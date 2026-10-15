@@ -65,12 +65,11 @@
 //     14 TeX errors a compile, both books now compile in three passes. The units change for 2106.10165, 2310.20360 and
 //     2608.12096's tikzequation; 2212.06817, 2608.09189, 2608.14557, 2608.17060 and 2608.22687 lose marks only, and the
 //     five made papers' units, probes and marked originals are byte-for-byte what they were
-// 12: a formula the author split across inline formulas, its delimiters balanced across them alone and nothing but white
-//     space and punctuation between them, is one placeholder (latex-front.mjs formulaRuns, core/protector/math-runs.ts):
-//     2307.16209's `$\{\Phi_0$, $\Phi_1$, $\Phi_2\}$` went out as three markers, Microsoft's Chinese moved the first one,
-//     its brace with it, and page 31 drew the set broken apart. 16 runs in 3 of the corpus's 124 papers (2307.16209: 2
-//     units of 452, 2608.02055, 2608.29782) are cut anew; every other unit keeps its pieces, and a copy of 10 or 11
-//     carries those over (live.mjs PIPELINE_CARRIES)
+// 12: raised with TRANSLATE_VERSION 2 (a formula split across inline formulas sent as one marker, mt.mjs formulaRuns), so
+//     that copies are judged again; the units are 11's, byte for byte. 2307.16209's `$\{\Phi_0$, $\Phi_1$, $\Phi_2\}$`
+//     went out as three markers, Microsoft's Chinese moved the first one, its brace with it, and page 31 drew the set
+//     broken apart. A copy of 10 or 11 carries every unit but one holding a formula whose delimiters do not balance on its
+//     own (live.mjs PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '12'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */

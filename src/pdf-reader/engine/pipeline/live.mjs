@@ -26,7 +26,7 @@ import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { decideGroups, groupOf } from '../translate/groups.mjs'
-import { batchOf, FIRST_BATCH, NEXT_BATCH, nameCells, plainSource, textsShown, translateUnits } from '../translate/mt.mjs'
+import { batchOf, FIRST_BATCH, formulaRuns, holdsUnbalanced, NEXT_BATCH, nameCells, plainSource, textsShown, translateUnits } from '../translate/mt.mjs'
 import { kOfSource, trPiecesOf } from '../layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
@@ -392,14 +392,18 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   where its reply set a marker's `#` as text, which 10 reads as the marker's (dropped): a translation whose text holds
  *   a `\#` is not carried, as 7's
  * - 9: likewise
- * - 10, 11: what 11 changes is where the patch inserts a lead or a mark (latex-front.mjs), and the units it cuts anew (a
- *   macro's call, a subscript) have new hashes; what 12 changes is what a unit is where a formula is split across inline
- *   formulas (latex-front.mjs formulaRuns), such a unit's hash new too. The wire and its reading back are 10's, so every
- *   unit of the same pieces is translated as 12 translates it
+ * - 10, 11: 11 changes where the patch inserts a lead or a mark (latex-front.mjs), and the units it cuts anew (a macro's
+ *   call, a subscript) have new hashes. 12 sends a formula split across inline formulas as one marker (mt.mjs formulaRuns,
+ *   TRANSLATE_VERSION 2), its unit's pieces and hash as they were: the translation of a unit that holds a run was made of
+ *   its parts sent apart, and is sent again — the units whose wire 12 changes, and no other. Given no unit (a caller that
+ *   has none), a translation that holds a formula whose delimiters do not balance on its own (mt.mjs holdsUnbalanced) is
+ *   sent again, a few more units, whose wire is unchanged and which the per-text cache answers. 7, 8 and 9 take that test
+ *   with their own
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
-const SAME_WIRE = () => true
-export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH, 8: NO_MARKER_HASH, 9: NO_MARKER_HASH, 10: SAME_WIRE, 11: SAME_WIRE }
+const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
+const NO_MARKER_HASH_OR_RUN = (pieces, unit = null) => NO_MARKER_HASH(pieces) && NO_RUN(pieces, unit)
+export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH_OR_RUN, 8: NO_MARKER_HASH_OR_RUN, 9: NO_MARKER_HASH_OR_RUN, 10: NO_RUN, 11: NO_RUN }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

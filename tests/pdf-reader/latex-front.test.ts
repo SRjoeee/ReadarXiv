@@ -604,39 +604,3 @@ describe('nothing is inserted inside a call or between a subscript and its opera
     }
   })
 })
-
-describe('a formula split across inline formulas is one placeholder (2307.16209 p31: "{Φ0的一阶偏微分方程组，Φ1，Φ2}")', () => {
-  const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`)
-  const phs = (u: Unit) => u.pieces.filter(p => p.t !== 'text').map(p => (p as { src?: string }).src)
-
-  it('the thesis\'s sentence as it stands: the set one placeholder, its commas inside it, one marker on the wire, written back byte for byte', () => {
-    const sentence = 'give rise to a first-order system of partial differential equations for the three components $\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$ \\cite{Teukolsky:1973ha}:'
-    const p = body(sentence)
-    const [u] = p.units as Unit[]
-    expect(phs(u as Unit)).toEqual(['$\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$', '\\cite{Teukolsky:1973ha}'])
-    expect(serialize(u as never).wire).toBe('give rise to a first-order system of partial differential equations for the three components @a# @b#:')
-    expect(new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))).toContain(sentence)
-    expect(patched(p)).toContain('<T0>$\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$<T0>\\cite{Teukolsky:1973ha}<T0>')
-  })
-
-  it('nested pairs, \\(…\\) as $…$, a half-open interval, and spacing between the parts', () => {
-    expect(phs((body('The tuple $((A,\\circ)$, $(B, \\cdot), l_\\circ$,~$r_\\circ)$ is a pair.').units as Unit[])[0] as Unit)).toEqual(['$((A,\\circ)$, $(B, \\cdot), l_\\circ$,~$r_\\circ)$'])
-    expect(phs((body('Take \\(\\langle a\\), \\(b\\rangle\\) here.').units as Unit[])[0] as Unit)).toEqual(['\\(\\langle a\\), \\(b\\rangle\\)'])
-    expect(phs((body('Let $x \\in [0$, $1)$ be given.').units as Unit[])[0] as Unit)).toEqual(['$x \\in [0$, $1)$'])
-  })
-
-  it('words between the parts are the translator\'s: they stay apart (2608.02055\'s $a \\in \\{$L, L-O, N$\\}$, 2608.18502\'s $($intrinsic$)$)', () => {
-    const [u] = body('For $a \\in \\{$L, L-O, N$\\}$ and $($intrinsic$)$ and $f(x$ and $y)$ alike.').units as Unit[]
-    expect(phs(u as Unit)).toEqual(['$a \\in \\{$', '$\\}$', '$($', '$)$', '$f(x$', '$y)$'])
-  })
-
-  it('a run that never balances, or balances only past a word, keeps its parts; so do formulas balanced each on its own', () => {
-    expect(phs((body('Here $\\{a$, $b$ end.').units as Unit[])[0] as Unit)).toEqual(['$\\{a$', '$b$'])
-    expect(phs((body('Here $\\{a$, $b)$ end.').units as Unit[])[0] as Unit)).toEqual(['$\\{a$', '$b)$'])
-    expect(phs((body('Here $(a)$, $b$, $\\{c\\}$ end.').units as Unit[])[0] as Unit)).toEqual(['$(a)$', '$b$', '$\\{c\\}$'])
-  })
-
-  it('a display takes no part in a run', () => {
-    expect(phs((body('Here $\\{a$, \\[b\\}\\] end of it.').units as Unit[])[0] as Unit)).toEqual(['$\\{a$', '\\[b\\}\\]'])
-  })
-})

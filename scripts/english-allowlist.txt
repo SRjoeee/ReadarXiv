@@ -38,7 +38,7 @@ src/providers/chrome-builtin.ts 2
 src/providers/glossary.ts 3
 src/providers/microsoft.ts 1
 src/ui/strings.ts 3
-tests/pdf-reader/latex-front.test.ts 12  # 2026-09-28: Chinese titles and paragraphs as a translation's pieces, the inputs and expectations of its line breaks and its title's words; 2026-09-30: a Japanese line of names, the input and expectations of its breaks (+2); 2026-10-16: +1, the set Microsoft's Chinese broke apart (2307.16209 p31), quoted in a test's name as evidence
+tests/pdf-reader/latex-front.test.ts 11  # 2026-09-28: Chinese titles and paragraphs as a translation's pieces, the inputs and expectations of its line breaks and its title's words; 2026-09-30: a Japanese line of names, the input and expectations of its breaks (+2)
 tests/pdf-reader/mt-wire.test.ts 9  # 2026-10-02: Chinese replies with a percent and a times after a number, the inputs and expectations of the wire's spaces taken back; 2026-10-05: +7, Microsoft's Chinese and Japanese replies for 2610.02069 with a marker's # doubled or displaced, quoted as they came, the inputs and expectations of their read-back
 tests/pdf-reader/typeset-measure.test.ts 7  # 2026-10-01: Chinese, Korean and Cyrillic text as the inputs of the width model (density.mjs), each with the width xeCJK and the T2A faces set it at
 tests/pdf-reader/ui/copy.test.ts 5  # 2026-10-04: +1, the page's name in Chinese, the expectation; 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese

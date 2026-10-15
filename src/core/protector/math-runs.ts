@@ -3,16 +3,16 @@
 // formula a placeholder of its own, a translator may move one of them away from the others, and the set is drawn broken
 // apart: Microsoft's Chinese set the first one before the words the other two follow, "{Φ0的一阶偏微分方程组，Φ1，Φ2}" (the
 // thesis's page 31). Such a run — formulas whose delimiters are unbalanced each on its own and balanced across them,
-// nothing but white space and punctuation between them — is one placeholder: its parts, and what stands between them, as
-// the source has them.
+// nothing but white space and punctuation between them — goes to the translator as one placeholder, and comes back as its
+// parts and what stands between them, as the source has them.
 //
-// The rule reads TeX alone, so that any host that holds a formula's source can use it: the PDF reader's front end does
-// (latex-front.mjs formulaRuns, the paper's `$…$` and `\(…\)`); a LaTeXML page's formulas carry their source as
-// `alttext`, and its own split runs are the same (four in the HTML fixtures), but the HTML protector's placeholder is one
-// node, so it does not take a run yet. Imports nothing.
+// The rule reads TeX alone, so that any host that holds a formula's source can use it: the PDF reader's wire does (mt.mjs
+// formulaRuns, over a unit's `$…$` and `\(…\)`; the unit keeps its parts); a LaTeXML page's formulas carry their source
+// as `alttext`, and its own split runs are the same (four in the HTML fixtures), which its protector does not group yet.
+// Imports nothing.
 
 /** a delimiter's kind. `(` and `[` are one kind: a half-open interval, `[0, 1)`, is balanced */
-export type Kind ='paren' | 'brace' | 'angle' | 'vert' | 'Vert' | 'floor' | 'ceil' | 'group' | 'left'
+export type Kind = 'paren' | 'brace' | 'angle' | 'vert' | 'Vert' | 'floor' | 'ceil' | 'group' | 'left'
 const OPENS: Record<string, Kind> = {
   '(': 'paren', '[': 'paren', '\\lbrack': 'paren', '\\{': 'brace', '\\lbrace': 'brace', '\\langle': 'angle',
   '\\lvert': 'vert', '\\lVert': 'Vert', '\\lfloor': 'floor', '\\lceil': 'ceil', '\\lgroup': 'group',

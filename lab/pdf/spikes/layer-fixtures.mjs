@@ -421,7 +421,7 @@ async function seededRecord(paper, target, hashes, from) {
     // (as a copy carries over: the units its pipeline's translations this one reads alike, PIPELINE_CARRIES)
     const carries = pipeline === PIPELINE_VERSION ? () => true : (PIPELINE_CARRIES[pipeline] ?? (() => false))
     const { seed } = await seedFrom(rec, paper.units)
-    for (const [i, x] of seed) if (!results.has(i) && !kept.has(paper.units[i]) && carries(x.pieces)) results.set(i, x)
+    for (const [i, x] of seed) if (!results.has(i) && !kept.has(paper.units[i]) && carries(x.pieces, paper.units[i])) results.set(i, x)
   }
   const carried = results.size
   const todo = paper.units.filter((u, i) => !kept.has(u) && !results.has(i))

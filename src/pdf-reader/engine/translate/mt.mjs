@@ -6,6 +6,7 @@ import { tokens } from '../pipeline/anchors.mjs'
 import { bySentence } from '../view/highlight.mjs'
 import { MIXED } from './mixed.mjs'
 import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../../core/protector/tokens.ts'
+import { balancedRuns, delimiterResidue, RUN_SEPARATOR } from '../../../core/protector/math-runs.ts'
 import { sentenceCuts } from '../../../core/sentences/index.ts'
 
 // This file is the translation's: the wire a unit goes out as, and the reading back of a reply. A change here that alters
@@ -31,18 +32,61 @@ export const utf8 = s => new TextDecoder().decode(latin1Bytes(s))
 const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu
 export const texEscape = s => s.replace(INVISIBLE, '').replace(/[\\#$%&_{}~^]/g, c => ({ '\\': '\\textbackslash{}', '~': '\\textasciitilde{}', '^': '\\textasciicircum{}' })[c] ?? `\\${c}`)
 
+// ---------------------------------------------------------------- a formula split across inline formulas
+/** an inline formula's TeX, its math shifts off: `$…$` or `\(…\)`, never a display; else null */
+const inlineTex = src => (typeof src !== 'string' ? null : /^\$(?!\$)[\s\S]*\$$/.test(src) && src.length > 1 ? src.slice(1, -1) : /^\\\([\s\S]*\\\)$/.test(src) ? src.slice(2, -2) : null)
+/** a placeholder that is space or an ellipsis, as what stands between a run's formulas may be: a tie, TeX's spaces, \ldots */
+const RUN_SPACE = /^(?:~|\\[ ,;:!\n]|\\(?:q?quad|enspace|thinspace|nobreakspace|l?dots|textellipsis)(?![A-Za-z@])(?:\{\})?)\s*$/
+/**
+ * A formula the author split across inline formulas — `$\{\Phi_0$, $\Phi_1$, $\Phi_2\}$`, a set whose brace the first
+ * opens and the last closes — goes out as one placeholder: the formulas of a run whose delimiters balance across them
+ * alone (core/protector/math-runs.ts balancedRuns), with the white space, commas, semicolons, ties and ellipses between
+ * them. Sent apart, Microsoft's Chinese put the set's first formula, its brace with it, before the words the other two
+ * follow, and the set was drawn broken apart (2307.16209's page 31). The unit keeps its pieces: the marker stands for the
+ * run's own pieces, which a reply read back gives again in their order (rehydrate), so that the layout file's rows, the
+ * unit's hash and the layer's crops are each part's, one line each, as TeX may break the line between them (11 of the
+ * corpus's 16 runs take two). A word between two formulas is the translator's: no run crosses one (2608.18502's
+ * `$($intrinsic$)$`). The runs of `pieces`, a Map of each run's first piece's index to its last's
+ */
+export function formulaRuns(pieces) {
+  const items = pieces.map(p => {
+    if (p.t === 'ph') { const tex = inlineTex(p.src); return tex !== null ? { tex } : RUN_SPACE.test(p.src ?? '') ? 'between' : null }
+    return p.t === 'text' && p.src === undefined && RUN_SEPARATOR.test(utf8(p.s)) ? 'between' : null
+  })
+  return new Map(balancedRuns(items))
+}
+/** whether translated pieces hold an inline formula whose delimiters do not balance on its own: a part of a run, which a
+ *  wire that sent each part apart may have set apart from the others (live.mjs PIPELINE_CARRIES) */
+export const holdsUnbalanced = pieces => pieces.some(p => {
+  const tex = p?.t === 'ph' ? inlineTex(p.src) : null
+  if (tex === null) return false
+  const r = delimiterResidue(tex)
+  return !r || r.opens.length > 0 || r.closes.length > 0
+})
+/** the slot a run goes out as: its pieces, the unit's own */
+const runSlot = pieces => ({ t: 'run', pieces })
+/** the characters that are not white space a run's text holds, which its marker does not write (plainSource counts them) */
+const runShown = slot => slot.pieces.filter(p => p.t === 'text').map(p => utf8(p.s)).join('').replace(/\s+/g, '').length
+/** a slot as the pieces it stands for */
+const piecesOf = slot => (slot.t === 'run' ? slot.pieces : [slot])
+
 /** a unit → the wire text, the table from marker id back to the original piece, and the markers the wire set apart
  *  from a full stop before them (`stops`), from a digit before them (`numbers`) and from one after them
  *  (`numbersAfter`), whose spaces rehydrate takes off again */
 export function serialize(u) {
-  const slots = [], stops = new Set(), numbers = new Set(), numbersAfter = new Set()
+  const slots = [], stops = new Set(), numbers = new Set(), numbersAfter = new Set(), hidden = new Map()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
-  u.pieces.forEach((p, k) => {
-    if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escape(s); return }
-    slots.push(p)
+  const runs = formulaRuns(u.pieces)
+  for (let k = 0; k < u.pieces.length; k++) {
+    const p = u.pieces[k]
+    if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escape(s); continue }
+    // (a run: one marker for its pieces, the next text the one after its last)
+    const last = runs.get(k) ?? k
+    slots.push(last > k ? runSlot(u.pieces.slice(k, last + 1)) : p)
     const m = `@${toAlpha(slots.length)}#`
+    if (last > k) hidden.set(m, runShown(slots.at(-1)))
     // a marker touching a word is read as part of it by the engine (#254): a space of ours around it. So is one right
     // after a full stop, `models.@a#` — a citation or a footnote's mark after a sentence — which left the sentence's
     // last word in English (the HTML page's protector, 09c25622: 13 of 17 blocks as sent, none with the space); of nine
@@ -52,12 +96,14 @@ export function serialize(u) {
     const before = /[\p{L}\p{N}\p{M}.]$/u.test(wire) ? ' ' : ''
     if (wire.endsWith('.')) stops.add(slots.length)
     if (/\p{N}$/u.test(wire)) numbers.add(slots.length)
-    const nextText = u.pieces[k + 1]?.t === 'text' ? u.pieces[k + 1].s : ''
+    const nextText = u.pieces[last + 1]?.t === 'text' ? u.pieces[last + 1].s : ''
     const after = /^[\p{L}\p{N}\p{M}]/u.test(utf8(nextText)) ? ' ' : ''
     if (/^\p{N}/u.test(utf8(nextText))) numbersAfter.add(slots.length)
     wire += before + m + after
-  })
-  return { wire, slots, lead, trail, stops, numbers, numbersAfter }
+    k = last
+  }
+  // (`hidden` where a run went out: a unit without one is serialised as it was before runs)
+  return { wire, slots, lead, trail, stops, numbers, numbersAfter, ...(hidden.size ? { hidden } : {}) }
 }
 
 /** the translation → pieces, or why it cannot be used. The space the wire set after a full stop before a marker is the
@@ -113,7 +159,8 @@ export function rehydrate(text, { slots, lead, trail, stops, numbers, numbersAft
     if (seen.has(id)) return { error: 'duplicated marker' }
     const wires = stops?.has(id) ? STOP_SPACE : numbers?.has(id) ? NUMBER_SPACE : null
     pushText(buf, wires && (SPACING.test(slots[id - 1].src ?? '') ? SPACE : wires)); buf = ''
-    seen.set(id, pieces.length); pieces.push(slots[id - 1])
+    // (a run's marker: the run's pieces, in their order, or none of them: a marker moved, lost or doubled is read as any is)
+    seen.set(id, pieces.length); pieces.push(...piecesOf(slots[id - 1]))
     afterNumber = !!numbersAfter?.has(id)
   }
   buf += text.slice(last); pushText(buf)
@@ -150,12 +197,14 @@ const atomsOf = (s, re) => [...s.matchAll(re)].map(m => [m.index, m.index + m[0]
 const outOf = (atoms, c) => { for (const [a, b] of atoms) if (c > a && c < b) return b; return c }
 const cumulative = ls => { const out = []; let at = 0; for (const n of ls.slice(0, -1)) { at += n; out.push(at) } return out }
 /** how many characters that are not white space the source wire writes before `c`: an escaped @ or an entity one, a
- *  marker or a tag none — the placeholder is a space in the plain text */
-function shownBefore(wire, c, re = ATOM) {
+ *  marker or a tag none — the placeholder is a space in the plain text —, but a run's (serialize `hidden`), which stands
+ *  for the text between its formulas too */
+function shownBefore(wire, c, re = ATOM, hidden = null) {
   let n = 0, i = 0
   for (const m of wire.slice(0, c).matchAll(re)) {
     for (; i < m.index; i++) if (!/\s/.test(wire[i])) n++
     if (m[0] === '@@' || m[0][0] === '&') n++
+    n += hidden?.get(m[0]) ?? 0
     i = m.index + m[0].length
   }
   for (; i < c; i++) if (!/\s/.test(wire[i])) n++
@@ -202,7 +251,7 @@ export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false, f
   if (!W || !source?.length || source.length !== target?.length) return null
   if (source.reduce((a, b) => a + b, 0) !== ser.wire.length || target.reduce((a, b) => a + b, 0) !== text.length) return null
   const plain = plainSource(u), translated = plainTranslated(pieces)
-  if (shownBefore(ser.wire, ser.wire.length, W.atoms) !== nonSpace(plain)) return null
+  if (shownBefore(ser.wire, ser.wire.length, W.atoms, ser.hidden) !== nonSpace(plain)) return null
   const wireAtoms = atomsOf(ser.wire, W.atoms), textAtoms = atomsOf(text, W.atoms)
   const cs = cumulative(source).map(c => outOf(wireAtoms, c)), ct = cumulative(target).map(c => outOf(textAtoms, c))
   // the reply with a sentinel where each sentence begins, read back as the pieces were: the sentinels' places in its
@@ -221,7 +270,7 @@ export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false, f
   const out = { src: [], tr: [] }
   let before = [0, 0]
   cs.forEach((c, j) => {
-    const at = [wordAfter(plain, shownBefore(ser.wire, c, W.atoms)), wordAfter(translated, tn[j])]
+    const at = [wordAfter(plain, shownBefore(ser.wire, c, W.atoms, ser.hidden)), wordAfter(translated, tn[j])]
     const k = [words(plain.slice(0, at[0])), words(translated.slice(0, at[1]))]
     if (k[0] <= before[0] || k[1] <= before[1] || k[0] >= total[0] || k[1] >= total[1]) return
     out.src.push(at[0]); out.tr.push(at[1]); before = k
@@ -244,17 +293,25 @@ export function sentencesKept(s, src, tr) {
 const escapeTags = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 /** a unit → the wire text: <x id="n"/> for an opaque piece, <t id="n">…</t> around a formatting pair, which LLMs keep */
 export function serializeTags(u) {
-  const slots = [], pairSlot = new Map()
+  const slots = [], pairSlot = new Map(), hidden = new Map()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
-  u.pieces.forEach((p, k) => {
-    if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escapeTags(s); return }
-    if (p.t === 'open') { slots.push({ open: p }); pairSlot.set(p.id, slots.length); wire += `<t id="${slots.length}">`; return }
-    if (p.t === 'close') { const n = pairSlot.get(p.id); if (n) slots[n - 1].close = p; wire += '</t>'; return }
-    slots.push({ void: p }); wire += `<x id="${slots.length}"/>`
-  })
-  return { wire, slots, lead, trail }
+  const runs = formulaRuns(u.pieces)
+  for (let k = 0; k < u.pieces.length; k++) {
+    const p = u.pieces[k]
+    if (p.t === 'text') { let s = utf8(p.s).replace(/\s+/g, ' '); if (k === 0) s = s.trimStart(); if (k === u.pieces.length - 1) s = s.trimEnd(); wire += escapeTags(s); continue }
+    if (p.t === 'open') { slots.push({ open: p }); pairSlot.set(p.id, slots.length); wire += `<t id="${slots.length}">`; continue }
+    if (p.t === 'close') { const n = pairSlot.get(p.id); if (n) slots[n - 1].close = p; wire += '</t>'; continue }
+    // (a run: one void for its pieces, as serialize sends it)
+    const last = runs.get(k) ?? k
+    slots.push({ void: last > k ? runSlot(u.pieces.slice(k, last + 1)) : p })
+    const x = `<x id="${slots.length}"/>`
+    if (last > k) hidden.set(x, runShown(slots.at(-1).void))
+    wire += x
+    k = last
+  }
+  return { wire, slots, lead, trail, ...(hidden.size ? { hidden } : {}) }
 }
 /** the translation → pieces, or why it cannot be used; the model's common spellings of a tag are read as the extension reads them */
 export function rehydrateTags(text, { slots, lead, trail }) {
@@ -266,7 +323,7 @@ export function rehydrateTags(text, { slots, lead, trail }) {
   while ((m = re.exec(text))) {
     pushText(text.slice(last, m.index)); last = re.lastIndex
     const x = m[1] ?? m[2] ?? m[3], t = m[4] ?? m[5] ?? m[6]
-    if (x) { const n = Number(x), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(slot.void) }
+    if (x) { const n = Number(x), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(...piecesOf(slot.void)) }
     else if (t) { const n = Number(t), slot = slots[n - 1]; if (!slot?.open || !slot.close || seenPair.has(n)) return { error: 'bad pair' }; seenPair.add(n); stack.push(n); pieces.push(slot.open) }
     else { const n = stack.pop(); if (!n) return { error: 'bad pair' }; pieces.push(slots[n - 1].close) }
   }
@@ -366,6 +423,8 @@ function splitContextOf(slots) {
     isAnnotation: id => { const p = piece(id); return !!p && (p.t === 'nested' || (p.t === 'ph' && CITE.test(p.src))) },
     textOf: id => {
       const p = piece(id)
+      // (a run of formulas is a formula)
+      if (p?.t === 'run') return 'x'
       if (p?.t !== 'ph') return undefined
       if (p.src === '~' || /^\\\\/.test(p.src)) return ' '
       if (CITET.test(p.src)) return 'Smith et al'
