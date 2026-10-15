@@ -151,6 +151,20 @@ export function layoutPage(L, p, { first, table, spans }) {
   return true
 }
 
+/**
+ * A unit's stream told again, in a layout whose units' first tokens come with their pages rather than with the parts (the
+ * right's on the layer, whose tokens are a laid page's words: layerShapes): its tokens made again, its pages' geometry let go.
+ * False where the unit is not told or its stream is that already
+ */
+export function layoutStream(L, id, stream) {
+  const u = L.told?.get(id)
+  if (!u || u.stream === stream) return false
+  u.stream = stream
+  L.anchors.get(id).tokens = tokensOf(L, id, stream)
+  for (const p of L.pagesOf.get(id) ?? []) L.cache.delete(p)
+  return true
+}
+
 /** a unit's tokens in a layout made page by page: those of every page given, rising, and its stream (its first token,
  *  which a page's geometry tells its head by, and its sentences whether one began before a run) */
 function tokensOf(L, id, stream) {

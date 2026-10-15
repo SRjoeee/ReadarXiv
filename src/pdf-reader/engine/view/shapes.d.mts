@@ -51,6 +51,28 @@ export interface SideShapes {
 /** the right's shapes, the left's mirrored over copies of its own */
 export interface MirroredShapes { readonly layout: Layout; readonly shapes: Shapes<Run, Float>; forget(page: number): void; dispose(): void }
 
+/** a laid page's words as the right's shapes read them (the door's PageWords) */
+export interface LaidWords {
+  tokens: PageTable
+  word: Int32Array
+  spans: readonly (readonly [number, readonly number[]])[]
+  original: readonly number[]
+}
+/** the right's shapes on the layer: the left's mirrored where its place shows the original, its own over a laid page's words */
+export interface LayerShapes {
+  readonly layout: Layout
+  readonly shapes: Shapes<Run, Float>
+  /** a laid page's words (once a door): its part made once its left part is in; false where it was given already */
+  lay(page: number, words: LaidWords): boolean
+  laid(page: number): boolean
+  /** a unit's starts on the right: its words' where it is all on laid pages, `left` where it is on none, null else */
+  starts(id: number, text: string, offsets: readonly number[] | undefined, left: Int32Array | null): Int32Array | null
+  /** every page back to the mirror (a door opened again) */
+  reset(): void
+  forget(page: number): void
+  dispose(): void
+}
+export declare function layerShapes(source: SideShapes): LayerShapes
 export declare function pdfShapes(layout: Layout): Shapes<Run, Float>
 export declare function leftPageInput(left: Pick<ReadLeftPart, 'page' | 'first' | 'table' | 'spans' | 'pairs'>): LeftPageInput
 export declare function createShapes(o?: { kindOf?: (id: number) => string | undefined; warn?: (what: string, error: unknown) => void }): SideShapes

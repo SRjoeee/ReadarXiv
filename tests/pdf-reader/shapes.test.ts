@@ -3,7 +3,7 @@ import { type Anchor, type DocToken, lineRects, sentenceStarts, tokenizeDocument
 import { readLeftPart, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { type Box, pageFloats } from '@/pdf-reader/engine/view/floats.mjs'
 import { blockOf, clickOf, layoutOf, pageGeometry, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
-import { createShapes, leftPageInput, mirror, pdfShapes } from '@/pdf-reader/engine/view/shapes.mjs'
+import { createShapes, layerShapes, leftPageInput, mirror, pdfShapes } from '@/pdf-reader/engine/view/shapes.mjs'
 // the gate's own harness (SH1 on the ten papers), here on a paper of the test's
 import { cutSide, pagesAgree } from '../../lab/pdf/spikes/highlight-pages.mjs'
 
@@ -503,5 +503,98 @@ describe('SH4: an empty or refused left part', () => {
     expect(h.shapes.click(1, 100, 700, PAD, () => null)).toBeNull()
     expect(h.shapes.float(4)).toBeNull()
     expect(pdfShapes(h.layout).runs(1)).toEqual([])
+  })
+})
+
+describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', () => {
+  /** page 3's words as the layer gives them: the units `painted` drawn from their left tokens moved down `dy` (the translation's
+   *  lines), each token its word's index in the unit; the rest of the page's units shown as the original's (`original`) */
+  function wordsOf(page: number, painted: number[], dy = 3) {
+    const l = nth(cutSide(whole, anchors, views).lefts, page)
+    const ks: number[] = [], spans: [number, number[]][] = [], word: number[] = []
+    for (const [id, ranges] of l.spans) {
+      if (!painted.includes(id)) continue
+      const first = ks.length
+      for (let j = 0; j < ranges.length; j += 2) for (let t = nth(ranges, j); t < nth(ranges, j) + nth(ranges, j + 1); t++) { word.push(ks.length - first); ks.push(t) }
+      spans.push([id, [first, ks.length - first]])
+    }
+    const f = (a: Float32Array, d = 0) => Float32Array.from(ks, k => nth([...a], k) + d)
+    const T = l.table
+    return {
+      tokens: { n: ks.length, l: f(T.l), r: f(T.r), y: f(T.y, -dy), h: f(T.h), top: f(T.top, -dy), bottom: f(T.bottom, -dy) },
+      word: Int32Array.from(word), spans: spans.reverse(), original: l.spans.map(s => s[0]).filter(id => !painted.includes(id)),
+    }
+  }
+  const BASE = 2 ** 16
+
+  it('lays a page once its left part is in: a unit drawn there runs over its words, a unit shown as the original over copies of the left\'s tokens', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf })
+    l.addParts(parts)
+    for (const p of [1, 2]) l.addPage(nth(lefts, p))
+    const r = layerShapes(l)
+    expect(r.lay(3, wordsOf(3, [5]))).toBe(true)
+    // (no left part of page 3 yet: nothing of it on either pane)
+    expect(r.shapes.runs(6)).toEqual([])
+    expect(r.laid(3)).toBe(false)
+    l.addPage(nth(lefts, 3))
+    expect(r.laid(3)).toBe(true)
+    const a = l.shapes.runs(5).filter(x => x.page === 3), b = r.shapes.runs(5).filter(x => x.page === 3)
+    expect(b.length).toBe(1)
+    expect(nth(b, 0).top).toBeCloseTo(nth(a, 0).top - 3, 4)
+    expect(nth(b, 0).x0).toBeCloseTo(nth(a, 0).x0, 4)
+    // unit 6 is the original's on the laid page: its boxes the left's, from runs and tokens of the right's own (trap 1)
+    const c = l.shapes.runs(6), d = r.shapes.runs(6)
+    expect(d.length).toBe(c.length)
+    for (let i = 0; i < c.length; i++) { expect(nth(d, i)).not.toBe(nth(c, i)); expect(r.shapes.block(nth(d, i), PAD)).toEqual(l.shapes.block(nth(c, i), PAD)) }
+    expect(tablesOf(r.layout)[3]?.l).not.toBe(tablesOf(l.layout)[3]?.l)
+    expect(nth(d, 0).toks.every(k => k >= 3 * BASE && k < 4 * BASE)).toBe(true)
+    // the pages not laid are the left's mirrored
+    for (const id of [1, 2, 3]) expect(r.shapes.runs(id).map(x => r.shapes.block(x, PAD))).toEqual(l.shapes.runs(id).map(x => l.shapes.block(x, PAD)))
+    expect(r.shapes.runs(1).every((x, i) => x !== l.shapes.runs(1)[i])).toBe(true)
+    // what a point lights on the laid page: the right's own run, on its own lines
+    const hb = blockOf(nth(b, 0), PAD)
+    expect(r.shapes.hit(3, (hb.x0 + hb.x1) / 2, hb.y0 + 0.5, PAD, () => null)).toMatchObject({ id: 5, s: -1 })
+    expect(r.lay(3, wordsOf(3, [5]))).toBe(false)
+  })
+
+  it('gives the right\'s starts of a unit all on laid pages from its words, the left\'s of a unit on none, none of a unit on both', () => {
+    const l = built([1, 2, 3]), r = layerShapes(l)
+    r.lay(3, wordsOf(3, [6]))
+    const n6 = (UNITS.get(6) ?? []).length, text = Array.from({ length: n6 }, () => 'text').join(' ')
+    const offsets = [10, 30].map(w => 5 * w)
+    const st = r.starts(6, text, offsets, null)
+    expect(st && [...st]).toEqual([3 * BASE + 10, 3 * BASE + 30])
+    expect(r.shapes.fits(6, st as Int32Array, true)).toBe(true)
+    const run = nth(r.shapes.runs(6), 0), first = nth(run.rows, 0), b = blockOf(run, PAD)
+    expect(r.shapes.hit(3, b.x0 + 5, (first.y0 + first.y1) / 2, PAD, id => (id === 6 ? st : null))).toMatchObject({ id: 6, s: 0 })
+    // unit 5: page 2 shown as the original, page 3 laid: no starts on the right; unit 1, on no laid page: the left's
+    expect(r.starts(5, textOf(5), offsetsOf(5), wholeStarts.get(5) ?? null)).toBeNull()
+    expect(r.starts(1, textOf(1), offsetsOf(1), wholeStarts.get(1) ?? null)).toBe(wholeStarts.get(1))
+    // a start no token carries the word of: none
+    expect(r.starts(6, text, [5 * (n6 + 3)].filter(o => o < text.length).concat([text.length - 1]), null)).toBeNull()
+  })
+
+  it('a page laid as the left draws it gives the left\'s runs and heads: a unit takes its head from its own first token there (its stream)', () => {
+    const l = built([1, 2, 3]), r = layerShapes(l), left = nth(cutSide(whole, anchors, views).lefts, 1), T = left.table
+    // every token of page 1 drawn where the left has it, the heading's number (no unit's) among them, each unit's spans the left's
+    const copy = (a: Float32Array) => Float32Array.from(a)
+    r.lay(1, { tokens: { n: T.n, l: copy(T.l), r: copy(T.r), y: copy(T.y), h: copy(T.h), top: copy(T.top), bottom: copy(T.bottom) }, word: new Int32Array(T.n).fill(-1), spans: left.spans.map(([id, rs]) => [id, [...rs]]), original: [] })
+    expect(r.laid(1)).toBe(true)
+    expect(pageGeometry(r.layout, 1).heads).toEqual([0])
+    for (const id of [0, 1, 2, 3]) expect(r.shapes.runs(id).filter(x => x.page === 1).map(x => r.shapes.block(x, PAD))).toEqual(l.shapes.runs(id).filter(x => x.page === 1).map(x => l.shapes.block(x, PAD)))
+  })
+
+  it('reset lays every page again from the words given after it', () => {
+    const l = built([1, 2, 3]), r = layerShapes(l)
+    r.lay(3, wordsOf(3, [6]))
+    const toks = nth(r.shapes.runs(6), 0).toks
+    expect(r.starts(6, 'text text', [5], null) && true).toBe(true)
+    r.reset()
+    expect(r.laid(3)).toBe(false)
+    expect(r.shapes.runs(6).map(x => r.shapes.block(x, PAD))).toEqual(l.shapes.runs(6).map(x => l.shapes.block(x, PAD)))
+    r.lay(3, wordsOf(3, [6], 5))
+    expect(nth(r.shapes.runs(6), 0).toks).toEqual(toks)
+    expect(nth(r.shapes.runs(6), 0).top).toBeCloseTo(nth(l.shapes.runs(6), 0).top - 5, 4)
   })
 })
