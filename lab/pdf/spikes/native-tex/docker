@@ -1,0 +1,33 @@
+#!/bin/bash
+# lab/pdf/spikes/native-tex/docker
+# A stand-in for the one `docker run` lab/pdf/spikes/layer-fixtures.mjs makes (latexmk in texlive/texlive:latest, no
+# network), for a machine whose Docker cannot run it: the same latexmk command, run natively in the build folder with a
+# local TeX Live. Put this folder first on PATH for that one run (lab/pdf/README.md, 2608.16117v1-zh). It handles that
+# command alone and refuses any other; it never calls Docker. A compile made so is not the Docker image's package versions
+# byte for byte, and the next make in Docker replaces what it made.
+#   NATIVE_TEX_BIN       the TeX Live binaries (default: TinyTeX's, ~/Library/TinyTeX/bin/universal-darwin)
+#   NATIVE_TEXMFLOCAL    a tree of the packages that TeX Live lacks, its ls-R made (mktexlsr): links into a full TeX Live
+#                        tree of the same year; required
+#   NATIVE_TEXMFVAR      a TEXMFVAR whose pdftex.map is the full tree's (its fonts' map); optional
+set -u
+[ "${1:-}" = run ] || { echo "native-tex/docker: only 'run' is handled" >&2; exit 1; }
+shift
+build=""; cmd=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -v) build="${2%%:/work}"; shift 2 ;;
+    --rm|--init) shift ;;
+    --network|--cpus|--memory|-w) shift 2 ;;
+    texlive/texlive:latest) shift; cmd=("$@"); break ;;
+    *) echo "native-tex/docker: unexpected argument $1" >&2; exit 1 ;;
+  esac
+done
+[ -n "$build" ] && [ -d "$build" ] || { echo "native-tex/docker: no build folder" >&2; exit 1; }
+[ "${cmd[0]:-}" = timeout ] && cmd=("${cmd[@]:2}")
+[ "${cmd[0]:-}" = latexmk ] || { echo "native-tex/docker: only latexmk is run" >&2; exit 1; }
+[ -n "${NATIVE_TEXMFLOCAL:-}" ] || { echo "native-tex/docker: NATIVE_TEXMFLOCAL is not set" >&2; exit 1; }
+export PATH="${NATIVE_TEX_BIN:-$HOME/Library/TinyTeX/bin/universal-darwin}:/usr/bin:/bin"
+export TEXMFLOCAL="$NATIVE_TEXMFLOCAL" texmf_casefold_search=0 FORCE_SOURCE_DATE=1 SOURCE_DATE_EPOCH=1767225600
+[ -n "${NATIVE_TEXMFVAR:-}" ] && export TEXMFVAR="$NATIVE_TEXMFVAR"
+# (the image's 600 s limit, as perl's alarm: macOS has no timeout)
+cd "$build" && exec perl -e 'alarm 600; exec @ARGV' "${cmd[@]}"

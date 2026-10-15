@@ -232,6 +232,9 @@ if ((!PROTO || TEX) && !GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the
 const KEY = PROTO ? `${TIER}-proto${PROTO_UNITS === 'p7' ? '-p7' : ''}${PROTO_FACES === 'prototype' ? '-pf' : ''}${TEX_KEY}${REMOVAL ? `-removal-${REMOVAL}` : ''}` : LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
 if (REMOVAL && !PROTO) throw new Error('--removal: v0 only (--engine-kind=proto)')
 if (!['made', 'fixed', 'given'].includes(LAYOUTS)) throw new Error(`--layouts=${LAYOUTS}: made or fixed`)
+/** whether the measures against TeX's file are taken (layer-gate/proto.mjs againstFileOf): where the fixtures' layout files
+ *  are a maker's made ones, never the fixtures' own (--layouts=fixed, v0 alone), whose segments are font boxes */
+const AGAINST_FILE_ON = PROTO && LAYOUTS !== 'fixed'
 const MAKER = join(here, 'layer-fixtures.mjs')
 /**
  * Whether the maker asks TeX for the paper's own switch (layer-fixtures.mjs --switch): where the engine's marks file
@@ -264,7 +267,7 @@ let PREVIOUS_DIR = null
 /** --debug-lost=<fixture>:<page>: that page's lost-ink regions written as images (out/layer-gate/lost/) */
 const DEBUG_LOST = arg('debug-lost')
 /** TeX's file against the drawing (score.mjs, the 2608.16117 survey): the measures each output's records show apart */
-const AGAINST_FILE = ['contentLost', 'textInDisplay', 'slotsSkipped', 'lineStartPunct', 'glyphsLost', 'linesLeft']
+const AGAINST_FILE = ['contentLost', 'contentUnknown', 'textInDisplay', 'slotsSkipped', 'lineStartPunct', 'glyphsLost', 'linesLeft']
 /** the brief's exact values: 12 pages an output, every page of the thesis; and every page of 2608.16117v1, whose
  *  defects the maintainer saw on staging reach page 14 (the 2608.16117 survey, 2026-10-15) */
 const PAGES_OF = 12, ALL_PAGES = new Set(['2307.16209v1', '2608.16117v1'])
@@ -463,7 +466,7 @@ async function runFixture(page, name, errors) {
   if (removal) Object.assign(meta, { addon: removal.key })
   // (--perf: what a reader is sent, the R set and its manifest, no plan)
   const addon = removal ? (PERF ? { url: `/removal/${name}.pdf`, manifest: removal.shippedManifest, plan: null } : { url: `/removal/${name}.pdf`, manifest: removal.manifest, plan: removal.plan }) : null
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, rules: '/rules/layout-rules.json', names: RULES_LABELS(target), removal: REMOVAL, addon, perf: PERF, parts: PARTS, slices: SLICES })
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, rules: '/rules/layout-rules.json', names: RULES_LABELS(target), removal: REMOVAL, addon, perf: PERF, parts: PARTS, slices: SLICES, againstFile: AGAINST_FILE_ON })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
@@ -902,7 +905,15 @@ if (arg('check')) {
 if (arg('record')) {
   if (PROTO_PLACE || PROTO_ORDER) { console.log('FAIL --record: --proto-place and --proto-order are comparisons with the live prototype, never a record'); exit = 1 }
   else if (ONLY || PAGES) { console.log('FAIL --record: a whole run only (no --only, no --pages)'); exit = 1 }
-  else writeRecords(recordAt, run, completeness)
+  else {
+    // (and every output the record's run of this kind holds: a run given another folder of references, the gate's default
+    // of 29, is whole by itself and would drop the 30th unseen. An output leaves the record by its own pull request, the
+    // record edited so)
+    const had = existsSync(recordAt) ? readJson(recordAt).tiers?.[KEY] : null
+    const dropped = Object.keys(had?.fixtures ?? {}).filter(n => !run.fixtures[n])
+    if (dropped.length) { console.log(`FAIL --record: the record's ${KEY} run holds ${dropped.length} output${dropped.length === 1 ? '' : 's'} this run has not (${dropped.join(' ')}): give the references, translations and geometry its inputs name (LAYER_REFS, LAYER_RECORDS, LAYER_GEOMETRY; lab/pdf/README.md)`); exit = 1 }
+    else writeRecords(recordAt, run, completeness)
+  }
 }
 if (arg('write-floor')) {
   // the prototype's floor as this gate measures it: v0 under the floor's conditions (the prototype's own staging units
@@ -1156,8 +1167,8 @@ function gateMd(run, rows) {
   // (TeX's file against the drawing: defects held to the run before as rates, until the pull request that removes a
   // cause gates its measure at 0, README)
   const fileMs = AGAINST_FILE.map(k => MEASURES.find(m => m[0] === k)).filter(m => run.tier === 'pixel' || m[1] === 'model')
-  L.push('', "## TeX's file against the drawing (held to the run before, not yet at 0)", '', `| output | ${fileMs.map(m => m[4]).join(' | ')} | placeholders not placed |`, `|---|${fileMs.map(() => '---|').join('')}---|`)
-  for (const [name, f] of Object.entries(run.fixtures)) L.push(`| ${name} | ${fileMs.map(m => f.totals[m[0]] ?? '-').join(' | ')} | ${f.totals.contentUnknown ?? '-'} |`)
+  L.push('', "## TeX's file against the drawing (held to the run before, not yet at 0)", '', `| output | ${fileMs.map(m => m[4]).join(' | ')} |`, `|---|${fileMs.map(() => '---|').join('')}`)
+  for (const [name, f] of Object.entries(run.fixtures)) L.push(`| ${name} | ${fileMs.map(m => f.totals[m[0]] ?? '-').join(' | ')} |`)
   L.push('', '## Recorded, not gated (the brief\'s typography)', '')
   L.push('| output | full size | median size | style match | lines on a layout baseline | unfit (floor) | bar | page 1 ms | slowest unit ms |', '|---|---|---|---|---|---|---|---|---|')
   for (const [name, f] of Object.entries(run.fixtures)) {

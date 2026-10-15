@@ -79,14 +79,17 @@ export const MEASURES = [
   // TeX's file against the drawing (the 2608.16117 survey and the p59 finding, 2026-10-15; measure.mjs): a placeholder of a
   // drawn unit not shown exactly once, its ink its file row's segments (contentOf); a drawn line over a display's segment or
   // row (overDisplayOf); an empty slot between two drawn lines of a unit's frame (slotsSkippedOf); a drawn line opened by a
-  // character UAX #14 keeps from a line's start where the original's is not (lineStartsOf); an erased glyph the strict rule
+  // character UAX 14 keeps from a line's start where the original's is not (lineStartsOf); an erased glyph the strict rule
   // does not account for (glyphAccounted); a drawn unit's own text line left intact (pixelPage linesLeft). Each is a defect
   // compared as a rate against the run it is held to, as the others are, until the pull request that removes its cause
   // gates it at 0 (lab/pdf/README.md, the layer gate)
   ['contentLost', 'model', 'defect', 'down', 'placeholders not shown once (TeX\'s segments)'],
   ['textInDisplay', 'model', 'defect', 'down', 'drawn lines over a display'],
   ['slotsSkipped', 'model', 'defect', 'down', 'empty slots between two lines of a unit'],
-  ['lineStartPunct', 'model', 'defect', 'down', 'lines opened by a mark UAX #14 keeps from a line start'],
+  ['lineStartPunct', 'model', 'defect', 'down', 'lines opened by a mark UAX 14 keeps from a line start'],
+  // (and the placeholders the content measure cannot place, LOST in the file or of a unit it does not hold: compared as
+  // the others, so that a maker that loses more ink cannot lower the content measures by it)
+  ['contentUnknown', 'model', 'defect', 'down', 'placeholders the content measure cannot place'],
   ['glyphsLost', 'pixel', 'defect', 'down', 'erased glyphs not accounted for (strict)'],
   ['linesLeft', 'pixel', 'defect', 'down', "a drawn unit's own lines left intact"],
 ]
@@ -96,13 +99,10 @@ export const MEASURES = [
 export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"],
   // the crops with no TeX baseline to hold them to, the units v0 draws alone (the layout file not locating them whole: D4),
   // and the lines TeX's rule opened, or would have where the paper has no values for it (layer2.mjs breakLines)
-  ['cropNoTex', 'crops with no TeX baseline'], ['aloneUnits', 'units v0 draws alone'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"],
-  // (the placeholders of drawn units whose ink TeX's file does not place, LOST, or whose pieces the content measure cannot
-  // read against their source's: what contentLost cannot see)
-  ['contentUnknown', 'placeholders the content measure cannot place']]
+  ['cropNoTex', 'crops with no TeX baseline'], ['aloneUnits', 'units v0 draws alone'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"]]
 /** the reported counts a run's totals sum over its fixtures */
-const REPORTED_COUNTS = ['cropNoTex', 'aloneUnits', 'linesOpened', 'linesUnopened', 'contentUnknown']
-/** the content and line measures a page's model holds (measure.mjs), and the reported count beside them */
+const REPORTED_COUNTS = ['cropNoTex', 'aloneUnits', 'linesOpened', 'linesUnopened']
+/** the content and line measures a page's model holds (measure.mjs) */
 const FILE_MEASURES = ['contentLost', 'textInDisplay', 'slotsSkipped', 'lineStartPunct', 'contentUnknown']
 /** the placement counts, which a run without a layout file (v0 alone) has none of */
 const PLACEMENT = ['cropTextOverlap', 'cropBaselineOff', 'cropNoTex']
@@ -191,7 +191,6 @@ export function fixtureTotals(pages, frames, tier) {
     generated: kindsOf(pages), generatedLeft: sum(pages, p => p.generatedLeft),
   }
   for (const k of PLACEMENT) if (pages.some(p => p[k] !== undefined)) t[k] = sum(pages, p => p[k])
-  if (pages.some(p => p.contentUnknown !== undefined)) t.contentUnknown = sum(pages, p => p.contentUnknown)
   if (tier === 'pixel') {
     const tc = sum(pages, p => p.textCells), cc = sum(pages, p => p.cellCells)
     Object.assign(t, {

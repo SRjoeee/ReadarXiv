@@ -66,40 +66,52 @@ Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `
 
 The gate measures the drawn layer, v0 (`--engine-kind=proto`, its default; the records' mode is `--proto-tex=lines --removal=draw`; `--door` is the reader's door). The first layer (`layer/layer.mjs`, with the fit and the line breaker under `layer/`) is parked (`parked/README.md`): `--engine-kind=layer` is refused with a message that says so, for an older worktree given by `--engine=<it>` that still has the entry it measures it as it was, and the layer lab's first view reports that the entry is not there. The checker `layer/check.mjs` stays, since the gate's instrument imports it by its address.
 
-**TeX's file against the drawing** (the 2608.16117 survey and the p59 finding, 2026-10-15). Six measures read the
+**TeX's file against the drawing** (the 2608.16117 survey and the p59 finding, 2026-10-15). Seven measures read the
 drawing against TeX's own file, the layout file the fixture's drawing is given (`fixtures/<output>/layout.json`, its rows
 read by the instrument itself, `measure.mjs fileIndexOf`), never against the engine's own matching of the page's ink,
 which the older completeness checks trust. Not the kept layout (`refs/<output>/layout.json`): the 29 earlier fixtures'
 were made by the layout maker's first version, whose segments are a glyph's font box rather than its ink and which holds
-no `held` lines. A pull request that changes what the maker writes therefore moves these measures' ground truth with it,
-in its own pack:
+no `held` lines; so they are not taken where the run is given the fixtures' own layout files (`--layouts=fixed`, v0
+alone). A pull request that changes what the maker writes moves these measures' ground truth with it, in its own pack:
 
 | Measure | Tier | What is counted |
 |---|---|---|
-| `contentLost` | model | A placeholder of a drawn unit whose ink the file finds on the page (its segments) that is not shown exactly once: by a crop holding a segment's centre, by its rendering drawn from its source, by characters drawn as the page's own that stand in its segments, or by its ink left in place (kept, or never erased). Shown no time or twice or more. The drawing's putting back of ink it lost track of is no showing. |
+| `contentLost` | model | A placeholder of a drawn unit whose ink the file finds on the page (its segments) that is not shown exactly once. A rendering shows it only where it is that placeholder's own (its unit and piece) and drawn from its ink or source: its crop holding a segment's centre, its rendering from its source, its characters drawn as the page's own standing in its segments, or its ink left in place (kept, on a kept line, or never erased). Another placeholder's rendering drawn from its ink is no showing, nor is the drawing's putting back of ink it lost track of. Shown no time or twice or more. |
+| `contentUnknown` | model | The placeholders of drawn units the content measure cannot place: LOST in the file (no segment, no ground truth for their ink), or of a unit the file does not hold on the page. Gated as the others, so that a maker that loses more ink cannot lower the content measures by it. |
 | `textInDisplay` | model | A drawn line whose text's ink meets a display's segment or a display's row (a held line no text line of its unit shares a band with). |
-| `slotsSkipped` | model | An empty slot between two drawn lines of a unit in one frame, at their own pitch, with no held line or kept rendering between them. |
-| `lineStartPunct` | model | A drawn line that opens with a character UAX #14 keeps from a line's start (CL, CP, IS, EX, NS; LineBreak-17.0.0), unless the original's line on that baseline opens with one. |
-| `glyphsLost` | pixel | Lost ink by the strict account (`measure.mjs glyphAccounted`): an erased glyph in a placeholder's segment counts only where that placeholder is drawn from it or from its source; one on the unit's own line in no segment is TeX's text, replaced; a leftover of a gap is never accounted. `lostInk` stays as it was. |
-| `linesLeft` | pixel | A drawn unit's own text line of the file (not held, its kept label aside) left intact on the copy, as `stray` reads an item intact. |
-
-Beside them, not gated: `contentUnknown`, the placeholders the content measure cannot place, those the file has LOST (no
-segment: no ground truth for their ink) and those of a drawn unit the file does not hold on the page.
+| `slotsSkipped` | model | Room between two drawn lines of a unit in one frame, beyond their own pitch, that the original does not leave there itself, in slots: TeX's own room (between two of the unit's text lines of the file beyond its pitch: a blank line between paragraphs, a display's rows) and a line the drawing keeps as the original's are set aside. |
+| `lineStartPunct` | model | A drawn line that opens with a character UAX 14 keeps from a line's start (CL, CP, IS, EX, NS; LineBreak-17.0.0), unless the original's line on that baseline opens with one. |
+| `glyphsLost` | pixel | Lost ink by the strict account (`measure.mjs glyphAccounted`): an erased glyph in a placeholder's segment counts only where that placeholder is drawn from it or from its source; one on the unit's own line in no segment is TeX's text, replaced; a leftover of a gap off the file's lines is never accounted. `lostInk` stays as it was. |
+| `linesLeft` | pixel | A drawn unit's own text line of the file (not held; its kept label and the placeholders kept in place aside) left intact on the copy, as `stray` reads an item intact. |
 
 **How a new measure is gated.** A measure that is not 0 on `next` when it is added cannot be gated at 0: every pull request
 would fail. It enters as a `defect`, compared as a rate per 1,000 cells against the run it is held to (the merge base's in
-CI, the record locally), so that it fails only on a regression; `next`'s value is its baseline in the record. The six above
-entered so, on 2026-10-15. The pull request that removes a measure's cause brings it to 0 and, in the same pull request,
-gates it at 0: it adds the measure to the completeness checks (`layer-gate.mjs completenessRows`, where any count above 0
-makes the gate exit 1, and `rules-gate.mjs`'s `CHECK`, the names its public line may show). From then on any count fails.
+CI, the record locally), so that it fails only on a regression; `next`'s value is its baseline in the record. The seven
+above entered so, on 2026-10-15. The pull request that removes a measure's cause brings it to 0 and, in the same pull
+request, gates it at 0: it adds the measure to the completeness checks (`layer-gate.mjs completenessRows`, where any count
+above 0 makes the gate exit 1, and `rules-gate.mjs`'s `CHECK`, the names its public line may show). From then on any count
+fails.
 
 **2608.16117v1-zh**, the thirtieth output (CC BY 4.0; staging's own translation, the paper the maintainer reported on):
 its PDF, layout file and translation are in the private bucket only, never in git, and it is not in `data/layer-fixtures`
 (the gate reads every folder there). Every page of it is measured, as every page of the thesis is: the defects seen on
 staging reach page 14. Its layout file was made natively, not in Docker (whose image store is unreadable on the machine
-that made it): `layer-fixtures.mjs --offline --engine=<next>` with the one `docker run` it makes answered by the same
-latexmk command run with the local TinyTeX (TeX Live 2026, the packages TinyTeX lacks taken from the full TeX Live 2026
-tree), so its compile is not the Docker image's package versions byte for byte.
+that made it): `layer-fixtures.mjs --offline --engine=<next> --only=2608.16117v1:zh`, with `LAYER_FIXTURES`, `AXT_DATA` and
+`COMPILES` naming folders of its own and `lab/pdf/spikes/native-tex/` first on `PATH`, whose `docker` answers the one
+`docker run` the maker makes with the same latexmk command run by the local TinyTeX (TeX Live 2026; `NATIVE_TEXMFLOCAL`, a
+tree linking the full TeX Live 2026 tree's package directories TinyTeX lacks, with its `ls-R`; `NATIVE_TEXMFVAR`, one
+holding that tree's `pdftex.map`). Made twice so, the file is byte-equal; it is still not the Docker image's package
+versions byte for byte, and the next make in Docker replaces it (a new pack object).
+
+**Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
+folders, and a `--record` that would drop an output the record's run holds is refused. The record of 2026-10-15:
+
+```
+LAYER_RECORDS=lab/pdf/out/layer-gate/cut-p10-s2608/records LAYER_REFS=lab/pdf/out/layer-gate/cut-p10-s2608/refs \
+LAYER_GEOMETRY=lab/pdf/out/layer-gate/cut-p10-s2608/geometry pnpm exec tsx lab/pdf/spikes/layer-gate.mjs \
+  --tier=pixel --engine-kind=proto --proto-tex=lines --removal=draw --record --no-progress
+node lab/pdf/spikes/gate-pack.mjs make --out=lab/pdf/out/gate-pack-s2608
+```
 
 ### The rules gate in CI
 
