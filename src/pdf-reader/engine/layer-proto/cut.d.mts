@@ -49,7 +49,6 @@ export interface CutOptions {
   base?: { bytes: number; sha256: string; xref: number }
   image?: string
   lineskip?: [number, number] | null
-  cites?: [string, string][] | null
 }
 export interface Cut {
   units: (Written & { from: number; to: number })[]

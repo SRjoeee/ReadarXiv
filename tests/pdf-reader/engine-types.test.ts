@@ -64,8 +64,8 @@ describe('the units readers, bodies-free (amendment M21)', () => {
   it('type a read without bodies as flags, and the default as the full chunk, with no cast', () => {
     const entry = `${ROOT}/src/pdf-reader/engine/layer.mjs`
     const check = `
-import { readUnitsChunk, unitsOfChunks, droppedOf } from '${entry}'
-import type { ReadUnitsChunk, ReadUnitsChunkLight, Ref } from '${entry}'
+import { readUnitsChunk, unitsOfChunks, droppedOf, indexOf, readPart, mergeParts, openLayer } from '${entry}'
+import type { LayerIndex, LightLayerIndex, PartChain, ReadHead, ReadUnitsChunk, ReadUnitsChunkLight, Ref } from '${entry}'
 type Eq<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
 type Expect<T extends true> = T
 declare const bytes: Uint8Array
@@ -92,6 +92,21 @@ export async function use() {
 }
 // @ts-expect-error a light chunk is not a full one: the bodies-free chain needs the option
 unitsOfChunks([light])
+declare const head: ReadHead
+declare const light: ReadUnitsChunkLight
+declare const full: ReadUnitsChunk
+const lean = indexOf(head, [light])
+const whole = indexOf(head, [full])
+type H = Expect<Eq<typeof lean, LightLayerIndex>>
+type I = Expect<Eq<typeof whole, LayerIndex>>
+type J = Expect<Eq<typeof lean.pieces, Uint32Array>>
+type K = Expect<Eq<typeof light.pieces, Uint32Array>>
+declare const chain: PartChain | null
+export const parts = [readPart(bytes, { ref, index: lean, chain }), readPart(bytes, { ref, index: whole, chain }), {} as [H, I, J, K]]
+// @ts-expect-error a light index holds no bodies: the merge refuses it
+mergeParts(lean, [])
+// @ts-expect-error nor does the door take one
+openLayer({ index: lean } as Parameters<typeof openLayer>[0])
 `
     expect(tsc({ 'check.ts': check })).toEqual({ status: 0, errors: [] })
   })

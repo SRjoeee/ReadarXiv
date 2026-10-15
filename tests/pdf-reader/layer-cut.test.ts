@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { type Cut, type CutEntry, cutBundle, type CutOptions, needFrontier, TAIL_NOT_CARRIED } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import {
-  CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, readHead, readLeftPart, readPart, readUnitsChunk, writePart,
-  type ReadUnitsChunk, type Ref,
+  CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, type ReadUnitsChunk, type ReadUnitsChunkLight, readHead, readLeftPart, readPart, readUnitsChunk, writePart,
+  type Ref,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { needsOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
@@ -674,6 +674,21 @@ describe.skipIf(!LAB_ON)('the real papers cut', () => {
       const K = await oracleK(whole)
       expect(seen.map(e => [e.id, e.slot, e.lists, [...e.reach].sort((x, y) => x - y), e.rects === null])).toEqual(K.map(e => [e.id, e.stream, e.lists, [...e.reach].sort((x, y) => x - y), e.rects === null]))
       await checkCut(name, whole, c)
+      // the parts read against a light index (M24) are the parts read against the full one
+      {
+        const head = await readHead(c.head.bytes, { ref: c.head.ref })
+        const full: ReadUnitsChunk[] = [], lean: ReadUnitsChunkLight[] = []
+        for (const u of c.units) full.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: full.at(-1) ?? null }))
+        for (const u of c.units) lean.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: lean.at(-1) ?? null, bodies: false }))
+        const a = indexOf(head, full), b = indexOf(head, lean)
+        let ca: PartChain | null = null, cb: PartChain | null = null
+        for (const p of c.parts) {
+          const x = await readPart(p.bytes, { ref: p.ref, index: a, chain: ca }), y = await readPart(p.bytes, { ref: p.ref, index: b, chain: cb })
+          expect(y, `${name}: part ${p.from}-${p.to}`).toEqual(x)
+          ca = x.chain
+          cb = y.chain
+        }
+      }
       if (process.env.AXT_CUT_STATS) process.stderr.write(`CUT ${name} N=${whole.paper.pages} units=${units.length} left=${whole.left.units.length} layout=${layout.units.length} parts=${JSON.stringify(fits(c))} bytes=${c.parts.map(p => p.bytes.length)}\n`)
       const again = await cutBundle(whole, { leftPages: () => null })
       expect([...c.units, c.head, ...c.parts].map(w => w.sha256)).toEqual([...again.units, again.head, ...again.parts].map(w => w.sha256))

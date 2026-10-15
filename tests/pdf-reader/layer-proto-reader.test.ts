@@ -122,6 +122,12 @@ type Opened = Parameters<typeof import('@/pdf-reader/engine/layer-proto/run.mjs'
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('the reader\'s door: two readers\' hosts are the same calls', () => {
+  it('refuses a light index (M24): the layer needs the units\' bodies', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const light = { kind: 'index', light: true, sha256: 'a'.repeat(64), head: { paper: { pages: 1 } }, units: [], kinds: [], pieces: new Uint32Array(0), dropped: [], records: {} }
+    await expect(openLayer({ index: light, doc: docOf(), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} } as never)).rejects.toThrow(/light index/)
+  })
+
   it('opens v0 with the bundle\'s left, layout and add-on, the target\'s units and cells\' groups, L7\'s labels, the served faces and hyphenation, at 2.5 and dpr 1', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const bundle = bundleOf(), doc = docOf()
