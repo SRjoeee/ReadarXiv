@@ -702,6 +702,75 @@ describe('the PR\'s review', () => {
   })
 })
 
+describe('the PR\'s review, second round', () => {
+  /** a want of page n from the right pane: the pointer over its middle */
+  async function want(s: Setup, n: number) {
+    const c = clientOf(s.panes.right, n, 300, 400)
+    s.panes.right.dispatchEvent(new MouseEvent('mousemove', { clientX: c.clientX, clientY: c.clientY, bubbles: true }))
+    await s.clock.advance(20)
+    await settle(s, 6)
+  }
+
+  it('a refusal while a left part is fetched aborts that fetch (4289061885)', async () => {
+    const m = await M()
+    const s = await setup({ composedFailAt: [2] })
+    await nearOn(s, [1])
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref) })
+    await settle(s)
+    s.side.tell({ parts: [jobRef(m, 0)] })
+    await settle(s)
+    s.hold.add(m.lefts[1]!.sha256)
+    await want(s, 1)
+    const signal = s.signals.get(m.lefts[1]!.sha256)
+    expect(signal?.aborted).toBe(false)
+    s.side.tell({ parts: [jobRef(m, 1)] })
+    await settle(s)
+    expect(s.side.probe().state).toBe('refused')
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('a fork lets a page\'s failed left part be asked again at once, from the new door (4289061968)', async () => {
+    const m = await M()
+    const input = partInputs(m.head.sha256, m.lefts)[1]!
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const s = await setup({ extra: [other] })
+    await nearOn(s, [2])
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(m, i)) })
+    await settle(s)
+    s.refuse.add(m.lefts[2]!.sha256)
+    await want(s, 2)
+    const count = () => s.fetched.filter(x => x === m.lefts[2]!.sha256).length
+    expect(count()).toBe(1)
+    s.refuse.clear()
+    s.side.tell({ parts: [{ ...(other.ref as Ref), prev: m.parts[0]!.sha256 }] })
+    await settle(s)
+    expect(s.side.probe().forks).toBe(1)
+    await want(s, 1)
+    await want(s, 2)
+    expect(count()).toBe(2)
+  })
+
+  it('a page this door laid, let go far away and near again, whose copy then fails: the right\'s shapes the original\'s there too (4289064231)', async () => {
+    const s = await setup({ copyFails: (d, n, before) => d === 0 && n === 1 && before === 1 })
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s)
+    await want(s, 1)
+    expect(s.side.probe().shapesLaid).toBe(1)
+    await nearOn(s, [1], false)
+    await nearOn(s, [1])
+    await settle(s)
+    expect(content(s, 1)).toBe('original')
+    expect(s.side.probe().shapesLaid).toBe(0)
+    // asked again on the next scroll: laid, its shapes the layer's again
+    s.panes.right.scrollTop = 30
+    await flush(10)
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    expect(s.side.probe().shapesLaid).toBe(1)
+  })
+})
+
 describe('the side: one a view, and its dispose', () => {
   it('a second side while one lives throws; after its dispose another may be made', async () => {
     const s = await setup()

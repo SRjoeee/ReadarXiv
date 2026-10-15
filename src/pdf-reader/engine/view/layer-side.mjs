@@ -230,7 +230,8 @@ export function createLayerSide(view, o) {
     try {
       layer = await open({
         index, doc, parts, target: o.target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}),
-        leftPart: (_page, ref) => o.fetchObject(ref, ac.signal),
+        // (the left parts' fetches go with the door's generation: a reopen, a refusal or the dispose aborts them)
+        leftPart: (_page, ref) => o.fetchObject(ref, leftAc.signal),
         onRetired: d => retired(d, me),
       })
     } catch (e) { throw coded(e, 'open') }
@@ -308,6 +309,8 @@ export function createLayerSide(view, o) {
   function shownOriginal(n) {
     const P = rec(n)
     if (P.content && (P.content.gen !== gen || !P.content.wrap)) unlay(n)
+    // the right's shapes there the original's again, as its place is
+    if (right?.hide(n)) startsFor([...rows.keys()])
   }
   /** what the place shows of the layer let go, the place back to its pre-layer content */
   function unlay(n) {
@@ -435,7 +438,7 @@ export function createLayerSide(view, o) {
     ring.push(`${n}@${Math.round(clock.now())}`)
     if (ring.length > RING) ring.shift()
     // the right's shapes of the page: its words (the units the layer shows as the original's from the left's tokens)
-    if (right?.lay(n, laid.words)) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
+    if (right?.lay(n, laid.words) || right?.show(n)) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
   }
   /** a laid page's copy drawn again at the place's new k (a zoom): from the left's canvas once PDF.js drew it at that k */
   async function recopy(n) {
@@ -543,7 +546,8 @@ export function createLayerSide(view, o) {
       if (doc) { const c = contents; void c.outline(doc).then(m => { if (m && contents === c) outlineSoon() }, () => {}) }
       shapedParts = []
       leftStarts.clear(); rightStarts.clear()
-      leftAsked.clear(); floatsAsked.clear()
+      // (the chain's left parts may be others now: a page's failure is no longer a reason to wait)
+      leftAsked.clear(); floatsAsked.clear(); leftFailed.clear()
       outlineSoon()
     }
     const more = parts.slice(shapedParts.length)
