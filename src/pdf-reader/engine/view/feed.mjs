@@ -141,8 +141,10 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
       do {
         rechain = false
         const at = gen
-        // a chain told shorter (a catalog's): what was read past it let go
-        if (read.length > told.length) { read = read.slice(0, told.length); changed() }
+        // a chain told anew (a fork, a catalog's shorter one): what was read past their common part let go, at once
+        let same = 0
+        while (same < read.length && same < told.length && read[same].sha256 === told[same].sha256) same++
+        if (read.length > same) { read = read.slice(0, same); changed() }
         for (let i = 0; i < told.length && !disposed && at === gen; i++) {
           const r = told[i]
           if (read[i]?.sha256 === r.sha256) continue

@@ -38,6 +38,9 @@ export const COPY_PIXELS = 2 ** 24
 const K_SLACK = 0.02
 /** how long after a zoom's last step the copies are drawn again: PDF.js draws its own pages 400 ms after it */
 export const RECOPY_MS = 600
+/** how long after a left part's fetch or read fails it is asked again, on a want of its page: a failure may be the network's,
+ *  or the part's own, which asking on every pointer frame would only repeat */
+export const LEFT_RETRY_MS = 10_000
 /** the pages wanted last whose geometry is kept beside the near ones (§3.2) */
 const WANTED_KEPT = 20
 /** the commits the probe keeps */
@@ -128,6 +131,12 @@ export function createLayerSide(view, o) {
     offPage?.()
     try { was?.dispose() } catch { /* the door's own */ }
     for (const n of pages.keys()) { abortAsk(n); unlay(n) }
+    // nothing more is read: the feed's fetches and the left parts' let go, the latest composed document with them (the
+    // door told retired lets go its own), the right's shapes the original's again, as its places are
+    feed.dispose()
+    leftAc.abort()
+    letGo(latest, 'side')
+    if (right) { right.reset(); startsFor([...rows.keys()]) }
     emitLayer()
   }
 
@@ -401,10 +410,11 @@ export function createLayerSide(view, o) {
     let got
     try { got = await copyAt(d, n, k, my) } catch (e) {
       if (disposed || my !== gen) return
-      // the page shows the original; asked again on the next scroll or a zoom
+      // the page shows the original (an earlier door's drawing let go); asked again on the next scroll or a zoom
       warn('copy', e)
       P.failed = true
       rearm.add(n)
+      shownOriginal(n)
       return
     }
     if (!got) return
@@ -508,6 +518,8 @@ export function createLayerSide(view, o) {
   let left = null, right = null, shapedParts = []
   let leftAc = new AbortController()
   const leftAsked = new Set(), wantsBefore = new Set(), floatsAsked = new Set()
+  /** when each page's left part last failed */
+  const leftFailed = new Map()
   const leftStarts = new Map(), rightStarts = new Map()
   /** the last pages wanted, most recent last; the pages whose geometry is kept (near and wanted) */
   const wanted = []
@@ -526,6 +538,9 @@ export function createLayerSide(view, o) {
       right = layerShapes(left)
       contents = createContents(index)
       contents.take([...rows.values()])
+      // the original's outline gives the new contents the pages of the headings no part locates
+      const doc = V.left.doc()
+      if (doc) { const c = contents; void c.outline(doc).then(m => { if (m && contents === c) outlineSoon() }, () => {}) }
       shapedParts = []
       leftStarts.clear(); rightStarts.clear()
       leftAsked.clear(); floatsAsked.clear()
@@ -550,6 +565,8 @@ export function createLayerSide(view, o) {
       windowed()
     }
     if (leftAsked.has(p)) return
+    // a part that failed: asked again once its wait has passed
+    if (clock.now() - (leftFailed.get(p) ?? -Infinity) < LEFT_RETRY_MS) return
     if (!door) { wantsBefore.add(p); return }
     leftAsked.add(p)
     const my = gen, L0 = left
@@ -557,6 +574,7 @@ export function createLayerSide(view, o) {
       if (disposed) return
       // (the shapes made again for a fork meanwhile: a left part of the chain let go is not theirs; asked again on a want)
       if (left !== L0) { leftAsked.delete(p); return }
+      leftFailed.delete(p)
       // in a task of its own: the page's part of the layout, its sentences and the panes' shapes
       clock.later(() => {
         if (disposed || left !== L0) return
@@ -569,6 +587,9 @@ export function createLayerSide(view, o) {
     }, e => {
       if (disposed || isAbort(e) || my !== gen) { if (my !== gen) leftAsked.delete(p); return }
       left?.refuse(p, e)
+      // the door keeps no failed fetch: asked again on a later want, once LEFT_RETRY_MS has passed
+      leftAsked.delete(p)
+      leftFailed.set(p, clock.now())
     })
   }
   /** the geometry kept for the near pages and the last pages wanted; the rest let go (made again on their next use) */
@@ -672,6 +693,8 @@ export function createLayerSide(view, o) {
       rowsEnded = false
       leftStarts.clear(); rightStarts.clear()
       shapesChanged()
+      // the contents' titles are the attempt's rows': the source's until its rows come
+      if (contents?.clearTexts()) outlineSoon()
       reopenWanted = true
       void pump()
     },
@@ -686,6 +709,7 @@ export function createLayerSide(view, o) {
         rows: rows.size, rowsEnded, ready, failed, stalled: stalls, laid: laidNow, retired: retiredNow, asking,
         composed: counts.composed, docs: entries.size, opens: counts.opens, forks: counts.forks, asked: counts.asked, commits: counts.commits, copies: counts.copies, retirements: counts.retired,
         leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '),
+        shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
       }
     },
     dispose() {

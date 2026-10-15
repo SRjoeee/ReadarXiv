@@ -66,8 +66,11 @@ export interface Options {
   faceSources?: LayerSideOptions['faceSources']
   /** another paper's objects served (its pages `pages`), in place of the format test's */
   paper?: { objects: readonly { bytes: Uint8Array; sha256: string }[]; pages: number }
-  /** pages whose first copy the door fails to draw */
-  copyFails?: readonly number[]
+  /** pages whose first copy the door fails to draw; or which copies fail: the door's index (0 the first opened), the page, the
+   *  page's copies drawn by that door before */
+  copyFails?: readonly number[] | ((door: number, page: number, before: number) => boolean)
+  /** the composed opens (0 the first) that fail */
+  composedFailAt?: readonly number[]
   /** the door refuses to open, as openLayer refuses a document of another page count */
   openFails?: boolean
 }
@@ -116,7 +119,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
     composed: (tail, options) => {
       const task = fakeTask(destroyed, `composed ${composed.length}`)
       composed.push({ tail, options, task })
-      if (o.composedFails) task.reject(new Error('no composed document'))
+      if (o.composedFails || o.composedFailAt?.includes(composed.length - 1)) task.reject(new Error('no composed document'))
       else task.resolve((o.real ? o.real.docFor(rOf(tail)) : drawable(fakeDoc((o.paper?.pages ?? N) + rOf(tail)))) as never)
       return task as unknown as DocumentTask
     },
@@ -130,10 +133,12 @@ export async function setup(o: Options = {}): Promise<Setup> {
       const take = layer.take.bind(layer), end = layer.end.bind(layer), copyOf = layer.copyOf.bind(layer), dispose = layer.dispose.bind(layer)
       layer.take = r => { seen.taken.push(...r); return take(r) }
       layer.end = () => { seen.ended++; end() }
-      const failing = new Set(o.copyFails ?? [])
+      const which = doors.length - 1, list = Array.isArray(o.copyFails) ? new Set(o.copyFails) : null
+      const fails = typeof o.copyFails === 'function' ? o.copyFails : (d: number, n: number, before: number) => d === 0 && before === 0 && !!list?.has(n)
       layer.copyOf = (n, src, k) => {
+        const before = seen.copies.filter(c => c[0] === n).length
         seen.copies.push([n, src, k])
-        if (failing.delete(n)) return Promise.reject(new Error(`the copy of page ${n} failed (the test's)`))
+        if (fails(which, n, before)) return Promise.reject(new Error(`the copy of page ${n} failed (the test's)`))
         return copyOf(n, src, k)
       }
       layer.dispose = () => { if (live === layer) live = null; dispose() }

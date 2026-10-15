@@ -77,6 +77,8 @@ export function createContents(index) {
       }
       return moved
     },
+    /** the rows' titles let go (a later attempt's rows to come): whether a heading had one */
+    clearTexts() { const had = texts.size > 0; texts.clear(); return had },
     entries: () => outlineOf(headings, id => texts.get(id), id => first.get(id)?.page ?? outlined.get(id) ?? null),
     /** a unit's first rectangle where a part has located it */
     firstRect: id => first.get(id) ?? null,

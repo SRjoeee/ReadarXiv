@@ -6,8 +6,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { createLayerSide, PAGE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
-import type { DocumentTask, ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
+import { createLayerSide, LEFT_RETRY_MS, PAGE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { N, partInputs, TAILS } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, rowOf, type Setup, settle, setup } from './helpers/side-setup'
@@ -581,6 +581,124 @@ describe('the order (§2.2): the original before the base and the door', () => {
     expect(bind).toHaveBeenCalledTimes(1)
     expect(s.opens).toBe(1)
     expect(content(s, 1)).toBe('layer')
+  })
+})
+
+describe('the PR\'s review', () => {
+  /** a want of page n from the right pane: the pointer over its middle */
+  async function want(s: Setup, n: number) {
+    const c = clientOf(s.panes.right, n, 300, 400)
+    s.panes.right.dispatchEvent(new MouseEvent('mousemove', { clientX: c.clientX, clientY: c.clientY, bubbles: true }))
+    await s.clock.advance(20)
+    await settle(s, 6)
+  }
+
+  it('a refusal after the composed document is open lets it go at once, and nothing more is fetched (4288064933)', async () => {
+    const s = await setup({ openFails: true })
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(s.side.probe().state).toBe('refused')
+    expect(s.destroyed).toEqual(['destroy composed 0'])
+    const n = s.fetched.length
+    s.side.tell({ parts: [jobRef(await M(), 0)] })
+    await settle(s)
+    expect(s.fetched.length).toBe(n)
+  })
+
+  it('a refusal after pages were laid puts the right\'s shapes back to the original\'s with its places (4288144909)', async () => {
+    const m = await M()
+    const s = await setup({ composedFailAt: [2] })
+    await nearOn(s, [1])
+    // the door opened over no part (the original alone), then part 1's tail: the third composed document fails
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref) })
+    await settle(s)
+    s.side.tell({ parts: [jobRef(m, 0)] })
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    await want(s, 1)
+    expect(s.side.probe().shapesLaid).toBe(1)
+    // the next part's tail: its composed document does not open
+    s.side.tell({ parts: [jobRef(m, 1)] })
+    await settle(s)
+    expect(s.side.probe()).toMatchObject({ state: 'refused', why: 'composed', shapesLaid: 0 })
+    expect(content(s, 1)).toBe('original')
+  })
+
+  it('a replacement page whose copy fails: the earlier door\'s drawing goes, the original shows, and it is asked again (4288144925)', async () => {
+    const s = await setup({ copyFails: (d, n, before) => d === 1 && n === 1 && before === 0 })
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s)
+    const old = layerOf(s, 1)?.querySelector('svg')
+    expect(old).not.toBeNull()
+    s.side.again()
+    await settle(s)
+    expect(s.opens).toBe(2)
+    expect(content(s, 1)).toBe('original')
+    expect(old?.isConnected).toBe(false)
+    s.panes.right.scrollTop = 30
+    await flush(10)
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+  })
+
+  it('a left part whose fetch fails is fetched again on a later want, once its wait has passed (4288144898)', async () => {
+    const m = await M()
+    const s = await setup()
+    s.refuse.add(m.lefts[1]!.sha256)
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s)
+    await want(s, 1)
+    const count = () => s.fetched.filter(x => x === m.lefts[1]!.sha256).length
+    expect(count()).toBe(1)
+    s.refuse.clear()
+    // (the pointer over the page again at once: not asked again, a failure may be the part's own)
+    await want(s, 1)
+    expect(count()).toBe(1)
+    await s.clock.advance(LEFT_RETRY_MS + 100)
+    await want(s, 2)
+    await want(s, 1)
+    expect(count()).toBe(2)
+    // (pages 2 and 1 landed: page 1's on its second ask)
+    expect(s.side.probe().leftParts).toBe(2)
+  })
+
+  it('again() lets the earlier attempt\'s titles go from the contents; a fork keeps the outline\'s pages (4288065086, 4288065279, 4288144903)', async () => {
+    const m = await M()
+    const input = partInputs(m.head.sha256, m.lefts)[1]!
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const s = await setup({ extra: [other] })
+    // the original's own outline: 'Intro' on page 3
+    const doc = internalsOf(s.view).left.doc() as unknown as Record<string, unknown>
+    doc.getOutline = async () => [{ title: 'Intro', dest: [2, { name: 'XYZ' }], items: [] }]
+    const outline = () => (s.events.filter(e => e.type === 'outline').at(-1) as Extract<ViewEvent, { type: 'outline' }>).entries[0]
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(m, i)) })
+    s.side.take([rowOf(6, 'Einleitung')])
+    await settle(s)
+    expect(outline()).toMatchObject({ id: 6, page: 3, title: 'Einleitung' })
+    // a fork: page 4's part, which locates the heading, no longer follows; the outline's page is kept
+    s.side.tell({ parts: [{ ...(other.ref as Ref), prev: m.parts[0]!.sha256 }] })
+    await settle(s)
+    expect(s.side.probe().forks).toBe(1)
+    expect(outline()).toMatchObject({ id: 6, page: 3, title: 'Einleitung' })
+    s.side.again()
+    await settle(s)
+    expect(outline()).toMatchObject({ id: 6, page: 3, title: 'Intro' })
+  })
+
+  it('a catalog naming a shorter chain opens the door again over it and ends its parts (4288064787)', async () => {
+    const m = await M()
+    const s = await setup()
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(s.door.layer?.stats().parts).toEqual({ through: 4, told: 3 })
+    s.side.tell({ parts: [m.parts[0]!.ref as Ref], end: { through: 1 } })
+    await settle(s)
+    expect(s.opens).toBe(2)
+    expect(s.door.layer?.stats().parts).toEqual({ through: 1, told: 1 })
+    expect(s.side.probe().ended).toBe(true)
+    expect(s.door.layer?.pageState(2)).toBe('failed')
   })
 })
 

@@ -7,6 +7,8 @@ import type { PageBox } from './shapes.mjs'
 export interface Contents {
   addParts(parts: readonly Pick<ReadPart, 'left'>[]): boolean
   take(rows: readonly Row[]): boolean
+  /** the rows' titles let go: whether a heading had one */
+  clearTexts(): boolean
   outline(doc: { getOutline(): Promise<unknown[] | null>; getDestination(id: string): Promise<unknown[] | null>; getPageIndex(ref: unknown): Promise<number> }): Promise<boolean>
   entries(): OutlineEntry[]
   firstRect(id: number): PageBox | null

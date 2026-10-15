@@ -54,3 +54,4 @@ export declare function createLayerSide(view: ReaderView, o: LayerSideOptions): 
 export declare const PAGE_MS: number
 export declare const COPY_PIXELS: number
 export declare const RECOPY_MS: number
+export declare const LEFT_RETRY_MS: number
