@@ -84,6 +84,9 @@ const sameFile = (a, b) => !!b && (sameBytes(a, b) || withoutMarks(latin1(a)) ==
 const byPath = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)
 /** what the bibliography step reads: every aux's \citation, \bibdata and \bibstyle lines (BibTeX's), every .bcf whole (biber's) */
 const bibInput = files => [...files].filter(([p]) => /\.(?:aux|bcf)$/.test(p)).sort(byPath).map(([p, b]) => `${p}\n${p.endsWith('.bcf') ? latin1(b) : (latin1(b).match(/^\\(?:citation|bibdata|bibstyle)\{.*$/gm) ?? []).join('\n')}`).join('\n')
+/** whether a pass wrote a bibliography job beside the main one's (an aux of another name holding a \bibdata: chapterbib, multibib,
+ *  bibunits), which latexmk runs BibTeX on and a one-pass request (the main job's bibliography step alone) never does */
+const otherBibJobs = (files, main) => [...files].some(([p, b]) => /\.aux$/.test(p) && p !== `${jobName(main)}.aux` && /^\\bibdata\{/m.test(latin1(b)))
 /** a pass that ran to the document's end: TeX ran (`ok`), did not stop short, and logged END_TEX's AXT-END */
 const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
 
@@ -113,7 +116,9 @@ const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
  *     without draft 2 the marked passes go on; without the next marked pass the last one's PDF is kept, not settled
  *   - a draft that did not run through (not ok — a limit, the budget spent —, stopped short, no AXT-END: nonstop
  *     mode goes on after an error as latexmk -f does) falls back to today's compile (`fallback`), as does a pass that ran
- *     through and returned no files (a host that cannot, or files past its bound); a marked pass that did not run
+ *     through and returned no files (a host that cannot, or files past its bound), or the first draft wrote a bibliography job
+ *     beside the main one's (otherBibJobs: chapterbib, multibib, bibunits — no bibliography shipped), which latexmk runs
+ *     and the one-pass request does not; a marked pass that did not run
  *     through, or gave no PDF, is the compile's refusal (null), with no fallback after it
  */
 async function convergeThenMark(paper, compile, marked, cm, { wall, budget }) {
@@ -148,6 +153,7 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget }) {
   const first = await pass(unmarked, true, !shipped)
   if (!ranThrough(first)) return fallback('draft-failed')
   if (!first.files) return fallback('no-files')
+  if (!shipped && otherBibJobs(first.files, main)) return fallback('aux-jobs')
   // (the aux from the files' bytes: the `aux` field may be a lossy decoding)
   const auxBytes = first.files.get(`${jobName(main)}.aux`), missed = notFound(first.log)
   const readNext = (p, b) => { const had = givenAt(unmarked, p); return had ? !sameFile(b, had) : missed.has(p) && /\S/.test(latin1(b)) }

@@ -389,13 +389,14 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
 
   it('falls back to today\'s compile where a draft returned no files or did not run through', async () => {
     const bbl = '\\begin{thebibliography}{1}\n\\bibitem{a} A.\n\\end{thebibliography}\n'
-    const cases: [string, (Compiled | Error)[], 'no-files' | 'draft-failed', number][] = [
+    const cases: [string, (Compiled | Error)[], 'no-files' | 'draft-failed' | 'aux-jobs', number][] = [
       ['a host that returns no files', [PROBE, { ok: true, pdf: null, log: END }], 'no-files', 1],
       ['a draft that is not ok', [PROBE, { ...draftOf({ 'main.aux': AUX }), ok: false, error: 'limit cpu' }], 'draft-failed', 1],
       ['a draft that timed out (a host returns files only with ok)', [PROBE, { ok: false, pdf: null, log: 'the log of a pass the wall stopped\n', error: 'Compilation timeout' }], 'draft-failed', 1],
       ['a draft that stopped short', [PROBE, draftOf({ 'main.aux': AUX }, `! Emergency stop.\n${END}`)], 'draft-failed', 1],
       ['a draft with no AXT-END', [PROBE, draftOf({ 'main.aux': AUX }, 'the log of a halted pass\n')], 'draft-failed', 1],
       ['a second draft that did not run through', [PROBE, draftOf({ 'main.aux': AUX, 'main.bbl': bbl }, `No file main.bbl.\n${END}`), draftOf({ 'main.aux': AUX }, '! TeX capacity exceeded, sorry [main memory size=5000000].\n')], 'draft-failed', 2],
+      ['a bibliography job beside the main one\'s (chapterbib, multibib): latexmk runs BibTeX on it, a pass does not', [PROBE, draftOf({ 'main.aux': AUX, 'chap.aux': '\\relax \n\\bibstyle{plain}\n\\bibdata{refs}\n' })], 'aux-jobs', 1],
       ['a marked pass that returned no files', [PROBE, draftOf({ 'main.aux': AUX }), { ok: true, pdf: PDF, log: `${LINES}${END}` }], 'no-files', 1],
     ]
     for (const [why, answers, fallback, drafts] of cases) {
@@ -408,6 +409,12 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     // (and as today where it fails too)
     const failed = await cmOf([PROBE, { ok: true, pdf: null, log: END }, { ok: false, error: 'Compilation timeout' }])
     expect(failed.made).toEqual({ refused: 'compile', ms: { probe: expect.any(Number), compile: expect.any(Number) }, cm: { drafts: 1, marked: 0, settled: false, fallback: 'no-files' } })
+  })
+
+  it('takes an aux of another name with no \\bibdata (an \\include\'d chapter\'s) as no bibliography job', async () => {
+    const made = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'chap.aux': '\\relax \n\\@setckpt{chap}{\\setcounter{page}{2}}\n' }), markedOf({ 'main.aux': AUX })])
+    expect(made.made).toMatchObject({ cm: { drafts: 1, marked: 1, settled: true } })
+    expect(made.made.cm).not.toHaveProperty('fallback')
   })
 
   it('refuses at the compile where a draft throws or a marked pass did not run through, and opens nothing', async () => {

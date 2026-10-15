@@ -139,7 +139,8 @@ function nativeCompile(source, req, records) {
     step(bin, [bin, '-no-shell-escape', '-interaction=nonstopmode', ...mode, main])
     passes = 1
     if (!killed && req.bibtex === true) {
-      const biber = existsSync(join(BUILD, `${job}.bcf`)), tool = biber ? 'biber' : 'bibtex'
+      // (a .bcf this pass wrote — in files mode, newer than the marker —, not one the source archive shipped)
+      const bcf = join(BUILD, `${job}.bcf`), biber = req.files ? written(walk(), `${job}.bcf`) : existsSync(bcf), tool = biber ? 'biber' : 'bibtex'
       if (has(tool)) step(tool, [tool, `./${job}`])
       else missing.push(tool)
     }
@@ -297,7 +298,8 @@ for (const arg of ids) {
       if (!row.pdf.equal) row.lost = await lost(L.pdf, CM.pdf)
       if (!row.marks.equal) { mkdirSync(OUT, { recursive: true }); writeFileSync(join(OUT, `${id}.L.marks.json`), L.made.marks); writeFileSync(join(OUT, `${id}.CM.marks.json`), CM.made.marks); row.marks.differences = differences(L.made.marks, CM.made.marks) }
       // equal: the same PDF (or, for XeLaTeX's, whose drivers compress otherwise, the same marks and layout)
-      const equal = row.pdf.equal ? row.marks.equal && row.layout?.equal !== false : paper.meta.compiler === 'xelatex' && row.marks.equal && row.layout?.equal === true
+      // (a layout asked for and refused is no equality: it verified nothing)
+      const equal = row.pdf.equal ? row.marks.equal && (!row.layout || row.layout.equal === true) : paper.meta.compiler === 'xelatex' && row.marks.equal && row.layout?.equal === true
       row.equal = equal
       if (equal) tally.equal++
       else { tally.differ++; failed++ }

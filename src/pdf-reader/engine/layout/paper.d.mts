@@ -5,7 +5,7 @@ import type { Compiled, CompileRequest, Paper } from '../pipeline/live.mjs'
  *  last marked pass wrote the files it was given (else the bound of five TeX passes was reached and its PDF kept), and
  *  why today's compile was asked instead, where it was: a host that returned no files, or a draft that did not run
  *  through. Pass counts enter no key and no file */
-export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' }
+export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' }
 
 /**
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read
