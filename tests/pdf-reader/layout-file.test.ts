@@ -21,7 +21,7 @@ const MATH = PH_KINDS.indexOf('math'), DISPLAY = PH_KINDS.indexOf('display'), CI
  *  and onto the next page, a caption, a footnote */
 function made(): LayoutFile {
   return {
-    schema: 3,
+    schema: 4,
     layout: LAYOUT,
     pdfjs: '5.4.296',
     paper: { id: '2608.04322', version: 1, pages: 3 },
@@ -116,6 +116,17 @@ describe('a valid file', () => {
     const index = indexLayout(parseLayout(new TextEncoder().encode(encodeLayout(f))))
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.TEXT, segs: new Float64Array(0), text: '%' })
   })
+  it('a later display of a display group (JOINED) and a LOST piece outside the unit (OUTSIDE) parse with no segments', () => {
+    const f = made()
+    // unit 5's display k2 owns its group's ink; a second display k3 of the group, JOINED; the LOST macro k1 of unit 8 OUTSIDE
+    f.ph.splice(4, 0, [5, 3, DISPLAY, PH_FLAG.JOINED])
+    const r8 = f.ph.find(r => r[0] === 8 && r[1] === 1)
+    if (!r8) throw new Error('no row 8.1')
+    r8[3] = PH_FLAG.LOST | PH_FLAG.OUTSIDE
+    const index = indexLayout(parseLayout(new TextEncoder().encode(encodeLayout(f))))
+    expect(index.unit(5)!.ph.get(3)).toEqual({ kind: 'display', flags: PH_FLAG.JOINED, segs: new Float64Array(0), text: null })
+    expect(index.unit(8)!.ph.get(1)?.flags).toBe(PH_FLAG.LOST | PH_FLAG.OUTSIDE)
+  })
   it('a valid file parses, round-trips and indexes', () => {
     const f = made()
     const text = encodeLayout(f)
@@ -151,7 +162,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null })
-    expect(LAYOUT).toBe('5')
+    expect(LAYOUT).toBe('6')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
@@ -357,7 +368,8 @@ const ROWS: [string, Edit, string][] = [
   ['an extra key of 10,000 characters is named by its first 20', f => { f['k'.repeat(10000)] = 1 }, `${'k'.repeat(20)}…`],
   ['schema 1, a file before the names', f => { f.schema = 1 }, 'schema'],
   ['schema 2, a file before the interline glue', f => { f.schema = 2 }, 'schema'],
-  ['schema 4', f => { f.schema = 4 }, 'schema'],
+  ['schema 3', f => { f.schema = 3 }, 'schema'],
+  ['schema 5', f => { f.schema = 5 }, 'schema'],
   ['a lineskip of one number', f => { (f as { lineskip: unknown }).lineskip = [1] }, 'lineskip'],
   ['a lineskip that is a string', f => { (f as { lineskip: unknown }).lineskip = ['1pt', 0] }, 'lineskip[0]'],
   ['a lineskiplimit past \\maxdimen', f => { (f as { lineskip: unknown }).lineskip = [1, 1e6] }, 'lineskip[1]'],
@@ -467,7 +479,16 @@ const ROWS: [string, Edit, string][] = [
   ['EMPTY and LOST together', f => { f.ph[4][3] = PH_FLAG.EMPTY | PH_FLAG.LOST }, 'ph[4][3]'],
   ['NUMBERED on a citation', f => { f.ph[1][3] = PH_FLAG.SOURCE_BRACKETS | PH_FLAG.NUMBERED }, 'ph[1][3]'],
   ['a placeholder kind of 10', f => { f.ph[0][2] = 10 }, 'ph[0][2]'],
-  ['placeholder flags of 128', f => { f.ph[0][3] = 128 }, 'ph[0][3]'],
+  ['placeholder flags of 512', f => { f.ph[0][3] = 512 }, 'ph[0][3]'],
+  // JOINED: a display's, alone, with no segments of its own (its ink its group's first display's)
+  ['JOINED on a formula', f => { f.ph[0] = [2, 1, MATH, PH_FLAG.JOINED] }, 'ph[0]'],
+  ['JOINED with segments', f => { f.ph[3][3] = PH_FLAG.JOINED }, 'ph[3]'],
+  ['JOINED and LOST', f => { f.ph[3] = [5, 2, DISPLAY, PH_FLAG.JOINED | PH_FLAG.LOST] }, 'ph[3]'],
+  ['JOINED and NUMBERED', f => { f.ph[3] = [5, 2, DISPLAY, PH_FLAG.JOINED | PH_FLAG.NUMBERED] }, 'ph[3]'],
+  // OUTSIDE: with LOST alone
+  ['OUTSIDE on a found formula', f => { f.ph[0][3] = PH_FLAG.OUTSIDE }, 'ph[0][3]'],
+  ['OUTSIDE and LOST and RAISED', f => { f.ph[5][3] = PH_FLAG.LOST | PH_FLAG.OUTSIDE | PH_FLAG.RAISED }, 'ph[5][3]'],
+  ['OUTSIDE and EMPTY', f => { f.ph[4][3] = PH_FLAG.EMPTY | PH_FLAG.OUTSIDE }, 'ph[4][3]'],
   ['TEXT on a formula', f => { f.ph[0][3] = PH_FLAG.TEXT }, 'ph[0]'],
   ['TEXT and LOST', f => { f.ph[5][3] = PH_FLAG.TEXT | PH_FLAG.LOST }, 'ph[5]'],
   ['a TEXT placeholder with no text', f => { f.ph[5][3] = PH_FLAG.TEXT }, 'pageText'],
@@ -748,7 +769,7 @@ function largest(): LayoutFile {
   const views: number[] = []
   for (let p = 0; p < PAGES; p++) views.push(0, 0, 612, 792)
   const fonts = Array.from({ length: 512 }, (_, i) => `NimbusRomNo9L-Regu${i}`)
-  const f: LayoutFile = { schema: 3, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null }
+  const f: LayoutFile = { schema: 4, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null }
   for (let i = 0; i < UNITS; i++) {
     const id = 2 * i, heading = i % 10 === 0, n = linesOf(i), page = 1 + (i % (PAGES - 1))
     f.units.push([id, heading ? H : P, heading ? 1 : 9, i % 8 === 0 ? UNIT_FLAG.CENTRED : 0, 40])

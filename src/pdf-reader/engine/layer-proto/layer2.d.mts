@@ -39,7 +39,8 @@ export interface Params {
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
-export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean }
+/** a page character (pageChars2's); `nu`: no Unicode of the file's stands for its glyph (its text is no reading of it) */
+export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean; nu?: boolean }
 /** a unit of the units file, as the layer reads it */
 export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean; group?: string }
 // ---- the per-unit reading (prepareUnit): the contract the rest of v0 reads
@@ -103,7 +104,8 @@ export interface Prepared extends Map<number, Resolved> {
   cat: Map<string, 'acc' | 'keep' | 'orphan' | 'undrawn'>
   /** the finish: the lines a located display holds */
   displayLines?: Set<string>
-  /** part 5: the piece index of a crop whose ink no source proves its placeholder's (the unit is left the original's) */
+  /** part 5: the piece index of a placeholder whose rendering no source proves (tex.mjs proofOf: the unit is left the
+   *  original's) */
   unproven?: number
   /** part 4's source knows each placeholder's ink (a layout file's segments) over part 1's lines (the file's): a gap's piece
    *  none took is the unit's text */
@@ -127,7 +129,7 @@ export interface Renderings {
   gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other'): Gap | null | undefined
   /** how a placeholder is drawn where the source knows it without the page (a layout file's macro that sets no ink: none;
    *  its text symbol: the character), else null */
-  fixed?(p: Placeholder): { mode: 'none' | 'source'; text: string } | null
+  fixed?(p: Placeholder): { mode: 'none' | 'source'; text: string; proof?: boolean } | null
 }
 /** the parts of a unit another source gives in place of v0's; a part not given is v0's */
 export interface UnitParts {
@@ -139,8 +141,9 @@ export interface UnitParts {
   label?: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
   /** part 4: which ink each placeholder is, by a source that knows it (Prepared.inkKnown, with part 1) */
   renderings?: (ctx: RenderingsContext) => Renderings
-  /** part 5: each crop cut from its placeholder's own ink (mutates the resolutions); the k of one no source proves, or -1 */
-  crops?: (out: Prepared) => number
+  /** part 5: every rendering proven, each crop cut from its placeholder's own ink (mutates the crops); the k of one no
+   *  source proves, or -1 */
+  proof?: (out: Prepared) => number
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it
@@ -159,11 +162,22 @@ type ToDev = (x: number, y: number) => [number, number]
 /** a spacing accent TeX sets as a glyph of its own */
 export declare const ACCENT: RegExp
 /** a page's text content as characters, each with its font's class (`fontOf(fontName)`) */
-export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass): Char[]
+/** the characters a font's ToUnicode map gives its glyphs (PDF.js's `toUnicode`, with fontExtraProperties), or null */
+export declare function mappedOf(toUnicode: unknown): Set<string> | null
+/** mappedOf of a font as PDF.js's commonObjs holds it; throws for a font (not Type3) exported with no `toUnicode` (a
+ *  document not opened with PDF_OPTIONS); null for anything else with no map to read */
+export declare function fontMappedOf(font: unknown): Set<string> | null
+/** whether a page character's text is no reading of its glyph (pageChars2's `nu`) */
+export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
+export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null): Char[]
 /** a placeholder's source as plain text, its environment, label and alignment marks left out */
 export declare function texToText2(src: string): string
 /** phClass with the paper's own macros told apart: { cls, unknown? } */
 export declare function phClass2(src: string): { cls: string; unknown?: boolean }
+/** whether a 'symbol' is a text symbol the proof exempts: one grapheme drawn, no `_`, `^`, `/` or `√(` */
+export declare function textSymbol(src: string): boolean
+/** phClass2 under the proof: a 'symbol' that is no text symbol is 'other' */
+export declare function phClassProven(src: string): { cls: string; unknown?: boolean }
 /** the unit's characters by its rectangles; `exact`: each rectangle's baseline and size where a layout file gives them */
 export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents?: Map<Rect, number[]>, exact?: ReadonlyMap<Rect, { baseline: number; size: number }> | null): Char[]
 export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[]): number
@@ -172,8 +186,8 @@ export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly nu
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
 /** the unit against its page, in parts: v0's, or `parts` another source gives (the per-unit reading's contract above) */
 export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: CiteMap | null, deny?: ReadonlySet<string> | null, parts?: UnitParts | null): Prepared
-/** the unit's placeholders by piece index */
-export declare function placeholdersOf(unit: Unit): Placeholder[]
+/** the unit's placeholders by piece index; `proven`: classed as a unit drawn under the proof is (phClassProven) */
+export declare function placeholdersOf(unit: Unit, proven?: boolean): Placeholder[]
 /** parts 1 and 2, v0's: the unit's characters by its rectangles, each line's baseline and size, and its extent */
 export declare function linesOf(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): UnitLines
 /** part 3, v0's: the first gap's label, out.label set; the gaps without it */

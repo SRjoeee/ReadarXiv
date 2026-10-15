@@ -125,8 +125,8 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * times for one index) and must have no effect until `o.acceptAddon(index, { pages })`, called once for each part that has a
  * layout, in order, when its range is final (a chained writer keeps its state there). A tail past TAIL_CAP shortens the part like
  * any size refusal; a page whose tail alone passes it ships with no layout. Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
- * its tail: clean pages as they are, removed pages TAIL_NOT_CARRIED, refused pages refused; with no add-on in the whole, every
- * page refused. Throws BundleRefusal for a whole that
+ * its tail: clean pages as they are, removed pages TAIL_NOT_CARRIED, refused pages refused; with no add-on in the whole, no
+ * add-on for any part (`addon: null`, M20: drawn by erase and restore). Throws BundleRefusal for a whole that
  * cannot be written (a dropped unit, a unit past the chunk caps) and `bound` for a page that no part can hold
  */
 export async function cutBundle(whole, o) {
@@ -216,6 +216,9 @@ export async function cutBundle(whole, o) {
     const addonOf = (b, withLayout, ad) => {
       if (!withLayout || !layout) return null
       if (ad) return ad
+      // (no add-on in the whole and no hook to make one, a producer with no remover: no add-on for the part's pages (M20), drawn by
+      // erase and restore as BUNDLE 3's bundle with none; a hook that answers null still plans them, as not planned)
+      if (!o.chainAddon && !whole.addon) return null
       const carry = !o.chainAddon && whole.addon ? whole.addon.manifest : null
       const page = {}
       for (let p = a; p <= b; p++) page[p] = carry ? carriedEntry(carry, p) : { ok: false, refused: 'not planned' }

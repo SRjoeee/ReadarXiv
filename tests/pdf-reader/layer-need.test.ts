@@ -67,6 +67,7 @@ describe('needsOf', () => {
     const run = readFileSync('src/pdf-reader/engine/layer-proto/run.mjs', 'utf8')
     expect(run).toContain("import { needsOf } from './need.mjs'")
     expect(run).not.toMatch(/function needsOf/)
-    expect(run).toMatch(/needsOf\(K, N, PASSES,/)
+    // (over K, or under parts K and the entry standing for the parts not told yet: the door design §0.3)
+    expect(run).toMatch(/needsOf\(partsEnded \|\| through >= N \? K : \[\.\.\.K, [^\n]*\], N, PASSES,/)
   })
 })

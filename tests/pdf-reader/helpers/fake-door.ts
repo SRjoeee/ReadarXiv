@@ -1,10 +1,10 @@
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import type { LaidPage, Layer, LayerDocument, LeftPage, OpenLayerOptions, PageEvent, PageState } from '@/pdf-reader/engine/layer-proto/door.mjs'
+import type { LaidPage, Layer, LayerDocument, LeftPage, OpenLayerOptions, PageEvent, PageState } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import { type ReadPart, readLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { BUILTIN_RULES, RULES_SCHEMA } from '@/pdf-reader/engine/rules/layout.mjs'
 
-// A door with the real signatures (layer-proto/door.d.mts) and the readiness protocol's honest semantics, for the web lane's view
+// A door with the real signatures (layer-proto/reader.d.mts) and the readiness protocol's honest semantics, for the web lane's view
 // tests and for the conformance suite (door-conformance.ts). It lays nothing: a page is "laid" when the composed document
 // answers its page, and its SVG is a stand-in of the right size. What it keeps exactly is the protocol: when a page waits, lays,
 // is ready or failed, what is told and when, what a pageOf does on each state, the refusals of addPart, the document swap and
@@ -266,7 +266,7 @@ class FakeLayer implements Layer {
     const text = document.createElementNS(SVG_NS, 'text')
     text.textContent = `page ${page}`
     svg.append(text)
-    return { svg, w, h, words: {}, links: [] }
+    return { svg, w, h, words: { tokens: [], spans: [], original: [] }, links: [] }
   }
 
   pageOf(page: number, o: { lang: string; signal?: AbortSignal }): Promise<LaidPage> {
@@ -399,7 +399,7 @@ class FakeLayer implements Layer {
 }
 
 export interface FakeDoor {
-  /** openLayer's signature (door.d.mts); one open layer at a time */
+  /** openLayer's signature (reader.d.mts); one open layer at a time */
   openLayer(o: OpenLayerOptions): Promise<Layer>
   /** lets the layer lay what is queued (manual mode), then lets the tasks that answer run */
   advance(): Promise<void>
