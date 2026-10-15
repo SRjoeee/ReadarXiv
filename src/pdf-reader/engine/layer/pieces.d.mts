@@ -14,10 +14,14 @@ export declare function styleOf(src: string): number
  *  unused source piece of the same t, src and id; -1 where none */
 export declare function kOfSource(source: readonly unknown[]): (piece: unknown) => number
 /** each slot's index in its unit's pieces (`slots`: mt.mjs serialize(unit).slots, which the caller makes): the early's
- *  slots carry these */
-export declare function slotKs(unit: { pieces: readonly unknown[] }, slots: readonly unknown[]): number[]
+ *  slots carry these. A run's slot (`{ t: 'run', pieces }`, one marker for a formula split across inline formulas) has
+ *  the indices of all its pieces in their order, formulas and the text between them; -1 where a slot is none of the unit's */
+export declare function slotKs(unit: { pieces: readonly unknown[] }, slots: readonly unknown[]): (number | number[])[]
 /** the engine's translated pieces as TrPiece, or null where a non-text piece has no k */
 export declare function trPiecesOf(pieces: readonly unknown[], kOf: (piece: unknown) => number): TrPiece[] | null
 /** the text sentence offsets count in: plainTranslated's, from TrPiece (each non-text piece a space, white space
  *  collapsed, trimmed) */
 export declare function trText(pieces: readonly TrPiece[]): string
+
+/** mt.mjs shown: a text piece as the compiled PDF shows it, a translation's TeX escapes undone, a source's bytes as UTF-8 */
+export declare function shown(p: { s: string; tr?: boolean }): string

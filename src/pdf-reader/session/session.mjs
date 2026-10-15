@@ -2367,7 +2367,7 @@ async function live() {
     // a seed whole, by the identity that answers now and of the wire sent now is taken as it is, never sent again — the
     // copy's when it was made by this pipeline in this wire format, or unit by unit by one that carries over into it
     // (cache.mjs copyReuse, reusable) — and the rest are asked again
-    const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, ...copyReuse(cached, { pipeline: PIPELINE_VERSION, format: engine.format, context, carries: PIPELINE_CARRIES }), made })
+    const seed = reusable(seedAgain(p.seed, made), { identity: engine.identity, ...copyReuse(cached, { pipeline: PIPELINE_VERSION, format: engine.format, context, carries: PIPELINE_CARRIES }), made, units })
     // one replacement at a time, in the order the compiles came in; the final's bytes once compiled, and whether this
     // run's own final reached the screen (`shownNow`): a final an earlier run showed sets an earlier translation
     let swaps = Promise.resolve(), finalPdf = null, shownNow = false

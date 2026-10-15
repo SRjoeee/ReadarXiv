@@ -443,7 +443,9 @@ describe('the door: three opens, the same pages', () => {
     expect(states).not.toContain('failed:2')
     const run = seen.runs.at(-1) as Run
     expect(run.skipped.filter(s => s.id === 8).map(s => s.why)).toEqual(['error'])
-    expect(run.stats.some(r => r.id === 8)).toBe(false)
+    // (the reader's run keeps no unit's record and no audit: their count alone, which the error leaves out)
+    expect([run.stats, run.audit]).toEqual([[], []])
+    expect(layer.stats().drawn).toBe(run.order.length - run.skipped.filter(s => run.order.includes(s.id)).length)
     expect(pages[1]!.svg.querySelector('[data-u="8"]')).toBeNull()
     expect(pages[1]!.svg.querySelector('[data-u="1"]')).not.toBeNull()
     layer.dispose()

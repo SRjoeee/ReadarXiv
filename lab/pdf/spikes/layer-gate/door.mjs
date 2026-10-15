@@ -8,7 +8,10 @@
 // document with arXiv's pages, as a reader opens it; one slice a face, its whole file over its coverage). `door` is a
 // reader's: the bundle the driver made of the same parts, read by readBundle, the document composed from arXiv's bytes and
 // the bundle's tail, openLayer over it, the rows the driver made of the record (rows.mjs rowOf) taken in parts, a
-// macrotask apart, beside the pages asked for. Each page's answer: its SVG's markup, and its pixels' digests (SHA-256,
+// macrotask apart, beside the pages asked for. The gate's run keeps every state it lays with (openProto's `free` off), the
+// door's lets go of it as the reader's does (the 1b design §3): so the two equal also proves that letting go moves no drawing.
+// Each page's answer: its SVG's markup, its word table's digest (words.mjs; the right pane's sentence highlight reads it, 1b-E: equal
+// at the door and at the gate's own run, and at the gate's recorded scale), and its pixels' digests (SHA-256,
 // and one FNV-1a hash a pixel row, to say where two differ): the gate's run's original and copy planes (v0's own canvases
 // at 2.5 device pixels a unit), the page the door's document draws by PDF.js at 2.5, and copyOf(page, the gate's run's
 // original, 2.5): the page as PDF.js drew it at 2.5, the same pixels for both copies (PDF.js's first drawing of a page in
@@ -23,6 +26,19 @@ const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Er
 const json = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json() }
 const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('')
 const digest = async data => hex(await crypto.subtle.digest('SHA-256', data))
+/** the bytes a page's word table keeps: its typed columns (the spans and the units left the original's, a few words, are not counted) */
+const wordsBytes = w => [w.tokens.l, w.tokens.r, w.tokens.y, w.tokens.h, w.tokens.top, w.tokens.bottom, w.word].reduce((n, a) => n + a.byteLength, 0)
+/** a page's word table (src/pdf-reader/engine/layer-proto/words.mjs) as one digest: its columns' bytes, its spans and the units left
+ *  the original's; the same table gives the same digest */
+async function wordsDigest(w) {
+  const t = w.tokens
+  const parts = [new TextEncoder().encode(JSON.stringify([t.n, w.spans, w.original]))]
+  for (const a of [t.l, t.r, t.y, t.h, t.top, t.bottom, w.word]) parts.push(new Uint8Array(a.buffer, a.byteOffset, a.byteLength))
+  const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+  let at = 0
+  for (const p of parts) { all.set(p, at); at += p.length }
+  return digest(all)
+}
 /** a pixel row's FNV-1a hash, row by row */
 function rowHashes(d, W, H) {
   const out = new Array(H)
@@ -75,6 +91,39 @@ const macrotask = () => new Promise(ok => setTimeout(ok, 0))
 /** the page's sheets but the faces' classes' (layer2.mjs faceClass: made once a page, for every run, and kept) */
 const ownSheets = () => [...document.head.querySelectorAll('style')].filter(e => { const rules = [...(e.sheet?.cssRules ?? [])]; return !(rules.length && rules.every(r => /^\.axf\d+$/.test(r.selectorText ?? ''))) })
 
+/**
+ * Whether the words the translation has can be found in the page tables (1b-E; a sentence starts at a word, and the view finds the
+ * token that carries its index): over the units laid whose pages are all among the first `limit`, the words of their plain
+ * translated text (anchors.mjs tokens) and how many have no token carrying their index, and the same for the words sentences begin
+ * at (the record's `sentences.tr` offsets, counted as sentenceStarts counts them).
+ */
+async function reachOf(run, finals, record, limit) {
+  const [{ tokens }, { plainOfPieces }] = await Promise.all([import('/engine/pipeline/anchors.mjs'), import('/engine/layer-proto/words.mjs')])
+  const r = { units: 0, words: 0, noToken: 0, starts: 0, startsNoToken: 0 }
+  for (const u of run.placed) {
+    if (u.refused || u.withheld || !u.unit?.pieces || u.pages.some(q => q > limit || !finals[q])) continue
+    const plain = plainOfPieces(u.unit.pieces)
+    const n = tokens(plain).length
+    const has = new Set()
+    for (const q of u.pages) {
+      const f = finals[q], sp = f.spans.find(x => x[0] === u.id)
+      if (!sp) continue
+      for (let k = 0; k < sp[1].length; k += 2) for (let i = sp[1][k]; i < sp[1][k] + sp[1][k + 1]; i++) if (f.word[i] >= 0) has.add(f.word[i])
+    }
+    r.units++
+    r.words += n
+    r.noToken += n - has.size
+    const tr = record.units[u.id]?.sentences?.tr
+    if (Array.isArray(tr)) for (const o of tr) {
+      if (!(o > 0 && o < plain.length)) continue
+      const k = tokens(plain.slice(0, o)).length
+      if (k >= n) continue
+      r.starts++
+      if (!has.has(k)) r.startsNoToken++
+    }
+  }
+  return r
+}
 window.door = {
   /** the gate's own run with the door's inputs, its first `pages` pages in turn, those before each let go first; at the
    *  door's resolution (scale 2.5, dpr 1), or at another of the same device pixels a unit (the gate's recorded runs': 1.25
@@ -93,7 +142,7 @@ window.door = {
       labels: { captions: { figure: 'target', table: 'target' } },
       ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl,
     })
-    const out = []
+    const out = [], finals = []
     for (let p = 1; p <= Math.min(pages, run.N); p++) {
       for (let q = 1; q < p; q++) if (!run.rows[q - 1].released) run.release(q)
       await run.until(p)
@@ -102,9 +151,15 @@ window.door = {
       // door's copy to be drawn over: PDF.js's first drawing of a page in a document may differ from its later ones,
       // 2608.04322's page 3 by a few pixel rows from run to run)
       const recs = JSON.stringify(run.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r))
-      out.push({ p, svg: row.svg.outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), o: await pixelsOf(row.left), c: await pixelsOf(row.right), ...(png ? { png: await pngOf(row.left) } : {}) })
+      out.push({ p, svg: run.svgOf(p).outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), o: await pixelsOf(row.left), c: await pixelsOf(row.right), ...(png ? { png: await pngOf(row.left) } : {}) })
+      // (and the page's word table, a final page's: the pages its units run on to drawn first, after the page is read)
+      const done = run.doneAt(p)
+      if (Number.isFinite(done) && done > p) await run.until(done)
+      const final = run.wordsOf(p)
+      Object.assign(out.at(-1), { words: await wordsDigest(final), wordsBytes: wordsBytes(final), wordsTokens: final.tokens.n })
+      finals[p] = final
     }
-    const summary = { N: run.N, laid: run.stats.length, skipped: run.skipped.length }
+    const summary = { N: run.N, laid: run.stats.length, skipped: run.skipped.length, reach: await reachOf(run, finals, record, Math.min(pages, run.N)) }
     run.dispose()
     await doc.loadingTask.destroy()
     return { pages: out, summary }
@@ -127,7 +182,7 @@ window.door = {
     })()
     const out = []
     for (let p = 1; p <= Math.min(pages, bundle.paper.pages); p++) {
-      const { svg, w, h } = await layer.pageOf(p, { lang: target })
+      const { svg, w, h, words } = await layer.pageOf(p, { lang: target })
       const markup = svg.cloneNode(true)
       const lang = markup.getAttribute('lang')
       markup.removeAttribute('lang')
@@ -142,7 +197,7 @@ window.door = {
       // the same pixels; the page this load's PDF.js draws compared with it apart
       const original = await canvasOfPng(`/door/${name}/o${p}.png`)
       const copy = await layer.copyOf(p, original, K)
-      out.push({ p, svg: markup.outerHTML, lang, w, h, source: await pixelsOf(source), original: await pixelsOf(original), copy: await pixelsOf(copy) })
+      out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), source: await pixelsOf(source), original: await pixelsOf(original), copy: await pixelsOf(copy) })
       for (const c of [source, original, copy]) { c.width = 0; c.height = 0 }
     }
     await fed

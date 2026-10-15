@@ -42,11 +42,13 @@
 import { pageDirty, pagePlan, pageRules } from '../layer-proto/removal.mjs'
 import { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, checkBoxes, parseAddonManifest, REFUSED_MAX } from './addon-manifest.mjs'
 import { pageInk } from './ink.mjs'
-import { makeAddon, openRemover, SETS } from './remove.mjs'
+import { alignOf, makeAddon, openRemover, removalEntry, SETS } from './remove.mjs'
 
 /** the share of the manifest's byte and value caps that the paper's `dirty` and `rules` boxes may take, in page order: the
- *  other half is for the rest of the manifest (an entry a page, its units' ids, its reasons), which no page's ink changes */
-const BOXES_BYTES = ADDON_MANIFEST_CAP / 2, BOXES_VALUES = ADDON_MANIFEST_VALUES / 2
+ *  other half is for the rest of the manifest (an entry a page, its units' ids, its reasons), which no page's ink changes.
+ *  A paper-wide bound: a paper cut into parts spends it over the parts in page order (layout/chain.mjs), so that many parts
+ *  hold no more boxes than one add-on of the whole paper could */
+export const BOXES_BYTES = ADDON_MANIFEST_CAP / 2, BOXES_VALUES = ADDON_MANIFEST_VALUES / 2
 
 const refusal = why => ({ ok: false, refused: String(why).slice(0, REFUSED_MAX) })
 /** an error's message, and never a throw of its own (an object with no prototype has none to read, and no string) */
@@ -69,20 +71,97 @@ export async function paperAddon(o) {
   }
 }
 
-/** why a planned page's kept ink `dirty` and `rules` cannot go into the manifest, or null, and then their cost is taken out
- *  of `budget` (the boxes' share of the caps, in page order): a box past the page's view by the reader's slack or an empty
- *  one (addon-manifest.mjs checkBoxes, the reader's own), or more than the budget has left */
-function unfit(views, page, dirty, rules, budget) {
+/**
+ * A page's plan for the add-on, from the layout file (`index`, file.mjs indexLayout: every unit framed on the page, an
+ * earlier part's too) and the page's ink (`ink`, layout/ink.mjs pageInk with `indices`) alone: null where nothing is planned
+ * (a page rotated or past the ink reader's cap, or no unit and no babel name of the file on it), else { dirty, the kept ink
+ * under the page's units (pageDirty), rules, the rules near its cells' lines (pageRules), unfit, why the manifest cannot hold
+ * them (a box past the page's view by the reader's slack, or empty: addon-manifest.mjs checkBoxes, the reader's own; null
+ * where it can), cost { bytes, values }, what they take of the manifest's boxes' share, and, on a page with kept ink the
+ * manifest can hold (the remover's to remove), remove { units: [id, glyphs, paths][], names: [occurrence, glyphs][], crops:
+ * [glyphs, paths][], shows, align } }: what the remover takes out and checks (a crop's glyphs must align too), with `align`
+ * the page's alignment facts (remove.mjs alignOf of the operator list `ink` was read from; `facts`, or a function giving
+ * them, called only for such a page). Page-local and pure: no budget is spent here
+ */
+export function pagePlanOf(index, p, ink, facts) {
+  if (ink.rotated || ink.capped) return null
+  const { own: _own, ...pp } = pagePlan(index, p, ink)
+  if (!pp.units.length && !pp.names.length) return null
+  const dirty = pageDirty(index, p, ink, pp), rules = pageRules(index, p, ink)
+  let unfit = null
   try {
-    checkBoxes(dirty, page, views, 'dirty')
-    checkBoxes(rules, page, views, 'rules')
-  } catch (e) { return `its kept ink or rules cannot be written: ${reasonOf(e)}` }
+    checkBoxes(dirty, p, index.file.views, 'dirty')
+    checkBoxes(rules, p, index.file.views, 'rules')
+  } catch (e) { unfit = `its kept ink or rules cannot be written: ${reasonOf(e)}` }
   let bytes = 0, values = 0
   for (const boxes of [dirty, rules]) if (boxes.length) { bytes += JSON.stringify(boxes).length; values += boxes.length + 1 }
-  if (budget.bytes + bytes > BOXES_BYTES || budget.values + values > BOXES_VALUES) return `its kept ink and rules (${dirty.length + rules.length} numbers) are more than the manifest has left`
-  budget.bytes += bytes
-  budget.values += values
-  return null
+  const plan = { dirty, rules, unfit, cost: { bytes, values } }
+  if (dirty.length && unfit === null) {
+    plan.remove = {
+      units: pp.units.map(u => [u.id, u.glyphs, u.paths]), names: pp.names.map(nm => [nm.occurrence, nm.glyphs]), crops: pp.crops.map(c => [c.glyphs, c.paths]),
+      shows: pp.shows, align: typeof facts === 'function' ? facts() : facts,
+    }
+  }
+  return plan
+}
+
+/**
+ * Every page's plan (pagePlanOf) of PDF.js's document `doc` of arXiv's PDF, `OPS` PDF.js's operator codes, `index` the layout
+ * file's: { plans, a Map from each planned page to its plan, ms { ops, ink, plan } }. Reads each page's operator list once
+ * and keeps none
+ */
+export async function pagePlansOf({ doc, OPS, index }) {
+  const plans = new Map(), ms = { ops: 0, ink: 0, plan: 0 }
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p)
+    let t = performance.now()
+    const list = await page.getOperatorList()
+    ms.ops += performance.now() - t
+    t = performance.now()
+    const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true })
+    ms.ink += performance.now() - t
+    t = performance.now()
+    const plan = pagePlanOf(index, p, ink, () => alignOf(OPS, list))
+    if (plan) plans.set(p, plan)
+    ms.plan += performance.now() - t
+  }
+  return { plans, ms }
+}
+
+/**
+ * Pages `from` to `to` of the add-on's manifest as far as the plans tell them, before the remover: `planOf(p)` each page's
+ * plan (pagePlanOf's, or null), `spent` { bytes, values } the boxes' share taken by the pages before (the paper's, in page
+ * order). A page with no plan is not planned; one whose boxes the manifest cannot hold, or more than the share has left, is
+ * refused (and spends none); a planned page with no kept ink is `{ ok: true }` (with its rules), filled with paper where
+ * the reader draws; one with kept ink is the remover's (`asked`, rising; its entry null until withRemoved). Returns
+ * { page, asked, spent }, `spent` the share taken after `to`. Pure
+ */
+export function rangeEntries(planOf, from, to, spent) {
+  const page = {}, asked = []
+  let { bytes, values } = spent
+  for (let p = from; p <= to; p++) {
+    const plan = planOf(p)
+    if (!plan) { page[p] = { ok: false, refused: 'not planned' }; continue }
+    if (plan.unfit !== null) { page[p] = refusal(plan.unfit); continue }
+    if (bytes + plan.cost.bytes > BOXES_BYTES || values + plan.cost.values > BOXES_VALUES) { page[p] = refusal(`its kept ink and rules (${plan.dirty.length + plan.rules.length} numbers) are more than the manifest has left`); continue }
+    bytes += plan.cost.bytes
+    values += plan.cost.values
+    if (plan.dirty.length) { asked.push(p); page[p] = null } else page[p] = plan.rules.length ? { ok: true, rules: plan.rules } : { ok: true }
+  }
+  return { page, asked, spent: { bytes, values } }
+}
+
+/** the asked pages' entries (rangeEntries' `asked`) with the remover's word on each (`removed[p]`: { ok: true, units, at }
+ *  or { ok: false, refused }): a removed page its units, its removed page and its kept ink, a refused one its reason; each
+ *  its rules. Writes into `page` */
+export function withRemoved(page, asked, planOf, removed) {
+  for (const p of asked) {
+    const e = removed[p], plan = planOf(p)
+    const out = e.ok ? { ok: true, units: e.units, ...(e.at ? { at: e.at } : {}), dirty: plan.dirty } : refusal(e.refused)
+    if (plan.rules.length) out.rules = plan.rules
+    page[p] = out
+  }
+  return page
 }
 
 async function shipped({ bytes, index, doc, OPS, PL, deflate, inflate }) {
@@ -94,56 +173,24 @@ async function shipped({ bytes, index, doc, OPS, PL, deflate, inflate }) {
   const N = R.numPages
   if (doc.numPages !== N || index.file.paper.pages !== N) return refusal(`the PDF has ${N} pages, PDF.js ${doc.numPages}, the layout file ${index.file.paper.pages}`)
 
-  // each page's plan, dirty ink and rules from its own ink; no operator list is kept here (the pages the add-on removes ask
-  // for theirs again, which PDF.js holds already)
-  const planned = [], dirty = {}, rules = {}, swapped = { pages: {} }, unwritable = {}, budget = { bytes: 0, values: 0 }
-  ms.ops = 0
-  ms.ink = 0
-  ms.plan = 0
-  for (let p = 1; p <= N; p++) {
-    const page = await doc.getPage(p)
-    t = performance.now()
-    const list = await page.getOperatorList()
-    ms.ops += performance.now() - t
-    t = performance.now()
-    const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true })
-    ms.ink += performance.now() - t
-    // (a page rotated, or past the ink reader's cap, has no plan: the layer lays over neither)
-    if (ink.rotated || ink.capped) continue
-    t = performance.now()
-    const { own: _own, ...pp } = pagePlan(index, p, ink)
-    if (pp.units.length || pp.names.length) {
-      const d = pageDirty(index, p, ink, pp), r = pageRules(index, p, ink)
-      const why = unfit(index.file.views, p, d, r, budget)
-      if (why) unwritable[p] = why
-      else {
-        planned.push(p)
-        if (d.length) { dirty[p] = d; swapped.pages[p] = pp }
-        if (r.length) rules[p] = r
-      }
-    }
-    ms.plan += performance.now() - t
-  }
+  // each page's plan, dirty ink, rules and alignment facts from its own ink and operator list; no list is kept
+  const read = await pagePlansOf({ doc, OPS, index })
+  Object.assign(ms, read.ms)
+  const planOf = p => read.plans.get(p) ?? null
 
   // the removed page, R, only where kept ink lies under a unit's rectangles, and not on a page whose ink the manifest cannot
-  // hold: compact
+  // hold: compact; the boxes' share spent over the paper in page order
   t = performance.now()
-  const made = await makeAddon({ R, bytes, OPS, opListOf: async p => (await doc.getPage(p)).getOperatorList(), deflate, plan: swapped, sets: SETS, compact: true })
+  const { page, asked } = rangeEntries(planOf, 1, N, { bytes: 0, values: 0 })
+  const made = await makeAddon({ R, bytes, alignOf: p => planOf(p).remove.align, deflate, plan: { pages: Object.fromEntries(asked.map(p => [p, removalEntry(planOf(p).remove)])) }, sets: SETS, compact: true, pages: asked })
   const manifest = made.manifest
-  for (const p of planned) {
-    if (!dirty[p]) manifest.page[p] = { ok: true }
-    else if (manifest.page[p].ok) manifest.page[p].dirty = dirty[p]
-    if (rules[p]) manifest.page[p].rules = rules[p]
-  }
-  for (const p of Object.keys(unwritable)) manifest.page[p] = { ok: false, refused: unwritable[p] }
-  for (const entry of Object.values(manifest.page)) if (entry.refused !== undefined && entry.refused.length > REFUSED_MAX) entry.refused = entry.refused.slice(0, REFUSED_MAX)
+  manifest.page = withRemoved(page, asked, planOf, manifest.page)
 
   // (the update's length, as the remover counts it, against what a reader takes and what the manifest says: a bundle's
-  // reader needs the tail to be the manifest's `appended` bytes. The tail is a copy: a view would carry arXiv's bytes with
-  // it across a worker's boundary)
+  // reader needs the tail to be the manifest's `appended` bytes. The tail is the update's own bytes, not a view of arXiv's)
   if (made.appended > ADDON_CAP) return refusal(`the add-on is ${made.appended} bytes, past the ${ADDON_CAP} a reader takes`)
-  if (manifest.appended !== made.appended || made.bytes.length !== bytes.length + made.appended) return refusal('the add-on\'s bytes are not what its manifest counts')
-  const tail = made.bytes.slice(bytes.length)
+  if (manifest.appended !== made.appended || made.tail.length !== made.appended) return refusal('the add-on\'s bytes are not what its manifest counts')
+  const tail = made.tail
   ms.make = performance.now() - t
 
   // the backstop: the manifest as the reader reads it, byte and value caps and all

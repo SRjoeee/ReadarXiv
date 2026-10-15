@@ -29,7 +29,7 @@
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
 //       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
 //       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
-//       [--door-memory[=<pages>]] [--door-parts[=doubling|splits:<n>|seed:<s>]] [--door-parts-addon=none]
+//       [--door-memory[=<pages>]] [--door-parts[=doubling|splits:<n>|seed:<s>]] [--door-parts-addon=chained|carried|none]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -110,7 +110,9 @@
 //                layout file; the shipped add-on and its manifest) and its rows from its record (rows.mjs rowOf), and each page
 //                drawn twice, each in a page load of its own (layer-gate/door.mjs): by the gate's own call of openProto with
 //                the door's inputs, and by openLayer with the rows taken n a part (16 by default) as they come. Each page's
-//                SVG markup (pageOf's, its lang aside) must equal the run's, the page PDF.js draws at 2.5 device pixels a unit
+//                SVG markup (pageOf's, its lang aside) and word table (words.mjs, the digest of its columns, spans and units
+//                left the original's; the run's own at the gate's recorded scale too) must equal the run's, the page PDF.js
+//                draws at 2.5 device pixels a unit
 //                v0's own original, and copyOf(page, that page, 2.5)'s pixels the run's copy plane; a fixture fails where
 //                one does not, and the run is written to out/layer-gate/door-<commit>-<time>.json
 //   --door-memory  what the reader's door holds while it lays a paper (a measurement of its own, never recorded; the door's
@@ -120,16 +122,21 @@
 //                its JS heap after a collection and the browser's resident memory. Written to
 //                out/layer-gate/memory-<commit>-<time>.json
 //   --door-parts  the door in parts (BUNDLE 4; never recorded; the door's choices as --door has them): each fixture's bundle as
-//                --door makes it, cut by the cutter (layer-proto/cut.mjs, no chained add-on: a clean page's entry carried, a
-//                removed one refused) at the doubling schedule (the default), every <n> pages a part (splits:<n>), or at part
-//                lengths of 1 to 4 drawn from <s> (seed:<s>), and its pages drawn twice, each in a page load of its own
-//                (layer-gate/door-parts.mjs): door A over the cut made whole (mergeParts, BUNDLE 3's open), door B over the index
-//                with no part, each part told when the run waits for one. Each page's SVG markup, copyOf's pixels over the page
-//                as door A's load drew it, and the digest of the run's records of its units must be equal, the units left and
-//                why too, and no page told laying may wait for a part before it is ready (Q1); the run is written to
-//                out/layer-gate/door-parts-<commit>-<time>.json. --door-parts-addon=none: the paper with no add-on (a producer
-//                with no remover, M20): the cut made of it with none (every part `addon: null`), door A then BUNDLE 3's open of
-//                the bundle with `addon: null` (door C: the same units, left and layout, v0's own erase and restore)
+//                --door makes it, cut by the cutter (layer-proto/cut.mjs) with the chained add-on (layout/chain.mjs: each part's
+//                tail after the parts before it, the plans from arXiv's PDF and the layout file in Node, the remover in process,
+//                layout/remove.mjs removerOf) at the doubling schedule (the default), every <n> pages a part (splits:<n>), or at
+//                part lengths of 1 to 4 drawn from <s> (seed:<s>), and its pages drawn twice, each in a page load of its own
+//                (layer-gate/door-parts.mjs): door A over the cut made whole (mergeParts, BUNDLE 3's open, over arXiv's PDF and
+//                every tail), door B over the index with no part, each part told when the run waits for one (a part with a tail
+//                with the composed document through it). Each page's SVG markup, word table digest, copyOf's pixels over the page as door A's load
+//                drew it, and the digest of the run's records of its units must be equal, the units left and why too, and no
+//                page told laying may wait for a part before it is ready (Q1); and door A must draw every page as BUNDLE 3's
+//                open of the bundle with its single tail does (C', door S: the same markup, copyOf's pixels over door A's
+//                drawing of the page as door B's, records, units left and states). The run is written to out/layer-gate/door-parts-<commit>-<time>.json. --door-parts-addon=carried: the
+//                cut with no hook (the whole add-on's manifest carried, its removed pages refused, no tail); none: the paper with
+//                no add-on (a producer with no remover, M20): the cut made of it with none (every part `addon: null`), door A
+//                then BUNDLE 3's open of the bundle with `addon: null` (door C: the same units, left and layout, v0's own erase
+//                and restore)
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, the layout rules' labels'
@@ -214,9 +221,10 @@ if (MEMORY !== null && !(Number.isInteger(MEMORY) && MEMORY >= 10)) throw new Er
  *  recorded), at the schedule given */
 const DOOR_PARTS = arg('door-parts') === true ? 'doubling' : typeof arg('door-parts') === 'string' ? arg('door-parts') : null
 if (DOOR_PARTS !== null && !/^(?:doubling|splits:[1-9]\d*|seed:\d+)$/.test(DOOR_PARTS)) throw new Error(`--door-parts=${DOOR_PARTS}: doubling, splits:<n> or seed:<s>`)
-/** --door-parts-addon=none: the paper with no add-on, against BUNDLE 3's open of it with none */
-const DOOR_PARTS_ADDON = typeof arg('door-parts-addon') === 'string' ? arg('door-parts-addon') : 'carried'
-if (!['carried', 'none'].includes(DOOR_PARTS_ADDON) || (DOOR_PARTS_ADDON === 'none' && DOOR_PARTS === null)) throw new Error(`--door-parts-addon=${DOOR_PARTS_ADDON}: none, with --door-parts`)
+/** --door-parts-addon=chained|carried|none: the parts' add-on chained (the default: each part's tail), the whole's manifest
+ *  carried with no tail, or none (against BUNDLE 3's open of the paper with none) */
+const DOOR_PARTS_ADDON = typeof arg('door-parts-addon') === 'string' ? arg('door-parts-addon') : 'chained'
+if (!['chained', 'carried', 'none'].includes(DOOR_PARTS_ADDON) || (arg('door-parts-addon') !== null && DOOR_PARTS === null)) throw new Error(`--door-parts-addon=${DOOR_PARTS_ADDON}: chained, carried or none, with --door-parts`)
 /** --door[=<n>]: the reader's door against the gate's own page, its rows taken n a part (a proof: never recorded) */
 const DOOR = arg('door') === true || ((MEMORY !== null || DOOR_PARTS !== null) && arg('door') === null) ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
 if (DOOR !== null && !(Number.isInteger(DOOR) && DOOR > 0)) throw new Error(`--door=${arg('door')}: a count of rows a part`)
@@ -380,10 +388,11 @@ const MOVED_MODULES = { '/engine/font-roles.mjs': 'rules/font-roles.mjs', '/engi
 const ADDONS = new Map()
 /** --door: each fixture's bundle and rows, by the path the page asks for them at */
 const DOOR_FILES = new Map()
-/** --door-parts: run.mjs's stand-in, the instrument of door-parts.mjs (each run kept in __gateRuns, each wait told to __gateWait) */
+/** --door-parts: run.mjs's stand-in, the instrument of door-parts.mjs (each run kept in __gateRuns, each wait told to __gateWait),
+ *  each run keeping its units' records (`records`, which the reader's does not) for the comparison of the pages' records */
 const RUN_STAND_IN = `export * from '/engine/layer-proto/run.mjs?real'
 import { openProto as real } from '/engine/layer-proto/run.mjs?real'
-export async function openProto(o) { const run = await real({ ...o, onWait: what => globalThis.__gateWait?.(what) }); (globalThis.__gateRuns ??= []).push(run); return run }
+export async function openProto(o) { const run = await real({ ...o, records: true, onWait: what => globalThis.__gateWait?.(what) }); (globalThis.__gateRuns ??= []).push(run); return run }
 `
 const server = createServer((req, res) => {
   let path
@@ -615,7 +624,7 @@ async function doorFixture(page, name, errors) {
   const gated = await page.evaluate(x => window.door.gate(x), { ...o, scale: 1.25, dpr: 2, png: false })
   const pages = door.pages.map((d, i) => {
     const g = gate.pages[i]
-    const e = { p: d.p, svg: d.svg === g.svg, lang: d.lang === target, size: d.w === g.w && d.h === g.h, source: d.source.sha === g.o.sha, original: d.original.sha === g.o.sha, copy: d.copy.sha === g.c.sha, laid: gated.pages[i]?.recs === g.recs, drawn: gated.pages[i]?.c.sha === g.c.sha, read: gated.pages[i]?.o.sha === g.o.sha }
+    const e = { p: d.p, svg: d.svg === g.svg, lang: d.lang === target, size: d.w === g.w && d.h === g.h, words: d.words === g.words, wordsAt: gated.pages[i]?.words === g.words, wordsSha: g.words, wordsBytes: g.wordsBytes, wordsTokens: g.wordsTokens, source: d.source.sha === g.o.sha, original: d.original.sha === g.o.sha, copy: d.copy.sha === g.c.sha, laid: gated.pages[i]?.recs === g.recs, drawn: gated.pages[i]?.c.sha === g.c.sha, read: gated.pages[i]?.o.sha === g.o.sha }
     if (!e.source) e.sourceRows = rowsApart(d.source, g.o).length
     if (!e.copy) { const ys = rowsApart(d.copy, g.c); e.copyRows = [ys.length, ys[0] ?? null, ys.at(-1) ?? null] }
     if (!e.svg) {
@@ -628,10 +637,10 @@ async function doorFixture(page, name, errors) {
     return e
   })
   const all = key => pages.every(e => e[key])
-  const ok = pages.length === gate.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('original') && all('copy') && door.sheets[0] === door.sheets[1] && !errors.length
+  const ok = pages.length === gate.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('words') && all('wordsAt') && all('original') && all('copy') && door.sheets[0] === door.sheets[1] && !errors.length
   if (!ok) failures.push(name)
   const n = key => pages.filter(e => e[key]).length
-  const line = `${pages.length} pages: SVG ${n('svg')}/${pages.length} equal, copy ${n('copy')}, this load's PDF.js page v0's original on ${n('source')}; at 1.25 x 2 records ${n('laid')}, copy ${n('drawn')}, original ${n('read')}; rows ${made.meta.rows} (${made.meta.unexpected} not the target's) taken ${DOOR} a part, ${door.stats.dropped} dropped, ${door.stats.drawn} units drawn (the gate's run ${gate.summary.laid}); bundle ${made.meta.bytes} bytes, ${made.meta.dropped} units dropped${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+  const line = `${pages.length} pages: SVG ${n('svg')}/${pages.length} equal, words ${n('words')}, copy ${n('copy')}, this load's PDF.js page v0's original on ${n('source')}; at 1.25 x 2 records ${n('laid')}, words ${n('wordsAt')}, copy ${n('drawn')}, original ${n('read')}; rows ${made.meta.rows} (${made.meta.unexpected} not the target's) taken ${DOOR} a part, ${door.stats.dropped} dropped, ${door.stats.drawn} units drawn (the gate's run ${gate.summary.laid}); bundle ${made.meta.bytes} bytes, ${made.meta.dropped} units dropped${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
   return { name, door: true, ok, ready: true, line, pages, made: made.meta, gate: gate.summary, stats: door.stats, sheets: door.sheets }
 }
 
@@ -658,11 +667,13 @@ function q1Of(log) {
   return out
 }
 /**
- * --door-parts: a fixture's bundle made as --door makes it, cut at the schedule (cut.mjs cutBundle, no chained add-on), its
- * objects served for the page to read as a host does (layer-gate/door-parts.mjs); its pages drawn by door A (the cut made whole,
- * mergeParts) and door B (no part at the open, each told when the run waits for one), each in a page load of its own, and
- * compared page by page: SVG markup, copyOf's pixels over door A's PNG of the page, the run's records of the page's units; the
- * units left and why; Q1 over door B's log
+ * --door-parts: a fixture's bundle made as --door makes it, cut at the schedule (cut.mjs cutBundle, the chained add-on's hooks
+ * by default), its objects served for the page to read as a host does (layer-gate/door-parts.mjs), with arXiv's PDF composed
+ * through each part's tail; its pages drawn by door A (the cut made whole, mergeParts, over arXiv's PDF and every tail) and door
+ * B (no part at the open, each told when the run waits for one, a part with a tail with its composed document), each in a page
+ * load of its own, and compared page by page: SVG markup, copyOf's pixels over door A's PNG of the page, the run's records of
+ * the page's units; the units left and why; Q1 over door B's log; and with the chained add-on, door A against door S (BUNDLE
+ * 3's open of the bundle with its single tail, C')
  */
 async function doorPartsFixture(page, name, errors) {
   const { paper, target } = nameOf(name)
@@ -671,30 +682,43 @@ async function doorPartsFixture(page, name, errors) {
   const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
   const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
   const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf')))
-  const cutTo = targetOf(DOOR_PARTS), none = DOOR_PARTS_ADDON === 'none'
+  const cutTo = targetOf(DOOR_PARTS), none = DOOR_PARTS_ADDON === 'none', chained = DOOR_PARTS_ADDON === 'chained'
   const read3 = readBundle(new Uint8Array(made.bytes))
-  const cut = await cutBundle(none ? { ...read3, addon: null } : read3, { leftPages: () => null, base: { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }, ...(cutTo ? { target: cutTo } : {}) })
+  const base = { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }
+  const hooks = chained ? await chainedHooksOf(arxiv, read3, base) : null
+  const cut = await cutBundle(none ? { ...read3, addon: null } : read3, { leftPages: () => null, base, ...(cutTo ? { target: cutTo } : {}), ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}) })
   const at = `/door/${name}`, served = []
   const serve = (path, body) => { DOOR_FILES.set(path, body); served.push(path) }
-  // (door C: BUNDLE 3's bundle itself, its add-on taken off in the page)
-  if (none) serve(`${at}/bundle.json`, made.bytes)
+  // (door C: BUNDLE 3's bundle itself, its add-on taken off in the page; door S: the same with its single tail)
+  if (none || chained) serve(`${at}/bundle.json`, made.bytes)
   cut.units.forEach((u, i) => serve(`${at}/u${i}.json`, Buffer.from(u.bytes)))
   serve(`${at}/head.json`, Buffer.from(cut.head.bytes))
   cut.parts.forEach((p, i) => serve(`${at}/p${i}.json`, Buffer.from(p.bytes)))
-  serve(`${at}/cut.json`, JSON.stringify({ units: cut.units.map((u, i) => ({ path: `${at}/u${i}.json`, ref: u.ref })), head: { path: `${at}/head.json`, ref: cut.head.ref }, parts: cut.parts.map((p, i) => ({ path: `${at}/p${i}.json`, ref: p.ref })) }))
+  // arXiv's PDF through each part's tail (the composed document a host opens for it), and through the last tail
+  const docs = {}, tails = []
+  let composed = null
+  cut.parts.forEach((p, i) => {
+    const tail = JSON.parse(Buffer.from(p.bytes).toString('utf8')).addon?.tail
+    if (!tail) return
+    tails.push(Buffer.from(tail, 'base64'))
+    composed = `${at}/c${i}.pdf`
+    docs[i] = composed
+    serve(composed, Buffer.concat([Buffer.from(arxiv), ...tails]))
+  })
+  serve(`${at}/cut.json`, JSON.stringify({ units: cut.units.map((u, i) => ({ path: `${at}/u${i}.json`, ref: u.ref })), head: { path: `${at}/head.json`, ref: cut.head.ref }, parts: cut.parts.map((p, i) => ({ path: `${at}/p${i}.json`, ref: p.ref })), docs, composed }))
   serve(`${at}/rows.json`, JSON.stringify(made.rows))
   const o = { name, target, rules: '/rules/layout-rules.json', pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF) }
   const open = async () => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&doorparts=1`); await page.waitForFunction(() => window.gateReady === true) }
   try {
     await open()
-    const a = await page.evaluate(x => window.doorParts.whole(x), { ...o, bundle3: none })
+    const a = await page.evaluate(x => window.doorParts.whole(x), { ...o, bundle3: none ? 'none' : false })
     for (const e of a.pages) { serve(`${at}/s${e.p}.png`, Buffer.from(e.png, 'base64')); delete e.png }
     await open()
     const b = await page.evaluate(x => window.doorParts.parts(x), o)
     const q1 = q1Of(b.log), waits = b.log.filter(e => e === 'wait:part').length
     const pages = b.pages.map((d, i) => {
       const g = a.pages[i]
-      return { p: d.p, svg: d.svg === g?.svg, lang: d.lang === target, size: d.w === g?.w && d.h === g?.h, copy: d.copy.sha === g?.copy.sha, recs: d.recs === g?.recs }
+      return { p: d.p, svg: d.svg === g?.svg, lang: d.lang === target, size: d.w === g?.w && d.h === g?.h, words: d.words === g?.words, wordsSha: g?.words, copy: d.copy.sha === g?.copy.sha, recs: d.recs === g?.recs }
     })
     const all = key => pages.every(e => e[key]), n = key => pages.filter(e => e[key]).length
     // the units left: before endParts door B's are door A's less exactly what endParts' accounting adds (a multiset), and after
@@ -703,6 +727,18 @@ async function doorPartsFixture(page, name, errors) {
     const minus = (x, y) => { const m = counts(x); for (const v of y) m.set(v, (m.get(v) ?? 0) - 1); return m }
     const nonNegative = m => [...m.values()].every(v => v >= 0)
     const same = (m, k) => [...new Set([...m.keys(), ...k.keys()])].every(v => (m.get(v) ?? 0) === (k.get(v) ?? 0))
+    // C' (the chained add-on): door A, over every tail, against door S, BUNDLE 3's open over the bundle's single tail. Door S's
+    // copies are drawn over door A's PNG of each page (`shared`), as door B's are: two loads' own first drawings of one of
+    // arXiv's pages may differ (PDF.js, under load), so the copies are compared over the same pixels, never over each load's
+    // own original (that comparison failed some 10 of 523 pages a run, different pages each run, at six workers)
+    let single = null
+    if (chained) {
+      await open()
+      const sd = await page.evaluate(x => window.doorParts.whole(x), { ...o, bundle3: 'single', png: false, shared: true })
+      const same = sd.pages.length === a.pages.length && sd.pages.every((d, i) => d.svg === a.pages[i]?.svg && d.copy.sha === a.pages[i]?.copy.sha && d.recs === a.pages[i]?.recs && d.w === a.pages[i]?.w && d.h === a.pages[i]?.h)
+      single = { pages: sd.pages.filter((d, i) => d.svg === a.pages[i]?.svg && d.copy.sha === a.pages[i]?.copy.sha && d.recs === a.pages[i]?.recs).length, of: sd.pages.length, left: sd.skipped.join('\n') === a.skipped.join('\n'), states: sd.states === a.states, ok: false, tails: tails.length, removed: hooks.state().r }
+      single.ok = same && single.left && single.states && sd.addon === true
+    }
     const lacking = minus(a.skipped, b.before.skipped), added = minus(b.after.skipped, b.before.skipped)
     const left = {
       subset: nonNegative(lacking), accounted: nonNegative(added) && same(lacking, added), after: b.after.skipped.join('\n') === a.skipped.join('\n'),
@@ -712,11 +748,28 @@ async function doorPartsFixture(page, name, errors) {
     const leftOk = left.subset && left.accounted && left.after && left.statesBefore && left.statesAfter
     // (with no add-on, door B's parts carry none and door C's bundle none)
     const bare = !none || (b.addons === 0 && a.addon === false)
-    const ok = pages.length === a.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('copy') && all('recs') && leftOk && bare && !q1.length && !errors.length
+    const ok = pages.length === a.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('words') && all('copy') && all('recs') && leftOk && bare && !q1.length && !errors.length && (single === null || single.ok)
     if (!ok) failures.push(name)
-    const line = `${none ? `no add-on (door C, BUNDLE 3's with none${bare ? '' : ': NOT bare'}), ` : ''}${pages.length} pages, ${cut.parts.length} parts (${DOOR_PARTS}: ${b.parts.map(r => r.join('-')).join(' ')}): SVG ${n('svg')}/${pages.length} equal, copy ${n('copy')}, records ${n('recs')}; units left (${a.skipped.length}): before endParts ${left.subset && left.accounted ? `door A's less the ${left.lacking} its accounting adds${left.whys.length ? ` (${left.whys.join(', ')})` : ''}` : 'NOT door A\'s less the accounting'}, after it ${left.after ? 'equal' : 'NOT equal'}; states ${left.statesBefore && left.statesAfter ? 'equal' : 'NOT equal'} before and after; door B told ${b.needed} of ${b.of} parts as its run waited (${waits} waits), the rest at the end; Q1 ${q1.length ? `broken: ${q1.slice(0, 3).join('; ')}` : 'held'}; ${b.drawn} units drawn (door A ${a.drawn})${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
-    return { name, door: true, ok, ready: true, line, pages, schedule: DOOR_PARTS, addon: DOOR_PARTS_ADDON, parts: b.parts, needed: b.needed, waits, q1, left, bare }
+    const line = `${none ? `no add-on (door C, BUNDLE 3's with none${bare ? '' : ': NOT bare'}), ` : ''}${single ? `chained (${single.tails} tails, ${single.removed} removed pages; door A as BUNDLE 3's single tail on ${single.pages}/${single.of} pages, units left ${single.left ? 'equal' : 'NOT equal'}, states ${single.states ? 'equal' : 'NOT equal'}), ` : ''}${pages.length} pages, ${cut.parts.length} parts (${DOOR_PARTS}: ${b.parts.map(r => r.join('-')).join(' ')}): SVG ${n('svg')}/${pages.length} equal, words ${n('words')}, copy ${n('copy')}, records ${n('recs')}; units left (${a.skipped.length}): before endParts ${left.subset && left.accounted ? `door A's less the ${left.lacking} its accounting adds${left.whys.length ? ` (${left.whys.join(', ')})` : ''}` : 'NOT door A\'s less the accounting'}, after it ${left.after ? 'equal' : 'NOT equal'}; states ${left.statesBefore && left.statesAfter ? 'equal' : 'NOT equal'} before and after; door B told ${b.needed} of ${b.of} parts as its run waited (${waits} waits), the rest at the end; Q1 ${q1.length ? `broken: ${q1.slice(0, 3).join('; ')}` : 'held'}; ${b.drawn} units drawn (door A ${a.drawn})${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    return { name, door: true, ok, ready: true, line, pages, schedule: DOOR_PARTS, addon: DOOR_PARTS_ADDON, parts: b.parts, needed: b.needed, waits, q1, left, bare, single }
   } finally { for (const f of served) DOOR_FILES.delete(f) }
+}
+
+/** --door-parts' chained add-on: the cutter's hooks (layout/chain.mjs chainedAddon) over the plans of arXiv's PDF in Node
+ *  (layout/addon.mjs pagePlansOf over the bundle's layout file) and the remover in process (layout/remove.mjs removerOf over
+ *  arXiv's bytes), as the prepare child and the remover child run them */
+async function chainedHooksOf(arxiv, read3, base) {
+  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const [{ chainedAddon }, { pagePlansOf }, { removerOf }, { indexLayout }] = await Promise.all(['layout/chain.mjs', 'layout/addon.mjs', 'layout/remove.mjs', 'layout/file.mjs'].map(f => import(E(f))))
+  const PL = await import('@cantoo/pdf-lib')
+  // (the facts' reader named by its own version: the remover refuses another than its pinned one)
+  const { OPS, version } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const { deflateSync } = await import('node:zlib')
+  const doc = await openNode(arxiv)
+  const { plans } = await pagePlansOf({ doc, OPS, index: indexLayout(read3.layout) })
+  try { await doc.loadingTask.destroy() } catch {}
+  const remover = removerOf({ bytes: arxiv, PL, inflate: inflateTolerant, deflate: b => new Uint8Array(deflateSync(b)) })
+  return chainedAddon({ N: read3.paper.pages, views: read3.left.pages, base: { bytes: base.bytes, xref: base.xref }, planOf: p => plans.get(p) ?? null, pdfjs: version, remove: ({ plans: ask }) => remover.remove(ask) })
 }
 
 /** a record piece as a result's piece (spikes/rows-check.mjs resultOf): a text it translated stays itself, one it left is
@@ -775,7 +828,9 @@ async function doorBundleOf(name, removal) {
 /** the remover's files, digested: a change of them makes every add-on again (the plan's, removal.mjs pagePlan, too; the
  *  manifest's reader, which holds REMOVAL and the bounds the maker checks its manifest by, and the maker, addon.mjs) */
 function removerDigest() {
-  return sha256(['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layout/addon-manifest.mjs', 'src/pdf-reader/engine/layout/addon.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs'].map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
+  // (the exchange's payloads, the chained writer and the tail's reading since E3: the remover's side reads them)
+  const files = ['src/pdf-reader/engine/layout/remove.mjs', 'src/pdf-reader/engine/layout/ink.mjs', 'src/pdf-reader/engine/layout/file.mjs', 'src/pdf-reader/engine/layout/addon-manifest.mjs', 'src/pdf-reader/engine/layout/addon.mjs', 'src/pdf-reader/engine/layer-proto/removal.mjs', 'src/pdf-reader/engine/layout/chain-wire.mjs', 'src/pdf-reader/engine/layout/chain.mjs', 'src/pdf-reader/engine/layout/tail.mjs']
+  return sha256(files.filter(f => existsSync(join(ENGINE, f))).map(f => readFileSync(join(ENGINE, f))).join('\n')).slice(0, 16)
 }
 
 /**
@@ -960,17 +1015,18 @@ if (DOOR_PARTS !== null) {
   const made = new Date().toISOString()
   const file = join(ROOT, 'out/layer-gate', `door-parts-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
   writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, doorParts: DOOR_PARTS, doorPartsAddon: DOOR_PARTS_ADDON }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
-  console.log(`\ndoor-parts (${DOOR_PARTS}${DOOR_PARTS_ADDON === 'none' ? ', no add-on, against door C' : ''}): ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left as door A's on ${ran.filter(r => r.left?.subset && r.left.accounted && r.left.after && r.left.statesBefore && r.left.statesAfter).length} outputs (before endParts less its accounting, after it equal; the states too); Q1 held on ${ran.filter(r => r.q1 && !r.q1.length).length}, the runs waiting for a part ${ran.reduce((n, r) => n + (r.waits ?? 0), 0)} times; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  console.log(`\ndoor-parts (${DOOR_PARTS}${DOOR_PARTS_ADDON === 'none' ? ', no add-on, against door C' : DOOR_PARTS_ADDON === 'chained' ? `, chained tails, door A as the single tail's on ${ran.reduce((n, r) => n + (r.single?.pages ?? 0), 0)} pages of ${ran.reduce((n, r) => n + (r.single?.of ?? 0), 0)} (${ran.reduce((n, r) => n + (r.single?.tails ?? 0), 0)} tails)` : ', the manifest carried'}): ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, the word tables on ${count('words')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left as door A's on ${ran.filter(r => r.left?.subset && r.left.accounted && r.left.after && r.left.statesBefore && r.left.statesAfter).length} outputs (before endParts less its accounting, after it equal; the states too); Q1 held on ${ran.filter(r => r.q1 && !r.q1.length).length}, the runs waiting for a part ${ran.reduce((n, r) => n + (r.waits ?? 0), 0)} times; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
   process.exit(failures.length || ran.length !== asked.length ? 1 : 0)
 }
 if (DOOR !== null) {
   const ran = [...results.values()].sort((a, b) => a.name.localeCompare(b.name))
   const all = ran.flatMap(r => r.pages ?? [])
   const count = key => all.filter(e => e[key]).length
+  const reach = key => ran.reduce((n, r) => n + (r.gate?.reach?.[key] ?? 0), 0)
   const made = new Date().toISOString()
   const file = join(ROOT, 'out/layer-gate', `door-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
   writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, door: DOOR }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
-  console.log(`\ndoor: ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, copyOf's pixels the copy plane on ${count('copy')} (drawn over v0's original, whose PNG read back is it on ${count('original')}), the page this load's PDF.js draws v0's original on ${count('source')}; the gate's own run at 1.25 CSS px a unit and dpr 2 against it at 2.5 and dpr 1: the units' records equal on ${count('laid')} pages, the copy planes on ${count('drawn')}, the originals on ${count('read')}; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  console.log(`\ndoor: ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, the word tables on ${count('words')} (at the gate's recorded scale on ${count('wordsAt')}), copyOf's pixels the copy plane on ${count('copy')} (drawn over v0's original, whose PNG read back is it on ${count('original')}), the page this load's PDF.js draws v0's original on ${count('source')}; the gate's own run at 1.25 CSS px a unit and dpr 2 against it at 2.5 and dpr 1: the units' records equal on ${count('laid')} pages, the copy planes on ${count('drawn')}, the originals on ${count('read')}; the words the translations have with no token carrying their index: ${reach('noToken')} of ${reach('words')}, and of the sentence starts (the records' sentences.tr) ${reach('startsNoToken')} of ${reach('starts')}; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
   process.exit(failures.length || ran.length !== asked.length ? 1 : 0)
 }
 
@@ -1099,9 +1155,10 @@ function completenessRows(run) {
     // (the consistency checks, the table-groups brief: a table group drawn partly, a label the final names left in the
     // source language; each must be 0. And the measures of TeX's file whose cause a pull request removed, gated at 0 in
     // it, README: a drawn line over a display, since the display grouping read from the file, 2026-10-15)
-    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0, textInDisplay: t.textInDisplay ?? 0 }
+    // (and a unit whose record the run could not make: drawn and measured by nothing, run.mjs recordErrors)
+    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0, textInDisplay: t.textInDisplay ?? 0, recordErrors: f.summary?.recordErrors ?? 0 }
     if (TIER === 'pixel') row.lostInk = t.lostInk ?? 0
-    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay'].filter(k => row[k] > 0)
+    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay', 'recordErrors'].filter(k => row[k] > 0)
     if (t.numbersShown < t.numbersTotal) row.fails.push('numbers')
     return row
   })
