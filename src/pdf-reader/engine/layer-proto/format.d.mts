@@ -92,6 +92,7 @@ export interface PartChain {
   readonly last: string | null
   /** the last K entry told, in (slot, id) order (-Infinity, -1 before any) */
   readonly slot: number; readonly id: number
+  /** the furthest page any part's views reached (a part whose own units reach less far leaves the rest to the part that told them) */
   readonly reach: number
   /** the views of pages through + 1 … reach */
   readonly ahead: readonly number[]
