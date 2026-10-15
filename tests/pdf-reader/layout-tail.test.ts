@@ -51,6 +51,46 @@ describe('tailLinks', () => {
   })
 })
 
+/** a tail of the remover's stream form with this /Index and /Prev */
+const streamTail = (index: string, prev = '212001') => bytes(`\n187 0 obj\n<< /Type /XRef /Size 188 /W [1 4 2] /Index [${index}] /Root 183 0 R /Prev ${prev} /Length 0 >>\nstream\n\nendstream\nendobj\nstartxref\n212869\n%%EOF\n`)
+
+describe('tailLinks is bounded by the tail it reads', () => {
+  it('refuses an /Index that names far more objects than the tail has bytes, in a few milliseconds and no memory (the review\'s DoS)', () => {
+    const heap = process.memoryUsage().heapUsed
+    for (const pairs of [1, 4, 16, 26_214]) {
+      const t = streamTail(Array.from({ length: pairs }, () => '1 1000000').join(' '))
+      const start = performance.now()
+      expect(tailLinks(t), `${pairs} pairs`).toBeNull()
+      expect(performance.now() - start, `${pairs} pairs`).toBeLessThan(100)
+    }
+    expect(process.memoryUsage().heapUsed - heap).toBeLessThan(64 * 2 ** 20)
+  })
+
+  it('refuses object numbers past PDF\'s limit, numbers that are not safe integers, duplicate numbers, and a /Prev that is no offset', () => {
+    expect(tailLinks(streamTail('68 1 8388607 2'))).toBeNull()
+    expect(tailLinks(streamTail('68 1 8388608 1'))).toBeNull()
+    expect(tailLinks(streamTail(`68 1 ${'9'.repeat(400)} 1`))).toBeNull()
+    expect(tailLinks(streamTail(`${'9'.repeat(400)} 1 186 1`))).toBeNull()
+    expect(tailLinks(streamTail('68 1 68 1'))).toBeNull()
+    expect(tailLinks(streamTail('68 1 186 2 187 1'))).toBeNull()
+    expect(tailLinks(streamTail('68 1 186 2', '9'.repeat(400)))).toBeNull()
+    // (and the real shapes are read: one number a pair, or a run)
+    expect(tailLinks(streamTail('68 1 186 1 187 1'))).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 186, last: 187 })
+    expect(tailLinks(streamTail('68 1 186 2'))).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 186, last: 187 })
+    expect(tailLinks(streamTail('186 2 68 1'))).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 186, last: 187 })
+    expect(tailLinks(streamTail('68 2'))).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 69, last: 69 })
+  })
+
+  it('a classic table is bounded the same way: a subsection that claims more entries than the table has bytes, a number past the limit', () => {
+    const t = (sub: string) => bytes(`\nxref\n${sub}trailer\n<< /Size 9 /Root 1 0 R /Prev 5 >>\nstartxref\n9\n%%EOF\n`)
+    const entry = '0000000100 00000 n\r\n'
+    expect(tailLinks(t(`12 1\n${entry}300 1000000\n${entry}`))).toBeNull()
+    expect(tailLinks(t(`12 1\n${entry}8388608 1\n${entry}`))).toBeNull()
+    expect(tailLinks(t(`12 1\n${entry}12 1\n${entry}`))).toBeNull()
+    expect(tailLinks(t(`12 1\n${entry}300 2\n${entry}${entry}`))).toEqual({ startxref: 9, prev: 5, root: 12, first: 300, last: 301 })
+  })
+})
+
 describe('startxrefOf', () => {
   it('is the number before the final %%EOF of the PDF, as the remover reads it', () => {
     const pdf = new Uint8Array(readFileSync(`${SAMPLE}/sample-1.pdf`))

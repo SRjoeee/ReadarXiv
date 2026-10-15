@@ -46,9 +46,36 @@ export function tailLinks(tail) {
   if (!Number.isSafeInteger(startxref)) return null
   const body = text.slice(0, end.index)
   const section = body.endsWith('endobj\n') ? streamSection(body) : tableSection(body)
-  if (section === null || section.prev === null || section.numbers.length < 2) return null
-  const numbers = section.numbers.sort((a, b) => a - b)
-  return { startxref, prev: section.prev, root: numbers[0], first: numbers[1], last: numbers[numbers.length - 1] }
+  if (section === null || section.prev === null) return null
+  // the objects the section defines are defined inside the tail: each costs a byte of it at least
+  const nums = summary(section.ranges, tail.length)
+  if (nums === null || nums.total < 2) return null
+  return { startxref, prev: section.prev, root: nums.min, first: nums.second, last: nums.max }
+}
+
+/** an object number at most (ISO 32000-1, annex C: 8,388,607) */
+const OBJECT_MAX = 8_388_607
+
+/**
+ * The least, the second least and the greatest object number of `ranges` ([first, count] each), in one pass over the ranges
+ * and never over the numbers: null where a range is not a run of 1 or more object numbers within OBJECT_MAX, where two
+ * overlap (a number twice), or where the numbers in all are more than `most`
+ */
+function summary(ranges, most) {
+  if (ranges.length > most) return null
+  const sorted = ranges.slice().sort((a, b) => a[0] - b[0])
+  let total = 0, max = -1
+  for (let i = 0; i < sorted.length; i++) {
+    const [first, count] = sorted[i]
+    if (!Number.isSafeInteger(first) || !Number.isSafeInteger(count) || first < 0 || count < 1 || first + count - 1 > OBJECT_MAX) return null
+    if (i > 0 && first <= max) return null
+    total += count
+    if (total > most) return null
+    max = first + count - 1
+  }
+  if (total < 1) return null
+  const [first, count] = sorted[0]
+  return { min: first, second: count > 1 ? first + 1 : sorted[1]?.[0], max, total }
 }
 
 /** the section `xref\n(<first> <count>\n<count × 20 bytes>)… trailer\n<< … /Prev n … >>\n`, at the end of `body` */
@@ -58,20 +85,19 @@ function tableSection(body) {
   let from = body.lastIndexOf('\nxref\n', trailerAt)
   if (from < 0) return null
   from += 6
-  // the subsections must reach the trailer exactly: nothing but the table lies between
-  const numbers = []
+  // the subsections must reach the trailer exactly: nothing but the table lies between, and each entry is 20 bytes of it
+  const ranges = []
   let at = from
   while (at < trailerAt) {
     const head = /^(\d{1,9}) (\d{1,9})\n/.exec(body.slice(at, at + 24))
     if (head === null) return null
     const first = Number(head[1]), count = Number(head[2])
     at += head[0].length + 20 * count
-    if (count > 1_000_000 || at > trailerAt) return null
-    for (let i = 0; i < count; i++) numbers.push(first + i)
+    if (at > trailerAt) return null
+    ranges.push([first, count])
   }
   if (at !== trailerAt) return null
-  const prev = /\/Prev (\d+)/.exec(body.slice(trailerAt))?.[1]
-  return { numbers, prev: prev === undefined ? null : Number(prev) }
+  return { ranges, prev: prevOf(body.slice(trailerAt)) }
 }
 
 /** the section `<n> 0 obj\n<< /Type /XRef … /Index [<first> <count> …] … /Prev n … /Length l >>\nstream\n…\nendstream\nendobj\n` */
@@ -85,11 +111,14 @@ function streamSection(body) {
   if (index === undefined) return null
   const pairs = index.trim().split(/\s+/).map(Number)
   if (pairs.length % 2 !== 0) return null
-  const numbers = []
-  for (let i = 0; i < pairs.length; i += 2) {
-    if (pairs[i + 1] > 1_000_000) return null
-    for (let k = 0; k < pairs[i + 1]; k++) numbers.push(pairs[i] + k)
-  }
-  const prev = /\/Prev (\d+)/.exec(dict)?.[1]
-  return { numbers, prev: prev === undefined ? null : Number(prev) }
+  const ranges = []
+  for (let i = 0; i < pairs.length; i += 2) ranges.push([pairs[i], pairs[i + 1]])
+  return { ranges, prev: prevOf(dict) }
+}
+
+/** the section's /Prev, an offset that is a safe integer; null otherwise */
+function prevOf(text) {
+  const prev = /\/Prev (\d+)/.exec(text)?.[1]
+  const n = Number(prev)
+  return prev !== undefined && Number.isSafeInteger(n) ? n : null
 }
