@@ -173,8 +173,8 @@ describe('the run in parts draws every page as the open over the whole paper doe
       let compared = 0
       for (const ends of everySplit(spec.pages)) {
         const P = await takePaper(spec, ends)
-        // (a cutter with no target hook cuts at the doubling alone: the splits it cannot make are the doubling again)
-        if (!P.honoured && ends.length) continue
+        // (the cutter cuts where its target hook says: every split of the pages is one)
+        expect(P.honoured, ends.join()).toBe(true)
         const want = drawing(await wholeRun(P))
         // (a drawing worth comparing: units laid on every page, a table's column the original's, a unit left the original's)
         expect(want.order.length).toBeGreaterThan(5)
@@ -214,7 +214,7 @@ describe('the run in parts: waits, failures and documents', () => {
   it('with each part\'s rows taken after it, lays every page with no wait once its inputs are in (Q1, readiness alone)', async () => {
     for (const spec of [TAKE, FLOAT]) for (const ends of everySplit(spec.pages)) {
       const P = await takePaper(spec, ends)
-      if (!P.honoured && ends.length) continue
+      expect(P.honoured, ends.join()).toBe(true)
       for (let before = 0; before <= P.parts.length; before++) for (const feed of ['eager', 'starved'] as const) {
         const { run, q1 } = await partsRun(P, { before, ended: 'last', feed, rows: 'parts' })
         expect(q1, `${ends.join(',')}, ${before}, ${feed}`).toEqual([])
