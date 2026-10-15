@@ -53,7 +53,7 @@ const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A
 /** mt.mjs utf8: a source's text is read byte for byte (latin1), its characters UTF-8 */
 const utf8 = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return new TextDecoder().decode(b) }
 /** mt.mjs shown: a text piece as the compiled PDF shows it, a translation's TeX escapes undone, a source's bytes as UTF-8 */
-const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
+export const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
 
 /** a piece's key for finding an equal one: its kind, its source and, an open's or a close's, its pair; null where it has
  *  not their shape */
@@ -90,10 +90,21 @@ export function kOfSource(source) {
 }
 
 /** each slot's index in its unit's pieces (`slots`: mt.mjs serialize(unit).slots, which the caller makes): the early's
- *  slots carry these, so that a wire read back against them names its placeholders by k */
+ *  slots carry these, so that a wire read back against them names its placeholders by k. A run's slot (mt.mjs
+ *  formulaRuns: `{ t: 'run', pieces }`, a formula split across inline formulas, one marker) has the indices of all its
+ *  pieces, in their order — its formulas and the text between them, which its marker stands for —, an array where any
+ *  other slot has a number; -1 where a slot is none of the unit's */
 export function slotKs(unit, slots) {
   const kOf = kOfSource(unit?.pieces)
-  return (Array.isArray(slots) ? slots : []).map(kOf)
+  return (Array.isArray(slots) ? slots : []).map(slot => {
+    if (slot?.t !== 'run' || !Array.isArray(slot.pieces)) return kOf(slot)
+    // (its placeholders found as any slot's, so that an equal one after the run is not taken for one of them; the run is
+    // a stretch of the unit's pieces, its text between them by where it stands)
+    const ks = slot.pieces.filter(p => p?.t !== 'text').map(kOf)
+    if (!ks.length || ks.some(k => k < 0)) return -1
+    const run = Array.from({ length: ks.at(-1) - ks[0] + 1 }, (_, i) => ks[0] + i)
+    return run.length === slot.pieces.length ? run : -1
+  })
 }
 
 /**

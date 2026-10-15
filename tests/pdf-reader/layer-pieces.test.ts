@@ -187,6 +187,17 @@ describe('slotKs', () => {
     // slots read from JSON (the early's, from the Worker) find the same
     expect(slotKs(u, viaJson(serialize(u as never).slots))).toEqual([1, 2, 4, 5])
   })
+  it("a run's slot (a formula split across inline formulas, one marker) has all its pieces' indices, in order", () => {
+    // text, the set's three parts and the commas between them, text, \cite{a}
+    const u = unit([text('the components '), ph('$\\{\\Phi_0$'), text(', '), ph('$\\Phi_1$'), text(', '), ph('$\\Phi_2\\}$'), text(' hold '), ph('\\cite{a}')])
+    expect(slotKs(u, serialize(u as never).slots)).toEqual([[1, 2, 3, 4, 5], 7])
+    expect(slotKs(u, viaJson(serialize(u as never).slots))).toEqual([[1, 2, 3, 4, 5], 7])
+  })
+  it('two runs side by side, a tie inside one, and a part of a run met again after it', () => {
+    const u = unit([ph('$\\{a$'), text(', '), ph('$b\\}$'), text(', '), ph('$(c$'), ph('~'), ph('$d)$'), text(' and '), ph('$b\\}$')])
+    expect(slotKs(u, serialize(u as never).slots)).toEqual([[0, 1, 2], [4, 5, 6], 8])
+    expect(slotKs(u, viaJson(serialize(u as never).slots))).toEqual([[0, 1, 2], [4, 5, 6], 8])
+  })
 })
 
 describe("the shared rules are mt.mjs's", () => {

@@ -16,8 +16,15 @@ export declare const SPACING: RegExp
 export declare function unitText(pieces: Piece[]): { text: string; gaps?: number[] }
 /** an engine's plain text as TeX sets it: its invisible characters dropped, TeX's special characters escaped */
 export declare function texEscape(s: string): string
-/** a unit → the wire text of the markers format, and the table from marker id back to the original piece */
-export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: Piece[]; lead: string; trail: string; stops?: Set<number>; numbers?: Set<number>; numbersAfter?: Set<number> }
+/** a run of formulas a marker stands for: the unit's own pieces, read back in their order */
+export type RunSlot = { t: 'run'; pieces: Piece[] }
+/** a formula split across inline formulas: each run's first piece's index → its last's */
+export declare function formulaRuns(pieces: Piece[]): Map<number, number>
+/** whether translated pieces hold an inline formula whose delimiters do not balance on its own */
+export declare function holdsUnbalanced(pieces: Piece[]): boolean
+/** a unit → the wire text of the markers format, and the table from marker id back to the original piece (a run's
+ *  pieces for a run's marker; `hidden`, the characters of a run's text a marker stands for) */
+export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: (Piece | RunSlot)[]; lead: string; trail: string; stops?: Set<number>; numbers?: Set<number>; numbersAfter?: Set<number>; hidden?: Map<string, number> }
 /** the translation → pieces, or why it cannot be used */
 export declare function rehydrate(text: string, ser: ReturnType<typeof serialize>, tolerant?: boolean): { pieces: Piece[] } | { error: string }
 /** where each sentence after the first begins: offsets of its first word in the plain source and in the plain translation */
@@ -25,7 +32,7 @@ export type Sentences = { src: number[]; tr: number[] }
 /** a unit's sentences from its engine's sentence lengths for the wire it was sent (the segment's `alignment`), or null */
 export declare function sentencesOf(u: { pieces: Piece[] }, ser: { wire: string }, text: string, alignment: { source: number[]; target: number[] } | undefined, pieces: Piece[], tolerant?: boolean, format?: 'markers' | 'tags'): Sentences | null
 /** a unit → the tags wire (an LLM's, Google's): <x id="n"/> for an opaque piece, <t id="n">…</t> around a formatting pair */
-export declare function serializeTags(u: { pieces: Piece[] }): { wire: string; slots: unknown[]; lead: string; trail: string }
+export declare function serializeTags(u: { pieces: Piece[] }): { wire: string; slots: unknown[]; lead: string; trail: string; hidden?: Map<string, number> }
 /** the translation → pieces, or why it cannot be used */
 export declare function rehydrateTags(text: string, ser: ReturnType<typeof serializeTags>): { pieces: Piece[] } | { error: string }
 /** a unit's sentence cuts on its tags wire */

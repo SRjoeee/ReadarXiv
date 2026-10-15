@@ -97,7 +97,7 @@ function addShapes(by, units) {
  *   endParts()           no more parts: every page no part covers fails
  *   pageState(page), onPage(listener)  each page's state, and each change told once: laying, then ready or failed
  *   pageOf(page, { lang, signal })  the page laid, a new LaidPage each call (its SVG made anew of the page's kept markup, lang
- *                        set; words and links empty until the engine's 2b and 3a); it waits for what the page needs, and
+ *                        set; words a copy of the page's word table, links empty until the engine's 3a); it waits for what the page needs, and
  *                        rejects where the page fails, the layer is let go or the signal aborts
  *   leftPageOf(page, { signal })  the page's left part, fetched once through leftPart and read, once a part covers it
  *   copyOf(page, source, k)  a ready page's copy at a view's resolution, over `source` (the page as PDF.js drew it at k)
@@ -196,13 +196,14 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const live = () => { if (disposed) throw letGoError() }
   const pageIn = page => { if (!Number.isSafeInteger(page) || page < 1 || page > N) throw new RangeError(`page: 1 to ${N}, not ${typeof page === 'number' ? page : kindOf(page)}`) }
   /** a ready page as a host keeps it: a new element made of the page's kept markup (run.svgOf: no layout, face, ink or PDF.js
-   *  call), its lang set; words and links new empty data until the engine's 2b and 3a (their shapes are fixed now). The run
-   *  holds no element of a page: a host drops a far page's and asks again */
+   *  call), its lang set; its word table, a copy of the page's kept record (run.wordsOf: no array is the run's, the host may
+   *  transfer or free them; an empty table for a page with none painted); links new empty data until the engine's 3a (their
+   *  shape is fixed now). The run holds no element of a page: a host drops a far page's and asks again */
   const fresh = (page, lang) => {
     const r = run.rows[page - 1]
     const svg = run.svgOf(page)
     svg.setAttribute('lang', lang)
-    return { svg, w: r.w, h: r.h, words: { tokens: [], spans: [], original: [] }, links: [] }
+    return { svg, w: r.w, h: r.h, words: run.wordsOf(page), links: [] }
   }
   const off = a => { if (a.signal && a.onAbort) a.signal.removeEventListener('abort', a.onAbort) }
 

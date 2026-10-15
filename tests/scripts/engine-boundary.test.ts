@@ -58,11 +58,12 @@ describe('what an engine file may import', () => {
     const [v] = engineViolations([`${E}/x.mjs`], { root: t.root }) as Violation[]
     expect(v).toEqual({ file: `${E}/x.mjs`, spec: '../../ui/strings', why: expect.stringContaining('src/core/sentences') })
   })
-  it('lets src/core/sentences, src/core/protector/tokens and src/core/names through by a relative path, however the module is spelled', () => {
+  it('lets src/core/sentences, src/core/protector/tokens, src/core/names and src/core/protector/math-runs through by a relative path, however the module is spelled', () => {
     expect(violationsOf("import { splitSentences } from '../../../core/sentences'\n")).toEqual([])
     expect(violationsOf("import { splitSentences } from '../../../core/sentences/index.ts'\n")).toEqual([])
     expect(violationsOf("import { toAlpha } from '../../../core/protector/tokens'\nimport { n } from '../../../core/protector/tokens.ts'\n")).toEqual([])
     expect(violationsOf("import { isName } from '../../../core/names'\nexport * from '../../../core/names.ts'\n")).toEqual([])
+    expect(violationsOf("import { balancedRuns } from '../../../core/protector/math-runs.ts'\n")).toEqual([])
   })
   it('refuses an alias for its spelling, even to a module the engine may import or to the engine itself: only a bundler resolves it', () => {
     expect(violationsOf("import { toAlpha } from '@/core/protector/tokens'\n")).toEqual(['@/core/protector/tokens'])
@@ -75,7 +76,7 @@ describe('what an engine file may import', () => {
     expect(violationsOf("import { serialize } from '../../../core/protector/serialize'\n")).toEqual(['../../../core/protector/serialize'])
     expect(violationsOf("import { serialize } from '@/core/protector'\n")).toEqual(['@/core/protector'])
   })
-  it('allows those three modules and no other of the core: a sibling of one is another module', () => {
+  it('allows those four modules and no other of the core: a sibling of one is another module', () => {
     expect(violationsOf("import { x } from '../../../core/sentences/other'\n")).toEqual(['../../../core/sentences/other'])
     expect(violationsOf("import { x } from '../../../core/text'\n")).toEqual(['../../../core/text'])
     expect(violationsOf("import { x } from '../../../core/namesake'\n")).toEqual(['../../../core/namesake'])
@@ -210,10 +211,10 @@ describe('the engine\'s packages', () => {
 })
 
 describe('the exported rule', () => {
-  it('scopes to src/pdf-reader/engine/ and allows the three core modules by path', () => {
+  it('scopes to src/pdf-reader/engine/ and allows the four core modules by path', () => {
     expect(ENGINE.test(`${E}/mt.mjs`)).toBe(true)
     expect(ENGINE.test('src/pdf-reader/controller.ts')).toBe(false)
-    expect(ENGINE_ALLOW).toEqual(['src/core/sentences', 'src/core/protector/tokens', 'src/core/names'])
+    expect(ENGINE_ALLOW).toEqual(['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs'])
   })
 })
 
@@ -376,13 +377,13 @@ describe('the repository\'s engine today', () => {
     for (const file of ENGINE_MOVE_OUT) expect(found.some(v => v.file === file), `${file} no longer violates: take it off the list`).toBe(true)
     for (const target of ENGINE_MOVE_IN) expect(found.some(v => resolveFor(v) === target), `${target} is no longer imported from the engine: take it off the list`).toBe(true)
   })
-  it('has a closure behind the three core modules it may import that is alias-free and holds nothing but those three', () => {
+  it('has a closure behind the four core modules it may import that is alias-free and holds nothing but those four', () => {
     const allowed = new Set<string>()
     for (const module of ENGINE_ALLOW as string[]) for (const file of closureOf([module]) as Set<string>) allowed.add(file)
     for (const file of allowed) {
       for (const spec of valueImportsOf(readFileSync(file, 'utf8')) as string[]) expect(spec.startsWith('.'), `${file} imports ${spec}`).toBe(true)
-      expect((ENGINE_ALLOW as string[]).includes(resolveSpecifier('src/x.ts', file)), `${file} is not one of the three`).toBe(true)
+      expect((ENGINE_ALLOW as string[]).includes(resolveSpecifier('src/x.ts', file)), `${file} is not one of the four`).toBe(true)
     }
-    expect(allowed.size).toBe(3)
+    expect(allowed.size).toBe(4)
   })
 })

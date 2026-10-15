@@ -278,7 +278,10 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const again = await layer.pageOf(1, { lang: 'zh-Hans' })
     expect(again.svg).not.toBe(pages[0]!.svg)
     expect(again.svg.outerHTML).toBe(pages[0]!.svg.outerHTML)
-    expect(again.words).toEqual({ tokens: [], spans: [], original: [] })
+    // (the word table: a copy of the page's record, new arrays on every ask)
+    expect(again.words.tokens.n).toBe(again.words.word.length)
+    expect(again.words).toEqual(pages[0]!.words)
+    expect(again.words.word).not.toBe(pages[0]!.words.word)
     expect(again.links).toEqual([])
     const source = document.createElement('canvas')
     source.width = 1500
