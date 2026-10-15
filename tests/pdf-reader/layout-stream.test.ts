@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '@/pdf-reader/engine/layout/ink.mjs'
-import { type Follow, OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
+import { type Follow, OWNED, OWNED_HOW, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
 
 // Each placeholder's own ink in the marked compile by content-stream order: a page here is what pageInk reads of one,
 // its glyphs and boxes in the order shown and its points among them, its glyphs packed as the marks read keeps them
@@ -37,12 +37,23 @@ function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
 const closed: Follow = { closing: true, want: '', ends: [], blocked: false }
 const open = (want: string, ends: string[] = [], blocked = false): Follow => ({ closing: false, want, ends, blocked })
 const how = (name: string) => OWNED_HOW.indexOf(name)
-/** each owned piece's glyphs as a string and its rule count, or its how where it is not owned */
+/** an entry as the cases read it: its glyphs as a string and its rule count, or its how where it is not owned */
+const shown = (pages: readonly StreamPage[], e: { how: number; glyphs: [number, number][]; boxes: unknown[] }) => (e.how < OWNED ? [e.glyphs.map(([p, g]) => pages[p - 1]?.glyphs.u[g]).join(''), e.boxes.length] as [string, number] : OWNED_HOW[e.how] as string)
+/** each owned piece's glyphs as a string and its rule count, or its how where it is not owned: ownedOf's over the whole, and
+ *  the same a page at a time (ownedPages, the page stream: each case holds both), its closing points' pages as their
+ *  destinations would give them, a point read twice told at the end */
 function owned(pages: StreamPage[], follows: Record<string, Follow>, dropped: string[] = []) {
   const out: Record<string, string | [string, number]> = {}
-  for (const [name, e] of ownedOf(pages, { follows: n => follows[n] ?? null, dropped })) {
-    out[name] = e.how < OWNED ? [e.glyphs.map(([p, g]) => pages[p - 1]?.glyphs.u[g]).join(''), e.boxes.length] : OWNED_HOW[e.how] as string
-  }
+  for (const [name, e] of ownedOf(pages, { follows: n => follows[n] ?? null, dropped })) out[name] = shown(pages, e)
+  const pageOfPoint = (name: string) => { const i = pages.findIndex(p => p.points.some(pt => pt.name === name)); return i < 0 ? null : i + 1 }
+  const paged: Record<string, string | [string, number]> = {}
+  const s = ownedPages({ follows: n => follows[n] ?? null, dropped, closing: n => pageOfPoint(`${n.slice(0, -1)}b`) })
+  const take = (name: string, e: { how: number; glyphs: [number, number][]; boxes: unknown[] }, W: readonly StreamPage[]) => { paged[name] = shown(W, e) }
+  pages.forEach((page, i) => { s.add(i + 1, page, take) })
+  s.end(take)
+  const twice = s.twice()
+  for (const name of Object.keys(paged)) if (/a$/.test(name) && (twice.has(name) || twice.has(`${name.slice(0, -1)}b`))) paged[name] = 'a mark set twice'
+  expect(paged).toEqual(out)
   return out
 }
 
@@ -207,5 +218,61 @@ describe('ownedOf', () => {
   it('a name the caller does not know, and a bracket, own nothing and are no piece', () => {
     const page = pageOf([{ at: 'bs1' }, { at: 'p9.9a' }, 'x', { at: 'p9.9b' }, { at: '3s' }, { at: 'be1' }])
     expect(owned([page], {})).toEqual({})
+  })
+})
+
+describe('ownedPages: a piece found once the pages it may read are in, the pages before let go', () => {
+  /** the pages added one by one, each piece's page count when it was found and the window's pages it was given */
+  function paged(pages: StreamPage[], follows: Record<string, Follow>, closing: Record<string, number> = {}) {
+    const found: Record<string, { after: number; held: number[] }> = {}
+    let added = 0
+    const s = ownedPages({ follows: n => follows[n] ?? null, closing: n => closing[n] ?? null })
+    const take = (name: string, _e: unknown, W: readonly StreamPage[]) => { found[name] = { after: added, held: W.flatMap((p, i) => (p.points.length || p.glyphs.n ? [i + 1] : [])) } }
+    for (const page of pages) { added++; s.add(added, page, take) }
+    s.end(take)
+    return found
+  }
+
+  it('a piece closed on its page is found with its page; one closed on the next page waits for it, the page before let go', () => {
+    const p1 = pageOf([{ at: 'bs1' }, 'one ', { at: 'p0.1a' }, 'x', { at: 'p0.1b' }, ' two ', { at: 'p0.3a' }, 'k1', { at: 'be1' }])
+    const p2 = pageOf([{ at: 'bs2' }, 'k2', { at: 'p0.3b' }, ' three', { at: 'be2' }])
+    const p3 = pageOf([{ at: 'bs3' }, 'four ', { at: 'p0.5a' }, 'y', { at: 'p0.5b' }, { at: 'be3' }])
+    const f = { 'p0.1a': closed, 'p0.3a': closed, 'p0.5a': closed }
+    // (both forms agree: owned asserts it)
+    expect(owned([p1, p2, p3], f)).toEqual({ 'p0.1a': ['x', 0], 'p0.3a': ['k1k2', 0], 'p0.5a': ['y', 0] })
+    const got = paged([p1, p2, p3], f, { 'p0.1a': 1, 'p0.3a': 2, 'p0.5a': 3 })
+    // page 1's pieces wait for the piece closed on page 2: all found once page 2 is in, over pages 1 and 2
+    expect(got['p0.1a']).toEqual({ after: 2, held: [1, 2] })
+    expect(got['p0.3a']).toEqual({ after: 2, held: [1, 2] })
+    // page 3's own, its window page 3 alone: pages 1 and 2 let go
+    expect(got['p0.5a']).toEqual({ after: 3, held: [3] })
+  })
+
+  it('an opening point alone in a body waits for the next point in its region; with none, for the document\'s end', () => {
+    const p1 = pageOf([{ at: 'bs1' }, 'words ', { at: 'p0.1a' }, '\na=b(1)', { at: 'be1' }])
+    const p2 = pageOf([{ at: 'bs2' }, 'nothing marked here', { at: 'be2' }])
+    const p3 = pageOf([{ at: 'bs3' }, 'where more words', { at: '0e' }, { at: 'be3' }])
+    const f = { 'p0.1a': open('wheremor') }
+    owned([p1, p2, p3], f)
+    expect(paged([p1, p2, p3], f)['p0.1a']).toEqual({ after: 3, held: [1, 2, 3] })
+    owned([p1, p2], f)
+    expect(paged([p1, p2], f)['p0.1a']).toEqual({ after: 2, held: [1, 2] })
+  })
+
+  it('a closing point read on a page before its opening point: out of order, as over the whole', () => {
+    const p1 = pageOf(['one ', { at: 'p0.1b' }, 'two'])
+    const p2 = pageOf(['three ', { at: 'p0.1a' }, 'four'])
+    expect(owned([p1, p2], { 'p0.1a': closed })).toEqual({ 'p0.1a': 'marks out of order' })
+  })
+
+  it('a point read again on a later page: told by twice(), as the whole tells it', () => {
+    const p1 = pageOf(['one ', { at: 'p0.1a' }, 'x', { at: 'p0.1b' }])
+    const p2 = pageOf(['two ', { at: 'p0.1a' }, 'y'])
+    expect(owned([p1, p2], { 'p0.1a': closed })).toEqual({ 'p0.1a': 'a mark set twice' })
+  })
+
+  it('pages come in order', () => {
+    const s = ownedPages({ follows: () => null })
+    expect(() => s.add(2, pageOf(['x']), () => {})).toThrow(RangeError)
   })
 })
