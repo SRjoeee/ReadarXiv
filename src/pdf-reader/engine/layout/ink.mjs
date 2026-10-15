@@ -390,3 +390,28 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   }
   return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP, rotated: false }
 }
+
+/**
+ * A page's glyphs (pageInk's, a Glyph each) packed as columns, the form a reading keeps them in past its page: { n, x0,
+ * x1, y, top, bottom, ix0, ix1, size, font, u, most }, the i-th of each column the glyph `order[i]` (indices into
+ * `glyphs`; with no order, each glyph in its own place, the content stream's order). Each number as the Glyph holds it,
+ * but `ix0` and `ix1`, its ink across with its advance (the lesser and the greater of the two: an italic's overhang past
+ * its advance); `font` the id `fontIds` gives its font's name, -1 where none is asked; `most` the largest size. A Glyph is
+ * an object of ten fields, some 290 bytes in Node; its columns some 80 (the prepare memory note of 2026-10-15). The
+ * layout maker keeps arXiv's ink so (make.mjs glyphsOf), the marks read the marked compile's (marks.mjs layoutMarksOf)
+ */
+export function packGlyphs(glyphs, { order = null, fontIds = null } = {}) {
+  const n = order ? order.length : glyphs.length
+  const P = {
+    n, x0: new Float64Array(n), x1: new Float64Array(n), y: new Float64Array(n), top: new Float64Array(n), bottom: new Float64Array(n),
+    ix0: new Float64Array(n), ix1: new Float64Array(n), size: new Float64Array(n), font: new Int32Array(n).fill(-1), u: new Array(n), most: 0,
+  }
+  for (let i = 0; i < n; i++) {
+    const t = glyphs[order ? order[i] : i]
+    P.x0[i] = t.x0; P.x1[i] = t.x1; P.y[i] = t.y; P.top[i] = t.top; P.bottom[i] = t.bottom; P.size[i] = t.size; P.u[i] = t.u
+    P.ix0[i] = Math.min(t.x0, t.ix0 ?? t.x0); P.ix1[i] = Math.max(t.x1, t.ix1 ?? t.x1)
+    if (fontIds) P.font[i] = fontIds(t.font)
+    if (t.size > P.most) P.most = t.size
+  }
+  return P
+}
