@@ -106,3 +106,43 @@ describe('the view opened on a first read given up on', () => {
   })
 })
 
+describe('the settings changed elsewhere while the view is open', () => {
+  const changed = { ...DEFAULT_CONFIG, mode: 'only' as const, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false, sync: false } }
+  const open = (watch: (cb: (c: typeof DEFAULT_CONFIG) => void) => () => void, query = 'paper=2600.00001') => openView({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams(query), emit: vi.fn(), reading: { config: DEFAULT_CONFIG, fallbackReason: null } }, { watch, read: vi.fn() })
+  it('move the view\'s display and sync as a late read does: unless the address names the display or the reader chose', () => {
+    let tell: (c: typeof DEFAULT_CONFIG) => void = () => {}
+    view.setDisplay.mockClear(); view.setSync.mockClear()
+    const session = open(cb => { tell = cb; return () => {} })
+    tell(changed)
+    expect(view.setDisplay.mock.calls.at(-1)).toEqual(['translation'])
+    expect(view.setSync.mock.calls.at(-1)).toEqual([false])
+    session.setDisplay('original')
+    session.setSyncMode('same')
+    tell({ ...changed, pdfReader: { ...changed.pdfReader, original: false, sync: false } })
+    expect(view.setDisplay.mock.calls.at(-1)).toEqual(['original'])
+    expect(view.setSync.mock.calls.at(-1)).toEqual([true])
+    // an address that names the display holds it
+    view.setDisplay.mockClear()
+    open(cb => { tell = cb; return () => {} }, 'paper=2600.00001&mode=bilingual')
+    tell(changed)
+    expect(view.setDisplay.mock.calls).toEqual([['bilingual']])
+  })
+})
+
+describe('the paper\'s title where its PDF has none', () => {
+  const panes = () => ({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams(''), emit: vi.fn() })
+  it('is the abstract page\'s citation_title, one request to arXiv made only then; nothing where it cannot be had', async () => {
+    const fetch = vi.fn(async (url: string) => new Response('<!doctype html><meta name="citation_title" content="  Counting Lattice Paths  ">', { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    const host = readerHost({ ...panes(), reading: { config: DEFAULT_CONFIG, fallbackReason: null } }, DEFAULT_CONFIG, '2600.00001', () => () => {}, vi.fn())
+    expect(await host.titleFallback?.()).toBe('Counting Lattice Paths')
+    expect(fetch).toHaveBeenCalledWith('https://arxiv.org/abs/2600.00001', { credentials: 'omit' })
+    fetch.mockImplementationOnce(async () => new Response('gone', { status: 404 }))
+    expect(await host.titleFallback?.()).toBe('')
+    fetch.mockImplementationOnce(async () => { throw new TypeError('offline') })
+    expect(await host.titleFallback?.()).toBe('')
+    host.stop()
+    vi.unstubAllGlobals()
+  })
+})
+

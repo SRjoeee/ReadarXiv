@@ -37,6 +37,19 @@ export function displayFrom(params: URLSearchParams, config: Config): EngineDisp
   return isDisplay(named) ? named : displayOf(config)
 }
 
+/** the paper's title where its PDF's metadata has none: the abstract page's citation_title, one request to arXiv made only
+ *  then (the extension may read arxiv.org); '' where it cannot be had */
+export async function abstractTitle(paper: string): Promise<string> {
+  if (!paper) return ''
+  try {
+    const res = await fetch(`https://arxiv.org/abs/${paper}`, { credentials: 'omit' })
+    if (!res.ok) return ''
+    return new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('meta[name="citation_title"]')?.getAttribute('content')?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
+
 /** whether a link out of the paper may be opened: a web page or a mail address, never a script, data, or a page of the
  *  browser's or the extension's (a PDF's link, and the layer's, name what they like) */
 export function outward(url: string): boolean {
@@ -44,8 +57,8 @@ export function outward(url: string): boolean {
 }
 
 /** the reader page's host of the view, over the panes the page drew; `config` the settings as the page read them, `watch`
- *  how their changes are heard and `read` how they are read (the extension's storage); `late` told of the settings a
- *  first read given up on came to, once they land */
+ *  how their changes are heard and `read` how they are read (the extension's storage); `late` told of settings that came
+ *  after the view opened: a first read given up on, once it lands, and every change made elsewhere */
 export function readerHost(host: SessionHost, config: Config, paper: string, watch: typeof watchConfig = watchConfig, read: typeof readConfig = readConfig, late: (config: Config) => void = () => {}): ReaderHost & { stop(): void } {
   let latest = config
   const dark = globalThis.matchMedia?.('(prefers-color-scheme: dark)')
@@ -72,7 +85,7 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
     for (const l of listeners) l(p)
   }
   // a change the storage holds is valid by then (watchConfig parses it): the settings are readable again
-  const unwatch = watch(next => { heard = true; landed(next, null) })
+  const unwatch = watch(next => { heard = true; landed(next, null); late(next) })
   // the page's own first read given up on (no answer in its time, ui/first-read.ts), the defaults standing in: read again,
   // and the late answer followed as a change of the settings, unless a change came first
   if (host.reading == null) void read().then(r => { if (!stopped && !heard) { landed(r.config, r.fallbackReason); late(r.config) } }, () => {})
@@ -82,6 +95,7 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
     words: { pageName: (side, n) => R.pageName(side === 'left' ? 'original' : 'translation', n), sideName: side => R.display[side === 'left' ? 'original' : 'translation'] },
     prefs: { get: prefs, subscribe: l => { listeners.add(l); return () => { listeners.delete(l) } } },
     links: { openExternal: url => { if (outward(url)) globalThis.open(url, '_blank', 'noopener') } },
+    titleFallback: () => abstractTitle(paper),
     emit: event => { const e = fromView(event, paper); if (e) host.emit(e) },
     stop() { stopped = true; unwatch(); listeners.clear(); sheet?.remove() },
   }
@@ -94,10 +108,10 @@ export function readerHost(host: SessionHost, config: Config, paper: string, wat
 export function openView(host: SessionHost, io: { watch?: typeof watchConfig; read?: typeof readConfig } = {}): Session {
   const params = host.params, paper = params.get('paper') ?? ''
   const config = host.reading?.config ?? DEFAULT_CONFIG
-  /** what the reader chose here: a late first read does not undo it */
+  /** what the reader chose here: settings that come later do not undo it */
   const chosen = { display: false, sync: false }
-  // the settings a first read given up on came to: their display (where the address names none) and their sync, in place
-  // of the defaults the view opened on, unless the reader chose them meanwhile
+  // settings that came after the view opened (a first read given up on, a change made elsewhere): their display (where the
+  // address names none) and their sync, unless the reader chose them here
   const late = (next: Config) => {
     if (paper && !chosen.display && !isDisplay(params.get('mode'))) view.setDisplay(displayFrom(params, next))
     if (!chosen.sync) view.setSync(next.pdfReader.sync)

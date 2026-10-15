@@ -540,6 +540,9 @@ try {
     const opened = await page.waitForFunction(() => window.__reader?.view?.probe().original === 'open', null, { timeout: 30_000 }).then(() => true, () => false)
     const p0 = opened ? await probe() : {}
     check('the development entry opens the sample in the view: the left\'s pages, a place for each on the right, one loading task', opened && p0.pages === bundle.paper.pages && p0.places === bundle.paper.pages && p0.tasks === 1 && p0.opens === 1, JSON.stringify({ pages: p0.pages, places: p0.places, tasks: p0.tasks }))
+    // the sample's PDF has no title of its own: the host's fallback, the abstract page's citation_title
+    const titled = await page.waitForFunction(t => window.__reader.controller.getState().paper.title === t, TITLE, { timeout: 10_000 }).then(() => true, () => false)
+    check('the paper\'s title, which its PDF lacks, is the abstract page\'s, through the host', titled && asked.arxiv.includes('GET /abs'), `${await page.evaluate(() => window.__reader.controller.getState().paper.title)}`)
     /** each pane's page boxes on the screen, and the right's pane's scroller */
     const boxes = () => page.evaluate(() => {
       const of = sel => [...document.querySelectorAll(sel)].map(el => { const r = el.getBoundingClientRect(); return { top: r.top, width: r.width, height: r.height } })

@@ -683,19 +683,43 @@ export function createReaderView(host) {
   }
 
   // ---------------------------------------------------------------- going places
-  /** a link's or a command's jump in a pane: the left by PDF.js's own, the right's places by their top and the
-   *  destination's height; the pane jumped is the driver, so that the other follows */
+  /** a link's or a command's jump in a pane: the left by PDF.js's own; the right's places as PDF.js takes a destination on
+   *  its own pages (pdf_viewer.mjs scrollPageIntoView): its zoom first — XYZ's own, Fit and FitB the page's fit, FitH and
+   *  FitBH the page's width, FitV and FitBV the page's height, FitR the rectangle, both fitted to the right pane — through
+   *  the left's viewer, which the places follow, then the point it names at the pane's top left. The pane jumped is the
+   *  driver, so that the other follows, and is levelled once a zoom settles */
   function jump(s, { pageNumber: n, destArray }) {
     if (disposed || !laid) return
     follower.take(s)
     if (s === L) { L.viewer.scrollPageIntoView({ pageNumber: n, destArray }); return }
-    const top = pageTop(R, n), vp = pageView(R, n)?.viewport
-    if (top == null) return
-    let y = 0
+    const vp0 = pageView(R, n)?.viewport, c = R.container
+    if (!vp0) return
     const kind = Array.isArray(destArray) ? destArray[1]?.name : null
-    const py = kind === 'XYZ' ? destArray[3] : kind === 'FitH' || kind === 'FitBH' ? destArray[2] : kind === 'FitR' ? destArray[5] : null
-    if (vp && typeof py === 'number') y = Math.max(0, vp.convertToViewportPoint(0, py)[1])
-    R.container.scrollTop = top + y
+    // the page's height as it shows, in CSS px at scale 1 (its rotation and user unit in it)
+    const h = (vp0.height / vp0.scale) * PDF_TO_CSS
+    let zoom = null, x = null, y = null
+    if (kind === 'XYZ') { x = destArray[2]; y = destArray[3]; if (destArray[4] > 0) zoom = destArray[4] }
+    else if (kind === 'Fit' || kind === 'FitB') zoom = 'page-fit'
+    else if (kind === 'FitH' || kind === 'FitBH') { zoom = 'page-width'; if (typeof destArray[2] === 'number' && destArray[2] >= 0) y = destArray[2] }
+    else if (kind === 'FitV' || kind === 'FitBV') { x = destArray[2]; zoom = (c.clientHeight - 5) / h }
+    else if (kind === 'FitR') {
+      x = destArray[2]; y = destArray[5]
+      zoom = Math.min(Math.abs((c.clientWidth - 40) / (destArray[4] - destArray[2])), Math.abs((c.clientHeight - 5) / (destArray[5] - destArray[3]))) / PDF_TO_CSS
+    }
+    if (zoom !== null && (typeof zoom === 'string' || (zoom > 0 && Number.isFinite(zoom) && zoom !== L.viewer.currentScale))) {
+      // a fit is the menu's; XYZ's scale too; a height's or a rectangle's is none of its choices
+      zoomChosen = typeof zoom === 'string' || kind === 'XYZ' ? zoom : null
+      if (typeof zoom === 'string') fitShown(zoom); else setScale(zoom)
+      tellScale(L.viewer.currentScale)
+      follower.zoomed()
+    }
+    const top = pageTop(R, n), vp = pageView(R, n)?.viewport
+    if (top == null || !vp) return
+    if (typeof x === 'number') {
+      const div = pageDiv(R, n)
+      c.scrollLeft = (div?.offsetLeft ?? 0) + (div?.clientLeft ?? 0) + Math.max(0, vp.convertToViewportPoint(x, 0)[0])
+    }
+    c.scrollTop = top + (typeof y === 'number' ? Math.max(0, vp.convertToViewportPoint(0, y)[1]) : 0)
   }
   function goToPage(which, n) {
     if (disposed) return

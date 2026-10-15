@@ -713,6 +713,44 @@ describe('V11: the places before a layer', () => {
     expect(() => viewer.optionalContentConfigPromise).not.toThrow()
   })
 
+  it('a destination\'s zoom is honoured on the right as PDF.js honours it on the left: XYZ\'s, Fit, FitH, FitV, FitR', async () => {
+    const s = setup()
+    await opened(s, 6)
+    await nearOn(s, [1])
+    await flush(20)
+    const viewer = (FakePDFPageView.made[0] as FakePDFPageView).options.layerProperties.linkService.pdfViewer
+    const top = (n: number) => (places(s)[n - 1] as HTMLElement).offsetTop
+    const scale = () => leftViewer().currentScale
+    const go = async (pageNumber: number, destArray: unknown[]) => { viewer.scrollPageIntoView({ pageNumber, destArray }); await flush() }
+    // XYZ with a zoom: the scale, then the point at the top of the pane
+    await go(3, [null, { name: 'XYZ' }, 0, 692, 1.5])
+    expect(scale()).toBe(1.5)
+    expect(last(s.events, 'scale')?.zoom).toBe(1.5)
+    expect(s.panes.right.scrollTop).toBe(Math.round(top(3) + 100 * 1.5 * 96 / 72))
+    // Fit: the page fitted whole, its top at the pane's
+    await go(2, [null, { name: 'Fit' }])
+    expect(scale()).toBeCloseTo(Math.min(560 / 816, 795 / 1056), 3)
+    expect(last(s.events, 'scale')?.zoom).toBe('page-fit')
+    expect(s.panes.right.scrollTop).toBe(top(2))
+    // FitH: the width fitted, the height given
+    await go(2, [null, { name: 'FitH' }, 396])
+    expect(scale()).toBeCloseTo(560 / 816, 3)
+    expect(s.panes.right.scrollTop).toBe(Math.round(top(2) + 396 * scale() * 96 / 72))
+    // FitV: the page's height fitted to the right pane
+    await go(2, [null, { name: 'FitV' }, 0])
+    expect(scale()).toBeCloseTo(795 / 1056, 3)
+    expect(last(s.events, 'scale')?.zoom).toBeNull()
+    // FitR: the rectangle fitted to the right pane, its top at the pane's
+    await go(4, [null, { name: 'FitR' }, 100, 400, 300, 500])
+    expect(scale()).toBeCloseTo(Math.min(560 / 200, 795 / 100) * 72 / 96, 3)
+    expect(s.panes.right.scrollTop).toBe(Math.round(top(4) + (792 - 500) * scale() * 96 / 72))
+    // XYZ with no zoom keeps the scale
+    const was = scale()
+    await go(5, [null, { name: 'XYZ' }, null, null, 0])
+    expect(scale()).toBe(was)
+    expect(s.panes.right.scrollTop).toBe(top(5))
+  })
+
   it('a far place\'s page view is destroyed with its canvas; no second document is opened', async () => {
     const s = setup()
     await opened(s, 6)
