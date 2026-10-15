@@ -24,7 +24,12 @@ import { bundleUnitsOf, fromBase64, toBase64, UNIT_FLAG_BITS, unitStands } from 
 export { bundleUnitsOf, UNIT_FLAG_BITS }
 
 /** the bundle's format: raised with any change to what it holds (the left's tokens and spans, with the highlight); 2 the
- *  layout file's schema 2, its babel names (D1a); 3 its schema 3, the paper's \lineskip and \lineskiplimit */
+ *  layout file's schema 2, its babel names (D1a); 3 its schema 3, the paper's \lineskip and \lineskiplimit. The layout
+ *  file's schema 4 (PH_FLAG.JOINED and PH_FLAG.OUTSIDE) is NOT a contract of its own: b3 now names two layout schemas and
+ *  each reader's parseLayout refuses the other's, so a b3 bundle holding schema 4 is read by this engine's reader only (a
+ *  released reader of schema 3 refuses it whole). That holds while no released reader asks b3 of content this engine
+ *  makes: the web's pin does not move before BUNDLE 4 (format.mjs) lands, and the pin moves with BUNDLE 4 (M1), which
+ *  names the contract anew (the controller's ruling of 2026-10-15) */
 export const BUNDLE = '3'
 /** a bundle's bytes at most (the 147-page thesis's is 1.18 MiB) and its values (the thesis holds 165,659) */
 export const BUNDLE_CAP = 4 * 2 ** 20

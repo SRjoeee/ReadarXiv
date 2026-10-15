@@ -42,7 +42,7 @@ function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string
   const items = [item(name, x, width, 230), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), ...(runIn ? [item('\u2014', 60, 4, 230), item('Alpha beta gamma', 64 + glue, 100, 230)] : [item('Alpha beta gamma', 20, 100, 200)])]
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
   const file = {
-    schema: 3, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['NimbusRomNo9L-Regu'],
+    schema: 4, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['NimbusRomNo9L-Regu'],
     units: runIn ? [[0, UNIT_KINDS.indexOf('para'), 9, 0, 1]] : [], lines: runIn ? [[0, [1, 64 + glue, 164 + glue, 230, 237, 227.5, 10, 0]]] : [], frames: runIn ? [[0, [1, 0, 0, 1, -1, 0]]] : [],
     erase: [], ph: [], labels: runIn ? [[0, LABEL_KINDS.indexOf('number'), 1, 60, 230, 64, 237, 228]] : [], headings: [], pageText: [], held: [],
     names: [[1, NAME_KEYS.indexOf(key as never), 1, x, 230, x + width, 237, 228, nameSize, 0, flags | (runIn ? NAME_FLAG.RUN_IN : 0), runIn ? 0 : -1, glue, column[0], column[1]]],

@@ -77,15 +77,23 @@ describe('layoutMarking', () => {
     const units = [unit('para', PARA.map(p => ({ ...p })))]
     const before = structuredClone(units)
     const { units: marked } = layoutMarking(units, MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph $x$', 'ph \\axtpm{p0.1b}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\bert', 'text', 'ph ~', 'ph \\axtpma{p0.6a}', 'ph \\cite{c}', 'ph \\axtpm{p0.6b}', 'text'])
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpmm{p0.1a}', 'ph $x$', 'ph \\axtpm{p0.1b}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\bert', 'text', 'ph ~', 'ph \\axtpma{p0.6a}', 'ph \\cite{c}', 'ph \\axtpm{p0.6b}', 'text'])
     expect(units).toEqual(before)
     expect(marked[0]).not.toBe(units[0])
+  })
+  it("an inline formula's opening mark is \\axtpmm, set on the empty list after a display too; a display's \\axtpma", () => {
+    const marked = layoutMarking([unit('para', [text('the '), ph('\\[a=b\\]'), text('\n'), ph('$x$'), text(' and '), ph('\\(y\\)'), text(' or '), ph('\\ensuremath{z}'), text(' then '), ph('\\cite{k}')])], MARK_CLASSES, { lines: false }).units[0]
+    expect(srcs(marked).filter(s => /axtpm[am]/.test(s))).toEqual(['ph \\axtpma{p0.1a}', 'ph \\axtpmm{p0.3a}', 'ph \\axtpmm{p0.5a}', 'ph \\axtpmm{p0.7a}', 'ph \\axtpma{p0.9a}'])
+    // LAYOUT_TEX's \\axt@pmm: \\axt@pma with no test of the empty list
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@pmc{\\ifnum\\lastnodetype=-1 \\expandafter\\@gobble\\else\\expandafter\\axt@pmd\\fi}')
   })
   it('a class switched off is not marked', () => {
     const units = [unit('para', PARA)]
     const noCite = layoutMarking(units, MARK_CLASSES.filter(c => c !== 'cite'), { lines: false }).units[0]
     expect(srcs(noCite).some(s => s.includes('p0.6'))).toBe(false)
-    expect(srcs(noCite)).toContain('ph \\axtpma{p0.1a}')
+    expect(srcs(noCite)).toContain('ph \\axtpmm{p0.1a}')
     const noMacro = layoutMarking(units, MARK_CLASSES.filter(c => c !== 'macro'), { lines: false }).units[0]
     expect(srcs(noMacro)).not.toContain('ph \\axtpma{p0.3a}')
     expect(srcs(noMacro)).toContain('ph \\axtpma{p0.6a}')
@@ -101,7 +109,7 @@ describe('layoutMarking', () => {
     // the call points at the note's own copy, marked as a unit of its own
     const call = nth(nth(marked, 1).pieces as Piece[], 2)
     expect(call.unit).toBe(marked[0])
-    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph $y$', 'ph \\axtpm{p0.1b}', 'text'])
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpmm{p0.1a}', 'ph $y$', 'ph \\axtpm{p0.1b}', 'text'])
     expect(mark(note)).toEqual({ start: '\\leavevmode\\axtmark{0s}', end: '\\axtend{0e}', before: '\\axtlines{0}' })
     expect(mark(nth(marked, 0))).toEqual(mark(note))
     expect(nth(para.pieces as Piece[], 1).unit).toBe(note)
@@ -136,13 +144,13 @@ describe('layoutMarking', () => {
       unit('para', [{ t: 'nested', pre: '\\footnote{', unit: unit('footnote', [text('n')]), post: '}' }, text(' after '), ph('$z$')]),
     ]
     const { units: marked, mark } = layoutMarking(units, MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.2a}', 'ph $x$', 'ph \\axtpm{p0.2b}'])
+    expect(srcs(marked[0])).toEqual(['ph \\cline{1-2}', 'text', 'ph \\axtpmm{p0.2a}', 'ph $x$', 'ph \\axtpm{p0.2b}'])
     expect(srcs(marked[1])).toEqual(['ph \\mc{2}{x}', 'text'])
     expect(srcs(marked[2])).toEqual(['ph \\noindent', 'ph \\para{Head}', 'text', 'ph \\axtpma{p2.3a}', 'ph \\cite{a}', 'ph \\axtpm{p2.3b}'])
-    expect(srcs(marked[3])).toEqual(['ph \\axtpma{p3.0a}', 'ph $x$', 'ph \\axtpm{p3.0b}', 'text'])
+    expect(srcs(marked[3])).toEqual(['ph \\axtpmm{p3.0a}', 'ph $x$', 'ph \\axtpm{p3.0b}', 'text'])
     expect(srcs(marked[4])).toEqual(['ph \\axtpma{p4.0a}', 'ph \\bert', 'text'])
     expect(srcs(marked[5])).toEqual(srcs(units[5]))
-    expect(srcs(marked[6])).toEqual(['nested', 'text', 'ph \\axtpma{p6.2a}', 'ph $z$', 'ph \\axtpm{p6.2b}'])
+    expect(srcs(marked[6])).toEqual(['nested', 'text', 'ph \\axtpmm{p6.2a}', 'ph $z$', 'ph \\axtpm{p6.2b}'])
     // as patch writes them: each opening mark at or after its unit's start mark, or right before it
     const project = { main: 'main.tex', units: marked, files: new Map([['main.tex', '']]) }
     for (const [i, u] of marked.entries()) {
@@ -150,7 +158,7 @@ describe('layoutMarking', () => {
       const start = mark(nth(units, i))?.start
       if (!start) continue
       const at = out.indexOf(start)
-      const opening = [...out.matchAll(/\\axtpma\{[^}]*\}/g)]
+      const opening = [...out.matchAll(/\\axtpm[am]\{[^}]*\}/g)]
       for (const o of opening) expect(o.index >= at || o.index + o[0].length === at, `${i}: ${out}`).toBe(true)
     }
   })
@@ -158,7 +166,7 @@ describe('layoutMarking', () => {
     // a mark between them would take the \\protect, and be written as itself to a file (2608.23586's list of figures)
     const { units: marked } = layoutMarking([unit('para', [text('A (Eq.~'), ph('\\protect'), ph('\\eqref{e}'), text(') and '), ph('\\noexpand'), text(' '), ph('$x$'), text(' then '), ph('$y$')])], MARK_CLASSES, { lines: false })
     // (\\noexpand itself is a paper's macro to the classes, marked before it as any)
-    expect(srcs(marked[0])).toEqual(['text', 'ph \\protect', 'ph \\eqref{e}', 'text', 'ph \\axtpma{p0.4a}', 'ph \\noexpand', 'text', 'ph $x$', 'text', 'ph \\axtpma{p0.8a}', 'ph $y$', 'ph \\axtpm{p0.8b}'])
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\protect', 'ph \\eqref{e}', 'text', 'ph \\axtpma{p0.4a}', 'ph \\noexpand', 'text', 'ph $x$', 'text', 'ph \\axtpmm{p0.8a}', 'ph $y$', 'ph \\axtpm{p0.8b}'])
   })
   it('marks no macro inside a word', () => {
     // a letter command or an accent glued to the word's letters (Giessenbachstra\\ss e, 2608.15334): a mark there would
@@ -172,19 +180,19 @@ describe('layoutMarking', () => {
     // what it would see. A source that ends in a control symbol gets the opening mark only too; LaTeX's \\) reads nothing
     const note = { t: 'nested' as const, pre: '\\footnote{', unit: unit('footnote', [text('x')]), post: '}' }
     const { units: marked } = layoutMarking([unit('para', [text('A '), ph('\\code{X}'), text(' is '), ph('\\code{a}'), note, text(' and '), ph('\\opt{b}'), text(' '), ph('$x$'), text(' then '), note, ph('\\cite{c}'), text(', '), ph('$y$\\%'), text(' or '), ph('\\(z\\)'), text('.')])], MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\code{X}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\code{a}', 'nested', 'text', 'ph \\axtpma{p0.6a}', 'ph \\opt{b}', 'text', 'ph $x$', 'text', 'ph \\axtpma{n0.10a}', 'nested', 'ph \\cite{c}', 'text', 'ph \\axtpma{p0.13a}', 'ph $y$\\%', 'text', 'ph \\axtpma{p0.15a}', 'ph \\(z\\)', 'ph \\axtpm{p0.15b}', 'text'])
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\code{X}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\code{a}', 'nested', 'text', 'ph \\axtpma{p0.6a}', 'ph \\opt{b}', 'text', 'ph $x$', 'text', 'ph \\axtpma{n0.10a}', 'nested', 'ph \\cite{c}', 'text', 'ph \\axtpmm{p0.13a}', 'ph $y$\\%', 'text', 'ph \\axtpmm{p0.15a}', 'ph \\(z\\)', 'ph \\axtpm{p0.15b}', 'text'])
   })
   it('after a forced break, which may begin a table\'s row, passes over the commands before the next word', () => {
     // aastex's deluxetable: rows the scanner does not read as cells, \\ between them, \enddata after the last
     const rows = unit('para', [text('Polarization '), ph('&'), text(' Right '), ph('\\\\'), text('\n'), ph('$\\theta$'), text(' (peak) '), ph('&'), text(' x '), ph('\\\\'), text('\n'), ph('\\cline{1-2}'), text(' Wave '), ph('\\cite{a}'), ph('\\\\'), text('\n'), ph('\\enddata')])
     const { units: marked } = layoutMarking([rows], MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\axtpma{p0.5a}', 'ph $\\theta$', 'ph \\axtpm{p0.5b}', 'text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.13a}', 'ph \\cite{a}', 'ph \\axtpm{p0.13b}', 'ph \\\\', 'text', 'ph \\enddata'])
+    expect(srcs(marked[0])).toEqual(['text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\axtpmm{p0.5a}', 'ph $\\theta$', 'ph \\axtpm{p0.5b}', 'text', 'ph &', 'text', 'ph \\\\', 'text', 'ph \\cline{1-2}', 'text', 'ph \\axtpma{p0.13a}', 'ph \\cite{a}', 'ph \\axtpm{p0.13b}', 'ph \\\\', 'text', 'ph \\enddata'])
   })
   it('after a cell\'s tab the same: tabularray\'s \\SetCell must open its cell', () => {
     // a tblr table read as one paragraph (2608.03994): \\SetCell[c=4]{c} after an opening mark spanned no columns
     const row = unit('para', [ph('\\textbf{Model}'), ph('&'), text(' '), ph('\\SetCell[c=4]{c}'), text(' Slopes '), ph('&'), text(' '), ph('$x$'), ph('\\\\')])
     const { units: marked } = layoutMarking([row], MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['ph \\textbf{Model}', 'ph &', 'text', 'ph \\SetCell[c=4]{c}', 'text', 'ph &', 'text', 'ph \\axtpma{p0.7a}', 'ph $x$', 'ph \\axtpm{p0.7b}', 'ph \\\\'])
+    expect(srcs(marked[0])).toEqual(['ph \\textbf{Model}', 'ph &', 'text', 'ph \\SetCell[c=4]{c}', 'text', 'ph &', 'text', 'ph \\axtpmm{p0.7a}', 'ph $x$', 'ph \\axtpm{p0.7b}', 'ph \\\\'])
   })
   it('the closing mark is left out after a control word, whose spaces TeX skips', () => {
     const { units: marked } = layoutMarking([unit('para', [text('A '), ph('\\footnotemark'), text(' and '), ph('\\bert{}'), text(' B '), ph('\\foo{x}\\bar'), text(' C')])], MARK_CLASSES, { lines: false })
@@ -199,7 +207,7 @@ describe('layoutMarking', () => {
     expect(srcs(num)).toEqual(['text', 'ph \\looseness=-1', 'text', 'ph \\axtpma{p0.3a}', 'ph \\myskip=3pt plus 1pt', 'text', 'ph \\axtpma{p0.5a}', 'ph \\ref{x2}', 'ph \\axtpm{p0.5b}', 'text'])
     // nor after one that ends a line: the mark would stand on the next, and a blank line after it would end no paragraph
     const atEnd = layoutMarking([unit('para', [text('A '), ph('\\cite{x}\n'), text('\n'), ph('$y$')])], MARK_CLASSES, { lines: false }).units[0]
-    expect(srcs(atEnd)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\cite{x}\n', 'text', 'ph \\axtpma{p0.3a}', 'ph $y$', 'ph \\axtpm{p0.3b}'])
+    expect(srcs(atEnd)).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\cite{x}\n', 'text', 'ph \\axtpmm{p0.3a}', 'ph $y$', 'ph \\axtpm{p0.3b}'])
   })
 })
 
@@ -236,13 +244,13 @@ describe('originalFiles with the layout marks', () => {
       for (const lines of [false, true]) {
         const marked = decode(originalFiles(paperOf(src), { lines, layout: MARK_CLASSES }))
         expect(marked.indexOf(LAYOUT_TEX), name).toBeGreaterThan(0)
-        const out = marked.replace(LAYOUT_TEX, '').replace(/\\axtpma\{[^}]*\}|\\axtpm\{[^}]*\}|\\axthmark\{[^}]*\}|\\leavevmode\\axtmark\{t\d+s\}|\\axtend\{t\d+e\}/g, '')
+        const out = marked.replace(LAYOUT_TEX, '').replace(/\\axtpm[am]\{[^}]*\}|\\axtpm\{[^}]*\}|\\axthmark\{[^}]*\}|\\leavevmode\\axtmark\{t\d+s\}|\\axtend\{t\d+e\}/g, '')
         expect(out, name).toBe(decode(originalFiles(paperOf(src), { lines })))
       }
     }
     // not vacuously: the sources hold every kind of mark
     const all = Object.values(SOURCES).map(src => decode(originalFiles(paperOf(src), { lines: true, layout: MARK_CLASSES }))).join('\n')
-    for (const m of ['\\axtpma{p', '\\axtpm{p', '\\axtpma{n', '\\axthmark{h', '\\leavevmode\\axtmark{t', '\\axtend{t']) expect(all).toContain(m)
+    for (const m of ['\\axtpma{p', '\\axtpmm{p', '\\axtpm{p', '\\axtpma{n', '\\axthmark{h', '\\leavevmode\\axtmark{t', '\\axtend{t']) expect(all).toContain(m)
     expect(all).not.toContain('\\axtpm{n')
   })
   it('puts LAYOUT_TEX after MARK_DEF, on the line the TeX after it begins: the paper\'s lines keep their numbers', () => {
@@ -505,10 +513,10 @@ describe('LAYOUT_TEX', () => {
   })
 
   it('\\axt@unmark: the regex is the one that never reaches across a group, built from UNMARK_CS', () => {
-    expect(UNMARK_CS).toEqual(['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb'])
+    expect(UNMARK_CS).toEqual(['axtpma', 'axtpmm', 'axtpm', 'axthmark', 'axtnma', 'axtnmb'])
     expect(new Set(UNMARK_CS).size).toBe(UNMARK_CS.length)
     // `\c[^BE]` tests the next item only and `*` repeats it: any run of tokens but a brace, so a match ends at its own argument
-    expect(LAYOUT_TEX).toContain('\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpm|axthmark|axtnma|axtnmb}\\cB.\\c[^BE].*\\cE.}')
+    expect(LAYOUT_TEX).toContain('\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpmm|axtpm|axthmark|axtnma|axtnmb}\\cB.\\c[^BE].*\\cE.}')
     expect(LAYOUT_TEX).toContain('\\cB.\\c[^BE].*\\cE.}')
     expect(LAYOUT_TEX).not.toContain('.*?')
     expect(LAYOUT_TEX.split('\\regex_const:Nn\\c__axt_marks_regex').length).toBe(2)
@@ -856,6 +864,18 @@ describe('reading the marked original', () => {
     expect(large.owned.filter(e => e.length === 2 && e[1] === past).length).toBeGreaterThan(1)
     expect(large.owned.some(e => e.length > 2)).toBe(true)
   }, 120_000)
+  it('layoutMarksOf: a display group\'s first display owns the group, to the text after it; a later one, which TeX gives no point, is in it', async () => {
+    // the empty paragraph between two displays holds no mark: p0.3a is never set, and its ink is the first's
+    const units = [unit('para', [text('define '), ph('\\[a=b\\]'), text('\n'), ph('\\[c=d\\]'), text(' where '), ph('$x$'), text(' holds')])]
+    const shown: Shown[] = [{ at: 'bs1' }, ['define', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['a=b', 150, 680], ['c=d', 150, 660], ['where', 72, 640], { at: 'p0.5a' }, ['x', 110, 640], { at: 'p0.5b' }, ['holds', 120, 640], { at: '0e' }, { at: 'be1' }]
+    const dests: [string, number, number, number][] = [['0s', 1, 72, 700], ['p0.1a', 1, 102, 700], ['p0.5a', 1, 105, 640], ['p0.5b', 1, 115, 640], ['0e', 1, 145, 640]]
+    const doc = streamDocument([{ view: [0, 0, 612, 792], items: [item('define', 72, 700)], shown }], dests.map(([n, ...r]) => [`axt-${n}`, ...r]))
+    const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
+    const of = (name: string) => m.owned.find(e => e[0] === name)
+    expect(of('p0.1a')?.slice(0, 3)).toEqual(['p0.1a', OWNED_HOW.indexOf('open, with the displays after it'), 6])
+    expect(of('p0.3a')).toEqual(['p0.3a', OWNED_HOW.indexOf('in the display before it')])
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
+  })
   it('layoutMarksOf reads the marked compile\'s operator lists: each piece\'s own glyphs and rules by its points, and how', async () => {
     const units = [unit('para', [text('see '), ph('$x^2$'), text(' and '), ph('$\\frac{1}{d}$'), text(' by '), ph('\\bert'), text(' models. '), ph('\\[a=b\\]')]), unit('para', [text('Next words')])]
     const shown: Shown[] = [
@@ -933,7 +953,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: 5, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0] }, pages: 2,
+  schema: 6, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -977,10 +997,11 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 5 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 5 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 5 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 5 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 6 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 6 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 6 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 6 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 6 }, 'schema'],
       ['a lineskip of one number', m => { (m.marking as Record<string, unknown>).lineskip = [1] }, 'marking.lineskip'],
       ['a lineskip past \\maxdimen', m => { (m.marking as Record<string, unknown>).lineskip = [1, 1e6] }, 'marking.lineskip[1]'],
       ['a lineskip a hundredth past \\maxdimen as written', m => { (m.marking as Record<string, unknown>).lineskip = [1, 16322.8] }, 'marking.lineskip[1]'],

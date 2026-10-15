@@ -2,7 +2,7 @@
 // stand-in arXiv PDF and the layer bundle the reader's browser checks (tests/e2e/reader.mjs) are served from the stand-in
 // of the layer API (tests/e2e/lib/layer-api.mjs). Nothing here is an arXiv paper's, so both outputs are committed.
 //
-//   pnpm exec tsx scripts/make-sample-bundle.mjs [--out=<dir>] [--check]
+//   pnpm exec tsx scripts/make-sample-bundle.mjs [--out=<dir>] [--check] [--keep-pdf]
 //
 // The steps, in the order the server's prepare takes them, each through the engine's modules as they stand:
 //   1. the stand-in arXiv PDF: the sample's source compiled unmarked (sample-1.pdf);
@@ -18,7 +18,10 @@
 // bytes: run twice, the outputs are identical. `--out` writes elsewhere than the fixture's directory; `--check` makes the
 // outputs in a temporary directory and exits 1 where they differ from the committed ones (a changed engine, a new
 // TeX Live: remake them, and the stand-in's tests will tell what else moved). No request leaves this machine, and the
-// image is never pulled.
+// image is never pulled. `--keep-pdf` takes the committed stand-in PDF as step 1's, compiling nothing for it: for a
+// machine whose TeX Live is not the image's (lab/pdf/spikes/native-tex/, first on PATH, answers the `docker run`), whose
+// stand-in would differ by its packages' versions alone, so that the bundle is made over the PDF the stand-in serves, as
+// a paper's layout over arXiv's; the next make in Docker makes both again.
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
@@ -45,6 +48,7 @@ const REPO = fileURLToPath(new URL('..', import.meta.url))
 const FIXTURE = join(REPO, 'tests/fixtures/pdf/sample-1')
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const CHECK = process.argv.includes('--check')
+const KEEP_PDF = process.argv.includes('--keep-pdf')
 const OUT = CHECK ? mkdtempSync(join(tmpdir(), 'sample-bundle-out-')) : (argOf('out') ?? FIXTURE)
 
 /** the sample's identity: an identifier no arXiv paper has (there is no month 00), its first version, and the compiler
@@ -122,8 +126,8 @@ const hundredths = x => Math.round(x * 100) / 100
 const step = (n, what) => console.log(`${n}. ${what}`)
 
 // 1. the stand-in arXiv PDF
-step(1, 'the sample compiled unmarked')
-const unmarked = await compile(files)
+step(1, KEEP_PDF ? 'the committed stand-in PDF' : 'the sample compiled unmarked')
+const unmarked = KEEP_PDF ? { pdf: new Uint8Array(readFileSync(join(FIXTURE, 'sample-1.pdf'))) } : await compile(files)
 if (!unmarked?.pdf) throw new Error('the sample made no PDF')
 const arxiv = unmarked.pdf
 const arxivTask = open(arxiv)

@@ -94,6 +94,8 @@ export interface PartChain {
   readonly slot: number; readonly id: number
   /** a flag for each unit of the paper that a part has told (as a left unit or a file-only one): none is told twice */
   readonly told: Uint8Array
+  /** a flag for each table group (groupsOfCells) that an earlier part told a member of: a later part tells no other member of it (amendment M18) */
+  readonly groups: Uint8Array
   /** the furthest page any part's views reached (a part whose own units reach less far leaves the rest to the part that told them) */
   readonly reach: number
   /** the views of pages through + 1 … reach */
@@ -111,6 +113,7 @@ export interface ReadPart {
   kind: 'part'; sha256: string; bytes: number; head: string; prev: string | null
   pages: [from: number, to: number]; reach: number; views: readonly number[]
   left: UnitWire[]; fileOnly: [id: number, after: number][]; layout: LayoutPart | null
+  /** null where the layout is, and where the part has no add-on for its pages (M20: its pages drawn by erase and restore) */
   addon: { manifest: RemovalManifest; tail: Uint8Array | null; r: number } | null
   leftParts: (Ref & { page: number })[]
   /** the state after this part */
@@ -221,4 +224,9 @@ export declare function catalogKey(paper: string, version: number, vtag: string)
  *  and catalogKey would not write */
 export declare function keyParts(key: string): { paper: string; version: number; ctag: string; sha256: string } | { paper: string; version: number; vtag: string; ctag?: undefined } | null
 /** the last page of the part that begins at page `a` of `N` in the doubling schedule: min(N, 2a − 1) */
+/** the table groups of the cells (M18): `of[id]` a unit's group number or -1, `members[g]` the ids of group g, rising */
+export interface TableGroups { of: Int32Array; count: number; members: number[][] }
+export declare function groupsOfCells(cells: ReadonlyMap<number, { table: number; row: number; col: number; span: number; head: boolean }>, n: number): TableGroups
+/** the groups of a paper's units as bundleUnitsOf gives them */
+export declare function groupsOfUnits(units: readonly BundleUnit[]): TableGroups
 export declare function partTarget(a: number, N: number): number

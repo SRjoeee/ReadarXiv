@@ -496,8 +496,8 @@ describe('makeLayout', () => {
       marks: [['0s', 1, 97, 700], ['0e', 1, endOf(runs[3] as Run), 688], ['n0.2a', 1, 122, 688]],
       units: [unit('para', [ph('\\textbf{Bold}'), text(' words follow here and a note'), { t: 'nested', unit: note }, text('. Then more')]), note],
     })
-    // the bold at the unit's head: no mark, LOST, counted apart
-    expect(phOf(file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.LOST])
+    // the bold at the unit's head: no mark, LOST, counted apart; before the start mark, outside the unit's lines
+    expect(phOf(file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
     // the call: its number, raised, to the full stop after it
     expect(phOf(file, 0, 2)).toEqual([0, 2, 5, PH_FLAG.RAISED, 1, 122, 688, 125.5, 691.5 + 5.25, 691.5 - 1.75])
     expect(stats.ph).toMatchObject({ unmarked: 1, marked: 1, found: 1, inferred: 1 })
@@ -539,9 +539,10 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(stats.ph.byKind.display).toEqual([1, 1])
     // the heading's number is its label, not the display's
     expect(file.labels.map(l => l.slice(0, 4))).toEqual([[1, 0, 1, 72]])
-    // nothing after it on its page: its end is not known (the next mark on the next page), LOST, not EMPTY
+    // nothing after it on its page, and no column body: its end is not known (the next mark on the next page), LOST, not
+    // EMPTY; after its unit's end mark, outside the unit's lines
     const alone = await made({ ...w, pages: [{ runs: runs.slice(0, 3) }], marks: (w.marks as Mark[]).slice(0, 3), units: [w.units[0] as SourceUnit] })
-    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+    expect(phOf(alone.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
     expect(alone.stats.ph.why).toEqual({ 'open, the next mark on another page': 1 })
   })
 
@@ -757,8 +758,99 @@ describe('makeLayout, the re-review of 2026-10-06', () => {
       marks: [['0s', 1, 72, 700], ['0e', 1, 217, 700], ['p0.1a', 1, 217, 700], ['1s', 1, 72, 680], ['1e', 1, 267, 528]],
       units: [unit('para', [text(`${words(0, 10)} `), ph('\\[x=y\\]')]), unit('para', [text(`a=b and more ${words(10, 120)}`)])],
     })
-    expect(phOf(lost.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST])
+    expect(phOf(lost.file, 0, 1)).toEqual([0, 1, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
     expect(lost.stats.ph.empty).toBe(0)
+  })
+})
+
+describe('makeLayout, the LOST survey (2026-10-15): a display group, a piece outside the unit, a part on its marks\' line', () => {
+  it('a display group: the first display found with the group\'s ink, the later one JOINED, no segments of its own', async () => {
+    // TeX sets no point for the second display (the empty paragraph between two displays): its ink is the first's
+    const runs: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: 'a=b', x: 150, y: 680 }, { s: 'c=d', x: 150, y: 660 }, { s: 'where x holds', x: 72, y: 640 }]
+    const { file, stats } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[3] as Run), 640], ['p0.1a', 1, endOf(runs[0] as Run), 700]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]'), text('\n'), ph('\\[c=d\\]'), text(' where x holds')])],
+    })
+    const first = phOf(file, 0, 1)
+    expect(first[3]).toBe(0)
+    expect(chunk(first.slice(4), 6).map(sg => sg[2])).toEqual([680, 660])
+    expect(phOf(file, 0, 3)).toEqual([0, 3, 1, PH_FLAG.JOINED])
+    expect(stats.ph).toMatchObject({ joined: 1, lost: 0, found: 1 })
+    // the first not found: the later one LOST too
+    const none = await made({ pages: [{ runs: runs.slice(0, 3) }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.1a', 1, endOf(runs[0] as Run), 700]], units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]'), text('\n'), ph('\\[c=d\\]'), text(' where x holds')])] })
+    expect((phOf(none.file, 0, 3)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
+  })
+  it("a display opening a unit, its start mark on the unit's first line, is OUTSIDE (the rows before the mark are no line of the unit's: the thesis's u69, u113, u432, u445)", async () => {
+    // the start mark at the first text below the display; the unit's lines from it
+    const runs: Run[] = [{ s: 'x=y+1', x: 150, y: 700 }, { s: words(0, 10), x: 72, y: 680 }, { s: words(10, 10), x: 72, y: 668 }]
+    for (const lead of [{}, { lead: 'xy ' }]) {
+      // (with the display's letters, latex-front's `lead`, the anchor gives the unit the display's row too, and the head
+      // drop takes it away)
+      const { file, stats } = await made({
+        pages: [{ runs }],
+        marks: [['0s', 1, 72, 680], ['0e', 1, endOf(runs[2] as Run), 668]],
+        units: [unit('para', [ph('\\[x=y+1\\]'), text(`\n${words(0, 20)}`)], lead)],
+      })
+      expect(stats.lines.held).toBe('lead' in lead ? 1 : 0)
+      expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => l[3])).toEqual([680, 668])
+      expect(phOf(file, 0, 0)).toEqual([0, 0, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
+      // what makes it OUTSIDE: the first line begins at the start mark or past it, so no line of the unit's holds the display
+      expect(chunk(rowsOf(file, 0, 'lines'), 8)[0]?.[1]).toBeGreaterThanOrEqual(72)
+    }
+  })
+  it("the first line the head drop leaves is cut at the start mark: a head glued to the first word is no glyph of it, and is looked for beside the mark", async () => {
+    // a display, then \\bert's "BERT" glued to the first word (1.5 pt, under GLUE's 0.2 em), the start mark between them
+    const runs: Run[] = [{ s: 'x=y+1', x: 150, y: 700 }, { s: 'BERT', x: 72, y: 680 }, { s: words(0, 10), x: 93.5, y: 680 }, { s: words(10, 10), x: 72, y: 668 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 93.5, 680], ['0e', 1, endOf(runs[3] as Run), 668]],
+      // (the display's letters, latex-front's `lead`: the anchor's lead walk gives the unit the display's row, which the
+      // head drop takes away)
+      units: [unit('para', [ph('\\[x=y+1\\]'), ph('\\bert'), text(` ${words(0, 20)}`)], { lead: 'xy ' })],
+    }
+    // the probe says nothing of the macro: it stays LOST, outside the unit's lines, and the first line holds none of its ink
+    const { file, stats } = await made(w)
+    expect(stats.lines.held).toBe(1)
+    const lines = chunk(rowsOf(file, 0, 'lines'), 8)
+    expect(lines.map(l => l[3])).toEqual([680, 668])
+    expect(lines[0]?.[1]).toBeGreaterThanOrEqual(93.5)
+    expect(chunk(rowsOf(file, 0, 'erase'), 5).every(e => (e[1] as number) >= 93.5 - 0.5 || e[0] !== 0)).toBe(true)
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
+    // the probe's "BERT": found beside the mark, a segment of the first line, which takes it in and erases it
+    const found = await made({ ...w, texts: [['\\bert', 'BERT']] })
+    expect(phOf(found.file, 0, 1).slice(3, 8)).toEqual([0, 1, 72, 680, 92])
+    expect(chunk(rowsOf(found.file, 0, 'lines'), 8)[0]?.[1]).toBe(72)
+    expect(phOf(found.file, 0, 0)).toEqual([0, 0, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
+  })
+  it('a head text symbol drawn as its character keeps its glyph in the first line the head drop leaves: erased once, drawn once', async () => {
+    // a display, then \\#'s "#" glued to the first word (1 pt), the start mark between them: symbolsOf counted the "#" on
+    // that line (TEXT) before the drop, and the cut at the mark keeps it, so the erase takes it in
+    const runs: Run[] = [{ s: 'x=y+1', x: 150, y: 700 }, { s: '#', x: 72, y: 680 }, { s: words(0, 10), x: 78, y: 680 }, { s: words(10, 10), x: 72, y: 668 }]
+    const { file, stats } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 78, 680], ['0e', 1, endOf(runs[3] as Run), 668]],
+      units: [unit('para', [ph('\\[x=y+1\\]'), ph('\\#'), text(` ${words(0, 20)}`)], { lead: 'xy ' })],
+    })
+    expect(stats.lines.held).toBe(1)
+    expect(phOf(file, 0, 1)[3]).toBe(PH_FLAG.TEXT)
+    expect(chunk(rowsOf(file, 0, 'lines'), 8)[0]?.slice(1, 4)).toEqual([72, 223, 680])
+    expect(chunk(rowsOf(file, 0, 'erase'), 5)[0]?.[1]).toBe(72)
+    expect(phOf(file, 0, 0)).toEqual([0, 0, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
+  })
+  it("an inline part on no line goes to the line both its marks stand on, within the line's size of its baseline (2608.16117's \\frac)", async () => {
+    // a fraction's numerator 7.6 pt over its line's baseline, past the part rule's reach
+    const runs: Run[] = [{ s: 'the quantity', x: 72, y: 700 }, { s: 'pq', x: 140, y: 707.6 }, { s: 'FM', x: 140, y: 693 }, { s: 'is the stress', x: 160, y: 700 }]
+    const { file, stats } = await made({
+      // in the stream, the fraction between its two points
+      pages: [{ runs, points: { 'p0.1a': [1, 0], 'p0.1b': [3, 0] } }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[3] as Run), 700], ['p0.1a', 1, 135, 700], ['p0.1b', 1, 152, 700]],
+      units: [unit('para', [text('the quantity '), ph('$\\frac{pq}{FM}$'), text(' is the stress')])],
+    })
+    const row = phOf(file, 0, 1)
+    expect((row[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+    expect(row[6]).toBe(700)
+    expect(stats.ph.lost).toBe(0)
   })
 })
 
@@ -1061,7 +1153,7 @@ describe('makeLayout, a unit\'s head pieces: its macros before its start mark, w
   it('one whose letters are not the probe\'s, or with no answer, stays LOST, its glyphs a label as before', async () => {
     for (const texts of [undefined, [['\\bert', 'BART']] as [string, string][]]) {
       const { file, stats } = await made({ ...bert, ...(texts ? { texts } : {}) })
-      expect(phOf(file, 0, 0)[3]).toBe(PH_FLAG.LOST)
+      expect(phOf(file, 0, 0)[3]).toBe(PH_FLAG.LOST | PH_FLAG.OUTSIDE)
       expect(file.labels).toHaveLength(1)
       expect(stats.ph.heads).toEqual([0, 0])
     }

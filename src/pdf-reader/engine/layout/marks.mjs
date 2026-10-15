@@ -510,6 +510,12 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  *   would keep the empty paragraph between two displays a line, and would end the \ignorespaces amsmath's \] began
  *   (2608.20051, 2608.29782). In vertical mode it waits for the next mark that is set, the unit's start mark at the same
  *   place (layoutMarking marks only a placeholder at or after it).
+ * - **\axtpmm{name}, before an inline formula** (its source begins $, \( or \ensuremath): \axtpma, but set on the empty
+ *   list too. The formula's math-on node follows the mark at once, so the paragraph TeX resumes after a display is no
+ *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
+ *   native case (lab/pdf/spikes/layout-marks-cases.mjs, 'an inline formula first after a display') holds every item in
+ *   place. A display after a display keeps \axtpma's rule: it has no point, and stream.mjs gives its group's ink to the
+ *   display before it.
  * - **\axtpm{name}, after one; \axthmark{name}, a heading's.** Set in horizontal mode only; \axtpm after the placeholder's
  *   last ink, its trailing glue, penalties and kerns put back after it, and on an empty list nothing: after a display,
  *   where TeX resumes the paragraph, a mark would open a line of its own where the paragraph ends, and TeX's skip of the
@@ -607,9 +613,9 @@ export const NAMES_TEX = [
 ].join('')
 
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
- *  can carry (\axtpma, \axtpm, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
+ *  can carry (\axtpma, \axtpmm, \axtpm, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
  *  alternation and the prefilter from it, so the two cannot drift */
-export const UNMARK_CS = ['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
+export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
 
 /** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`
  *  and `\axtnmb`), inert where they are read (\@starttoc's \axt@off, pdfstringdef, the nameref names' unmark). Only these:
@@ -673,16 +679,19 @@ export const LAYOUT_TEX = [
   '\\def\\axt@pmc{\\ifnum\\lastnodetype=-1 \\expandafter\\@gobble\\else\\expandafter\\axt@pmd\\fi}',
   '\\def\\axt@pmb{\\ifhmode\\expandafter\\axt@pmc\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pma{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmb\\fi}',
+  '\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}',
+  '\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}',
   '\\protected\\def\\axt@pm#1{\\ifaxt@off\\else\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1}\\fi\\fi\\fi}',
   '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\ifhmode\\relax\\axt@put{#1}\\fi\\fi}',
   '\\def\\axtpma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pma\\else\\expandafter\\@gobble\\fi}',
+  '\\def\\axtpmm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pmm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axthmark{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hm\\else\\expandafter\\@gobble\\fi}',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
   '\\AddToHook{package/gettitlestring/after}{\\let\\axt@title@of\\GetTitleString\\long\\def\\GetTitleString#1{\\def\\axt@title{#1}\\axt@unmark\\axt@title\\expandafter\\axt@title@of\\expandafter{\\axt@title}}}',
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
-  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pm\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
+  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
+  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
   UNMARK_TEX,
   NAMES_TEX,
   POINTS_TEX,
@@ -757,7 +766,8 @@ function passedOver(pieces) {
  * copy, the paper's units untouched — and each unit's mark for patch(): MARK_DEF's for a marked unit (with \axtlines
  * when `lines`), a cell's and a heading's own. `mark` takes a unit or its copy.
  * A placeholder of a class in `classes`, at index k of unit i, in a unit with a mark, gets \axtpma{p<i>.<k>a} before it
- * and \axtpm{p<i>.<k>b} after it (`n` for a footnote's call), but where a mark would change what TeX does:
+ * (\axtpmm for an inline formula, set on the empty list after a display too) and \axtpm{p<i>.<k>b} after it (`n` for a
+ * footnote's call), but where a mark would change what TeX does:
  * - none at a unit's head before its start mark, nor so after a forced break or an alignment's tab (passedOver);
  * - none right after a piece that may look ahead (LOOKS_AHEAD), unless TeX answered that a mark there changes nothing
  *   (`switches`: a footnote's call's `word`, or its `call` before another call), and none for a paper's macro glued to
@@ -814,7 +824,8 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       const said = answer(p, next)
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
-      const open = { t: 'ph', src: `\\axtpma{${name}a}` }
+      // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX)
+      const open = { t: 'ph', src: `\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
       if (said === '1' || (LOOKS_AHEAD(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
     })
@@ -833,8 +844,10 @@ export const MARKS_DEPTH = 3
  *  null where no probe ran, the macros TeX said set no ink (`marking.inkless`) and the texts it showed they set
  *  (`marking.texts`), and the rest of a word given in parts (a token of word -1); 4 the babel names' marks (MARK_NAME's
  *  n<occurrence>.<key>) and whether each name's own text holds a lowercase letter (`marking.names`); 5 the paper's
- *  \lineskip and \lineskiplimit (`marking.lineskip`, PDF units, readSkipProbe: one pair, at the body's start) */
-export const MARKS_SCHEMA = 5
+ *  \lineskip and \lineskiplimit (`marking.lineskip`, PDF units, readSkipProbe: one pair, at the body's start); 6 an inline
+ *  formula's opening mark set on the empty list after a display (\axtpmm), and `owned` by stream.mjs's OWNED_HOW of a
+ *  piece past its column's end and of a display group (a later display of one 'in the display before it') */
+export const MARKS_SCHEMA = 6
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned']
 const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts', 'names', 'lineskip']
@@ -936,7 +949,10 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
  * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
  * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
  * characters of the text after it in its unit up to the next visible piece, its unit's next marks, and whether a visible
- * piece with no mark follows it with no text between
+ * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
+ * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
+ * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
+ * the group's last one's
  */
 function followsOf(units, names) {
   const nameOf = (i, k) => { const c = classOf(units[i]?.pieces[k]); return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null }
@@ -944,11 +960,17 @@ function followsOf(units, names) {
     const m = /^([pn])(\d+)\.(\d+)a$/.exec(name)
     const i = m ? Number(m[2]) : -1, k = m ? Number(m[3]) : -1, u = units[i]
     if (!u || nameOf(i, k) !== name.slice(0, -1)) return null
+    const display = classOf(u.pieces[k]) === 'display', group = []
     let after = '', q = k + 1
-    for (; q < u.pieces.length && !classOf(u.pieces[q]); q++) if (u.pieces[q].t === 'text') after += plainTranslated([u.pieces[q]])
+    for (;;) {
+      for (; q < u.pieces.length && !classOf(u.pieces[q]); q++) if (u.pieces[q].t === 'text') after += plainTranslated([u.pieces[q]])
+      if (!display || q >= u.pieces.length || classOf(u.pieces[q]) !== 'display' || /\S/.test(after) || names.has(`${nameOf(i, q)}a`)) break
+      group.push(`${nameOf(i, q)}a`)
+      q++
+    }
     const want = asSet(after).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT)
     const next = q < u.pieces.length ? nameOf(i, q) : null
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked: !!next && !names.has(`${next}a`) }
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked: !!next && !names.has(`${next}a`), group }
   }
 }
 

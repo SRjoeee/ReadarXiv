@@ -139,7 +139,7 @@ describe('each writer then its reader is the identity', () => {
     expect(p1.leftParts).toEqual([M.lefts[1]!.ref])
     expect(p2.leftParts).toEqual([M.lefts[2]!.ref, M.lefts[3]!.ref])
     expect(p1.chain).toEqual({
-      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), reach: 2, ahead: VIEWS[1], end: BASE.bytes + TAILS[0]!.tail.length,
+      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), groups: Uint8Array.of(0, 0, 0), reach: 2, ahead: VIEWS[1], end: BASE.bytes + TAILS[0]!.tail.length,
       xref: TAILS[0]!.startxref, next: 104, root: 12, r: 1,
     })
     expect(p2.chain).toMatchObject({ through: 3, slot: 41.5, id: 5, reach: 4, ahead: VIEWS[3], end: BASE.bytes + TAILS[0]!.tail.length + TAILS[1]!.tail.length, xref: TAILS[1]!.startxref, next: 108, root: 12, r: 2 })
@@ -189,7 +189,7 @@ describe('mergeParts is the whole', () => {
     const merged = mergeParts(M.index, M.readParts)
     // the whole file by hand: the layout's fonts by first appearance (lines by unit id, then names), page 4 not planned
     const whole: LayoutFile = {
-      schema: 3, layout: LAYOUT, pdfjs: PDFJS, paper: { ...PAPER, pages: N }, left: '', views: VIEWS.flat(), fonts: ['CMR10', 'CMBX12'],
+      schema: 4, layout: LAYOUT, pdfjs: PDFJS, paper: { ...PAPER, pages: N }, left: '', views: VIEWS.flat(), fonts: ['CMR10', 'CMBX12'],
       units: [[0, 1, 9, 1, 1], [2, 0, 9, 0, 7], [3, 4, 9, 0, 1], [5, 4, 9, 0, 3]],
       lines: [
         [0, [1, 150, 460, 700, 712, 696, 17.28, 0]], [2, [1, 72, 540, 650, 657.5, 647.25, 10, 0, 2, 72, 300, 700, 710, 698, 10, 0]],
@@ -1091,9 +1091,17 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).addon.manifest.sets = { R: 4 } }, 'addon.manifest.sets.R')
   })
 
-  it('refuses an add-on where the layout is null, none where it is not, and a tail the manifest does not account for', async () => {
+  it('refuses an add-on where the layout is null and a tail the manifest does not account for; a layout with no add-on is a part (M20)', async () => {
     await refused(2, p => { (p as Any).addon = { manifest: parsed(M.parts[1]!).addon.manifest, tail: null } }, 'addon')
-    await refused(0, p => { (p as Any).addon = null }, 'addon')
+    // (no add-on for the part's pages: no manifest entry, no tail, no removed page counted)
+    const bare = await partWith(0, p => { (p as Any).addon = null })
+    expect(bare.layout).not.toBeNull()
+    expect(bare.addon).toBeNull()
+    expect([bare.chain.r, bare.chain.end, bare.chain.xref, bare.chain.next, bare.chain.root]).toEqual([0, BASE.bytes, BASE.xref, null, null])
+    // (and the writer writes one: its reader reads it back)
+    const w = await writePart({ ...partInputs(M.head.sha256, M.lefts)[0]!, addon: null })
+    const back = await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })
+    expect([back.layout !== null, back.addon, back.chain.r]).toEqual([true, null, 0])
     await refused(0, p => { (p as Any).addon.manifest.appended = 1 }, 'addon.tail')
     await refused(0, p => { (p as Any).addon.tail = null }, 'addon.manifest.appended')
     await refused(0, p => { (p as Any).addon.tail = '' }, 'addon.tail')
@@ -1133,7 +1141,7 @@ describe('a part against the chain', () => {
       const real = Buffer.from(sample.addon.tail, 'base64')
       const placed = (declared: number) => Buffer.from(textOf(real).replace(/startxref\n\d+\n/, `startxref\n${declared}\n`), 'latin1')
       const at = sample.base.bytes + 132
-      const first = { head: M.head.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(UNITS.length), reach: 0, ahead: [], end: sample.base.bytes, xref: 212001, next: null, root: null, r: 0 } as unknown as PartChain
+      const first = { head: M.head.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(UNITS.length), groups: new Uint8Array(0), reach: 0, ahead: [], end: sample.base.bytes, xref: 212001, next: null, root: null, r: 0 } as unknown as PartChain
       const run = (tail: Buffer) => partWith(0, ((p: Any) => { p.addon.tail = tail.toString('base64'); p.addon.manifest.appended = tail.length }) as never, { chain: first })
       // (the real stream tail, as its declaration places it, is read through the chain; the same tail declared elsewhere is not)
       expect((await run(placed(at))).addon!.tail).toHaveLength(real.length)
