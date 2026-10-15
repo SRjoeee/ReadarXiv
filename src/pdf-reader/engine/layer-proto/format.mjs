@@ -43,9 +43,11 @@ export const VTAG4 = `${CTAG4}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`
 /** a units chunk's bytes at most, its values, and its nesting: the object, `units`, a unit, its pieces, a piece */
 export const UNITS_CAP = 2 * 2 ** 20, UNITS_VALUES = 400_000
 const UNITS_DEPTH = 5
-/** the chunks a paper's units may fill at most, and their bytes and values in all (amendment M2; provisional until the web
- *  lane has measured workerd, whose number may overwrite these: they are here and nowhere else) */
-export const CHUNKS_MAX = 8, UNITS_TOTAL_BYTES = 16 * 2 ** 20, UNITS_TOTAL_VALUES = 3_200_000
+/** the chunks a paper's units may fill at most, and their bytes and values in all (amendment M2'): an ABUSE GUARD, not a limit
+ *  on a paper's length, sized at 10 times the longest real book and more (G3's units are 2,458,984 bytes and 161,607 values).
+ *  If a guard would bind before memory does on a real paper, the answer is per chunk, never a lower total. They are here
+ *  and nowhere else */
+export const CHUNKS_MAX = 20, UNITS_TOTAL_BYTES = 32 * 2 ** 20, UNITS_TOTAL_VALUES = 3_500_000
 /** the head's: the object, `units` and a ref in it (`cites` and a pair in it as deep); at most 5,000 cites of a key of 1–128
  *  and a label of 1–32 code units fill about 0.85 MB of it (amendment M11) */
 export const HEAD_CAP = 1024 * 1024, HEAD_VALUES = 64_000
@@ -376,7 +378,10 @@ export async function writeUnitChunks({ paper, units }) {
  * The units of chunks read in order, head-less (amendment M3; the head's indexOf takes the same): each chunk after the one
  * before it (its `from` the last `to` + 1, the first 0), of one paper and one pipeline, read as one chain (each chunk's
  * `stands` begins as the one before's); no more than CHUNKS_MAX chunks, and their values in all within UNITS_TOTAL_VALUES.
- * Gives every unit (null where dropped), its kind (null likewise) and the ids dropped. Throws BundleRefusal
+ * Gives every unit (null where dropped), its kind (null likewise) and the ids dropped, and the windowed access amendment M3'
+ * asks for: `index`, each chunk's { from, to }; `chunkOf(id)`, the chunk holding a unit; `externalRefs(k)`, the ids below chunk
+ * k's `from` that its nested pieces name (rising), so that a reader holding one chunk at a time knows which earlier units it
+ * needs. Throws BundleRefusal
  */
 export function unitsOfChunks(chunks) {
   const K = 'index'
@@ -395,7 +400,24 @@ export function unitsOfChunks(chunks) {
     for (let q = 0; q < c.dropped.length; q++) dropped.push(c.dropped[q])
     before = c
   }
-  return { units, kinds, dropped }
+  const index = chunks.map(c => ({ from: c.from, to: c.to }))
+  // (windowed access, amendment M3': which chunk holds a unit, and which earlier units a chunk's nested pieces name)
+  const chunkOf = id => {
+    if (!Number.isInteger(id) || id < 0 || id >= units.length) throw new RangeError('not a unit of the chunks')
+    let lo = 0, hi = index.length - 1
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (index[mid].from <= id) lo = mid; else hi = mid - 1 }
+    return lo
+  }
+  const externalRefs = k => {
+    if (!Number.isInteger(k) || k < 0 || k >= chunks.length) throw new RangeError('not a chunk')
+    const out = new Set(), from = chunks[k].from
+    for (const u of chunks[k].units) {
+      if (u === null) continue
+      for (const p of u[5]) if (p[0] === 4 && p[2] < from) out.add(p[2])
+    }
+    return [...out].sort((a, b) => a - b)
+  }
+  return { units, kinds, dropped, index, chunkOf, externalRefs }
 }
 
 // ---------------------------------------------------------------- the head

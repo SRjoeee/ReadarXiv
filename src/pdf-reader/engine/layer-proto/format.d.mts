@@ -19,7 +19,8 @@ export declare const VTAG4: string
 /** a units chunk's bytes at most, and its values (counted before JSON.parse) */
 export declare const UNITS_CAP: number
 export declare const UNITS_VALUES: number
-/** the chunks a paper's units may fill at most, and their bytes and values in all (provisional; one place) */
+/** the chunks a paper's units may fill at most, and their bytes and values in all: an abuse guard (10 times the longest real
+ *  book and more), not a limit on a paper's length */
 export declare const CHUNKS_MAX: number
 export declare const UNITS_TOTAL_BYTES: number
 export declare const UNITS_TOTAL_VALUES: number
@@ -127,7 +128,15 @@ export interface ReadCatalog {
 export declare function readUnitsChunk(bytes: Uint8Array, o: { ref: Ref; before?: ReadUnitsChunk | null; caps?: Caps }): Promise<ReadUnitsChunk>
 export declare function readHead(bytes: Uint8Array, o: { ref: Ref; caps?: Caps }): Promise<ReadHead>
 /** the units of chunks read in order, head-less: every unit (null where dropped), its kind and the ids dropped */
-export interface ReadUnits { units: (BundleUnit | null)[]; kinds: (string | null)[]; dropped: number[] }
+export interface ReadUnits {
+  units: (BundleUnit | null)[]; kinds: (string | null)[]; dropped: number[]
+  /** each chunk's ids */
+  index: { from: number; to: number }[]
+  /** the chunk holding a unit; throws a RangeError for an id that is none */
+  chunkOf(id: number): number
+  /** the ids below chunk k's `from` that its nested pieces name, rising */
+  externalRefs(k: number): number[]
+}
 /** chunks read as one chain: each after the one before, of one paper and pipeline, 1 to CHUNKS_MAX of them; throws BundleRefusal */
 export declare function unitsOfChunks(chunks: readonly ReadUnitsChunk[]): ReadUnits
 /** sync: the head and its chunks bound (each chunk's range, digest and bytes the head's ref, in order, read as one `before`
