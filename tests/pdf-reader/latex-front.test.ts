@@ -539,6 +539,30 @@ describe('nothing is inserted inside a call or between a subscript and its opera
     expect(marked(p)[0]).toContain('\\strangechapter{$\\infty$}\n\n\\axtlines{0}')
   })
 
+  it('a single token after the call is the argument TeX takes for the command it ends in (\\chapter X, \\chapter\\name): it stays with the call, whether the call\'s own argument was walked apart, kept with it or walked in a pair', () => {
+    const p = paperOf([
+      BOOK, '\\newcommand{\\Title}{The Title}', '\\newcommand{\\plain}[1]{\\setcounter{chapter}{#1}\\chapter}',
+      '\\newcommand{\\lead}[1]{\\textbf{#1}\\footnote}', '\\newcommand{\\sys}[1]{\\textsc{#1}\\xspace}',
+    ].join('\n'), [
+      'Before it.', '\\strangechapter{7}X title body words here.', '\\strangechapter{$\\infty$}\\Title more words here.',
+      '\\plain{3}Y and the words of it.', 'We use \\lead{Name}Z words after it, and \\sys{Name} words too.',
+    ].join('\n\n'))
+    expect(units(p)).toEqual([['para', 'Before it.'], ['para', 'title body words here.'], ['para', 'more words here.'], ['para', 'and the words of it.'], ['para', 'We use Name words after it, and Name words too.']])
+    for (const text of marked(p)) {
+      for (const call of ['\\strangechapter{7}X', '\\strangechapter{$\\infty$}\\Title', '\\plain{3}Y', '\\lead{Name}Z', '\\sys{Name} words']) expect(text).toContain(call)
+      expect(text).toContain('\\axtlines{3}\\plain{3}Y')
+    }
+  })
+
+  it('a macro whose last command is an operand of the one before it, which TeX does not run (\\string\\section, \\let\\saved\\section), is read as before', () => {
+    const p = paperOf([
+      '\\newcommand{\\showname}[1]{#1\\string\\section}', '\\newcommand{\\keep}[1]{#1\\let\\saved\\section}',
+      '\\newcommand{\\keepto}[1]{#1\\global\\let\\saved = \\chapter}', '\\newcommand{\\alias}[1]{#1\\renewcommand\\saved\\section}',
+      '\\newcommand{\\reset}[1]{#1\\let\\saved\\relax\\section}',
+    ].join('\n'), 'Before \\showname{x} {grouped prose} and \\keep{y} {more of it} and \\keepto{z} {the rest}, \\alias{v} {its words} end.\n\n\\reset{Words}{A Section}')
+    expect(units(p)).toEqual([['para', 'Before x grouped prose and y more of it and z the rest, v its words end.'], ['para', 'Words'], ['heading', 'A Section', 1]])
+  })
+
   it('an environment of the paper\'s own that sets a display is math, the paragraph around it one unit (2310.20360\'s eqsplit)', () => {
     const p = paperOf([
       '\\newcommand{\\bfm}{\\mathbf{m}}',
@@ -552,6 +576,17 @@ describe('nothing is inserted inside a call or between a subscript and its opera
     expect(units(p)).toEqual([['para', 'It holds that\n\nwhich ends the proof.'], ['para', 'Then  and  close it.']])
     const [u] = marked(p)
     expect(u).toContain('\\begin{eqsplit}\n  \\lvert \\bfm_1 - x \\rvert\n&= \\bfm_1 - x\n\\\\ \\text{and}\\qquad \\Theta_t = x^\\alpha + \\mathbf{x}_{ij}\n\\end{eqsplit}')
+  })
+
+  it('…not one whose begin code closes the display it sets, or opens none (\\\\[2pt] is a line break), nor one defined again as text; \\provideenvironment changes none', () => {
+    const p = paperOf([
+      '\\usepackage{amsmath}',
+      '\\newenvironment{between}{\\begin{equation}a=b\\end{equation}}{\\begin{equation}c=d\\end{equation}}',
+      '\\newenvironment{steps}{\\begin{quote}\\\\[2pt]}{\\[x\\]\\end{quote}}',
+      '\\newenvironment{foo}{\\[}{\\]}\\renewenvironment{foo}{\\begin{quote}}{\\end{quote}}',
+      '\\newenvironment{dd}{\\[}{\\]}\\provideenvironment{dd}{\\begin{quote}}{\\end{quote}}',
+    ].join('\n'), '\\begin{between}Words between the two.\\end{between}\n\n\\begin{steps}Words of the steps.\\end{steps}\n\n\\begin{foo}Words of the quote.\\end{foo}\n\nThen \\begin{dd} y_1 = x^2 \\end{dd} ends it.')
+    expect(units(p)).toEqual([['para', 'Words between the two.'], ['para', 'Words of the steps.'], ['para', 'Words of the quote.'], ['para', 'Then  ends it.']])
   })
 
   it('math the walker cannot tell (an environment by \\let): its unit holds a subscript, and nothing is inserted in it — \\bfm_1, x^\\alpha, \\mathbf{x}_{ij}, \\Theta_t', () => {
