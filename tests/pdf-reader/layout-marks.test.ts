@@ -868,6 +868,30 @@ describe('reading the marked original', () => {
     const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
     expect({ ...plain, owned: m.owned, chars: m.chars }).toEqual(m)
   })
+  it("layoutMarksOf lets each page's operator list go once its ink is read: one cleanup a page, after its list, the file the same", async () => {
+    const units = [unit('para', [text('see '), ph('$x^2$'), text(' and more')])]
+    const page = { view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown: [['see', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['x', 92, 700], ['2', 97, 703.5, 7], { at: 'p0.1b' }, ['and', 106, 700]] as Shown[] }
+    const more = { view: [0, 0, 612, 792], items: [item('more', 72, 700)], shown: [['more', 72, 700]] as Shown[] }
+    const doc = streamDocument([page, more, more], [['axt-0s', 1, 72, 700], ['axt-p0.1a', 1, 87, 700], ['axt-p0.1b', 1, 100.5, 700]])
+    const events: string[] = []
+    // PDF.js's page: its list answered, then let go (PDFPageProxy.cleanup)
+    const watched = {
+      ...doc,
+      getPage: async (n: number) => {
+        const p = await doc.getPage(n)
+        return { ...p, getOperatorList: async () => { const list = await p.getOperatorList(); events.push(`ops ${n}`); return list }, cleanup: () => { events.push(`cleanup ${n}`); return true } }
+      },
+    }
+    const m = await layoutMarksOf(watched, '', { engine: 'pdflatex', units, OPS })
+    expect(events).toEqual(['ops 1', 'cleanup 1', 'ops 2', 'cleanup 2', 'ops 3', 'cleanup 3'])
+    expect(m.owned).toEqual([['p0.1a', OWNED_HOW.indexOf('closed'), 2, 1, 92, 700, 10, 0, 1, 97, 703.5, 7, 1]])
+    // the file of pages that have no cleanup (a fake document's, a PDF.js without it) is the same
+    expect(m).toEqual(await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS }))
+    // no ink asked: each page let go all the same, its list never asked
+    events.length = 0
+    await layoutMarksOf(watched, '', { engine: 'pdflatex' })
+    expect(events).toEqual(['cleanup 1', 'cleanup 2', 'cleanup 3'])
+  })
   it('layoutMarksOf owns no ink off its page: the piece is written as not owned, and the file parses', async () => {
     const units = [unit('para', [text('see '), ph('$x$'), text(' and '), ph('$y$'), text(' end')])]
     const shown: Shown[] = [['see', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['x', 5000, 700], { at: 'p0.1b' }, ['and', 106, 700], { at: 'p0.3a' }, ['y', 130, 700, 300], { at: 'p0.3b' }, ['end', 140, 700], { at: '0e' }]

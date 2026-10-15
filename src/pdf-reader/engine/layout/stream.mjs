@@ -32,6 +32,9 @@ export const OWNED_HOW = Object.freeze([
   'ink out of bounds',
 ])
 export const OWNED = 4
+/** the glyph columns ownedOf reads of a page (ink.mjs packGlyphs), and the owned rows after it (marks.mjs): a glyph's
+ *  origin, baseline, size and character */
+export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'])
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])\d+$/
@@ -59,16 +62,16 @@ const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_S
 /** each page's regions: of each glyph, of each box, at each point; every page begins outside any body */
 function regionsOf(page) {
   const { glyphs, points } = page, nBoxes = page.boxes.length / 4
-  const glyph = new Int32Array(glyphs.length), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
+  const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
   let body = false, depth = 0, bodies = false
   const apply = name => {
     const m = BRACKET.exec(name)
     if (!m) return
     if (m[1] === 'b') { body = m[2] === 's'; bodies = true } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
   }
-  for (let q = 0, g = 0; g <= glyphs.length; g++) {
+  for (let q = 0, g = 0; g <= glyphs.n; g++) {
     while (q < points.length && points[q].glyph <= g) { apply(points[q].name); at[q] = code(body, depth); q++ }
-    if (g < glyphs.length) glyph[g] = code(body, depth)
+    if (g < glyphs.n) glyph[g] = code(body, depth)
   }
   body = false; depth = 0
   for (let q = 0, b = 0; b < nBoxes; b++) {
@@ -81,9 +84,10 @@ function regionsOf(page) {
 /**
  * Each piece's own glyphs and rules in the marked compile, by its opening point's name: Map name → { how, glyphs, boxes }
  * (OWNED_HOW; glyphs and boxes [page, index] into the pages, in stream order, none where it is not owned). `pages`, page
- * by page (1-based at index 0), what pageInk read of the marked compile, with each page's view; `follows(name)`, for an
- * opening point's name, what the marking says of its piece ({ closing, want, ends, blocked }, Follow), or null for a
- * name that is no piece of a unit; `dropped`, the names the log reports set twice.
+ * by page (1-based at index 0), what pageInk read of the marked compile, its glyphs packed in stream order (ink.mjs
+ * packGlyphs, STREAM_COLUMNS at least), with each page's view; `follows(name)`, for an opening point's name, what the marking says of its piece
+ * ({ closing, want, ends, blocked }, Follow), or null for a name that is no piece of a unit; `dropped`, the names the
+ * log reports set twice.
  * - Two points: the glyphs and boxes between them in the opening point's region; on another page only where it is a
  *   column's body (else what TeX shipped between cannot be cut: unbracketed), the two in one region; outside the
  *   bodies, not across a column (JUMP_X, JUMP_Y). A closing point expected (`closing`) and not read: none.
@@ -135,8 +139,8 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       for (let j = 1; j < glyphs.length; j++) {
         const [p, g] = glyphs[j], [o, h] = glyphs[j - 1]
         if (p !== o) continue
-        const P = pages[p - 1], v = P.view, a = P.glyphs[h], b = P.glyphs[g]
-        if (b.y - a.y > JUMP_Y * (v[3] - v[1]) && b.x0 - a.x0 > JUMP_X * (v[2] - v[0])) return true
+        const v = pages[p - 1].view, G = pages[p - 1].glyphs
+        if (G.y[g] - G.y[h] > JUMP_Y * (v[3] - v[1]) && G.x0[g] - G.x0[h] > JUMP_X * (v[2] - v[0])) return true
       }
       return false
     }
@@ -147,7 +151,7 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       if (pb !== pa && rA % 2 === 0) { out.set(name, none(HOW['across a page, unbracketed'])); continue }
       for (let p = pa; p <= pb; p++) {
         const P = pages[p - 1]
-        take(p, p === pa ? A.glyph : 0, p === pb ? B.glyph : P.glyphs.length, p === pa ? A.box : 0, p === pb ? B.box : P.boxes.length / 4)
+        take(p, p === pa ? A.glyph : 0, p === pb ? B.glyph : P.glyphs.n, p === pa ? A.box : 0, p === pb ? B.box : P.boxes.length / 4)
       }
       out.set(name, jumps() ? none(HOW['across a column, unbracketed']) : { how: HOW.closed, glyphs, boxes })
       continue
@@ -177,9 +181,9 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       else if (f.ends.includes(N.name)) out.set(name, { how: HOW["open, to its unit's next mark"], glyphs, boxes })
       else if (later && Number(later[1]) > Number(m[2])) {
         // the next unit's label: the glyphs on its start mark's line before it, the boxes after the first of them
-        const after = P.glyphs[N.glyph], size = g => P.glyphs[g].size
+        const G = P.glyphs, after = N.glyph
         let end = glyphs.length
-        while (after && end > 0 && Math.abs(P.glyphs[glyphs[end - 1][1]].y - after.y) < 0.5 * Math.max(size(glyphs[end - 1][1]), after.size)) end--
+        while (after < G.n && end > 0 && Math.abs(G.y[glyphs[end - 1][1]] - G.y[after]) < 0.5 * Math.max(G.size[glyphs[end - 1][1]], G.size[after])) end--
         const upTo = end < glyphs.length ? P.boxAt[glyphs[end][1]] : N.box
         out.set(name, { how: HOW["open, to its unit's next mark"], glyphs: glyphs.slice(0, end), boxes: boxes.filter(([, b]) => b < upTo) })
       } else out.set(name, none(HOW["open, the next mark not its unit's"]))
@@ -199,7 +203,7 @@ export function ownedOf(pages, { follows, dropped = [] }) {
  *  characters past its end: a ligature), or from which they spell the start of it up to the last glyph (the text runs
  *  to the next point); -1 where it is nowhere */
 function textAt(P, glyphs, want) {
-  const chars = glyphs.map(([, g]) => charOf(P.glyphs[g].u))
+  const chars = glyphs.map(([, g]) => charOf(P.glyphs.u[g]))
   for (let e = 0; e < chars.length; e++) {
     if (!chars[e]) continue
     let w = 0, h = e
