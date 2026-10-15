@@ -1,6 +1,6 @@
 // lab/pdf/spikes/gate-pack.mjs
 // The fixture pack the rules gate runs from in CI (rules-as-data plan §8, Task R6). The layer gate's model tier reads the
-// 29 outputs' inputs from lab/pdf/data and out/, which a runner does not have and a public repository may not hold: arXiv's
+// outputs' inputs from lab/pdf/data and out/, which a runner does not have and a public repository may not hold: arXiv's
 // PDFs, the layout files made from them and the PIPELINE translations are under arXiv's licence. The pack is those inputs
 // and nothing else, made on the maintainer's machine, kept in a private bucket, and restored by digest:
 //   pack/fixtures/<fx>/arxiv.pdf, layout.json     the made layout files (--fixtures)
