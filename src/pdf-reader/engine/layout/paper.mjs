@@ -39,8 +39,8 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
   const { main } = paper.project, engine = paper.meta.compiler
   // (CM: each compile's wall as the host counts it, its `ms`, else as long as it took here — what the host's compile
   // budget is spent by —, and the last one's)
-  const wall = { spent: 0, last: 0 }
-  const asked = converge ? async req => { const t0 = performance.now(), c = await compile(req); wall.last = c?.ms ?? performance.now() - t0; wall.spent += wall.last; return c } : compile
+  const wall = { spent: 0, last: 0, longest: 0 }
+  const asked = converge ? async req => { const t0 = performance.now(), c = await compile(req); wall.last = c?.ms ?? performance.now() - t0; wall.spent += wall.last; wall.longest = Math.max(wall.longest, wall.last); return c } : compile
   const probe = await stage('probe', async () => {
     // (runLive's request for its font probe)
     const c = await asked({ main, engine, rerun: false, bibtex: false, overrides: probeFiles(paper, { marks: true }) })
@@ -139,9 +139,9 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget, boun
   const { main } = paper.project, engine = paper.meta.compiler, shipped = !!paper.meta.bbl
   const unmarked = originalFiles(paper, { lines: true })
   const carried = new Map()
-  let passes = 0, bibSeen = null, longest = 0
-  /** whether the budget leaves room for one more pass as long as the longest so far */
-  const affordable = () => budget === null || budget === undefined || budget - wall.spent >= 1.2 * longest
+  let passes = 0, bibSeen = null
+  /** whether the budget leaves room for one more pass as long as the longest compile so far, the probe's included */
+  const affordable = () => budget === null || budget === undefined || budget - wall.spent >= 1.2 * wall.longest
   /** the bytes a pass given `own` had at a path: its own file, else the latest carried, else the paper's */
   const givenAt = (own, p) => own.get(p) ?? carried.get(p) ?? paper.fsys.read(p)
   const pass = async (own, draft, bibtex) => {
@@ -149,7 +149,6 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget, boun
     if (draft) cm.drafts++
     else cm.marked++
     const c = await compile({ main, engine, rerun: false, bibtex, overrides: new Map([...carried, ...own]), draft, files: true })
-    longest = Math.max(longest, wall.last)
     return c ?? null
   }
   /** a pass's files carried to the next, and the bibliography step's input where it ran */
@@ -204,7 +203,7 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget, boun
     last = c
     cm.settled = [...c.files].every(([p, b]) => sameFile(p, b, givenAt(marked, p)))
     if (cm.settled) { take(c, bibtex); break }
-    if (passes < PASSES && !fits(c, marked)) return fallback('files-bound')
+    if (passes < PASSES && affordable() && !fits(c, marked)) return fallback('files-bound')
     take(c, bibtex)
   }
   return last

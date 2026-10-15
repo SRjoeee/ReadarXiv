@@ -495,9 +495,9 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     const bbl = '\\begin{thebibliography}{1}\n\\bibitem{a} A.\n\\end{thebibliography}\n'
     const timed = (c: Compiled, ms: number): Compiled => ({ ...c, ms })
     const moving = (n: number, ms: number) => timed(markedOf({ 'main.aux': `\\relax \n\\newlabel{s}{{1}{${n}}}\n` }), ms)
-    const run = async (answers: Compiled[], compileBudgetMs?: number | null) => {
+    const run = async (answers: Compiled[], compileBudgetMs?: number | null, filesBound?: { count: number; bytes: number }) => {
       const c = compiler(answers), o = opener()
-      const made = await layoutMarksOfPaper(paperOf(), { compile: c.compile, open: o.open, OPS, converge: true, ...(compileBudgetMs === undefined ? {} : { compileBudgetMs }) })
+      const made = await layoutMarksOfPaper(paperOf(), { compile: c.compile, open: o.open, OPS, converge: true, ...(compileBudgetMs === undefined ? {} : { compileBudgetMs }), ...(filesBound ? { filesBound } : {}) })
       return { made, asked: c.asked, open: o.open }
     }
     // a draft that would have asked for a second (a bibliography it looked for): probe 10 ms, draft 100 ms
@@ -507,6 +507,14 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     const thin = await run([timed(PROBE, 10), draft, moving(1, 100)], 200)
     expect(thin.made).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts: 1, marked: 1, settled: true } })
     expect(thin.asked.map(r => r.draft)).toEqual([undefined, true, false])
+    // the longest compile counts the probe's: probe 150, draft 50, 60 left is under 1.2 x 150 (not under 1.2 x 50)
+    const slowProbe = await run([timed(PROBE, 150), timed(draftOf({ 'main.aux': AUX, 'main.bbl': bbl }, `No file main.bbl.\n${END}`), 50), moving(1, 50)], 260)
+    expect(slowProbe.made).toMatchObject({ cm: { drafts: 1, marked: 1, settled: true } })
+    // a marked pass past the files' bound that leaves no room for another is kept: no pass would carry them
+    const big = Object.fromEntries(Array.from({ length: 3 }, (_, i) => [`n${i}.dat`, 'x']))
+    const heavy = await run([timed(PROBE, 10), timed(draftOf({ 'main.aux': AUX }), 100), timed(markedOf({ 'main.aux': '\\relax \n\\newlabel{s}{{1}{2}}\n', ...big }), 150)], 250, { count: 1, bytes: 1e6 })
+    expect(heavy.made).toMatchObject({ marks: expect.any(Uint8Array), cm: { drafts: 1, marked: 1, settled: false } })
+    expect(heavy.made.cm).not.toHaveProperty('fallback')
     // a marked pass that did not settle is kept where the next does not fit: the first marked pass is no bet, and is asked
     const pdf1 = enc('%PDF-1.7 the first marked pass')
     const kept = await run([timed(PROBE, 10), timed(draftOf({ 'main.aux': AUX }), 100), timed(markedOf({ 'main.aux': '\\relax \n\\newlabel{s}{{1}{2}}\n' }, { pdf: pdf1 }), 150), moving(3, 150)], 300)
