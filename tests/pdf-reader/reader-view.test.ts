@@ -72,7 +72,7 @@ const leftViewer = () => FakePDFViewer.made[0] as FakePDFViewer
 const last = <T extends ViewEvent['type']>(events: ViewEvent[], type: T) => events.filter(e => e.type === type).at(-1) as Extract<ViewEvent, { type: T }> | undefined
 const places = (s: Setup) => [...s.panes.right.querySelectorAll<HTMLElement>('.pdfViewer > .page')]
 /** an original opened: its task resolved with `doc`, the view's answer awaited */
-async function opened(s: Setup, pages = 6, o: { title?: string } = {}) {
+async function opened(s: Setup, pages = 6, o: { title?: string; rotate?: number } = {}) {
   const task = fakeTask()
   const doc = fakeDoc(pages, o)
   const answer = s.view.showOriginal(() => task as unknown as DocumentTask)
@@ -125,6 +125,28 @@ describe('V1: one original at a time', () => {
     expect(await second).toBe('opened')
     expect(b.destroy).not.toHaveBeenCalled()
     expect(leftViewer().pagesCount).toBe(3)
+  })
+
+  it('a showOriginal made while the one before waits for its pages to be laid out supersedes it: no opened from it', async () => {
+    const s = setup()
+    const a = fakeTask(), b = fakeTask()
+    const doc = fakeDoc(3)
+    // the view reads page 1 at once; the viewer's own read of it, which lays the pages out, waits
+    let lay: () => void = () => {}
+    const page1 = doc.getPage.bind(doc)
+    let asked = 0
+    doc.getPage = n => (n === 1 && ++asked === 2 ? new Promise(r => { lay = () => r(page1(1)) }) : page1(n))
+    const first = s.view.showOriginal(() => a as unknown as DocumentTask)
+    a.resolve(doc)
+    await flush(10)
+    expect(leftViewer().pdfDocument).toBe(doc)
+    const second = s.view.showOriginal(() => b as unknown as DocumentTask)
+    expect(await first).toBe('superseded')
+    expect(a.destroy).toHaveBeenCalledTimes(1)
+    lay()
+    b.resolve(fakeDoc(4))
+    expect(await second).toBe('opened')
+    expect(s.events.filter(e => e.type === 'opened')).toEqual([{ type: 'opened', pages: 4 }])
   })
 
   it('an opener that throws, or whose task rejects, answers failed and says why', async () => {
@@ -427,6 +449,22 @@ describe('V6: overlays', () => {
     expect(last(s.events, 'scale')?.zoom).toBeNull()
   })
 
+  it('an original let go lets go of what was lit on its pages: nothing painted holds them', async () => {
+    const s = setup()
+    await opened(s, 3)
+    internalsOf(s.view).setShapes('left', stub())
+    internalsOf(s.view).setShapes('right', stub())
+    internalsOf(s.view).light(1)
+    const band = s.panes.left.querySelector('.page .axt-hl-layer > .axt-hl') as HTMLElement
+    expect(s.view.probe().lit).toBe(1)
+    const b = fakeTask()
+    const again = s.view.showOriginal(() => b as unknown as DocumentTask)
+    b.resolve(fakeDoc(3))
+    expect(await again).toBe('opened')
+    expect(s.view.probe().lit).toBeNull()
+    expect(band.isConnected || band.parentElement !== null).toBe(false)
+  })
+
   it('the zoom menu\'s check follows the fit applied, and is none after a step', async () => {
     const s = setup()
     await opened(s, 3)
@@ -464,6 +502,17 @@ describe('V8: the right pane, read through its places', () => {
     expect(s.panes.right.querySelector<HTMLElement>('.pdfViewer')?.style.getPropertyValue('--scale-factor')).toBe(leftViewer().viewer.style.getPropertyValue('--scale-factor'))
     s.view.zoomTo('page-width')
     expect(leftViewer().currentScale).toBeCloseTo(560 / 816, 3)
+  })
+
+  it('fits the right alone by the page as it shows, a quarter-turned page by its turned size', async () => {
+    const s = setup()
+    await opened(s, 3, { rotate: 90 })
+    s.view.setDisplay('translation')
+    await s.clock.tick(); await s.clock.tick()
+    // the page shows 792 units wide: page-width is the pane's 560 px over 792 at 96/72
+    expect(leftViewer().currentScale).toBeCloseTo(560 / 1056, 3)
+    s.view.zoomTo('page-fit')
+    expect(leftViewer().currentScale).toBeCloseTo(Math.min(560 / 1056, 795 / 816), 3)
   })
 
   it('a click on the right levels the pair at the click\'s height, the same point of the same page', async () => {
@@ -711,6 +760,21 @@ describe('V12: the web\'s fixes as plain behaviour', () => {
     page.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: 200, clientY: 300 }))
     await flush()
     expect(layoutOf).not.toHaveBeenCalled()
+  })
+
+  it('a pane\'s shapes coming repaint both panes: a sentence lit is drawn on the other once both have its starts', async () => {
+    const s = setup()
+    await opened(s, 3)
+    const sentence = (): Shapes => ({ ...stub(), fits: () => true, sentence: () => [{ page: 1, x0: 100, y0: 650, x1: 200, y1: 700 }] })
+    const starts = new Map([[1, new Int32Array([0, 5])]])
+    leftViewer().render(1)
+    internalsOf(s.view).setShapes('left', sentence(), starts)
+    internalsOf(s.view).light(1, 1)
+    // the right has no starts yet: the unit's sentence is not known on both panes, and nothing is drawn for it
+    expect(s.panes.left.querySelectorAll('.axt-hl')).toHaveLength(0)
+    internalsOf(s.view).setShapes('right', sentence(), starts)
+    expect(s.panes.left.querySelectorAll('.axt-hl')).toHaveLength(1)
+    expect(s.panes.right.querySelectorAll('.axt-hl')).toHaveLength(1)
   })
 
   it('a pointer over a page of either pane is a want of that page, and nothing is asked before it', async () => {

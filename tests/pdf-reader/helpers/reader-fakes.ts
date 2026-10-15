@@ -91,8 +91,12 @@ export function viewportOf(w: number, h: number, scale: number): FakeViewport {
     clone: o => viewportOf(w, h, o.scale),
   }
 }
-export function fakeDoc(pages = 6, o: { title?: string; size?: { w: number; h: number } } = {}): FakeDoc {
-  const sizes = Array.from({ length: pages }, () => ({ ...(o.size ?? { w: 612, h: 792 }) }))
+/** `rotate`: each page's /Rotate (90 or 270 shows it a quarter-turn round): its box (`view`) unrotated, as PDF.js gives
+ *  it, its viewports and page views at the displayed size */
+export function fakeDoc(pages = 6, o: { title?: string; size?: { w: number; h: number }; rotate?: number } = {}): FakeDoc {
+  const raw = o.size ?? { w: 612, h: 792 }, turned = o.rotate === 90 || o.rotate === 270
+  const shown = turned ? { w: raw.h, h: raw.w } : raw
+  const sizes = Array.from({ length: pages }, () => ({ ...shown }))
   const made = new Map<number, FakePage>()
   return {
     numPages: pages, sizes, title: o.title ?? '',
@@ -101,7 +105,7 @@ export function fakeDoc(pages = 6, o: { title?: string; size?: { w: number; h: n
       let p = made.get(n)
       if (!p) {
         const { w, h } = sizes[n - 1] as { w: number; h: number }
-        p = { pageNumber: n, view: [0, 0, w, h], rotate: 0, getViewport: ({ scale }) => viewportOf(w, h, scale), cleanup: vi.fn() }
+        p = { pageNumber: n, view: [0, 0, raw.w, raw.h], rotate: o.rotate ?? 0, getViewport: ({ scale }) => viewportOf(w, h, scale), cleanup: vi.fn() }
         made.set(n, p)
       }
       return Promise.resolve(p)

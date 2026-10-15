@@ -399,6 +399,16 @@ describe('fromView: the reading view\'s events as the session\'s, the controller
     expect(state.sides.right).toEqual({ page: 2, pages: 4 })
   })
 
+  it('a view opened is ready in every display, and a retry that opens it mends a failure', () => {
+    const view = (e: object) => fromView(e as never, '2600.00001') as SessionEvent
+    const open = fold([{ type: 'display', display: 'bilingual' }, { type: 'opened', pages: 4 }].map(view))
+    expect(open).toMatchObject({ display: 'bilingual', phase: 'ready' })
+    const mended = fold([{ type: 'display', display: 'bilingual' }, { type: 'failed', error: '503' }, { type: 'opened', pages: 4 }].map(view))
+    expect(mended).toMatchObject({ phase: 'ready', failure: null })
+    // the session's own note keeps its rule: a translated display waits for its translation
+    expect(fold([{ type: 'display', mode: 'bilingual' }, note('opened')]).phase).toBe('loading')
+  })
+
   it('says a PDF that could not be opened is the network\'s failure, and tells nothing of a dropped original or the layer', () => {
     const failed = fromView({ type: 'failed', error: '404' }, '2600.00001')
     expect(failed).toMatchObject({ type: 'fail', event: 'fetch failed', kind: 'network' })

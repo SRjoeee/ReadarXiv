@@ -412,7 +412,10 @@ export function createReaderView(host) {
   }
   async function showOriginal(open) {
     if (disposed) return 'failed'
+    // a newer call supersedes the one loading, and one whose document is set but whose pages are not laid out yet: its task
+    // destroyed, its call 'superseded', no 'opened' told of it (its pages are not on screen yet)
     opening?.supersede()
+    if (current && !laid) letGo()
     let task
     try { task = open(Object.freeze({ ...kit.assets })) } catch (e) { if (!current) held = []; return failed(e) }
     if (!task?.promise) { if (!current) held = []; return failed(new Error('the opener gave no loading task')) }
@@ -454,6 +457,8 @@ export function createReaderView(host) {
    *  keep their sizes and show the skeleton */
   function letGo() {
     const was = current
+    // what is lit on its pages goes with them: the painted elements would hold the pages let go
+    lighting.light(null)
     // where the reader was, for the original shown next
     if (laid) kept = readingPlace(readSide())
     current = null
@@ -478,10 +483,10 @@ export function createReaderView(host) {
 
   // ---------------------------------------------------------------- zoom and fit
   const setScale = v => { L.viewer.currentScaleValue = typeof v === 'number' ? String(v) : v }
-  /** the page's width and height in CSS px at scale 1 */
+  /** the first page's width and height in CSS px at scale 1, as it shows: its viewport's, which carries its rotation and
+   *  its user unit (its box, pdfPage.view, carries neither), as PDF.js's own fits take them */
   function pageSize() {
-    const pv = L.viewer.getPageView(0), view = pv?.pdfPage?.view, vp = pv?.viewport
-    if (view) return { w: (view[2] - view[0]) * PDF_TO_CSS, h: (view[3] - view[1]) * PDF_TO_CSS }
+    const vp = L.viewer.getPageView(0)?.viewport
     return vp?.scale ? { w: (vp.width / vp.scale) * PDF_TO_CSS, h: (vp.height / vp.scale) * PDF_TO_CSS } : null
   }
   /** the left's fit to its pane's width, never beyond a reading width while it is shown alone */

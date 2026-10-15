@@ -178,6 +178,10 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       switch (event.event) {
         case 'opened':
           return state.display === 'original' && state.phase === 'loading' ? { ...next, phase: 'ready' } : next
+        // the reading view's original open (fromView): its pages are on screen in every display, and a failure of the open
+        // before it is mended (a retry that opened)
+        case 'view opened':
+          return { ...next, phase: 'ready', failure: null }
         case 'digest':
           return shown === 'none' && state.phase === 'ready' ? { ...next, phase: 'loading' } : next
         // the copy's passages its typesetting left in the original (session.mjs, cache.mjs passagesInSource), from the
@@ -204,12 +208,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
 }
 
 /** the reading view's event as the session's (the reader's design, §11.7): what the interface's state is folded from. The
- *  original opened is the session's `opened` note, a PDF that could not be opened its fetch failure; the paper's id is the
- *  address's. None for what the interface does not hold (the original dropped, the layer's state until the layer side) */
+ *  original opened is the note `view opened` (ready in every display), a PDF that could not be opened its fetch failure;
+ *  the paper's id is the address's. None for what the interface does not hold (the original dropped, the layer's state until the layer side) */
 export function fromView(event: ViewEvent, paper: string): SessionEvent | null {
   switch (event.type) {
     case 'loading': return event
-    case 'opened': return { type: 'note', event: 'opened', data: {}, got: 0, total: 0, lost: 0, again: false }
+    case 'opened': return { type: 'note', event: 'view opened', data: {}, got: 0, total: 0, lost: 0, again: false }
     case 'failed': return { type: 'fail', event: 'fetch failed', text: `Could not fetch ${paper}'s PDF (${event.error})`, kind: 'network' }
     case 'paper': return { type: 'paper', id: paper, title: event.title }
     case 'page': return { type: 'page', side: event.side, page: event.page, pages: event.pages }

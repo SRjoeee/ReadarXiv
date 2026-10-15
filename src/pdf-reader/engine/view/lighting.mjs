@@ -156,12 +156,14 @@ export function createLighting(o) {
       if (fitsWanted.has(hit.id)) return lit?.id === hit.id ? lit : null
       return { id: hit.id, s: hit.s ?? -1 }
     },
-    /** a pane's shapes and its sentence starts (null: none); what is lit painted again by them */
+    /** a pane's shapes and its sentence starts (null: none): what is lit painted again on both panes (whether a unit lights
+     *  by sentence is read of both), and what a resting pointer is over looked at again */
     setShapes(side, shapes, starts = null) {
       side.shapes = shapes
       side.starts = starts
       drawnFor = new WeakMap(); drawnKept = 0
-      paint(side)
+      for (const s of o.sides) paint(s)
+      o.again()
     },
     dispose() {
       o.clear(fitTimer)

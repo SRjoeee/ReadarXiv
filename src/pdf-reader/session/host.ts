@@ -42,8 +42,9 @@ export function outward(url: string): boolean {
   try { return ['http:', 'https:', 'mailto:'].includes(new URL(url).protocol) } catch { return false }
 }
 
-/** the reader page's host of the view, over the panes the page drew; `config` the settings as the page read them */
-export function readerHost(host: SessionHost, config: Config, paper: string): ReaderHost & { stop(): void } {
+/** the reader page's host of the view, over the panes the page drew; `config` the settings as the page read them, `watch`
+ *  how their changes are heard (the extension's storage) */
+export function readerHost(host: SessionHost, config: Config, paper: string, watch: typeof watchConfig = watchConfig): ReaderHost & { stop(): void } {
   let latest = config
   const dark = globalThis.matchMedia?.('(prefers-color-scheme: dark)')
   const listeners = new Set<(p: ViewPrefs) => void>()
@@ -57,9 +58,11 @@ export function readerHost(host: SessionHost, config: Config, paper: string): Re
     if (sheet.textContent !== text) sheet.textContent = text
   }
   showLook()
-  const unwatch = watchConfig(next => {
+  const unwatch = watch(next => {
     latest = next
     showLook()
+    // the page draws its look of the controller's state (App.tsx: the theme, the dimmed pages, the panes swapped)
+    host.emit({ type: 'settings', config: next, pack: null })
     const p = prefs()
     for (const l of listeners) l(p)
   })
