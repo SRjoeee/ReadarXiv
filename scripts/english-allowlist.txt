@@ -26,6 +26,7 @@ src/config/appearance.ts 10
 src/config/storage.ts 3
 src/core/names.ts 1  # 2026-09-22: engine output quoted as the rule's evidence — names sent alone, turned into other words
 src/core/protector/label.ts 9
+src/core/protector/math-runs.ts 1  # 2026-10-16: the set Microsoft's Chinese broke apart (2307.16209 p31), quoted as evidence
 src/core/protector/serialize.ts 1
 src/core/renderer/failed.ts 1
 src/core/renderer/highlight.ts 1

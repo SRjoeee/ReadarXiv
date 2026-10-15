@@ -117,7 +117,7 @@ export function platformImportsOf(file, text) {
 
 /** The reader's engine (src/pdf-reader/engine) is the contract the web imports. The web's build loads it through its pin, a
  *  plain browser page loads it as it stands and plain node loads its server and translation entries, so an engine file
- *  names a module by relative path to the engine's own files or to three modules of the core, or by `node:`, or, in rules/,
+ *  names a module by relative path to the engine's own files or to four modules of the core, or by `node:`, or, in rules/,
  *  by the layout rules' validator, and in no other way: not by an alias, which only a bundler's configuration resolves, nor
  *  a build setting's name, a root-absolute path or a URL, nor a package out of place, nor a computed specifier. It is a
  *  whitelist over every file of the engine (modules, TypeScript and declaration files, stylesheets) and every form that names
@@ -125,11 +125,11 @@ export function platformImportsOf(file, text) {
  *  resolves a value. */
 export const ENGINE = /^src\/pdf-reader\/engine\//
 
-/** The three modules of the core an engine file may import, by their path with no extension or index file (the
- *  placeholder wire's tokens, the sentence splitter, the figure-name test). Nothing deeper in the core: a sibling of one of
- *  them is another module. The closure of each holds those three alone, by relative path (a test holds it), so the web's pin,
- *  a plain page and plain node load it as the engine's own files */
-export const ENGINE_ALLOW = ['src/core/sentences', 'src/core/protector/tokens', 'src/core/names']
+/** The four modules of the core an engine file may import, by their path with no extension or index file (the
+ *  placeholder wire's tokens, the sentence splitter, the figure-name test, the runs of a formula split across inline
+ *  formulas). Nothing deeper in the core: a sibling of one of them is another module. The closure of each holds those four
+ *  alone, by relative path (a test holds it), so the web's pin, a plain page and plain node load it as the engine's own files */
+export const ENGINE_ALLOW = ['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs']
 
 /** The packages an engine file may import, by name and under which directory. The engine imports no PDF library: the
  *  layout maker is handed it (`PL`) */

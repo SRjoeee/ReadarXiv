@@ -16,7 +16,7 @@ export declare function translationFiles(paper: Paper, translated: Map<SourceUni
 export { PIPELINE_VERSION } from './versions.mjs'
 /** the earlier pipelines whose copies carry their translations over into this one, unit by unit, with the test each
  *  translation's pieces must pass (cache.mjs copyReuse) */
-export declare const PIPELINE_CARRIES: Record<string, (pieces: unknown[]) => boolean>
+export declare const PIPELINE_CARRIES: Record<string, (pieces: unknown[], unit?: { pieces: unknown[] } | null) => boolean>
 export declare const TYPESETTING_VERSION: string
 /** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
 export declare function probeFiles(paper: Paper, options?: { width?: boolean; marks?: boolean }): Map<string, Uint8Array>
