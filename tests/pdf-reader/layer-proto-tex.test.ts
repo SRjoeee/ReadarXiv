@@ -94,6 +94,98 @@ describe('a displayed formula the held lines cover (D4 step 1)', () => {
     const on = held(unitOf([L(500), L(488), L(470), L(458), L(440), L(428)], [[1, 0, [1, 50, 470, 80, 477, 468]], [3, 32, []]]), [2, 4])
     expect([...T.displayCover(on, unit(...pieces), kOf)]).toEqual([[1, [2]], [3, [4]]])
   })
+  // a unit of text, a LOST display, the source's "with", a found display, text, and a found display after its last line
+  // (2307.16209 page 59, unit 198): lines 0 and 1 text, 2 the first display's row (held), 3 "with", 4 the second's row
+  // (held), 5 text; the third display at 400, on no line of the unit
+  const p59 = () => held(unitOf([L(500), L(488), L(470), L(458), L(440), L(428)], [[1, 32, []], [3, 0, [1, 50, 440, 80, 447, 438]], [5, 0, [1, 50, 400, 80, 407, 398]]]), [2, 4])
+  const kOf6 = [-1, 1, -1, 3, -1, 5]
+  it("groups the displays by TeX's file in the source's order, not by the translation's pieces (2307.16209 page 59)", () => {
+    // the translation sets nothing between the first two displays, where the source has "with": read from its pieces they
+    // were one group, paired with the first run and refuted by the second display's segments, and the unit fell to v0
+    const u = unit(text('x '), ph(display), text(' '), ph(display), text(' y '), ph(display))
+    const tr6 = [[0, 'x '], [1, 1], [0, ' '], [1, 3], [0, ' y '], [1, 5]]
+    expect([...T.displayCover(p59(), u, kOf6)]).toEqual([[1, [2]], [3, [4]]])
+    expect(T.locatedWhole(p59(), u, tr6, { held: true }).ok).toBe(true)
+    // (whatever the translation sets around them: its words moved after the last display, or the displays in another order)
+    const moved = unit(text('x '), ph(display), ph(display), ph(display), text(' y'))
+    expect([...T.displayCover(p59(), moved, [-1, 1, 3, 5, -1])]).toEqual([[1, [2]], [2, [4]]])
+    const swapped = unit(text('x '), ph(display), text(' y '), ph(display), ph(display))
+    expect(new Map(T.displayCover(p59(), swapped, [-1, 3, -1, 1, 5]))).toEqual(new Map([[3, [2]], [1, [4]]]))
+    // (a LOST display the file says lies after the unit's last line takes no run, left as the original's ink: OUTSIDE)
+    const outside = held(unitOf([L(500), L(488), L(470), L(458)], [[1, 32, []], [3, PH_FLAG.LOST | PH_FLAG.OUTSIDE, []]]), [2])
+    expect([...T.displayCover(outside, unit(text('x '), ph(display), text(' y '), ph(display), text(' z')), [-1, 1, -1, 3, -1])]).toEqual([[1, [2]]])
+    // (a display the file holds no row for: nothing)
+    expect(T.displayCover(p59(), u, [-1, 1, -1, 7, -1, 5]).size).toBe(0)
+  })
+  it("draws page 59's text in its blocks: before the first display, none on the line between, the rest after the second", () => {
+    const u = { kind: 'para', src: 'a b c with d', pieces: [text('p '), ph(display), text(' '), ph(display), text(' q '), ph(display)] } as never
+    const lu = p59()
+    const t = T.texRects(lu)
+    const page = [...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 470, 10, 2, math), ...item('with', 10, 458, 10, 3), ...item('y=2', 60, 440, 10, 4, math), ...item('d', 10, 428, 10, 5), ...item('z=3', 60, 400, 10, 6, math)]
+    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, kOf6, { use: 'lines', lines: t }) as never)
+    expect(prep.unproven).toBeUndefined()
+    const r1 = prep.get(1), r3 = prep.get(3)
+    expect([r1?.mode, r3?.mode]).toEqual(['kept', 'kept'])
+    const blocks = L2.blocks2(t.rects as never, [[0, 0, 612, 792]], new Set(prep.keep), prep.lineInfo, prep.regionOf, prep.referenced)
+    expect(blocks.map(b => [b.B, b.after])).toEqual([[[500, 488], 0], [[458], 1], [[428], 2]])
+    const word = (n: number) => ({ s: 'x'.repeat(n), cls: 'latin', w100: 50 * n, st: {} })
+    const P = { ...resolveRules(BUILTIN_RULES, 'de').params, borrow: 0 }
+    const l = L2.layoutUnit2([word(30), { blockTo: r1?.region, w100: 0 }, { blockTo: r3?.region, w100: 0 }, word(30)] as never, blocks as never, 10, P as never)
+    expect(l.lines.map(x => [x.baseline, x.items.filter(it => it.t.s).length])).toEqual([[500, 1], [428, 1]])
+  })
+  it('places a leading LOST display on the run before the first found one, and none where no run is left before it', () => {
+    // lines 0 text, 1 the first display's row (held), 2 text, 3 the second's (held, found), 4 text
+    const lead = held(unitOf([L(500), L(488), L(470), L(458), L(440)], [[1, 32, []], [3, 0, [1, 50, 458, 80, 465, 456]]]), [1, 3])
+    const u = unit(text('a '), ph(display), text(' b '), ph(display), text(' c'))
+    expect([...T.displayCover(lead, u, [-1, 1, -1, 3, -1])]).toEqual([[1, [1]], [3, [3]]])
+    // a display that opens the unit, its rows before its first line (no line of it): LOST, no run before the found one's
+    const head = held(unitOf([L(500), L(488), L(470), L(458)], [[0, 32, []], [2, 0, [1, 50, 470, 80, 477, 468]]]), [2])
+    const opens = unit(ph(display), text(' a b '), ph(display), text(' c'))
+    expect(T.displayCover(head, opens, [0, -1, 2, -1]).size).toBe(0)
+    expect(T.locatedWhole(head, opens, [[1, 0], [0, ' a b '], [1, 2], [0, ' c']], { held: true }).why).toBe('lost')
+    // (which the maker writes OUTSIDE where it stands before the unit's start mark: then off the lines, the other its run's)
+    const flagged = held(unitOf([L(500), L(488), L(470), L(458)], [[0, PH_FLAG.LOST | PH_FLAG.OUTSIDE, []], [2, 0, [1, 50, 470, 80, 477, 468]]]), [2])
+    expect([...T.displayCover(flagged, opens, [0, -1, 2, -1])]).toEqual([[2, [2]]])
+  })
+  it("refuses a found display over two runs, and counts no run of an inline placeholder's rows (a fraction's line)", () => {
+    const u = unit(text('a '), ph(display), text(' b '), ph(display), text(' c'))
+    const kOf = [-1, 1, -1, 3, -1]
+    const twoRuns = held(unitOf([L(500), L(488), L(470), L(458), L(440), L(428)], [[1, 0, [1, 50, 470, 80, 477, 468, 1, 50, 440, 80, 447, 438]], [3, 32, []]]), [2, 4])
+    expect(T.displayCover(twoRuns, u, kOf).size).toBe(0)
+    // line 1 the numerator of an inline fraction on line 0, held (no source word); lines 3 the LOST display's row
+    const frac = held(unitOf([L(500), L(488), L(470), L(458), L(446)], [[1, 0, [1, 60, 500, 80, 510, 485]], [3, 32, []]]), [1, 3])
+    const withFrac = unit(text('a '), ph('$\\frac{x}{y}$'), text(' b '), ph(display), text(' c'))
+    expect([...T.displayCover(frac, withFrac, kOf)]).toEqual([[3, [3]]])
+    expect(T.locatedWhole(frac, withFrac, [[0, 'a '], [1, 1], [0, ' b '], [1, 3], [0, ' c']], { held: true }).ok).toBe(true)
+  })
+  it('places a LOST display between the found ones by the order, a found one off the unit\'s lines taking no run', () => {
+    // a found display at a column's foot, on no line of the unit (2307.16209 unit 162), then the LOST one between text lines
+    const foot = held(unitOf([L(500), L(488), L(470), L(458)], [[1, 0, [1, 50, 60, 80, 70, 50]], [3, 32, []]]), [2])
+    expect([...T.displayCover(foot, unit(text('a '), ph(display), text(' b '), ph(display), text(' c')), [-1, 1, -1, 3, -1])]).toEqual([[3, [2]]])
+    // the found groups not in the runs' order, or a run no group takes: nothing
+    const order = held(unitOf([L(500), L(488), L(470), L(458), L(440), L(428)], [[1, 0, [1, 50, 440, 80, 447, 438]], [3, 0, [1, 50, 470, 80, 477, 468]]]), [2, 4])
+    expect(T.displayCover(order, unit(text('a '), ph(display), text(' b '), ph(display), text(' c')), [-1, 1, -1, 3, -1]).size).toBe(0)
+    expect(T.displayCover(p59(), unit(text('a '), ph(display), text(' b'), ph(display), text(' c ')), [-1, 3, -1, 5, -1]).size).toBe(0)
+  })
+  it('takes two LOST displays with source text between as one group or two by the runs, and neither where those say neither', () => {
+    // the source's pieces k0 to k4 (text, display, text, display, text): the text between the displays is the source's,
+    // which the file does not hold: white space (one group, one run) or a line of TeX's (two groups, a text line between
+    // two runs)
+    const u = unit(text('a '), ph(display), text(' b '), ph(display), text(' c'))
+    const kOf = [-1, 1, -1, 3, -1]
+    const one = held(unitOf([L(500), L(488), L(470), L(458), L(440)], [[1, 32, []], [3, 32, []]]), [2, 3])
+    expect([...T.displayCover(one, u, kOf)]).toEqual([[1, [2, 3]], [3, [2, 3]]])
+    const two = held(unitOf([L(500), L(488), L(470), L(458), L(440), L(428)], [[1, 32, []], [3, 32, []]]), [2, 4])
+    expect([...T.displayCover(two, u, kOf)]).toEqual([[1, [2]], [3, [4]]])
+    // (two displays next in the source, no piece between them, are one group whatever the runs)
+    const next = (h: number[]) => held(unitOf([L(500), L(488), L(470), L(458), L(440), L(428)], [[1, 32, []], [2, 32, []]]), h)
+    const adjacent = unit(text('a '), ph(display), ph(display), text(' c'))
+    expect([...T.displayCover(next([2, 3]), adjacent, [-1, 1, 2, -1])]).toEqual([[1, [2, 3]], [2, [2, 3]]])
+    expect(T.displayCover(next([2, 4]), adjacent, [-1, 1, 2, -1]).size).toBe(0)
+    // three, two runs: which two share one the count does not say
+    const three = held(unitOf([L(500), L(488), L(470), L(458), L(440), L(428)], [[1, 32, []], [3, 32, []], [5, 32, []]]), [2, 4])
+    expect(T.displayCover(three, unit(text('a '), ph(display), text(' '), ph(display), text(' '), ph(display), text(' c')), [-1, 1, -1, 3, -1, 5, -1]).size).toBe(0)
+  })
   it("reads it as kept, a break: the text before it on the lines above it, the text after below, none on its rows", () => {
     const lu = held(unitOf(lines, [[1, 32, []]]), [2, 3])
     const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph(display), text(' \u4E59')] } as never
@@ -300,10 +392,11 @@ describe('a display group and a piece outside the unit\'s lines (JOINED, OUTSIDE
   it('a JOINED display is located with its group, which a LOST one is not', () => {
     expect(T.locatedWhole(fileUnit(PH_FLAG.JOINED), u, tr, { held: true }).ok).toBe(true)
     expect(T.locatedWhole(fileUnit(PH_FLAG.JOINED), u, tr).ok).toBe(true)
-    // the control: the later display LOST, not JOINED. Without the file's held lines it is not located; with them it is the
-    // held run's (displayCover, D4 step 1), whatever its flag, so that case proves nothing of JOINED's
+    // the control: the later display LOST, not JOINED. Without the file's held lines it is not located; with them neither:
+    // after a found display, one the maker did not JOIN has a point of its own, so it is a group of its own (whatever
+    // the translation sets between them), and the one run is the found display's (displayCover, D4 step 1)
     expect(T.locatedWhole(fileUnit(PH_FLAG.LOST), u, tr).why).toBe('lost')
-    expect(T.locatedWhole(fileUnit(PH_FLAG.LOST), u, tr, { held: true }).ok).toBe(true)
+    expect(T.locatedWhole(fileUnit(PH_FLAG.LOST), u, tr, { held: true }).why).toBe('lost')
   })
   it('reads as its group: kept, the same region as the first, a break the text after them starts below', () => {
     const lu = fileUnit(PH_FLAG.JOINED)

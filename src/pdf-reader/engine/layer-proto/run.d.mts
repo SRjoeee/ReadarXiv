@@ -46,8 +46,9 @@ export interface PageFill { own: number | null; anchor: number | null; lines: nu
  *  unit's operations in turn: drawCopy draws them at any resolution), its view, its words and links (the engine's 2b and 3a:
  *  null until then), its fill numbers (null where no pass told them). Beside it the page's canvases at v0's own resolution
  *  (the original, its copy where `copy` keeps one): where `copy` keeps none, the original is let go as soon as the page is
- *  drawn and its ink read, `left` null from then on. `base`: the page is drawn, and a crop may be cut from it, until the page
- *  is released */
+ *  drawn and its ink read, `left` null from then on. `base`: the page is drawn and its canvases held, which v0's own copy cuts
+ *  its crops and restores from, until the page is released (whether a crop is drawn at all is the page's own: it was read
+ *  and did not fail) */
 export interface Row {
   page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: unknown | null; links: unknown[] | null; fill: PageFill | null
   left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; base: boolean; released?: boolean

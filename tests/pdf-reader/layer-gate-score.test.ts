@@ -248,6 +248,37 @@ describe("the erase bites: the original's ink erased that no drawn unit owns", (
   })
 })
 
+describe('ink a crop carries (the layer gate, 2026-10-15 F)', () => {
+  // a 60 x 40 page at one device pixel a unit: a drawn unit's frame over x 10-50, y 17.5-27
+  const W = 60, H = 40
+  const planeOf = (ink: (x: number, y: number) => boolean) => {
+    const a = new Uint8ClampedArray(W * H * 4)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = ink(x, H - 1 - y) ? 0 : 255; a.set([v, v, v, 255], 4 * (y * W + x)) }
+    return a
+  }
+  const paper = planeOf(() => false)
+  const orig = [{ x0: 10, x1: 50, baseline: 20, top: 27, bottom: 17.5, size: 10 }]
+  const drawnUnit = { id: 1, kind: 'para', drawn: true, why: null, orig, lines: [{ baseline: 20, size: 10, x0: 10, x1: 50 }], erase: [[34, 17.5, 50, 27]], crops: [] } as UnitIn
+
+  it("F: the original's rule is not erased graphics where a crop carries it elsewhere, drawn on a later page too; with no crop, or one cut elsewhere, it is", () => {
+    // a rule of the original's (x 20-26, y 10-13) outside every text line, gone from the copy. `cut` holds the crops cut from
+    // this page by their source, whichever page they are drawn on (the instrument passes them so: proto.mjs): the unit has no
+    // crop of its own here, as one whose crop is drawn on page 2 has none on page 1
+    const O = planeOf((x, y) => x >= 20 && x < 26 && y >= 10 && y < 13)
+    const erased = (cut: { src: number[]; unit: number; clip?: number[][] }[]) =>
+      (pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: paper, T: paper, units: [drawnUnit], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut }) as { graphics: { px: number; erased: number } }).graphics
+    expect(erased([])).toMatchObject({ px: 18, erased: 18 })
+    expect(erased([{ src: [18, 9, 28, 15], unit: 1 }])).toMatchObject({ px: 18, erased: 0 })
+    expect(erased([{ src: [30, 9, 40, 15], unit: 1 }]).erased).toBe(18)
+    // (cut through boxes of its own ink, it carries only those: the part of the rule outside them is erased)
+    expect(erased([{ src: [18, 9, 28, 15], unit: 1, clip: [[18, H - 15, 5, 6]] }]).erased).toBe(9)
+    // (the legacy instrument, page.mjs, gives the exemption no crops: graphics erased as before it, the bites still read `cut`)
+    const legacy = (cut: { src: number[]; unit: number }[]) =>
+      pixelPage({ k: 1, view: [0, 0, W, H], W, H, O, C: paper, T: paper, units: [drawnUnit], kept: [], items: [], ref: [{ id: 1, kind: 'para', orig }], drawnText: '', cut, graphicsCut: [] }) as { graphics: { erased: number } }
+    expect(legacy([{ src: [18, 9, 28, 15], unit: 1 }]).graphics.erased).toBe(18)
+  })
+})
+
 describe('generated text left (D1a)', () => {
   it("counts a page's names left by kind, sums them a fixture and a pool, and gates them down", () => {
     const page = (p: number, generated: Record<string, number>) => pageEntry(p, {
