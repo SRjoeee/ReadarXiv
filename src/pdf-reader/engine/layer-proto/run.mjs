@@ -63,6 +63,8 @@ const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
  *  measured in and no style made up of a face that has none (a bold or an oblique the family lacks stays regular) */
 const SVG_RULES = ['.tl{position:absolute;left:0;top:0;overflow:visible;font-synthesis:none}', '.tl text{white-space:pre;fill:#141414}']
 const r1 = x => Math.round(x * 100) / 100
+/** a run's `still` that never stops it */
+const ALWAYS = () => true
 const yieldNow = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise(ok => setTimeout(ok, 0)))
 
 /**
@@ -419,7 +421,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const N = Math.min(removal?.manifest?.pages ?? doc.numPages, doc.numPages, pages)
 
   const rows = []
-  for (let i = 1; i <= N; i++) {
+  /** page i's row, at its view's size: its canvases, its SVG and its drawing */
+  const makeRow = i => {
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
     const left = document.createElement('canvas'), right = copy ? document.createElement('canvas') : null
@@ -430,8 +433,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     svg.setAttribute('height', String(h))
     svg.setAttribute('xml:space', 'preserve')
     // (ops: the page's drawing as data, every painted unit's in turn: kept when the page's canvases are let go)
-    rows.push({ page: i, left, right, svg, w, h, base: false, ops: [] })
+    rows[i - 1] = { page: i, left, right, svg, w, h, base: false, ops: [] }
   }
+  for (let i = 1; i <= N; i++) makeRow(i)
   const sheet = document.head.appendChild(document.createElement('style'))
   for (const rule of SVG_RULES) sheet.sheet.insertRule(rule, sheet.sheet.cssRules.length)
 
@@ -498,16 +502,26 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       cands.push({ id, stream: before + 0.5, rects: null })
     }
   }
-  const K = cands.slice().sort((a, b) => a.stream - b.stream)
-  const candOf = new Map(K.map(c => [c.id, c]))
+  const K = [], candOf = new Map()
   // the pages each of a unit's sources would draw it on (which source is its row's to decide) and every page their
   // lines are on: what laying a page waits for (needsOf)
   const shownOf = rects => [...new Set(rects.filter(r => r[0] <= N).map(r => r[0]))]
-  for (const c of K) {
-    const lu = tex?.use === 'lines' ? tex.index.unit(c.id) : null
-    const from = [c.rects, lu ? texRects(lu).rects : null].filter(Boolean)
-    c.lists = from.map(shownOf).filter(l => l.length)
-    c.reach = new Set(from.flatMap(rs => rs.map(r => r[0])))
+  /** units of the stream added to K after its last (their order the stream's): each with the pages its sources draw it on,
+   *  and its rectangles, where the left holds it, counted in its pages' text area, columns and every unit's rectangles */
+  const addUnits = entries => {
+    for (const c of entries) {
+      const lu = tex?.use === 'lines' ? tex.index.unit(c.id) : null
+      const from = [c.rects, lu ? texRects(lu).rects : null].filter(Boolean)
+      c.lists = from.map(shownOf).filter(l => l.length)
+      c.reach = new Set(from.flatMap(rs => rs.map(r => r[0])))
+      K.push(c)
+      candOf.set(c.id, c)
+      if (!c.rects) continue
+      // the lowest unit line of each page: no unit borrows below it (the page's text area)
+      for (const r of c.rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
+      if (geometry.kinds[c.id] === 'para') for (const r of c.rects) (cols[r[0]] ??= []).push([r[1], r[3]])
+      addRects(c.id, c.rects)
+    }
   }
   /** whether a translated row holds what v0 reads of a unit, of the types it reads them as: its kind and source, and
    *  pieces, each a text with its string or a placeholder, an open, a close or a nested footnote with its source's */
@@ -590,8 +604,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     U.forEach((u, id) => { if (u?.group && translated(u) && !read.has(u.group)) (unread.get(u.group) ?? unread.set(u.group, []).get(u.group)).push(id) })
     for (const [g, ids] of unread) readGroup(g, ids)
   }
-  // the lowest unit line of each page: no unit borrows below it (the page's text area)
-  for (const [, , rects] of GU) for (const r of rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
   const expected = Array.from({ length: N + 1 }, () => 0)
   const stats = []
   const citeMap = new Map()
@@ -819,9 +831,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
 
   // the columns of each page, as its paragraphs' lines span them: a line centred in its column (a caption under its
-  // figure, a title over the text) is set centred, whatever the page's own middle
+  // figure, a title over the text) is set centred, whatever the page's own middle (each unit's lines as it is added, addUnits)
   const cols = []
-  for (const [id, , rects] of GU) if (geometry.kinds[id] === 'para') for (const r of rects) (cols[r[0]] ??= []).push([r[1], r[3]])
   const centredInColumn = b => {
     const rs = b.rects, list = cols[b.page] ?? []
     const mid = (b.x0 + b.x1) / 2
@@ -835,7 +846,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the units the hybrid draws that v0's geometry does not hold, as each is placed)
   const rectsByPage = new Map()
   const addRects = (id, rects) => { for (const r of rects) { if (!rectsByPage.has(r[0])) rectsByPage.set(r[0], []); rectsByPage.get(r[0]).push([id, r]) } }
-  for (const [id, , rects] of GU) addRects(id, rects)
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
   const columnOf = b => {
     const mid = (b.x0 + b.x1) / 2
@@ -1267,6 +1277,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (the faces it waited for apart from its laying: no task of v0's)
     timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
     timesOf(p.pages[0]).fonts += fontWait
+    afterLay(p)
+    ms.set(p.id, performance.now() - t0 - fontWait)
+  }
+  /** a unit laid (or left the original's) counted, recorded and painted: its page passes, its table group, its paint */
+  const afterLay = p => {
     // (a unit no step fits is the original's: neither erased nor drawn, nor checked; nor one whose characters no served
     // slice holds (`served`) or whose slice did not load (`face`))
     if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
@@ -1290,7 +1305,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
     } else if (g) settleGroup(g)
     else if (!p.refused) for (const pg of p.pages) paint(p, pg)
-    ms.set(p.id, performance.now() - t0 - fontWait)
   }
 
   // a page drawn: its characters read, its copy made and its ink mapped; the paper's designs from the first
@@ -1399,7 +1413,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // open's (a unit not translated, an author, a cell whose group is withheld, the file's lines in place of the geometry's
   // decide which units are placed, and so the batches). A unit's row is fixed once it is placed (a row taken for it
   // later is late), and every row once a table's group is read
-  const need = needsOf(K, N, PASSES, c => !c.rects)
+  // (the geometry's units and the file's alone, in the stream's order: v0's sort is stable, so equal streams keep the
+  // order the hybrid reports its sources in)
+  addUnits(cands.slice().sort((a, b) => a.stream - b.stream))
+  /** what laying each page reads of K as it stands (needsOf) */
+  const needNow = () => needsOf(K, N, PASSES, c => !c.rects)
+  let need = needNow()
   /** the units placed, in the stream's order, as layGroups and doneAt read them (`placed` is the same less each table
    *  group withheld as its cells are laid), and by id */
   const laidOut = [], byId = new Map()
@@ -1459,11 +1478,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** whether the run was let go (dispose): nothing is drawn or laid after it */
   let disposed = false
   const changed = () => { const w = wake; wake = null; w?.() }
-  /** the units of the stream up to K[idx] placed, as their rows come */
-  const settle = async idx => {
-    while (!disposed && frontier <= idx && frontier < K.length) {
+  /** the units of the stream up to K[target()] placed, as their rows come (the index read again after each wait); `still`,
+   *  read at each wait, false ends it there */
+  const settle = async (target, still = ALWAYS) => {
+    while (!disposed && frontier <= target() && frontier < K.length) {
       // (planned before waiting: doneAt never reads a placement it has not planned)
-      if (!settleable(K[frontier])) { if (plannedTo < frontier) plan(); await new Promise(ok => { wake = ok }); continue }
+      if (!settleable(K[frontier])) { if (plannedTo < frontier) plan(); if (!still()) break; await new Promise(ok => { wake = ok }); continue }
       consume(K[frontier])
     }
     if (plannedTo < frontier) plan()
@@ -1495,7 +1515,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (the page's names, before its units: layer2.mjs nameInTarget)
     if (!disposed) await paintNames(pg)
     const t1 = performance.now()
-    await settle(need.lay[pg])
+    await settle(() => need.lay[pg])
     const waited = performance.now() - t1
     // (let go during the yield before a unit, as a host's dispose usually is: that unit is not laid either)
     for (const id of groups.get(pg) ?? []) { if (disposed) return; await yieldNow(); if (disposed) return; order.push(id); await arrive(byId.get(id)) }
@@ -1530,6 +1550,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** every page's canvases let go, drawn or not, and the removed pages' (dispose) */
   const letGo = () => {
     for (const r of rows) {
+      // (a page whose view no part has told yet has no row)
+      if (!r) continue
       for (const c of [r.left, r.right]) if (c) { c.width = 0; c.height = 0 }
       r.base = false
       r.released = true
@@ -1566,14 +1588,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     doneAt: doneAtOf,
     /** every page up to the one that finishes page `p` drawn, and the units each lays laid and painted, a unit a task:
      *  page after page, each once the units it lays have come, up to p, then on to the page that finishes it (doneAt,
-     *  once the units on it have come) */
-    until(p) {
+     *  once the units on it have come). `still`, read between pages and at each wait for rows, false ends it there */
+    until(p, still = ALWAYS) {
       busy = busy.then(async () => {
         const q = Math.min(p, N)
-        while (!disposed && drawnTo < q) await layNext()
-        await settle(need.done[q] ?? -1)
+        while (!disposed && still() && drawnTo < q) await layNext()
+        await settle(() => need.done[q] ?? -1, still)
         const to = Math.min(N, doneAt[q] ?? p)
-        while (!disposed && drawnTo < to) await layNext()
+        while (!disposed && still() && drawnTo < to) await layNext()
       })
       return busy
     },

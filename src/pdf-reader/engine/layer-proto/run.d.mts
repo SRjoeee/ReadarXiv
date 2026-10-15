@@ -109,8 +109,9 @@ export interface ProtoRun {
   readonly sources: Sources
   /** the page after whose units page `page` is done; Infinity until the units it reads have come */
   doneAt(page: number): number
-  /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come */
-  until(page: number): Promise<void>
+  /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come;
+   *  `still`, read between pages and at each wait, false ends it there (a page under way is finished first) */
+  until(page: number, still?: () => boolean): Promise<void>
   /** units as they arrive (id → row): a row wins over one taken before it until its unit is placed; the hybrid's pieces
    *  read from each translated row's pieces' k; a row no unit of this paper's (not a unit's shape, its kind not the
    *  layout file's or the geometry's, its group not the open's `groups`, a k past its source's pieces) left the
