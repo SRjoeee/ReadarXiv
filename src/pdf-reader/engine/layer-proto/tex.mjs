@@ -95,7 +95,9 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = fals
  * and v0 laid the text over (3.54)).
  * - A held run: the file's `held` lines (those the unit's source does not write: a display's rows; no slot, never erased)
  *   consecutive in one frame, so on one page and in one column, in the unit's line order. TeX sets the source in order,
- *   so the runs stand in the source's order of the display groups they hold, one group a run.
+ *   so the runs stand in the source's order of the display groups they hold, one group a run. Only a display's rows are
+ *   one: a run the found segments of an inline placeholder meet, and no display's, is that placeholder's (a fraction's
+ *   numerator or denominator, which the file reads as a line of its own and holds), and is not counted.
  * - The displays in their source order (`kOf`), in groups: a display JOINED to the one before it is of its group (TeX
  *   gave it no point, its ink the first's); any other display after a found one, or a found one, is a group of its own
  *   (it has its own point: the maker JOINs a display TeX set in the group of a found one), as is one with a placeholder
@@ -115,21 +117,14 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = fals
  * line of the unit or on two runs, a found group out of order, a run no group takes or a LOST group no run is left for:
  * a run that is no display, another unit's line the anchor took; a display whose rows hold the source's words and are
  * not held; one display over two frames; three LOST groups and the runs' count saying neither all apart nor all joined).
- * A LOST group's run rests on the order and the count alone, no segment checks it, and a misplacement moves the break
- * (which run the flow breaks at), never ink, since every held line stays the original's, drawn and never erased
+ * A LOST group's run rests on the order and the count alone, no segment checks it. Where the count agrees and the run is
+ * the wrong one, the break moves (which run the flow breaks at) and the held lines stay the original's, drawn and never
+ * erased; but a LOST display whose own rows are not held (they hold the source's words) is then laid on another run, and
+ * its rows are erased as the unit's text: its ink is lost.
  */
 export function displayCover(lu, unit, kOf) {
   const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), none = new Map()
-  const runs = [], runOf = new Map()
-  for (let f = 0; f < F.length; f += 6) {
-    let run = null
-    for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
-      if (!held.has(j)) { run = null; continue }
-      if (!run) runs.push((run = []))
-      run.push(j)
-      runOf.set(j, runs.length - 1)
-    }
-  }
+  const { LOST, EMPTY, JOINED, OUTSIDE } = PH_FLAG
   // the unit's displays by their source index, and the source's pieces the translation holds as no text
   const ds = [], placed = new Set()
   for (const [i, p] of unit.pieces.entries()) {
@@ -138,10 +133,32 @@ export function displayCover(lu, unit, kOf) {
   }
   if (ds.some(d => !d.row)) return none
   ds.sort((a, b) => a.k - b.k)
+  const meets = (j, s, S) => L[8 * j] === S[s] && Math.min(S[s + 4], L[8 * j + 4]) > Math.max(S[s + 5], L[8 * j + 5])
+  const isFound = row => !(row.flags & (LOST | EMPTY | JOINED)) && row.segs.length > 0
+  // the held runs: a display's rows, not an inline placeholder's (the found segments of one meeting it, and no display's)
+  const displays = new Set(ds.map(d => d.k))
+  const metBy = (run, display) => {
+    for (const [k, row] of lu.ph) {
+      if (displays.has(k) !== display || !isFound(row)) continue
+      const S = row.segs
+      for (let s = 0; s + 5 < S.length; s += 6) if (run.some(j => meets(j, s, S))) return true
+    }
+    return false
+  }
+  const all = []
+  for (let f = 0; f < F.length; f += 6) {
+    let run = null
+    for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
+      if (!held.has(j)) { run = null; continue }
+      if (!run) all.push((run = []))
+      run.push(j)
+    }
+  }
+  const runs = all.filter(run => !metBy(run, false) || metBy(run, true)), runOf = new Map()
+  runs.forEach((run, n) => { for (const j of run) runOf.set(j, n) })
   const rowBetween = (a, b) => { for (const k of lu.ph.keys()) if (k > a && k < b) return true; return false }
   const textBetween = (a, b) => { for (let k = a + 1; k < b; k++) if (!placed.has(k)) return true; return false }
   // the groups; `open`: one whose boundary with the group before it the file does not give (LOST both, text between)
-  const { LOST, EMPTY, JOINED, OUTSIDE } = PH_FLAG
   const groups = []
   for (const d of ds) {
     const g = groups.at(-1), prev = g?.members.at(-1), f = d.row.flags
@@ -151,9 +168,8 @@ export function displayCover(lu, unit, kOf) {
     else groups.push({ members: [d], at: null, open })
   }
   // each group's run (its index), -1 off the unit's lines, or null: LOST, the order's to place
-  const meets = (j, s, S) => L[8 * j] === S[s] && Math.min(S[s + 4], L[8 * j + 4]) > Math.max(S[s + 5], L[8 * j + 5])
   for (const g of groups) {
-    const found = g.members.filter(d => !(d.row.flags & (LOST | EMPTY | JOINED)) && d.row.segs.length)
+    const found = g.members.filter(d => isFound(d.row))
     if (!found.length) { if (g.members.every(d => d.row.flags & (OUTSIDE | EMPTY))) g.at = -1; continue }
     for (const { row: { segs: S } } of found) {
       for (let s = 0; s + 5 < S.length; s += 6) {
@@ -174,6 +190,11 @@ export function displayCover(lu, unit, kOf) {
   const settle = upTo => {
     let stretch = lost
     if (upTo - next !== lost.length) {
+      // (the join rests on the runs' count alone: where a LOST display's rows make no run of their own, at a page's or a
+      // column's foot past the unit's lines or holding the source's words and not held, the count can join two displays
+      // the source keeps apart. The file cannot tell: the root fix is the maker writing why a display is LOST, a later
+      // display of a group whose first was not found apart from one LOST on its own, a new flag of the layout file's
+      // schema; debt #299)
       stretch = []
       for (const g of lost) { if (g.open && stretch.length) stretch.at(-1).members.push(...g.members); else stretch.push({ members: [...g.members] }) }
       if (upTo - next !== stretch.length) return false
