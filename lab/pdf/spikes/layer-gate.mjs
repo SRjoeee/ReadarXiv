@@ -683,10 +683,23 @@ async function doorPartsFixture(page, name, errors) {
       return { p: d.p, svg: d.svg === g?.svg, lang: d.lang === target, size: d.w === g?.w && d.h === g?.h, copy: d.copy.sha === g?.copy.sha, recs: d.recs === g?.recs }
     })
     const all = key => pages.every(e => e[key]), n = key => pages.filter(e => e[key]).length
-    const ok = pages.length === a.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('copy') && all('recs') && a.skipped === b.skipped && !q1.length && !errors.length
+    // the units left: before endParts door B's are door A's less exactly what endParts' accounting adds (a multiset), and after
+    // it they are door A's; the pages' states equal at both
+    const counts = list => { const m = new Map(); for (const x of list) m.set(x, (m.get(x) ?? 0) + 1); return m }
+    const minus = (x, y) => { const m = counts(x); for (const v of y) m.set(v, (m.get(v) ?? 0) - 1); return m }
+    const nonNegative = m => [...m.values()].every(v => v >= 0)
+    const same = (m, k) => [...new Set([...m.keys(), ...k.keys()])].every(v => (m.get(v) ?? 0) === (k.get(v) ?? 0))
+    const lacking = minus(a.skipped, b.before.skipped), added = minus(b.after.skipped, b.before.skipped)
+    const left = {
+      subset: nonNegative(lacking), accounted: nonNegative(added) && same(lacking, added), after: b.after.skipped.join('\n') === a.skipped.join('\n'),
+      statesBefore: b.before.states === a.states, statesAfter: b.after.states === a.states,
+      lacking: [...lacking.values()].reduce((x, v) => x + v, 0), whys: [...new Set([...added].filter(([, v]) => v > 0).map(([e]) => e.slice(e.indexOf(':') + 1)))],
+    }
+    const leftOk = left.subset && left.accounted && left.after && left.statesBefore && left.statesAfter
+    const ok = pages.length === a.pages.length && pages.length > 0 && all('svg') && all('lang') && all('size') && all('copy') && all('recs') && leftOk && !q1.length && !errors.length
     if (!ok) failures.push(name)
-    const line = `${pages.length} pages, ${cut.parts.length} parts (${DOOR_PARTS}: ${a.parts.map(r => r.join('-')).join(' ')}): SVG ${n('svg')}/${pages.length} equal, copy ${n('copy')}, records ${n('recs')}; units left ${a.skipped === b.skipped ? 'equal' : 'NOT equal'} (${a.skippedCount}); door B told ${b.told} of ${b.of} parts as its run waited (${waits} waits); Q1 ${q1.length ? `broken: ${q1.slice(0, 3).join('; ')}` : 'held'}; ${b.drawn} units drawn (door A ${a.drawn})${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
-    return { name, door: true, ok, ready: true, line, pages, schedule: DOOR_PARTS, parts: a.parts, told: b.told, waits, q1, skipped: [a.skippedCount, a.skipped === b.skipped] }
+    const line = `${pages.length} pages, ${cut.parts.length} parts (${DOOR_PARTS}: ${a.parts.map(r => r.join('-')).join(' ')}): SVG ${n('svg')}/${pages.length} equal, copy ${n('copy')}, records ${n('recs')}; units left (${a.skipped.length}): before endParts ${left.subset && left.accounted ? `door A's less the ${left.lacking} its accounting adds${left.whys.length ? ` (${left.whys.join(', ')})` : ''}` : 'NOT door A\'s less the accounting'}, after it ${left.after ? 'equal' : 'NOT equal'}; states ${left.statesBefore && left.statesAfter ? 'equal' : 'NOT equal'} before and after; door B told ${b.needed} of ${b.of} parts as its run waited (${waits} waits), the rest at the end; Q1 ${q1.length ? `broken: ${q1.slice(0, 3).join('; ')}` : 'held'}; ${b.drawn} units drawn (door A ${a.drawn})${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    return { name, door: true, ok, ready: true, line, pages, schedule: DOOR_PARTS, parts: a.parts, needed: b.needed, waits, q1, left }
   } finally { for (const f of served) DOOR_FILES.delete(f) }
 }
 
@@ -931,7 +944,7 @@ if (DOOR_PARTS !== null) {
   const made = new Date().toISOString()
   const file = join(ROOT, 'out/layer-gate', `door-parts-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
   writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, doorParts: DOOR_PARTS }, fixtures: Object.fromEntries(ran.map(r => [r.name, r])) }))
-  console.log(`\ndoor-parts (${DOOR_PARTS}): ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left equal on ${ran.filter(r => r.skipped?.[1]).length} outputs; Q1 held on ${ran.filter(r => r.q1 && !r.q1.length).length}, the runs waiting for a part ${ran.reduce((n, r) => n + (r.waits ?? 0), 0)} times; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  console.log(`\ndoor-parts (${DOOR_PARTS}): ${ran.length} outputs, ${all.length} pages: SVG markup equal on ${count('svg')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left as door A's on ${ran.filter(r => r.left?.subset && r.left.accounted && r.left.after && r.left.statesBefore && r.left.statesAfter).length} outputs (before endParts less its accounting, after it equal; the states too); Q1 held on ${ran.filter(r => r.q1 && !r.q1.length).length}, the runs waiting for a part ${ran.reduce((n, r) => n + (r.waits ?? 0), 0)} times; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
   process.exit(failures.length || ran.length !== asked.length ? 1 : 0)
 }
 if (DOOR !== null) {

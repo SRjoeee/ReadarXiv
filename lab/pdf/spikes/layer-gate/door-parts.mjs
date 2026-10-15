@@ -7,9 +7,12 @@
 // run waits for one (addPart: every part late, as a slow prepare tells them). The rows are the record's, all taken, then end().
 // Each page's answer: its SVG's markup, copyOf's pixels over the page as door A's load had PDF.js draw it (its PNG, so that both
 // copies start from the same pixels), and the digest of the run's records of the units on the page (the run is reached through
-// the driver's stand-in of run.mjs, which keeps each run it opens and tells this page what the run waits for). Door B also
-// keeps its log: each page's state as the door told it and each wait of the run, so the driver checks Q1 (a page told laying
-// is ready before the run waits for a part)
+// the driver's stand-in of run.mjs, which keeps each run it opens and tells this page what the run waits for); and once the
+// pages are asked, every page's state and the units left and why. Door B then tells the parts its pages did not need and ends
+// the parts, as a host does at the catalog's end, its states and units left read before endParts and after (the accounting of
+// the units no page shows and of those nothing locates waits for the parts' end). Door B also keeps its log: each page's
+// state as the door told it and each wait of the run, so the driver checks Q1 (a page told laying is ready before the run
+// waits for a part)
 import * as pdfjs from 'pdfjs-dist'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
@@ -59,6 +62,8 @@ async function cutOf(name) {
 /** each page's records of the units on it (timings aside), as a digest; the run's units left and why, sorted */
 const recsOf = (run, p) => textDigest(JSON.stringify(run.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r)))
 const skippedOf = run => run.skipped.map(s => `${s.id}:${s.why}`).sort()
+/** every page's state, as one string (w, l, r, f) */
+const statesOf = (layer, N) => { let s = ''; for (let p = 1; p <= N; p++) s += layer.pageState(p)[0]; return s }
 
 /** a door's pages asked for in turn, 1 to `pages`, each awaited; then each page's copy over `sourceOf(p)` and its records */
 async function askEvery(R, layer, { target, pages, N, sourceOf }) {
@@ -75,8 +80,10 @@ async function askEvery(R, layer, { target, pages, N, sourceOf }) {
     for (const c of [source, copy]) { c.width = 0; c.height = 0 }
   }
   for (const e of out) e.recs = await recsOf(run(), e.p)
-  return { pages: out, skipped: await textDigest(skippedOf(run()).join('\n')), skippedCount: run().skipped.length }
+  return { pages: out }
 }
+/** what a door holds once its pages are asked: every page's state, the units left and why (sorted) */
+const heldOf = (layer, N) => ({ states: statesOf(layer, N), skipped: skippedOf(window.__gateRuns.at(-1)) })
 
 window.doorParts = {
   /** door A: BUNDLE 3's open over the cut made whole (mergeParts); each page's PDF.js drawing at K kept as PNG for door B */
@@ -103,11 +110,13 @@ window.doorParts = {
       drawn.height = 0
       return { png, source: await canvasOfPng(png) }
     }
-    const out = await askEvery(R, layer, { target, pages, N: index.head.paper.pages, sourceOf })
+    const N = index.head.paper.pages
+    const out = await askEvery(R, layer, { target, pages, N, sourceOf })
+    const held = heldOf(layer, N)
     const stats = layer.stats()
     layer.dispose()
     await doc.loadingTask.destroy()
-    return { ...out, parts: parts.map(p => p.pages), drawn: stats.drawn }
+    return { ...out, ...held, parts: parts.map(p => p.pages), drawn: stats.drawn }
   },
 
   /** door B: openLayer over the index, no part at the open, each told when the run waits for one */
@@ -129,12 +138,19 @@ window.doorParts = {
     layer.take(rows)
     layer.end()
     const sourceOf = async p => ({ png: null, source: await canvasOfPng(await bytes(`/door/${name}/s${p}.png`)) })
-    const out = await askEvery(R, layer, { target, pages, N: index.head.paper.pages, sourceOf })
+    const N = index.head.paper.pages
+    const out = await askEvery(R, layer, { target, pages, N, sourceOf })
     window.__gateWait = null
+    // (the catalog's end, as a host has it: every part told, the rows ended already, then endParts)
+    const needed = next
+    while (next < parts.length) layer.addPart(parts[next++])
+    const before = heldOf(layer, N)
+    layer.endParts()
+    const after = heldOf(layer, N)
     const stats = layer.stats()
     layer.dispose()
     await doc.loadingTask.destroy()
-    return { ...out, log, told: next, of: parts.length, drawn: stats.drawn }
+    return { ...out, before, after, log, needed, of: parts.length, drawn: stats.drawn }
   },
 }
 window.gateReady = true
