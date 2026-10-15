@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { serialize } from '@/pdf-reader/engine/translate/mt.mjs'
 
@@ -476,5 +478,94 @@ describe('patch: where each unit is written', () => {
     const outer = spans.find(x => x.unit === inner[0]?.outer) as { from: number; to: number }
     expect(text.slice(inner[0]?.from, inner[0]?.to)).toBe(`<T${note}>`)
     expect([outer.from <= (inner[0]?.from ?? -1), (inner[0]?.to ?? Infinity) <= outer.to]).toEqual([true, true])
+  })
+})
+
+// What the marked originals insert — a unit's start and end marks, its line probe, the layout's marks — goes only where
+// the patch can tell it stands between two of TeX's units: before a command and the arguments TeX reads for it, after a
+// whole argument, inside a group (a title's braces). A paper's macro whose body ends in a command reads that command's
+// arguments after its own (2106.10165: \axtlines between \strangechapter{$\infty$} and the title \chapter took, a book
+// of 471 pages that stopped TeX), and math the walker reads as prose has operands a mark would split (2310.20360:
+// \bfm_\leavevmode\axtmark{…}1, "Missing { inserted")
+describe('nothing is inserted inside a call or between a subscript and its operand (2106.10165, 2310.20360)', () => {
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const paperOf = (defs: string, body: string, cls = 'book') => openPaper(new Map([['main.tex', enc(`\\documentclass{${cls}}\n${defs}\n\\begin{document}\n${body}\n\\end{document}\n`)]]))
+  const dec = (b: Uint8Array | undefined) => new TextDecoder('latin1').decode(b)
+  /** the main file of the marked original as the run makes it: unmarked of the layout (lines), and with its marks */
+  const marked = (p: ReturnType<typeof paperOf>) => [dec(originalFiles(p, { lines: true }).get('main.tex')), dec(originalFiles(p, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))]
+  const units = (p: ReturnType<typeof paperOf>) => (p.units as (Unit & { depth?: number })[]).map(u => [u.kind, textOf(u).trim(), ...(u.depth === undefined ? [] : [u.depth])])
+  const BOOK = '\\newcommand{\\strangechapter}[1]{\\renewcommand{\\thechapter}{#1}\\chapter}'
+  const CHAPTER = 'Words of the chapter before it.\n\n\\strangechapter{$\\infty$}{The End of Training}\\label{ch:eot}\n\\index{end of training}\n\nThe first paragraph of the last chapter.'
+
+  it('2106.10165\'s \\strangechapter{$\\infty$}{The End of Training}: the group after the call is \\chapter\'s title, a heading, and nothing comes between the call and it', () => {
+    const p = paperOf(BOOK, CHAPTER)
+    expect(units(p)).toEqual([['para', 'Words of the chapter before it.'], ['heading', 'The End of Training', 0], ['para', 'The first paragraph of the last chapter.']])
+    const [u, l] = marked(p)
+    expect(u).toContain('\\strangechapter{$\\infty$}{The End of Training}\\label{ch:eot}')
+    expect(l).toContain('\\strangechapter{$\\infty$}{\\axthmark{h1s}The End of Training\\axthmark{h1e}}\\label{ch:eot}')
+    // the units around it keep their marks and their line probes
+    expect(u).toMatch(/\\axtlines\{0\}\s*\\leavevmode\\axtmark\{0s\}Words/)
+    expect(u).toMatch(/\\axtlines\{2\}\\leavevmode\\axtmark\{2s\}The first/)
+  })
+
+  it('a wrapper with two arguments before the title, with an optional one and the heading\'s own, a starred heading, braces inside the title', () => {
+    const p = paperOf([
+      '\\newcommand{\\numbered}[2]{\\setcounter{chapter}{#1}\\renewcommand{\\thechapter}{#2}\\chapter}',
+      '\\newcommand{\\strangesection}[2][]{\\renewcommand{\\thesection}{#2}\\section}',
+      '\\newcommand{\\unnumbered}[1]{\\def\\shortname{#1}\\section*}',
+    ].join('\n'), [
+      '\\numbered{3}{$\\aleph$}{A Chapter Numbered by Hand}', 'Its first words here.',
+      '\\strangesection[short]{A}[Short]{The {Long} Title of It}', 'Words of the section.',
+      '\\unnumbered{X}{Notes on the Method}', 'Words of the notes.',
+    ].join('\n\n'))
+    expect(units(p)).toEqual([['heading', 'A Chapter Numbered by Hand', 0], ['para', 'Its first words here.'], ['heading', 'The Long Title of It', 1], ['para', 'Words of the section.'], ['heading', 'Notes on the Method', 1], ['para', 'Words of the notes.']])
+    for (const text of marked(p)) {
+      expect(text).toMatch(/\\numbered\{3\}\{\$\\aleph\$\}\{(?:\\axthmark\{h0s\})?A Chapter/)
+      expect(text).toMatch(/\\strangesection\[short\]\{A\}\[Short\]\{(?:\\axthmark\{h2s\})?The \{Long\} Title of It(?:\\axthmark\{h2e\})?\}/)
+      expect(text).toMatch(/\\unnumbered\{X\}\{(?:\\axthmark\{h4s\})?Notes on the Method/)
+    }
+  })
+
+  it('in a translation too: the title translated as a heading, the call as it stands before it', () => {
+    const p = paperOf(BOOK, CHAPTER)
+    const all = p.units as Unit[]
+    const out = dec(patch(p.project, new Map(all.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))])) as Map<(typeof p.units)[number], unknown[]>).get('main.tex'))
+    expect(out).toContain('\\strangechapter{$\\infty$}{<T1>}\\label{ch:eot}')
+  })
+
+  it('a call followed by no argument, or a macro that ends in a command that takes none or one the walk does not know, is read as before', () => {
+    const p = paperOf(`${BOOK}\\newcommand{\\bfx}[1]{\\textbf{#1}\\relax}\\newcommand{\\sys}[1]{\\textsc{#1}\\xspace}`, '\\strangechapter{$\\infty$}\n\nA paragraph after it.\n\n\\bfx{Bold} {words after} end, \\sys{Name} {words too} end.')
+    expect(units(p)).toEqual([['para', 'A paragraph after it.'], ['para', 'Bold words after end, Name words too end.']])
+    expect(marked(p)[0]).toContain('\\strangechapter{$\\infty$}\n\n\\axtlines{0}')
+  })
+
+  it('an environment of the paper\'s own that sets a display is math, the paragraph around it one unit (2310.20360\'s eqsplit)', () => {
+    const p = paperOf([
+      '\\newcommand{\\bfm}{\\mathbf{m}}',
+      '\\newenvironment{eqsplit}{\\equation\\aligned%\n}{\\endaligned\\endequation%\n}',
+      '\\NewDocumentEnvironment{disp}{O{}}{\\[}{\\]}',
+      '\\newenvironment{eqn}[1]{\\begin{equation}\\label{#1}}{\\end{equation}}',
+    ].join('\n'), [
+      'It holds that\n\\begin{eqsplit}\n  \\lvert \\bfm_1 - x \\rvert\n&= \\bfm_1 - x\n\\\\ \\text{and}\\qquad \\Theta_t = x^\\alpha + \\mathbf{x}_{ij}\n\\end{eqsplit}\nwhich ends the proof.',
+      'Then \\begin{disp}[a] y_1 = x^\\alpha \\end{disp} and \\begin{eqn}{e} z_t = 1 \\end{eqn} close it.',
+    ].join('\n\n'))
+    expect(units(p)).toEqual([['para', 'It holds that\n\nwhich ends the proof.'], ['para', 'Then  and  close it.']])
+    const [u] = marked(p)
+    expect(u).toContain('\\begin{eqsplit}\n  \\lvert \\bfm_1 - x \\rvert\n&= \\bfm_1 - x\n\\\\ \\text{and}\\qquad \\Theta_t = x^\\alpha + \\mathbf{x}_{ij}\n\\end{eqsplit}')
+  })
+
+  it('math the walker cannot tell (an environment by \\let): its unit holds a subscript, and nothing is inserted in it — \\bfm_1, x^\\alpha, \\mathbf{x}_{ij}, \\Theta_t', () => {
+    const body = '\\begin{myeq}\n\\bfm_1 - x = x^\\alpha + \\mathbf{x}_{ij} + \\Theta_t\n\\end{myeq}'
+    const p = paperOf('\\newcommand{\\bfm}{\\mathbf{m}}\\let\\myeq\\equation\\let\\endmyeq\\endequation', `A paragraph of prose.\n\n${body}\n\nAnother paragraph of prose.`)
+    // the walker reads the display as prose (a unit of its own)…
+    expect(units(p).map(x => x[1])).toEqual(['A paragraph of prose.', '1 - x = x + ij + t', 'Another paragraph of prose.'])
+    expect(markUnits(p.units)((p.units as unknown[])[1] as (typeof p.units)[number])).toBeNull()
+    for (const text of marked(p)) {
+      // …and writes it back as it stands, nothing after an `_` or a `^`; the prose around it is marked
+      expect(text).toContain(`\n\n${body}\n\n`)
+      expect(text).not.toMatch(/[_^]\s*(?:\\leavevmode|\\axt)/)
+      expect(text).toMatch(/\\axtmark\{0s\}A paragraph/)
+      expect(text).toMatch(/\\axtmark\{2s\}Another paragraph/)
+    }
   })
 })
