@@ -234,8 +234,12 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
       markup.removeAttribute('lang')
       expect(markup.outerHTML).toBe(want[i])
     })
-    // (the same element each time it is asked)
-    expect((await layer.pageOf(1, { lang: 'zh-Hans' })).svg).toBe(pages[0]!.svg)
+    // (a new element of the same markup each time it is asked)
+    const again = await layer.pageOf(1, { lang: 'zh-Hans' })
+    expect(again.svg).not.toBe(pages[0]!.svg)
+    expect(again.svg.outerHTML).toBe(pages[0]!.svg.outerHTML)
+    expect(again.words).toEqual({ tokens: [], spans: [], original: [] })
+    expect(again.links).toEqual([])
     const source = document.createElement('canvas')
     source.width = 1500
     source.height = 1500
@@ -334,11 +338,13 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(styles()).toBe(before)
     // (the faces' classes stay, for the page's other runs)
     expect([...document.head.querySelectorAll('style')].some(faceSheet)).toBe(true)
-    await expect(layer.pageOf(2, { lang: 'zh' })).rejects.toThrow(/let go/)
+    // (the door's calls after dispose throw at once, but take, stats and unitAt)
+    expect(() => layer.pageOf(2, { lang: 'zh' })).toThrow(/let go/)
+    expect(() => layer.pageState(1)).toThrow(/let go/)
     const source = document.createElement('canvas')
     source.width = 10
     source.height = 10
-    await expect(layer.copyOf(1, source, 2.5)).rejects.toThrow(/let go/)
+    expect(() => layer.copyOf(1, source, 2.5)).toThrow(/let go/)
     expect(layer.take(rowsOf(bundle))).toEqual({ complete: [] })
     expect(layer.stats().rules).toEqual({ schema: 3, version: BUILTIN_RULES.version })
     expect(layer.unitAt(1, 100, 262)).toBe(0)
@@ -547,8 +553,10 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
     const jump = await layer.pageOf(2, { lang: 'zh' })
     expect(canvases.map(c => c.width)).toEqual([0, 0])
     expect(run.rows.map(r => [r.left, r.base, r.released])).toEqual([[null, false, true], [null, false, true]])
-    expect((await layer.pageOf(2, { lang: 'zh' })).svg).toBe(jump.svg)
-    expect((await layer.pageOf(1, { lang: 'zh' })).svg).toBe(run.rows[0]!.svg)
+    expect((await layer.pageOf(2, { lang: 'zh' })).svg.outerHTML).toBe(jump.svg.outerHTML)
+    const one = (await layer.pageOf(1, { lang: 'zh' })).svg
+    one.removeAttribute('lang')
+    expect(one.outerHTML).toBe(run.rows[0]!.svg.outerHTML)
     const source = document.createElement('canvas')
     source.width = 750
     source.height = 750

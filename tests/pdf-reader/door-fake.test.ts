@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import type { LayerDocument } from '@/pdf-reader/engine/layer-proto/door.mjs'
+import type { LayerDocument } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { type DoorSetup, runDoorConformance } from './helpers/door-conformance'

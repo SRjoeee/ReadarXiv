@@ -1528,6 +1528,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** whether the run was let go (dispose): nothing is drawn or laid after it */
   let disposed = false
   const changed = () => { const w = wake; wake = null; w?.() }
+  /** the one wait, until a take, a part, end() or a poke changes something: the waiter set before the instrument hears of it,
+   *  so that what the instrument does at once is not lost */
+  const waitFor = what => { const woken = new Promise(ok => { wake = ok }); onWait?.(what); return woken }
   /** the units of the stream up to K[target()] placed, as their rows come (the index read again after each wait); `still`,
    *  read at each wait, false ends it there */
   // (parts: at the end of K so far, a target past it waits for a part, unless the parts have ended)
@@ -1535,7 +1538,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     while (!disposed && frontier <= target() && (frontier < K.length || !partsEnded)) {
       // (planned before waiting: doneAt never reads a placement it has not planned)
       const what = frontier >= K.length ? 'part' : settleable(K[frontier]) ? null : 'rows'
-      if (what) { if (plannedTo < frontier) plan(); if (!still()) break; onWait?.(what); await new Promise(ok => { wake = ok }); continue }
+      if (what) { if (plannedTo < frontier) plan(); if (!still()) break; await waitFor(what); continue }
       consume(K[frontier])
     }
     if (plannedTo < frontier) plan()
@@ -1570,7 +1573,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // pages, left the original's, why `page`)
   const layNext = async (still = ALWAYS) => {
     const pg = drawnTo + 1
-    while (!disposed && through < pg && !partsEnded) { if (!still()) return; onWait?.('part'); await new Promise(ok => { wake = ok }) }
+    while (!disposed && through < pg && !partsEnded) { if (!still()) return; await waitFor('part') }
     if (disposed) return
     const t0 = performance.now()
     if (pg > through) failedPages.add(pg)
