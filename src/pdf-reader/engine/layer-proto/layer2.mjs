@@ -51,6 +51,7 @@
 //   their punctuation and caption labels kept.
 // - Erasing: what a unit's erasing covers that no painted unit accounts for is put back from the original (kept lines
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
+import { noStart } from './no-start.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -1128,6 +1129,19 @@ function finishUnit(out, unit, rects, charsByPage) {
     const regs = [...r.gap.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`), ...(r.gap.held ?? [])].map(k => out.regionOf.get(k)).filter(g => g !== undefined)
     if (regs.length) { r.region = Math.max(...regs); out.referenced.add(r.region) }
   }
+  // the original's first character after each displayed formula the drawing breaks at (its region), or before which a
+  // display outside the unit's lines stands (`inPlace`: the unit's first): tokensOf2 drops a translation's mark that may
+  // not start a line at that segment's head where the original's line there opens with none
+  const real = c => !c.sep && !c.space && /\S/.test(c.ch)
+  for (const r of out.values()) {
+    if (r?.cls !== 'display') continue
+    if (r.mode === 'none' && r.inPlace) { r.origAfter = uc.find(real)?.ch ?? null; continue }
+    if (r.mode !== 'kept' || r.region === undefined) continue
+    let last = -1
+    uc.forEach((c, i) => { if (out.regionOf.get(`${c.page}|${c.rect.join()}`) === r.region) last = i })
+    const next = uc.slice(last + 1).find(c => real(c) && !keepSet.has(`${c.page}|${c.rect.join()}`))
+    r.origAfter = next?.ch ?? null
+  }
   // the translation's own text, letters only: a name it keeps as the page writes it ("Niño", whose ñ the source wrote
   // as a command) is drawn, not shown twice
   const trLetters = norm(unit.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ') + ' ' + [...out.values()].map(r => r?.text ?? '').join(' '))
@@ -1259,7 +1273,8 @@ function gapClass2(text) {
 function secondChance(out, phs, gaps, plain, lcs, unit, citeMap, uc) {
   const used = new Set()
   for (const r of out.values()) if (r?.gap) for (const c of r.gap.chars) used.add(c)
-  const want = phs.filter(p => { const r = out.get(p.k); return r && (r.mode === 'source' || r.mode === 'cite-map' || (r.mode === 'none' && p.cls === 'display')) })
+  // (never one a source already proves: a layout file's own rendering, a piece it draws as nothing, tex.mjs proofOf)
+  const want = phs.filter(p => { const r = out.get(p.k); return r && !r.proof && !r.gap?.proof && (r.mode === 'source' || r.mode === 'cite-map' || (r.mode === 'none' && p.cls === 'display')) })
   if (!want.length) return
   // the gaps' pieces no placeholder took, cut at what was taken
   const pieces = []
@@ -1787,9 +1802,24 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true }
     }
   }
+  // a displayed formula the text after it starts below (or one before the unit's lines): the translation's text that
+  // opens that segment with a mark UAX 14 does not let a line start with (a sentence's ideographic comma or full stop Microsoft sets after
+  // a display piece, a "," or ")") is drawn without it, unless the original's own line there opens with one (its
+  // `origAfter`): the maintainer's fix 4 of 2026-10-15, for every script. The rows and the cache keep the translation
+  let after = null
+  const dropped = s => {
+    let t = s
+    for (;;) {
+      const lead = /^\s*/.exec(t)[0], ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
+      if (lead.length >= t.length || !noStart(ch) || noStart(after.origAfter)) return t
+      t = t.slice(lead.length + ch.length)
+    }
+  }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
-      pushText(p.s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”'), style())
+      let s = p.s
+      if (after && /\S/.test(s)) { s = dropped(s); after = null }
+      pushText(s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”'), style())
       return
     }
     if (p.t === 'open') {
@@ -1815,8 +1845,13 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (r.mode === 'kept' && r.region !== undefined && resolved.referenced?.has(r.region)) {
       while (tokens.at(-1)?.space) tokens.pop()
       tokens.push({ blockTo: r.region, w100: 0 })
+      if (r.cls === 'display') after = r
       return
     }
+    // (a display before the unit's lines, drawn as nothing: the text after it opens the unit's first line)
+    if (r.cls === 'display' && r.inPlace && !tokens.some(t => !t.space)) { after = r; return }
+    // (anything else drawn ends the segment's head: a crop, a rendering's text; nothing drawn and a space do not)
+    if (r.mode !== 'none' && r.text !== ' ' && !(r.mode === 'kept' && r.cls === 'display')) after = null
     if (r.mode === 'crop') {
       const glue = tokens.length > 0 && !lastIsSpace()
       tokens.push({ crop: r, cw: r.crop[2] - r.crop[0], glue, w100: 0 })

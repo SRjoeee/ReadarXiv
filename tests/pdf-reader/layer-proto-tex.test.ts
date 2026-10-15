@@ -310,6 +310,53 @@ describe('a display group and a piece outside the unit\'s lines (JOINED, OUTSIDE
   })
 })
 
+describe("a piece past the pages shown, a source's own proof, and fix 4 (the LOST round's review, 2026-10-15)", () => {
+  const L = (y: number) => [1, 10, 200, y, y + 7, y - 2, 10, 0]
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const D = '\\begin{equation}x=1\\end{equation}'
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  const drawn = (u: never, prep: never) => L2.tokensOf2(u, prep, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string').map(t => t.s).join('')
+  it('a found row whose segments all lie past the pages shown is proven, drawn as its page text, never "?"', () => {
+    const u = { kind: 'para', src: 'in Section here', pieces: [text('\u5728\u7B2C '), ph('\\ref{sec:x}'), text(' \u8282')] } as never
+    const lu = unitOf([[1, 10, 145, 100, 108, 97, 10, 0]], [[1, 0, [13, 181.41, 568.58, 196.87, 575.95, 568.43]]]) as { ph: Map<number, { text?: string }> }
+    const row = lu.ph.get(1)
+    if (row) row.text = 'C.1'
+    const read = (shown: number) => L2.prepareUnit(u, [[1, 10, 97.85, 145, 106.83]] as never, [item('in here', 10, 100, 10, 0) as never], new Map() as never, null, { proof: T.proofOf(lu as never, [-1, 1, -1], shown) } as never)
+    const r = read(12)
+    expect(r.unproven).toBeUndefined()
+    expect(r.get(1)).toMatchObject({ mode: 'source', text: 'C.1' })
+    // with its page shown, not so: its characters are read there, and here none is
+    expect(read(13).unproven).toBe(1)
+  })
+  it('a piece the file draws as nothing (OUTSIDE) is never handed a guessed rendering by the second chance', () => {
+    const head = { kind: 'para', src: 'alpha beta gamma', pieces: [ph(D), text(' alpha beta gamma')] } as never
+    const lu = unitOf([L(500)], [[0, PH_FLAG.LOST | PH_FLAG.OUTSIDE, []]]) as { ph: Map<number, { kind: string }> }
+    const row = lu.ph.get(0)
+    if (row) row.kind = 'display'
+    const t = T.texRects(lu as never)
+    // a run of the line no source word takes, the display's own text: what the second chance would hand it (kept, a
+    // guess, and the unit then unproven)
+    const prep = L2.prepareUnit(head, t.rects as never, [[...item('alpha beta gamma', 12, 500, 10, 0), ...item('x=1', 120, 500, 10, 9, math)] as never], new Map() as never, null, T.texParts(lu as never, [0, -1], { use: 'lines', lines: t }) as never)
+    expect(prep.get(0)).toMatchObject({ mode: 'none', inPlace: true })
+    expect(prep.unproven).toBeUndefined()
+  })
+  it("fix 4: a mark that may not start a line opening the text after a display is dropped, unless the original's line opens with one", () => {
+    const lines = [L(500), L(488), L(470), L(458), L(440)]
+    const lu = { ...(unitOf(lines, [[1, 0, [1, 50, 470, 80, 477, 456]]]) as object), held: [2, 3] } as unknown as { ph: Map<number, { kind: string }> }
+    const row = lu.ph.get(1)
+    if (row) row.kind = 'display'
+    const t = T.texRects(lu as never)
+    const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph(D), text('\uFF0C\u4E59')] } as never
+    const page = (after: string) => [...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 470, 10, 2, math), ...item('(1)', 180, 458, 10, 3), ...item(after, 10, 440, 10, 4)]
+    const prep = (after: string) => L2.prepareUnit(u, t.rects as never, [page(after) as never], new Map() as never, null, T.texParts(lu as never, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(drawn(u, prep('where d') as never)).toBe('\u7532\u4E59')
+    // the original's own line after the display opens with a comma: kept
+    expect(drawn(u, prep(', where d') as never)).toBe('\u7532\uFF0C\u4E59')
+  })
+})
+
 describe('the state units share, which a unit the file locates teaches as v0 does', () => {
   it("a citation found by its segments is learnt for the paper: a unit laid after it draws the same key's citation not found", () => {
     const page = [...item('as shown in', 10, 100, 10, 0), ...item('[12]', 70, 100, 10, 1), ...item('before', 95, 100, 10, 2)]

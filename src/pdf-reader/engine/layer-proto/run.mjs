@@ -1093,7 +1093,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading, each rendering proven
     // by the file (proofOf: a crop cut from its placeholder's own ink, page text in its segments), or the unit left the
     // original's where the file proves one not
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0' }) : tex ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id))) } : null
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N }) : tex ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id)), N) } : null
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : citeMap, null, parts)
     if (prep.unproven !== undefined) { p.refused = true; p.why = 'unproven'; unlead(p); return }
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as

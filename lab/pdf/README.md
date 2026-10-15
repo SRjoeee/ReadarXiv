@@ -113,7 +113,17 @@ record and units copied into its output folder first, `LAYER_FIXTURES` the gate'
 from it (`gate-pack.mjs make --fixtures=<that folder>`). Every placeholder the old files found has the same row; only LOST
 ones moved. The measures read the new flags as TeX's file says: a `JOINED` display has no segments of its own (its ink is
 in its group's first display's, which `contentLost` and `textInDisplay` read), and an `OUTSIDE` piece is LOST
-(`contentUnknown`). The sample's bundle is made so too, over the committed stand-in PDF (`scripts/make-sample-bundle.mjs
+(`contentUnknown`). A unit that opens with a display has its rows before its start mark's line taken off as no line of
+it (as the held rows at its end), so that an `OUTSIDE` piece is outside every line of its unit. The prototype's checker
+counts a placeholder shown when it is drawn or left intact where it stands (`inPlace`: an `OUTSIDE` piece, which the
+drawing never erases), never `missing`. The hybrid's safe rule is one place (`layer-proto/tex.mjs` `proofOf`): a
+rendering is drawn only from what the file proves (its segments, its page text, its held run or group, a piece the file
+draws as nothing), else the unit stays the original's; its one exemption is a LaTeX text symbol (`\%`, `$\times$`), whose
+source is its rendering's content; a piece whose segments all lie past the pages the run shows (the gate's 12) is
+proven and drawn as its page text, never `?`. Fix 4 (the maintainer's ruling of 2026-10-15, every script): a mark UAX 14
+does not let a line start with (`layer-proto/no-start.mjs`, the table `lineStartPunct` reads too, served to the gate from
+this repository) that opens the translation's text right after a displayed formula is dropped from the drawing, unless
+the original's line there opens with one; the rows and the cache keep the translation. The sample's bundle is made so too, over the committed stand-in PDF (`scripts/make-sample-bundle.mjs
 --keep-pdf`, the shim first on PATH: its stand-in compiled natively would differ by the packages' versions alone).
 
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's

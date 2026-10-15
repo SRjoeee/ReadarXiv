@@ -242,18 +242,27 @@ function heldRendering(run, lines, uc) {
  * a display drawn as nothing), nothing proves which ink is the placeholder's — a crop of the page's rectangle carries
  * whatever stands in it (2307.16209 page 38's "ıe", from the line above), v0's alignment hands a rendering to the next
  * placeholder along (2608.16117's unit 28) — and the answer is that placeholder's k: its unit stays the original's (the
- * run's `unproven`). Else -1. Mutates the crops it cuts.
+ * run's `unproven`). Else -1. Mutates the crops it cuts. A placeholder whose row is found and whose segments all lie on
+ * pages past those the run shows (`shown`: a unit cut at the last page shown, its lines laid there too) is proven by the
+ * file, and drawn as its page text where the file has one, else as nothing: never its source's "?" (no character of it
+ * is read on a page not shown; a reader shows every page).
  * The one exemption (the controller's ruling of 2026-10-15): a LaTeX text symbol v0 draws from its source (\%,
  * $\times$: phClass2's 'symbol'). Its source is its rendering's content, a character LaTeX's own definition sets, and its
  * glyph is its line's, erased with it; the rule is against guessing where a formula's ink is, which a symbol asks for
  * none of.
  */
-export function proofOf(lu, kOf) {
+export function proofOf(lu, kOf, shown = Infinity) {
   return res => {
     for (const r of res.values()) {
       if (!r || r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
       const row = lu && kOf ? lu.ph.get(kOf[r.k]) : null
       const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED)) ? row.segs : []
+      let past = S.length > 0
+      for (let s = 0; s + 5 < S.length; s += 6) if (S[s] <= shown) past = false
+      if (past) {
+        Object.assign(r, { mode: row.text ? 'source' : 'none', text: row.text ?? '', proof: true })
+        continue
+      }
       if (r.mode === 'crop') {
         if (r.gap?.box) continue
         let seg = null
@@ -283,12 +292,12 @@ export function proofOf(lu, kOf) {
  *   where the file has none, and a mark its first line holds before its first word);
  * - extents 'tex' (with 'lines'): part 2 too, the file's erase rectangles (its glyphs' boxes merged); else each line's
  *   extent as v0 reads it from its characters.
- * - and part 5 for any `use`, the proof of every rendering (proofOf).
+ * - and part 5 for any `use`, the proof of every rendering (proofOf; `shown`, the last page the run shows).
  * `kOf`: each piece's source index (kOfPieces).
  */
-export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
+export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = Infinity }) {
   const parts = {
-    proof: proofOf(lu, kOf),
+    proof: proofOf(lu, kOf, shown),
     renderings({ unit, phs, uc, gaps, citeMap }) {
       const found = new Map(), joined = []
       let cover
@@ -325,7 +334,8 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0' }) {
       const fixed = p => {
         if (inklessOf(lu, kOf, p)) return { mode: 'none', text: '', proof: true }
         const row = lu.ph.get(kOf[p.k])
-        if (row && row.flags & PH_FLAG.OUTSIDE && lines?.lineOf) return { mode: 'none', text: '', proof: true }
+        // (`inPlace`: shown by its own ink, left where it stands: the checker's)
+        if (row && row.flags & PH_FLAG.OUTSIDE && lines?.lineOf) return { mode: 'none', text: '', proof: true, inPlace: true }
         return row && row.flags & PH_FLAG.TEXT && row.text && p.cls !== 'symbol' ? { mode: 'source', text: row.text, proof: true } : null
       }
       return { gaps, gapFor: p => found.get(p) ?? null, fixed }
