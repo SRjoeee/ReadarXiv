@@ -206,6 +206,48 @@ describe("C1: a unit's fill leading is its fit's", () => {
   })
 })
 
+describe("S3: a page's fill target is a function of its page", () => {
+  // The fill leading of a paragraph is how loosely its translation can be spread over its original's frame: 1.0 for a long one
+  // on a short frame, up to the script's top for a short one. Page 1 is a title page (one paragraph at 1.0), page 2 a fuller
+  // page (1.25), page 3 two paragraphs at the top (1.667) and page 4 one at 1.5; a paragraph runs from page 2 to page 4, laid
+  // as page 4 is drawn, so that page 3's pass runs before page 2's (on next, page 3 is held to the title page's
+  // rhythm: the targets there depend on the order the passes run in)
+  const para = (id: number, pages: [number, number, number][], chars: number, at = 0x4e00): Spec => {
+    const lines = pages.flatMap(([page, top, n]) => Array.from({ length: n }, (_, i) => line(page, top - 12 * i, [20, `Alpha beta ${page}${i}`])))
+    return { id, kind: 'para', src: lines.map(l => l.items[0]![1]).join(' '), lines, from: 'file', tr: [text(CJK(chars, at))] }
+  }
+  const specs: Spec[] = [
+    para(0, [[1, 250, 4]], 20),
+    para(1, [[2, 250, 6]], 28, 0x4e40),
+    para(2, [[2, 100, 3], [4, 270, 2]], 30, 0x4e80),
+    para(3, [[3, 250, 6]], 16, 0x4ec0),
+    para(4, [[3, 120, 8]], 20, 0x4f00),
+    para(5, [[4, 200, 4]], 16, 0x4f40),
+  ]
+  PAPERS.push(['S3, a skipped page', specs, 4, [null, [0, 1, 3, 4, 5, 2], [0, 1, 4, 3, 2, 5]]])
+  /** what a page drew and recorded: its fill numbers, markup and operations */
+  const pageOf = (run: Run, q: number) => ({ fill: run.rows[q - 1]!.fill, markup: run.rows[q - 1]!.markup, ops: JSON.stringify(run.rows[q - 1]!.ops) })
+  it("is each page's own, held to its anchor alone: the targets are the pages' own, though page 3's pass runs before page 2's", async () => {
+    const run = await open(paper(specs, 4))
+    await run.until(4)
+    // (page 3 is passed with page 1, before page 2 and page 4, which wait for the paragraph laid as page 4 is drawn: page 3 is
+    // not held to the title page's 1.0, nor page 2 to anything)
+    expect(run.rows.map(r => r.fill?.target)).toEqual([1, 1.25, 1.667, 1.5])
+    expect(run.rows.map(r => r.fill?.anchor)).toEqual([1, 1.25, 1.667, 1.5])
+    expect(Object.keys(run.rows[1]!.fill!).sort()).toEqual(['anchor', 'body', 'own', 'target'])
+  })
+  it('draws every page alike, the units of a page laid in any order: fill, markup and operations', async () => {
+    const want = await open(paper(specs, 4))
+    await want.until(4)
+    for (const order of [[0, 1, 3, 4, 5, 2], [0, 1, 3, 4, 2, 5]]) {
+      const run = await open(paper(specs, 4), { order })
+      await run.until(4)
+      expect(run.order, `${order}`).toEqual(order)
+      for (const q of [1, 2, 3, 4]) expect(pageOf(run, q), `${order} page ${q}`).toEqual(pageOf(want, q))
+    }
+  })
+})
+
 describe("C1: a page is painted in the order its painters' first pages' passes run laid in order", () => {
   // page 3 is painted by a paragraph from page 1 (its line on page 2 none: a full page's float between), one from page 2,
   // and its own: the first two laid at page 3, as their last page is drawn, in either order (the lay order a recorded run

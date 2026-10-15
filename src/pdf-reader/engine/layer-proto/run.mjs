@@ -120,54 +120,57 @@ export function settleLayout(p) {
 }
 
 /**
- * adaptiveFill (P.adaptiveFill: { band, track, size }; D since 2026-10-07, generalised by D6's F6b on 2026-10-08; null
- * for B): the units that begin on a page (`units`, each laid already: tokens, blocks, s, P, layout), each spread over
- * its original's frame, the page's lines kept to one rhythm. A unit is filled at the state its fit set it at, its
+ * A page's fill target, a pure function of the page: the units that begin on it (`units`, each fitted: `fillLead`,
+ * `fitLines`, kind, `refused`) and those running on to it from a page before (`continuing`), and the band. `own` is the
+ * median fill leading of the units that begin on it and tell one (a unit of one line has no leading to tell, and tells only
+ * where no unit has more; the body kinds first, of all kinds where it has no body unit); `anchor` is the median fill leading
+ * of every body unit drawn on it, a unit running on from the page before included; the target is `own` held within `band` of
+ * `anchor`. Nothing is read from another page, a pass or the laying order (S3, 1b-C, the 1b design §2.2): a page's rhythm
+ * is the same however the paper is opened. Null where no unit begun on the page tells a fill leading; `target` null where
+ * only a continuation tells one. `body`: the page's body units told its own.
+ */
+export function pageTarget(units, continuing, band) {
+  const r3 = x => Math.round(x * 1000) / 1000
+  const tells = p => typeof p.fillLead === 'number'
+  const withLead = units.filter(p => !p.refused && tells(p))
+  const telling = withLead.filter(p => p.fitLines >= 2)
+  const body = telling.filter(p => EVEN_KINDS.has(p.unit.kind))
+  const anchorLeads = [...units, ...continuing].filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && tells(p) && p.fitLines >= 2).map(p => p.fillLead)
+  const anchor = anchorLeads.length ? r3(median(anchorLeads)) : null
+  const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
+  if (!leads.length) return anchor === null ? null : { target: null, own: null, anchor, body: false }
+  const own = median(leads)
+  const target = r3(anchor === null ? own : Math.min(anchor + band, Math.max(anchor - band, own)))
+  return { target, own: r3(own), anchor, body: body.length > 0 }
+}
+
+/**
+ * adaptiveFill (P.adaptiveFill: { band, track, size }; D since 2026-10-07, generalised by D6's F6b on 2026-10-08, page-local
+ * since 1b-C; null for B): the units that begin on a page (`units`, each laid already: tokens, blocks, s, P, layout), each
+ * spread over its original's frame, the page's lines kept to one rhythm. A unit is filled at the state its fit set it at, its
  * leading apart: its fill leading is the loosest, from its fitted leading up to P.fillLead em of the size it is drawn
  * at (null: the original's own pitch), at which that state still sets it whole, so that its text reaches its frame's
- * foot. The page's target is the median of its body units' fill leadings (of all its units' where it has no body unit;
- * a unit of one line has no leading to tell, and tells only where no unit has more), held within `band` of `held.last`,
- * the target of the last page before it whose body units told it, and within `band` of `held.anchor`, the target of the
- * fullest page passed (the most body lines of the original's on it, `continuing` units, those running on from a page
- * before, counted with its own; the earliest of equals; nextHeld) (null: no page has): a page's rhythm moves from the
- * last page's by no more than the band, and the paper's comes to and stays within a band of its fullest page's, however
- * many pages it runs to (the coordinator's ruling of 2026-10-08, one rhythm across the paper, the maintainer's standing
- * preference; anchored on the fullest page, not the first, which a title page's few lines made the thesis's, holding
- * its pages a fifth of a pitch under their own). Each unit takes its fill leading, but never more than `band` over the
+ * foot. The page's target is pageTarget's: the median of its body units' fill leadings held within `band` of the median of
+ * every body unit drawn on it (`continuing`: the units begun on a page before and running on to it), however the paper is
+ * opened. Each unit takes its fill leading, but never more than `band` over the
  * target, so that neighbouring paragraphs keep one line spacing. A CJK unit the band or its fill leading's top stops
  * short of its fill then takes tracking, up to `track` em; and where every body unit of the page is still short with
  * all of it, the page's body units take one size, the largest up to `size` x the original's at which every one of them
  * is still set whole: one size a page where it grows, never a unit's own (D grew each unit apart, and a page mixed 1.0
  * and 1.1); a unit the fit had to shrink keeps its own largest fitting size. A unit its fitted state does not set again
  * (the text run past a display) keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
- * kept), then `onFilled(p, target)`. Returns the page's target, its own (`own`, before it is held), whether its body
- * units told it (`body`), and, for the anchor, the original's lines of every body unit on the page (`lines`) and their
- * fill leadings' median (`anchor`); a page whose units begun on it tell none answers its lines and anchor alone
- * (`target` null), and null where nothing tells.
+ * kept), then `onFilled(p, target)`. Returns pageTarget's answer: the page's target, its own (before it is held), the anchor
+ * and whether its body units told it; `target` null where only a continuation tells, and null where nothing tells.
  */
-export function fillPage(units, P, held = null, onFilled = () => {}, { page = units[0]?.pages[0] ?? null, continuing = [] } = {}) {
+export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}) {
   const { band, track, size } = P.adaptiveFill
   const r3 = x => Math.round(x * 1000) / 1000
   const at = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
-  const withLead = units.filter(p => p.fillLead !== null)
-  const telling = withLead.filter(p => p.layout.lines.length >= 2)
-  const body = telling.filter(p => EVEN_KINDS.has(p.unit.kind))
-  // (the page as the paper's anchor reads it: every body unit with lines on it, those running on from a page before as
-  // well, their original's lines on this page and the fill leadings of those that tell; their laying stays the page's
-  // they begin on)
-  const present = [...units, ...continuing].filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused)
-  const lines = present.reduce((n, p) => n + p.blocks.reduce((m, b) => m + (b.page === page ? b.B.length : 0), 0), 0)
-  const anchorLeads = present.filter(p => p.fillLead !== null && p.fillLead !== undefined && p.layout.lines.length >= 2).map(p => p.fillLead)
-  const anchor = anchorLeads.length ? r3(median(anchorLeads)) : null
-  const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
-  if (!leads.length) return anchor === null ? null : { target: null, own: null, body: false, lines, anchor }
-  const own = median(leads)
-  const hold = (v, at) => Math.min(at + band, Math.max(at - band, v))
-  // (the anchor's window first, the page before's step last: a page moves by the band at most, and so reaches a window it
-  // stands outside of, a band a page)
-  const target = r3(held === null ? own : hold(hold(own, held.anchor), held.last))
+  const told = pageTarget(units, continuing, band)
+  if (!told || told.target === null) return told
+  const { target } = told
   const filled = []
   for (const p of units) {
     if (p.fillLead === null) continue
@@ -213,7 +216,7 @@ export function fillPage(units, P, held = null, onFilled = () => {}, { page = un
     settleLayout(p)
     onFilled(p, target)
   }
-  return { target, own: r3(own), body: body.length > 0, lines, anchor }
+  return told
 }
 
 /**
@@ -238,25 +241,13 @@ function fillLeadsOf(p, P) {
   // layouts a unit where trying each hundredth from the top took up to forty. Monotone in practice, not by construction:
   // the greedy breaking's kinsoku and hanging marks could make a looser value set a unit a closer one does not; the linear
   // search from the top is the reference, and the halving drew the same on every fixture. So for the tracking and size)
+  p.fitLines = p.layout.lines.length
   const st = p.layout.state
   if (!at(p, st)) { p.fillLead = null; return }
   const lo = st.lead, hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
   let ok = 0, no = Math.round((hi - lo) / 0.01) + 1
   while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...st, lead: L(k) })) ok = k; else no = k }
   p.fillLead = ok ? L(ok) : lo
-}
-
-/**
- * The targets the next page's fill is held to, from the last held and a page's pass (fillPage's answer): the page's target
- * as the last, where its body told one, and as the anchor the target of the page with the most body lines passed so far
- * (its body units' fill leadings, those running on from a page before as well; the earliest of equals). A page that
- * tells neither changes nothing. Pages are passed in their laying order, so that no page reads a later one
- */
-export function nextHeld(held, r) {
-  if (!r) return held
-  if (held === null) return r.body ? { last: r.target, anchor: r.anchor ?? r.target, lines: r.lines } : null
-  const fuller = r.anchor !== null && r.lines > held.lines
-  return { last: r.body ? r.target : held.last, anchor: fuller ? r.anchor : held.anchor, lines: fuller ? r.lines : held.lines }
 }
 
 /**
@@ -1381,7 +1372,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (adaptiveFill: every unit is laid at its leading relative to the original's own pitch, the script's own on a solid-set
     // original, and filled by its page's pass, fillPass. D filled a loose original's units alone (S3-12, against a band of
     // leading page by page moving the pages' pitches apart); D6's F6b fills every original's, its page's target held within
-    // the band of the last page's)
+    // the band of its own page's anchor (1b-C))
     if (P.adaptiveFill) {
       p.fillable = true
       p.P.leadBase = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
@@ -1455,19 +1446,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
   // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated from the layout
-  // it is drawn with (the lines TeX's rule opened among them: a looser leading may open none the fit's did); the paper's
-  // targets a page is held to, the last a page's body units told and the fullest page's own, in the order the pages'
-  // passes run (the
-  // units' laying order, the same whether the rows come at once or in parts: no page waits for a later one)
-  let held = null
+  // it is drawn with (the lines TeX's rule opened among them: a looser leading may open none the fit's did). A page's target
+  // is a function of its own units alone (pageTarget): no page reads another's, whatever the order the passes run in
   const fillPass = pg => {
-    const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, held, (p, target) => {
+    const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, (p, target) => {
       const l = p.layout
       if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
-    }, { page: pg, continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
-    held = nextHeld(held, r)
+    }, { continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
     // (the page's fill numbers, kept with its record)
-    rows[pg - 1].fill = r && { own: r.own, anchor: r.anchor, lines: r.lines, body: r.body }
+    rows[pg - 1].fill = r && { own: r.own, anchor: r.anchor, target: r.target, body: r.body }
   }
   // the leftover packed (packPage) over a page's units laid, each moved unit's record updated
   const packPass = pg => {
