@@ -711,7 +711,8 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   with one warning; the side stays open. A refusal of the whole side carries a code (`head`, `units`, `index`, `base`,
   `composed`, `open`).
 - **The documents** are the side's: each composed task is destroyed once no door reads it (the door's `onRetired`) and the
-  side holds a later one, and at dispose; none twice. `again()` reuses the latest.
+  side holds a later one, at a refusal of the side (its feed's fetches with it, and the right's shapes the original's again),
+  and at dispose; none twice. `again()` reuses the latest.
 - **Each place shows the best version there is** (§11.7): its pre-layer content until the door has laid its page and the
   place is near the view, then the layer's copy (the door's `copyOf` at the place's k: device pixels a PDF unit, within
   2^24 pixels; from the left's canvas where PDF.js drew it within 2 % of that k, else the place's own page view's canvas,
@@ -732,7 +733,8 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   page's floats from what PDF.js drew the left's page by. The geometry is kept for the near pages and the last 20 wanted.
 - **The contents** (`contents.mjs`): the index's headings through `outline.ts`'s rule, each at its unit's first rectangle
   once a part locates it, else at the page the left document's outline gives its title (matched in order), else none;
-  titled by its row once taken. `outline` is told at the index and after each change (once a frame), `heading` from the
+  titled by its row once taken (`again()` lets the rows' titles go; a fork asks the outline again for the new contents).
+  `outline` is told at the index and after each change (once a frame), `heading` from the
   scroll of either pane: the last heading at or above the reading line of the pane read.
 - **What it tells**: `layer` events (`opening`, `open` with the pages laid, `refused` with its why), `coverage()` and a
   bounded `probe()` (counts, states, a ring of the last 32 commits). The door's stats tell no late rows and no skipped
