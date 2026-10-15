@@ -20,9 +20,10 @@ import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, 
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
 
 /** the bundle's format: raised with any change to what it holds (the left's tokens and spans, with the highlight); 2 the
- *  layout file's schema 2, its babel names (D1a); 3 its schema 3, the paper's \lineskip and \lineskiplimit; 4 its schema 4,
- *  PH_FLAG.JOINED and PH_FLAG.OUTSIDE */
-export const BUNDLE = '4'
+ *  layout file's schema 2, its babel names (D1a); 3 its schema 3, the paper's \lineskip and \lineskiplimit. The layout
+ *  file's schema 4 (PH_FLAG.JOINED and PH_FLAG.OUTSIDE) is held in BUNDLE 3: readBundle reads the file by parseLayout,
+ *  which refuses any schema but its own, and the content's vtag names LAYOUT (l6) */
+export const BUNDLE = '3'
 /** a bundle's bytes at most (the 147-page thesis's is 1.18 MiB) and its values (the thesis holds 165,659) */
 export const BUNDLE_CAP = 4 * 2 ** 20
 export const BUNDLE_VALUES = 1_000_000

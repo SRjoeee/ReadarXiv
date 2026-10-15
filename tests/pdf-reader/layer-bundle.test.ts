@@ -114,11 +114,11 @@ describe('the versions a bundle names', () => {
   })
 
   it('CTAG names the reader\'s contract, VTAG the content, and bundleKey is layer/<id>v<n>/<VTAG>.json, an old identifier\'s slash written _', () => {
-    expect(BUNDLE).toBe('4')
+    expect(BUNDLE).toBe('3')
     expect(CTAG).toBe(`b${BUNDLE}-j${PDFJS}`)
     expect(VTAG).toBe(`${CTAG}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const vtag = VTAG
-    expect(vtag).toBe('b4-j6.3.289-p11-l6-r5')
+    expect(vtag).toBe('b3-j6.3.289-p11-l6-r5')
     expect(bundleKey('1706.03762', 7)).toBe(`layer/1706.03762v7/${vtag}.json`)
     expect(bundleKey('hep-th/9901001', 1)).toBe(`layer/hep-th_9901001v1/${vtag}.json`)
     // (the web's vtag form, src/shared/identity.ts VTAG_FORM, is stricter than a token of letters, digits and points)

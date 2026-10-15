@@ -232,8 +232,7 @@ function heldRendering(run, lines, uc) {
 /**
  * Part 5, the proof (layer2.mjs prepareUnit), for any unit the hybrid draws: the one place the hybrid's safe rule is held
  * (the math round's `unproven`, from its crops to every rendering; the maintainer's ruling of 2026-10-15). A placeholder
- * is drawn only from what proves it: TeX's own (one that sets nothing, a space, a LaTeX text symbol's character; a
- * rendering the file gives: a placeholder's segments, a display's held run or its group, a text symbol's TEXT row, one
+ * is drawn only from what proves it: TeX's own (one that sets nothing, a space; a rendering the file gives: a placeholder's segments, a display's held run or its group, a text symbol's TEXT row, one
  * outside the unit's lines drawn as nothing, a macro TeX said sets no ink: `proof`), or of v0's reading:
  * - a crop, cut from its placeholder's own ink, the file's segment of its row on the crop's page that its rectangle meets
  *   (stream ownership, layout/stream.mjs), on that segment's baseline (layer2.mjs cropOfBox): its rendering the same;
@@ -244,6 +243,10 @@ function heldRendering(run, lines, uc) {
  * whatever stands in it (2307.16209 page 38's "ıe", from the line above), v0's alignment hands a rendering to the next
  * placeholder along (2608.16117's unit 28) — and the answer is that placeholder's k: its unit stays the original's (the
  * run's `unproven`). Else -1. Mutates the crops it cuts.
+ * The one exemption (the controller's ruling of 2026-10-15): a LaTeX text symbol v0 draws from its source (\%,
+ * $\times$: phClass2's 'symbol'). Its source is its rendering's content, a character LaTeX's own definition sets, and its
+ * glyph is its line's, erased with it; the rule is against guessing where a formula's ink is, which a symbol asks for
+ * none of.
  */
 export function proofOf(lu, kOf) {
   return res => {
