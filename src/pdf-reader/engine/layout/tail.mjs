@@ -4,9 +4,13 @@
 // which it rewrote, and the fresh object numbers it allocated. The chain of tails is checked from these bytes alone, so that
 // no field written beside a tail can disagree with it.
 //
-// This is today's form, read as the remover writes it; the chained tails of the remover's next version (E3) replace the
-// reading, not the two functions' meaning. Imports nothing: the readers of the layer's format take it.
+// The remover writes one such update a part (its chained tails, layout/remove.mjs makeAddon's `chain`): each section's /Prev
+// the last one's, its offsets from the document's end so far, its fresh numbers after the last tail's, the same root; the
+// reading is the same for each. Imports nothing: the readers of the layer's format and the remover's side take it.
 
+/** a part's tail at most, raw (the largest today is 32.9 KB a whole paper): the part's reader (layer-proto/format.mjs, which
+ *  re-exports it) and the remover's side (layout/remove.mjs removerOf, layout/chain.mjs) hold a tail to it */
+export const TAIL_CAP = 2 ** 20
 /** the last bytes of a tail that are looked at for its section */
 const WINDOW = 256 * 1024
 /** the bytes at the end of a PDF that are looked at for its `startxref` (remove.mjs reads the same 1024) */

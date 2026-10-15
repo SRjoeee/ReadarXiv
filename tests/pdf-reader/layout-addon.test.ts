@@ -8,7 +8,7 @@ import { constants as zlibConstants, deflateRawSync, deflateSync, inflateRawSync
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { paperAddon } from '@/pdf-reader/engine/layout/addon.mjs'
+import { BOXES_BYTES, type PagePlan, pagePlansOf, paperAddon, rangeEntries } from '@/pdf-reader/engine/layout/addon.mjs'
 import { ADDON_CAP, parseAddonManifest, REFUSED_MAX, REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, type LayoutIndex } from '@/pdf-reader/engine/layout/file.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
@@ -338,4 +338,34 @@ describe('paperAddon in a worker under a 64 MB heap: the remover\'s probes, refu
     expect(r.bad).toMatchObject({ ok: true, page: { ok: false, refused: expect.stringMatching(/more than the walk allows/) } })
     expect(r.good.ok).toBe(true)
   }, 40000)
+})
+
+describe('the plans (pagePlansOf) and the range assembly (rangeEntries): the add-on\'s pages before the remover', () => {
+  it('plan each page alone, and any split of the paper assembles as the whole, the boxes\' share spent in page order', async () => {
+    const index = layoutOf(UNITS, 4)
+    const { plans } = await pagePlansOf({ doc: await open(PAPER), OPS, index })
+    // page 1 dirty (the remover's), page 2 clean with a rule, page 3 not planned, page 4 dirty
+    expect([...plans.keys()]).toEqual([1, 2, 4])
+    expect(plans.get(1)).toMatchObject({ unfit: null, rules: [] })
+    expect(plans.get(1)?.remove?.units.map(u => u[0])).toEqual([1])
+    expect(plans.get(1)?.remove?.align.codes.length).toBe(plans.get(1)?.remove?.shows)
+    expect(plans.get(2)).toMatchObject({ dirty: [], rules: [72, 660, 122, 660.5] })
+    expect(plans.get(2)?.remove).toBeUndefined()
+    const planOf = (p: number) => plans.get(p) ?? null
+    const whole = rangeEntries(planOf, 1, 4, { bytes: 0, values: 0 })
+    expect(whole.asked).toEqual([1, 4])
+    expect(whole.page).toEqual({ 1: null, 2: { ok: true, rules: [72, 660, 122, 660.5] }, 3: { ok: false, refused: 'not planned' }, 4: null })
+    // (the same entries, pages and share, cut anywhere: the share carried from the pages before)
+    for (const cuts of [[1, 2, 3, 4], [2, 4], [1, 4], [3, 4]]) {
+      let spent = { bytes: 0, values: 0 }, from = 1
+      const page: Record<number, unknown> = {}, asked: number[] = []
+      for (const to of cuts) { const r = rangeEntries(planOf, from, to, spent); Object.assign(page, r.page); asked.push(...r.asked); spent = r.spent; from = to + 1 }
+      expect({ page, asked, spent }, cuts.join(' ')).toEqual(whole)
+    }
+    // a page past the share left is refused alone and spends none, wherever the paper is cut
+    const heavy = (p: number): PagePlan | null => (p === 2 ? { ...planOf(2)!, cost: { bytes: BOXES_BYTES - 10, values: 1 } } : planOf(p))
+    const r = rangeEntries(heavy, 1, 4, { bytes: 20, values: 0 })
+    expect(r.page[2]).toEqual({ ok: false, refused: expect.stringMatching(/more than the manifest has left/) })
+    expect(r.spent).toEqual({ bytes: 20 + planOf(1)!.cost.bytes + planOf(4)!.cost.bytes, values: planOf(1)!.cost.values + planOf(4)!.cost.values })
+  })
 })
