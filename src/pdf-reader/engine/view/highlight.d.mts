@@ -26,6 +26,9 @@ export declare function layoutParts(layout: Layout, parts: readonly PartRects[])
 /** a page's part: its tokens, ids from `first`, and each unit's tokens there; false where it was given already; a
  *  RangeError where its ids reach into another page's */
 export declare function layoutPage(layout: Layout, page: number, part: { first: number; table: PageTable; spans: readonly (readonly [number, ArrayLike<number>])[] }): boolean
+/** a unit's stream (its first token) told again where its pages bring it (the right's laid pages); false where the unit is
+ *  not told or its stream is that already */
+export declare function layoutStream(layout: Layout, id: number, stream: number): boolean
 /** whether a unit's tokens are all in its layout (always for one made whole): its sentences wait for it */
 export declare function tokensIn(layout: Layout | null | undefined, id: number): boolean
 /** a page's runs; the units whose head it took and the words it filled in (for the gate) */

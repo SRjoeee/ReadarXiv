@@ -12,6 +12,12 @@
 //                                               answers 400); 202 preparing (begun or joined) | 200 { ready: true }
 //                                               | 404 { why } | 429 { retryAfterMs }
 //   GET  /api/v1/original/<id>v<n>              200 application/pdf, range requests answered | 404 { why: 'no-pdf' }
+//   GET  /api/v1/layer/<id>v<n>/<ctag>          BUNDLE 4 (where the stand-in is given the sample's objects, `layer4`): 200 the
+//                                               catalog | 202 { position, stage, progress, retryAfterMs, layer: { units, head,
+//                                               parts } }, the objects made so far (every part's `prev`), parts given as the
+//                                               preparation's progress passes their share | 404, 429, faults as above
+//   GET  /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>  200 an object of the layer, by its whole digest (immutable) | 404
+//                                               { why: 'not-prepared' } for a digest it does not hold
 //
 // Every answer carries `Access-Control-Allow-Origin: *` (never credentials) and `X-Content-Type-Options: nosniff`; JSON
 // answers carry `Content-Security-Policy: sandbox`; a miss is JSON, never an HTML page. The <vtag> is the engine's own
@@ -33,6 +39,7 @@
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { VTAG } from '../../../src/pdf-reader/engine/layer-proto/bundle.mjs'
+import { CTAG4 } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
 
 const SAMPLE_DIR = new URL('../../fixtures/pdf/sample-1/', import.meta.url)
 
@@ -80,8 +87,10 @@ function checked(m) {
  *  segment, the version tag, and `/prepare` where the request is one) */
 const LAYER_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+?)(\/prepare)?$/
 const ORIGINAL_ROUTE = /^\/api\/v1\/original\/([^/]+)$/
+/** an object of BUNDLE 4's layer by its digest (the capture groups: the segment, the ctag, the digest) */
+const OBJECT_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+)\/o\/([0-9a-f]{64})$/
 /** whether a path is one of the stand-in's routes: what a route table gives it, and answers no other path with it */
-export const serves = path => LAYER_ROUTE.test(path) || ORIGINAL_ROUTE.test(path)
+export const serves = path => LAYER_ROUTE.test(path) || ORIGINAL_ROUTE.test(path) || OBJECT_ROUTE.test(path)
 /** a request's body kept in the record: its text at most this long (the length is kept whole) */
 const BODY_TEXT_MAX = 200
 const NO_STORE = 'no-store'
@@ -106,9 +115,10 @@ function rangeOf(header, size) {
 
 /**
  * The stand-in over a sample (`loadSample`). `vtag` is the one version tag it holds the bundle under, `pollMs` the longest
- * a preparing answer asks to wait before the next GET, `now` the clock.
+ * a preparing answer asks to wait before the next GET, `now` the clock. `layer4`: the sample's BUNDLE 4 objects
+ * (layer-cut.mjs cutSample: `objects` by digest, `refs` as a job tells them, `catalog` its bytes), held under CTAG4
  */
-export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now } = {}) {
+export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now, layer4 = null } = {}) {
   let layer = checked('ready'), original = checked('ready')
   /** when the preparation began, ms on `now`'s clock; null until it has */
   let since = null
@@ -136,13 +146,16 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     const elapsed = now() - since
     return elapsed >= layer.ms ? { state: 'done' } : { state: 'under way', elapsed, left: layer.ms - elapsed }
   }
-  const preparing = ({ elapsed, left }) => {
+  const preparing = ({ elapsed, left }, four = false) => {
     const progress = layer.ms === 0 ? 1 : Math.floor((elapsed / layer.ms) * 100) / 100
-    return json(202, { position: 0, stage: STAGES[Math.min(STAGES.length - 1, Math.floor(progress * STAGES.length))], progress, retryAfterMs: Math.max(1, Math.min(pollMs, Math.ceil(left))) }, NO_STORE)
+    // BUNDLE 4's objects made so far: the chunks and the head at once, each part once the progress passes its share
+    const made = four ? { layer: { units: layer4.refs.units, head: layer4.refs.head, parts: layer4.refs.parts.slice(0, Math.floor(progress * (layer4.refs.parts.length + 1))) } } : {}
+    return json(202, { position: 0, stage: STAGES[Math.min(STAGES.length - 1, Math.floor(progress * STAGES.length))], progress, retryAfterMs: Math.max(1, Math.min(pollMs, Math.ceil(left))), ...made }, NO_STORE)
   }
 
   function layerAnswer({ headers, body }, segment, tag, prepare) {
-    if (tag !== vtag) return missing('unknown-versions')
+    const four = !!layer4 && tag === CTAG4
+    if (tag !== vtag && !four) return missing('unknown-versions')
     if (prepare) {
       // (the media type alone: `application/json; charset=utf-8` is JSON; any other type is 415, and JSON that is not {} is 400)
       if ((headers['content-type'] ?? '').split(';')[0].trim().toLowerCase() !== 'application/json') return json(415, { why: 'unsupported-media-type' }, NO_STORE)
@@ -160,9 +173,14 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
       since = now()
       prep = preparation()
     }
-    if (prep.state === 'under way') return preparing(prep)
+    if (prep.state === 'under way') return preparing(prep, four)
     if (prepare) return json(200, { ready: true }, NO_STORE)
-    return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE }, body: sample.bundle }
+    return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE }, body: four ? layer4.catalog : sample.bundle }
+  }
+  function objectAnswer(segment, tag, sha) {
+    const bytes = segment === sample.segment && tag === CTAG4 ? layer4?.objects.get(sha) : null
+    if (!bytes) return missing('not-prepared')
+    return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE }, body: bytes }
   }
   function originalAnswer({ headers }, segment) {
     if (segment !== sample.segment || original.kind === 'none') return missing('no-pdf')
@@ -181,12 +199,17 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
    */
   function answer(request) {
     const { method, path } = request
-    const layerRoute = LAYER_ROUTE.exec(path)
+    const objectRoute = OBJECT_ROUTE.exec(path)
+    const layerRoute = objectRoute ? null : LAYER_ROUTE.exec(path)
     const originalRoute = ORIGINAL_ROUTE.exec(path)
-    const target = layerRoute ? layer : originalRoute ? original : null
+    const target = layerRoute || objectRoute ? layer : originalRoute ? original : null
     // (a route's faults come before anything of the request is read: a server that is down is down for every request)
     if (target?.kind === 'reset' || target?.kind === 'hang') return { fault: target.kind }
     if (target?.kind === 'error') return json(target.status, { why: 'unavailable' }, NO_STORE)
+    if (objectRoute) {
+      if (method !== 'GET') return json(405, { why: 'method-not-allowed' }, NO_STORE, { allow: 'GET' })
+      return objectAnswer(objectRoute[1], objectRoute[2], objectRoute[3])
+    }
     if (layerRoute) {
       const prepare = layerRoute[3] === '/prepare'
       const allowed = prepare ? 'POST' : 'GET'

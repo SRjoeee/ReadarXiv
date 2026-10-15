@@ -16,9 +16,9 @@
 // its words (lighting.mjs startsOf, by the panes' starts and their shapes' fits), else whole. The left's starts are its
 // units' pairs read as anchors.mjs sentenceStarts reads an anchor's (createShapes starts), once every page the unit is on
 // has come; the right has none until its pages bring their words, and every unit lights whole meanwhile — on the one path.
-import { sentenceStarts } from '../pipeline/anchors.mjs'
+import { sentenceStarts, tokens as wordsOfText } from '../pipeline/anchors.mjs'
 import { floatHitOf, floatOf, floatShapes, pageFloats } from './floats.mjs'
-import { blockOf, clickOf, hitOf, layoutPage, layoutParts, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn } from './highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutPage, layoutParts, layoutStream, pageGeometry, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn } from './highlight.mjs'
 
 /** a PDF side's shapes, of its layout: highlight.mjs and floats.mjs, as the extension paints them */
 export function pdfShapes(L) {
@@ -205,4 +205,120 @@ export function mirror(source) {
     hit: atPage((page, x, y, padX, startsOf) => floatHitOf(source.layout, page, x, y, padX, hitOf(R, page, x, y, padX, startsOf))),
   }
   return { layout: R, shapes, forget: p => { R.cache.delete(p) }, dispose: () => { state.followers.delete(follower) } }
+}
+
+/** a laid page's token ids: page · 2^16 + its index in the page's table (a left part holds at most TOKENS_PAGE tokens, and a
+ *  laid page as many as its words and the copies beside them), so that they rise page by page whatever comes first */
+const BASE = 2 ** 16
+const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
+
+/**
+ * The right's shapes on the layer (the contract §2.7, step 4): on a page whose place shows the original, the left's mirrored
+ * (mirror); on a page the layer has laid, a layout of the right's own over the page's words (the door's LaidPage.words: the
+ * tokens the layer drew, in the page's PDF units, each unit's spans in paint order), and for each unit the layer shows there
+ * as the original's (`words.original`) copies of the left's tokens of it (trap 1: never the left's arrays or runs). A laid
+ * page's part is made once its left part is in too (the units shown as the original need it), in the same task.
+ *
+ * `lay(page, words)` a page laid (once a door: a ready page is final); `laid(page)` whether its part is in; `starts(id, text,
+ * offsets, left)` a unit's starts on the right: of a unit all on laid pages, its words' (the token carrying each start's word,
+ * `text` its plainTranslated and `offsets` its row's `sentences.tr`); of a unit on no laid page, the left's (`left`: the same
+ * tokens, mirrored); of one on both, none (it lights whole); `reset()` every page back to the mirror (a door opened again);
+ * `forget(page)` its geometry let go; `dispose()` stops following the source
+ */
+export function layerShapes(source) {
+  const state = told.get(source.shapes)
+  if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
+  const M = mirror(source)
+  let L, words, made, wordAt
+  /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
+  const tellParts = parts => layoutParts(L, parts.map(part => ({
+    pages: [...part.pages], views: [...part.views],
+    left: part.left.map(([id, , rects]) => [id, BASE * Math.min(...rects.map(r => r[0])) - 1, rects.map(r => [...r])]),
+  })))
+  function reset() {
+    L = pageLayout(state.kindOf)
+    words = new Map(); made = new Set(); wordAt = new Map()
+    if (state.parts.length) tellParts(state.parts)
+  }
+  /** page p's part of the laid layout, where its words and its left part are in */
+  function make(p) {
+    const w = words.get(p), left = state.pages.get(p)
+    if (made.has(p) || !w || !left) return false
+    const original = new Set(w.original)
+    const copied = left.spans.filter(([id]) => original.has(id))
+    const n0 = w.tokens.n
+    let n = n0
+    for (const [, ts] of copied) n += ts.length
+    const T = { n }
+    for (const f of FIELDS) { T[f] = new Float32Array(n); T[f].set(w.tokens[f].subarray(0, n0)) }
+    const word = new Int32Array(n).fill(-1)
+    word.set(w.word.subarray(0, n0))
+    const base = BASE * p, spans = []
+    for (const [id, ranges] of w.spans) {
+      const ks = []
+      for (let j = 0; j < ranges.length; j += 2) for (let t = ranges[j], end = t + ranges[j + 1]; t < end; t++) ks.push(base + t)
+      spans.push([id, Int32Array.from(ks).sort()])
+    }
+    let at = n0
+    for (const [id, ts] of copied) {
+      const ks = new Int32Array(ts.length)
+      for (let i = 0; i < ts.length; i++, at++) {
+        const k = ts[i] - left.first
+        for (const f of FIELDS) T[f][at] = left.table[f][k]
+        ks[i] = base + at
+      }
+      spans.push([id, ks])
+    }
+    if (!layoutPage(L, p, { first: base, table: T, spans })) return false
+    // a unit whose first page this is begins at its own first token here
+    for (const [id, ks] of spans) if (ks.length && L.pagesOf.get(id)?.[0] === p) layoutStream(L, id, ks[0])
+    made.add(p)
+    wordAt.set(p, word)
+    // (the words are in the page's table now: let go, the page kept as given)
+    words.set(p, null)
+    return true
+  }
+  reset()
+  const follower = { addParts: parts => tellParts(parts), addPage: input => { make(input.page) } }
+  state.followers.add(follower)
+
+  const laid = p => made.has(p)
+  const pagesOf = id => L.pagesOf.get(id) ?? M.layout.pagesOf.get(id) ?? []
+  const mode = id => { const ps = pagesOf(id), n = ps.filter(laid).length; return !n ? 'mirror' : n === ps.length ? 'laid' : 'mixed' }
+  // a laid page's floats are the left's, as the mirror's are (made then)
+  const floatsOf = p => { state.floatsOn(p); L.floats = source.layout.floats }
+  const shapes = {
+    runs: id => pagesOf(id).flatMap(p => pageGeometry(laid(p) ? L : M.layout, p).byId.get(id) ?? []),
+    block: (run, padX) => blockOf(run, padX),
+    sentence: (run, starts, s, padX) => { if (!laid(run.page)) return M.shapes.sentence(run, starts, s, padX); floatsOf(run.page); return sentenceOf(L, run, starts, s, padX) },
+    fits: (id, starts, now) => { const m = mode(id); return m === 'laid' ? sentencesFit(L, id, starts, !now) : m === 'mirror' ? M.shapes.fits(id, starts, now) : false },
+    float: M.shapes.float,
+    floatShapes: M.shapes.floatShapes,
+    hit: (page, x, y, padX, startsOf) => { if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf); floatsOf(page); return floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)) },
+    click: (page, x, y, padX, startsOf) => { if (!laid(page)) return M.shapes.click(page, x, y, padX, startsOf); floatsOf(page); return clickOf(L, page, x, y, padX, startsOf) },
+  }
+  return {
+    get layout() { return L },
+    shapes,
+    lay(p, w) { if (words.has(p) || !w?.tokens) return false; words.set(p, w); make(p); return true },
+    laid,
+    starts(id, text, offsets, left) {
+      const m = mode(id)
+      if (m === 'mirror') return left ?? null
+      if (m === 'mixed' || !tokensIn(L, id)) return null
+      if (typeof text !== 'string' || !Array.isArray(offsets) || !offsets.every((o, j) => Number.isInteger(o) && o > (j ? offsets[j - 1] : 0) && o < text.length)) return null
+      const ts = L.anchors.get(id)?.tokens ?? [], out = new Int32Array(offsets.length)
+      for (let j = 0, from = 0; j < offsets.length; j++) {
+        const w = wordsOfText(text.slice(0, offsets[j])).length
+        let k = -1
+        for (; from < ts.length && k < 0; from++) { const t = ts[from], p = Math.floor(t / BASE); if (wordAt.get(p)?.[t - BASE * p] === w) k = t }
+        if (k < 0 || k <= (j ? out[j - 1] : ts[0])) return null
+        out[j] = k
+      }
+      return out
+    },
+    reset,
+    forget: p => { L.cache.delete(p); M.forget(p) },
+    dispose: () => { state.followers.delete(follower); M.dispose() },
+  }
 }

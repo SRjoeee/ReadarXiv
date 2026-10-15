@@ -364,12 +364,14 @@
     "writeCatalog"
   ],
   "view": [
+    "PAGE_MS",
     "blockOf",
     "blockWire",
     "bySentence",
     "captionFor",
     "clickOf",
     "contentsOf",
+    "createLayerSide",
     "createReaderView",
     "figureLabels",
     "figureRegions",

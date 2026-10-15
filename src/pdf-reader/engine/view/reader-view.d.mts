@@ -140,12 +140,27 @@ export interface Internals {
     view(n: number): PlaceView | null
     near(n: number): boolean
     contentOf(n: number): PlaceContent
-    /** the layer's content in place n, in place: its page view destroyed with its canvas first; size and scroll unchanged */
-    swap(n: number, content: HTMLElement): boolean
+    /** the canvas of place n's own page view where PDF.js drew it whole (read before a swap releases it), else null */
+    canvas(n: number): HTMLCanvasElement | null
+    /** the layer's content in place n, in place: its page view destroyed with its canvas first; size and scroll unchanged.
+     *  `blank`: content that shows nothing (a page let go far from the view): the place is no page shown (contentOf 'none') */
+    swap(n: number, content: HTMLElement, o?: { blank?: boolean }): boolean
     /** place n back to its pre-layer content */
     restore(n: number): void
   }
-  left: { doc(): ViewDocument | null; canvas(n: number): HTMLCanvasElement | null; scale(): number }
+  left: {
+    doc(): ViewDocument | null
+    /** the left's page n drawn whole by PDF.js (its canvas, its k its width over the page's), else null */
+    canvas(n: number): HTMLCanvasElement | null
+    scale(): number
+    /** the left's page n as PDF.js holds it (its operator list drawn: the floats' inputs), once laid out */
+    pdfPage(n: number): unknown
+  }
+  /** the host's PDF.js library (OPS, AnnotationMode) and its getDocument options (assets) */
+  readonly lib: unknown
+  readonly assets: Readonly<Record<string, unknown>>
+  /** the page at the reading line of the pane read and the line's height on it (PDF units, y up); null with none */
+  reading(): { page: number; y: number | null } | null
   words: ViewWords
   dpr(): number
   clock: ViewClock
@@ -162,6 +177,8 @@ export interface Internals {
   /** the left's scale changed, and the places with it: a step's or a pinch's drawn again `drawingDelay` ms after the last
    *  (-1: at once), for the copies drawn at the pane's resolution */
   onScale(listener: (scale: number, drawingDelay: number) => void): () => void
+  /** a pane scrolled (each scroll event), for the layer side's re-asks and the heading read */
+  onScrolled(listener: (side: Side) => void): () => void
   /** the view's one layer side, disposed first by the view's own dispose; a second while one lives throws */
   attach(side: { dispose(): void }): () => void
   emit(event: ViewEvent): void
