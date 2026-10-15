@@ -24,6 +24,7 @@ import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, 
 import { tailLinks } from '../layout/tail.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
+import { groupOf } from '../translate/groups.mjs'
 import { plainSource } from '../translate/mt.mjs'
 import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
 import { sourceUnitsOf } from './rows.mjs'
@@ -385,6 +386,33 @@ function recordsOf(units) {
   return { kind, flags, depth, plainLength, cells, headings }
 }
 
+/**
+ * The table groups of a paper (amendment M18): the consistency group of each unit that is a cell, by the engine's own
+ * groups.mjs groupOf over the cells the records hold. `of[id]` is the unit's group number (-1: none), numbered by first
+ * member; `count` the groups; `members[g]` the ids of group g, rising. A pure function of the cells, so the cut and the
+ * reader agree
+ */
+export function groupsOfCells(cells, n) {
+  const of = new Int32Array(n).fill(-1), number = new Map(), members = []
+  for (const [id, cell] of cells) {
+    const key = groupOf({ cell })
+    if (key === null) continue
+    let g = number.get(key)
+    if (g === undefined) { g = members.length; number.set(key, g); members.push([]) }
+    of[id] = g
+    members[g].push(id)
+  }
+  return { of, count: members.length, members }
+}
+/** the groups of units as bundleUnitsOf gives them (the cut's input) */
+export const groupsOfUnits = units => groupsOfCells(recordsOf(units).cells, units.length)
+const groupsOfIndex = new WeakMap()
+function indexGroups(index) {
+  let g = groupsOfIndex.get(index)
+  if (g === undefined) groupsOfIndex.set(index, g = groupsOfCells(index.records.cells, index.units.length))
+  return g
+}
+
 /** the units' total past its bound (amendment M2): `units-too-large`, the bound and the size as data */
 const tooLarge = (what, bound, size) => new BundleRefusal('units-too-large', { kind: 'units', path: '', data: { what, bound, size } })
 
@@ -705,7 +733,7 @@ function partShape(v, { N, unitCount, atFrom }) {
 /** the chain before any part */
 function initialChain(index) {
   const base = index.head.base
-  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), reach: 0, ahead: [], end: base.bytes, xref: base.xref, next: null, root: null, r: 0 }
+  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), groups: new Uint8Array(indexGroups(index).count), reach: 0, ahead: [], end: base.bytes, xref: base.xref, next: null, root: null, r: 0 }
 }
 
 /**
@@ -754,18 +782,28 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   }
   // (and no unit twice: one told by an earlier part is refused at any slot, past the frontier too)
   const told = was.told.slice()
+  // (chain check 7, amendment M18: nor a member of a table group an earlier part told, which would split the group across parts)
+  const grouped = indexGroups(index), groups = was.groups.slice(), mine = []
+  const tell = (id, path) => {
+    if (told[id] === 1) throw refuse(K, path, 'a unit already told by an earlier part')
+    const g = grouped.of[id]
+    if (g >= 0) {
+      if (was.groups[g] === 1) throw refuse(K, path, 'a member of a table group an earlier part told')
+      mine.push(g)
+    }
+    told[id] = 1
+  }
   for (let i = 0; i < s.left.length; i++) {
     const w = s.left[i]
-    if (told[w[0]] === 1) throw refuse(K, `left[${i}][0]`, 'a unit already told by an earlier part')
-    told[w[0]] = 1
+    tell(w[0], `left[${i}][0]`)
     note(w[1], w[0])
   }
   for (let i = 0; i < s.fileOnly.length; i++) {
     const e = s.fileOnly[i]
-    if (told[e[0]] === 1) throw refuse(K, `fileOnly[${i}][0]`, 'a unit already told by an earlier part')
-    told[e[0]] = 1
+    tell(e[0], `fileOnly[${i}][0]`)
     note(e[1] + 0.5, e[0])
   }
+  for (const g of mine) groups[g] = 1
   if (any && !(lowSlot > was.slot || (lowSlot === was.slot && lowId > was.id))) throw refuse(K, 'left', 'a unit that is not after the last one told (slot, id)')
   // (the views of the pages the last part reached past its own: those this part's views include are as told; a part whose own
   // units reach less far leaves the rest to the part that told them)
@@ -784,7 +822,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
     root = links.root
   }
   const after = Object.freeze({
-    head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, told, reach: Math.max(s.reach, was.reach),
+    head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, told, groups, reach: Math.max(s.reach, was.reach),
     ahead: Object.freeze(s.reach >= was.reach ? s.views.slice(4 * (s.b - s.a + 1)) : was.ahead.slice(4 * (s.b - was.through))), end, xref, next, root, r: was.r + (s.addon === null ? 0 : s.addon.r),
   })
   return {
