@@ -182,6 +182,13 @@ const listsOf = aux => {
 /** TeX writes its log in lines of 79 characters at most, a warning about a long key over two: joined again (a line of
  *  79 of its own is joined to the next too, so what is looked for in it is not anchored to a line's start) */
 const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
+/** whether a pass set a contents list from nothing: one its aux writes (listsOf) whose file the pass did not find
+ *  (LaTeX's \@input: "No file <job>.<ext>."), as a pass does that was given no aux of its own (the F2 re-review's N2) —
+ *  the list set empty, every unit after it early by its height. `main`, the project's main file (the job's name) */
+export const listsMissing = (r, main) => { const log = unwrapped(lastTexLog(r.log)); return [...listsOf(r.aux).keys()].some(ext => log.includes(`No file ${jobName(main)}.${ext}.`)) }
+/** the files a compile's last pass looked for and did not find, as LaTeX's \@input says it ("No file <name>.": a list,
+ *  the bibliography, the index; biblatex's bibliography says so too) */
+export const notFound = log => new Set([...unwrapped(lastTexLog(log)).matchAll(/No file (\S+?)\.(?=\s|$)/g)].map(m => m[1]))
 /** why a compile that gave a PDF is not shown (unsettable): the font that would not load, or the letters it lost */
 const whyUnset = r => (lastTexLog(r.log).match(/^! Font .* not loadable.*$/m)?.[0] ?? `a letter it could not set (${[...lostIn(r.log).keys()].slice(0, 5).join(', ')})`).slice(0, 300)
 
@@ -934,11 +941,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      *  warnings are the kernel's, its keys in plain quotes; a one-pass draft under it always asks for biber again and
      *  says there were undefined references, which says nothing */
     const bibcites = text => (text ?? '').match(/^\\bibcite\{/gm)?.length ?? 0, noFile = ext => `No file ${jobName(project.main)}.${ext}.`
-    const referencesWhole = r => { const log = unwrapped(lastTexLog(r.log)); return !log.includes(noFile('bbl')) && !/(?:LaTeX|Package natbib) Warning: Citation [`'].*undefined/.test(log) && bibcites(r.aux) === bibcites(readings?.cites) && !listsMissing(r) }
-    /** whether a draft set a contents list from nothing: one its aux writes (listsOf) whose file its pass did not find
-     *  (LaTeX's \@input: "No file <job>.<ext>."), as a draft does that was given no aux of this translation (the F2
-     *  re-review's N2) — the list set empty, every unit after it early by its height */
-    const listsMissing = r => { const log = unwrapped(lastTexLog(r.log)); return [...listsOf(r.aux).keys()].some(ext => log.includes(noFile(ext))) }
+    const referencesWhole = r => { const log = unwrapped(lastTexLog(r.log)); return !log.includes(noFile('bbl')) && !/(?:LaTeX|Package natbib) Warning: Citation [`'].*undefined/.test(log) && bibcites(r.aux) === bibcites(readings?.cites) && !listsMissing(r, project.main) }
     /** the preview that can measure the final: the last of the whole translation, planned, shown */
     let measuring = null
     // a preview of part of the translation held once for the last batch (below), as long as the last preview took
@@ -1053,7 +1056,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
           // it — is measured once more, given its own lists (the F2 re-review's N2). Not the original's lists instead: as
           // tall as the translation's only where its entries are, and the thesis 2307.16209's figures' long captions made
           // its re-set three pages short (-5 pages / 2.787 against -2 / 1.493 with its own). Not one that lost a letter
-          if (plan && !unset && r.ok && listsMissing(r)) {
+          if (plan && !unset && r.ok && listsMissing(r, project.main)) {
             aux = r.aux
             if (r.bbl) bbl = r.bbl
             r = await measure(plan)
