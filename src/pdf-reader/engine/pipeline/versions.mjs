@@ -59,7 +59,13 @@
 //     holds a `#`: a `#` the reply set outside its markers is a marker's, the source's text holding none, and is no
 //     longer set as text, a pair of brackets that held only it with it (mt.mjs rehydrate: Microsoft's `@f#(#)`, which
 //     drew "[10](#)" in 1706.03762's Japanese)
-export const PIPELINE_VERSION = '10'
+// 11: nothing is inserted inside a macro's call or between a subscript and its operand (latex-front.mjs: a lead or a mark
+//     goes before a whole call, after a complete argument or inside a group). 2106.10165v2's `\strangechapter{..}{Title}`
+//     wrapper was split by the lead, and 2310.20360v3's `eqsplit` (`\equation\aligned`) and `_` operands took marks:
+//     14 TeX errors a compile, both books now compile in three passes. The units change for 2106.10165, 2310.20360 and
+//     2608.12096's tikzequation; 2212.06817, 2608.09189, 2608.14557, 2608.17060 and 2608.22687 lose marks only, and the
+//     five made papers' units, probes and marked originals are byte-for-byte what they were
+export const PIPELINE_VERSION = '11'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
