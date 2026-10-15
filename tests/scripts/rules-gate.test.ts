@@ -568,6 +568,8 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     expect(publicLine(`FAIL requests that would have left the machine: http://example.com/${TEXT.replaceAll(' ', '%20')}`)).toBe('FAIL requests that would have left the machine')
     expect(publicLine('model tier: 29 outputs, 483 pages in 34.2 s on 4 workers; the run in /work/out/layer-gate/model-010c5789-2026-10-08T08-05-36-198Z.json')).toMatch(/^model tier: 29 outputs/)
     expect(publicLine(`completeness (spec §5): 1 of 29 outputs fail: ${NAME} [missing, twice]`)).toContain(`${NAME} [missing, twice]`)
+    // (a measure of TeX's file gated at 0 by the pull request that removed its cause: a drawn line over a display)
+    expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [textInDisplay]`)).toContain(`${NAME} [textInDisplay]`)
     expect(publicLine('completeness (spec §5): every one of 29 outputs passes')).toContain('every one of 29')
   })
   it('holds back everything else: a stack, a reason, a table, a line of a debug print, an ok line that carries more than numbers', () => {

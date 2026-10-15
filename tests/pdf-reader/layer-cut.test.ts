@@ -1,11 +1,12 @@
 // @vitest-environment node
+import { LAB_ON, LAB_PAPERS, labFiles } from './helpers/lab-data'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { type Cut, type CutEntry, cutBundle, type CutOptions, needFrontier, TAIL_NOT_CARRIED } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import {
-  CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, readHead, readLeftPart, readPart, readUnitsChunk, writePart,
-  type ReadUnitsChunk, type Ref,
+  CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, type ReadUnitsChunk, type ReadUnitsChunkLight, readHead, readLeftPart, readPart, readUnitsChunk, writePart,
+  type Ref,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { needsOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
@@ -647,20 +648,15 @@ describe('the sample paper\'s bundle (tests/fixtures/pdf/sample-1)', () => {
 })
 
 // ---------------------------------------------------------------- the real papers (where this machine has them)
-const LAB = process.env.AXT_LAB
-describe.skipIf(!LAB)('the real papers cut', () => {
-  const PAPERS: [string, string][] = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'de'], ['2608.04322v1', 'zh']]
-  const FIXTURES = 'out/layer-gate/fixtures/f343494cf544323e', GEOMETRY = 'out/layer-gate/cut-p10/geometry'
-  for (const [name, target] of PAPERS) {
+describe.skipIf(!LAB_ON)('the real papers cut', () => {
+  for (const [name, target] of LAB_PAPERS) {
     it(name, async () => {
       const { existsSync } = await import('node:fs')
-      const { join } = await import('node:path')
       const { openPaper } = await import('@/pdf-reader/engine/pipeline/live.mjs')
       const { unpackSource } = await import('@/pdf-reader/engine/source/tar.mjs')
       const { bundleUnitsOf } = await import('@/pdf-reader/engine/layer-proto/units.mjs')
       const { parseLayout } = await import('@/pdf-reader/engine/layout/file.mjs')
-      const root = LAB as string
-      const layoutFile = join(root, FIXTURES, `${name}-zh`, 'layout.json'), geometryFile = join(root, GEOMETRY, `${name}-${target}-geometry.json`), sourceFile = join(root, 'data/layout', name, 'source.gz')
+      const { layoutFile, geometryFile, sourceFile } = labFiles(name, target)
       for (const f of [layoutFile, geometryFile, sourceFile]) if (!existsSync(f)) throw new Error(`missing ${f}`)
       const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
       const source = await unpackSource(new Uint8Array(readFileSync(sourceFile)))
@@ -678,6 +674,21 @@ describe.skipIf(!LAB)('the real papers cut', () => {
       const K = await oracleK(whole)
       expect(seen.map(e => [e.id, e.slot, e.lists, [...e.reach].sort((x, y) => x - y), e.rects === null])).toEqual(K.map(e => [e.id, e.stream, e.lists, [...e.reach].sort((x, y) => x - y), e.rects === null]))
       await checkCut(name, whole, c)
+      // the parts read against a light index (M24) are the parts read against the full one
+      {
+        const head = await readHead(c.head.bytes, { ref: c.head.ref })
+        const full: ReadUnitsChunk[] = [], lean: ReadUnitsChunkLight[] = []
+        for (const u of c.units) full.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: full.at(-1) ?? null }))
+        for (const u of c.units) lean.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: lean.at(-1) ?? null, bodies: false }))
+        const a = indexOf(head, full), b = indexOf(head, lean)
+        let ca: PartChain | null = null, cb: PartChain | null = null
+        for (const p of c.parts) {
+          const x = await readPart(p.bytes, { ref: p.ref, index: a, chain: ca }), y = await readPart(p.bytes, { ref: p.ref, index: b, chain: cb })
+          expect(y, `${name}: part ${p.from}-${p.to}`).toEqual(x)
+          ca = x.chain
+          cb = y.chain
+        }
+      }
       if (process.env.AXT_CUT_STATS) process.stderr.write(`CUT ${name} N=${whole.paper.pages} units=${units.length} left=${whole.left.units.length} layout=${layout.units.length} parts=${JSON.stringify(fits(c))} bytes=${c.parts.map(p => p.bytes.length)}\n`)
       const again = await cutBundle(whole, { leftPages: () => null })
       expect([...c.units, c.head, ...c.parts].map(w => w.sha256)).toEqual([...again.units, again.head, ...again.parts].map(w => w.sha256))
