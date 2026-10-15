@@ -205,7 +205,8 @@ window.door = {
     layer.dispose()
     await doc.loadingTask.destroy()
     // (the sheets before the open and after dispose: the run's own gone)
-    return { pages: out, stats: { ...stats, pageMs: undefined }, complete: complete.length, rows: rows.length, sheets: [sheets, ownSheets().length] }
+    // (the pages `take` told complete, as a set: the engine may tell them in no order the pages have, 1b-D; each exactly once)
+    return { pages: out, stats: { ...stats, pageMs: undefined }, complete: complete.length, completeOnce: new Set(complete).size === complete.length, rows: rows.length, sheets: [sheets, ownSheets().length] }
   },
 }
 

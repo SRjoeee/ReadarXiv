@@ -265,7 +265,8 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     pages.push(await layer.pageOf(2, { lang: 'zh-Hans' }))
     expect([1, 2].map(p => run.held(p))).toEqual([1, 2].map(() => ({ state: [], units: [], reads: 0 })))
     expect(run.rows.map(r => [Object.keys(r).includes('svg'), r.base, !!r.released])).toEqual([[false, true, false], [false, true, false]])
-    expect(await fed).toEqual([1, 2])
+    // (the pages complete in no order the pages have, each exactly once: the set of the pages told, sorted)
+    expect((await fed).sort()).toEqual([1, 2])
     pages.forEach((pg, i) => {
       expect(pg.svg).toBeInstanceOf(SVGSVGElement)
       expect([pg.w, pg.h, pg.svg.getAttribute('width'), pg.svg.getAttribute('height')]).toEqual([750, 750, '750', '750'])
