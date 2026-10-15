@@ -1,31 +1,31 @@
 {
  "schema": 1,
  "tier": "pixel",
- "made": "2026-10-14T16:19:32.128Z",
+ "made": "2026-10-15T01:21:11.814Z",
  "engine": {
   "root": ".",
-  "commit": "225a17258828a4e0ca8c6309ff9459b2f4b76db6",
-  "branch": "exp/quality-math",
+  "commit": "649fd94bf3cf41223894c16051824052247c5cf5",
+  "branch": "feat/gate-content-measures",
   "dirty": false
  },
  "inputs": {
   "tier": "pixel",
-  "pages": "the first 12 of each output, every page of 2307.16209v1",
+  "pages": "the first 12 of each output, every page of 2307.16209v1, 2608.16117v1",
   "scale": 2.5,
   "inkScale": 2,
   "inkMin": 4,
   "composite": "darken",
   "layouts": "made",
   "switch": true,
-  "fixtures": "out/layer-gate/fixtures/396e8a157156d879",
-  "records": "out/layer-gate/cut-p10/records",
-  "refs": "out/layer-gate/cut-p10/refs",
-  "geometry": "out/layer-gate/cut-p10/geometry",
+  "fixtures": "out/layer-gate/fixtures/f343494cf544323e",
+  "records": "out/layer-gate/cut-p10-s2608/records",
+  "refs": "out/layer-gate/cut-p10-s2608/refs",
+  "geometry": "out/layer-gate/cut-p10-s2608/geometry",
   "chromium": "153.0.8010.12",
   "pdfjs": "6.3.289",
   "fonts": "7aa6ebe2c491a740",
   "checker": "3497d4d5c8282447",
-  "measures": "58e1660a262e6878",
+  "measures": "caf536f60d263247",
   "kind": "proto",
   "protoUnits": "fixture",
   "place": "the gate's",
@@ -75,7 +75,14 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "lineStartPunct": [
+     [
+      10,
+      182
+     ]
+    ]
+   }
   },
   {
    "name": "1512.03385v1-fr",
@@ -111,7 +118,14 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "lineStartPunct": [
+     [
+      3,
+      31
+     ]
+    ]
+   }
   },
   {
    "name": "1512.03385v1-ko",
@@ -165,7 +179,19 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "lineStartPunct": [
+     [
+      3,
+      29,
+      31
+     ],
+     [
+      12,
+      305
+     ]
+    ]
+   }
   },
   {
    "name": "1706.03762v7-de",
@@ -185,7 +211,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "linesLeft": [
+     [
+      5,
+      46
+     ]
+    ]
+   }
   },
   {
    "name": "1706.03762v7-es",
@@ -205,7 +238,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "linesLeft": [
+     [
+      5,
+      46
+     ]
+    ]
+   }
   },
   {
    "name": "1706.03762v7-fr",
@@ -225,7 +265,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "linesLeft": [
+     [
+      5,
+      46
+     ]
+    ]
+   }
   },
   {
    "name": "1706.03762v7-ja",
@@ -245,7 +292,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "linesLeft": [
+     [
+      5,
+      46
+     ]
+    ]
+   }
   },
   {
    "name": "1706.03762v7-ko",
@@ -265,7 +319,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "linesLeft": [
+     [
+      5,
+      46
+     ]
+    ]
+   }
   },
   {
    "name": "1706.03762v7-ru",
@@ -285,7 +346,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "linesLeft": [
+     [
+      5,
+      46
+     ]
+    ]
+   }
   },
   {
    "name": "1706.03762v7-zh",
@@ -305,7 +373,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "linesLeft": [
+     [
+      5,
+      46
+     ]
+    ]
+   }
   },
   {
    "name": "1810.04805v2-de",
@@ -323,7 +398,74 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "contentLost": [
+     [
+      1,
+      "2:24:2",
+      "5:2:2",
+      "5:11:2"
+     ],
+     [
+      2,
+      "11:3:2",
+      "15:5:2",
+      "16:2:2",
+      "16:7:2",
+      "20:2:2",
+      "21:2:2"
+     ],
+     [
+      3,
+      "21:11:2"
+     ],
+     [
+      6,
+      "117:5:2"
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      15,
+      16,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "linesLeft": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      11,
+      15,
+      16,
+      20,
+      21
+     ],
+     [
+      3,
+      23,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ]
+   }
   },
   {
    "name": "1810.04805v2-es",
@@ -341,7 +483,80 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "contentLost": [
+     [
+      1,
+      "2:24:2",
+      "5:2:2",
+      "5:11:2"
+     ],
+     [
+      2,
+      "11:3:2",
+      "15:5:2",
+      "16:2:2",
+      "16:7:2",
+      "20:2:2",
+      "21:2:2"
+     ],
+     [
+      3,
+      "21:11:2"
+     ],
+     [
+      6,
+      "117:5:2"
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      15,
+      16,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "linesLeft": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      11,
+      15,
+      16,
+      20,
+      21
+     ],
+     [
+      3,
+      23,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "lineStartPunct": [
+     [
+      9,
+      191
+     ]
+    ]
+   }
   },
   {
    "name": "1810.04805v2-fr",
@@ -359,7 +574,74 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "contentLost": [
+     [
+      1,
+      "2:24:2",
+      "5:2:2",
+      "5:11:2"
+     ],
+     [
+      2,
+      "11:3:2",
+      "15:5:2",
+      "16:2:2",
+      "16:7:2",
+      "20:2:2",
+      "21:2:2"
+     ],
+     [
+      3,
+      "21:11:2"
+     ],
+     [
+      6,
+      "117:5:2"
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      15,
+      16,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "linesLeft": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      11,
+      15,
+      16,
+      20,
+      21
+     ],
+     [
+      3,
+      23,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ]
+   }
   },
   {
    "name": "1810.04805v2-ja",
@@ -377,7 +659,85 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "contentLost": [
+     [
+      1,
+      "2:24:2",
+      "5:2:2",
+      "5:11:2"
+     ],
+     [
+      2,
+      "11:3:2",
+      "15:5:2",
+      "16:2:2",
+      "16:7:2",
+      "20:2:2",
+      "21:2:2"
+     ],
+     [
+      3,
+      "32:0:2",
+      "21:11:2"
+     ],
+     [
+      6,
+      "117:5:2"
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      15,
+      16,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "linesLeft": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      11,
+      15,
+      16,
+      20,
+      21
+     ],
+     [
+      3,
+      23,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "lineStartPunct": [
+     [
+      7,
+      126
+     ],
+     [
+      12,
+      208
+     ]
+    ]
+   }
   },
   {
    "name": "1810.04805v2-ko",
@@ -395,7 +755,74 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "contentLost": [
+     [
+      1,
+      "2:24:2",
+      "5:2:2",
+      "5:11:2"
+     ],
+     [
+      2,
+      "11:3:2",
+      "15:5:2",
+      "16:2:2",
+      "16:7:2",
+      "20:2:2",
+      "21:2:2"
+     ],
+     [
+      3,
+      "21:11:2"
+     ],
+     [
+      6,
+      "117:5:2"
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      15,
+      16,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "linesLeft": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      11,
+      15,
+      16,
+      20,
+      21
+     ],
+     [
+      3,
+      23,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ]
+   }
   },
   {
    "name": "1810.04805v2-ru",
@@ -413,7 +840,80 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "contentLost": [
+     [
+      1,
+      "2:24:2",
+      "5:2:2",
+      "5:11:2"
+     ],
+     [
+      2,
+      "11:3:2",
+      "15:5:2",
+      "16:2:2",
+      "16:7:2",
+      "20:2:2",
+      "21:2:2"
+     ],
+     [
+      3,
+      "21:11:2"
+     ],
+     [
+      6,
+      "117:5:2"
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      15,
+      16,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "linesLeft": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      11,
+      15,
+      16,
+      20,
+      21
+     ],
+     [
+      3,
+      23,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "lineStartPunct": [
+     [
+      3,
+      28
+     ]
+    ]
+   }
   },
   {
    "name": "1810.04805v2-zh",
@@ -431,7 +931,73 @@
    "labelsSource": 0,
    "lostInk": 0,
    "fails": [],
-   "units": {}
+   "units": {
+    "contentLost": [
+     [
+      1,
+      "2:24:2",
+      "5:2:2",
+      "5:11:2"
+     ],
+     [
+      2,
+      "11:3:2",
+      "15:5:2",
+      "16:2:2",
+      "16:7:2",
+      "20:2:2",
+      "21:2:2"
+     ],
+     [
+      3,
+      "32:0:2",
+      "21:11:2"
+     ],
+     [
+      6,
+      "117:5:2"
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      1,
+      5
+     ],
+     [
+      2,
+      16,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ],
+    "linesLeft": [
+     [
+      1,
+      2,
+      5
+     ],
+     [
+      2,
+      11,
+      15,
+      16,
+      20,
+      21
+     ],
+     [
+      3,
+      23,
+      21
+     ],
+     [
+      6,
+      117
+     ]
+    ]
+   }
   },
   {
    "name": "2307.16209v1-zh",
@@ -453,6 +1019,407 @@
     "twice"
    ],
    "units": {
+    "lineStartPunct": [
+     [
+      25,
+      59
+     ],
+     [
+      27,
+      69
+     ],
+     [
+      29,
+      73,
+      74
+     ],
+     [
+      30,
+      75
+     ],
+     [
+      32,
+      80
+     ],
+     [
+      34,
+      89
+     ],
+     [
+      35,
+      91
+     ],
+     [
+      39,
+      109
+     ],
+     [
+      40,
+      112
+     ],
+     [
+      43,
+      127
+     ],
+     [
+      45,
+      133
+     ],
+     [
+      48,
+      147,
+      148
+     ],
+     [
+      49,
+      151
+     ],
+     [
+      50,
+      158
+     ],
+     [
+      51,
+      163
+     ],
+     [
+      53,
+      178
+     ],
+     [
+      54,
+      180
+     ],
+     [
+      56,
+      188
+     ],
+     [
+      57,
+      192,
+      193,
+      195
+     ],
+     [
+      58,
+      197
+     ],
+     [
+      59,
+      199
+     ],
+     [
+      60,
+      201
+     ],
+     [
+      61,
+      204
+     ],
+     [
+      64,
+      214
+     ],
+     [
+      65,
+      217,
+      214
+     ],
+     [
+      66,
+      218
+     ],
+     [
+      68,
+      226
+     ],
+     [
+      69,
+      231,
+      229
+     ],
+     [
+      73,
+      245
+     ],
+     [
+      79,
+      264
+     ],
+     [
+      80,
+      267
+     ],
+     [
+      81,
+      268,
+      269,
+      270
+     ],
+     [
+      82,
+      270
+     ],
+     [
+      83,
+      276,
+      277
+     ],
+     [
+      84,
+      277
+     ],
+     [
+      89,
+      299
+     ],
+     [
+      90,
+      303,
+      304
+     ],
+     [
+      91,
+      307,
+      306
+     ],
+     [
+      92,
+      311
+     ],
+     [
+      93,
+      313,
+      312
+     ],
+     [
+      96,
+      322,
+      323
+     ],
+     [
+      100,
+      341
+     ],
+     [
+      101,
+      343,
+      342
+     ],
+     [
+      102,
+      345
+     ],
+     [
+      107,
+      363
+     ],
+     [
+      109,
+      366,
+      368
+     ],
+     [
+      110,
+      369,
+      368
+     ],
+     [
+      111,
+      371
+     ],
+     [
+      114,
+      384,
+      383
+     ],
+     [
+      122,
+      422
+     ],
+     [
+      124,
+      427
+     ],
+     [
+      125,
+      430
+     ],
+     [
+      126,
+      432
+     ],
+     [
+      127,
+      434
+     ],
+     [
+      129,
+      435
+     ],
+     [
+      130,
+      437
+     ],
+     [
+      131,
+      437
+     ],
+     [
+      132,
+      439
+     ],
+     [
+      133,
+      439
+     ],
+     [
+      134,
+      443
+     ],
+     [
+      135,
+      445,
+      444,
+      446
+     ],
+     [
+      136,
+      447,
+      449,
+      446
+     ],
+     [
+      137,
+      450
+     ]
+    ],
+    "contentLost": [
+     [
+      27,
+      "69:2:0",
+      "69:4:0",
+      "69:6:0"
+     ],
+     [
+      29,
+      "73:17:0",
+      "74:1:0",
+      "74:3:0",
+      "74:5:0",
+      "74:7:0",
+      "74:11:0",
+      "74:13:0",
+      "74:15:0"
+     ],
+     [
+      30,
+      "75:38:0",
+      "74:33:0",
+      "74:35:0"
+     ],
+     [
+      51,
+      "162:21:0",
+      "162:23:0"
+     ],
+     [
+      53,
+      "178:57:0"
+     ],
+     [
+      54,
+      "178:65:0",
+      "178:73:0",
+      "178:75:2"
+     ],
+     [
+      59,
+      "198:9:0",
+      "198:11:0"
+     ],
+     [
+      79,
+      "264:7:0"
+     ],
+     [
+      80,
+      "267:23:2",
+      "267:43:0"
+     ],
+     [
+      122,
+      "420:9:2"
+     ],
+     [
+      126,
+      "432:2:0"
+     ],
+     [
+      127,
+      "434:23:0",
+      "434:25:0",
+      "434:27:0",
+      "434:29:0",
+      "434:31:0",
+      "434:39:0",
+      "434:74:0"
+     ],
+     [
+      128,
+      "434:100:0",
+      "434:102:0",
+      "434:108:0",
+      "434:110:0",
+      "434:112:0"
+     ],
+     [
+      135,
+      "445:2:0"
+     ]
+    ],
+    "linesLeft": [
+     [
+      27,
+      69
+     ],
+     [
+      31,
+      79
+     ],
+     [
+      34,
+      89
+     ],
+     [
+      40,
+      113
+     ],
+     [
+      59,
+      199
+     ],
+     [
+      95,
+      318
+     ],
+     [
+      99,
+      338
+     ],
+     [
+      122,
+      422
+     ],
+     [
+      126,
+      432
+     ],
+     [
+      135,
+      445
+     ]
+    ],
     "twice": [
      [
       28,
@@ -463,6 +1430,38 @@
      [
       51,
       162
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      57,
+      195
+     ],
+     [
+      80,
+      267
+     ],
+     [
+      89,
+      299
+     ],
+     [
+      121,
+      418
+     ],
+     [
+      136,
+      447
+     ]
+    ],
+    "textInDisplay": [
+     [
+      59,
+      198
+     ],
+     [
+      80,
+      267
      ]
     ]
    }
@@ -485,7 +1484,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "lineStartPunct": [
+     [
+      4,
+      38
+     ]
+    ]
+   }
   },
   {
    "name": "2608.04322v1-es",
@@ -505,7 +1511,14 @@
    "fails": [
     "lostInk"
    ],
-   "units": {}
+   "units": {
+    "lineStartPunct": [
+     [
+      5,
+      54
+     ]
+    ]
+   }
   },
   {
    "name": "2608.04322v1-fr",
@@ -606,6 +1619,142 @@
     "lostInk"
    ],
    "units": {}
+  },
+  {
+   "name": "2608.16117v1-zh",
+   "pages": 40,
+   "missing": 0,
+   "twice": 0,
+   "brackets": 1,
+   "duplicated": 0,
+   "numbers": [
+    68,
+    68
+   ],
+   "clipped": 0,
+   "groupsSplit": 0,
+   "labelsSource": 0,
+   "lostInk": 24,
+   "fails": [
+    "lostInk",
+    "brackets"
+   ],
+   "units": {
+    "contentLost": [
+     [
+      2,
+      "8:49:2",
+      "8:57:2"
+     ],
+     [
+      3,
+      "8:74:2"
+     ],
+     [
+      5,
+      "15:59:0",
+      "15:61:0"
+     ],
+     [
+      13,
+      "35:21:0"
+     ],
+     [
+      14,
+      "35:41:0"
+     ],
+     [
+      16,
+      "42:17:2"
+     ]
+    ],
+    "slotsSkipped": [
+     [
+      2,
+      8
+     ],
+     [
+      3,
+      8,
+      11
+     ]
+    ],
+    "lineStartPunct": [
+     [
+      2,
+      8
+     ],
+     [
+      5,
+      15
+     ],
+     [
+      9,
+      23
+     ],
+     [
+      11,
+      30
+     ],
+     [
+      12,
+      32
+     ],
+     [
+      13,
+      35
+     ],
+     [
+      14,
+      35,
+      36
+     ],
+     [
+      36,
+      107
+     ],
+     [
+      37,
+      107,
+      113
+     ],
+     [
+      38,
+      113,
+      115
+     ],
+     [
+      40,
+      121
+     ]
+    ],
+    "linesLeft": [
+     [
+      2,
+      8
+     ],
+     [
+      3,
+      8
+     ],
+     [
+      16,
+      42
+     ]
+    ],
+    "cropTextOverlap": [
+     [
+      14,
+      35
+     ]
+    ],
+    "brackets": [
+     [
+      39,
+      120
+     ]
+    ]
+   }
   }
  ],
  "summaries": {
@@ -629,8 +1778,8 @@
     "unfit": 2,
     "group: a cell unfit": 46
    },
-   "page1Ms": 181,
-   "slowestUnitMs": 23
+   "page1Ms": 167,
+   "slowestUnitMs": 25
   },
   "1512.03385v1-es": {
    "fullSize": 0.373,
@@ -652,7 +1801,7 @@
     "unfit": 3,
     "group: a cell unfit": 47
    },
-   "page1Ms": 184,
+   "page1Ms": 180,
    "slowestUnitMs": 24
   },
   "1512.03385v1-fr": {
@@ -675,8 +1824,8 @@
     "unfit": 1,
     "group: a cell unfit": 1
    },
-   "page1Ms": 187,
-   "slowestUnitMs": 24
+   "page1Ms": 178,
+   "slowestUnitMs": 25
   },
   "1512.03385v1-ja": {
    "fullSize": 0.669,
@@ -699,7 +1848,7 @@
     "unfit": 13,
     "group: a cell unfit": 51
    },
-   "page1Ms": 250,
+   "page1Ms": 272,
    "slowestUnitMs": 33
   },
   "1512.03385v1-ko": {
@@ -723,8 +1872,8 @@
     "unfit": 2,
     "group: a cell unfit": 46
    },
-   "page1Ms": 561,
-   "slowestUnitMs": 30
+   "page1Ms": 541,
+   "slowestUnitMs": 29
   },
   "1512.03385v1-ru": {
    "fullSize": 0.376,
@@ -746,8 +1895,8 @@
     "unfit": 9,
     "group: a cell unfit": 53
    },
-   "page1Ms": 157,
-   "slowestUnitMs": 21
+   "page1Ms": 142,
+   "slowestUnitMs": 24
   },
   "1512.03385v1-zh": {
    "fullSize": 0.916,
@@ -770,7 +1919,7 @@
     "unfit": 1,
     "group: a cell unfit": 4
    },
-   "page1Ms": 596,
+   "page1Ms": 576,
    "slowestUnitMs": 28
   },
   "1706.03762v7-de": {
@@ -789,8 +1938,8 @@
    "bar": 0.03,
    "overBar": false,
    "why": {},
-   "page1Ms": 102,
-   "slowestUnitMs": 19
+   "page1Ms": 143,
+   "slowestUnitMs": 17
   },
   "1706.03762v7-es": {
    "fullSize": 0.629,
@@ -811,8 +1960,8 @@
     "unfit": 1,
     "group: a cell unfit": 5
    },
-   "page1Ms": 102,
-   "slowestUnitMs": 18
+   "page1Ms": 130,
+   "slowestUnitMs": 19
   },
   "1706.03762v7-fr": {
    "fullSize": 0.635,
@@ -830,7 +1979,7 @@
    "bar": 0.03,
    "overBar": false,
    "why": {},
-   "page1Ms": 157,
+   "page1Ms": 111,
    "slowestUnitMs": 18
   },
   "1706.03762v7-ja": {
@@ -854,8 +2003,8 @@
     "unfit": 3,
     "group: a cell unfit": 7
    },
-   "page1Ms": 271,
-   "slowestUnitMs": 21
+   "page1Ms": 432,
+   "slowestUnitMs": 25
   },
   "1706.03762v7-ko": {
    "fullSize": 0.881,
@@ -876,8 +2025,8 @@
     "author": 2,
     "unanchored": 1
    },
-   "page1Ms": 504,
-   "slowestUnitMs": 20
+   "page1Ms": 715,
+   "slowestUnitMs": 24
   },
   "1706.03762v7-ru": {
    "fullSize": 0.626,
@@ -898,8 +2047,8 @@
     "unfit": 4,
     "group: a cell unfit": 12
    },
-   "page1Ms": 106,
-   "slowestUnitMs": 17
+   "page1Ms": 138,
+   "slowestUnitMs": 20
   },
   "1706.03762v7-zh": {
    "fullSize": 0.896,
@@ -922,8 +2071,8 @@
     "unfit": 3,
     "group: a cell unfit": 7
    },
-   "page1Ms": 780,
-   "slowestUnitMs": 20
+   "page1Ms": 1109,
+   "slowestUnitMs": 22
   },
   "1810.04805v2-de": {
    "fullSize": 0.447,
@@ -945,8 +2094,8 @@
     "unfit": 2,
     "group: a cell unfit": 4
    },
-   "page1Ms": 135,
-   "slowestUnitMs": 24
+   "page1Ms": 187,
+   "slowestUnitMs": 26
   },
   "1810.04805v2-es": {
    "fullSize": 0.388,
@@ -966,8 +2115,8 @@
    "why": {
     "unanchored": 7
    },
-   "page1Ms": 141,
-   "slowestUnitMs": 25
+   "page1Ms": 184,
+   "slowestUnitMs": 27
   },
   "1810.04805v2-fr": {
    "fullSize": 0.369,
@@ -989,8 +2138,8 @@
     "unfit": 2,
     "group: a cell unfit": 7
    },
-   "page1Ms": 130,
-   "slowestUnitMs": 25
+   "page1Ms": 144,
+   "slowestUnitMs": 30
   },
   "1810.04805v2-ja": {
    "fullSize": 0.698,
@@ -1014,8 +2163,8 @@
     "unfit": 6,
     "group: a cell unfit": 9
    },
-   "page1Ms": 204,
-   "slowestUnitMs": 31
+   "page1Ms": 579,
+   "slowestUnitMs": 32
   },
   "1810.04805v2-ko": {
    "fullSize": 0.849,
@@ -1036,8 +2185,8 @@
     "author": 1,
     "unanchored": 8
    },
-   "page1Ms": 506,
-   "slowestUnitMs": 27
+   "page1Ms": 1044,
+   "slowestUnitMs": 28
   },
   "1810.04805v2-ru": {
    "fullSize": 0.374,
@@ -1057,8 +2206,8 @@
    "why": {
     "unanchored": 7
    },
-   "page1Ms": 263,
-   "slowestUnitMs": 24
+   "page1Ms": 176,
+   "slowestUnitMs": 25
   },
   "1810.04805v2-zh": {
    "fullSize": 0.923,
@@ -1081,8 +2230,8 @@
     "unfit": 3,
     "group: a cell unfit": 4
    },
-   "page1Ms": 749,
-   "slowestUnitMs": 24
+   "page1Ms": 621,
+   "slowestUnitMs": 25
   },
   "2307.16209v1-zh": {
    "fullSize": 1,
@@ -1105,8 +2254,8 @@
     "served": 5,
     "unfit": 1
    },
-   "page1Ms": 624,
-   "slowestUnitMs": 320
+   "page1Ms": 614,
+   "slowestUnitMs": 306
   },
   "2608.04322v1-de": {
    "fullSize": 0.442,
@@ -1128,8 +2277,8 @@
     "unfit": 4,
     "group: a cell unfit": 13
    },
-   "page1Ms": 229,
-   "slowestUnitMs": 25
+   "page1Ms": 221,
+   "slowestUnitMs": 27
   },
   "2608.04322v1-es": {
    "fullSize": 0.509,
@@ -1151,8 +2300,8 @@
     "unfit": 5,
     "group: a cell unfit": 11
    },
-   "page1Ms": 177,
-   "slowestUnitMs": 27
+   "page1Ms": 206,
+   "slowestUnitMs": 30
   },
   "2608.04322v1-fr": {
    "fullSize": 0.434,
@@ -1174,8 +2323,8 @@
     "unfit": 2,
     "group: a cell unfit": 5
    },
-   "page1Ms": 258,
-   "slowestUnitMs": 28
+   "page1Ms": 199,
+   "slowestUnitMs": 29
   },
   "2608.04322v1-ja": {
    "fullSize": 0.875,
@@ -1198,8 +2347,8 @@
     "unfit": 1,
     "group: a cell unfit": 2
    },
-   "page1Ms": 350,
-   "slowestUnitMs": 31
+   "page1Ms": 346,
+   "slowestUnitMs": 30
   },
   "2608.04322v1-ko": {
    "fullSize": 0.972,
@@ -1220,7 +2369,7 @@
     "author": 1,
     "unanchored": 1
    },
-   "page1Ms": 716,
+   "page1Ms": 671,
    "slowestUnitMs": 27
   },
   "2608.04322v1-ru": {
@@ -1243,8 +2392,8 @@
     "unfit": 5,
     "group: a cell unfit": 16
    },
-   "page1Ms": 189,
-   "slowestUnitMs": 25
+   "page1Ms": 217,
+   "slowestUnitMs": 28
   },
   "2608.04322v1-zh": {
    "fullSize": 1,
@@ -1265,8 +2414,31 @@
     "author": 1,
     "unanchored": 1
    },
-   "page1Ms": 669,
-   "slowestUnitMs": 26
+   "page1Ms": 652,
+   "slowestUnitMs": 30
+  },
+  "2608.16117v1-zh": {
+   "fullSize": 0.983,
+   "medianScale": 1,
+   "style": [
+    117,
+    117
+   ],
+   "onGrid": 0.5,
+   "unfit": [
+    0,
+    117
+   ],
+   "unfitShare": 0,
+   "bar": 0.01,
+   "overBar": false,
+   "why": {
+    "author": 3,
+    "unanchored": 2,
+    "unproven": 1
+   },
+   "page1Ms": 861,
+   "slowestUnitMs": 159
   }
  }
 }
