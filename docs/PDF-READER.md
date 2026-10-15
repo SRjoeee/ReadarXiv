@@ -935,7 +935,14 @@ within noise.
   for a unit `sentenceStarts` would read (located by its marks, or by its text over 80 % of it): on the ten papers, one
   unit's pairs read where the whole layout's anchor refused them.
 - **An empty or refused left part** (a page past the left part's caps ships none, M8): no shapes on that page and
-  nothing thrown; a refusal warns once a page, and a later left part for it is taken.
+  nothing thrown; a refusal warns once a page, and a later left part for it is taken. A left part whose token ids reach
+  into a page already in is refused, and the first of the two keeps its place: a bogus page that comes first leaves its
+  true neighbour refused, since nothing in the two tells which is wrong.
+- **Floats and the view's window**: a page's floats are made of what its drawing gives (its figures and paths,
+  `floats`), and again on the page's first use after a part moves the document part — never in the part's task, which
+  would make every such page's geometry again at once. A page leaving the window (`forget`) lets its geometry, its
+  floats and their inputs go; its drawing gives them again. Inputs that throw are let go with one warning, and the page
+  has no floats.
 
 ## 18. Rules and their versions
 

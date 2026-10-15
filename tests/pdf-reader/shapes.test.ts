@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Anchor, type DocToken, lineRects, sentenceStarts, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { readLeftPart, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { type Box, pageFloats } from '@/pdf-reader/engine/view/floats.mjs'
 import { blockOf, layoutOf, pageGeometry, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
 import { createShapes, leftPageInput, mirror, pdfShapes } from '@/pdf-reader/engine/view/shapes.mjs'
 // the gate's own harness (SH1 on the ten papers), here on a paper of the test's
@@ -274,6 +275,87 @@ describe('SH3: sentences through the same calls', () => {
   it('headings and captions light whole, whatever starts they are given', () => {
     const cap = nth(h.shapes.runs(4), 0), c = h.shapes.block(cap, PAD)
     expect(h.shapes.hit(2, (c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2, PAD, () => Int32Array.of(nth(UNITS.get(4) ?? [], 2)))).toMatchObject({ id: 4, s: -1 })
+  })
+
+  it('a unit short of a page lights whole where a point lights it, whatever starts it is given', () => {
+    const half = built([1]), st = wholeStarts.get(3) as Int32Array
+    const r = nth(half.shapes.runs(3), 0), top = nth(r.rows, 0)
+    expect(half.shapes.hit(1, r.x0 + 20, (top.y0 + top.y1) / 2, PAD, () => st)).toMatchObject({ id: 3, s: -1 })
+  })
+})
+
+describe('the feed: pages and parts told again, a left part malformed, floats on the layer path', () => {
+  /** a layout's kept page geometries (an internal of highlight.mjs the test looks into) */
+  const cacheOf = (layout: object) => (layout as { cache: Map<number, unknown> }).cache
+  const { parts, lefts } = cutSide(whole, anchors, views)
+
+  it('a page given again changes nothing (false); a part told again leaves every page as it was', () => {
+    const h = built([1, 2, 3]), runs = h.shapes.runs(5)
+    expect(h.addPage(nth(lefts, 2))).toBe(false)
+    expect(nth(h.shapes.runs(5), 0)).toBe(nth(runs, 0))
+    h.addParts(parts)
+    expect(h.shapes.runs(5)).toEqual(runs)
+  })
+
+  it('a malformed left part goes to the refusal: one warning, nothing thrown, a good one taken after', () => {
+    const warn = vi.fn(), h = createShapes({ kindOf, warn })
+    h.addParts(parts)
+    expect(() => h.addPage({ ...nth(lefts, 3), spans: undefined as never })).not.toThrow()
+    expect(h.has(3)).toBe(false)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(h.addPage(nth(lefts, 3))).toBe(true)
+    expect(h.shapes.runs(6).length).toBe(1)
+  })
+
+  it('a page whose floats throw: one warning, nothing thrown into the feed or the paint, the mirror told every part and page', () => {
+    const warn = vi.fn(), l = createShapes({ kindOf, warn }), r = mirror(l)
+    l.addParts([nth(parts, 0)])
+    l.addPage(nth(lefts, 1))
+    // paths no float can be made of (a rule that is no box), given before the page's part
+    const bad = { rules: [null as unknown as Box & { v: boolean }] }
+    expect(() => l.floats(2, [], bad)).not.toThrow()
+    expect(() => l.addParts(parts.slice(1))).not.toThrow()
+    expect(() => l.addPage(nth(lefts, 2))).not.toThrow()
+    const cap = nth(l.shapes.runs(4), 0), c = blockOf(cap, PAD), x = (c.x0 + c.x1) / 2, y = (c.y0 + c.y1) / 2
+    expect(() => l.shapes.hit(2, x, y, PAD, () => null)).not.toThrow()
+    expect(() => r.shapes.hit(2, x, y, PAD, () => null)).not.toThrow()
+    expect(l.shapes.float(4)).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    // the later part and pages reached the mirror; the bad inputs are gone, so a later part rethrows nothing
+    l.addPage(nth(lefts, 3))
+    expect(r.shapes.runs(4).length).toBe(1)
+    expect(r.shapes.runs(6).length).toBe(1)
+    expect(() => l.addParts(parts)).not.toThrow()
+    expect(warn).toHaveBeenCalledTimes(1)
+    // the page's floats given again, made of good paths
+    l.floats(2)
+    expect(l.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
+  })
+
+  it('a part makes no page again in its own task: floats come back on their next use, from the page\'s geometry made then', () => {
+    const h = built([1, 2, 3])
+    h.floats(2)
+    expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
+    h.addParts(parts)
+    expect(cacheOf(h.layout).size).toBe(0)
+    expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
+    expect(cacheOf(h.layout).has(2)).toBe(true)
+    // the float the whole layout makes of the same page
+    const W = layoutOf(doc, views, anchors, kindOf), [f] = pageFloats(W, 2)
+    expect(h.shapes.float(4)).toEqual(f)
+  })
+
+  it('forget lets a page\'s floats and their inputs go: no part makes them again, the caller gives them again on its redraw', () => {
+    const h = built([1, 2, 3])
+    h.floats(2)
+    expect(h.shapes.float(4)).not.toBeNull()
+    h.forget(2)
+    expect(h.shapes.float(4)).toBeNull()
+    h.addParts(parts)
+    expect(h.shapes.float(4)).toBeNull()
+    expect(cacheOf(h.layout).has(2)).toBe(false)
+    h.floats(2)
+    expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
   })
 })
 

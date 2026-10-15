@@ -64,50 +64,57 @@ const told = new WeakMap()
 
 /**
  * A side's shapes made page by page from the layer's wire: { layout, shapes, addParts, addPage, refuse, has, forget,
- * starts, floats }. `kindOf(id)` a unit's kind (the index's); `warn(what, error)` where a left part is refused, once a page.
- * After `addParts` or `addPage` the pane's shapes are set again (lighting.mjs setShapes): what a page's runs are made of
- * may have moved, and the paint keeps what it drew by the run
+ * starts, floats }. `kindOf(id)` a unit's kind (the index's); `warn(what, error)` where a left part or a page's floats are
+ * refused, once each a page. After `addParts` or `addPage` the pane's shapes are set again (lighting.mjs setShapes): what
+ * a page's runs are made of may have moved, and the paint keeps what it drew by the run
  */
 export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {}) {
-  const L = pageLayout(kindOf), shapes = pdfShapes(L)
-  const state = { kindOf, parts: [], pages: new Map(), followers: new Set() }
+  const L = pageLayout(kindOf), base = pdfShapes(L)
   /** each unit's pairs, page by page ([words, tokens]); their map made once the unit's tokens are all in */
   const pairsOn = new Map(), pairsOf = new Map()
-  /** a page's floats' inputs (its figures and paths, floats.mjs), kept to be made again when the document part moves */
+  /** a page's floats' inputs (its figures and paths, floats.mjs) while the page is in the view's window, its drawing's
+   *  to give: its floats made of them on its first use after they come or the document part moves — never in a part's
+   *  task, which would make every such page's geometry again at once —, let go with the page (forget) */
   const floatsIn = new Map()
   const warned = new Set()
-  const makeFloats = p => {
+  const once = (what, e) => { if (warned.has(what)) return; warned.add(what); warn(what, e) }
+  /** a page's floats made where its inputs are kept and its floats are not; inputs that throw are let go, one warning */
+  function floatsOn(p) {
     const at = floatsIn.get(p)
-    if (!at || !L.pt[p] || !L.page[p]) return
-    L.floats?.delete(p)
-    pageFloats(L, p, at.regions, at.paths)
+    if (!at || L.floats?.has(p) || !L.pt[p] || !L.page[p]) return
+    try { pageFloats(L, p, at.regions, at.paths) } catch (e) { floatsIn.delete(p); L.floats?.delete(p); once(`the floats of page ${p}`, e) }
   }
-  function refuse(page, e) {
-    if (warned.has(page)) return
-    warned.add(page)
-    warn(`the left part of page ${page}`, e)
+  const refuse = (page, e) => once(`the left part of page ${page}`, e)
+  // the float a unit lights and what a point lights read its pages' floats, made then
+  const shapes = {
+    ...base,
+    float: id => { for (const p of L.pagesOf.get(id) ?? []) floatsOn(p); return base.float(id) },
+    hit: (page, x, y, padX, startsOf) => { floatsOn(page); return base.hit(page, x, y, padX, startsOf) },
   }
+  const state = { kindOf, parts: [], pages: new Map(), followers: new Set(), floatsOn }
   told.set(shapes, state)
   return {
     layout: L,
     shapes,
-    /** parts told (format.mjs ReadPart: pages, views, left): the document part as they come, in page order */
+    /** parts told (format.mjs ReadPart: pages, views, left): the document part as they come, in page order; the mirrors
+     *  told them too. No page's geometry nor floats made here: each on its next use */
     addParts(parts) {
       if (!parts.length) return
-      state.parts.push(...parts)
       layoutParts(L, parts)
-      for (const p of floatsIn.keys()) makeFloats(p)
+      state.parts.push(...parts)
       for (const f of state.followers) f.addParts(parts)
     },
-    /** a page's left part (format.mjs ReadLeftPart): its part of the layout; false where it was in already or is refused
-     *  (one warning a page: its ids reach into another page's) */
+    /** a page's left part (format.mjs ReadLeftPart): its part of the layout, and the mirrors'; false where it was in
+     *  already or is refused — malformed, or its ids reach into another page's (one warning a page) */
     addPage(left) {
-      if (L.pt[left.page]) return false
-      const input = leftPageInput(left)
-      try { if (!layoutPage(L, input.page, input)) return false } catch (e) { refuse(input.page, e); return false }
+      let input
+      try {
+        if (L.pt[left.page]) return false
+        input = leftPageInput(left)
+        if (!layoutPage(L, input.page, input)) return false
+      } catch (e) { refuse(left?.page, e); return false }
       state.pages.set(input.page, input)
       for (const [id, words, tokens] of input.pairs) (pairsOn.get(id) ?? pairsOn.set(id, new Map()).get(id)).set(input.page, [words, tokens])
-      makeFloats(input.page)
       for (const f of state.followers) f.addPage(input)
       return true
     },
@@ -116,9 +123,10 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
     refuse,
     /** whether a page's part is in */
     has: p => !!L.pt[p],
-    /** a page's geometry let go (the view's window: NEAR and the last pages wanted), made again from its part on its next
-     *  use; its part, its floats and the units' sentences elsewhere kept */
-    forget: p => { L.cache.delete(p) },
+    /** a page out of the view's window (NEAR and the last pages wanted): its geometry, its floats and their inputs let
+     *  go — the geometry made again from its part on its next use, the floats when its drawing gives their inputs again;
+     *  its part and the units' sentences elsewhere kept */
+    forget: p => { L.cache.delete(p); L.floats?.delete(p); floatsIn.delete(p) },
     /**
      * A unit's sentence starts on the left, by its text and its sentences' offsets in it (`text` the unit's plain source,
      * `offsets` the row's `sentences.src`): anchors.mjs sentenceStarts over its tokens and its pairs, once every page
@@ -140,11 +148,13 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
       }
       return pairs && sentenceStarts({ tokens: L.anchors.get(id).tokens, pairs, bounded: true, coverage: 1 }, text, offsets)
     },
-    /** a page's floats (floats.mjs pageFloats) from what its drawing gave: its figures' regions and its paths; made when
-     *  its part is in, and again whenever the document part moves */
+    /** a page's floats (floats.mjs pageFloats) from what its drawing gave: its figures' regions and its paths; made now
+     *  where its part is in, else on its first use after it comes, and again on its first use after the document part
+     *  moves; inputs that throw are let go with one warning, the page then without floats */
     floats(page, regions = [], paths = {}) {
       floatsIn.set(page, { regions, paths })
-      makeFloats(page)
+      L.floats?.delete(page)
+      floatsOn(page)
     },
   }
 }
@@ -183,7 +193,7 @@ export function mirror(source) {
     click: own.click,
     float: from.float,
     floatShapes: from.floatShapes,
-    hit: (page, x, y, padX, startsOf) => floatHitOf(source.layout, page, x, y, padX, hitOf(R, page, x, y, padX, startsOf)),
+    hit: (page, x, y, padX, startsOf) => { state.floatsOn(page); return floatHitOf(source.layout, page, x, y, padX, hitOf(R, page, x, y, padX, startsOf)) },
   }
   return { layout: R, shapes, forget: p => { R.cache.delete(p) }, dispose: () => { state.followers.delete(follower) } }
 }

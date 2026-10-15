@@ -32,17 +32,20 @@ export interface SideShapes {
   readonly shapes: Shapes<Run, Float>
   /** the document part as the parts come (format.mjs ReadPart), in page order */
   addParts(parts: readonly PartRects[]): void
-  /** a page's left part (the door's leftPageOf); false where it was in already or is refused (one warning a page) */
+  /** a page's left part (the door's leftPageOf); false where it was in already or is refused, malformed or overlapping
+   *  another page's ids (one warning a page) */
   addPage(left: Pick<ReadLeftPart, 'page' | 'first' | 'table' | 'spans' | 'pairs'>): boolean
   /** a page's left part refused: no shapes there, one warning a page; a later one is taken */
   refuse(page: number, error: unknown): void
   has(page: number): boolean
-  /** a page's geometry let go (the view's window), made again from its part on its next use */
+  /** a page out of the view's window: its geometry, floats and their inputs let go (made again on its next use, the
+   *  floats once its drawing gives their inputs again) */
   forget(page: number): void
   /** a unit's sentence starts on the left by its plain source and its row's `sentences.src`, once every page it is on
    *  has come; null where it lights whole */
   starts(id: number, text: string, offsets: readonly number[] | undefined): Int32Array | null
-  /** a page's floats from its drawing's figures and paths, made when its part is in and again as the document part moves */
+  /** a page's floats from its drawing's figures and paths: made now where its part is in, else on its first use, and
+   *  again on its first use after the document part moves; inputs that throw are let go, one warning */
   floats(page: number, regions?: Box[], paths?: Partial<Paths>): void
 }
 /** the right's shapes, the left's mirrored over copies of its own */
