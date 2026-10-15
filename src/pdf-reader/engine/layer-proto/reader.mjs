@@ -375,8 +375,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       if (signal?.aborted) return Promise.reject(abortError())
       if (dead && told[page] !== READY) return Promise.reject(dead)
       if (told[page] === FAILED) return Promise.reject(new Error(`page ${page} failed`))
-      // (answered in a microtask: a dispose in between rejects it, as it rejects every pending ask)
-      if (told[page] === READY) return Promise.resolve().then(() => { live(); release(page); return fresh(page, lang) })
+      // (answered in a microtask: a dispose or an abort in between rejects it, as they reject every pending ask)
+      if (told[page] === READY) return Promise.resolve().then(() => { live(); if (signal?.aborted) throw abortError(); release(page); return fresh(page, lang) })
       return new Promise((resolve, reject) => {
         const a = { resolve, reject, lang, signal, onAbort: null }
         if (signal) {

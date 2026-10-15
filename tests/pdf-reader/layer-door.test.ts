@@ -389,6 +389,23 @@ describe('the door: three opens, the same pages', () => {
     expect(await p).toMatch(/let go/)
   })
 
+  it('rejects a ready page\'s ask with an AbortError when its signal aborts in the same task (PR #359)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const c = await cutSpec(SPEC)
+    const layer = await openLayer({ index: c.index, doc: docsOf(SPEC)(0) as never, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    try {
+      layer.take(rowsOfIndex(c.index))
+      await layer.pageOf(1, { lang: 'zh' })
+      expect(layer.pageState(1)).toBe('ready')
+      const ctl = new AbortController()
+      const p = layer.pageOf(1, { lang: 'zh', signal: ctl.signal }).then(() => 'value', (e: Error) => e.name)
+      ctl.abort()
+      expect(await p).toBe('AbortError')
+      // (an ask not aborted still answers)
+      expect((await layer.pageOf(1, { lang: 'zh', signal: new AbortController().signal })).svg).toBeTruthy()
+    } finally { layer.dispose() }
+  })
+
   it('leaves a unit that throws while it is laid the original\'s, why error, and completes its page (DR6)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const c = await cutSpec(SPEC)
