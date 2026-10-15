@@ -84,6 +84,43 @@ const lineEnvsOf = texts => {
   for (const m of text.matchAll(/\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g)) out.add(m[1]?.trim() || `${m[2].trim()}code`)
   return out
 }
+/** a display's opening (group 1) and its close (group 2) in an environment's code: a math environment's \\begin or its
+ *  command, \\[ or $$ (group 3, either) */
+const DISPLAY_NAMES = '(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray)\\*?'
+const DISPLAY_TOKEN = new RegExp(String.raw`(\\begin\s*\{\s*${DISPLAY_NAMES}\s*\}|\\${DISPLAY_NAMES}(?![A-Za-z@*])|\\\[)|(\\end\s*\{\s*${DISPLAY_NAMES}\s*\}|\\end${DISPLAY_NAMES}(?![A-Za-z@*])|\\\])|(\$\$)`, 'g')
+/** the displays code opens and closes, in order: 1 an opening, -1 a close. TeX's \\\\ and \\$ are no part of one (a
+ *  line break's \\\\[2pt] is no \\[) */
+const displayTokens = code => [...code.replace(/\\[\\$]/g, '  ').matchAll(DISPLAY_TOKEN)].map(m => (m[1] ? 1 : m[2] ? -1 : 0))
+/** whether an environment's begin code leaves a display open where it ends, and its end code closes that one before
+ *  anything else (a $$ the one or the other, by where it stands) */
+const setsDisplay = (begin, end) => {
+  let depth = 0
+  for (const d of displayTokens(begin)) depth = Math.max(0, depth + (d || (depth ? -1 : 1)))
+  const first = displayTokens(end)[0]
+  return depth > 0 && first !== undefined && first !== 1
+}
+/** the environments of the paper's own that set a display: their begin code opens one that their end code closes
+ *  (\\newenvironment{eqsplit}{\\equation\\aligned}{\\endaligned\\endequation}, \\NewDocumentEnvironment{x}{…}{\\[}{\\]}),
+ *  by their last definition, as TeX takes it (\\provide… defines nothing a definition before it made). Their body is
+ *  math: read as prose, 2310.20360's 89 eqsplit displays were cut into units, whose marks came between a subscript's _
+ *  and its operand (\\bfm_\\leavevmode\\axtmark{…}1: "Missing { inserted"). Not one whose begin code sets a display of
+ *  its own and closes it, its body the text after it */
+const displayEnvsOf = texts => {
+  const out = new Map()
+  for (const t of texts.map(uncommented)) {
+    for (const m of t.matchAll(/\\(?:(?:re|provide)?newenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment)\s*\*?\s*\{([^}]+)\}/g)) {
+      const doc = m[0].includes('DocumentEnvironment'), name = m[1].trim()
+      if (/^\\(?:provide|Provide)/.test(m[0]) && out.has(name)) continue
+      let k = skipSpaces(t, m.index + m[0].length)
+      // \\newenvironment's [n][default]; a document environment's argument specification, a group
+      if (doc) { if (t[k] !== '{') continue; const g = matchGroup(t, k); if (g < 0) continue; k = skipSpaces(t, g) } else for (let n = 0; n < 2 && t[k] === '['; n++) { const e = matchGroup(t, k, '[', ']'); if (e < 0) break; k = skipSpaces(t, e) }
+      if (t[k] !== '{') continue
+      const b = matchGroup(t, k), k2 = b > 0 ? skipSpaces(t, b) : -1, e = t[k2] === '{' ? matchGroup(t, k2) : -1
+      if (e > 0) out.set(name, setsDisplay(t.slice(k + 1, b - 1), t.slice(k2 + 1, e - 1)))
+    }
+  }
+  return new Set([...out].filter(([, display]) => display).map(([name]) => name))
+}
 /** whether `env` is read by lines (LINE_ENVS, or the paper's own `lineEnvs`: by its name, a star in it as defined
  *  (`\\DefineVerbatimEnvironment{Code*}`), or by the name its star is added to) */
 const isLineEnv = (env, lineEnvs) => LINE_ENVS.test(env) || !!lineEnvs?.has(env) || !!lineEnvs?.has(env.replace(/\*$/, ''))
@@ -453,10 +490,38 @@ function paperMacros(files) {
     // metadata) has it set elsewhere, perhaps more than once: a front unit, with no mark (2608.12096's \\conference,
     // marked where it was called, left a translation's leading on every page after it)
     const p0 = prose.length === 1 ? prose[0] : undefined
-    out.set(name, { params, opt, prose: p0, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }) })
+    const then = params ? tailOf(t.slice(k + 1, e - 1)) : null
+    out.set(name, { params, opt, prose: p0, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
   }
   return out
 }
+/**
+ * The command a macro's body ends in, none of its arguments given there, by name: TeX's reading goes on past the call's
+ * own arguments into that command's (`then`, the walker's: the call is walked as that command). 2106.10165's
+ * \\newcommand{\\strangechapter}[1]{\\renewcommand{\\thechapter}{#1}\\chapter}, called as
+ * \\strangechapter{$\\infty$}{The End of Training}: the chapter's title is the group after the call, which the walk took
+ * for a paragraph of its own, and its line probe, written before the unit, came between \\chapter and its title: \\chapter
+ * took \\axtlines for the title, and the book of 471 pages stopped TeX. Null where the body ends otherwise, in a
+ * declaration that takes no argument (NO_ARGS), or in a command's operand, which TeX does not run (\\string\\section)
+ */
+function tailOf(body) {
+  const t = uncommented(body).trimEnd()
+  // its tokens: a control word (a star after it with it, as commandAt reads it), a control symbol, a character
+  const at = []
+  for (let i = 0; i < t.length; i++) { if (/\s/.test(t[i])) continue; at.push(i); if (t[i] === '\\') i = commandAt(t, i).end - 1 }
+  const word = k => (at[k] !== undefined && t[at[k]] === '\\' && isLetter(t[at[k] + 1] ?? '') ? commandAt(t, at[k]).name : null)
+  const n = at.length - 1, name = word(n)
+  if (!name || NO_ARGS.has(name)) return null
+  // one an operand of the command before it, which TeX does not run: \\string\\section, \\let\\saved\\section,
+  // \\let\\saved=\\section, \\def\\section…
+  const before = t[at[n - 1]] === '=' ? n - 2 : n - 1
+  return OPERAND_OF.has(word(n - 1)) || SECOND_OPERAND_OF.has(word(before - 1)) ? null : name
+}
+/** the commands whose operand is the token after them (tailOf): it is printed, compared or defined, not run */
+const OPERAND_OF = new Set(['string', 'noexpand', 'meaning', 'show', 'let', 'futurelet', 'def', 'gdef', 'edef', 'xdef', 'ifx', 'newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand', 'chardef', 'mathchardef', 'countdef', 'dimendef', 'skipdef', 'toksdef'])
+/** …and those whose operand is the second token after them, the first a name (\\let\\saved\\section, \\ifx\\a\\section,
+ *  \\renewcommand\\saved\\section) */
+const SECOND_OPERAND_OF = new Set(['let', 'ifx', 'newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand'])
 /** whether a macro body ends where something after a call goes on being read: in a command whose arguments it does not
  *  all give (by the role table), in one the table does not know, after a bracket (\\includegraphics[…]), or with a
  *  look ahead anywhere in it */
@@ -807,8 +872,37 @@ function walk(s, from, to, b, ctx) {
   let i = from, textStart = -1
   const endText = () => { if (textStart >= 0 && textStart < i) b.text(s.slice(textStart, i), textStart, i); textStart = -1 }
   const startText = () => { if (textStart < 0) textStart = i }
+  // the command a paper macro's call ends in (its `then`, tailOf), walked next as that command where an argument follows
+  // the call: { name, end } with `end` the call's, and s[i…end) the call's source still to place (none where its own
+  // arguments were walked). Every unit then begins and ends outside the call and the arguments TeX reads after it — a
+  // unit's leading and line probe, which go before its first piece, cannot come between them. Only a command whose
+  // arguments the walk knows: a heading's or a caption's, another of the paper's macros, one of the role table's; one it
+  // does not know (\\xspace, \\fi) leaves what follows the call as it was read before. `thens`, how many in a row: a
+  // macro that ends in itself goes no further than a few
+  let then = null, thens = 0
+  const goOn = (macro, call, at) => {
+    const name = macro.then, params = name && paperParams(name, paper), tail = name && ctx.macros.get(name)
+    if (!name || thens >= 4 || !(HEADINGS.has(name) || OWN_UNIT_ARG.has(name) || tail || params)) return false
+    const next = argsAfter(s, call.end, 1).args[0]
+    if (next) { if (next.end > to) return false; then = { name, end: call.end }; i = at; return true }
+    // a single token where that command takes a required argument, which TeX takes for it (\\chapter X, \\chapter\\name):
+    // it goes with the call, in one piece — the call's placeholder, or the close of the pair its text was walked in —, or
+    // where the call's arguments were walked as units of their own, stays in the source after it: no unit begins, and no
+    // layout mark goes, between the two
+    const k = skipSpaces(s, call.end)
+    const takes = HEADINGS.has(name) || OWN_UNIT_ARG.has(name) || (tail ? tail.params > (tail.opt ? 1 : 0) : params.some(p => p.shape === '{' || p.shape === '_'))
+    if (!takes || k >= to || /[\s{}[\]$%#&^_]/.test(s[k])) return false
+    const token = s[k] === '\\' ? commandAt(s, k) : null, e = token ? token.end : k + 1, last = b.cur?.pieces.at(-1)
+    if (e > to || (at === call.end && last && last.t !== 'close')) return false
+    if (at < call.end) b.ph(s.slice(at, e), at, e)
+    else if (last) { last.src += s.slice(call.end, e); b.cur.end = e }
+    // (a call of the paper's macro of no argument counted as any is: storedBodies)
+    if (token && ctx.macros.get(token.name)?.params === 0) ctx.called?.(token.name, b.kind)
+    i = e
+    return true
+  }
   while (i < to && !ctx.ended) {
-    const c = s[i]
+    const c = then ? '\\' : s[i]
     // a comment takes its line's end with it; a blank line after it is still \\par, as TeX reads it (`text % note`, then
     // an empty line: two paragraphs, which one unit set as one)
     if (c === '%') { endText(); i = skipComment(s, i) + 1; let k = i; while (k < to && (s[k] === ' ' || s[k] === '\t')) k++; if (k < to && s[k] === '\n' && b.cur) { b.flush(); i = k + 1 } continue }
@@ -833,8 +927,9 @@ function walk(s, from, to, b, ctx) {
     if (c === '&' && b.cellMode) { endText(); b.flush(); i++; continue }
     if (c === '}' || c === '&' || c === '#' || c === '^' || c === '_') { endText(); b.ph(c, i, i + 1); i++; continue }
     if (c !== '\\') { startText(); i++; continue }
-    // a command
-    const { name, end } = commandAt(s, i)
+    // a command, or the one a macro's call ends in (goOn)
+    const { name, end } = then ?? commandAt(s, i)
+    thens = then ? thens + 1 : 0; then = null
     // \\iffalse … \\fi, and \\if followed by words (an author's way of commenting a passage out): nothing there is typeset,
     // so nothing there is a unit — and a mark or a translated first word would change what \\if compares
     if (name === 'iffalse' || (name === 'if' && /^[ \t]*\n?[ \t]*[A-Za-z]{2}/.test(s.slice(end, end + 8)))) {
@@ -843,20 +938,20 @@ function walk(s, from, to, b, ctx) {
     }
     if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e, name === '['); i = e; continue } }
     const shorthand = ctx.envMacros.get(name)
-    if (shorthand?.side === 'begin' && (MATH_ENVS.test(shorthand.env) || SKIP_ENVS.test(shorthand.env))) {
+    if (shorthand?.side === 'begin' && (MATH_ENVS.test(shorthand.env) || ctx.displayEnvs.has(shorthand.env) || SKIP_ENVS.test(shorthand.env))) {
       // the block ends at the partner macro or at a literal \end{env}
       const ends = [...ctx.envMacros].filter(([, v]) => v.side === 'end' && v.env === shorthand.env).map(([k]) => k)
       const re = new RegExp(`\\\\(?:${ends.map(e => e.replace(/[@*]/g, m => `\\${m}`)).join('|') || '(?!)'})(?![A-Za-z@])|\\\\end\\s*\\{${shorthand.env.replace(/\*/g, '\\*')}\\}`, 'g')
       re.lastIndex = end
       const m = re.exec(s)
       const stop = m && m.index < to ? m.index + m[0].length : end
-      endText(); b.ph(s.slice(i, stop), i, stop, displayEnv(shorthand.env)); i = stop; continue
+      endText(); b.ph(s.slice(i, stop), i, stop, displayEnv(shorthand.env) || ctx.displayEnvs.has(shorthand.env)); i = stop; continue
     }
     if (name === 'begin') {
       const m = s.slice(end).match(/^\s*\{([^}]+)\}/); if (!m) { i = end; continue }
       const env = m[1].trim(), afterBegin = end + m[0].length
       const [bodyEnd, afterEnd] = endOfEnv(s, afterBegin, env)
-      if (MATH_ENVS.test(env)) { endText(); b.ph(s.slice(i, afterEnd), i, afterEnd, displayEnv(env)); i = afterEnd; continue }
+      if (MATH_ENVS.test(env) || ctx.displayEnvs.has(env)) { endText(); b.ph(s.slice(i, afterEnd), i, afterEnd, displayEnv(env) || ctx.displayEnvs.has(env)); i = afterEnd; continue }
       endText(); b.flush()
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
       if (env === 'tikzpicture') { tikzText(s, afterBegin, bodyEnd, b, ctx); i = afterEnd; continue }
@@ -1005,13 +1100,13 @@ function walk(s, from, to, b, ctx) {
         endText(); b.flush()
         const before = b.units.length, saved = b.kind; b.kind = 'para'; walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); b.kind = saved
         for (const u of b.units.slice(before)) u.front = true
-        i = call.end; continue
+        i = call.end; goOn(macro, call, i); continue
       }
       if (arg?.group) {
         // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
         // is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
-        if (holdsBlock(s.slice(arg.start + 1, arg.end - 1))) { endText(); b.flush(); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); i = call.end; continue }
-        endText(); const id = b.open(s.slice(i, arg.start + 1), i); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; continue
+        if (holdsBlock(s.slice(arg.start + 1, arg.end - 1))) { endText(); b.flush(); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); i = call.end; goOn(macro, call, i); continue }
+        endText(); const id = b.open(s.slice(i, arg.start + 1), i); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; goOn(macro, call, i); continue
       }
     }
     if (call) {
@@ -1019,7 +1114,10 @@ function walk(s, from, to, b, ctx) {
       // a macro of no argument: an empty group after it ends its name, and goes with it (\\method{} is); each call the
       // walk meets is counted, its prose body walked where every call is one (storedBodies)
       if (!macro.params) { const k = skipSpaces(s, e); if (s.startsWith('{}', k)) e = k + 2; ctx.called?.(name, b.kind) }
-      endText(); b.ph(s.slice(i, e), i, e); i = e; continue
+      endText()
+      // the call's source then goes with the command it ends in: in that command's placeholder, or before its own unit
+      if (goOn(macro, call, i)) continue
+      b.ph(s.slice(i, e), i, e); i = e; continue
     }
     if (name === 'verb') { const d = s[end]; const e = s.indexOf(d, end + 1); const stop = e < 0 ? end : e + 1; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     // listings' and minted's inline code, read as \verb is: its keys, minted's language, then a brace group or a
@@ -1359,7 +1457,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
@@ -1841,11 +1939,21 @@ const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]r
  *  tables of contents), not the author block's names, places and notes (typeset again in running heads and the
  *  PDF's metadata, compared by the class, kept as they are for some languages), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
  *  which a destination's position does not follow), not a macro's body (storedBodies: set where it is called, perhaps
- *  more than once) */
+ *  more than once), not one TeX reads in math mode (inMath) */
 export const markUnits = (units, translated = null) => {
   const id = new Map(units.map((u, i) => [u, i]))
-  return u => (u.kind === 'author' ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || u.stored ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
+  return u => (u.kind === 'author' ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || u.stored || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
 }
+/**
+ * Whether a unit holds a subscript or a superscript of its own (a piece `_` or `^`, outside every formula the walker
+ * knows): TeX reads it in math mode — a display of an environment the walker cannot tell, a key in an argument, lines
+ * TeX skips — and nothing proves a place in it lies between two whole operands. A mark is put only where the patch can
+ * tell it stands between two of TeX's units — before a command and its arguments, after a whole argument, inside a
+ * group — and in math a word's first letter may be an operand: \\bfm_\\leavevmode\\axtmark{…}1 gave "Missing {
+ * inserted" (2310.20360), \\hat \\leavevmode x would take \\leavevmode for the accent's. So none goes into such a unit,
+ * and neither does its leading or its line probe, which come with the mark
+ */
+const inMath = u => u.pieces.some(p => p.t === 'ph' && (p.src === '_' || p.src === '^'))
 /** A translated line of names or places goes into \\axtwide (FIT_DEF), all of it — its marks, a \\IEEEauthorrefmark
  *  after the last name — inside the braces that hold it: in a box that does not wrap (a table's c column, where
  *  article and IEEEtran set their author blocks) a line the translation made wider than the page is set as a paragraph
