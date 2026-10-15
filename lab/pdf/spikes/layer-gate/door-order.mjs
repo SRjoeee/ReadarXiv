@@ -13,7 +13,7 @@
 // page and the digest of the records of the units on it (the run is reached through the driver's stand-in of run.mjs). Once
 // the pages are asked: every page's state and the units left and why. Today the engine lays in order whatever is asked, so
 // every mode must equal the reference; the modes exist to fail on the day it does not
-import { answerOf, base64, bytes, K, lastRun, macrotask, openDoor, pngOf, recsOf, rngOf, shuffled, skippedOf, statesOf, wordsDigest } from '/gate/door-common.mjs'
+import { answerOf, base64, bytes, K, lastRun, macrotask, openDoor, pngOf, recsOf, rngOf, shuffled, skippedOf, statesOf } from '/gate/door-common.mjs'
 
 /** what a door holds once its pages are asked: every page's state, the units left and why (sorted), the units drawn */
 const heldOf = (layer, N) => ({ states: statesOf(layer, N), skipped: skippedOf(lastRun()), drawn: layer.stats().drawn })
@@ -41,7 +41,7 @@ window.doorOrder = {
     for (const e of out) e.recs = await recsOf(lastRun(), e.p)
     const held = heldOf(d.layer, d.N)
     await d.done()
-    return { pages: out, ...held }
+    return { pages: out, ...held, completes: d.completes }
   },
 
   /** one open, the pages asked in `mode`'s order over the reference's PNGs (served at /door/<name>/s<p>.png) */
@@ -58,10 +58,9 @@ window.doorOrder = {
         await answers.get(p)
         return
       }
-      const first = await answers.get(p)
-      const markup = got.svg.cloneNode(true)
-      markup.removeAttribute('lang')
-      if (markup.outerHTML !== first.svg || (await wordsDigest(got.words)) !== first.words) repeats.push(p)
+      // (a page answered again answers as it did: all of what an answer is, its copy's pixels too)
+      const first = await answers.get(p), again = await answerOf(d.layer, p, got, await bytes(`/door/${name}/s${p}.png`))
+      if (['svg', 'lang', 'w', 'h', 'words'].some(k => again[k] !== first[k]) || again.copy.sha !== first.copy.sha) repeats.push(p)
     }
     const ask = async (p, o = {}) => {
       stat.asks++
@@ -104,7 +103,7 @@ window.doorOrder = {
     }
     const held = heldOf(d.layer, d.N)
     await d.done()
-    return { pages: out, ...held, repeats, errors, stat: { ...stat, order: stat.order.slice(0, 64) } }
+    return { pages: out, ...held, completes: d.completes, repeats, errors, stat: { ...stat, order: stat.order.slice(0, 64) } }
   },
 }
 window.gateReady = true

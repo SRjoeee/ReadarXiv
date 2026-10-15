@@ -7,7 +7,8 @@
 // the removed pages beyond them, the units laid and drawn, and with `perf` the time (the open, then the ask) and the longest
 // task the browser reports (50 ms or more) while the page was laid. Today the engine lays in order, so J is the prefix up to
 // the page; the engine's closure (Need(p), 1b-D1) is compared with it where the engine exposes one (`closureOf` of
-// layer-proto/need.mjs): until then `closure` is null and the driver prints 'closure: n/a'
+// layer-proto/need.mjs): until then `closure` is null and the driver prints 'closure: n/a'; where it is exposed the report says
+// so, and D1 adds the comparison (it needs the run's K entries, which the engine does not give a host yet)
 import { answerOf, bytes, lastRun, openDoor, recsOf } from '/gate/door-common.mjs'
 
 window.doorJump = {
@@ -28,10 +29,11 @@ window.doorJump = {
     const answer = await answerOf(d.layer, page, got, await bytes(`/door/${name}/s${page}.png`))
     answer.recs = await recsOf(lastRun(), page)
     if (observer) { await new Promise(ok => setTimeout(ok, 0)); observer.takeRecords().forEach(e => longTasks.push(e.duration)); observer.disconnect() }
-    const need = await import('/engine/layer-proto/need.mjs')
+    // (an engine from before need.mjs has no closure either: null, never a failed ask)
+    const need = await import('/engine/layer-proto/need.mjs').catch(() => null)
     await d.done()
     return {
-      ...answer, j, closure: typeof need.closureOf === 'function' ? 'exposed' : null,
+      ...answer, j, completes: d.completes, closure: typeof need?.closureOf === 'function' ? 'exposed' : null,
       ...(perf ? { ms: { open: Math.round(t1 - t0), ask: Math.round(t2 - t1) }, longest: longTasks.length ? Math.round(Math.max(...longTasks)) : 0 } : {}),
     }
   },

@@ -147,11 +147,12 @@
 //                units on it (through the driver's stand-in of run.mjs), and the units left and why, the pages' states and the
 //                units drawn. The run is written to out/layer-gate/door-order-<commit>-<time>.json
 //   --door-jump  each page asked for first and alone, in a fresh page load (the 1b-D design, §6 items 4 and 6, X1 and J; never
-//                recorded; the door's choices as --door has them): all = every page of the fixtures, or <fixture>:<page>,…
+//                recorded; the door's choices as --door has them): all = every page --door shows (the first 12 of each output, every page of
+//                2307.16209v1 and 2608.16117v1; --pages=<n> says another count: 523 pages), or <fixture>:<page>,…
 //                (a fixture's name, or its paper's, as 2307.16209:147 for 2307.16209v1-zh). Each compared with the reference
 //                (as --door-order) and J reported, what the ask drew and laid before the page was ready (pages PDF.js was asked
-//                for, units laid; the engine's closure Need(p), where it exposes one, is compared: 'closure: n/a' until
-//                then). The tasks (a fixture's pages, 6 to a task) are shared among --workers; with --perf also the time to the
+//                for, units laid; the engine's closure Need(p), where it exposes one, is reported as exposed, and
+//                compared by D1: 'closure: n/a' until then). The tasks (a fixture's pages, 6 to a task) are shared among --workers; with --perf also the time to the
 //                page (a fresh open, then the ask) and the longest task of 50 ms or more, on one worker. The run is written to
 //                out/layer-gate/door-jump-<commit>-<time>.json
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
@@ -362,7 +363,8 @@ if (FREEZE) {
 }
 /** --door-jump=<fixture>:<page>,…: the pages asked for, by fixture (a fixture is named whole, or by its paper's id alone) */
 const JUMP_LIST = DOOR_JUMP !== null && DOOR_JUMP !== 'all' ? jumpListOf(DOOR_JUMP, fixtures) : null
-const asked = JUMP_LIST ? fixtures.filter(n => JUMP_LIST.has(n)) : ONLY ? fixtures.filter(n => ONLY.includes(n)) : fixtures
+if (JUMP_LIST && ONLY && ONLY.some(n => !JUMP_LIST.has(n))) throw new Error(`--only: ${ONLY.filter(n => !JUMP_LIST.has(n)).join(', ')} not among --door-jump's fixtures`)
+const asked = JUMP_LIST ? fixtures.filter(n => JUMP_LIST.has(n) && (!ONLY || ONLY.includes(n))) : ONLY ? fixtures.filter(n => ONLY.includes(n)) : fixtures
 if (ONLY && !JUMP_LIST && asked.length !== ONLY.length) throw new Error(`--only: no fixture ${ONLY.filter(n => !fixtures.includes(n)).join(', ')} in ${FIXTURES}`)
 for (const name of asked) if (!existsSync(join(REFS, name, 'ref.json'))) throw new Error(`${name}: no frozen reference (${join(REFS, name, 'ref.json')}): run --freeze once`)
 
@@ -773,10 +775,10 @@ async function doorOrderFixture(page, name, errors) {
     const rows = run.pages.map((d, i) => (d.missing ? { p: d.p, missing: true } : { p: d.p, ...sameAs(d, ref.pages[i], target), wordsSha: ref.pages[i]?.words }))
     const n = key => rows.filter(e => e[key]).length
     const left = { skipped: run.skipped.join('\n') === ref.skipped.join('\n'), states: run.states === ref.states, drawn: run.drawn === ref.drawn }
-    const ok = rows.length === ref.pages.length && rows.length > 0 && KEYS.every(k => n(k) === rows.length) && left.skipped && left.states && left.drawn && !run.repeats.length && !run.errors.length && !errors.length
+    const ok = rows.length === ref.pages.length && rows.length > 0 && KEYS.every(k => n(k) === rows.length) && left.skipped && left.states && left.drawn && ref.completes.ok && run.completes.ok && !run.repeats.length && !run.errors.length && !errors.length
     if (!ok) failures.push(name)
     const st = run.stat
-    const line = `${rows.length} pages asked ${DOOR_ORDER}: SVG ${n('svg')}/${rows.length} equal, words ${n('words')}, copy ${n('copy')}, records ${n('recs')}; units left (${ref.skipped.length}) ${left.skipped ? 'equal' : 'NOT equal'}, states ${left.states ? 'equal' : 'NOT equal'}, units drawn ${run.drawn}${left.drawn ? '' : ` NOT the reference's ${ref.drawn}`}; ${st.asks} asks${st.bursts ? ` in ${st.bursts} bursts, ${st.aborted} aborted (${st.abortLost} resolved first), ${st.reasks} re-asks` : ''}${run.repeats.length ? `; asked twice and answered differently: ${run.repeats.slice(0, 5).join(' ')}` : ''}${run.errors.length ? `; ask errors ${run.errors.slice(0, 3).join(' | ')}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    const line = `${rows.length} pages asked ${DOOR_ORDER}: SVG ${n('svg')}/${rows.length} equal, words ${n('words')}, copy ${n('copy')}, records ${n('recs')}; units left (${ref.skipped.length}) ${left.skipped ? 'equal' : 'NOT equal'}, states ${left.states ? 'equal' : 'NOT equal'}, units drawn ${run.drawn}${left.drawn ? '' : ` NOT the reference's ${ref.drawn}`}; completions ${ref.completes.ok && run.completes.ok ? 'told once each, as the run has them' : 'NOT as the run has them'}; ${st.asks} asks${st.bursts ? ` in ${st.bursts} bursts, ${st.aborted} aborted (${st.abortLost} resolved first), ${st.reasks} re-asks` : ''}${run.repeats.length ? `; asked twice and answered differently: ${run.repeats.slice(0, 5).join(' ')}` : ''}${run.errors.length ? `; ask errors ${run.errors.slice(0, 3).join(' | ')}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
     return { name, door: true, ok, ready: true, line, pages: rows, mode: DOOR_ORDER, left, stat: st, repeats: run.repeats, errors: run.errors }
   } finally { doneWith(name) }
 }
@@ -796,14 +798,14 @@ async function doorJumpTask(page, key, errors) {
     for (const p of pages) {
       await openDoorPage(page, 'doorjump')
       const r = await page.evaluate(x => window.doorJump.ask(x), { name, target, rules: '/rules/layout-rules.json', page: p, perf: PERF })
-      out.push({ p, ...sameAs(r, ref.pages[p - 1], target), j: r.j, closure: r.closure, ...(r.ms ? { ms: r.ms, longest: r.longest } : {}) })
+      out.push({ p, ...sameAs(r, ref.pages[p - 1], target), completes: r.completes.ok, j: r.j, closure: r.closure, ...(r.ms ? { ms: r.ms, longest: r.longest } : {}) })
     }
     const n = key => out.filter(e => e[key]).length
-    const ok = out.length === pages.length && KEYS.every(k => n(k) === out.length) && !errors.length
+    const ok = out.length === pages.length && KEYS.every(k => n(k) === out.length) && out.every(e => e.completes) && !errors.length
     if (!ok) failures.push(key)
     const mean = f => (out.reduce((a, e) => a + f(e), 0) / out.length).toFixed(1)
     const detail = JUMP_LIST || PERF ? out.map(e => `p${e.p}${e.ms ? ` ${secondsOf(e.ms.open + e.ms.ask)} s (open ${secondsOf(e.ms.open)} + ask ${secondsOf(e.ms.ask)}), longest task ${e.longest} ms,` : ''} ${e.j.drawn.length} pages drawn ${e.j.drawn.length > 8 ? `(${e.j.drawn[0]}..${e.j.drawn.at(-1)})` : `(${e.j.drawn.join(' ')})`}, ${e.j.units} units laid`).join('; ') : ''
-    const line = `${out.length} pages asked first and alone (${pages[0]}..${pages.at(-1)}): SVG ${n('svg')}/${out.length} equal, words ${n('words')}, copy ${n('copy')}, records ${n('recs')}; J: ${mean(e => e.j.drawn.length)} pages drawn and ${mean(e => e.j.units)} units laid a page; closure: ${out.some(e => e.closure) ? 'exposed, not compared yet' : 'n/a'}${detail ? `; ${detail}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    const line = `${out.length} pages asked first and alone (${pages[0]}..${pages.at(-1)}): SVG ${n('svg')}/${out.length} equal, words ${n('words')}, copy ${n('copy')}, records ${n('recs')}, completions ${n('completes')}; J: ${mean(e => e.j.drawn.length)} pages drawn and ${mean(e => e.j.units)} units laid a page; closure: ${out.some(e => e.closure) ? 'exposed, not compared yet' : 'n/a'}${detail ? `; ${detail}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
     return { name, key, door: true, ok, ready: true, line, pages: out }
   } finally { doneWith(name) }
 }

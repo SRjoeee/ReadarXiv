@@ -81,11 +81,12 @@ export function shuffled(list, rnd) {
 
 /** the run the stand-in opened last */
 export const lastRun = () => window.__gateRuns.at(-1)
-/** the digest of the records of the units on page `p` (timings aside), through the stand-in's run. A table cell's record is left
+/** the digest of the records of the units on page `p` (timings aside, sorted by unit id: `run.stats` is in lay order, which an
+ *  ask-order change moves without moving a record), through the stand-in's run. A table cell's record is left
  *  out: it leaves the run's records with its group when the group is withheld (run.mjs settleGroup: a group on several pages, or
  *  with a cell unfit), as soon as the group's cells are all laid, which is no fact of a page; the drawing of a cell is compared by
  *  the page's SVG */
-export const recsOf = (run, p) => textDigest(JSON.stringify(run.stats.filter(r => r.pages.includes(p) && r.kind !== 'cell').map(({ ms: _, ...r }) => r)))
+export const recsOf = (run, p) => textDigest(JSON.stringify(run.stats.filter(r => r.pages.includes(p) && r.kind !== 'cell').map(({ ms: _, ...r }) => r).sort((a, b) => a.id - b.id)))
 /** the units left the original's and why, sorted */
 export const skippedOf = run => run.skipped.map(s => `${s.id}:${s.why}`).sort()
 /** every page's state, as one string (w, l, r, f) */
@@ -94,7 +95,8 @@ export const statesOf = (layer, N) => { let s = ''; for (let p = 1; p <= N; p++)
 /**
  * One layer over a fixture's bundle: the composed document (its getPage counted: `drawn` holds the pages of the ORIGINAL
  * (1 to N) the layer asked PDF.js for, `extra` the removed pages beyond them), openLayer, the rows taken at once and ended.
- * `done()` lets the layer go and destroys the document
+ * `completes`: the pages `take` told complete for the rows given at once, against the pages the run says are complete then (the
+ * pages left wait for end()): each exactly once, none missing, none more. `done()` lets the layer go and destroys the document
  */
 export async function openDoor({ name, target, rules }) {
   const R = await import('/engine/layer-proto/reader.mjs')
@@ -108,9 +110,13 @@ export async function openDoor({ name, target, rules }) {
   const ruleSet = await ruleSetOf(rules)
   window.__gateRuns = []
   const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl })
-  layer.take(rows)
+  const reported = layer.take(rows).complete
+  const run = lastRun()
+  const expected = []
+  for (let p = 1; p <= N; p++) if (run.complete(p)) expected.push(p)
   layer.end()
-  return { layer, doc, N, drawn, extra, async done() { layer.dispose(); await doc.loadingTask.destroy() } }
+  const completes = { reported, expected, ok: reported.length === new Set(reported).size && reported.slice().sort((a, b) => a - b).join() === expected.join() }
+  return { layer, doc, N, drawn, extra, completes, async done() { layer.dispose(); await doc.loadingTask.destroy() } }
 }
 
 /** a laid page's answer, the numbers every run is compared by: its SVG's markup (lang aside), its size, its word table's digest

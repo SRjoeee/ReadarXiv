@@ -137,6 +137,7 @@ describe('the reader\'s door: pageOf in any order, bursts, aborts and asks made 
     it(`${paper.name}: bursts of concurrent asks, some aborted by signal, some made again`, async () => {
       const P = build(paper)
       const { snaps: wanted } = await inOrder(P)
+      let abortsSeen = 0
       for (const seed of [5, 17, 41]) {
         const { layer, run } = await open(build(paper))
         const rnd = lcg(seed)
@@ -159,9 +160,11 @@ describe('the reader\'s door: pageOf in any order, bursts, aborts and asks made 
           }
         }
         for (const p of pagesOf(P)) expect(got.get(p), `seed ${seed} page ${p}`).toEqual(wanted.get(p))
-        expect(aborted, `seed ${seed} aborted`).toBeGreaterThanOrEqual(0)
+        abortsSeen += aborted
         layer.dispose()
       }
+      // (the test is about aborts: a burst whose asks all resolved would prove nothing of them)
+      expect(abortsSeen, `${paper.name} aborts observed`).toBeGreaterThan(0)
     })
   }
 })
