@@ -128,6 +128,17 @@ this repository) that opens the translation's text right after a displayed formu
 the original's line there opens with one; the rows and the cache keep the translation. The sample's bundle is made so too, over the committed stand-in PDF (`scripts/make-sample-bundle.mjs
 --keep-pdf`, the shim first on PATH: its stand-in compiled natively would differ by the packages' versions alone).
 
+**The 2608.16117 survey's fixes 2 and 3 (2026-10-15).** A unit drawn on the file's lines keeps the file's held lines and
+its found displays' rows alone: the alignment's two keep rules (a line with no source word; one of three or four words or
+more under a fifth of them the source's) stay on v0's own lines, a unit the file does not locate whole (`layer2.mjs
+alignUnit`). A forced break of the row (`\\`, `\newline`) between two visible pieces that are no display ends the laid
+line, and the text after it starts on the file's first line after the original's break (`layer-proto/tex.mjs
+forcedBreaks`): TeX's breaks are the file's lines a break's `\hfil` ended short of their frame's measure, paired with the
+row's break groups in order as D4 pairs displays with held runs, only where they are as many and every placeholder the
+file finds stands between the breaks its place in the row says; else the text runs through as before. `slotsSkipped`
+sets aside the room before a display, not before a forced break: it counts the slots a break leaves after a translation
+of the text before it that is shorter than the original's lines.
+
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
 folders, and a `--record` that would drop an output the record's run of its kind holds (for a model run, the pixel run's
 where the record has no model run of its own) is refused (`score.mjs droppedOutputs`). The record of 2026-10-15:
