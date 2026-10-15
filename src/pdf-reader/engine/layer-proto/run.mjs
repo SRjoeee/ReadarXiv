@@ -600,10 +600,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const sweep = () => { if (free) for (let q = 1; q <= drawnTo; q++) if (!freed[q] && !reads[q] && doneAtOf(q) <= drawnTo) letGoPage(q) }
   /** what a unit holds for its lay, its passes and its paint alone (and the file's lines it is laid by: `tex.lines`) */
   const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear']
-  /** a unit nothing reads again: its table group settled, each of its pages passed (with a page pass), so painted for good */
+  /** a unit nothing reads again: painted on every page it is on, or left the original's (refused, or withheld with its
+   *  group), its table group settled, and each of its pages passed (with a page pass: a pass reads the units running on to
+   *  its page) */
   const settledUnit = u => {
     const g = u.unit.group && groupCells.has(u.unit.group) ? u.unit.group : null
-    return (!g || !!groupLaid.get(g)?.done) && (!PASSES || u.pages.every(q => passed[q]))
+    return (u.refused || u.withheld || u.painted === u.pages.length) && (!g || !!groupLaid.get(g)?.done) && (!PASSES || u.pages.every(q => passed[q]))
   }
   /** a unit's own state let go: what stays is its place (id, stream, rects, pages), its row and its fill numbers */
   const letGoUnit = p => {
@@ -831,6 +833,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     T.ops += tCompose - tOps
     T.compose += tSvg - tCompose
     T.svg += performance.now() - tSvg
+    // (painted on one more of its pages: on its last, and with its pages passed, it lets go of what it was laid with)
+    p.painted = (p.painted ?? 0) + 1
+    if (settledUnit(p)) letGoUnit(p)
   }
 
   // ---- babel's names (D1a): each generated heading the layout file locates on a page (layout/file.mjs `names`: Abstract,
@@ -1362,6 +1367,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const r = stats.indexOf(p.rec)
     if (r >= 0) stats.splice(r, 1)
     if (p.counted) { p.counted = false; drawnUnits-- }
+    p.withheld = true
     skipped.push({ id: p.id, kind: p.unit.kind, why: `group: ${why}`, chars: trCharsOf(p.unit), pages: p.pages })
   }
   const settleGroup = g => {
