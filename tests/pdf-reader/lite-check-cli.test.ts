@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -45,5 +45,29 @@ describe('lite-check.mjs', () => {
     const r = run(['1512.03385v1', SAMPLE])
     expect(r.status).toBe(0)
     expect(r.stdout.match(/^ok /gm)?.length).toBe(3)
+  })
+
+  it('refuses a --side that is not stock or lite, before it reads or writes anything', () => {
+    for (const side of ['Lite', 'LITE', 'stok', '', 'both']) {
+      const out = join(data, `typo-${side || 'empty'}.json`)
+      const r = run(['1512.03385v1', `--side=${side}`, `--digests=${out}`])
+      expect(r.status, side).toBe(2)
+      expect(r.stderr + r.stdout).toMatch(/--side=stock\|lite/)
+      expect(r.stdout).not.toContain('read')
+      expect(existsSync(out), side).toBe(false)
+    }
+  })
+
+  it('compares only a stock record and a lite record, in that order, and refuses two of one side', () => {
+    const stock = join(data, 'stock.json'), lite = join(data, 'lite.json')
+    expect(run([`--compare=${stock},${lite}`]).status).toBe(0)
+    for (const pair of [[stock, stock], [lite, lite], [lite, stock]]) {
+      const r = run([`--compare=${pair.join(',')}`])
+      expect(r.status, pair.map(f => f.slice(f.lastIndexOf('/') + 1)).join(',')).toBe(2)
+      expect(r.stderr + r.stdout).toMatch(/stock.*lite/)
+    }
+    // a record that names no side (an older file) is refused too
+    writeFileSync(join(data, 'bare.json'), JSON.stringify({ pdfs: {}, peak: {} }))
+    expect(run([`--compare=${join(data, 'bare.json')},${lite}`]).status).toBe(2)
   })
 })

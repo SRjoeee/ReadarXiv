@@ -50,8 +50,14 @@ async function pass(bytes, lite) {
 }
 
 const SIDE = argOf('side'), DIGESTS = argOf('digests'), COMPARE = argOf('compare')
+const usage = why => { console.error(`${why}\nusage: lite-check.mjs [<id>|<pdf> …] [--layouts=<dir>] | <ids/pdfs> --side=stock|lite [--digests=<file>] | --compare=<stock file>,<lite file>`); process.exit(2) }
+// the side is exactly stock or lite, before anything is read (a typo would run the stock path and label it with the typo)
+if (SIDE !== null && SIDE !== 'stock' && SIDE !== 'lite') usage(`--side=${SIDE}: not --side=stock|lite`)
 if (COMPARE) {
-  const [a, b] = COMPARE.split(',').map(f => JSON.parse(readFileSync(f, 'utf8')))
+  const files = COMPARE.split(',')
+  if (files.length !== 2) usage('--compare takes two files: <stock file>,<lite file>')
+  const [a, b] = files.map(f => JSON.parse(readFileSync(f, 'utf8')))
+  if (a.side !== 'stock' || b.side !== 'lite') usage(`--compare: the first file must record the stock side and the second the lite one (they record ${JSON.stringify(a.side ?? null)} and ${JSON.stringify(b.side ?? null)})`)
   const same = JSON.stringify(a.pdfs) === JSON.stringify(b.pdfs)
   console.log(`${same ? 'ok  ' : 'FAIL'} ${Object.keys(a.pdfs).length} PDFs, ${Object.values(a.pdfs).reduce((n, p) => n + p.ops.length, 0)} pages: operator lists and ink ${same ? 'the same' : 'DIFFER'}; peaks stock ${JSON.stringify(a.peak)} lite ${JSON.stringify(b.peak)}`)
   process.exit(same ? 0 : 1)
@@ -66,7 +72,7 @@ function pdfsOf(t) {
 }
 let failed = 0
 const report = (ok, text) => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${text}`) }
-if (SIDE) {
+if (SIDE !== null) {
   const peak = { arrayBuffers: 0, rss: 0 }
   const timer = setInterval(() => { const m = process.memoryUsage(); peak.arrayBuffers = Math.max(peak.arrayBuffers, Math.round(m.arrayBuffers / 2 ** 20)); peak.rss = Math.max(peak.rss, Math.round(m.rss / 2 ** 20)) }, 10)
   const pdfs = {}
@@ -79,7 +85,7 @@ if (SIDE) {
   await new Promise(r => setTimeout(r, 3000))
   clearInterval(timer)
   console.log(`${SIDE}: peak ${JSON.stringify(peak)}; ${await mem()}`)
-  if (DIGESTS) { const { writeFileSync } = await import('node:fs'); writeFileSync(DIGESTS, JSON.stringify({ pdfs, peak })) }
+  if (DIGESTS) { const { writeFileSync } = await import('node:fs'); writeFileSync(DIGESTS, JSON.stringify({ side: SIDE, pdfs, peak })) }
   process.exit(0)
 }
 for (const t of targets) {
