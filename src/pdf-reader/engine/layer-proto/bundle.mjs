@@ -56,7 +56,8 @@ const NAMED = ['pipeline', 'layout', 'removal', 'image']
 /**
  * A bundle refused, and why. BUNDLE 3's refusals carry their whole message as `why` ("<path>: <what>"); BUNDLE 4's
  * (format.mjs) name the kind of object and the path: `o` { kind: 'units' | 'head' | 'part' | 'left' | 'catalog' | 'index',
- * path }, the message `<kind>: <path>: <why>` (`<kind>: <why>` for the object as a whole)
+ * path, data }, the message `<kind>: <path>: <why>` (`<kind>: <why>` for the object as a whole); `data`, where a refusal
+ * carries figures (the bound and the size of `units-too-large`), is theirs, null otherwise
  */
 export class BundleRefusal extends Error {
   constructor(why, o = null) {
@@ -65,6 +66,7 @@ export class BundleRefusal extends Error {
     this.why = why
     this.kind = o === null ? null : o.kind
     this.path = o === null ? null : o.path
+    this.data = o?.data ?? null
   }
 }
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)

@@ -24,5 +24,9 @@ export { paperAddon } from './layout/addon.mjs'
 export { BYTES_MAX, CHECK_SETS, COST, DecodeLimit, HELD_MAX, LexLimit, SETS, WALK_MAX, checkPage, lex, makeAddon, openRemover, removePaper } from './layout/remove.mjs'
 // the bundle's writer (the reader's parsers are the layer entry's)
 export { bundleUnitsOf, writeBundle } from './layer-proto/bundle.mjs'
+// BUNDLE 4: the writers of a paper's objects, the keys and the bounds (the readers are the layer entry's), and the memory-class errors every catch lets through
+export { BUILD_END_WHYS, BUNDLE4, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG4, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG4, catalogKey, isFinalEnd, keyOf, keyParts, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks } from './layer-proto/format.mjs'
+export { BundleRefusal } from './layer-proto/bundle.mjs'
+export { isMemoryError } from './pipeline/memory.mjs'
 // the faces' coverage and metrics
 export { COVERAGE, COVERAGE_SOURCE, METRICS } from './rules/font-coverage.mjs'

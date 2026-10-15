@@ -68,10 +68,12 @@ export type RefusalKind = 'units' | 'head' | 'part' | 'left' | 'catalog' | 'inde
 /** a bundle refused, and why. BUNDLE 3's carry the whole message as `why` ("<path>: <what>") and no kind; BUNDLE 4's name the
  *  object and the JSON path in it: `message` is `<kind>: <path>: <why>` (`<kind>: <why>` for the object as a whole) */
 export declare class BundleRefusal extends Error {
-  constructor(why: string, o?: { kind: RefusalKind; path: string })
+  constructor(why: string, o?: { kind: RefusalKind; path: string; data?: Readonly<Record<string, unknown>> })
   readonly why: string
   readonly kind: RefusalKind | null
   readonly path: string | null
+  /** the figures a refusal carries (the bound and the size of `units-too-large`), else null */
+  readonly data: Readonly<Record<string, unknown>> | null
 }
 /** the paper version's one path segment, `<id>v<n>`, an old identifier's slash written _ (the web's keys spell it so) */
 export declare const segmentOf: (id: string, version: number) => string
