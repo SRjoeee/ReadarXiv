@@ -76,6 +76,38 @@ describe('the real door: (a) a page lays once the parts covering its closure are
   })
 })
 
+describe('the real door: L3, what comes in parts gives the pages one take gives', () => {
+  it('parts told out of order from a job and the catalog, rows in pieces: every page drawn as when all is told at once', async () => {
+    const m = await M()
+    const rows = rowsOfIndex(m.index)
+    /** each page's drawing on the right, as its place holds it */
+    const drawn = (s: Setup) => [1, 2, 3, 4].map(n => layerOf(s, n)?.querySelector('svg')?.outerHTML ?? null)
+    const a = await real()
+    await nearOn(a, [1, 2, 3, 4])
+    a.side.tell(await ALL())
+    a.side.take(rows)
+    a.side.end()
+    await still(a)
+    const whole = drawn(a)
+    expect(whole.every(x => x !== null)).toBe(true)
+    a.view.dispose()
+    const b = await real()
+    await nearOn(b, [1, 2, 3, 4])
+    b.side.tell({ parts: [jobRef(m, 2)] })
+    b.side.take(rows.slice(4))
+    b.side.tell({ head: m.head.ref })
+    await still(b)
+    b.side.tell({ units: m.chunks.map(c => c.ref), parts: [m.parts[1]!.ref as never, jobRef(m, 2)] })
+    b.side.take(rows.slice(0, 2))
+    await still(b)
+    b.side.tell({ parts: [jobRef(m, 0)], end: { through: N } })
+    b.side.take(rows.slice(2, 4))
+    b.side.end()
+    await still(b)
+    expect(drawn(b)).toEqual(whole)
+  })
+})
+
 describe('the real door: (b) a terminal failure', () => {
   it('page 1 that cannot be drawn fails every page not ready, once; the places show the original; asking again rejects at once', async () => {
     const m = await M()
