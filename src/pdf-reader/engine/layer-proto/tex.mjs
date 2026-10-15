@@ -12,7 +12,7 @@
 // page characters are PDF.js's in both, so that the paper's citations and macros a unit learns, and the characters the
 // restore counts as accounted for, are the same keys whichever source a unit took.
 import { PH_FLAG } from '../layout/file.mjs'
-import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2 } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -70,7 +70,8 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = fals
   if (!kOf) return { ok: false, why: 'pieces' }
   let cover
   for (const [i, p] of unit.pieces.entries()) {
-    const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClass2(p.src).cls : null
+    // (as the unit is read under the proof: a formula of no letter or digit, "Σ_α^β", no text symbol, phClassProven)
+    const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClassProven(p.src).cls : null
     if (!cls || !VISIBLE.has(cls) || (cls === 'symbol' && symbols === 'text')) continue
     const row = lu.ph.get(kOf[i])
     if (!row) { if (MACROS.has(cls)) continue; return { ok: false, why: 'no row' } }
@@ -251,10 +252,12 @@ function heldRendering(run, lines, uc) {
  * pageChars2's `nu`, a glyph its font's ToUnicode does not map, which PDF.js reads by its code, or a private-use,
  * replacement or control character. The reader would see another character than the page's: 2307.16209 page 133, unit
  * 442, drew "g(z′) = Í n g n (z′) n" for g(z') = Σ_n g_n(z')^n (newtx's display sum, in txexs, which no ToUnicode maps).
- * The one exemption (the controller's ruling of 2026-10-15): a LaTeX text symbol v0 draws from its source (\%,
- * $\times$: phClass2's 'symbol'). Its source is its rendering's content, a character LaTeX's own definition sets, and its
- * glyph is its line's, erased with it; the rule is against guessing where a formula's ink is, which a symbol asks for
- * none of.
+ * The one exemption (the controller's rulings of 2026-10-15): a LaTeX text symbol v0 draws from its source (\%,
+ * $\times$, $^\dagger$: layer2.mjs textSymbol, a 'symbol' whose drawn text is one grapheme with no `_`, `^`, `/` or `√(`).
+ * Its source is its rendering's content, a character LaTeX's own definition sets, and its glyph is its line's, erased
+ * with it; the rule is against guessing where a formula's ink is, which a symbol asks for none of. A formula of no
+ * letter or digit ($\sum_{\alpha}^{\beta}$, drawn "Σ_α^β" from its source) is no text symbol: a unit under the proof
+ * reads it as 'other' (phClassProven), and it is proven as any formula is.
  */
 export function proofOf(lu, kOf, shown = Infinity) {
   return res => {

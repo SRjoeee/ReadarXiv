@@ -100,6 +100,17 @@ export function mappedOf(toUnicode) {
   for (const v of map) if (typeof v === 'string') for (const s of [v, v.normalize('NFKC')]) for (const ch of s) out.add(ch)
   return out
 }
+/**
+ * mappedOf of a font as PDF.js's `commonObjs` holds it, failing closed: a font object (not Type3) with no `toUnicode`
+ * key was exported without its extra properties (a document not opened with PDF_OPTIONS), and with no map to read
+ * pageChars2 could mark only what no Unicode stands for, so a glyph read by its code (u442's sum sign) would pass as
+ * proof. That throws. Anything else (a Type3 font, an error PDF.js resolved in a font's place, null) has none to read.
+ */
+export function fontMappedOf(font) {
+  if (font === null || typeof font !== 'object' || typeof font.isType3Font !== 'boolean') return null
+  if (!font.isType3Font && !('toUnicode' in font)) throw new Error("a font with no ToUnicode map to read: open the document with the engine's PDF_OPTIONS (fontExtraProperties)")
+  return mappedOf(font.toUnicode)
+}
 /** a character no Unicode stands for: private use, a replacement character, a control */
 const NO_UNICODE = /[\p{Co}\p{Cc}\uFFFD]/u
 /** whether a page character's text is no reading of its glyph (pageChars2's `nu`): one no Unicode stands for, or one
@@ -231,6 +242,27 @@ export function phClass2(src) {
   if (ci === 'zero' || ci === 'space') return { cls: ci }
   if (!/\\[A-Za-z]/.test(inner)) return { cls: c }
   return /^\$|^\\\(/.test(src) ? { cls: 'other', unknown: true } : { cls: 'umacro', unknown: true }
+}
+/** a 'symbol' placeholder's drawn text (resolvePlaceholders): its source's plain text, less the mark of the superscript
+ *  it is drawn as */
+const symbolDrawn = src => texToText2(src).replace(/^\^\(?|\)$/g, '')
+const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
+/**
+ * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
+ * kind the proof exempts (tex.mjs proofOf): its drawn text one grapheme (\%, $\times$, $^\dagger$), holding none of the
+ * marks texToText2 writes for a formula's structure, `_`, `^`, `/` or `√(`. Any other is a formula the page sets as ink of
+ * its own ($\sum_{\alpha}^{\beta}$ drawn "Σ_α^β", $\int_{-\infty}^{\infty}$ "∫_(-∞)^∞", $\frac{\alpha}{\beta}$ "α/β"),
+ * which the proof must find like any formula: phClassProven's 'other' (the controller's ruling of 2026-10-15)
+ */
+export function textSymbol(src) {
+  const t = symbolDrawn(src)
+  return !/[_^/]|√\(/.test(t) && [...GRAPHEMES.segment(t)].length === 1
+}
+/** phClass2 as a unit drawn under the proof reads its placeholders: a 'symbol' that is no text symbol (textSymbol) is
+ *  'other', looked for on the page and proven */
+export function phClassProven(src) {
+  const c = phClass2(src)
+  return c.cls === 'symbol' && !textSymbol(src) ? { cls: 'other' } : c
 }
 
 /**
@@ -635,7 +667,7 @@ function rectStyle(uc) {
  * `charsByPage`: pageChars2's (the unit's own part of each page).
  */
 export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = null, parts = null) {
-  const phs = placeholdersOf(unit)
+  const phs = placeholdersOf(unit, !!parts?.proof)
   const out = new Map()
   const lines = (parts?.lines ?? linesOf)(rects, charsByPage)
   out.extents = parts?.extents ? parts.extents(lines, rects) : lines.extents
@@ -665,11 +697,12 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   return out
 }
 
-/** a unit's placeholders by piece index, each with its source and class (phClass2); a nested footnote is its mark */
-export function placeholdersOf(unit) {
-  const phs = []
+/** a unit's placeholders by piece index, each with its source and class (phClass2; phClassProven where the unit is drawn
+ *  under the proof, `proven`); a nested footnote is its mark */
+export function placeholdersOf(unit, proven = false) {
+  const phs = [], classOf = proven ? phClassProven : phClass2
   unit.pieces.forEach((p, k) => {
-    if (p.t === 'ph') phs.push({ k, src: p.src, ...phClass2(p.src) })
+    if (p.t === 'ph') phs.push({ k, src: p.src, ...classOf(p.src) })
     else if (p.t === 'nested') phs.push({ k, src: '\\footnotemark', cls: 'num', nested: true })
   })
   return phs
@@ -1037,6 +1070,22 @@ export function v0Renderings({ phs, gaps: gapsIn, uc, citeMap, plain }) {
 }
 
 /**
+ * A rendering in its own brackets without them (`real`, its characters, the brackets first and last; `inner`, those
+ * between): their text and characters. A rendering a layout file's segment proves (`proof`, its `box`) keeps its box,
+ * clipped across to what lies between the brackets on its line, so that its crop is still cut from the segment's own ink
+ * (layer2.mjs drawnAs, tex.mjs proofOf), never estimated from the text layer's characters, which no proof covers
+ */
+function unbracketed(g, real, inner) {
+  const out = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true, ...(g.proof ? { proof: true } : {}) }
+  const box = g.box
+  if (!box) return out
+  const open = real[0], close = real.at(-1)
+  const x0 = Math.max(box.x0, open.x1), x1 = Math.min(box.x1, close.x0)
+  out.box = box.lines === 1 && open.page === close.page && x1 > x0 ? { ...box, x0, x1 } : box
+  return out
+}
+
+/**
  * The resolution's rules, either source's renderings (`renderingsOf`, v0Renderings or a layout file's): each
  * placeholder by piece index drawn as nothing, a space, a symbol from its source, a kept rendering, its rendering's page
  * text or crop (drawnAs), a citation as the paper wrote it before (cite-map), or its source's plain text; a rendering in
@@ -1076,7 +1125,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
         // the gap took from the source's text ("Eqn.(1)"), or the reader sees "\uFF08(1)\uFF09"
         const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
         const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
-        if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) g = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true, ...(g.proof ? { proof: true } : {}) }
+        if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) g = unbracketed(g, real, inner)
       }
       if (g) gapOf.set(p.k, g)
       if (!g && cls === 'cite' && citeMap && p.keys.length && p.keys.every(k => citeMap.has(k))) {
@@ -1113,7 +1162,7 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
     const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
     const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
     if (!inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) continue
-    const ng = { text: inner.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars: inner, of: g.of ?? g, unbracketed: true, ...(g.proof ? { proof: true } : {}) }
+    const ng = unbracketed(g, real, inner)
     const cls = p.cls === 'cite' ? 'cite' : p.cls === 'num' ? 'num' : 'other'
     out.set(p.k, { ...drawnAs(p, ng, cls, r.sup, out.lineInfo), k: p.k, src: p.src, cls: p.cls, gap: ng, second: r.second })
   }
@@ -1166,14 +1215,20 @@ function finishUnit(out, unit, rects, charsByPage) {
     r.origAfter = next?.ch ?? null
   }
   // the original's own character a held line shows right after a kept placeholder's ink (1512.03385's footnote 1: a URL's
-  // line kept, its full stop with it), `heldAfter`: tokensOf2 drops the translation's mark there that would show it twice
+  // line kept, its full stop with it), `heldAfter`, and how many marks no line may start with it shows there in a row
+  // (`heldMarks`): tokensOf2 drops as many of the translation's there, which would show them twice, and no more (a
+  // closing corner bracket U+300D after the translation's ideographic full stop is its own)
   for (const r of out.values()) {
     if (r?.mode !== 'kept' || r.cls === 'display' || r.region === undefined || !r.gap) continue
     const own = new Set(r.gap.chars.filter(real).map(charKey))
     let last = -1
     uc.forEach((c, i) => { if (own.has(charKey(c))) last = i })
-    const next = last >= 0 ? uc.slice(last + 1).find(real) : null
-    r.heldAfter = next && out.regionOf.get(`${next.page}|${next.rect.join()}`) === r.region ? next.ch : null
+    const after = last >= 0 ? uc.slice(last + 1).filter(real) : []
+    const inRegion = c => out.regionOf.get(`${c.page}|${c.rect.join()}`) === r.region
+    r.heldAfter = after[0] && inRegion(after[0]) ? after[0].ch : null
+    let n = 0
+    while (n < after.length && inRegion(after[n]) && noStart(after[n].ch)) n++
+    r.heldMarks = n
   }
   // the translation's own text, letters only: a name it keeps as the page writes it ("Niño", whose ñ the source wrote
   // as a command) is drawn, not shown twice
@@ -1841,13 +1896,16 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // `origAfter`): the maintainer's fix 4 of 2026-10-15, for every script. So is such a mark after a placeholder kept on
   // its held line where that line shows the original's own mark after it (`heldAfter`). The rows and the cache keep the translation
   let after = null
+  // (after a display, every such mark: the original's line there opens with none; after a held line's mark, as many as it
+  // shows, `most`)
   const dropped = s => {
     let t = s
-    for (;;) {
+    for (let n = 0; n < (after.most ?? Infinity); n++) {
       const lead = /^\s*/.exec(t)[0], ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
       if (lead.length >= t.length || !noStart(ch) || noStart(after.origAfter)) return t
       t = t.slice(lead.length + ch.length)
     }
+    return t
   }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
@@ -1882,7 +1940,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (r.cls === 'display') after = r
       // (a held line's own mark after the placeholder stands with it, the original's: the translation's is not drawn
       // again, finishUnit's `heldAfter`)
-      else if (noStart(r.heldAfter)) after = { origAfter: null }
+      else if (noStart(r.heldAfter)) after = { origAfter: null, most: r.heldMarks ?? 1 }
       return
     }
     // (a display before the unit's lines, drawn as nothing: the text after it opens the unit's first line)

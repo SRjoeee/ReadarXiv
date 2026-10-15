@@ -144,7 +144,8 @@ describe('ownedOf', () => {
   it("a display at its column's foot, the text after it in the next body, owns what its region holds to that text (pastColumn)", () => {
     // 2608.16117's (12): the display the column's last line, its text after it on the next page, the next mark there
     const p1 = pageOf([{ at: 'bs1' }, 'words ', { at: 'p0.1a' }, '\na=b(1)', { at: 'be1' }, '\nNote', { at: '3s' }, ' text'])
-    const p2 = pageOf(['Head', { at: 'bs2' }, '\nwhere more ', { at: 'c1-2' }, 'words', { at: 'p0.3a' }, 'x', { at: 'p0.3b' }])
+    // (the page's column mark set where MARK_DEF sets it, in the shipout's background: outside any body, region 0)
+    const p2 = pageOf([{ at: 'c1-2' }, 'Head', { at: 'bs2' }, '\nwhere more words', { at: 'p0.3a' }, 'x', { at: 'p0.3b' }])
     const got = ownedOf([p1, p2], { follows: n => ({ 'p0.1a': open('wheremor'), 'p0.3a': closed })[n] ?? null })
     expect(owned([p1, p2], { 'p0.1a': open('wheremor'), 'p0.3a': closed })['p0.1a']).toEqual(['a=b(1)', 0])
     expect(got.get('p0.1a')?.how).toBe(how("open, past its column's end"))
@@ -159,7 +160,7 @@ describe('ownedOf', () => {
 
   it("a display that ends its unit at its column's foot, the next mark on the next page, ends with the body", () => {
     const p1 = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { at: 'p0.1a' }, '\na=b(3)', { at: 'be1' }, '\n7'])
-    const p2 = pageOf([{ at: 'bs2' }, { at: 'c1-2' }, 'Next', { at: '1s' }, ' unit'])
+    const p2 = pageOf([{ at: 'c1-2' }, { at: 'bs2' }, 'Next', { at: '1s' }, ' unit'])
     expect(owned([p1, p2], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['a=b(3)', 0] })
     // its unit's next piece across the break: through to its mark (a display \allowdisplaybreaks breaks)
     const q2 = pageOf([{ at: 'bs2' }, 'c=d(4)', { at: 'p0.3a' }, 'x', { at: 'p0.3b' }])

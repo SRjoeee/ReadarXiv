@@ -75,7 +75,8 @@ const STAY = {
   // (\\axtpmm), which no line is made of and no \\ignorespaces is cut short by: the formula's math-on follows at once
   // (the LOST survey of 2026-10-15: 2608.16117's $\\hat r^\\alpha$ and $(a_1,a_2,a_3)$); a display after a display and
   // then a formula, the display without one
-  'an inline formula first after a display': doc('\\usepackage{amsmath}', `${prose(6, () => '')} define\n\\[ a = b \\]\n$\\hat r^\\alpha$ is ${prose(6, () => '')}\n\\begin{equation} c = d \\end{equation}\n\\( z_0 \\) holds ${prose(6, () => '')}\n\\begin{align} e &= f \\end{align}\n\\begin{equation*} g = h \\end{equation*}\n\\ensuremath{\\theta} and ${prose(6, () => '')}\n\n${prose(4, () => '')} \\[ p = q \\] $x$, and \\[ u = v \\]\n$$ w = 1 $$\n$y$ ${prose(4, () => '')}`),
+  // (XeLaTeX too: its \special is the same kind of node as pdfTeX's, so the mark on the empty list is as harmless there)
+  'an inline formula first after a display': { engines: ['pdflatex', 'xelatex'], src: doc('\\usepackage{amsmath}', `${prose(6, () => '')} define\n\\[ a = b \\]\n$\\hat r^\\alpha$ is ${prose(6, () => '')}\n\\begin{equation} c = d \\end{equation}\n\\( z_0 \\) holds ${prose(6, () => '')}\n\\begin{align} e &= f \\end{align}\n\\begin{equation*} g = h \\end{equation*}\n\\ensuremath{\\theta} and ${prose(6, () => '')}\n\n${prose(4, () => '')} \\[ p = q \\] $x$, and \\[ u = v \\]\n$$ w = 1 $$\n$y$ ${prose(4, () => '')}`) },
   // amsmath's \\] ends in \\ignorespaces, which skips a macro that sets nothing and the line end after it; a mark set
   // there would end the skip, and the next line begin with a space (2608.29782's \\delete{…} after a display)
   'a macro that sets nothing after a display': doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}', `${prose(6, () => '')} by\n\\[ a = b \\]\n\\delete{A passage $x$ set aside.}\n${prose(6, () => '')} and\n\\begin{align*} c = d \\end{align*}\n\\delete{More.}\n${prose(6, () => '')}`),

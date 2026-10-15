@@ -119,7 +119,9 @@ counts a placeholder shown when it is drawn or left intact where it stands (`inP
 drawing never erases), never `missing`. The hybrid's safe rule is one place (`layer-proto/tex.mjs` `proofOf`): a
 rendering is drawn only from what the file proves (its segments, its page text, its held run or group, a piece the file
 draws as nothing), else the unit stays the original's; its one exemption is a LaTeX text symbol (`\%`, `$\times$`), whose
-source is its rendering's content; a piece whose segments all lie past the pages the run shows (the gate's 12) is
+source is its rendering's content: one grapheme drawn, with no `_`, `^`, `/` or `√(` (`layer2.mjs textSymbol`), so that a
+formula of no letter or digit (`$\sum_{\alpha}^{\beta}$`) is proven as any formula is; with no layout file (the maker
+refused, the bundle dropped it) the reader's units are still drawn under the rule, which nothing then proves; a piece whose segments all lie past the pages the run shows (the gate's 12) is
 proven and drawn as its page text, never `?`. Fix 4 (the maintainer's ruling of 2026-10-15, every script): a mark UAX 14
 does not let a line start with (`layer-proto/no-start.mjs`, the table `lineStartPunct` reads too, served to the gate from
 this repository) that opens the translation's text right after a displayed formula is dropped from the drawing, unless

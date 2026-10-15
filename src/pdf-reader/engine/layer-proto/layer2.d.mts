@@ -164,6 +164,9 @@ export declare const ACCENT: RegExp
 /** a page's text content as characters, each with its font's class (`fontOf(fontName)`) */
 /** the characters a font's ToUnicode map gives its glyphs (PDF.js's `toUnicode`, with fontExtraProperties), or null */
 export declare function mappedOf(toUnicode: unknown): Set<string> | null
+/** mappedOf of a font as PDF.js's commonObjs holds it; throws for a font (not Type3) exported with no `toUnicode` (a
+ *  document not opened with PDF_OPTIONS); null for anything else with no map to read */
+export declare function fontMappedOf(font: unknown): Set<string> | null
 /** whether a page character's text is no reading of its glyph (pageChars2's `nu`) */
 export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
 export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null): Char[]
@@ -171,6 +174,10 @@ export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (f
 export declare function texToText2(src: string): string
 /** phClass with the paper's own macros told apart: { cls, unknown? } */
 export declare function phClass2(src: string): { cls: string; unknown?: boolean }
+/** whether a 'symbol' is a text symbol the proof exempts: one grapheme drawn, no `_`, `^`, `/` or `√(` */
+export declare function textSymbol(src: string): boolean
+/** phClass2 under the proof: a 'symbol' that is no text symbol is 'other' */
+export declare function phClassProven(src: string): { cls: string; unknown?: boolean }
 /** the unit's characters by its rectangles; `exact`: each rectangle's baseline and size where a layout file gives them */
 export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents?: Map<Rect, number[]>, exact?: ReadonlyMap<Rect, { baseline: number; size: number }> | null): Char[]
 export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[]): number
@@ -179,8 +186,8 @@ export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly nu
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
 /** the unit against its page, in parts: v0's, or `parts` another source gives (the per-unit reading's contract above) */
 export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: CiteMap | null, deny?: ReadonlySet<string> | null, parts?: UnitParts | null): Prepared
-/** the unit's placeholders by piece index */
-export declare function placeholdersOf(unit: Unit): Placeholder[]
+/** the unit's placeholders by piece index; `proven`: classed as a unit drawn under the proof is (phClassProven) */
+export declare function placeholdersOf(unit: Unit, proven?: boolean): Placeholder[]
 /** parts 1 and 2, v0's: the unit's characters by its rectangles, each line's baseline and size, and its extent */
 export declare function linesOf(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): UnitLines
 /** part 3, v0's: the first gap's label, out.label set; the gaps without it */

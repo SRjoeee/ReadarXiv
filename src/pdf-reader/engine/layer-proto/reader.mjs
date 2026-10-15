@@ -71,8 +71,9 @@ function shapesOf(units) {
 /**
  * The layer of one paper and target, as either reader shows it: v0 opened over the composed document `doc` (arXiv's PDF
  * followed by the bundle's add-on, opened once by PDF.js with PDF_OPTIONS; arXiv's PDF alone where the bundle has no
- * add-on) with the bundle's `left` as its geometry, its layout file as the hybrid's (none where the maker refused), its
- * add-on's manifest as the text removal's (the old way where there is none), the units to come the target's
+ * add-on) with the bundle's `left` as its geometry, its layout file as the hybrid's (none where the maker refused, or the
+ * bundle dropped it: every rendering is still proven, by nothing then, so that a unit with a placeholder other than TeX's
+ * own nothing, a space or a text symbol stays the original's; run.mjs openProto's `proof`), its add-on's manifest as the text removal's (the old way where there is none), the units to come the target's
  * (toTranslate), each table cell's group from the bundle's cells, the target's caption names on every float (L7), the
  * host's served faces (`faceSources`) and hyphenation patterns (`hyphUrl`), at scale 2.5 and a device pixel ratio of 1,
  * no copy kept at v0's own resolution (so a page's original canvas is let go as soon as its ink is read, not when the
@@ -123,6 +124,9 @@ async function openOne({ bundle, doc, target, faceSources, hyphUrl, rules }, tok
     units: [], expect, groups, target,
     pages: Number.POSITIVE_INFINITY, scale: SCALE, dpr: 1, copy: false,
     tex: bundle.layout ? { ...HYBRID, index: indexLayout(bundle.layout), pieces: new Map() } : null,
+    // (no layout file, the maker refused or the bundle dropped it: every unit still under the proof, which nothing then
+    // proves but TeX's own nothing, a space and a text symbol, so no unproven crop or source text is drawn)
+    proof: true,
     removal: bundle.addon ? { mode: 'draw', doc, manifest: bundle.addon.manifest } : null,
     labels: { captions: CAPTIONS },
     rules, faceSources, hyphUrl,

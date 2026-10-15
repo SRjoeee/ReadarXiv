@@ -152,8 +152,39 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const plain = await openLayer({ bundle: bare, doc, target: 'de', faceSources, hyphUrl })
     const p = seen.opens.at(-1) as unknown as Opened
     expect([p.tex, p.removal]).toEqual([null, null])
+    // (and every unit still drawn under the proof, which nothing proves then: below)
+    expect([o.proof, p.proof]).toEqual([true, true])
     expect(p.labels).toEqual({ captions: { figure: 'target', table: 'target' } })
     plain.dispose()
+  })
+
+  it("with no layout file every unit is still drawn under the proof: one with a placeholder nothing proves stays the original's", async () => {
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const bundle = bundleOf({ layout: false, addon: false }), rows = rowsOf(bundle)
+    const units: unknown[] = []
+    for (const r of rows) units[r[0]] = unitOf(bundle, r)
+    // unit 0 holds a citation its page does not show, which only its source could draw; unit 2 a text symbol
+    const u0 = units[0] as { pieces: unknown[] }, u2 = units[2] as { pieces: unknown[] }
+    units[0] = { ...u0, pieces: [{ t: 'text', s: CJK(2) }, { t: 'ph', src: '\\cite{nobody}' }, { t: 'text', s: CJK(2, 0x4e40) }] }
+    units[2] = { ...u2, pieces: [{ t: 'text', s: CJK(2, 0x4e80) }, { t: 'ph', src: '\\%' }, { t: 'text', s: CJK(2, 0x4ec0) }] }
+    const skippedOf = async (proof: boolean) => {
+      const run = await openProto({
+        doc: docOf(), geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } } as never, units: units as never, target: 'zh',
+        pages: Number.POSITIVE_INFINITY, scale: 2.5, dpr: 1, copy: false, faceSources, hyphUrl, tex: null, proof, labels: { captions: { figure: 'target', table: 'target' } },
+      })
+      await run.until(2)
+      const out = { unproven: run.skipped.filter(k => k.why === 'unproven').map(k => k.id), drawn: run.stats.map(r => r.id) }
+      run.dispose()
+      return out
+    }
+    const proven = await skippedOf(true)
+    expect(proven.unproven).toEqual([0])
+    expect(proven.drawn).toContain(2)
+    expect(proven.drawn).not.toContain(0)
+    // the lab's v0 alone, no proof: the citation drawn from its source, as before
+    const bare = await skippedOf(false)
+    expect(bare.unproven).toEqual([])
+    expect(bare.drawn).toContain(0)
   })
 
   it('refuses a rule set that is none with a TypeError of its own, before it takes the page\'s one open, like the door\'s other arguments', async () => {

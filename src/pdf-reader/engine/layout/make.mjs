@@ -916,6 +916,28 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   }
 
   /**
+   * A unit's first line cut at its start mark, as lineOf cuts a first line (`from`), where the head drop made it the
+   * first after its rows were taken: its glyphs left of the mark are no glyph of the unit's (TeX set them before it: a
+   * head piece, or ink outside the unit's lines), and go free; its extent is its glyphs' again, with the found pieces'
+   * ink it takes in (`extra` and the unit's boxes on it); its baseline stays, on which those pieces' segments stand
+   */
+  function cutAtStart(one) {
+    const { id: i, rows, S } = one, r = rows[0], P = ink[r.page]
+    if (!S || S.page !== r.page) return
+    const keep = r.gl.filter(g => mid(P, g) >= S.x - 0.05)
+    if (!keep.length || keep.length === r.gl.length) return
+    for (const g of r.gl) if (mid(P, g) < S.x - 0.05 && P.owner[g] === i) P.owner[g] = -1
+    const row = rowOf(P, keep, r.page, r.ks, r.base)
+    row.base = r.base
+    if (r.extra?.length) {
+      row.extra = r.extra
+      for (const g of r.extra) { row.x0 = Math.min(row.x0, P.ix0[g]); row.x1 = Math.max(row.x1, P.ix1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
+    }
+    for (const [j, B] of one.boxes ?? []) if (j === 0) { row.x0 = Math.min(row.x0, B[0]); row.x1 = Math.max(row.x1, B[2]); row.top = Math.max(row.top, B[3]); row.bottom = Math.min(row.bottom, B[1]) }
+    rows[0] = row
+  }
+
+  /**
    * A unit's text symbols the marking gave no mark (glued to the word before, at the unit's head), each drawn as its
    * character (PH_FLAG.TEXT, its text the file's pageText) where the unit's own lines on arXiv's page hold that
    * character's ink: its glyphs there, those of no found placeholder of the unit, as many at least as the unit has such
@@ -1086,7 +1108,10 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i) P.owner[g] = -1 }
     // at the unit's head: the rows before its start mark's line (a display that opens it, before patch's start mark at
     // its first text) that carry none of its source's words and no ink of its found pieces are no line of the unit's
-    // either, as the held rows at its end; then its start mark stands on its first line
+    // either, as the held rows at its end; then its start mark stands on its first line, which is cut at it as a first
+    // line is (lineOf's `from`: no glyph left of the mark is the unit's, a head glued to its first word under GLUE too),
+    // and the head pieces are looked for beside the mark there (besideMarks, which the per-unit pass ran on the row the
+    // drop took away, the mark on none of its)
     const jS = one.S ? rows.findIndex(r => r.page === one.S.page && Math.abs(one.S.y - r.base) < 0.5 * r.size) : -1
     if (jS > 0 && rows.slice(0, jS).every((r, j) => !r.extra?.length && !boxed.has(j) && wordsOn(r).hits === 0)) {
       for (const r of rows.slice(0, jS)) free(r)
@@ -1095,6 +1120,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       boxed.clear()
       for (const [row] of one.boxes) boxed.add(row)
       stats.lines.held += jS
+      cutAtStart(one)
+      if (one.heads) besideMarks(one, false)
     }
     if (rows.length < 2) continue
     const held = new Set()
