@@ -350,6 +350,15 @@ describe('layoutMarksOfPaper with converge (CM)', () => {
     expect(parseLayoutMarks(made.marks).lines).toEqual([[0, 4]])
   })
 
+  it('takes the marks in a file the paper writes itself as no difference, and a changed number in it as one', async () => {
+    const cut = '\\axtmark {3s}Some commented words\\axtend {3e}\n'
+    const bare = 'Some commented words\n'
+    const same = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'comment.cut': bare }), markedOf({ 'main.aux': AUX, 'comment.cut': cut })])
+    expect(same.made).toMatchObject({ cm: { drafts: 1, marked: 1, settled: true } })
+    const page = await cmOf([PROBE, draftOf({ 'main.aux': AUX, 'comment.cut': bare }), markedOf({ 'main.aux': AUX, 'comment.cut': cut.replace('words', 'words 2') }), markedOf({ 'main.aux': AUX, 'comment.cut': cut.replace('words', 'words 2') })])
+    expect(page.made).toMatchObject({ cm: { drafts: 1, marked: 2, settled: true } })
+  })
+
   it('stops at five TeX passes in all, drafts with them, and keeps the last PDF, not settled', async () => {
     const pdf5 = enc('%PDF-1.7 the fifth pass')
     const moving = (n: number, pdf = PDF) => markedOf({ 'main.aux': `\\relax \n\\newlabel{s}{{1}{${n}}}\n` }, { pdf })

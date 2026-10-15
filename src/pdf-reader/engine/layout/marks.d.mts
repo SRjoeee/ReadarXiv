@@ -84,6 +84,8 @@ export declare const LAYOUT_TEX: string
 /** the control sequences \\axt@unmark takes out of a title's copy with their arguments: the regex's alternation and the
  *  prefilter that keeps it from running on a list holding none of them are both built from this list */
 export declare const UNMARK_CS: readonly string[]
+export declare const MARK_CS: readonly string[]
+export declare function withoutMarks(text: string): string
 /** LAYOUT_TEX's names: \\axtnma{<key>} and \\axtnmb{<key>} around each babel name macro's own text */
 export declare const NAMES_TEX: string
 /** LAYOUT_TEX's last part: a point (`/axt-<name> ri`) beside each destination, around each column's body and each

@@ -21,7 +21,7 @@
 import { jobName, lastTexLog, latin1 } from '../source/latex-front.mjs'
 import { listsMissing, notFound, originalFiles, probeFiles, stoppedShort } from '../pipeline/live.mjs'
 import { completeLog } from '../pipeline/typeset/tex.mjs'
-import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe, readNameProbe, readSkipProbe } from './marks.mjs'
+import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, probeSamples, readInkProbe, readInkTexts, readMarkProbe, readNameProbe, readSkipProbe, withoutMarks } from './marks.mjs'
 
 /**
  * A paper's layout marks (paper.d.mts): the marks file's bytes, with each stage's time, or the stage that failed with the
@@ -77,13 +77,10 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
 
 /** CM's bound: the TeX passes it runs at most, its drafts and marked passes together (latexmk's max_repeat) */
 const PASSES = 5
-/** a babel name's marks as a pass writes them into a list or the aux (marks.mjs NAMES_TEX: `\protect \axtnma {<key>}`
- *  and `\axtnmb`), inert where they are read (\@starttoc's \axt@off, pdfstringdef, the nameref names' unmark): what the
- *  marked pass's files hold that the unmarked's do not */
-const NAME_MARKS = /(?:\\protect\s*)?\\axtnm[ab]\s*\{[^{}]*\}/g
 const sameBytes = (a, b) => a.length === b.length && a.every((x, i) => x === b[i])
-/** whether a file a pass wrote is the copy it was given, name marks aside */
-const sameFile = (a, b) => !!b && (sameBytes(a, b) || latin1(a).replace(NAME_MARKS, '') === latin1(b).replace(NAME_MARKS, ''))
+/** whether a file a pass wrote is the copy it was given, layout marks aside (marks.mjs withoutMarks: every mark a pass can
+ *  write into a file, a babel name's into a list or the aux and a unit's into text the paper writes itself) */
+const sameFile = (a, b) => !!b && (sameBytes(a, b) || withoutMarks(latin1(a)) === withoutMarks(latin1(b)))
 const byPath = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)
 /** what the bibliography step reads: every aux's \citation, \bibdata and \bibstyle lines (BibTeX's), every .bcf whole (biber's) */
 const bibInput = files => [...files].filter(([p]) => /\.(?:aux|bcf)$/.test(p)).sort(byPath).map(([p, b]) => `${p}\n${p.endsWith('.bcf') ? latin1(b) : (latin1(b).match(/^\\(?:citation|bibdata|bibstyle)\{.*$/gm) ?? []).join('\n')}`).join('\n')
@@ -107,7 +104,7 @@ const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
  *     a rewrite of the same bytes too), the latest copy of each, in place of the paper's own file of that path; never in
  *     place of one of the pass's own (the original's files, marked or not: a file TeX rewrote there is the unmarked
  *     copy, which would take the marks away); a file not returned keeps its bytes
- *   - a marked pass whose every returned file has the bytes it was given at that path (sameFile: a babel name's marks
+ *   - a marked pass whose every returned file has the bytes it was given at that path (sameFile: layout marks
  *     aside; a file it was given none of is new) is the fixed point latexmk would stop at: its PDF and log are the
  *     marks'. Else the next pass is a marked one again, to PASSES TeX passes in all, where the last one's PDF is kept,
  *     not settled

@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_CS, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf, withoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
@@ -492,6 +492,19 @@ describe('LAYOUT_TEX', () => {
   })
   // \axt@unmark: the regex takes a mark and its argument out of a title's copy, and a prefilter keeps it from running on a
   // list that holds none of the five (unmark-finding: 4.36 s of the thesis's layout compile, a miss costing 3 ms a run)
+  it('withoutMarks: every layout mark and its own argument out of a written file, nothing else', () => {
+    expect(MARK_CS).toEqual(['axtmark', 'axtend', ...UNMARK_CS])
+    // each kind, behind a \\protect or not, with a space or none before its argument
+    for (const m of ['\\axtmark{12s}', '\\axtmark {12s}', '\\axtend{12e}', '\\axtpma{p1.2a}', '\\axtpm {p1.2b}', '\\axthmark{h3s}', '\\protect \\axtnma {abstract}', '\\protect\\axtnmb{abstract}'])
+      expect(withoutMarks(`a${m}b`), m).toBe('ab')
+    // in the middle of a line, at its start and end, many to a line; the text around them untouched
+    expect(withoutMarks('\\axtmark {1s}We use \\axtpma {p1.0a}$x$\\axtpm {p1.0b} here.\\axtend {1e}\n  next line \\axthmark{h2s}\n')).toBe('We use $x$ here.\n  next line \n')
+    // a mark's argument is its own braces: the group after it stays, as does a macro that only starts like a mark
+    expect(withoutMarks('\\axtpm{p1b}{keep}\\axtmarker{x}\\axtmarkx \\axtmark{1s')).toBe('{keep}\\axtmarker{x}\\axtmarkx \\axtmark{1s')
+    // no mark: the same text, byte for byte
+    expect(withoutMarks('\\contentsline {section}{1}{2}{section.1}\n')).toBe('\\contentsline {section}{1}{2}{section.1}\n')
+  })
+
   it('\\axt@unmark: the regex is the one that never reaches across a group, built from UNMARK_CS', () => {
     expect(UNMARK_CS).toEqual(['axtpma', 'axtpm', 'axthmark', 'axtnma', 'axtnmb'])
     expect(new Set(UNMARK_CS).size).toBe(UNMARK_CS.length)
