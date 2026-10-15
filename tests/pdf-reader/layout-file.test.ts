@@ -487,6 +487,7 @@ const ROWS: [string, Edit, string][] = [
   ['JOINED and NUMBERED', f => { f.ph[3] = [5, 2, DISPLAY, PH_FLAG.JOINED | PH_FLAG.NUMBERED] }, 'ph[3]'],
   // OUTSIDE: with LOST alone
   ['OUTSIDE on a found formula', f => { f.ph[0][3] = PH_FLAG.OUTSIDE }, 'ph[0][3]'],
+  ['OUTSIDE and LOST and RAISED', f => { f.ph[5][3] = PH_FLAG.LOST | PH_FLAG.OUTSIDE | PH_FLAG.RAISED }, 'ph[5][3]'],
   ['OUTSIDE and EMPTY', f => { f.ph[4][3] = PH_FLAG.EMPTY | PH_FLAG.OUTSIDE }, 'ph[4][3]'],
   ['TEXT on a formula', f => { f.ph[0][3] = PH_FLAG.TEXT }, 'ph[0]'],
   ['TEXT and LOST', f => { f.ph[5][3] = PH_FLAG.TEXT | PH_FLAG.LOST }, 'ph[5]'],

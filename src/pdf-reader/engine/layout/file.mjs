@@ -356,7 +356,7 @@ function checkRows(f, { views, lo, hi }) {
     const empty = (flags & PH_FLAG.EMPTY) !== 0, lost = (flags & PH_FLAG.LOST) !== 0, symbol = (flags & PH_FLAG.TEXT) !== 0, joined = (flags & PH_FLAG.JOINED) !== 0
     if (empty && lost) throw refuse(`ph[${i}][3]`, 'EMPTY and LOST together')
     if (joined && (flags !== PH_FLAG.JOINED || kind !== DISPLAY || r.length !== 4)) throw refuse(`ph[${i}]`, 'JOINED but on a display alone, with no other flag and no segments')
-    if ((flags & PH_FLAG.OUTSIDE) !== 0 && !lost) throw refuse(`ph[${i}][3]`, 'OUTSIDE but not LOST')
+    if ((flags & PH_FLAG.OUTSIDE) !== 0 && flags !== (PH_FLAG.LOST | PH_FLAG.OUTSIDE)) throw refuse(`ph[${i}][3]`, 'OUTSIDE but not LOST alone')
     if (symbol && (empty || lost || kind !== MACRO || r.length !== 4)) throw refuse(`ph[${i}]`, 'TEXT but on a macro alone, with no segments')
     if ((flags & PH_FLAG.NUMBERED) !== 0 && kind !== DISPLAY) throw refuse(`ph[${i}][3]`, 'NUMBERED on a kind not display')
     const segs = (r.length - 4) / 6, most = kind === DISPLAY ? SEGS_DISPLAY : SEGS_INLINE
