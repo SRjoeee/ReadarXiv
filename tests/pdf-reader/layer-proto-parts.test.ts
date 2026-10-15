@@ -410,6 +410,10 @@ describe.skipIf(!LAB)('H4: the local papers in parts, as the open over each made
         const P: Paper = { N, index, parts, docFor }
         // (a part that ships no layout draws its units as with no file: the warm door is its reference, not the whole)
         const want = drawing(parts.some(p => p.layout === null) ? (await partsRun(P, { before: parts.length, ended: 'open' })).run : await wholeRun(P))
+        // (a drawing worth comparing: units laid and drawn on the pages, as many parts as the schedule asks)
+        expect(want.order.length, name).toBeGreaterThan(20)
+        expect(want.pages.filter(p => p?.svg).length, name).toBeGreaterThan(N / 2)
+        if (to) expect(parts.length, name).toBeGreaterThan(N / 4)
         const { run, q1 } = await partsRun(P, { before: 0, ended: 'open', feed: 'starved' })
         expect(drawing(run), `${name}, ${schedule}, ${parts.length} parts`).toEqual(want)
         expect(q1, `${name}, ${schedule}`).toEqual([])
