@@ -236,7 +236,10 @@ const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro'
  * box [x0, y0, x1, y1], TeX's own; an EMPTY placeholder has none, a LOST or TEXT one none the file knows), its lines
  * ({ j, box, baseline, size, held }: `held` a line its source does not write, a display's row), its pitch (`pitch`: the
  * median gap between two of its own text lines next to each other in one column, its lines whose spans overlap, with no
- * held line of the column between, over all its pages), and on its first
+ * held line of the column between, over all its pages), the line ends a forced break shapes (`breaks`, { y, next, x0, x1 }:
+ * a text line whose ink ends short of its column's measure, the column's rightmost text ink, by more than SHORT of its
+ * size, with the unit's next line in the file a text line of that column on the page; `y` between the two baselines,
+ * `next` the next line's; `breaksAll`, the unit's count of them over all its pages), and on its first
  * page the placeholders the file has LOST (`lost`, their k: ink no measure can place); `displays`, every display's
  * segments
  */
@@ -265,7 +268,7 @@ export function fileIndexOf(layout) {
   }
   // (each unit's pitch: the gaps of its text lines next to each other, page by page and column by column (lines whose
   // spans overlap, chained), no held line of the column between)
-  const gaps = new Map()
+  const gaps = new Map(), breaks = new Map()
   const overlaps = (a, b) => Math.min(a.box[2], b.box[2]) > Math.max(a.box[0], b.box[0])
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
     const columns = []
@@ -277,6 +280,7 @@ export function fileIndexOf(layout) {
       into.push(l)
     }
     const held = u.lines.filter(l => l.held)
+    u.breaks = []
     for (const c of columns) {
       const text = c.slice().sort((a, b) => b.baseline - a.baseline)
       for (let i = 1; i < text.length; i++) {
@@ -284,13 +288,45 @@ export function fileIndexOf(layout) {
         if (!(g > 0) || held.some(h => h.baseline < a.baseline && h.baseline > b.baseline && (overlaps(h, a) || overlaps(h, b)))) continue
         ;(gaps.get(id) ?? gaps.set(id, []).get(id)).push(g)
       }
+      // (TeX's line breaks a forced break shapes: a text line its ink ends short of its column's measure, the next line of
+      // the unit in the file a text line of the column)
+      const measure = Math.max(...c.map(l => l.box[2])), x0 = Math.min(...c.map(l => l.box[0]))
+      for (const l of c) {
+        const n = c.find(m => m.j === l.j + 1)
+        if (n && l.box[2] < measure - SHORT * l.size) u.breaks.push({ y: (l.baseline + n.baseline) / 2, next: n.baseline, x0, x1: measure })
+      }
     }
+    breaks.set(id, (breaks.get(id) ?? 0) + u.breaks.length)
   }
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
     const g = (gaps.get(id) ?? []).sort((a, b) => a - b)
     u.pitch = g.length ? (g[(g.length - 1) >> 1] + g[g.length >> 1]) / 2 : null
+    u.breaksAll = breaks.get(id) ?? 0
   }
   return pages
+}
+
+/** LaTeX's forced line breaks: `\\` (starred, or with its optional space) and \newline, each TeX's \hfil\break */
+const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a line ends short of its column's measure by more than this share of its size (a justified line's ink reaches it, to a
+ *  glyph's side bearing) */
+const SHORT = 0.5
+/**
+ * The forced breaks of a unit's source (its pieces: { t, s } text, { t: 'ph', src } a placeholder) that end a line of it:
+ * groups of FORCED_BREAK placeholders with no other piece between them but white space, with something of the unit
+ * before and after the group (a text holding a non-space character, or a placeholder or footnote that is no forced
+ * break). A group at an edge of the unit ends none of its lines (the blank after its last paragraph)
+ */
+export function forcedBreaksIn(pieces) {
+  let n = 0, before = false, group = false
+  for (const p of pieces ?? []) {
+    if (p.t === 'ph' && FORCED_BREAK.test(p.src ?? '')) { if (before) group = true; continue }
+    if (p.t === 'text' ? !/\S/.test(p.s ?? '') : p.t !== 'ph' && p.t !== 'nested') continue
+    if (group) n++
+    group = false
+    before = true
+  }
+  return n
 }
 
 /**
@@ -384,8 +420,13 @@ export function overDisplayOf({ lines, boxes }) {
  * unit's own text lines of the file in the frame's column beyond its pitch (a blank line between paragraphs, a tall
  * line's opening: `tex`, { baseline, x0, x1 }, and `texPitch`), the share of it that lies between the two drawn lines;
  * and a line of the unit's text the drawing keeps as the original's (`keptRows`, their middles, no held line among
- * them), a pitch of TeX's each. `units`: the drawn units, { id, orig, lines: [{ baseline, size, x0, x1, pitch }], tex,
- * held, texPitch, keptRows }. Returns { slotsSkipped, where: the units, once a slot }
+ * them), a pitch of TeX's each. A forced break of TeX's between the two lines (`breaks`, fileIndexOf's: a line TeX ended
+ * short, where the unit's source sets as many forced breaks as the file has such lines, forcedBreaksIn) sets aside the room
+ * above the line TeX set after it (`next`), as the room before a display is set aside: the text before the break ends where
+ * its translation does, and the text after it starts on that line. The room from that line down is counted as any (a
+ * drawing that starts the text after the break lower skips those slots). `units`: the drawn units, { id, orig, lines:
+ * [{ baseline, size, x0, x1, pitch }], tex, held, texPitch, keptRows, breaks }. Returns { slotsSkipped, where: the units,
+ * once a slot }
  */
 export function slotsSkippedOf(units) {
   const where = []
@@ -401,16 +442,22 @@ export function slotsSkippedOf(units) {
         // (across the frame's column and the two lines: a display's rows stand beside a short line too)
         const x0 = Math.min(fr.x0, mine[j - 1].x0, mine[j].x0), x1 = Math.max(fr.x1, mine[j - 1].x1, mine[j].x1)
         if ((u.held ?? []).some(h => { const y = (h[1] + h[3]) / 2; return y > b && y < a && Math.min(h[2], x1) > Math.max(h[0], x0) })) continue
+        // (a forced break between them: counted from the line TeX set after it, `from`, as from a slot a pitch over it, the
+        // lower drawn line on that line skipping none)
+        let from = a
+        for (const k of u.breaks ?? []) if (k.y > b && k.y < a && Math.min(k.x1, x1) > Math.max(k.x0, x0)) from = Math.min(from, k.next)
+        if (from < a && b >= from - 0.5) continue
+        const top = from < a ? from + pitch : a
         // (TeX's own room between them: each gap of its text lines past its pitch, by the share of it they span)
         let room = 0
         if (p0 > 0) {
           for (let i = 1; i < tex.length; i++) {
-            const hi = tex[i - 1], lo = tex[i], span = Math.min(hi, a) - Math.max(lo, b)
+            const hi = tex[i - 1], lo = tex[i], span = Math.min(hi, from) - Math.max(lo, b)
             if (span > 0 && hi - lo > p0) room += ((hi - lo - p0) * span) / (hi - lo)
           }
-          room += p0 * (u.keptRows ?? []).filter(y => y > b && y < a).length
+          room += p0 * (u.keptRows ?? []).filter(y => y > b && y < from).length
         }
-        const slots = Math.floor(rd((a - b - pitch - room) / pitch, 2))
+        const slots = Math.floor(rd((top - b - pitch - room) / pitch, 2))
         for (let s = 0; s < slots; s++) where.push(u.id)
       }
     })

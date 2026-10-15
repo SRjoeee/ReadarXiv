@@ -525,6 +525,40 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(of([700, 684.4, 656.8], { tex: texAt([700, 688, 676, 652, 640]), pitch: 15.6 }).slotsSkipped).toBe(0)
   })
 
+  it("TeX's forced breaks: the file's lines ended short of their column, as many as the source's breaks inside the unit (fixes 2 and 3's C)", async () => {
+    const { fileIndexOf, forcedBreaksIn } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    // a paragraph, `\\ \\`, a paragraph: line 1 ends short, the blank line, lines 2 and 3; the last line short too, no break
+    const file = (rows: number[][], held: number[] = []) => fileIndexOf({ lines: [[3, rows.flat()]], held: [[3, held]], ph: [] }).get(1)!.units.get(3)!
+    const u = file([line(1, 72, 472, 700), line(1, 72, 300, 688), line(1, 72, 472, 664), line(1, 72, 200, 652)])
+    expect(u.breaks).toEqual([{ y: 676, next: 664, x0: 72, x1: 472 }])
+    expect(u.breaksAll).toBe(1)
+    // none where the next line is a display's row, the line reaches its measure, or it is the unit's last
+    expect(file([line(1, 72, 472, 700), line(1, 72, 300, 688), line(1, 150, 400, 664), line(1, 72, 472, 640)], [2]).breaks).toEqual([])
+    expect(file([line(1, 72, 472, 700), line(1, 72, 470, 688), line(1, 72, 472, 664)]).breaks).toEqual([])
+    // the source's breaks inside the unit: a group of `\\` (or \newline) with the unit's own before and after it, none at an edge
+    const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+    expect(forcedBreaksIn([text('a'), ph('\\\\'), text('\n'), ph('\\\\'), text(' b'), ph('\\\\'), ph('\\\\'), text('\n')])).toBe(1)
+    expect(forcedBreaksIn([text('a'), ph('\\\\[2pt]'), ph('$x$'), ph('\\newline'), text('c')])).toBe(2)
+    expect(forcedBreaksIn([ph('\\\\'), text('a b')])).toBe(0)
+  })
+
+  it('an empty slot: the room above the line TeX set after a forced break is the break\'s, the room below it is counted', async () => {
+    const { slotsSkippedOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const orig = lines(6)
+    const drawnAt = (bs: number[]) => bs.map(baseline => ({ baseline, size: 10, x0: 72, x1: 472, pitch: 12 }))
+    const tex = [700, 688, 664, 652, 640].map(baseline => ({ baseline, x0: 72, x1: 472 }))
+    const brk = [{ y: 676, next: 664, x0: 72, x1: 472 }]
+    const of = (bs: number[], breaks: typeof brk = brk) => slotsSkippedOf([{ id: 11, orig, lines: drawnAt(bs), tex, held: [], texPitch: 12, keptRows: [], breaks }]).slotsSkipped
+    // the paragraph before the break one line shorter than the original's: its line 688 left empty, the next one at 664
+    expect(of([700, 664])).toBe(0)
+    // the same drawing with no break of TeX's there: a slot skipped (688's)
+    expect(of([700, 664], [])).toBe(1)
+    // the text after the break started one line low: the slot of 664 is skipped
+    expect(of([700, 652])).toBe(1)
+    // a break in another column holds no room of this one
+    expect(of([700, 664], [{ ...brk[0]!, x0: 480, x1: 540 }])).toBe(1)
+  })
+
   it("a line opened by a mark UAX 14 keeps from a line's start, unless the original's line opens with one", async () => {
     const { lineStartsOf, noStart } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
     for (const c of ['\uff0c', '\u3002', '\u3001', ')', ',', '.', '!', '?', ';', ':', '\u300d', '\u30fb', '\u{1f679}']) expect(noStart(c)).toBe(true)
