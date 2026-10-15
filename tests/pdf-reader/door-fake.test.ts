@@ -26,7 +26,7 @@ async function openFake(s: DoorSetup, opts: FakeDoorOptions = {}) {
   const layer = await door.openLayer({
     index: s.paper.index, doc: docFor(parts.at(-1)?.chain.r ?? 0), parts, target: 'zh', faceSources: (async () => null) as never, hyphUrl: () => '', leftPart: s.leftPart, onRetired: s.onRetired,
   })
-  return { door, layer, advance: () => door.advance(), docFor }
+  return { door, layer, advance: () => door.advance(), docFor, closure: (p: number): readonly number[] => opts.closure?.(p) ?? [p] }
 }
 
 describe('the fake door', () => {
@@ -40,6 +40,12 @@ describe('the fake door gating on rows', () => {
     const rows = s.paper.index.units.map((_, id) => [id, [], 'whole', null, null] as Row)
     return { ...h, supplyRows: () => { h.layer.take(rows) } }
   })
+})
+
+describe('the fake door with the closures of an in-order door', () => {
+  // (the small paper: a unit runs from page 1 onto page 2, so pages 1 and 2 are laid together and each later page after the pages before it)
+  const inOrder = (p: number) => (p <= 2 ? [1, 2] : Array.from({ length: p }, (_, i) => i + 1))
+  runDoorConformance(s => openFake(s, { closure: inOrder }))
 })
 
 describe('the fake door in auto mode', () => {
@@ -56,6 +62,21 @@ describe('the fake door: what only it has', () => {
     const page = await h.layer.pageOf(1, { lang: 'zh' })
     expect(page.svg.getAttribute('lang')).toBe('zh')
     h.layer.dispose()
+  })
+
+  it('counts a read that rejects with a falsy value as a failure', async () => {
+    const M = await made()
+    for (const value of [undefined, null, 0, '']) {
+      const door = createFakeDoor()
+      const doc = { numPages: N, getPage: async () => { throw value } }
+      const parts = M.readParts.slice(0, 3)
+      const layer = await door.openLayer({ index: M.index, doc: { numPages: N + 2, getPage: doc.getPage }, parts, target: 'zh', faceSources: (async () => null) as never, hyphUrl: () => '', leftPart: async () => new Uint8Array(), onRetired: () => {} })
+      const one = layer.pageOf(1, { lang: 'zh' }).then(() => 'laid', () => 'failed')
+      await door.advance()
+      expect(await one).toBe('failed')
+      expect(layer.pageState(1)).toBe('failed')
+      layer.dispose()
+    }
   })
 
   it('fails a page the test says to fail', async () => {

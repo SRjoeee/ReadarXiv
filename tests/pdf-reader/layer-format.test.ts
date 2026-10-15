@@ -139,7 +139,7 @@ describe('each writer then its reader is the identity', () => {
     expect(p1.leftParts).toEqual([M.lefts[1]!.ref])
     expect(p2.leftParts).toEqual([M.lefts[2]!.ref, M.lefts[3]!.ref])
     expect(p1.chain).toEqual({
-      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), reach: 2, ahead: VIEWS[1], end: BASE.bytes + TAILS[0]!.tail.length,
+      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), groups: Uint8Array.of(0, 0, 0), reach: 2, ahead: VIEWS[1], end: BASE.bytes + TAILS[0]!.tail.length,
       xref: TAILS[0]!.startxref, next: 104, root: 12, r: 1,
     })
     expect(p2.chain).toMatchObject({ through: 3, slot: 41.5, id: 5, reach: 4, ahead: VIEWS[3], end: BASE.bytes + TAILS[0]!.tail.length + TAILS[1]!.tail.length, xref: TAILS[1]!.startxref, next: 108, root: 12, r: 2 })
@@ -1133,7 +1133,7 @@ describe('a part against the chain', () => {
       const real = Buffer.from(sample.addon.tail, 'base64')
       const placed = (declared: number) => Buffer.from(textOf(real).replace(/startxref\n\d+\n/, `startxref\n${declared}\n`), 'latin1')
       const at = sample.base.bytes + 132
-      const first = { head: M.head.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(UNITS.length), reach: 0, ahead: [], end: sample.base.bytes, xref: 212001, next: null, root: null, r: 0 } as unknown as PartChain
+      const first = { head: M.head.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(UNITS.length), groups: new Uint8Array(0), reach: 0, ahead: [], end: sample.base.bytes, xref: 212001, next: null, root: null, r: 0 } as unknown as PartChain
       const run = (tail: Buffer) => partWith(0, ((p: Any) => { p.addon.tail = tail.toString('base64'); p.addon.manifest.appended = tail.length }) as never, { chain: first })
       // (the real stream tail, as its declaration places it, is read through the chain; the same tail declared elsewhere is not)
       expect((await run(placed(at))).addon!.tail).toHaveLength(real.length)
