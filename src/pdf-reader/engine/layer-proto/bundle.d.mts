@@ -1,10 +1,14 @@
 // bundle.mjs's types: the layer bundle as the engine writes it and both readers read it (the web mirrors them in its
 // src/shared/bundle.ts)
-import type { CellPlace, SourceUnit } from '../source/latex-front.mjs'
+import type { CellPlace } from '../source/latex-front.mjs'
 import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { LayoutFile } from '../layout/file.mjs'
+import type { BundleUnit } from './units.mjs'
 
 export type { CellPlace } from '../source/latex-front.mjs'
+export type { BundlePiece, BundleUnit } from './units.mjs'
+// (the units and base64 moved to units.mjs, which BUNDLE 4's chunks take too)
+export { bundleUnitsOf, UNIT_FLAG_BITS } from './units.mjs'
 /** the bundle's format */
 export declare const BUNDLE: '3'
 /** a bundle's bytes at most, as a reader decodes them, and its values, counted before JSON.parse */
@@ -17,13 +21,6 @@ export declare const CTAG: string
 /** the content's, `<CTAG>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a bundle key's last part; a reader names the maker's
  *  versions, never compares them */
 export declare const VTAG: string
-/** a unit's flags (KEPT: openPaper's `kept`, nameCells) */
-export declare const UNIT_FLAG_BITS: { readonly TITLE: 1; readonly FRONT: 2; readonly BRACKETED: 4; readonly KEPT: 8 }
-/** a piece as openPaper reads it, positions dropped: a text (with the source as written where it differs, an accent's
- *  letter), a placeholder, a group's open and close paired by `id`, a nested unit by its id */
-export type BundlePiece = [0, s: string] | [0, s: string, src: string] | [1, src: string] | [2, id: number, src: string] | [3, id: number, src: string] | [4, pre: string, unit: number, post: string]
-/** a unit: its kind, flags, depth, table cell, display edges and pieces; its id is its index */
-export type BundleUnit = [kind: string, flags: number, depth: number | null, cell: CellPlace | null, edges: { lead?: string; trail?: string; inner?: string } | null, pieces: BundlePiece[]]
 /** a page's box, PDF units */
 export type Box = [x0: number, y0: number, x1: number, y1: number]
 /** a located unit of the original's side: its id, its stream index (the text layer's order), its line rectangles */
@@ -65,13 +62,21 @@ export interface BundleParts {
   layout: LayoutFile | null
   addon: { manifest: RemovalManifest; tail: Uint8Array } | null
 }
-/** a bundle refused, and why (a JSON path and what) */
+/** which object a BUNDLE 4 refusal is of: a units chunk, the head, a part, a left part, the catalog, or the index the head and
+ *  its chunks make */
+export type RefusalKind = 'units' | 'head' | 'part' | 'left' | 'catalog' | 'index'
+/** a bundle refused, and why. BUNDLE 3's carry the whole message as `why` ("<path>: <what>") and no kind; BUNDLE 4's name the
+ *  object and the JSON path in it: `message` is `<kind>: <path>: <why>` (`<kind>: <why>` for the object as a whole) */
 export declare class BundleRefusal extends Error {
-  constructor(why: string)
+  constructor(why: string, o?: { kind: RefusalKind; path: string })
   readonly why: string
+  readonly kind: RefusalKind | null
+  readonly path: string | null
 }
-/** the bundle's units from openPaper's paper (its `units` and `kept`); throws on a piece the front end does not make */
-export declare function bundleUnitsOf(paper: { units: readonly SourceUnit[]; kept: ReadonlySet<SourceUnit> }): BundleUnit[]
+/** the paper version's one path segment, `<id>v<n>`, an old identifier's slash written _ (the web's keys spell it so) */
+export declare const segmentOf: (id: string, version: number) => string
+/** our copy of arXiv's PDF a bundle was made over: `/api/v1/original/<id>v<n>` */
+export declare const originalUrl: (id: string, version: number) => string
 /** the bundle file's bytes (UTF-8 JSON) from its parts, under the engine's versions; the same parts, the same bytes.
  *  Never past BUNDLE_CAP or BUNDLE_VALUES (readBundle's defaults): the add-on written null where it would be, then the
  *  layout too, which the prepare sees reading the bundle back; past them with neither, throws BundleRefusal */
