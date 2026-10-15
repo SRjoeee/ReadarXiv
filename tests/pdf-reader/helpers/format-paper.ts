@@ -4,7 +4,7 @@ import {
   readUnitsChunk, type Ref, type TokenWire, type Written, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import type { UnitWire } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { type BundleUnit } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import type { BundleUnit } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { REMOVAL, type RemovalManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { type LayoutPart, NAME_FLAG, NAME_KEYS, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 

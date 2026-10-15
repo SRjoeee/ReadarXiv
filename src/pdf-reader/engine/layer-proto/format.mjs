@@ -20,7 +20,7 @@
 // (for `records`, below) alone: never the run, the remover, the layout's maker nor the front end, which a reader does not load.
 import { checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
 import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
-import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told, utf8Strict } from '../layout/json.mjs'
+import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
 import { tailLinks } from '../layout/tail.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
@@ -199,7 +199,12 @@ async function opened(kind, bytes, ref, def, caps) {
   if (bytes.length > cap) throw refuse(kind, '', `${bytes.length} bytes, more than ${cap}`)
   const sha256 = await digestOf(bytes)
   if (ref !== null && sha256 !== ref.sha256) throw refuse(kind, '', 'not the digest of its ref')
-  const text = inside(kind, '', () => utf8Strict(bytes))
+  // (strict UTF-8: a TextDecoder's TypeError is the bytes' malformation; anything else, a memory-class error among it, is not)
+  let text
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes) } catch (e) {
+    if (e instanceof TypeError) throw refuse(kind, '', 'malformed UTF-8')
+    throw e
+  }
   const n = inside(kind, '', () => countValues(text, most, def.depth))
   if (n > most) throw refuse(kind, '', `more than ${most} values`)
   let value

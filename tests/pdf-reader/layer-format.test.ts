@@ -28,7 +28,15 @@ import {
 afterEach(() => { vi.restoreAllMocks() })
 
 let M: Made
-beforeAll(async () => { M = await made() })
+/** the complete catalog of the small paper */
+let CAT: { bytes: Uint8Array }
+beforeAll(async () => {
+  M = await made()
+  CAT = await writeCatalog({
+    head: M.readHead, units: M.chunks.map(c => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length })),
+    parts: M.parts.map(p => ({ from: p.from, to: p.to, sha256: p.sha256, bytes: p.bytes.length })), end: { through: 4 },
+  })
+})
 
 /** the refusal a reader's promise ends in, or null; any other end is the test's failure */
 async function refusal(run: Promise<unknown>): Promise<BundleRefusal | null> {
@@ -235,7 +243,7 @@ const READERS: { kind: 'units' | 'head' | 'part' | 'left' | 'catalog'; cap: numb
   { kind: 'head', cap: HEAD_CAP, values: HEAD_VALUES, depth: 3, sample: () => M.head, read: (b, ref, caps) => readHead(b, { ref: ref!, caps }) },
   { kind: 'part', cap: PART_CAP, values: PART_VALUES, depth: 7, sample: () => M.parts[0]!, read: (b, ref, caps) => readPart(b, { ref: ref!, index: M.index, chain: null, caps }) },
   { kind: 'left', cap: LEFT_CAP, values: LEFT_VALUES, depth: 4, sample: () => M.lefts[1]!, read: (b, ref, caps) => readLeftPart(b, { ref: ref as never, streamOf: id => STREAM.get(id), caps }) },
-  { kind: 'catalog', cap: CATALOG_CAP, values: CATALOG_VALUES, depth: 3, sample: () => ({ bytes: M.parts[0]!.bytes }), read: (b, _ref, caps) => readCatalog(b, { caps }) },
+  { kind: 'catalog', cap: CATALOG_CAP, values: CATALOG_VALUES, depth: 3, sample: () => CAT, read: (b, _ref, caps) => readCatalog(b, { caps }) },
 ]
 /** `bytes` with a ref that is theirs (their length and digest) */
 const asRef = (kind: (typeof READERS)[number]['kind'], bytes: Uint8Array) => ({ kind, ...(kind === 'left' ? { page: 1 } : {}), sha256: sha256Of(bytes), bytes: bytes.length })
@@ -1276,4 +1284,228 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
       })
     })
   }
+})
+
+// ---------------------------------------------------------------- 14. determinism
+/** the same value with the keys of every object (not array) in reverse order */
+function reversed(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(reversed)
+  if (v !== null && typeof v === 'object' && !(v instanceof Uint8Array)) return Object.fromEntries(Object.entries(v).reverse().map(([k, x]) => [k, reversed(x)]))
+  return v
+}
+
+describe('every writer twice gives the same bytes, digest and key, whatever order its input\'s keys came in', () => {
+  const same = (a: { bytes: Uint8Array; sha256: string; key: string; ref: object }, b: typeof a) => {
+    expect(textOf(a.bytes)).toBe(textOf(b.bytes))
+    expect([a.sha256, a.key, a.ref]).toEqual([b.sha256, b.key, b.ref])
+  }
+
+  it('units chunks: a cell and edges written in other key orders', async () => {
+    const shuffled = UNITS.map(u => [u[0], u[1], u[2], u[3] && reversed(u[3]), u[4] && reversed(u[4]), u[5]]) as typeof UNITS
+    same((await writeUnitChunks({ paper: PAPER, units: shuffled }))[0]!, M.chunks[0]!)
+    same((await writeUnitChunks({ paper: { version: PAPER.version, id: PAPER.id }, units: UNITS }))[0]!, M.chunks[0]!)
+  })
+
+  it('the head, the left parts, the catalog', async () => {
+    const h = await writeHead({ paper: { pages: N, version: PAPER.version, id: PAPER.id }, base: { xref: BASE.xref, sha256: BASE.sha256, bytes: BASE.bytes }, image: IMAGE, units: M.chunks, lineskip: [1, 0], cites: null })
+    same(h, M.head)
+    for (let p = 1; p <= N; p++) {
+      const w = await writeLeftPart({ paper: PAPER, page: p, first: TOKENS_ON_PAGE * (p - 1), tokens: reversed(tokenWire(TOKENS_ON_PAGE, p)) as never, ...(LEFT_OF[p] as (typeof LEFT_OF)[number]) })
+      same(w, M.lefts[p]!)
+    }
+    const refs = (list: { from: number; to: number; sha256: string; bytes: Uint8Array }[]) => list.map(c => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length }))
+    const a = await writeCatalog({ head: M.readHead, units: refs(M.chunks), parts: refs(M.parts), end: { through: 4 } })
+    const b = await writeCatalog({ head: M.readHead, units: refs(M.chunks).map(r => reversed(r) as typeof r), parts: refs(M.parts).map(r => reversed(r) as typeof r), end: { through: 4 } })
+    same(a, b)
+  })
+
+  it('the parts: the manifest and the add-on in other key orders, the stats in another order', async () => {
+    const inputs = partInputs(M.head.sha256, M.lefts, [null, M.parts[0]!.sha256, M.parts[1]!.sha256])
+    for (let i = 0; i < 3; i++) same(await writePart(inputs[i]!), M.parts[i]!)
+    const first = inputs[0]!
+    const manifest = { ...first.addon!.manifest, stats: { z: 1, a: 2, removed: 3 } }
+    const a = await writePart({ ...first, addon: { manifest, tail: first.addon!.tail } })
+    const b = await writePart({ ...first, addon: { manifest: reversed(manifest) as typeof manifest, tail: first.addon!.tail } })
+    same(a, b)
+    expect(textOf(a.bytes)).toContain('"stats":{"a":2,"removed":3,"z":1}')
+  })
+
+  it('a whole paper written again is the same objects: the digests, the keys', async () => {
+    const again = await made()
+    expect(again.head.key).toBe(M.head.key)
+    expect(again.parts.map(p => p.key)).toEqual(M.parts.map(p => p.key))
+    expect(again.chunks.map(c => c.sha256)).toEqual(M.chunks.map(c => c.sha256))
+    expect(Object.values(again.lefts).map(l => l.sha256)).toEqual(Object.values(M.lefts).map(l => l.sha256))
+  })
+})
+
+// ---------------------------------------------------------------- 15. keys
+describe('keys', () => {
+  const sha = 'a'.repeat(64)
+
+  it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
+    expect(CTAG4).toBe(`b4-j${PDFJS}`)
+    expect(VTAG4).toBe(`${CTAG4}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
+    const key = keyOf('2608.04322', 3, CTAG4, sha)
+    expect(key).toBe(`layer/2608.04322v3/${CTAG4}/${sha}.json`)
+    expect(keyParts(key)).toEqual({ paper: '2608.04322', version: 3, ctag: CTAG4, sha256: sha })
+    const cat = catalogKey('2608.04322', 3, VTAG4)
+    expect(cat).toBe(`layer/2608.04322v3/${VTAG4}.json`)
+    expect(keyParts(cat)).toEqual({ paper: '2608.04322', version: 3, vtag: VTAG4 })
+    // the writers' keys are these
+    expect(M.head.key).toBe(keyOf(PAPER.id, PAPER.version, CTAG4, M.head.sha256))
+    expect(M.parts[1]!.key).toBe(keyOf(PAPER.id, PAPER.version, CTAG4, M.parts[1]!.sha256))
+  })
+
+  it('an old identifier\'s slash is written _, and read back', () => {
+    for (const id of ['hep-th/9901001', 'math.GT/0309136', 'astro-ph/0001001']) {
+      const key = keyOf(id, 12, CTAG4, sha)
+      expect(key).toBe(`layer/${id.replace('/', '_')}v12/${CTAG4}/${sha}.json`)
+      expect(keyParts(key)).toEqual({ paper: id, version: 12, ctag: CTAG4, sha256: sha })
+      expect(keyParts(catalogKey(id, 12, VTAG4))).toEqual({ paper: id, version: 12, vtag: VTAG4 })
+    }
+  })
+
+  it('refuses the spellings keyOf would not write', () => {
+    const good = keyOf('2608.04322', 3, CTAG4, sha)
+    for (const bad of [
+      good.replace('v3/', 'v03/'), good.replace('v3/', 'v0/'), good.replace('v3/', 'v/'), good.replace(sha, 'A'.repeat(64)), good.replace(sha, sha.slice(1)), good.replace(sha, `${sha}0`),
+      good.replace('.json', '.JSON'), good.replace('layer/', 'layer3/'), `${good}/`, `/${good}`, good.replace('2608.04322', '2608.043'), good.replace('2608.04322v3', 'hep-th/9901001v3'),
+      good.replace(CTAG4, 'b4'), good.replace(CTAG4, `${CTAG4}-p11`), good.replace(CTAG4, 'B4-j6'), good.replace('/', '//'), good.replace('2608.04322', '..'),
+      catalogKey('2608.04322', 3, VTAG4).replace('-l', '-L'), catalogKey('2608.04322', 3, VTAG4).replace(`${VTAG4}`, CTAG4), 'layer/2608.04322v3/x.json', 'x', '', `layer/${'a'.repeat(400)}`,
+    ]) expect(keyParts(bad), bad).toBeNull()
+    expect(keyParts(7 as never)).toBeNull()
+    // (the old identifier with its slash in the key, where a _ goes)
+    expect(keyParts(`layer/hep-th/9901001v1/${CTAG4}/${sha}.json`)).toBeNull()
+  })
+
+  it('throws a RangeError on an identifier, a version, a tag or a digest that is not one', () => {
+    for (const args of [['../x', 1, CTAG4, sha], ['2608.04322', 0, CTAG4, sha], ['2608.04322', 1001, CTAG4, sha], ['2608.04322', 1.5, CTAG4, sha], ['2608.04322', 1, 'b4', sha], ['2608.04322', 1, CTAG4, 'abc'], ['2608.04322', 1, CTAG4, sha.toUpperCase()], [7, 1, CTAG4, sha]] as const) {
+      expect(() => (keyOf as (...a: unknown[]) => string)(...args), String(args)).toThrow(RangeError)
+    }
+    expect(() => catalogKey('2608.04322', 1, 'b4-j1')).toThrow(RangeError)
+    expect(() => catalogKey('2608.04322v1', 1, VTAG4)).toThrow(RangeError)
+  })
+
+  it('partTarget gives the doubling schedule: 1, 2–3, 4–7, … and N', () => {
+    const schedule = (n: number) => {
+      const out: [number, number][] = []
+      for (let a = 1; a <= n;) { const b = partTarget(a, n); out.push([a, b]); a = b + 1 }
+      return out
+    }
+    expect(schedule(100)).toEqual([[1, 1], [2, 3], [4, 7], [8, 15], [16, 31], [32, 63], [64, 100]])
+    expect(schedule(1)).toEqual([[1, 1]])
+    expect(schedule(4)).toEqual([[1, 1], [2, 3], [4, 4]])
+    expect(schedule(147).at(-1)).toEqual([128, 147])
+    expect([partTarget(1, 9), partTarget(5, 6), partTarget(5, 100)]).toEqual([1, 6, 9])
+    for (const [a, n] of [[0, 5], [1, 0], [1.5, 5], [1, Number.NaN]] as [number, number][]) expect(() => partTarget(a, n)).toThrow(RangeError)
+  })
+})
+
+// ---------------------------------------------------------------- 16. writers never emit what readers refuse
+describe('a writer given what its reader would refuse throws BundleRefusal', () => {
+  const input = () => partInputs(M.head.sha256, M.lefts)[0]!
+  const writeRefused = (edit: (p: ReturnType<typeof input>) => void) => { const p = input(); edit(p); return refusal(writePart(p)) }
+
+  it('a part past CONTENT_MAX bytes of content (the tail\'s base64 apart)', async () => {
+    // a unit of 140,000 rectangles, each 37 bytes: about 5.2 MB, 840,000 values
+    const rects = Array.from({ length: 140_000 }, (_, i) => [1, 72.123 + (i % 7) / 1000, 647.123, 540.123, 657.123] as [number, number, number, number, number])
+    const e = await writeRefused(p => { p.left = [[0, 0, rects], p.left[1]!] })
+    expect(e).toMatchObject({ kind: 'part', message: expect.stringMatching(/bytes of content, past 4827816/) })
+    // (the same content, shorter by a tenth, is written, and read)
+    const ok = input()
+    ok.left = [[0, 0, rects.slice(0, 100_000)], ok.left[1]!]
+    const w = await writePart(ok)
+    expect(w.bytes.length).toBeGreaterThan(3_000_000)
+    expect((await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })).left[0]![2]).toHaveLength(100_000)
+  })
+
+  it('a part past PART_VALUES values, or PART_CAP bytes', async () => {
+    const rects = Array.from({ length: 170_000 }, () => [1, 72, 647, 540, 657] as [number, number, number, number, number])
+    expect(await writeRefused(p => { p.left = [[0, 0, rects], p.left[1]!] })).toMatchObject({ kind: 'part', message: expect.stringMatching(/more than 1000000 values/) })
+    expect(PART_VALUES).toBe(1_000_000)
+    // the tail's base64 counts against the cap, but not the content: the largest tail beside a part at CONTENT_MAX fits PART_CAP
+    expect(CONTENT_MAX + 4 * Math.ceil(TAIL_CAP / 3) + 64 * 1024).toBe(PART_CAP)
+  })
+
+  it('a tail past TAIL_CAP, and a tail at it', async () => {
+    const tail = (n: number) => { const t = new Uint8Array(n).fill(0x20); return t }
+    const withTail = (n: number) => writeRefused(p => { const t = tail(n); p.addon = { manifest: { ...p.addon!.manifest, appended: n }, tail: t } })
+    expect(await withTail(TAIL_CAP + 1)).toMatchObject({ kind: 'part', path: 'addon.tail', message: expect.stringMatching(/more than 1048576 bytes/) })
+    // (a tail of white space has no section: its chain is the reader's, and the writer sees a tail within the cap)
+    expect(await withTail(TAIL_CAP)).toBeNull()
+    expect(await withTail(0)).toMatchObject({ path: 'addon.tail' })
+  })
+
+  it('a shape the part alone shows wrong: a rectangle off its page, a unit in both lists, an add-on without a layout, a missing left part', async () => {
+    expect(await writeRefused(p => { p.left = [[0, 0, [[1, 72, 647, 900, 657]]], p.left[1]!] })).toMatchObject({ kind: 'part', path: 'left[0][2][0][3]' })
+    expect(await writeRefused(p => { p.fileOnly = [[0, 0]] })).toMatchObject({ path: 'fileOnly[0][0]' })
+    expect(await writeRefused(p => { p.layout = null })).toMatchObject({ kind: 'part' })
+    expect(await writeRefused(p => { p.leftParts = [] })).toMatchObject({ path: 'leftParts' })
+    expect(await writeRefused(p => { p.pages = [1, 0] })).toMatchObject({ path: 'pages' })
+    expect(await writeRefused(p => { p.head = 'abc' })).toMatchObject({ path: 'head' })
+    expect(await writeRefused(p => { p.views = p.views.slice(0, 4) })).toMatchObject({ kind: 'part' })
+  })
+
+  it('a unit past a chunk alone, and a head, a left part, a catalog by their readers\' own bounds', async () => {
+    const big = Array.from({ length: 200 }, () => [0, 'x'.repeat(16_000)])
+    expect(await refusal(writeUnitChunks({ paper: PAPER, units: [['para', 0, null, null, null, big] as never] }))).toMatchObject({ kind: 'units', id: 0 })
+    expect(await refusal(writeHead({ paper: { ...PAPER, pages: 0 }, base: BASE, image: IMAGE, units: M.chunks, lineskip: null, cites: null }))).toMatchObject({ kind: 'head', path: 'paper.pages' })
+    expect(await refusal(writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: [], lineskip: null, cites: null }))).toMatchObject({ kind: 'head', path: 'units' })
+  })
+})
+
+// ---------------------------------------------------------------- 17. memory-class errors
+/** `target.name` made to run `fn` (restored by afterEach) */
+const stub = (target: object, name: string, fn: () => never) => vi.spyOn(target as Record<string, (...a: unknown[]) => unknown>, name).mockImplementation(fn)
+
+describe('a memory-class error goes through a reader or a writer as itself', () => {
+  const memory = () => failedAllocation() as Error
+
+  it('a reader does not wrap it, whichever step it comes in: the digest, the decoding, the parse', async () => {
+    const good = M.head
+    for (const [target, name] of [[globalThis.crypto.subtle, 'digest'], [TextDecoder.prototype, 'decode'], [JSON, 'parse']] as const) {
+      const e = memory()
+      stub(target, name, () => { throw e })
+      await expect(readHead(good.bytes, { ref: good.ref })).rejects.toBe(e)
+      vi.restoreAllMocks()
+    }
+    // (any other error of those steps is not a refusal either, and is not turned into one)
+    const other = new Error('boom')
+    vi.spyOn(JSON, 'parse').mockImplementation(() => { throw other })
+    await expect(readHead(good.bytes, { ref: good.ref })).rejects.toMatchObject({ name: 'BundleRefusal', why: 'not JSON' })
+  })
+
+  it('every kind\'s reader', async () => {
+    for (const r of READERS) {
+      const e = memory()
+      vi.spyOn(JSON, 'parse').mockImplementation(() => { throw e })
+      const bytes = r.sample().bytes
+      await expect(r.read(bytes, r.kind === 'catalog' ? null : asRef(r.kind, bytes))).rejects.toBe(e)
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('a writer does not wrap it: the digest, the text, the encoder', async () => {
+    const run = {
+      units: () => writeUnitChunks({ paper: PAPER, units: UNITS }),
+      head: () => writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: M.chunks, lineskip: null, cites: null }),
+      left: () => writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(3), spans: [], pairs: [] }),
+      part: () => writePart(partInputs(M.head.sha256, M.lefts)[2]!),
+    }
+    for (const [name, make] of Object.entries(run)) {
+      for (const [target, fn] of [[globalThis.crypto.subtle, 'digest'], [JSON, 'stringify'], [TextEncoder.prototype, 'encode']] as const) {
+        if (name === 'units' && fn === 'stringify') continue
+        const e = memory()
+        stub(target, fn, () => { throw e })
+        await expect(make(), `${name} ${fn}`).rejects.toBe(e)
+        vi.restoreAllMocks()
+      }
+    }
+    // (the part chain's readers: a memory error inside the tail's reading)
+    const e = memory()
+    const p = M.parts[0]!
+    vi.spyOn(Uint8Array.prototype, 'subarray').mockImplementation(() => { throw e })
+    await expect(readPart(p.bytes, { ref: p.ref, index: M.index, chain: null })).rejects.toBe(e)
+  })
 })
