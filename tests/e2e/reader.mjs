@@ -20,10 +20,12 @@
 // refusal), the faults of the layer API (refused, none, 5xx, nothing, which the stand-in already answers) and the
 // reading place kept between displays. The shipped reader's translated displays, which need the TeX page, are not checked.
 //
-// Usage: pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
+// Usage: AXT_READER_VIEW=1 pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
+// The build is asked for the reading view's development entry (AXT_READER_VIEW=1, wxt.config.ts), which a release build
+// leaves out: a build without it fails the view's section, saying so.
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { readBundle, VTAG } from '../../src/pdf-reader/engine/layer-proto/bundle.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
@@ -49,6 +51,8 @@ const ABSTRACT_PAGE = `<!doctype html><title>stand-in abstract</title><meta name
 const manifest = readFileSync(`${BUILD}/manifest.json`, 'utf8')
 const LAYER_HOSTS = ['https://readarxiv.com', ...['https://app-staging.readarxiv.org'].filter(host => manifest.includes(host))]
 const LINK = 'https://example.invalid/sample-1'
+/** whether the build holds the reading view's development entry: its places' code, in a chunk (wxt.config.ts READER_VIEW) */
+const viewBuilt = readdirSync(`${BUILD}/chunks`).some(f => f.endsWith('.js') && readFileSync(`${BUILD}/chunks/${f}`, 'utf8').includes('axt-place-view'))
 /** the panel's and the popup's two entries, by their words in either interface language */
 const ENTRY = { html: /Translate HTML|HTML 翻译/, pdf: /Translate PDF|PDF 翻译/ }
 
@@ -529,7 +533,8 @@ try {
 
   // ------------------------------------------------------------------------------- the reading view, its development entry
   section('the reading view (?layer=1): the original on both panes, the places, the follower, zoom, pinch, narrow')
-  {
+  if (!viewBuilt) check('the build holds the reading view\'s development entry: build it with AXT_READER_VIEW=1 pnpm build', false, `no chunk of ${BUILD} holds the places`)
+  else {
     const page = await openReader({ layer: '1', mode: 'bilingual' })
     const probe = () => page.evaluate(() => window.__reader.view.probe())
     const opened = await page.waitForFunction(() => window.__reader?.view?.probe().original === 'open', null, { timeout: 30_000 }).then(() => true, () => false)

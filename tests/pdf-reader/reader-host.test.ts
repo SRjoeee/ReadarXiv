@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 
 vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, pdfjsLib: {} }))
-const { displayFrom, prefsOf } = await import('@/pdf-reader/session/host.ts')
+const { displayFrom, outward, prefsOf } = await import('@/pdf-reader/session/host.ts')
 
 describe('the host of the reading view', () => {
   it('reads the look of the settings: the panes swapped, the pages dimmed, the theme (the system\'s where asked), the highlight', () => {
@@ -22,3 +22,11 @@ describe('the host of the reading view', () => {
     expect(displayFrom(new URLSearchParams('mode=nonsense'), { ...config, pdfReader: { ...config.pdfReader, original: true } })).toBe('original')
   })
 })
+
+describe('a link out of the paper', () => {
+  it('opens only a web page or a mail address: no script, no data, no page of the browser\'s or the extension\'s', () => {
+    for (const ok of ['https://example.org/a?b#c', 'http://example.org', 'mailto:someone@example.org']) expect(outward(ok), ok).toBe(true)
+    for (const no of ['javascript:alert(1)', 'data:text/html,<b>x</b>', 'chrome-extension://abc/options.html', 'chrome://settings', 'file:///etc/passwd', 'blob:https://x/1', 'not a url', '']) expect(outward(no), no).toBe(false)
+  })
+})
+

@@ -36,6 +36,12 @@ export function displayFrom(params: URLSearchParams, config: Config): EngineDisp
   return named === 'original' || named === 'bilingual' || named === 'translation' ? named : displayOf(config)
 }
 
+/** whether a link out of the paper may be opened: a web page or a mail address, never a script, data, or a page of the
+ *  browser's or the extension's (a PDF's link, and the layer's, name what they like) */
+export function outward(url: string): boolean {
+  try { return ['http:', 'https:', 'mailto:'].includes(new URL(url).protocol) } catch { return false }
+}
+
 /** the reader page's host of the view, over the panes the page drew; `config` the settings as the page read them */
 export function readerHost(host: SessionHost, config: Config, paper: string): ReaderHost & { stop(): void } {
   let latest = config
@@ -62,7 +68,7 @@ export function readerHost(host: SessionHost, config: Config, paper: string): Re
     pdfjs: { lib: pdfjsLib, viewer: { EventBus, PDFViewer, PDFPageView, PDFLinkService, LinkTarget }, assets: ASSETS },
     words: { pageName: (side, n) => R.pageName(side === 'left' ? 'original' : 'translation', n), sideName: side => R.display[side === 'left' ? 'original' : 'translation'] },
     prefs: { get: prefs, subscribe: l => { listeners.add(l); return () => { listeners.delete(l) } } },
-    links: { openExternal: url => { globalThis.open(url, '_blank', 'noopener') } },
+    links: { openExternal: url => { if (outward(url)) globalThis.open(url, '_blank', 'noopener') } },
     emit: event => { const e = fromView(event, paper); if (e) host.emit(e) },
     stop() { unwatch(); listeners.clear(); sheet?.remove() },
   }

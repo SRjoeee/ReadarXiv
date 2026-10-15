@@ -673,7 +673,11 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
 
 The extension's host is `src/pdf-reader/session/host.ts`. Its development entry, `?layer=1` on the reader's address, runs
 the reader on the view: the original on both panes, as the reader shows a paper before its translation. The extension's own
-session stays the reader until the layer side and the links join the view; `pnpm e2e:reader` checks the development entry.
+session stays the reader until the layer side and the links join the view. The entry is built only where the build is asked
+for it, `AXT_READER_VIEW=1 pnpm build` (`wxt.config.ts` `READER_VIEW`): a release build holds neither the entry nor its
+chunk, since the reader's page is reachable by address from arXiv's pages, and `scripts/check-output.mjs` checks each build
+for it either way. `pnpm e2e:reader` runs on a build asked for it, and its view section fails on one that is not. A link
+the view opens out of the paper is a web page or a mail address, never a script, data or a page of the browser's.
 The view's rows are `tests/pdf-reader/reader-view.test.ts` (V1–V14, on PDF.js stand-ins and a clock moved by hand) and
 `tests/pdf-reader/reader-view-bundle.test.ts` (a browser build of the view and layer entries reads nothing outside the engine,
 no `pdfjs-dist`, and nothing of the server's).

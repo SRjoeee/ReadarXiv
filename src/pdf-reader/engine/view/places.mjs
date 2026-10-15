@@ -12,9 +12,12 @@
 // layout after writing it: whether a place is near is an IntersectionObserver's answer.
 //
 // The places borrow the left's document: a page view is made over `doc.getPage(n)` and let go by a reset that releases its
-// canvas, never by PDFPageView.destroy, whose PDFPageProxy.cleanup would drop what the left's viewer keeps of that page
-// (its operator list and decoded images, which its own redraws and the floats read). A page view lives in a holder of its
-// own inside the place, so that the --scale-factor PDF.js writes on a standalone page view's container stays off the place.
+// canvas. What PDF.js keeps of the page since it was drawn (its operator list, its decoded images) is let go with it only
+// where the left has not drawn that page: there it is the left's, which its own redraws and the floats read, and its
+// viewer lets it go as the page leaves its buffer. A page only the right drew (the right shown alone: the left, hidden,
+// draws nothing and lets nothing go) would otherwise be kept for the document's life. PDF.js cleans nothing up while a
+// drawing of the page is under way. A page view lives in a holder of its own inside the place, so that the --scale-factor
+// PDF.js writes on a standalone page view's container stays off the place.
 
 /** how far past the view a place is near: one pane's height above and below */
 export const NEAR = '100% 0px 100% 0px'
@@ -134,6 +137,7 @@ export function createPlaces(o) {
     if (i >= 0) queue.splice(i, 1)
     v.reset()
     v.div.remove()
+    if (o.original(p.n)?.renderingState === INITIAL) v.pdfPage?.cleanup?.()
     counts.released++
   }
   function letGo(p) {

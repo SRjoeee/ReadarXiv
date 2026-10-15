@@ -4,7 +4,7 @@
 // The real PDF.js, in a real browser, is pnpm e2e:reader's (its development entry, ?layer=1).
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type Shapes, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
-import { clientOf, drawPanes, FakeIO, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, flush, installLayout, type ManualClock, manualClock, reads, resetFakes } from './helpers/reader-fakes'
+import { clientOf, drawPanes, FakeEventBus, FakeIO, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, flush, installLayout, type ManualClock, manualClock, reads, resetFakes } from './helpers/reader-fakes'
 
 vi.mock('@/pdf-reader/engine/view/highlight.mjs', async importOriginal => {
   const real = await importOriginal<typeof import('@/pdf-reader/engine/view/highlight.mjs')>()
@@ -89,6 +89,14 @@ async function scrollBy(pane: HTMLElement, dy: number) {
   pane.scrollTop += dy
   await flush()
 }
+/** the page at a pane's reading line (a quarter down its 800 px), and how far down it */
+function readingAt(pane: HTMLElement) {
+  const y = pane.scrollTop + 800 * 0.25
+  const pages = [...pane.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')]
+  const p = pages.findIndex(d => d.offsetTop + d.offsetHeight > y)
+  const d = pages[p] as HTMLElement
+  return { page: p + 1, f: (y - d.offsetTop) / d.offsetHeight }
+}
 const stub = (): Shapes & { calls: string[] } => {
   const calls: string[] = []
   const run = { page: 1 }
@@ -167,6 +175,33 @@ describe('V2: a change during an open applies once open', () => {
   })
 })
 
+describe('V2: the commands held', () => {
+  it('a command held for an open that failed is let go: the next open does not replay it', async () => {
+    const s = setup()
+    const t = fakeTask()
+    const answer = s.view.showOriginal(() => t as unknown as DocumentTask)
+    s.view.zoomBy(2)
+    t.reject(new Error('down'))
+    expect(await answer).toBe('failed')
+    await opened(s, 3)
+    expect(leftViewer().currentScale).toBeCloseTo(560 / 816, 3)
+  })
+
+  it('a command held that throws does not hold the open: it answers opened, and the commands after it run', async () => {
+    const s = setup()
+    internalsOf(s.view).setUnits({ unitAt: () => null, firstRect: () => { throw new Error('a unit that cannot be read') }, pageOf: () => null })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const t = fakeTask()
+    const answer = s.view.showOriginal(() => t as unknown as DocumentTask)
+    s.view.goToUnit(3)
+    s.view.zoomTo(1.5)
+    t.resolve(fakeDoc(3))
+    expect(await answer).toBe('opened')
+    expect(leftViewer().currentScale).toBe(1.5)
+    expect(warn).toHaveBeenCalled()
+  })
+})
+
 describe('the places: the original\'s pages on the right', () => {
   it('number the original\'s pages, at its page boxes, and follow its zoom', async () => {
     const s = setup()
@@ -195,14 +230,7 @@ describe('V3: the reading place kept', () => {
   it('across a display change, a zoom and a narrow window, the page and the point at the reading line stay', async () => {
     const s = setup()
     await opened(s, 6)
-    const L = s.panes.left, R = s.panes.right
-    const at = (pane: HTMLElement) => {
-      const y = pane.scrollTop + 800 * 0.25
-      const pages = [...pane.querySelectorAll<HTMLElement>('.pdfViewer > .page')]
-      const p = pages.findIndex(d => d.offsetTop + d.offsetHeight > y)
-      const d = pages[p] as HTMLElement
-      return { page: p + 1, f: (y - d.offsetTop) / d.offsetHeight }
-    }
+    const L = s.panes.left, R = s.panes.right, at = readingAt
     await scrollBy(L, 2 * 806 + 300)
     const before = at(L)
     s.view.setDisplay('translation')
@@ -217,6 +245,25 @@ describe('V3: the reading place kept', () => {
     await s.clock.tick(); await s.clock.tick(); await s.clock.tick()
     expect(at(R).page).toBe(before.page)
     expect(Math.abs(at(R).f - before.f)).toBeLessThan(0.02)
+  })
+})
+
+describe('V3 with the sync off: each pane is the reader\'s own', () => {
+  it('a zoom keeps each pane at its own place, not the other\'s', async () => {
+    const s = setup()
+    await opened(s, 6)
+    s.view.setSync(false)
+    const L = s.panes.left, R = s.panes.right
+    const top = (pane: HTMLElement, n: number) => (pane.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')[n - 1] as HTMLElement).offsetTop
+    await scrollBy(L, top(L, 2) - L.scrollTop)
+    await scrollBy(R, top(R, 5) - R.scrollTop)
+    expect([readingAt(L).page, readingAt(R).page]).toEqual([2, 5])
+    const before = [readingAt(L), readingAt(R)]
+    s.view.zoomTo(2)
+    s.view.zoomBy(0.8)
+    expect([readingAt(L).page, readingAt(R).page]).toEqual([2, 5])
+    expect(Math.abs(readingAt(L).f - (before[0] as { f: number }).f)).toBeLessThan(0.02)
+    expect(Math.abs(readingAt(R).f - (before[1] as { f: number }).f)).toBeLessThan(0.02)
   })
 })
 
@@ -315,9 +362,27 @@ describe('V5: dispose leaves nothing', () => {
     expect(s.view.probe().tasks).toBe(0)
     expect(document.documentElement.hasAttribute('data-axt-pdf-mode')).toBe(false)
     expect(s.clock.pending()).toEqual({ frames: 0, timers: 0 })
+    // and none of PDF.js's events is still heard
+    expect(FakeEventBus.made.map(b => b.count())).toEqual(FakeEventBus.made.map(() => 0))
     // after dispose, commands are no-ops
     s.view.zoomBy(2); s.view.setDisplay('original')
     expect(await s.view.showOriginal(() => fakeTask() as unknown as DocumentTask)).toBe('failed')
+  })
+})
+
+describe('V5: an animation under way', () => {
+  it('is cancelled by dispose: the follower bound on the compositor lets go', async () => {
+    vi.stubGlobal('ScrollTimeline', class {})
+    const anims: { cancel: ReturnType<typeof vi.fn> }[] = []
+    ;(HTMLElement.prototype as unknown as { animate: unknown }).animate = function () { const a = { cancel: vi.fn(), currentTime: 0, onfinish: null }; anims.push(a); return a }
+    try {
+      const s = setup()
+      await opened(s, 4)
+      s.panes.left.dispatchEvent(new Event('wheel'))
+      expect(anims).toHaveLength(1)
+      s.view.dispose()
+      expect(anims.every(a => a.cancel.mock.calls.length === 1)).toBe(true)
+    } finally { delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate }
   })
 })
 
@@ -534,6 +599,24 @@ describe('V11: the places before a layer', () => {
     expect(first.div.isConnected).toBe(false)
     expect((places(s)[0] as HTMLElement).querySelector('.axt-place-view')?.children).toHaveLength(0)
     expect(leftViewer().log.filter(l => l === 'setDocument')).toHaveLength(1)
+  })
+
+  it('a place far from the view lets its page go where only the right drew it; the left\'s drawn pages stay the left\'s', async () => {
+    const s = setup()
+    const { doc } = await opened(s, 6)
+    s.view.setDisplay('translation')
+    await s.clock.tick(); await s.clock.tick(); await s.clock.tick()
+    await nearOn(s, [4])
+    await flush(20)
+    const four = await doc.getPage(4)
+    expect(four.cleanup).not.toHaveBeenCalled()
+    await nearOn(s, [4], false)
+    expect(four.cleanup).toHaveBeenCalledTimes(1)
+    leftViewer().render(2)
+    await nearOn(s, [2])
+    await flush(20)
+    await nearOn(s, [2], false)
+    expect((await doc.getPage(2)).cleanup).not.toHaveBeenCalled()
   })
 
   it('draws the near places one at a time', async () => {

@@ -43,6 +43,13 @@ function pdfjsFiles(): { absoluteSrc: string; relativeDest: string }[] {
  * the release
  */
 const DEV_PAGES = ['gallery', 'controls', 'capsule']
+/**
+ * The reading view's development entry (`?layer=1` on the reader's address, docs/PDF-READER.md §11.7), built only where the
+ * build is asked for it: `AXT_READER_VIEW=1 pnpm build`, the build pnpm e2e:reader runs on. A release build leaves the entry
+ * and its chunk out (the condition is false at build time), and scripts/check-output.mjs checks it either way. It goes once
+ * the extension's reader is the view
+ */
+const READER_VIEW = process.env.AXT_READER_VIEW === '1'
 
 // The WXT project configuration.
 export default defineConfig({
@@ -50,7 +57,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
   // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
-  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()) } }),
+  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_VIEW__: JSON.stringify(READER_VIEW) } }),
   hooks: {
     'entrypoints:found': (wxt, infos) => {
       if (wxt.config.mode !== 'production') return

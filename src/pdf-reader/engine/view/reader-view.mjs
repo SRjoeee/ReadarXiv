@@ -334,7 +334,8 @@ export function createReaderView(host) {
     tellRightPage()
     const run = held
     held = []
-    for (const f of run) f()
+    // a command that throws is said, and neither holds the open nor the commands after it
+    for (const f of run) { try { f() } catch (e) { warn('a command given while the original opened', e) } }
     current.inited(true)
   })
   // each page at its own size once every page is known
@@ -413,8 +414,8 @@ export function createReaderView(host) {
     if (disposed) return 'failed'
     opening?.supersede()
     let task
-    try { task = open(Object.freeze({ ...kit.assets })) } catch (e) { return failed(e) }
-    if (!task?.promise) return failed(new Error('the opener gave no loading task'))
+    try { task = open(Object.freeze({ ...kit.assets })) } catch (e) { if (!current) held = []; return failed(e) }
+    if (!task?.promise) { if (!current) held = []; return failed(new Error('the opener gave no loading task')) }
     counts.tasks++
     counts.opens++
     let gone
@@ -431,7 +432,8 @@ export function createReaderView(host) {
     const first = got.e ? got : await wait(got.v.getPage(1))
     if (first === GONE) return 'superseded'
     opening = null
-    if (first.e) { release(task); return failed(first.e) }
+    // a failed open with no original shown lets go of the commands held for it: a retry starts afresh
+    if (first.e) { release(task); if (!current) held = []; return failed(first.e) }
     const doc = got.v
     // the original shown before let go: its places' page views first, the viewer emptied, then its task
     if (current) letGo()
@@ -523,13 +525,25 @@ export function createReaderView(host) {
     }
     follower.put(c, place.doc * (c.scrollHeight - c.clientHeight))
   }
-  /** a change of scale with the reading place kept: read on the pane read before, every shown pane put there after */
-  function scaled(change) {
-    const place = laid ? readingPlace(readSide()) : null
-    change()
-    if (!place) return
+  /** where each shown pane is to be put after a change of its layout: scrolling together, at the place read on the pane
+   *  read (the pair is level); apart, each at its own (the pane the reader is not reading does not move); a pane coming
+   *  into view, at the place read. Read before the change */
+  function placesNow() {
+    if (!laid) return null
+    const read = readingPlace(readSide()), together = active(), own = new Map()
+    if (!together) for (const s of sides) if (shown(s)) own.set(s, readingPlace(s))
+    return { read, own }
+  }
+  function putAll(at) {
+    if (!at || !laid) return
     follower.invalidate()
-    for (const s of sides) if (shown(s)) putAt(s, place)
+    for (const s of sides) if (shown(s)) putAt(s, at.own.get(s) ?? at.read)
+  }
+  /** a change of scale with the reading places kept (placesNow): read before, the panes put back after */
+  function scaled(change) {
+    const at = placesNow()
+    change()
+    putAll(at)
   }
   function zoomTo(z) {
     if (disposed) return
@@ -595,9 +609,9 @@ export function createReaderView(host) {
 
   // ---------------------------------------------------------------- displays
   /** the display changed, or a narrow window: the panes shown fitted to their width in the next frame, then put at the
-   *  reading place `place` (read before the change, on the pane read: the driver where it was shown, else the one shown).
-   *  A change made before that frame joins it, the first change's place kept: it was read where the layout was the
-   *  reader's */
+   *  places read before the change (placesNow: the place read on the pane read, or each pane's own where they scroll
+   *  apart). A change made before that frame joins it, the first change's places kept: they were read where the layout
+   *  was the reader's */
   function relayout(place) {
     if (due) return
     due = true
@@ -614,13 +628,11 @@ export function createReaderView(host) {
       fitShown('page-width')
       clock.frame(() => {
         relaying = false
-        if (!at || !laid) return
-        follower.invalidate()
-        for (const s of sides) if (shown(s)) putAt(s, at)
+        putAll(at)
       })
     })
   }
-  const placeNow = () => (laid && !due ? readingPlace(readSide()) : null)
+  const placeNow = () => (due ? null : placesNow())
   function setDisplay(d) {
     if (disposed || !DISPLAYS.includes(d) || d === mode) return
     const place = placeNow()
