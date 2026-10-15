@@ -888,9 +888,11 @@ describe('writes after the popup stops', () => {
     const seen: unknown[] = []
     const unsubscribe = made.popup.subscribe(() => seen.push(made.popup.state()))
     release()
-    await settle()
+    // The landing waits on the digest of the chain settings, which the thread pool answers in real time: neither the fake
+    // clock nor a fixed number of microtask turns reaches it (a slow runner failed here: expected null not to be null).
+    // Wait for the landing itself
+    await vi.waitFor(() => { expect(made.popup.state().input.config).not.toBeNull() }, { timeout: 10_000 })
     expect(seen.length).toBeGreaterThan(0)
-    expect(made.popup.state().input.config).not.toBeNull()
     unsubscribe()
     stop()
     spy.mockRestore()
