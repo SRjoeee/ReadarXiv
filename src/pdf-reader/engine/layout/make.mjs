@@ -407,6 +407,11 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
   }
   const dropped = new Set(marks.dropped)
   const markOf = name => { const m = dropped.has(name) ? null : at.get(name); return m ? carry(m.page, m.x, m.y) : null }
+  /** a unit's own mark as the anchors take it. The rule today: carried as every mark is, so none onto a page whose ink is not
+   *  whole (past OPS_CAP, given up on, rotated, past the carry's bound): such a page drops its units' marks before anchoring,
+   *  and moves the anchors (the page stream's design, Appendix A Q2). A page-local rule would carry them regardless and leave
+   *  a dark page's units to the rows' own check (a unit with a line on a dark page is not placed): this function alone */
+  const anchorMarkOf = markOf
   /** a mark the carrier does not place (past its line's last word), on the line of its partner, which moved whole: by
    *  the partner's offset */
   const besideOf = (partner, carried, name) => {
@@ -425,7 +430,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
   }
   const carriedUnit = new Map(), byPage = new Map(), withWords = markWords(ours, unitMarks), raw = new Map()
   doc.forEach((t, k) => (byPage.get(t.page) ?? byPage.set(t.page, []).get(t.page)).push(k))
-  for (const [k] of withWords) raw.set(k, markOf(nameOf.get(k)))
+  for (const [k] of withWords) raw.set(k, anchorMarkOf(nameOf.get(k)))
   // a unit's mark past its line's last word in the marks file (a heading in small capitals, whose words' rests the
   // file keeps no box of), on the line of its other mark: by that one's offset
   for (const [k] of withWords) {
