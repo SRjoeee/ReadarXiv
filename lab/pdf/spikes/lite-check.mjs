@@ -56,14 +56,23 @@ if (COMPARE) {
   console.log(`${same ? 'ok  ' : 'FAIL'} ${Object.keys(a.pdfs).length} PDFs, ${Object.values(a.pdfs).reduce((n, p) => n + p.ops.length, 0)} pages: operator lists and ink ${same ? 'the same' : 'DIFFER'}; peaks stock ${JSON.stringify(a.peak)} lite ${JSON.stringify(b.peak)}`)
   process.exit(same ? 0 : 1)
 }
+/** the PDFs a target stands for: a path ending in .pdf as it is; an id, its arXiv PDF and every compile cached beside it (one function
+ *  for both modes, so that a digest record is keyed by the same paths whichever mode wrote it); an id with no PDF stands for none */
+function pdfsOf(t) {
+  if (t.endsWith('.pdf')) return [t]
+  const dir = join(DATA, 'layout', t)
+  const compiles = existsSync(join(dir, 'compiles')) ? readdirSync(join(dir, 'compiles')).filter(f => f.endsWith('.pdf')).sort().map(f => join(dir, 'compiles', f)) : []
+  return existsSync(join(dir, 'arxiv.pdf')) ? [join(dir, 'arxiv.pdf'), ...compiles] : (console.log(`skip ${t}: no ${join(dir, 'arxiv.pdf')}`), [])
+}
 let failed = 0
 const report = (ok, text) => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${text}`) }
 if (SIDE) {
   const peak = { arrayBuffers: 0, rss: 0 }
   const timer = setInterval(() => { const m = process.memoryUsage(); peak.arrayBuffers = Math.max(peak.arrayBuffers, Math.round(m.arrayBuffers / 2 ** 20)); peak.rss = Math.max(peak.rss, Math.round(m.rss / 2 ** 20)) }, 10)
   const pdfs = {}
-  for (const file of targets) {
+  for (const file of targets.flatMap(pdfsOf)) {
     const bytes = new Uint8Array(readFileSync(file))
+    if (!bytes.length) { console.log(`skip ${file}: empty`); continue }
     pdfs[file] = await pass(bytes, SIDE === 'lite')
     console.log(`${SIDE}: ${file} read, ${pdfs[file].ops.length} pages`)
   }
@@ -75,7 +84,7 @@ if (SIDE) {
 }
 for (const t of targets) {
   const dir = join(DATA, 'layout', t)
-  const files = t.endsWith('.pdf') ? [t] : [join(dir, 'arxiv.pdf'), ...(existsSync(join(dir, 'compiles')) ? readdirSync(join(dir, 'compiles')).filter(f => f.endsWith('.pdf')).sort().map(f => join(dir, 'compiles', f)) : [])]
+  const files = pdfsOf(t)
   for (const file of files) {
     const bytes = new Uint8Array(readFileSync(file))
     if (!bytes.length) { console.log(`skip ${file}: empty`); continue }
