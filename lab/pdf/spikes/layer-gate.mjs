@@ -129,8 +129,8 @@
 //                with the composed document through it). Each page's SVG markup, copyOf's pixels over the page as door A's load
 //                drew it, and the digest of the run's records of its units must be equal, the units left and why too, and no
 //                page told laying may wait for a part before it is ready (Q1); and door A must draw every page as BUNDLE 3's
-//                open of the bundle with its single tail does (C', door S: the same markup, pixels, records, units left and
-//                states). The run is written to out/layer-gate/door-parts-<commit>-<time>.json. --door-parts-addon=carried: the
+//                open of the bundle with its single tail does (C', door S: the same markup, copyOf's pixels over door A's
+//                drawing of the page as door B's, records, units left and states). The run is written to out/layer-gate/door-parts-<commit>-<time>.json. --door-parts-addon=carried: the
 //                cut with no hook (the whole add-on's manifest carried, its removed pages refused, no tail); none: the paper with
 //                no add-on (a producer with no remover, M20): the cut made of it with none (every part `addon: null`), door A
 //                then BUNDLE 3's open of the bundle with `addon: null` (door C: the same units, left and layout, v0's own erase
@@ -725,11 +725,14 @@ async function doorPartsFixture(page, name, errors) {
     const minus = (x, y) => { const m = counts(x); for (const v of y) m.set(v, (m.get(v) ?? 0) - 1); return m }
     const nonNegative = m => [...m.values()].every(v => v >= 0)
     const same = (m, k) => [...new Set([...m.keys(), ...k.keys()])].every(v => (m.get(v) ?? 0) === (k.get(v) ?? 0))
-    // C' (the chained add-on): door A, over every tail, against door S, BUNDLE 3's open over the bundle's single tail
+    // C' (the chained add-on): door A, over every tail, against door S, BUNDLE 3's open over the bundle's single tail. Door S's
+    // copies are drawn over door A's PNG of each page (`shared`), as door B's are: two loads' own first drawings of one of
+    // arXiv's pages may differ (PDF.js, under load), so the copies are compared over the same pixels, never over each load's
+    // own original (that comparison failed some 10 of 523 pages a run, different pages each run, at six workers)
     let single = null
     if (chained) {
       await open()
-      const sd = await page.evaluate(x => window.doorParts.whole(x), { ...o, bundle3: 'single', png: false })
+      const sd = await page.evaluate(x => window.doorParts.whole(x), { ...o, bundle3: 'single', png: false, shared: true })
       const same = sd.pages.length === a.pages.length && sd.pages.every((d, i) => d.svg === a.pages[i]?.svg && d.copy.sha === a.pages[i]?.copy.sha && d.recs === a.pages[i]?.recs && d.w === a.pages[i]?.w && d.h === a.pages[i]?.h)
       single = { pages: sd.pages.filter((d, i) => d.svg === a.pages[i]?.svg && d.copy.sha === a.pages[i]?.copy.sha && d.recs === a.pages[i]?.recs).length, of: sd.pages.length, left: sd.skipped.join('\n') === a.skipped.join('\n'), states: sd.states === a.states, ok: false, tails: tails.length, removed: hooks.state().r }
       single.ok = same && single.left && single.states && sd.addon === true
