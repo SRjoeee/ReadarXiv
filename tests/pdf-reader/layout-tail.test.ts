@@ -21,14 +21,14 @@ function classic(numbers: number[], prev: number, at: number): Uint8Array {
 describe('tailLinks', () => {
   it('reads the sample\'s real tail (a cross-reference stream): where it starts, what it follows, the root and the fresh run', () => {
     const links = tailLinks(sampleTail)
-    expect(links).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 186, last: 187 })
+    expect(links).toEqual({ startxref: 212869, xrefAt: 132, prev: 212001, root: 68, first: 186, last: 187 })
     // (the section lies inside the tail, which follows arXiv's bytes)
     expect(links!.startxref).toBeGreaterThanOrEqual(sampleBundle.base.bytes)
     expect(links!.startxref).toBeLessThan(sampleBundle.base.bytes + sampleTail.length)
   })
 
   it('reads a classic section: the least number the root, the others the fresh run', () => {
-    expect(tailLinks(classic([12, 300, 301, 305], 5000, 7000))).toEqual({ startxref: 7000, prev: 5000, root: 12, first: 300, last: 305 })
+    expect(tailLinks(classic([12, 300, 301, 305], 5000, 7000))).toEqual({ startxref: 7000, xrefAt: 50, prev: 5000, root: 12, first: 300, last: 305 })
   })
 
   it('is null for what ends in no such section, and never throws', () => {
@@ -47,7 +47,8 @@ describe('tailLinks', () => {
     const big = new Uint8Array(300 * 1024 + sampleTail.length)
     big.fill(0x20)
     big.set(sampleTail, 300 * 1024)
-    expect(tailLinks(big)).toEqual(tailLinks(sampleTail))
+    // (the section's place is in the whole tail, not in the window)
+    expect(tailLinks(big)).toEqual({ ...tailLinks(sampleTail), xrefAt: 300 * 1024 + 132 })
   })
 })
 
@@ -75,10 +76,10 @@ describe('tailLinks is bounded by the tail it reads', () => {
     expect(tailLinks(streamTail('68 1 186 2 187 1'))).toBeNull()
     expect(tailLinks(streamTail('68 1 186 2', '9'.repeat(400)))).toBeNull()
     // (and the real shapes are read: one number a pair, or a run)
-    expect(tailLinks(streamTail('68 1 186 1 187 1'))).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 186, last: 187 })
-    expect(tailLinks(streamTail('68 1 186 2'))).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 186, last: 187 })
-    expect(tailLinks(streamTail('186 2 68 1'))).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 186, last: 187 })
-    expect(tailLinks(streamTail('68 2'))).toEqual({ startxref: 212869, prev: 212001, root: 68, first: 69, last: 69 })
+    expect(tailLinks(streamTail('68 1 186 1 187 1'))).toEqual({ startxref: 212869, xrefAt: 1, prev: 212001, root: 68, first: 186, last: 187 })
+    expect(tailLinks(streamTail('68 1 186 2'))).toEqual({ startxref: 212869, xrefAt: 1, prev: 212001, root: 68, first: 186, last: 187 })
+    expect(tailLinks(streamTail('186 2 68 1'))).toEqual({ startxref: 212869, xrefAt: 1, prev: 212001, root: 68, first: 186, last: 187 })
+    expect(tailLinks(streamTail('68 2'))).toEqual({ startxref: 212869, xrefAt: 1, prev: 212001, root: 68, first: 69, last: 69 })
   })
 
   it('a classic table is bounded the same way: a subsection that claims more entries than the table has bytes, a number past the limit', () => {
@@ -87,7 +88,7 @@ describe('tailLinks is bounded by the tail it reads', () => {
     expect(tailLinks(t(`12 1\n${entry}300 1000000\n${entry}`))).toBeNull()
     expect(tailLinks(t(`12 1\n${entry}8388608 1\n${entry}`))).toBeNull()
     expect(tailLinks(t(`12 1\n${entry}12 1\n${entry}`))).toBeNull()
-    expect(tailLinks(t(`12 1\n${entry}300 2\n${entry}${entry}`))).toEqual({ startxref: 9, prev: 5, root: 12, first: 300, last: 301 })
+    expect(tailLinks(t(`12 1\n${entry}300 2\n${entry}${entry}`))).toEqual({ startxref: 9, xrefAt: 1, prev: 5, root: 12, first: 300, last: 301 })
   })
 })
 

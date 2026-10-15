@@ -35,7 +35,8 @@ export function startxrefOf(pdf) {
  * the tail ends in (an offset into the whole document, arXiv's bytes first); `prev`, the section's `/Prev` (the startxref of
  * the document before it); `root`, the page tree's root, the least object number the section names (the tree is an object
  * of the document, rewritten, and the fresh objects are numbered above all it had); `first` and `last`, the least and
- * greatest of the fresh numbers. null where the tail ends in no such section (or names the root alone). Never throws
+ * greatest of the fresh numbers; `xrefAt`, where the section begins in the tail (the offset `startxref` declares, less where the
+ * tail begins). null where the tail ends in no such section (or names the root alone). Never throws
  */
 export function tailLinks(tail) {
   if (!(tail instanceof Uint8Array)) return null
@@ -50,7 +51,7 @@ export function tailLinks(tail) {
   // the objects the section defines are defined inside the tail: each costs a byte of it at least
   const nums = summary(section.ranges, tail.length)
   if (nums === null || nums.total < 2) return null
-  return { startxref, prev: section.prev, root: nums.min, first: nums.second, last: nums.max }
+  return { startxref, xrefAt: tail.length - text.length + section.at, prev: section.prev, root: nums.min, first: nums.second, last: nums.max }
 }
 
 /** an object number at most (ISO 32000-1, annex C: 8,388,607) */
@@ -82,9 +83,9 @@ function summary(ranges, most) {
 function tableSection(body) {
   const trailerAt = body.lastIndexOf('trailer\n')
   if (trailerAt < 0) return null
-  let from = body.lastIndexOf('\nxref\n', trailerAt)
-  if (from < 0) return null
-  from += 6
+  const found = body.lastIndexOf('\nxref\n', trailerAt)
+  if (found < 0) return null
+  const from = found + 6
   // the subsections must reach the trailer exactly: nothing but the table lies between, and each entry is 20 bytes of it
   const ranges = []
   let at = from
@@ -97,7 +98,7 @@ function tableSection(body) {
     ranges.push([first, count])
   }
   if (at !== trailerAt) return null
-  return { ranges, prev: prevOf(body.slice(trailerAt)) }
+  return { ranges, prev: prevOf(body.slice(trailerAt)), at: found + 1 }
 }
 
 /** the section `<n> 0 obj\n<< /Type /XRef … /Index [<first> <count> …] … /Prev n … /Length l >>\nstream\n…\nendstream\nendobj\n` */
@@ -113,7 +114,7 @@ function streamSection(body) {
   if (pairs.length % 2 !== 0) return null
   const ranges = []
   for (let i = 0; i < pairs.length; i += 2) ranges.push([pairs[i], pairs[i + 1]])
-  return { ranges, prev: prevOf(dict) }
+  return { ranges, prev: prevOf(dict), at: body.lastIndexOf('\n', dictAt) + 1 }
 }
 
 /** the section's /Prev, an offset that is a safe integer; null otherwise */
