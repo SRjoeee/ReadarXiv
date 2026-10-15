@@ -210,11 +210,13 @@ export declare function snapFirstRect2(rects: Rect[], charsByPage: readonly (rea
 /** wordChars: the page's characters the first line may grow over the words its source begins with (step 3) */
 export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
 /** a unit's translation as tokens; `.base` is its base style. `measure(s, face)`: a run's width at 100 px (the canvas's, cached,
- *  by default); a host reading the tokens' faces and texts before the faces are loaded passes a measure that takes none */
+ *  by default); a host reading the tokens' faces and texts before the faces are loaded passes a measure that takes none.
+ *  `tagWords`: each token of a text piece also carries `at` and `end`, its range in the unit's plainTranslated(pieces) (words.mjs),
+ *  and no other field changes */
 /** what a unit's first line starts with before its own text: each part in its own style, then a space (`gap`
  *  undefined) or that many em of the unit's size after its last character, no place to break (0: none) */
 export interface Lead { parts: { text: string; st: Partial<Style> }[]; gap?: number }
-export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: (s: string, face: Face) => number): Token[] & { base: Style }
+export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: (s: string, face: Face) => number, tagWords?: boolean): Token[] & { base: Style }
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
 export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
@@ -277,6 +279,8 @@ export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasR
 export declare function pageItemsOf(chars: readonly Char[], page: number, px: ToDev, ink: InkMap | undefined): { items: { chars: Char[]; keys: string[]; box: number[] }[]; cover: Uint8Array | null }
 /** the unit's lines on one page as SVG markup (a <g data-u="id">) */
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string
+/** the unit's lines on a page that stay the original's, with the baseline and size its reading gave each (the page's word table) */
+export declare function keptLines(rects: readonly number[][], prep: { keep?: readonly string[]; lineInfo?: ReadonlyMap<string, { baseline: number; size: number }> } | null | undefined, page: number): { x0: number; x1: number; baseline: number; size: number; top: number; bottom: number }[]
 export declare function drawnRuns(tokens: readonly Token[]): { key: string; n: number }[]
 export declare function styleMatch(orig: Prepared['orig'] | undefined, drawn: readonly { key: string; n: number }[], drawnBase?: string): { match: number; total: number; base?: boolean; ob?: string; db?: string }
 /** a line's band between the rules over and under it: its original baseline, and how low and high its em box may reach */

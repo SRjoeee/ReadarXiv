@@ -55,6 +55,8 @@ import { noStart } from './no-start.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
+import { shown } from '../layer/pieces.mjs'
+import { plainTracker, transformMap } from './words.mjs'
 
 // (the fit's parameters, per script and language, are the layout rules': rules/layout.mjs resolveRules gives a run its P)
 
@@ -1819,8 +1821,11 @@ export function ink100(s, face) {
  * tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
  * would give
  */
-export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, measure = w100) {
+export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, measure = w100, tagWords = false) {
   const tokens = []
+  // (`tagWords`, the page's word table: each token of a text piece carries `at` and `end`, its range in plainTranslated(pieces),
+  // words.mjs; no other field of a token changes, and a token of a lead, a label or a placeholder's rendering has none)
+  const plain = tagWords ? plainTracker() : null
   const base = baseOf(unit, baseIn)
   const stack = [{ ...base }]
   const style = () => stack.at(-1)
@@ -1845,7 +1850,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     tokens.push(t)
   }
-  const pushText = (s, st, extra = {}) => {
+  const pushText = (s, st, extra = {}, track = null) => {
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
       if (/^\s+$/.test(chunk)) {
@@ -1856,21 +1861,29 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       }
       // the chunk by class: CJK characters, and the runs between them
       const parts = []
-      let cur = null
+      let cur = null, off = 0
       for (const ch of chunk) {
         const cls = cjkRe.test(ch) ? 'cjk' : 'latin'
         // Chinese and Japanese break between any two CJK characters: each its own part
-        if (cls === 'cjk' && !keepAll) { cur = null; parts.push({ cls, s: ch }); continue }
+        if (cls === 'cjk' && !keepAll) { cur = null; parts.push({ cls, s: ch, off }); off += ch.length; continue }
         if (cur && cur.cls === cls) cur.s += ch
-        else { cur = { cls, s: ch }; parts.push(cur) }
+        else { cur = { cls, s: ch, off }; parts.push(cur) }
+        off += ch.length
       }
       parts.forEach((p, n) => {
         // a Latin word cut at its own hyphens and slashes: a line may break after them
         // a URL or a path (mono) after its separators, as TeX's url package breaks it
         const pieces = p.cls !== 'latin' ? [p.s] : st.fam === 'mono' || /^(?:https?:|www\.)/.test(p.s) ? p.s.split(/(?<=[/.\-_#?&=])(?=[^/.\-_#?&=])/) : !extra.ph ? p.s.split(/(?<=[A-Za-zÀ-ɏЀ-ӿ][-/])(?=[A-Za-zÀ-ɏЀ-ӿ])/) : [p.s]
+        let po = 0
         pieces.forEach((s, q) => {
           const face = faceOf(st, p.cls, to)
           const t = { s, st, face, cls: p.cls, w100: measure(s, face), ...extra, ...(q > 0 ? { brk: true } : {}) }
+          if (track && s.length) {
+            const i = m.index + p.off + po, last = i + s.length - 1
+            t.at = track.at[track.base + track.map.from[i]]
+            t.end = track.at[track.base + track.map.from[last]] + track.map.span[last]
+          }
+          po += s.length
           // within a chunk, parts stand together (no break), but Chinese and Japanese break before and after a CJK
           // character, and a word may break after its own hyphen
           if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1].cls === 'cjk'))) t.glue = true
@@ -1915,10 +1928,16 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
       let s = p.s
+      // (the plain text's offsets of the piece's characters, as the PDF shows it; a piece whose shown text is not the one drawn
+      // from, or whose transformed text the map cannot follow, is tagged with none)
+      const sh = plain ? shown(p) : null, at = plain?.text(sh)
       if (after && /\S/.test(s)) { s = dropped(s); after = null }
-      pushText(s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”'), style())
+      const text = s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”')
+      const map = at && sh === p.s ? transformMap(s, text) : null
+      pushText(text, style(), {}, map && { at, base: p.s.length - s.length, map })
       return
     }
+    plain?.gap()
     if (p.t === 'open') {
       const next = applyCmd(p.src, style(), designs)
       const colour = /^\\textcolor\{([a-zA-Z]+)\}/.exec(p.src)
@@ -2882,6 +2901,23 @@ export function svgOfUnit(L, page, toPx, scale, id) {
     out += `<text y="${n2(by)}">${body}</text>${oblique}`
   }
   return `${out}</g>`
+}
+
+/**
+ * The unit's lines on one page that stay the original's (a displayed formula's, and any line the unit keeps): their rectangles
+ * with the baseline and size the unit's reading gave each (`prep.lineInfo`), for the page's word table (words.mjs). `rects`: the
+ * unit's rectangles [page, x0, bottom, x1, top]; none where it keeps none
+ */
+export function keptLines(rects, prep, page) {
+  const keep = prep?.keep?.length ? new Set(prep.keep) : null
+  if (!keep) return []
+  const out = []
+  for (const r of rects) {
+    if (r[0] !== page || !keep.has(rectKey(r))) continue
+    const info = prep.lineInfo?.get(rectKey(r))
+    out.push({ x0: r[1], x1: r[3], baseline: info?.baseline ?? r[2], size: info?.size ?? r[4] - r[2], top: r[4], bottom: r[2] })
+  }
+  return out
 }
 
 /**
