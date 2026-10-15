@@ -973,10 +973,11 @@ function completenessRows(run) {
   return Object.entries(run.fixtures).map(([name, f]) => {
     const t = f.totals
     // (the consistency checks, the table-groups brief: a table group drawn partly, a label the final names left in the
-    // source language; each must be 0)
-    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0 }
+    // source language; each must be 0. And the measures of TeX's file whose cause a pull request removed, gated at 0 in
+    // it, README: a drawn line over a display, since the display grouping read from the file, 2026-10-15)
+    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0, textInDisplay: t.textInDisplay ?? 0 }
     if (TIER === 'pixel') row.lostInk = t.lostInk ?? 0
-    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource'].filter(k => row[k] > 0)
+    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay'].filter(k => row[k] > 0)
     if (t.numbersShown < t.numbersTotal) row.fails.push('numbers')
     return row
   })
@@ -1162,8 +1163,8 @@ function closer(m, a, b) {
 function gateMd(run, rows) {
   const L = ['# The instant layer\'s completeness gate (spec §5)', '']
   L.push(`Written by \`spikes/layer-gate.mjs --tier=${run.tier} --record\` on ${run.made.slice(0, 10)}, the engine at \`${run.engine.commit?.slice(0, 8)}\`. Pages: ${run.inputs.pages}; a check fails on any count above 0 (lost ink: regions of more than ${run.inputs.inkMin} device pixels at ${run.inputs.inkScale}x).`, '')
-  L.push('| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | fails |', '|---|---|---|---|---|---|---|---|---|---|---|---|')
-  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.fails.join(', ') || 'none'} |`)
+  L.push('| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | lines over a display | fails |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.textInDisplay ?? 0} | ${r.fails.join(', ') || 'none'} |`)
   // (TeX's file against the drawing: defects held to the run before as rates, until the pull request that removes a
   // cause gates its measure at 0, README)
   const fileMs = AGAINST_FILE.map(k => MEASURES.find(m => m[0] === k)).filter(m => run.tier === 'pixel' || m[1] === 'model')
