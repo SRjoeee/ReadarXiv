@@ -1,15 +1,20 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import type { PartChain } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import {
-  BUILD_END_WHYS, BUNDLE4, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG4, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
+  BUILD_END_WHYS, BUNDLE4, DEPTH_NONE, KIND_NONE, RECORD_FLAG, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG4, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
   isFinalEnd, keyOf, keyParts, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
   readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, VTAG4, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { authorsTranslated } from '@/pdf-reader/engine/translate/kept.mjs'
+import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
+import { batchesOf, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
+import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
-import { encodeLayout, LAYOUT, type LayoutFile } from '@/pdf-reader/engine/layout/file.mjs'
+import { encodeLayout, LAYOUT, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import {
@@ -673,7 +678,7 @@ describe('the head', () => {
     await bad((h: never) => { (h as { units: { bytes: number }[] }).units[0]!.bytes = UNITS_CAP + 1 }, 'units[0].bytes')
     await bad((h: never) => { (h as { units: { kind: string }[] }).units[0]!.kind = 'part' }, 'units[0].kind')
     await bad((h: never) => { const u = (h as { units: { from: number; to: number }[] }).units; u.push({ ...u[0]!, from: 9, to: 9 }) }, 'units[1].from')
-    await bad((h: never) => { (h as { units: unknown[] }).units = 'x' }, 'units')
+    await bad((h: never) => { (h as { units: unknown }).units = 'x' }, 'units')
   })
 
   it('refuses a lineskip past its bounds, and cites past theirs: 5,000 pairs, a key of 1–128 and a label of 1–32 code units, keys unique (amendment M11)', async () => {
@@ -782,7 +787,7 @@ describe('a part against the index', () => {
   it('refuses an id past the units, in the left, the file-only and the layout', async () => {
     await refused(0, p => { (p as unknown as P).left![1]![0] = 99 as never }, 'left[1][0]')
     await refused(1, p => { (p as unknown as P).fileOnly![0]![0] = 99 as never }, 'fileOnly[0][0]')
-    await refused(1, p => { const l = (p as unknown as { layout: { units: number[][] } }).layout; l.units[1]![0] = 99; l.lines[1]![0] = 99; l.frames[1]![0] = 99 }, 'layout.units[1][0]')
+    await refused(1, p => { const l = (p as unknown as { layout: { units: number[][]; lines: number[][]; frames: number[][] } }).layout; l.units[1]![0] = 99; l.lines[1]![0] = 99; l.frames[1]![0] = 99 }, 'layout.units[1][0]')
   })
 
   it('refuses a layout unit of another kind or another piece count than its unit\'s, where the unit stands', async () => {
@@ -1198,4 +1203,77 @@ describe('the catalog', () => {
     expect(await refusal(w({ units: [] }))).toMatchObject({ path: 'units' })
     expect(await refusal(w({ end: { through: 3, refused: 'nope' as never }, parts: parts().slice(0, 2) }))).toMatchObject({ path: 'end.refused' })
   })
+})
+
+// ---------------------------------------------------------------- M15. the units' records
+describe('records (amendment M15): derived once, the engine\'s own predicates', () => {
+  /** the sample paper's units (CC0, tests/fixtures/pdf/sample-1/) as a BUNDLE 3 file holds them, and the synthetic paper's */
+  const sample = () => readBundle(new Uint8Array(readFileSync('tests/fixtures/pdf/sample-1/bundle.json'))).units
+  const LANGS = ['zh', 'ja', 'ko', 'de', 'fr', 'ru', 'es', 'ar']
+
+  it('are columns of one entry a unit: kind, flags, depth, plain length, and the sparse cells and headings', () => {
+    const r = M.index.records
+    expect(r.kind).toBeInstanceOf(Uint8Array)
+    expect(r.flags).toBeInstanceOf(Uint8Array)
+    expect(r.depth).toBeInstanceOf(Int8Array)
+    expect(r.plainLength).toBeInstanceOf(Uint32Array)
+    expect([r.kind.length, r.flags.length, r.depth.length, r.plainLength.length]).toEqual([8, 8, 8, 8])
+    expect([...r.kind]).toEqual(UNITS.map(u => UNIT_KINDS.indexOf(u[0] as never)).map(k => (k < 0 ? KIND_NONE : k)))
+    // the title carries TITLE, a cell KEPT, the front heading FRONT and BRACKETED, the author AUTHOR
+    expect([...r.flags]).toEqual([RECORD_FLAG.TITLE, 0, 0, RECORD_FLAG.KEPT, 0, 0, RECORD_FLAG.FRONT | RECORD_FLAG.BRACKETED, RECORD_FLAG.AUTHOR])
+    // a heading's depth is its own (the \\part's -1 is one), a unit with none DEPTH_NONE
+    expect([...r.depth]).toEqual([DEPTH_NONE, DEPTH_NONE, DEPTH_NONE, DEPTH_NONE, DEPTH_NONE, DEPTH_NONE, 1, DEPTH_NONE])
+    expect([r.plainLength[0], r.plainLength[1], r.plainLength[3], r.plainLength[6]]).toEqual(['A Title'.length, 'A note.'.length, 'Model'.length, 'Intro'.length])
+    expect(r.plainLength[2]).toBe(plainSource(sourceUnitsOf({ units: UNITS })[2]!).length)
+    expect([...r.cells.keys()]).toEqual([3, 4, 5])
+    expect(r.cells.get(4)).toEqual({ table: 0, row: 1, col: 0, span: 2, head: false })
+    expect([...r.headings]).toEqual([[0, 'A Title'], [6, 'Intro']])
+    // (the same records, head-less, from the chunks alone)
+    expect(unitsOfChunks(M.readChunks).records).toEqual(r)
+  })
+
+  it('a depth of -1 (a \\part) is a depth, and a unit that does not stand has none of anything', async () => {
+    const o = parsed(M.chunks[0]!)
+    o.units[6][2] = -1
+    o.units[7][0] = 'Author'
+    const f = forged('units', o, { from: 0, to: 7 })
+    const c = await readUnitsChunk(f.bytes, { ref: f.ref, before: null })
+    const r = unitsOfChunks([c]).records
+    expect(r.depth[6]).toBe(-1)
+    expect([r.kind[7], r.flags[7], r.depth[7], r.plainLength[7]]).toEqual([KIND_NONE, 0, DEPTH_NONE, 0])
+    expect(r.headings.has(7)).toBe(false)
+  })
+
+  for (const [name, getUnits] of [['the synthetic paper', () => [...UNITS]], ['the sample paper', () => sample() as never]] as [string, () => (typeof UNITS[number] | null)[]][]) {
+    it(`equal the engine's own derivation on ${name}: toTranslate for every language, groupOf, the batches of batchesOf`, async () => {
+      const units = getUnits()
+      const chunks = await writeUnitChunks({ paper: PAPER, units: units as never })
+      const read: Awaited<ReturnType<typeof readUnitsChunk>>[] = []
+      for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
+      const { records: r } = unitsOfChunks(read)
+      const bundle = { units }
+      expect(units.length).toBeGreaterThan(5)
+      for (const lang of LANGS) {
+        const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0 || (!authorsTranslated(lang) && (r.flags[i]! & RECORD_FLAG.AUTHOR) !== 0)
+        const derived = [...units.keys()].filter(i => units[i] !== null && !kept(i))
+        expect(derived, lang).toEqual(toTranslate(bundle, lang))
+        // the batches: the same cuts from the records' lengths as batchesOf makes from the plain source
+        let left = derived
+        const batches: number[][] = []
+        for (let first = true; left.length; first = false) {
+          const b = batchOf(left, i => r.plainLength[i]!, first ? FIRST_BATCH : NEXT_BATCH)
+          batches.push(b)
+          left = left.slice(b.length)
+        }
+        expect(batches, lang).toEqual(batchesOf(bundle, lang))
+      }
+      const source = sourceUnitsOf(bundle)
+      source.forEach((u, i) => {
+        expect(r.cells.has(i), `cell ${i}`).toBe(!!u?.cell)
+        if (u?.cell) expect(groupOf({ cell: r.cells.get(i) } as never)).toBe(groupOf(u))
+        expect(r.plainLength[i]).toBe(u ? plainSource(u).length : 0)
+        expect(r.headings.get(i)).toBe(u?.kind === 'heading' ? plainSource(u) : undefined)
+      })
+    })
+  }
 })

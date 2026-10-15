@@ -82,6 +82,8 @@ export interface LayerIndex {
   kind: 'index'; sha256: string
   head: ReadHead
   units: readonly (BundleUnit | null)[]; kinds: readonly (string | null)[]; dropped: readonly number[]
+  /** derived once from the units (amendment M15): the index's shape is frozen with it */
+  records: UnitRecords
 }
 /** what the parts told so far fix: a pure function of the parts' sequence */
 export interface PartChain {
@@ -127,9 +129,31 @@ export interface ReadCatalog {
  *  its id and in `dropped`; throws BundleRefusal, a TypeError for bytes that are no Uint8Array */
 export declare function readUnitsChunk(bytes: Uint8Array, o: { ref: Ref; before?: ReadUnitsChunk | null; caps?: Caps }): Promise<ReadUnitsChunk>
 export declare function readHead(bytes: Uint8Array, o: { ref: Ref; caps?: Caps }): Promise<ReadHead>
+/** the units' records (amendment M15), derived once, one entry a unit, its id the index */
+export interface UnitRecords {
+  /** the unit's UNIT_KINDS index; KIND_NONE for another kind or a unit that does not stand */
+  kind: Uint8Array
+  /** RECORD_FLAG: the unit's flags (TITLE, FRONT, BRACKETED, KEPT) and AUTHOR */
+  flags: Uint8Array
+  /** a heading's depth (-1 a \part …); DEPTH_NONE where the unit has none */
+  depth: Int8Array
+  /** the plain source text's length (mt.mjs plainSource); 0 for none */
+  plainLength: Uint32Array
+  /** the table cells' place, the fields groupOf reads */
+  cells: ReadonlyMap<number, { table: number; row: number; col: number; span: number; head: boolean }>
+  /** the plain source of the heading units */
+  headings: ReadonlyMap<number, string>
+}
+/** the flags of a unit's record: the bundle's unit flags and AUTHOR (kind `author`) */
+export declare const RECORD_FLAG: { readonly TITLE: 1; readonly FRONT: 2; readonly BRACKETED: 4; readonly KEPT: 8; readonly AUTHOR: 16 }
+/** a record's depth for a unit with none, and its kind for none of UNIT_KINDS or a unit that does not stand */
+export declare const DEPTH_NONE: -128
+export declare const KIND_NONE: 255
 /** the units of chunks read in order, head-less: every unit (null where dropped), its kind and the ids dropped */
 export interface ReadUnits {
   units: (BundleUnit | null)[]; kinds: (string | null)[]; dropped: number[]
+  /** the units' records (amendment M15) */
+  records: UnitRecords
   /** each chunk's ids */
   index: { from: number; to: number }[]
   /** the chunk holding a unit; throws a RangeError for an id that is none */

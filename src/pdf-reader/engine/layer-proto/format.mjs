@@ -16,15 +16,17 @@
 // reader will, and checks the shape rules it can see with the reader's own checks, so that it never emits what its reader
 // refuses (a throw is BundleRefusal, a defect of the caller's input and no silent loss). The same input gives the same bytes.
 //
-// Imports the layout's parsers, the engine's versions and the units alone: never the run, the remover, the layout's maker nor
-// the front end, which a reader does not load.
+// Imports the layout's parsers, the engine's versions, the units, and the rows' and the translation's readings of a unit
+// (for `records`, below) alone: never the run, the remover, the layout's maker nor the front end, which a reader does not load.
 import { checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
 import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told, utf8Strict } from '../layout/json.mjs'
 import { tailLinks } from '../layout/tail.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
+import { plainSource } from '../translate/mt.mjs'
 import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
+import { sourceUnitsOf } from './rows.mjs'
 import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
@@ -328,6 +330,43 @@ function unitText(u) {
   return JSON.stringify([u[0], u[1], u[2], cell, edges, u[5]])
 }
 
+/** the flags of a unit's record (amendment M15): the bundle's own unit flags (UNIT_FLAG_BITS: TITLE, FRONT, BRACKETED, KEPT) and
+ *  AUTHOR, set where the unit's kind is `author` (rows.mjs toTranslate keeps the KEPT names, and the author block where the
+ *  target does not write it as the paper does) */
+export const RECORD_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, BRACKETED: 4, KEPT: 8, AUTHOR: 16 })
+/** a record's `depth` for a unit that has none (a heading's depth runs from -1, a \part, so -1 cannot be it), and its `kind` for
+ *  a kind that is none of UNIT_KINDS, or a unit that does not stand */
+export const DEPTH_NONE = -128, KIND_NONE = 255
+
+/**
+ * The units' records, once (amendment M15): columns of one entry a unit, its id the index. `kind` the unit's UNIT_KINDS index;
+ * `flags` RECORD_FLAG; `depth` a heading's; `plainLength` the plain source text's length (mt.mjs plainSource: what the host's
+ * batching estimates from; 0 for no text); `cells` the table cells' place (the fields groupOf reads), `headings` the plain
+ * source of the heading units. The units are read as rows.mjs reads them, so that every predicate is the engine's own. A unit
+ * that does not stand has KIND_NONE, no flags, DEPTH_NONE and no length
+ */
+function recordsOf(units) {
+  const n = units.length
+  const kind = new Uint8Array(n).fill(KIND_NONE), flags = new Uint8Array(n), depth = new Int8Array(n).fill(DEPTH_NONE), plainLength = new Uint32Array(n)
+  const cells = new Map(), headings = new Map()
+  const source = sourceUnitsOf({ units })
+  for (let i = 0; i < n; i++) {
+    const b = units[i]
+    if (b === null) continue
+    const k = UNIT_KINDS.indexOf(b[0])
+    if (k >= 0) kind[i] = k
+    flags[i] = b[1] | (b[0] === 'author' ? RECORD_FLAG.AUTHOR : 0)
+    if (b[2] !== null) depth[i] = b[2]
+    const u = source[i]
+    if (!u) continue
+    const plain = plainSource(u)
+    plainLength[i] = plain.length
+    if (u.cell) cells.set(i, u.cell)
+    if (b[0] === 'heading') headings.set(i, plain)
+  }
+  return { kind, flags, depth, plainLength, cells, headings }
+}
+
 /** the units' total past its bound (amendment M2): `units-too-large`, the bound and the size as data */
 const tooLarge = (what, bound, size) => new BundleRefusal('units-too-large', { kind: 'units', path: '', data: { what, bound, size } })
 
@@ -378,7 +417,7 @@ export async function writeUnitChunks({ paper, units }) {
  * The units of chunks read in order, head-less (amendment M3; the head's indexOf takes the same): each chunk after the one
  * before it (its `from` the last `to` + 1, the first 0), of one paper and one pipeline, read as one chain (each chunk's
  * `stands` begins as the one before's); no more than CHUNKS_MAX chunks, and their values in all within UNITS_TOTAL_VALUES.
- * Gives every unit (null where dropped), its kind (null likewise) and the ids dropped, and the windowed access amendment M3'
+ * Gives every unit (null where dropped), its kind (null likewise) and the ids dropped, their `records` (M15), and the windowed access amendment M3'
  * asks for: `index`, each chunk's { from, to }; `chunkOf(id)`, the chunk holding a unit; `externalRefs(k)`, the ids below chunk
  * k's `from` that its nested pieces name (rising), so that a reader holding one chunk at a time knows which earlier units it
  * needs. Throws BundleRefusal
@@ -417,7 +456,7 @@ export function unitsOfChunks(chunks) {
     }
     return [...out].sort((a, b) => a - b)
   }
-  return { units, kinds, dropped, index, chunkOf, externalRefs }
+  return { units, kinds, dropped, index, chunkOf, externalRefs, records: recordsOf(units) }
 }
 
 // ---------------------------------------------------------------- the head
@@ -503,7 +542,7 @@ export function indexOf(head, chunks, o = {}) {
     if (c.paper.id !== head.paper.id || c.paper.version !== head.paper.version) throw refuse(K, path, 'not the head\'s paper')
     if (c.pipeline !== head.versions.pipeline) throw refuse(K, path, 'not the head\'s pipeline')
   }
-  const { units, kinds, dropped } = unitsOfChunks(chunks)
+  const { units, kinds, dropped, records } = unitsOfChunks(chunks)
   const cat = o.catalog
   if (cat !== undefined) {
     if (cat.head.sha256 !== head.sha256 || cat.head.bytes !== head.bytes) throw refuse(K, 'catalog.head', 'not the head the index is made of')
@@ -515,7 +554,7 @@ export function indexOf(head, chunks, o = {}) {
       if (a.from !== b.from || a.to !== b.to || a.sha256 !== b.sha256 || a.bytes !== b.bytes) throw refuse(K, `catalog.units[${i}]`, 'not the head\'s chunk')
     }
   }
-  return Object.freeze({ kind: 'index', sha256: head.sha256, head, units: Object.freeze(units), kinds: Object.freeze(kinds), dropped: Object.freeze(dropped) })
+  return Object.freeze({ kind: 'index', sha256: head.sha256, head, units: Object.freeze(units), kinds: Object.freeze(kinds), dropped: Object.freeze(dropped), records })
 }
 
 // ---------------------------------------------------------------- the parts
