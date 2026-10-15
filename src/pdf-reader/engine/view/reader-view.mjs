@@ -85,7 +85,7 @@ export function createReaderView(host) {
   const counts = { events: 0, tasks: 0, opens: 0, failures: 0, layouts: 0 }
   let lastEvent = null, lastAlign = null
   const released = new WeakSet()
-  const listeners = { drawn: new Set(), want: new Set(), near: new Set(), original: new Set() }
+  const listeners = { drawn: new Set(), want: new Set(), near: new Set(), original: new Set(), scale: new Set() }
   const tell = (set, ...args) => { for (const l of [...set]) l(...args) }
   function emit(event) {
     if (disposed) return
@@ -343,6 +343,7 @@ export function createReaderView(host) {
     follower.invalidate()
     if (laid) places.scale(scaleFactor(), scale, stepDelay)
     tellScale(scale)
+    if (laid) tell(listeners.scale, scale, stepDelay)
   })
   on(L.bus, 'pagerendered', ({ pageNumber, error }) => {
     if (!laid) return
@@ -779,6 +780,7 @@ export function createReaderView(host) {
     onWant: l => { listeners.want.add(l); return () => listeners.want.delete(l) },
     onNear: l => { listeners.near.add(l); return () => listeners.near.delete(l) },
     onOriginal: l => { listeners.original.add(l); return () => listeners.original.delete(l) },
+    onScale: l => { listeners.scale.add(l); return () => listeners.scale.delete(l) },
     attach(s) {
       if (disposed) throw new Error('the reading view is disposed')
       if (side) throw new Error('the reading view has a layer side already')

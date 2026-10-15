@@ -159,6 +159,9 @@ export interface Internals {
   onNear(listener: (page: number, near: boolean) => void): () => void
   /** the original shown or let go */
   onOriginal(listener: (state: 'opened' | 'dropped', doc: ViewDocument | null) => void): () => void
+  /** the left's scale changed, and the places with it: a step's or a pinch's drawn again `drawingDelay` ms after the last
+   *  (-1: at once), for the copies drawn at the pane's resolution */
+  onScale(listener: (scale: number, drawingDelay: number) => void): () => void
   /** the view's one layer side, disposed first by the view's own dispose; a second while one lives throws */
   attach(side: { dispose(): void }): () => void
   emit(event: ViewEvent): void

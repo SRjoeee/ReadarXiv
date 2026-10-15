@@ -706,6 +706,17 @@ describe('V12: the web\'s fixes as plain behaviour', () => {
     expect(last(u.events, 'paper')).toEqual({ type: 'paper', title: 'Its own' })
   })
 
+  it('the layer side hears of the scale as the places follow it, a step\'s with its drawing delay', async () => {
+    const s = setup()
+    await opened(s, 3)
+    const heard: string[] = []
+    internalsOf(s.view).onScale((scale, delay) => heard.push(`${scale.toFixed(2)} ${delay}`))
+    const from = leftViewer().currentScale
+    s.view.zoomBy(1.5)
+    s.view.zoomTo(1)
+    expect(heard).toEqual([`${(Math.round(from * 1.5 * 100) / 100).toFixed(2)} 400`, '1.00 -1'])
+  })
+
   it('onPageDrawn is told once for each page drawn, on either pane', async () => {
     const s = setup()
     await opened(s, 3)
