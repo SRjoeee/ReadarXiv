@@ -4,6 +4,9 @@
 // plans (layout/addon.mjs pagePlansOf) over a layout file, the same. Prints the ArrayBuffers and RSS after each side; exits 1 where anything differs.
 //   pnpm exec tsx lab/pdf/spikes/lite-check.mjs [<id>v<n> … | <pdf> …] [--layouts=<gate pack's fixtures dir>]
 //        [--gc] (node --expose-gc for --gc)
+// One side at a time, in a process of its own (a heavy PDF's stock side holds GBs): --side=stock|lite --digests=<file> writes that side's
+// digests; --compare=<stock file>,<lite file> compares two such files. Each side prints the peak ArrayBuffers and RSS it reached
+// (sampled every 10 ms, no forced gc) when --side is given.
 // Papers by id read <AXT_DATA, else lab/pdf/data>/layout/<id>/arxiv.pdf and every compile in its compiles/*.pdf; a path ending
 // in .pdf is read alone. --layouts: <dir>/<id>-zh/layout.json is the layout file the plans are made over. Data outside git, read only.
 import { createHash } from 'node:crypto'
@@ -46,8 +49,30 @@ async function pass(bytes, lite) {
   return { ops, inks }
 }
 
+const SIDE = argOf('side'), DIGESTS = argOf('digests'), COMPARE = argOf('compare')
+if (COMPARE) {
+  const [a, b] = COMPARE.split(',').map(f => JSON.parse(readFileSync(f, 'utf8')))
+  const same = JSON.stringify(a.pdfs) === JSON.stringify(b.pdfs)
+  console.log(`${same ? 'ok  ' : 'FAIL'} ${Object.keys(a.pdfs).length} PDFs, ${Object.values(a.pdfs).reduce((n, p) => n + p.ops.length, 0)} pages: operator lists and ink ${same ? 'the same' : 'DIFFER'}; peaks stock ${JSON.stringify(a.peak)} lite ${JSON.stringify(b.peak)}`)
+  process.exit(same ? 0 : 1)
+}
 let failed = 0
 const report = (ok, text) => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${text}`) }
+if (SIDE) {
+  const peak = { arrayBuffers: 0, rss: 0 }
+  const timer = setInterval(() => { const m = process.memoryUsage(); peak.arrayBuffers = Math.max(peak.arrayBuffers, Math.round(m.arrayBuffers / 2 ** 20)); peak.rss = Math.max(peak.rss, Math.round(m.rss / 2 ** 20)) }, 10)
+  const pdfs = {}
+  for (const file of targets) {
+    const bytes = new Uint8Array(readFileSync(file))
+    pdfs[file] = await pass(bytes, SIDE === 'lite')
+    console.log(`${SIDE}: ${file} read, ${pdfs[file].ops.length} pages`)
+  }
+  await new Promise(r => setTimeout(r, 3000))
+  clearInterval(timer)
+  console.log(`${SIDE}: peak ${JSON.stringify(peak)}; ${await mem()}`)
+  if (DIGESTS) { const { writeFileSync } = await import('node:fs'); writeFileSync(DIGESTS, JSON.stringify({ pdfs, peak })) }
+  process.exit(0)
+}
 for (const t of targets) {
   const dir = join(DATA, 'layout', t)
   const files = t.endsWith('.pdf') ? [t] : [join(dir, 'arxiv.pdf'), ...(existsSync(join(dir, 'compiles')) ? readdirSync(join(dir, 'compiles')).filter(f => f.endsWith('.pdf')).sort().map(f => join(dir, 'compiles', f)) : [])]
