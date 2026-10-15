@@ -151,17 +151,18 @@ describe("S4: a unit's lines on a page are dropped and grown by that page alone"
     ...(claimedOn2 ? [{ id: 2, kind: 'para', src: 'More words', lines: [line(2, 120, [20, 'More words'])], rects: [rectOf(A2)], from: 'geometry', tr: [text(CJK(4, 0x4e60))] } as Spec] : []),
   ]
   const pagesOf = (run: Run) => placedOf(run, 0).rects.map(r => r[0])
-  it('keeps its first page\'s lines, all claimed, whether its later page\'s are claimed or not', async () => {
+  it("drops a page's lines another unit's cover where another page keeps one, and keeps all where every line is another's", async () => {
     const free = await open(paper(specsOf(false), 2))
     await free.until(2)
     const claimed = await open(paper(specsOf(true), 2))
     await claimed.until(2)
-    // (the whole unit's "one at least" read its other page: its first page's line went where page 2's stayed, and stayed
-    // where page 2's went too)
-    expect(pagesOf(free)).toEqual([1, 2])
-    expect(pagesOf(claimed)).toEqual([1])
-    expect(placedOf(claimed, 0).rec?.dropped).toBe(1)
-    expect(placedOf(free, 0).rec?.dropped).toBe(0)
+    // (its first page's line another's, its second page's its own: laid on page 2 alone, as the whole unit's rule laid it,
+    // never two translations on one line)
+    expect(pagesOf(free)).toEqual([2])
+    expect(placedOf(free, 0).rec?.dropped).toBe(1)
+    // (every line another's, by the rectangles as placed: all kept, nothing saying which are its own)
+    expect(pagesOf(claimed)).toEqual([1, 2])
+    expect(placedOf(claimed, 0).rec?.dropped).toBe(0)
   })
   it('grows a line over its own words the anchors left out beside it, never over another unit\'s', async () => {
     // (the anchors took "beta" alone; "Alpha" before it is its own, and "Other" after it another unit's line)
@@ -197,9 +198,10 @@ describe("C1: a unit's fill leading is its fit's", () => {
   })
 })
 
-describe("C1: a page is painted in its painters' first pages' order", () => {
+describe("C1: a page is painted in the order its painters' first pages' passes run laid in order", () => {
   // page 3 is painted by a paragraph from page 1 (its line on page 2 none: a full page's float between), one from page 2,
-  // and its own: the first two laid at page 3, as their last page is drawn, in either order
+  // and its own: the first two laid at page 3, as their last page is drawn, in either order (the lay order a recorded run
+  // gives, `order`)
   const specs: Spec[] = [
     { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 100, [20, 'Kappa lambda'])], from: 'file', tr: [text(CJK(5))] },
     { id: 1, kind: 'para', src: 'Alpha beta gamma', lines: [line(1, 200, [20, 'Alpha beta']), line(3, 270, [20, 'gamma'])], from: 'file', tr: [text(CJK(6, 0x4e20))] },
@@ -207,16 +209,37 @@ describe("C1: a page is painted in its painters' first pages' order", () => {
     { id: 3, kind: 'para', src: 'Delta epsilon zeta', lines: [line(2, 200, [20, 'Delta epsilon']), line(3, 250, [20, 'zeta'])], from: 'file', tr: [text(CJK(6, 0x4e60))] },
     { id: 4, kind: 'para', src: 'Xi omicron', lines: [line(3, 100, [20, 'Xi omicron'])], from: 'file', tr: [text(CJK(5, 0x4e80))] },
   ]
-  it('the same whichever of the page passes ran first', async () => {
+  it('by the rank of the last unit laid on each first page', async () => {
     const one = await open(paper(specs, 3), { order: [0, 1, 2, 3, 4] })
     await one.until(3)
     const two = await open(paper(specs, 3), { order: [0, 2, 3, 1, 4] })
     await two.until(3)
-    // (page 3's group lays the paragraph from page 1 first in one, the one from page 2 first in the other)
+    // (page 3's group lays the paragraph from page 1 first in one, the one from page 2 first in the other: page 1's pass runs
+    // first in one, page 2's in the other, and each page is painted in that order)
     expect(one.order.indexOf(1)).toBeLessThan(one.order.indexOf(3))
     expect(two.order.indexOf(3)).toBeLessThan(two.order.indexOf(1))
     expect(paintedOn(one, 3)).toEqual([1, 3, 4])
-    expect(paintedOn(two, 3)).toEqual([1, 3, 4])
-    for (const p of [1, 2, 3]) expect(paintedOn(two, p)).toEqual(paintedOn(one, p))
+    expect(paintedOn(two, 3)).toEqual([3, 1, 4])
+  })
+  it("paints a page's part of a unit whose pages skip one as its pass runs, never waiting on a later page's", async () => {
+    // (w on pages 1, 3 and 5; u on pages 2 and 3, laid at page 3, before w, laid at page 5)
+    const five: Spec[] = [
+      { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 100, [20, 'Kappa lambda'])], from: 'file', tr: [text(CJK(5))] },
+      { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [line(1, 200, [20, 'Alpha beta']), line(3, 270, [20, 'gamma']), line(5, 270, [20, 'delta'])], from: 'file', tr: [text(CJK(8, 0x4e20))] },
+      { id: 2, kind: 'para', src: 'Mu nu', lines: [line(2, 100, [20, 'Mu nu'])], from: 'file', tr: [text(CJK(3, 0x4e40))] },
+      { id: 3, kind: 'para', src: 'Delta epsilon zeta', lines: [line(2, 200, [20, 'Delta epsilon']), line(3, 250, [20, 'zeta'])], from: 'file', tr: [text(CJK(6, 0x4e60))] },
+      { id: 4, kind: 'para', src: 'Xi omicron', lines: [line(3, 100, [20, 'Xi omicron'])], from: 'file', tr: [text(CJK(5, 0x4e80))] },
+      { id: 5, kind: 'para', src: 'Pi rho', lines: [line(4, 100, [20, 'Pi rho'])], from: 'file', tr: [text(CJK(3, 0x4ea0))] },
+      { id: 6, kind: 'para', src: 'Sigma tau', lines: [line(5, 100, [20, 'Sigma tau'])], from: 'file', tr: [text(CJK(4, 0x4ec0))] },
+    ]
+    const run = await open(paper(five, 5))
+    await run.until(3, () => run.drawnTo < 3)
+    expect(placedOf(run, 1).layout).toBeUndefined()
+    // (u's part of page 3 painted already, and page 2 let go: no unit on it is still to be painted)
+    expect(paintedOn(run, 3)).toEqual([3])
+    run.release(2)
+    expect(run.rows[1]!.released).toBe(true)
+    await run.until(5)
+    expect(paintedOn(run, 3)).toEqual([3, 1, 4])
   })
 })

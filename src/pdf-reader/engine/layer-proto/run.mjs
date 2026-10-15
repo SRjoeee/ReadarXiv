@@ -219,8 +219,10 @@ export function fillPage(units, P, held = null, onFilled = () => {}, { page = un
  * A unit's fill leading (fillPage's) and its top, read from its fit alone: `fillTop`, the loosest leading P.fillLead allows
  * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null); `fillLead`, the
  * loosest leading from its fitted one up to the top at which its fitted state still sets it whole (null where that state
- * does not set it again). Set on the unit as it is laid (afterLay), so that a page's pass reads a unit running on to it from
- * a page before by numbers fixed at its fit, never by whether that page's pass has run (the 1b design, §2.1 C1)
+ * does not set it again). Set on the unit as it is laid (afterLay), so that the fill leading a page's pass reads of a unit
+ * running on to it from a page before no longer depends on whether that page's pass has run (the 1b design, §2.1 C1). Not
+ * yet the rest of the pass's reads: its line count, read live (after its first page's fill), and the targets the page is
+ * held to (`held`, through every page passed before) are S3's, 1b-C's
  */
 function fillLeadsOf(p, P) {
   const r3 = x => Math.round(x * 1000) / 1000
@@ -898,8 +900,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
   // the units the hybrid draws that v0's geometry does not hold, as each is placed)
-  const rectsByPage = new Map()
-  const addRects = (id, rects) => { for (const r of rects) { if (!rectsByPage.has(r[0])) rectsByPage.set(r[0], []); rectsByPage.get(r[0]).push([id, r]) } }
+  // (and a copy of each as it was added, before any unit grew one: what decides whether all of a unit's lines are another's)
+  const rectsByPage = new Map(), placedByPage = new Map()
+  const addRects = (id, rects) => {
+    for (const r of rects) {
+      if (!rectsByPage.has(r[0])) { rectsByPage.set(r[0], []); placedByPage.set(r[0], []) }
+      rectsByPage.get(r[0]).push([id, r])
+      placedByPage.get(r[0]).push([id, r.slice()])
+    }
+  }
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
   /** the text area of page pg as unit p reads it: as the page's growth step left it once p's own lines there grew (growOn),
    *  the units ranked before it on the page grown and those after it not yet, whenever p is laid */
@@ -1075,23 +1084,31 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // are its pages' own: never a function of which units of other pages were laid before it
   /** the placed units with lines on each page (any page of their lines, those past the pages shown too), as placed */
   const onPage = new Map()
-  /** each page's units in their rank, sorted again where more are placed; each unit's growth on a page that has run */
-  const rankedOf = new Map(), grownOn = new Set()
+  /** each page's units in their rank, sorted again where more are placed, and how many of them (a prefix of the rank) have
+   *  grown there */
+  const rankedOf = new Map(), grownTo = new Map()
   /** each placed unit's place in the lay order (plan) */
   let rankOf = new Map()
   const rankedOn = g => {
     const list = onPage.get(g) ?? []
     let line = rankedOf.get(g)
-    if (!line || line.length !== list.length) rankedOf.set(g, (line = list.slice().sort((a, b) => (rankOf.get(a.id) ?? Infinity) - (rankOf.get(b.id) ?? Infinity))))
+    if (!line || line.length !== list.length) {
+      rankedOf.set(g, (line = list.slice().sort((a, b) => (rankOf.get(a.id) ?? Infinity) - (rankOf.get(b.id) ?? Infinity))))
+      // (a unit placed after the page's growth began ranks after every unit grown there: it is laid later, so those grown
+      // stay a prefix)
+      const at = line.findIndex(q => !q.grew.has(g))
+      grownTo.set(g, at < 0 ? line.length : at)
+    }
     return line
   }
   /** a unit placed: its pages' growth to come (its lines' pages, the units on each) */
   const toGrow = p => {
     p.linePages = [...new Set(p.rects.map(r => r[0]))]
-    Object.assign(p, { local: [], dropped: 0, grown: 0, area: new Map() })
+    Object.assign(p, { local: [], dropped: 0, grown: 0, area: new Map(), grew: new Set() })
     for (const g of p.linePages) (onPage.get(g) ?? onPage.set(g, []).get(g)).push(p)
   }
   const overlap = (a, b) => Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1])) * Math.max(0, Math.min(a[4], b[4]) - Math.max(a[2], b[2]))
+  const covered = (r, o) => overlap(r, o) > 0.5 * (r[3] - r[1]) * (r[4] - r[2])
   /** unit p's lines on page g dropped and grown, reading that page alone; the page's text area as they leave it kept for p */
   const growOn = (p, g) => {
     const others = []
@@ -1103,14 +1120,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // under the translation)
     const fileLines = !!p.tex?.lines
     // a line another unit's rectangle mostly covers is that unit's (the anchors carried a mark to the wrong column:
-    // 1512.03385 page 3, a paragraph's last lines laid over the next column's): left out, the unit keeping one at least on
-    // its first page, decided there alone (the whole unit's "one at least" read its other pages; no unit of the 30 outputs
-    // has a page all of whose lines are claimed, 2026-10-15). Its pages stay as they were counted: a page it no longer
-    // holds lines on is painted with nothing
+    // 1512.03385 page 3, a paragraph's last lines laid over the next column's): left out, on each page by the others'
+    // rectangles there as they stand, unless every line of the unit is another's, which keeps them all (then nothing says
+    // which are its own). That is decided once, by the rectangles as they were placed, before any unit grew one (the rows on
+    // the unit's own pages alone, so no page's growth waits on another's), and is the whole unit's as before wherever the
+    // others' growth makes none of its lines another's that was not: growth stops at another unit's characters (extendRects'
+    // `foreign`), and where it would still leave a unit no line, the unit is the original's (layout2). Its pages stay as they
+    // were counted: a page it no longer holds lines on is painted with nothing
     if (!fileLines) {
-      const own = p.rects.filter(r => r[0] === g)
-      const gone = new Set(own.filter(r => others[g].some(o => overlap(r, o) > 0.5 * (r[3] - r[1]) * (r[4] - r[2]))))
-      if (gone.size && !(g === p.linePages[0] && gone.size === own.length)) { p.rects = p.rects.filter(r => !gone.has(r)); p.dropped += gone.size }
+      p.keepAll ??= p.rects.every(r => (placedByPage.get(r[0]) ?? []).some(([id, o]) => id !== p.id && covered(r, o)))
+      const gone = p.keepAll ? null : new Set(p.rects.filter(r => r[0] === g && others[g].some(o => covered(r, o))))
+      if (gone?.size) { p.rects = p.rects.filter(r => !gone.has(r)); p.dropped += gone.size }
     }
     const rs = p.rects.filter(r => r[0] === g), shown = p.pages.includes(g)
     // iteration 3: the unit's own part of the page (its rectangles' box, 20 pt above and below, 60 pt to either side), one
@@ -1145,21 +1165,27 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!fileLines && p.rects[0]?.[0] === g) p.inkBefore = L2.snapFirstRect2(p.rects, p.local)
     p.area.set(g, textArea(g))
   }
-  /** p's growth on each of its pages, after that of every unit ranked before it there (a unit left the original's for a page
-   *  that failed never grows); one that throws for another unit than p is that unit's, thrown as it is laid */
+  /** p's growth on each of its pages, after that of every unit ranked before it there, the rank taken a unit at a time from
+   *  where the page's growth stands; one that throws for another unit than p is that unit's, thrown as it is laid. A unit
+   *  ranked before p that is left the original's already (`refused`: for a page that failed, before it was laid) never
+   *  grows. Laid in order that is exact: every unit ranked before p on the page has been laid or left before p is, so a
+   *  unit's own state says it and no other page is read. Laying out of order (1b-D), a unit ranked before p may not have
+   *  been reached yet: one whose other page fails grows here, where in order it would not, unless the pages of the units
+   *  ranked before a laid unit are drawn first (and failed ones refused) */
   const growTo = p => {
     for (const g of p.linePages) {
-      if (grownOn.has(`${p.id}|${g}`)) continue
-      for (const q of rankedOn(g)) {
-        const key = `${q.id}|${g}`
-        if (!grownOn.has(key)) {
-          grownOn.add(key)
-          if (q === p || !(q.refused || q.pages.some(x => failedPages.has(x)))) {
-            try { growOn(q, g) } catch (e) { if (q === p || isMemoryError(e)) throw e; q.stepError ??= e }
-          }
+      if (p.grew.has(g)) continue
+      const line = rankedOn(g)
+      let i = grownTo.get(g) ?? 0
+      while (i < line.length) {
+        const q = line[i++]
+        q.grew.add(g)
+        if (q === p || !q.refused) {
+          try { growOn(q, g) } catch (e) { if (q === p || isMemoryError(e)) { grownTo.set(g, i); throw e } q.stepError ??= e }
         }
         if (q === p) break
       }
+      grownTo.set(g, i)
     }
   }
   const layout2 = async p => {
@@ -1168,6 +1194,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // first line's edge snapped back to its first word's start: its pages' growth steps (growOn)
     growTo(p)
     if (p.stepError) throw p.stepError
+    // (none of its lines left: every one another unit's once theirs grew, though not as placed (growOn); the unit is the
+    // original's, where the whole unit's rule kept them all)
+    if (!p.rects.length) { p.refused = true; p.why = 'unfit'; unlead(p); return }
     const fileLines = !!p.tex?.lines, local = p.local, inkBefore = p.inkBefore
     // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading, each rendering proven
     // by the file (proofOf: a crop cut from its placeholder's own ink, page text in its segments), or the unit left the
@@ -1386,28 +1415,38 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const paintGroup = (g, q = null) => { for (const p of groupLaid.get(g).list) for (const pg of p.pages) if (q === null || pg === q) paint(p, pg) }
   // ---- each page painted by itself (1b-B, the 1b design §2.3 C1): a page's pass decides the layouts of the units that begin
   // on it, and paints nothing; a page is painted in one order, whatever order the passes ran in: its names (at its drawing),
-  // then, for each first page f of the units on it in ascending order, f's pass's units in their order (a unit moved by the
-  // leftover's packing last) and the table groups settled at f. Each first page's part is painted once its pass and every
-  // part before it have been, so laid in order (the passes run in page order where every unit's pages follow each other, as on
-  // all 30 outputs) a page is painted part by part exactly when and as before, and laid in any order, the same. A page's
-  // paint writes only that page's state (its accounted characters, kept ink, the removal's guard, its ops and its SVG)
-  /** each page's painters' first pages (the placed units on it), each pass's painters and its groups settled, the passes
-   *  run, and how many of each page's parts are painted */
-  const firstsOn = [], passOrder = [], settledAt = [], passed = new Uint8Array(N + 1), paintedParts = new Uint32Array(N + 1)
-  const partsOf = q => [...(firstsOn[q] ?? [])].sort((a, b) => a - b)
-  /** page q's parts painted, from the first not painted, as far as their passes have run */
+  // then, for each first page f of the units on it, f's pass's units in their order (a unit moved by the leftover's packing
+  // last) and the table groups settled at f. The first pages are taken in the order their passes run laid in order: by
+  // when the last unit on each is laid (its lay rank), and where one unit's laying completes two, in its pages' order
+  // (passKey). That is a function of the units' ranks alone, and it is the order a page was painted in before: a page's
+  // paint is order-dependent (what the restore counts as accounted, the removal's guard), so it keeps that one, also where
+  // a unit's pages skip one (a paragraph on pages 1 and 3 ranks its part of page 3 after that of one from page 2 laid
+  // before it). Each part is painted once its pass and every part before it have run: laid in order each paints as its
+  // pass runs, so a page is painted part by part exactly when and as before; laid in any order, the same. A page's paint
+  // writes only that page's state (its accounted characters, kept ink, the removal's guard, its ops and its SVG)
+  /** each page's painters' first pages and placed units (on its pages shown), each pass's painters and its groups settled,
+   *  the passes run, and each page's parts painted */
+  const firstsOn = [], unitsOn = [], passOrder = [], settledAt = [], passed = new Uint8Array(N + 1), paintedOn = []
+  /** when page f's pass runs, laid in order: the lay rank of the last unit on it, then f's place in that unit's pages */
+  const passKey = f => {
+    let last = null, at = -1
+    for (const u of unitsOn[f] ?? []) { const r = rankOf.get(u.id) ?? Infinity; if (r > at) { at = r; last = u } }
+    return [at, last ? last.pages.indexOf(f) : 0]
+  }
+  const partsOf = q => [...(firstsOn[q] ?? [])].map(f => [f, passKey(f)]).sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1] || a[0] - b[0]).map(([f]) => f)
+  /** page q's parts painted, in their order, as far as their passes have run */
   const paintOn = q => {
-    const fs = partsOf(q)
-    let i = paintedParts[q]
-    for (; i < fs.length && passed[fs[i]]; i++) {
-      const f = fs[i]
+    const done = (paintedOn[q] ??= new Set())
+    for (const f of partsOf(q)) {
+      if (done.has(f)) continue
+      if (!passed[f]) break
+      done.add(f)
       for (const u of passOrder[f]) if (u.pages.includes(q)) paint(u, q)
       for (const g of settledAt[f]) paintGroup(g, q)
     }
-    paintedParts[q] = i
   }
   /** whether unit u's part of page q (its first page's) is painted */
-  const partPainted = (u, q) => partsOf(q).indexOf(u.pages[0]) < paintedParts[q]
+  const partPainted = (u, q) => !!paintedOn[q]?.has(u.pages[0])
   /** page pg's pass: the even pass, the page fill and the leftover packed over the units that begin on it, its groups
    *  settled, then each page its units are on painted as far as it can be */
   const passPage = pg => {
@@ -1455,8 +1494,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
     if (PASSES) {
-      // (its fill leading is its fit's, fixed now: a page's pass reads the units running on to it by it. With the even pass,
-      // which lays the units of a page anew before the fill, the fill leading is the pass's, as it was)
+      // (its fill leading is its fit's, fixed now (fillLeadsOf). With the even pass, which lays the units of a page anew before
+      // the fill, the fill leading is the pass's, as it was)
       if (P.adaptiveFill && !P.even && p.fillable && !p.refused) fillLeadsOf(p, P)
       // (a page's pass sets the units that begin on it, which are then painted on each of their pages, each page in its
       // own order (paintOn): a unit is never painted from two layouts; a table's cells with their group, once it is laid
@@ -1638,7 +1677,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const pg of p.pages) expected[pg]++
     if (!c.rects) addRects(p.id, p.rects)
     toGrow(p)
-    for (const pg of p.pages) (firstsOn[pg] ??= new Set()).add(p.pages[0])
+    for (const pg of p.pages) { (firstsOn[pg] ??= new Set()).add(p.pages[0]); (unitsOn[pg] ??= []).push(p) }
   }
   // each page's units, in the order of the page whose drawing lays them (a recorded order, where given, within it), and
   // the page after whose units a page is done: the last that lays a unit with lines on it; over the units placed so far
