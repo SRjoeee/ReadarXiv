@@ -314,16 +314,30 @@ const UNITS_DEF = { cap: UNITS_CAP, values: UNITS_VALUES, depth: UNITS_DEPTH }
  * shape, a nested piece naming no unit before it that stands, in this chunk or an earlier one) is null at its id and listed in
  * `dropped`, and the rest stand. Throws BundleRefusal, a TypeError for bytes that are not a Uint8Array
  */
-export async function readUnitsChunk(bytes, { ref, before = null, caps }) {
+export async function readUnitsChunk(bytes, { ref, before = null, dropped: droppedBefore, bodies = true, caps }) {
   const K = 'units'
   if (before !== null && !(isObject(before) && before.kind === 'units' && before.stands instanceof Uint8Array && Number.isInteger(before.to))) throw new TypeError('units: `before` is not the chunk read before')
+  // (amendment M19: a chunk read alone, `before` null, is told the ids below its `from` that did not stand; every other earlier id stands)
+  if (droppedBefore !== undefined) {
+    if (before !== null) throw new TypeError('units: `dropped` is for a chunk read with no `before`')
+    if (!Array.isArray(droppedBefore)) throw new TypeError('units: `dropped` is not an array of ids')
+    const from = ref.from ?? 0
+    for (let i = 0, last = -1; i < droppedBefore.length; i++) {
+      const d = droppedBefore[i]
+      if (!Number.isSafeInteger(d) || d <= last || d >= from) throw new TypeError('units: `dropped` is not ids rising, each below the chunk\'s `from`')
+      last = d
+    }
+  }
+  if (typeof bodies !== 'boolean') throw new TypeError('units: `bodies` is not a boolean')
   const { value: v, sha256, values } = await opened(K, bytes, ref, UNITS_DEF, caps)
   envelope(K, v, UNITS_KEYS)
   const paper = paperOf(K, v.paper, 'paper', false)
   if (!isVersionToken(v.pipeline)) throw refuse(K, 'pipeline', `not a version, 1 to 32 letters, digits or points (${kindOf(v.pipeline)})`)
   const ids = v.ids
   if (!Array.isArray(ids) || ids.length !== 2) throw refuse(K, 'ids', `not [from, to] (${kindOf(ids)})`)
-  const want = before === null ? 0 : before.to + 1
+  if (Array.isArray(ids) && ((ref.from !== undefined && ref.from !== ids[0]) || (ref.to !== undefined && ref.to !== ids[1]))) throw refuse(K, 'ref', `the ref's ids ${ref.from ?? '?'} to ${ref.to ?? '?'} are not the chunk's ${ids[0]} to ${ids[1]}`)
+  const want = before === null ? (ref.from ?? 0) : before.to + 1
+  if (before === null && droppedBefore !== undefined && ref.from === undefined && droppedBefore.length) throw new TypeError('units: `dropped` needs the ref\'s `from`')
   if (ids[0] !== want) throw refuse(K, 'ids[0]', `not ${want}${before === null ? ', the first unit' : ', the one after the last chunk\'s'}`)
   if (!isInteger(ids[1], ids[0], ID_MAX)) throw refuse(K, 'ids[1]', 'not an integer from `from` up')
   if (before !== null && (before.paper.id !== paper.id || before.paper.version !== paper.version)) throw refuse(K, 'paper', 'not the paper of the chunk before')
@@ -334,11 +348,21 @@ export async function readUnitsChunk(bytes, { ref, before = null, caps }) {
   if (units.length !== to - from + 1) throw refuse(K, 'units', `not the ${to - from + 1} units of ids ${from} to ${to}`)
   const stands = new Uint8Array(to + 1), dropped = []
   if (before !== null) stands.set(before.stands)
+  else {
+    stands.fill(1, 0, from)
+    if (droppedBefore !== undefined) for (const d of droppedBefore) stands[d] = 0
+  }
   for (let i = 0; i < units.length; i++) {
     if (unitStands(units[i], from + i, stands)) stands[from + i] = 1
     else { units[i] = null; dropped.push(from + i) }
   }
-  return { kind: 'units', sha256, bytes: bytes.length, values, paper: { id: paper.id, version: paper.version }, pipeline: v.pipeline, from, to, units, dropped, stands }
+  const out = { kind: 'units', sha256, bytes: bytes.length, values, paper: { id: paper.id, version: paper.version }, pipeline: v.pipeline, from, to, units, dropped, stands }
+  if (!bodies) {
+    // (bodies-free, amendment M21: what the index keeps of each unit, worked out now, and the bodies let go with the parsed text)
+    out.part = partOf(units, from, stands)
+    out.units = units.map(u => (u === null ? null : true))
+  }
+  return out
 }
 
 /** a unit as written: its objects (the table cell, the display edges) in the schema's order, whatever order they came in */
@@ -364,11 +388,13 @@ export const DEPTH_NONE = -128, KIND_NONE = 255
  * source of the heading units. The units are read as rows.mjs reads them, so that every predicate is the engine's own. A unit
  * that does not stand has KIND_NONE, no flags, DEPTH_NONE and no length
  */
-function recordsOf(units) {
+function recordsOf(units, from = 0, standsBefore = null) {
   const n = units.length
   const kind = new Uint8Array(n).fill(KIND_NONE), flags = new Uint8Array(n), depth = new Int8Array(n).fill(DEPTH_NONE), plainLength = new Uint32Array(n)
   const cells = new Map(), headings = new Map()
-  const source = sourceUnitsOf({ units })
+  // (a chunk alone: the units before it are stand-ins that stand where the chunks before it say, which is all a nested piece asks of one)
+  const list = from === 0 ? units : [...Array.from({ length: from }, (_, i) => (standsBefore[i] === 1 ? STANDS : null)), ...units]
+  const source = sourceUnitsOf({ units: list })
   for (let i = 0; i < n; i++) {
     const b = units[i]
     if (b === null) continue
@@ -376,12 +402,12 @@ function recordsOf(units) {
     if (k >= 0) kind[i] = k
     flags[i] = b[1] | (b[0] === 'author' ? RECORD_FLAG.AUTHOR : 0)
     if (b[2] !== null) depth[i] = b[2]
-    const u = source[i]
+    const u = source[from + i]
     if (!u) continue
     const plain = plainSource(u)
     plainLength[i] = plain.length
-    if (u.cell) cells.set(i, u.cell)
-    if (b[0] === 'heading') headings.set(i, plain)
+    if (u.cell) cells.set(from + i, u.cell)
+    if (b[0] === 'heading') headings.set(from + i, plain)
   }
   return { kind, flags, depth, plainLength, cells, headings }
 }
@@ -411,6 +437,18 @@ function indexGroups(index) {
   let g = groupsOfIndex.get(index)
   if (g === undefined) groupsOfIndex.set(index, g = groupsOfCells(index.records.cells, index.units.length))
   return g
+}
+
+const STANDS = Object.freeze(['para', 0, null, null, null, []])
+/** what a chunk read without bodies keeps (amendment M21): each unit's kind, its records, and the earlier units its nested pieces name */
+function partOf(units, from, stands) {
+  const kinds = units.map(u => (u === null ? null : u[0]))
+  const external = new Set()
+  for (const u of units) {
+    if (u === null) continue
+    for (const p of u[5]) if (p[0] === 4 && p[2] < from) external.add(p[2])
+  }
+  return { kinds, records: recordsOf(units, from, stands), external: [...external].sort((a, b) => a - b) }
 }
 
 /** the units' total past its bound (amendment M2): `units-too-large`, the bound and the size as data */
@@ -470,8 +508,9 @@ export async function writeUnitChunks({ paper, units }) {
  * k's `from` that its nested pieces name (rising), so that a reader holding one chunk at a time knows which earlier units it
  * needs. Throws BundleRefusal
  */
-export function unitsOfChunks(chunks) {
+export function unitsOfChunks(chunks, { bodies = true } = {}) {
   const K = 'index'
+  if (typeof bodies !== 'boolean') throw new TypeError('units: `bodies` is not a boolean')
   if (chunks.length > CHUNKS_MAX) throw refuse(K, 'units', `more than ${CHUNKS_MAX} chunks (${chunks.length})`)
   const units = [], kinds = [], dropped = []
   let before = null, total = 0, totalBytes = 0
@@ -485,7 +524,9 @@ export function unitsOfChunks(chunks) {
     if (totalBytes > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, totalBytes)
     total += c.values
     if (total > UNITS_TOTAL_VALUES) throw tooLarge('values', UNITS_TOTAL_VALUES, total)
-    for (let q = 0; q < c.units.length; q++) { units.push(c.units[q]); kinds.push(c.units[q] === null ? null : c.units[q][0]) }
+    if (bodies && c.part !== undefined) throw new TypeError('units: the chunks were read without bodies')
+    if (c.part !== undefined) for (let q = 0; q < c.units.length; q++) { units.push(c.units[q]); kinds.push(c.part.kinds[q]) }
+    else for (let q = 0; q < c.units.length; q++) { units.push(c.units[q]); kinds.push(c.units[q] === null ? null : c.units[q][0]) }
     for (let q = 0; q < c.dropped.length; q++) dropped.push(c.dropped[q])
     before = c
   }
@@ -500,13 +541,37 @@ export function unitsOfChunks(chunks) {
   const externalRefs = k => {
     if (!Number.isInteger(k) || k < 0 || k >= chunks.length) throw new RangeError('not a chunk')
     const out = new Set(), from = chunks[k].from
+    if (chunks[k].part !== undefined) return [...chunks[k].part.external]
     for (const u of chunks[k].units) {
       if (u === null) continue
       for (const p of u[5]) if (p[0] === 4 && p[2] < from) out.add(p[2])
     }
     return [...out].sort((a, b) => a - b)
   }
+  if (!bodies) {
+    // (bodies-free: every unit a stands flag, the records the chunks' own joined; a chunk that has its bodies is worked out the same way)
+    const parts = chunks.map(c => c.part ?? partOf(c.units, c.from, c.stands))
+    const n = units.length
+    const records = { kind: new Uint8Array(n), flags: new Uint8Array(n), depth: new Int8Array(n), plainLength: new Uint32Array(n), cells: new Map(), headings: new Map() }
+    chunks.forEach((c, i) => {
+      const r = parts[i].records
+      records.kind.set(r.kind, c.from); records.flags.set(r.flags, c.from); records.depth.set(r.depth, c.from); records.plainLength.set(r.plainLength, c.from)
+      for (const [id, cell] of r.cells) records.cells.set(id, cell)
+      for (const [id, h] of r.headings) records.headings.set(id, h)
+    })
+    return { units: units.map(u => (u === null ? null : true)), kinds, dropped, index, chunkOf, externalRefs, records }
+  }
   return { units, kinds, dropped, index, chunkOf, externalRefs, records: recordsOf(units) }
+}
+
+/**
+ * The ids that did not stand in chunks read in order, rising: the `dropped` a service forwards with its units announcement, so
+ * that a consumer reads chunk k alone (readUnitsChunk's `dropped`, the ids below its `from`). Amendment M19
+ */
+export function droppedOf(chunks) {
+  const out = []
+  for (const c of chunks) for (const d of c.dropped) out.push(d)
+  return out
 }
 
 // ---------------------------------------------------------------- the head

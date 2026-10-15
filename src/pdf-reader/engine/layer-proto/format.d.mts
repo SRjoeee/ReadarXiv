@@ -72,6 +72,8 @@ export interface ReadUnitsChunk {
   dropped: number[]
   /** a flag for each of ids 0 … to, carried to the next chunk */
   stands: Uint8Array
+  /** only a chunk read with `bodies: false` (amendment M21): `units` then holds `true` (stands) or null, and this what the index keeps */
+  part?: { kinds: (string | null)[]; records: UnitRecords; external: number[] }
 }
 export interface ReadHead {
   kind: 'head'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }
@@ -133,7 +135,15 @@ export interface ReadCatalog {
 // ---------------------------------------------------------------- readers
 /** a units chunk as received (`before`: the chunk read before it, null for the first); a unit that does not stand is null at
  *  its id and in `dropped`; throws BundleRefusal, a TypeError for bytes that are no Uint8Array */
-export declare function readUnitsChunk(bytes: Uint8Array, o: { ref: Ref; before?: ReadUnitsChunk | null; caps?: Caps }): Promise<ReadUnitsChunk>
+/**
+ * `dropped` (amendment M19): for a chunk read alone (`before` null, `ref.from` > 0), the ids below `from` that did not stand,
+ * rising (default none: every other earlier id stands); a nested piece naming one drops its unit as in the chain. `bodies:
+ * false` (M21): `units` holds `true` or null for each id, and the kinds, records and external refs are kept in `part`; every
+ * check runs as with bodies. A TypeError for `dropped` with `before`, or ids not below `from`, rising
+ */
+export declare function readUnitsChunk(bytes: Uint8Array, o: { ref: Ref; before?: ReadUnitsChunk | null; dropped?: readonly number[]; bodies?: boolean; caps?: Caps }): Promise<ReadUnitsChunk>
+/** the ids that did not stand in chunks read in order, rising: what a service forwards for reading a chunk alone */
+export declare function droppedOf(chunks: readonly ReadUnitsChunk[]): number[]
 export declare function readHead(bytes: Uint8Array, o: { ref: Ref; caps?: Caps }): Promise<ReadHead>
 /** the units' records (amendment M15), derived once, one entry a unit, its id the index */
 export interface UnitRecords {
@@ -157,7 +167,7 @@ export declare const DEPTH_NONE: -128
 export declare const KIND_NONE: 255
 /** the units of chunks read in order, head-less: every unit (null where dropped), its kind and the ids dropped */
 export interface ReadUnits {
-  units: (BundleUnit | null)[]; kinds: (string | null)[]; dropped: number[]
+  units: (BundleUnit | true | null)[]; kinds: (string | null)[]; dropped: number[]
   /** the units' records (amendment M15) */
   records: UnitRecords
   /** each chunk's ids */
@@ -168,7 +178,9 @@ export interface ReadUnits {
   externalRefs(k: number): number[]
 }
 /** chunks read as one chain: each after the one before, of one paper and pipeline, 1 to CHUNKS_MAX of them; throws BundleRefusal */
-export declare function unitsOfChunks(chunks: readonly ReadUnitsChunk[]): ReadUnits
+export declare function unitsOfChunks(chunks: readonly ReadUnitsChunk[], o?: { bodies?: true }): ReadUnits & { units: (BundleUnit | null)[] }
+/** bodies-free (M21): `units` holds `true` or null; the chunks may have been read with `bodies: false` (then `bodies: true` throws a TypeError) */
+export declare function unitsOfChunks(chunks: readonly ReadUnitsChunk[], o: { bodies: false }): ReadUnits & { units: (true | null)[] }
 /** sync: the head and its chunks bound (each chunk's range, digest and bytes the head's ref, in order, read as one `before`
  *  chain; paper and pipeline the head's); with `catalog`, its head and units equal these */
 export declare function indexOf(head: ReadHead, chunks: readonly ReadUnitsChunk[], o?: { catalog?: ReadCatalog }): LayerIndex

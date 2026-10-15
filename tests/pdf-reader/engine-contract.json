@@ -311,6 +311,7 @@
     "batchesOf",
     "bundleKey",
     "catalogKey",
+    "droppedOf",
     "firstFaceOf",
     "indexLayout",
     "indexOf",
