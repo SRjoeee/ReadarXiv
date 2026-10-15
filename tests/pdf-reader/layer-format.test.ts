@@ -1000,3 +1000,202 @@ describe('a part against the chain', () => {
     expect(await partWith(1, () => {})).toMatchObject({ pages: [2, 3] })
   })
 })
+
+// ---------------------------------------------------------------- 12. left parts
+describe('a left part', () => {
+  const streamOf = (id: number) => STREAM.get(id)
+  // biome-ignore lint/suspicious/noExplicitAny: a test breaks the left part's types on purpose
+  type Any = any
+  const readWith = (page: number, edit: (l: Any) => void, o: { ref?: object; streamOf?: (id: number) => number | undefined } = {}) => {
+    const l = parsed(M.lefts[page]!)
+    edit(l)
+    const f = forged('left', l, { page })
+    return readLeftPart(f.bytes, { ref: { ...f.ref, page, ...o.ref } as never, streamOf: o.streamOf ?? streamOf })
+  }
+  const refused = async (page: number, edit: (l: Any) => void, path: string | RegExp, o?: Parameters<typeof readWith>[2]) => {
+    const e = await refusal(readWith(page, edit, o))
+    expect(e, 'refused').not.toBeNull()
+    expect(e!.kind).toBe('left')
+    expect(e!.path).toMatch(typeof path === 'string' ? new RegExp(`^${path.replace(/[[\].]/g, '\\$&')}$`) : path)
+  }
+
+  it('refuses the tokens\' wire out of bounds: n past TOKENS_PAGE, fields of another length, no whole numbers, a decode past ±TOKEN_LIMIT', async () => {
+    await refused(1, l => { l.tokens.perPage = [TOKENS_PAGE + 1] }, 'tokens.perPage[0]')
+    await refused(1, l => { l.tokens.perPage = [1, 2] }, 'tokens.perPage')
+    await refused(1, l => { l.tokens.perPage = 20 }, 'tokens.perPage')
+    await refused(1, l => { l.tokens.l.pop() }, 'tokens.l')
+    await refused(1, l => { delete l.tokens.top }, 'tokens.top')
+    await refused(1, l => { l.tokens.extra = [] }, 'tokens.extra')
+    await refused(1, l => { l.tokens.r[3] = 1.5 }, 'tokens.r[3]')
+    await refused(1, l => { l.tokens.y[3] = '5' }, 'tokens.y[3]')
+    await refused(1, l => { l.tokens.h[0] = 100_000 * 1000 + 1 }, 'tokens.h[0]')
+    await refused(1, l => { l.tokens.bottom[0] = -(100_000 * 1000 + 1) }, 'tokens.bottom[0]')
+    await refused(1, l => { l.tokens.l.fill(0); l.tokens.l[0] = 100_000 * 1000; l.tokens.l[1] = 1 }, 'tokens.l[1]')
+    // (the limit itself, and a sum that comes back)
+    expect((await readWith(1, l => { l.tokens.l.fill(0); l.tokens.l[0] = 100_000 * 1000 })).table.l[0]).toBe(100_000)
+    expect((await readWith(1, l => { l.tokens.l.fill(0); l.tokens.l[0] = 100_000 * 1000; l.tokens.l[1] = -200_000_000 })).table.l[1]).toBe(-100_000)
+  })
+
+  it('takes n = TOKENS_PAGE tokens and none (an empty page)', async () => {
+    const n = TOKENS_PAGE
+    const w = await writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(n), spans: [], pairs: [] })
+    expect(w.emptied).toBe(false)
+    expect((await readLeftPart(w.bytes, { ref: w.ref as never, streamOf })).table.n).toBe(n)
+    const none = await writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(0), spans: [], pairs: [] })
+    expect((await readLeftPart(none.bytes, { ref: none.ref as never, streamOf })).table.l).toHaveLength(0)
+  })
+
+  it('refuses spans that are not rising, not inside the page, naming too many tokens, or not a unit of the parts told', async () => {
+    await refused(2, l => { l.spans = [[3, [5, 2]], [2, [0, 2]]] }, 'spans[1][0]')
+    await refused(2, l => { l.spans = [[2, [0, 2]], [2, [5, 2]]] }, 'spans[1][0]')
+    await refused(2, l => { l.spans[0][1] = [] }, 'spans[0][1]')
+    await refused(2, l => { l.spans[0][1] = [0] }, 'spans[0][1]')
+    await refused(2, l => { l.spans[0][1] = [0, 0] }, 'spans[0][1][1]')
+    await refused(2, l => { l.spans[0][1] = [19, 2] }, 'spans[0][1][1]')
+    await refused(2, l => { l.spans[0][1] = [20, 1] }, 'spans[0][1][0]')
+    await refused(2, l => { l.spans[0][1] = [4, 2, 5, 1] }, 'spans[0][1][2]')
+    await refused(2, l => { l.spans[0][1] = [4, 2, 3, 1] }, 'spans[0][1][2]')
+    // (adjacent ranges are one run split in two, and read)
+    expect((await readWith(2, l => { l.spans[0][1] = [0, 2, 2, 2] })).spans[0]![1]).toEqual([0, 2, 2, 2])
+    // named: SPANNED_PER_TOKEN · n = 40 tokens at most
+    await refused(2, l => { l.spans = [[2, [0, 20]], [3, [5, 15]], [4, [0, 6]]]; }, 'spans', { streamOf: id => (id === 3 ? 25 : id === 4 ? 40 : 20) })
+    await refused(2, () => {}, 'spans[0][0]', { streamOf: () => undefined })
+  })
+
+  it('refuses a unit whose stream lies on the page and whose first range does not begin there', async () => {
+    // unit 3 has stream 25, page 2 begins at token 20: its first range begins at 5
+    await refused(2, l => { l.spans[1][1] = [6, 2] }, 'spans[1][1][0]')
+    expect((await readWith(2, l => { l.spans[1][1] = [5, 2] })).spans[1]![1]).toEqual([5, 2])
+    // (a unit whose stream is on another page begins its range anywhere on this one: unit 2, stream 12, on page 2)
+    expect((await readWith(2, l => { l.spans[0][1] = [7, 1] })).spans[0]![1]).toEqual([7, 1])
+    // the unit's stream is the parts' (streamOf), at the page's edges
+    expect((await readWith(2, () => {}, { streamOf: id => (id === 3 ? 20 + TOKENS_ON_PAGE : STREAM.get(id)) })).spans).toHaveLength(2)
+    await refused(2, () => {}, 'spans[1][1][0]', { streamOf: id => (id === 3 ? 39 : STREAM.get(id)) })
+  })
+
+  it('refuses pairs whose ids are not spans\' and rising, runs not rising by word, outside the page, or of no tokens', async () => {
+    await refused(2, l => { l.pairs = [[2, [0, 0, 1]]]; l.pairs.push([2, [0, 0, 1]]) }, 'pairs[1][0]')
+    await refused(2, l => { l.pairs = [[9, [0, 0, 1]]] }, 'pairs[0][0]')
+    await refused(2, l => { l.pairs = [[3, [0, 0, 1]], [2, [0, 0, 1]]] }, 'pairs[1][0]')
+    await refused(2, l => { l.pairs[0][1] = [] }, 'pairs[0][1]')
+    await refused(2, l => { l.pairs[0][1] = [0, 5] }, 'pairs[0][1]')
+    await refused(2, l => { l.pairs[0][1] = [0, 5, 0] }, 'pairs[0][1][2]')
+    await refused(2, l => { l.pairs[0][1] = [0, 19, 2] }, 'pairs[0][1][1]')
+    await refused(2, l => { l.pairs[0][1] = [0, 20, 1] }, 'pairs[0][1][1]')
+    await refused(2, l => { l.pairs[0][1] = [3, 5, 2, 4, 7, 1] }, 'pairs[0][1][3]')
+    await refused(2, l => { l.pairs[0][1] = [3, 5, 2, 3, 7, 1] }, 'pairs[0][1][3]')
+    await refused(2, l => { l.pairs[0][1] = [-1, 5, 2] }, 'pairs[0][1][0]')
+    expect((await readWith(2, l => { l.pairs[0][1] = [3, 5, 2, 5, 9, 1] })).pairs[0]![1]).toEqual([3, 5, 2, 5, 9, 1])
+  })
+
+  it('is the page its part names: the ref\'s page, and the page a page is', async () => {
+    await refused(2, () => {}, 'page', { ref: { page: 3 } })
+    await refused(2, l => { l.page = 0 }, 'page')
+    await refused(2, l => { l.page = 10_001 }, 'page')
+    await refused(2, l => { l.first = -1 }, 'first')
+    await refused(2, l => { l.first = 1.5 }, 'first')
+    await refused(2, l => { l.spans = {} }, 'spans')
+    await refused(2, l => { l.pairs = 'x' }, 'pairs')
+  })
+
+  it('a page that would pass its caps ships an empty left part, never a throw (amendment M8)', async () => {
+    expect([LEFT_CAP, LEFT_VALUES, TOKENS_PAGE]).toEqual([1024 * 1024, 200_000, 15_000])
+    // n past TOKENS_PAGE
+    const big = await writeLeftPart({ paper: PAPER, page: 3, first: 40, tokens: tokenWire(TOKENS_PAGE + 1), spans: [[4, [1, 1]]], pairs: [] })
+    expect(big.emptied).toBe(true)
+    const e = await readLeftPart(big.bytes, { ref: big.ref as never, streamOf })
+    expect(e).toMatchObject({ page: 3, first: 40, spans: [], pairs: [] })
+    expect(e.table.n).toBe(0)
+    // values past LEFT_VALUES: 15,000 tokens of six fields are 90,000; a page of many small spans names more
+    const spans = Array.from({ length: 30_000 }, (_, i) => [i, [0, 1]] as [number, number[]])
+    const many = await writeLeftPart({ paper: PAPER, page: 3, first: 40, tokens: tokenWire(TOKENS_PAGE), spans, pairs: [] })
+    expect(many.emptied).toBe(true)
+    expect(many.bytes.length).toBeLessThan(500)
+    // a page within the caps is not emptied
+    const small = await writeLeftPart({ paper: PAPER, page: 3, first: 40, tokens: tokenWire(10), spans: [[4, [1, 1]]], pairs: [] })
+    expect(small.emptied).toBe(false)
+    // the empty part is the same bytes however it was reached, and is a left part of its page
+    const again = await writeLeftPart({ paper: PAPER, page: 3, first: 40, tokens: tokenWire(TOKENS_PAGE + 5), spans: [], pairs: [] })
+    expect(again.sha256).toBe(big.sha256)
+    // a shape wrong for another reason still throws
+    expect(await refusal(writeLeftPart({ paper: PAPER, page: 0, first: 0, tokens: tokenWire(2), spans: [], pairs: [] }))).toMatchObject({ kind: 'left', path: 'page' })
+    expect(await refusal(writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(5), spans: [[0, [0, 9]]], pairs: [] }))).toMatchObject({ kind: 'left' })
+  })
+})
+
+// ---------------------------------------------------------------- 13. the catalog
+describe('the catalog', () => {
+  // biome-ignore lint/suspicious/noExplicitAny: a test breaks the catalog's types on purpose
+  type Any = any
+  const units = () => M.chunks.map(c => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length }))
+  const parts = () => M.parts.map(p => ({ from: p.from, to: p.to, sha256: p.sha256, bytes: p.bytes.length }))
+  const catalog = async () => writeCatalog({ head: M.readHead, units: units(), parts: parts(), end: { through: 4 } })
+  const readWith = async (edit: (c: Any) => void, o: { key?: string; paper?: { id: string; version: number } } = {}) => {
+    const c = parsed(await catalog())
+    edit(c)
+    return readCatalog(utf8(JSON.stringify(c)), o)
+  }
+  const refused = async (edit: (c: Any) => void, path: string, o?: { key?: string; paper?: { id: string; version: number } }) => {
+    const e = await refusal(readWith(edit, o))
+    expect(e, 'refused').not.toBeNull()
+    expect(e!.kind).toBe('catalog')
+    expect(e!.path).toBe(path)
+  }
+
+  it('refuses parts that are not contiguous from page 1, past the paper, or a ref of another kind', async () => {
+    await refused(c => { c.parts[1].from = 3 }, 'parts[1].from')
+    await refused(c => { c.parts[0].from = 2 }, 'parts[0].from')
+    await refused(c => { c.parts[2].to = 5 }, 'parts[2].to')
+    await refused(c => { c.parts[1].kind = 'units' }, 'parts[1].kind')
+    await refused(c => { c.parts[0].bytes = PART_CAP + 1 }, 'parts[0].bytes')
+    await refused(c => { c.parts = {} }, 'parts')
+    await refused(c => { c.head.kind = 'part' }, 'head.kind')
+    await refused(c => { c.left = [] }, 'left')
+  })
+
+  it('refuses `through` that is not the last part\'s `to`, a refusal with through = N, a complete end with a part missing', async () => {
+    await refused(c => { c.end.through = 3 }, 'end.through')
+    await refused(c => { c.end = { through: 4, refused: 'memory' } }, 'end.refused')
+    await refused(c => { c.parts.pop() }, 'end.through')
+    await refused(c => { c.parts.pop(); c.end = { through: 3, refused: 'x' } }, 'end.refused')
+    await refused(c => { c.end.extra = 1 }, 'end.extra')
+    await refused(c => { delete c.end.through }, 'end.through')
+    await refused(c => { c.end = [] }, 'end')
+    // (a part list of a refused paper: 0 for none)
+    const none = await readCatalog(utf8(JSON.stringify({ ...parsed(await catalog()), parts: [], end: { through: 0, refused: 'bound' } })))
+    expect(none.end).toEqual({ through: 0, refused: 'bound' })
+  })
+
+  it('refuses versions that are not a reader\'s: the PDF.js and the tokens', async () => {
+    await refused(c => { c.versions.pdfjs = '5.0.0' }, 'versions.pdfjs')
+    await refused(c => { c.versions.layout = '' }, 'versions.layout')
+    await refused(c => { c.paper.pages = 0 }, 'paper.pages')
+    await refused(c => { c.units = [] }, 'units')
+  })
+
+  it('is the key\'s: of its paper and of the VTAG its versions make; and the paper asked for', async () => {
+    const w = await catalog()
+    const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
+    expect(w.key).toBe(`layer/${PAPER.id}v${PAPER.version}/${VTAG4}.json`)
+    expect(c.versions).toEqual(M.readHead.versions)
+    const other = (vtag: string) => catalogKey(PAPER.id, PAPER.version, vtag)
+    await refused(() => {}, 'versions', { key: other(VTAG4.replace(/-r\d+$/, '-r99')) })
+    await refused(() => {}, 'versions', { key: other(VTAG4.replace('-p', '-p9')) })
+    await refused(() => {}, 'paper', { key: catalogKey('2608.04323', 1, VTAG4) })
+    await refused(() => {}, 'paper', { key: catalogKey(PAPER.id, 2, VTAG4) })
+    await refused(() => {}, 'key', { key: keyOf(PAPER.id, 1, CTAG4, '0'.repeat(64)) })
+    await refused(() => {}, 'key', { key: 'layer/x' })
+    await refused(() => {}, 'paper', { paper: { id: PAPER.id, version: 2 } })
+  })
+
+  it('is written only for what it would read: the end, the chunks and the parts the head and the parts make', async () => {
+    const w = (o: Partial<Parameters<typeof writeCatalog>[0]>) => writeCatalog({ head: M.readHead, units: units(), parts: parts(), end: { through: 4 }, ...o })
+    expect(await refusal(w({ end: { through: 3 } }))).toMatchObject({ kind: 'catalog', path: 'end.through' })
+    expect(await refusal(w({ end: { through: 4, refused: 'bound' } }))).toMatchObject({ path: 'end.refused' })
+    expect(await refusal(w({ end: { through: 4 }, parts: parts().slice(0, 2) }))).toMatchObject({ path: 'end.through' })
+    expect(await refusal(w({ parts: [{ ...parts()[0]!, from: 2, to: 2 }, ...parts().slice(1)], end: { through: 4 } }))).toMatchObject({ path: 'parts[0].from' })
+    expect(await refusal(w({ units: [{ ...units()[0]!, bytes: 5 }] }))).toMatchObject({ path: 'units[0]' })
+    expect(await refusal(w({ units: [] }))).toMatchObject({ path: 'units' })
+    expect(await refusal(w({ end: { through: 3, refused: 'nope' as never }, parts: parts().slice(0, 2) }))).toMatchObject({ path: 'end.refused' })
+  })
+})

@@ -43,7 +43,7 @@ export const TOKENS_ON_PAGE = 20
 /** one page's tokens as the wire: n integers a field, delta-coded, in thousandths */
 export function tokenWire(n: number, seed = 0): TokenWire {
   const f = (a: number, b: number) => Array.from({ length: n }, (_, i) => (i === 0 ? a + seed : b))
-  return { perPage: [n], l: f(72_000, 10_000), r: f(100_000, 10_000), y: f(700_000, -12_000), h: f(10_000, 0), top: f(708_000, -12_000), bottom: f(698_000, -12_000) }
+  return { perPage: [n], l: f(72_000, 100), r: f(100_000, 100), y: f(700_000, -10), h: f(10_000, 0), top: f(708_000, -10), bottom: f(698_000, -10) }
 }
 
 /** what each page's left part says: spans [id, ranges], pairs [id, runs] */
