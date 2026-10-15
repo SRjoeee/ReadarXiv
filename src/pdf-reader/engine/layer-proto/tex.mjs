@@ -6,9 +6,11 @@
 //
 // What the file knows that v0 guesses: each line's baseline and size and its ink's extent across (v0 reads them from the
 // anchors' rectangles and the text layer's estimates), the line's frame, each placeholder's ink by its own segments (v0
-// aligns the page's words with the source and takes the runs left over), and a label's box. The rest of the unit's
-// reading is the same for both: the alignment with its source (which characters are its words, its style, the lines it
-// keeps), the resolution's rules, and the finish (what becomes of each page character, which the restore reads). The
+// aligns the page's words with the source and takes the runs left over), a label's box, which of its lines are no text of
+// its own (`held`: the lines kept, the alignment keeping none on the file's lines), and where a forced break `\\` ends
+// a line (forcedBreaks). The rest of the unit's reading is the same for both: the alignment with its source (which
+// characters are its words, its style), the resolution's rules, and the finish (what becomes of each page character,
+// which the restore reads). The
 // page characters are PDF.js's in both, so that the paper's citations and macros a unit learns, and the characters the
 // restore counts as accounted for, are the same keys whichever source a unit took.
 import { PH_FLAG } from '../layout/file.mjs'
@@ -219,6 +221,96 @@ export function displayCover(lu, unit, kOf) {
   return settle(runs.length) ? out : none
 }
 
+/** LaTeX's forced line breaks: `\\` (starred, or with its optional space) and \newline, each set as \hfil\break, so that
+ *  TeX ends the line there short of its measure and sets what follows on the next */
+export const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a line ends short of its frame's measure by more than this share of its size (a justified line's ink reaches it, to a
+ *  glyph's side bearing) */
+const SHORT = 0.5
+
+/**
+ * Where each forced break of the unit's row ends a line of the file (the fix 3 of the 2608.16117 survey, 2026-10-15: its
+ * paragraphs were separated by `\\ \\`, and the translation ran through the original's blank line mid-sentence). A
+ * break group: the unit's forced breaks (FORCED_BREAK) in its order with nothing visible between them (text holding a
+ * non-space character, or a placeholder v0 draws ink for); one breaks the unit's text where a visible piece that is no
+ * display stands before it and after it (a display breaks it by itself; one at an edge of the unit ends no line of it).
+ * TeX's breaks: each line of the file (not held) that ends short of its frame's measure (the rightmost ink of the frame's
+ * lines not held, less SHORT of its size: the \hfil a forced break sets) with a line of the unit after it that is not
+ * held either, no display's segment between the two nor on the line (a display's row the file does not hold). A unit in
+ * two columns of one page pairs nothing (a placeholder's line is read by its baseline, which the other column's line may
+ * share). The groups pair with TeX's breaks in order, as D4 pairs
+ * displays with held runs (displayCover): only where they are as many; and the pairing holds only where every placeholder
+ * the file finds (its segments, by the unit's line nearest each on its page) stands between the breaks its place in the
+ * row says, as TeX set it. Returns a Map of each piece of a paired group, by its index, to the file's line after its
+ * break, the line the text after it starts on; empty where nothing pairs (a ragged or centred unit's short lines, a break
+ * TeX set at a line's end), and the unit's text then runs through as before.
+ */
+export function forcedBreaks(lu, unit, kOf = null) {
+  const out = new Map()
+  if (!lu) return out
+  const groups = []
+  let group = null, before = null
+  for (const [i, p] of unit.pieces.entries()) {
+    if (p.t === 'ph' && FORCED_BREAK.test(p.src ?? '')) {
+      if (!group) groups.push((group = { members: [], before, after: null }))
+      group.members.push(i)
+      continue
+    }
+    const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClass2(p.src).cls : null
+    if (!(p.t === 'text' ? /\S/.test(p.s ?? '') : !!cls && VISIBLE.has(cls))) continue
+    const kind = cls === 'display' ? 'display' : 'text'
+    if (group) { group.after = kind; group = null }
+    before = kind
+  }
+  const breaks = groups.filter(g => g.before === 'text' && g.after === 'text')
+  if (!breaks.length) return out
+  const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), n = L.length / 8
+  // (a unit in two columns of one page: a placeholder's line is read by its baseline alone below, which another column's
+  // line may share, so nothing pairs)
+  const columns = new Map()
+  for (let f = 0; f < F.length; f += 6) { const c = columns.get(F[f]); if (c !== undefined && c !== F[f + 1]) return out; columns.set(F[f], F[f + 1]) }
+  // (a display's segments, which may stand between two lines of the unit that are no display's rows, its own break, or
+  // on a line of it, a display's row that is no held line: no line a forced break ends)
+  const displays = []
+  for (const row of lu.ph.values()) if (row.kind === 'display' && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY))) for (let s = 0; s + 5 < row.segs.length; s += 6) displays.push([row.segs[s], row.segs[s + 2], row.segs[s + 4], row.segs[s + 5]])
+  const cands = []
+  for (let f = 0; f < F.length; f += 6) {
+    const first = F[f + 2], count = F[f + 3]
+    let right = -Infinity
+    for (let j = first; j < first + count; j++) if (!held.has(j)) right = Math.max(right, L[8 * j + 2])
+    for (let j = first; j < first + count; j++) {
+      if (held.has(j) || j + 1 >= n || held.has(j + 1) || !(L[8 * j + 2] < right - SHORT * L[8 * j + 6])) continue
+      const page = L[8 * j], hi = L[8 * j + 3], lo = L[8 * (j + 1) + 3]
+      if (L[8 * (j + 1)] === page && displays.some(([pg, base]) => pg === page && base < hi && base > lo)) continue
+      if (displays.some(([pg, , top, bottom]) => pg === page && Math.min(top, L[8 * j + 4]) > Math.max(bottom, L[8 * j + 5]))) continue
+      cands.push(j)
+    }
+  }
+  if (cands.length !== breaks.length) return out
+  // (each found placeholder between the breaks its place in the row says: its segments on the unit's lines after the break
+  // before it and up to the break after it)
+  if (kOf) {
+    const lineOf = (page, base) => {
+      let best = -1
+      for (let j = 0; j < n; j++) if (L[8 * j] === page && (best < 0 || Math.abs(L[8 * j + 3] - base) < Math.abs(L[8 * best + 3] - base))) best = j
+      return best
+    }
+    let side = 0
+    for (const [i, p] of unit.pieces.entries()) {
+      while (side < breaks.length && breaks[side].members[0] < i) side++
+      if (p.t !== 'ph' && p.t !== 'nested') continue
+      const row = kOf[i] >= 0 ? lu.ph.get(kOf[i]) : null
+      if (!row || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED | PH_FLAG.OUTSIDE)) continue
+      for (let s = 0; s + 5 < row.segs.length; s += 6) {
+        const j = lineOf(row.segs[s], row.segs[s + 2])
+        if (j < 0 || (side > 0 && j <= cands[side - 1]) || (side < breaks.length && j > cands[side])) return out
+      }
+    }
+  }
+  breaks.forEach((g, b) => { for (const i of g.members) out.set(i, cands[b] + 1) })
+  return out
+}
+
 /**
  * The unit's lines from the file, on the pages up to `maxPage`, as v0's rectangles [page, x0, y0, x1, y1]: across their
  * words' ink, and up and down an anchors' rectangle's band from their exact baselines (the file's top and bottom are its
@@ -377,7 +469,8 @@ export function proofOf(lu, kOf, shown = Infinity) {
  * The unit's parts from the file (layer2.d.mts UnitParts), for a unit locatedWhole passes. `use`:
  * - 'ph': part 4 alone, the placeholders' renderings by their segments (the unit's lines v0's);
  * - 'lines': part 1 too, the unit's lines (`lines`, texRects' answer), and part 3, its label by the file's box (v0's
- *   where the file has none, and a mark its first line holds before its first word);
+ *   where the file has none, and a mark its first line holds before its first word); and where its forced breaks end
+ *   those lines (`breaks`, forcedBreaks);
  * - extents 'tex' (with 'lines'): part 2 too, the file's erase rectangles (its glyphs' boxes merged); else each line's
  *   extent as v0 reads it from its characters.
  * - and part 5 for any `use`, the proof of every rendering (proofOf; `shown`, the last page the run shows).
@@ -443,6 +536,8 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = I
     }
     return { uc, extents: ext, lineInfo, held }
   }
+  // (and where its forced breaks end the file's lines, which its rectangles are: forcedBreaks)
+  parts.breaks = unit => forcedBreaks(lu, unit, kOf)
   if (extents === 'tex') {
     parts.extents = (_lines, rects) => {
       const out = new Map()

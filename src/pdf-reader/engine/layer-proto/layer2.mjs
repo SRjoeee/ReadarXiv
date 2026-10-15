@@ -486,8 +486,10 @@ export function extendFirstLines(rects, pageViews, others) {
  * whose start the anchors missed, and left one where another unit's line stands before it (a run-in heading: 1810.04805's
  * "Model Architecture", 1706.03762's "Encoder:"), over which the translation was laid and which it never erased; a
  * layout file's first line starts at the unit's own mark (IEEE's "Index Terms—" before it).
+ * `breakAt`: a forced break's region by the key of the line TeX set after it (finishUnit), referenced: a block starts
+ * at that line and counts the region before it, as one after a kept region does.
  */
-export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null) {
+export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null) {
   const kept = r => !!keep?.has(rectKey(r))
   const blocks = []
   let cur = null
@@ -516,12 +518,14 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
     const widthsVary = Math.max(...rs.map(r => r[3] - r[1])) - Math.min(...rs.map(r => r[3] - r[1])) > 6
     b.centred = rs.length > 1 ? Math.max(...centres) - Math.min(...centres) < 3 && widthsVary : Math.abs(centres[0] - pageCentre) < 3 && b.x1 - b.x0 < 0.8 * (view ? view[2] - view[0] : 612)
   }
-  if (!keep?.size) { for (const b of blocks) b.after = 0; return blocks }
+  if (!keep?.size && !breakAt?.size) { for (const b of blocks) b.after = 0; return blocks }
   let after = 0
   return blocks.flatMap(b => {
     const runs = []
     let run = null
     b.rects.forEach((r, i) => {
+      const brk = breakAt?.get(rectKey(r))
+      if (brk !== undefined && referenced?.has(brk)) { run = null; after = Math.max(after, brk + 1) }
       if (kept(r)) {
         run = null
         const g = regionOf?.get(rectKey(r))
@@ -658,7 +662,8 @@ function rectStyle(uc) {
  *   1. frames and lines (linesOf): the unit's characters on its lines, each line's baseline and size;
  *   2. erase extents (the lines' own, linesOf's): each line's box to erase, before the drawing's padding;
  *   then the alignment (alignUnit, either source's lines): which characters are the source's words, the original's
- *   style, where the first word starts, the lines none of whose words are the source's (kept);
+ *   style, where the first word starts, and on v0's lines the lines none of whose words are the source's (kept; on the
+ *   file's, its held lines);
  *   3. labels (labelOf): a label the class sets before the unit's first line, kept as the original's;
  *   4. placeholder renderings (v0Renderings): which of the page's ink each placeholder is, and where it sits;
  *   then the resolution's rules (resolvePlaceholders, either source's renderings): how each placeholder is drawn, the
@@ -666,8 +671,9 @@ function rectStyle(uc) {
  *   5. the proof (none in v0 alone, tex.mjs proofOf): each rendering proven by the layout file (a crop cut from its
  *   placeholder's own ink, page text or kept ink in its segments, the file's own rendering), or the placeholder whose
  *   ink no source proves (`unproven`, its k: the unit is then left the original's);
- *   and the finish (finishUnit): the kept lines in regions, each character's category (what the restore and the
- *   checker read).
+ *   and the finish (finishUnit): the kept lines in regions, a forced break the source locates (`breaks`, tex.mjs
+ *   forcedBreaks) a region of no lines before the line TeX set after it, each character's category (what the restore and
+ *   the checker read).
  * `charsByPage`: pageChars2's (the unit's own part of each page).
  */
 export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = null, parts = null) {
@@ -679,7 +685,9 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // gap each placeholder took
   out.uc = lines.uc
   out.lineInfo = lines.lineInfo
-  const aligned = alignUnit(out, unit, rects, deny)
+  // (a unit on the file's own lines keeps the lines TeX says are no text of its own alone: the file's held lines, below,
+  // and its found displays' rows, the finish's; no alignment's guess at another unit's line, which TeX's lines never are)
+  const aligned = alignUnit(out, unit, rects, deny, !!parts?.lines)
   // (the lines part 1's source says the unit's source does not write: kept as the original's, as a display's are)
   if (lines.held?.length) out.keep = [...new Set([...(out.keep ?? []), ...lines.held])]
   const gaps = (parts?.label ?? labelOf)(out, unit, rects, charsByPage, aligned)
@@ -689,6 +697,8 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   out.inkKnown = !!(parts?.renderings && parts.lines)
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
   if (parts?.proof) { const k = parts.proof(out); if (k >= 0) out.unproven = k }
+  // (a source that knows where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it)
+  out.breaks = parts?.breaks?.(unit) ?? null
   finishUnit(out, unit, rects, charsByPage)
   // a displayed formula found, whose lines hold words the alignment took for the source's ("RMSE" in "RMSE_i(t) =",
   // while the text says "…using the RMSE:"): aligned again without its lines' words, once
@@ -727,8 +737,14 @@ export function linesOf(rects, charsByPage) {
  * (matchedKeys), its original style (orig), where its first word starts (firstX0), and the lines none of whose words are
  * the source's, kept as the original's (keep). Returns the gaps: the page's runs of the unit that the source does not
  * write, each a placeholder's rendering or a label.
+ * `fileLines`: part 1 gave the layout file's lines (the unit located whole, tex.mjs texParts 'lines'), every one of which
+ * TeX set as this unit's own: no line is kept by the alignment, neither one with no source word nor one with too few of
+ * them. The kept lines are then the file's (`held`, prepareUnit) and its found displays' rows (resolvePlaceholders,
+ * finishUnit) alone: the fix of the 2608.16117 survey, 2026-10-15, whose author-year citation lines ("networks (Kim et
+ * al., 2016). Islam and Picu…") the second rule kept as another unit's, their words a placeholder's and not the source's,
+ * the English left under the translation and a blank band above it.
  */
-function alignUnit(out, unit, rects, deny) {
+function alignUnit(out, unit, rects, deny, fileLines = false) {
   const uc = out.uc
   out.matchedKeys = new Set()
   let gaps = []
@@ -744,7 +760,7 @@ function alignUnit(out, unit, rects, deny) {
       const c0 = uc[O[q0].start]
       if (c0 && `${c0.page}|${c0.rect.join()}` === rectKey(rects[0])) out.firstX0 = c0.x0
     }
-    if (rects.length > 1) {
+    if (rects.length > 1 && !fileLines) {
       const minX = Math.min(...rects.map(r => r[1])), first = rectKey(rects[0])
       // (iteration 3: or of three words or more, where it starts: a line none of whose words are the source's is not
       // the unit's text, a rectangle the anchors gave it over another's line; kept, it is shown and no text is laid
@@ -1189,12 +1205,18 @@ function finishUnit(out, unit, rects, charsByPage) {
   // a located display's lines all kept: those it holds a third of, and their pieces on the same band (a fraction's
   // numerator line it holds less of was laid over and erased)
   out.keep = [...new Set([...(out.keep ?? []), ...displayTouched(out, uc)])]
-  // the kept lines in runs (regions), in the unit's order: the text after a kept placeholder starts below its region
+  // the kept lines in runs (regions), in the unit's order: the text after a kept placeholder starts below its region. A
+  // forced break the source locates (`breaks`: its pieces, each with the file's line TeX set after it) is a region of no
+  // lines of its own just before that line (`breakAt`, by its key), which its pieces hold: the text after it starts there
   const keepSet = new Set(out.keep ?? [])
   out.regionOf = new Map()
+  out.breakAt = new Map()
+  const breakNext = new Set(out.breaks?.values() ?? []), breakOf = new Map()
   let region = -1, inRun = false
   for (const r of rects) {
     const k = rectKey(r)
+    const j = breakNext.size ? out.lineInfo.get(k)?.j : undefined
+    if (j !== undefined && breakNext.has(j) && !keepSet.has(k) && !breakOf.has(j)) { region++; inRun = false; out.breakAt.set(k, region); breakOf.set(j, region) }
     if (keepSet.has(k)) { if (!inRun) region++; inRun = true; out.regionOf.set(k, region) }
     else inRun = false
   }
@@ -1204,6 +1226,12 @@ function finishUnit(out, unit, rects, charsByPage) {
     // (and the lines a display's rendering is, a held run's, where they hold none of its characters: tex.mjs)
     const regs = [...r.gap.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`), ...(r.gap.held ?? [])].map(k => out.regionOf.get(k)).filter(g => g !== undefined)
     if (regs.length) { r.region = Math.max(...regs); out.referenced.add(r.region) }
+  }
+  for (const [i, j] of out.breaks ?? []) {
+    const r = out.get(i), g = breakOf.get(j)
+    if (!r || g === undefined) continue
+    Object.assign(r, { region: g, brk: true })
+    out.referenced.add(g)
   }
   // the original's first character after each displayed formula the drawing breaks at (its region), or before which a
   // display outside the unit's lines stands (`inPlace`: the unit's first): tokensOf2 drops a translation's mark that may
@@ -1938,6 +1966,14 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     const r = resolved.get(k)
     if (!r) return
+    // (a forced break the file locates, finishUnit's: the laid line ends there, and the text after it starts on the line
+    // TeX set after the original's break, as after a display)
+    if (r.brk && r.region !== undefined && resolved.referenced?.has(r.region)) {
+      while (tokens.at(-1)?.space) tokens.pop()
+      // (a group's later pieces are the same break)
+      if (tokens.at(-1)?.blockTo !== r.region) tokens.push({ blockTo: r.region, w100: 0 })
+      return
+    }
     // iteration 3: a kept rendering (a displayed formula) stands where it is; the text after it starts below it
     if (r.mode === 'kept' && r.region !== undefined && resolved.referenced?.has(r.region)) {
       while (tokens.at(-1)?.space) tokens.pop()
@@ -1989,8 +2025,8 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
 // ---- the unit's blocks, with the original's baselines
 
 /** blocksOf's blocks, each with its lines' measured baselines (B), sizes, pitch and the free space below it */
-export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null) {
-  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced)
+export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null) {
+  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt)
   const info = r => lineInfo.get(rectKey(r)) ?? lineInfo.get(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`)
   for (const b of blocks) {
     b.B = b.rects.map(r => info(r)?.baseline ?? r[2] + 0.24 * (r[4] - r[2]))

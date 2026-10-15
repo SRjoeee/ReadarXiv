@@ -25,7 +25,7 @@
 // fixture's layout file (its rows read by the instrument itself, fileIndexOf), whether or not the hybrid is given it.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, glyphAccounted, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
+import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
@@ -462,9 +462,18 @@ function againstFileOf(p, recs, units, drawnLines, items, refOf, boxPdf) {
   // (each drawn unit's own text lines in the file, its pitch, and the lines the drawing keeps of it as the original's)
   // (v0's kept lines include a display's held rows, which the pair's own test sets apart: its text's lines alone)
   const keptRowsOf = (id, held) => (S.byId.get(id)?.prep?.keep ?? []).map(key => key.split('|')).filter(([pg]) => Number(pg) === p).map(([, b]) => { const r = b.split(',').map(Number); return (r[1] + r[3]) / 2 }).filter(y => !held.some(h => y >= h[1] && y <= h[3]))
+  // (and TeX's forced breaks in its lines, where its source sets exactly as many: forcedBreaksIn over the record's pieces,
+  // each piece's kind TeX's file's: a placeholder visible where the file holds a row of ink for it, one the units file
+  // writes as text by that text)
+  const pieceKindsOf = (id, own) => {
+    const kOf = contentKOf(id), tr = S.trPieces.get(id)
+    if (!kOf) return () => undefined
+    return (i, q) => (q.t === 'text' ? (/\S/.test(q.s ?? '') ? 'text' : null) : q.t !== 'ph' && q.t !== 'nested' ? null : kOf[i] < 0 ? (/\S/.test(String(tr?.[i]?.[1] ?? '')) ? 'text' : null) : own.rows?.get(kOf[i]) === 'display' ? 'display' : own.rows?.has(kOf[i]) ? 'text' : null)
+  }
   const slots = slotsSkippedOf(units.filter(u => u.drawn).map(u => {
     const own = fpage?.units.get(u.id), held = (own?.lines ?? []).filter(l => l.held).map(l => l.box)
-    return { id: u.id, orig: u.orig, tex: (own?.lines ?? []).filter(l => !l.held).map(l => ({ baseline: l.baseline, x0: l.box[0], x1: l.box[2] })), held, texPitch: own?.pitch ?? null, keptRows: keptRowsOf(u.id, held), lines: drawnLines.filter(l => l.unit === u.id).map(l => ({ baseline: l.baseline, size: S.byId.get(u.id)?.layout?.f ?? 0, x0: l.x0, x1: l.x1, pitch: l.pitch })) }
+    const breaks = own?.breaks?.length ? forcedBreakRoom(own, forcedBreaksIn(S.byId.get(u.id)?.unit?.pieces, pieceKindsOf(u.id, own))) : []
+    return { id: u.id, orig: u.orig, tex: (own?.lines ?? []).filter(l => !l.held).map(l => ({ baseline: l.baseline, x0: l.box[0], x1: l.box[2] })), held, texPitch: own?.pitch ?? null, keptRows: keptRowsOf(u.id, held), breaks, lines: drawnLines.filter(l => l.unit === u.id).map(l => ({ baseline: l.baseline, size: S.byId.get(u.id)?.layout?.f ?? 0, x0: l.x0, x1: l.x1, pitch: l.pitch })) }
   }))
   // (the original's line a drawn line stands on: the unit's own reference line on its baseline, within half a point; its
   // first character, the page's first item on that line from its left edge on)

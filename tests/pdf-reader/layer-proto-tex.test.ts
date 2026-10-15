@@ -643,3 +643,84 @@ describe('the erase of a line of several boxes', () => {
     expect((second[0] ?? 0) + (second[2] ?? 0)).toBeCloseTo(301.8)
   })
 })
+
+describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 3, 2026-10-15)", () => {
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const key = (r: number[]) => `${r[0]}|${r.slice(1).join()}`
+  it('fix 2: a unit on the file\'s lines keeps its held lines alone, its author-year citation line its own text', () => {
+    // "delta (Kim Lee Park Choi Han 2016)": seven words, one the source's, the rest the citation's rendering. On v0's
+    // lines the alignment keeps that line as another unit's (four words or more, under a fifth of them the source's)
+    const lines = [[1, 10, 200, 500, 507, 498, 10, 0], [1, 10, 200, 488, 495, 486, 10, 0], [1, 10, 200, 476, 483, 474, 10, 0]]
+    const lu = unitOf(lines, [[1, 0, [1, 40, 488, 180, 495, 486]]]) as { ph: Map<number, { kind: string }> }
+    const row = lu.ph.get(1)
+    if (row) row.kind = 'cite'
+    const u = { kind: 'para', src: 'alpha beta gamma delta epsilon zeta eta', pieces: [text('\u7532\u4E59\u4E19\u4E01 '), ph('\\citep{kim,lee,park,choi,han}'), text(' \u620A\u5DF1\u5E9A')] } as never
+    const page = [...item('alpha beta gamma', 10, 500, 10, 0), ...item('delta (Kim Lee Park Choi Han 2016)', 10, 488, 10, 1), ...item('epsilon zeta eta', 10, 476, 10, 2)]
+    const t = T.texRects(lu as never)
+    const citeLine = key(t.rects[1] as number[])
+    const tex = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu as never, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(tex.keep ?? []).not.toContain(citeLine)
+    expect(tex.get(1)?.mode).not.toBe('kept')
+    // the control: on v0's own lines (a unit the file does not locate whole) the rule stays, the anchors' rectangle may be
+    // over another unit's line
+    const v0 = L2.prepareUnit(u, t.rects.map(r => [...r]) as never, [page as never], new Map() as never)
+    expect(v0.keep).toContain(citeLine)
+  })
+
+  // a paragraph, `\\ \\`, a paragraph: lines 0 and 1 the first (1 ended short at the forced break), the blank line, 2 and 3
+  // the second; and `\\ \\` after the unit's last words, which ends no line of it
+  const L = (y: number, x1 = 200) => [1, 10, x1, y, y + 7, y - 2, 10, 0]
+  const lines = [L(500), L(488, 90), L(464), L(452, 120)]
+  const BR = '\\\\'
+  const unit = (...p: object[]) => ({ kind: 'para', src: 'a b c d', pieces: p }) as never
+  const u = unit(text('\u7532'), ph(BR), ph(BR), text(' \u4E59'), ph(BR), ph(BR), text('\n'))
+  it("fix 3: pairs each forced break between two visible pieces with a line TeX ended short, in order, never one at an edge", () => {
+    expect([...T.forcedBreaks(unitOf(lines) as never, u)]).toEqual([[1, 2], [2, 2]])
+    // a break before a display ends no line of the text: the display does
+    const D = '\\begin{equation}x=1\\end{equation}'
+    expect(T.forcedBreaks(unitOf(lines) as never, unit(text('\u7532'), ph(BR), ph(D), text(' \u4E59'))).size).toBe(0)
+  })
+  it('pairs nothing where the breaks and the short lines are not as many, nor where a found piece stands across its break', () => {
+    // no line ended short (the break at a line's end), and two for one break (a ragged unit)
+    expect(T.forcedBreaks(unitOf([L(500), L(488), L(464), L(452, 120)]) as never, u).size).toBe(0)
+    expect(T.forcedBreaks(unitOf([L(500, 150), L(488, 90), L(464), L(452, 120)]) as never, u).size).toBe(0)
+    // a citation the translation sets after the break, whose segments the file puts on line 0, before it
+    const cited = unit(text('\u7532'), ph(BR), text(' \u4E59'), ph('\\cite{x}'), text('\u4E19'))
+    const kOf = [-1, -1, -1, 3, -1]
+    expect(T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 500, 80, 507, 498]]]) as never, cited, kOf).size).toBe(0)
+    expect([...T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 464, 80, 471, 462]]]) as never, cited, kOf)]).toEqual([[1, 2]])
+  })
+  it('pairs nothing in a unit in two columns of one page, nor at a short line that is a display\'s row (#367 review)', () => {
+    // two columns of page 1: the left one's line 1 ends short, as the break's line would
+    const two = { ...(unitOf([L(500), L(488, 90), [1, 320, 520, 500, 507, 498, 10, 0], [1, 320, 520, 488, 495, 486, 10, 0]]) as object), frames: Float64Array.from([1, 0, 0, 2, -1, 0, 1, 1, 2, 2, 500, 0]) }
+    const one = unit(text('\u7532'), ph(BR), text(' \u4E59'))
+    expect([...T.forcedBreaks(unitOf([L(500), L(488, 90), L(464), L(452)]) as never, one)]).toEqual([[1, 2]])
+    expect(T.forcedBreaks(two as never, one).size).toBe(0)
+    // a display's row the file does not hold, short of the measure: no line a forced break ends
+    const row = unitOf([L(500), L(488, 90), L(464), L(452, 120)], [[7, 0, [1, 40, 488, 90, 495, 486]]]) as { ph: Map<number, { kind: string }> }
+    const d = row.ph.get(7)
+    if (d) d.kind = 'display'
+    expect(T.forcedBreaks(row as never, one).size).toBe(0)
+  })
+  it('breaks the text there: the laid line ends at the break, the text after it starts on the line TeX set after it', () => {
+    const lu = unitOf(lines)
+    const t = T.texRects(lu)
+    const page = [...item('a', 10, 500, 10, 0), ...item('b', 10, 488, 10, 1), ...item('c', 10, 464, 10, 2), ...item('d', 10, 452, 10, 3)]
+    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, -1, -1, -1, -1, -1, -1], { use: 'lines', lines: t }) as never)
+    const r = prep.get(1)
+    expect(r).toMatchObject({ mode: 'none', brk: true })
+    expect(prep.get(2)?.region).toBe(r?.region)
+    expect(prep.referenced.has(r?.region as number)).toBe(true)
+    // (the edge break is a space, as before)
+    expect(prep.get(4)?.brk).toBeUndefined()
+    const blocks = L2.blocks2(t.rects as never, [[0, 0, 612, 792]], prep.keep ? new Set(prep.keep) : null, prep.lineInfo, prep.regionOf, prep.referenced, null, prep.breakAt)
+    expect(blocks.map(b => [b.B, b.after])).toEqual([[[500, 488], 0], [[464, 452], 1]])
+    const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+    const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0, borrow: 0 }
+    const tokens = L2.tokensOf2(u, prep, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 50)
+    expect(tokens.map(x => (x.blockTo !== undefined ? '|' : x.space ? '_' : x.s)).join('')).toBe('\u7532|_\u4E59')
+    const l = L2.layoutUnit2(tokens, blocks as never, 10, P as never)
+    expect(l.clipped).toBe(false)
+    expect(l.lines.filter(x => x.items.some(it => it.t.s)).map(x => [x.baseline, x.items.map(it => it.t.s ?? '').join('')])).toEqual([[500, '\u7532'], [464, '\u4E59']])
+  })
+})

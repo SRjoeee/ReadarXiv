@@ -100,6 +100,11 @@ export interface Prepared extends Map<number, Resolved> {
   /** the finish: each kept line's region (a run of kept lines), and the regions a kept placeholder holds */
   regionOf: Map<string, number>
   referenced: Set<number>
+  /** a source's forced breaks (tex.mjs forcedBreaks): each break piece's index to the file's line TeX set after it */
+  breaks?: Map<number, number> | null
+  /** the finish: a forced break's region (no lines of its own) by the key of the line after it, which its pieces hold
+   *  (their resolutions' `region`, with `brk`) */
+  breakAt?: Map<string, number>
   /** the finish: what became of each of the unit's page characters, by its key */
   cat: Map<string, 'acc' | 'keep' | 'orphan' | 'undrawn'>
   /** the finish: the lines a located display holds */
@@ -144,6 +149,9 @@ export interface UnitParts {
   /** part 5: every rendering proven, each crop cut from its placeholder's own ink (mutates the crops); the k of one no
    *  source proves, or -1 */
   proof?: (out: Prepared) => number
+  /** where the unit's forced breaks end its lines (with part 1's lines, the file's): each break piece's index to the line
+   *  set after it, by its index in the file (LineInfo.j) */
+  breaks?: (unit: Unit) => Map<number, number>
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it
@@ -183,7 +191,7 @@ export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readon
 /** `first`: the unit's first line (default rects[0]; `rects` may be its lines on one page alone) */
 export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
 export declare function extendFirstLines(rects: Rect[], pageViews: readonly number[][], others: readonly (readonly Rect[] | undefined)[]): void
-export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null): Block[]
+export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null): Block[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
 /** the unit against its page, in parts: v0's, or `parts` another source gives (the per-unit reading's contract above) */
 export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: CiteMap | null, deny?: ReadonlySet<string> | null, parts?: UnitParts | null): Prepared
@@ -230,7 +238,7 @@ export declare function restoreUnaccounted(erased: readonly number[][], px: ToDe
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
  *  is awaited before each measure (a face served in slices has the slice of the text by then) */
 export declare function warmFaces(to: string, cjk: boolean, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
-export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, lineskip?: readonly [skip: number, limit: number] | null): Block2[]
+export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, lineskip?: readonly [skip: number, limit: number] | null, breakAt?: ReadonlyMap<string, number> | null): Block2[]
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>

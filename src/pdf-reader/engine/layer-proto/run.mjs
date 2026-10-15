@@ -1337,7 +1337,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const s = orig?.size ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
     const base = orig && orig.st.fam !== 'math' ? { ...orig.st } : { fam: 'serif', bold: p.unit.kind === 'heading', italic: false, caps: false, design: designs.serif }
     const keep = prep.keep?.length ? new Set(prep.keep) : null
-    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null)
+    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt)
     for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // a label the first line starts with stays the original's: the line starts after it. A file's first line starts at
