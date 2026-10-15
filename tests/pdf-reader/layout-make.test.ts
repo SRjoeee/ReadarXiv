@@ -377,6 +377,37 @@ describe('makeLayout', () => {
     expect(done.stats.capped).toEqual([4])
   })
 
+  it('each page let go once read, one cleanup a page after its list, or once given up on; the file the same', async () => {
+    const page = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }] })
+    const pages = [page('alpha beta gamma'), page('delta epsilon zeta'), page('eta theta iota'), page('kappa lambda mu')]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700], ['2s', 3, 72, 700], ['2e', 3, 142, 700], ['3s', 4, 72, 700], ['3e', 4, 147, 700]]
+    const units = ['alpha beta gamma', 'delta epsilon zeta', 'eta theta iota', 'kappa lambda mu'].map(s => unit('para', [text(s)]))
+    // page 2's list never comes and page 3's fails (both given up: giveUp, and a failed list's cancellation cleans up
+    // nothing in PDF.js); page 4's is read, capped
+    const w: World = { pages: [pages[0] as Page, { ...pages[1] as Page, ops: 'never' }, { ...pages[2] as Page, ops: 'fails' }, { ...pages[3] as Page, ops: 'capped' }], marked: pages, marks, units }
+    const events: string[] = []
+    const base = arxivOf(w.pages)
+    const arxiv = {
+      ...base,
+      getPage: async (n: number) => {
+        const p = await base.getPage(n)
+        return { ...p, getOperatorList: () => p.getOperatorList().then(list => { events.push(`ops ${n}`); return list }), cleanup: () => { events.push(`cleanup ${n}`); return true } }
+      },
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.useFakeTimers()
+    const marksFile = await marksOf(w)
+    const run = (doc: typeof base) => makeLayout({ units, marks: marksFile, arxiv: doc, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+    const watched = run(arxiv), plain = run(base)
+    await vi.advanceTimersByTimeAsync(2 * OPS_MS + 1000)
+    const [a, b] = [await watched, await plain]
+    warn.mockRestore()
+    expect(events).toEqual(['ops 1', 'cleanup 1', 'cleanup 2', 'cleanup 3', 'ops 4', 'cleanup 4'])
+    if (!('file' in a) || !('file' in b)) throw new Error('refused')
+    expect(a.stats.timedOut).toEqual([2, 3])
+    expect(encodeLayout(a.file)).toBe(encodeLayout(b.file))
+  })
+
   it("a placeholder's symbol set apart at its line's end is its ink", async () => {
     // a table's head cell, ASR then a space then an arrow, which the text layer gives no word of
     const runs: Run[] = [{ s: 'ASR', x: 72, y: 700 }, { s: '\u2193', x: 89.35, y: 700 }, { s: 'ACC', x: 140, y: 700 }]
