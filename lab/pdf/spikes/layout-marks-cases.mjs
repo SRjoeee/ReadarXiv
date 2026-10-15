@@ -11,8 +11,12 @@
 // The names' cases (D1a): babel's named headings marked (marks.mjs NAMES_TEX, literalNames), each under pdfLaTeX and
 // XeLaTeX, with hyperref and without: every text item where v0 has it, the log the run reads unchanged, and each name's
 // two marks on its glyphs.
+// The wrappers' case: a book whose paper macros end in \chapter or \section, their arguments before the title
+// (2106.10165's \strangechapter{$\infty$}{…}), and displays the walker reads as prose or as the paper's own environment
+// (2310.20360's eqsplit, \bfm_1): v0 and v1 set with no error in three passes, the contents as v0's.
 //   pnpm exec tsx lab/pdf/spikes/layout-marks-cases.mjs            (ONLY=stream: the stream's cases alone; ONLY=names:
-//                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone)
+//                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone;
+//                                                                  ONLY=wrappers: the wrappers' alone)
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -34,6 +38,8 @@ const STREAM_ONLY = process.env.ONLY === 'stream'
 const NAMES_ONLY = process.env.ONLY === 'names'
 /** \axt@unmark's case alone */
 const UNMARK_ONLY = process.env.ONLY === 'unmark'
+/** the wrappers' case alone */
+const WRAPPERS_ONLY = process.env.ONLY === 'wrappers'
 const dir = mkdtempSync(join(tmpdir(), 'layout-marks-cases-'))
 
 // ---------------------------------------------------------------- the documents
@@ -139,7 +145,7 @@ const jobs = [], queued = []
 function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true, trace = false, files = {} } = {}) {
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-'))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-'))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -268,6 +274,34 @@ const unmarkUnit = String.raw`\makeatletter
 \makeatother`
 queue('unmark-unit', doc(unmarkUnit, 'x'), { variants: ['v1'], passes: 1 })
 queue('files-titlesec', filesSrc.replace('\\usepackage{hyperref}', '\\usepackage{titlesec}\\usepackage{hyperref}'), { passes: 3 })
+// a paper's macros that end in a heading command, their own arguments before the title TeX reads after them: a unit's
+// line probe or mark between the call and the title was \chapter's title (2106.10165: "Argument of \axtlines has an
+// extra }", no PDF); and displays read as prose (an environment by \let) or as the paper's own (eqsplit), a mark after a
+// subscript's _ the operand's ("Missing { inserted", 2310.20360)
+const wrappersSrc = doc(String.raw`\usepackage{amsmath}\usepackage{hyperref}\newcommand{\bfm}{\mathbf{m}}
+\newcommand{\strangechapter}[1]{\renewcommand{\thechapter}{#1}\chapter}
+\newcommand{\numbered}[2]{\setcounter{chapter}{#1}\renewcommand{\thechapter}{#2}\chapter}
+\newcommand{\strangesection}[2][]{\renewcommand{\thesection}{#2}\section}
+\newcommand{\unnumbered}[1]{\def\shortname{#1}\section*}
+\newenvironment{eqsplit}{\equation\aligned%
+}{\endaligned\endequation%
+}
+\let\myeq\equation\let\endmyeq\endequation`, [
+  '\\tableofcontents', '\\chapter{Opening}', prose(12, () => ''),
+  '\\strangechapter{$\\infty$}{The End of Training}\\label{ch:eot}', prose(12, () => ''),
+  `${prose(4, () => '')} it holds that\n${String.raw`\begin{eqsplit}
+  \lvert \bfm_1 - x \rvert
+&= \bfm_1 - x
+\\ \text{and}\qquad \Theta_t = x^\alpha + \mathbf{x}_{ij}
+\end{eqsplit}`}\n${prose(4, () => '')}`,
+  String.raw`\begin{myeq}
+\bfm_1 - x = x^\alpha + \mathbf{x}_{ij} + \Theta_t
+\end{myeq}`, prose(6, () => ''),
+  String.raw`\numbered{3}{$\aleph$}{A Chapter Numbered by Hand}`, prose(8, () => ''),
+  String.raw`\strangesection[short]{A}[Short]{The {Long} Title of It}`, prose(8, () => ''),
+  String.raw`\unnumbered{X}{Notes on the Method}`, prose(8, () => ''),
+].join('\n\n'), '\\documentclass{book}')
+const wrappersPaper = queue('wrappers-book', wrappersSrc, { passes: 3 })
 // the cells of a scaled table, under pdfTeX (failed) and under XeTeX (printed)
 const cellSrc = /** @type {string} */ (STAY['a cell in \\resizebox'])
 const cellPaper = queue('cell-xe', cellSrc, { engine: 'xelatex', variants: ['v1'] })
@@ -560,6 +594,16 @@ compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
 if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY) {
+  const heads = wrappersPaper.units.filter(u => u.kind === 'heading').map(u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('').trim())
+  check('the wrappers\' titles are headings, the paper\'s display one placeholder', ['Opening', 'The End of Training', 'A Chapter Numbered by Hand', 'The Long Title of It', 'Notes on the Method'].every(h => heads.includes(h)) && wrappersPaper.units.some(u => u.pieces.some(p => p.t === 'ph' && /^\\begin\{eqsplit\}[\s\S]*\\end\{eqsplit\}$/.test(p.src))), JSON.stringify(heads))
+  for (const v of ['v0', 'v1']) {
+    const errors = errorsOf(`wrappers-book-${v}`), toc = read(`wrappers-book-${v}`, 'toc', 'latin1') ?? ''
+    check(`a wrapper's title and a display read as prose set with no error, ${v}: three passes, a PDF`, !!read(`wrappers-book-${v}`, 'pdf')?.length && !errors.length, JSON.stringify(errors.slice(0, 4)))
+    check(`… the contents hold the titles, no probe or mark in them, ${v}`, /\\numberline \{\$\\infty \$\}The End of Training\}/.test(toc) && /\\numberline \{\$\\aleph \$\}A Chapter Numbered by Hand\}/.test(toc) && /\\numberline \{A\}Short\}/.test(toc) && !/axt/.test(toc), toc.slice(0, 400))
+  }
+  check('… and v1\'s contents are v0\'s', read('wrappers-book-v0', 'toc', 'latin1') === read('wrappers-book-v1', 'toc', 'latin1'))
+}
+if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY) {
 for (const [name, , engine] of stays) {
   for (const hyper of [false, true]) {
     const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`
@@ -682,7 +726,7 @@ for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a cit
 }
 
 // ---------------------------------------------------------------- \axt@unmark's check
-if (!STREAM_ONLY && !NAMES_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY) {
   const unit = /^UNIT SUMMARY n=(\d+), bad=(\d+)/m.exec(read('unmark-unit-v1', 'log', 'latin1') ?? '')
   check('\\axt@unmark on hand-written lists: the bare regex\'s result by tokens, in every case', !!unit && Number(unit[1]) >= 25 && unit[2] === '0', `${unit?.[0]} ${(read('unmark-unit-v1', 'log', 'latin1') ?? '').match(/^UNIT DIFF.*/gm)?.slice(0, 3)}`)
   for (const [job, label] of [['unmark-files', 'with hyperref'], ['unmark-files-titlesec', 'and with titlesec']]) {
@@ -701,7 +745,7 @@ if (!STREAM_ONLY && !NAMES_ONLY) {
 
 
 // ---------------------------------------------------------------- the names' checks
-if (!STREAM_ONLY && !UNMARK_ONLY) {
+if (!STREAM_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY) {
   for (const j of nameJobs) {
     const label = `a babel name: ${j.name} (${j.engine}${j.hyper ? ', with hyperref' : ''})`
     const [a, b] = [await pdfOf(`${j.key}-v0`), await pdfOf(`${j.key}-v1`)]
@@ -793,7 +837,7 @@ const OWN = {
   C: [['$\\phi$', '\u03d5'], ['$', glyphsOf], ['\\cite{one}', '[1]'], ['call:Note ', null], ['\\begin{align}', (src, nth) => rowsOf(src.trim(), [1, 9, 21, 37][nth])]],
   D: [['$b_', glyphsOf], ['$', null]],
 }
-for (const s of NAMES_ONLY || UNMARK_ONLY ? [] : [...streams, luaStream]) {
+for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : [...streams, luaStream]) {
   const label = `the stream, ${s.name} (${s.engine})`
   const [a, b] = [await inkOf(`${s.key}-v1`), await inkOf(`${s.key}-v1np`)]
   if (!a || !b) { check(`${label}: compiled`, false, `no PDF (${a ? 'v1np' : 'v1'})`); continue }
@@ -866,7 +910,7 @@ for (const s of NAMES_ONLY || UNMARK_ONLY ? [] : [...streams, luaStream]) {
 }
 
 // TeX's own boxes: the points' nodes out (the corpus check's comparison), nothing else different
-for (const name of NAMES_ONLY || UNMARK_ONLY ? [] : Object.keys(TRACED)) {
+for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : Object.keys(TRACED)) {
   const boxesOf = v => { const log = read(`${traceKey(name)}-${v}`, 'log', 'latin1') ?? ''; const out = [], lines = log.split('\n'); for (let i = 0; i < lines.length; i++) if (/^Completed box being shipped out \[/.test(lines[i])) { const at = i; while (i < lines.length && lines[i] !== '') i++; out.push(...lines.slice(at, i), '') } return pageBoxes(out.join('\n')) }
   const [a, b] = [boxesOf('v1np'), boxesOf('v1')], d = boxDiff(a, b)
   check(`the stream, TeX's boxes with the points and without them the same: ${name}`, a.length > 0 && a.length === b.length && !d.length, JSON.stringify({ pages: [a.length, b.length], differences: d.length, first: d.slice(0, 3).map(x => [x.page, x.v0, x.v1]) }))

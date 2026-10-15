@@ -18,10 +18,10 @@ import { textless } from '../rules/arg-roles.mjs'
 import { tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
-import { pageInk } from './ink.mjs'
+import { packGlyphs, pageInk } from './ink.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
-import { OWNED, OWNED_HOW, ownedOf, WANT } from './stream.mjs'
+import { OWNED, OWNED_HOW, ownedOf, STREAM_COLUMNS, WANT } from './stream.mjs'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
@@ -966,8 +966,10 @@ function followsOf(units, names) {
 
 /**
  * The marks file (internal, prep/<mid>/marks-<sha>.json) from a PDF.js document of the marked original and its last
- * TeX pass's log; the caller opens and destroys the document. Every destination MARK_NAME takes, by page (1-based) and
- * place, but one the log reports set twice (`dropped`: TeX kept the first, wherever that was) or off its page's view;
+ * TeX pass's log; the caller opens and destroys the document, each of its pages cleaned up once read (page.cleanup: its
+ * operator list let go), so that a caller that reads its operator lists again pays a parse again. Every destination
+ * MARK_NAME takes, by page (1-based) and place, but one the log reports set twice (`dropped`: TeX kept the first,
+ * wherever that was) or off its page's view;
  * each page's view and columns (MARK_DEF's c<n>-<k>); each unit's line count (LINES_TEX's AXT-LINES); the document's
  * text tokens (tokenizeDocument), their words once each; what the marked original was marked with (`marking`: the
  * classes and the paper's own switch it was given to layoutMarking, null where no probe was run: the two mark
@@ -997,7 +999,16 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
     views.push(...page.view.slice(0, 4).map(r2))
     const content = await page.getTextContent()
     text.push({ page: p, items: content.items, styles: content.styles })
-    if (units && OPS) stream.push({ ...pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 }), view: page.view.slice(0, 4) })
+    if (units && OPS) {
+      // kept for ownedOf, every page to the last: the columns of its glyphs it reads (ink.mjs packGlyphs, in stream
+      // order), not a Glyph object each, and each glyph's boxes before it as 32-bit integers
+      const { glyphs, boxes, points, boxAt } = pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
+      stream.push({ glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) })
+    }
+    // its operator list let go once its ink is read, so that PDF.js holds one page's, not every page's to the end; nothing
+    // reads it again, and the caller destroys the document after (paper.mjs). With the packing, the reading's live set on
+    // 2303.18223 (144 pages, 726,000 glyphs; arXiv's PDF for the marked original) is 224 MiB, not 449
+    page.cleanup?.()
   }
   checkViews(views, pages, 'views')
   const dropped = duplicatesIn(log), twice = new Set(dropped)
@@ -1057,12 +1068,16 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
       const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); owned.push([name, k]) }
       if (e.glyphs.length > GLYPHS_PIECE || e.boxes.length > RULES_PIECE) { not('more glyphs than a piece may own'); continue }
       if (all + e.glyphs.length + e.boxes.length > OWNED_ALL) { not('past the glyphs a paper may own'); continue }
-      const gs = e.glyphs.map(([p, g]) => [p, stream[p - 1].glyphs[g]]), bs = e.boxes.map(([p, b]) => [p, stream[p - 1].boxes.slice(4 * b, 4 * b + 4)])
-      if (gs.some(([p, g]) => !ok(p, g.x0, g.y) || !(r2(g.size) > 0 && g.size <= SIZE_MAX)) || bs.some(([p, b]) => !ok(p, b[0], b[1]) || !ok(p, b[2], b[3]))) { not('ink out of bounds'); continue }
-      all += gs.length + bs.length
-      const row = [name, e.how, gs.length]
-      for (const [p, g] of gs) {
-        let u = g.u.length > CHAR_MAX ? g.u.slice(0, /[\ud800-\udbff]/.test(g.u[CHAR_MAX - 1]) ? CHAR_MAX - 1 : CHAR_MAX) : g.u
+      const bs = e.boxes.map(([p, b]) => [p, stream[p - 1].boxes.slice(4 * b, 4 * b + 4)])
+      // a glyph's own numbers: its page's columns (packGlyphs) at its index
+      const off = ([p, g]) => { const G = stream[p - 1].glyphs; return !ok(p, G.x0[g], G.y[g]) || !(r2(G.size[g]) > 0 && G.size[g] <= SIZE_MAX) }
+      if (e.glyphs.some(off) || bs.some(([p, b]) => !ok(p, b[0], b[1]) || !ok(p, b[2], b[3]))) { not('ink out of bounds'); continue }
+      all += e.glyphs.length + bs.length
+      const row = [name, e.how, e.glyphs.length]
+      for (const [p, g] of e.glyphs) {
+        const G = stream[p - 1].glyphs
+        let u = G.u[g]
+        if (u.length > CHAR_MAX) u = u.slice(0, /[\ud800-\udbff]/.test(u[CHAR_MAX - 1]) ? CHAR_MAX - 1 : CHAR_MAX)
         let c = charOf.get(u)
         if (c === undefined) {
           // the last place of `chars` kept for '', every character past it written so: the parser takes CHARS_MAX at
@@ -1072,7 +1087,7 @@ export async function layoutMarksOf(marked, log, { engine, classes = LAYOUT_CLAS
           c = charOf.get(u) ?? chars.length
           if (c === chars.length) { chars.push(u); charOf.set(u, c) }
         }
-        row.push(p, r2(g.x0), r2(g.y), r2(g.size), c)
+        row.push(p, r2(G.x0[g]), r2(G.y[g]), r2(G.size[g]), c)
       }
       for (const [p, b] of bs) row.push(p, r2(b[0]), r2(b[1]), r2(b[2]), r2(b[3]))
       owned.push(row)

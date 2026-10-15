@@ -18,6 +18,21 @@ export interface InkPoint { name: string; glyph: number; box: number }
  *  painted glyph whatever its Unicode; the marked compile's points among them, and each glyph's boxes before it; `capped`
  *  when the walk stopped at OPS_CAP; `rotated` when the page's /Rotate is not 0 (then nothing is returned) */
 export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paths?: number[]; shows?: number; capped: boolean; rotated: boolean }
+/** a page's glyphs packed as columns (packGlyphs): the i-th of each the glyph `order[i]` (each in its own place where no
+ *  order is given); `ix0` and `ix1` its ink across with its advance; `font` the id `fontIds` gives (-1 where none is
+ *  asked); `most` the largest size */
+export interface PackedGlyphs {
+  n: number; x0: Float64Array; x1: Float64Array; y: Float64Array; top: Float64Array; bottom: Float64Array
+  ix0: Float64Array; ix1: Float64Array; size: Float64Array; font: Int32Array; u: string[]; most: number
+}
+/** a column packGlyphs may keep */
+export type GlyphColumn = 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'ix0' | 'ix1' | 'size' | 'font' | 'u'
+/** every column packGlyphs may keep, its default */
+export declare const GLYPH_COLUMNS: readonly GlyphColumn[]
+type PackOptions = { order?: readonly number[] | null; fontIds?: ((font: string) => number) | null }
+/** pageInk's glyphs as the columns a reading keeps past its page: every column, or those asked for */
+export declare function packGlyphs(glyphs: readonly Glyph[], o?: PackOptions & { columns?: undefined }): PackedGlyphs
+export declare function packGlyphs<K extends GlyphColumn>(glyphs: readonly Glyph[], o: PackOptions & { columns: readonly K[] }): Pick<PackedGlyphs, 'n' | 'most' | K>
 /** a glyph's key in an outline table: its font's PostScript name, its character and its advance */
 export declare function outlineKey(font: unknown, fontId: string, g: { fontChar?: unknown; unicode?: unknown; width?: unknown }): string
 /** the outline boxes collected (pageInk's `collect`) as the reader is sent them, in thousandths of an em, by font */

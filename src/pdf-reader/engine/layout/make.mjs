@@ -19,7 +19,7 @@ import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokenizeDocument,
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, NAMES_MAX, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { pageInk } from './ink.mjs'
+import { packGlyphs, pageInk } from './ink.mjs'
 import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
@@ -137,27 +137,15 @@ function viewOf(v) {
   return [x0, y0, x1, y1].every(n => Number.isFinite(n) && Math.abs(n) <= COORD_MAX) && x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : null
 }
 
-/** a page's glyphs by baseline, rising, in arrays (x0, x1, y, top, bottom, size, font, u; ix0 and ix1 their ink across
- *  with their advance; top and bottom their own ink up and down, ink.mjs), and its boxes */
+/** a page's glyphs by baseline, rising, packed (ink.mjs packGlyphs: x0, x1, y, top, bottom, size, font, u; ix0 and ix1
+ *  their ink across with their advance; top and bottom their own ink up and down), each glyph's owner and whether it is
+ *  taken, and its boxes */
 function glyphsOf(got, fontIds) {
   const order = got.glyphs.map((_, i) => i).sort((a, b) => {
     const p = got.glyphs[a], q = got.glyphs[b]
     return p.y - q.y || p.x0 - q.x0 || a - b
   })
-  const n = order.length, P = {
-    n, x0: new Float64Array(n), x1: new Float64Array(n), y: new Float64Array(n), top: new Float64Array(n), bottom: new Float64Array(n),
-    ix0: new Float64Array(n), ix1: new Float64Array(n),
-    size: new Float64Array(n), font: new Int32Array(n), u: new Array(n), owner: new Int32Array(n).fill(-1), taken: new Uint8Array(n),
-    boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2), most: 0,
-  }
-  order.forEach((g, i) => {
-    const t = got.glyphs[g]
-    P.x0[i] = t.x0; P.x1[i] = t.x1; P.y[i] = t.y; P.top[i] = t.top; P.bottom[i] = t.bottom; P.size[i] = t.size; P.u[i] = t.u
-    // its ink across: its outline's and its advance's together (ink.mjs: an italic's overhang past its advance)
-    P.ix0[i] = Math.min(t.x0, t.ix0 ?? t.x0); P.ix1[i] = Math.max(t.x1, t.ix1 ?? t.x1)
-    P.font[i] = fontIds(t.font)
-    if (t.size > P.most) P.most = t.size
-  })
+  const P = { ...packGlyphs(got.glyphs, { order, fontIds }), owner: new Int32Array(order.length).fill(-1), taken: new Uint8Array(order.length), boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2) }
   for (let i = 0; i + 3 < got.boxes.length; i += 4) P.boxes.push([got.boxes[i], got.boxes[i + 1], got.boxes[i + 2], got.boxes[i + 3]])
   return P
 }
@@ -330,7 +318,9 @@ async function gzipSize(bytes) {
 /**
  * A paper's layout file, or why none is made: { file, stats } or { refused, stats }. `units` the paper's (ids their
  * indices); `marks` the marks file of its layout compile; `arxiv` a PDF.js document of arXiv's PDF, which the caller
- * opens and destroys; `OPS` PDF.js's operator codes
+ * opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
+ * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
+ * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes
  */
 export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs }) {
   const stats = blank(units)
@@ -372,8 +362,15 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     let ops = null
     try { ops = await within(page.getOperatorList(), Math.min(OPS_MS, OPS_PAPER_MS - waited)) } catch {}
     waited += now() - t0
-    if (!ops) { giveUp(page, seen); stats.timedOut.push(p); dark.add(p); continue }
+    // a page given up on let go as well: a list that failed has no stream left to cancel, and giveUp's cancellation of
+    // it cleans up nothing (PDF.js's _abortOperatorList returns early); after a cancellation, cleaning up is a no-op
+    if (!ops) { giveUp(page, seen); page.cleanup?.(); stats.timedOut.push(p); dark.add(p); continue }
     const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
+    // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
+    // not every page's to the document's end (48 MiB on 2303.18223's 144 pages; an image a late decode brings is dropped
+    // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the
+    // add-on, which reads lists again, is made from a document of its own: addon.mjs)
+    page.cleanup?.()
     if (got.capped) stats.capped.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part
     if (got.capped || got.rotated) { dark.add(p); continue }

@@ -412,6 +412,9 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(u.pitch).toBe(null)
     const three = fileIndexOf({ lines: [[3, [...line(1, 72, 472, 700), ...line(1, 72, 472, 688), ...line(1, 200, 340, 670), ...line(1, 72, 472, 640), ...line(1, 72, 472, 628)]]], held: [[3, [2]]], ph: [] })
     expect(three.get(1)!.units.get(3)!.pitch).toBe(12)
+    // two columns at the same heights: each column's own gaps, never a line of one beside the other's
+    const columns = fileIndexOf({ lines: [[3, [...line(1, 72, 290, 700), ...line(1, 320, 540, 700), ...line(1, 72, 290, 688), ...line(1, 320, 540, 688)]]], held: [], ph: [] })
+    expect(columns.get(1)!.units.get(3)!.pitch).toBe(12)
   })
 
   it('content: a placeholder is shown once by its own crop of its ink, its source drawn, its characters drawn, or its ink in place', async () => {
@@ -449,6 +452,9 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(contentOf({ phs: [a, b], erased, pageTexts: [{ unit: 3, k: 1, src: a.src, chars: [[201, 186.6], [206, 186.6]] }] }).contentWhere).toEqual([[3, 1, 0], [3, 9, 0]])
     // drawn from their own ink, each once
     expect(contentOf({ phs: [a, b], erased, pageTexts: [{ unit: 3, k: 1, src: a.src, chars: [[240, 204]] }, { unit: 3, k: 9, src: b.src, chars: [[206, 186.6]] }] }).contentLost).toBe(0)
+    // a piece the translation repeats, drawn from its source twice: shown twice; two of one source drawn so: each its own
+    expect(contentOf({ phs: [a], erased, texts: [{ unit: 3, k: 1, src: a.src }, { unit: 3, k: 1, src: a.src }] }).contentWhere).toEqual([[3, 1, 2]])
+    expect(contentOf({ phs: [a, { ...b, src: a.src }], erased, texts: [{ unit: 3, k: 1, src: a.src }, { unit: 3, k: 9, src: a.src }] }).contentLost).toBe(0)
     // two \\eqref of one label, their renderings swapped: each shows the same text where the other stood, both shown once
     const c = { ...b, src: a.src }
     expect(contentOf({ phs: [a, c], erased, pageTexts: [{ unit: 3, k: 1, src: a.src, chars: [[206, 186.6]] }, { unit: 3, k: 9, src: a.src, chars: [[240, 204]] }] }).contentLost).toBe(0)
@@ -583,5 +589,8 @@ describe('what the instrument reads itself, against the engine (the measures aga
     expect(droppedOutputs(record, 'model-proto-x', ['b'])).toEqual(['a', 'c'])
     expect(droppedOutputs(null, 'model-proto-x', ['b'])).toEqual([])
     expect(droppedOutputs({ tiers: { 'model-proto-x': { fixtures: { b: {} } }, 'pixel-proto-x': { fixtures: { a: {}, b: {} } } } }, 'model-proto-x', ['b'])).toEqual([])
+    // a pixel record over a record that holds only a model run of the kind, which recording it deletes: held to it
+    expect(droppedOutputs({ tiers: { 'model-proto-x': { fixtures: { a: {}, b: {} } } } }, 'pixel-proto-x', ['b'])).toEqual(['a'])
+    expect(droppedOutputs({ tiers: { 'model-proto-x': { fixtures: { a: {} } }, 'pixel-proto-x': { fixtures: { b: {} } } } }, 'pixel-proto-x', ['b'])).toEqual(['a'])
   })
 })
