@@ -753,6 +753,12 @@ function referenceOf(page, name, upTo) {
   }
   return DOOR_REFS.get(name)
 }
+/** a page's markups that differ, written to out/layer-gate/door-diff/<name>-p<page>-<side>.svg (never in the repository) */
+function writeDiff(name, p, sides) {
+  const dir = join(ROOT, 'out/layer-gate/door-diff')
+  mkdirSync(dir, { recursive: true })
+  for (const [side, svg] of Object.entries(sides)) writeFileSync(join(dir, `${name}-p${p}-${side}.svg`), svg)
+}
 /** what a page asked another way is compared by with the reference's: each answer equal */
 const sameAs = (r, g, target) => ({ svg: r.svg === g?.svg, lang: r.lang === target, size: r.w === g?.w && r.h === g?.h, words: r.words === g?.words, copy: r.copy.sha === g?.copy.sha, recs: r.recs === g?.recs })
 const KEYS = ['svg', 'lang', 'size', 'words', 'copy', 'recs']
@@ -773,6 +779,8 @@ async function doorOrderFixture(page, name, errors) {
     await openDoorPage(page, 'doororder')
     const run = await page.evaluate(x => window.doorOrder.order(x), { name, target, rules: '/rules/layout-rules.json', pages, mode: DOOR_ORDER })
     const rows = run.pages.map((d, i) => (d.missing ? { p: d.p, missing: true } : { p: d.p, ...sameAs(d, ref.pages[i], target), wordsSha: ref.pages[i]?.words }))
+    // (a page's two markups where they differ, to look at: never in the repository, they hold the paper's translation)
+    for (const [i, e] of rows.entries()) if (!e.missing && !e.svg) writeDiff(name, e.p, { ref: ref.pages[i]?.svg ?? '', order: run.pages[i].svg })
     const n = key => rows.filter(e => e[key]).length
     const left = { skipped: run.skipped.join('\n') === ref.skipped.join('\n'), states: run.states === ref.states, drawn: run.drawn === ref.drawn }
     const ok = rows.length === ref.pages.length && rows.length > 0 && KEYS.every(k => n(k) === rows.length) && left.skipped && left.states && left.drawn && ref.completes.ok && run.completes.ok && !run.repeats.length && !run.errors.length && !errors.length

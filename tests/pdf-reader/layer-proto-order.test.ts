@@ -98,6 +98,22 @@ describe('the run: a page asked in any order answers as the page asked in order'
   })
 })
 
+describe('a face\'s class in the markup is the face\'s own name, never the order the faces were first met in', () => {
+  // (a page laid by its closure meets its faces in another order than the pages laid in turn; a counter of first uses named
+  // them by that order, and the same page's markup differed though its glyphs did not)
+  it('names each face by its key, whichever face a run meets first', async () => {
+    const { svgOfUnit } = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+    const fnv = (key: string) => { let h = 0x811c9dc5; for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193) >>> 0; return `axf${h.toString(36)}` }
+    const face = (family: string, weight: number) => ({ family, weight, style: 'normal', caps: false, size: 1 })
+    const A = face('"order-test A"', 400), B = face('"order-test B"', 700)
+    const unit = (first: typeof A, then: typeof A) => ({ f: 10, state: { track: 0, trackLatin: 0 }, lines: [{ page: 1, x0: 0, baseline: 100, items: [{ x: 0, t: { s: 'Ab', cls: 'latin', face: first } }, { x: 20, t: { space: true } }, { x: 30, t: { s: 'Cd', cls: 'latin', face: then } }] }] })
+    const classes = (svg: string) => [...svg.matchAll(/class="([^"]+)"/g)].map(m => m[1])
+    // (B met first, then A: each is named by its own key)
+    expect(classes(svgOfUnit(unit(B, A) as never, 1, (x: number, y: number) => [x, y], 1, 0))).toEqual([fnv('"order-test B"|700|normal|0'), fnv('"order-test A"|400|normal|0')])
+    expect(classes(svgOfUnit(unit(A, B) as never, 1, (x: number, y: number) => [x, y], 1, 1))).toEqual([fnv('"order-test A"|400|normal|0'), fnv('"order-test B"|700|normal|0')])
+  })
+})
+
 describe('the reader\'s door: pageOf in any order, bursts, aborts and asks made again answer as the page asked in order', () => {
   const faceSources = async (id: string) => [{ url: `/f/${id}.otf`, ranges: [0, 0x10ffff] }]
   const hyphUrl = (lang: string) => `/hyph/${lang}.json`

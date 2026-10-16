@@ -112,7 +112,7 @@ function rowsOf(bundle: ReadBundle, tr: (id: number) => string = id => CJK(4, 0x
 const tick = () => new Promise(ok => setTimeout(ok, 0))
 /** the sheets in the page but the one of the faces' classes the SVG text names (layer2.mjs faceClass), which every run of
  *  the page shares, each face's class made once */
-const faceSheet = (e: HTMLStyleElement) => { const rules = [...(e.sheet?.cssRules ?? [])]; return rules.length > 0 && rules.every(r => /^\.axf\d+$/.test((r as CSSStyleRule).selectorText ?? '')) }
+const faceSheet = (e: HTMLStyleElement) => { const rules = [...(e.sheet?.cssRules ?? [])]; return rules.length > 0 && rules.every(r => /^\.axf[0-9a-z-]+$/.test((r as CSSStyleRule).selectorText ?? '')) }
 const styles = () => [...document.head.querySelectorAll('style')].filter(e => !faceSheet(e)).length
 
 beforeEach(() => { seen.opens.length = 0; seen.runs.length = 0; seen.urls.length = 0; facesAsked.length = 0 })
