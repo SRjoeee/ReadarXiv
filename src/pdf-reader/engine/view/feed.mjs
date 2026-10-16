@@ -92,7 +92,7 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
   /** the chain as told, in page order; the parts told that do not follow yet; when each part was first heard; the digests
    *  refused; the parts the last end told names (a fork leaves them be); each part read, by digest (its reading a function
    *  of the part before it, which its `prev` names) */
-  let told = [], gen = 0, seq = 0, named = new Set()
+  let told = [], gen = 0, seq = 0, named = null
   const waiting = new Map(), heard = new Map(), refusedParts = new Set(), readOf = new Map()
   /** the parts read, aligned with `told` as far as it is read */
   let read = []
@@ -118,7 +118,7 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
       const dropped = told.slice(at)
       if (!joins(r)) return false
       const live = dropped.filter(t => !refusedParts.has(t.sha256))
-      if (live.some(t => named.has(t.sha256) || heard.get(t.sha256) > heard.get(r.sha256))) return false
+      if (live.some(t => named?.has(t.sha256) || heard.get(t.sha256) > heard.get(r.sha256))) return false
       cut(at)
     } else if (r.from !== lastTo() + 1 || !joins(r)) return false
     told.push(r)
@@ -208,7 +208,8 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
       const whole = told1 && Array.isArray(parts) ? chainOf(parts, told1.through) : null
       if (whole) {
         const same = whole.length === told.length && whole.every((r, i) => r.sha256 === told[i].sha256)
-        const sameNamed = whole.length === named.size && whole.every(r => named.has(r.sha256))
+        // (none named before: the first catalog, which drops the waiters whatever chain it names, an empty one too)
+        const sameNamed = !!named && whole.length === named.size && whole.every(r => named.has(r.sha256))
         if (!same) {
           const keep = told.findIndex((t, i) => t.sha256 !== whole[i]?.sha256)
           cut(keep < 0 ? told.length : keep)
@@ -216,8 +217,8 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
           gen++
           moved = true
         }
-        // a part waiting from before the catalog is none of its chain's: it does not join it later. The same catalog told
-        // again keeps the parts that came after it (a later build's, which wait for their predecessors)
+        // one rule: a catalog drops the parts waiting from before it, unless it is the catalog in force told again, which
+        // keeps the parts heard since (a later build's, waiting for their predecessors)
         if (!same || !sameNamed) waiting.clear()
         named = new Set(whole.map(r => r.sha256))
       } else {

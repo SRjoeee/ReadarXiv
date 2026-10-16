@@ -364,6 +364,18 @@ describe('the feed: the PR\'s review, third round (#379)', () => {
     f.dispose()
   })
 
+  it('the first catalog, of no part, drops a part that waited before it: a later page 1 joins it alone (4290316952, 4290327860)', async () => {
+    const M = await made()
+    const f = createFeed({ fetchObject: server(M).fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [catalogRef(M, 1)] })
+    await flush()
+    f.tell({ parts: [], end: { through: 0 } })
+    f.tell({ parts: [jobRef(M, 0)] })
+    await flush()
+    expect(shas(f.state().parts)).toEqual([M.parts[0]!.sha256])
+    f.dispose()
+  })
+
   it('the same catalog told again keeps a part that came after it and waits for its predecessor (4289273579)', async () => {
     const M = await made()
     const f = createFeed({ fetchObject: server(M).fetchObject })
