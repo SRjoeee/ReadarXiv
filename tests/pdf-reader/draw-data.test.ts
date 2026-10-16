@@ -40,7 +40,7 @@ describe('drawDataOf', () => {
     const { draw, why } = await drawDataOf(page)
     expect(page.calls).toEqual(['text', 'ann'])
     expect(why).toBeNull()
-    expect(draw!.fonts).toEqual([['CMR10', 'serif', 0, ['a', 'b', 'ﬁ', 'fi']], ['Type3Font', 'sans-serif', 1, null], [null, null, 2, null]])
+    expect(draw!.fonts).toEqual([['CMR10', 'serif', 0, ['a', 'b', 'ﬁ', 'f', 'i']], ['Type3Font', 'sans-serif', 1, null], [null, null, 2, null]])
     expect(draw!.items.map(i => [i[0], i[8]])).toEqual([['hello', 0], ['', 0], ['x', 1], ['y', -1], ['z', 2]])
     expect(draw!.items[0]).toEqual(['hello', 10, 0, 10, 72, 700, 20, 10, 0])
     expect(draw!.links).toEqual([[[1, 2, 3, 4], null, null, 'sec.1', 'x', 0, 1, [0, 255, 0]]])
