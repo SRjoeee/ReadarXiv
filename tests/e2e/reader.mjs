@@ -32,7 +32,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { readBundle, VTAG } from '../../src/pdf-reader/engine/layer-proto/bundle.mjs'
-import { CTAG4 } from '../../src/pdf-reader/engine/layer-proto/format.mjs'
+import { CTAG5 } from '../../src/pdf-reader/engine/layer-proto/format.mjs'
 import { cutSample, rowsOf, sampleFiles } from './lib/layer-cut.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
@@ -47,7 +47,7 @@ const EXT = `${HERE}.ext-reader`
 const SHOTS = `${HERE}.shots`
 
 // ---- the paper, and the stand-in of the layer API over it
-/** the sample as BUNDLE 4's objects, which the stand-in serves under CTAG4 beside BUNDLE 3's bundle */
+/** the sample as BUNDLE 4's objects, which the stand-in serves under CTAG5 beside BUNDLE 3's bundle */
 const sampleCut = await cutSample(sampleFiles())
 const api = layerApi({ layer4: sampleCut })
 /** a face for the layer's Latin text, of the PDF.js package this tree holds (the extension's served faces are its run's, PR 5) */
@@ -671,7 +671,7 @@ try {
       if (r.status === 202 && body.layer) window.__reader.side.tell(body.layer)
       if (r.status === 200) window.__reader.side.tell({ head: body.head, units: body.units, parts: body.parts, end: body.end })
       return { status: r.status, parts: body.layer?.parts?.length ?? body.parts?.length ?? 0 }
-    }, `https://readarxiv.com/api/v1/layer/${sample.segment}/${CTAG4}`)
+    }, `https://readarxiv.com/api/v1/layer/${sample.segment}/${CTAG5}`)
     const looks = []
     for (let i = 0; i < 12; i++) { const a = await look(); looks.push(a); if (a.status === 200) break; await page.waitForTimeout(400) }
     api.set({ layer: mode.ready() })

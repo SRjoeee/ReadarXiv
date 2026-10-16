@@ -33,16 +33,16 @@ import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG */
-export const BUNDLE4 = '4'
+export const BUNDLE5 = '5'
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
-/** the reader's contract, `b4-j<PDFJS>`: what a reader asks by. Until the pin moves (next's extension asks for BUNDLE 3's) it
- *  is named with the 4 */
-export const CTAG4 = `b${BUNDLE4}-j${PDFJS}`
+/** the reader's contract, `b5-j<PDFJS>`: what a reader asks by. Until the pin moves (next's extension asks for BUNDLE 3's) it
+ *  is named with the 5 */
+export const CTAG5 = `b${BUNDLE5}-j${PDFJS}`
 /** the content's: the contract, then the pipeline, the layout maker and the remover the server made it with; a key's
  *  directory (and the catalog's name). A reader reads objects of a newer maker: those three are named, never compared */
-export const VTAG4 = `${CTAG4}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`
+export const VTAG5 = `${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`
 
 /** a units chunk's bytes at most, its values, and its nesting: the object, `units`, a unit, its pieces, a piece */
 export const UNITS_CAP = 2 * 2 ** 20, UNITS_VALUES = 400_000
@@ -123,7 +123,7 @@ function exactKeys(kind, v, keys, path) {
 /** the object's first two keys: the format (`bundle`, a units chunk's own `format`) and the kind it is; refused for what it is
  *  before its other keys are looked at */
 function envelope(kind, v, keys) {
-  const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? UNITS_FORMAT : BUNDLE4
+  const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? UNITS_FORMAT : BUNDLE5
   if (!isObject(v)) throw refuse(kind, '', `not an object (${kindOf(v)})`)
   if (v[tag] !== want) throw refuse(kind, tag, `not this reader's '${want}' (${typeof v[tag] === 'string' ? told(v[tag]) : kindOf(v[tag])})`)
   if (v.kind !== kind) throw refuse(kind, 'kind', `not a ${kind} (${typeof v.kind === 'string' ? told(v.kind) : kindOf(v.kind)})`)
@@ -242,13 +242,13 @@ async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null
     if (content > CONTENT_MAX) throw past(`${content} bytes of content, past ${CONTENT_MAX}`, 'content', content, CONTENT_MAX)
   }
   const sha256 = await digestOf(bytes)
-  const key = kind === 'catalog' ? catalogKey(paper.id, paper.version, vtag) : keyOf(paper.id, paper.version, CTAG4, sha256)
+  const key = kind === 'catalog' ? catalogKey(paper.id, paper.version, vtag) : keyOf(paper.id, paper.version, CTAG5, sha256)
   return { kind, bytes, sha256, key, ref: { kind, ...pos, sha256, bytes: bytes.length }, ...pos, values: n }
 }
 const written = (kind, obj, def, paper, pos, contentOf = null, vtag = null) => finish(kind, JSON.stringify(obj), def, paper, pos, contentOf, vtag)
 
 /** the VTAG the versions of a head or a catalog make: what names the catalog, for its writer and for its reader */
-const vtagOf = v => `b${BUNDLE4}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}`
+const vtagOf = v => `b${BUNDLE5}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}`
 
 // ---------------------------------------------------------------- keys
 const CTAG_FORM = /^b[0-9]+-j[0-9A-Za-z.]+$/
@@ -650,7 +650,7 @@ export async function readHead(bytes, { ref, caps }) {
  *  chunks `writeUnitChunks` gave, in order */
 export async function writeHead({ paper, base, image, units, lineskip }) {
   const obj = {
-    bundle: BUNDLE4, kind: 'head',
+    bundle: BUNDLE5, kind: 'head',
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
     base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref },
     versions: { pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image },
@@ -948,7 +948,7 @@ export async function writePart({ paper, head, prev, pages, views, left, fileOnl
   // (a tail past TAIL_CAP is the cut's to answer with a shorter part: E3's writer keeps one page's tail within it)
   if (addon !== null && addon.tail !== null && addon.tail.length > TAIL_CAP) throw new BundleRefusal(`more than ${TAIL_CAP} bytes (${addon.tail.length})`, { kind: K, path: 'addon.tail', data: { bound: 'tail', size: addon.tail.length, max: TAIL_CAP } })
   const obj = {
-    bundle: BUNDLE4, kind: 'part', head, prev, pages: [pages[0], pages[1]],
+    bundle: BUNDLE5, kind: 'part', head, prev, pages: [pages[0], pages[1]],
     views: views.map(r3),
     left: left.map(([id, stream, rects]) => [id, stream, rects.map(([p, x0, y0, x1, y1]) => [p, r3(x0), r3(y0), r3(x1), r3(y1)])]),
     fileOnly: fileOnly.map(([id, after]) => [id, after]),
@@ -1071,7 +1071,7 @@ export async function readLeftPart(bytes, { ref, streamOf, caps }) {
 
 /** the left part of a page with no tokens (n = 0, no spans, no pairs): what a page whose part would pass its caps ships */
 const emptyLeft = (page, first) => ({
-  bundle: BUNDLE4, kind: 'left', page, first,
+  bundle: BUNDLE5, kind: 'left', page, first,
   tokens: { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }, spans: [], pairs: [], draw: null,
 })
 
@@ -1083,7 +1083,7 @@ const emptyLeft = (page, first) => ({
  */
 export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, draw = null }) {
   const obj = {
-    bundle: BUNDLE4, kind: 'left', page, first,
+    bundle: BUNDLE5, kind: 'left', page, first,
     tokens: { perPage: [...tokens.perPage], l: [...tokens.l], r: [...tokens.r], y: [...tokens.y], h: [...tokens.h], top: [...tokens.top], bottom: [...tokens.bottom] },
     spans: spans.map(([id, ranges]) => [id, [...ranges]]),
     pairs: pairs.map(([id, runs]) => [id, [...runs]]),
@@ -1168,7 +1168,7 @@ export async function writeCatalog({ head, units, parts, end }) {
   const refs = (list, kind) => list.map(u => ({ kind, from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes }))
   const through = parts.length ? parts[parts.length - 1].to : 0
   const obj = {
-    bundle: BUNDLE4, kind: 'catalog',
+    bundle: BUNDLE5, kind: 'catalog',
     paper: { id: head.paper.id, version: head.paper.version, pages: head.paper.pages },
     versions: Object.fromEntries(VERSION_KEYS.map(k => [k, head.versions[k]])),
     head: { kind: 'head', sha256: head.sha256, bytes: head.bytes },
@@ -1243,7 +1243,7 @@ export function mergeParts(index, parts) {
     schema: 1,
     paper: { id: head.paper.id, version: head.paper.version, pages: N },
     base: { bytes: head.base.bytes, sha256: head.base.sha256, url: originalUrl(head.paper.id, head.paper.version) },
-    versions: { bundle: BUNDLE4, ...head.versions },
+    versions: { bundle: BUNDLE5, ...head.versions },
     units: [...index.units],
     left: { kinds: index.kinds.map(k => k ?? ''), pages: boxes, units },
     layout, addon, dropped: [...index.dropped],

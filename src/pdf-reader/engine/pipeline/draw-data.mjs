@@ -28,7 +28,7 @@ const hostDependent = f => f !== null && typeof f === 'object' && typeof f.isTyp
 /**
  * Page `page`'s draw, from a PDF.js page proxy whose operator list has been read: { draw, why }, `draw` the draw in PDF.js's shapes
  * (layer-proto/draw.mjs wireOf makes it the data and sheds what the reader would refuse) or null, `why` null or the reason for none:
- * 'read' (text or annotations could not be read), 'font' (a font a host would read differently), 'shed' (a cap). A memory-class
+ * 'read' (text or annotations could not be read), 'props' (the document was opened without fontExtraProperties), 'font' (a font a host would read differently), 'shed' (a cap). A memory-class
  * error is thrown
  */
 export async function drawDataOf(page) {
@@ -56,7 +56,8 @@ export async function drawDataOf(page) {
           const type3 = f !== null && typeof f === 'object' && typeof f.isType3Font === 'boolean' ? (f.isType3Font ? 1 : 0) : 2
           let mapped = null
           if (type3 === 0) {
-            if (!('toUnicode' in f)) return { draw: null, why: 'read' }
+            // (the document was opened without `fontExtraProperties: true`: the fonts carry no map; a setup fault, told apart in the stats)
+            if (!('toUnicode' in f)) return { draw: null, why: 'props' }
             const set = mappedChars(f.toUnicode)
             mapped = set === null ? null : [...set]
           }

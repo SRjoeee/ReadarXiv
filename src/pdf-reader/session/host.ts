@@ -16,7 +16,7 @@ import { lookOf } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { readConfig, watchConfig } from '@/config/storage'
 import { R } from '@/ui/strings'
-import { CTAG4 } from '../engine/layer.mjs'
+import { CTAG5 } from '../engine/layer.mjs'
 import type { FaceSlice } from '../engine/layer-proto/fonts.mjs'
 import { createLayerSide, createReaderView, type DocumentTask, type LayerSide, type LayerSideOptions, type ReaderHost, type ReaderView, type ViewPrefs } from '../engine/view.mjs'
 import { readerAddresses } from '../addresses.mjs'
@@ -112,12 +112,12 @@ const DIGEST = /^[0-9a-f]{64}$/
 const OBJECT_MARGIN = 1024
 /**
  * The layer's transport for the view's layer side, over the layer API at `api` (an origin): each object by its whole digest
- * (`/api/v1/layer/<id>v<n>/<CTAG4>/o/<sha256>`, immutable; the side's readers check the digest); the base, the bytes the left
+ * (`/api/v1/layer/<id>v<n>/<CTAG5>/o/<sha256>`, immutable; the side's readers check the digest); the base, the bytes the left
  * holds digested against the head's (a mismatch is no layer here: fetching our copy and showing it is the extension's run's);
  * the composed document, PDF.js over the original's bytes followed by the tails told, with the side's options
  */
 export function layerTransport(view: ReaderView, api: string, paper: { id: string; version: number }): Pick<LayerSideOptions, 'fetchObject' | 'bind' | 'composed'> {
-  const at = `${api}/api/v1/layer/${paper.id.replace('/', '_')}v${paper.version}/${CTAG4}/o/`
+  const at = `${api}/api/v1/layer/${paper.id.replace('/', '_')}v${paper.version}/${CTAG5}/o/`
   return {
     async fetchObject(ref, signal) {
       // a digest in the path, nothing else; no more read than the ref's bytes (and a margin for an encoded answer's length):

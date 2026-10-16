@@ -6,9 +6,9 @@ import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import type { PartChain, ReadUnitsChunk, ReadUnitsChunkLight } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import {
-  BUILD_END_WHYS, BUNDLE4, DEPTH_NONE, KIND_NONE, RECORD_FLAG, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG4, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
+  BUILD_END_WHYS, BUNDLE5, DEPTH_NONE, KIND_NONE, RECORD_FLAG, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG5, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
   isFinalEnd, keyOf, keyParts, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
-  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG4, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
+  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG5, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { authorsTranslated } from '@/pdf-reader/engine/translate/kept.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -162,7 +162,7 @@ describe('each writer then its reader is the identity', () => {
     const parts = M.parts.map(p => ({ from: p.from, to: p.to, sha256: p.sha256, bytes: p.bytes.length }))
     const units = M.chunks.map(c => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length }))
     const done = await writeCatalog({ head: M.readHead, units, parts, end: { through: 4 } })
-    expect(done.key).toBe(catalogKey(PAPER.id, PAPER.version, VTAG4))
+    expect(done.key).toBe(catalogKey(PAPER.id, PAPER.version, VTAG5))
     const c = await readCatalog(done.bytes, { key: done.key, paper: PAPER })
     expect(c).toMatchObject({ kind: 'catalog', sha256: done.sha256, paper: { ...PAPER, pages: N }, head: { kind: 'head', sha256: M.head.sha256 }, end: { through: 4 } })
     expect(c.parts).toEqual(parts.map(r => ({ kind: 'part', ...r })))
@@ -227,7 +227,7 @@ describe('mergeParts is the whole', () => {
     expect(encodeLayout(merged.layout!)).toBe(encodeLayout(read.layout!))
     expect(merged.addon!.manifest).toEqual(read.addon!.manifest)
     expect(merged.addon!.tail).toEqual(read.addon!.tail)
-    expect(merged.versions).toEqual({ bundle: BUNDLE4, ...M.readHead.versions })
+    expect(merged.versions).toEqual({ bundle: BUNDLE5, ...M.readHead.versions })
   })
 
   it('refuses parts that are not one chain: the first with a prev, a part that does not follow the digest of the one before (two chains sharing a head)', async () => {
@@ -405,9 +405,9 @@ describe('a reader\'s envelope', () => {
   }
 
   it('refuses a unit chunk\'s old envelope (`bundle` in place of `format`): the chunk\'s format is its own', async () => {
-    expect(await refusal(read('units', o => { o.bundle = '4'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
+    expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
-    expect(BUNDLE4).toBe('4')
+    expect(BUNDLE5).toBe('5')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1620,14 +1620,14 @@ describe('the catalog', () => {
   it('is the key\'s: of its paper and of the VTAG its versions make; and the paper asked for', async () => {
     const w = await catalog()
     const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
-    expect(w.key).toBe(`layer/${PAPER.id}v${PAPER.version}/${VTAG4}.json`)
+    expect(w.key).toBe(`layer/${PAPER.id}v${PAPER.version}/${VTAG5}.json`)
     expect(c.versions).toEqual(M.readHead.versions)
     const other = (vtag: string) => catalogKey(PAPER.id, PAPER.version, vtag)
-    await refused(() => {}, 'versions', { key: other(VTAG4.replace(/-r\d+$/, '-r99')) })
-    await refused(() => {}, 'versions', { key: other(VTAG4.replace('-p', '-p9')) })
-    await refused(() => {}, 'paper', { key: catalogKey('2608.04323', 1, VTAG4) })
-    await refused(() => {}, 'paper', { key: catalogKey(PAPER.id, 2, VTAG4) })
-    await refused(() => {}, 'key', { key: keyOf(PAPER.id, 1, CTAG4, '0'.repeat(64)) })
+    await refused(() => {}, 'versions', { key: other(VTAG5.replace(/-r\d+$/, '-r99')) })
+    await refused(() => {}, 'versions', { key: other(VTAG5.replace('-p', '-p9')) })
+    await refused(() => {}, 'paper', { key: catalogKey('2608.04323', 1, VTAG5) })
+    await refused(() => {}, 'paper', { key: catalogKey(PAPER.id, 2, VTAG5) })
+    await refused(() => {}, 'key', { key: keyOf(PAPER.id, 1, CTAG5, '0'.repeat(64)) })
     await refused(() => {}, 'key', { key: 'layer/x' })
     await refused(() => {}, 'paper', { paper: { id: PAPER.id, version: 2 } })
   })
@@ -1638,8 +1638,8 @@ describe('the catalog', () => {
     const f = forged('head', h)
     const other = await readHead(f.bytes, { ref: f.ref })
     const w = await writeCatalog({ head: other, units: units(), parts: parts(), end: { through: 4 } })
-    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b4-j${PDFJS}-p12-l7-r99`))
-    expect(w.key).not.toBe(catalogKey(PAPER.id, PAPER.version, VTAG4))
+    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b5-j${PDFJS}-p12-l7-r99`))
+    expect(w.key).not.toBe(catalogKey(PAPER.id, PAPER.version, VTAG5))
     const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
     expect(c.versions).toMatchObject({ pipeline: '12', layout: '7', removal: '99' })
   })
@@ -1787,47 +1787,47 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG4).toBe(`b4-j${PDFJS}`)
-    expect(VTAG4).toBe(`${CTAG4}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
-    const key = keyOf('2608.04322', 3, CTAG4, sha)
-    expect(key).toBe(`layer/2608.04322v3/${CTAG4}/${sha}.json`)
-    expect(keyParts(key)).toEqual({ paper: '2608.04322', version: 3, ctag: CTAG4, sha256: sha })
-    const cat = catalogKey('2608.04322', 3, VTAG4)
-    expect(cat).toBe(`layer/2608.04322v3/${VTAG4}.json`)
-    expect(keyParts(cat)).toEqual({ paper: '2608.04322', version: 3, vtag: VTAG4 })
+    expect(CTAG5).toBe(`b5-j${PDFJS}`)
+    expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
+    const key = keyOf('2608.04322', 3, CTAG5, sha)
+    expect(key).toBe(`layer/2608.04322v3/${CTAG5}/${sha}.json`)
+    expect(keyParts(key)).toEqual({ paper: '2608.04322', version: 3, ctag: CTAG5, sha256: sha })
+    const cat = catalogKey('2608.04322', 3, VTAG5)
+    expect(cat).toBe(`layer/2608.04322v3/${VTAG5}.json`)
+    expect(keyParts(cat)).toEqual({ paper: '2608.04322', version: 3, vtag: VTAG5 })
     // the writers' keys are these
-    expect(M.head.key).toBe(keyOf(PAPER.id, PAPER.version, CTAG4, M.head.sha256))
-    expect(M.parts[1]!.key).toBe(keyOf(PAPER.id, PAPER.version, CTAG4, M.parts[1]!.sha256))
+    expect(M.head.key).toBe(keyOf(PAPER.id, PAPER.version, CTAG5, M.head.sha256))
+    expect(M.parts[1]!.key).toBe(keyOf(PAPER.id, PAPER.version, CTAG5, M.parts[1]!.sha256))
   })
 
   it('an old identifier\'s slash is written _, and read back', () => {
     for (const id of ['hep-th/9901001', 'math.GT/0309136', 'astro-ph/0001001']) {
-      const key = keyOf(id, 12, CTAG4, sha)
-      expect(key).toBe(`layer/${id.replace('/', '_')}v12/${CTAG4}/${sha}.json`)
-      expect(keyParts(key)).toEqual({ paper: id, version: 12, ctag: CTAG4, sha256: sha })
-      expect(keyParts(catalogKey(id, 12, VTAG4))).toEqual({ paper: id, version: 12, vtag: VTAG4 })
+      const key = keyOf(id, 12, CTAG5, sha)
+      expect(key).toBe(`layer/${id.replace('/', '_')}v12/${CTAG5}/${sha}.json`)
+      expect(keyParts(key)).toEqual({ paper: id, version: 12, ctag: CTAG5, sha256: sha })
+      expect(keyParts(catalogKey(id, 12, VTAG5))).toEqual({ paper: id, version: 12, vtag: VTAG5 })
     }
   })
 
   it('refuses the spellings keyOf would not write', () => {
-    const good = keyOf('2608.04322', 3, CTAG4, sha)
+    const good = keyOf('2608.04322', 3, CTAG5, sha)
     for (const bad of [
       good.replace('v3/', 'v03/'), good.replace('v3/', 'v0/'), good.replace('v3/', 'v/'), good.replace(sha, 'A'.repeat(64)), good.replace(sha, sha.slice(1)), good.replace(sha, `${sha}0`),
       good.replace('.json', '.JSON'), good.replace('layer/', 'layer3/'), `${good}/`, `/${good}`, good.replace('2608.04322', '2608.043'), good.replace('2608.04322v3', 'hep-th/9901001v3'),
-      good.replace(CTAG4, 'b4'), good.replace(CTAG4, `${CTAG4}-p11`), good.replace(CTAG4, 'B4-j6'), good.replace('/', '//'), good.replace('2608.04322', '..'),
-      catalogKey('2608.04322', 3, VTAG4).replace('-l', '-L'), catalogKey('2608.04322', 3, VTAG4).replace(`${VTAG4}`, CTAG4), 'layer/2608.04322v3/x.json', 'x', '', `layer/${'a'.repeat(400)}`,
+      good.replace(CTAG5, 'b5'), good.replace(CTAG5, `${CTAG5}-p11`), good.replace(CTAG5, 'B5-j6'), good.replace('/', '//'), good.replace('2608.04322', '..'),
+      catalogKey('2608.04322', 3, VTAG5).replace('-l', '-L'), catalogKey('2608.04322', 3, VTAG5).replace(`${VTAG5}`, CTAG5), 'layer/2608.04322v3/x.json', 'x', '', `layer/${'a'.repeat(400)}`,
     ]) expect(keyParts(bad), bad).toBeNull()
     expect(keyParts(7 as never)).toBeNull()
     // (the old identifier with its slash in the key, where a _ goes)
-    expect(keyParts(`layer/hep-th/9901001v1/${CTAG4}/${sha}.json`)).toBeNull()
+    expect(keyParts(`layer/hep-th/9901001v1/${CTAG5}/${sha}.json`)).toBeNull()
   })
 
   it('throws a RangeError on an identifier, a version, a tag or a digest that is not one', () => {
-    for (const args of [['../x', 1, CTAG4, sha], ['2608.04322', 0, CTAG4, sha], ['2608.04322', 1001, CTAG4, sha], ['2608.04322', 1.5, CTAG4, sha], ['2608.04322', 1, 'b4', sha], ['2608.04322', 1, CTAG4, 'abc'], ['2608.04322', 1, CTAG4, sha.toUpperCase()], [7, 1, CTAG4, sha]] as const) {
+    for (const args of [['../x', 1, CTAG5, sha], ['2608.04322', 0, CTAG5, sha], ['2608.04322', 1001, CTAG5, sha], ['2608.04322', 1.5, CTAG5, sha], ['2608.04322', 1, 'b5', sha], ['2608.04322', 1, CTAG5, 'abc'], ['2608.04322', 1, CTAG5, sha.toUpperCase()], [7, 1, CTAG5, sha]] as const) {
       expect(() => (keyOf as (...a: unknown[]) => string)(...args), String(args)).toThrow(RangeError)
     }
-    expect(() => catalogKey('2608.04322', 1, 'b4-j1')).toThrow(RangeError)
-    expect(() => catalogKey('2608.04322v1', 1, VTAG4)).toThrow(RangeError)
+    expect(() => catalogKey('2608.04322', 1, 'b5-j1')).toThrow(RangeError)
+    expect(() => catalogKey('2608.04322v1', 1, VTAG5)).toThrow(RangeError)
   })
 
   it('partTarget gives the doubling schedule: 1, 2–3, 4–7, … and N', () => {

@@ -153,13 +153,13 @@ describe('the layer\'s transport (layerTransport)', () => {
   const viewOf = (data: Uint8Array | null) => ({ originalData: () => (data ? Promise.resolve(data) : null) }) as never
 
   it('fetches an object by its whole digest under the reader\'s ctag, with no credentials; an answer that is not ok refuses it', async () => {
-    const { CTAG4 } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+    const { CTAG5 } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
     const calls: [string, RequestInit][] = []
     vi.stubGlobal('fetch', async (url: string, init: RequestInit) => { calls.push([url, init]); return url.endsWith('b'.repeat(64)) ? new Response('nope', { status: 404 }) : new Response(new Uint8Array([1, 2, 3])) })
     const t = layerTransport(viewOf(original), 'https://readarxiv.com', { id: 'math/0601001', version: 2 })
     const signal = new AbortController().signal
     expect([...(await t.fetchObject({ kind: 'part', sha256: 'a'.repeat(64), bytes: 3 }, signal))]).toEqual([1, 2, 3])
-    expect(calls[0]?.[0]).toBe(`https://readarxiv.com/api/v1/layer/math_0601001v2/${CTAG4}/o/${'a'.repeat(64)}`)
+    expect(calls[0]?.[0]).toBe(`https://readarxiv.com/api/v1/layer/math_0601001v2/${CTAG5}/o/${'a'.repeat(64)}`)
     expect(calls[0]?.[1]).toMatchObject({ credentials: 'omit', signal })
     await expect(t.fetchObject({ kind: 'part', sha256: 'b'.repeat(64), bytes: 3 }, signal)).rejects.toThrow(/404/)
     vi.unstubAllGlobals()

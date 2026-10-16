@@ -346,9 +346,9 @@ describe('on the wire (a local HTTP server over the same answers)', () => {
 
 describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the objects by digest', async () => {
   const { cutSample, sampleFiles } = await import('./layer-cut.mjs')
-  const { CTAG4, readCatalog } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+  const { CTAG5, readCatalog } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
   const layer4 = await cutSample(sampleFiles())
-  const PATH = `/api/v1/layer/${sample.segment}/${CTAG4}`
+  const PATH = `/api/v1/layer/${sample.segment}/${CTAG5}`
 
   it('answers the CTAG\'s GET with the catalog, which names the head, the chunks and the parts the job tells', async () => {
     const a = get(layerApi({ sample, layer4 }), PATH)
@@ -388,7 +388,7 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
       expect(createHash('sha256').update((a as { body: Uint8Array }).body).digest('hex')).toBe(sha)
       expect((a as { body: Uint8Array }).body).toEqual(bytes)
     }
-    for (const path of [`${PATH}/o/${'0'.repeat(64)}`, `/api/v1/layer/2600.99999v1/${CTAG4}/o/${[...layer4.objects.keys()][0]}`, `/api/v1/layer/${sample.segment}/${VTAG}/o/${[...layer4.objects.keys()][0]}`]) {
+    for (const path of [`${PATH}/o/${'0'.repeat(64)}`, `/api/v1/layer/2600.99999v1/${CTAG5}/o/${[...layer4.objects.keys()][0]}`, `/api/v1/layer/${sample.segment}/${VTAG}/o/${[...layer4.objects.keys()][0]}`]) {
       const a = get(api, path)
       expect(a.status, path).toBe(404)
       expect(jsonOf(a)).toEqual({ why: 'not-prepared' })

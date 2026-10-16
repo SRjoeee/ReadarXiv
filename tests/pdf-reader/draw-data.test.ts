@@ -1,6 +1,9 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { drawInputsOf } from '@/pdf-reader/engine/layer-proto/draw.mjs'
+import { checkDraw, drawInputsOf } from '@/pdf-reader/engine/layer-proto/draw.mjs'
 import { drawDataOf, mappedChars } from '@/pdf-reader/engine/pipeline/draw-data.mjs'
 
 // A page's draw geometry from PDF.js's page proxy (pipeline/draw-data.mjs): the calls it makes, the fonts it tells, the pages it sheds
@@ -69,7 +72,7 @@ describe('drawDataOf', () => {
     expect(await drawDataOf(pageOf({ textFails: new Error('x') }))).toEqual({ draw: null, why: 'read' })
     expect(await drawDataOf(pageOf({ annotFails: new Error('x') }))).toEqual({ draw: null, why: 'read' })
     const bare = pageOf({ items: [item('a', 'f')], styles: { f: {} }, fonts: { f: { name: 'F', isType3Font: false, missingFile: false } } })
-    expect(await drawDataOf(bare)).toEqual({ draw: null, why: 'read' })
+    expect(await drawDataOf(bare)).toEqual({ draw: null, why: 'props' })
     await expect(drawDataOf(pageOf({ textFails: Object.assign(new RangeError('Array buffer allocation failed'), {}) }))).rejects.toThrow(RangeError)
   })
 
@@ -89,5 +92,43 @@ describe('drawDataOf', () => {
     expect(draw!.links[0]![3]).toEqual([0, 4, 0, 'XYZ', 72, 600, null])
     expect(draw!.links[0]![1]).toHaveLength(8)
     expect(drawInputsOf(draw!).annots[0]!.dest).toEqual([{ num: 4, gen: 0 }, { name: 'XYZ' }, 72, 600, null])
+  })
+})
+
+describe('drawDataOf over a real PDF (the sample paper), opened as the prepare opens it', () => {
+  const dir = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
+  const bytes = new Uint8Array(readFileSync(new URL('../fixtures/pdf/sample-1/sample-1.pdf', import.meta.url)))
+  const open = async (extra: boolean) => {
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    return getDocument({ data: bytes.slice(), verbosity: 0, cMapUrl: join(dir, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(dir, 'standard_fonts/'), ...(extra ? { fontExtraProperties: true } : {}) }).promise
+  }
+
+  it('tells every page: its items as getTextContent has them, its embedded fonts with their maps, its Link annotations', async () => {
+    const doc = await open(true)
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p)
+      await page.getOperatorList()
+      const { draw, why } = await drawDataOf(page)
+      expect(why, `page ${p}`).toBeNull()
+      expect(draw!.items).toHaveLength((await page.getTextContent()).items.filter(i => 'str' in i).length)
+      expect(draw!.fonts.length).toBeGreaterThan(0)
+      expect(draw!.fonts.every(f => f[2] === 0 && Array.isArray(f[3]) && (f[3] as string[]).length > 0)).toBe(true)
+      expect(() => checkDraw(JSON.parse(JSON.stringify(draw)))).not.toThrow()
+    }
+    await doc.loadingTask.destroy()
+  })
+
+  it('a document opened without fontExtraProperties tells no page (the setup fault, named), and the operator lists are the same bytes either way', async () => {
+    const [on, off] = [await open(true), await open(false)]
+    for (let p = 1; p <= on.numPages; p++) {
+      const [a, b] = [await on.getPage(p), await off.getPage(p)]
+      const [la, lb] = [await a.getOperatorList(), await b.getOperatorList()]
+      // (a font's loaded name carries its document's number: g_d0_f1, g_d1_f1)
+      const same = (l: { fnArray: unknown; argsArray: unknown }) => JSON.stringify([l.fnArray, l.argsArray]).replace(/g_d\d+_/g, 'g_d_')
+      expect(same(la)).toBe(same(lb))
+      expect((await drawDataOf(b)).why).toBe('props')
+    }
+    await on.loadingTask.destroy()
+    await off.loadingTask.destroy()
   })
 })

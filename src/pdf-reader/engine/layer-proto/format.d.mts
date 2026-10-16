@@ -10,13 +10,13 @@ import type { UnitWire } from './bundle.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog */
-export declare const BUNDLE4: '4'
+export declare const BUNDLE5: '5'
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
 export declare const UNITS_FORMAT: '1'
-/** the reader's contract, `b4-j<PDFJS>` (until the pin moves, next's extension asks for BUNDLE 3's) */
-export declare const CTAG4: string
-/** the content's, `<CTAG4>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a key's directory, the catalog's name */
-export declare const VTAG4: string
+/** the reader's contract, `b5-j<PDFJS>` (until the pin moves, next's extension asks for BUNDLE 3's) */
+export declare const CTAG5: string
+/** the content's, `<CTAG5>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a key's directory, the catalog's name */
+export declare const VTAG5: string
 /** a units chunk's bytes at most, and its values (counted before JSON.parse) */
 export declare const UNITS_CAP: number
 export declare const UNITS_VALUES: number
