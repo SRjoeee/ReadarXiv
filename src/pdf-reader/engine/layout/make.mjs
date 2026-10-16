@@ -21,7 +21,7 @@ import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokens } from '..
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
-import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, NAMES_MAX, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
+import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { alignOf } from './remove.mjs'
@@ -371,9 +371,12 @@ async function gzipSize(bytes) {
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here. `plans`:
  * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
  * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again. A page whose ink
- * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone
+ * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone. `parts`: the file is cut into parts (layer-proto/
+ * cut.mjs partCutter), which hold the bounds of what a part holds and the carry's share, each part's: the file is made
+ * whatever share of the lines is carried (some), and checked without the bounds a part holds of its own (file.mjs
+ * parseLayout `sized`); `lines` in the result, each marked page's lines [carried, total] (carry.mjs pageLines)
  */
-export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, plans: wantPlans = false }) {
+export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, plans: wantPlans = false, parts = false }) {
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
@@ -445,7 +448,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
   stats.lines.total = L.total
   stats.lines.carried = L.same + L.moved + L.respaced + L.fuzzy
   stats.ms.carry = now() - t
-  if (!(L.total > 0 && stats.lines.carried >= CARRY_MIN * L.total)) return { refused: 'carry', stats }
+  // (for parts, the share is the cut's verdict on each part's pages: `parts`)
+  if (!(L.total > 0 && (parts || stats.lines.carried >= CARRY_MIN * L.total))) return { refused: 'carry', stats }
   /** a position of the marked original on arXiv's PDF: carried by its line, on a page with ink, within its view */
   const carry = (page, x, y) => {
     const c = carrier.carry(page, x, y)
@@ -644,8 +648,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
       for (const g of gs) P.owner[g] = NAME_OWNER
       named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) | (lead >= 0 ? NAME_FLAG.RUN_IN : 0), lead, glue, column: edge ?? [row.x0, row.x1] })
     }
+    // (all of them: the file's NAMES_MAX is a bound of what a file or a part holds, its refusal, never a truncation here)
     named.sort((p, q) => p.occurrence - q.occurrence)
-    if (named.length > NAMES_MAX) named.length = NAMES_MAX
   }
 
   // ---------------------------------------------------------------- placeholders, by unit and source piece index
@@ -1447,13 +1451,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
   const bytes = new TextEncoder().encode(encodeLayout(file))
   stats.bytes.raw = bytes.length
   let parsed
-  try { parsed = parseLayout(bytes) } catch (e) {
+  try { parsed = parseLayout(bytes, { sized: !parts }) } catch (e) {
     if (!(e instanceof LayoutRefusal)) throw e
     stats.refusal = { path: e.path, why: e.why }
     return { refused: 'bounds', stats }
   }
   stats.bytes.gzip = await gzipSize(bytes)
-  if (!wantPlans) return { file: parsed, stats }
+  const made = parts ? { file: parsed, stats, lines: carrier.pageLines } : { file: parsed, stats }
+  if (!wantPlans) return made
   // ---------------------------------------------------------------- the add-on's plans, of the ink read above
   // (each page's as addon.mjs pagePlansOf makes it of the page's operator list read again: the same ink, the same facts)
   const index = indexLayout(parsed), plans = new Map()
@@ -1462,5 +1467,5 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
     const plan = pagePlanOf(index, p, planInkOf(ink[p]), () => unpackFacts(facts[p]))
     if (plan) plans.set(p, plan)
   }
-  return { file: parsed, stats, plans }
+  return { ...made, plans }
 }

@@ -332,6 +332,12 @@ describe('makeLayout', () => {
     // nine of ten: a file
     const nine = await make({ ...w, pages: [{ runs: lines.map((r, j) => (j === 9 ? theirs[9] as Run : r)) }] })
     expect('file' in nine).toBe(true)
+    // for parts, the share is each part's (the cut's verdict): a file whatever share is carried, each marked page's lines told
+    const marks = await marksOf(w)
+    const cut = await makeLayout({ units: w.units, marks, arxiv: arxivOf(w.pages), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', parts: true })
+    if (!('file' in cut)) throw new Error('refused')
+    expect(cut.lines && [...cut.lines]).toEqual([[1, [8, 10]]])
+    expect(cut.stats.lines).toMatchObject({ carried: 8, total: 10 })
   })
 
   it("arXiv's page count out of bounds is refused before anything is read", async () => {

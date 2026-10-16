@@ -145,6 +145,8 @@ export function carrier(marked, arxiv) {
   const X = (ts, l, j) => ts[l.tokens[j]].x
   const match = new Map(), over = [], added = new Set()
   const lines = { total: 0, same: 0, moved: 0, respaced: 0, fuzzy: 0 }
+  // (each marked page's lines: [carried, total])
+  const pageLines = new Map()
   // each page's lines by baseline, for the lines near a position; each token's line; the rests of words given in parts
   const nearby = new Map(), lineOf = new Map(), restsOn = new Map()
 
@@ -164,6 +166,7 @@ export function carrier(marked, arxiv) {
       /** whether the page is past its work with n more */
       const spend = n => (work += n) > PAGE_WORK
       const found = matchPage(oursOn.get(page), spend)
+      pageLines.set(page, [found === null ? 0 : found.size, oursOn.get(page).length])
       if (found === null) { over.push(page); continue }
       for (const [l, best] of found) {
         match.set(l, best)
@@ -346,6 +349,7 @@ export function carrier(marked, arxiv) {
   }
   return {
     lines,
+    pageLines,
     over,
     add,
     /** the marked line a position stands on — on its page, within half its height of its baseline, from its height

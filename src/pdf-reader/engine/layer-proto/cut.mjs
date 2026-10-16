@@ -130,8 +130,9 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * layout, in order, when its range is final (a chained writer keeps its state there). A tail past TAIL_CAP shortens the part like
  * any size refusal; a page whose tail alone passes it ships with no layout. Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
  * its tail: clean pages as they are, removed pages TAIL_NOT_CARRIED, refused pages refused; with no add-on in the whole, no
- * add-on for any part (`addon: null`, M20: drawn by erase and restore). Throws BundleRefusal for a whole that
- * cannot be written (a dropped unit, a unit past the chunk caps) and `bound` for a page that no part can hold
+ * add-on for any part (`addon: null`, M20: drawn by erase and restore). `o.verdict`: partCutter's. Throws BundleRefusal for a
+ * whole that cannot be written (a dropped unit, a unit past the chunk caps) and `bound` for a page that no part can hold. The
+ * cut is partCutter's, fed the whole paper: a producer that feeds it a part at a time cuts the same parts
  */
 export async function cutBundle(whole, o) {
   if (typeof o?.leftPages !== 'function') throw new TypeError('leftPages: a function of the page')
@@ -151,27 +152,61 @@ export async function cutBundle(whole, o) {
   const lineskip = 'lineskip' in o ? o.lineskip : whole.layout?.lineskip ?? null
   const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip })
 
-  // K and its frontier
+  // K and its frontier, then the parts
+  const { K, F } = wholeFrontier(whole, frontier)
+  const cutter = partCutter({
+    paper, N, head, views: whole.left.pages, leftPages: o.leftPages, addon: whole.addon ?? null, chainAddon: o.chainAddon ?? null, acceptAddon: o.acceptAddon ?? null,
+    target: o.target ?? null, partPagesMax: o.partPagesMax, verdict: o.verdict ?? null,
+  })
+  // each page's need bound (need.mjs: the last page whose part laying it reads), over the whole K, once
+  const known = { K, F, NB: o.extend !== false && !o.target ? needBound(K, N) : null, layout: whole.layout ?? null }
+  for (;;) if ((await cutter.next(known)) === null) break
+  return { units, head, parts: cutter.parts, left: cutter.left, end: { through: N } }
+}
+
+/**
+ * K over the whole paper and its frontier closed over the table groups (what partCutter cuts a paper made whole on): `whole`
+ * cutBundle's, `frontier(K, N)` F as an array of pages 0 to N (needFrontier's by default), checked: a TypeError or a
+ * RangeError for one that is not an index of K for each page, rising from -1
+ */
+export function wholeFrontier(whole, frontier = needFrontier) {
+  const N = whole.paper.pages
   const grouped = groupsOfUnits(whole.units)
   const K = entriesOf(whole, N, grouped)
   const given = frontier(K, N)
   if (!Array.isArray(given) || given.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)
   for (let b = 0; b <= N; b++) if (!Number.isInteger(given[b]) || given[b] < -1 || given[b] >= K.length || (b > 0 && given[b] < given[b - 1])) throw new RangeError(`frontier: page ${b} is not an index of K, rising`)
   if (given[0] !== -1) throw new RangeError('frontier: page 0 is not -1')
-  const F = closedOver(given, K, grouped)
-  // each page's need bound (need.mjs: the last page whose part laying it reads), over the whole K, once
-  const extend = o.extend !== false && !o.target
-  const maxPages = o.partPagesMax === undefined ? PART_PAGES_MAX : o.partPagesMax
+  return { K, F: closedOver(given, K, grouped) }
+}
+
+/**
+ * The cut a part at a time (E2b): the state from one part to the next (the page the next part begins at, the last part's
+ * digest, the K entries told, the left parts written), and `next(known)`, the part from that page cut on what `known` holds,
+ * or null past the paper's last page. `known`: `K` (entriesOf's entries, in K order: every one the part may tell, those up to
+ * F(b) of each page b it may end at), `F` the frontier closed over the table groups, `NB` each page's need bound (null: the
+ * schedule's target taken as it is, not extended), `layout` the layout file's rows (a whole file, or one holding at least
+ * every row of the units the part may tell and every babel name on its pages, in the file's order) or null. A part tells
+ * exactly what cutBundle's tells of the same paper wherever `known` agrees with the whole paper's on what the part reads.
+ *
+ * `paper` { id, version }, `N` its pages, `head` the head written, `views` every page's view; `leftPages`, `addon` (the whole add-on, or null), `chainAddon`, `acceptAddon`, `target`, `partPagesMax`: cutBundle's.
+ * `verdict({ pages, input, written })`: of the part as cut with its layout, its pages' layout refused ({ refused, ...why }) or
+ * kept (null); a part refused is the same pages with no layout (C1.4: its units drawn from the left, a table group's
+ * layout-only cells too), its add-on not accepted. Each part's verdict is `verdicts[i]`: null, the hook's refusal, or
+ * { refused: 'part' } for a first page that alone passes a part's bounds with its layout (a part of one page, with none)
+ */
+export function partCutter({ paper, N, head, views, leftPages, addon = null, chainAddon = null, acceptAddon = null, target: targetOf = null, partPagesMax, verdict = null }) {
+  if (typeof leftPages !== 'function') throw new TypeError('leftPages: a function of the page')
+  const maxPages = partPagesMax === undefined ? PART_PAGES_MAX : partPagesMax
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new RangeError(`partPagesMax: ${String(maxPages)} is not a positive whole number of pages`)
-  const NB = extend ? needBound(K, N) : null
 
   // the left parts, written as the parts reach their pages
-  const lefts = []
+  const lefts = [], parts = [], verdicts = []
   let tokens = 0
   const leftTo = async b => {
     while (lefts.length < b) {
       const page = lefts.length + 1
-      const got = await o.leftPages(page)
+      const got = await leftPages(page)
       const first = got ? got.first : tokens
       const t = got ? got.tokens : empty
       const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [] })
@@ -180,13 +215,11 @@ export async function cutBundle(whole, o) {
     }
   }
 
-  const layout = whole.layout ?? null
-  const fonts = layout?.fonts ?? []
-  const views = whole.left.pages
-  const parts = []
-  let prev = null, taken = -1
-  for (let a = 1; a <= N;) {
-    let target = o.target ? o.target(a, N) : partTarget(a, N)
+  let prev = null, taken = -1, a = 1
+  async function next({ K, F, NB = null, layout = null }) {
+    if (a > N) return null
+    const fonts = layout?.fonts ?? []
+    let target = targetOf ? targetOf(a, N) : partTarget(a, N)
     if (!Number.isInteger(target) || target < a || target > N) throw new RangeError(`target: ${target} is not a last page from ${a} to ${N}`)
     // (no part is wider than partPagesMax, the extension or not: the target is clamped first)
     target = Math.min(target, a + maxPages - 1)
@@ -242,27 +275,20 @@ export async function cutBundle(whole, o) {
       if (ad) return ad
       // (no add-on in the whole and no hook to make one, a producer with no remover: no add-on for the part's pages (M20), drawn by
       // erase and restore as BUNDLE 3's bundle with none; a hook that answers null still plans them, as not planned)
-      if (!o.chainAddon && !whole.addon) return null
-      const carry = !o.chainAddon && whole.addon ? whole.addon.manifest : null
+      if (!chainAddon && !addon) return null
+      const carry = !chainAddon && addon ? addon.manifest : null
       const page = {}
       for (let p = a; p <= b; p++) page[p] = carry ? carriedEntry(carry, p) : { ok: false, refused: 'not planned' }
       return { manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page, appended: 0, stats: {} }, tail: null }
     }
     // the hook is consulted for each candidate range once (the add-on is part of the part's size), so it must be free of side
-    // effects until `acceptAddon` tells it which range was kept
+    // effects until `acceptAddon` tells it which range was kept. Without its layout a part tells its left units alone: a
+    // layout-only unit of the range is not told (C1.4: the reader draws the part from the left, a table group's left cells
+    // among them, its layout-only cells not at all); that is the documented price of a part with no layout
     const write = async (b, withLayout) => {
       await leftTo(b)
       const x = input(b, withLayout)
-      if (!withLayout && layout) {
-        // (without its layout a part tells its left units alone, and a layout-only unit of the range is lost to the stream: that is
-        // the documented price of a page too big for a layout, but never for a table group, which would be told in part)
-        const told = new Set(x.mine.map(e => e.id))
-        const groupsTold = new Set(x.mine.map(e => grouped.of[e.id]).filter(g => g >= 0))
-        for (const e of K.slice(taken + 1, Math.max(taken, upTo(b)) + 1)) {
-          if (!told.has(e.id) && groupsTold.has(grouped.of[e.id])) throw refuse('part', 'pages', `unit ${e.id}, a member of a table group the part tells in part: page ${a} cannot be told whole without its layout`, { bound: 'part', page: a, unit: e.id })
-        }
-      }
-      const ad = withLayout && layout && o.chainAddon ? await o.chainAddon(parts.length, { pages: [a, b], layout: x.part }) : null
+      const ad = withLayout && layout && chainAddon ? await chainAddon(parts.length, { pages: [a, b], layout: x.part }) : null
       const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part, addon: addonOf(b, withLayout, ad), leftParts: lefts.slice(a - 1, b) })
       return { w, x }
     }
@@ -278,7 +304,7 @@ export async function cutBundle(whole, o) {
       }
       return tried.get(key)
     }
-    let at = await fits(target, true), b = target, withLayout = true
+    let at = await fits(target, true), b = target, withLayout = true, refused = null
     if (at === null) {
       // the longest run of pages from a that fits (a part only grows with its pages)
       let lo = a - 1, hi = target
@@ -291,16 +317,31 @@ export async function cutBundle(whole, o) {
         // a page that alone does not fit ships without its layout: v0 draws its units from the left
         b = a
         withLayout = false
+        if (layout) refused = { refused: 'part' }
         at = await fits(b, false)
         if (at === null) throw refuse('part', 'pages', `page ${a} alone passes the bounds of a part, with no layout`, { bound: 'part', page: a })
       }
     }
-    if (withLayout && layout && o.acceptAddon) await o.acceptAddon(parts.length, { pages: [a, b] })
+    // the producer's verdict on the part as cut with its layout (the carry's share of its pages, its reading): refused, the same
+    // pages with none, which hold less than they did with it
+    if (withLayout && layout && verdict) {
+      const v = await verdict({ pages: [a, b], input: at.x, written: at.w })
+      if (v) {
+        refused = v
+        withLayout = false
+        at = await fits(b, false)
+        if (at === null) throw refuse('part', 'pages', `pages ${a} to ${b} pass the bounds of a part with no layout`, { bound: 'part', page: a })
+      }
+    }
+    if (withLayout && layout && acceptAddon) await acceptAddon(parts.length, { pages: [a, b] })
     const { w } = at
-    parts.push(Object.assign(w, { leftParts: lefts.slice(a - 1, b) }))
+    const part = Object.assign(w, { leftParts: lefts.slice(a - 1, b) })
+    parts.push(part)
+    verdicts.push(refused)
     prev = w.sha256
     taken = Math.max(taken, upTo(b))
     a = b + 1
+    return part
   }
-  return { units, head, parts, left: lefts, end: { through: N } }
+  return { next, parts, left: lefts, verdicts, get from() { return a } }
 }

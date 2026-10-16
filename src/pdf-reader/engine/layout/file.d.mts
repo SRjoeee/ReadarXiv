@@ -61,11 +61,12 @@ export interface LayoutFile {
   lineskip: [lineskip: number, lineskiplimit: number] | null
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; a file of another `schema` is
- *  refused, one of another maker's `layout` is read; throws LayoutRefusal */
-export declare function parseLayout(bytes: Uint8Array): LayoutFile
+ *  refused, one of another maker's `layout` is read; throws LayoutRefusal. `sized` false: none of the bounds a part holds
+ *  of its own (the file's bytes and values, LINES_ALL, PAGE_TEXT_ALL, NAMES_MAX, FONTS_MAX), for a file cut into parts */
+export declare function parseLayout(bytes: Uint8Array, o?: { sized?: boolean }): LayoutFile
 /** a file already parsed, within the bounds of what holds it (a layer bundle): every bound parseLayout checks past
  *  JSON.parse; returns the value itself, its -0s written 0; throws LayoutRefusal */
-export declare function checkLayout(value: unknown): LayoutFile
+export declare function checkLayout(value: unknown, o?: { sized?: boolean }): LayoutFile
 /** the file as written: keys in the schema's order, numbers to a hundredth, no white space */
 export declare function encodeLayout(file: LayoutFile): string
 /** the paper's \lineskip and \lineskiplimit, or null: each within TeX's \maxdimen; `path` names it in a refusal */

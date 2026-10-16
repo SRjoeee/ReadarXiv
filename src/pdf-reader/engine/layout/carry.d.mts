@@ -12,6 +12,8 @@ export interface Carrier {
   /** a position of the marked original on arXiv's PDF, or null where its line was not carried */
   carry(page: number, x: number, y: number): { page: number; x: number; y: number; whole: boolean } | null
   readonly lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number }
+  /** each marked page added: its lines carried and its lines */
+  readonly pageLines: ReadonlyMap<number, readonly [carried: number, total: number]>
   /** the marked original's pages that cost more work than a page may: none of their lines is carried */
   readonly over: readonly number[]
   /** the marked tokens `from` to `to` (`marked`'s indices), whole pages none of which was added: their lines matched */

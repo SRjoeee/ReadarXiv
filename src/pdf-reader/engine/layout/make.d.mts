@@ -22,6 +22,9 @@ export interface MakeInput {
   floatMatch?: Map<number, number[] | null> | null
   /** the add-on's plans as well (`plans` in the result), of the ink the maker reads: each page's operator list read once */
   plans?: boolean
+  /** the file is cut into parts (layer-proto/cut.mjs partCutter), which hold the bounds a part holds and the carry's share per
+   *  part: made whatever share is carried, checked without those bounds; `lines` in the result */
+  parts?: boolean
 }
 export interface LayoutStats {
   lines: { carried: number; total: number; held: number }
@@ -64,7 +67,7 @@ export interface LayoutStats {
   refusal?: { path: string; why: string }
 }
 /** a paper's layout file, or why none is made */
-export declare function makeLayout(o: MakeInput): Promise<{ file: LayoutFile; stats: LayoutStats; plans?: Map<number, PagePlan> } | { refused: 'carry' | 'pages' | 'bounds'; stats: LayoutStats }>
+export declare function makeLayout(o: MakeInput): Promise<{ file: LayoutFile; stats: LayoutStats; plans?: Map<number, PagePlan>; lines?: ReadonlyMap<number, readonly [carried: number, total: number]> } | { refused: 'carry' | 'pages' | 'bounds'; stats: LayoutStats }>
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number
 /** a page's operator list waited for at most, ms; and a paper's in all */
