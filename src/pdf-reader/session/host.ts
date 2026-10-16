@@ -138,6 +138,9 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
   const shown: { opened: Promise<Shown> } = { opened: Promise.resolve('failed') }
   const showOriginal = (): Promise<Shown> => (shown.opened = paper ? view.showOriginal(original) : Promise.resolve('failed'))
   if (paper) void showOriginal()
+  // asked to translate (#readarxiv on the PDF address, the reader's design, §2): an original left on is let go, so that the
+  // next PDF opens as this one does
+  if (paper && params.get('ask') === 'translate' && config.pdfReader.original) save(c => ({ ...c, pdfReader: { ...c.pdfReader, original: false } }))
 
   // ---------------------------------------------------------------- the layer's run
   const store = io.store === undefined ? createLayerStore() : io.store
@@ -184,18 +187,21 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
   // ---------------------------------------------------------------- the settings that land
   function landed(next: Config, from: Landing) {
     if (from === 'first') { if (!provisional) return; from = 'elsewhere' }
+    // the settings the page started on given up on (a first read late, the defaults standing in): what the reader chose
+    // meanwhile stands over them; any later landing is followed by settings.ts's rule alone
+    const late = provisional !== null
     provisional = null
     const prev = config
     config = next
     show()
     if (from === 'refused') return
     // (a run that stopped short: the service failed, or units were lost to it)
-    const at = run?.probe(), stopped = at?.state === 'failed' || (at?.state === 'translated' && Number(at.lost) > 0)
+    const at = run?.probe(), stopped = at?.state === 'failed' || at?.rowsState === 'failed' || (at?.rowsState === 'translated' && Number(at.lost) > 0)
     const follow = followOf(prev, next, from, { translating, held, stopped, addressDisplay: isDisplay(params.get('mode')), addressSync, display: mode, syncMode: view.probe().sync ? 'same' : 'off' })
     if (follow.reload) { void writes.then(() => location.reload()); return }
     if (follow.retry) void writes.then(() => run?.retry())
-    if (follow.display && !chosen.display) { view.setDisplay(follow.display); mode = follow.display; wantTranslation() }
-    if (follow.sync && !chosen.sync) view.setSync(follow.sync !== 'off')
+    if (follow.display && !(late && chosen.display)) { view.setDisplay(follow.display); mode = follow.display; wantTranslation() }
+    if (follow.sync && !(late && chosen.sync)) view.setSync(follow.sync !== 'off')
   }
 
   // ---------------------------------------------------------------- the page's end

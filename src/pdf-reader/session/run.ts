@@ -112,7 +112,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   /** the rows of the visit, latest per unit; the attempt's abort; how far the translation is */
   const rows = new Map<number, Row>()
   let attempt: AbortController | null = null, total = 0, lost = 0, looks = 0, prepares = 0, ours = false
-  let state: 'engine' | 'looking' | 'open' | 'translated' | 'unavailable' | 'failed' = 'engine'
+  /** where the run is: its service and its look at the layer (`state`), and its translation of the layer's units (`rowsState`) */
+  let state: 'engine' | 'looking' | 'open' | 'unavailable' | 'failed' = 'engine'
+  let rowsState: 'idle' | 'translating' | 'translated' | 'failed' = 'idle'
   const emit = (e: RunEvent) => { if (!disposed) host.emit(e) }
   const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
     if (signal.aborted) return reject(Object.assign(new Error('the run is let go'), { name: 'AbortError' }))
@@ -263,6 +265,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     attempt?.abort()
     attempt = a
     total = toTranslate(index, target).length
+    rowsState = 'translating'
     const context = contextOf(index)
     const e = engine
     emit({ type: 'translating', got: counts().got, total, lost: 0 })
@@ -285,7 +288,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     } catch (err) {
       if (a.signal.aborted || disposed) return
       // a failure that is no error of the service's: the scope let go, and a retry opens the service again
-      state = 'failed'
+      rowsState = 'failed'
       void engine?.close?.()
       engine = null
       return emit({ type: 'fail', kind: kindOf(err) })
@@ -293,7 +296,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     if (a.signal.aborted || disposed || s !== side) return
     s.end()
     lost = result.lost
-    state = 'translated'
+    rowsState = result.stopped && result.stopped !== 'aborted' ? 'failed' : 'translated'
     const c = counts()
     emit({ type: 'translated', got: c.got, total, lost: result.lost, stopped: result.stopped && result.stopped !== 'aborted' ? (result.stopped as ProviderErrorKind) : null })
   }
@@ -352,6 +355,6 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       side = null
       void engine?.close?.()
     },
-    probe: () => ({ state, target, looks, prepares, rows: rows.size, total, lost, ours }),
+    probe: () => ({ state, rowsState, target, looks, prepares, rows: rows.size, total, lost, ours }),
   }
 }

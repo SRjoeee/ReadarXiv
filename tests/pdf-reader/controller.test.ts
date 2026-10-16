@@ -81,6 +81,12 @@ describe('reduce: the layer\'s states (Task 12)', () => {
     expect(fold([opened, { type: 'layer', state: 'refused', laid: 0, total: 4 }])).toMatchObject({ phase: 'ready', unavailable: { why: 'unreachable' } })
   })
 
+  it('the original not opened (its fetch failed): the run\'s translation meanwhile leaves its card; the original\'s open mends it', () => {
+    const failed = fold([{ type: 'fail', event: 'fetch failed', text: '', kind: 'network' }, { type: 'translating', got: 3, total: 9, lost: 0 }, { type: 'translated', got: 9, total: 9, lost: 0, stopped: null }])
+    expect(failed).toMatchObject({ phase: 'failed', failure: 'network', progress: 1 })
+    expect(fold([{ type: 'page', side: 'left', page: 1, pages: 4 }, opened], failed)).toMatchObject({ phase: 'ready', failure: null })
+  })
+
   it('a target the layer does not set: the language not supported (the menu offered), the paper not greyed', () => {
     expect(fold([opened, { type: 'unavailable', why: 'target', retryAt: null }])).toMatchObject({ languageSupported: false, available: true, phase: 'ready' })
   })

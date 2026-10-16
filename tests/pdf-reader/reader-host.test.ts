@@ -148,19 +148,37 @@ describe('the settings, written and followed', () => {
     expect(b.events).toContainEqual({ type: 'refused' })
   })
 
-  it('settings that land from elsewhere reach the controller and the view\'s look, and move the display and the sync unless the reader chose them here', async () => {
+  it('settings that land from elsewhere reach the controller and the view\'s look, and move the display and the sync by settings.ts\'s rule', async () => {
     const a = await opened()
     const changed = { ...DEFAULT_CONFIG, theme: 'dark' as const, mode: 'only' as const, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false, sync: false } }
     a.surface.land(changed)
     expect(a.events).toContainEqual({ type: 'settings', config: changed, pack: null })
     expect(a.view.setDisplay).toHaveBeenLastCalledWith('translation')
     expect(a.view.setSync).toHaveBeenLastCalledWith(false)
+    // a display chosen here is written, and a later change made elsewhere is followed as any is (the shipped reader's rule)
     a.session.setDisplay('bilingual')
-    a.session.setSyncMode('same')
     await flush(20)
-    a.surface.land({ ...changed, mode: 'only', pdfReader: { ...changed.pdfReader, original: true, sync: false } })
-    expect(a.view.setDisplay).toHaveBeenLastCalledWith('bilingual')
-    expect(a.view.setSync).toHaveBeenLastCalledWith(true)
+    a.surface.land({ ...changed, mode: 'side', pdfReader: { ...changed.pdfReader, original: true, sync: false } })
+    expect(a.view.setDisplay).toHaveBeenLastCalledWith('original')
+  })
+
+  it('a first read given up on: the display and sync the reader chose meanwhile stand over the late answer', async () => {
+    const view = fakeView(), surface = fakeSurface(null)
+    const run = vi.fn(() => ({ retry: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
+    const session = await openReader({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams('paper=2600.00001v1'), emit: () => {}, reading: { config: DEFAULT_CONFIG, fallbackReason: { kind: 'unknown' } } }, { view: view.make as never, surface: surface.make as never, store: null, run: run as never, fetch: vi.fn(async () => new Response('', { status: 404 })) as never })
+    session.setDisplay('original')
+    session.setSyncMode('off')
+    await flush(20)
+    view.v.setDisplay.mockClear(); view.v.setSync.mockClear()
+    surface.land({ ...DEFAULT_CONFIG, mode: 'only', pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false, sync: true } }, 'first')
+    expect(view.v.setDisplay).not.toHaveBeenCalled()
+    expect(view.v.setSync).not.toHaveBeenCalled()
+  })
+
+  it('asked to translate (#readarxiv): an original left on is let go', async () => {
+    const a = await opened('paper=2600.00001v1&ask=translate', { config: { ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } } })
+    await flush(20)
+    expect(a.surface.writes.at(-1)?.pdfReader.original).toBe(false)
   })
 
   it('an address that names the display holds it', async () => {

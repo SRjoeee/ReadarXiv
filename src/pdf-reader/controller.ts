@@ -125,6 +125,9 @@ export interface Session {
 const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
 /** the layer has drawn something: a failure then leaves the pages laid readable, its card not over them */
 const drawn = (state: ReaderState) => state.layer.laid > 0
+/** the original could not be opened: its card stands, whatever the run does meanwhile (its rows wait for the original),
+ *  until the original opens */
+const noOriginal = (state: ReaderState) => state.phase === 'failed' && state.sides.left.pages === 0
 
 /**
  * One event folded into the state; the same object when nothing changed, so that no listener hears of it. The phase moves
@@ -191,6 +194,24 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       if (event.state === 'refused') return { ...state, layer, preparing: null, unavailable: { why: 'unreachable', retryAt: null }, phase: state.phase === 'failed' ? 'failed' : 'ready' }
       return layer === state.layer ? state : { ...state, layer }
     }
+    case 'translating':
+    case 'translated':
+    case 'unavailable':
+      if (noOriginal(state)) return reduceRun({ ...state, phase: 'ready' }, event, true)
+      return reduceRun(state, event, false)
+    default:
+      return state
+  }
+}
+
+/** the run's own events: the translation and the layer's availability. `held`: the original's failure stands over them (its
+ *  phase and its reason kept) */
+function reduceRun(state: ReaderState, event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>, held: boolean): ReaderState {
+  const next = reduceRunFree(state, event)
+  return held ? { ...next, phase: 'failed', failure: 'network' } : next
+}
+function reduceRunFree(state: ReaderState, event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>): ReaderState {
+  switch (event.type) {
     case 'translating': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 0
       return { ...state, phase: 'translating', preparing: null, failure: null, progress, failedUnits: event.lost }
@@ -211,8 +232,6 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
         phase: state.phase === 'failed' ? 'failed' : 'ready',
       }
     }
-    default:
-      return state
   }
 }
 
