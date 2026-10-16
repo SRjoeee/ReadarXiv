@@ -115,6 +115,7 @@ for (const [what, ok] of [
   [`a production build names no staging host${stagingNamed.length > 0 ? ` (${stagingNamed.join(', ')})` : ''}`, stagingNamed.length === 0],
   [`the web-accessible resources are popup.html and pdf-reader.html, to https://arxiv.org/* alone`, war.length === 2 && war.every(entry => entry.resources.length === 1 && sameList(entry.matches, ['https://arxiv.org/*'])) && sameList(war.map(entry => entry.resources[0]), ['popup.html', 'pdf-reader.html'])],
   [`the offscreen document stays, for the figure recogniser alone`, (manifest.permissions ?? []).includes('offscreen')],
+  [`the extension's pages frame nothing (frame-src 'none')`, /(?:^|;)\s*frame-src\s+'none'\s*(?:;|$)/.test(manifest.content_security_policy?.extension_pages ?? '')],
 ]) {
   if (ok) console.log(`✓ ${what}`)
   else {

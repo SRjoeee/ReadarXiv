@@ -120,8 +120,10 @@ export default defineConfig({
     // host it. Neither shows an install warning
     permissions: ['storage', 'contextMenus', 'offscreen'],
     // The recogniser is WebAssembly, which an extension page may compile only when its policy says so. Everything it
-    // compiles ships in the package; `script-src 'self'` stays as it was
-    content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
+    // compiles ships in the package; `script-src 'self'` stays as it was. No extension page frames anything (Stage 5 Task 17:
+    // the TeX page the reader and the offscreen document framed is parked), so none may: `frame-src 'none'`. The pages that
+    // are framed (the popup, the reader, by arXiv's) are the manifest's web-accessible resources, which this does not touch
+    content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; frame-src 'none'" },
     // The keyboard entry (UI.md S-P-50): the same toggle as the context menu. The popup shows the
     // binding Chrome reports, so a reader who rebinds or removes it sees the truth
     commands: { 'axt-toggle': { suggested_key: { default: 'Alt+T' }, description: '__MSG_toggle__' } },

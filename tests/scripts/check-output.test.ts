@@ -129,11 +129,13 @@ describe('the layer reader\'s package', () => {
   })
   it('the web-accessible resources are the popup and the reader to arXiv alone; the offscreen document stays', () => {
     const war = [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'] }]
-    put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: war, permissions: ['storage', 'offscreen'] }))
+    put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: war, permissions: ['storage', 'offscreen'], content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'; frame-src 'none'" } }))
     expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✓')
     expect(verdict('the offscreen document stays')).toBe('✓')
+    expect(verdict('the extension\'s pages frame nothing')).toBe('✓')
     put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: [...war.slice(0, 1), { resources: ['pdf-reader.html'], matches: ['<all_urls>'] }], permissions: ['storage'] }))
     expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✗')
     expect(verdict('the offscreen document stays')).toBe('✗')
+    expect(verdict('the extension\'s pages frame nothing')).toBe('✗')
   })
 })
