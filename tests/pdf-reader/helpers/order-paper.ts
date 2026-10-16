@@ -12,7 +12,7 @@ import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 // the reader's door (`bundleOf`, `rowsOf`: a bundle written and read back by the engine, its rows made by the engine's own
 // rows), and every page's answer taken as a snapshot (`runSnap`, `layerSnap`) to be compared with the page asked in order.
 // Each paper has what its name says and the pages are 300 × 300 pt; a line is 10 pt type, 12 pt apart.
-// Today the engine lays the pages in order whatever is asked: these are the guards of the day it does not (D1)
+// The engine lays a page asked by its closure alone (1b-D1): these hold every page so laid to the page laid in order
 
 /** a canvas context that draws nothing and reads a white page */
 const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as Record<string | symbol, unknown>, {
@@ -163,23 +163,25 @@ export function build(paper: Paper): Built {
 }
 
 export type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run.mjs').openProto>>
-/** v0 over the paper, every unit at once (the hybrid over the layout file, each cell's group given); `free`: the run lets go of what it has laid, as the reader's does */
-export async function openRun(P: Built, { free = true } = {}) {
+/** v0 over the paper, every unit at once (the hybrid over the layout file, each cell's group given, or with `groups` false
+ *  none: the groups read from the rows, as the gate's and the lab's whole opens do); `expect`: the rows to be taken after the
+ *  open (take) rather than given; `free`: the run lets go of what it has laid, as the reader's does */
+export async function openRun(P: Built, { free = true, groups = true, expect = false } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const units: unknown[] = []
   const pieces = new Map<number, unknown[]>()
-  for (const [id, r] of P.rows) { units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
+  for (const [id, r] of P.rows) { if (!expect) units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
-    doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, groups: P.groups,
+    doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}),
     tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }
-/** a page asked for, as the door asks: laid, and the pages its units run on to drawn (the page is then final) */
+/** a page asked for, as the door asks: its closure laid (Need(p), run.mjs layFor), and nothing else; the page is then final */
 export async function askPage(run: Run, p: number) {
-  await run.until(p)
-  const done = run.doneAt(p)
-  if (Number.isFinite(done) && done > p) await run.until(done)
+  await run.layFor(p)
 }
+/** the ids of the paper's units drawn on any of `pages` (every unit is the layout file's alone: its lines are its only source) */
+export const unitsOn = (P: Built, pages: readonly number[]) => P.paper.specs.filter(s => s.lines.some(l => pages.includes(l.page))).map(s => s.id)
 /** what a run answers of a page (a failed page has no answer but its failure): the markup and operations it drew, its fill numbers, its SVG, its word table
  *  and the records of the units on it, by unit id */
 export function runSnap(run: Run, p: number) {

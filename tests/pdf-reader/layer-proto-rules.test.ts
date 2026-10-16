@@ -185,9 +185,18 @@ const SWITCH_PAGE = () => column([
   { kind: 'para', rows: [8, 9], tr: '\u5b57'.repeat(20) },
   { kind: 'caption', rows: [11], tr: '\u56fe'.repeat(10) },
 ])
-/** a page's drawing, its SVG and its operations, as one SHA-256 */
+/** each face class as the engine named it before 1b-D (its first use's number in the realm, axf0, axf1, …), by the order of the
+ *  face sheet's rules (happy-dom keeps a rule inserted with no index at the sheet's end: the order the faces were first met in):
+ *  the engine names a class by its face now, so that a page's markup is the same whichever page was laid first, and the
+ *  constant below is the older engine's markup, which this one equals but for the names */
+const asBefore = (svg: string) => {
+  const sheet = [...document.head.querySelectorAll('style')].map(e => [...(e.sheet?.cssRules ?? [])] as CSSStyleRule[]).find(rs => rs.length > 0 && rs.every(r => /^\.axf/.test(r.selectorText ?? '')))
+  const order = (sheet ?? []).map(r => r.selectorText.slice(1))
+  return svg.replace(/class="(axf[0-9a-z-]+)"/g, (m, c: string) => (order.includes(c) ? `class="axf${order.indexOf(c)}"` : m))
+}
+/** a page's drawing, its SVG (its face classes as before 1b-D: asBefore) and its operations, as one SHA-256 */
 const drawingOf = async (run: Awaited<ReturnType<typeof open>>) => {
-  const bytes = new TextEncoder().encode(`${run.svgOf(1).outerHTML}\n${JSON.stringify(run.rows[0]!.ops)}`)
+  const bytes = new TextEncoder().encode(`${asBefore(run.svgOf(1).outerHTML)}\n${JSON.stringify(run.rows[0]!.ops)}`)
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('')
 }
 /** SWITCH_PAGE's drawing by the engine before the leftover switch (0be9390d, D6's F6b, built in a scratch directory from

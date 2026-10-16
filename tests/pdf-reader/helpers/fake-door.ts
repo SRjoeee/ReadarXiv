@@ -179,6 +179,18 @@ class FakeLayer implements Layer {
     this.range(page)
     return this.state[page] as PageState
   }
+  /** the fake's own rule: in gate mode, the units of the parts through the page whose rows are not taken (none ended) */
+  rowsFor(page: number): number[] {
+    this.check()
+    this.range(page)
+    if (this.fake.opts.rows !== 'gate' || this.rowsEnded || this.state[page] === 'ready') return []
+    const out: number[] = []
+    for (const part of this.parts) {
+      if (part.pages[0] > page) break
+      for (const id of [...part.left.map(w => w[0]), ...part.fileOnly.map(e => e[0])]) if (!this.taken.has(id)) out.push(id)
+    }
+    return out.sort((a, b) => a - b)
+  }
   onPage(listener: (page: number, state: PageEvent) => void): () => void {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }

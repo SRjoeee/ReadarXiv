@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { askPage, build, type Built, bundleOf, installStubs, layerSnap, openRun, PAPERS, type Run, rowsOf, runSnap, shuffled } from './helpers/order-paper'
+import { askPage, build, type Built, bundleOf, installStubs, layerSnap, openRun, PAPERS, type Run, rowsOf, runSnap, shuffled, unitsOn } from './helpers/order-paper'
 
 // The order of the asks (the 1b-D design §5, X1 and X2; PR 1b-D0): a page's answer is the same whichever page was asked before it
 // and whatever else is asked beside it. Over the synthetic papers of helpers/order-paper.ts (units across page breaks, a table on
@@ -7,8 +7,8 @@ import { askPage, build, type Built, bundleOf, installStubs, layerSnap, openRun,
 // fill): each page's markup, operations, fill numbers, word table and unit records, taken as the page is ready, equal the page
 // asked in order, 1 to N — whether the pages are asked in reverse, the last first, in the order three seeds give, each alone
 // in a run of its own (X1), or, at the reader's door, in bursts of concurrent asks with aborts by signal and asks made again
-// (X2). Today the engine lays the pages in order whatever is asked, so these pass on the prefix; they are the guards of the day
-// it lays a page by what it needs (1b-D1), and a unit's record or a fill number that depends on the order would fail one
+// (X2). The engine lays a page asked by its closure alone (Need(p), 1b-D1): a unit's record or a fill number that depended on
+// the order would fail one. And a page asked alone reads no more than its closure: the pages drawn, the units laid (X2's bound)
 
 const seen = vi.hoisted(() => ({ runs: [] as unknown[] }))
 vi.mock('@/pdf-reader/engine/layer-proto/run.mjs', async importOriginal => {
@@ -68,6 +68,71 @@ describe('the run: a page asked in any order answers as the page asked in order'
     })
   }
 
+  for (const paper of PAPERS) it(`${paper.name}: a page asked alone draws, lays and readies no more and no less than its closure (X2)`, async () => {
+    const P0 = build(paper)
+    for (let p = 1; p <= P0.paper.pages; p++) {
+      const P = build(paper)
+      const run = await openRun(P)
+      const C = run.closure(p)
+      await askPage(run, p)
+      const as = `${paper.name} page ${p}`
+      // (page 1 drawn first, then the closure's pages in order, each once: its draw, the failed one among them read too)
+      expect(P.doc.asked, as).toEqual(C.draw)
+      // (the units laid are those on its pass pages, in their rank; every page its closure makes ready is)
+      expect(run.order.every(id => unitsOn(P, C.pass).includes(id)), `${as}: laid ${run.order}`).toBe(true)
+      const lay = run.idsOf(C.lay)
+      expect(run.order.every(id => lay.includes(id)), `${as}: laid ${run.order} among ${lay}`).toBe(true)
+      for (const q of C.ready) expect(run.ready(q) || run.failed(q), `${as}: page ${q} of its ready set`).toBe(true)
+      expect(run.ready(p) || run.failed(p), as).toBe(true)
+    }
+  })
+
+  it('L1: a unit with a page that cannot be read grows on its other pages in every order: page 3 alike asked first, last or alone', async () => {
+    const paper = PAPERS.find(x => x.name === 'S-D footnote, page 4 unreadable')!
+    const { run: want, snaps: wanted } = await ask(build(paper), [1, 2, 3, 4], true)
+    // (unit 4 runs from page 3 on to page 4, which cannot be read: it is the original's, why page, and grows on page 3 alike)
+    expect(want.skipped.filter(s => s.why === 'page').map(s => s.id)).toEqual([4, 5])
+    for (const order of [[4, 3, 2, 1], [3], [4, 3], [2, 3]]) {
+      const { run, snaps } = await ask(build(paper), order, true)
+      expect(snaps.get(3), `${order}`).toEqual(wanted.get(3))
+      // (page 3's closure reads page 4: unit 4 left the original's in every order that lays page 3)
+      expect(run.skipped.filter(s => s.id === 4).map(s => s.why), `${order}`).toEqual(['page'])
+    }
+  })
+
+  it('lays a table group across pages from the rows\' groups where the open is given none (the gate\'s and the lab\'s whole opens)', async () => {
+    // (S-B's column on pages 2, 3 and 4: its cells' groups only in their rows; each page asked first and alone, and in order,
+    // draws as the open given each unit's group)
+    const paper = PAPERS.find(x => x.name === 'S-B tables')!
+    const { snaps: wanted } = await ask(build(paper), [1, 2, 3, 4], true)
+    for (const order of [[1, 2, 3, 4], [3], [2], [4, 3, 2, 1]]) for (const rows of ['at the open', 'taken after'] as const) {
+      const P = build(paper)
+      const run = await openRun(P, { groups: false, expect: rows === 'taken after' })
+      if (rows === 'taken after') run.take(new Map([...P.rows].map(([id, r]) => [id, r as never])))
+      for (const p of order) { await askPage(run, p); expect(runSnap(run, p), `no groups given, rows ${rows}, ${order}: page ${p}`).toEqual(wanted.get(p)) }
+    }
+  })
+
+  it('pins the contract: page 1 is drawn first, whatever page is asked, and the paper\'s designs are its own', async () => {
+    // (pages after the first set in Palatino, page 1 in Times: the designs are Times's, as page 1 says, though most of the
+    // paper's characters are another serif's. This pins the contract, R11 and L3; it cannot catch a designs rule that read
+    // the running tally of every page drawn, since every closure draws page 1 before any other page)
+    const palatino = (P: Built) => {
+      const get = P.doc.getPage
+      P.doc.getPage = async (n: number) => {
+        const pg = (await get(n)) as Record<string, unknown> & { getTextContent(): Promise<{ items: unknown[]; styles: Record<string, unknown> }> }
+        return n === 1 ? pg : { ...pg, commonObjs: { get: () => ({ name: 'Palatino-Roman' }) } }
+      }
+      return P
+    }
+    const paper = PAPERS.find(x => x.name === 'S-A chain')!
+    for (const first of [1, 5, 3]) {
+      const run = await openRun(palatino(build(paper)))
+      await askPage(run, first)
+      expect(run.designs.serif, `page ${first} first`).toBe('times')
+    }
+  })
+
   it('a title page then fuller pages: each page\'s fill target is its own, whichever page is asked first', async () => {
     const paper = PAPERS.find(x => x.name === 'S3 fill')!
     const { run: want } = await ask(build(paper), [1, 2, 3, 4], true)
@@ -77,6 +142,22 @@ describe('the run: a page asked in any order answers as the page asked in order'
       const { run } = await ask(build(paper), order, true)
       for (const p of order) expect(run.rows[p - 1]!.fill, `${order} page ${p}`).toEqual(want.rows[p - 1]!.fill)
     }
+  })
+})
+
+describe('a face\'s class in the markup is the face\'s own name, never the order the faces were first met in', () => {
+  // (a page laid by its closure meets its faces in another order than the pages laid in turn; a counter of first uses named
+  // them by that order, and the same page's markup differed though its glyphs did not)
+  it('names each face by its key, whichever face a run meets first', async () => {
+    const { svgOfUnit } = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+    const fnv = (key: string) => { let h = 0x811c9dc5; for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193) >>> 0; return `axf${h.toString(36)}` }
+    const face = (family: string, weight: number) => ({ family, weight, style: 'normal', caps: false, size: 1 })
+    const A = face('"order-test A"', 400), B = face('"order-test B"', 700)
+    const unit = (first: typeof A, then: typeof A) => ({ f: 10, state: { track: 0, trackLatin: 0 }, lines: [{ page: 1, x0: 0, baseline: 100, items: [{ x: 0, t: { s: 'Ab', cls: 'latin', face: first } }, { x: 20, t: { space: true } }, { x: 30, t: { s: 'Cd', cls: 'latin', face: then } }] }] })
+    const classes = (svg: string) => [...svg.matchAll(/class="([^"]+)"/g)].map(m => m[1])
+    // (B met first, then A: each is named by its own key)
+    expect(classes(svgOfUnit(unit(B, A) as never, 1, (x: number, y: number) => [x, y], 1, 0))).toEqual([fnv('"order-test B"|700|normal|0'), fnv('"order-test A"|400|normal|0')])
+    expect(classes(svgOfUnit(unit(A, B) as never, 1, (x: number, y: number) => [x, y], 1, 1))).toEqual([fnv('"order-test A"|400|normal|0'), fnv('"order-test B"|700|normal|0')])
   })
 })
 

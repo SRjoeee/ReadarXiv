@@ -2849,14 +2849,20 @@ export function pageItemsOf(chars, page, px, ink) {
 }
 
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-const faceClasses = new Map()
+const faceClasses = new Map(), faceNames = new Set()
 let faceSheet = null
-/** a face's CSS class, its rule added to the page's sheet once */
+/** a face's CSS class, its rule added to the page's sheet once. Its name is the face's own (its key's digest, FNV-1a, base 36),
+ *  never the order faces were first met in: a page laid by its closure meets its faces in another order than the pages laid in
+ *  turn, and its markup is the same either way (1b-D). Two keys of one digest, never seen: the later one's name numbered */
 function faceClass(face) {
   const key = `${face.family}|${face.weight}|${face.style}|${face.caps ? 1 : 0}`
   let c = faceClasses.get(key)
   if (!c) {
-    c = `axf${faceClasses.size}`
+    let h = 0x811c9dc5
+    for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193) >>> 0
+    c = `axf${h.toString(36)}`
+    for (let n = 2; faceNames.has(c); n++) c = `axf${h.toString(36)}-${n}`
+    faceNames.add(c)
     faceClasses.set(key, c)
     faceSheet ??= document.head.appendChild(document.createElement('style'))
     faceSheet.sheet.insertRule(`.${c}{font-family:${face.family};font-weight:${face.weight};font-style:${face.style}${face.caps ? ';font-variant:small-caps' : ''}}`)

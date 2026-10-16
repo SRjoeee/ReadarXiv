@@ -89,7 +89,7 @@ async function composedOf(name, bundle) {
 }
 const macrotask = () => new Promise(ok => setTimeout(ok, 0))
 /** the page's sheets but the faces' classes' (layer2.mjs faceClass: made once a page, for every run, and kept) */
-const ownSheets = () => [...document.head.querySelectorAll('style')].filter(e => { const rules = [...(e.sheet?.cssRules ?? [])]; return !(rules.length && rules.every(r => /^\.axf\d+$/.test(r.selectorText ?? ''))) })
+const ownSheets = () => [...document.head.querySelectorAll('style')].filter(e => { const rules = [...(e.sheet?.cssRules ?? [])]; return !(rules.length && rules.every(r => /^\.axf[0-9a-z-]+$/.test(r.selectorText ?? ''))) })
 
 /**
  * Whether the words the translation has can be found in the page tables (1b-E; a sentence starts at a word, and the view finds the

@@ -95,30 +95,66 @@ const PAPERS: [string, Spec[], number, (number[] | null)[]][] = []
 const paintedOn = (run: Run, page: number) => [...run.svgOf(page).innerHTML.matchAll(/data-u="(\d+)"/g)].map(m => Number(m[1]))
 
 describe('S1: a crop is cut from any page of the paper that was read', () => {
-  // a paragraph from page 1 on to page 2, its formula on page 1: laid at page 2, as its last page is drawn, and painted then
+  // a paragraph from page 1 on to page 2, its formula on page 1, and a paragraph of page 3: page 3's closure draws page 1 (its
+  // setup) and lays none of page 1's units
   const specs: Spec[] = [
     { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'file', tr: [text(CJK(5))] },
     {
       id: 1, kind: 'para', src: 'Alpha $x^2$ beta gamma', lines: [line(1, 40, [20, 'Alpha'], [60, 'x2']), line(2, 270, [20, 'beta gamma'])], from: 'file', pieces: 3,
       ph: [[1, 0, 1, 60, 40, 70, 47, 38]], tr: [text(CJK(4, 0x4e10)), { t: 'ph', src: '$x^2$', k: 1 }, text(CJK(6, 0x4e30))],
     },
+    { id: 2, kind: 'para', src: 'Mu nu', lines: [line(3, 200, [20, 'Mu nu'])], from: 'file', tr: [text(CJK(3, 0x4e60))] },
   ]
-  PAPERS.push(['S1', specs, 2, [null]])
+  PAPERS.push(['S1', specs, 3, [null]])
   const cropsFrom = (run: Run, page: number) => run.rows.flatMap(r => r.ops.filter(o => o.op === 'crop' && (o as { page: number }).page === page))
   it('draws it though the host let the page go (its row no longer `base`) before the unit is painted', async () => {
-    const whole = await open(paper(specs, 2))
-    await whole.until(2)
+    const whole = await open(paper(specs, 3))
+    await whole.until(3)
     const want = cropsFrom(whole, 1)
     expect(want.length).toBe(1)
-    const run = await open(paper(specs, 2))
-    // (page 1 drawn and its own units laid, the paragraph from it still to come; then page 1 let go, as release lets it)
-    await run.until(1, () => run.drawnTo < 1)
-    expect(run.drawnTo).toBe(1)
+    const run = await open(paper(specs, 3))
+    // (page 1 drawn for page 3's closure, the paragraph from it still to come; then page 1 let go, as a host lets a page go)
+    await run.layFor(3)
+    expect([1, 2, 3].map(q => run.ready(q))).toEqual([false, false, true])
     expect(placedOf(run, 1).layout).toBeUndefined()
     run.rows[0]!.base = false
-    await run.until(2)
+    await run.until(3)
     expect(cropsFrom(run, 1)).toEqual(want)
     expect(run.rows.map(r => JSON.stringify(r.ops))).toEqual(whole.rows.map(r => JSON.stringify(r.ops)))
+  })
+})
+
+describe('L2: a unit is laid once every page it reads is drawn, its placeholders\' too', () => {
+  // a paragraph of page 1 whose formula the layout file places on page 2 (a placeholder's segment past its last page), and a
+  // paragraph of page 2: page 1's closure draws page 2 before the paragraph is laid, in order too, so that whether its crop's
+  // page is drawn is never the order's (the hybrid leaves such a unit the original's, unproven: nothing proves a crop it has no
+  // line beside; what it reads is drawn all the same)
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Alpha $x^2$ beta', lines: [line(1, 200, [20, 'Alpha'], [80, 'beta'])], from: 'file', pieces: 3, ph: [[1, 0, 2, 60, 150, 70, 157, 148]], tr: [text(CJK(3)), { t: 'ph', src: '$x^2$', k: 1 }, text(CJK(2, 0x4e20))] },
+    { id: 1, kind: 'para', src: 'Gamma delta x2', lines: [line(2, 250, [20, 'Gamma delta']), line(2, 150, [60, 'x2'])], from: 'file', tr: [text(CJK(5, 0x4e40))] },
+  ]
+  PAPERS.push(['L2', specs, 2, [null]])
+  /** the paper, each page's read logged with the units laid by then */
+  const logged = () => {
+    const P = paper(specs, 2), get = P.doc.getPage, log: string[] = []
+    let run: Run | null = null
+    P.doc.getPage = async (n: number) => { log.push(`read ${n} after ${run?.order.join(',') ?? ''}`); return get(n) }
+    return { P, log, bind: (r: Run) => { run = r } }
+  }
+  it('draws the page of its placeholder before it is laid, whatever page is asked first', async () => {
+    const want = await open(paper(specs, 2))
+    expect(want.closure(1).draw).toEqual([1, 2])
+    await want.until(2)
+    for (const first of [1, 2]) {
+      const { P, log, bind } = logged()
+      const run = await open(P)
+      bind(run)
+      await run.layFor(first)
+      await run.until(2)
+      expect(log, `page ${first} first`).toEqual(['read 1 after ', 'read 2 after '])
+      expect(run.rows.map(r => JSON.stringify(r.ops)), `page ${first} first`).toEqual(want.rows.map(r => JSON.stringify(r.ops)))
+      expect(run.skipped, `page ${first} first`).toEqual(want.skipped)
+    }
   })
 })
 
@@ -186,6 +222,82 @@ describe("S4: a unit's lines on a page are dropped and grown by that page alone"
   })
 })
 
+describe('S4 with a first page all another\'s: the first line is the first placed page\'s, whatever page grew first (L4)', () => {
+  // q (unit 1) is laid by v0's geometry on pages 2 and 3, its line on page 2 another unit's rectangle covers (dropped there),
+  // its line on page 3 anchored mid-word; u (unit 3) runs from page 3 to 4 and v (unit 4) from 4 to 5. Page 5's closure lays u
+  // and v, and u's growth on page 3 grows q there before q's own page 2 is reached: the first line q's page-3 growth reads
+  // was its page-2 line (not yet dropped), where laid in order it was its page-3 line (the page-2 one dropped), and its edge
+  // snapped. The first line is the first placed page's, read on that page alone, so both orders draw page 3 alike
+  const rectOf = (l: Line, x0 = spanOf(l)[0]) => [l.page, x0, l.b - 2.15, spanOf(l)[1], l.b + 6.83]
+  const Q2 = line(2, 200, [20, 'Alpha beta']), Q3 = line(3, 200, [20, 'gamma delta'])
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'geometry', tr: [text(CJK(5))] },
+    { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [Q2, Q3], rects: [rectOf(Q2), rectOf(Q3, 30)], from: 'geometry', tr: [text(CJK(8, 0x4e20))] },
+    { id: 2, kind: 'para', src: 'Other words', lines: [line(2, 120, [20, 'Other words'])], rects: [rectOf(Q2)], from: 'geometry', tr: [text(CJK(4, 0x4e40))] },
+    { id: 3, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], from: 'geometry', tr: [text(CJK(8, 0x4e60))] },
+    { id: 4, kind: 'para', src: 'Pi rho sigma tau', lines: [line(4, 60, [20, 'Pi rho']), line(5, 270, [20, 'sigma tau'])], from: 'geometry', tr: [text(CJK(8, 0x4e80))] },
+  ]
+  PAPERS.push(['S4, a first page dropped', specs, 5, [null]])
+  const pageOf = (run: Run, q: number) => ({ markup: run.rows[q - 1]!.markup, ops: JSON.stringify(run.rows[q - 1]!.ops) })
+  it('draws every page alike laid in order, page 5 first, reversed, or each page alone', async () => {
+    const want = await open(paper(specs, 5))
+    await want.until(5)
+    // (q's page-2 line dropped as another's: its lines are its page 3's alone)
+    expect(placedOf(want, 1).rects.map(r => r[0])).toEqual([3])
+    for (const first of [[5], [5, 4, 3, 2, 1], [3], [4]]) {
+      const run = await open(paper(specs, 5))
+      for (const p of first) await run.layFor(p)
+      await run.until(5)
+      for (let q = 1; q <= 5; q++) expect(pageOf(run, q), `${first} first, page ${q}`).toEqual(pageOf(want, q))
+      expect(placedOf(run, 1).rects, `${first} first`).toEqual(placedOf(want, 1).rects)
+    }
+  })
+})
+
+describe('L1: a unit left the original\'s for a page that cannot be read grows on its other pages as a unit ranked after it there needs', () => {
+  // q (unit 1, v0's geometry) on pages 2 and 3, its page-2 line anchored on "beta" alone ("Alpha" before it its own), page 3
+  // unreadable: q is refused 'page' and never laid. u (unit 2) on pages 2 and 4 ranks after it on page 2 and grows it there
+  // first (L1): in order too, where next's rule skipped a unit refused before it was reached
+  const Q2 = line(2, 200, [20, 'Alpha beta'])
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'geometry', tr: [text(CJK(5))] },
+    { id: 1, kind: 'para', src: 'Alpha beta gamma', lines: [Q2, line(3, 200, [20, 'gamma'])], rects: [[2, 50, 200 - 2.15, 70, 200 + 6.83], [3, 20, 200 - 2.15, 45, 200 + 6.83]], from: 'geometry', tr: [text(CJK(6, 0x4e20))] },
+    { id: 2, kind: 'para', src: 'Other words more text', lines: [line(2, 120, [20, 'Other words']), line(4, 270, [20, 'more text'])], from: 'geometry', tr: [text(CJK(8, 0x4e40))] },
+  ]
+  /** the paper, its page 3 unreadable */
+  const failing = () => { const P = paper(specs, 4), get = P.doc.getPage; P.doc.getPage = async (n: number) => { if (n === 3) throw new Error('page 3 cannot be read'); return get(n) }; return P }
+  const page2 = (run: Run) => ({ markup: run.rows[1]!.markup, ops: JSON.stringify(run.rows[1]!.ops) })
+  it('is grown on page 2 in order and in every other order, the page drawn alike', async () => {
+    const want = await open(failing())
+    await want.until(4)
+    expect(want.failed(3)).toBe(true)
+    expect(want.skipped.filter(x => x.id === 1).map(x => x.why)).toEqual(['page'])
+    // (its line grown over "Alpha", its own source's word: the anchors' x0 of 50 back to the line's 20)
+    expect(placedOf(want, 1).rects.find(r => r[0] === 2)![1]).toBeCloseTo(20, 1)
+    for (const first of [[4], [2], [4, 2, 1]]) {
+      const run = await open(failing())
+      for (const p of first) await run.layFor(p)
+      await run.until(4)
+      expect(page2(run), `${first} first`).toEqual(page2(want))
+      expect(placedOf(run, 1).rects, `${first} first`).toEqual(placedOf(want, 1).rects)
+    }
+  })
+  it('is grown alike by the run that lets go and the one that keeps, with no page pass too (a unit left the original\'s is let go only once its growth has run)', async () => {
+    const noPass = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }
+    noPass.scripts.Hans!.adaptiveFill = null
+    for (const rules of [undefined, noPass]) {
+      const kept = await open(failing(), { rules })
+      await kept.until(4)
+      const freed = await open(failing(), { rules, free: true })
+      await freed.until(4)
+      const as = rules ? 'no page pass' : 'the built-in set'
+      expect(placedOf(freed, 1).rects, as).toEqual(placedOf(kept, 1).rects)
+      expect(placedOf(freed, 1).rects.find(r => r[0] === 2)![1], as).toBeCloseTo(20, 1)
+      for (const q of [1, 2, 4]) expect(freed.rows[q - 1]!.ops, `${as} page ${q}`).toEqual(kept.rows[q - 1]!.ops)
+    }
+  })
+})
+
 describe("C1: a unit's fill leading is its fit's", () => {
   // a paragraph of page 2, and one from page 2 on to page 3: page 2's pass waits for the second, laid at page 3
   const specs: Spec[] = [
@@ -196,8 +308,10 @@ describe("C1: a unit's fill leading is its fit's", () => {
   PAPERS.push(['C1, fill', specs, 3, [null]])
   it('is set as the unit is laid, before the pass of its page has run', async () => {
     const run = await open(paper(specs, 3))
-    await run.until(2, () => run.drawnTo < 2)
-    expect(run.drawnTo).toBe(2)
+    // (page 2's closure: its paragraph laid first, by its rank, then stopped before the one running on to page 3)
+    await run.layFor(2, () => run.order.length < 1)
+    expect(run.order).toEqual([0])
+    expect(run.rows[1]!.fill).toBeNull()
     expect(placedOf(run, 0).layout).toBeDefined()
     expect(placedOf(run, 1).layout).toBeUndefined()
     const lead = (placedOf(run, 0) as { fillLead?: number | null }).fillLead
@@ -245,7 +359,9 @@ describe("S3: a page's fill target is a function of its page", () => {
     for (const order of [[0, 1, 3, 4, 5, 2], [0, 1, 3, 4, 2, 5]]) {
       const run = await open(paper(specs, 4), { order })
       await run.until(4)
-      expect(run.order, `${order}`).toEqual(order)
+      // (the units' rank is the order given; the records are in it, whatever order the closures laid them in)
+      expect(run.stats.map(r => r.id), `${order}`).toEqual(order)
+      expect([...run.order].sort(), `${order}`).toEqual([...order].sort())
       for (const q of [1, 2, 3, 4]) expect(pageOf(run, q), `${order} page ${q}`).toEqual(pageOf(want, q))
     }
   })
@@ -282,6 +398,52 @@ describe('S3 with the even pass: a continuation enters its page\'s anchor at its
   })
 })
 
+describe('the rules that lay in order (the even pass; no page pass): a page asked lays the prefix, in the stream\'s order', () => {
+  const specs: Spec[] = [
+    para(0, [[1, 250, 4]], 44),
+    para(1, [[1, 100, 3], [2, 270, 3]], 30, 0x4e40),
+    para(2, [[1, 40, 2], [4, 270, 2]], 12, 0x4e80),
+    para(3, [[2, 200, 6]], 24, 0x4ec0),
+    para(4, [[3, 120, 4]], 16, 0x4f00),
+    para(5, [[4, 120, 4]], 16, 0x4f40),
+  ]
+  const rulesOf = (how: 'even' | 'no pass') => {
+    const r = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }
+    if (how === 'even') r.scripts.Hans!.even = 1
+    else r.scripts.Hans!.adaptiveFill = null
+    return r
+  }
+  it('bounds a closure by every page its units read, a placeholder\'s past the prefix\'s last page among them', async () => {
+    // (the L2 paper: page 1's paragraph reads page 2 for its formula; laid in order, page 1's closure is page 1 alone, and
+    // draws page 2 too and is bound by it, so that the part covering page 2 is in before page 1 is told laying)
+    const L2specs = PAPERS.find(([name]) => name === 'L2')![1]
+    for (const how of ['even', 'no pass'] as const) {
+      const run = await open(paper(L2specs, 2), { rules: rulesOf(how) })
+      expect(run.closure(1).pass, how).toEqual([1])
+      expect(run.closure(1).draw, how).toEqual([1, 2])
+      expect(run.closure(1).bound, how).toBe(2)
+    }
+  })
+  for (const how of ['even', 'no pass'] as const) it(`${how}: page 3 asked first lays the prefix up to it, as laid in order`, async () => {
+    const rules = rulesOf(how)
+    const want = await open(paper(specs, 4), { rules })
+    await want.until(4)
+    const run = await open(paper(specs, 4), { rules })
+    // (its closure is the prefix needsOf reads: pages 1 to the last page 3 may be done after, and every page those units read)
+    expect(run.closure(3).pass.slice(0, 3)).toEqual([1, 2, 3])
+    expect(run.closure(3).draw).toEqual(expect.arrayContaining(run.closure(3).pass))
+    await run.layFor(3)
+    // (page 3 ready, and every page done by it: page 1's paragraph that runs on to page 4 is laid with page 4)
+    expect(run.ready(3)).toBe(true)
+    expect(run.ready(1)).toBe(false)
+    // (laid in the stream's order: the units' order is the run's laid in order, a prefix of it)
+    expect(want.order.slice(0, run.order.length)).toEqual(run.order)
+    await run.until(4)
+    expect(run.order).toEqual(want.order)
+    for (let q = 1; q <= 4; q++) expect(JSON.stringify(run.rows[q - 1]!.ops), `${how} page ${q}`).toEqual(JSON.stringify(want.rows[q - 1]!.ops))
+  })
+})
+
 describe("C1: a page is painted in the order its painters' first pages' passes run laid in order", () => {
   // page 3 is painted by a paragraph from page 1 (its line on page 2 none: a full page's float between), one from page 2,
   // and its own: the first two laid at page 3, as their last page is drawn, in either order (the lay order a recorded run
@@ -299,10 +461,11 @@ describe("C1: a page is painted in the order its painters' first pages' passes r
     await one.until(3)
     const two = await open(paper(specs, 3), { order: [0, 2, 3, 1, 4] })
     await two.until(3)
-    // (page 3's group lays the paragraph from page 1 first in one, the one from page 2 first in the other: page 1's pass runs
-    // first in one, page 2's in the other, and each page is painted in that order)
-    expect(one.order.indexOf(1)).toBeLessThan(one.order.indexOf(3))
-    expect(two.order.indexOf(3)).toBeLessThan(two.order.indexOf(1))
+    // (page 3's group ranks the paragraph from page 1 first in one, the one from page 2 first in the other: page 1's pass runs
+    // first in one, page 2's in the other, laid in order, and each page is painted in that order whatever order they were laid in)
+    const rankOf = (run: Run) => run.stats.map(r => r.id)
+    expect(rankOf(one).indexOf(1)).toBeLessThan(rankOf(one).indexOf(3))
+    expect(rankOf(two).indexOf(3)).toBeLessThan(rankOf(two).indexOf(1))
     expect(paintedOn(one, 3)).toEqual([1, 3, 4])
     expect(paintedOn(two, 3)).toEqual([3, 1, 4])
   })
@@ -319,7 +482,8 @@ describe("C1: a page is painted in the order its painters' first pages' passes r
     ]
     PAPERS.push(['C1, pages skipped', five, 5, [null]])
     const run = await open(paper(five, 5))
-    await run.until(3, () => run.drawnTo < 3)
+    // (page 2's closure: u laid, page 2 passed, its part of page 3 painted, w not laid)
+    await run.layFor(2)
     expect(placedOf(run, 1).layout).toBeUndefined()
     // (u's part of page 3 painted already, and page 2 let go: no unit on it is still to be painted)
     expect(paintedOn(run, 3)).toEqual([3])
