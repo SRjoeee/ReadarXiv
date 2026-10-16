@@ -26,9 +26,10 @@ function lowerBound(xs, v) {
 /**
  * @param {{ doc: readonly object[], views: readonly (readonly number[])[], anchors: ReadonlyMap<number, object | null> }} o
  *   `doc` the tokens the anchors were made on (tokenizeDocument's, fitted), in page order; `views` each page's box as PDF.js gives
- *   it, pages 1 to N; `anchors` anchorUnits' result
+ *   it, pages 1 to N; `anchors` anchorUnits' result; `edges` the tokens' ink edges made already (layout/arxiv.mjs: the tokens'
+ *   items let go), and `columns` the pages' columns' rule (highlight.mjs pageColumns, today's), both layoutOf's
  */
-export function leftSideOf({ doc, views, anchors }) {
+export function leftSideOf({ doc, views, anchors, edges = null, columns = undefined }) {
   const N = views.length, n = doc.length
   const pages = views.map(v => v.map(onGrid))
 
@@ -45,7 +46,7 @@ export function leftSideOf({ doc, views, anchors }) {
   // the layout of what is shipped, as the reader makes it of the units it is given (the web's anchorsOf): their rectangles on the
   // grid and tokens
   const shipped = new Map(placed.map(u => [u.id, { rects: u.rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 })), tokens: u.tokens }]))
-  const { tok } = layoutOf(doc, pages, shipped)
+  const { tok } = layoutOf(doc, pages, shipped, undefined, { edges, ...(columns ? { columns } : {}) })
 
   // each page's first token: tokens are in page order, a page with none begins where the next does
   const start = new Int32Array(N + 2).fill(n)

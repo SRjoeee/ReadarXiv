@@ -45,6 +45,12 @@ export const STEPS_MAX = 5_000_000
  *  them), 65 MB at the budget and its 4,096 cells. The corpus's most: 22,101 boxes (2608.27728 page 15); this is 22.6
  *  times that */
 export const BOXES_PAGE = 500_000
+/** the boxes a page's ink holds at most, whatever its reader: one operation may place any number of them (a repeat or a group
+ *  of images, which PDF.js's own list for getOperatorList never holds, its queue optimiser being off for it, but a list from
+ *  elsewhere may; a text-showing operation's glyphs set turned, a box each), so OPS_CAP alone does not bound them. A page past
+ *  it is capped as one past OPS_CAP is: no ink, that page alone. A reader that asks for BOXES_PAGE never meets it (its boxes
+ *  past the budget are merged, 4,096 at most); the corpus's most is 22,101 boxes (2608.27728 page 15) */
+export const BOXES_CAP = 1_000_000
 /** the walk's backstop (`msMax`), in milliseconds: past it reading stops and the page is `timedOut` (its reader gives it no
  *  ink, and says so apart from a list that never came). STEPS_MAX is the walk's bound; this is for a machine far slower
  *  than the one it was measured on, and only there does it act: a page timed out on one machine and read on another, the
@@ -178,7 +184,8 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * shows them; `points`: each point of the marked compile (POINT), { name, glyph, box }, the glyphs and the boxes shown
  * before it; `boxAt`: for each glyph, the boxes shown before it. On arXiv's PDF the points are nobody's. `capped`: the
  * list held more than OPS_CAP operations, the walk took more than `stepsMax` steps (STEPS_MAX), the stack went deeper
- * than STACK_MAX, or (`glyphsMax`) the page showed more glyphs than that, and reading stopped there. `timedOut`: the walk
+ * than STACK_MAX, (`glyphsMax`) the page showed more glyphs than that, or it kept more than BOXES_CAP boxes, and reading
+ * stopped there, within the operation. `timedOut`: the walk
  * passed `msMax` (INK_MS, the backstop), and reading stopped there. A reader gives a page capped or timed out no ink.
  * `rotated`: the page's /Rotate is not 0, and nothing is read (the layer lays over no rotated page).
  * `boxesMax` (BOXES_PAGE where a reader asks; none by default): the boxes past it, of every kind, are not kept one by one
@@ -282,12 +289,15 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (clip) { bx0 = Math.max(bx0, clip[0]); by0 = Math.max(by0, clip[1]); bx1 = Math.min(bx1, clip[2]); by1 = Math.min(by1, clip[3]) }
     return bx0 <= bx1 && by0 <= by1 ? [bx0, by0, bx1, by1] : null
   }
-  /** a box painted, a step: kept one by one within the budget, else merged by cell (whatever its kind) */
+  /** a box painted, a step: kept one by one within the budget, else merged by cell (whatever its kind); past BOXES_CAP
+   *  boxes kept (a reader that asks for no budget), reading stops, the page capped */
   const put = (x0, y0, x1, y1, path) => {
     step(1)
     if (stop) return
-    if (boxes.length < 4 * keep) { boxes.push(x0, y0, x1, y1); if (indices) paths.push(path) }
-    else merge(x0, y0, x1, y1)
+    if (boxes.length >= 4 * keep) { merge(x0, y0, x1, y1); return }
+    if (boxes.length >= 4 * BOXES_CAP) { over = true; stop = true; return }
+    boxes.push(x0, y0, x1, y1)
+    if (indices) paths.push(path)
   }
   const addBox = (m, x0, y0, x1, y1, path = -1) => { const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path); else step(1) }
   /** the clip in force cut to a rectangle of space `m`; nothing left of it is a clip of no area */

@@ -58,12 +58,47 @@ export interface CutOptions {
   base?: { bytes: number; sha256: string; xref: number }
   image?: string
   lineskip?: [number, number] | null
+  /** the producer's verdict on each part as cut with its layout (partCutter's) */
+  verdict?: PartVerdict | null
 }
+/** a part's layout refused, and why ({ refused, ...the why's numbers }), or kept (null) */
+export type PartRefusal = { refused: string; [why: string]: unknown }
+/** the producer's verdict on a part as cut with its layout: its pages, what it was cut from, the part written */
+export type PartVerdict = (part: { pages: [number, number]; input: { part: LayoutPart | null }; written: Written }) => PartRefusal | null | Promise<PartRefusal | null>
+/** what a part is cut on (partCutter's `next`): K, F closed over the table groups, the need bound (null: no extension), the rows */
+export interface CutKnown {
+  K: readonly (CutEntry & { left: UnitWire | null; lu: unknown; first: number; last: number; lastLeft: number })[]
+  F: readonly number[]
+  NB?: ArrayLike<number> | null
+  layout?: Pick<LayoutFile, 'fonts' | 'units' | 'lines' | 'frames' | 'erase' | 'ph' | 'labels' | 'headings' | 'pageText' | 'held' | 'names'> | null
+}
+export type CutPart = Written & { from: number; to: number; leftParts: (Written & { page: number })[] }
+/** the cut a part at a time: cutBundle's, fed what is known when each part is cut */
+export interface PartCutter {
+  /** the part from `from`, or null past the paper's last page */
+  next(known: CutKnown): Promise<CutPart | null>
+  readonly parts: CutPart[]
+  readonly left: (Written & { page: number })[]
+  /** each part's: null, the verdict's refusal, or { refused: 'part' } (its first page alone past a part's bounds with its layout) */
+  readonly verdicts: (PartRefusal | null)[]
+  /** the page the next part begins at */
+  readonly from: number
+}
+/** K over the whole paper and its frontier closed over the table groups: what partCutter cuts a paper made whole on */
+export declare function wholeFrontier(whole: WholePaper, frontier?: CutOptions['frontier']): { K: CutKnown['K']; F: number[] }
+export declare function partCutter(o: {
+  paper: { id: string; version: number }; N: number; head: Written; views: readonly Box[]
+  leftPages: CutOptions['leftPages']; addon?: { manifest: RemovalManifest } | null
+  chainAddon?: CutOptions['chainAddon'] | null; acceptAddon?: CutOptions['acceptAddon'] | null
+  target?: CutOptions['target'] | null; partPagesMax?: number; verdict?: PartVerdict | null
+  /** false: no part nor left part kept once given (`parts` and `left` hold nulls): a stream's */
+  retain?: boolean
+}): PartCutter
 export interface Cut {
   units: (Written & { from: number; to: number })[]
   head: Written
   /** in page order; `leftParts` the part's own, pages from..to */
-  parts: (Written & { from: number; to: number; leftParts: (Written & { page: number })[] })[]
+  parts: CutPart[]
   /** one for each page 1..N */
   left: (Written & { page: number })[]
   /** what the catalog's `end` is (the Worker writes it) */
@@ -76,3 +111,5 @@ export declare const TAIL_NOT_CARRIED: 'tail not carried'
 /** the frontier by the door's rule: needsOf(K, N, false, layout-only).lay */
 export declare function needFrontier(K: readonly NeedEntry[], N: number): number[]
 export declare function cutBundle(whole: WholePaper, o: CutOptions): Promise<Cut>
+/** cutBundle's start: the whole checked, its chunks and head written, and the cutter with what each part is cut on */
+export declare function wholeCutter(whole: WholePaper, o: CutOptions): Promise<{ units: Cut['units']; head: Written; cutter: PartCutter; known: CutKnown; N: number }>

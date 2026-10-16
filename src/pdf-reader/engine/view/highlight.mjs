@@ -53,11 +53,14 @@ function lowerBound(xs, v) {
  * tokens are tens of thousands) each page's columns, the document's column text edges and the half leading of each
  * kind of unit on each page; the units on each page. `doc` tokenizeDocument's tokens; `views` each page's box, [x0, y0, x1, y1]; `anchors`
  * anchorUnits' result; `kindOf(id)` a unit's kind. Nothing of `doc` is kept: its objects, with their words and items,
- * are ten times the copy (2608.02459: 9 and 11.6 MB a side)
+ * are ten times the copy (2608.02459: 9 and 11.6 MB a side). `o.edges`: the tokens' ink edges made already (inkEdges, as
+ * layout/arxiv.mjs makes them a page at a time while the text items are there), copied, for tokens whose items are let
+ * go; `o.columns`: the pages' columns' rule (pageColumns, today's: from every located unit's lines; null: today's, made
+ * with the document part)
  */
-export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
+export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges = null, columns = null } = {}) {
   const n = doc.length, pages = views.length
-  const { l, r } = inkEdges(doc)
+  const { l, r } = edges ? { l: Float32Array.from(edges.l), r: Float32Array.from(edges.r) } : inkEdges(doc)
   const tok = { l, r, y: new Float32Array(n), h: new Float32Array(n), top: new Float32Array(n), bottom: new Float32Array(n) }
   // tokens are in page order: page p's are [pageStart[p], pageStart[p + 1])
   const pageStart = new Int32Array(pages + 2).fill(n), far = []
@@ -70,7 +73,9 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined) {
   for (let p = pages; p >= 1; p--) if (pageStart[p] > pageStart[p + 1]) pageStart[p] = pageStart[p + 1]
   const units = []
   for (const [id, a] of anchors) if (a?.tokens?.length) units.push([id, a.rects])
-  const { page, unitsOn, pagesOf } = documentOf(views, units, kindOf)
+  const part = documentOf(views, units, kindOf), { unitsOn, pagesOf } = part
+  // (the columns by a rule given: a part's units alone under the whole left's columns, the page stream's test)
+  const page = columns ? columns(views, anchors, kindOf) : part.page
   // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
   // column's text edge: a proof's box set flush right
   for (const k of far) {
@@ -173,6 +178,18 @@ function tokensOf(L, id, stream) {
   const at = lowerBound(out, stream)
   if (out[at] !== stream) out.splice(at, 0, stream)
   return out
+}
+
+/**
+ * Each page's columns, by today's rule: [null, page 1, …], each { mid, width, size, x0, x1, two, cols, lead }: the
+ * document part's (documentOf) of the located units' line rectangles, so every page's columns read every unit's place. A
+ * rule that read arXiv's text alone would make a page's columns before any unit is located (a rule change: layoutOf's
+ * `columns`)
+ */
+export function pageColumns(views, anchors, kindOf = () => undefined) {
+  const units = []
+  for (const [id, a] of anchors) if (a?.tokens?.length) units.push([id, a.rects])
+  return documentOf(views, units, kindOf).page
 }
 
 /**

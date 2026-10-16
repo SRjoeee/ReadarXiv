@@ -226,6 +226,22 @@ describe('pageInk', () => {
     expect(b.glyphs.map(q => q.u)).toEqual(['A', 'Z'])
   })
 
+  it('a page past `glyphsMax` glyphs is capped, one operation showing them all (a hostile page): what it read stops there', () => {
+    expect(GLYPHS_PAGE).toBe(100_000)
+    // one showText of a million glyphs, within OPS_CAP by far: three operations and a text object's
+    const run = Array.from({ length: 1_000_000 }, () => g('x', 1))
+    const page = [...text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.showText, [run]]), ...text('f1', 10, [1, 0, 0, 1, 72, 600], show(g('Z')))]
+    const capped = pageInk(OPS, list(page), commonObjs, { rotate: 0, glyphsMax: GLYPHS_PAGE })
+    expect(capped.capped).toBe(true)
+    expect(capped.glyphs).toHaveLength(GLYPHS_PAGE)
+    expect(capped.glyphs.some(q => q.u === 'Z')).toBe(false)
+    // at the bound exactly: all read; and with none asked, every glyph (the bound is the caller's)
+    const at = pageInk(OPS, list(text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.showText, [run.slice(0, 1000)]])), commonObjs, { rotate: 0, glyphsMax: 1000 })
+    expect([at.capped, at.glyphs.length]).toEqual([false, 1000])
+    const free = pageInk(OPS, list(page), commonObjs, { rotate: 0 })
+    expect([free.capped, free.glyphs.length]).toEqual([false, 1_000_001])
+  })
+
   it('a painted glyph is ink whatever its Unicode: a symbolic font\'s code 32 (2307.16209\'s big left parenthesis) is a glyph', () => {
     // txexs's parenthesis is drawn from code 32, which PDF.js gives the Unicode of a space
     const { glyphs } = ink(text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('a', 500), g(' ', 750, true), g('', 500), g('b', 500))))

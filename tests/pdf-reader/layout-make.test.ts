@@ -1,145 +1,78 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { encodeLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
-import { BOXES_PAGE, INK_MS, OPS_CAP, STACK_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
-import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
-import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
+import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
+import { CARRY_MIN, fontName, GIVEN_UP_MAX, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
+import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
+import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
+import { arxivOf, endOf, FONTS, type Mark, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
+import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
 
-// The layout maker over a fake PDF.js document of arXiv's PDF and a marks file made, as the run makes it, from a fake
-// marked original: each run of text is a text item and the glyphs of an operator list alike, every character half an em
-// wide, so that a word's place in the text layer is its glyphs' place. The marked original's operator list shows its
-// runs in their order, and a point (`/axt-<name> ri`) beside each mark: before the first glyph on the mark's baseline at
-// or right of it, else after the last one on that baseline (a page's `points` places one by hand, before a run's
-// character, as TeX's content stream has it where a mark's place does not tell); a box is shown at the page's end, or
-// before the run its fifth number names; `order`, the runs' order in the stream where it is not the text layer's
+// The layout maker over the fake world of helpers/make-world.ts
 
-const CH = 0.5
-/** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32); `one`: the whole
- *  string one glyph's Unicode (a character and its variation selector) */
-type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
-type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[] }
-type Mark = [name: string, page: number, x: number, y: number]
-type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
-
-const FONTS: Record<string, unknown> = {
-  F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
-  F2: { name: `ABCDEF+Ä${'x'.repeat(300)}`, fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
-}
-const STYLES = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F2: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' } }
-const size = (r: Run) => r.size ?? 10
-const adv = (r: Run) => (r.w ?? CH) * size(r)
-/** where a run's character j begins, and where the run ends */
-const xAt = (r: Run, j: number) => r.x + j * adv(r)
-const endOf = (r: Run) => xAt(r, r.one ? 1 : r.s.length)
-const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: (r.one ? 1 : r.s.length) * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: !!r.eol })
-/** where each mark's point stands in a page's stream: [run, character] before which it is shown, in the marks' order */
-function pointsOf(p: Page, page: number, marks: Mark[]) {
-  const out: [name: string, run: number, char: number][] = []
-  for (const [name, at] of Object.entries(p.points ?? {})) out.push([name, at[0], at[1]])
-  for (const [name, pg, x, y] of marks) {
-    if (pg !== page || p.points?.[name]) continue
-    let first: [number, number] | null = null, last: [number, number] | null = null
-    p.runs.forEach((r, ri) => {
-      if (Math.abs(r.y - y) >= 0.5 * size(r)) return
-      for (let c = 0; c < r.s.length; c++) {
-        if (r.s[c] === ' ') continue
-        if (!first && xAt(r, c) >= x - 0.01) first = [ri, c]
-        last = [ri, c + 1]
-      }
-    })
-    const at: [number, number] = first ?? last ?? [p.runs.length, 0]
-    out.push([name, at[0], at[1]])
-  }
-  return out
-}
-function opsOf(p: Page, points: [string, number, number][] = []) {
-  const ops: [number, unknown[]][] = []
-  const at = (ri: number, c: number) => { for (const [name, r, ch] of points) if (r === ri && ch === c) ops.push([OPS.setRenderingIntent, [{ name: `axt-${name}` }]]) }
-  const box = (b: number[]) => ops.push([OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(b.slice(0, 4))]])
-  for (const ri of p.order ?? p.runs.map((_, i) => i)) {
-    const r = p.runs[ri] as Run
-    for (const b of p.boxes ?? []) if (b[4] === ri) box(b)
-    ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [[1, 0, 0, 1, r.x, r.y]]])
-    // a space is a move, as TeX's pages show it: no glyph (the ink reader keeps every painted glyph); a point between two
-    // characters parts the run's showText
-    let glyphs: unknown[] = []
-    if (r.one) { ops.push([OPS.showText, [[{ unicode: r.s, width: (r.w ?? CH) * 1000, isSpace: false, fontChar: r.s, vmetric: null }]]], [OPS.endText, []]); continue }
-    for (let c = 0; c <= r.s.length; c++) {
-      if (points.some(([, pr, pc]) => pr === ri && pc === c)) { if (glyphs.length) ops.push([OPS.showText, [glyphs]]); glyphs = []; at(ri, c) }
-      if (c === r.s.length) break
-      const ch = r.s[c] as string
-      glyphs.push(ch === ' ' ? -(r.w ?? CH) * 1000 : { unicode: r.blank ? ' ' : ch, width: (r.w ?? CH) * 1000, isSpace: !!r.blank, fontChar: ch, vmetric: null })
-    }
-    if (glyphs.length) ops.push([OPS.showText, [glyphs]])
-    ops.push([OPS.endText, []])
-  }
-  at(p.runs.length, 0)
-  for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
-  // (past OPS_CAP: operations the walk reads and does nothing with, after the page's own, as one typed array)
-  if (p.ops === 'capped') { const fn = new Uint16Array(OPS_CAP + 1).fill(OPS.setFillRGBColor); fn.set(ops.map(o => o[0])); return { fnArray: fn, argsArray: ops.map(o => o[1]) } }
-  // (after the page's own: saves past STACK_MAX, or two thousand operations the walk does nothing with, more steps than
-  // come between two readings of its clock; before it, one painted path more than BOXES_PAGE, off the page's columns, one
-  // operand each, so that the page is degraded and every box of its own past the budget)
-  if (p.ops === 'deep') for (let i = 0; i <= STACK_MAX; i++) ops.push([OPS.save, []])
-  if (p.ops === 'dense' || p.ops === 'slow') {
-    const dense = p.ops === 'dense', extra = dense ? BOXES_PAGE + 1 : 2000, own = ops.length
-    const fn = new Uint16Array(own + extra).fill(dense ? OPS.constructPath : OPS.setFillRGBColor)
-    fn.set(ops.map(o => o[0]), dense ? extra : 0)
-    const path = [OPS.fill, [Float32Array.from([0])], Float32Array.from([-100, 0, -90, 10])], filler = new Array(extra).fill(dense ? path : [])
-    return { fnArray: fn, argsArray: dense ? [...filler, ...ops.map(o => o[1])] : [...ops.map(o => o[1]), ...filler] }
-  }
-  return { fnArray: ops.map(o => o[0]), argsArray: ops.map(o => o[1]) }
-}
-/** PDF.js's glyph outlines (where it draws glyphs as paths, as in Node), by `<loadedName>_path_<fontChar>`: DrawOPS in em */
-const PATHS: Record<string, number[]> = {}
-const commonObjs = { get: (id: string) => (id in PATHS ? { path: new Float32Array(PATHS[id]!) } : (FONTS[id] ?? null)), has: (id: string) => id in PATHS || id in FONTS }
-function arxivOf(pages: Page[], asked: number[] = []) {
-  return {
-    numPages: pages.length,
-    getPage: async (n: number) => {
-      const p = pages[n - 1] as Page
-      return {
-        view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs,
-        getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }),
-        getOperatorList: () => {
-          asked.push(n)
-          return p.ops === 'never' ? new Promise(() => {}) : p.ops === 'fails' ? Promise.reject(new Error('broken page')) : Promise.resolve(opsOf(p))
-        },
-      }
-    },
-  }
-}
-function markedOf(pages: Page[], marks: Mark[]) {
-  return {
-    numPages: pages.length,
-    getPage: async (n: number) => {
-      const p = pages[n - 1] as Page
-      return { view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }), getOperatorList: async () => opsOf({ ...p, ops: p.markedOps }, pointsOf(p, n, marks)) }
-    },
-    getDestinations: async () => new Map(marks.map(([name, page, x, y]) => [`axt-${name}`, [{ num: 100 + page, gen: 0 }, { name: 'FitR' }, x, y, null]])),
-    getPageIndex: async (ref: { num: number }) => ref.num - 101,
-  }
-}
-async function marksOf(w: World, log = '', classes?: MarkClass[]) {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
-}
 const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
-/** a made file: it parses, and made again it is the same bytes */
+/** a seeded generator */
+const seeded = (seed: number) => () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32 }
+let seeds = 1
+/**
+ * The same world's file with its passes run as tasks (makerOf byTasks) in an order a seeded pick makes of those the whole
+ * order allows, each task confined to its own pages (`check`), the columns' edges the whole run's
+ */
+async function inOtherOrder(w: World, log: string) {
+  const input = { units: w.units, marks: await marksOf(w, log), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+  const first = await makerOf({ ...input, arxiv: arxivOf(w.pages) })
+  if ('refused' in first) return first
+  for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+  await first.whole()
+  const m = await makerOf({ ...input, arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true })
+  if ('refused' in m) return m
+  for (let p = 1; p <= m.pages; p++) await m.readPage(p)
+  const rand = seeded(seeds++)
+  return m.byTasks(ready => Math.floor(rand() * ready.length))
+}
+/**
+ * The same world's rows made a page at a time (makerOf byStream: the page stream's maker, the units anchored by ranges, the
+ * passes as tasks as pages are read, each page let go once its tasks ran), the frame and the columns' edges the whole run's,
+ * merged as parts are (mergeLayout): the whole file's rows
+ */
+async function byPages(w: World, log: string) {
+  const input = { units: w.units, marks: await marksOf(w, log), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', plans: true }
+  let frameOf: ((t: unknown) => boolean) | null = null
+  const first = await makerOf({ ...input, arxiv: arxivOf(w.pages), frame: ((d: never, ms: never) => { frameOf = pageFrame(d, ms) as never; return frameOf }) as never })
+  if ('refused' in first) return null
+  for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+  const whole = await first.whole()
+  if (!('file' in whole)) return null
+  const m = await makerOf({ ...input, arxiv: arxivOf(w.pages), frame: () => frameOf as never, columnEdges: first.edges(), check: true })
+  if ('refused' in m) return null
+  const st = await m.byStream()
+  if ('refused' in st) throw new Error('the stream refused what the whole made')
+  return { whole, merged: mergeLayout([st.layout() as never]), plans: st.plans }
+}
+/** what a file's stats count, but its times and its gzip size */
+const counted = (s: LayoutStats) => { const { ms: _ms, bytes, ...rest } = s; return { ...rest, raw: bytes.raw } }
+/** a made file: it parses, and made again it is the same bytes, its passes in another order the whole order allows too */
 async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: LayoutStats }> {
-  const one = await make(w, log), two = await make(w, log)
-  if (!('file' in one) || !('file' in two)) throw new Error(`refused: ${JSON.stringify('refused' in one ? one : two)}`)
+  const one = await make(w, log), two = await make(w, log), three = await inOtherOrder(w, log)
+  if (!('file' in one) || !('file' in two) || !('file' in three)) throw new Error(`refused: ${JSON.stringify('refused' in one ? one : 'refused' in two ? two : three)}`)
   const text = encodeLayout(one.file)
   expect(encodeLayout(two.file)).toBe(text)
+  expect(encodeLayout(three.file)).toBe(text)
+  expect(counted(three.stats)).toEqual(counted(one.stats))
+  // a page at a time: every unit's rows and every name's, as the whole file holds them, and every page's plan
+  const four = await byPages(w, log)
+  if (four) {
+    const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+    expect(rows(four.merged as never)).toEqual(rows(four.whole.file as never))
+    expect(four.plans).toEqual(four.whole.plans)
+  }
   expect(parseLayout(new TextEncoder().encode(text))).toEqual(one.file)
   for (const [, rows] of one.file.erase) expect(rows.length).toBeGreaterThan(0)
   return one
 }
 
-const text = (s: string) => ({ t: 'text', s })
-const ph = (src: string) => ({ t: 'ph', src })
-const unit = (kind: string, pieces: unknown[], more: Partial<SourceUnit> & { front?: boolean } = {}): SourceUnit => ({ kind, pieces, ...more })
-const words = (from: number, n: number) => Array.from({ length: n }, (_, i) => `w${from + i}`).join(' ')
 const rowsOf = (f: LayoutFile, id: number, kind: 'lines' | 'frames' | 'erase') => { const e = f[kind].find(([u]) => u === id); if (!e) throw new Error(`no ${kind} for ${id}`); return e[1] }
 const chunk = (rows: number[], n: number) => Array.from({ length: rows.length / n }, (_, i) => rows.slice(i * n, i * n + n))
 const phOf = (f: LayoutFile, id: number, k: number) => { const r = f.ph.find(p => p[0] === id && p[1] === k); if (!r) throw new Error(`no ph ${id}.${k}`); return r }
@@ -340,6 +273,12 @@ describe('makeLayout', () => {
     // nine of ten: a file
     const nine = await make({ ...w, pages: [{ runs: lines.map((r, j) => (j === 9 ? theirs[9] as Run : r)) }] })
     expect('file' in nine).toBe(true)
+    // for parts, the share is each part's (the cut's verdict): a file whatever share is carried, each marked page's lines told
+    const marks = await marksOf(w)
+    const cut = await makeLayout({ units: w.units, marks, arxiv: arxivOf(w.pages), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', parts: true })
+    if (!('file' in cut)) throw new Error('refused')
+    expect(cut.lines && [...cut.lines]).toEqual([[1, [8, 10]]])
+    expect(cut.stats.lines).toMatchObject({ carried: 8, total: 10 })
   })
 
   it("arXiv's page count out of bounds is refused before anything is read", async () => {
@@ -734,15 +673,27 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT, UNIT_FLAG.FRONT, 0])
   })
 
-  it("a paper's operator lists are waited for OPS_PAPER_MS in all: the pages past it are not asked", async () => {
-    const pages = Array.from({ length: 8 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'never' }))
+  it("each page's operator list is waited for OPS_MS alone, and a paper's pages given up on are GIVEN_UP_MAX at most: every page after is dark, unread", async () => {
+    expect(GIVEN_UP_MAX).toBe(8)
+    // twelve pages whose lists never come: the first eight each waited for OPS_MS and given up, the four after never asked
+    // (a count, no clock of the paper's: a paper of 10,000 such pages costs 8 times OPS_MS)
+    const pages = Array.from({ length: 12 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'never' }))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     const asked: number[] = []
     const out = make({ pages, marked: pages.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked)
-    await vi.advanceTimersByTimeAsync(OPS_PAPER_MS + 10 * OPS_MS)
+    await vi.advanceTimersByTimeAsync(13 * OPS_MS)
     const done = await out
-    expect(asked).toEqual([1, 2, 3, 4, 5, 6])
-    expect(done.stats.timedOut).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(asked).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(done.stats.timedOut).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    // a capped page is given up on too: seven pages past OPS_CAP and a slow one, then the rest unread
+    const mixed = pages.map((p, j): Page => ({ ...p, ops: j < 7 ? 'capped' : 'never' }))
+    const asked2: number[] = []
+    const out2 = make({ pages: mixed, marked: mixed.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked2)
+    await vi.advanceTimersByTimeAsync(6 * OPS_MS)
+    const done2 = await out2
+    expect(asked2).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(done2.stats.capped).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(done2.stats.timedOut).toEqual([8, 9, 10, 11, 12])
   })
 
   it('the pinned PDF.js has the cancel the maker gives a page up with; without it the maker warns once and goes on', async () => {
@@ -1432,5 +1383,176 @@ describe("makeLayout, babel's names (D1a)", () => {
     // no page with a body line of its kind of column: its own box (no room past it is known), never the page's half
     const alone = await made({ pages: [{ runs: [h] }], marks: [[`n1.ref.s`, 1, h.x, h.y], [`n1.ref.e`, 1, endOf(h), h.y]], units: [] })
     expect(alone.file.names.map(r => [r[3], r[5], r[13], r[14]])).toEqual([[72, endOf(h), 72, endOf(h)]])
+  })
+})
+
+describe('makeLayout over arXiv\'s text read once (the prepare\'s step T, layout/arxiv.mjs)', () => {
+  /** a world whose arXiv document counts its text reads */
+  const counted = (w: World) => {
+    const doc = arxivOf(w.pages), reads: number[] = []
+    return { reads, doc: { numPages: doc.numPages, getPage: async (n: number) => { const p = await doc.getPage(n); return { ...p, getTextContent: async () => { reads.push(n); return p.getTextContent() } } } } }
+  }
+  const worlds: [string, World][] = [['a paragraph with a display', DISPLAY], ['two columns', { pages: [{ runs: Array.from({ length: 6 }, (_, j): Run => ({ s: words(10 * j, 10), x: 60, y: 700 - 12 * j })) }], marks: [['0s', 1, 60, 700], ['0e', 1, endOf({ s: words(50, 10), x: 60, y: 640 }), 640]], units: [unit('para', [text(words(0, 60))])] }]]
+  for (const [name, w] of worlds) {
+    it(`${name}: with the text given, no page's text is read again and the file is the same bytes, the floats' matches given or not`, async () => {
+      const marks = await marksOf(w)
+      const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+      const alone = counted(w), want = await makeLayout({ ...base, arxiv: alone.doc })
+      expect(alone.reads).toEqual(w.pages.map((_, i) => i + 1))
+      const read = counted(w), text = await readArxivText(read.doc)
+      expect(read.reads).toEqual(w.pages.map((_, i) => i + 1))
+      const texts = w.units.map((u, i) => ({ id: i, ...unitText(u.pieces as Parameters<typeof unitText>[0]), ...displayEdges(u) }))
+      const floatMatch = floatMatches(text.tokens, texts, id => ['caption', 'footnote', 'cell', 'figure'].includes(w.units[id]?.kind ?? ''))
+      for (const given of [{ text }, { text, floatMatch }]) {
+        const got = await makeLayout({ ...base, arxiv: read.doc, ...given })
+        if (!('file' in want) || !('file' in got)) throw new Error('refused')
+        expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
+      }
+      expect(read.reads).toEqual(w.pages.map((_, i) => i + 1))
+    })
+  }
+
+  it('the frame\'s rule is the caller\'s: by default today\'s (pageFrame), the same bytes; one given is the rule the anchors are placed under', async () => {
+    const marks = await marksOf(DISPLAY)
+    const base = { units: DISPLAY.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const want = await makeLayout({ ...base, arxiv: arxivOf(DISPLAY.pages) })
+    const calls: number[] = []
+    const got = await makeLayout({ ...base, arxiv: arxivOf(DISPLAY.pages), frame: (doc, ms) => { calls.push(doc.length); return pageFrame(doc, ms) } })
+    if (!('file' in want) || !('file' in got)) throw new Error('refused')
+    expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
+    // asked once, of arXiv's tokens
+    expect(calls.length).toBe(1)
+    expect(calls[0]).toBeGreaterThan(0)
+  })
+
+  it('the page stream places a range\'s units alone: it takes no frame by default (pageFrame over them is not the whole\'s), a TypeError', async () => {
+    const marks = await marksOf(DISPLAY)
+    const base = { units: DISPLAY.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const first = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages) })
+    if ('refused' in first && first.refused) throw new Error('refused')
+    for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+    await first.whole()
+    const m = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages), columnEdges: first.edges() })
+    if ('refused' in m && m.refused) throw new Error('refused')
+    await expect(m.byStream()).rejects.toThrow(/frame/)
+  })
+
+  it('a text of another page count than the document is the caller\'s mistake', async () => {
+    const marks = await marksOf(DISPLAY)
+    const text = await readArxivText(arxivOf([...DISPLAY.pages, ...DISPLAY.pages]))
+    await expect(makeLayout({ units: DISPLAY.units, marks, arxiv: arxivOf(DISPLAY.pages), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', text })).rejects.toThrow(TypeError)
+  })
+})
+
+describe('makeLayout with the add-on\'s plans (`plans`): each page\'s operator list read once for both', () => {
+  // a paragraph over a stray glyph of another baseline under its rectangle (kept ink: the page is dirty, its removal
+  // planned), a page of a display, a page of no unit's, and a page past the ink reader's cap
+  const para: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: words(10, 10), x: 72, y: 688 }, { s: 'K', x: 100, y: 676, size: 14 }]
+  const shown: Run[] = DISPLAY.pages[0]?.runs ?? []
+  const w: World = {
+    pages: [{ runs: para, boxes: [[150, 699, 160, 701]] }, { runs: shown }, { runs: [{ s: 'nobody', x: 72, y: 700 }] }, { runs: [{ s: words(40, 3), x: 72, y: 700 }], ops: 'capped' }],
+    marked: [{ runs: [para[0] as Run, para[1] as Run] }, { runs: shown }, { runs: [{ s: 'nobody', x: 72, y: 700 }] }, { runs: [{ s: words(40, 3), x: 72, y: 700 }] }],
+    marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[1] as Run), 688], ['1s', 2, 72, 700], ['1e', 2, 267, 648], ['p1.1a', 2, 217, 700], ['2s', 4, 72, 700], ['2e', 4, endOf({ s: words(40, 3), x: 72, y: 700 }), 700]],
+    units: [unit('para', [text(words(0, 20))]), { ...(DISPLAY.units[0] as SourceUnit) }, unit('para', [text(words(40, 3))])],
+  }
+  it('the plans are pagePlansOf\'s of the same document, a dirty page\'s removal and alignment facts among them, and the file is the same bytes', async () => {
+    const marks = await marksOf(w)
+    const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const asked: number[] = []
+    const got = await makeLayout({ ...base, arxiv: arxivOf(w.pages, asked), plans: true })
+    const want = await makeLayout({ ...base, arxiv: arxivOf(w.pages) })
+    if (!('file' in got) || !('file' in want)) throw new Error('refused')
+    expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
+    expect(asked).toEqual([1, 2, 3, 4])
+    const { plans } = await pagePlansOf({ doc: arxivOf(w.pages) as never, OPS, index: indexLayout(got.file) })
+    expect(got.plans).toEqual(plans)
+    expect(plans.get(1)?.remove?.align.codes.length).toBeGreaterThan(0)
+    expect(plans.has(4)).toBe(false)
+    // without `plans`, none
+    expect('plans' in want).toBe(false)
+  })
+})
+
+describe('makerOf: the passes as tasks, in any order the whole order allows', () => {
+  it('runInOrder runs each page\'s tasks in their order, whatever it picks among those that may run', () => {
+    const rand = seeded(11)
+    const log: [number, string][] = []
+    // tasks of four passes over six units, each on one or two pages of five, and a page task a page
+    const tasks: { key: number[]; pages: number[]; run: () => void }[] = []
+    for (let x = 0; x < 4; x++) for (let i = 0; i < 6; i++) { const pages = i % 3 === 0 ? [1 + (i % 5), 2 + (i % 4)] : [1 + (i % 5)]; tasks.push({ key: [x, i], pages, run: () => { for (const q of pages) log.push([q, `${x}.${i}`]) } }) }
+    for (let q = 1; q <= 5; q++) tasks.push({ key: [1.5, q], pages: [q], run: () => log.push([q, `b.${q}`]) })
+    tasks.push({ key: [9, 0], pages: [], run: () => {} })
+    for (let s = 0; s < 20; s++) {
+      log.length = 0
+      runInOrder(tasks.slice().reverse(), ready => Math.floor(rand() * ready.length))
+      for (let q = 1; q <= 5; q++) {
+        const want = tasks.filter(t => t.pages.includes(q)).sort((a, b) => a.key[0]! - b.key[0]! || a.key[1]! - b.key[1]!).map(t => (t.key[0] === 1.5 ? `b.${t.key[1]}` : `${t.key[0]}.${t.key[1]}`))
+        expect(log.filter(([p]) => p === q).map(([, k]) => k)).toEqual(want)
+      }
+    }
+  })
+
+  it('a paper of three pages, paragraphs across their breaks, a display and a note: the same file in every order tried', async () => {
+    const lines = (page: number, from: number, n: number): Run[] => Array.from({ length: n }, (_, j) => ({ s: words(1000 * page + from + 10 * j, 10), x: 72, y: 700 - 12 * j }))
+    const p1 = [...lines(1, 0, 6), { s: 'a=b', x: 150, y: 620 }, { s: '(1)', x: 252, y: 620 }, ...lines(1, 100, 4).map(r => ({ ...r, y: r.y - 96 }))]
+    const p2 = [...lines(2, 0, 8), { s: 'and a note', x: 72, y: 600 }, { s: '1', x: 122, y: 603.5, size: 7 }, { s: '. Then more', x: 125.5, y: 600 }]
+    const p3 = lines(3, 0, 5)
+    const pages: Page[] = [{ runs: p1 }, { runs: p2 }, { runs: p3 }]
+    const last2 = p2.at(-1) as Run
+    const note = unit('footnote', [text('A note.')])
+    const w: World = {
+      pages,
+      marks: [
+        ['0s', 1, 72, 700], ['0e', 1, endOf(p1[5] as Run), 640], ['p1.1a', 1, 150, 620],
+        ['1s', 1, 72, 604], ['1e', 2, endOf(p2[7] as Run), 616], ['2s', 2, 72, 600], ['2e', 2, endOf(last2), 600], ['n2.2a', 2, 122, 600],
+        ['3s', 3, 72, 700], ['3e', 3, endOf(p3[4] as Run), 652],
+      ],
+      units: [
+        unit('para', [text(lines(1, 0, 6).map(r => r.s).join(' '))]),
+        unit('para', [text(`${lines(1, 100, 4).map(r => r.s).join(' ')} `), ph('\\begin{equation}a=b\\end{equation}'), text(` ${lines(2, 0, 8).map(r => r.s).join(' ')}`)]),
+        unit('para', [text('and a note'), { t: 'nested', unit: note }, text('. Then more')]),
+        unit('para', [text(p3.map(r => r.s).join(' '))]),
+        note,
+      ],
+    }
+    const want = await made(w)
+    // (every paragraph placed, the second across the break)
+    expect(want.file.units.map(u => u[0])).toEqual([0, 1, 2, 3])
+    expect(new Set(rowsOf(want.file, 1, 'lines').filter((_, j) => j % 8 === 0))).toEqual(new Set([1, 2]))
+    for (let s = 0; s < 12; s++) {
+      const got = await inOtherOrder(w, '')
+      if (!('file' in got)) throw new Error('refused')
+      expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
+    }
+  })
+})
+
+describe('makerOf, a page at a time: no unit decided before its match is final (the stage-1 review\'s B1)', () => {
+  // a figure's text box is a paragraph by kind, in the text by floating(), and TeX sets it after the text that follows it in
+  // the source: the units' order is not their bounds' order, so a unit's window between its bounded neighbours may miss it
+  it('two figures\' text boxes set after the paragraphs that follow them: each anchored once its marks are carried', async () => {
+    // five pages of ten lines; unit i's text on page at[i] (units 1 and 2 the boxes, set past units 3 and 4)
+    const at = [1, 4, 5, 2, 3]
+    const lines = (page: number): Run[] => Array.from({ length: 10 }, (_, j) => ({ s: words(100 * page + 10 * j, 10), x: 72, y: 700 - 12 * j }))
+    const marks: Mark[] = []
+    at.forEach((p, i) => { const ls = lines(p); marks.push([`${i}s`, p, 72, 700], [`${i}e`, p, endOf(ls[9] as Run), 592]) })
+    const { file } = await made({ pages: [1, 2, 3, 4, 5].map(p => ({ runs: lines(p) })), marks, units: at.map(p => unit('para', [text(words(100 * p, 100))])) })
+    expect(file.units.map(u => u[0])).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('a text box at the head of a page inside a paragraph running past it: the paragraph\'s first page waits for its marks', async () => {
+    // four pages of twenty lines; unit 1 (the box) at page 3's head, inside unit 2, which runs from page 2's middle to page 4
+    const L = (p: number, j: number): Run => ({ s: words(1000 * p + 10 * j, 10), x: 72, y: 700 - 12 * j })
+    const span = (p: number, a: number, b: number) => Array.from({ length: b - a }, (_, k) => L(p, a + k))
+    const pieces: [number, number, number][][] = [[[1, 0, 20], [2, 0, 10]], [[3, 0, 12]], [[2, 10, 20], [3, 12, 20], [4, 0, 5]], [[4, 5, 20]]]
+    const marks: Mark[] = []
+    pieces.forEach((ps, i) => {
+      const [p0, a0] = ps[0] as [number, number, number], [p1, , b1] = ps.at(-1) as [number, number, number]
+      const last = L(p1, b1 - 1)
+      marks.push([`${i}s`, p0, 72, L(p0, a0).y], [`${i}e`, p1, endOf(last), last.y])
+    })
+    const units = pieces.map(ps => unit('para', [text(ps.flatMap(([p, a, b]) => span(p, a, b).map(r => r.s)).join(' '))]))
+    const { file } = await made({ pages: [1, 2, 3, 4].map(p => ({ runs: span(p, 0, 20) })), marks, units })
+    expect(file.units.map(u => u[0])).toEqual([0, 1, 2, 3])
   })
 })
