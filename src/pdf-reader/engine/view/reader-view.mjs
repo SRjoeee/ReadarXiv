@@ -873,6 +873,12 @@ export function createReaderView(host) {
       const vp = pageView(s, place.page)?.viewport
       return { page: place.page, y: vp ? vp.convertToPdfPoint(0, place.at * vp.height)[1] : null }
     },
+    /** the right's page at the middle of its view, the one the reader is looking at there (0 with no places, or the pane
+     *  out of the display): read where the layout is clean, as the pane's own page is */
+    centre() {
+      if (!places.count() || !shown(R)) return 0
+      return pageAt(R, follower.shownAt(R) + R.container.clientHeight / 2)
+    },
     words: host.words,
     dpr: () => globalThis.devicePixelRatio || 1,
     clock,

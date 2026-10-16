@@ -167,6 +167,8 @@ export interface Internals {
   readonly assets: Readonly<Record<string, unknown>>
   /** the page at the reading line of the pane read and the line's height on it (PDF units, y up); null with none */
   reading(): { page: number; y: number | null } | null
+  /** the right's page at the middle of its view (0 with no places, or the pane out of the display) */
+  centre(): number
   words: ViewWords
   dpr(): number
   clock: ViewClock

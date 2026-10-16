@@ -248,6 +248,24 @@ describe('the real door: target-first laying (1b-D1, #380)', () => {
     expect(s.side.rowsFor(99)).toEqual([])
   })
 
+  it('a jump: the page in the middle of the view is laid first, then the one after it, then the one before (its near pages asked farthest first, it last)', async () => {
+    const { s, index, refs } = await eight()
+    s.side.tell(refs)
+    s.side.take(rowsOfIndex(index))
+    s.side.end()
+    await still(s)
+    // the right pane put with page 6 in the middle of its view, as a jump there leaves it
+    const page = (n: number) => s.panes.right.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')[n - 1] as HTMLElement
+    s.panes.right.scrollTop = page(6).offsetTop + page(6).offsetHeight / 2 - s.panes.right.clientHeight / 2
+    await macrotask()
+    const laid: number[] = []
+    s.layer()?.onPage((p, st) => { if (st === 'ready') laid.push(p) })
+    await nearOn(s, [5, 6, 7])
+    await still(s)
+    expect(laid.slice(0, 3)).toEqual([6, 7, 5])
+    for (const n of [5, 6, 7]) expect(content(s, n), `page ${n}`).toBe('layer')
+  })
+
   it('a fast scroll: asks made and let go leave no ask and no place in between, the page reached laid; an ask let go is dropped', async () => {
     const { s, index, refs } = await eight()
     s.side.tell(refs)

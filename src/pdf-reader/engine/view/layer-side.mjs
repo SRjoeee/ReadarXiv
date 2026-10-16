@@ -249,7 +249,7 @@ export function createLayerSide(view, o) {
     emitLayer()
     for (const p of wantsBefore) want(p)
     wantsBefore.clear()
-    for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) ask(n)
+    for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) askSoon(n)
   }
 
   // ---------------------------------------------------------------- the rows
@@ -329,6 +329,25 @@ export function createLayerSide(view, o) {
     if (V.places.swap(n, empty(), { blank: true })) counts.retired++
     else P.content = null
     release(was?.copy)
+  }
+  /** the near pages to ask, asked together once the places told have all been heard: the farthest from the page in the
+   *  middle of the view first and that page last, the door laying the newest ask first (D1), so that the page the reader is
+   *  looking at is laid first; the door takes the others in the order asked, so at an equal distance the page ahead is
+   *  asked first, and laid next. Asked in page order, a jump to page 20 laid 21, then 19, then 20 */
+  const toAsk = new Set()
+  let askQueued = false
+  function askSoon(n) {
+    toAsk.add(n)
+    if (askQueued) return
+    askQueued = true
+    queueMicrotask(() => {
+      askQueued = false
+      if (disposed) { toAsk.clear(); return }
+      const c = V.centre(), far = n => (c ? Math.abs(n - c) : -n)
+      const order = [...toAsk].sort((a, b) => far(b) - far(a) || b - a)
+      toAsk.clear()
+      for (const p of order) ask(p)
+    })
   }
   /** a near page asked of the door (once a door), unless it shows this door's layer */
   function ask(n) {
@@ -477,8 +496,9 @@ export function createLayerSide(view, o) {
       if (on) {
         // a page whose layer failed or was let go asked again on coming near
         rec(n).failed = false
-        ask(n)
+        askSoon(n)
       } else {
+        toAsk.delete(n)
         abortAsk(n)
         rearm.delete(n)
         // a page this door laid is retired; a drawing kept from an earlier door goes, the place back to its own content
@@ -508,7 +528,7 @@ export function createLayerSide(view, o) {
     V.onScrolled(() => {
       if (disposed) return
       // the pages given up at PAGE_MS asked again, where they are near
-      if (rearm.size) { const again = [...rearm]; rearm.clear(); for (const n of again) { abortAsk(n); ask(n) } }
+      if (rearm.size) { const again = [...rearm]; rearm.clear(); for (const n of again) { abortAsk(n); askSoon(n) } }
       headingSoon()
     }),
     V.onOriginal(s => {
