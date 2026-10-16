@@ -2009,7 +2009,6 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (lead.length >= t.length || !noStart(ch) || noStart(after.origAfter)) return t
       t = t.slice(lead.length + ch.length)
     }
-    return t
   }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {

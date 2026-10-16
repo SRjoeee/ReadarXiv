@@ -52,7 +52,7 @@ describe('ensureFixtures', () => {
     expect(await ensureFixtures({ root, cacheDir, fetchImpl: offline, log, gapMs: 0 })).toEqual({ verified: [], downloaded: [ENTRY.path] })
     expect(readFileSync(file())).toEqual(BODY)
     expect(offline).not.toHaveBeenCalled()
-    expect(log.mock.calls[0][0]).toMatch(/from the machine's cache/)
+    expect(log.mock.calls[0]![0]).toMatch(/from the machine's cache/)
     // a cached file that is not the pinned bytes is ignored, never copied, and arXiv is asked
     rmSync(file())
     writeFileSync(join(cacheDir, ENTRY.sha256), 'something else')
