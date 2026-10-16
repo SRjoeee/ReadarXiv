@@ -2364,6 +2364,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     }
     open()
   }
+  // (a line's trailing spaces dropped)
   const trim = l => { while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w } }
   if (slots.length) open()
   while (i < tokens.length && li < slots.length && !stop) {
@@ -2399,7 +2400,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       consumed = Math.max(consumed, tokens[i].blockTo + 1)
       if (flow) {
         // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
-        if (fresh && line.items.length) { while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w } advance() }
+        if (fresh && line.items.length) { trim(line); advance() }
         if ((slots[li]?.after ?? 0) < consumed) spilled = true
         i++
         continue
@@ -2411,7 +2412,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
           // (the slot by itself, not by its index: settle may drop slots of this line's flow above the display, before
           // it; the slot below the display is of another flow, which settle never moves)
           const to = slots[q]
-          while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w }
+          trim(line)
           settle()
           if (stop) break
           li = slots.indexOf(to)
@@ -2519,10 +2520,10 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       }
     }
     // the line is closed: its trailing spaces dropped
-    while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w }
+    trim(line)
     advance()
   }
-  for (const l of lines) while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w }
+  for (const l of lines) trim(l)
   // (the last line, settled as the others were when they closed)
   if (!stop) settle()
   // break tokens left at the end place nothing

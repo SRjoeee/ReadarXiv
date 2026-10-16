@@ -760,6 +760,16 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     expect(z.lines(z.fit())).toEqual([[1, 500, A], [1, 484.4, Bc]])
   })
 
+  it("a lone `\\\\` before a tall line: the gap TeX's \\lineskip opened is no room of the break's (#383 review)", () => {
+    // line 2 is tall (14 over its baseline): TeX set it the short line's depth, its height and \lineskip (1) under it, 17
+    // where the pitch is 12 (the file's boxes, as blocks2 reads a tall line's opening)
+    const rows = [L(500), L(488, 90), [1, 10, 200, 471, 485, 469, 10, 0], L(459), L(447, 120)]
+    const one = { kind: 'para', src: '', pieces: [text(A), ph(BR), text(` ${Bc}`)] } as never
+    expect([...T.forcedBreaks(unitOf(rows) as never, one, null, [1, 0])]).toEqual([[1, { next: 2, room: 0 }]])
+    // with no values for TeX's rule, all of the gap beyond the pitch
+    expect([...T.forcedBreaks(unitOf(rows) as never, one)]).toEqual([[1, { next: 2, room: 0.417 }]])
+  })
+
   it("`\\vspace{0.3cm}\\\\`: TeX's room is the glue it set, 0.63 of a pitch, kept at the drawing's pitch", () => {
     // 0.3 cm, 8.54 pt, at a pitch of 13.6: line 2 is 1.63 pitches under line 1 (here 12 \u00D7 1.63 = 19.56)
     const rows = [L(500), L(488, 90), L(468.44), L(456.44), L(444.44, 120)]

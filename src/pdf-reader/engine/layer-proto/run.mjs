@@ -1354,7 +1354,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading, each rendering proven
     // by the file (proofOf: a crop cut from its placeholder's own ink, page text in its segments), or the unit left the
     // original's where the file proves one not; a unit of a part with no layout as with no file (filed), through the same proof
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N }) : filed(p.id) ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id)), N) } : proof ? { proof: proofOf(null, null, N) } : null
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N, lineskip: LINESKIP }) : filed(p.id) ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id)), N) } : proof ? { proof: proofOf(null, null, N) } : null
     // (the citations and macros its renderings teach are the unit's own, learnt as it is read: a later placeholder of the
     // unit reads its earlier ones, never another unit's, S2. The paper's, learnt in lay order, made a unit's reading a
     // function of every unit laid before it; no unit of the 30 outputs is read otherwise without it, 2026-10-15)

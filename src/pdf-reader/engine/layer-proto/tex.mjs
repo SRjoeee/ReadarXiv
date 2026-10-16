@@ -244,7 +244,11 @@ const SHORT = 0.5
  * row says, as TeX set it. Returns a Map of each piece of a paired group, by its index, to { next, room }: `next` the
  * file's line after its break, the line TeX set the text after it on; `room` what TeX left between the two lines beyond
  * the unit's pitch, in pitches (the gap over the pitch less one, never below 0: 1 for `\\ \\`, whose second break sets an
- * empty line, 0 for a lone `\\`, 0.63 for `\vspace{0.3cm}\\` at a pitch of 13.6), the unit's own rows' alone. `room` is
+ * empty line, 0 for a lone `\\`, 0.63 for `\vspace{0.3cm}\\` at a pitch of 13.6), the unit's own rows' alone. Where TeX's
+ * rule between two lines (`lineskip`, the paper's \lineskip and \lineskiplimit: the layout file's) set the next line
+ * lower for its height, the short line's depth, the next line's height and \lineskip (their boxes the file's, as blocks2
+ * reads a tall line's opening), the gap is measured from there: that opening is the tall line's, no room of the break's
+ * (a lone `\\` before a fraction, 17 apart at a pitch of 12, is room 0, not 0.42). `room` is
  * null where `next` opens another frame (TeX drops glue at a frame's head, and the file says nothing more: the text after
  * it starts there), or where the unit has no two lines of its own next to each other in a frame besides its breaks' (no
  * pitch to measure the gap by). The fix of 2026-10-16: within a frame, the break ends the laid line and leaves its room
@@ -254,7 +258,7 @@ const SHORT = 0.5
  * Empty where nothing pairs (a ragged or centred unit's short lines, a break TeX set at a line's end), and the unit's text
  * then runs through as before.
  */
-export function forcedBreaks(lu, unit, kOf = null) {
+export function forcedBreaks(lu, unit, kOf = null, lineskip = null) {
   const out = new Map()
   if (!lu) return out
   const groups = []
@@ -327,9 +331,16 @@ export function forcedBreaks(lu, unit, kOf = null) {
   }
   gaps.sort((a, b) => a - b)
   const p0 = gaps.length ? (gaps[(gaps.length - 1) >> 1] + gaps[gaps.length >> 1]) / 2 : null
+  // (the two lines' distance with no break between them: the pitch, or TeX's rule's where the pitch would set the next
+  // line's top nearer the short line's foot than \lineskiplimit: the one's depth, the other's height and \lineskip)
+  const natural = j => {
+    if (!lineskip) return p0
+    const d = L[8 * j + 3] - L[8 * j + 5], h = L[8 * (j + 1) + 4] - L[8 * (j + 1) + 3]
+    return p0 - d - h < lineskip[1] ? Math.max(p0, d + h + lineskip[0]) : p0
+  }
   breaks.forEach((g, b) => {
     const j = cands[b]
-    const room = p0 === null || frameOf[j] !== frameOf[j + 1] ? null : Math.max(0, Math.round(((L[8 * j + 3] - L[8 * (j + 1) + 3]) / p0 - 1) * 1000) / 1000)
+    const room = p0 === null || frameOf[j] !== frameOf[j + 1] ? null : Math.max(0, Math.round(((L[8 * j + 3] - L[8 * (j + 1) + 3] - natural(j)) / p0) * 1000) / 1000)
     for (const i of g.members) out.set(i, { next: j + 1, room })
   })
   return out
@@ -494,13 +505,13 @@ export function proofOf(lu, kOf, shown = Infinity) {
  * - 'ph': part 4 alone, the placeholders' renderings by their segments (the unit's lines v0's);
  * - 'lines': part 1 too, the unit's lines (`lines`, texRects' answer), and part 3, its label by the file's box (v0's
  *   where the file has none, and a mark its first line holds before its first word); and where its forced breaks end
- *   those lines (`breaks`, forcedBreaks);
+ *   those lines (`breaks`, forcedBreaks; `lineskip`, the file's \lineskip and \lineskiplimit, or null);
  * - extents 'tex' (with 'lines'): part 2 too, the file's erase rectangles (its glyphs' boxes merged); else each line's
  *   extent as v0 reads it from its characters.
  * - and part 5 for any `use`, the proof of every rendering (proofOf; `shown`, the last page the run shows).
  * `kOf`: each piece's source index (kOfPieces).
  */
-export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = Infinity }) {
+export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = Infinity, lineskip = null }) {
   const parts = {
     proof: proofOf(lu, kOf, shown),
     renderings({ unit, phs, uc, gaps, citeMap }) {
@@ -560,8 +571,9 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = I
     }
     return { uc, extents: ext, lineInfo, held }
   }
-  // (and where its forced breaks end the file's lines, which its rectangles are: forcedBreaks)
-  parts.breaks = unit => forcedBreaks(lu, unit, kOf)
+  // (and where its forced breaks end the file's lines, which its rectangles are: forcedBreaks, by TeX's rule between two
+  // lines where the file gives its values)
+  parts.breaks = unit => forcedBreaks(lu, unit, kOf, lineskip)
   if (extents === 'tex') {
     parts.extents = (_lines, rects) => {
       const out = new Map()

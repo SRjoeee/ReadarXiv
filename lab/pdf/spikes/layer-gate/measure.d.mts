@@ -39,10 +39,11 @@ export declare function markupResidueOf(text: string, src: string): string[]
 /** TeX's file as the instrument holds it, by page (the kept layout's rows): each unit's placeholders with ink there, its
  *  lines, the LOST placeholders on its first page; every display's segments. Boxes are [x0, y0, x1, y1] */
 export interface FileLine { j: number; box: number[]; baseline: number; size: number; held: boolean }
-/** a line end of TeX's that a forced break shapes (fileIndexOf): between the two baselines, the next line's, its column */
-export interface FileBreak { y: number; next: number; x0: number; x1: number }
+/** a line end of TeX's that a forced break shapes (fileIndexOf): between the two baselines, the next line's, its column;
+ *  `room`, TeX's room between the two lines in pitches (fileIndexOf's; slotsSkippedOf reads it from the gap where it is not given) */
+export interface FileBreak { y: number; next: number; x0: number; x1: number; room?: number }
 export interface FilePage { units: Map<number, { phs: { k: number; kind: string; segs: number[][] }[]; lines: FileLine[]; lost: number[]; pitch: number | null; breaks: FileBreak[]; breaksAll: number; rows: Map<number, string> }>; displays: number[][] }
-export declare function fileIndexOf(layout: { lines?: [number, number[]][]; ph?: number[][]; held?: [number, number[]][] }): Map<number, FilePage>
+export declare function fileIndexOf(layout: { lines?: [number, number[]][]; ph?: number[][]; held?: [number, number[]][]; lineskip?: readonly number[] | null }): Map<number, FilePage>
 export declare function displayRowsOf(page: FilePage | undefined): number[][]
 /** a rendering of a placeholder by its unit and its piece's source index: a crop's source, or its characters' centres */
 export interface Rendering { unit: number; k: number | null; src?: string | null; chars: number[][] }

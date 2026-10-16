@@ -587,7 +587,8 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     // a paragraph, `\\ \\`, a paragraph: line 1 ends short, the blank line, lines 2 and 3; the last line short too, no break
     const file = (rows: number[][], held: number[] = []) => fileIndexOf({ lines: [[3, rows.flat()]], held: [[3, held]], ph: [] }).get(1)!.units.get(3)!
     const u = file([line(1, 72, 472, 700), line(1, 72, 300, 688), line(1, 72, 472, 664), line(1, 72, 200, 652)])
-    expect(u.breaks).toEqual([{ y: 676, next: 664, x0: 72, x1: 472 }])
+    // (its room TeX's: the gap beyond the pitch, in pitches)
+    expect(u.breaks).toEqual([{ y: 676, next: 664, x0: 72, x1: 472, room: 1 }])
     expect(u.breaksAll).toBe(1)
     // none where the next line is a display's row, the line reaches its measure, or it is the unit's last
     expect(file([line(1, 72, 472, 700), line(1, 72, 300, 688), line(1, 150, 400, 664), line(1, 72, 472, 640)], [2]).breaks).toEqual([])
@@ -603,6 +604,12 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(across.get(1)!.units.get(3)!.breaks).toEqual([])
     expect(across.get(1)!.units.get(3)!.breaksAll).toBe(1)
     expect(across.get(2)!.units.get(3)!.breaksAll).toBe(1)
+    // a lone break before a tall line (14.5 over its baseline): the gap TeX's \lineskip opened (the short line's depth, the
+    // next line's height and \lineskip, by the file's boxes) is no room of the break's; with no values for the rule, all of
+    // the gap beyond the pitch is
+    const tall = (lineskip: number[] | null) => fileIndexOf({ lines: [[3, [line(1, 72, 472, 718), line(1, 72, 472, 706), line(1, 72, 300, 694), [1, 72, 472, 676, 690.5, 673.5, 10, 0], line(1, 72, 472, 664)].flat()]], held: [[3, []]], ph: [], lineskip }).get(1)!.units.get(3)!.breaks.map(k => k.room)
+    expect(tall([1, 0])).toEqual([0])
+    expect(tall(null)).toEqual([0.5])
   })
 
   it("an empty slot: a forced break's room is TeX's (its gap past the pitch), credited once in its frame wherever the drawing sets it", async () => {
@@ -626,6 +633,21 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(of([700, 652])).toBe(2)
     // a break in another column holds no room of this one (TeX's blank here its own room, as with none)
     expect(of([700, 664], [{ ...brk[0]!, x0: 480, x1: 540 }])).toBe(1)
+  })
+
+  it("a break's room a fraction of a pitch goes to the gap nearest it: a real empty slot elsewhere in the frame is not hidden (#383 review)", async () => {
+    const { slotsSkippedOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const orig = lines(6)
+    const drawnAt = (bs: number[]) => bs.map(baseline => ({ baseline, size: 10, x0: 72, x1: 472, pitch: 12 }))
+    // `\vspace{0.3cm}\\` after 688: TeX's next line 1.63 pitches under it (a room of 0.63)
+    const tex = [700, 688, 668.44, 656.44, 644.44].map(baseline => ({ baseline, x0: 72, x1: 472 }))
+    const brk = [{ y: 678.22, next: 668.44, x0: 72, x1: 472 }]
+    const of = (bs: number[], breaks: typeof brk = brk) => slotsSkippedOf([{ id: 11, orig, lines: drawnAt(bs), tex, held: [], texPitch: 12, keptRows: [], breaks }]).slotsSkipped
+    // the break drawn with its room, then every line
+    expect(of([700, 680.44, 668.44, 656.44, 644.44])).toBe(0)
+    // the break drawn with its room, and a line's slot left empty further down: one, as with no break of TeX's at all
+    expect(of([700, 680.44, 668.44, 644.44])).toBe(1)
+    expect(of([700, 680.44, 668.44, 644.44], [])).toBe(1)
   })
 
   it('forced breaks as the engine counts them: invisible pieces are no content, a display none, and only as many as the file has (#367 review)', async () => {
