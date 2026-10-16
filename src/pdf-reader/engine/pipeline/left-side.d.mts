@@ -21,7 +21,8 @@ export interface LeftSide {
  * `doc`: the tokens the anchors were made on, in page order (fitted: tokens whose fields are not finite are dropped before anchoring);
  * `views`: each page's box as PDF.js gives it, pages 1 to N; `anchors`: anchorUnits' result. Throws a RangeError for a token whose
  * page goes backwards or past the views. `edges`: the tokens' ink edges made already (layout/arxiv.mjs readArxivText's, whose tokens
- * hold no item); `columns`: the pages' columns' rule (view/highlight.mjs pageColumns, today's)
+ * hold no item); `columns`: the rule of the pages' columns the far push reads (view/highlight.mjs pageColumns, today's; columnsOfTokens',
+ * the text's alone: `() => columnsOfTokens(doc, views)`)
  */
 export declare function leftSideOf(o: { doc: readonly DocToken[]; views: readonly (readonly number[])[]; anchors: ReadonlyMap<number, Anchor | null>; edges?: { l: ArrayLike<number>; r: ArrayLike<number> } | null; columns?: ColumnRule }): LeftSide
 /** leftSideOf a unit at a time: each unit given as its anchor is final (`add`, in any order; `none` for one with none), a page's

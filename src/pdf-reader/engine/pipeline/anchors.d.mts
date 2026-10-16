@@ -26,6 +26,12 @@ export declare function markWords(doc: DocToken[], marks: Map<string, { page: nu
 /** the pages' frame's rule: (doc, every unit's located tokens) → whether a token is inside the frame (pageFrame, today's) */
 export type FrameRule = (doc: DocToken[], ms: readonly (number[] | null)[]) => (t: DocToken) => boolean
 export declare const pageFrame: FrameRule
+/** the pages' frame from the document's tokens alone (rule 1 of the page stream, made at step T): pageFrame's arithmetic over the
+ *  body words (a letter; at most 1.5 times the body size; on no line that recurs at its baseline on another page), the same
+ *  verdict's shape; a function of `doc` alone. As placeUnits' `frame`: `() => frameOfTokens(doc)` */
+export declare function frameOfTokens(doc: readonly DocToken[]): (t: DocToken) => boolean
+/** the largest a body word is set: 1.5 times the document's body size (the height most of its tokens with text have, to a tenth) */
+export declare function bodyMax(doc: readonly DocToken[]): number
 /** a unit's match (matchUnits): its matched tokens, coverage, bounds where it has marks, and the word → token map */
 export interface UnitMatch { m: number[]; coverage: number; bounded: [number, number] | null; ws?: string[]; pairs?: Map<number, number> | null; textPairs?: Map<number, number> | null }
 export interface MatchOptions { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null }

@@ -27,7 +27,8 @@ function lowerBound(xs, v) {
  * @param {{ doc: readonly object[], views: readonly (readonly number[])[], anchors: ReadonlyMap<number, object | null> }} o
  *   `doc` the tokens the anchors were made on (tokenizeDocument's, fitted), in page order; `views` each page's box as PDF.js gives
  *   it, pages 1 to N; `anchors` anchorUnits' result; `edges` the tokens' ink edges made already (layout/arxiv.mjs: the tokens'
- *   items let go), and `columns` the pages' columns' rule (highlight.mjs pageColumns, today's), both layoutOf's
+ *   items let go), and `columns` the rule of the pages' columns the far push reads (highlight.mjs pageColumns, today's;
+ *   columnsOfTokens', arXiv's text alone, made once: `() => columns`), both layoutOf's
  */
 export function leftSideOf({ doc, views, anchors, edges = null, columns = undefined }) {
   // the layout of what is shipped, as the reader makes it of the units it is given (the web's anchorsOf): their rectangles on the
