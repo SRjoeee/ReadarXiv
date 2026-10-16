@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { annotationsOf, erasedOf as gateErased, glyphPointsOf } from '../../lab/pdf/spikes/layer-gate/links.mjs'
-import { type Annot, annotsOf, charPoints, copyLinks, erasedOf, freezeLinks, inPlaceOf, MAX_GLYPHS, MAX_LINKS, ownerOf, pointsOf, readAnnots, type Unsupported, WORK_MAX } from '@/pdf-reader/engine/layer-proto/links.mjs'
+import { type Annot, annotsOf, charPoints, copyLinks, erasedOf, freezeLinks, inPlaceOf, MAX_GLYPHS, MAX_LINKS, ownersOf, pointsOf, readAnnots, type Unsupported, WORK_MAX } from '@/pdf-reader/engine/layer-proto/links.mjs'
 
 // The links of a laid page (src/pdf-reader/engine/layer-proto/links.mjs; PR 3a-1, the 3a design §3.1 to §3.6): the annotations a
 // page keeps, which a reader carries (LK11) and which it does not, the owner of an annotation, what the page's operations leave
@@ -140,22 +140,29 @@ describe('what the operations leave erased', () => {
 })
 
 describe('the owner of an annotation', () => {
+  // (in their order: the growth rank of a page, then the units left the original's)
   const units = [
     { id: 4, stream: 40, rects: [[1, 90, 695, 140, 715]] },
     { id: 7, stream: 70, rects: [[1, 90, 695, 105, 715], [2, 0, 600, 500, 800]] },
     { id: 2, stream: 20, rects: [[1, 90, 695, 105, 715]] },
   ]
   const a = (rect: number[], text = 'abcdef', x = 100, w = 60) => kept(annotsOf([raw({ rect })], pointsOf([item(text, x, 700, w)])).list)[0]!
-  it('is the unit whose rectangles on the page hold most of the annotation\'s points, ties to the smaller area, then the smaller id', () => {
-    expect(ownerOf(a([100, 695, 130, 710]), units, 1)?.id).toBe(4)
-    // (one point in each of the three rectangles of a tie: 'ab' at 105 is in all, so 2 and 7 share it with 4; the smaller area wins, the one with the smaller id after it)
-    expect(ownerOf(a([100, 695, 106, 710], 'ab', 100, 10), units, 1)?.id).toBe(2)
-    expect(ownerOf(a([100, 695, 106, 710], 'ab', 100, 10), units, 2)?.id).toBe(7)
-    expect(ownerOf(a([100, 695, 106, 710], 'ab', 100, 10), units, 3)).toBeNull()
+  const owner = (an: Annot, list: typeof units, q: number) => { const at = ownersOf([an], list, q).get(an.i); return at === undefined ? null : list[at]!.id }
+  it('is the first unit in order whose rectangles on the page hold more than half of the annotation\'s points', () => {
+    expect(owner(a([100, 695, 130, 710]), units, 1)).toBe(4)
+    // (two of its points of 'ab' at 102.5 and 107.5: 4 holds both, 7 and 2 one: the first with a majority)
+    expect(owner(a([100, 695, 110, 710], 'ab', 100, 10), units, 1)).toBe(4)
+    expect(owner(a([100, 695, 110, 710], 'ab', 100, 10), units.slice(1), 1)).toBeNull()
+    expect(owner(a([100, 695, 106, 710], 'ab', 100, 10), units, 2)).toBe(7)
+    expect(owner(a([100, 695, 106, 710], 'ab', 100, 10), units, 3)).toBeNull()
   })
   it('is the one under its rectangle\'s centre where the link has no glyph, and none where no unit is', () => {
-    expect(ownerOf(a([95, 690, 99, 712], 'zz', 300, 10), units, 1)?.id).toBe(2)
-    expect(ownerOf(a([300, 10, 310, 20], 'zz', 500, 10), units, 1)).toBeNull()
+    expect(owner(a([95, 690, 99, 712], 'zz', 300, 10), units, 1)).toBe(4)
+    expect(owner(a([300, 10, 310, 20], 'zz', 500, 10), units, 1)).toBeNull()
+  })
+  it('reads a unit\'s rectangles as its growth left them on the page, whatever its lay moved after', () => {
+    const grown = { id: 5, stream: 5, rects: [[1, 0, 695, 300, 715]], grown: new Map([[1, [[1, 400, 695, 500, 715]]]]) }
+    expect(owner(a([100, 695, 130, 710]), [grown, ...units], 1)).toBe(4)
   })
 })
 
@@ -174,7 +181,7 @@ describe('a page that is final', () => {
 
   it('LK7: leaves a link over text that stays where it stands: its rectangle (or quads) exact, not moved, named by the overlaid text, with its border', () => {
     const f = free([])
-    expect(f.dropped).toBe(0)
+    expect(f.dropped.unmatched).toBe(0)
     expect(f.inPlace).toBe(4)
     // (ranked by the owner unit's stream index, the one with no owner after every owned one: unit 1's two links, then unit 3's, then the margin's)
     expect(f.records.map(r => r.name)).toEqual(['Table', 'Also here', '12,', ''])
@@ -188,21 +195,21 @@ describe('a page that is final', () => {
 
   it('LK8: drops a link with a glyph point erased, counted, and keeps one whose glyphs the operations left', () => {
     const f = free([erase(100, 690, 260, 715), erase(95, 490, 195, 515)], { sources: true })
-    expect(f.dropped).toBe(2)
+    expect(f.dropped.unmatched).toBe(2)
     expect(f.records.map(r => r.name)).toEqual(['Table', ''])
     expect(f.sources).toEqual([{ annots: [[1, 1]], tier: 'place' }, { annots: [[1, 3]], tier: 'place' }])
     // (a link with some of its glyphs erased is dropped: its text is gone, and a link over what remains would be half-wrong)
-    expect(free([erase(100, 690, 135, 715)]).dropped).toBe(1)
+    expect(free([erase(100, 690, 135, 715)]).dropped.unmatched).toBe(1)
   })
 
   it('LK9: keeps a link over what a restore put back', () => {
     const f = free([erase(100, 690, 260, 715), { op: 'restore', page: 1, clip: [[...dev(100, 715), 320, 50]], boxes: [[...dev(100, 715), 320, 50]] }])
-    expect(f.dropped).toBe(0)
+    expect(f.dropped.unmatched).toBe(0)
     expect(f.records.map(r => r.name)).toEqual(['Table', 'Also here', '12,', ''])
   })
 
   it('leaves out an annotation a unit\'s match took, and ranks the moved records it made first within their unit', () => {
-    const moved = { rec: { boxes: [10, 10, 20, 20], dest: 'cite.a', name: '12', moved: true, order: 0 }, stream: 10, sources: { annots: [[1, 0]], tier: 'geometry' } }
+    const moved = { rec: { boxes: [10, 10, 20, 20], dest: 'cite.a', name: '12', moved: true, order: 0 }, stream: 10, id: 1, seq: 0, sources: { annots: [[1, 0]], tier: 'geometry' } }
     const f = free([], { consumed: new Set([0]), moved: [moved], sources: true })
     expect(f.records.map(r => [r.name, r.moved, r.order])).toEqual([['12', true, 0], ['Table', false, 1], ['Also here', false, 2], ['', false, 3]])
     expect(f.sources![0]).toEqual({ annots: [[1, 0]], tier: 'geometry' })
@@ -210,7 +217,7 @@ describe('a page that is final', () => {
   })
 
   it('answers no link for a page whose annotations could not be read', () => {
-    expect(freezeLinks({ list: null, q: 1, ops: [], devOf: dev, units })).toEqual({ records: [], sources: null, inPlace: 0, dropped: 0, unplaced: 0 })
+    expect(freezeLinks({ list: null, q: 1, ops: [], devOf: dev, units })).toEqual({ records: [], sources: null, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 } })
   })
 
   it('is a function of the page alone: the same list, operations and units give the same records, whatever the order of the units', () => {
@@ -257,11 +264,11 @@ describe('the two readings of a glyph\'s place', () => {
     expect(kept(list)[0]!.g.ch).toEqual([])
     expect(kept(list)[0]!.g2.ch).toEqual(['i'])
     const f = (ops: unknown[]) => freezeLinks({ list, q: 1, ops: ops as never, devOf: dev, units: [] })
-    expect(f([erase(99, 690, 110, 715)]).dropped).toBe(1)
+    expect(f([erase(99, 690, 110, 715)]).dropped.unmatched).toBe(1)
     // (the engine's point at 102 is erased and put back by a restore over 101.5 to 102.5: kept; over 101.5 to 102 it is not put back: dropped)
     const restore = (w: number) => ({ op: 'restore', page: 1, clip: [[...dev(101.5, 715), w, 50]], boxes: [[...dev(101.5, 715), w, 50]] })
-    expect(f([erase(99.9, 690, 102.5, 715), restore(2)]).dropped).toBe(0)
-    expect(f([erase(99.9, 690, 102.5, 715), restore(1)]).dropped).toBe(1)
+    expect(f([erase(99.9, 690, 102.5, 715), restore(2)]).dropped.unmatched).toBe(0)
+    expect(f([erase(99.9, 690, 102.5, 715), restore(1)]).dropped.unmatched).toBe(1)
   })
   it('drops it where the engine\'s point is erased and the estimate\'s lands on a restored neighbour', () => {
     // two links: the estimate's point of 'j' (115) and the engine's (112); a restore covers 114 to 116 only, the erase 104 to 120
@@ -270,10 +277,10 @@ describe('the two readings of a glyph\'s place', () => {
     expect(kept(l2)[0]!.g2.ch).toEqual(['j'])
     const ops = [erase(104, 690, 120, 715), { op: 'restore', page: 1, clip: [[...dev(114, 715), 2 * 2, 50]], boxes: [[...dev(114, 715), 2 * 2, 50]] }]
     // (the estimate at 115 is put back, the engine's centre at 112 is not: dropped)
-    expect(freezeLinks({ list: l2, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped).toBe(1)
+    expect(freezeLinks({ list: l2, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped.unmatched).toBe(1)
     // (and with the estimate alone it would have stayed)
     const alone = annotsOf([raw({ rect: [110, 695, 118, 710], overlaidText: 'j' })], est).list
-    expect(freezeLinks({ list: alone, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped).toBe(0)
+    expect(freezeLinks({ list: alone, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped.unmatched).toBe(0)
   })
 })
 
@@ -292,6 +299,14 @@ describe('a page that is hostile', () => {
     expect(JSON.stringify(f.records).length).toBeLessThan(1_000_000)
     expect(ms).toBeLessThan(3000)
   })
+  it('finds a link\'s glyphs set far apart in a bounded time: the occupied cells, never the empty ones between them', () => {
+    // (text at both ends of the grid's clamp and one glyph between, a rectangle over all of them)
+    const pts = pointsOf([item('a', -1e9, -1e9, 8), item('b', 1e9, 1e9, 8), item('c', 300, 400, 8)])
+    const start = performance.now()
+    const { list } = annotsOf([raw({ rect: [-2e9, -2e9, 2e9, 2e9] }), raw({ rect: [290, 390, 320, 420] })], pts)
+    expect(performance.now() - start).toBeLessThan(1000)
+    expect(list.map(a => (a.unsupported ? null : a.g.ch.join('')))).toEqual(['abc', 'c'])
+  })
   it('does not carry a link with more than MAX_GLYPHS glyph points, whole-page rectangles included', () => {
     const pts = pointsOf(Array.from({ length: 5000 }, (_, k) => item('abc', (k % 50) * 10, 700 - Math.floor(k / 50) * 3, 30)))
     const { list, total, unsupported } = annotsOf([raw({ rect: [0, 0, 600, 800] }), raw({ rect: [0, 690, 30, 710] })], pts)
@@ -305,8 +320,8 @@ describe('a page that is hostile', () => {
     // (many operations make each point test dear: the budget lasts for some of the links only)
     const ops = Array.from({ length: Math.ceil(WORK_MAX / 2000) }, () => ({ op: 'crop', page: 1, src: [0, 0, 1, 1], dst: [0, 0, 1, 1] }))
     const f = freezeLinks({ list, q: 1, ops: ops as never, devOf: dev, units: [] })
-    expect(f.unplaced).toBeGreaterThan(0)
-    expect(f.inPlace + f.dropped + f.unplaced).toBe(1000)
+    expect(f.dropped.unplaced).toBeGreaterThan(0)
+    expect(f.inPlace + f.dropped.unmatched + f.dropped.unplaced).toBe(1000)
     expect(f.records.length).toBe(f.inPlace)
   })
 })

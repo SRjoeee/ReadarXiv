@@ -172,7 +172,7 @@ import { chromium } from 'playwright'
 import { engineKindOf } from './layer-gate/kind.mjs'
 import { encodePng } from './layer-gate/png.mjs'
 import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath, withNames } from './layer-gate/ref.mjs'
-import { compare, completenessRows, droppedOutputs, fixtureTotals, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
+import { compare, completenessRows, droppedOutputs, fixtureTotals, LINKS_MIN, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
 import { composedDiff } from './layer-gate/links.mjs'
 
 const here = new URL('.', import.meta.url).pathname
@@ -1291,6 +1291,12 @@ console.log(`\n${TIER} tier: ${ran.length} outputs, ${ran.reduce((a, r) => a + r
 let exit = failures.length ? 1 : 0
 const bad = completeness.filter(c => c.fails.length)
 console.log(`completeness (spec §5): ${bad.length ? `${bad.length} of ${completeness.length} outputs fail: ${bad.map(c => `${c.name} [${c.fails.join(', ')}]`).join('; ')}` : `every one of ${completeness.length} outputs passes`}${bad.length && arg('check') ? ' (under --check the merge rule decides: each check is a measure of it)' : ''}`)
+// (the links' minimums' misses, each output's: the annotations not kept, page:rank, and the moved records not true, page:rank)
+for (const c of completeness) {
+  if (c.linksWrongAt) console.log(`  ${c.name}: links wrong at ${c.linksWrongAt.slice(0, 40).join(' ')}${c.linksWrongAt.length > 40 ? ' ...' : ''}`)
+  if (c.linksLost) console.log(`  ${c.name}: links kept ${pct(c.linksKept)} < ${pct(LINKS_MIN.kept)}, ${c.linksLost.length} not kept: ${c.linksLost.slice(0, 40).join(' ')}${c.linksLost.length > 40 ? ' ...' : ''}`)
+  if (c.linksFalse) console.log(`  ${c.name}: moved links true ${pct(c.linksTrue)} < ${pct(LINKS_MIN.true)}, ${c.linksFalse.length} not true: ${c.linksFalse.slice(0, 40).join(' ')}${c.linksFalse.length > 40 ? ' ...' : ''}`)
+}
 // the completeness gate exits 1 on its own; under --check its counts are measures of the merge rule, which a change that
 // leaves them where the record has them passes
 if (bad.length && !arg('check')) exit = 1
@@ -1564,8 +1570,8 @@ function closer(m, a, b) {
 function gateMd(run, rows) {
   const L = ['# The instant layer\'s completeness gate (spec §5)', '']
   L.push(`Written by \`spikes/layer-gate.mjs --tier=${run.tier} --record\` on ${run.made.slice(0, 10)}, the engine at \`${run.engine.commit?.slice(0, 8)}\`. Pages: ${run.inputs.pages}; a check fails on any count above 0 (lost ink: regions of more than ${run.inputs.inkMin} device pixels at ${run.inputs.inkScale}x).`, '')
-  L.push('| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | lines over a display | links wrong | fails |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
-  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.textInDisplay ?? 0} | ${r.linksWrong ?? 0} | ${r.fails.join(', ') || 'none'} |`)
+  L.push(`| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | lines over a display | links wrong | links kept (at least ${pct(LINKS_MIN.kept)}) | moved links true (at least ${pct(LINKS_MIN.true)}) | fails |`, '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.textInDisplay ?? 0} | ${r.linksWrong ?? 0} | ${r.linksKept === undefined ? '-' : pct(r.linksKept)} | ${r.linksTrue === undefined ? '-' : pct(r.linksTrue)} | ${r.fails.join(', ') || 'none'} |`)
   // (TeX's file against the drawing: defects held to the run before as rates, until the pull request that removes a
   // cause gates its measure at 0, README)
   const fileMs = AGAINST_FILE.map(k => MEASURES.find(m => m[0] === k)).filter(m => run.tier === 'pixel' || m[1] === 'model')

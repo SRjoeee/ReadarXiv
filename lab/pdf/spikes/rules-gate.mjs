@@ -378,20 +378,24 @@ export function stampRun(file, out, packJson) {
 
 /** the output of the gate that is names and numbers: an output's `ok` line, the tier's line, the completeness line */
 const NAME = '[A-Za-z0-9._-]+v\\d+-[A-Za-z-]+'
-const CHECK = '(?:missing|twice|brackets|duplicated|clipped|groupsSplit|labelsSource|textInDisplay|linksWrong|recordErrors|lostInk|numbers)'
+const CHECK = '(?:missing|twice|brackets|duplicated|clipped|groupsSplit|labelsSource|textInDisplay|linksWrong|linksKept|linksTrue|recordErrors|lostInk|numbers)'
 const OK_LINE = new RegExp(`^ok   ${NAME}: \\d+ pages, \\d+/\\d+ text units drawn(?:, in \\d+ parts)? \\(\\d+(?:\\.\\d+)? s\\)$`)
 const TIER_LINE = /^model tier: \d+ outputs, \d+ pages in \d+(?:\.\d+)? s on \d+ workers; the run in .+\.json$/
 const COMPLETE_LINE = new RegExp(`^completeness \\(spec §5\\): (?:every one of \\d+ outputs passes|\\d+ of \\d+ outputs fail: ${NAME} \\[${CHECK}(?:, ${CHECK})*\\](?:; ${NAME} \\[${CHECK}(?:, ${CHECK})*\\])*)$`)
 const FAIL_LINE = new RegExp(`^FAIL (${NAME})(?::|$)`)
+/** the links' misses an output lists (layer-gate.mjs, after the completeness line): pages, ranks and the reasons' names alone */
+const LINK_AT = '(?:p\\d+:)?(?:\\d+:)?(?:\\d+|p\\d+/\\d+)(?::[a-z]+(?:\\+[a-z]+)*)?'
+const LINKS_LINE = new RegExp(`^  ${NAME}: (?:links wrong at|links kept \\d+(?:\\.\\d+)? % < \\d+(?:\\.\\d+)? %, \\d+ not kept:|moved links true \\d+(?:\\.\\d+)? % < \\d+(?:\\.\\d+)? %, \\d+ not true:)(?: ${LINK_AT})+(?: \\.\\.\\.)?$`)
 
 /**
  * What of a line the gate prints may be echoed to a job log anyone can read, or null. The gate prints exception stacks, the
- * reason an output failed and what a check names, which can carry a unit's text. An output's `ok` line and the tier's and
- * completeness lines are names and numbers and pass as they are; a failure is cut after the output's name; the rest is held back
+ * reason an output failed and what a check names, which can carry a unit's text. An output's `ok` line, the tier's and
+ * completeness lines and an output's list of the links it misses (pages, ranks, reasons' names) are names and numbers and pass as
+ * they are; a failure is cut after the output's name; the rest is held back
  * (the whole output is in a file of the runner that nothing uploads).
  */
 export function publicLine(line) {
-  if (OK_LINE.test(line) || TIER_LINE.test(line) || COMPLETE_LINE.test(line)) return line
+  if (OK_LINE.test(line) || TIER_LINE.test(line) || COMPLETE_LINE.test(line) || LINKS_LINE.test(line)) return line
   const fail = FAIL_LINE.exec(line)
   if (fail) return `FAIL ${fail[1]}`
   if (line.startsWith('FAIL requests that would have left the machine')) return 'FAIL requests that would have left the machine'

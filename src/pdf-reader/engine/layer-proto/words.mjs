@@ -138,6 +138,15 @@ export function plainOfPieces(pieces) {
 const ASC = 0.75, DESC = -0.22, CJK_ASC = 0.88, CJK_DESC = -0.12
 const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
 
+/** a text token's band on a line whose baseline is `by` (L: its unit's layout): the baseline it is drawn on (a superscript's
+ *  raised), the size drawn and the ascent and descent of a Times-like face, or of a CJK face's em box, over and under it: the
+ *  word table's, and a moved link's (links.mjs) */
+export function tokenBand(t, L, by) {
+  const h = L.f * (t.sup ? 0.62 : 1) * (t.face.size ?? 1), y = t.sup ? by + 0.36 * L.f : by
+  const cjk = t.cls === 'cjk'
+  return { y, h, top: y + (cjk ? CJK_ASC : ASC) * h, bottom: y + (cjk ? CJK_DESC : DESC) * h }
+}
+
 /** a page's table as it is built: one growable column a field, in drawing order */
 export function newWords() {
   return { n: 0, cap: 256, l: new Float32Array(256), r: new Float32Array(256), y: new Float32Array(256), h: new Float32Array(256), top: new Float32Array(256), bottom: new Float32Array(256), word: new Int32Array(256), spans: [] }
@@ -182,9 +191,8 @@ export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () =
         continue
       }
       if (typeof t.s !== 'string') continue
-      const h = L.f * (t.sup ? 0.62 : 1) * (t.face.size ?? 1), y = t.sup ? by + 0.36 * L.f : by
-      const cjk = t.cls === 'cjk'
-      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * L.f : 0), y, h, y + (cjk ? CJK_ASC : ASC) * h, y + (cjk ? CJK_DESC : DESC) * h, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end))
+      const { y, h, top, bottom } = tokenBand(t, L, by)
+      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * L.f : 0), y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end))
     }
   }
   for (const k of kept) push(W, k.x0, k.x1, k.baseline, k.size, k.top, k.bottom, -1)

@@ -114,10 +114,13 @@ const REPORTED_COUNTS = ['cropNoTex', 'aloneUnits', 'linesOpened', 'linesUnopene
 /** the content and line measures a page's model holds (measure.mjs) */
 const FILE_MEASURES = ['contentLost', 'textInDisplay', 'slotsSkipped', 'lineStartPunct', 'contentUnknown']
 /** the link counts a page's model holds (links.mjs linksPage), and the ones a fixture's totals sum: the shares are made of them */
-export const LINK_COUNTS = ['linksTotal', 'linksUnsupported', 'linksPlaceable', 'linksKeptN', 'linksMoved', 'linksInPlace', 'linksTrueN']
+export const LINK_COUNTS = ['linksTotal', 'linksUnsupported', 'linksPlaceable', 'linksKeptN', 'linksMoved', 'linksInPlace', 'linksTrueN', 'linksUnverified']
 /** the placement counts, which a run without a layout file (v0 alone) has none of */
 const PLACEMENT = ['cropTextOverlap', 'cropBaselineOff', 'cropNoTex']
 export const TOLERANCE = { share: 0.002, ratio: 0.02, count: 0, defect: 0 }
+/** the links' minimums per output (3a-2, the owner's ruling): links kept ÷ the original's links, and moved links whose drawn text
+ *  is the reference's ÷ the moved links measured */
+export const LINKS_MIN = { kept: 0.95, true: 0.98 }
 /** the defects that are counts of things (their rates compared), and the counts each sums from a page */
 const DEFECTS = MEASURES.filter(m => m[2] === 'defect').map(m => m[0])
 
@@ -231,7 +234,7 @@ function linkTotals(list) {
   const t = {}
   for (const k of LINK_COUNTS) t[k] = sum(list, p => p[k])
   t.linksKept = r(share(t.linksKeptN, t.linksTotal))
-  t.linksTrue = r(share(t.linksTrueN, t.linksMoved))
+  t.linksTrue = r(share(t.linksTrueN, t.linksMoved - (t.linksUnverified ?? 0)))
   return t
 }
 
@@ -311,7 +314,7 @@ function pageView(p, tier) {
     paraGap: p.paraGap ?? null, paraGapWide: p.paraGaps ? p.paraGapWide / p.paraGaps : null, generatedLeft: p.generatedLeft ?? 0,
     cropTextOverlap: p.cropTextOverlap ?? null, cropBaselineOff: p.cropBaselineOff ?? null,
     // (the link shares from their counts; a page of a record made before the measures has none)
-    linksKept: p.linksTotal ? (p.linksKeptN ?? 0) / p.linksTotal : null, linksTrue: p.linksMoved ? (p.linksTrueN ?? 0) / p.linksMoved : null,
+    linksKept: p.linksTotal ? (p.linksKeptN ?? 0) / p.linksTotal : null, linksTrue: p.linksMoved - (p.linksUnverified ?? 0) > 0 ? (p.linksTrueN ?? 0) / (p.linksMoved - (p.linksUnverified ?? 0)) : null,
   }
   if (tier === 'pixel') Object.assign(v, { textTranslated: share(p.textTranslatedCells, p.textCells), textEnglish: share(p.textEnglishCells, p.textCells), textBlank: share(p.textBlankCells, p.textCells), cellsTranslated: share(p.cellTranslatedCells, p.cellCells) })
   for (const d of DEFECTS) if (p[d] !== undefined) v[d] = p[d]
@@ -367,6 +370,22 @@ export function completenessRows(run, tier) {
     if (tier === 'pixel') row.lostInk = t.lostInk ?? 0
     row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay', 'linksWrong', 'recordErrors'].filter(k => row[k] > 0)
     if (t.numbersShown < t.numbersTotal) row.fails.push('numbers')
+    // (and the links' two shares held to their minimums, 3a-2, the owner's ruling: none where there is nothing to share, no
+    // link or no moved record; the misses listed, the annotations not kept (`linksLost`, page:rank) and the moved records whose
+    // drawn text is not the reference's (`linksFalse`, page:rank))
+    // (decided on the counts, never on the share rounded for the report: 18,999 of 20,000 is below 0.95; the share alone where a
+    // record has no counts)
+    const counts = { linksKept: [t.linksKeptN, t.linksTotal], linksTrue: [t.linksTrueN, (t.linksMoved ?? 0) - (t.linksUnverified ?? 0)] }
+    for (const [k, min] of [['linksKept', LINKS_MIN.kept], ['linksTrue', LINKS_MIN.true]]) {
+      if (t[k] === null || t[k] === undefined) continue
+      row[k] = t[k]
+      const [n, d] = counts[k]
+      if ((Number.isFinite(n) && d > 0 ? n / d : t[k]) < min - 1e-12) row.fails.push(k)
+    }
+    // (and each wrong link's page, rank and reasons, links.mjs linksPage's `where`: names and numbers alone)
+    if (row.linksWrong > 0) row.linksWrongAt = (f.pages ?? []).flatMap(p => (p.where?.linksWrong ?? []).map(x => `p${p.p}:${x}`))
+    if (row.fails.includes('linksKept')) row.linksLost = f.summary?.linksLost ?? []
+    if (row.fails.includes('linksTrue')) row.linksFalse = (f.pages ?? []).flatMap(p => (p.where?.linksTrue ?? []).map(x => `${p.p}:${x}`))
     return row
   })
 }

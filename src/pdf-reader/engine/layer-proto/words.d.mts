@@ -40,6 +40,8 @@ export declare function plainOfPieces(pieces: readonly { t: string; s?: string; 
 /** the page's table as it is built */
 export interface OpenWords { n: number; cap: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array; word: Int32Array; spans: [number, number[]][] }
 export declare function newWords(): OpenWords
+/** a text token's band on a line whose baseline is `by`: the baseline it is drawn on, the size drawn, its face's ascent and descent over and under it */
+export declare function tokenBand(t: Token, L: Layout, by: number): { y: number; h: number; top: number; bottom: number }
 /** a unit's tokens on a page appended to the table, as one span; `kept`: the original's lines it keeps (layer2.mjs keptLines) */
 export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: number, wordOf: ((at: number, end: number) => number) | null, kept?: readonly { x0: number; x1: number; baseline: number; size: number; top: number; bottom: number }[], drawnCrop?: (crop: { page: number }) => boolean): void
 /** the record a page keeps */

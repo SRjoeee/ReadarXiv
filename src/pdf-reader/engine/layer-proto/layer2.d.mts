@@ -291,6 +291,17 @@ export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasR
 export declare function pageItemsOf(chars: readonly Char[], page: number, px: ToDev, ink: InkMap | undefined): { items: { chars: Char[]; keys: string[]; box: number[] }[]; cover: Uint8Array | null }
 /** the unit's lines on one page as SVG markup (a <g data-u="id">) */
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string
+/** a <tspan> of a laid line's text as svgOfUnit draws it: its face, whether it is a run of single CJK characters each at its
+ *  own place (`chars`), a superscript's, its colour, text, the PDF x of its start (of each character, `chars`), its tracking,
+ *  and each item drawn in it as [its index in the line, the UTF-16 offset of its text in the run's] */
+export interface LineRun { face: Face; chars: boolean; sup: boolean; color?: string; text: string; xs: number[]; track?: number; items: [number, number][]; crop?: undefined }
+/** a laid line as svgOfUnit draws it, in order: its runs and its crops (`crop`: the item's index) */
+export declare function lineRuns(line: Line, L: Layout): (LineRun | { crop: number })[]
+/** the PDF x of a run's edge before its UTF-16 offset `at`, as the browser lays it out (the run's start, the measure of the text
+ *  before it in its face at the size drawn, its tracking); `measure`: a run's width at 100 px (w100's) */
+export declare function runEdge(run: LineRun, at: number, line: Line, L: Layout, measure?: (s: string, face: Face) => number): number
+/** an open piece whose text is a link's: \href, \hyperref, \hyperlink */
+export declare const LINK_OPEN: RegExp
 /** the unit's lines on a page that stay the original's, with the baseline and size its reading gave each (the page's word table) */
 export declare function keptLines(rects: readonly number[][], prep: { keep?: readonly string[]; lineInfo?: ReadonlyMap<string, { baseline: number; size: number }> } | null | undefined, page: number): { x0: number; x1: number; baseline: number; size: number; top: number; bottom: number }[]
 export declare function drawnRuns(tokens: readonly Token[]): { key: string; n: number }[]

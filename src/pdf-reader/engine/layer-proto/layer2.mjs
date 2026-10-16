@@ -1796,6 +1796,8 @@ const applyCmd = (src, s, d) => {
   for (const [re, f] of STYLE_CMDS) if (re.test(src)) return f(s, d)
   return null
 }
+/** an open piece whose text is a link's (hyperref's \href, \hyperref, \hyperlink, starred or not) */
+export const LINK_OPEN = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
 
 /**
  * The unit's base style without what its own groups set: where explicit groups (\textit, \textbf…) hold most of its
@@ -1992,7 +1994,10 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (p.t === 'open') {
       const next = applyCmd(p.src, style(), designs)
       const colour = /^\\textcolor\{([a-zA-Z]+)\}/.exec(p.src)
-      stack.push({ ...(next ?? style()), ...(colour ? { color: colour[1] } : {}) })
+      // (a link's text, \href's, \hyperref's or \hyperlink's: each token of it tells its pair by `link`, the open's id, which the
+      // engine's links read (links.mjs) and no drawing does)
+      const link = LINK_OPEN.test(p.src) && p.id !== undefined ? { link: p.id } : {}
+      stack.push({ ...(next ?? style()), ...(colour ? { color: colour[1] } : {}), ...link })
       return
     }
     if (p.t === 'close') {
@@ -2959,73 +2964,111 @@ export function svgOfUnit(L, page, toPx, scale, id) {
     if (line.page !== page) continue
     const [, by] = toPx(line.x0, line.baseline)
     let body = '', oblique = ''
-    let run = null
-    const flush = () => {
-      if (!run) return
+    for (const run of lineRuns(line, L)) {
+      if (run.crop !== undefined) {
+        // the formula's plain text, invisible, over its crop: copied and found with the rest
+        const it = line.items[run.crop], [x] = toPx(it.x, line.baseline)
+        if (it.t.crop.text) body += `<tspan class="${faceClass(faceOf({ fam: 'serif', design: 'times' }, 'latin', 'en'))}" x="${n2(x)}" y="${n2(by)}" font-size="${n2(fs * 0.9)}" fill-opacity="0">${esc(it.t.crop.text)}</tspan>`
+        continue
+      }
       const cls = faceClass(run.face)
       const fill = run.color ? ` fill="${COLOURS[run.color] ?? '#141414'}"` : ''
       // (v0: a role table face's size correction, 1 for the prototype's faces)
       const size = n2((run.sup ? fs * 0.62 : fs) * (run.face.size ?? 1))
       const y = run.sup ? n2(by - L.f * 0.36 * scale) : n2(by)
-      const xs = run.chars ? run.xs.map(n2).join(' ') : n2(run.xs[0])
+      const cx = run.xs.map(x => toPx(x, line.baseline)[0])
+      const xs = run.chars ? cx.map(n2).join(' ') : n2(cx[0])
       // a word laid out with tracking is drawn with it (single CJK characters carry it in their places)
       const ls = !run.chars && run.track ? ` letter-spacing="${n2(run.track * L.f * scale)}"` : ''
       const span = `<tspan class="${cls}" x="${xs}" y="${y}" font-size="${size}"${ls}${fill}>${esc(run.text)}</tspan>`
       if (run.face.oblique) {
-        const ox = n2(run.xs[0])
+        const ox = n2(cx[0])
         oblique += `<text transform="translate(${ox} ${n2(by)}) skewX(${-OBLIQUE_DEG}) translate(${-ox} ${-n2(by)})">${span}</text>`
       } else body += span
-      run = null
     }
-    line.items.forEach((it, n) => {
-      const t = it.t
-      const [x] = toPx(it.x, line.baseline)
-      if (t.crop) {
-        flush()
-        // the formula's plain text, invisible, over its crop: copied and found with the rest
-        if (t.crop.text) body += `<tspan class="${faceClass(faceOf({ fam: 'serif', design: 'times' }, 'latin', 'en'))}" x="${n2(x)}" y="${n2(by)}" font-size="${n2(fs * 0.9)}" fill-opacity="0">${esc(t.crop.text)}</tspan>`
-        return
-      }
-      if (t.space) {
-        // the space is copied with the text before it (a run of single CJK characters takes it too: Korean and the
-        // spaces around Latin words), though justification places what follows
-        if (run) {
-          run.text += ' '
-          // a per-character run gives the space its own place, so that the characters after it keep theirs
-          if (run.chars) run.xs.push(x)
-        }
-        return
-      }
-      const single = t.cls === 'cjk' && [...t.s].length === 1 && !t.sup
-      // faces alike by their class (each token has a face object of its own): single CJK characters of one face share
-      // a run, which keeps the DOM small (one tspan for a line's run, not one a character)
-      const sameFace = run && faceClass(run.face) === faceClass(t.face) && run.face.oblique === t.face.oblique && run.sup === !!t.sup && run.color === t.st?.color
-      if (single) {
-        // single CJK characters share a run, each at its own place (justification between them included)
-        if (!sameFace || !run.chars) {
-          flush()
-          run = { face: t.face, chars: true, sup: false, color: t.st?.color, text: '', xs: [] }
-        }
-        run.text += t.s
-        run.xs.push(x)
-      } else {
-        // a word (Latin, or a Hangul word) flows in its face from its own place; words glued to it with no space
-        // between flow on in the same run
-        // (not after a lead's kern, whose width the run would not keep: TeX's \labelsep after a run-in name's joint)
-        const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && !line.items[n - 1]?.t.kern && line.items[n - 1]?.t.cls === t.cls && !t.brk
-        if (!glued) {
-          flush()
-          run = { face: t.face, chars: false, sup: !!t.sup, color: t.st?.color, text: '', xs: [x], track: t.sup ? 0 : t.cls === 'cjk' ? L.state.track : L.state.trackLatin }
-        }
-        run.text += t.s
-      }
-      // the line's last word: a space after it for the copy, where it is not hyphenated
-      if (n === line.items.length - 1 && t.cls === 'latin' && !t.hyphenated) run.text += ' '
-    })
-    flush()
     out += `<text y="${n2(by)}">${body}</text>${oblique}`
   }
   return `${out}</g>`
+}
+
+/** a face as svgOfUnit tells two apart: its CSS class's key (faceClass), with no class made */
+const faceKey = face => `${face.family}|${face.weight}|${face.style}|${face.caps ? 1 : 0}`
+
+/**
+ * A laid line as svgOfUnit draws it, in order: each <tspan> of its text (a run) and each crop. A run is { face, chars, sup,
+ * color, text, xs, track, items }: `xs` the PDF x of its start, or of each of its characters where it is a run of single CJK
+ * characters (`chars`), each at its own place; `track` the tracking it is drawn with, em of the layout's size, after each
+ * character; `items`, each item of the line drawn in it as [its index, the UTF-16 offset of its text in the run's]. A crop
+ * is { crop: its item's index }. The one walk the SVG and the links read (links.mjs places a link over a run's characters by it)
+ */
+export function lineRuns(line, L) {
+  const out = []
+  let run = null
+  const flush = () => { if (run) { out.push(run); run = null } }
+  line.items.forEach((it, n) => {
+    const t = it.t
+    if (t.crop) { flush(); out.push({ crop: n }); return }
+    if (t.space) {
+      // the space is copied with the text before it (a run of single CJK characters takes it too: Korean and the
+      // spaces around Latin words), though justification places what follows
+      if (run) {
+        run.items.push([n, run.text.length])
+        run.text += ' '
+        // a per-character run gives the space its own place, so that the characters after it keep theirs
+        if (run.chars) run.xs.push(it.x)
+      }
+      return
+    }
+    const single = t.cls === 'cjk' && [...t.s].length === 1 && !t.sup
+    // faces alike by their class (each token has a face object of its own): single CJK characters of one face share
+    // a run, which keeps the DOM small (one tspan for a line's run, not one a character)
+    const sameFace = run && faceKey(run.face) === faceKey(t.face) && run.face.oblique === t.face.oblique && run.sup === !!t.sup && run.color === t.st?.color
+    if (single) {
+      // single CJK characters share a run, each at its own place (justification between them included)
+      if (!sameFace || !run.chars) {
+        flush()
+        run = { face: t.face, chars: true, sup: false, color: t.st?.color, text: '', xs: [], items: [] }
+      }
+      run.items.push([n, run.text.length])
+      run.text += t.s
+      run.xs.push(it.x)
+    } else {
+      // a word (Latin, or a Hangul word) flows in its face from its own place; words glued to it with no space
+      // between flow on in the same run
+      // (not after a lead's kern, whose width the run would not keep: TeX's \labelsep after a run-in name's joint)
+      const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && !line.items[n - 1]?.t.kern && line.items[n - 1]?.t.cls === t.cls && !t.brk
+      if (!glued) {
+        flush()
+        run = { face: t.face, chars: false, sup: !!t.sup, color: t.st?.color, text: '', xs: [it.x], track: t.sup ? 0 : t.cls === 'cjk' ? L.state.track : L.state.trackLatin, items: [] }
+      }
+      run.items.push([n, run.text.length])
+      run.text += t.s
+    }
+    // the line's last word: a space after it for the copy, where it is not hyphenated
+    if (n === line.items.length - 1 && t.cls === 'latin' && !t.hyphenated) run.text += ' '
+  })
+  flush()
+  return out
+}
+
+/**
+ * Where a run of `lineRuns` draws its text: the PDF x of the edge before its UTF-16 offset `at` (its text's length: the edge
+ * after its last character), as the browser lays the <tspan> out: from its start, the width of the text before `at` in its face
+ * at the size it is drawn (measure: a run's width at 100 px, w100's), and its tracking after each character. A run of single
+ * characters has each at its own place: the edge before one is its place, after its last the item's slot's end (`line`'s)
+ */
+export function runEdge(run, at, line, L, measure = w100) {
+  if (run.chars) {
+    // (each character of the run its own place: by its index in code points, the space's place among them)
+    const cps = [...run.text.slice(0, at)].length
+    if (cps < run.xs.length) return run.xs[cps]
+    const [n] = run.items.at(-1)
+    const it = line.items[n]
+    return it.x + it.w
+  }
+  const before = run.text.slice(0, at)
+  const f = L.f * (run.sup ? 0.62 : 1)
+  return run.xs[0] + (measure(before, run.face) * f) / 100 + (run.track ? run.track * L.f * [...before].length : 0)
 }
 
 /**

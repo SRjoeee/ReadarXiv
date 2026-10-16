@@ -27,7 +27,7 @@ import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
 import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
-import { annotationsOf, drawnCharsOf, erasedOf, glyphPointsOf, glyphsOfLink, linksPage, pairsOf, referenceOf, textUnder } from '/gate/links.mjs'
+import { annotationsOf, cropsShown, drawnCharsOf, erasedOf, glyphPointsOf, glyphsOfLink, linksPage, pairsOf, referenceOf, textUnder } from '/gate/links.mjs'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
@@ -534,6 +534,8 @@ async function linksOfPage(p, page, tc) {
   const records = run.linksOf ? run.linksOf(p) : []
   const sources = records.length && run.linkSources ? run.linkSources(p) : null
   for (const src of sources ?? []) for (const [q] of src?.annots ?? []) await parsedOf(q)
+  // (how many annotations each tier took, the engine's own claim, reported: which tier made the moved links)
+  for (const src of sources ?? []) if (src?.tier) L.tiers[src.tier] = (L.tiers[src.tier] ?? 0) + (src.annots?.length ?? 0)
   const view = page.getViewport({ scale: K })
   const glyphs = glyphPointsOf(tc.items)
   const moved = records.some(r => r.moved)
@@ -542,22 +544,46 @@ async function linksOfPage(p, page, tc) {
   // segment, the unit whose line the point is on, the unit's translated pairs. The pages the records' sources are on, read here)
   const glyphsOf = new Map([[p, glyphs]])
   if (moved) for (const src of sources ?? []) for (const [q] of src?.annots ?? []) if (!glyphsOf.has(q) && Number.isInteger(q) && q >= 1 && q <= doc.numPages) glyphsOf.set(q, glyphPointsOf((await (await doc.getPage(q)).getTextContent()).items))
+  // (what the crops drawn on the page show, the drawing's own audit: each crop's source page and box, its drawn box and the clip
+  // it is drawn through, its source page's glyphs (read here) carried to where it is drawn: a moved record's truth over a crop)
+  const cropsHere = moved ? run.audit.filter(a => a.what === 'crop' && a.page === p && Number.isInteger(a.srcPage) && a.srcPage >= 1 && a.srcPage <= doc.numPages) : []
+  const viewOf = new Map([[p, page.view]])
+  for (const a of cropsHere) {
+    if (!glyphsOf.has(a.srcPage)) glyphsOf.set(a.srcPage, glyphPointsOf((await (await doc.getPage(a.srcPage)).getTextContent()).items))
+    if (!viewOf.has(a.srcPage)) viewOf.set(a.srcPage, (await doc.getPage(a.srcPage)).view)
+  }
+  const pdfBox = (v, b) => [v[0] + b[0] / K, v[3] - b[3] / K, v[0] + b[2] / K, v[3] - b[1] / K]
+  const crops = cropsShown(cropsHere.map(a => ({ srcPage: a.srcPage, src: a.src, dst: pdfBox(page.view, a.dst), clip: a.clip ? a.clip.map(([x, y, w, h]) => pdfBox(viewOf.get(a.srcPage), [x, y, x + w, y + h])) : null })), q => glyphsOf.get(q))
   const within = (x, y, b) => x >= Math.min(b[0], b[2]) && x <= Math.max(b[0], b[2]) && y >= Math.min(b[1], b[3]) && y <= Math.max(b[1], b[3])
   const ctxOf = q => {
     const fp = S.file?.get(q), all = L.parsed.get(q).links.filter(a => a.ok)
     return {
       all, points: a => glyphsOfLink(a, glyphsOf.get(q) ?? []),
-      segment: (x, y) => !!fp && [...fp.units.values()].some(u => u.phs.some(ph => ph.segs.some(b => within(x, y, b)))),
+      segment: (x, y, d = 0) => !!fp && [...fp.units.values()].some(u => u.phs.some(ph => ph.segs.some(b => within(x, y, [b[0] - d, b[1], b[2] + d, b[3]])))),
       owner: (x, y) => { if (fp) for (const [id, u] of fp.units) if (u.lines.some(l => within(x, y, l.box))) return id; return null },
-      pairsOf: id => pairsOf(S.byId.get(id)?.unit?.pieces),
+      // (each pair with its index in the unit's source, the units file's: the references are read in the source's order)
+      pairsOf: id => pairsOf(S.byId.get(id)?.unit?.pieces, kOfPiecesOf(S.byId.get(id)?.unit?.pieces, S.trPieces.get(id))),
     }
   }
   const m = linksPage({
     page: p, parsed: q => L.parsed.get(q), counted: q => q <= S.pages, glyphs, erased: erasedOf(run.rows[p - 1]?.ops, (x, y) => view.convertToViewportPoint(x, y)), records, sources, claims: L.claims,
-    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), reference: (rec, annots) => (annots.every(a => a.page === annots[0].page) ? referenceOf(annots, ctxOf(annots[0].page)) : null),
+    // (each annotation read with its own page's TeX's file and glyphs, a record a unit drew over a page break merging two pages'
+    // annotations; with no TeX's file to read, no reference can be had where a link's text is the translation's: unverified, so
+    // too where the file has no page an annotation is on, whose units are the hybrid's v0's alone)
+    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), crops, reference: (rec, annots) => (!S.file || annots.some(a => !S.file.get(a.page)) ? undefined : referenceOf(annots, q => (Number.isInteger(q) && q >= 1 && q <= doc.numPages && L.parsed.has(q) ? ctxOf(q) : null))),
   })
   const { where, ...values } = m
   return { values, where: Object.fromEntries(Object.entries(where).filter(([, ids]) => ids.length)) }
+}
+
+/** the annotations of T on the pages the gate measures that no record kept (its own target, in no way wrong): page:rank */
+function linksLostOf() {
+  const L = S.links, out = []
+  for (const [q, parsed] of [...L.parsed].sort((a, b) => a[0] - b[0])) {
+    if (q > S.pages) continue
+    for (const a of parsed.links) if (a.ok && !L.claims.get(`${q}|${a.i}`)?.credited) out.push(`${q}:${a.i}`)
+  }
+  return out
 }
 
 window.gate = {
@@ -632,7 +658,7 @@ window.gate = {
     // version, whose segments are a glyph's font box, not its ink, and which holds no `held` lines; nor any layout file of
     // a maker before FILE_LAYOUT_MIN, the fixture's own included where the run is given those, --layouts=fixed or v0
     // alone, or a folder of them: then the measures against TeX's file are not taken)
-    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), links: { parsed: new Map(), claims: new Map() }, pages, checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
+    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), links: { parsed: new Map(), claims: new Map(), tiers: {} }, pages, checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
     if (parts) {
       // one part a macrotask from the open on, beside the driver's pages (until), then end()
@@ -1035,6 +1061,9 @@ window.gate = {
       ...(parts ? { parts } : {}),
       // (the units whose record could not be made: drawn, and measured by nothing, so a failure of the gate's)
       ...(run.recordErrors?.length ? { recordErrors: run.recordErrors.length } : {}),
+      // (the original's links of the pages measured that no record kept, page:rank: the misses of linksKept, read once every page's
+      // records are in, a record of a later page may keep one of an earlier; and the engine's own counts)
+      linksLost: linksLostOf(), linkTiers: S.links.tiers, ...(run.linkStats ? { links: run.linkStats } : {}),
     }
   },
 }
