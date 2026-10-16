@@ -282,14 +282,15 @@ describe('the run in parts: waits, failures and documents', () => {
     facade.add(P.parts[0]!)
     run.grow(P.parts[0]!)
     expect(run.rows[0]).not.toBeNull()
-    for (let i = 0; i < 100 && run.drawnTo < 1; i++) await tick()
-    await ticks()
-    // (page 1 drawn, its units laid; the unit running on to page 2 waits for the part that covers page 2)
-    expect(run.drawnTo).toBe(1)
-    expect(run.doneAt(1)).toBe(2)
+    for (let i = 0; i < 100 && waits.length < 2; i++) await tick()
+    // (page 1 drawn; its closure reads page 2, which a unit runs on to, and waits for the part that covers it: nothing laid, page 2
+    // not drawn)
+    expect(doc.reads).toEqual([1])
+    expect(waits).toEqual(['part', 'part'])
+    expect([run.drawnTo, run.order.length, run.doneAt(1)]).toEqual([0, 0, Infinity])
     for (const part of P.parts.slice(1)) { facade.add(part); run.grow(part) }
     await one
-    expect(run.drawnTo).toBe(2)
+    expect(run.ready(1)).toBe(true)
     run.dispose()
   })
 
@@ -360,8 +361,9 @@ describe('the run in parts: waits, failures and documents', () => {
     const run = await openWarm(P, doc)
     const laid = await run.until(3).then(() => 'laid', (e: Error) => e.message)
     expect(laid).toMatch(/PDF_OPTIONS/)
+    // (page 2 read with page 1, its closure, before any unit is laid)
     expect(doc.reads).toEqual([1, 2])
-    expect(run.drawnTo).toBe(1)
+    expect([run.drawnTo, run.order]).toEqual([0, []])
     run.dispose()
   })
 

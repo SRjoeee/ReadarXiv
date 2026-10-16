@@ -138,8 +138,10 @@ describe('the paper of these tests, opened whole (today\'s call)', () => {
     // (the author line is the file's alone, which places no author: unanchored, as a cell whose citation it does not find)
     expect(d.skipped).toEqual(['11:unanchored', '12:group: a cell not drawn', '1:unanchored'])
     expect(new Set(d.order)).toEqual(new Set([0, 2, 7, 8, 9, 10, ...Array.from({ length: 11 }, (_, i) => 14 + i), 25]))
-    // (page 2's group: the cells first, then the paragraph from page 1, whose second page is waited on after them)
-    expect(d.order.slice(2, 6)).toEqual([8, 9, 10, 7])
+    // (their rank, the records' order: page 2's group the cells first, then the paragraph from page 1, whose second page is
+    // waited on after them; laid page by page, each by its closure: page 1's lays the paragraph that runs on to page 2 with it)
+    expect(d.stats.map(r => r.id).slice(2, 6)).toEqual([8, 9, 10, 7])
+    expect(d.order.slice(0, 6)).toEqual([0, 2, 7, 8, 9, 10])
     expect(d.stats.map(r => r.id).sort((a, b) => a - b)).toEqual([...d.order].sort((a, b) => a - b))
     for (const p of d.pages) expect(p.svg).not.toBe('')
     // and every page is complete at once: nothing is expected that is not there
@@ -201,9 +203,10 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     const rest = specs.map(s => s.id).filter(id => id !== 5 && id !== 13)
     const P = paper(specs)
     const run = await open(P, 'parts')
-    expect(run.take(rowsOf(P, rest)).complete).toEqual([])
-    // page 1 is done once page 2 is (its last paragraph runs on to it), and page 2's lost paragraph is not in
-    expect([1, 2, 3].map(p => run.complete(p))).toEqual([false, false, false])
+    // page 3 reads no unit of pages 1 and 2 (none runs on to it): complete at once. Page 1's last paragraph runs on to page 2 and
+    // is ranked there against page 2's units, whose lost paragraph is not in; and page 1's lost paragraph is not in
+    expect(run.take(rowsOf(P, rest)).complete).toEqual([3])
+    expect([1, 2, 3].map(p => run.complete(p))).toEqual([false, false, true])
     let done = false
     const laid = run.until(1).then(() => { done = true })
     await ticks()
@@ -213,7 +216,8 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     await ticks()
     expect(done).toBe(false)
     // page 1's lost paragraph in: every page complete, each laid as the one-shot open lays it, the lost units nowhere
-    expect(run.take(rowsOf(P, [5])).complete).toEqual([1, 2, 3])
+    // (the pages complete a take together, in no order the pages have: a set, each once)
+    expect(run.take(rowsOf(P, [5])).complete.slice().sort()).toEqual([1, 2])
     await laid
     await run.until(3)
     expect(drawing(run)).toEqual(want)
@@ -230,32 +234,42 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     expect(drawing(ended)).toEqual(want)
   })
 
-  it('until(p) never lays page p before p − 1', async () => {
+  it('lays a page only once its Need is in: its closure\'s pages drawn, page 1 first, its rows taken; no other page\'s', async () => {
     // (each unit's table group given: a page is laid once its own units have come)
     const { want } = await wholeDrawing()
     const P = paper()
     const run = await open(P, 'parts', { groups: groupsOf() })
     const onPage = (p: number) => SPECS.filter(s => s.lines[0]![0] === p).map(s => s.id)
-    const laid = run.until(3)
+    // page 3 asked first: its closure is page 1 (drawn first: the paper's setup) and page 3, its rows page 3's units'
+    expect(run.closure(3)).toMatchObject({ draw: [1, 3], ready: [3] })
+    const three = run.layFor(3)
+    for (let i = 0; i < 100 && P.doc.asked.length < 2; i++) await tick()
     await ticks()
-    // page 1 drawn, its units awaited
-    expect(P.doc.asked).toEqual([1])
+    expect(P.doc.asked).toEqual([1, 3])
     expect(run.order).toEqual([])
-    // page 1's rows: its units laid while the later rows are missing, page 2 drawn and its units awaited
+    expect(run.rowsFor(3)).toEqual(onPage(3))
+    // page 1's rows: nothing laid, page 3 waits for its own; page 3's: its units laid while pages 1 and 2's are missing
     run.take(rowsOf(P, onPage(1)))
     await ticks()
-    expect(run.order).toEqual(want.order.slice(0, 2))
-    expect(P.doc.asked).toEqual([1, 2])
-    // page 3's rows: nothing more while page 2's are missing
+    expect(run.order).toEqual([])
     run.take(rowsOf(P, onPage(3)))
+    await three
+    expect(run.order).toEqual(onPage(3))
+    expect([1, 2, 3].map(q => run.ready(q))).toEqual([false, false, true])
+    expect(P.doc.asked).toEqual([1, 3])
+    // page 1's closure reads page 2 (its last paragraph runs on to it) and waits for page 2's rows, which rank against it there
+    const one = run.layFor(1)
+    for (let i = 0; i < 100 && P.doc.asked.length < 3; i++) await tick()
     await ticks()
-    expect(run.order).toEqual(want.order.slice(0, 2))
-    expect(P.doc.asked).toEqual([1, 2])
-    // page 2's: page 2 laid, then page 3
+    expect(P.doc.asked).toEqual([1, 3, 2])
+    expect(run.order).toEqual(onPage(3))
+    expect(run.rowsFor(1)).toEqual(onPage(2))
     run.take(rowsOf(P, onPage(2)))
-    await laid
-    expect(P.doc.asked).toEqual([1, 2, 3])
-    expect(drawing(run)).toEqual(want)
+    await one
+    await run.until(3)
+    // (every page drawn once, each as the one open draws it; the units laid in another order, their records in their rank)
+    expect(P.doc.asked).toEqual([1, 3, 2])
+    expect({ ...drawing(run), order: [...run.order].sort((a, b) => a - b) }).toEqual({ ...want, order: [...want.order].sort((a, b) => a - b) })
   })
 
   it('draws the pages whose units have come while a later page\'s rows are still missing', async () => {
@@ -264,7 +278,7 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     // each unit's table group given: the table on page 2 is read once its own cells are in
     const P = paper()
     const run = await open(P, 'parts', { groups: groupsOf() })
-    expect(run.take(rowsOf(P, early)).complete).toEqual([1, 2])
+    expect(run.take(rowsOf(P, early)).complete.slice().sort()).toEqual([1, 2])
     expect([1, 2, 3].map(p => run.complete(p))).toEqual([true, true, false])
     await run.until(2)
     expect(run.order).toEqual(want.order.slice(0, 6))
@@ -286,27 +300,71 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     expect([1, 2].map(p => slow.complete(p))).toEqual([false, false])
   })
 
-  it("one unit a task: no task holds two units' lays", async () => {
-    // (scheduler.yield, which v0 yields by, spied on: each gives the event loop a turn)
+  it('slices its work: a yield once the units laid since the last one took SLICE_MS, none before', async () => {
+    const { slicer, SLICE_MS } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    // (a clock of the test's: units of 3 ms give way after every third, at 9 ms; one of 60 ms at once after it)
+    let t = 0, gives = 0
+    const s = slicer({ now: () => t, give: async () => { gives++ } })
+    expect(SLICE_MS).toBe(8)
+    const after: number[] = []
+    for (let unit = 1; unit <= 7; unit++) { t += 3; if (s.due()) { await s.give(); after.push(unit) } }
+    expect(after).toEqual([3, 6])
+    t += 60
+    expect(s.due()).toBe(true)
+    await s.give()
+    expect([gives, s.due()]).toEqual([3, false])
+    // (a budget of its own)
+    const tight = slicer({ now: () => t, budget: 1, give: async () => {} })
+    t += 1
+    expect(tight.due()).toBe(true)
+  })
+
+  it('gives way between two units once a slice\'s work is done, and lays them back to back within one; the same drawing', async () => {
+    // (scheduler.yield, which v0 yields by, spied on; the clock the run reads stood still, then running 10 ms at every read:
+    // no yield between units, then one before every unit)
     const at: number[] = []
     let run: Run | null = null
     g.scheduler = { yield: () => { at.push(run ? run.order.length : -1); return new Promise(ok => setTimeout(ok, 0)) } }
-    run = await open(paper(), 'whole')
-    await run.until(3)
-    // between the i-th unit's lay and the next one's, a yield
-    for (let i = 0; i < run.order.length; i++) expect(at, `before unit ${i + 1}`).toContain(i)
-    // and the drawing is the same with and without the yields (one that gives no other task a turn)
+    const was = performance.now.bind(performance)
+    let clock = 0
+    try {
+      performance.now = () => clock
+      run = await open(paper(), 'whole')
+      await run.until(3)
+      const still = at.filter(n => n > 0).length
+      expect(still).toBe(0)
+      const first = drawing(run)
+      at.length = 0
+      performance.now = () => (clock += 10)
+      run = await open(paper(), 'whole')
+      await run.until(3)
+      for (let i = 1; i < run.order.length; i++) expect(at, `before unit ${i + 1}`).toContain(i)
+      expect(drawing(run)).toEqual(first)
+    } finally { performance.now = was }
+    // and the drawing is the same with yields that give no other task a turn, on the real clock
     g.scheduler = { yield: () => Promise.resolve() }
     const { want } = await wholeDrawing()
     expect(drawing(run)).toEqual(want)
   })
 
+  it('names the rows a page waits for (rowsFor): its own entries\', and every row only for a cell whose group is read from all', async () => {
+    // (no group given at the open: a table cell waits for every row, a paragraph for its own)
+    const P = paper()
+    const run = await open(P, 'parts')
+    run.take(rowsOf(P, [...P.rows.keys()].filter(id => id !== 13 && id !== 25)))
+    // (page 3's closure: its paragraphs, unit 25 among them; page 2's: its cells, which wait for every row, and unit 13)
+    expect(run.rowsFor(3)).toEqual([25])
+    expect(run.rowsFor(2)).toEqual([13, 25])
+    run.take(rowsOf(P, [13, 25]))
+    expect([1, 2, 3].map(q => run.rowsFor(q))).toEqual([[], [], []])
+  })
+
   it('lets no page go before it is drawn and its units laid', async () => {
-    // (page 1 holds no unit: its doneAt is the page itself from the open on, and no release lets it go undrawn)
+    // (page 1 holds no unit, but is not drawn: it is not ready, and no release lets it go undrawn)
     const specs = SPECS.filter(s => s.lines[0]![0] !== 1)
     const P = paper(specs)
     const run = await open(P, 'parts')
-    expect(run.doneAt(1)).toBe(1)
+    expect(run.doneAt(1)).toBe(Infinity)
     run.release(1)
     expect(run.rows[0]!.released).toBeUndefined()
   })

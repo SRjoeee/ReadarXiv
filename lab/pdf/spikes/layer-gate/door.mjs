@@ -89,7 +89,7 @@ async function composedOf(name, bundle) {
 }
 const macrotask = () => new Promise(ok => setTimeout(ok, 0))
 /** the page's sheets but the faces' classes' (layer2.mjs faceClass: made once a page, for every run, and kept) */
-const ownSheets = () => [...document.head.querySelectorAll('style')].filter(e => { const rules = [...(e.sheet?.cssRules ?? [])]; return !(rules.length && rules.every(r => /^\.axf\d+$/.test(r.selectorText ?? ''))) })
+const ownSheets = () => [...document.head.querySelectorAll('style')].filter(e => { const rules = [...(e.sheet?.cssRules ?? [])]; return !(rules.length && rules.every(r => /^\.axf[0-9a-z-]+$/.test(r.selectorText ?? ''))) })
 
 /**
  * Whether the words the translation has can be found in the page tables (1b-E; a sentence starts at a word, and the view finds the
@@ -205,7 +205,9 @@ window.door = {
     layer.dispose()
     await doc.loadingTask.destroy()
     // (the sheets before the open and after dispose: the run's own gone)
-    return { pages: out, stats: { ...stats, pageMs: undefined }, complete: complete.length, rows: rows.length, sheets: [sheets, ownSheets().length] }
+    // (the pages `take` told complete, as a set: the engine may tell them in no order the pages have, 1b-D; none twice. Which pages
+    // it must tell is checked where the run is reached, door-common.mjs openDoor `completes`: the rest wait for end())
+    return { pages: out, stats: { ...stats, pageMs: undefined }, complete: complete.length, completeOnce: new Set(complete).size === complete.length, rows: rows.length, sheets: [sheets, ownSheets().length] }
   },
 }
 
