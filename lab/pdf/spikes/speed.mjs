@@ -49,7 +49,8 @@ async function child() {
   const mk = await im('layout/marks.mjs'), front = await im('source/latex-front.mjs'), live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs')
   const arx = await im('layout/arxiv.mjs'), pass = await im('pipeline/page-pass.mjs'), remove = await im('layout/remove.mjs'), tail = await im('layout/tail.mjs'), versions = await im('pipeline/versions.mjs')
   const NM = join(REPO, 'node_modules/pdfjs-dist/')
-  const open = bytes => getDocument({ data: bytes.slice(), ...LITE, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }).promise
+  const tasks = []
+  const open = bytes => { const task = getDocument({ data: bytes.slice(), ...LITE, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }); tasks.push(task); return task.promise }
   const MiB = 2 ** 20, r1 = v => Math.round(v * 10) / 10
   const liveSet = () => { globalThis.gc?.(); globalThis.gc?.(); const m = process.memoryUsage(); return r1((m.heapUsed + m.arrayBuffers) / MiB) }
   const deflate = b => new Uint8Array(deflateSync(b))
@@ -98,8 +99,8 @@ async function child() {
     first: { ms: first?.ms ?? null, page: firstPage, ...(MEM ? { live: first?.live ?? null } : {}) },
     maxRssMiB: r1(process.resourceUsage().maxRSS / 1024), ...(MEM ? { liveEnd: liveSet() } : {}),
   }
-  await arxiv.destroy(); await mdoc.destroy()
   process.stdout.write(`${JSON.stringify(out)}\n`)
+  for (const task of tasks) await task.destroy()
 }
 
 // ---------------------------------------------------------------- the runs, and the table
