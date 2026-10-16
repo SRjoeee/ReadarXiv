@@ -181,6 +181,12 @@ function wellFormed(boxes) {
   return true
 }
 const flat = boxes => boxes.flat()
+/** a record's border is its annotation's: none where the annotation has none, else the same width, colour and style (a style the
+ *  record does not name is solid) */
+function sameBorder(rec, border) {
+  if (!border) return rec === undefined || rec === null
+  return !!rec && Math.abs(rec.width - border.width) < 1e-6 && Array.isArray(rec.rgb) && rec.rgb.length === 3 && rec.rgb.every((v, i) => v === border.rgb[i]) && (rec.style ?? 'solid') === border.style
+}
 const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= BOX_TOLERANCE)
 
 // ---------------------------------------------------------------- the reference of linksTrue
@@ -224,8 +230,14 @@ export function referenceOf(annots, ctx) {
     if (owner === null) { parts.push(a.ov); continue }
     const pairs = ctx.pairsOf(owner) ?? []
     let pair = null
-    if (a.target?.url !== undefined) pair = pairs.find(p => hrefUrlOf(p.src) === new URL(a.target.url).href) ?? null
-    else {
+    if (a.target?.url !== undefined) {
+      // (the pairs with this URL, in source order, against the owner's annotations with it, in PDF order: as many, the i-th to the i-th)
+      const href = new URL(a.target.url).href
+      const same = pairs.filter(p => hrefUrlOf(p.src) === href)
+      const mine = ctx.all.filter(b => b.target?.url !== undefined && new URL(b.target.url).href === href && ownerOf(b) === owner)
+      const at = mine.findIndex(b => b.i === a.i)
+      if (at >= 0 && mine.length === same.length) pair = same[at]
+    } else {
       const mine = ctx.all.filter(b => b.target?.dest !== undefined && ownerOf(b) === owner)
       const internal = pairs.filter(p => /^\\(?:hyperref|hyperlink)\b/.test(p.src))
       const at = mine.findIndex(b => b.i === a.i)
@@ -266,6 +278,9 @@ export function referenceOf(annots, ctx) {
  *   scheme   it carries a url that is not allowed, or both or neither of dest and url
  *   name     it has an empty name and glyphs under it
  *   shape    its boxes are not [x0 < x1, y0 < y1] times n
+ *   order    its `order` is not its rank in the list (an integer, 0..n-1, in order)
+ *   border   its border is not its annotation's (none, or the same width, colour and style)
+ *   name     (also) its name is not the drawn text under it (moved) or its annotation's overlaid text (in place)
  */
 export function linksPage(o) {
   const own = o.parsed(o.page)
@@ -284,14 +299,12 @@ export function linksPage(o) {
     const good = [], keys = []
     const shapeOk = wellFormed(rec.boxes)
     if (!shapeOk) reasons.push('shape')
+    if (rec.order !== r) reasons.push('order')
     if ((rec.url === undefined) === (rec.dest === undefined) || (rec.url !== undefined && !urlAllowed(rec.url))) reasons.push('scheme')
     if (!claimed.length) reasons.push('claim')
     for (const [q, i] of claimed) {
-      const a = o.parsed(q)?.byIndex.get(i)
-      if (!a?.ok) { reasons.push('missing'); continue }
-      if (!sameTarget(rec, a.target)) { reasons.push('target'); continue }
+      // (every claim is registered, whatever its annotation or target: uniqueness is across all the fixture's records)
       const key = `${q}|${i}`
-      // (claimed by another record of this page, or by one of an earlier page: that record is made wrong when this page is read, below)
       const prior = o.claims?.get(key)
       if (here.get(key) > 1 || (prior && prior.page !== o.page)) reasons.push('twice')
       if (prior && prior.page !== o.page) {
@@ -299,6 +312,10 @@ export function linksPage(o) {
         if (!prior.flagged) { prior.flagged = true; out.linksWrong++; out.where.linksWrong.push(`p${prior.page}/${prior.label}:twice`) }
       }
       keys.push(key)
+      const a = o.parsed(q)?.byIndex.get(i)
+      if (!a?.ok) { reasons.push('missing'); continue }
+      if (!sameTarget(rec, a.target)) { reasons.push('target'); continue }
+      if (!sameBorder(rec.border, a.border)) reasons.push('border')
       good.push({ q, a })
     }
     if (!rec.moved) {
@@ -309,23 +326,27 @@ export function linksPage(o) {
         if (glyphsOfLink(good[0].a, o.glyphs).some(p => o.erased(p.x, p.y))) reasons.push('erased')
       }
     }
+    // (the drawn text under a moved record, once: its name and its truth are read against it)
+    const wantDrawn = rec.moved && shapeOk
+    const drawnText = wantDrawn ? o.drawn(rec) : ''
     if (typeof rec.name !== 'string') reasons.push('name')
     else if (!rec.name && (rec.moved || good.some(({ a }) => pointsIn(o.glyphs, a.boxes).length))) reasons.push('name')
+    else if (rec.name && rec.moved && /\S/u.test(drawnText) && !sameText(rec.name, drawnText)) reasons.push('name')
+    else if (rec.name && !rec.moved && good.length === 1 && /\S/u.test(good[0].a.ov) && !sameText(rec.name, good[0].a.ov)) reasons.push('name')
     if (rec.moved) out.linksMoved++
     else out.linksInPlace++
     const why = [...new Set(reasons)]
-    if (why.length) { out.linksWrong++; out.where.linksWrong.push(`${rec.order ?? r}:${why.join('+')}`) }
+    if (why.length) { out.linksWrong++; out.where.linksWrong.push(`${r}:${why.join('+')}`) }
     // (credited only for the pages the gate measures: its denominator is theirs alone)
     const credit = why.length ? [] : [...new Set(keys)].filter(k => (o.counted ? o.counted(Number(k.split('|')[0])) : true))
     out.linksKeptN += credit.length
-    for (const k of new Set(keys)) if (o.claims && !o.claims.has(k)) o.claims.set(k, { page: o.page, label: String(rec.order ?? r), credited: credit.includes(k), flagged: why.length > 0 })
+    for (const k of new Set(keys)) if (o.claims && !o.claims.has(k)) o.claims.set(k, { page: o.page, label: String(r), credited: credit.includes(k), flagged: why.length > 0 })
     if (rec.moved) {
       // (an annotation of another page, where a unit lies over a page break: its annotation carries `page`, and the caller reads that page's glyphs and TeX's file)
       const ref = good.length && good.length === claimed.length ? o.reference(rec, good.map(({ q, a }) => ({ ...a, page: q }))) : null
       // (a record with no drawn character under it is unverifiable, not true: two empty texts are not a match)
-      const drawn = ref === null || !shapeOk ? '' : o.drawn(rec)
-      if (ref !== null && /\S/u.test(drawn) && sameText(drawn, ref)) out.linksTrueN++
-      else out.where.linksTrue.push(String(rec.order ?? r))
+      if (ref !== null && /\S/u.test(drawnText) && sameText(drawnText, ref)) out.linksTrueN++
+      else out.where.linksTrue.push(String(r))
     }
   }
   return out

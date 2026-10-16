@@ -524,8 +524,10 @@ async function drawnPointsOf(p, page) {
 async function linksOfPage(p, page, tc) {
   const { run, doc } = S
   const L = S.links
+  // (a page the engine names that the document does not have (0, past the last, not an integer) has no annotation: the record is
+  // classified missing, the fixture goes on)
   const parsedOf = async q => {
-    if (!L.parsed.has(q)) L.parsed.set(q, annotationsOf(await (q === p ? page : await doc.getPage(q)).getAnnotations()))
+    if (!L.parsed.has(q)) L.parsed.set(q, Number.isInteger(q) && q >= 1 && q <= doc.numPages ? annotationsOf(await (q === p ? page : await doc.getPage(q)).getAnnotations()) : annotationsOf([]))
     return L.parsed.get(q)
   }
   const own = await parsedOf(p)
@@ -539,7 +541,7 @@ async function linksOfPage(p, page, tc) {
   // (the reference of a translated link reads TeX's file and the glyph points of the page its annotation is on: a placeholder's
   // segment, the unit whose line the point is on, the unit's translated pairs. The pages the records' sources are on, read here)
   const glyphsOf = new Map([[p, glyphs]])
-  if (moved) for (const src of sources ?? []) for (const [q] of src?.annots ?? []) if (!glyphsOf.has(q)) glyphsOf.set(q, glyphPointsOf((await (await doc.getPage(q)).getTextContent()).items))
+  if (moved) for (const src of sources ?? []) for (const [q] of src?.annots ?? []) if (!glyphsOf.has(q) && Number.isInteger(q) && q >= 1 && q <= doc.numPages) glyphsOf.set(q, glyphPointsOf((await (await doc.getPage(q)).getTextContent()).items))
   const within = (x, y, b) => x >= Math.min(b[0], b[2]) && x <= Math.max(b[0], b[2]) && y >= Math.min(b[1], b[3]) && y <= Math.max(b[1], b[3])
   const ctxOf = q => {
     const fp = S.file?.get(q), all = L.parsed.get(q).links.filter(a => a.ok)

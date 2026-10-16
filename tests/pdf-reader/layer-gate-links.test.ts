@@ -133,8 +133,10 @@ const run = (o: Run = {}) => {
   const { annots, glyphs } = page1()
   return linksPage({ page: o.page ?? 1, parsed: o.parsed ?? (q => (q === 1 ? annots : undefined)), glyphs, erased: o.erased ?? noErase, records: o.records ?? [], sources: o.sources ?? null, claims: o.claims ?? new Map(), drawn: o.drawn ?? unused, reference: o.reference ?? noRef })
 }
-const moved = (dest: string, boxes: number[], o: Partial<LinkRec> = {}): LinkRec => ({ boxes, dest, name: '12', moved: true, order: 0, ...o })
-const inPlace = (o: Partial<LinkRec> & { boxes: number[] }): LinkRec => ({ dest: 'cite.a', name: '12', moved: false, order: 0, ...o })
+/** the border `raw` gives its annotations (width 1, green, solid) */
+const border = { width: 1, rgb: [0, 255, 0], style: 'solid' }
+const moved = (dest: string, boxes: number[], o: Partial<LinkRec> = {}): LinkRec => ({ boxes, dest, name: '12', moved: true, order: 0, border, ...o })
+const inPlace = (o: Partial<LinkRec> & { boxes: number[] }): LinkRec => ({ dest: 'cite.a', name: '12', moved: false, order: 0, border, ...o })
 
 describe('a page\'s link measures: the baseline, where the engine drops every link', () => {
   it('counts T and U, kept 0, wrong 0, no moved record', () => {
@@ -172,7 +174,7 @@ describe('kept', () => {
   })
   it('keeps both halves of a merged record (two abutting annotations of one target, one <a>)', () => {
     const annots = annotationsOf([raw({ rect: [100, 698, 130, 712], dest: 'cite.a' }), raw({ rect: [100, 686, 120, 700], dest: 'cite.a' })])
-    const m = linksPage({ page: 1, parsed: () => annots, glyphs: [], erased: noErase, records: [moved('cite.a', [100, 698, 130, 712, 100, 686, 120, 700])], sources: [{ annots: [[1, 0], [1, 1]] }], claims: new Map(), drawn: () => 'ab', reference: () => 'ab' })
+    const m = linksPage({ page: 1, parsed: () => annots, glyphs: [], erased: noErase, records: [moved('cite.a', [100, 698, 130, 712, 100, 686, 120, 700], { name: 'ab' })], sources: [{ annots: [[1, 0], [1, 1]] }], claims: new Map(), drawn: () => 'ab', reference: () => 'ab' })
     expect(m).toMatchObject({ linksKeptN: 2, linksMoved: 1, linksTrueN: 1, linksWrong: 0 })
   })
   it('keeps an annotation of another page where the unit lies over a page break, once', () => {
@@ -221,15 +223,55 @@ describe('wrong: each defect in turn', () => {
   })
   it('the same across pages: the later page makes the earlier record wrong and takes its credit back (the fixture\'s sums are right)', () => {
     const claims: Run['claims'] = new Map()
-    const first = run({ records: [moved('cite.a', [150, 698, 170, 712], { order: 3 })], sources: [a0], claims, reference: () => '12', drawn: () => '12' })
+    const first = run({ records: [moved('cite.a', [150, 698, 170, 712])], sources: [a0], claims, reference: () => '12', drawn: () => '12' })
     expect(first).toMatchObject({ linksKeptN: 1, linksWrong: 0 })
     const second = run({ records: [moved('cite.a', [150, 698, 170, 712], { order: 0 })], sources: [a0], claims, page: 2, parsed: () => page1().annots, reference: () => '12', drawn: () => '12' })
     expect(second).toMatchObject({ linksKeptN: -1, linksWrong: 2 })
-    expect(second.where.linksWrong).toEqual(['p1/3:twice', '0:twice'])
+    expect(second.where.linksWrong).toEqual(['p1/0:twice', '0:twice'])
     expect(first.linksKeptN + second.linksKeptN).toBe(0)
     // a third claim does not count the earlier record again
     const third = run({ records: [moved('cite.a', [150, 698, 170, 712], { order: 0 })], sources: [a0], claims, page: 3, parsed: () => page1().annots, reference: () => '12', drawn: () => '12' })
     expect(third).toMatchObject({ linksKeptN: 0, linksWrong: 1 })
+  })
+  it('registers a claim whatever its target: a later record that claims the same annotation rightly is not unique either', () => {
+    const claims: Run['claims'] = new Map()
+    // (page 1: a record claims annotation 1 (cite.b) with another target)
+    const bad = run({ records: [moved('cite.a', [150, 698, 170, 712])], sources: [{ annots: [[1, 1]] }], claims })
+    expect(why(bad)).toEqual(['target'])
+    const later = run({ records: [moved('cite.b', [150, 698, 170, 712], { name: '7' })], sources: [{ annots: [[1, 1]] }], claims, page: 2, parsed: () => page1().annots, reference: () => '7', drawn: () => '7' })
+    expect(why(later)).toEqual(['twice'])
+    expect(later.linksKeptN).toBe(0)
+  })
+  it('classifies an invalid or absent source page as missing, whatever page it names', () => {
+    for (const q of [0, -1, 99, 1.5]) expect(why(run({ records: [moved('cite.a', [150, 698, 170, 712])], sources: [{ annots: [[q, 0]] }] }))).toContain('missing')
+  })
+  it('a record carries its annotation\'s border: none where it has none, else the same width, colour and style', () => {
+    const border = (b: object | undefined) => why(run({ records: [moved('cite.a', [150, 698, 170, 712], { border: b as LinkRec['border'] })], sources: [a0], reference: () => '12', drawn: () => '12' }))
+    expect(border({ width: 1, rgb: [0, 255, 0], style: 'solid' })).toEqual([])
+    expect(border({ width: 1, rgb: [0, 255, 0] })).toEqual([]) // a style not named is solid
+    expect(border(undefined)).toEqual(['border'])
+    expect(border({ width: 2, rgb: [0, 255, 0], style: 'solid' })).toEqual(['border'])
+    expect(border({ width: 1, rgb: [255, 0, 0], style: 'solid' })).toEqual(['border'])
+    expect(border({ width: 1, rgb: [0, 255, 0], style: 'dashed' })).toEqual(['border'])
+    // an annotation with no border: the record has none
+    const plain = annotationsOf([raw({ borderStyle: { width: 0 } })])
+    const m = (b: object | undefined) => linksPage({ page: 1, parsed: () => plain, glyphs: [], erased: noErase, records: [moved('cite.a', [150, 698, 170, 712], { border: b as LinkRec['border'] })], sources: [a0], claims: new Map(), drawn: () => '12', reference: () => '12' }).where.linksWrong
+    expect(m(undefined)).toEqual([])
+    expect(m({ width: 1, rgb: [0, 255, 0], style: 'solid' })).toEqual(['0:border'])
+  })
+  it('a name is the drawn text under a moved record, or the overlaid text of an in-place one', () => {
+    expect(why(run({ records: [moved('cite.a', [150, 698, 170, 712], { name: 'unrelated' })], sources: [a0], reference: () => '12', drawn: () => '12' }))).toEqual(['name'])
+    expect(why(run({ records: [moved('cite.a', [150, 698, 170, 712], { name: ' 12 ' })], sources: [a0], reference: () => '12', drawn: () => '12' }))).toEqual([])
+    expect(why(run({ records: [inPlace({ boxes: [100, 698, 130, 712], name: 'unrelated' })], sources: [a0] }))).toEqual(['name'])
+    expect(why(run({ records: [inPlace({ boxes: [100, 698, 130, 712], name: '12' })], sources: [a0] }))).toEqual([])
+  })
+  it('a record\'s order is its rank in the list: an integer, 0..n-1, in order', () => {
+    const two = (o0: number, o1: number) => run({ records: [moved('cite.a', [150, 698, 170, 712], { order: o0 }), moved('cite.b', [150, 680, 170, 692], { order: o1, name: '7' })], sources: [a0, { annots: [[1, 1]] }], reference: (r) => (r.name === '7' ? '7' : '12'), drawn: (r) => r.name })
+    expect(two(0, 1).linksWrong).toBe(0)
+    expect(two(1, 0).where.linksWrong).toEqual(['0:order', '1:order'])
+    expect(two(0, 0).where.linksWrong).toEqual(['1:order'])
+    expect(two(0, 5).where.linksWrong).toEqual(['1:order'])
+    expect(two(0, 1.5).where.linksWrong).toEqual(['1:order'])
   })
   it('credits only annotations of the pages the gate measures: the denominator is theirs alone', () => {
     const annots = page1().annots
@@ -335,6 +377,22 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
     expect(referenceOf([all[2]!], { ...base, pairsOf: () => pairs.slice(0, 1) })).toBeNull()
     // no pair for the URL: not found
     expect(referenceOf([all[0]!], { ...base, pairsOf: () => pairs })).toBeNull()
+  })
+  it('tells two \\href pairs with one URL apart by the annotation\'s rank among the owner\'s annotations with that URL', () => {
+    const two = annotationsOf([
+      raw({ rect: [100, 700, 130, 712], url: 'https://example.org/a', dest: undefined, overlaidText: 'here' }),
+      raw({ rect: [100, 680, 130, 692], url: 'https://example.org/a', dest: undefined, overlaidText: 'there' }),
+    ])
+    const both = two.links.filter(a => a.ok)
+    const pairs = pairsOf([
+      { t: 'open', id: 1, src: '\\href{https://example.org/a}{here}' }, { t: 'text', s: 'ici' }, { t: 'close', id: 1 },
+      { t: 'open', id: 2, src: '\\href{https://example.org/a}{there}' }, { t: 'text', s: 'la-bas' }, { t: 'close', id: 2 },
+    ])
+    const ctx = { ...base, all: both, points: (a: Annot) => [{ x: 1, y: a.i, ch: 'x' }], pairsOf: () => pairs }
+    expect(referenceOf([both[0]!], ctx)).toBe('ici')
+    expect(referenceOf([both[1]!], ctx)).toBe('la-bas')
+    // not as many pairs as annotations: not found
+    expect(referenceOf([both[1]!], { ...ctx, pairsOf: () => pairs.slice(0, 1) })).toBeNull()
   })
   it('reads an \\href\'s URL as a URL, TeX\'s escapes undone', () => {
     expect(hrefUrlOf('\\href{https://example.org/a_b\\_c?x=1\\&y=2}{t}')).toBe('https://example.org/a_b_c?x=1&y=2')
