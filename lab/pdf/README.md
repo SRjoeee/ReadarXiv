@@ -163,6 +163,20 @@ room the shorter translation of the text before it did not use stood as a band b
 pitches where TeX set 2). `slotsSkipped` credits each break's room once in its frame wherever the drawing sets it. Fixes 2
 and 3 are the owner's ruling of 2026-10-16, `rulings/2026-10-16-fixes-2-3.json`.
 
+**The 2609.26457 survey's fixes (2026-10-17).** A paragraph whose measure TeX changed within it (a wrapped figure
+beside its first lines, `\parshape`, `\hangindent`) is laid in each line's own measure (`layer2.mjs measuresOf`): a step
+is an edge more than 2 em off the line's before it that stays (the two lines before it hold the old edge and the line
+after it the new, within 0.5 em; a first line's indent, and where the measure widens on the right a last line ending
+short of it, break neither), each run of lines between two steps its own extent; the block keeps one grid, pitch and
+flow across the change, a slot between two lines of two measures takes the narrower, and a line that is not its block's
+last is erased to its own measure's edge. An isolated short line is no step, nor are a unit's kept lines. Before, every
+slot took the block's widest line's edge, and 2609.26457's unit 43 (page 8) was laid over its wrapped figure's caption.
+On the 30 outputs no block steps. And a placeholder v0's reading finds no rendering for (drawn from its source, or a
+citation as the page wrote it before) whose row the file finds, its segments on the pages shown, is read from those
+segments as the file's own reading reads a found row (`tex.mjs proofOf`, `layer2.mjs resolutionFrom`: a formula on one
+line cropped at its segment, page text standing in them) where it was left unproven; a rendering v0 took that the
+segments do not hold stays no proof, and a LOST row is never read.
+
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
 folders, and a `--record` that would drop an output the record's run of its kind holds (for a model run, the pixel run's
 where the record has no model run of its own) is refused (`score.mjs droppedOutputs`). The record of 2026-10-15:

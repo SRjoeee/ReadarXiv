@@ -588,9 +588,14 @@ describe("a formula of no letter or digit is no text symbol: proven as any formu
       const whole = read(T.texParts(found, kOf, { use: 'ph' }))
       expect(whole.unproven).toBeUndefined()
       expect(whole.get(1)).toMatchObject({ mode: 'crop', crop: [59.6, 96.7, 75.4, 108.3], baseline: 100 })
-      // v0's own reading under the proof, no file, the row LOST, or found: none proves it (v0 reads no word in symbols
-      // alone, so it would draw the source's text): the unit the original's
-      for (const lu of [null, lost, found]) expect(read({ proof: T.proofOf(lu, lu ? kOf : null) }).unproven).toBe(1)
+      // v0's own reading under the proof, no file or the row LOST: none proves it (v0 reads no word in symbols alone, so it
+      // would draw the source's text): the unit the original's
+      for (const lu of [null, lost]) expect(read({ proof: T.proofOf(lu, lu ? kOf : null) }).unproven).toBe(1)
+      // the row found: v0 found no rendering, and the proof reads it from the row's segment, as the file's own reading does
+      // (tex.mjs proofOf, F6 of the 2609.26457 survey): the same crop, proven
+      const filed = read({ proof: T.proofOf(found, kOf) })
+      expect(filed.unproven).toBeUndefined()
+      expect(filed.get(1)).toMatchObject({ mode: 'crop', crop: [59.6, 96.7, 75.4, 108.3], baseline: 100 })
     })
   }
   it('a text symbol stays exempt: drawn from its source under the proof with no file, and asked for by no file', () => {

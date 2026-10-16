@@ -150,9 +150,9 @@ export interface UnitParts {
   label?: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
   /** part 4: which ink each placeholder is, by a source that knows it (Prepared.inkKnown, with part 1) */
   renderings?: (ctx: RenderingsContext) => Renderings
-  /** part 5: every rendering proven, each crop cut from its placeholder's own ink (mutates the crops); the k of one no
-   *  source proves, or -1 */
-  proof?: (out: Prepared) => number
+  /** part 5: every rendering proven, each crop cut from its placeholder's own ink (mutates the crops; one the reading found
+   *  none for read again from the source, `unit`'s); the k of one no source proves, or -1 */
+  proof?: (out: Prepared, unit: Unit) => number
   /** where the unit's forced breaks end its lines (with part 1's lines, the file's): each break piece's index to the line
    *  set after it, by its index in the file (LineInfo.j) */
   breaks?: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
@@ -168,7 +168,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2)
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2)
 type ToDev = (x: number, y: number) => [number, number]
 
 /** a spacing accent TeX sets as a glyph of its own */
@@ -195,7 +195,10 @@ export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readon
 /** `first`: the unit's first line (default rects[0]; `rects` may be its lines on one page alone) */
 export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
 export declare function extendFirstLines(rects: Rect[], pageViews: readonly number[][], others: readonly (readonly Rect[] | undefined)[]): void
-export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null): Block[]
+/** a block's lines by the measure TeX set each to, where it changed within the paragraph (a wrapped figure, \parshape,
+ *  \hangindent): each line's key to its measure's [x0, x1], or null where the block is one measure */
+export declare function measuresOf(rects: readonly Rect[], keep?: ReadonlySet<string> | null): Map<string, [number, number]> | null
+export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null): (Block & { measures?: Map<string, [number, number]> | null })[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
 /** the unit against its page, in parts: v0's, or `parts` another source gives (the per-unit reading's contract above) */
 export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: CiteMap | null, deny?: ReadonlySet<string> | null, parts?: UnitParts | null): Prepared
@@ -248,6 +251,8 @@ export declare function blocks2(rects: readonly Rect[], pageViews: readonly numb
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>
+/** a placeholder's resolution read again from a rendering another source proves (tex.mjs proofOf): its page text or crop */
+export declare function resolutionFrom(r: Resolved, g: Gap & { proof?: boolean }, unit: Unit, lineInfo?: Prepared['lineInfo'] | null): Resolved
 /** a crop from a layout file's segment (its piece's own ink): the box, a fraction of a point around, on its line's
  *  baseline */
 export declare function cropOfBox(box: { x0: number; x1: number; top: number; bottom: number; baseline: number }): { crop: number[]; baseline: number }

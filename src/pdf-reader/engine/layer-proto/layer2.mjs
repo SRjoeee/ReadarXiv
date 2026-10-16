@@ -478,6 +478,64 @@ export function extendFirstLines(rects, pageViews, others) {
   }
 }
 
+/** a change of a paragraph's measure: a line's edge this many em off the line's before it */
+const STEP_EM = 2
+/** lines set to one measure: their edges within this many em of it (a justified line's ink ends a point or two short of
+ *  its measure, or past it by a protruded hyphen) */
+const MEASURE_TOL = 0.5
+/**
+ * A block's lines by the measure TeX set each to, where it changed within the paragraph (a wrapfigure beside its first
+ * lines, \parshape, \hangindent, a cutout): 2609.26457 page 8, unit 43, whose lines 1 to 7 end at x 283 beside the figure
+ * and its caption, lines 8 to 20 at 533; v0's block took its widest line's edge for every slot and laid the translation
+ * over the caption. A step is an edge (either side) more than STEP_EM em off the line's before it that stays: the two lines
+ * before it hold the old edge and the line after it the new, each within MEASURE_TOL em. The first line's start may lie
+ * further in (its indent), and where the measure widens on the right the paragraph's last line may end short of it; an
+ * isolated short line (a ragged or broken line, a paragraph's last) is no step. The block's kept lines (a display's rows)
+ * are no line of a measure. Returns a Map of each line's key (rectKey) to its measure's [x0, x1], the extent of its run of
+ * lines between two steps, or null where the block is one measure (every slot its block's edges, as before).
+ */
+export function measuresOf(rects, keep = null) {
+  const lines = rects.filter(r => !keep?.has(rectKey(r)))
+  const n = lines.length
+  if (n < 4) return null
+  const em = median(lines.map(r => (r[4] - r[2]) / 0.894))
+  const step = STEP_EM * em, tol = MEASURE_TOL * em
+  const cuts = new Set()
+  for (const side of [1, 3]) {
+    const e = lines.map(r => r[side])
+    for (let i = 2; i + 1 < n; i++) {
+      if (!(Math.abs(e[i] - e[i - 1]) > step)) continue
+      const widens = side === 3 ? e[i] > e[i - 1] : e[i] < e[i - 1]
+      const before = Math.abs(e[i - 2] - e[i - 1]) <= tol || (side === 1 && i - 2 === 0 && e[0] > e[1])
+      const after = Math.abs(e[i + 1] - e[i]) <= tol || (side === 3 && widens && i + 1 === n - 1 && e[i + 1] < e[i])
+      if (before && after) cuts.add(i)
+    }
+  }
+  if (!cuts.size) return null
+  const out = new Map()
+  let from = 0
+  for (const to of [...[...cuts].sort((a, b) => a - b), n]) {
+    const run = lines.slice(from, to)
+    const m = [Math.min(...run.map(r => r[1])), Math.max(...run.map(r => r[3]))]
+    for (const r of run) out.set(rectKey(r), m)
+    from = to
+  }
+  return out
+}
+/** a block's measure at slot `k` of its lines (on its grid) or at baseline `y`: its line's (measuresOf); between two lines
+ *  of two measures the narrower of both, so that no slot runs over what stands beside either; [x0, x1] */
+function measureAt(b, y, k) {
+  const at = i => b.measures.get(rectKey(b.rects[i])) ?? [b.x0, b.x1]
+  if (k >= 0 && k < b.rects.length) return at(k)
+  const Y = b.G ?? b.B
+  if (y >= Y[0] - 0.05) return at(0)
+  for (let i = 0; i + 1 < Y.length; i++) {
+    if (Math.abs(y - Y[i + 1]) <= 0.05) return at(i + 1)
+    if (y < Y[i] && y > Y[i + 1]) { const a = at(i), c = at(i + 1); return [Math.max(a[0], c[0]), Math.min(a[1], c[1])] }
+  }
+  return at(Y.length - 1)
+}
+
 /**
  * blocksOf (layer.js) with its kept lines (a displayed formula) never moved: blocksOf started a far-in first line at its
  * block's edge before it split the block around the kept lines, so a formula that began a block (the unit's text went
@@ -522,6 +580,9 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
     const pageCentre = view ? (view[0] + view[2]) / 2 : 306
     const widthsVary = Math.max(...rs.map(r => r[3] - r[1])) - Math.min(...rs.map(r => r[3] - r[1])) > 6
     b.centred = rs.length > 1 ? Math.max(...centres) - Math.min(...centres) < 3 && widthsVary : Math.abs(centres[0] - pageCentre) < 3 && b.x1 - b.x0 < 0.8 * (view ? view[2] - view[0] : 612)
+    // (the measures its lines are set to, where TeX changed it within the paragraph: measuresOf; a centred block's lines
+    // are no measure's)
+    b.measures = b.centred ? null : measuresOf(rs, keep)
   }
   if (!keep?.size && !breakAt?.size) { for (const b of blocks) b.after = 0; return blocks }
   let after = 0
@@ -701,7 +762,7 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // alone the unit's characters are v0's rectangles', and a leftover may be a rendering the segments do not reach)
   out.inkKnown = !!(parts?.renderings && parts.lines)
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
-  if (parts?.proof) { const k = parts.proof(out); if (k >= 0) out.unproven = k }
+  if (parts?.proof) { const k = parts.proof(out, unit); if (k >= 0) out.unproven = k }
   // (a source that knows where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it)
   out.breaks = parts?.breaks?.(unit) ?? null
   finishUnit(out, unit, rects, charsByPage)
@@ -1369,6 +1430,24 @@ function drawnAs(p, g, cls, sup, lineInfo = null) {
   const y0 = Math.min(...real.map(c => (c.ybEff !== undefined ? c.yb - c.size : c.yb - c.size * 0.26))), y1 = Math.max(...real.map(c => (c.ybEff !== undefined ? c.yb + c.size * 0.15 : c.yb + c.size * 0.8)))
   const x0 = Math.min(...real.map(c => c.x0)), x1 = Math.max(...real.map(c => c.x1))
   return { mode: 'crop', page: real[0].page, crop: [x0 - 0.4, y0, x1 + 0.4, y1], baseline, text: texToText2(p.src) }
+}
+
+/**
+ * A placeholder's resolution read again from a rendering another source proves where v0's reading found none (tex.mjs
+ * proofOf: the layout file's segments of its row, renderingOf's, `g`): as resolvePlaceholders reads a rendering, its own
+ * brackets left out where the translation sets its own, and drawn as its page text or a crop (drawnAs). `r`: the
+ * resolution it replaces (its k, src, cls and sup kept); `unit`, its unit; `lineInfo`, its lines' (Prepared's).
+ */
+export function resolutionFrom(r, g, unit, lineInfo = null) {
+  const p = { k: r.k, src: r.src, cls: r.cls }
+  const cls = renderingClass(p.cls)
+  let gg = g
+  if ((cls === 'num' || cls === 'other' || (cls === 'cite' && /^\(/.test(g.text))) && /^[([]/.test(g.text) && /[)\]]$/.test(g.text) && bracketed(unit.pieces, p.k)) {
+    const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
+    const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
+    if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) gg = unbracketed(g, real, inner)
+  }
+  return { ...drawnAs(p, gg, cls, !!r.sup, lineInfo), k: p.k, src: p.src, cls: p.cls, gap: gg }
 }
 
 /**
@@ -2235,10 +2314,13 @@ function slotsAt(blocks, st, P, s) {
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
       if (y < low - 0.05) break
       const target = k === 0 || (onGrid && k < b.B.length) ? k : null
-      const x0 = b.x0 + (bi === 0 && k === 0 && !b.centred ? b.indent : 0)
+      // (each slot the measure of the line it is laid at, where the paragraph's changed: measuresOf; the block's grid, its
+      // pitch and its flow its own across the change, one paragraph's)
+      const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, onGrid && k < G.length ? k : -1) : [b.x0, b.x1]
+      const x0 = bi === 0 && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
-      if (b.x1 - x0 < 1.5 * s * st.scale) continue
-      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
+      if (mx1 - x0 < 1.5 * s * st.scale) continue
+      out.push({ block: bi, page: b.page, x0, x1: mx1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
     }
   }
   return out
@@ -2715,8 +2797,10 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
       for (const [ei, e] of boxes.entries()) {
         const [x0, y0, , y1] = e
         // a line that is not its block's last is justified to the column's edge: erased to it (a closing symbol the
-        // anchors' line rectangle left out stayed, 1512.03385 page 2's "&")
-        const x1 = ri < b.rects.length - 1 && ei === boxes.length - 1 ? Math.max(e[2], b.x1) : e[2]
+        // anchors' line rectangle left out stayed, 1512.03385 page 2's "&"); to its own measure's where the paragraph's
+        // changed (measuresOf: a line beside a wrapped figure, never erased over it)
+        const edge = b.measures && !b.centred ? b.measures.get(rectKey(r))?.[1] ?? b.x1 : b.x1
+        const x1 = ri < b.rects.length - 1 && ei === boxes.length - 1 ? Math.max(e[2], edge) : e[2]
         const [ax, ay] = px(x0 - (bi === 0 && ri === 0 && ei === 0 ? 0.3 : 1.8), y1 + 1.2), [bx, by] = px(x1 + 1.8, y0 - 1.2)
         ops.push({ op: 'erase', box: [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] })
         erased.push([Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)])
