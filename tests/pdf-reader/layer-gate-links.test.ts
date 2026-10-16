@@ -128,7 +128,7 @@ const page1 = () => {
 const noErase = () => false
 const unused = () => ''
 const noRef = () => null
-type Run = { records?: LinkRec[]; sources?: (LinkSource | null)[] | null; erased?: (x: number, y: number) => boolean; parsed?: (q: number) => Annots | undefined; claims?: Map<string, string>; page?: number; drawn?: (r: LinkRec) => string; reference?: (r: LinkRec, a: Annot[]) => string | null }
+type Run = { records?: LinkRec[]; sources?: (LinkSource | null)[] | null; erased?: (x: number, y: number) => boolean; parsed?: (q: number) => Annots | undefined; claims?: Map<string, { page: number; label: string; credited: boolean; flagged: boolean }>; page?: number; drawn?: (r: LinkRec) => string; reference?: (r: LinkRec, a: Annot[]) => string | null }
 const run = (o: Run = {}) => {
   const { annots, glyphs } = page1()
   return linksPage({ page: o.page ?? 1, parsed: o.parsed ?? (q => (q === 1 ? annots : undefined)), glyphs, erased: o.erased ?? noErase, records: o.records ?? [], sources: o.sources ?? null, claims: o.claims ?? new Map(), drawn: o.drawn ?? unused, reference: o.reference ?? noRef })
@@ -213,15 +213,33 @@ describe('wrong: each defect in turn', () => {
     expect(why(run({ records: [moved('cite.a', [150, 698, 170, 712])], sources: [{ annots: [[1, 1]] }] }))).toEqual(['target'])
     expect(why(run({ records: [{ ...moved('cite.a', [150, 698, 170, 712]), dest: undefined, url: 'https://example.org/p' }], sources: [a0] }))).toEqual(['target'])
   })
-  it('an annotation another record claims, on the same page or on another (ambiguous)', () => {
+  it('an annotation two records claim: both are wrong, whichever is processed first (ambiguous)', () => {
     const two = run({ records: [moved('cite.a', [150, 698, 170, 712], { order: 0 }), moved('cite.a', [150, 680, 170, 692], { order: 1 })], sources: [a0, a0], reference: () => '12', drawn: () => '12' })
-    expect(two.linksWrong).toBe(1)
-    expect(two.where.linksWrong).toEqual(['1:twice'])
-    expect(two.linksKeptN).toBe(1)
-    // (a fixture's pages share the claims)
-    const claims = new Map<string, string>()
-    run({ records: [moved('cite.a', [150, 698, 170, 712])], sources: [a0], claims, reference: () => '12', drawn: () => '12' })
-    expect(run({ records: [moved('cite.a', [150, 698, 170, 712])], sources: [a0], claims, page: 2, parsed: () => page1().annots, reference: () => '12', drawn: () => '12' }).linksWrong).toBe(1)
+    expect(two.linksWrong).toBe(2)
+    expect(two.where.linksWrong).toEqual(['0:twice', '1:twice'])
+    expect(two.linksKeptN).toBe(0)
+  })
+  it('the same across pages: the later page makes the earlier record wrong and takes its credit back (the fixture\'s sums are right)', () => {
+    const claims: Run['claims'] = new Map()
+    const first = run({ records: [moved('cite.a', [150, 698, 170, 712], { order: 3 })], sources: [a0], claims, reference: () => '12', drawn: () => '12' })
+    expect(first).toMatchObject({ linksKeptN: 1, linksWrong: 0 })
+    const second = run({ records: [moved('cite.a', [150, 698, 170, 712], { order: 0 })], sources: [a0], claims, page: 2, parsed: () => page1().annots, reference: () => '12', drawn: () => '12' })
+    expect(second).toMatchObject({ linksKeptN: -1, linksWrong: 2 })
+    expect(second.where.linksWrong).toEqual(['p1/3:twice', '0:twice'])
+    expect(first.linksKeptN + second.linksKeptN).toBe(0)
+    // a third claim does not count the earlier record again
+    const third = run({ records: [moved('cite.a', [150, 698, 170, 712], { order: 0 })], sources: [a0], claims, page: 3, parsed: () => page1().annots, reference: () => '12', drawn: () => '12' })
+    expect(third).toMatchObject({ linksKeptN: 0, linksWrong: 1 })
+  })
+  it('credits only annotations of the pages the gate measures: the denominator is theirs alone', () => {
+    const annots = page1().annots
+    const m = linksPage({ page: 1, parsed: () => annots, counted: q => q <= 1, glyphs: [], erased: noErase, records: [moved('cite.a', [150, 698, 170, 712])], sources: [{ annots: [[2, 0]] }], claims: new Map(), drawn: () => '12', reference: () => '12' })
+    expect(m).toMatchObject({ linksKeptN: 0, linksWrong: 0, linksMoved: 1 })
+  })
+  it('does not read the drawn text of a moved record whose boxes are malformed: the defect is reported, the gate does not stop', () => {
+    const m = run({ records: [{ ...moved('cite.a', [150, 698, 170, 712]), boxes: null } as unknown as LinkRec], sources: [a0], reference: () => '12', drawn: () => { throw new Error('asked') } })
+    expect(m.where.linksWrong).toEqual(['0:shape'])
+    expect(m.linksTrueN).toBe(0)
   })
   it('an in-place record with more than one annotation, or one of another page', () => {
     expect(why(run({ records: [inPlace({ boxes: [100, 698, 130, 712] })], sources: [{ annots: [[1, 0], [1, 1]] }] }))).toContain('claim')

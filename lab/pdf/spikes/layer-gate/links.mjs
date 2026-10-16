@@ -244,12 +244,15 @@ export function referenceOf(annots, ctx) {
  * the engine names as a source); `glyphs`: the page's glyph points; `erased(x, y)`: E(p); `records` and `sources` (R(p) and
  * the attribution, the records' order; `sources` null where the engine has none); `claims`: a Map shared by a fixture's pages, so
  * that an annotation two records of different pages claim is found; `drawn(record)`: the drawn text under the record's boxes
- * (asked only of a moved record); `reference(record, annots)`: the reference text or null (asked only of a moved record).
+ * (asked only of a moved record whose boxes are well formed); `reference(record, annots)`: the reference text or null (asked only
+ * of a moved record); `counted(q)`: whether page q is one the gate measures (an annotation of another page is no kept link: the
+ * denominator is the measured pages' alone; default every page).
  *
  * Returns the counts of the page (an entry in the record): `linksTotal` and `linksUnsupported` (T and U of the page),
  * `linksPlaceable` (annotations of T none of whose glyph points is erased: what "in place" alone could keep), `linksKeptN`
  * (annotations of any page that records of this page keep: attributed to a record with its own target, moved or in place on
- * its rectangle, the record in no way wrong), `linksMoved`, `linksInPlace`, `linksTrueN` (moved records whose drawn text is
+ * its rectangle, the record in no way wrong; a record on a later page that claims an annotation too makes the earlier record
+ * wrong and takes its credit back, so this page's counts can hold -1 and +1: the fixture's sums are right), `linksMoved`, `linksInPlace`, `linksTrueN` (moved records whose drawn text is
  * the reference's), `linksWrong` (records with a defect: below), and `where`: { linksWrong: ['<order>:<reasons>'], linksTrue:
  * ['<order>'] }, the ranks of the records at fault.
  *
@@ -258,7 +261,7 @@ export function referenceOf(annots, ctx) {
  *   claim    the engine names no annotation for it, or an in-place record more than one or one of another page
  *   missing  it names an annotation that is not in T
  *   target   it names an annotation of another target
- *   twice    another record (or it again) claims the same annotation
+ *   twice    another record (or it again) claims the same annotation: both records are wrong
  *   rect     it is in place and its boxes are not its annotation's rectangle (or quads)
  *   scheme   it carries a url that is not allowed, or both or neither of dest and url
  *   name     it has an empty name and glyphs under it
@@ -270,12 +273,17 @@ export function linksPage(o) {
   const out = { linksTotal: own.total, linksUnsupported: own.unsupported, linksPlaceable: 0, linksKeptN: 0, linksMoved: 0, linksInPlace: 0, linksTrueN: 0, linksWrong: 0, where: { linksWrong: [], linksTrue: [] } }
   for (const a of T) if (!glyphsOfLink(a, o.glyphs).some(p => o.erased(p.x, p.y))) out.linksPlaceable++
   const records = o.records ?? [], sources = o.sources ?? null
+  // (how many claims each annotation has among this page's records, a record that names it twice counting twice: the claim of the
+  // record processed first is as ambiguous as the second's)
+  const here = new Map()
+  for (const src of sources ?? []) for (const [q, i] of src?.annots ?? []) here.set(`${q}|${i}`, (here.get(`${q}|${i}`) ?? 0) + 1)
   for (const [r, rec] of records.entries()) {
     const reasons = []
     const me = `${o.page}:${r}`
     const claimed = sources?.[r]?.annots ?? []
-    const good = []
-    if (!wellFormed(rec.boxes)) reasons.push('shape')
+    const good = [], keys = []
+    const shapeOk = wellFormed(rec.boxes)
+    if (!shapeOk) reasons.push('shape')
     if ((rec.url === undefined) === (rec.dest === undefined) || (rec.url !== undefined && !urlAllowed(rec.url))) reasons.push('scheme')
     if (!claimed.length) reasons.push('claim')
     for (const [q, i] of claimed) {
@@ -283,8 +291,14 @@ export function linksPage(o) {
       if (!a?.ok) { reasons.push('missing'); continue }
       if (!sameTarget(rec, a.target)) { reasons.push('target'); continue }
       const key = `${q}|${i}`
-      if (o.claims?.has(key)) reasons.push('twice')
-      o.claims?.set(key, me)
+      // (claimed by another record of this page, or by one of an earlier page: that record is made wrong when this page is read, below)
+      const prior = o.claims?.get(key)
+      if (here.get(key) > 1 || (prior && prior.page !== o.page)) reasons.push('twice')
+      if (prior && prior.page !== o.page) {
+        if (prior.credited) { out.linksKeptN--; prior.credited = false }
+        if (!prior.flagged) { prior.flagged = true; out.linksWrong++; out.where.linksWrong.push(`p${prior.page}/${prior.label}:twice`) }
+      }
+      keys.push(key)
       good.push({ q, a })
     }
     if (!rec.moved) {
@@ -301,12 +315,15 @@ export function linksPage(o) {
     else out.linksInPlace++
     const why = [...new Set(reasons)]
     if (why.length) { out.linksWrong++; out.where.linksWrong.push(`${rec.order ?? r}:${why.join('+')}`) }
-    else out.linksKeptN += new Set(good.map(({ q, a }) => `${q}|${a.i}`)).size
+    // (credited only for the pages the gate measures: its denominator is theirs alone)
+    const credit = why.length ? [] : [...new Set(keys)].filter(k => (o.counted ? o.counted(Number(k.split('|')[0])) : true))
+    out.linksKeptN += credit.length
+    for (const k of new Set(keys)) if (o.claims && !o.claims.has(k)) o.claims.set(k, { page: o.page, label: String(rec.order ?? r), credited: credit.includes(k), flagged: why.length > 0 })
     if (rec.moved) {
       // (an annotation of another page, where a unit lies over a page break: its annotation carries `page`, and the caller reads that page's glyphs and TeX's file)
       const ref = good.length && good.length === claimed.length ? o.reference(rec, good.map(({ q, a }) => ({ ...a, page: q }))) : null
       // (a record with no drawn character under it is unverifiable, not true: two empty texts are not a match)
-      const drawn = ref === null ? '' : o.drawn(rec)
+      const drawn = ref === null || !shapeOk ? '' : o.drawn(rec)
       if (ref !== null && /\S/u.test(drawn) && sameText(drawn, ref)) out.linksTrueN++
       else out.where.linksTrue.push(String(rec.order ?? r))
     }

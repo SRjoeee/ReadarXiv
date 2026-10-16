@@ -509,8 +509,9 @@ async function drawnPointsOf(p, page) {
   host.append(svg)
   document.body.append(host)
   try {
-    const view = page.view, s = K / devicePixelRatio
-    return drawnCharsOf(svg, (x, y) => ({ x: view[0] + x / s, y: view[3] - y / s }))
+    // (the inverse of the viewport the SVG was made through: rotation, crop box and user unit included)
+    const vp = page.getViewport({ scale: K / devicePixelRatio })
+    return drawnCharsOf(svg, (x, y) => { const [px, py] = vp.convertToPdfPoint(x, y); return { x: px, y: py } })
   } finally { host.remove() }
 }
 
@@ -550,7 +551,7 @@ async function linksOfPage(p, page, tc) {
     }
   }
   const m = linksPage({
-    page: p, parsed: q => L.parsed.get(q), glyphs, erased: erasedOf(run.rows[p - 1]?.ops, (x, y) => view.convertToViewportPoint(x, y)), records, sources, claims: L.claims,
+    page: p, parsed: q => L.parsed.get(q), counted: q => q <= S.pages, glyphs, erased: erasedOf(run.rows[p - 1]?.ops, (x, y) => view.convertToViewportPoint(x, y)), records, sources, claims: L.claims,
     drawn: rec => textUnder(chars, boxesOf(rec.boxes)), reference: (rec, annots) => (annots.every(a => a.page === annots[0].page) ? referenceOf(annots, ctxOf(annots[0].page)) : null),
   })
   const { where, ...values } = m
@@ -629,7 +630,7 @@ window.gate = {
     // version, whose segments are a glyph's font box, not its ink, and which holds no `held` lines; nor any layout file of
     // a maker before FILE_LAYOUT_MIN, the fixture's own included where the run is given those, --layouts=fixed or v0
     // alone, or a folder of them: then the measures against TeX's file are not taken)
-    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), links: { parsed: new Map(), claims: new Map() }, checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
+    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), links: { parsed: new Map(), claims: new Map() }, pages, checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
     if (parts) {
       // one part a macrotask from the open on, beside the driver's pages (until), then end()

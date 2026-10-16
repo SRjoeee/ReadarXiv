@@ -33,7 +33,8 @@ export interface LinksIn {
   erased(x: number, y: number): boolean
   records?: LinkRec[]
   sources?: (LinkSource | null | undefined)[] | null
-  claims?: Map<string, string>
+  claims?: Map<string, { page: number; label: string; credited: boolean; flagged: boolean }>
+  counted?(q: number): boolean
   drawn(record: LinkRec): string
   reference(record: LinkRec, annots: Annot[]): string | null
 }
