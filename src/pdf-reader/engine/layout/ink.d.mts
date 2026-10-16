@@ -14,6 +14,12 @@ export declare function outlineBox(commonObjs: unknown, font: unknown, fontChar:
 export declare const OPS_CAP: number
 /** the glyphs a page's ink holds at most where its reader asks (`glyphsMax`): past it the page is capped */
 export declare const GLYPHS_PAGE: number
+/** a page's operator list waited for at most, in milliseconds (the layout maker's read of arXiv's PDF, the marked original's) */
+export declare const OPS_MS: number
+/** a promise's value, or null where it does not come within `ms` or fails */
+export declare function within<T>(promise: Promise<T> | T, ms: number): Promise<T | null>
+/** a page's operator list given up on (PDF.js's own cancellation); where the PDF.js has none, a warning once (`seen`) */
+export declare function giveUp(page: unknown, seen: { warned: boolean; who?: string }): void
 /** a point of the marked compile (`/axt-<name> ri`): its name, and the glyphs and boxes the page showed before it */
 export interface InkPoint { name: string; glyph: number; box: number }
 /** a page's glyphs and graphics boxes (images, paths: x0, y0, x1, y1) from its operator list, in stream order, every

@@ -18,7 +18,7 @@ import { textless } from '../rules/arg-roles.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
-import { packGlyphs, pageInk } from './ink.mjs'
+import { giveUp, GLYPHS_PAGE, OPS_MS, packGlyphs, pageInk, within } from './ink.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
@@ -1014,7 +1014,9 @@ const UNIT_MARK = /^\d+[se]$/
  * - then for each page p `{ page }`: { p, view (its four numbers to a hundredth, checked as the marks' views are), tokens
  *   (the marks' tokens of p, stride 6: page, x, y, w, h, word), words (the words first seen on p, appended to the table in
  *   order), owned (the pieces found once p was read: [name, row], each row [name, how] or [name, how, n, glyphs (page, x0,
- *   y, size, its character itself), rules (page, x0, y0, x1, y1)]) }. Each page's view, text and, with `units` and `OPS`,
+ *   y, size, its character itself), rules (page, x0, y0, x1, y1)]), dark (null, or why the page's ink was not read:
+ *   'timedOut', its operator list not given within OPS_MS and given up; 'capped', past OPS_CAP or GLYPHS_PAGE. It has no
+ *   ink then: no piece on it is owned) }. Each page's view, text and, with `units` and `OPS`,
  *   its operator list are read once and the page cleaned up after (page.cleanup); its tokens (tokenizeDocument, which begins
  *   again on every page) are let go once read; its packed ink (packGlyphs, STREAM_COLUMNS) is held only until every piece
  *   that may read it is found (stream.mjs ownedPages);
@@ -1077,6 +1079,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   const follows = units ? followsOf(units, set) : null
   const stream = units && OPS ? ownedPages({ follows, dropped, closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
   let all = 0, found = []
+  const seen = { warned: false, who: 'marked read' }
   const take = (name, e, W) => {
     if (e.how >= OWNED) { found.push([name, [name, e.how]]); return }
     const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); found.push([name, [name, k]]) }
@@ -1111,10 +1114,18 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     views.push(...view)
     const content = await page.getTextContent()
     let ink = null
+    let dark = null
     if (stream) {
       // the columns of its glyphs ownedOf reads (ink.mjs packGlyphs, in stream order), not a Glyph object each, and each
-      // glyph's boxes before it as 32-bit integers: held until every piece that may read the page is found
-      const { glyphs, boxes, points, boxAt } = pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
+      // glyph's boxes before it as 32-bit integers: held until every piece that may read the page is found. Bounded as the
+      // layout maker's read of arXiv's PDF is (the compile is the paper's source, set by a TeX the reader does not hold):
+      // its operator list waited for OPS_MS at most and given up past it, its glyphs GLYPHS_PAGE at most; a page past
+      // either has no ink, so no piece on it is owned (`dark`, that page alone)
+      let ops = null
+      try { ops = await within(page.getOperatorList(), OPS_MS) } catch {}
+      const got = ops ? pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE }) : null
+      if (!ops) { giveUp(page, seen); dark = 'timedOut' } else if (got.capped) dark = 'capped'
+      const { glyphs, boxes, points, boxAt } = dark ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
       ink = { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) }
     }
     // its operator list let go once its ink is read, so that PDF.js holds one page's, not every page's to the end; nothing
@@ -1145,7 +1156,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     if (stream) stream.add(p, ink, take)
     const owned = found
     found = []
-    yield { page: { p, view, tokens, words: fresh, owned } }
+    yield { page: { p, view, tokens, words: fresh, owned, dark } }
   }
   if (stream) stream.end(take)
   const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
@@ -1160,14 +1171,18 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
  *   opening points' order, WORDS_MAX). A point read twice on pages apart makes its piece 'a mark set twice' (ownedOf over the
  *   whole says so), and owns nothing, nor the displays of its group. The characters' table in the rows' order, as before.
  * - `unitMarks`: markedPages' (null where a unit mark's page could not be looked up).
+ * - `dark`: the pages whose ink was not read (markedPages' `dark`): `timedOut`, their operator list given up past OPS_MS;
+ *   `capped`, past OPS_CAP's operations or GLYPHS_PAGE's glyphs. No piece on them is owned; the marks file says nothing of
+ *   them (its keys are exact), the run's stats do.
  * `marked` a PDF.js document of the marked original, `log` its last pass's log; the options are layoutMarksOf's
  */
 export async function readMarked(marked, log, o) {
   let head = null, end = null
-  const views = [], words = [], tokens = [], rows = new Map()
+  const views = [], words = [], tokens = [], rows = new Map(), dark = { timedOut: [], capped: [] }
   for await (const x of markedPages(marked, log, o)) {
     if (x.head) head = x.head
     else if (x.page) {
+      if (x.page.dark) dark[x.page.dark].push(x.page.p)
       views.push(...x.page.view)
       for (const w of x.page.words) words.push(w)
       for (const v of x.page.tokens) tokens.push(v)
@@ -1213,7 +1228,7 @@ export async function readMarked(marked, log, o) {
       owned.push(row)
     }
   }
-  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned }, unitMarks }
+  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned }, unitMarks, dark }
 }
 
 /** a point read twice on pages apart (markedPages' `twice`): its piece 'a mark set twice', owning nothing, nor the displays

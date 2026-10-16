@@ -23,7 +23,7 @@ import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { giveUp, GLYPHS_PAGE, OPS_MS, packGlyphs, pageInk, within } from './ink.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf } from './remove.mjs'
@@ -36,12 +36,8 @@ const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
 
 /** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
 export const CARRY_MIN = 0.9
-/** a page's operator list is waited for at most OPS_MS: past it the page has no ink, and the page's parse is given up
- *  (giveUp). PDF.js parses a page's whole content stream before it answers: 0.9 to 2.8 s for 2608.18626's page 8 (102,052
- *  operations) on a laptop, 2 to 4 times that reckoned on one vCPU; the corpus's 2,793 pages take 36.9 s in all, a paper's
- *  at most a few seconds. A page's alone: no bound of the paper's time makes a page's ink hang on the pages before it (the
- *  page stream's darkness is page-local, E2b) */
-export const OPS_MS = 10_000
+/** a page's operator list waited for at most (ink.mjs OPS_MS, the marked original's read's too) */
+export { OPS_MS }
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
 /** units TeX sets away from where the source has them (anchors.mjs `floating`) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
@@ -115,27 +111,6 @@ export function fontName(name) {
     out += c >= 0x20 && c <= 0x7e ? s[i] : '?'
   }
   return out || '?'
-}
-
-/** a promise's value, or null where it does not come within `ms` or fails */
-function within(promise, ms) {
-  let timer
-  const late = new Promise(resolve => { timer = setTimeout(() => resolve(null), Math.max(0, ms)) })
-  return Promise.race([Promise.resolve(promise).then(v => v, () => null), late]).finally(() => clearTimeout(timer))
-}
-/** a page's operator list given up on: PDF.js's own cancellation (its rendering's, PDFPageProxy._abortOperatorList on
- *  its _intentStates, read on the pinned PDF.js by layout-make.test.ts), so that the worker stops parsing. Where a PDF.js
- *  has none, a warning, once a paper (`seen`), and the maker goes on waiting: the worker parses the page to its end, the
- *  pages after it wait behind it, and each is still given up past OPS_MS */
-function giveUp(page, seen) {
-  if (typeof page?._abortOperatorList !== 'function' || !(page?._intentStates instanceof Map)) {
-    if (!seen.warned) console.warn('layout maker: this PDF.js cancels no operator list; the pages after a slow one wait behind it')
-    seen.warned = true
-    return
-  }
-  try {
-    for (const state of page._intentStates.values()) page._abortOperatorList({ intentState: state, reason: new Error('the layout maker gave up'), force: true })
-  } catch {}
 }
 
 /** a page's view, x0 y0 x1 y1, as the file may hold it, or null */

@@ -8,6 +8,7 @@ import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
+import { GLYPHS_PAGE, OPS_MS } from '@/pdf-reader/engine/layout/ink.mjs'
 import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
@@ -836,22 +837,24 @@ describe('reading the marked original', () => {
   }, 60_000)
   it('layoutMarksOf: past OWNED_ALL a paper\'s pieces are not owned, and past MARKS_CAP its last owned pieces are cut, never the file refused', async () => {
     // 14 pieces, counted in their opening points' order (p0.1a, p0.3a, …: the page stream finds them so, E2a) 12 of 20,000
-    // glyphs and one of 9,999: 249,999 owned; the last, p0.27a, 20,000 more, past OWNED_ALL
-    const n = 14, per = 20_000, past = OWNED_HOW.indexOf('past the glyphs a paper may own')
+    // glyphs and one of 9,999: 249,999 owned; the last, p0.27a, 20,000 more, past OWNED_ALL. Four pieces a page, each page
+    // within GLYPHS_PAGE (a page past it has no ink)
+    const n = 14, per = 20_000, past = OWNED_HOW.indexOf('past the glyphs a paper may own'), on = (q: number) => 1 + Math.floor(q / 4)
     const units = [unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())]
     const run = async (big: boolean) => {
-      const shown: Shown[] = [{ at: '0s' }], dests: [string, number, number, number][] = [['0s', 1, big ? 10_000 : 72, big ? 13_000 : 700]]
+      const shown: Shown[][] = Array.from({ length: on(n - 1) }, () => []), dests: [string, number, number, number][] = [['0s', 1, big ? 10_000 : 72, big ? 13_000 : 700]]
+      shown[0]!.push({ at: '0s' })
       for (let q = 0; q < n; q++) {
         const k = 2 * q + 1, y = big ? 13_000.11 - 300 * q : 700 - 12 * q, count = q === n - 2 ? 9_999 : per
         // at coordinates of five digits on a page of 14,000 pt, each glyph a character of its own kind (an index of five
         // digits into `chars`): some 8.6 MB, past MARKS_CAP; else 4 MB of one character, within it
         const glyphs = Array.from({ length: count }, (_, i) => { if (!big) return 'x'; const c = 10_000 + ((q * per + i) % 55_000); return String.fromCharCode(0x4e00 + (c % 20000)) + String.fromCharCode(0x4e00 + Math.floor(c / 20000)) })
-        shown.push({ at: `p0.${k}a` }, { glyphs, x: big ? 10_000.11 : 72, y, size: big ? 199.99 : 10, step: big ? 1 : 0.01 }, { at: `p0.${k}b` })
-        dests.push([`p0.${k}a`, 1, big ? 10_000 : 72, y], [`p0.${k}b`, 1, big ? 13_000 : 80, y])
+        shown[on(q) - 1]!.push({ at: `p0.${k}a` }, { glyphs, x: big ? 10_000.11 : 72, y, size: big ? 199.99 : 10, step: big ? 1 : 0.01 }, { at: `p0.${k}b` })
+        dests.push([`p0.${k}a`, on(q), big ? 10_000 : 72, y], [`p0.${k}b`, on(q), big ? 13_000 : 80, y])
       }
-      shown.push({ at: '0e' }); dests.push(['0e', 1, big ? 13_000 : 80, big ? 9_000 : 500])
+      shown[on(n - 1) - 1]!.push({ at: '0e' }); dests.push(['0e', on(n - 1), big ? 13_000 : 80, big ? 9_000 : 500])
       const view = big ? [0, 0, 14_000, 14_000] : [0, 0, 612, 792]
-      const doc = streamDocument([{ view, items: [item('see', dests[0]![2], dests[0]![3])], shown }], dests.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
+      const doc = streamDocument(shown.map((sh, i) => ({ view, items: i ? [] : [item('see', dests[0]![2], dests[0]![3])], shown: sh })), dests.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
       const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
       const written = encodeLayoutMarks(m)
       expect(new TextEncoder().encode(written).length).toBeLessThanOrEqual(MARKS_CAP)
@@ -928,6 +931,36 @@ describe('reading the marked original', () => {
     await layoutMarksOf(watched, '', { engine: 'pdflatex' })
     expect(events).toEqual(['cleanup 1', 'cleanup 2', 'cleanup 3'])
   })
+  it('the marked read is bounded a page: a list that never comes is given up past OPS_MS, one past GLYPHS_PAGE capped; the next page read', async () => {
+    const units = [unit('para', [text('see '), ph('$x^2$'), text(' and more')]), unit('para', [text('then '), ph('$y$'), text(' end')])]
+    const first = { view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown: [['see', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['x', 92, 700], ['2', 97, 703.5, 7], { at: 'p0.1b' }, ['and', 106, 700]] as Shown[] }
+    const second = { view: [0, 0, 612, 792], items: [item('then', 72, 700)], shown: [['then', 72, 700], { at: '1s' }, { at: 'p1.1a' }, ['y', 100, 700], { at: 'p1.1b' }, ['end', 110, 700]] as Shown[] }
+    const dests: [string, number, number, number][] = [['axt-0s', 1, 72, 700], ['axt-p0.1a', 1, 87, 700], ['axt-p0.1b', 1, 100.5, 700], ['axt-1s', 2, 72, 700], ['axt-p1.1a', 2, 95, 700], ['axt-p1.1b', 2, 105, 700]]
+    const base = streamDocument([first, second], dests)
+    const want = await readMarked(base, '', { engine: 'pdflatex', units, OPS } as never)
+    expect(want.marks.owned.map(e => e[0])).toEqual(['p0.1a', 'p1.1a'])
+    // page 1's operator list never comes: given up past OPS_MS, page 1 has no ink, page 2's piece still owned
+    vi.useFakeTimers()
+    const stuck = { ...base, getPage: async (n: number) => { const p = await base.getPage(n); return n === 1 ? { ...p, getOperatorList: () => new Promise(() => {}) } : p } }
+    const reading = readMarked(stuck, '', { engine: 'pdflatex', units, OPS } as never)
+    await vi.advanceTimersByTimeAsync(OPS_MS + 10)
+    const late = await reading
+    vi.useRealTimers()
+    // (a row's character by its index into its marks' `chars`, which the rows before it fill)
+    const rowOf = (m: typeof want, name: string) => { const e = m.marks.owned.find(r => r[0] === name); return e && [...e.slice(0, 7), m.marks.chars[e[7] as number], ...e.slice(8)] }
+    expect(late.dark).toEqual({ timedOut: [1], capped: [] })
+    expect(rowOf(late, 'p1.1a')).toEqual(rowOf(want, 'p1.1a'))
+    expect(late.marks.owned.find(e => e[0] === 'p0.1a')).toBeUndefined()
+    // page 1 showing past GLYPHS_PAGE glyphs: capped, its ink none
+    const many = { ...first, shown: [...first.shown, { glyphs: Array.from({ length: GLYPHS_PAGE + 1 }, () => 'z'), x: 72, y: 600, step: 1 }] as Shown[] }
+    const capped = await readMarked(streamDocument([many, second], dests), '', { engine: 'pdflatex', units, OPS } as never)
+    expect(capped.dark).toEqual({ timedOut: [], capped: [1] })
+    expect(capped.marks.owned.find(e => e[0] === 'p0.1a')).toBeUndefined()
+    expect(rowOf(capped, 'p1.1a')).toEqual(rowOf(want, 'p1.1a'))
+    // and nothing of the kind on the pages as they are
+    expect(want.dark).toEqual({ timedOut: [], capped: [] })
+  }, 60_000)
+
   it('layoutMarksOf owns no ink off its page: the piece is written as not owned, and the file parses', async () => {
     const units = [unit('para', [text('see '), ph('$x$'), text(' and '), ph('$y$'), text(' end')])]
     const shown: Shown[] = [['see', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['x', 5000, 700], { at: 'p0.1b' }, ['and', 106, 700], { at: 'p0.3a' }, ['y', 130, 700, 300], { at: 'p0.3b' }, ['end', 140, 700], { at: '0e' }]
@@ -1215,17 +1248,18 @@ describe('markedPages: the marked original a page at a time (the page stream, E2
   })
 
   it('the paper-wide bounds (OWNED_ALL, WORDS_MAX) are the lab file\'s alone: the server\'s marks are bounded per piece', async () => {
-    // 14 pieces of 20,000 glyphs but one: past OWNED_ALL in all, each within GLYPHS_PIECE
-    const n = 14, per = 20_000
+    // 14 pieces of 20,000 glyphs but one: past OWNED_ALL in all, each within GLYPHS_PIECE; four a page, within GLYPHS_PAGE
+    const n = 14, per = 20_000, on = (q: number) => 1 + Math.floor(q / 4)
     const many = [unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())]
-    const shown: Shown[] = [{ at: '0s' }], ds: [string, number, number, number][] = [['0s', 1, 72, 700]]
+    const shown: Shown[][] = Array.from({ length: on(n - 1) }, () => []), ds: [string, number, number, number][] = [['0s', 1, 72, 700]]
+    shown[0]!.push({ at: '0s' })
     for (let q = 0; q < n; q++) {
       const k = 2 * q + 1, y = 700 - 12 * q
-      shown.push({ at: `p0.${k}a` }, { glyphs: Array.from({ length: q === n - 2 ? 9_999 : per }, () => 'x'), x: 72, y, size: 10, step: 0.01 }, { at: `p0.${k}b` })
-      ds.push([`p0.${k}a`, 1, 72, y], [`p0.${k}b`, 1, 80, y])
+      shown[on(q) - 1]!.push({ at: `p0.${k}a` }, { glyphs: Array.from({ length: q === n - 2 ? 9_999 : per }, () => 'x'), x: 72, y, size: 10, step: 0.01 }, { at: `p0.${k}b` })
+      ds.push([`p0.${k}a`, on(q), 72, y], [`p0.${k}b`, on(q), 80, y])
     }
-    shown.push({ at: '0e' }); ds.push(['0e', 1, 80, 500])
-    const doc = () => streamDocument([{ view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown }], ds.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
+    shown[on(n - 1) - 1]!.push({ at: '0e' }); ds.push(['0e', on(n - 1), 80, 500])
+    const doc = () => streamDocument(shown.map((sh, i) => ({ view: [0, 0, 612, 792], items: i ? [] : [item('see', 72, 700)], shown: sh })), ds.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
     const server = await readMarked(doc(), '', { engine: 'pdflatex', units: many, OPS })
     expect(server.marks.owned.every(e => e.length > 2)).toBe(true)
     const file = parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(doc(), '', { engine: 'pdflatex', units: many, OPS }))))

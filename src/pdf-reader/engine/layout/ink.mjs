@@ -16,6 +16,33 @@
 /** the operations read on a page at most: a heavy vector page (a plot of every point of a dataset) holds hundreds of
  *  thousands, and the text that is laid over lies before or among the first of them */
 export const OPS_CAP = 150_000
+/** a page's operator list is waited for at most OPS_MS (the layout maker's read of arXiv's PDF and the marked original's read):
+ *  past it the page has no ink, and the page's parse is given up (giveUp). PDF.js parses a page's whole content stream before
+ *  it answers: 0.9 to 2.8 s for 2608.18626's page 8 (102,052 operations) on a laptop, 2 to 4 times that reckoned on one vCPU;
+ *  the corpus's 2,793 pages take 36.9 s in all, a paper's at most a few seconds. A page's alone: no bound of the paper's time
+ *  makes a page's ink hang on the pages before it (the page stream's darkness is page-local, E2b) */
+export const OPS_MS = 10_000
+/** a promise's value, or null where it does not come within `ms` or fails */
+export function within(promise, ms) {
+  let timer
+  const late = new Promise(resolve => { timer = setTimeout(() => resolve(null), Math.max(0, ms)) })
+  return Promise.race([Promise.resolve(promise).then(v => v, () => null), late]).finally(() => clearTimeout(timer))
+}
+/** a page's operator list given up on: PDF.js's own cancellation (its rendering's, PDFPageProxy._abortOperatorList on
+ *  its _intentStates, read on the pinned PDF.js by layout-make.test.ts), so that the worker stops parsing. Where a PDF.js
+ *  has none, a warning, once a paper (`seen`), and the maker goes on waiting: the worker parses the page to its end, the
+ *  pages after it wait behind it, and each is still given up past OPS_MS */
+export function giveUp(page, seen) {
+  if (typeof page?._abortOperatorList !== 'function' || !(page?._intentStates instanceof Map)) {
+    if (!seen.warned) console.warn(`${seen.who ?? 'layout maker'}: this PDF.js cancels no operator list; the pages after a slow one wait behind it`)
+    seen.warned = true
+    return
+  }
+  try {
+    for (const state of page._intentStates.values()) page._abortOperatorList({ intentState: state, reason: new Error(`the ${seen.who ?? 'layout maker'} gave up`), force: true })
+  } catch {}
+}
+
 /** the glyphs a page's ink holds at most, where its reader asks (`glyphsMax`): one text-showing operation may show any
  *  number of glyphs, so OPS_CAP alone does not bound a page's ink. A page past it is capped as one past OPS_CAP is: no ink,
  *  that page alone. The densest page of the corpus's arXiv PDFs holds a few thousand */
