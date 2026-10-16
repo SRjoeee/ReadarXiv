@@ -299,6 +299,14 @@ describe('a page that is hostile', () => {
     expect(JSON.stringify(f.records).length).toBeLessThan(1_000_000)
     expect(ms).toBeLessThan(3000)
   })
+  it('finds a link\'s glyphs set far apart in a bounded time: the occupied cells, never the empty ones between them', () => {
+    // (text at both ends of the grid's clamp and one glyph between, a rectangle over all of them)
+    const pts = pointsOf([item('a', -1e9, -1e9, 8), item('b', 1e9, 1e9, 8), item('c', 300, 400, 8)])
+    const start = performance.now()
+    const { list } = annotsOf([raw({ rect: [-2e9, -2e9, 2e9, 2e9] }), raw({ rect: [290, 390, 320, 420] })], pts)
+    expect(performance.now() - start).toBeLessThan(1000)
+    expect(list.map(a => (a.unsupported ? null : a.g.ch.join('')))).toEqual(['abc', 'c'])
+  })
   it('does not carry a link with more than MAX_GLYPHS glyph points, whole-page rectangles included', () => {
     const pts = pointsOf(Array.from({ length: 5000 }, (_, k) => item('abc', (k % 50) * 10, 700 - Math.floor(k / 50) * 3, 30)))
     const { list, total, unsupported } = annotsOf([raw({ rect: [0, 0, 600, 800] }), raw({ rect: [0, 690, 30, 710] })], pts)

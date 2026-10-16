@@ -415,6 +415,14 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
     expect(pairs).toEqual([{ src: '\\href{https://example.org/a?b=1}{our website}', text: 'notre site', k: null }])
     expect(referenceOf([all[0]!], { ...base, pairsOf: () => pairs })).toBe('notre site')
   })
+  it('counts a link\'s pairs alone: a unit with a formatting group and no link pair has no link text of its own', () => {
+    const pieces = [{ t: 'open', id: 1, src: '\\emph{' }, { t: 'text', s: 'important' }, { t: 'close', id: 1 }]
+    expect(pairsOf(pieces)).toEqual([])
+    expect(referenceOf([all[2]!], { ...base, pairsOf: () => pairsOf(pieces) })).toBe('21')
+    // (a group inside a pair adds its text to the pair's)
+    const inside = [{ t: 'open', id: 1, src: '\\href{https://example.org/a?b=1}{' }, { t: 'open', id: 2, src: '\\emph{' }, { t: 'text', s: 'notre' }, { t: 'close', id: 2 }, { t: 'text', s: ' site' }, { t: 'close', id: 1 }]
+    expect(pairsOf(inside).map(p => p.text)).toEqual(['notre site'])
+  })
   it('is the owner\'s i-th \\hyperref or \\hyperlink pair, where the pairs are as many as its internal links', () => {
     const pairs = pairsOf([
       { t: 'open', id: 1, src: '\\hyperref[a]{Section 3}' }, { t: 'text', s: 'section 3 (fr)' }, { t: 'close', id: 1 },

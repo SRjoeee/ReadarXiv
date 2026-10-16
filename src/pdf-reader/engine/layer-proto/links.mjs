@@ -108,21 +108,31 @@ function gridOf(p) {
   }
   return { cells, x0, x1, y0, y1, p }
 }
-/** the indices (ascending) of the grid's points strictly inside one of the boxes, or null where there are more than `limit` */
+/** the indices (ascending) of the grid's points strictly inside one of the boxes, or null where there are more than `limit`. A
+ *  box over more cells than the grid holds reads the occupied cells instead of its own: a box spanning a hostile page's text set
+ *  far apart costs the points, never the empty cells between them */
 function hitsIn(grid, boxes, limit) {
   const seen = new Set()
   const { p } = grid
+  const take = (list, b) => {
+    for (const k of list) {
+      if (!inside(p.x[k], p.y[k], b)) continue
+      seen.add(k)
+      if (seen.size > limit) return false
+    }
+    return true
+  }
   for (const b of boxes) {
     const xa = Math.max(cellOf(b[0]), grid.x0), xb = Math.min(cellOf(b[2]), grid.x1), ya = Math.max(cellOf(b[1]), grid.y0), yb = Math.min(cellOf(b[3]), grid.y1)
-    for (let cx = xa; cx <= xb; cx++) {
-      for (let cy = ya; cy <= yb; cy++) {
-        for (const k of grid.cells.get(keyOf(cx, cy)) ?? []) {
-          if (!inside(p.x[k], p.y[k], b)) continue
-          seen.add(k)
-          if (seen.size > limit) return null
-        }
+    if (xa > xb || ya > yb) continue
+    if ((xb - xa + 1) * (yb - ya + 1) > grid.cells.size) {
+      for (const [key, list] of grid.cells) {
+        const cx = Math.floor(key / 4194304) - CLAMP, cy = (key % 4194304) - CLAMP
+        if (cx >= xa && cx <= xb && cy >= ya && cy <= yb && !take(list, b)) return null
       }
+      continue
     }
+    for (let cx = xa; cx <= xb; cx++) for (let cy = ya; cy <= yb; cy++) if (!take(grid.cells.get(keyOf(cx, cy)) ?? [], b)) return null
   }
   return [...seen].sort((a, b) => a - b)
 }
@@ -594,9 +604,14 @@ function placeCrop(to, annots, lines, scale, records, tried) {
     const sx = it.w / (cr[2] - cr[0])
     const X = x => it.x + (x - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * scale
     const drawn = [it.x, Y(cr[1]), it.x + it.w, Y(cr[3])]
-    const ar = c.a.rect
-    const box = [Math.max(drawn[0], X(ar[0])), Math.max(drawn[1], Y(ar[1])), Math.min(drawn[2], X(ar[2])), Math.min(drawn[3], Y(ar[3]))]
-    if (!sound4(box) || !box.every(Number.isFinite)) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
+    // (each of the annotation's boxes (its quads', else its rectangle) by the crop's map, cut to the drawn box: a link over two
+    // lines of a crop is two boxes, never the rectangle round both)
+    const box = []
+    for (const ar of c.a.boxes?.length ? c.a.boxes : [c.a.rect]) {
+      const b = [Math.max(drawn[0], X(ar[0])), Math.max(drawn[1], Y(ar[1])), Math.min(drawn[2], X(ar[2])), Math.min(drawn[3], Y(ar[3]))]
+      if (sound4(b) && b.every(Number.isFinite)) box.push(...b)
+    }
+    if (!box.length) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
     // (named by what the crop shows under it: the original's text there, PDF.js's overlaid text; the crop's copy text names the
     // whole crop, which two links over one crop would share, and may not be what it shows)
     const name = collapse(c.a.ov || (annots.length === 1 ? r.text : '') || c.a.g2.ch.join(''))

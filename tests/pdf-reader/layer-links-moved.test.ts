@@ -149,6 +149,10 @@ describe('LK3: a link over a crop', () => {
     // (one past the crop's box is cut to it)
     const wide = ann(1, { url: 'https://x.org/a' }, 'x', ['1|1'], [190, 490, 270, 520])
     expect(placeUnit({ groups: [{ to: target(2, { draw: 'crop' }), annots: [{ ...cand(wide, 3), tier: 'url' }] }], ...(where as object) } as never).records[0]!.rec.boxes).toEqual([150, 396, 198, 408])
+    // (an annotation over two lines of the crop, its quads two boxes: each mapped, never the rectangle round both)
+    const quads = { ...ann(2, { url: 'https://x.org/a' }, 'x', ['1|2'], [200, 495, 260, 510]), boxes: [[230, 503, 260, 509], [200, 496, 220, 502]] }
+    const two = placeUnit({ groups: [{ to: target(2, { draw: 'crop' }), annots: [{ ...cand(quads, 3), tier: 'url' }] }], ...(where as object) } as never).records[0]!.rec.boxes
+    expect(two.map(v => Math.round(v * 100) / 100)).toEqual([174, 402.4, 198, 407.2, 150, 396.8, 166, 401.6])
     // (an annotation of another page than the crop's source is placed nowhere)
     expect(placeUnit({ groups: [{ to: target(2, { draw: 'crop' }), annots: [{ ...cand(a, 2), tier: 'url' }] }], ...(where as object) } as never).tried).toEqual([{ q: 2, i: 0, why: 'unplaced' }])
   })

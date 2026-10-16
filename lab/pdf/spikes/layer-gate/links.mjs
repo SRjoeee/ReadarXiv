@@ -211,8 +211,10 @@ const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b
 
 // ---------------------------------------------------------------- the reference of linksTrue
 
+/** the opens of a link's pairs, as the engine reads them (layer2.mjs LINK_OPEN) */
+const LINK_PAIR = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
 /**
- * A unit's translated pairs (\href, \hyperref, \hyperlink and the others), from its pieces ({ t: 'text', s } | { t: 'open', id,
+ * A unit's translated pairs (\href, \hyperref, \hyperlink; no other group), from its pieces ({ t: 'text', s } | { t: 'open', id,
  * src } | { t: 'close', id } | other): { src, text, k }, the plain text of the pieces between the pair (a placeholder inside it
  * adds none), and `k` the open's index in the unit's SOURCE (`kOf`: each piece's, the units file's: measure.mjs kOfPiecesOf),
  * null where unknown. In the SOURCE's order where every pair's is known, else the translation's: a translation may set two
@@ -221,7 +223,8 @@ const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b
 export function pairsOf(pieces, kOf = null) {
   const out = [], open = new Map()
   for (const [i, p] of (pieces ?? []).entries()) {
-    if (p.t === 'open') { const k = kOf?.[i]; const e = { src: String(p.src ?? ''), text: '', k: Number.isInteger(k) && k >= 0 ? k : null }; open.set(p.id, e); out.push(e) }
+    // (a link's opens alone: a formatting group, \emph{...}, is no pair, and a unit with one has no link text of its own)
+    if (p.t === 'open' && LINK_PAIR.test(String(p.src ?? ''))) { const k = kOf?.[i]; const e = { src: String(p.src ?? ''), text: '', k: Number.isInteger(k) && k >= 0 ? k : null }; open.set(p.id, e); out.push(e) }
     else if (p.t === 'close') open.delete(p.id)
     else if (p.t === 'text') for (const e of open.values()) e.text += p.s
   }
