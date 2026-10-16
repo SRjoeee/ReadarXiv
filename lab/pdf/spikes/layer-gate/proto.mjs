@@ -535,19 +535,23 @@ async function linksOfPage(p, page, tc) {
   const glyphs = glyphPointsOf(tc.items)
   const moved = records.some(r => r.moved)
   const chars = moved ? await drawnPointsOf(p, page) : []
-  // (TeX's file, for the reference of a translated link: a placeholder's segment, the unit whose line the point is on, and the
-  // unit's translated pairs)
-  const fp = S.file?.get(p)
+  // (the reference of a translated link reads TeX's file and the glyph points of the page its annotation is on: a placeholder's
+  // segment, the unit whose line the point is on, the unit's translated pairs. The pages the records' sources are on, read here)
+  const glyphsOf = new Map([[p, glyphs]])
+  if (moved) for (const src of sources ?? []) for (const [q] of src?.annots ?? []) if (!glyphsOf.has(q)) glyphsOf.set(q, glyphPointsOf((await (await doc.getPage(q)).getTextContent()).items))
   const within = (x, y, b) => x >= Math.min(b[0], b[2]) && x <= Math.max(b[0], b[2]) && y >= Math.min(b[1], b[3]) && y <= Math.max(b[1], b[3])
-  const ctx = {
-    all: own.links.filter(a => a.ok), points: a => glyphsOfLink(a, glyphs),
-    segment: (x, y) => !!fp && [...fp.units.values()].some(u => u.phs.some(ph => ph.segs.some(b => within(x, y, b)))),
-    owner: (x, y) => { if (fp) for (const [id, u] of fp.units) if (u.lines.some(l => within(x, y, l.box))) return id; return null },
-    pairsOf: id => pairsOf(S.byId.get(id)?.unit?.pieces),
+  const ctxOf = q => {
+    const fp = S.file?.get(q), all = L.parsed.get(q).links.filter(a => a.ok)
+    return {
+      all, points: a => glyphsOfLink(a, glyphsOf.get(q) ?? []),
+      segment: (x, y) => !!fp && [...fp.units.values()].some(u => u.phs.some(ph => ph.segs.some(b => within(x, y, b)))),
+      owner: (x, y) => { if (fp) for (const [id, u] of fp.units) if (u.lines.some(l => within(x, y, l.box))) return id; return null },
+      pairsOf: id => pairsOf(S.byId.get(id)?.unit?.pieces),
+    }
   }
   const m = linksPage({
     page: p, parsed: q => L.parsed.get(q), glyphs, erased: erasedOf(run.rows[p - 1]?.ops, (x, y) => view.convertToViewportPoint(x, y)), records, sources, claims: L.claims,
-    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), reference: (rec, annots) => referenceOf(annots, ctx),
+    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), reference: (rec, annots) => (annots.every(a => a.page === annots[0].page) ? referenceOf(annots, ctxOf(annots[0].page)) : null),
   })
   const { where, ...values } = m
   return { values, where: Object.fromEntries(Object.entries(where).filter(([, ids]) => ids.length)) }

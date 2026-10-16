@@ -179,7 +179,11 @@ describe('kept', () => {
     const annots1 = annotationsOf([raw({ rect: [100, 698, 130, 712], dest: 'cite.a' })])
     const annots2 = annotationsOf([])
     const m = linksPage({ page: 2, parsed: q => (q === 1 ? annots1 : annots2), glyphs: [], erased: noErase, records: [moved('cite.a', [100, 700, 130, 712])], sources: [{ annots: [[1, 0]] }], claims: new Map(), drawn: () => '12', reference: () => '12' })
-    expect(m).toMatchObject({ linksTotal: 0, linksKeptN: 1, linksWrong: 0 })
+    expect(m).toMatchObject({ linksTotal: 0, linksKeptN: 1, linksWrong: 0, linksTrueN: 1 })
+    // (its reference is asked for the annotation of its own page: the annotation says which)
+    const asked: (number | undefined)[] = []
+    linksPage({ page: 2, parsed: q => (q === 1 ? annots1 : annots2), glyphs: [], erased: noErase, records: [moved('cite.a', [100, 700, 130, 712])], sources: [{ annots: [[1, 0]] }], claims: new Map(), drawn: () => '12', reference: (_, a) => { asked.push((a[0] as Annot & { page?: number }).page); return '12' } })
+    expect(asked).toEqual([1])
   })
   it('keeps nothing a wrong record carries', () => {
     expect(run({ records: [moved('cite.b', [150, 698, 170, 712])], sources: [a0], reference: () => '12', drawn: () => '12' })).toMatchObject({ linksKeptN: 0, linksWrong: 1 })
@@ -258,6 +262,10 @@ describe('true: the drawn text under a moved link against the reference', () => 
     expect(wrong.where.linksTrue).toEqual(['0'])
     expect(run({ records: [rec], sources: [a0], drawn: () => '12', reference: () => null })).toMatchObject({ linksTrueN: 0, where: { linksTrue: ['0'] } })
   })
+  it('does not count a moved record with no drawn character under it, whatever the reference: two empty texts are no match', () => {
+    expect(run({ records: [rec], sources: [a0], drawn: () => '', reference: () => '' }).linksTrueN).toBe(0)
+    expect(run({ records: [rec], sources: [a0], drawn: () => ' ', reference: () => '' }).where.linksTrue).toEqual(['0'])
+  })
   it('asks nothing of an in-place record', () => {
     const m = run({ records: [inPlace({ boxes: [100, 698, 130, 712] })], sources: [a0], drawn: () => { throw new Error('asked') }, reference: () => { throw new Error('asked') } })
     expect(m.linksTrueN).toBe(0)
@@ -328,6 +336,8 @@ describe('the composed document against arXiv\'s', () => {
     for (const change of [{ rect: [100, 700, 131, 710] }, { dest: 'cite.q' }, { dest: undefined, url: 'https://a.org' }, { borderStyle: { width: 2, style: 1 } }, { color: [255, 0, 0] }, { overlaidText: '13' }, { quadPoints: Float32Array.from([0, 1, 2, 1, 0, 0, 2, 0]) }]) {
       expect(composedDiff([page(), page()], [page(), [raw(change), page()[1]]])).toEqual([2])
     }
+    // a border style alone (solid to dashed)
+    expect(composedDiff([page()], [[raw({ borderStyle: { width: 1, style: 2 } }), page()[1]]])).toEqual([1])
     // an annotation less on a page; a page missing from the composed document
     expect(composedDiff([page()], [page().slice(1)])).toEqual([1])
     expect(composedDiff([page(), page()], [page()])).toEqual([2])

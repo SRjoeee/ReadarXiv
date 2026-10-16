@@ -303,9 +303,11 @@ export function linksPage(o) {
     if (why.length) { out.linksWrong++; out.where.linksWrong.push(`${rec.order ?? r}:${why.join('+')}`) }
     else out.linksKeptN += new Set(good.map(({ q, a }) => `${q}|${a.i}`)).size
     if (rec.moved) {
-      // (the reference reads this page's glyphs and TeX's file of this page: an annotation of another page has none, and is not true)
-      const ref = good.length && good.length === claimed.length && good.every(({ q }) => q === o.page) ? o.reference(rec, good.map(({ a }) => a)) : null
-      if (ref !== null && sameText(o.drawn(rec), ref)) out.linksTrueN++
+      // (an annotation of another page, where a unit lies over a page break: its annotation carries `page`, and the caller reads that page's glyphs and TeX's file)
+      const ref = good.length && good.length === claimed.length ? o.reference(rec, good.map(({ q, a }) => ({ ...a, page: q }))) : null
+      // (a record with no drawn character under it is unverifiable, not true: two empty texts are not a match)
+      const drawn = ref === null ? '' : o.drawn(rec)
+      if (ref !== null && /\S/u.test(drawn) && sameText(drawn, ref)) out.linksTrueN++
       else out.where.linksTrue.push(String(rec.order ?? r))
     }
   }
@@ -314,12 +316,12 @@ export function linksPage(o) {
 
 // ---------------------------------------------------------------- the composed document against arXiv's
 
-/** a page's Link annotations as the composed-document check compares them: rect, dest, url, border width, colour,
+/** a page's Link annotations as the composed-document check compares them: rect, dest, url, border width and style, colour,
  *  overlaid text and quads, every Link annotation (those the reader cannot carry too) */
 export function linkSetOf(raw) {
   return (raw ?? []).filter(a => a?.subtype === 'Link').map(a => ({
     rect: a.rect ? Array.from(a.rect) : null, dest: a.dest ?? null, url: a.url ?? null, unsafeUrl: a.unsafeUrl ?? null, action: a.action ?? null,
-    bw: a.borderStyle?.width ?? null, color: a.color ? Array.from(a.color) : null, ov: a.overlaidText ?? null, quads: a.quadPoints ? Array.from(a.quadPoints) : null,
+    bw: a.borderStyle?.width ?? null, bs: a.borderStyle?.style ?? null, color: a.color ? Array.from(a.color) : null, ov: a.overlaidText ?? null, quads: a.quadPoints ? Array.from(a.quadPoints) : null,
   }))
 }
 /** the pages (1-based) on which the composed document's Link annotations differ from arXiv's: `a` and `b` the raw annotation

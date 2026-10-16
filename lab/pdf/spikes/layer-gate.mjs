@@ -659,7 +659,7 @@ async function doorFixture(page, name, errors) {
   DOOR_FILES.set(`/door/${name}/bundle.json`, made.bytes)
   DOOR_FILES.set(`/door/${name}/rows.json`, JSON.stringify(made.rows))
   // (the composed document's links against arXiv's, all the paper's pages, in Node: linksComposed, gated at 0)
-  const links = await composedLinks(made.composed.arxiv, Buffer.concat([made.composed.arxiv, made.composed.tail]), made.composed.pages)
+  const links = await composedLinks(made.composed.arxiv, [Buffer.concat([made.composed.arxiv, made.composed.tail])], made.composed.pages)
   const o = { name, target, rules: '/rules/layout-rules.json', pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), part: DOOR }
   const open = async () => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&door=1`); await page.waitForFunction(() => window.gateReady === true) }
   await open()
@@ -885,7 +885,7 @@ async function doorPartsFixture(page, name, errors) {
   serve(`${at}/cut.json`, JSON.stringify({ units: cut.units.map((u, i) => ({ path: `${at}/u${i}.json`, ref: u.ref })), head: { path: `${at}/head.json`, ref: cut.head.ref }, parts: cut.parts.map((p, i) => ({ path: `${at}/p${i}.json`, ref: p.ref })), docs, composed }))
   serve(`${at}/rows.json`, JSON.stringify(made.rows))
   // (the composed document through every tail against arXiv's, in Node: linksComposed, gated at 0; no tail, nothing to compare)
-  const links = tails.length ? await composedLinks(arxiv, Buffer.concat([Buffer.from(arxiv), ...tails]), read3.paper.pages) : { pages: read3.paper.pages, differing: [] }
+  const links = tails.length ? await composedLinks(arxiv, tails.map((_, i) => Buffer.concat([Buffer.from(arxiv), ...tails.slice(0, i + 1)])), read3.paper.pages) : { pages: read3.paper.pages, documents: 0, differing: [] }
   const o = { name, target, rules: '/rules/layout-rules.json', pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF) }
   const open = async () => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&doorparts=1`); await page.waitForFunction(() => window.gateReady === true) }
   try {
@@ -1093,20 +1093,26 @@ const inflateTolerant = (b, limit = Infinity) => {
 const openNode = async data => (await import('pdfjs-dist/legacy/build/pdf.mjs')).getDocument({ data: data.slice(), verbosity: 0, cMapUrl: `${PDFJS}/cmaps/`, cMapPacked: true, standardFontDataUrl: `${PDFJS}/standard_fonts/`, useSystemFonts: false }).promise
 
 /**
- * linksComposed (3a-0): the pages 1 to N of the composed document (arXiv's PDF followed by the add-on's tail or tails, as the
- * reader composes it) whose Link annotations differ from arXiv's, in rectangle, destination, url, border width, colour, overlaid
+
+ * linksComposed (3a-0): the pages 1 to N of the composed documents (arXiv's PDF followed by the add-on's tail or tails, as the
+ * reader composes it: with chained parts, through each tail in turn) whose Link annotations differ from arXiv's, in rectangle, destination, url, border width, colour, overlaid
  * text or quads (links.mjs composedDiff). In Node, PDF.js's legacy build of the version the browser's is, no page drawn.
  * Gated at 0 from 3a-0: the add-on appends pages and rewrites none of arXiv's, and the reader's links are the left document's
  */
-async function composedLinks(arxiv, composed, N) {
-  // (PDF.js's Node build takes a Uint8Array, never a Buffer)
-  const [a, b] = [await openNode(new Uint8Array(arxiv)), await openNode(new Uint8Array(composed))]
+async function composedLinks(arxiv, composeds, N) {
+  const a = await openNode(new Uint8Array(arxiv))
   try {
     const read = async doc => { const out = []; for (let p = 1; p <= N; p++) out.push(await (await doc.getPage(p)).getAnnotations()); return out }
-    return { pages: N, differing: composedDiff(await read(a), await read(b)) }
-  } finally { await Promise.all([a.loadingTask.destroy(), b.loadingTask.destroy()]) }
+    const base = await read(a), differing = new Set()
+    // (every document a reader is given: with chained parts, arXiv's PDF through each tail in turn, not only through the last)
+    for (const bytes of composeds) {
+      const b = await openNode(new Uint8Array(bytes))
+      try { for (const p of composedDiff(base, await read(b))) differing.add(p) } finally { await b.loadingTask.destroy() }
+    }
+    return { pages: N, documents: composeds.length, differing: [...differing].sort((x, y) => x - y) }
+  } finally { await a.loadingTask.destroy() }
 }
-const composedLine = c => `linksComposed ${c.differing.length} of ${c.pages} pages differ from arXiv's${c.differing.length ? ` (${c.differing.slice(0, 5).join(' ')}${c.differing.length > 5 ? ' ...' : ''})` : ''}`
+const composedLine = c => `linksComposed ${c.differing.length} of ${c.pages} pages differ from arXiv's${c.documents > 1 ? ` (${c.documents} documents)` : ''}${c.differing.length ? ` (${c.differing.slice(0, 5).join(' ')}${c.differing.length > 5 ? ' ...' : ''})` : ''}`
 
 async function makeAddonOf(key, bytes, layoutFile) {
   const dir = join(ROOT, 'out/layer-gate/removal', key)
