@@ -30,23 +30,42 @@ function lowerBound(xs, v) {
  *   items let go), and `columns` the pages' columns' rule (highlight.mjs pageColumns, today's), both layoutOf's
  */
 export function leftSideOf({ doc, views, anchors, edges = null, columns = undefined }) {
-  const N = views.length, n = doc.length
-  const pages = views.map(v => v.map(onGrid))
-
-  // the units located, by id rising: tokens rising and unique, the first the stream, the rectangles on the grid
-  const placed = []
-  for (const [id, a] of [...anchors].sort((x, y) => x[0] - y[0])) {
-    const tokens = a ? [...new Set(a.tokens)].sort((x, y) => x - y) : []
-    const rects = a ? a.rects.map(r => [r.page, onGrid(r.x0), onGrid(r.y0), onGrid(r.x1), onGrid(r.y1)]) : []
-    if (!tokens.length || !rects.length || !rects.every(r => r.every(Number.isFinite))) continue
-    placed.push({ id, a, tokens: Int32Array.from(tokens), rects })
-  }
-  const units = placed.map(u => [u.id, u.tokens[0], u.rects])
-
   // the layout of what is shipped, as the reader makes it of the units it is given (the web's anchorsOf): their rectangles on the
   // grid and tokens
-  const shipped = new Map(placed.map(u => [u.id, { rects: u.rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 })), tokens: u.tokens }]))
-  const { tok } = layoutOf(doc, pages, shipped, undefined, { edges, ...(columns ? { columns } : {}) })
+  const pages = views.map(v => v.map(onGrid))
+  const side = sideOf(doc, pages, shipped => layoutOf(doc, pages, shipped, undefined, { edges, ...(columns ? { columns } : {}) }).tok, [...anchors].sort((x, y) => x[0] - y[0]))
+  return { pages, units: side.units(), leftPages: side.leftPages, stats: side.stats }
+}
+
+/**
+ * leftSideOf a unit at a time (the page stream, stage 2): each unit given as its anchor is final (`add(id, anchor)`, in any
+ * order; `none(id)` for one with none), and a page's left part input (`leftPages(page)`) once every unit with a token on it is
+ * given, that page's as leftSideOf's of the whole: the tokens' layout is made before any unit is given, so `columns` (the pages'
+ * columns' rule, a whole run's: the far push reads every located unit under today's) must be given. `units()` the units given
+ * that are located, ids rising; `done()` how many units were given, located or not
+ */
+export function leftSideStream({ doc, views, edges = null, columns }) {
+  if (typeof columns !== 'function') throw new TypeError('columns: the pages\' columns\' rule, given: the tokens\' layout is made before any unit is')
+  const pages = views.map(v => v.map(onGrid))
+  const side = sideOf(doc, pages, () => layoutOf(doc, pages, new Map(), undefined, { edges, columns }).tok, [])
+  return { pages, add: side.add, none: side.none, units: side.units, leftPages: side.leftPages, stats: side.stats, done: side.done }
+}
+
+/** the side of `doc` on the grid `pages`, its tokens' layout `tokOf(shipped)` (of the units `first` give, the rest added after) */
+function sideOf(doc, pages, tokOf, first) {
+  const N = pages.length, n = doc.length
+  // the units located, by id: tokens rising and unique, the first the stream, the rectangles on the grid
+  const placed = new Map()
+  const located = (id, a) => {
+    const tokens = a ? [...new Set(a.tokens)].sort((x, y) => x - y) : []
+    const rects = a ? a.rects.map(r => [r.page, onGrid(r.x0), onGrid(r.y0), onGrid(r.x1), onGrid(r.y1)]) : []
+    if (!tokens.length || !rects.length || !rects.every(r => r.every(Number.isFinite))) return null
+    return { id, a, tokens: Int32Array.from(tokens), rects }
+  }
+  const given = []
+  for (const [id, a] of first) { const u = located(id, a); if (u) given.push(u) }
+  const shipped = new Map(given.map(u => [u.id, { rects: u.rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 })), tokens: u.tokens }]))
+  const tok = tokOf(shipped)
 
   // each page's first token: tokens are in page order, a page with none begins where the next does
   const start = new Int32Array(N + 2).fill(n)
@@ -57,25 +76,29 @@ export function leftSideOf({ doc, views, anchors, edges = null, columns = undefi
   }
   for (let p = N; p >= 1; p--) if (start[p] > start[p + 1]) start[p] = start[p + 1]
 
-  // the units on each page, ids rising, and each unit's start runs
+  // the units on each page (ids; rising when a page is asked for), each unit's start runs
   const on = Array.from({ length: N + 1 }, () => [])
-  const runsOf = new Map()
-  const stats = { units: placed.length, tokens: n, paired: 0, runs: 0, gated: 0, filtered: 0 }
-  placed.forEach((u, i) => {
-    for (let k = 0, p = 1; k < u.tokens.length; k++) {
+  const stats = { units: 0, tokens: n, paired: 0, runs: 0, gated: 0, filtered: 0 }
+  // (the pages a unit was added to since they were last asked for: their units sorted again)
+  const unsorted = new Set()
+  let done = 0
+  const take = u => {
+    placed.set(u.id, u)
+    stats.units++
+    for (let k = 0, p = 1, last = 0; k < u.tokens.length; k++) {
       while (p < N && start[p + 1] <= u.tokens[k]) p++
-      if (on[p].at(-1) !== i) on[p].push(i)
+      if (last !== p) { on[p].push(u.id); unsorted.add(p); last = p }
     }
-    const runs = startRuns(u.a)
-    if (runs) {
-      runsOf.set(i, runs)
+    u.runs = startRuns(u.a)
+    if (u.runs) {
       stats.paired++
-      stats.runs += runs.length / 3
+      stats.runs += u.runs.length / 3
       let kept = 0
-      for (let j = 2; j < runs.length; j += 3) kept += runs[j]
+      for (let j = 2; j < u.runs.length; j += 3) kept += u.runs[j]
       stats.filtered += u.a.pairs.size - kept
     } else if (u.a.pairs) stats.gated++
-  })
+  }
+  for (const u of given) { take(u); done++ }
 
   const leftPages = page => {
     if (!Number.isInteger(page) || page < 1 || page > N) throw new RangeError(`not a page 1 to ${N}`)
@@ -92,16 +115,17 @@ export function leftSideOf({ doc, views, anchors, edges = null, columns = undefi
       }
       tokens[f] = out
     }
+    if (unsorted.delete(page)) on[page].sort((x, y) => x - y)
     const spans = [], pairs = []
-    for (const i of on[page]) {
-      const u = placed[i], ranges = []
+    for (const id of on[page]) {
+      const u = placed.get(id), ranges = []
       for (let j = lowerBound(u.tokens, first); j < u.tokens.length && u.tokens[j] < end; j++) {
         const t = u.tokens[j] - first, last = ranges.length - 2
         if (last >= 0 && ranges[last] + ranges[last + 1] === t) ranges[last + 1]++
         else ranges.push(t, 1)
       }
       spans.push([u.id, ranges])
-      const runs = runsOf.get(i)
+      const runs = u.runs
       if (!runs) continue
       const clipped = []
       for (let j = 0; j < runs.length; j += 3) {
@@ -114,5 +138,11 @@ export function leftSideOf({ doc, views, anchors, edges = null, columns = undefi
     return { first, tokens, spans, pairs }
   }
 
-  return { pages, units, leftPages, stats }
+  return {
+    leftPages, stats,
+    add(id, a) { const u = located(id, a); if (u) take(u); done++ },
+    none() { done++ },
+    units: () => [...placed.values()].sort((x, y) => x.id - y.id).map(u => [u.id, u.tokens[0], u.rects]),
+    done: () => done,
+  }
 }

@@ -4,7 +4,7 @@ import type { Written } from '../layer-proto/format.mjs'
 import type { ArxivText } from '../layout/arxiv.mjs'
 import type { AddonChainState, RemoverAnswer } from '../layout/chain.mjs'
 import type { LayoutStats } from '../layout/make.mjs'
-import type { LayoutMarks, UnitMarks } from '../layout/marks.mjs'
+import type { LayoutMarks, MarkedOptions, UnitMarks } from '../layout/marks.mjs'
 import type { ColumnRule } from '../view/highlight.mjs'
 import type { FrameRule } from './anchors.mjs'
 import type { LeftSide } from './left-side.mjs'
@@ -16,8 +16,12 @@ export interface LayerOptions {
   paper: { id: string; version: number }
   /** openPaper's paper: its units (ids their indices) and those it keeps */
   source: { units: readonly { kind: string; pieces: unknown[] }[]; kept: ReadonlySet<unknown> }
-  /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none */
-  marks: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string } | null
+  /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none (or `marked`) */
+  marks?: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string } | null
+  /** the marked original to be read here instead (a PDF.js document of it, the caller's to open and destroy, its last pass's log,
+   *  and readMarked's options but the units and the operator codes, this pass's): read whole first (readMarked), or, under the
+   *  oracle, a page at a time beside arXiv's; its refusal is the marks' ('marks') */
+  marked?: { doc: unknown; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'> } | null
   /** a PDF.js document of arXiv's PDF (the caller opens and destroys it), and its text as readArxivText read it (step T) */
   arxiv: { doc: unknown; text?: ArxivText | null }
   OPS: Record<string, number>
@@ -40,7 +44,9 @@ export interface LayerOptions {
   /** an object the whole run writes its maker frame predicate and columns' edges into: an oracle */
   capture?: Partial<LayerOracle> | null
 }
-export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<string, [number, number]> }
+/** a whole run's rules (`capture`'s): the maker's frame predicate and columns' edges, and the left's frame predicate and its
+ *  pages' columns (those two for the marked original read a page at a time) */
+export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<string, [number, number]>; leftFrame?: (t: unknown) => boolean; columns?: unknown }
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
   | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; closed?: [from: number, to: number, read: number][] } }

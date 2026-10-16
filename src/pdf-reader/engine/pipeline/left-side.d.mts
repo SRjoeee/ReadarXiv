@@ -24,3 +24,18 @@ export interface LeftSide {
  * hold no item); `columns`: the pages' columns' rule (view/highlight.mjs pageColumns, today's)
  */
 export declare function leftSideOf(o: { doc: readonly DocToken[]; views: readonly (readonly number[])[]; anchors: ReadonlyMap<number, Anchor | null>; edges?: { l: ArrayLike<number>; r: ArrayLike<number> } | null; columns?: ColumnRule }): LeftSide
+/** leftSideOf a unit at a time: each unit given as its anchor is final (`add`, in any order; `none` for one with none), a page's
+ *  left part input once every unit with a token on it is given; the tokens' layout made first, so the pages' columns' rule is
+ *  given (a whole run's) */
+export interface LeftSideStream {
+  pages: Box[]
+  add(id: number, anchor: Anchor | null): void
+  none(id: number): void
+  /** the units given that are located, ids rising */
+  units(): UnitWire[]
+  leftPages(page: number): LeftPageInput | null
+  stats: LeftSide['stats']
+  /** how many units were given, located or not */
+  done(): number
+}
+export declare function leftSideStream(o: { doc: readonly DocToken[]; views: readonly (readonly number[])[]; edges?: { l: ArrayLike<number>; r: ArrayLike<number> } | null; columns: ColumnRule }): LeftSideStream
