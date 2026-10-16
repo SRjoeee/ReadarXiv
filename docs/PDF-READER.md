@@ -385,19 +385,20 @@ No state that tells the reader nothing is shown (no "done").
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
 | Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
-| Translating | the first translation | the same line on, by the share of paragraphs done, then the final; 正在翻译 said to screen readers |
-| Translating again | a stored translation, settings changed | the progress line likewise, 正在按当前设置重新翻译 said to screen readers; the old translation stays readable and is replaced paragraph by paragraph |
+| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 PDF 对照 said to screen readers (S-R-23, draft) |
+| Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
+| Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24, draft); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
-| Cannot be had | the paper has no source, or none of the ways of typesetting it worked (every one tried, none for want of time) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close. Remembered on this machine by paper version, language and pipeline, when the paper's own source set there: a visit again asks nothing of the service, a new pipeline tries once more (the maintainer, 2026-09-26; the words first had none) |
+| Cannot be had | no bilingual version can be made of the paper (no source, no PDF, a prepare that cannot succeed, one this version of the reader cannot read) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close |
 | No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
-- Recovery is automatic where it can be: when the network comes back the translation goes on by itself; 重试 asks only
-  for the paragraphs that are missing, the rest come from the cache; rate limiting never shows (the chain retries it, and
-  only its final giving-up counts as a failure).
+- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited and asked again; 重试 opens the
+  layer again and asks only for the paragraphs that are missing, the rest coming from the cache; rate limiting never shows
+  (the chain retries it, and only its final giving-up counts as a failure).
 - A failure never takes focus.
 
 ## 9. The extension around the reader
@@ -672,13 +673,10 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
   listeners. Disposing the view disposes its layer side first, then leaves no listener, observer, animation, document, task,
   place or page view.
 
-The extension's host is `src/pdf-reader/session/host.ts`. Its development entry, `?layer=1` on the reader's address, runs
-the reader on the view: the original on both panes, as the reader shows a paper before its translation. The extension's own
-session stays the reader until the layer side and the links join the view. The entry is built only where the build is asked
-for it, `AXT_READER_VIEW=1 pnpm build` (`wxt.config.ts` `READER_VIEW`): a release build holds neither the entry nor its
-chunk, since the reader's page is reachable by address from arXiv's pages, and `scripts/check-output.mjs` checks each build
-for it either way. `pnpm e2e:reader` runs on a build asked for it, and its view section fails on one that is not. A link
-the view opens out of the paper is a web page or a mail address, never a script, data or a page of the browser's.
+The extension's host is `src/pdf-reader/session/host.ts` (`openReader`): the reader on the view since Stage 5 (the compiled
+session it replaced is parked, `parked/extension-compile/`), arXiv's PDF shown at the open, always, and the paper's layer
+the run's (`session/run.ts`, §11.10). `scripts/check-output.mjs` checks that every build holds the view. A link the view opens
+out of the paper is a web page or a mail address, never a script, data or a page of the browser's.
 The view's rows are `tests/pdf-reader/reader-view.test.ts` (V1–V14, on PDF.js stand-ins and a clock moved by hand) and
 `tests/pdf-reader/reader-view-bundle.test.ts` (a browser build of the view and layer entries reads nothing outside the engine,
 no `pdfjs-dist`, and nothing of the server's).
@@ -745,10 +743,7 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   drive takes the page, not at the ask. The door's stats tell no late rows and no skipped
   units yet: `coverage()` gives 0 and {} for them.
 
-The extension's development entry makes a side on the harness's word (`__reader.openSide`) over `layerTransport`
-(`session/host.ts`: the layer API's objects by digest, the base checked against the original's bytes, the composed document
-over them and the tails); the run that tells it the layer and the rows, and the faces, are the extension's run's to come.
-The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `layer-side-door.test.ts` (the real door),
+The extension's run makes the side and tells it (§11.10). The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `layer-side-door.test.ts` (the real door),
 `feed.test.ts`, `contents.test.ts` and `shapes.test.ts` SH5; `pnpm e2e:reader` runs it on the sample cut into BUNDLE 4's
 objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API.
 
@@ -784,6 +779,35 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
 
 The rows are `tests/pdf-reader/links-view.test.ts` (LV1–LV4 on links.mjs, LS1–LS7 on the side over the fake door) and the
 real door's in `layer-side-door.test.ts`.
+
+### 11.10 The extension's run on the layer
+
+`session/run.ts` `startRun(view, paper, host)` is the extension's run of a paper (Stage 5 Task 9; the shared reader view's
+contract §4.3), started by the host once a translated display is shown in a visible tab:
+
+1. **The service first** (`session/translate.mjs` `openEngine`, the background's chain): its target is the layer's (one of
+   the engine's `TARGETS`, else S-R-13 and nothing asked of our server); a service that cannot run is the card's reason.
+2. **The layer's look** (`session/server.ts`, the layer API v1 by the reader's CTAG): a catalog is told to the side whole,
+   with its end, and kept on this machine; each 202 is the prepare under way, said (S-R-23), its objects so far told, asked
+   again once its wait has passed (never sooner, at least a second); a 404 `not-prepared` asks the prepare, once a visit; any
+   other 404 is why there is none (S-R-17); a 429 waits its time (S-R-24 meanwhile); our server out of reach (a 5xx or the
+   network, twice) opens a paper whose catalog this machine holds, else S-R-24. Only the paper's id and version leave the
+   machine, in the address: no query, `{}` the prepare's only body, no credentials, no referrer.
+3. **The objects** through this machine's store first (`cache/layer-store.ts`, by digest, checked there), then our server
+   within each ref's bytes; the side's readers check every one.
+4. **The base**: arXiv's PDF the left shows, digested whole; bytes that are not the layer's base fetch our copy (the store
+   first, then `/api/v1/original/`), checked against the base, shown on the left in their place. None to be had is no
+   layer, the original staying.
+5. **The composed document**: the original's bytes followed by the tails told, opened by the extension's PDF.js with the
+   side's options.
+6. **The rows**: the engine's `runRows` over the side's index, the paper's title and abstract as an LLM's context, the units
+   nearest the page in view first (that page's closure by the side's `rowsFor`, then ahead before behind), each batch's rows
+   taken as they come, then the end. A retry is the side's `again()`, every row held taken at once, and the run again.
+
+The served faces are `session/faces.ts` (our site's static table, eb-report G1), the hyphenation `<api>/hyph/<lang>.json`.
+An id with no version is the latest version arXiv's abstract page lists (`session/paper.ts`). The run's rows are
+`tests/pdf-reader/run.test.ts`, `server.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
+reader on the sample served by the stand-in of the layer API, through the echo service.
 
 ## 12. Performance gates
 
@@ -1158,7 +1182,6 @@ The edge cases, decided:
 
 - **The web's translation identity** is `axt-tr/2|<paper>|v<version>|<target>|<chain>|p<PIPELINE>|t<TRANSLATE>|b<BUNDLE>`, with no `r<RULES>`: the rules of the HTML page cut none of a PDF's units.
 - **The background's per-text key** keeps `RULES_VERSION` for the HTML page's blocks only; a PDF text's key holds none (`cache/key.ts` `CacheSource`, named by every cache descriptor and `CACHE_KEY_VERSION` still 6: no HTML key changed, and a PDF text's old entries are no key of the new ones). The cache holds the translator's raw answer to a text, which no rule of reading changes.
-- **Until the extension's rows cache replaces `session/session.mjs`'s copies** (the extension's stage 5, task 10), a copy is judged by `PIPELINE_VERSION` alone, so a change of the translation rules that must void copies raises both.
 - **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 4 (3 before a display group's later displays were written `JOINED`, their ink the group's first display's, and a LOST piece outside its unit's lines `OUTSIDE`, the LOST survey of 2026-10-15; 2 before the paper's `\lineskip` and `\lineskiplimit`, 1 before the babel names, D1a) and `checkAddonManifest` a manifest whose `schema` is not 1; the file's `layout` and the manifest's `removal` are read for their shape (a version token) and never compared, so a reader opens what a newer maker or remover wrote. A change of either file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL` — but the layout file's schema 4 did not raise `BUNDLE` (the controller's ruling of 2026-10-15: the next `BUNDLE`, 4, is the pipeline lane's new wire). This breaks the contract's promise for `b3`: a released reader of schema 3 asking `b3` of content this engine makes would refuse it whole, as `parseLayout` refuses any schema but its own. It holds only because no released reader asks for such content: the web's pin does not move before `BUNDLE` 4 lands, and moves with it (M1).
 
 ### 18.3 Bump rules
