@@ -665,19 +665,29 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  and every match has run): an annotation no unit took whose glyph points the operations left unerased stays in place, any
    *  other is dropped and counted. Pure of the order the pages were asked in: it reads this page's annotations, operations and
    *  units alone. A page whose annotations could not be read has none */
+  /** the units with lines on page q as a link's owner is chosen among them: every unit of the original's side (K: those placed,
+   *  left the original's and never placed alike, each by the rectangles the left side gave it), and a unit only the layout file
+   *  holds (no rectangles of its own) by the lines it was placed on */
+  const linkUnitsOn = q => {
+    const out = new Map()
+    for (const c of K) if (c.rects?.some(r => r[0] === q)) out.set(c.id, { id: c.id, stream: c.stream, rects: c.rects })
+    for (const u of laid[q] ?? []) if (!out.has(u.id)) out.set(u.id, { id: u.id, stream: u.stream, rects: u.rects })
+    return [...out.values()]
+  }
   const freezeLinksOf = q => {
     const r = rows[q - 1]
     if (!r || r.links) return
     const t0 = performance.now()
     const done = LK.freezeLinks({
       list: annots[q - 1] ?? null, q, ops: r.ops, devOf: pxOf(q), consumed: consumed[q],
-      units: (laid[q] ?? []).map(u => ({ id: u.id, stream: u.stream, rects: u.rects })), moved: r.linksOpen ?? [], sources: records,
+      units: linkUnitsOn(q), moved: r.linksOpen ?? [], sources: records,
     })
     r.links = done.records
     r.linksOpen = null
     if (records) linkSrc[q - 1] = done.sources
     linkStats.inPlace += done.inPlace
     linkStats.dropped.unmatched += done.dropped
+    linkStats.dropped.unplaced += done.unplaced
     timesOf(q).links += performance.now() - t0
   }
   /** a page's analysis state let go (its canvases, a copy's, are the gate's: release) */
@@ -1773,10 +1783,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
       r.view = page.view
       const textP = page.getTextContent()
-      // (the page's links, asked beside its text: one more round trip to the worker, read before the page is cleaned up)
-      const annP = LK.readAnnots(page)
       await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
       const tRendered = performance.now()
+      // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
+      // read before the page is cleaned up)
+      const annP = LK.readAnnots(page)
       timesOf(i).render += tRendered - tPage
       const tc = await textP
       if (i === 1 && lmP) await lmP
@@ -1798,14 +1809,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       timesOf(i).text += performance.now() - tRendered
       // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
       const raw = await annP
-      const tLinks = performance.now()
       if (raw === null) { annots[i - 1] = null; linkStats.unread++ } else {
-        const read = LK.annotsOf(raw, LK.pointsOf(tc.items))
+        const read = LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars2[i - 1]))
         annots[i - 1] = read.list
         linkStats.total += read.total
         linkStats.unsupported += read.unsupported
       }
-      timesOf(i).links += performance.now() - tLinks
+      // (the request's latency from its dispatch to its answer, and the parse)
+      timesOf(i).links += performance.now() - tRendered
     } finally {
       // (its pixels and characters read, or the read thrown: nothing reads the proxy's rendering state again (lp item 2), a
       // view's copy renders the page anew (renderAt), and PDF.js keeps the state of a render still under way to the end)

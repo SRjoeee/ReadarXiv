@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { annotationsOf, erasedOf as gateErased, glyphPointsOf } from '../../lab/pdf/spikes/layer-gate/links.mjs'
-import { type Annot, annotsOf, copyLinks, erasedOf, freezeLinks, inPlaceOf, ownerOf, pointsOf, readAnnots, type Unsupported } from '@/pdf-reader/engine/layer-proto/links.mjs'
+import { type Annot, annotsOf, charPoints, copyLinks, erasedOf, freezeLinks, inPlaceOf, MAX_GLYPHS, MAX_LINKS, ownerOf, pointsOf, readAnnots, type Unsupported, WORK_MAX } from '@/pdf-reader/engine/layer-proto/links.mjs'
 
 // The links of a laid page (src/pdf-reader/engine/layer-proto/links.mjs; PR 3a-1, the 3a design §3.1 to §3.6): the annotations a
 // page keeps, which a reader carries (LK11) and which it does not, the owner of an annotation, what the page's operations leave
@@ -55,6 +55,8 @@ describe('the annotations a page keeps', () => {
       raw({ dest: undefined, url: 'javascript:alert(1)' }),
       raw({ dest: undefined, url: 'ftp://example.org/x' }),
       raw({ dest: undefined, url: 'tel:+10000000' }),
+      raw({ dest: undefined, url: 'data:text/html,<b>x</b>' }),
+      raw({ dest: undefined, url: 'file:///etc/passwd' }),
       raw({ dest: undefined, attachment: { filename: 'x.pdf' } }),
       raw({ rect: [100, 695, 100, 710] }),
       raw({ rect: undefined }),
@@ -65,8 +67,8 @@ describe('the annotations a page keeps', () => {
       raw({ dest: [{ num: 12, gen: 0 }, { name: 'XYZ' }, 72, 700, 0] }),
     ]
     const { list, total, unsupported } = annotsOf(odd, pts)
-    expect(list.map(a => !!a.unsupported)).toEqual([true, true, true, true, true, true, true, true, true, true, false, false])
-    expect([total, unsupported]).toEqual([2, 10])
+    expect(list.map(a => !!a.unsupported)).toEqual([true, true, true, true, true, true, true, true, true, true, true, true, false, false])
+    expect([total, unsupported]).toEqual([2, 12])
     expect(list.map(a => a.i)).toEqual(odd.map((_, i) => i))
     // (the gate's instrument counts the same)
     const gate = annotationsOf(odd as never)
@@ -208,7 +210,7 @@ describe('a page that is final', () => {
   })
 
   it('answers no link for a page whose annotations could not be read', () => {
-    expect(freezeLinks({ list: null, q: 1, ops: [], devOf: dev, units })).toEqual({ records: [], sources: null, inPlace: 0, dropped: 0 })
+    expect(freezeLinks({ list: null, q: 1, ops: [], devOf: dev, units })).toEqual({ records: [], sources: null, inPlace: 0, dropped: 0, unplaced: 0 })
   })
 
   it('is a function of the page alone: the same list, operations and units give the same records, whatever the order of the units', () => {
@@ -236,7 +238,75 @@ describe('LK12: a copy of the links', () => {
   })
 })
 
-it('names a link whose overlaid text is empty by the characters under it, and a glyphless one by nothing', () => {
-  const a = kept(annotsOf([raw({ overlaidText: '' }), raw({ overlaidText: '', rect: [300, 300, 310, 310] })], pointsOf([item('ab', 100, 700, 20)])).list)
+it('names a link whose overlaid text is empty by the engine\'s characters under it, never by the estimate, and a glyphless one by nothing', () => {
+  const items = pointsOf([item('ab', 100, 700, 20)])
+  const own = charPoints([{ ch: 'a', x0: 100, x1: 108, yb: 700 }, { ch: 'b', x0: 108, x1: 120, yb: 700 }])
+  const a = kept(annotsOf([raw({ overlaidText: '' }), raw({ overlaidText: '', rect: [300, 300, 310, 310] })], items, own).list)
   expect([inPlaceOf(a[0]!).name, inPlaceOf(a[1]!).name]).toEqual(['ab', ''])
+  // (the estimate alone names nothing)
+  expect(inPlaceOf(kept(annotsOf([raw({ overlaidText: '' })], items).list)[0]!).name).toBe('')
+})
+
+describe('the two readings of a glyph\'s place', () => {
+  // the text item 'ij' is cut in two equal halves, centres at 105 and 115; the engine's characters are a narrow 'i' (100 to 104, centre 102) and a wide 'j' (104 to 120, centre 112)
+  const est = pointsOf([item('ij', 100, 700, 20)])
+  const own = charPoints([{ ch: 'i', x0: 100, x1: 104, yb: 700 }, { ch: 'j', x0: 104, x1: 120, yb: 700 }])
+  // the link is the 'i' alone: PDF.js's rectangle is 100 to 103.5; the estimate has no point there, the engine's has the 'i' at 102
+  const list = annotsOf([raw({ rect: [100, 695, 103.5, 710], overlaidText: 'i' })], est, own).list
+  it('keeps a link out of the erased area only if a point of neither is erased: the estimate alone finds nothing under it', () => {
+    expect(kept(list)[0]!.g.ch).toEqual([])
+    expect(kept(list)[0]!.g2.ch).toEqual(['i'])
+    const f = (ops: unknown[]) => freezeLinks({ list, q: 1, ops: ops as never, devOf: dev, units: [] })
+    expect(f([erase(99, 690, 110, 715)]).dropped).toBe(1)
+    // (the engine's point at 102 is erased and put back by a restore over 101.5 to 102.5: kept; over 101.5 to 102 it is not put back: dropped)
+    const restore = (w: number) => ({ op: 'restore', page: 1, clip: [[...dev(101.5, 715), w, 50]], boxes: [[...dev(101.5, 715), w, 50]] })
+    expect(f([erase(99.9, 690, 102.5, 715), restore(2)]).dropped).toBe(0)
+    expect(f([erase(99.9, 690, 102.5, 715), restore(1)]).dropped).toBe(1)
+  })
+  it('drops it where the engine\'s point is erased and the estimate\'s lands on a restored neighbour', () => {
+    // two links: the estimate's point of 'j' (115) and the engine's (112); a restore covers 114 to 116 only, the erase 104 to 120
+    const l2 = annotsOf([raw({ rect: [110, 695, 118, 710], overlaidText: 'j' })], est, own).list
+    expect(kept(l2)[0]!.g.ch).toEqual(['j'])
+    expect(kept(l2)[0]!.g2.ch).toEqual(['j'])
+    const ops = [erase(104, 690, 120, 715), { op: 'restore', page: 1, clip: [[...dev(114, 715), 2 * 2, 50]], boxes: [[...dev(114, 715), 2 * 2, 50]] }]
+    // (the estimate at 115 is put back, the engine's centre at 112 is not: dropped)
+    expect(freezeLinks({ list: l2, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped).toBe(1)
+    // (and with the estimate alone it would have stayed)
+    const alone = annotsOf([raw({ rect: [110, 695, 118, 710], overlaidText: 'j' })], est).list
+    expect(freezeLinks({ list: alone, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped).toBe(0)
+  })
+})
+
+describe('a page that is hostile', () => {
+  it('reads at most MAX_LINKS annotations, and counts the rest unsupported', () => {
+    const many = Array.from({ length: 100_000 }, (_, k) => raw({ rect: [k % 600, 10, (k % 600) + 4, 20], dest: `d${k}` }))
+    const pts = pointsOf(Array.from({ length: 100_000 }, (_, k) => item('ab', k % 600, 15, 8)))
+    const start = performance.now()
+    const { list, total, unsupported } = annotsOf(many, pts, charPoints([]))
+    const f = freezeLinks({ list, q: 1, ops: Array.from({ length: 5000 }, (_, k) => erase(k % 600, 0, (k % 600) + 1, 5)) as never, devOf: dev, units: [{ id: 1, stream: 1, rects: Array.from({ length: 3000 }, (_, k) => [1, k % 600, 0, (k % 600) + 5, 30]) }] })
+    const ms = performance.now() - start
+    expect(list.length).toBeLessThanOrEqual(MAX_LINKS)
+    expect(total + unsupported).toBe(100_000)
+    expect(total).toBeLessThanOrEqual(MAX_LINKS)
+    expect(f.records.length).toBeLessThanOrEqual(MAX_LINKS)
+    expect(JSON.stringify(f.records).length).toBeLessThan(1_000_000)
+    expect(ms).toBeLessThan(3000)
+  })
+  it('does not carry a link with more than MAX_GLYPHS glyph points, whole-page rectangles included', () => {
+    const pts = pointsOf(Array.from({ length: 5000 }, (_, k) => item('abc', (k % 50) * 10, 700 - Math.floor(k / 50) * 3, 30)))
+    const { list, total, unsupported } = annotsOf([raw({ rect: [0, 0, 600, 800] }), raw({ rect: [0, 690, 30, 710] })], pts)
+    expect(list[0]).toEqual({ i: 0, unsupported: true })
+    expect([total, unsupported]).toEqual([1, 1])
+    expect(MAX_GLYPHS).toBeGreaterThan(50)
+  })
+  it('spends a bounded work on the freeze, and drops what is left as unplaced', () => {
+    const pts = pointsOf(Array.from({ length: 1000 }, (_, k) => item('abcde', 10 * (k % 50), 700 - 20 * Math.floor(k / 50), 40)))
+    const { list } = annotsOf(Array.from({ length: 1000 }, (_, k) => raw({ rect: [10 * (k % 50), 690 - 20 * Math.floor(k / 50), 10 * (k % 50) + 40, 710 - 20 * Math.floor(k / 50)], dest: `d${k}` })), pts)
+    // (many operations make each point test dear: the budget lasts for some of the links only)
+    const ops = Array.from({ length: Math.ceil(WORK_MAX / 2000) }, () => ({ op: 'crop', page: 1, src: [0, 0, 1, 1], dst: [0, 0, 1, 1] }))
+    const f = freezeLinks({ list, q: 1, ops: ops as never, devOf: dev, units: [] })
+    expect(f.unplaced).toBeGreaterThan(0)
+    expect(f.inPlace + f.dropped + f.unplaced).toBe(1000)
+    expect(f.records.length).toBe(f.inPlace)
+  })
 })
