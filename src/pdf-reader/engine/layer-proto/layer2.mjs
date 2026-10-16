@@ -2712,10 +2712,21 @@ export function layoutUnit2(tokens, blocks, s, P) {
     last = { r, st, f }
     if (r.rest >= r.total) break
   }
-  // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order)
+  // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order), at the
+  // most natural state at which it then fits. The walk down to the last state bought nothing the run past keeps: laid at the
+  // last, a paragraph that runs on past a display was drawn at the floor's size though it fit far larger (the M1 survey of
+  // 2608.16117, German page 10: units 28 and 35 at 0.8 and 0.85 of the original's size). Where it fits at none, the last
+  // state's, as far as it goes
   if (last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
-    const r = breakLines(tokens, slotsAt(blocks, last.st, P, s), last.f, last.st, P, last.st.scale, false)
-    if (r.rest > last.r.rest) last = { ...last, r }
+    let past = null
+    for (const st of statesOf(P, blocks, s)) {
+      tried++
+      const f = s * st.scale
+      past = { r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, false), st, f }
+      if (past.r.rest >= past.r.total) break
+    }
+    if (past.r.rest >= past.r.total) last = past
+    else if (past.r.rest > last.r.rest) last = { ...last, r: past.r }
   }
   // (step 3, P.flowPast: and else through every slot, a kept region only breaking the line, from the most natural state)
   if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
