@@ -43,6 +43,12 @@ export interface LayerStats {
   pageMs: Readonly<Record<number, number>>
   /** the rows skipped as no unit of the paper's (unitOf's null) */
   dropped: number
+  /** the Link annotations of the pages read, by what became of them: `total` the ones a reader can carry, `inPlace` those left
+   *  over the original's ink, `moved` those laid over the layer's own drawing, `dropped` the rest by reason (`unmatched`: over
+   *  erased text and matched by nothing; `ambiguous`; `unplaced`), `unsupported` those it cannot carry (a named action, a script,
+   *  an attachment, a url outside the allow-list, a rectangle with no area), `unread` the pages whose annotations could not be
+   *  read. `inPlace`, `moved` and `dropped` count the pages frozen so far, the others the pages drawn */
+  links: { total: number; inPlace: number; moved: number; dropped: { unmatched: number; ambiguous: number; unplaced: number }; unsupported: number; unread: number }
   /** the layout rule set the layer was opened with: its schema and version */
   rules: { schema: typeof RULES_SCHEMA; version: number }
 }
@@ -59,7 +65,7 @@ export type PageState = 'ready' | 'laying' | 'waiting' | 'failed'
 /** a state `onPage` tells: `waiting` is the state before any is told */
 export type PageEvent = Exclude<PageState, 'waiting'>
 export type { PageWords } from './words.mjs'
-/** a link of a laid page, plain data (the engine's 3a; D-9: empty until then). The contract the gate measures (lab/pdf/README.md,
+/** a link of a laid page, plain data (links.mjs, the engine's 3a: 3a-1 gives the links left over the original's ink, `moved: false`). The contract the gate measures (lab/pdf/README.md,
  *  "The links"):
  *  - `boxes`: [x0, y0, x1, y1] x n (x0 < x1, y0 < y1) in the page's PDF user space, unrotated, y up; moved, one box a drawn line
  *  - `dest` or `url`, exactly one. `dest` as PDF.js gives it, never resolved by the engine; `url` PDF.js's validated url only,

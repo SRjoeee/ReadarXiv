@@ -55,6 +55,7 @@ import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
+import * as LK from './links.mjs'
 import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, wordIndexer } from './words.mjs'
@@ -490,7 +491,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  names and units are set in as each is painted (svgOf makes the element of them anew at each ask: the run holds no element
    *  of a page), its drawing as data, every painted unit's operations in turn, kept when the page's canvases are let go; its
    *  words (the page's word table, built as each unit is painted in `wordsOpen` and frozen into `words` once the page is final:
-   *  words.mjs) and links (the engine's 3a), its fill numbers (adaptiveFill's pass) */
+   *  words.mjs) and links (links.mjs: frozen into `links` once the page is final, null before; `linksOpen` holds the moved
+   *  records a unit's match makes as they are made, 3a-2: none yet), its fill numbers (adaptiveFill's pass) */
   const makeRow = i => {
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
@@ -498,7 +500,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (no pixels until the page is drawn, drawPageOn sizes them: a page never drawn holds its row alone, not a canvas's default
     // 300 x 150, which a jump past a paper's pages kept on every page it did not draw)
     for (const c of [left, right]) if (c) { c.width = 0; c.height = 0; c.style.width = `${w}px`; c.style.height = `${h}px` }
-    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], markup: [], words: null, wordsOpen: null, links: null, fill: null }
+    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], markup: [], words: null, wordsOpen: null, links: null, linksOpen: null, fill: null }
   }
   if (!partsMode) for (let i = 1; i <= N; i++) makeRow(i)
   const sheet = document.head.appendChild(document.createElement('style'))
@@ -654,9 +656,35 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     r.words = freezeWords(r.wordsOpen, original)
     r.wordsOpen = null
   }
+  /** the annotations of each page (links.mjs annotsOf; null where the read failed), read once as the page is drawn and held
+   *  until the page is final; the ones a unit's match took, by page; the counts (LayerStats.links) and, with `records`, each
+   *  record's source annotations (the gate's attribution) */
+  const annots = [], consumed = [], linkSrc = []
+  const linkStats = { total: 0, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 }, unsupported: 0, unread: 0 }
+  /** a page's links frozen into its record once the page is final (every unit on it painted there, so the operations are final
+   *  and every match has run): an annotation no unit took whose glyph points the operations left unerased stays in place, any
+   *  other is dropped and counted. Pure of the order the pages were asked in: it reads this page's annotations, operations and
+   *  units alone. A page whose annotations could not be read has none */
+  const freezeLinksOf = q => {
+    const r = rows[q - 1]
+    if (!r || r.links) return
+    const t0 = performance.now()
+    const done = LK.freezeLinks({
+      list: annots[q - 1] ?? null, q, ops: r.ops, devOf: pxOf(q), consumed: consumed[q],
+      units: (laid[q] ?? []).map(u => ({ id: u.id, stream: u.stream, rects: u.rects })), moved: r.linksOpen ?? [], sources: records,
+    })
+    r.links = done.records
+    r.linksOpen = null
+    if (records) linkSrc[q - 1] = done.sources
+    linkStats.inPlace += done.inPlace
+    linkStats.dropped.unmatched += done.dropped
+    timesOf(q).links += performance.now() - t0
+  }
   /** a page's analysis state let go (its canvases, a copy's, are the gate's: release) */
   const letGoPage = q => {
     freezeWordsOf(q)
+    freezeLinksOf(q)
+    annots[q - 1] = consumed[q] = undefined
     unswept.delete(q)
     chars2[q - 1] = undefined
     inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
@@ -1713,7 +1741,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // page, less the faces it waited for, fonts) and painted, their operations made (ops: the erase and its put-back, or
   // the swap's rectangles), drawn on the copy (compose) and set as SVG (svg)
   const pageTimes = []
-  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0 })
+  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0, links: 0 })
   // the documents read: the original (`doc`) and the text-removed one (`removal.doc`, often the same). Under parts the newest
   // composed document, swapped at a part with a tail (swap); each read of a page holds its document (using), and one no longer
   // the newest is told to the host (onRetired) once no read holds it, the newest at dispose: each once, none destroyed here
@@ -1745,6 +1773,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
       r.view = page.view
       const textP = page.getTextContent()
+      // (the page's links, asked beside its text: one more round trip to the worker, read before the page is cleaned up)
+      const annP = LK.readAnnots(page)
       await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
       const tRendered = performance.now()
       timesOf(i).render += tRendered - tPage
@@ -1766,6 +1796,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       chars2[i - 1] = L2.pageChars2(tc, fontOf, mappedOfPage(page))
       timesOf(i).text += performance.now() - tRendered
+      // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
+      const raw = await annP
+      const tLinks = performance.now()
+      if (raw === null) { annots[i - 1] = null; linkStats.unread++ } else {
+        const read = LK.annotsOf(raw, LK.pointsOf(tc.items))
+        annots[i - 1] = read.list
+        linkStats.total += read.total
+        linkStats.unsupported += read.unsupported
+      }
+      timesOf(i).links += performance.now() - tLinks
     } finally {
       // (its pixels and characters read, or the read thrown: nothing reads the proxy's rendering state again (lp item 2), a
       // view's copy renders the page anew (renderAt), and PDF.js keeps the state of a render still under way to the end)
@@ -2206,6 +2246,34 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       freezeWordsOf(pg)
       return copyWords(r.words)
     },
+    /**
+     * Page `pg`'s links (links.mjs; the 3a design): the records of the page's Link annotations a reader can carry, sorted and
+     * ranked, a new copy on every ask (none of its objects the run's). Only a page that is final (ready) has them: frozen at the
+     * first ask if they are not already; a RangeError for another. A page whose annotations could not be read answers []
+     */
+    linksOf(pg) {
+      const r = rows[pg - 1]
+      if (!r) throw new RangeError(`linksOf: page ${pg} has no row`)
+      if (!readyOf(pg)) throw new RangeError(`linksOf: page ${pg} is not final`)
+      freezeLinksOf(pg)
+      return LK.copyLinks(r.links)
+    },
+    /** the counts of the links read and frozen so far (LayerStats.links), a copy */
+    get linkStats() { return { ...linkStats, dropped: { ...linkStats.dropped } } },
+    /**
+     * With `records`, the gate's: each of page `pg`'s records' source annotations and the tier that made it, in the records'
+     * order ({ annots: [[page, i], ...], tier }), the attribution the gate checks against the original's annotations (never
+     * trusted). A RangeError for a page that is not final
+     */
+    ...(records ? {
+      linkSources(pg) {
+        const r = rows[pg - 1]
+        if (!r) throw new RangeError(`linkSources: page ${pg} has no row`)
+        if (!readyOf(pg)) throw new RangeError(`linkSources: page ${pg} is not final`)
+        freezeLinksOf(pg)
+        return (linkSrc[pg - 1] ?? []).map(s => ({ annots: s.annots.map(a => a.slice()), tier: s.tier }))
+      },
+    } : {}),
     /**
      * What the run holds (the 1b design §3). With no page: whether it lets go (`free`), keeps the units' records and the
      * audit (`records`), and keeps on the gate's shelf what it lets go (`shelf`). With a page: the analysis state it holds of
