@@ -1238,6 +1238,20 @@ describe('markedPages: the marked original a page at a time (the page stream, E2
     expect(p2.page.words).toEqual(['here', 'results'])
     expect(end.end.owned).toEqual([])
     expect(end.end.twice.size).toBe(0)
+    // the pieces whose opening points stand before `found` are given: page 1's wait for page 2, then all are
+    expect([(p1.page as unknown as { found: number }).found, (p2.page as unknown as { found: number }).found]).toEqual([1, 3])
+  })
+
+  it('a point read again on a later page is told on that page (`repeats`), as the end\'s `twice`; the head holds the log\'s lines and every page looked up', async () => {
+    const again = [pages[0] as typeof pages[number], { ...(pages[1] as typeof pages[number]), shown: [{ at: 'p0.1a' }, ...(pages[1] as typeof pages[number]).shown] }]
+    const events: { head?: { lines: unknown; pageOf: Map<string, number> }; page?: { repeats: string[] }; end?: { twice: Set<string> } }[] = []
+    const log = 'AXT-LINES 0 3\n'
+    for await (const x of markedPages(streamDocument(again, dests), log, { engine: 'pdflatex', units, OPS })) events.push(x as never)
+    expect(events.filter(x => x.page).map(x => x.page?.repeats)).toEqual([[], ['p0.1a']])
+    expect([...(events.at(-1)?.end?.twice ?? [])]).toEqual(['p0.1a'])
+    const head = events[0]?.head
+    expect(head?.lines).toEqual((events.at(-1) as unknown as { end: { lines: unknown } }).end.lines)
+    expect(head?.pageOf.get('p0.3b')).toBe(2)
   })
 
   it('a page whose view is no view is refused there, with the place the marks\' view check names', async () => {

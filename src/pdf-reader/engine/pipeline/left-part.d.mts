@@ -10,3 +10,24 @@ export declare function leftOfPart(doc: DocToken[], units: UnitText[], o: LeftPa
 /** what the left of pages a to b reads: the units that may touch them (C), theirs (V1), and V1's (V2): unit indices, and
  *  their pages as a flag a page */
 export declare function partSets(doc: readonly DocToken[], units: readonly UnitText[], pages: [number, number], reach: [number, number][][]): Record<'C' | 'V1' | 'V2', { units: number[]; pages: Uint8Array }>
+/** the units anchored by ranges of a page as their bounds become final (the page stream): each range once every unit its left
+ *  reads has its match final, by leftOfPart under the whole document's frame */
+export interface RangedAnchors {
+  bounds: Map<string, [number, number]>
+  /** each page's first token and last; the last page with a token */
+  firstTok: Int32Array
+  lastTok: Int32Array
+  lastPage: number
+  /** the first page not anchored yet */
+  readonly am: number
+  /** unit u's own marks' pages while its bounds are not final: the least and the last (0: none) */
+  own(u: number, low: number, high: number): void
+  /** unit u's bounds final: [first token, last token], or null for none */
+  mark(u: number, bounds: [number, number] | null): void
+  isMarked(u: number): boolean
+  isSettled(u: number): boolean
+  /** the ranges anchored while ready: each unit first framed on the page to onAnchor, each final one reaching no later page
+   *  settled without one; past the last page every unit left settled */
+  run(onAnchor: (id: number, anchor: Anchor) => void, onSettle: (u: number) => void): void
+}
+export declare function rangedAnchors(doc: readonly DocToken[], units: readonly UnitText[], o?: Omit<LeftPartOptions, 'bounds' | 'minCoverage'> & { boundsKnown?: (() => boolean) | null }): RangedAnchors

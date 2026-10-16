@@ -270,13 +270,16 @@ const EMPTY = Object.freeze({ glyphs: Object.freeze({ n: 0 }), boxes: Object.fre
  * has none, from its point on to the next point in its region (ownedOf's pastColumn; the document's end where there is
  * none); a closing point read on an earlier page than its opening one is put in the window as that one point (marks out
  * of order). What it finds is ownedOf's over the whole document, but that a piece's work is bounded per window (WORK) and
- * that a point read twice on pages apart is told by `twice()` (the caller's to apply: 'a mark set twice').
+ * that a point read twice on pages apart is told by `twice()` (the caller's to apply: 'a mark set twice'), and a page at a
+ * time by `repeats()`; `found()` the least page whose opening points are not all found yet.
  * `follows`, `dropped`: ownedOf's. `add(p, page, take)`: page p (1, 2, … in order), as ownedOf reads a page; `take(name,
  * e, pages)` is called for each piece found, `e` ownedOf's entry, `pages` the window (pages[p - 1] page p) while it is
  * held. `end(take)`: no page after; every piece left is found
  */
 export function ownedPages({ follows, dropped = [], closing = () => null }) {
   const held = new Map(), regions = new Map(), counts = new Map(), opened = new Set(), early = new Map()
+  /** the point names read a second time since `repeats()` was last asked */
+  let fresh = []
   /** pages added, in order; their pieces, each { name, q, close, needPage, stop } */
   const queue = []
   let last = 0
@@ -325,7 +328,9 @@ export function ownedPages({ follows, dropped = [], closing = () => null }) {
       const pieces = []
       page.points.forEach((pt, q) => {
         const name = pt.name
-        counts.set(name, (counts.get(name) ?? 0) + 1)
+        const seen = (counts.get(name) ?? 0) + 1
+        counts.set(name, seen)
+        if (seen === 2) fresh.push(name)
         if (CLOSING.test(name) && !opened.has(`${name.slice(0, -1)}a`) && !early.has(name)) early.set(name, [p, q])
         if (!OPENING.test(name) || opened.has(name)) return
         opened.add(name)
@@ -343,6 +348,11 @@ export function ownedPages({ follows, dropped = [], closing = () => null }) {
     end(take) { drain(take, true) },
     /** the point names read more than once, on every page added */
     twice() { return new Set([...counts].filter(([, n]) => n > 1).map(([name]) => name)) },
+    /** the point names read a second time since this was last asked, in the order read: `twice()` a page at a time */
+    repeats() { const out = fresh; fresh = []; return out },
+    /** the least page an opening point still to be found stands on (one past the last page added where none is): every
+     *  piece whose opening point stands before it has been taken */
+    found() { return queue.length ? queue[0].p : last + 1 },
   }
 }
 

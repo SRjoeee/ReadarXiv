@@ -158,10 +158,15 @@ export type MarkedOptions = Parameters<typeof layoutMarksOf>[2] & { paper?: bool
 /** why a page of the marked original has no ink (null: it has): its operator list not given within OPS_MS ('timedOut'),
  *  or past OPS_CAP's operations or GLYPHS_PAGE's glyphs ('capped'); no piece on it is owned */
 export type MarkedDark = 'timedOut' | 'capped' | null
+/** the marked original's head (markedPages' first event): the names read, each page looked up once */
+export interface MarkedHead { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; pageOf: Map<string, number>; lines: [number, number][]; unitMarks: UnitMarks | null }
+/** one page of the marked original as it is read: its tokens, the words first seen on it, the pieces found once it was read,
+ *  why it has no ink (null: it has), the page before which every opening point's piece is found, the points read again on it */
+export interface MarkedPage { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][]; dark: MarkedDark; found: number; repeats: string[] }
 /** what the marked original gives a page at a time (markedPages): its head, each page, its end */
 export type MarkedEvent =
-  | { head: { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; unitMarks: UnitMarks | null } }
-  | { page: { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][]; dark: MarkedDark } }
+  | { head: MarkedHead }
+  | { page: MarkedPage }
   | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][] } }
 /** the marked original read a page at a time, an async generator: its head, each page in order, its end */
 export declare function markedPages(marked: unknown, log: string, o: MarkedOptions): AsyncGenerator<MarkedEvent>
@@ -169,6 +174,15 @@ export declare function markedPages(marked: unknown, log: string, o: MarkedOptio
  *  file; never trimmed to the file's bounds; the paper-wide bounds with `paper` alone) and the unit marks (null: a unit mark's
  *  page could not be looked up), and the pages with no ink, by why */
 export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; dark: { timedOut: number[]; capped: number[] } }>
+/** each opening point's piece as the page stream finds it (layout/stream.mjs Follow): of the units and the destinations' names */
+export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>): (name: string) => import('./stream.mjs').Follow | null
+/** whether a destination the head names is a mark of the marks file: on a page of the paper, within its page's view (`views`
+ *  the pages' read so far, stride 4) */
+export declare function markAt(views: readonly number[], pages: number, page: number | null, x: number, y: number): boolean
+/** each page's columns as the marks file has them, of the head's names alone */
+export declare function columnsOf(head: MarkedHead): number[]
+/** the marks of a marked original whose pages are still to be read: its head's marking, columns, dropped names and line counts */
+export declare function marksOfHead(head: MarkedHead, engine: string): LayoutMarks
 /** a point read twice on pages apart: its piece 'a mark set twice', nor the displays of its group, on `rows` in place */
 export declare function vetoTwice(rows: Map<string, OwnedRow>, twice: ReadonlySet<string>, follows: (name: string) => { group?: string[] } | null): void
 /** the marks file as the lab writes it: encodeLayoutMarks of the marks within the file's own bounds */

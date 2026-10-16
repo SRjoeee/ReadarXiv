@@ -3,7 +3,7 @@ import type { SourceUnit } from '../source/latex-front.mjs'
 import type { LayoutFile } from './file.mjs'
 import type { FrameRule } from '../pipeline/anchors.mjs'
 import type { ArxivText } from './arxiv.mjs'
-import type { LayoutMarks } from './marks.mjs'
+import type { LayoutMarks, MarkedEvent, MarkedHead, MarkedPage } from './marks.mjs'
 import type { PagePlan } from './addon.mjs'
 
 export interface MakeInput {
@@ -69,6 +69,9 @@ export interface LayoutStats {
   over: number[]
   bytes: { raw: number; gzip: number }
   ms: { text: number; ops: number; carry: number; anchor: number; rows: number }
+  /** the marked original read a page at a time (the page stream): pieces found after their unit's own ink was taken (dropped),
+   *  points read twice after their unit's placeholders were matched; none where it is read whole */
+  late: { rows: number; vetoes: number }
   /** why the file was refused, where it was ('bounds': the parser's refusal) */
   refusal?: { path: string; why: string }
 }
@@ -94,15 +97,24 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     carrying(): 'carry' | null
     /** each marked page's lines [carried, total], once carried */
     pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
-    /** the maker a page at a time (after carrying(), the columns' edges given) */
-    stream(): MakerStream
-    /** carrying(), then stream() over every page read here, finished */
-    byStream(): Promise<MakerStream | { refused: 'carry'; stats: LayoutStats }>
+    /** the maker a page at a time (after carrying(), the columns' edges given); with `marked` (markedPages' head, the marks
+     *  marksOfHead's), the marked original's pages given a page at a time too (`markedPage`, `markedEnd`), carrying() not run */
+    stream(o?: { marked?: MarkedHead | null }): MakerStream
+    /** carrying() (or the marked original's pages beside arXiv's, `marked`: its head and the events after it), then stream()
+     *  over every page read here, finished */
+    byStream(marked?: { head: MarkedHead; events: AsyncIterable<MarkedEvent> } | null): Promise<MakerStream | { refused: 'carry'; stats: LayoutStats }>
   }
 >
 /** the maker a page at a time: `pageRead(p)` after each page read in order, `finish()` after the last */
 export interface MakerStream {
   pageRead(p: number): void
+  /** the marked original's page (markedPages' page event's), pages in order; its end after its last */
+  markedPage(page: MarkedPage): void
+  markedEnd(end: Extract<MarkedEvent, { end: unknown }>['end']): void
+  /** whether the carry's refusal is known (the marked original read whole or to its end, or for parts a line carried) */
+  carryKnown(): boolean
+  /** the carry's refusal, once the marked original's end is given */
+  carryRefusal(): 'carry' | null
   finish(): void
   /** each page's plan, made as the page is let go (null without `plans`) */
   plans: Map<number, PagePlan> | null
@@ -113,8 +125,8 @@ export interface MakerStream {
   released(): number
   /** whether unit i's rows are made, or it has none */
   settled(i: number): boolean
-  progress(): { read: number; anchored: number; decided: number; released: number }
-  trace?: { read: number; anchored: number; decided: number; released: number }[]
+  progress(): { read: number; marked?: number; anchored: number; decided: number; released: number; held: number; glyphs: number }
+  trace?: { read: number; marked?: number; anchored: number; decided: number; released: number; held: number; glyphs: number }[]
 }
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number

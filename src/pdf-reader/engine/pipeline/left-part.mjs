@@ -102,3 +102,84 @@ export function partSets(doc, units, [a, b], reach) {
   const C = meeting(part), V1 = meeting(C.pages)
   return { C, V1, V2: meeting(V1.pages) }
 }
+
+/**
+ * The units anchored by ranges of a page (the page stream, E2b design §1.2): as each unit's bounds become final (`mark`),
+ * the pages from `am` on are anchored a page at a time, each once every unit its left reads (partSets' V2 of the page,
+ * under a conservative reach) has its match final, each by leftOfPart under the whole document's frame (`frame`), so that
+ * every unit's anchor is anchorUnits' over the whole paper. A unit's match is final when its bounds are and, where it has
+ * none, every unit between it and its nearest bounded neighbour in the text either side has them too (anchors.mjs
+ * neighbours). The reach of a unit whose match is not final (conservative): its own marks' pages (`own`: where its bounds
+ * would be, 0 for none) and the window it would have unbounded between the neighbours it may yet have, from the earliest end
+ * any unit still to be marked between it and its last bounded neighbour may get to the latest start any on its other side
+ * may (a figure's text box, a paragraph by kind, is set after the text that follows it: the units' order is not their
+ * bounds' order), with its MARGIN, and a float's match over the whole document (leftReach's). `boundsKnown()`: whether every
+ * bound the paper may have is known (matchUnits' switch between a whole-document search and one between neighbours; by
+ * default every unit marked). `run(onAnchor, onSettle)`: the ranges anchored while ready, each unit first framed on the page
+ * given to onAnchor(id, anchor), each unit whose match is final and reaches no later page settled without one (onSettle(u));
+ * past the last page every unit left is settled. A unit placed before the page anchored and not settled is a defect of the
+ * readiness: thrown. The units' ids are their indices
+ */
+export function rangedAnchors(doc, units, { floating = () => false, floatMatch = null, frame = pageFrame, boundsKnown = null } = {}) {
+  const n = units.length, N = doc.length
+  const bounds = new Map(), marked = new Uint8Array(n), settled = new Uint8Array(n), ownLow = new Int32Array(n), ownHigh = new Int32Array(n)
+  let markedCount = 0, am = 1
+  const lastPage = N ? doc[N - 1].page : 0
+  // each page's first token and last (the tokens are in page order): a page's tokens, as a reach's interval
+  const firstTok = new Int32Array(lastPage + 2).fill(N), lastTok = new Int32Array(lastPage + 2).fill(-1)
+  doc.forEach((t, k) => { if (k < firstTok[t.page]) firstTok[t.page] = k; lastTok[t.page] = k })
+  for (let p = lastPage; p >= 1; p--) if (firstTok[p] === N) firstTok[p] = firstTok[p + 1] ?? N
+  for (let p = 1; p <= lastPage; p++) if (lastTok[p] < 0) lastTok[p] = lastTok[p - 1] ?? -1
+  const key = u => String(units[u].id)
+  const inText = u => bounds.has(key(u)) && !floating(units[u].id)
+  const finalOf = () => {
+    const fin = new Uint8Array(n), out = leftReach(doc, units, { bounds, floating, floatMatch })
+    const pendBefore = new Uint8Array(n), pendAfter = new Uint8Array(n), lo = new Int32Array(n), hi = new Int32Array(n)
+    for (let u = 0, pend = 0, low = -1; u < n; u++) {
+      pendBefore[u] = pend; lo[u] = low
+      if (inText(u)) { pend = 0; low = bounds.get(key(u))[1] } else if (!marked[u]) { pend = 1; if (!floating(units[u].id) && ownLow[u]) low = Math.min(low, firstTok[ownLow[u]]) }
+    }
+    for (let u = n - 1, pend = 0, high = N; u >= 0; u--) {
+      pendAfter[u] = pend; hi[u] = high
+      if (inText(u)) { pend = 0; high = bounds.get(key(u))[0] } else if (!marked[u]) { pend = 1; if (!floating(units[u].id) && ownHigh[u]) high = Math.max(high, lastTok[ownHigh[u]]) }
+    }
+    for (let u = 0; u < n; u++) {
+      fin[u] = marked[u] && (bounds.has(key(u)) || (!pendBefore[u] && !pendAfter[u])) ? 1 : 0
+      if (fin[u]) continue
+      const more = [[Math.max(0, lo[u] + 1 - MARGIN), Math.min(N - 1, hi[u] - 1 + MARGIN)]]
+      if (!marked[u] && ownLow[u]) more.push([firstTok[ownLow[u]], lastTok[ownHigh[u]]])
+      out[u] = [...out[u], ...more.filter(([a, b]) => a <= b)]
+    }
+    return { fin, reach: out }
+  }
+  const settle = (u, f) => { if (settled[u]) return; settled[u] = 1; f(u) }
+  return {
+    bounds, firstTok, lastTok, lastPage,
+    /** the first page not anchored yet */
+    get am() { return am },
+    /** unit u's own marks' pages while its bounds are not final: the least and the last (0: it has none) */
+    own(u, low, high) { ownLow[u] = low; ownHigh[u] = high },
+    /** unit u's bounds final: [first token, last token], or null for none */
+    mark(u, b) {
+      if (marked[u]) return
+      if (b) bounds.set(key(u), b)
+      marked[u] = 1
+      markedCount++
+    },
+    isMarked: u => marked[u] === 1,
+    isSettled: u => settled[u] === 1,
+    run(onAnchor, onSettle) {
+      while (am <= lastPage) {
+        if (!(bounds.size > 0 || (boundsKnown ? boundsKnown() : markedCount === n))) return
+        const { fin, reach } = finalOf()
+        if (!partSets(doc, units, [am, am], reach).V2.units.every(u => fin[u])) return
+        const got = leftOfPart(doc, units, { bounds, floating, floatMatch, frame }, [am, am], reach)
+        for (const id of got.before) if (!settled[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
+        for (const [id, an] of got.anchors) settle(id, u => onAnchor(u, an))
+        am++
+        reach.forEach((iv, u) => { if (!settled[u] && fin[u] && iv.every(([, hi]) => doc[hi].page < am)) settle(u, onSettle) })
+      }
+      for (let u = 0; u < n; u++) settle(u, onSettle)
+    },
+  }
+}

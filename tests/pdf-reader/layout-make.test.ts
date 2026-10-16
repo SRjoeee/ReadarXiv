@@ -7,7 +7,8 @@ import { CARRY_MIN, fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, run
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
-import { arxivOf, endOf, FONTS, type Mark, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
+import { markedPages, marksOfHead } from '@/pdf-reader/engine/layout/marks.mjs'
+import { arxivOf, endOf, FONTS, type Mark, markedOf, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
 
 // The layout maker over the fake world of helpers/make-world.ts
 
@@ -48,7 +49,14 @@ async function byPages(w: World, log: string) {
   if ('refused' in m) return null
   const st = await m.byStream()
   if ('refused' in st) throw new Error('the stream refused what the whole made')
-  return { whole, merged: mergeLayout([st.layout() as never]), plans: st.plans }
+  // and the marked original read a page at a time too (markedPages: its head, then each page before arXiv's of its number)
+  const events = markedPages(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, units: w.units, OPS } as never)
+  const head = ((await events.next()).value as { head: Parameters<typeof marksOfHead>[0] }).head
+  const both = await makerOf({ ...input, marks: marksOfHead(head, 'pdflatex'), arxiv: arxivOf(w.pages), frame: () => frameOf as never, columnEdges: first.edges(), check: true })
+  if ('refused' in both) throw new Error('the marked stream refused what the whole made')
+  const sb = await both.byStream({ head, events } as never)
+  if ('refused' in sb) throw new Error('the marked stream refused what the whole made')
+  return { whole, merged: mergeLayout([st.layout() as never]), plans: st.plans, marked: mergeLayout([sb.layout() as never]), markedPlans: sb.plans, late: both.stats.late }
 }
 /** what a file's stats count, but its times and its gzip size */
 const counted = (s: LayoutStats) => { const { ms: _ms, bytes, ...rest } = s; return { ...rest, raw: bytes.raw } }
@@ -66,6 +74,9 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
     const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
     expect(rows(four.merged as never)).toEqual(rows(four.whole.file as never))
     expect(four.plans).toEqual(four.whole.plans)
+    expect(rows(four.marked as never)).toEqual(rows(four.whole.file as never))
+    expect(four.markedPlans).toEqual(four.whole.plans)
+    expect(four.late).toEqual({ rows: 0, vetoes: 0 })
   }
   expect(parseLayout(new TextEncoder().encode(text))).toEqual(one.file)
   for (const [, rows] of one.file.erase) expect(rows.length).toBeGreaterThan(0)
@@ -1460,5 +1471,71 @@ describe('makerOf, a page at a time: no unit decided before its match is final (
     const units = pieces.map(ps => unit('para', [text(ps.flatMap(([p, a, b]) => span(p, a, b).map(r => r.s)).join(' '))]))
     const { file } = await made({ pages: [1, 2, 3, 4].map(p => ({ runs: span(p, 0, 20) })), marks, units })
     expect(file.units.map(u => u[0])).toEqual([0, 1, 2, 3])
+  })
+})
+
+describe('makerOf, the marked original a page at a time (stage 2): its pages read beside arXiv\'s, the whole run\'s rows', () => {
+  /** the maker fed the marked original's pages as markedPages reads them (byStream's `marked`), the whole run's frame and edges */
+  async function streamed(w: World) {
+    const input = { units: w.units, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    let frameOf: unknown = null
+    const first = await makerOf({ ...input, marks: await marksOf(w), arxiv: arxivOf(w.pages), frame: ((d: never, ms: never) => { frameOf = pageFrame(d, ms); return frameOf }) as never })
+    if ('refused' in first) throw new Error('refused')
+    for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+    const whole = await first.whole()
+    const events = markedPages(markedOf(w.marked ?? w.pages, w.marks), '', { engine: 'pdflatex', units: w.units, OPS } as never)
+    const head = ((await events.next()).value as { head: Parameters<typeof marksOfHead>[0] }).head
+    const m = await makerOf({ ...input, marks: marksOfHead(head, 'pdflatex'), arxiv: arxivOf(w.pages), frame: () => frameOf as never, columnEdges: first.edges(), check: true })
+    if ('refused' in m) throw new Error('refused')
+    const st = await m.byStream({ head, events } as never)
+    return { whole, st, stats: m.stats }
+  }
+  const lines = (page: number, n = 10): Run[] => Array.from({ length: n }, (_, j) => ({ s: words(100 * page + 10 * j, 10), x: 72, y: 700 - 12 * j }))
+
+  it('a piece whose closing point is on the next page: its own ink is the unit\'s once that page is read, none too late', async () => {
+    // a paragraph from page 1's last line to page 2's first, a formula across the break (x on page 1, y on page 2)
+    const p1 = lines(1, 9), p2 = lines(2, 9)
+    const x: Run = { s: 'x', x: 200, y: 592 }, y: Run = { s: 'y', x: 72, y: 712 }
+    const pages: Page[] = [{ runs: [...p1, { s: words(190, 10), x: 72, y: 592 }, x] }, { runs: [y, ...p2] }]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['p0.1a', 1, 199, 592], ['p0.1b', 2, 78, 712], ['0e', 2, endOf(p2[8] as Run), p2[8]!.y]]
+    const units = [unit('para', [text(`${[...p1.map(r => r.s), words(190, 10)].join(' ')} `), ph('$x y$'), text(` ${p2.map(r => r.s).join(' ')}`)])]
+    const w: World = { pages, marks, units }
+    await made(w)
+    const { whole, st, stats } = await streamed(w)
+    if (!('file' in whole) || 'refused' in st) throw new Error('refused')
+    expect(mergeLayout([st.layout() as never]).ph).toEqual(whole.file.ph)
+    expect(stats.late).toEqual({ rows: 0, vetoes: 0 })
+  })
+
+  it('a piece found only once a later page is read (its stop there): its unit waits for it, none too late', async () => {
+    // page 1's body ends after the formula, the unit's end mark set past the body's end: the piece's stop, the next point in
+    // its region, is the next unit's start mark on page 2 (stream.mjs ownedPages: found once page 2 is read)
+    const r0: Run = { s: words(100, 10), x: 72, y: 700 }, r1: Run = { s: words(110, 9), x: 72, y: 688 }, x: Run = { s: 'x', x: 300, y: 688 }
+    const p2 = lines(2)
+    const pages: Page[] = [{ runs: [r0, r1, x], points: { bs1: [0, 0], be1: [2, 1] } }, { runs: p2, points: { bs2: [0, 0], be2: [p2.length, 0] } }]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['p0.1a', 1, 299, 688], ['0e', 1, 306, 688], ['1s', 2, 72, 700], ['1e', 2, endOf(p2[9] as Run), 592]]
+    const units = [unit('para', [text(`${r0.s} ${r1.s} `), ph('$x$')]), unit('para', [text(p2.map(r => r.s).join(' '))])]
+    const w: World = { pages, marks, units }
+    await made(w)
+    const { whole, st, stats } = await streamed(w)
+    if (!('file' in whole) || 'refused' in st) throw new Error('refused')
+    expect(mergeLayout([st.layout() as never]).ph).toEqual(whole.file.ph)
+    expect(stats.late).toEqual({ rows: 0, vetoes: 0 })
+    // (the piece's row is the marked original's second page's: page 1's pieces are not all found with page 1)
+    const found: number[] = []
+    for await (const e of markedPages(markedOf(pages, marks), '', { engine: 'pdflatex', units, OPS } as never)) if ('page' in e) found.push((e as { page: { found: number } }).page.found)
+    expect(found).toEqual([1, 3])
+  })
+
+  it('pages are let go before the marked original is read to its end', async () => {
+    const w: World = { pages: [1, 2, 3, 4].map(p => ({ runs: lines(p) })), marks: [1, 2, 3, 4].flatMap((p): Mark[] => [[`${p - 1}s`, p, 72, 700], [`${p - 1}e`, p, endOf(lines(p)[9] as Run), 592]]), units: [1, 2, 3, 4].map(p => unit('para', [text(words(100 * p, 100))])) }
+    await made(w)
+    const { st } = await streamed(w)
+    if ('refused' in st) throw new Error('refused')
+    const trace = (st as unknown as { trace: { read: number; marked: number; released: number }[] }).trace
+    expect(trace.map(t => t.marked)).toEqual([1, 2, 3, 4])
+    // pages 1 and 2 let go with page 3 read on both sides, not at the end (page 1's range waits for the units after it to be
+    // known: a mark of the marked page 3 may be carried to arXiv's page 2, and a unit with none searched MARGIN before it)
+    expect(trace[2]!.released).toBe(2)
   })
 })

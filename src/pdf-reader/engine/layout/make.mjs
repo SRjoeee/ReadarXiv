@@ -18,16 +18,16 @@
 // it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
 import { anchorUnits, boundsFromMarks, markWords, pageFrame, pageIndex, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
-import { leftOfPart, leftReach, partSets } from '../pipeline/left-part.mjs'
+import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
-import { carrierOf, tokensOfMarks } from './carry.mjs'
+import { carrier as carrierFor, carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { giveUp, GLYPHS_PAGE, OPS_MS, packGlyphs, pageInk, within } from './ink.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf } from './remove.mjs'
-import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
+import { classOf, followsOf, headEnd, layoutMarking, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 
@@ -98,6 +98,8 @@ const letters = s => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu
 const EVEN = new Set(['para', 'abstract', 'theorem'])
 
 const r2 = v => Math.round(v * 100) / 100
+/** a number to a hundredth as the marks file writes it (marks.mjs: -0 written 0) */
+const r2z = v => Math.round(v * 100) / 100 + 0
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] }
 
@@ -329,6 +331,9 @@ function blank(units) {
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
     capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
+    // (the page stream's, the marked original read a page at a time: rows found after their unit's own ink was taken, and points
+    // read twice after their unit's placeholders were matched; none on a paper read whole)
+    late: { rows: 0, vetoes: 0 },
   }
 }
 
@@ -456,27 +461,41 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
 
   // ---------------------------------------------------------------- the marks carried to arXiv's PDF by line
   let at = null, ours = null, carrier = null, dropped = null, carry = null, markOf = null, anchorMarkOf = null, besideOf = null, matcher = null
-  /** the marks carried to arXiv's PDF by line: null, or 'carry' where too few of the marked original's lines are */
-  function carrying() {
-    const t = now()
-    // a draft image frame's name (graphicx's draft, g<n>a, g<n>b, g<n>t) is no line of the paper's
-    at = new Map(marks.marks.map(([n, page, x, y]) => [n, { page, x, y }]))
-    const frames = []
-    for (const [n, a] of at) {
-      const g = /^g(\d+)a$/.exec(n)
-      const b = g && at.get(`g${g[1]}b`), top = g && at.get(`g${g[1]}t`)
-      if (b && top && b.page === a.page && top.page === a.page) frames.push([a.page, Math.min(a.x, b.x) - 1, Math.min(a.y, top.y) - 1, Math.max(a.x, b.x, top.x) + 1, Math.max(a.y, top.y) + 1])
-    }
-    const drawn = tk => !frames.some(([p, x0, y0, x1, y1]) => tk.page === p && tk.x + tk.w / 2 >= x0 && tk.x + tk.w / 2 <= x1 && tk.y >= y0 && tk.y <= y1)
-    ours = tokensOfMarks(marks).filter(drawn)
-    carrier = carrierOf(ours, doc)
-    for (const p of carrier.over) { stats.over.push(p); if (p >= 1 && p <= pages) dark.add(p) }
+  /** a draft image frame (graphicx's draft, g<n>a, g<n>b, g<n>t: no line of the paper's) whose start mark is `n` (at `a`): its
+   *  box, [page, x0, y0, x1, y1], or null */
+  const frameAt = (n, a) => {
+    const g = /^g(\d+)a$/.exec(n)
+    const b = g && at.get(`g${g[1]}b`), top = g && at.get(`g${g[1]}t`)
+    return b && top && b.page === a.page && top.page === a.page ? [a.page, Math.min(a.x, b.x) - 1, Math.min(a.y, top.y) - 1, Math.max(a.x, b.x, top.x) + 1, Math.max(a.y, top.y) + 1] : null
+  }
+  const drawnOf = frames => tk => !frames.some(([p, x0, y0, x1, y1]) => tk.page === p && tk.x + tk.w / 2 >= x0 && tk.x + tk.w / 2 <= x1 && tk.y >= y0 && tk.y <= y1)
+  /** the share of the marked original's lines carried: the file refused ('carry') where it is too small, else null */
+  const shareOf = () => {
     const L = carrier.lines
     stats.lines.total = L.total
     stats.lines.carried = L.same + L.moved + L.respaced + L.fuzzy
-    stats.ms.carry = now() - t
     // (for parts, the share is the cut's verdict on each part's pages: `parts`)
-    if (!(L.total > 0 && (parts || stats.lines.carried >= CARRY_MIN * L.total))) return 'carry'
+    return L.total > 0 && (parts || stats.lines.carried >= CARRY_MIN * L.total) ? null : 'carry'
+  }
+  /** a marked page the carrier is over its bound on (carry.mjs `over`): no ink of arXiv's page of its number */
+  const overFrom = from => { for (const p of carrier.over.slice(from)) { stats.over.push(p); if (p >= 1 && p <= pages) dark.add(p) } }
+  /** the marks carried to arXiv's PDF by line: null, or 'carry' where too few of the marked original's lines are */
+  function carrying() {
+    const t = now()
+    at = new Map(marks.marks.map(([n, page, x, y]) => [n, { page, x, y }]))
+    const frames = []
+    for (const [n, a] of at) { const f = frameAt(n, a); if (f) frames.push(f) }
+    ours = tokensOfMarks(marks).filter(drawnOf(frames))
+    carrier = carrierOf(ours, doc)
+    overFrom(0)
+    const refused = shareOf()
+    stats.ms.carry = now() - t
+    if (refused) return refused
+    carryOver()
+    return null
+  }
+  /** the carry's functions over the marks as they stand (`at`, `carrier`: the whole marked original's, or what of it is read) */
+  function carryOver() {
     /** a position of the marked original on arXiv's PDF: carried by its line, on a page with ink, within its view */
     carry = (page, x, y) => {
       const c = carrier.carry(page, x, y)
@@ -500,19 +519,34 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: carried.page, x, y, whole: true } : null
     }
     matcher = matcherOf({ ink, carry })
-    return null
   }
 
   // ---------------------------------------------------------------- the units located on arXiv's tokens
   let unitMarks = null, nameOf = null, carriedUnit = null, unplaced = null, linesTeX = null, anchors = null
+  /** the unit start marks by page: [key, mark, place], the place the key's first name's in the marks' order (the order the
+   *  unit marks are met in), for the unit a babel name leads (leadAt) */
+  let startsOn = new Map()
+  const startOn = (k, m, pos) => (startsOn.get(m.page) ?? startsOn.set(m.page, []).get(m.page)).push([k, m, pos])
+  const colAt = m => columnOf(m.page, m.x, m.x)
+  /** the unit a babel name whose end mark is `b` leads: the first unit start after it on its line, in its column (the other
+   *  column's first line may share its baseline), in our compile; of two at one place, the first in the marks' order */
+  const leadAt = b => {
+    let lead = -1, leadX = Infinity, leadPos = Infinity
+    for (const [k, m, pos] of startsOn.get(b.page) ?? []) if (Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && (m.x < leadX || (m.x === leadX && pos < leadPos))) { lead = Number(k.slice(0, -1)); leadX = m.x; leadPos = pos }
+    return lead
+  }
   /** the units' own marks carried, and the units located on arXiv's tokens under them */
   function anchoring() {
     const t = now()
-    unitMarks = new Map(); nameOf = new Map()
+    unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
+    const first = new Map()
+    let pos = 0
     for (const [n, m] of at) {
       const r = /^[th]?(\d+)([se])$/.exec(n)
-      if (r && Number(r[1]) < units.length) { unitMarks.set(`${Number(r[1])}${r[2]}`, m); nameOf.set(`${Number(r[1])}${r[2]}`, n) }
+      if (r && Number(r[1]) < units.length) { const k = `${Number(r[1])}${r[2]}`; if (!first.has(k)) first.set(k, pos); unitMarks.set(k, m); nameOf.set(k, n) }
+      pos++
     }
+    for (const [k, m] of unitMarks) if (k.endsWith('s')) startOn(k, m, first.get(k))
     carriedUnit = new Map()
     const byPage = new Map(), withWords = markWords(ours, unitMarks), raw = new Map()
     doc.forEach((t, k) => (byPage.get(t.page) ?? byPage.set(t.page, []).get(t.page)).push(k))
@@ -650,11 +684,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (letters(gs.slice().sort((g, h) => P.x0[g] - P.x0[h] || g - h).map(g => P.u[g]).join('')) !== want) { why("not arXiv's glyphs there"); return }
     const row = rowOf(P, gs, S.page, [], S.y)
     if (!(r2(row.size) > 0 && row.size <= SIZE_MAX)) { why('no size'); return }
-    // the unit it leads: the first unit start after its end on its line (its column's: the other column's first line
-    // may share its baseline) in our compile, carried after it on that line
-    const colAt = m => columnOf(m.page, m.x, m.x)
-    let lead = -1, leadX = Infinity
-    for (const [k, m] of unitMarks) if (k.endsWith('s') && m.page === b.page && Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && m.x < leadX) { lead = Number(k.slice(0, -1)); leadX = m.x }
+    // the unit it leads (leadAt), carried after it on that line
+    const lead = leadAt(b)
     let glue = 0
     if (lead >= 0) {
       const L = carriedUnit.get(`${lead}s`)
@@ -698,6 +729,18 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   const ph = [], kept = new Map() // kept: page → the rectangles erasing leaves out (displays' segments, labels)
   const keep = (p, r) => (kept.get(p) ?? kept.set(p, []).get(p)).push(r)
   const ownInk = new Map(marks.owned.map(e => [e[0], e]))
+  /** unit i's pieces phOf reads the own ink and marks of (a class marked, its macro not one that sets no ink, its opening
+   *  mark in the marking's design): [k, its opening mark's name, its closing one's] */
+  const designedOf = i => {
+    const out = []
+    units[i].pieces.forEach((piece, k) => {
+      const cls = classOf(piece)
+      if (!cls || (cls === 'macro' && inkless.has(piece.src)) || !classes.has(cls) || !design.get(`${i}.${k}`)?.open) return
+      const prefix = cls === 'footnote' ? 'n' : 'p'
+      out.push([k, `${prefix}${i}.${k}a`, `${prefix}${i}.${k}b`])
+    })
+    return out
+  }
   /** a found piece's matched glyphs, by its key: the twice bar's */
   const matchedBy = new Map()
   /** unit i's placeholders, each found on arXiv's page (matched), LOST, EMPTY or JOINED, its rows' ink taken in */
@@ -1584,25 +1627,23 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     return [...set].sort((x, y) => x - y)
   }
   /** the pages unit i's own marks and its pieces' own glyphs, rules and marks are carried to (carriedPage's), rising: those
-   *  it may touch whatever its anchor */
+   *  it may touch whatever its anchor (of the pieces phOf matches: designedOf's) */
   function carriedPagesOf(i) {
     const set = new Set()
     const add = v => { if (v !== null) set.add(v) }
     for (const end of ['s', 'e']) { const name = nameOf.get(`${i}${end}`), m = name === undefined || dropped.has(name) ? null : at.get(name); if (m) add(carriedPage(m.page, m.x, m.y)) }
-    units[i].pieces.forEach((piece, k) => {
-      const cls = classOf(piece)
-      if (!cls) return
-      const prefix = cls === 'footnote' ? 'n' : 'p', A = at.get(`${prefix}${i}.${k}a`) ?? null, B = at.get(`${prefix}${i}.${k}b`) ?? null
+    for (const [, a, b] of designedOf(i)) {
+      const A = at.get(a) ?? null, B = at.get(b) ?? null
       for (const M of [A, B]) if (M) add(carriedPage(M.page, M.x, M.y))
-      const e = ownInk.get(`${prefix}${i}.${k}a`)
-      if (!e) return
+      const e = ownInk.get(a)
+      if (!e) continue
       const n = e[2]
       for (let j = 3; j < 3 + 5 * n; j += 5) {
         add(carriedPage(e[j], e[j + 1], e[j + 2]))
         for (const M of [A, B]) if (M && M.page === e[j]) add(carriedPage(e[j], e[j + 1], M.y))
       }
       for (let j = 3 + 5 * n; j + 4 < e.length; j += 5) add(carriedPage(e[j], e[j + 1], e[j + 2]))
-    })
+    }
     return [...set].sort((x, y) => x - y)
   }
   /** the pages a babel name's occurrence reads and writes: its two marks' carried pages */
@@ -1648,45 +1689,107 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     return assemble()
   }
 
-  // ---------------------------------------------------------------- the page stream (E2b's oracle-early mode; stage 2's)
+  // ---------------------------------------------------------------- the page stream (E2b; stage 2: the marked original too)
   /**
-   * The maker a page at a time, after carrying(), the columns' edges given. arXiv's pages are read in order (`readPage(p)`,
-   * then `pageRead(p)`); as each is: every unit whose own marks are carried to pages read has them carried (anchoring()'s, a
-   * unit at a time); the units are anchored by ranges of a page (pipeline/left-part.mjs leftOfPart over those marks'
-   * bounds, under `frame`), a range once every unit it reads has its match final; each anchored unit's passes run as tasks
-   * (byTasks'), a task once its pages are decided (no unit that may touch them is still to be anchored) and read and every
-   * task before it in the whole order on them has run; a page is let go (its ink and facts dropped) once its tasks have run,
-   * its names are taken in and its plan is made (`plans`). A unit's rows are the file's (`layout()`, a unit's as the whole
-   * file's parse holds them) once they are made. `finish()` after the last page. `released()` the pages from 1 let go;
-   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed)
+   * The maker a page at a time, the columns' edges given. arXiv's pages are read in order (`readPage(p)`, then `pageRead(p)`);
+   * the marked original whole (carrying() first), or a page at a time as well (`marked`: markedPages' head; then each of its
+   * pages in order, `markedPage(page)`, and its end, `markedEnd(end)`): each name's mark as its page is read (within that
+   * page's view, as the marks file keeps it), the page's tokens drawn and carried (carry.mjs carrier, a page at a time), the
+   * pieces found once it was read (stream.mjs ownedPages). A unit's own marks are known once every name that may give them is
+   * read; its pieces' own ink once the window has found every piece whose opening point stands on its pieces' pages (the
+   * page's `found`; TeX sets a point and its destination at one place), or at the end. As pages are read on both sides: every
+   * unit whose own marks are known and carried to pages read (and whose marked pages, which tell those pages' darkness, are
+   * read) has them carried (anchoring()'s, a unit at a time); the units are anchored by ranges of a page (pipeline/left-part.mjs
+   * rangedAnchors, under `frame`); each anchored unit whose pieces' own ink is known has its passes run as tasks (byTasks'), a
+   * task once its pages are decided (no unit or babel name that may touch them is still to be anchored or known) and read and
+   * every task before it in the whole order on them has run; a page is let go (its ink and facts dropped) once its tasks have
+   * run, its names are taken in and its plan is made (`plans`). A unit's rows are the file's (`layout()`, a unit's as the whole
+   * file's parse holds them) once they are made. `finish()` after the last page of each. `released()` the pages from 1 let go;
+   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed). With `marked`, the carry's
+   * refusal is known at the marked original's end, or for parts once any line is carried (`carryKnown()`, `refused()`); a piece
+   * found after its unit's own ink was taken, or a point read twice after its unit's placeholders were matched, is too late
+   * (`stats.late`, rows and vetoes: the whole run's file but there)
    */
-  function stream() {
+  function stream({ marked: mh = null } = {}) {
     if (!edges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`)')
     const floating = id => FLOATING.has(units[id]?.kind ?? '')
     const n = units.length
-    // ---- each unit's own marks, carried once the pages they are carried to are read (anchoring()'s, a unit at a time)
-    unitMarks = new Map(); nameOf = new Map()
-    for (const [nm, m] of at) {
-      const r = /^[th]?(\d+)([se])$/.exec(nm)
-      if (r && Number(r[1]) < n) { unitMarks.set(`${Number(r[1])}${r[2]}`, m); nameOf.set(`${Number(r[1])}${r[2]}`, nm) }
-    }
+    // ---- the marked original: whole (carrying() done), or as its pages come, its names first (the head's)
+    const M = mh ? mh.pages : 0
+    let markedTo = mh ? 0 : Infinity, ended = !mh, refusal = null, foundTo = 1
+    const mViews = [], mWords = [], twiceSeen = new Set()
+    const follows = mh ? followsOf(units, mh.set) : null
+    if (mh) { at = new Map(); ours = []; carrier = carrierFor(ours, doc); carryOver() }
+    let X = 0
+    /** the last page from 1 read on both sides: arXiv's, and the marked original's that tells its darkness (carry.mjs `over`;
+     *  a page past the marked original's last has none of it) */
+    const readyTo = () => (markedTo >= M ? X : Math.min(X, markedTo))
+    // ---- the names in their order (the marks file's): each page's, each unit key's ([th]?<id>[se]), the babel names', the
+    // draft frames'
+    unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
     carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); anchors = new Map()
-    const byPage = pageIndex(doc), withWords = markWords(ours, unitMarks)
-    const bounds = new Map(), marked = new Uint8Array(n), waits = Array.from({ length: pages + 1 }, () => []), ownHigh = new Int32Array(n)
-    let markedCount = 0
-    // (and the least of those pages: where a unit's bounds would begin, its marks carried)
-    const ownLow = new Int32Array(n)
-    {
-      const wait = new Int32Array(n)
-      for (const [k] of withWords) {
-        const i = Number(k.slice(0, -1)), name = nameOf.get(k), m = dropped.has(name) ? null : at.get(name)
-        const c = m ? carriedPage(m.page, m.x, m.y) : null
-        if (c !== null) { wait[i] = Math.max(wait[i], c); ownLow[i] = ownLow[i] ? Math.min(ownLow[i], c) : c }
+    const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours)
+    const byName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
+    const listed = mh ? mh.named.filter(([, page]) => Number.isInteger(page) && page >= 1 && page <= M).sort(byName) : [...at].map(([nm, m]) => [nm, m.page, m.x, m.y])
+    const pageOfName = new Map(), namesOn = new Map(), gOn = new Map(), keyNames = new Map(), keysOn = new Map(), nameList = []
+    const push = (map, key, v) => (map.get(key) ?? map.set(key, []).get(key)).push(v)
+    listed.forEach(([nm, page, x, y], rank) => {
+      pageOfName.set(nm, page)
+      if (mh) push(namesOn, page, [nm, x, y])
+      if (mh && /^g\d+a$/.test(nm)) push(gOn, page, nm)
+      const r = /^[th]?(\d+)([se])$/.exec(nm)
+      if (r && Number(r[1]) < n) {
+        const k = `${Number(r[1])}${r[2]}`
+        push(keyNames, k, [nm, page, rank])
+        const on = keysOn.get(page) ?? keysOn.set(page, new Map()).get(page)
+        on.set(k, (on.get(k) ?? 0) + 1)
       }
-      for (let i = 0; i < n; i++) waits[wait[i]].push(i)
-      for (let i = 0; i < n; i++) ownHigh[i] = wait[i]
+      if (NAME_START.test(nm)) nameList.push(nm)
+    })
+    // ---- each unit: its keys (final once every name of them is read), its pieces' own ink and marks (known once found)
+    const R = rangedAnchors(doc, texts, { floating, floatMatch, frame })
+    const keyLeft = new Map([...keyNames].map(([k, list]) => [k, mh ? list.length : 0]))
+    const keysLeft = new Int32Array(n), rowsLeft = new Int32Array(n), known = new Uint8Array(n), wantDecide = new Uint8Array(n), phRan = new Uint8Array(n)
+    for (const k of keyNames.keys()) keysLeft[Number(k.slice(0, -1))]++
+    const rowsAt = new Map(), abAt = new Map(), rowLeast = new Float64Array(n).fill(Infinity)
+    if (mh) {
+      // (a display group's later display, which TeX gives no point: its ink is found with its group's first)
+      const groupHead = new Map()
+      for (let i = 0; i < n; i++) for (const [, a] of designedOf(i)) for (const g of follows(a)?.group ?? []) groupHead.set(g, a)
+      for (let i = 0; i < n; i++) for (const [, a, b] of designedOf(i)) {
+        for (const nm of [a, b]) { const pg = pageOfName.get(nm); if (pg !== undefined) { rowsLeft[i]++; push(abAt, pg, i); rowLeast[i] = Math.min(rowLeast[i], pg) } }
+        const rp = mh.pageOf.get(a) ?? (groupHead.has(a) ? mh.pageOf.get(groupHead.get(a)) : undefined)
+        if (rp !== undefined) { rowsLeft[i]++; push(rowsAt, rp, i); rowLeast[i] = Math.min(rowLeast[i], rp) }
+      }
     }
+    // ---- the pages each unit or babel name may touch before it is decided, as a count of the least: an undecided unit's
+    // carried pages once it is known (rawLow, its own marks' and pieces'), before, its names' pages but one (a mark of a
+    // marked page is carried to arXiv's page of its number or one beside it, carry.mjs); a unit anchored but not known, its
+    // anchor's first page too
+    const lowCount = new Int32Array(pages + 2), lowOf = new Int32Array(n), counted = new Uint8Array(n)
+    let lowAt = 1, decidedTo = 0
+    const countLow = (i, v) => {
+      v = Math.min(Math.max(1, v), pages + 1)
+      if (counted[i]) lowCount[lowOf[i]]--
+      lowOf[i] = v; lowCount[v]++; counted[i] = 1
+      if (v <= decidedTo) throw new Error(`unit ${i} may touch page ${v}, decided already`)
+      if (v < lowAt) lowAt = v
+    }
+    const decided = new Uint8Array(n)
+    const becomeKnown = i => {
+      if (known[i]) return
+      known[i] = 1
+      if (decided[i]) return
+      const pg = carriedPagesOf(i)
+      countLow(i, Math.min(pg.length ? pg[0] : pages + 1, wantDecide[i] ? lowOf[i] : Infinity))
+      if (wantDecide[i]) decide(i)
+    }
+    const rowDone = i => { if (--rowsLeft[i] === 0 && !keysLeft[i]) becomeKnown(i) }
+    // ---- a unit's own marks, carried once the pages they are carried to are read (anchoring()'s, a unit at a time)
+    const waits = Array.from({ length: pages + 1 }, () => [])
+    let wokeTo = -1
     const markUnit = i => {
+      if (R.isMarked(i)) return
       const ks = [`${i}s`, `${i}e`].filter(k => withWords.has(k)), raw = new Map()
       for (const k of ks) raw.set(k, anchorMarkOf(nameOf.get(k)))
       for (const k of ks) {
@@ -1696,16 +1799,43 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       for (const k of ks) { const c = raw.get(k); if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), withWords.get(k).t) }) }
       const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage).get(String(i))
-      if (b) bounds.set(String(i), b)
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !b))) unplaced.add(i)
-      marked[i] = 1
-      markedCount++
+      R.mark(i, b ?? null)
     }
-    // ---- the pages each unit may touch before its anchor is known: those its own marks and pieces are carried to
-    const lowCount = new Int32Array(pages + 2), rawLow = new Int32Array(n)
-    for (let i = 0; i < n; i++) { const pg = carriedPagesOf(i); rawLow[i] = pg.length ? pg[0] : pages + 1; lowCount[rawLow[i]]++ }
-    let lowAt = 1
+    /** unit i's own marks known: the pages they are carried to (where its bounds would begin and end), carried once read */
+    const marksKnown = i => {
+      let w = 0, lo = 0
+      for (const end of ['s', 'e']) {
+        const k = `${i}${end}`
+        if (!withWords.has(k)) continue
+        const name = nameOf.get(k), m = dropped.has(name) ? null : at.get(name), c = m ? carriedPage(m.page, m.x, m.y) : null
+        if (c !== null) { w = Math.max(w, c); lo = lo ? Math.min(lo, c) : c }
+      }
+      R.own(i, lo, w)
+      if (w <= wokeTo) markUnit(i)
+      else waits[w].push(i)
+      if (!rowsLeft[i]) becomeKnown(i)
+    }
+    /** a key's names all read: the last of them the key's mark (the first one's place its place), its word in our compile */
+    const finalKey = k => {
+      let first = null, last = null
+      for (const c of keyNames.get(k)) if (at.has(c[0])) { first ??= c; last = c }
+      if (last) {
+        const m = at.get(last[0])
+        unitMarks.set(k, m); nameOf.set(k, last[0])
+        if (k.endsWith('s')) startOn(k, m, first[2])
+        const tk = tokenAtMark(ours, oursOn, m, k.endsWith('s'))
+        withWords.set(k, { ...m, t: tk == null ? null : ours[tk].t })
+      }
+      const i = Number(k.slice(0, -1))
+      if (--keysLeft[i] === 0) marksKnown(i)
+    }
+    const wake = () => {
+      const to = Math.min(readyTo(), pages)
+      for (let q = wokeTo + 1; q <= to; q++) for (const i of waits[q]) markUnit(i)
+      wokeTo = Math.max(wokeTo, to)
+    }
     // ---- the tasks, a queue a page; a page's opened once it is decided and read
     const queue = new Map(), touching = new Map(), work = []
     const cmp = (x, y) => { for (let j = 0; j < Math.max(x.length, y.length); j++) { const d = (x[j] ?? -Infinity) - (y[j] ?? -Infinity); if (d) return d } return 0 }
@@ -1719,8 +1849,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         Q.list.splice(at, 0, t)
       }
     }
-    let X = 0, am = 1, decidedTo = 0, decidedCount = 0, releasedTo = 0
-    const decided = new Uint8Array(n), settledU = new Uint8Array(n), released = new Uint8Array(pages + 2)
+    let decidedCount = 0, releasedTo = 0
+    const settledU = new Uint8Array(n), released = new Uint8Array(pages + 2)
     const inFile = new Set(), unitRows = new Map(), nameRows = new Map(), namedOn = new Map()
     const plans = wantPlans ? new Map() : null
     let plansFailed = null
@@ -1754,80 +1884,39 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: [], erase: [], headings: [], pageText: [], held: [],
       }
     }
+    /** unit i's anchor final: its passes as tasks on its pages (unitPages'), once its pieces' own ink is known; till then its
+     *  anchor's first page kept from deciding */
     const decide = i => {
       if (decided[i]) return
+      const a = anchors.get(i)
+      if (a && !known[i]) {
+        if (!wantDecide[i]) {
+          wantDecide[i] = 1
+          let least = Infinity
+          for (const k of a.tokens) least = Math.min(least, doc[k].page)
+          if (least < lowOf[i]) countLow(i, least)
+        }
+        return
+      }
       decided[i] = 1
       decidedCount++
-      lowCount[rawLow[i]]--
-      if (!anchors.get(i)) { settledU[i] = 1; return }
+      if (counted[i]) { lowCount[lowOf[i]]--; counted[i] = 0 }
+      if (!a) { settledU[i] = 1; return }
       const pg = unitPages(i)
       for (const q of pg) (touching.get(q) ?? touching.set(q, []).get(q)).push(i)
       const of = f => () => { const one = placedById.get(i); if (one) f(one) }
       insert({ key: [0, i], pages: pg, run: () => place(i) })
-      for (const [x, f] of [[2, phOf], [4, heldOf], [5, outsideOf], [6, labelOf]]) insert({ key: [x, i], pages: pg, run: of(f) })
+      insert({ key: [2, i], pages: pg, run: () => { phRan[i] = 1; of(phOf)() } })
+      for (const [x, f] of [[4, heldOf], [5, outsideOf], [6, labelOf]]) insert({ key: [x, i], pages: pg, run: of(f) })
       insert({ key: [7, i], pages: pg, run: () => { of(one => { rowsOf(one); fileRowsOf(one); freeUnit(one) })(); settledU[i] = 1 } })
     }
-    const lastPage = doc.length ? doc[doc.length - 1].page : 0
-    // each page's first token and last (the tokens are in page order): a page's tokens, as a reach's interval
-    const firstTok = new Int32Array(lastPage + 2).fill(doc.length), lastTok = new Int32Array(lastPage + 2).fill(-1)
-    doc.forEach((t, k) => { if (k < firstTok[t.page]) firstTok[t.page] = k; lastTok[t.page] = k })
-    for (let p = lastPage; p >= 1; p--) if (firstTok[p] === doc.length) firstTok[p] = firstTok[p + 1] ?? doc.length
-    for (let p = 1; p <= lastPage; p++) if (lastTok[p] < 0) lastTok[p] = lastTok[p - 1] ?? -1
-    const inText = j => bounds.has(String(j)) && !floating(j)
-    /**
-     * Each unit's match final (matchUnits' is the whole paper's): its marks carried and, where it has no bounds, every unit
-     * between it and its nearest bounded neighbour in the text either side (anchors.mjs neighbours) carried too. And the
-     * reach of every unit whose match is not (design §1.2, conservative): its own marks' pages (where its bounds would be) and
-     * the window it would have unbounded between the neighbours it may yet have — from the earliest end any unit still to be
-     * carried between it and its last bounded neighbour may get to the latest start any on its other side may (a figure's text
-     * box, a paragraph by kind, is set after the text that follows it: the units' order is not their bounds' order) — with its
-     * MARGIN, and a float's match over the whole document (leftReach's). A unit whose match is final reaches what leftReach says
-     */
-    const finalOf = () => {
-      const fin = new Uint8Array(n), out = leftReach(doc, texts, { bounds, floating, floatMatch })
-      const N = doc.length, MARGIN = 100
-      const pendBefore = new Uint8Array(n), pendAfter = new Uint8Array(n), lo = new Int32Array(n), hi = new Int32Array(n)
-      for (let u = 0, pend = 0, low = -1; u < n; u++) {
-        pendBefore[u] = pend; lo[u] = low
-        if (inText(u)) { pend = 0; low = bounds.get(String(u))[1] } else if (!marked[u]) { pend = 1; if (!floating(u) && ownLow[u]) low = Math.min(low, firstTok[ownLow[u]]) }
-      }
-      for (let u = n - 1, pend = 0, high = N; u >= 0; u--) {
-        pendAfter[u] = pend; hi[u] = high
-        if (inText(u)) { pend = 0; high = bounds.get(String(u))[0] } else if (!marked[u]) { pend = 1; if (!floating(u) && ownHigh[u]) high = Math.max(high, lastTok[ownHigh[u]]) }
-      }
-      for (let u = 0; u < n; u++) {
-        fin[u] = marked[u] && (bounds.has(String(u)) || (!pendBefore[u] && !pendAfter[u])) ? 1 : 0
-        if (fin[u]) continue
-        const more = [[Math.max(0, lo[u] + 1 - MARGIN), Math.min(N - 1, hi[u] - 1 + MARGIN)]]
-        if (!marked[u] && ownLow[u]) more.push([firstTok[ownLow[u]], lastTok[ownHigh[u]]])
-        out[u] = [...out[u], ...more.filter(([a, b]) => a <= b)]
-      }
-      return { fin, reach: out }
-    }
-    /** the ranges anchored from `am` on, a page each, while every unit a range reads has its match final (and the paper's
-     *  bounds are known to be some, matchUnits' switch): its units first framed on its page anchored, every unit whose match
-     *  is final and which may reach no later page decided. A unit placed before the page anchored and not decided is a
-     *  defect of the readiness: thrown */
-    const anchorRanges = () => {
-      while (am <= lastPage) {
-        if (!(bounds.size > 0 || markedCount === n)) return
-        const { fin, reach } = finalOf()
-        if (!partSets(doc, texts, [am, am], reach).V2.units.every(u => fin[u])) return
-        const got = leftOfPart(doc, texts, { bounds, floating, floatMatch, frame }, [am, am], reach)
-        for (const id of got.before) if (!decided[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
-        for (const [id, an] of got.anchors) anchors.set(id, an)
-        for (const id of got.anchors.keys()) decide(id)
-        am++
-        reach.forEach((iv, u) => { if (!decided[u] && fin[u] && iv.every(([, hi]) => doc[hi].page < am)) decide(u) })
-      }
-      for (let u = 0; u < n; u++) decide(u)
-    }
-    /** the pages decided: before every range still to be anchored, and before the least page an undecided unit's marks or
-     *  pieces are carried to */
+    const onAnchor = (id, an) => { anchors.set(id, an); decide(id) }
+    /** the pages decided: before every range still to be anchored, and before the least page an undecided unit or babel name
+     *  may touch */
     const decidable = () => {
-      if (decidedCount === n) return pages
       while (lowAt <= pages && lowCount[lowAt] === 0) lowAt++
-      return Math.min(am - 1, lowAt - 1, pages)
+      if (decidedCount === n) return Math.min(lowAt - 1, pages)
+      return Math.min(R.am - 1, lowAt - 1, pages)
     }
     const advance = () => {
       const to = decidable()
@@ -1838,7 +1927,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (let q = decidedTo + 1; q <= to; q++) work.push(q)
       decidedTo = Math.max(decidedTo, to)
     }
-    const open = q => q <= decidedTo && q <= X
+    const open = q => q <= decidedTo && q <= readyTo()
     /** a page let go: its names taken into the file, its plan made, its ink and facts dropped */
     const release = q => {
       if (released[q] || !open(q)) return
@@ -1895,50 +1984,168 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       out.names = rows
       return out
     }
-    // the names, each a task on the pages its marks are carried to, and those of the unit it would lead (nameAt reads that
-    // unit's carried start mark)
-    const loose = []
-    let nth = 0
-    for (const [nm, a] of at) {
-      const x = NAME_START.exec(nm)
-      if (!x) continue
+    // ---- the babel names, each a task on the pages its marks are carried to and those of the unit it would lead (nameAt
+    // reads that unit's carried start mark), made once those marks are known: its two marks read, the unit starts on its end
+    // mark's page known (the unit it leads, leadAt) and that unit's own marks
+    const nameReady = nm => {
+      if (pageOfName.get(nm) > markedTo) return false
+      const x = NAME_START.exec(nm), e = `n${x[1]}.${x[2]}.e`, pe = pageOfName.get(e)
+      if (pe !== undefined && pe > markedTo) return false
+      const b = dropped.has(e) ? null : at.get(e)
+      if (!b) return true
+      for (const k of keysOn.get(b.page)?.keys() ?? []) if (k.endsWith('s') && keyLeft.get(k) > 0) return false
+      const lead = leadAt(b)
+      return lead < 0 || ['s', 'e'].every(end => !(keyLeft.get(`${lead}${end}`) > 0))
+    }
+    const nameTask = (nm, rank) => {
+      // (a name with no mark of the file's is met by no pass)
+      if (!at.has(nm)) return
+      const a = at.get(nm), x = NAME_START.exec(nm)
       const set = new Set(), e = `n${x[1]}.${x[2]}.e`, b = dropped.has(e) ? null : at.get(e)
       for (const m of [nm, e]) { const p = dropped.has(m) ? null : at.get(m), c = p ? carriedPage(p.page, p.x, p.y) : null; if (c !== null) set.add(c) }
       if (b) {
-        const colAt = m => columnOf(m.page, m.x, m.x)
-        let lead = -1, leadX = Infinity
-        for (const [k, m] of unitMarks) if (k.endsWith('s') && m.page === b.page && Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && m.x < leadX) { lead = Number(k.slice(0, -1)); leadX = m.x }
+        const lead = leadAt(b)
         if (lead >= 0) for (const end of ['s', 'e']) { const name = nameOf.get(`${lead}${end}`), m = name === undefined || dropped.has(name) ? null : at.get(name), c = m ? carriedPage(m.page, m.x, m.y) : null; if (c !== null) set.add(c) }
       }
       const t = {
-        key: [1, nth++], pages: [...set].sort((p, q) => p - q),
+        key: [1, rank], pages: [...set].sort((p, q) => p - q),
         run: () => {
           const before = named.length
           nameAt(nm, a)
           for (let j = before; j < named.length; j++) { const pg = named[j].row.page; (namedOn.get(pg) ?? namedOn.set(pg, []).get(pg)).push(named[j]) }
         },
       }
+      // (a name carried to no page reads no ink: it is not located, whatever runs before it)
       if (t.pages.length) insert(t)
-      else loose.push(t)
+      else t.run()
     }
-    // (a name carried to no page reads no ink: it is not located, whatever runs before it)
-    for (const t of loose) t.run()
-    for (const i of waits[0]) markUnit(i)
+    /** the names still to be made a task, in their order, each with the least page it may touch counted (its marks' pages but
+     *  one, and the end marks' of the units starting on its end mark's page) */
+    const pendingNames = []
+    const resolveNames = () => {
+      let kept = 0
+      for (const x of pendingNames) {
+        if (!nameReady(x.nm)) { pendingNames[kept++] = x; continue }
+        lowCount[x.low]--
+        nameTask(x.nm, x.rank)
+      }
+      pendingNames.length = kept
+    }
+    // ---- the units' and names' state before any page (the whole marked original's: every one known)
+    if (mh) {
+      for (let i = 0; i < n; i++) {
+        if (!keysLeft[i] && !rowsLeft[i]) continue
+        let least = Infinity, most = -Infinity
+        for (const k of [`${i}s`, `${i}e`]) for (const [, pg] of keyNames.get(k) ?? []) { least = Math.min(least, pg); most = Math.max(most, pg) }
+        // (where its bounds may be, before its own marks are known: their pages and one beside)
+        if (keysLeft[i] && R.lastPage) R.own(i, Math.min(Math.max(1, least - 1), R.lastPage), Math.min(most + 1, R.lastPage))
+        least = Math.min(least, rowLeast[i])
+        countLow(i, least === Infinity ? pages + 1 : least - 1)
+      }
+    }
+    for (let i = 0; i < n; i++) if (!keysLeft[i]) marksKnown(i)
+    for (const k of keyNames.keys()) if (!keyLeft.get(k)) finalKey(k)
+    nameList.forEach((nm, rank) => {
+      if (!mh) { nameTask(nm, rank); return }
+      const x = NAME_START.exec(nm), e = `n${x[1]}.${x[2]}.e`, pe = pageOfName.get(e), ps = [pageOfName.get(nm)]
+      if (pe !== undefined) {
+        ps.push(pe)
+        for (const k of keysOn.get(pe)?.keys() ?? []) if (k.endsWith('s')) for (const [, pg] of keyNames.get(`${k.slice(0, -1)}e`) ?? []) ps.push(pg)
+      }
+      const low = Math.min(Math.max(1, Math.min(...ps) - 1), pages + 1)
+      lowCount[low]++
+      if (low < lowAt) lowAt = low
+      pendingNames.push({ nm, rank, low })
+    })
+    if (mh) resolveNames()
+    wake()
 
+    /** what is ready run: the units whose marks' pages are read carried, the ranges anchored, the pages decided, their tasks */
+    const step = () => {
+      if (refusal) return
+      wake()
+      R.run(onAnchor, decide)
+      advance()
+      for (let q = Math.max(1, releasedTo + 1); q <= Math.min(readyTo(), decidedTo); q++) work.push(q)
+      pump()
+    }
     /** arXiv's page p read (after readPage(p), pages in order) */
     function pageRead(p) {
       X = p
-      for (const i of waits[p] ?? []) markUnit(i)
-      anchorRanges()
-      advance()
-      for (let q = Math.max(1, releasedTo + 1); q <= Math.min(X, decidedTo); q++) work.push(q)
-      pump()
+      step()
     }
-    /** every page read: the rest anchored, every task run, every page let go */
+    // ---- the marked original's pages, as they are read
+    const OPENING_ROW = /^[pn](\d+)\.(\d+)a$/
+    /** a piece found: its row, but where its unit's own ink was taken already (too late: dropped, counted) */
+    const takeRow = (name, row) => {
+      const m = OPENING_ROW.exec(name), i = m ? Number(m[1]) : -1
+      if (i >= 0 && i < n && known[i] && designedOf(i).some(([, a]) => a === name)) { stats.late.rows++; return }
+      ownInk.set(name, row)
+    }
+    /** points read twice (stream.mjs `repeats`): 'a mark set twice' on their pieces, as readMarked sets it at the end
+     *  (vetoTwice); counted where the piece's unit's placeholders were matched already */
+    const veto = names => {
+      for (const r of names) {
+        twiceSeen.add(r)
+        const o = /^[pn]\d+\.\d+b$/.test(r) ? `${r.slice(0, -1)}a` : r, m = OPENING_ROW.exec(o), i = m ? Number(m[1]) : -1
+        if (i >= 0 && i < n && phRan[i]) stats.late.vetoes++
+      }
+      vetoTwice(ownInk, twiceSeen, follows)
+    }
+    /** the marked original's page p (markedPages' page, pages in order) */
+    function markedPage(page) {
+      if (!mh || ended) throw new Error('the marked original is not read a page at a time here, or its end was given')
+      const { p } = page
+      if (p !== markedTo + 1) throw new RangeError(`the marked page ${p} after page ${markedTo}`)
+      const t = now()
+      for (const v of page.view) mViews.push(v)
+      for (const w of page.words) mWords.push(w)
+      // its marks, in the names' order, each on its page's view (the marks file's)
+      for (const [nm, x, y] of namesOn.get(p) ?? []) if (markAt(mViews, M, p, x, y)) at.set(nm, { page: p, x: r2z(x), y: r2z(y) })
+      // its draft frames, its tokens drawn, carried
+      const frames = []
+      for (const nm of gOn.get(p) ?? []) { const a = at.get(nm), f = a ? frameAt(nm, a) : null; if (f) frames.push(f) }
+      const drawn = drawnOf(frames), from = ours.length, over = carrier.over.length
+      for (const tk of tokensOfMarks({ tokens: page.tokens, words: mWords })) if (drawn(tk)) { push(oursOn, tk.page, ours.length); ours.push(tk) }
+      carrier.add(from, ours.length)
+      overFrom(over)
+      markedTo = p
+      // the pieces found once it was read, and the points read again on it
+      for (const [name, row] of page.owned) takeRow(name, row)
+      if (page.repeats.length) veto(page.repeats)
+      else if (twiceSeen.size && page.owned.length) vetoTwice(ownInk, twiceSeen, follows)
+      // what is known now: each key whose names are all read, the pieces' marks on it, the pieces before `found`
+      for (const [k, c] of keysOn.get(p) ?? []) { const left = keyLeft.get(k) - c; keyLeft.set(k, left); if (left === 0) finalKey(k) }
+      for (const i of abAt.get(p) ?? []) rowDone(i)
+      for (; foundTo < page.found; foundTo++) for (const i of rowsAt.get(foundTo) ?? []) rowDone(i)
+      resolveNames()
+      stats.ms.carry += now() - t
+      step()
+    }
+    /** the marked original's end (markedPages' end, after its last page): the pieces found at its end, its points read twice,
+     *  every piece known; the carry's share */
+    function markedEnd(end) {
+      if (!mh || ended) throw new Error('the marked original is not read a page at a time here, or its end was given')
+      if (markedTo !== M) throw new RangeError(`the marked original's end after page ${markedTo} of ${M}`)
+      const t = now()
+      ended = true
+      for (const [name, row] of end.owned) takeRow(name, row)
+      const more = [...end.twice].filter(r => !twiceSeen.has(r))
+      if (more.length) veto(more)
+      else if (twiceSeen.size && end.owned.length) vetoTwice(ownInk, twiceSeen, follows)
+      for (; foundTo <= M; foundTo++) for (const i of rowsAt.get(foundTo) ?? []) rowDone(i)
+      resolveNames()
+      refusal = shareOf()
+      stats.ms.carry += now() - t
+      step()
+    }
+    /** every page read (and the marked original's end): the rest anchored, every task run, every page let go */
     function finish() {
+      if (!ended) throw new Error('the marked original\'s end was not given')
+      if (refusal) throw new Error(`the layout is refused: ${refusal}`)
       X = pages
-      for (let i = 0; i < n; i++) if (!marked[i]) markUnit(i)
-      anchorRanges()
+      for (let i = 0; i < n; i++) if (!R.isMarked(i)) markUnit(i)
+      R.run(onAnchor, decide)
       for (let u = 0; u < n; u++) decide(u)
       advance()
       for (let q = 1; q <= pages; q++) work.push(q)
@@ -1970,7 +2177,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       Object.assign(stats.match, matcher.stats)
     }
     return {
-      pageRead, finish, plans, plansFailed: () => plansFailed,
+      pageRead, markedPage, markedEnd, finish, plans, plansFailed: () => plansFailed,
+      /** whether the carry's refusal is known: the marked original read whole, or to its end, or (for parts) a line carried */
+      carryKnown: () => ended || (parts && carrier.lines.total > 0),
+      /** the carry's refusal ('carry'), once the marked original's end is given; null else */
+      carryRefusal: () => refusal,
       /** the file's rows of the units settled so far (`ids`, rising: those of them it holds) and the names taken in */
       layout: (ids = [...unitRows.keys()].sort((x, y) => x - y)) => partOf(ids.filter(i => unitRows.has(i)), [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
       released: () => releasedTo,
@@ -1982,22 +2193,40 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         for (const [k, row] of nameRows) if (row[2] <= through) nameRows.delete(k)
         if (plans) for (const p of plans.keys()) if (p <= through) plans.delete(p)
       },
-      /** where the stream stands: the page read last, the pages anchored, decided and let go */
+      /** where the stream stands: the page read last (and the marked original's), the pages anchored, decided and let go */
       progress: () => {
         let held = 0, glyphs = 0
         for (let q = 1; q <= pages; q++) if (pagesInk[q]) { held++; glyphs += pagesInk[q].n }
-        return { read: X, anchored: am - 1, decided: decidedTo, released: releasedTo, held, glyphs }
+        return { read: X, ...(mh ? { marked: markedTo } : {}), anchored: R.am - 1, decided: decidedTo, released: releasedTo, held, glyphs }
       },
     }
   }
-  /** the paper's rows made a page at a time (stream's), every page read here: the stream, finished, or the carry's refusal */
-  async function byStream() {
-    const refused = carrying()
-    if (refused) return { refused, stats }
+  /**
+   * The paper's rows made a page at a time (stream's), every page read here: the stream, finished, or the carry's refusal.
+   * `marked` { head, events }: the marked original read a page at a time as well (markedPages' head, and its events after it:
+   * each page, then the end), its page p read before arXiv's page p; else it was read whole (the marks given), carried first
+   */
+  async function byStream(marked = null) {
+    if (!marked) {
+      const refused = carrying()
+      if (refused) return { refused, stats }
+    }
     const t = now()
-    const st = stream()
+    const st = stream(marked ? { marked: marked.head } : {})
     st.trace = []
-    for (let p = 1; p <= pages; p++) { await readPage(p); st.pageRead(p); st.trace.push(st.progress()) }
+    const it = marked ? marked.events[Symbol.asyncIterator]() : null
+    const M = marked ? marked.head.pages : 0
+    for (let p = 1; p <= Math.max(M, pages); p++) {
+      if (p <= M) { const x = await it.next(); if (x.done || !x.value.page) throw new Error(`the marked original gave no page ${p}`); st.markedPage(x.value.page) }
+      if (p <= pages) { await readPage(p); st.pageRead(p) }
+      st.trace.push(st.progress())
+    }
+    if (marked) {
+      const x = await it.next()
+      if (x.done || !x.value.end) throw new Error('the marked original gave no end')
+      st.markedEnd(x.value.end)
+      if (st.carryRefusal()) return { refused: st.carryRefusal(), stats }
+    }
     st.finish()
     stats.ms.rows = now() - t
     return st
