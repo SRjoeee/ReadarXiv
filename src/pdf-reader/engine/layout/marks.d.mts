@@ -168,7 +168,8 @@ export declare function markedPages(marked: unknown, log: string, o: MarkedOptio
 export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null }>
 /** a point read twice on pages apart: its piece 'a mark set twice', nor the displays of its group, on `rows` in place */
 export declare function vetoTwice(rows: Map<string, OwnedRow>, twice: ReadonlySet<string>, follows: (name: string) => { group?: string[] } | null): void
-/** the marks file as the lab writes it: encodeLayoutMarks of the marks within the file's own bounds */
+/** the marks file as the lab writes it of the marks in memory: encodeLayoutMarks of them as they are, which its parser reads back
+ *  as them; marks past one of the file's own bounds throw the parser's LayoutRefusal (no file is trimmed to other marks) */
 export declare function marksFile(m: LayoutMarks): string
 export declare function encodeLayoutMarks(m: LayoutMarks): string
 /** bytes, then values, then JSON.parse, then every bound below; throws LayoutRefusal */

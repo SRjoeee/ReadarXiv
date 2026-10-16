@@ -1227,8 +1227,19 @@ export function vetoTwice(rows, twice, follows) {
   }
 }
 
-/** the marks file as the lab writes it: encodeLayoutMarks of the marks within the file's own bounds (fitted) */
-export const marksFile = m => encodeLayoutMarks(fitted(m))
+/**
+ * The marks file as the lab writes it of the marks in memory (readMarked's, layoutMarksOfPaper's): encodeLayoutMarks of the
+ * marks as they are, a file its parser takes and reads back as those marks. The marks in memory are bounded a page and a
+ * piece, not by the file (the page pass's design, §3: MARKS_CAP, MARKS_VALUES, WORDS_MAX and OWNED_ALL are the file's
+ * alone), so marks past one of the file's bounds are no file: the parser's LayoutRefusal is thrown, never a file trimmed to
+ * other marks (fitted), which would make a layout of the file other than the layout made of them in memory. The lab's file
+ * of a marked PDF itself, within its bounds as ever, is layoutMarksOf's
+ */
+export function marksFile(m) {
+  const text = encodeLayoutMarks(m)
+  parseLayoutMarks(new TextEncoder().encode(text))
+  return text
+}
 
 /**
  * The marks file within what its own parser takes: past MARKS_CAP's bytes or MARKS_VALUES' values (OWNED_ALL's 250,000
