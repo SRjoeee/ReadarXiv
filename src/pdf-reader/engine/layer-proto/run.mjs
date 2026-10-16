@@ -1043,7 +1043,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!ops) ops = L2.unitOps(p.layout, p.blocks, pg, { px: pxOf(pg), k: scale * dpr, hasSource, pxOf, extents: p.layout.extents, audit, id: p.id, restore: ro })
     for (const o of ops) r.ops.push(o)
     const tCompose = performance.now()
-    if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn)
+    if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn, scale * dpr)
     const tSvg = performance.now()
     r.markup.push(L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
     const tWords = performance.now()
@@ -1149,7 +1149,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         }
       }
       for (const o of ops) r.ops.push(o)
-      if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn)
+      if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn, scale * dpr)
       r.markup.push(L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face }, cssOf(pg), scale))
       Object.assign(rec, { drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k), chars: mine.map(c => ({ ...c, page: pg })) })
     }
@@ -2584,7 +2584,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       if (disposed) { for (const c of rendered) { c.width = 0; c.height = 0 } return }
       ctx.drawImage(source, 0, 0)
-      L2.drawOps(ctx, r.ops, k / (scale * dpr), (j, plane = 'O') => (j === pg && plane === 'O' ? source : (others.get(`${plane}${j}`) ?? null)))
+      L2.drawOps(ctx, r.ops, k / (scale * dpr), (j, plane = 'O') => (j === pg && plane === 'O' ? source : (others.get(`${plane}${j}`) ?? null)), k)
       for (const c of others.values()) { c.width = 0; c.height = 0 }
     },
     /** a done page's canvases let go (its record stays), once no unit on it is still to be painted on any of its pages: no

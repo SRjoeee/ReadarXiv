@@ -232,6 +232,8 @@ export declare function extendRects(rects: Rect[], charsByPage: readonly (readon
 /** what a unit's first line starts with before its own text: each part in its own style, then a space (`gap`
  *  undefined) or that many em of the unit's size after its last character, no place to break (0: none) */
 export interface Lead { parts: { text: string; st: Partial<Style> }[]; gap?: number }
+/** `text` with the ranges `cuts` ([from, to), rising) left out, and its transformMap less the same characters; null where there is nothing to cut */
+export declare function cutOut(text: string, cuts: readonly (readonly [number, number])[], map: { from: number[]; span: number[] } | null): { text: string; map: { from: number[]; span: number[] } | null } | null
 export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: (s: string, face: Face) => number, tagWords?: boolean): Token[] & { base: Style }
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
@@ -291,7 +293,8 @@ export declare function unitOps(L: Layout, blocks: readonly Block2[], page: numb
 export declare function removalOps(L: Layout, page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; rects: DevBox[]; erase?: DevBox[]; lines?: number[][]; removed: (page: number) => boolean; audit?: Audit[] | null; id?: number | null; clips?: Map<number, { rects: DevBox[]; own: DevBox[] }> | null }): DrawOp[]
 /** the operations drawn on a copy of the page at `z` times v0's resolution, cut from each page and plane as PDF.js drew it
  *  there */
-export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number, plane: Plane) => DrawSource | null | undefined): void
+/** `k`: the device pixels a PDF unit `ctx` is drawn at; where SWAP_PAD is less than one of them, a swap's and a paper fill's rectangles are taken out to whole device pixels */
+export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number, plane: Plane) => DrawSource | null | undefined, k?: number | null): void
 export declare function pageItemsOf(chars: readonly Char[], page: number, px: ToDev, ink: InkMap | undefined): { items: { chars: Char[]; keys: string[]; box: number[] }[]; cover: Uint8Array | null }
 /** the unit's lines on one page as SVG markup (a <g data-u="id">) */
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string

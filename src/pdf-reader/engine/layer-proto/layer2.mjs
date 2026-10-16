@@ -53,6 +53,8 @@
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
 import { noStart } from './no-start.mjs'
 import { work } from './work.mjs'
+import { sourceRepeats, stutterCuts } from './stutter.mjs'
+import { SWAP_PAD } from '../layer/swap.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -152,7 +154,61 @@ export function pageChars2(textContent, fontOf, mapOf = null) {
       cx += w
     })
   }
-  return out
+  return joinAccents(out, textContent.items)
+}
+
+/** each spacing accent's combining mark: grave, acute, circumflex, tilde, diaeresis, macron, breve, dot, ring, caron,
+ *  cedilla, ogonek, double acute (Hungarian), as the fonts' ToUnicode maps write them (ASCII's three among them) */
+const COMBINING = new Map([['`', '̀'], ['ˋ', '̀'], ['´', '́'], ['ˊ', '́'], ['^', '̂'], ['ˆ', '̂'], ['~', '̃'], ['˜', '̃'], ['¯', '̄'], ['ˉ', '̄'], ['˘', '̆'], ['˙', '̇'], ['¨', '̈'], ['˚', '̊'], ['˝', '̋'], ['ˇ', '̌'], ['¸', '̧'], ['˛', '̨']])
+/** the marks set under a letter, which keep a dotless i dotless */
+const BELOW = new Set(['̧', '̨'])
+/**
+ * A spacing accent TeX set as a glyph of its own joined to its letter (the M1 survey of 2608.16117: "Munster et al.,¨ 2013"
+ * for Münster, seven citations; before, every such accent went to its line's end, charsOfUnit2). TeX's \accent sets the
+ * accent, then moves back over it to set the letter (OT1's: the accent before its letter), or sets the letter first and the
+ * accent over it (an accent-after-letter font); PDF.js starts a new item at such a move back, so the accent ends its item and
+ * its letter begins the next (or the accent begins its item and its letter ended the one before), the two items overlapping
+ * across. Joined where that is what the page shows: the two items in one font on one baseline, and the letter's span holding
+ * the accent glyph's centre (its own width in its design back from its item's end, or on from its item's start), which only
+ * the move back over the accent gives; the letter becomes its accented letter (NFC, one code point: ü, ć, č;
+ * a dotless ı or ȷ under an accent above it the dotted letter's: Loïc) and the accent is no character of its own. An accent
+ * alone in its item (a formula's \hat or \bar over a letter in another font, a capital's raised accent) keeps its own glyph
+ * and box, and a mark written after its letter in one item joins that letter where they compose. Every other character
+ * stays as it is.
+ */
+function joinAccents(chars, items) {
+  // (each item's characters: their first and last index in `chars`, which holds them in item order)
+  const runs = []
+  chars.forEach((c, i) => { const r = runs.at(-1); if (r?.item === c.item) r.last = i; else runs.push({ item: c.item, first: i, last: i }) })
+  const gone = new Set()
+  const join = (letter, mark) => {
+    const base = BELOW.has(mark) ? letter.ch : letter.ch === 'ı' ? 'i' : letter.ch === 'ȷ' ? 'j' : letter.ch
+    const ch = (base + mark).normalize('NFC')
+    if ([...ch].length !== 1 || ch === base + mark) return false
+    letter.ch = ch
+    return true
+  }
+  const isLetter = c => !!c && /^\p{L}$/u.test(c.ch) && !COMBINING.has(c.ch)
+  runs.forEach((r, n) => {
+    const it = items[r.item], end = it.transform[4] + it.width
+    for (let i = r.first; i <= r.last; i++) {
+      const c = chars[i]
+      // (a combining mark written after its letter in the item)
+      if (/^\p{M}$/u.test(c.ch)) { if (i > r.first && isLetter(chars[i - 1]) && !gone.has(i - 1) && join(chars[i - 1], c.ch)) gone.add(i); continue }
+      const mark = COMBINING.get(c.ch)
+      if (!mark || c.nu || r.first === r.last || (i !== r.first && i !== r.last)) continue
+      const w = (wDesign(c.ch, c.st) * c.size) / 100, tol = 0.05 * c.size
+      // the accent ends its item, its letter beginning the next; or begins it, its letter ending the one before
+      const o = i === r.last ? runs[n + 1] : runs[n - 1]
+      if (!o) continue
+      const L = chars[i === r.last ? o.first : o.last]
+      if (!isLetter(L) || L.nu || L.st !== c.st || Math.abs(L.yb - c.yb) > tol) continue
+      // (the accent glyph's centre on the letter: only the move back over it puts it there)
+      const mid = i === r.last ? end - w / 2 : it.transform[4] + w / 2
+      if (mid >= L.x0 - tol && mid <= L.x1 + tol && join(L, mark)) gone.add(i)
+    }
+  })
+  return gone.size ? chars.filter((_, i) => !gone.has(i)) : chars
 }
 
 // ---- the original: each line's baseline and size, the unit's style
@@ -1892,6 +1948,23 @@ export function droppedHeld(s, held) {
 }
 
 /**
+ * `text` with the ranges `cuts` ([from, to), rising: stutter.mjs stutterCuts) left out, and its transformMap (`map`, or null)
+ * less the same characters, so that each character left keeps the place in the piece it had; null where there is nothing to cut
+ */
+export function cutOut(text, cuts, map) {
+  if (!cuts.length) return null
+  let out = '', at = 0
+  const from = map ? [] : null, span = map ? [] : null
+  const keep = (a, z) => {
+    out += text.slice(a, z)
+    if (map) for (let i = a; i < z; i++) { from.push(map.from[i]); span.push(map.span[i]) }
+  }
+  for (const [a, z] of cuts) { if (a > at) keep(at, a); at = Math.max(at, z) }
+  keep(at, text.length)
+  return { text: out, map: map && { from, span } }
+}
+
+/**
  * A unit's pieces as tokens: { s, st, face, cls ('cjk'|'latin'), w100, glue (no break before), punct ('open'|'close'),
  * asp (CJK–Latin autospace before it), hyph (a language to hyphenate it in) }, { space }, { crop }, { sup }. `base`: the
  * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: what
@@ -2012,6 +2085,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       t = t.slice(lead.length + ch.length)
     }
   }
+  // (a translator's stutter, a word written twice in a row the source has once, drawn once: stutter.mjs, the M1 survey; not
+  // where the unit's source repeats a word itself)
+  const tidy = !sourceRepeats(unit.src)
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
       let s = p.s
@@ -2024,7 +2100,10 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // be drawn as it is shown)
       const sm = at ? (p.tr ? escapeMap(p.s, sh) : sh === p.s ? true : null) : null
       const map = sm ? transformMap(s, text) : null
-      pushText(text, style(), {}, map && { at, sh, base: p.s.length - s.length, map, sm: sm === true ? null : sm })
+      // (a stutter's second word left out of a translated piece, each character left keeping its place: the word table's offsets
+      // stay the translation's own)
+      const cut = tidy && p.tr ? cutOut(text, stutterCuts(text), map) : null
+      pushText(cut?.text ?? text, style(), {}, (cut ? cut.map : map) && { at, sh, base: p.s.length - s.length, map: cut ? cut.map : map, sm: sm === true ? null : sm })
       return
     }
     plain?.gap()
@@ -2673,10 +2752,21 @@ export function layoutUnit2(tokens, blocks, s, P) {
     last = { r, st, f }
     if (r.rest >= r.total) break
   }
-  // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order)
+  // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order), at the
+  // most natural state at which it then fits. The walk down to the last state bought nothing the run past keeps: laid at the
+  // last, a paragraph that runs on past a display was drawn at the floor's size though it fit far larger (the M1 survey of
+  // 2608.16117, German page 10: units 28 and 35 at 0.8 and 0.85 of the original's size). Where it fits at none, the last
+  // state's, as far as it goes
   if (last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
-    const r = breakLines(tokens, slotsAt(blocks, last.st, P, s), last.f, last.st, P, last.st.scale, false)
-    if (r.rest > last.r.rest) last = { ...last, r }
+    let past = null
+    for (const st of statesOf(P, blocks, s)) {
+      tried++
+      const f = s * st.scale
+      past = { r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, false), st, f }
+      if (past.r.rest >= past.r.total) break
+    }
+    if (past.r.rest >= past.r.total) last = past
+    else if (past.r.rest > last.r.rest) last = { ...last, r: past.r }
   }
   // (step 3, P.flowPast: and else through every slot, a kept region only breaking the line, from the most natural state)
   if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
@@ -2832,16 +2922,25 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
  * plane 'O' (or none) the original, 'R' its text-removed page, 'P' its placeholders alone. A crop is darkened in, never
  * pasted: its paper is white, and pasted it erased what it was laid over (a kept label). A swap puts the removed page's
  * pixels in its rectangles.
+ * `k`: the device pixels a PDF unit `ctx` is drawn at, where the caller knows it. A swap's and a paper fill's rectangles are a
+ * removed glyph's outline grown by SWAP_PAD for its antialiased edge, a device pixel and more at 2.5 device pixels a unit and
+ * up; where the pad is less than a device pixel (a reader at 85 % and a device pixel ratio of 1: 1.06 a unit), the glyph's
+ * edge pixel straddled the rectangle's edge, which the canvas antialiases too, and a faint row of the erased line's ink was
+ * left (the M1 survey of 2608.16117, Chinese page 10). There each rectangle is taken out to whole device pixels: every pixel
+ * the grown outline touches is wholly replaced, and no edge is blended. Where the pad is a device pixel or more, as drawn
  */
-export function drawOps(ctx, ops, z, sourceOf) {
+export function drawOps(ctx, ops, z, sourceOf, k = null) {
   const at = b => [b[0] * z, b[1] * z, b[2] * z, b[3] * z]
+  // (out to whole device pixels: a hair of rounding is no pixel)
+  const whole = b => { const x0 = Math.floor(b[0] * z + 1e-6), y0 = Math.floor(b[1] * z + 1e-6), x1 = Math.ceil((b[0] + b[2]) * z - 1e-6), y1 = Math.ceil((b[1] + b[3]) * z - 1e-6); return [x0, y0, x1 - x0, y1 - y0] }
+  const removed = k !== null && SWAP_PAD * k < 1 ? whole : at
   ctx.save()
   ctx.fillStyle = '#fff'
   for (const o of ops) {
     if (o.op === 'erase') ctx.fillRect(...at(o.box))
     else if (o.op === 'paper') {
       ctx.beginPath()
-      for (const e of o.rects) ctx.rect(...at(e))
+      for (const e of o.rects) ctx.rect(...removed(e))
       ctx.fill()
     }
     else if (o.op === 'restore') {
@@ -2858,7 +2957,7 @@ export function drawOps(ctx, ops, z, sourceOf) {
       if (!src || !o.rects.length) continue
       ctx.save()
       ctx.beginPath()
-      for (const e of o.rects) ctx.rect(...at(e))
+      for (const e of o.rects) ctx.rect(...removed(e))
       ctx.clip()
       ctx.drawImage(src, 0, 0)
       ctx.restore()
