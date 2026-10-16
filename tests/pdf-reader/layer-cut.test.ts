@@ -447,6 +447,23 @@ describe('partCutter: the cut a part at a time', () => {
     expect(keys(cutter.parts)).toEqual(keys(c.parts))
   })
 
+  it('under a verdict, a part whose writer refuses its layout (a row past its page\'s view) is its pages with none; without one, a throw', async () => {
+    const whole = wholeOf(SMALL)
+    // unit 3's line on page 2 (part [2, 3]) set past the page's right edge
+    const bad = structuredClone(whole)
+    const row = bad.layout!.lines.find(([id]) => id === 3)![1]
+    row[2] = 5000
+    await expect(cutPlain(bad, { leftPages: leftPagesOf(bad), base: BASE_OF })).rejects.toBeInstanceOf(BundleRefusal)
+    // (the head and K of the paper as it was: the row's place alone changed)
+    const { cutter, K, F } = await cutterOf(whole, { verdict: () => null })
+    for (;;) if ((await cutter.next({ K, F, layout: bad.layout })) === null) break
+    expect(cutter.parts.map(p => [p.from, p.to])).toEqual([[1, 1], [2, 3], [4, 7], [8, 8]])
+    expect(cutter.verdicts.map(v => v?.refused ?? null)).toEqual([null, 'part', null, null])
+    expect(cutter.verdicts[1]?.why).toMatch(/lines/)
+    const read = (p: { bytes: Uint8Array }) => JSON.parse(new TextDecoder().decode(p.bytes)) as { layout: unknown }
+    expect(cutter.parts.map(p => read(p).layout === null)).toEqual([false, true, false, false])
+  })
+
   it('records a first page that alone passes a part\'s bounds with its layout as refused: part', async () => {
     const whole = wholeOf({ pages: 2, units: [{ stream: 1, rects: [1], lines: [1] }, ...Array.from({ length: 80 }, () => ({ stream: null, lines: [1], perPage: 1900 }))] })
     const { cutter, K, F } = await cutterOf(whole, { leftPages: () => null })

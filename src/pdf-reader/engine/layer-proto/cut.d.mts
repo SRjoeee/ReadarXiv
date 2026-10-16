@@ -109,3 +109,5 @@ export declare const TAIL_NOT_CARRIED: 'tail not carried'
 /** the frontier by the door's rule: needsOf(K, N, false, layout-only).lay */
 export declare function needFrontier(K: readonly NeedEntry[], N: number): number[]
 export declare function cutBundle(whole: WholePaper, o: CutOptions): Promise<Cut>
+/** cutBundle's start: the whole checked, its chunks and head written, and the cutter with what each part is cut on */
+export declare function wholeCutter(whole: WholePaper, o: CutOptions): Promise<{ units: Cut['units']; head: Written; cutter: PartCutter; known: CutKnown; N: number }>

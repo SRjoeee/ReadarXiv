@@ -24,6 +24,7 @@ import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { pagePlanOf } from './addon.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf } from './remove.mjs'
 import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
@@ -371,7 +372,8 @@ async function gzipSize(bytes) {
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
  * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's). `plans`:
  * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
- * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again. A page whose ink
+ * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again (null where they
+ * fail, `plansFailed` why: the add-on's loss, never the file's). A page whose ink
  * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone. `parts`: the file is cut into parts (layer-proto/
  * cut.mjs partCutter), which hold the bounds of what a part holds and the carry's share, each part's: the file is made
  * whatever share of the lines is carried (some), and checked without the bounds a part holds of its own (file.mjs
@@ -1462,11 +1464,18 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
   if (!wantPlans) return made
   // ---------------------------------------------------------------- the add-on's plans, of the ink read above
   // (each page's as addon.mjs pagePlansOf makes it of the page's operator list read again: the same ink, the same facts)
-  const index = indexLayout(parsed), plans = new Map()
-  for (let p = 1; p <= pages; p++) {
-    if (!ink[p]?.plan) continue
-    const plan = pagePlanOf(index, p, planInkOf(ink[p]), () => unpackFacts(facts[p]))
-    if (plan) plans.set(p, plan)
+  // (the plans failing are the add-on's alone, never the file's: `plans` null, why in `plansFailed`; a failed allocation the
+  // paper's)
+  try {
+    const index = indexLayout(parsed), plans = new Map()
+    for (let p = 1; p <= pages; p++) {
+      if (!ink[p]?.plan) continue
+      const plan = pagePlanOf(index, p, planInkOf(ink[p]), () => unpackFacts(facts[p]))
+      if (plan) plans.set(p, plan)
+    }
+    return { ...made, plans }
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    return { ...made, plans: null, plansFailed: String(e?.message ?? e).slice(0, 200) }
   }
-  return { ...made, plans }
 }
