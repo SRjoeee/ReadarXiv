@@ -91,6 +91,8 @@ export declare function partCutter(o: {
   leftPages: CutOptions['leftPages']; addon?: { manifest: RemovalManifest } | null
   chainAddon?: CutOptions['chainAddon'] | null; acceptAddon?: CutOptions['acceptAddon'] | null
   target?: CutOptions['target'] | null; partPagesMax?: number; verdict?: PartVerdict | null
+  /** false: no part nor left part kept once given (`parts` and `left` hold nulls): a stream's */
+  retain?: boolean
 }): PartCutter
 export interface Cut {
   units: (Written & { from: number; to: number })[]

@@ -214,7 +214,7 @@ async function streamed(ctx, maker, lineskip) {
   const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip })
   const hooks = remove ? chainedAddon({ N, views: side.pages, base: { bytes: base.bytes, xref: base.xref }, planOf: p => st.plans?.get(p) ?? null, pdfjs, remove }) : null
   const state = { index: ctx.verdicts ? await indexOfHead(head, units) : null, chain: null, read: null }
-  const cutter = partCutter({ paper, N, head, views: side.pages, leftPages: side.leftPages, addon: null, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null })
+  const cutter = partCutter({ paper, N, head, views: side.pages, leftPages: side.leftPages, addon: null, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null, retain: false })
   if (ctx.onHead) await ctx.onHead(head, units)
   // each unit's slot in K (a left unit's stream, a layout-only one the last left stream of a smaller id's, and a half), its
   // first left page, and its table group
@@ -255,6 +255,8 @@ async function streamed(ctx, maker, lineskip) {
       if (part === null) return
       closed.push([part.from, part.to, X])
       await tell(ctx, state, cutter, part, layout, lines)
+      // (what the parts after it read of the units it told is K's alone; its pages' names and plans are done)
+      st.tell(K.slice(0, (part.to === N ? K.length - 1 : F[part.to]) + 1).map(e => e.id), part.to)
     }
   }
   /** what part from `a` reads is final (the conditions above), its target as the cutter makes it */

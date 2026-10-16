@@ -205,9 +205,10 @@ export function wholeFrontier(whole, frontier = needFrontier) {
  * layout-only cells too), its add-on not accepted. With a verdict, a part its writer refuses with its layout for what that
  * holds (not a size: a row its part's check refuses) is the longest run of its pages that fits with none, { refused: 'part',
  * why }, where cutBundle without one throws. Each part's verdict is `verdicts[i]`: null, the hook's refusal, the writer's,
- * or { refused: 'part' } for a first page that alone passes a part's bounds with its layout (a part of one page, with none)
+ * or { refused: 'part' } for a first page that alone passes a part's bounds with its layout (a part of one page, with none).
+ * `retain` false: no part nor left part is kept once given (`parts` holds a null for each, `left` too): a stream's
  */
-export function partCutter({ paper, N, head, views, leftPages, addon = null, chainAddon = null, acceptAddon = null, target: targetOf = null, partPagesMax, verdict = null }) {
+export function partCutter({ paper, N, head, views, leftPages, addon = null, chainAddon = null, acceptAddon = null, target: targetOf = null, partPagesMax, verdict = null, retain = true }) {
   if (typeof leftPages !== 'function') throw new TypeError('leftPages: a function of the page')
   const maxPages = partPagesMax === undefined ? PART_PAGES_MAX : partPagesMax
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new RangeError(`partPagesMax: ${String(maxPages)} is not a positive whole number of pages`)
@@ -360,7 +361,9 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
     if (withLayout && layout && acceptAddon) await acceptAddon(parts.length, { pages: [a, b] })
     const { w } = at
     const part = Object.assign(w, { leftParts: lefts.slice(a - 1, b) })
-    parts.push(part)
+    // (`retain` false: the part and its left parts are the caller's alone once given: a stream holds no part told)
+    parts.push(retain ? part : null)
+    if (!retain) for (let p = a - 1; p < b; p++) lefts[p] = null
     verdicts.push(refused)
     prev = w.sha256
     taken = Math.max(taken, upTo(b))

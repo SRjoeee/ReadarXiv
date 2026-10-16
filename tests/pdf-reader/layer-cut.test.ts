@@ -464,6 +464,16 @@ describe('partCutter: the cut a part at a time', () => {
     expect(cutter.parts.map(p => read(p).layout === null)).toEqual([false, true, false, false])
   })
 
+  it('keeps no part nor left part once given where told so (retain false): the same parts, nulls behind', async () => {
+    const whole = wholeOf(SMALL)
+    const { ref, cutter, K, F } = await cutterOf(whole, { retain: false })
+    const given: { key: string; sha256: string }[] = []
+    for (;;) { const part = await cutter.next({ K, F, layout: whole.layout }); if (part === null) break; given.push(part) }
+    expect(keys(given)).toEqual(keys(ref.parts))
+    expect(cutter.parts.every(p => p === null)).toBe(true)
+    expect(cutter.left.every(l => l === null)).toBe(true)
+  })
+
   it('records a first page that alone passes a part\'s bounds with its layout as refused: part', async () => {
     const whole = wholeOf({ pages: 2, units: [{ stream: 1, rects: [1], lines: [1] }, ...Array.from({ length: 80 }, () => ({ stream: null, lines: [1], perPage: 1900 }))] })
     const { cutter, K, F } = await cutterOf(whole, { leftPages: () => null })

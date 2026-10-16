@@ -1757,6 +1757,24 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (let x = one.entries?.[0] ?? 0; x < (one.entries?.[1] ?? 0); x++) { phs.push(ph[x].row); if (ph[x].text) texts_.push([ph[x].row[0], ph[x].row[1], ph[x].text]) }
       const mini = { fonts: [], units: [outUnits.at(-1)], lines: [outLines.at(-1)], frames: [outFrames.at(-1)], erase: last(outErase), ph: phs, labels: labelRows.has(i) ? [labelRows.get(i)] : [], headings: last(outHeadings), pageText: texts_, held: last(outHeld), names: [] }
       unitRows.set(i, JSON.parse(JSON.stringify(layoutPartRows(mini))))
+      // (admit's file of the whole holds none of them here: the stream's rows are unitRows')
+      outUnits.length = 0; outLines.length = 0; outFrames.length = 0; outErase.length = 0; outHeld.length = 0; outHeadings.length = 0
+    }
+    /** a unit settled: what its passes held let go (its lines' glyphs, its anchor, its pieces' matches); its rows are the file's */
+    const freeUnit = one => {
+      for (let x = one.entries?.[0] ?? 0; x < (one.entries?.[1] ?? 0); x++) matchedBy.delete(`${ph[x].row[0]}.${ph[x].row[1]}`)
+      anchors.delete(one.id)
+      one.rows = null; one.a = null; one.boxes = null; one.out = null; one.heads = null; one.tails = null; one.symbols = null; one.headSymbols = null
+    }
+    /** the rows K reads of a unit told (layer-proto/cut.mjs entriesOf: its unit row, its lines' pages, its placeholders'
+     *  segments' pages and its labels' pages), one row a page: what the cut of the parts after its own reads of it */
+    const stubOf = (i, r) => {
+      const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j < v.length; j += stride) set.add(v[j]); return [...set] }
+      const lines = pagesIn(r.lines.map(e => e[1]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2]))]
+      return {
+        units: r.units, lines: lines.length ? [[i, lines.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
+        labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: [], erase: [], headings: [], pageText: [], held: [],
+      }
     }
     const decide = i => {
       if (decided[i]) return
@@ -1769,7 +1787,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const of = f => () => { const one = placedById.get(i); if (one) f(one) }
       insert({ key: [0, i], pages: pg, run: () => place(i) })
       for (const [x, f] of [[2, phOf], [4, heldOf], [5, outsideOf], [6, labelOf]]) insert({ key: [x, i], pages: pg, run: of(f) })
-      insert({ key: [7, i], pages: pg, run: () => { of(one => { rowsOf(one); fileRowsOf(one) })(); settledU[i] = 1 } })
+      insert({ key: [7, i], pages: pg, run: () => { of(one => { rowsOf(one); fileRowsOf(one); freeUnit(one) })(); settledU[i] = 1 } })
     }
     /** whether unit u's match is the whole paper's (matchUnits'): its marks carried; where it has no bounds, every unit between
      *  it and its nearest bounded neighbour in the text either side carried too (anchors.mjs neighbours) */
@@ -1833,6 +1851,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       pagesInk[q] = null
       facts[q] = null
+      // (and what its tasks held: every one of them ran)
+      queue.delete(q); touching.delete(q); namedOn.delete(q); kept.delete(q)
       released[q] = 1
       while (released[releasedTo + 1]) releasedTo++
     }
@@ -1949,8 +1969,19 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       layout: (ids = [...unitRows.keys()].sort((x, y) => x - y)) => partOf(ids.filter(i => unitRows.has(i)), [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
       released: () => releasedTo,
       settled: i => settledU[i] === 1,
+      /** units `ids` told by the parts through page `through`: their rows the stubs K reads (stubOf), the names on those pages
+       *  and their plans let go */
+      tell: (ids, through) => {
+        for (const i of ids) { const r = unitRows.get(i); if (r && !r.stub) unitRows.set(i, { ...stubOf(i, r), stub: true }) }
+        for (const [k, row] of nameRows) if (row[2] <= through) nameRows.delete(k)
+        if (plans) for (const p of plans.keys()) if (p <= through) plans.delete(p)
+      },
       /** where the stream stands: the page read last, the pages anchored, decided and let go */
-      progress: () => ({ read: X, anchored: am - 1, decided: decidedTo, released: releasedTo }),
+      progress: () => {
+        let held = 0, glyphs = 0
+        for (let q = 1; q <= pages; q++) if (pagesInk[q]) { held++; glyphs += pagesInk[q].n }
+        return { read: X, anchored: am - 1, decided: decidedTo, released: releasedTo, held, glyphs }
+      },
     }
   }
   /** the paper's rows made a page at a time (stream's), every page read here: the stream, finished, or the carry's refusal */
