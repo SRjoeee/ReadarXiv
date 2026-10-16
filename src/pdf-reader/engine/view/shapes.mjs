@@ -229,7 +229,7 @@ export function layerShapes(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
-  let L, words, made, wordAt
+  let L, words, made, wordAt, hidden
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
   const tellParts = parts => layoutParts(L, parts.map(part => ({
     pages: [...part.pages], views: [...part.views],
@@ -237,7 +237,7 @@ export function layerShapes(source) {
   })))
   function reset() {
     L = pageLayout(state.kindOf)
-    words = new Map(); made = new Set(); wordAt = new Map()
+    words = new Map(); made = new Set(); wordAt = new Map(); hidden = new Set()
     if (state.parts.length) tellParts(state.parts)
   }
   /** page p's part of the laid layout, where its words and its left part are in */
@@ -282,7 +282,7 @@ export function layerShapes(source) {
   const follower = { addParts: parts => tellParts(parts), addPage: input => { make(input.page) } }
   state.followers.add(follower)
 
-  const laid = p => made.has(p)
+  const laid = p => made.has(p) && !hidden.has(p)
   const pagesOf = id => L.pagesOf.get(id) ?? M.layout.pagesOf.get(id) ?? []
   const mode = id => { const ps = pagesOf(id), n = ps.filter(laid).length; return !n ? 'mirror' : n === ps.length ? 'laid' : 'mixed' }
   // a laid page's floats are the left's, as the mirror's are (made then)
@@ -302,6 +302,10 @@ export function layerShapes(source) {
     shapes,
     lay(p, w) { if (words.has(p) || !w?.tokens) return false; words.set(p, w); make(p); return true },
     laid,
+    /** a laid page whose place shows the original again (its copy failed, a stall): the mirror's there until it is shown
+     *  again; whether that changed anything */
+    hide: p => { if (hidden.has(p)) return false; hidden.add(p); return made.has(p) },
+    show: p => hidden.delete(p),
     starts(id, text, offsets, left) {
       const m = mode(id)
       if (m === 'mirror') return left ?? null

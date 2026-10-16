@@ -65,6 +65,10 @@ export interface LayerShapes {
   /** a laid page's words (once a door): its part made once its left part is in; false where it was given already */
   lay(page: number, words: LaidWords): boolean
   laid(page: number): boolean
+  /** a page whose place shows the original again (laid already, or its part still waiting for its left part): the mirror's
+   *  there until `show`; whether its shapes changed */
+  hide(page: number): boolean
+  show(page: number): boolean
   /** a unit's starts on the right: its words' where it is all on laid pages, `left` where it is on none, null else */
   starts(id: number, text: string, offsets: readonly number[] | undefined, left: Int32Array | null): Int32Array | null
   /** every page back to the mirror (a door opened again) */
