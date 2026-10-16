@@ -1,6 +1,7 @@
 // make.mjs's types (JavaScript until the engine's port), for the container's prepare and the maker's tests
 import type { SourceUnit } from '../source/latex-front.mjs'
 import type { LayoutFile } from './file.mjs'
+import type { FrameRule } from '../pipeline/anchors.mjs'
 import type { ArxivText } from './arxiv.mjs'
 import type { LayoutMarks } from './marks.mjs'
 import type { PagePlan } from './addon.mjs'
@@ -20,6 +21,8 @@ export interface MakeInput {
   text?: ArxivText | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
+  /** the pages' frame's rule the maker's anchors are placed under (anchors.mjs pageFrame, today's) */
+  frame?: FrameRule
   /** the add-on's plans as well (`plans` in the result), of the ink the maker reads: each page's operator list read once */
   plans?: boolean
   /** the file is cut into parts (layer-proto/cut.mjs partCutter), which hold the bounds a part holds and the carry's share per

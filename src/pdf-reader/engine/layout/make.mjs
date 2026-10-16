@@ -17,7 +17,7 @@
 // is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
 // it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
-import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, markWords, pageFrame, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
@@ -368,7 +368,8 @@ async function gzipSize(bytes) {
  * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
  * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
- * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here. `plans`:
+ * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
+ * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's). `plans`:
  * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
  * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again. A page whose ink
  * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone. `parts`: the file is cut into parts (layer-proto/
@@ -376,7 +377,7 @@ async function gzipSize(bytes) {
  * whatever share of the lines is carried (some), and checked without the bounds a part holds of its own (file.mjs
  * parseLayout `sized`); `lines` in the result, each marked page's lines [carried, total] (carry.mjs pageLines)
  */
-export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, plans: wantPlans = false, parts = false }) {
+export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame = pageFrame, plans: wantPlans = false, parts = false }) {
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
@@ -504,7 +505,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
   }
   const linesTeX = new Map(marks.lines)
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
-  const anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch })
+  const anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame })
   stats.ms.anchor = now() - t
 
   // ---------------------------------------------------------------- each located unit's lines
