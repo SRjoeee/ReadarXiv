@@ -215,13 +215,14 @@ export function compilerKeeper(open) {
   }
 }
 
-/** a paper's files (Map path → bytes) → what the pipeline works on */
+/** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
+ *  float (`inFloat`, their indices, latex-front.mjs loadProject's) */
 export function openPaper(files) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
   if (!meta.main) throw new Error('no main file')
   const project = loadProject(fsys, meta.main, { tables: true })
-  return { fsys, meta, project, units: project.units, kept: nameCells(project.units) }
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units) }
 }
 
 /** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the
