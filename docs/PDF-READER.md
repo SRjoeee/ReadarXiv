@@ -737,7 +737,10 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   `outline` is told at the index and after each change (once a frame), `heading` from the
   scroll of either pane: the last heading at or above the reading line of the pane read.
 - **What it tells**: `layer` events (`opening`, `open` with the pages laid, `refused` with its why), `coverage()` and a
-  bounded `probe()` (counts, states, a ring of the last 32 commits). The door's stats tell no late rows and no skipped
+  bounded `probe()` (counts, states, a ring of the last 32 commits), and `rowsFor(page)`, the units whose rows the door's
+  page still waits for (its closure's: the door lays a page asked by its closure alone, the newest ask first), which a host
+  translating as it shows translates first. The stall clock starts at the page's `laying`, which the door tells when its
+  drive takes the page, not at the ask. The door's stats tell no late rows and no skipped
   units yet: `coverage()` gives 0 and {} for them.
 
 The extension's development entry makes a side on the harness's word (`__reader.openSide`) over `layerTransport`

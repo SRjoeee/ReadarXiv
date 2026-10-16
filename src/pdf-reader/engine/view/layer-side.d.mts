@@ -42,6 +42,9 @@ export interface LayerSide {
   /** a later attempt: the door disposed and opened again over the latest document with every part added, and no row carried
    *  (the host takes its rows again). Pages laid keep their drawing until the new door's page is ready */
   again(): void
+  /** the ids of the units whose rows the open door's page still waits for (the door's rowsFor: its closure's, Need(page)),
+   *  for a host that translates as it shows to translate first; [] with no door, out of the paper, or once the page is ready */
+  rowsFor(page: number): number[]
   /** `late` and `skipped` are the door's to tell (engine gap: not in its stats): 0 and {} until it does */
   coverage(): { laid: number; total: number; late: number; failed: number; stalled: number; skipped: Record<string, number>; parts: { through: number; told: number } }
   /** the harness's hooks: counts and states, a ring of the last commits (page@ms), never a page's text */

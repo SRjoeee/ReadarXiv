@@ -702,6 +702,12 @@ export function createLayerSide(view, o) {
       reopenWanted = true
       void pump()
     },
+    /** the ids of the units whose rows the open door's page still waits for (its closure's, Need(page)): a host translating
+     *  as it shows translates them first; [] with no door, a page out of the paper or one ready */
+    rowsFor(page) {
+      if (disposed || !door) return []
+      try { return door.rowsFor(page) } catch { return [] }
+    },
     coverage() {
       return { laid: ready, total: total(), late: 0, failed, stalled: stalls, skipped: {}, parts: door?.stats().parts ?? { through: 0, told: 0 } }
     },
