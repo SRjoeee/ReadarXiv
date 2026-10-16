@@ -20,6 +20,13 @@ export const OPS_CAP = 150_000
  *  number of glyphs, so OPS_CAP alone does not bound a page's ink. A page past it is capped as one past OPS_CAP is: no ink,
  *  that page alone. The densest page of the corpus's arXiv PDFs holds a few thousand */
 export const GLYPHS_PAGE = 100_000
+/** the boxes a page's ink holds at most, whatever its reader: one operation may place any number of them (a repeat or a group
+ *  of images, which PDF.js's own list for getOperatorList never holds, its queue optimiser being off for it, but a list from
+ *  elsewhere may; a text-showing operation's glyphs set turned, a box each), so OPS_CAP alone does not bound them. A page past
+ *  it is capped as one past OPS_CAP is: no ink, that page alone. It stays above the boxes a dense vector page keeps one by one
+ *  before its paths' boxes are merged by cell, the page degraded, never darkened (that budget is 500,000); the corpus's most
+ *  is 22,101 boxes (2608.27728 page 15) */
+export const BOXES_CAP = 1_000_000
 
 /** where a font gives no ascent or descent (an old Type 3 font gives none worth reading), as anchors.mjs reads them */
 const ASCENT = 0.75, DESCENT = -0.22
@@ -132,7 +139,7 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * shows them; `points`: each point of the marked compile (POINT), { name, glyph, box }, the glyphs and the boxes shown
  * before it; `boxAt`: for each glyph, the boxes shown before it. On arXiv's PDF the points are nobody's. `capped`: the
  * list held more than OPS_CAP operations, and those past it were not read, or (`glyphsMax`) it showed more glyphs than
- * that, and reading stopped there. `rotated`: the page's /Rotate is not 0, and
+ * that, or it placed more than BOXES_CAP boxes, and reading stopped there, within the operation. `rotated`: the page's /Rotate is not 0, and
  * nothing is read (the layer lays over no rotated page).
  * `indices` (the text remover's, layout/remove.mjs): each glyph also carries where the content stream shows it: `n`, its
  * text-showing operation's place among the page's own (an annotation's appearance not counted: -1 there), and `k`, its
@@ -195,7 +202,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (clip) { bx0 = Math.max(bx0, clip[0]); by0 = Math.max(by0, clip[1]); bx1 = Math.min(bx1, clip[2]); by1 = Math.min(by1, clip[3]) }
     return bx0 <= bx1 && by0 <= by1 ? [bx0, by0, bx1, by1] : null
   }
-  const addBox = (m, x0, y0, x1, y1, path = -1) => { const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) { boxes.push(b[0], b[1], b[2], b[3]); if (indices) paths.push(path) } }
+  // (past BOXES_CAP boxes, reading stops: the page is capped)
+  const addBox = (m, x0, y0, x1, y1, path = -1) => { const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) { if (boxes.length >= 4 * BOXES_CAP) { over = true; return } boxes.push(b[0], b[1], b[2], b[3]); if (indices) paths.push(path) } }
   /** the clip in force cut to a rectangle of space `m`; nothing left of it is a clip of no area */
   const clipTo = (m, x0, y0, x1, y1) => {
     const b = boxOf(m, x0, y0, x1, y1, s.clip)
@@ -261,6 +269,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       // the canvas neither paints nor advances a Type 3 font's invisible text or one of size 0
       if (s.tr === 3 || size === 0) return
       for (const g of arr) {
+        if (over) break
         if (typeof g === 'number') { s.x += (((vertical ? 1 : -1) * g * size) / 1000) * hs; continue }
         if (!g || typeof g !== 'object') continue
         glyphAt++
@@ -278,6 +287,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       // drawn as one string from the line's place: each glyph by the widths before it, no spacing (as the canvas)
       let w = 0
       for (const g of arr) {
+        if (over) break
         if (!g || typeof g !== 'object') continue
         glyphAt++
         const gw = num(g.width) * adv
@@ -289,6 +299,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     }
     let x = 0
     for (const g of arr) {
+      // (past glyphsMax or BOXES_CAP, the rest of the operation is not walked either)
+      if (over) break
       if (typeof g === 'number') { x += ((vertical ? 1 : -1) * g * size) / 1000; continue }
       if (!g || typeof g !== 'object') continue
       glyphAt++
@@ -375,7 +387,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       }
       case SHADING:
         // painted over the clip in force; with none, the page's background, left out
-        if (s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) { boxes.push(s.clip[0], s.clip[1], s.clip[2], s.clip[3]); if (indices) paths.push(-2) }
+        if (s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) { if (boxes.length >= 4 * BOXES_CAP) over = true; else { boxes.push(s.clip[0], s.clip[1], s.clip[2], s.clip[3]); if (indices) paths.push(-2) } }
         break
       case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: addBox(s.ctm, 0, 0, 1, 1, -3); break
       case IMAGE_REPEAT: case MASK_REPEAT: {
@@ -384,11 +396,11 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         const [sa, sb, sc, sd] = mask ? [a[1], a[2], a[3], a[4]] : [a[1], 0, 0, a[2]]
         const at = a[mask ? 5 : 3]
         if (!at || !(at.length >= 0)) break
-        for (let i = 0; i + 1 < at.length; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3)
+        for (let i = 0; i + 1 < at.length && !over; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3)
         break
       }
-      case MASK_GROUP: for (const img of Array.isArray(a[0]) ? a[0] : []) addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3); break
-      case INLINE_GROUP: for (const e of Array.isArray(a[1]) ? a[1] : []) addBox(mul(s.ctm, matrixOf(e?.transform)), 0, 0, 1, 1, -3); break
+      case MASK_GROUP: for (const img of Array.isArray(a[0]) ? a[0] : []) { if (over) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3) } break
+      case INLINE_GROUP: for (const e of Array.isArray(a[1]) ? a[1] : []) { if (over) break; addBox(mul(s.ctm, matrixOf(e?.transform)), 0, 0, 1, 1, -3) } break
       case INTENT: {
         const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
         const m = typeof name === 'string' ? POINT.exec(name) : null

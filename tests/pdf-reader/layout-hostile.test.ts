@@ -1,7 +1,7 @@
 import { deflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { GLYPHS_PAGE, OPS_CAP, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_CAP, GLYPHS_PAGE, OPS_CAP, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
 // A page's ink is bounded whatever the page (E2b stage 1, the per-part memory ceiling): what the maker holds of a page is its
@@ -85,4 +85,55 @@ describe('a hostile page\'s ink is bounded (the per-part memory ceiling)', () =>
     expect(got.capped).toBe(true)
     expect(got.glyphs).toHaveLength(GLYPHS_PAGE)
   }, 120_000)
+
+  // ---- an operation's many: what one operation places is bounded within it (a list as any caller may give: PDF.js's own for
+  // getOperatorList holds no repeat or group, its queue optimiser off for it, but a run of glyphs set turned it does hold)
+  const font = { name: 'F1', loadedName: 'F1', ascent: 0.8, descent: -0.2, fontMatrix: [0.001, 0, 0, 0.001, 0, 0] }
+  const objs = { get: (id: string) => (id === 'F1' ? font : null), has: () => false }
+
+  it('one image repeat placing BOXES_CAP + 1 images: the boxes stop at BOXES_CAP, the page capped', () => {
+    // (one operation, well within OPS_CAP)
+    const at = new Float32Array(2 * (BOXES_CAP + 1)).map((_, i) => (i % 2 ? 100 : 72) + (i >> 1) * 1e-4)
+    const got = pageInk(OPS, { fnArray: [OPS.paintImageXObjectRepeat], argsArray: [['img', 1, 1, at]] }, objs, { rotate: 0, glyphsMax: GLYPHS_PAGE })
+    expect(got.capped).toBe(true)
+    expect(got.boxes.length / 4).toBe(BOXES_CAP)
+    // a mask group and an inline image group alike
+    const images = Array.from({ length: BOXES_CAP + 1 }, () => ({ transform: [1, 0, 0, 1, 72, 100] }))
+    for (const [fn, args] of [[OPS.paintImageMaskXObjectGroup, [images]], [OPS.paintInlineImageXObjectGroup, [null, images]]] as const) {
+      const g = pageInk(OPS, { fnArray: [fn], argsArray: [args] }, objs, { rotate: 0 })
+      expect(g.capped).toBe(true)
+      expect(g.boxes.length / 4).toBe(BOXES_CAP)
+    }
+  })
+
+  it('one showText of BOXES_CAP + 1 glyphs set turned (a box each, no glyph): the boxes stop at BOXES_CAP, the page capped', () => {
+    let read = 0
+    const glyph = { unicode: 'x', fontChar: 'x', isSpace: false, get width() { read++; return 500 } }
+    const ops = { fnArray: [OPS.setFont, OPS.setTextMatrix, OPS.showText], argsArray: [['F1', 10], [[0, 1, -1, 0, 300, 300]], [new Array(BOXES_CAP + 1).fill(glyph)]] }
+    const got = pageInk(OPS, ops, objs, { rotate: 0, glyphsMax: GLYPHS_PAGE })
+    expect(got.glyphs).toHaveLength(0)
+    expect(got.capped).toBe(true)
+    expect(got.boxes.length / 4).toBe(BOXES_CAP)
+    // the operation's glyphs past the cap not walked
+    expect(read).toBeLessThanOrEqual(BOXES_CAP + 1)
+  })
+
+  it('one showText past glyphsMax: the walk stops inside the operation, at the glyph past it', () => {
+    let read = 0
+    const glyph = { unicode: 'x', fontChar: 'x', isSpace: false, get width() { read++; return 500 } }
+    const ops = { fnArray: [OPS.setFont, OPS.showText], argsArray: [['F1', 10], [new Array(1000).fill(glyph)]] }
+    const got = pageInk(OPS, ops, objs, { rotate: 0, glyphsMax: 10 })
+    expect(got.capped).toBe(true)
+    expect(got.glyphs).toHaveLength(10)
+    // (each glyph's width is read for its advance and its outline's key: twice a glyph walked, eleven walked)
+    expect(read).toBeLessThanOrEqual(2 * 11)
+    // a Type 3 font and a font PDF.js could not read alike
+    for (const kind of [{ isType3Font: true }, { isInvalidPDFjsFont: true }]) {
+      read = 0
+      const f = { ...font, ...kind }
+      const g = pageInk(OPS, ops, { get: (id: string) => (id === 'F1' ? f : null), has: () => false }, { rotate: 0, glyphsMax: 10 })
+      expect(g.capped).toBe(true)
+      expect(read).toBeLessThanOrEqual(2 * 11)
+    }
+  })
 })
