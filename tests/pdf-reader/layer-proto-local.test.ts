@@ -254,6 +254,50 @@ describe('S4 with a first page all another\'s: the first line is the first place
   })
 })
 
+describe('L1: a unit left the original\'s for a page that cannot be read grows on its other pages as a unit ranked after it there needs', () => {
+  // q (unit 1, v0's geometry) on pages 2 and 3, its page-2 line anchored on "beta" alone ("Alpha" before it its own), page 3
+  // unreadable: q is refused 'page' and never laid. u (unit 2) on pages 2 and 4 ranks after it on page 2 and grows it there
+  // first (L1): in order too, where next's rule skipped a unit refused before it was reached
+  const Q2 = line(2, 200, [20, 'Alpha beta'])
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'geometry', tr: [text(CJK(5))] },
+    { id: 1, kind: 'para', src: 'Alpha beta gamma', lines: [Q2, line(3, 200, [20, 'gamma'])], rects: [[2, 50, 200 - 2.15, 70, 200 + 6.83], [3, 20, 200 - 2.15, 45, 200 + 6.83]], from: 'geometry', tr: [text(CJK(6, 0x4e20))] },
+    { id: 2, kind: 'para', src: 'Other words more text', lines: [line(2, 120, [20, 'Other words']), line(4, 270, [20, 'more text'])], from: 'geometry', tr: [text(CJK(8, 0x4e40))] },
+  ]
+  /** the paper, its page 3 unreadable */
+  const failing = () => { const P = paper(specs, 4), get = P.doc.getPage; P.doc.getPage = async (n: number) => { if (n === 3) throw new Error('page 3 cannot be read'); return get(n) }; return P }
+  const page2 = (run: Run) => ({ markup: run.rows[1]!.markup, ops: JSON.stringify(run.rows[1]!.ops) })
+  it('is grown on page 2 in order and in every other order, the page drawn alike', async () => {
+    const want = await open(failing())
+    await want.until(4)
+    expect(want.failed(3)).toBe(true)
+    expect(want.skipped.filter(x => x.id === 1).map(x => x.why)).toEqual(['page'])
+    // (its line grown over "Alpha", its own source's word: the anchors' x0 of 50 back to the line's 20)
+    expect(placedOf(want, 1).rects.find(r => r[0] === 2)![1]).toBeCloseTo(20, 1)
+    for (const first of [[4], [2], [4, 2, 1]]) {
+      const run = await open(failing())
+      for (const p of first) await run.layFor(p)
+      await run.until(4)
+      expect(page2(run), `${first} first`).toEqual(page2(want))
+      expect(placedOf(run, 1).rects, `${first} first`).toEqual(placedOf(want, 1).rects)
+    }
+  })
+  it('is grown alike by the run that lets go and the one that keeps, with no page pass too (a unit left the original\'s is let go only once its growth has run)', async () => {
+    const noPass = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }
+    noPass.scripts.Hans!.adaptiveFill = null
+    for (const rules of [undefined, noPass]) {
+      const kept = await open(failing(), { rules })
+      await kept.until(4)
+      const freed = await open(failing(), { rules, free: true })
+      await freed.until(4)
+      const as = rules ? 'no page pass' : 'the built-in set'
+      expect(placedOf(freed, 1).rects, as).toEqual(placedOf(kept, 1).rects)
+      expect(placedOf(freed, 1).rects.find(r => r[0] === 2)![1], as).toBeCloseTo(20, 1)
+      for (const q of [1, 2, 4]) expect(freed.rows[q - 1]!.ops, `${as} page ${q}`).toEqual(kept.rows[q - 1]!.ops)
+    }
+  })
+})
+
 describe("C1: a unit's fill leading is its fit's", () => {
   // a paragraph of page 2, and one from page 2 on to page 3: page 2's pass waits for the second, laid at page 3
   const specs: Spec[] = [
@@ -369,6 +413,16 @@ describe('the rules that lay in order (the even pass; no page pass): a page aske
     else r.scripts.Hans!.adaptiveFill = null
     return r
   }
+  it('bounds a closure by every page its units read, a placeholder\'s past the prefix\'s last page among them', async () => {
+    // (the L2 paper: page 1's paragraph reads page 2 for its formula; laid in order, page 1's closure draws page 1 alone, and
+    // the part covering page 2 must be in before page 1 is told laying, since the paragraph draws page 2 before it is laid)
+    const L2specs = PAPERS.find(([name]) => name === 'L2')![1]
+    for (const how of ['even', 'no pass'] as const) {
+      const run = await open(paper(L2specs, 2), { rules: rulesOf(how) })
+      expect(run.closure(1).draw, how).toEqual([1])
+      expect(run.closure(1).bound, how).toBe(2)
+    }
+  })
   for (const how of ['even', 'no pass'] as const) it(`${how}: page 3 asked first lays the prefix up to it, as laid in order`, async () => {
     const rules = rulesOf(how)
     const want = await open(paper(specs, 4), { rules })

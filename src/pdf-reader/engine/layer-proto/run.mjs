@@ -683,6 +683,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** a unit's own state let go: what stays is its place (id, stream, rects, pages), its row and its fill numbers */
   const letGoUnit = p => {
     if (!free || p.letGo) return
+    // (not before its growth has run on every page of its lines that can grow: a unit ranked after it there grows it, whatever
+    // it is (L1), and reads what it holds; a page that failed grows nothing. So the run that lets go grows as the one that keeps)
+    if (p.linePages && !p.linePages.every(g => p.grew.has(g) || failedPages.has(g))) return
     p.letGo = true
     if (shelf) shelf.units.set(p.id, { ...p, tex: p.tex && { ...p.tex } })
     for (const k of HEAVY) p[k] = undefined
@@ -1330,9 +1333,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         const q = line[i++]
         if (q.grew.has(g)) continue
         q.grew.add(g)
-        // (a unit let go of, left the original's with its pages passed (`free`), holds no state to grow: none past them reads it)
-        if (q !== p && q.letGo) continue
         try { growOn(q, g) } catch (e) { if (q === p || isMemoryError(e)) { grownTo.set(g, i); throw e } q.stepError ??= e }
+        // (one whose lay was over, its growth now run on every page of its lines, lets go)
+        if (q !== p && settledUnit(q)) letGoUnit(q)
         if (q === p) break
       }
       grownTo.set(g, i)

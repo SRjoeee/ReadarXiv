@@ -100,9 +100,10 @@ describe('the run: a page asked in any order answers as the page asked in order'
     }
   })
 
-  it('L3: the paper\'s designs are page 1\'s alone, whatever page is asked first', async () => {
+  it('pins the contract: page 1 is drawn first, whatever page is asked, and the paper\'s designs are its own', async () => {
     // (pages after the first set in Palatino, page 1 in Times: the designs are Times's, as page 1 says, though most of the
-    // paper's characters are another serif's)
+    // paper's characters are another serif's. This pins the contract, R11 and L3; it cannot catch a designs rule that read
+    // the running tally of every page drawn, since every closure draws page 1 before any other page)
     const palatino = (P: Built) => {
       const get = P.doc.getPage
       P.doc.getPage = async (n: number) => {
