@@ -45,10 +45,12 @@ export type SessionEvent =
   /** the reader cannot go on: the original could not be fetched, the service cannot translate, or a crash; the chain's error
    *  kind where it is the service's */
   | { type: 'fail'; event: 'fetch failed' | 'service' | 'crashed'; text: string; kind?: ProviderErrorKind }
-  /** the paper's layer being prepared (run.ts) */
+  /** the paper's layer being prepared (run.ts): told at each of our server's answers while it lasts */
   | { type: 'preparing'; position: number | null; progress: number | null }
   /** the layer is coming: a catalog, or a prepare's first objects */
   | { type: 'coming' }
+  /** the layer's catalog: the paper's prepare, where there was one, is over */
+  | { type: 'prepared' }
   /** the layer's side as the view tells it: opening, open, or refused (no layer for the visit), and its pages laid */
   | { type: 'layer'; state: 'opening' | 'open' | 'refused'; laid: number; total: number }
   /** the translation under way, and its end for the attempt (`stopped`: why it stopped short) */

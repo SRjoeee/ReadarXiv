@@ -25,8 +25,12 @@ export interface ReaderState {
   /** where the reader can read the paper translated instead, when the bilingual version cannot be had: its HTML version */
   htmlVersion: string | null
   phase: Phase
-  /** the paper's layer being prepared: its place in the queue and how far it has come, each null while not known */
+  /** the paper's layer being prepared: its place in the queue and how far it has come, each null while not known; a state
+   *  of its own beside the phase, from the prepare's first answer to the layer's catalog (`prepared`) */
   preparing: { position: number | null; progress: number | null } | null
+  /** the translation has begun this visit: a prepare still under way after it is no longer the phase (its polls would
+   *  take the phase back from the translation, and the line and the status region with it) */
+  begun: boolean
   /** the layer's pages laid, of the paper's */
   layer: { laid: number; total: number }
   /** no bilingual version for now (refused, unreachable: passing), or for this paper or language; null while there may be */
@@ -80,6 +84,7 @@ export const INITIAL: ReaderState = {
   htmlVersion: null,
   phase: 'loading',
   preparing: null,
+  begun: false,
   layer: { laid: 0, total: 0 },
   unavailable: null,
   progress: 0,
@@ -184,8 +189,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     }
     case 'preparing': {
       const preparing = { position: event.position, progress: event.progress }
-      return { ...state, preparing, unavailable: null, phase: state.phase === 'failed' ? state.phase : 'preparing' }
+      // the phase only before the translation has begun, and over the original on screen (loading stays loading)
+      const phase = !state.begun && (state.phase === 'ready' || state.phase === 'preparing') ? 'preparing' : state.phase
+      return { ...state, preparing, unavailable: null, phase }
     }
+    case 'prepared':
+      return state.preparing === null && state.phase !== 'preparing' ? state : { ...state, preparing: null, phase: state.phase === 'preparing' ? 'ready' : state.phase }
     case 'coming':
       return state.unavailable === null && state.available ? state : { ...state, unavailable: null, available: true, languageSupported: true }
     case 'layer': {
@@ -214,13 +223,13 @@ function reduceRunFree(state: ReaderState, event: Extract<SessionEvent, { type: 
   switch (event.type) {
     case 'translating': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 0
-      return { ...state, phase: 'translating', preparing: null, failure: null, progress, failedUnits: event.lost }
+      return { ...state, phase: 'translating', begun: true, failure: null, progress, failedUnits: event.lost }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
-      if (event.stopped && !drawn(state)) return { ...state, phase: 'failed', failure: event.stopped, progress, failedUnits: event.lost }
-      return { ...state, phase: 'ready', preparing: null, progress, failedUnits: event.lost, failure: event.stopped }
+      if (event.stopped && !drawn(state)) return { ...state, phase: 'failed', begun: true, failure: event.stopped, progress, failedUnits: event.lost }
+      return { ...state, phase: 'ready', begun: true, progress, failedUnits: event.lost, failure: event.stopped }
     }
     case 'unavailable': {
       const lasting = LASTING.has(event.why)

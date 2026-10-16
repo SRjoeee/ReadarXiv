@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { createController, fromView, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
 import type { SessionEvent, SessionHost } from '@/pdf-reader/session/events'
+import { capsuleOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
 
 const fold = (events: SessionEvent[], from = INITIAL) => events.reduce(reduce, from)
 const opened: SessionEvent = { type: 'opened' }
@@ -61,7 +62,30 @@ describe('reduce: the layer\'s states (Task 12)', () => {
   it('preparing: the original, the prepare\'s place and progress, then the layer as it comes', () => {
     const p = fold([opened, { type: 'preparing', position: 3, progress: null }, { type: 'preparing', position: null, progress: 0.4 }])
     expect(p).toMatchObject({ phase: 'preparing', preparing: { position: null, progress: 0.4 }, available: true })
-    expect(fold([{ type: 'coming' }, { type: 'translating', got: 0, total: 9, lost: 0 }], p)).toMatchObject({ phase: 'translating', preparing: null })
+    expect(fold([{ type: 'coming' }, { type: 'translating', got: 0, total: 9, lost: 0 }], p)).toMatchObject({ phase: 'translating', preparing: { position: null, progress: 0.4 } })
+    expect(fold([{ type: 'coming' }, { type: 'prepared' }], p)).toMatchObject({ phase: 'ready', preparing: null })
+  })
+
+  it('the prepare is a state of its own, ended by the catalog: a poll once the translation has begun moves no phase, and nothing flips (the review\'s probe)', () => {
+    const prep = (position: number | null, progress: number): SessionEvent => ({ type: 'preparing', position, progress })
+    const seq: SessionEvent[] = [
+      opened, prep(2, 0.1), { type: 'coming' }, { type: 'translating', got: 0, total: 40, lost: 0 }, prep(null, 0.3),
+      { type: 'translating', got: 20, total: 40, lost: 3 }, { type: 'translated', got: 40, total: 40, lost: 3, stopped: null },
+      prep(null, 0.6), { type: 'coming' }, laid(3), { type: 'prepared' },
+    ]
+    const phases: string[] = [], spoken: string[] = []
+    let s = INITIAL
+    for (const e of seq) { s = reduce(s, e); phases.push(s.phase); spoken.push(spokenOf(s)) }
+    expect(phases).toEqual(['ready', 'preparing', 'preparing', 'translating', 'translating', 'translating', 'ready', 'ready', 'ready', 'ready', 'ready'])
+    // said once each, never back: the status region does not flip between the two
+    expect(spoken.filter((w, i) => w && w !== spoken[i - 1])).toHaveLength(2)
+    // held beside the translation while it lasts, gone with the catalog
+    expect(fold(seq.slice(0, 5)).preparing).toEqual({ position: null, progress: 0.3 })
+    expect(s.preparing).toBeNull()
+    // the translation ended, a poll after it leaves the line off and the passages that failed told
+    const after = fold(seq.slice(0, 8))
+    expect(lineOf(after).on).toBe(false)
+    expect(capsuleOf(after, { noticeClosed: false, narrowShown: false, refusalsSeen: 0 })?.kind).toBe('notice')
   })
 
   it('no source, no PDF, a prepare that cannot succeed: the translated displays greyed, the HTML version offered', () => {
