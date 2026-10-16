@@ -4,8 +4,10 @@
 // (layout/chain.mjs chainedAddon over the host's remover), and the cut (layer-proto/cut.mjs partCutter, cutBundle's own), each
 // part judged as it is cut: the carry's share of the lines of its marked pages (CARRY_MIN) and its own reader's reading of it
 // (readPart), a part refused either way the same pages with no layout. Under today's rules the frame, the column edges and the
-// far-push columns read the whole document, so every part is cut once the whole is known (stage 1: one flush at the end); the
-// parts are then cutBundle's of the same whole, byte for byte, wherever no verdict refuses one. What a part holds at most, and
+// far-push columns read the whole document, so every part is cut once the whole is known (one flush at the end); the parts are
+// then cutBundle's of the same whole, byte for byte, wherever no verdict refuses one. Under the page stream's rules 1, 3 and 4
+// each of them is had a page at a time, and the pass is a page stream (the marked original read beside arXiv's): each part cut
+// as soon as what it reads is final, the same parts as the whole path's under those rules. What a part holds at most, and
 // what the pass holds of arXiv's ink (GLYPHS_PAGE glyphs and OPS_CAP boxes a page, a page past either dark): docs/PDF-READER.md
 // §19.6.
 //
@@ -68,7 +70,7 @@ function fitted(text) {
  *
  * `marked` { doc, log, options } in place of `marks`: the marked original to be read here (a PDF.js document of it, the
  * caller's to open and destroy, its last pass's log, markedPages' options but the units and the operator codes): read whole
- * first (readMarked, as the prepare's marks stage reads it; its refusal the marks'), or under the oracle a page at a time.
+ * first (readMarked, as the prepare's marks stage reads it; its refusal the marks'), or in a page stream a page at a time.
  *
  * Under today's rules the maker's frame and the columns' edges read the whole document, so every part is cut at the end
  * (stage 1). `oracle` (tests and the lab: what a whole run of the same paper gave, `capture`'s): { frame, columnEdges }, the
@@ -77,7 +79,14 @@ function fitted(text) {
  * arXiv page read when it was cut); the same parts. With `marked`, also { leftFrame, columns }, the left's frame predicate
  * and its pages' columns: the marked original read a page at a time beside arXiv's (its page p + 1 before arXiv's page p),
  * the left anchored by ranges as the unit marks' pages are read (stage 2's streaming; markedStream). `capture` (an object):
- * the whole run's four rules written there, an oracle's
+ * the whole run's four rules written there, an oracle's.
+ *
+ * The production stream: under rules 1, 3 and 4 (`rules` { frame: 'tokens', edges: 'earlier', columns: 'tokens' }) every
+ * predicate is had a page at a time with no whole run before it (the frames and the far push's columns of arXiv's text
+ * alone, made at step T; the columns' edges of the pages before a page, the maker's own), so the pass is the oracle's
+ * stream with those, the marks given (the left anchored whole first) or the marked original read here (a page at a time
+ * beside arXiv's): the same parts as today's path under the same rules, cut as soon as what they read is final. `whole`
+ * (tests and the lab) asks for today's path whatever the rules; `capture` runs it too
  *
  * Told in order: `onHead(head, units)` (the head and the units' chunks), then for each part its left parts (`onLeft(written)`,
  * each page's once) and the part (`onPart(written, note)`), each awaited. `note`: { pages, layout: 'kept' | 'none' |
@@ -85,8 +94,12 @@ function fitted(text) {
  * addon } }, or { refused: 'anchors', why } before anything is told (arXiv's PDF read for no unit, or not read). A failed
  * allocation is thrown; a throw of the maker's is the layout's (none, `stats.layout`), never the paper's
  */
-export async function layerOfPaper({ paper, source, marks = null, marked = null, arxiv, OPS, pdfjs, base, image, remove = null, onHead = null, onLeft, onPart, verdicts = true, frame: frameGiven = pageFrame, columns: columnsGiven = undefined, rules: rulesGiven = null, oracle = null, capture = null }) {
+export async function layerOfPaper({ paper, source, marks = null, marked = null, arxiv, OPS, pdfjs, base, image, remove = null, onHead = null, onLeft, onPart, verdicts = true, frame: frameGiven = pageFrame, columns: columnsGiven = undefined, rules: rulesGiven = null, oracle = null, capture = null, whole: wholeAsked = false }) {
   const rules = rulesOf(rulesGiven)
+  // (the page stream without a whole run before it: rules 1, 3 and 4 give every predicate a page at a time, the frames and the
+  // far push's columns of arXiv's text alone, the columns' edges of the pages before a page; else, or `whole` asked (tests and
+  // the lab), today's path, the whole made first; with an oracle, the oracle's predicates)
+  const streams = !wholeAsked && !capture && (!!oracle || (rules.frame === 'tokens' && rules.edges === 'earlier' && rules.columns === 'tokens'))
   if (typeof onLeft !== 'function' || typeof onPart !== 'function') throw new TypeError('onLeft, onPart: the host\'s sinks')
   if (marks && marked) throw new TypeError('marks or marked: the marked original read, or to be read here, not both')
   if (!Number.isInteger(base?.bytes) || typeof base?.sha256 !== 'string' || !Number.isInteger(base?.xref)) throw new TypeError('base: arXiv\'s PDF\'s bytes, digest and startxref')
@@ -113,11 +126,14 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
   if (rules.floatSearch === 'forward' && !Array.isArray(source.inFloat)) throw new TypeError('source.inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
   const inFloat = rules.floatSearch === 'forward' ? source.inFloat : null, forward = inFloat ? new Set(inFloat) : null
-  // (the marked original to be read here: a page at a time beside arXiv's under the oracle, else whole first, readMarked as the
+  // (the marked original to be read here: a page at a time beside arXiv's in a stream, else whole first, readMarked as the
   // prepare's marks stage reads it, its refusal or throw the marks' refusal)
   const markedOptions = marked ? { ...marked.options, units, OPS } : null
-  if (marked && oracle) {
-    const r = await markedStream({ paper, units, texts, floating, text, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, base, image, remove, onHead, onLeft, onPart, verdicts, oracle, rules, inFloat, forward })
+  // (the predicates a stream takes: the oracle's, a whole run's; else the rules')
+  const given = oracle ? { makerFrame: () => oracle.frame, columnEdges: oracle.columnEdges, leftFrame: () => oracle.leftFrame, columns: () => oracle.columns } : { makerFrame: frame, columnEdges: null, leftFrame: leftFrameRule, columns }
+  if (marked && streams) {
+    if (oracle) for (const k of ['frame', 'columnEdges', 'leftFrame', 'columns']) if (oracle[k] === undefined) throw new TypeError(`oracle.${k}: a whole run's (capture), for the marked original read a page at a time`)
+    const r = await markedStream({ paper, units, texts, floating, text, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, base, image, remove, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward })
     if (r) return r
     marks = { refused: 'marks' }
   } else if (marked) {
@@ -137,9 +153,9 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // layout's alone
   let made = null, maker = null
   if (marks && 'marks' in marks) {
-    const makerFrame = oracle ? () => oracle.frame : capture ? (d, ms) => { capture.frame = frame(d, ms); return capture.frame } : frame
+    const makerFrame = streams ? given.makerFrame : capture ? (d, ms) => { capture.frame = frame(d, ms); return capture.frame } : frame
     try {
-      maker = await makerOf({ units, marks: marks.marks, arxiv: doc, OPS, paper, left: '', pdfjs, text, floatMatch, frame: makerFrame, plans: true, parts: true, rules, inFloat, ...(oracle ? { columnEdges: oracle.columnEdges } : {}) })
+      maker = await makerOf({ units, marks: marks.marks, arxiv: doc, OPS, paper, left: '', pdfjs, text, floatMatch, frame: makerFrame, plans: true, parts: true, rules, inFloat, ...(streams && given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
       if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null }
     } catch (e) {
       if (isMemoryError(e)) throw e
@@ -149,7 +165,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   } else made = { refused: marks?.refused ?? 'marks' }
 
   const ctx = { paper, N, base, image, remove, pdfjs, onHead, onLeft, onPart, verdicts, side, bundle, made }
-  if (maker && oracle) {
+  if (maker && streams) {
     // (the maker's throws are the layout's, its own calls' alone: a sink's, the reader's or the cutter's go on as themselves)
     let st = null
     try {
@@ -242,11 +258,11 @@ async function cutWhole(ctx, r) {
   return { through: N, count: cutter.parts.length, stats: { left: side.stats, layout: ctx.made, plans: plans ? { pages: plans.size, dirty: [...plans.values()].filter(p => p.remove).length } : null, addon: hooks ? hooks.state() : null } }
 }
 
-/** the left anchored whole before the maker (stage 1's oracle): every unit's anchor final */
+/** the left anchored whole before the maker (the marks given): every unit's anchor final */
 const wholeLeft = side => ({ pages: side.pages, leftPages: side.leftPages, units: () => side.units, stats: side.stats, done: () => true, all: () => true, frontier: () => Infinity, firstTok: () => Infinity })
 
 /**
- * The oracle's pass: the maker made a page at a time (`st`, its stream; null: no layout, the left alone), the left whole
+ * The page stream's pass: the maker made a page at a time (`st`, its stream; null: no layout, the left alone), the left whole
  * (wholeLeft) or anchored by ranges as the marked original's pages are read (streamingLeft), each part cut as soon as everything
  * it reads is final. What a part reads (layer-proto/cut.mjs partCutter): K's entries up to the frontier of its last page, their
  * table groups whole, its pages' need bounds, and every page those reach, with their indices in K; so a part is cut once
@@ -416,7 +432,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   return { through: N, count: cutter.parts.length, stats: { left: left.stats, layout: layoutStats, plans: st?.plans ? { pages: planned.pages + st.plans.size, dirty: planned.dirty + [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, closed } }
 }
 
-/** stage 1's oracle drive: arXiv's pages in order, each read and its stream told */
+/** the drive with the marks given: arXiv's pages in order, each read and its stream told */
 const arxivDrive = (maker, st, N) => async ({ making, close, read }) => {
   for (let p = 1; p <= N; p++) {
     await making(async () => { await maker.readPage(p); read(p); st.pageRead(p) })
@@ -425,19 +441,19 @@ const arxivDrive = (maker, st, N) => async ({ making, close, read }) => {
 }
 
 /**
- * The left anchored by ranges as the marked original's pages are read (left-part.mjs rangedAnchors, under the oracle's frame of
- * the left), the side a unit at a time (left-side.mjs leftSideStream, under its columns): each unit's bounds those of its unit
+ * The left anchored by ranges as the marked original's pages are read (left-part.mjs rangedAnchors, under `frame`, the whole
+ * document's frame rule of the left), the side a unit at a time (left-side.mjs leftSideStream, under `columns`): each unit's bounds those of its unit
  * marks (`<id>s`, `<id>e`: boundsFromMarks') once both their pages are read (their words read there); a unit with no pair of
  * them, or every unit where the marks are none (`unitMarks` null), unbounded from the start. `page(p)` the marked page p read;
  * `end()` every page read, or the reading given up (a mark not read has no word: no bounds)
  */
-function streamingLeft({ doc, views, edges, texts, floating, floatMatch, oracle, unitMarks, forward = null }) {
+function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, columns, unitMarks, forward = null }) {
   const n = texts.length, byPage = pageIndex(doc)
-  const side = leftSideStream({ doc, views, edges, columns: () => oracle.columns })
+  const side = leftSideStream({ doc, views, edges, columns })
   const done = new Uint8Array(n)
   let doneCount = 0, pending = 0
   const pairs = new Map()
-  const R = rangedAnchors(doc, texts, { floating, floatMatch, frame: () => oracle.leftFrame, boundsKnown: () => pending === 0, forward })
+  const R = rangedAnchors(doc, texts, { floating, floatMatch, frame, boundsKnown: () => pending === 0, forward })
   const lastPage = R.lastPage, clamp = p => Math.min(Math.max(1, p), lastPage)
   const isUnit = id => /^(?:0|[1-9]\d*)$/.test(id) && Number(id) < n
   const paired = new Set()
@@ -471,25 +487,25 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, oracle,
 }
 
 /**
- * The oracle's pass with the marked original read here a page at a time (`marked` { doc, log, options }: markedPages'): its
+ * The page stream with the marked original read here a page at a time (`marked` { doc, log, options }: markedPages'): its
  * head first; the maker of the head's marks (marksOfHead) fed each page as it comes (make.mjs stream `marked`), the left
  * anchored by ranges as the unit marks' pages are read (streamingLeft), the marked page p + 1 read before arXiv's page p (a
- * mark of the marked page p + 1 may be carried to arXiv's page p). The oracle holds a whole run's four rules: the maker's frame
- * and columns' edges, the left's frame and its pages' columns. A head that cannot be read is the marks' refusal (null: the
+ * mark of the marked page p + 1 may be carried to arXiv's page p). `given` holds the four predicates: the maker's frame and
+ * columns' edges (null: the maker's own, rule 3), the left's frame and its pages' columns' rule — an oracle's, a whole run's,
+ * or the rules'. A head that cannot be read is the marks' refusal (null: the
  * caller's whole path then, as readMarked's refusal is); a page that cannot be read after it is the layout's failure, the left
  * going on with the unit marks read (the whole path refuses the marks then, its left placed without them: not this one's)
  */
 async function markedStream(o) {
-  const { paper, units, texts, floating, text, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, base, image, remove, onHead, onLeft, onPart, verdicts, oracle, rules, inFloat, forward } = o
-  for (const k of ['frame', 'columnEdges', 'leftFrame', 'columns']) if (oracle[k] === undefined) throw new TypeError(`oracle.${k}: a whole run's (capture), for the marked original read a page at a time`)
+  const { paper, units, texts, floating, text, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, base, image, remove, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward } = o
   const events = markedPages(marked.doc, marked.log, markedOptions)
   let head = null
   try { head = (await events.next()).value?.head ?? null } catch (e) { if (isMemoryError(e)) throw e }
   if (!head) return null
-  const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, floating, floatMatch: leftFloats, oracle, unitMarks: head.unitMarks, forward })
+  const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, floating, floatMatch: leftFloats, frame: given.leftFrame, columns: given.columns, unitMarks: head.unitMarks, forward })
   let maker = null, st = null, made = null
   try {
-    maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text, floatMatch, frame: () => oracle.frame, plans: true, parts: true, rules, inFloat, columnEdges: oracle.columnEdges })
+    maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text, floatMatch, frame: given.makerFrame, plans: true, parts: true, rules, inFloat, ...(given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
     if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null } else st = maker.stream({ marked: head })
   } catch (e) {
     if (isMemoryError(e)) throw e

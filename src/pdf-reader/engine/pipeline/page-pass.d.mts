@@ -46,6 +46,9 @@ export interface LayerOptions {
   oracle?: LayerOracle | null
   /** an object the whole run writes its maker frame predicate and columns' edges into: an oracle */
   capture?: Partial<LayerOracle> | null
+  /** tests and the lab: today's path, the whole made first, whatever the rules (under rules 1, 3 and 4 the pass is a page
+   *  stream by itself, its parts cut early) */
+  whole?: boolean
 }
 /** a whole run's rules (`capture`'s): the maker's frame predicate and columns' edges, and the left's frame predicate and its
  *  pages' columns (those two for the marked original read a page at a time) */

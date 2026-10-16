@@ -305,3 +305,32 @@ describe('layerOfPaper: the page stream\'s rules (`rules`: rules 1, 3, 4 and 5)'
     await expect(passOf(worldOf(), { rules: { floatSearch: 'forward' }, source: { units: worldOf().units, kept: new Set() } as never })).rejects.toThrow(/inFloat/)
   })
 })
+
+describe('layerOfPaper: the production stream (rules 1, 3 and 4 give every predicate; no whole run before it)', () => {
+  const rules = { frame: 'tokens', edges: 'earlier', columns: 'tokens' } as const
+  for (const verdicts of [false, true]) {
+    it(`the marks given or the marked original read here: the whole path's layer under the same rules, its first part cut before the last page (verdicts ${verdicts ? 'on' : 'off'})`, async () => {
+      for (const w of [worldOf(), deferredWorld()]) {
+        for (const input of [{}, { marks: null, marked: markedIn(w) }]) {
+          const want = await passOf(w, { verdicts, rules, whole: true, ...input } as never)
+          const got = await passOf(w, { verdicts, rules, ...input } as never)
+          expect(got.told).toEqual(want.told)
+          expect(shas(got.units)).toEqual(shas(want.units))
+          expect(got.head?.sha256).toBe(want.head?.sha256)
+          expect(shas(got.parts)).toEqual(shas(want.parts))
+          expect(got.notes).toEqual(want.notes)
+          const closed = (got.r as { stats: { closed?: [number, number, number][] } }).stats.closed
+          expect(closed?.[0]?.[2]).toBeLessThan(w.pages.length)
+        }
+      }
+    })
+  }
+
+  it('without the three rules, or with `whole`, the whole made first (no part cut early)', async () => {
+    const w = worldOf()
+    for (const o of [{}, { rules: { frame: 'tokens', edges: 'earlier' } }, { rules, whole: true }]) {
+      const got = await passOf(w, o as never)
+      expect((got.r as { stats: { closed?: unknown } }).stats.closed).toBeUndefined()
+    }
+  })
+})
