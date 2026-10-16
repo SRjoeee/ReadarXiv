@@ -741,7 +741,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
       const before = u.pieces[k - 1], after = u.pieces[k + 1]
       let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
       const n = e[2], items = [], rules = []
-      for (let j = 3; j < 3 + 5 * n; j += 5) items.push({ page: e[j], x0: e[j + 1], y: e[j + 2], size: e[j + 3], u: marks.chars[e[j + 4]] ?? '' })
+      // (a glyph's character: an index into the marks' table, or the character itself, as the page stream hands a row on)
+      for (let j = 3; j < 3 + 5 * n; j += 5) items.push({ page: e[j], x0: e[j + 1], y: e[j + 2], size: e[j + 3], u: typeof e[j + 4] === 'string' ? e[j + 4] : marks.chars[e[j + 4]] ?? '' })
       for (let j = 3 + 5 * n; j < e.length; j += 5) rules.push({ page: e[j], x0: e[j + 1], y0: e[j + 2], x1: e[j + 3], y1: e[j + 4] })
       // EMPTY only where its points hold nothing between them: the piece draws nothing
       if (!items.length && !rules.length) { ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' }); continue }

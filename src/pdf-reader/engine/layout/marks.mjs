@@ -20,7 +20,7 @@ import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
 import { packGlyphs, pageInk } from './ink.mjs'
 import { NAME_KEYS } from './names.mjs'
-import { boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
+import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
 
 // ---------------------------------------------------------------- the classes
@@ -996,7 +996,7 @@ function followsOf(units, names) {
  * left out, and its rests with it. Numbers to a hundredth. What it gives, parseLayoutMarks takes
  */
 export async function layoutMarksOf(marked, log, o) {
-  return fitted((await readMarked(marked, log, o)).marks)
+  return fitted((await readMarked(marked, log, { ...o, paper: true })).marks)
 }
 
 /** a number to a hundredth, as the file writes it (-0 written 0) */
@@ -1005,23 +1005,27 @@ const r2z = v => Math.round(v * 100) / 100 + 0
 const UNIT_MARK = /^\d+[se]$/
 
 /**
- * The marked original read once, a page at a time (the page stream, E2a): { marks, unitMarks }.
- * - `marks`: what layoutMarksOf gives, in memory, as parseLayoutMarks reads the file encodeLayoutMarks writes of it (numbers
- *   to a hundredth, no -0), but never trimmed to the file's own bounds (fitted: the server writes no marks file; the lab's
- *   file is layoutMarksOf's). The names (getDestinations) are read first, each page looked up once by its reference; then each
- *   page's view, text and, with `units` and `OPS`, its operator list, each once, the page cleaned up after (page.cleanup):
- *   its tokens (tokenizeDocument, which begins again on every page) give the file's tokens and words and are let go; its ink,
- *   packed (packGlyphs, STREAM_COLUMNS), is held only until every piece that may read it is found (stream.mjs ownedPages).
- *   Each found piece's row is made then: GLYPHS_PIECE, RULES_PIECE, OWNED_ALL and its ink's bounds counted in its opening
- *   point's order (the rows are written by name, as before; OWNED_ALL alone may then bind on other pieces, never reached:
- *   the corpus's files are at most 1.4 MB). The characters' table is made at the end, in the rows' order, as before.
- * - `unitMarks`: each unit's start and end mark (destinations `axt-<id>s`, `axt-<id>e`, a dropped one too) with the word it
- *   stands by on its page of the marked original (anchors.mjs markWords), what the left is anchored by: Map name → { page,
- *   x, y, t }, in the names' order, the place as the destination gives it; null where a page's text could not be read or a
- *   unit mark's page could not be looked up (the left is then anchored by its text alone).
- * `marked` a PDF.js document of the marked original, `log` its last pass's log; the options are layoutMarksOf's
+ * The marked original read a page at a time (the page stream): an async generator of what each page gives, in page order.
+ * - first `{ head }`: { pages, marking, dropped, set (every name of the destinations and the log's dropped ones), named
+ *   ([name, page, x, y] of the destinations the marks keep, in the names' order, the place as given), destPage (name → page),
+ *   unitMarks } — `unitMarks` the unit marks the left is anchored by (destinations `axt-<id>s`, `axt-<id>e`, a dropped one
+ *   too: Map name → { page, x, y, t }, in the names' order), each one's word `t` filled as its page is read, or null where a
+ *   unit mark's page could not be looked up. The names are read first, each page looked up once by its reference;
+ * - then for each page p `{ page }`: { p, view (its four numbers to a hundredth, checked as the marks' views are), tokens
+ *   (the marks' tokens of p, stride 6: page, x, y, w, h, word), words (the words first seen on p, appended to the table in
+ *   order), owned (the pieces found once p was read: [name, row], each row [name, how] or [name, how, n, glyphs (page, x0,
+ *   y, size, its character itself), rules (page, x0, y0, x1, y1)]) }. Each page's view, text and, with `units` and `OPS`,
+ *   its operator list are read once and the page cleaned up after (page.cleanup); its tokens (tokenizeDocument, which begins
+ *   again on every page) are let go once read; its packed ink (packGlyphs, STREAM_COLUMNS) is held only until every piece
+ *   that may read it is found (stream.mjs ownedPages);
+ * - last `{ end }`: { owned (the pieces found at the document's end), twice (the point names read more than once on pages
+ *   apart: each such piece is 'a mark set twice', and owns nothing, nor the displays of its group), lines (the log's) }.
+ * A piece's row is bounded by itself (GLYPHS_PIECE, RULES_PIECE, its ink within its pages' views); with `paper`, by the
+ * marks file's paper-wide bounds too, as the file's parser takes them (OWNED_ALL counted in the opening points' order,
+ * WORDS_MAX): the lab's file (layoutMarksOf). `marked` a PDF.js document of the marked original, `log` its last pass's log;
+ * the options are layoutMarksOf's
  */
-export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, names = null, lineskip = null, units = null, OPS = null }) {
+export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, names = null, lineskip = null, units = null, OPS = null, paper = false }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const sw = checkSwitches(switches, 'switches'), none = checkInkless(inkless, 'inkless')
   const said = texts === null ? null : checkTexts(Array.isArray(texts) ? texts.flat() : texts, 'texts')
@@ -1040,7 +1044,6 @@ export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES
     return pageOf.get(key)
   }
   const dests = await pdf.getDestinations(), set = new Set(dropped)
-  /** the marks' names with their places (the file's, read below once the views are known); every name's page */
   const named = [], destPage = new Map()
   let unitMarks = new Map()
   /** the unit marks by page, for their words as each page is read */
@@ -1065,20 +1068,20 @@ export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES
     if (isInteger(page, 1, pages)) destPage.set(name, page)
     named.push([name, page, x, y])
   }
+  yield { head: { pages, marking, dropped, set, named, destPage, unitMarks } }
   // ---- each page, once
-  const views = [], words = [], wordOf = new Map(), tokens = []
+  const views = [], wordOf = new Map()
+  let words = 0
   // kept: whether the token before was written, so that a rest is written only after the word it is the rest of
   let kept = false
   const follows = units ? followsOf(units, set) : null
   const stream = units && OPS ? ownedPages({ follows, dropped, closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
-  /** each found piece's row, by its name: [name, how] or [name, how, n, glyphs (page, x0, y, size, its character), rules] */
-  const rows = new Map()
-  let all = 0
+  let all = 0, found = []
   const take = (name, e, W) => {
-    if (e.how >= OWNED) { rows.set(name, [name, e.how]); return }
-    const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); rows.set(name, [name, k]) }
+    if (e.how >= OWNED) { found.push([name, [name, e.how]]); return }
+    const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); found.push([name, [name, k]]) }
     if (e.glyphs.length > GLYPHS_PIECE || e.boxes.length > RULES_PIECE) { not('more glyphs than a piece may own'); return }
-    if (all + e.glyphs.length + e.boxes.length > OWNED_ALL) { not('past the glyphs a paper may own'); return }
+    if (paper && all + e.glyphs.length + e.boxes.length > OWNED_ALL) { not('past the glyphs a paper may own'); return }
     const ok = (p, x, y) => inView(views, p, r2(x), r2(y))
     const bs = e.boxes.map(([p, b]) => [p, W[p - 1].boxes.slice(4 * b, 4 * b + 4)])
     // a glyph's own numbers: its page's columns (packGlyphs) at its index
@@ -1090,15 +1093,22 @@ export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES
       const G = W[p - 1].glyphs
       let u = G.u[g]
       if (u.length > CHAR_MAX) u = u.slice(0, /[\ud800-\udbff]/.test(u[CHAR_MAX - 1]) ? CHAR_MAX - 1 : CHAR_MAX)
-      // (its character itself for now: the table's numbers are given at the end, in the rows' order)
+      // (its character itself: the file's table of them is made of the rows, in their order, by whoever writes the file)
       row.push(p, r2z(G.x0[g]), r2z(G.y[g]), r2z(G.size[g]), u)
     }
     for (const [p, b] of bs) row.push(p, r2z(b[0]), r2z(b[1]), r2z(b[2]), r2z(b[3]))
-    rows.set(name, row)
+    found.push([name, row])
   }
   for (let p = 1; p <= pages; p++) {
     const page = await pdf.getPage(p)
-    views.push(...page.view.slice(0, 4).map(r2z))
+    const view = page.view.slice(0, 4).map(r2z)
+    // (its view checked as checkViews checks the marks' views, there and now: a page's numbers are its own)
+    for (let i = 0; i < 4; i++) {
+      const at = 4 * (p - 1) + i
+      if (!isNumber(view[i]) || Math.abs(view[i]) > COORD_MAX) throw new LayoutRefusal(`views[${at}]`, `not a number within ±${COORD_MAX}`)
+      if (i >= 2 && view[i] <= view[i - 2]) throw new LayoutRefusal(`views[${at}]`, 'an empty view')
+    }
+    views.push(...view)
     const content = await page.getTextContent()
     let ink = null
     if (stream) {
@@ -1110,8 +1120,9 @@ export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES
     // its operator list let go once its ink is read, so that PDF.js holds one page's, not every page's to the end; nothing
     // reads it again, and the caller destroys the document after (paper.mjs)
     page.cleanup?.()
-    // its tokens: the file's, and the words of the unit marks on it
+    // its tokens: the marks', and the words of the unit marks on it
     const own = tokenizeDocument([{ page: p, items: content.items, styles: content.styles }])
+    const tokens = [], fresh = []
     for (const t of own) {
       const rest = t.t === ''
       if ((rest && !kept) || t.t.length > WORD_MAX) { kept = false; continue }
@@ -1119,9 +1130,9 @@ export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES
       if (!inView(views, t.page, x, y) || !(w >= 0 && w <= BOX_MAX) || !(h >= 0 && h <= BOX_MAX)) { kept = false; continue }
       let k = rest ? -1 : wordOf.get(t.t)
       if (k === undefined) {
-        if (words.length >= WORDS_MAX) { kept = false; continue }
-        k = words.length
-        words.push(t.t)
+        if (paper && words >= WORDS_MAX) { kept = false; continue }
+        k = words++
+        fresh.push(t.t)
         wordOf.set(t.t, k)
       }
       tokens.push(t.page, x, y, w, h, k)
@@ -1132,9 +1143,41 @@ export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES
       for (const [name, mk] of unitsOn.get(p)) { const k = tokenAtMark(own, byPage, mk, name.endsWith('s')); mk.t = k == null ? null : own[k].t }
     }
     if (stream) stream.add(p, ink, take)
+    const owned = found
+    found = []
+    yield { page: { p, view, tokens, words: fresh, owned } }
   }
   if (stream) stream.end(take)
-  checkViews(views, pages, 'views')
+  const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
+  yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines } }
+}
+
+/**
+ * The marked original read once, a page at a time (markedPages, drained): { marks, unitMarks }.
+ * - `marks`: what layoutMarksOf gives, in memory, as parseLayoutMarks reads the file encodeLayoutMarks writes of it (numbers
+ *   to a hundredth, no -0), but never trimmed to the file's own bounds (fitted: the server writes no marks file; the lab's
+ *   file is layoutMarksOf's), and with `paper` alone bounded by the file's paper-wide bounds (OWNED_ALL counted in the
+ *   opening points' order, WORDS_MAX). A point read twice on pages apart makes its piece 'a mark set twice' (ownedOf over the
+ *   whole says so), and owns nothing, nor the displays of its group. The characters' table in the rows' order, as before.
+ * - `unitMarks`: markedPages' (null where a unit mark's page could not be looked up).
+ * `marked` a PDF.js document of the marked original, `log` its last pass's log; the options are layoutMarksOf's
+ */
+export async function readMarked(marked, log, o) {
+  let head = null, end = null
+  const views = [], words = [], tokens = [], rows = new Map()
+  for await (const x of markedPages(marked, log, o)) {
+    if (x.head) head = x.head
+    else if (x.page) {
+      views.push(...x.page.view)
+      for (const w of x.page.words) words.push(w)
+      for (const v of x.page.tokens) tokens.push(v)
+      for (const [name, row] of x.page.owned) rows.set(name, row)
+    } else if (x.end) {
+      end = x.end
+      for (const [name, row] of x.end.owned) rows.set(name, row)
+    }
+  }
+  const { pages, marking, dropped, named, unitMarks } = head
   // ---- the marks, by the views now known
   const columns = new Array(pages).fill(0), marks = []
   for (const [name, page, x, y] of named) {
@@ -1145,17 +1188,10 @@ export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES
     marks.push([name, page, r2z(x), r2z(y)])
   }
   marks.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-  const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
-  // ---- the rows, by name: a point read twice on pages apart is a mark set twice (ownedOf over the whole says so), and
-  // owns nothing, nor the displays of its group; the characters' table in the rows' order
   const chars = [], owned = []
-  if (stream) {
-    const read = stream.twice(), set2 = OWNED_HOW.indexOf('a mark set twice'), inGroup = OWNED_HOW.indexOf('in the display before it')
-    for (const name of [...rows.keys()]) {
-      if (!OPENING.test(name) || !(read.has(name) || read.has(`${name.slice(0, -1)}b`))) continue
-      rows.set(name, [name, set2])
-      for (const g of follows(name)?.group ?? []) if (rows.get(g)?.[1] === inGroup) rows.delete(g)
-    }
+  if (o.units && o.OPS) {
+    const follows = followsOf(o.units, head.set)
+    vetoTwice(rows, end.twice, follows)
     const charOf = new Map()
     for (const name of [...rows.keys()].sort()) {
       const row = rows.get(name)
@@ -1177,7 +1213,18 @@ export async function readMarked(marked, log, { engine, classes = LAYOUT_CLASSES
       owned.push(row)
     }
   }
-  return { marks: { schema: MARKS_SCHEMA, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned }, unitMarks }
+  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned }, unitMarks }
+}
+
+/** a point read twice on pages apart (markedPages' `twice`): its piece 'a mark set twice', owning nothing, nor the displays
+ *  of its group (ownedOf's rule over the whole), on `rows` (name → row) in place */
+export function vetoTwice(rows, twice, follows) {
+  const set2 = OWNED_HOW.indexOf('a mark set twice'), inGroup = OWNED_HOW.indexOf('in the display before it')
+  for (const name of [...rows.keys()]) {
+    if (!OPENING.test(name) || !(twice.has(name) || twice.has(`${name.slice(0, -1)}b`))) continue
+    rows.set(name, [name, set2])
+    for (const g of follows(name)?.group ?? []) if (rows.get(g)?.[1] === inGroup) rows.delete(g)
+  }
 }
 
 /** the marks file as the lab writes it: encodeLayoutMarks of the marks within the file's own bounds (fitted) */

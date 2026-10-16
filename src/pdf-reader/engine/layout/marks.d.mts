@@ -150,9 +150,24 @@ export declare const OWNED_ALL: number
 export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 /** the unit marks the left is anchored by: `<id>s` / `<id>e` → the destination's place and the word it stands by (markWords) */
 export type UnitMarks = Map<string, { page: number; x: number; y: number; t: string | null }>
-/** the marked original read once, a page at a time: the marks in memory (as parseLayoutMarks reads their file; never trimmed
- *  to the file's bounds) and the unit marks (null: a page's text, or a unit mark's page, could not be read) */
-export declare function readMarked(marked: unknown, log: string, o: Parameters<typeof layoutMarksOf>[2]): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null }>
+/** an owned row as a page hands it on: [name, how], or [name, how, n, glyphs (page, x0, y, size, the character itself or its
+ *  index in the marks' `chars`), rules (page, x0, y0, x1, y1)] */
+export type OwnedRow = (string | number)[]
+/** the options of the marked original's reading: layoutMarksOf's, and `paper` (the marks file's paper-wide bounds too) */
+export type MarkedOptions = Parameters<typeof layoutMarksOf>[2] & { paper?: boolean }
+/** what the marked original gives a page at a time (markedPages): its head, each page, its end */
+export type MarkedEvent =
+  | { head: { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; unitMarks: UnitMarks | null } }
+  | { page: { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][] } }
+  | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][] } }
+/** the marked original read a page at a time, an async generator: its head, each page in order, its end */
+export declare function markedPages(marked: unknown, log: string, o: MarkedOptions): AsyncGenerator<MarkedEvent>
+/** the marked original read once, a page at a time (markedPages, drained): the marks in memory (as parseLayoutMarks reads their
+ *  file; never trimmed to the file's bounds; the paper-wide bounds with `paper` alone) and the unit marks (null: a unit mark's
+ *  page could not be looked up) */
+export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null }>
+/** a point read twice on pages apart: its piece 'a mark set twice', nor the displays of its group, on `rows` in place */
+export declare function vetoTwice(rows: Map<string, OwnedRow>, twice: ReadonlySet<string>, follows: (name: string) => { group?: string[] } | null): void
 /** the marks file as the lab writes it: encodeLayoutMarks of the marks within the file's own bounds */
 export declare function marksFile(m: LayoutMarks): string
 export declare function encodeLayoutMarks(m: LayoutMarks): string
