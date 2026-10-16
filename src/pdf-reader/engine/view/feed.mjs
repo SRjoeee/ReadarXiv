@@ -182,6 +182,8 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
   /** the parts of a tell that carries the end, as the chain whole: contiguous from page 1 to the end's `through`, in page
    *  order (the catalog's); null where they are not (a job's last parts told with the end are placed as any part is) */
   function chainOf(parts, through) {
+    // (a catalog of no part ends at page 0: the paper refused before its first page)
+    if (!parts.length) return through === 0 ? [] : null
     const sorted = [...parts].sort((a, b) => a.from - b.from)
     for (let i = 0; i < sorted.length; i++) if (sorted[i].from !== (i ? sorted[i - 1].to + 1 : 1) || !(sorted[i].to >= sorted[i].from)) return null
     return sorted.at(-1)?.to === through ? sorted : null
@@ -203,9 +205,10 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
         if (refusedParts.delete(r.sha256)) { bytes.delete(r.sha256); moved = true; gen++ }
       }
       // a tell with the end names the chain whole (the catalog's)
-      const whole = told1 && parts?.length ? chainOf(parts, told1.through) : null
+      const whole = told1 && Array.isArray(parts) ? chainOf(parts, told1.through) : null
       if (whole) {
         const same = whole.length === told.length && whole.every((r, i) => r.sha256 === told[i].sha256)
+        const sameNamed = whole.length === named.size && whole.every(r => named.has(r.sha256))
         if (!same) {
           const keep = told.findIndex((t, i) => t.sha256 !== whole[i]?.sha256)
           cut(keep < 0 ? told.length : keep)
@@ -213,10 +216,10 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
           gen++
           moved = true
         }
+        // a part waiting from before the catalog is none of its chain's: it does not join it later. The same catalog told
+        // again keeps the parts that came after it (a later build's, which wait for their predecessors)
+        if (!same || !sameNamed) waiting.clear()
         named = new Set(whole.map(r => r.sha256))
-        // a part waiting from before the catalog is none of its chain's: it does not join it later (a later build's
-        // part, heard after it, may)
-        waiting.clear()
       } else {
         for (const r of parts ?? []) {
           if (told.some(t => t.sha256 === r.sha256)) continue

@@ -343,6 +343,44 @@ describe('the feed: the PR\'s review, second round', () => {
   })
 })
 
+describe('the feed: the PR\'s review, third round (#379)', () => {
+  it('a catalog of no part, its end at page 0, names the chain empty: the job\'s parts let go (4289273351)', async () => {
+    const M = await made()
+    const f = createFeed({ fetchObject: server(M).fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(M, i)) })
+    await flush()
+    expect(f.state().parts.length).toBe(2)
+    f.tell({ parts: [], end: { through: 0, refused: 'bound' } })
+    await flush()
+    expect(f.state().parts).toEqual([])
+    expect(f.state().ended).toBe(true)
+    // (a tell of the end alone, with no parts named, is no catalog: the chain stays)
+    const g = createFeed({ fetchObject: server(M).fetchObject })
+    g.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [jobRef(M, 0)] })
+    g.tell({ end: { through: 4 } })
+    await flush()
+    expect(g.state().parts.length).toBe(1)
+    g.dispose()
+    f.dispose()
+  })
+
+  it('the same catalog told again keeps a part that came after it and waits for its predecessor (4289273579)', async () => {
+    const M = await made()
+    const f = createFeed({ fetchObject: server(M).fetchObject })
+    f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [catalogRef(M, 0)], end: { through: 1 } })
+    await flush()
+    expect(f.state().parts.length).toBe(1)
+    // a later build: its part of page 4 first (it waits for pages 2-3), the same catalog again, then the part of pages 2-3
+    f.tell({ parts: [jobRef(M, 2)], end: { through: 4 } })
+    f.tell({ parts: [catalogRef(M, 0)], end: { through: 1 } })
+    f.tell({ parts: [jobRef(M, 1)], end: { through: 4 } })
+    await flush()
+    expect(shas(f.state().parts)).toEqual(shas(M.readParts))
+    expect(f.state().ended).toBe(true)
+    f.dispose()
+  })
+})
+
 describe('the feed: dispose', () => {
   it('lets the fetches go and resolves no index after it', async () => {
     const M = await made()
