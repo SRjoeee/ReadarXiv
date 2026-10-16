@@ -985,7 +985,7 @@ window.gate = {
   /** the fixture's laid units, counted: v0 lays every unit it places (past its floor it clips), by its fit's knob */
   /**
    * A done page's costs (--perf): its first drawing (v0's page step, `pageMs`: its original drawn, its units laid and
-   * painted, and over the text-removed PDF its ink read; `times`, the engine's own split where it gives one; then its
+   * painted, and over the text-removed PDF its ink read; `times`, the engine's own split where it gives one; `work`, its deterministic work counters (layer-proto/work.mjs); then its
    * drawing at the gate's resolution, drawCopy, which draws the removed page there itself: `copy`), its drawing again at a zoom (`zoomK`, twice the gate's device pixels a unit: the original drawn there
    * by PDF.js, then the page's drawing at that resolution, drawCopy, which draws the removed and placeholders' pages there
    * itself), and the canvases its drawing holds (bytes: v0's own at the gate's resolution, its copy, the removed pages)
@@ -1020,7 +1020,8 @@ window.gate = {
     for (let q = 1; q <= run.rows.length; q++) add(run.removedCanvas?.(q))
     const r1 = v => Math.round(v * 10) / 10
     const times = run.pageTimes?.[p] ? Object.fromEntries(Object.entries(run.pageTimes[p]).map(([k, v]) => [k, r1(v)])) : null
-    return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, zoomRender: r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
+    const work = run.pageWork?.[p] ? { ...run.pageWork[p] } : null
+    return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, work, zoomRender: r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
   },
 
   async summary() {

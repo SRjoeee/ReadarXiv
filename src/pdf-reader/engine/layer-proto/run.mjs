@@ -60,6 +60,7 @@ import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf } from './need.mjs'
+import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -714,6 +715,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     p.linked = true
     const t0 = performance.now()
     const cands = []
+    // (the work units its matching spends, links.mjs's budgets, counted for the work counters: a page's share less what is left)
+    let tests = 0
     for (const q of p.pages) {
       const list = annots[q - 1]
       if (!list) continue
@@ -724,11 +727,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (at < 0) continue
       // (an annotation whose owner the share left unread: `unplaced`, where no owner's match gives it another reason)
       const skipped = new Set()
-      for (const a of LK.ownedIn(list, p, ranked.slice(0, at), q, { left: LK.WORK_MAX / ranked.length }, skipped)) cands.push({ q, a })
+      const share = { left: LK.WORK_MAX / ranked.length }
+      for (const a of LK.ownedIn(list, p, ranked.slice(0, at), q, share, skipped)) cands.push({ q, a })
+      tests += LK.WORK_MAX / ranked.length - share.left
       if (skipped.size) { const w = (whyOf[q] ??= new Map()); for (const i of skipped) if (!w.has(i)) w.set(i, 'unplaced') }
     }
     const budget = { left: LK.WORK_MAX / Math.max(1, rankedOnPage(p.pages[0]).length) }
-    if (!cands.length) return
+    const budget0 = budget.left
+    if (!cands.length) { workOf(p.pages[0]).linkTests += Math.round(tests); return }
     const L = p.layout
     const drawnText = new Set(), drawnCrop = new Set(), drawnPair = new Set()
     for (const line of L.lines) for (const it of line.items) {
@@ -776,6 +782,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       })
     }
     for (const t of [...m.tried, ...placed.tried]) (whyOf[t.q] ??= new Map()).set(t.i, t.why)
+    workOf(p.pages[0]).linkTests += Math.round(tests + budget0 - budget.left)
     timesOf(p.pages[0]).links += performance.now() - t0
   }
   /** a page's analysis state let go (its canvases, a copy's, are the gate's: release) */
@@ -1007,7 +1014,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!r?.base) return null
     return plane === 'R' ? RM?.removed[j] ?? null : r.left
   }
-  const paint = (p, pg) => {
+  const paint = (p, pg) => withWork(pg, () => paintUnit(p, pg))
+  const paintUnit = (p, pg) => {
     // (its links matched and placed at its first paint, its layout final on every page: links.mjs; the drawing reads none of it)
     if (!p.linked) linkUnit(p)
     const tOps = performance.now()
@@ -1041,6 +1049,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const tWords = performance.now()
     // (the page's word table, beside the markup: the unit's words in the order they are drawn; a page whose table is frozen is final)
     if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg), crop => hasSource(crop.page))
+    workOf(pg).ops += ops.length
     const T = timesOf(pg)
     T.ops += tCompose - tOps
     T.compose += tSvg - tCompose
@@ -1396,8 +1405,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // rectangles there as they stand, unless every line of the unit is another's, which keeps them all (then nothing says
     // which are its own). That is decided once, by the rectangles as they were placed, before any unit grew one (the rows on
     // the unit's own pages alone, so no page's growth waits on another's), and is the whole unit's as before wherever the
-    // others' growth makes none of its lines another's that was not: growth stops at another unit's characters (extendRects'
-    // `foreign`), and where it would still leave a unit no line, the unit is the original's (layout2). Its pages stay as they
+    // others' growth makes none of its lines another's that was not. What growth does and does not stop at: a line grows
+    // sideways character by character and stops at one inside another unit's rectangle (`foreign`, extendRects and
+    // extendRects2's loops), but it is also taken to the end of a text item that ends less than 8 pt past it, or to the end of
+    // the word it ends in, whatever stands there (extendRects2 checks no `foreign` for that), and a block's far-in first line
+    // is moved to the block's edge unless another unit's line overlaps it by more than half its height (extendFirstLines).
+    // Where growth would still leave a unit no line, the unit is the original's (layout2). Its pages stay as they
     // were counted: a page it no longer holds lines on is painted with nothing
     if (!fileLines) {
       p.keepAll ??= p.rects.every(r => (placedByPage.get(r[0]) ?? []).some(([id, o]) => id !== p.id && covered(r, o)))
@@ -1564,6 +1577,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (disposed) return
       if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; unlead(p); return }
     }
+    // (from here to the unit's end nothing is awaited: its work is charged to its first page in `arrive`)
+    p.workMark = markWork()
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
@@ -1755,7 +1770,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const partPainted = (u, q) => !!paintedOn[q]?.has(u.pages[0])
   /** page pg's pass: the even pass, the page fill and the leftover packed over the units that begin on it, its groups
    *  settled, then each page its units are on painted as far as it can be */
-  const passPage = pg => {
+  const passPage = pg => withWork(pg, () => passPageOf(pg))
+  const passPageOf = pg => {
     if (P.even) evenPass(pg)
     if (P.adaptiveFill) fillPass(pg)
     // (the leftover packed: the units moved are painted after the others, from the top, so that no erasing of the
@@ -1783,6 +1799,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       unlead(p)
     }
     // (let go while it was laid: neither recorded, nor painted, nor counted)
+    if (p.workMark) { if (!disposed) chargeWork(p.pages[0], p.workMark); p.workMark = null }
     if (disposed) return
     // (the faces it waited for apart from its laying: no task of v0's)
     timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
@@ -1845,11 +1862,25 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the swap's rectangles), drawn on the copy (compose) and set as SVG (svg)
   const pageTimes = []
   const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0, links: 0 })
+  // the deterministic work a page cost (work.mjs: integer counts, no clock), by page, as pageTimes is. Charged over stretches of
+  // synchronous code, so that a page's counts are the same whatever the order pages were asked in and however the tasks
+  // interleaved; `inWork` keeps a stretch inside another from being charged twice. Nothing the drawing reads
+  const pageWork = []
+  const workOf = pg => (pageWork[pg] ??= newWork())
+  let inWork = false
+  const chargeWork = (pg, m) => { const w = workOf(pg); for (const k of WORK_KEYS) w[k] += work[k] - m[k] }
+  const withWork = (pg, f) => {
+    if (inWork) return f()
+    inWork = true
+    const m = markWork()
+    try { return f() } finally { inWork = false; chargeWork(pg, m) }
+  }
   // the documents read: the original (`doc`) and the text-removed one (`removal.doc`, often the same). Under parts the newest
   // composed document, swapped at a part with a tail (swap); each read of a page holds its document (using), and one no longer
   // the newest is told to the host (onRetired) once no read holds it, the newest at dispose: each once, none destroyed here
   let D = doc, RD = removal?.doc ?? null
-  const uses = new Map(), retiring = new Set(), retired = new Set()
+  // (`retired` weakly: it only says a document was told already, and a strong set would keep every document the host has since destroyed, with its pages, for the run's length)
+  const uses = new Map(), retiring = new Set(), retired = new WeakSet()
   const tellRetired = d => { if (retired.has(d)) return; retired.add(d); onRetired?.(d) }
   const retire = d => { if (!d || retired.has(d)) return; if (uses.get(d)) retiring.add(d); else tellRetired(d) }
   const using = async (docs, f) => {
@@ -1943,6 +1974,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the page's ink, read now whatever the rules are: units that borrow below, widen over paper and grow a crop read it, on
     // their own page and, for a crop, on the page it is cut from
     inks[i] = L2.inkMapOf(r.left)
+    workOf(i).inkSteps += inks[i].w * inks[i].h
     // with no copy, nothing else reads the original's canvas: the drawing is made as data (ops), a view draws it over the
     // page it renders itself (drawCopy), and the checker, which reads this canvas, needs a copy. So it goes now, not when the
     // host is done with the page: a host that jumps to page p holds the canvases of all p pages until then, 12.5 MB each.
@@ -2311,7 +2343,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
 
   return {
-    N, P, rows, placed, skipped, stats, audit: audit ?? [], order, ms, pageMs, pageTimes, views,
+    N, P, rows, placed, skipped, stats, audit: audit ?? [], order, ms, pageMs, pageTimes, pageWork, views,
     /** the records that could not be made (with `records`): each unit's id and the error; the unit drawn as without records */
     recordErrors,
     /** each page's characters: the run's, or with `free` and `records` the gate's shelf (every page's, let go or not) */
@@ -2581,6 +2613,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // (the documents it reads, told to the host once no read holds them)
       retire(D)
       retire(RD)
+    },
+    /** the deterministic work counters (work.mjs) summed over the pages: the same for the same input, whatever the machine's speed */
+    workTotal() {
+      const t = newWork()
+      for (const w of pageWork) if (w) for (const k of WORK_KEYS) t[k] += w[k]
+      return t
     },
     /** how the removal went: pages removed and refused, units drawn by it (tex) and the old way (v0), the rectangles filled
      *  and swapped, the pages a swap draws the removed page for */

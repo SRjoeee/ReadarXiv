@@ -52,6 +52,7 @@
 // - Erasing: what a unit's erasing covers that no painted unit accounts for is put back from the original (kept lines
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
 import { noStart } from './no-start.mjs'
+import { work } from './work.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -1264,8 +1265,9 @@ function finishUnit(out, unit, rects, charsByPage) {
   }
   // the original's own character a held line shows right after a kept placeholder's ink (1512.03385's footnote 1: a URL's
   // line kept, its full stop with it), `heldAfter`, and how many marks no line may start with it shows there in a row
-  // (`heldMarks`): tokensOf2 drops as many of the translation's there, which would show them twice, and no more (a
-  // closing corner bracket U+300D after the translation's ideographic full stop is its own)
+  // (`heldMarks`, the characters): tokensOf2 drops the translation's marks there that stand for one the line shows, which
+  // would show them twice, and no other (a closing corner bracket U+300D after the translation's ideographic full stop is
+  // its own; so is a ")" before it where the line shows only a full stop)
   for (const r of out.values()) {
     if (r?.mode !== 'kept' || r.cls === 'display' || r.region === undefined || !r.gap) continue
     const own = new Set(r.gap.chars.filter(real).map(charKey))
@@ -1276,7 +1278,7 @@ function finishUnit(out, unit, rects, charsByPage) {
     r.heldAfter = after[0] && inRegion(after[0]) ? after[0].ch : null
     let n = 0
     while (n < after.length && inRegion(after[n]) && noStart(after[n].ch)) n++
-    r.heldMarks = n
+    r.heldMarks = after.slice(0, n).map(c => c.ch)
   }
   // the translation's own text, letters only: a name it keeps as the page writes it ("Niño", whose ñ the source wrote
   // as a command) is drawn, not shown twice
@@ -1829,6 +1831,7 @@ const mcache = new Map(), icache = new Map()
 const inkOfMetrics = m => ({ a: Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : 0, d: Number.isFinite(m.actualBoundingBoxDescent) ? m.actualBoundingBoxDescent : 0 })
 /** a run's width at 100 px in its face (canvas measureText, cached; its ink beside it, ink100) */
 function w100(s, face) {
+  work.measures++
   const font = fontString(face, 100)
   const key = `${font}|${s}`
   let w = mcache.get(key)
@@ -1852,6 +1855,40 @@ export function ink100(s, face) {
     icache.set(key, v)
   }
   return v
+}
+
+/**
+ * The kind a mark no line may start with is, across scripts: the translation's ideographic full stop stands for the
+ * original's ".", its closing corner bracket or full-width parenthesis for ")". A mark with no such partner is its own kind.
+ */
+export function markKind(ch) {
+  if (/^[.\u3002\uFF0E\uFF61]$/u.test(ch)) return 'stop'
+  if (/^[,\u3001\uFF0C\uFF64]$/u.test(ch)) return 'comma'
+  if (/^[;\uFF1B]$/u.test(ch)) return 'semi'
+  if (/^[:\uFF1A]$/u.test(ch)) return 'colon'
+  if (/^[!\uFF01]$/u.test(ch)) return 'excl'
+  if (/^[?\uFF1F]$/u.test(ch)) return 'quest'
+  if (/^[)\]}\uFF09\uFF3D\uFF5D\u3009\u300B\u300D\u300F\u3011\u3015\u3017\u3019\u301B\u2019\u201D]$/u.test(ch)) return 'close'
+  return ch
+}
+
+/**
+ * The text after a placeholder kept on its held line, without the leading marks that stand for one the line itself shows
+ * after the placeholder (`held`, the original's characters in order): each such mark is matched with one of those, not
+ * counted against them, so that a translation's ")" before its full stop is drawn where the line shows only a full stop.
+ */
+export function droppedHeld(s, held) {
+  const left = held.map(markKind)
+  let t = s, kept = ''
+  while (left.length) {
+    const lead = /^\s*/.exec(t)[0], ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
+    if (lead.length >= t.length || !noStart(ch)) break
+    const at = left.indexOf(markKind(ch))
+    if (at >= 0) left.splice(at, 1)
+    else kept += lead + ch
+    t = t.slice(lead.length + ch.length)
+  }
+  return kept + t
 }
 
 /**
@@ -1964,16 +2001,16 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // `origAfter`): the maintainer's fix 4 of 2026-10-15, for every script. So is such a mark after a placeholder kept on
   // its held line where that line shows the original's own mark after it (`heldAfter`). The rows and the cache keep the translation
   let after = null
-  // (after a display, every such mark: the original's line there opens with none; after a held line's mark, as many as it
-  // shows, `most`)
+  // (after a display, every such mark: the original's line there opens with none; after a held line's mark, those that
+  // stand for one the line shows, `held`)
   const dropped = s => {
+    if (after.held) return droppedHeld(s, after.held)
     let t = s
-    for (let n = 0; n < (after.most ?? Infinity); n++) {
+    for (;;) {
       const lead = /^\s*/.exec(t)[0], ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
       if (lead.length >= t.length || !noStart(ch) || noStart(after.origAfter)) return t
       t = t.slice(lead.length + ch.length)
     }
-    return t
   }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
@@ -2035,7 +2072,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (r.cls === 'display') after = r
       // (a held line's own mark after the placeholder stands with it, the original's: the translation's is not drawn
       // again, finishUnit's `heldAfter`)
-      else if (noStart(r.heldAfter)) after = { origAfter: null, most: r.heldMarks ?? 1 }
+      else if (noStart(r.heldAfter)) after = { origAfter: null, held: r.heldMarks?.length ? r.heldMarks : [r.heldAfter] }
       return
     }
     // (a display before the unit's lines, drawn as nothing: the text after it opens the unit's first line)
@@ -2287,6 +2324,7 @@ const tokW = (t, f, st, scale) => {
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
  */
 function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
+  work.breaks++
   // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
   // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
   const flow = strict === 'flow'
@@ -2629,6 +2667,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
   let last = null, tried = 0
   for (const st of statesOf(P, blocks, s)) {
     tried++
+    work.fit++
     const f = s * st.scale
     const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
     last = { r, st, f }
@@ -2643,6 +2682,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
   if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
     for (const st of statesOf(P, blocks, s)) {
       tried++
+      work.fit++
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow')
       if (r.rest >= r.total) { last = { r, st, f }; break }
@@ -2653,6 +2693,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
   // filled by its text's size, not by lines looser than the original's own)
   if (P.growTo > 1 && tried === 1 && last.r.rest >= last.r.total) {
     for (let k = Math.round((Math.min(P.growTo, P.capScale ?? Infinity) - 1) / P.step); k >= 1; k--) {
+      work.fit++
       const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
@@ -2686,6 +2727,7 @@ function laidOut({ r, st, f }, s, P, tried) {
  * leading, tracking or size): layoutUnit2's answer, clipped where the state does not set every token in the text's order
  */
 export function layoutAt(tokens, blocks, s, P, st) {
+  work.fit++
   const f = s * st.scale
   return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1)
 }

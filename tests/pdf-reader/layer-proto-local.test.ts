@@ -254,6 +254,67 @@ describe('S4 with a first page all another\'s: the first line is the first place
   })
 })
 
+describe('S4 with a first page all another\'s: the first line grows over the math before it by the first placed page alone (L4, the first line itself)', () => {
+  // as above, but q's page-3 lines are two of one block: "(1)=" stands before the first of them, which the unit's rectangle
+  // starts after. A line that is not the unit's first grows left over such math; the unit's first line does not. q's first
+  // line is its first placed page's (page 2, whose line another unit covers and drops), so its page-3 line is not the first
+  // whatever order the pages grow in: it grows over "(1)=" in order and when page 3 grows before page 2 is reached
+  const rectOf = (l: Line, x0 = spanOf(l)[0], x1 = spanOf(l)[1]) => [l.page, x0, l.b - 2.15, x1, l.b + 6.83]
+  const Q2 = line(2, 200, [20, 'Alpha beta']), Q3a = line(3, 200, [20, '(1)='], [40, 'gamma delta']), Q3b = line(3, 188, [20, 'epsilon zeta eta theta iota kappa lambda mu nu xi'])
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'geometry', tr: [text(CJK(5))] },
+    { id: 1, kind: 'para', src: 'Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi', lines: [Q2, Q3a, Q3b], rects: [rectOf(Q2), rectOf(Q3a, 40, 95), rectOf(Q3b)], from: 'geometry', tr: [text(CJK(10, 0x4e20))] },
+    { id: 2, kind: 'para', src: 'Other words', lines: [line(2, 120, [20, 'Other words'])], rects: [rectOf(Q2)], from: 'geometry', tr: [text(CJK(4, 0x4e40))] },
+    { id: 3, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], from: 'geometry', tr: [text(CJK(8, 0x4e60))] },
+    { id: 4, kind: 'para', src: 'Pi rho sigma tau', lines: [line(4, 60, [20, 'Pi rho']), line(5, 270, [20, 'sigma tau'])], from: 'geometry', tr: [text(CJK(8, 0x4e80))] },
+  ]
+  PAPERS.push(['S4, a first page dropped, math before the surviving line', specs, 5, [null]])
+  it('grows the surviving page-3 line over "(1)=" laid in order, page 5 first, reversed, or each page alone', async () => {
+    const want = await open(paper(specs, 5))
+    await want.until(5)
+    // (q's page-2 line dropped as another's; its page-3 line is not its first and has taken the math before it)
+    const rects3 = placedOf(want, 1).rects.filter(r => r[0] === 3)
+    expect(placedOf(want, 1).rects.map(r => r[0])).toEqual([3, 3])
+    expect(rects3[0]![1]).toBeLessThan(25)
+    // (the block is wide enough that extendFirstLines' far-in rule leaves the line at its words, 40: the math is what moved it)
+    for (const first of [[5], [5, 4, 3, 2, 1], [3], [4], [1, 2, 3], [2], [2, 3]]) {
+      const run = await open(paper(specs, 5))
+      for (const p of first) await run.layFor(p)
+      await run.until(5)
+      expect(placedOf(run, 1).rects, `${first} first`).toEqual(placedOf(want, 1).rects)
+    }
+  })
+})
+
+describe('the work counters (work.mjs): integer counts of what a page cost, the same for the same input', () => {
+  const Q2 = line(2, 200, [20, 'Alpha beta']), Q3 = line(3, 200, [20, 'gamma delta'])
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'geometry', tr: [text(CJK(5))] },
+    { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [Q2, Q3], rects: [[2, 20, 197.85, 70, 206.83], [3, 20, 197.85, 80, 206.83]], from: 'geometry', tr: [text(CJK(8, 0x4e20))] },
+    { id: 2, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], from: 'geometry', tr: [text(CJK(8, 0x4e60))] },
+  ]
+  const KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops']
+  const laid = async (order: number[]) => {
+    const run = await open(paper(specs, 4))
+    for (const p of order) await run.layFor(p)
+    await run.until(4)
+    return run
+  }
+  it('are integers for every page, counted for the lay, the measures, the breaks, the ink map and the operations, and a rerun gives the same counts', async () => {
+    const a = await laid([1, 2, 3, 4]), b = await laid([1, 2, 3, 4])
+    const total = a.workTotal() as unknown as Record<string, number>
+    expect(Object.keys(total)).toEqual(KEYS)
+    for (const k of ['fit', 'measures', 'breaks', 'inkSteps', 'ops']) expect(total[k], k).toBeGreaterThan(0)
+    for (const w of a.pageWork) if (w) for (const k of KEYS) expect(Number.isInteger((w as unknown as Record<string, number>)[k]), k).toBe(true)
+    expect(a.pageWork).toEqual(b.pageWork)
+    expect(b.workTotal()).toEqual(a.workTotal())
+  })
+  it('add up to the same total whatever order the pages were asked in', async () => {
+    const want = (await laid([1, 2, 3, 4])).workTotal()
+    for (const order of [[4], [3, 1], [4, 3, 2, 1]]) expect((await laid(order)).workTotal(), `${order} first`).toEqual(want)
+  })
+})
+
 describe('L1: a unit left the original\'s for a page that cannot be read grows on its other pages as a unit ranked after it there needs', () => {
   // q (unit 1, v0's geometry) on pages 2 and 3, its page-2 line anchored on "beta" alone ("Alpha" before it its own), page 3
   // unreadable: q is refused 'page' and never laid. u (unit 2) on pages 2 and 4 ranks after it on page 2 and grows it there

@@ -182,6 +182,10 @@ export declare function fontMappedOf(font: unknown): Set<string> | null
 /** whether a page character's text is no reading of its glyph (pageChars2's `nu`) */
 export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
 export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null): Char[]
+/** the kind a mark no line may start with is across scripts ("." and the ideographic full stop: 'stop'; ")" and a closing corner bracket: 'close'), else the mark itself */
+export declare function markKind(ch: string): string
+/** a text without the leading marks that stand for one of `held` (the original's marks after a kept placeholder, in order), each matched with one */
+export declare function droppedHeld(s: string, held: readonly string[]): string
 /** a placeholder's source as plain text, its environment, label and alignment marks left out */
 export declare function texToText2(src: string): string
 /** phClass with the paper's own macros told apart: { cls, unknown? } */

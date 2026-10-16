@@ -548,12 +548,26 @@ describe("page text no Unicode stands for, and a held line's own mark (the LOST 
     // as many dropped as the held line shows: one, so the translation's closing quote after its full stop is drawn
     const quoted = { ...(u as object), pieces: [text('\u7532 '), ph('\\url{http://x.org/y}'), text('\u3002\u300D')] } as never
     const one = L2.prepareUnit(quoted, t.rects as never, [[...item('a b', 10, 500, 10, 0), ...item('http://x.org/y.', 10, 488, 10, 1)] as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
-    expect(one.get(1)).toMatchObject({ heldAfter: '.', heldMarks: 1 })
+    expect(one.get(1)).toMatchObject({ heldAfter: '.', heldMarks: ['.'] })
     expect(drawn(quoted, one as never)).toBe('\u7532\u300D')
     // two the held line shows (".)"): both of the translation's
     const two = L2.prepareUnit(quoted, t.rects as never, [[...item('a b', 10, 500, 10, 0), ...item('http://x.org/y.)', 10, 488, 10, 1)] as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
-    expect(two.get(1)).toMatchObject({ heldMarks: 2 })
+    expect(two.get(1)).toMatchObject({ heldMarks: ['.', ')'] })
     expect(drawn(quoted, two as never)).toBe('\u7532')
+    // a mark is matched, not counted: the line shows only a full stop, the translation opens with ")" and then its full stop
+    const paren = { ...(u as object), pieces: [text('\u7532 '), ph('\\url{http://x.org/y}'), text(')\u3002')] } as never
+    const dot = L2.prepareUnit(paren, t.rects as never, [[...item('a b', 10, 500, 10, 0), ...item('http://x.org/y.', 10, 488, 10, 1)] as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    expect(drawn(paren, dot as never)).toBe('\u7532)')
+  })
+  it('droppedHeld drops each leading mark once for the one of the line it stands for, and keeps the others in order', () => {
+    expect(L2.markKind('\u3002')).toBe(L2.markKind('.'))
+    expect(L2.markKind('\u300D')).toBe(L2.markKind(')'))
+    expect(L2.markKind('\u3002')).not.toBe(L2.markKind(','))
+    expect(L2.droppedHeld(')\u3002abc', ['.'])).toBe(')abc')
+    expect(L2.droppedHeld('\u3002\u3002abc', ['.'])).toBe('\u3002abc')
+    expect(L2.droppedHeld('\u3002\u300Dabc', ['.', ')'])).toBe('abc')
+    expect(L2.droppedHeld('abc\u3002', ['.'])).toBe('abc\u3002')
+    expect(L2.droppedHeld(' \u3001\u3002 abc', ['.'])).toBe(' \u3001 abc')
   })
 })
 

@@ -11,8 +11,13 @@ export interface RemoteFixture {
 
 export function readManifest(root?: string): Promise<RemoteFixture[]>
 
+/** The machine's cache of pinned copies (READARXIV_FIXTURE_CACHE, else ~/.cache/readarxiv/fixtures), or null (empty variable, or CI) */
+export function defaultCacheDir(env?: Record<string, string | undefined>): string | null
+
 export function ensureFixtures(options?: {
   root?: string
+  /** A directory of pinned copies, one file per SHA-256: read before the bucket and arXiv, written with every verified copy; none by default (the tests pass a temporary one) */
+  cacheDir?: string | null
   fetchImpl?: typeof fetch
   log?: (line: string) => void
   /** Between two downloads and before a retry; the tests pass 0 */
