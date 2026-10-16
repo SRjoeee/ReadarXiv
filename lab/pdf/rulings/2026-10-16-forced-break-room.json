@@ -2,7 +2,7 @@
   "date": "2026-10-16",
   "by": "the maintainer",
   "on": "the forced-break correction (PR 383): a paired forced break inside a frame ends the laid line and leaves TeX's room, instead of pinning the next segment to its first row",
-  "quote": "都同意",
+  "quote": "\u90fd\u540c\u610f",
   "english": "agreed to all (2026-10-16), given in answer to the coordinator's summary of the one gated worsening",
   "measures": [
     "paragraph gaps a pitch or more wider"
