@@ -251,6 +251,8 @@ export declare function blocks2(rects: readonly Rect[], pageViews: readonly numb
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>
+/** whether a rendering's own characters hold one raised over its main glyphs' baseline (a superscript, a raised letter) */
+export declare function scriptedOf(chars: readonly Char[]): boolean
 /** a placeholder's resolution read again from a rendering another source proves (tex.mjs proofOf): its page text or crop */
 export declare function resolutionFrom(r: Resolved, g: Gap & { proof?: boolean }, unit: Unit, lineInfo?: Prepared['lineInfo'] | null): Resolved
 /** a crop from a layout file's segment (its piece's own ink): the box, a fraction of a point around, on its line's

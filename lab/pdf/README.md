@@ -175,7 +175,12 @@ On the 30 outputs no block steps. And a placeholder v0's reading finds no render
 citation as the page wrote it before) whose row the file finds, its segments on the pages shown, is read from those
 segments as the file's own reading reads a found row (`tex.mjs proofOf`, `layer2.mjs resolutionFrom`: a formula on one
 line cropped at its segment, page text standing in them) where it was left unproven; a rendering v0 took that the
-segments do not hold stays no proof, and a LOST row is never read.
+segments do not hold stays no proof, and a LOST row is never read. A text macro whose own characters hold one raised
+over its main glyphs' baseline by a tenth of an em or more (`layer2.mjs scriptedOf`: 2609.26457's `\aidesq{}`, AIDE^2,
+which page text on one baseline read "AIDE 2") is cropped from its ink, by the file's segment where it has one; where v0
+read it without the script ("AIDE" alone), the proof reads it from the segment. A lowered script ("AIDE human",
+"BERT BASE") reads as the same words and stays page text, which breaks across lines where a crop cannot: cropping
+those too moved 1810.04805's `\bertbase` in all 7 of its outputs and made layout measures worse.
 
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
 folders, and a `--record` that would drop an output the record's run of its kind holds (for a model run, the pixel run's

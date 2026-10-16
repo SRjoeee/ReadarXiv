@@ -15,7 +15,7 @@
 // restore counts as accounted for, are the same keys whichever source a unit took.
 import { PH_FLAG } from '../layout/file.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven, resolutionFrom } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven, resolutionFrom, scriptedOf } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -490,6 +490,16 @@ export function proofOf(lu, kOf, shown = Infinity) {
         if (!g || g.chars.some(c => c.nu)) return r.k
         res.set(r.k, { ...resolutionFrom(r, { ...g, proof: true }, unit, res.lineInfo), ...(r.second ? { second: true } : {}) })
         continue
+      }
+      // a text macro v0 reads as page text whose own ink, its segment on one line, sets a raised script (layer2.mjs scriptedOf):
+      // v0's alignment may leave the script's atom to no rendering ("AIDE" without the superscript 2 of 2609.26457's
+      // \aidesq{}), and page text on one baseline loses it. Read from the segment, as the file's own reading is: a crop
+      if ((r.cls === 'macro' || r.cls === 'umacro') && r.mode === 'orig-text' && S.length === 6 && !anyPast && unit) {
+        const g = renderingOf(S, res.uc ?? [], false)
+        if (g && scriptedOf(g.chars)) {
+          res.set(r.k, { ...resolutionFrom(r, { ...g, proof: true }, unit, res.lineInfo), ...(r.second ? { second: true } : {}) })
+          continue
+        }
       }
       if (r.mode === 'crop') {
         if (r.gap?.box) continue

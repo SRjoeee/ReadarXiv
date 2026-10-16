@@ -1403,8 +1403,30 @@ export function cropBaselineOf(real, lineInfo, main) {
   return info?.exact && Math.abs(info.baseline - own) <= 0.6 * big ? info.baseline : own
 }
 
+/** a script's characters: under this share of the rendering's largest size (the layout maker's SCRIPT_SIZE) */
+const SCRIPT_SHARE = 0.85
+/** a character over its rendering's main baseline by this share of the largest size or more: raised (TeX raises a
+ *  superscript 0.29 em at the least, sup3; the text layer gives one line's items one baseline) */
+const OFF_BASELINE = 0.1
+/**
+ * Whether a rendering's own characters hold one raised off the baseline of its main glyphs (those within SCRIPT_SHARE of
+ * its largest size): a superscript ("AIDE" and its "2" 4.3 pt up, 2609.26457's \aidesq{}, AIDE^2), a raised letter
+ * (\LaTeX's A). Set on the baseline as page text, a raised script reads as another token, "AIDE 2" (a version) for AIDE
+ * squared. A lowered one reads as the same words ("AIDE human" for 2609.26457's AIDE_human, "BERT BASE" for 1810.04805's
+ * BERT_BASE) and stays page text, which breaks across lines where a crop cannot. Read from the page's characters, which
+ * a layout file's segment holds as its own ink (renderingOf) and v0's alignment as its gap's, never from the macro's name.
+ */
+export function scriptedOf(chars) {
+  const ink = chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
+  if (ink.length < 2) return false
+  const big = Math.max(...ink.map(c => c.size))
+  const y = median(ink.filter(c => c.size >= SCRIPT_SHARE * big).map(c => c.ybEff ?? c.yb))
+  return ink.some(c => (c.ybEff ?? c.yb) - y >= OFF_BASELINE * big)
+}
+
 /** a placeholder drawn from its rendering on the page: as the page's text (a citation, a reference, a macro, a formula
- *  over lines) or as a crop of the page (a formula); `lineInfo`, the unit's lines' (Prepared's) */
+ *  over lines) or as a crop of the page (a formula, and a text macro that sets a raised script: scriptedOf, whose page
+ *  text on one baseline read "AIDE 2" for AIDE^2); `lineInfo`, the unit's lines' (Prepared's) */
 function drawnAs(p, g, cls, sup, lineInfo = null) {
   const real = g.chars.filter(c => !c.sep && !c.space)
   const lines = new Set(real.map(c => c.rect.join()))
@@ -1420,16 +1442,20 @@ function drawnAs(p, g, cls, sup, lineInfo = null) {
   // (a rendering whose source knows where its ink is, a layout file's segments, g.box: its lines are its segments)
   const box = g.box
   const broken = box ? box.lines > 1 : lines.size > 1 && !oneLine
-  if (cls !== 'other' || broken || p.cls === 'macro' || p.cls === 'umacro') return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
+  const textMacro = p.cls === 'macro' || p.cls === 'umacro'
+  const scripted = textMacro && !broken && oneLine && scriptedOf(real)
+  if (cls !== 'other' || broken || (textMacro && !scripted)) return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
+  // (a text macro's crop reads as its page text where its source has none: copied and found as the page shows it)
+  const text = texToText2(p.src) || (scripted ? g.text : '')
   // (with a box, a layout file's segment: the piece's own ink, on the baseline of the line TeX set it on)
-  if (box?.top !== undefined) return { mode: 'crop', page: real[0].page, ...cropOfBox(box), text: texToText2(p.src) }
+  if (box?.top !== undefined) return { mode: 'crop', page: real[0].page, ...cropOfBox(box), text }
   const main = real.filter(c => c.size >= lineSize * 0.85)
   const baseline = cropBaselineOf(real, lineInfo, main.length ? main : real)
   // (a hanging glyph, a radical, from an em below its baseline to just above it: by its baseline, its box reached into
   // the line above, "√dk" taking "nd v." from "…dimension d_v.")
   const y0 = Math.min(...real.map(c => (c.ybEff !== undefined ? c.yb - c.size : c.yb - c.size * 0.26))), y1 = Math.max(...real.map(c => (c.ybEff !== undefined ? c.yb + c.size * 0.15 : c.yb + c.size * 0.8)))
   const x0 = Math.min(...real.map(c => c.x0)), x1 = Math.max(...real.map(c => c.x1))
-  return { mode: 'crop', page: real[0].page, crop: [x0 - 0.4, y0, x1 + 0.4, y1], baseline, text: texToText2(p.src) }
+  return { mode: 'crop', page: real[0].page, crop: [x0 - 0.4, y0, x1 + 0.4, y1], baseline, text }
 }
 
 /**

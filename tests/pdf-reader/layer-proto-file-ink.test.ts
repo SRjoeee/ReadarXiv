@@ -2,10 +2,11 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
-// Two readings of 2609.26457 (zh) where the layer drew something other than TeX set, each fixed by what the page's lines
-// and the layout file's segments say: a paragraph beside a wrapped figure laid at the width of its widest line (over the
-// figure's caption), and a placeholder v0 found nowhere left unproven where the file holds its ink. The layer gate
-// measures the drawing; these are the rules, on made-up pages.
+// Three readings of 2609.26457 (zh) where the layer drew something other than TeX set, each fixed by what the page's
+// characters and the layout file's segments say, never by a name: a text macro that sets a raised script drawn as text on
+// one baseline ("AIDE 2" for AIDE^2), a paragraph beside a wrapped figure laid at the width of its
+// widest line (over the figure's caption), and a placeholder v0 found nowhere left unproven where the file holds its ink.
+// The layer gate measures the drawing; these are the rules, on made-up pages.
 
 type L2 = typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
 type Tex = typeof import('@/pdf-reader/engine/layer-proto/tex.mjs')
@@ -33,6 +34,61 @@ const unitOf = (lines: number[][], ph: [number, number, number[]][] = []) => {
 const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
 const rect = [1, 10, 97.85, 230, 106.83]
 const fileLine = [1, 10, 230, 100, 108, 97, 10, 0]
+
+describe('a text macro that sets a raised script is cropped from its ink, never set on one baseline (F4)', () => {
+  // "compare against AIDE^2, a production agent": the macro's "AIDE" at the line's size, its superscript "2" at 0.73 of it
+  // and 4.3 pt up (2609.26457's \aidesq{}, \ensuremath{\mathrm{AIDE}^{2}}), which page text on one baseline reads "AIDE 2"
+  const page = (macro: ReturnType<typeof item>) => [...item('compare against', 10, 100, 10, 0), ...macro, ...item(', a production agent', 130, 100, 10, 3)]
+  const sq = [...item('AIDE', 90, 100, 10, 1), ...item('2', 110, 104.3, 7.3, 2, math)]
+  const human = [...item('AIDE', 90, 100, 10, 1), ...item('human', 110, 98, 7.3, 2, math)]
+  const unit = (src: string) => ({ kind: 'para', src: 'compare against , a production agent', pieces: [text('\u4E0E '), ph(src), text('\uFF0C\u4E00\u4E2A\u751F\u4EA7\u4EE3\u7406')] }) as never
+  const v0 = (src: string, macro: ReturnType<typeof item>) => L2.prepareUnit(unit(src), [rect.slice()] as never, [page(macro) as never], new Map() as never)
+  const lu = unitOf([fileLine], [[1, 0, [1, 90, 100, 113.65, 109.3, 99.7]]])
+  it("with the layout file: the crop is the segment's box on the segment's baseline, the superscript in it", () => {
+    const r = L2.prepareUnit(unit('\\aidesq{}'), [rect.slice()] as never, [page(sq) as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'ph' }) as never)
+    expect(r.unproven).toBeUndefined()
+    expect(r.get(1)).toMatchObject({ mode: 'crop', baseline: 100, text: 'AIDE 2' })
+    for (const [i, v] of [89.6, 99.4, 114.05, 109.6].entries()) expect(r.get(1)?.crop?.[i]).toBeCloseTo(v, 6)
+  })
+  it("v0's reading, which takes \"AIDE\" by its name and leaves the \"2\" to none, read from the segment under the proof", () => {
+    expect(v0('\\aidesq{}', sq).get(1)).toMatchObject({ mode: 'orig-text', text: 'AIDE' })
+    const proven = L2.prepareUnit(unit('\\aidesq{}'), [rect.slice()] as never, [page(sq) as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, 1, -1]) } as never)
+    expect(proven.unproven).toBeUndefined()
+    expect(proven.get(1)).toMatchObject({ mode: 'crop', baseline: 100 })
+    for (const [i, v] of [89.6, 99.4, 114.05, 109.6].entries()) expect(proven.get(1)?.crop?.[i]).toBeCloseTo(v, 6)
+    // (its characters the crop's, the "2" too: erased with the line and shown once, in the crop)
+    expect(sq.every(c => proven.cat.get(`1|${c.item}|${c.k}`) === 'acc')).toBe(true)
+  })
+  it('v0 alone crops a raised letter (\\LaTeX\'s A) on its line\'s baseline', () => {
+    const r = v0('\\mylatex{}', [...item('L', 90, 100, 10, 1), ...item('A', 94, 102.1, 7.3, 2), ...item('TEX', 98, 100, 10, 4)]).get(1)
+    expect(r?.mode).toBe('crop')
+    expect(r?.baseline).toBe(100)
+  })
+  it('a lowered script (AIDE_human, BERT_BASE) or letter (\\TeX\'s E) reads as the same words: page text, which breaks', () => {
+    expect(v0('\\aidehuman{}', human).get(1)).toMatchObject({ mode: 'orig-text', text: 'AIDE human' })
+    const low = unitOf([fileLine], [[1, 0, [1, 90, 100, 128.25, 107.2, 96.4]]])
+    expect(L2.prepareUnit(unit('\\aidehuman{}'), [rect.slice()] as never, [page(human) as never], new Map() as never, null, T.texParts(low, [-1, 1, -1], { use: 'ph' }) as never).get(1)).toMatchObject({ mode: 'orig-text', text: 'AIDE human' })
+    expect(v0('\\mytex{}', [...item('T', 90, 100, 10, 1), ...item('E', 95, 97.85, 10, 2), ...item('X', 100, 100, 10, 4)]).get(1)?.mode).toBe('orig-text')
+  })
+  it("a macro of one size on one baseline stays the page's text, as one broken over two lines does", () => {
+    expect(v0('\\bert{}', item('BERT', 90, 100, 10, 1)).get(1)).toMatchObject({ mode: 'orig-text', text: 'BERT' })
+    const lines = [[1, 10, 97.85, 230, 106.83], [1, 10, 85.85, 230, 94.83]]
+    const pg = [...item('compare against AIDE', 10, 100, 10, 0), ...item('2', 10, 92.3, 7.3, 1, math), ...item(', a production agent', 30, 88, 10, 3)]
+    expect(L2.prepareUnit(unit('\\aidesq{}'), lines as never, [pg as never], new Map() as never).get(1)?.mode).toBe('orig-text')
+  })
+  it('a formula and a macro with arguments are cropped as before', () => {
+    expect(v0('$\\mathrm{AIDE}_{\\mathrm{human}}$', human).get(1)?.mode).toBe('crop')
+    expect(v0('\\aidek{0}', [...item('AIDE', 90, 100, 10, 1), ...item('0', 110, 98, 7.3, 2, math)]).get(1)?.mode).toBe('crop')
+  })
+  it('scriptedOf: a character raised a tenth of an em over the main glyphs; never a lowered one, a smaller one, or one alone', () => {
+    expect(L2.scriptedOf(sq as never)).toBe(true)
+    expect(L2.scriptedOf(human as never)).toBe(false)
+    expect(L2.scriptedOf(item('BERT', 90, 100, 10, 1) as never)).toBe(false)
+    expect(L2.scriptedOf([...item('ab', 90, 100, 10, 1), ...item('c', 100, 100.5, 10, 2)] as never)).toBe(false)
+    expect(L2.scriptedOf([...item('S', 90, 100, 10, 1), ...item('MALL', 95, 100, 8, 2)] as never)).toBe(false)
+    expect(L2.scriptedOf(item('2', 110, 104, 7, 2) as never)).toBe(false)
+  })
+})
 
 describe("a paragraph's measure where TeX changed it: each slot its line's (F5)", () => {
   /** a paragraph of n lines at size 10, 13.5 apart from 700, its first line indented 15; `x1(i)` each line's end,
