@@ -9,7 +9,9 @@
 //   pack/geometry/<paper>-<target>-geometry.json  the geometry the gate resolves for each output (LAYER_GEOMETRY)
 //   pack/data/fonts/<file>                        the served faces (AXT_DATA=pack/data)
 //   pack/texmf/<tex/generic/...>                  the en and de hyphenation patterns (TEXMF_DIST=pack/texmf)
-//   pack/manifest.json                            { schema, pipeline, layout: { schema, version }, made, digest, files: [{ path, sha256, bytes }] }
+//   pack/manifest.json                            { schema, pipeline, layout: { schema, version }, compileImage, made, digest, files: [{ path, sha256, bytes }] }
+// `compileImage` is lab/pdf/compile-image.json (the one place the compile image is pinned, by digest, shared with the web container): a
+// make refuses to run unless the local texlive image (`docker image inspect`) has the pinned digest, so the layouts the pack holds were made on it
 // `layout` names the layout files' schema and version (their `schema` field, which the reader refuses a file by when it is not its own, and their `layout` field, the maker's version, which the reader reads as a version token and does not compare): a make
 // reads every fixtures/<fx>/layout.json (not refs/<fx>/layout.json, the instrument's kept layout, which no reader parses) and fails unless all of them are the --engine tree's own (file.mjs LAYOUT_SCHEMA and
 // LAYOUT), and tests/scripts/gate-pack.test.ts holds the committed gate-pack.json to the engine, so that a change of the layout
@@ -33,6 +35,7 @@
 // the SHA-256 of its value). Neither the token nor the derived secret is printed. The read itself (the derivation, the signer, the
 // retry rule) is scripts/r2-read.mjs, which the fixtures fetch (scripts/fetch-fixtures.mjs) uses as well.
 import { constants, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -49,6 +52,8 @@ export const ROLE_WEIGHTS = ['light', 'regular', 'semibold', 'bold']
 
 const here = new URL('.', import.meta.url).pathname
 const REPO = resolve(here, '../../..')
+/** the compile image's pin, by digest: one value for the gate pack's layouts and the web container */
+export const COMPILE_IMAGE_FILE = join(import.meta.dirname, '..', 'compile-image.json')
 const ENGINE = 'src/pdf-reader/engine'
 /** the fidelity record a make takes its inputs from */
 const RECORD = 'lab/pdf/records/layer-gate.json'
@@ -196,6 +201,38 @@ export function layoutVersionOf(fixtures, names, expected) {
   return { schema: expected.schema, version: expected.version }
 }
 
+const IMAGE_REF = /^[a-z0-9][a-z0-9./_-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$/
+/**
+ * The compile image's pin (lab/pdf/compile-image.json): { texlive, base, node, aptSnapshot, texFormat }, the three images as
+ * `name:tag@sha256:<64 hex>`, `aptSnapshot` a dated snapshot or null (not pinned yet), `texFormat` the TeX Live release and the
+ * format's tool versions. Throws on a file that is not that
+ */
+export function compileImageOf(file = COMPILE_IMAGE_FILE) {
+  const j = readJson(file)
+  const keys = ['texlive', 'base', 'node', 'aptSnapshot', 'texFormat']
+  if (j === null || typeof j !== 'object' || Object.keys(j).join() !== keys.join()) throw new Error(`${file}: the keys must be ${keys.join(', ')}`)
+  for (const k of ['texlive', 'base', 'node']) if (typeof j[k] !== 'string' || !IMAGE_REF.test(j[k])) throw new Error(`${file}: ${k} must be name:tag@sha256:<digest>`)
+  if (j.aptSnapshot !== null && (typeof j.aptSnapshot !== 'string' || !/^\d{8}T\d{6}Z$/.test(j.aptSnapshot))) throw new Error(`${file}: aptSnapshot must be null or a snapshot timestamp (YYYYMMDDTHHMMSSZ)`)
+  if (j.texFormat === null || typeof j.texFormat !== 'object' || Array.isArray(j.texFormat)) throw new Error(`${file}: texFormat must be an object`)
+  return j
+}
+
+/** the repo digests (`sha256:...`) the local docker has for an image reference, [] where there is none; throws where docker cannot be asked */
+export function localImageDigests(ref, run = execFileSync) {
+  let out
+  try { out = run('docker', ['image', 'inspect', '--format', '{{json .RepoDigests}}', ref], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) } catch (e) {
+    throw new Error(`cannot ask docker for ${ref} (${String(e?.stderr ?? e?.message ?? e).trim().split('\n')[0]}): the pack is made on the pinned compile image, which has to be there to be checked`)
+  }
+  const list = JSON.parse(out)
+  return Array.isArray(list) ? list.map(x => String(x).slice(String(x).indexOf('@') + 1)) : []
+}
+
+/** throws unless the local image of the pinned texlive reference has the pinned digest */
+export function checkCompileImage(pinned, digests) {
+  const want = pinned.texlive.slice(pinned.texlive.indexOf('@') + 1)
+  if (!digests.includes(want)) throw new Error(`the local ${pinned.texlive.slice(0, pinned.texlive.indexOf('@'))} is ${digests.length ? digests.join(', ') : 'not there'}, not the pinned ${want} (lab/pdf/compile-image.json): pull the pinned image, or change the pin for the web container too`)
+}
+
 /** whether a directory holds a pack: a manifest.json of this schema or an earlier one (a make over the pack before a schema
  *  bump clears it) whose digest is its listing's (a browser extension's manifest.json is no pack's) */
 function isPack(dir) {
@@ -209,7 +246,7 @@ function isPack(dir) {
  * The pack written to `out`: each file copied (a clone where the filesystem has them), its mtime set to the epoch, its digest
  * and size read back from the copy; `manifest.json` last. An `out` that holds a pack is cleared first, one that holds anything else is refused. Returns the manifest.
  */
-export function makePack({ entries, out, pipeline, layout, made = new Date().toISOString() }) {
+export function makePack({ entries, out, pipeline, layout, compileImage = null, made = new Date().toISOString() }) {
   if (!Number.isInteger(layout?.schema) || typeof layout?.version !== 'string') throw new Error('makePack: the layout files\' schema and version are needed (layoutVersionOf)')
   if (existsSync(out)) {
     if (isPack(out)) rmSync(out, { recursive: true })
@@ -225,14 +262,14 @@ export function makePack({ entries, out, pipeline, layout, made = new Date().toI
     const bytes = readFileSync(to)
     files.push({ path, sha256: sha256(bytes), bytes: bytes.length })
   }
-  const manifest = { schema: PACK_SCHEMA, pipeline, layout, made, digest: listingDigest(files), files }
+  const manifest = { schema: PACK_SCHEMA, pipeline, layout, ...(compileImage ? { compileImage } : {}), made, digest: listingDigest(files), files }
   writeFileSync(join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 1)}\n`)
   return manifest
 }
 
 /** the committed copy of a manifest: each file with the url of its object, a key of its digest */
 export function packJsonOf(manifest, bucket = BUCKET) {
-  return { schema: manifest.schema, pipeline: manifest.pipeline, layout: manifest.layout, made: manifest.made, digest: manifest.digest, bucket, files: manifest.files.map(f => ({ ...f, url: `r2://${bucket}/${KEY_PREFIX}${f.sha256}` })) }
+  return { schema: manifest.schema, pipeline: manifest.pipeline, layout: manifest.layout, ...(manifest.compileImage ? { compileImage: manifest.compileImage } : {}), made: manifest.made, digest: manifest.digest, bucket, files: manifest.files.map(f => ({ ...f, url: `r2://${bucket}/${KEY_PREFIX}${f.sha256}` })) }
 }
 
 /** the pack's files grouped by what they are, for the listing the maintainer sees before an upload (counts and sizes only) */
@@ -355,6 +392,9 @@ async function main(argv) {
   const [command] = argv
   const packFile = where(argv, 'json'), packArg = typeof arg('pack', argv) === 'string' ? resolve(arg('pack', argv)) : packFile
   if (command === 'make') {
+    // (the layouts are made on the pinned compile image: refused before anything is read where the local one is another)
+    const compileImage = compileImageOf()
+    checkCompileImage(compileImage, localImageDigests(compileImage.texlive.slice(0, compileImage.texlive.indexOf('@'))))
     const engine = resolve(typeof arg('engine', argv) === 'string' ? arg('engine', argv) : REPO)
     const E = f => import(pathToFileURL(join(engine, ENGINE, f)).href)
     const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
@@ -366,7 +406,7 @@ async function main(argv) {
     const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [`${c.group}|${c.kai}`, c])).values()]
     const texmf = resolve(typeof arg('texmf', argv) === 'string' ? arg('texmf', argv) : process.env.TEXMF_DIST ?? join(homedir(), 'Library/TinyTeX/texmf-dist'))
     const entries = entriesOf({ fixtures, records, refs, geometry, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf })
-    const manifest = makePack({ entries, out: where(argv, 'out'), pipeline: pipelineOf(records, names), layout })
+    const manifest = makePack({ entries, out: where(argv, 'out'), pipeline: pipelineOf(records, names), layout, compileImage })
     writeFileSync(packFile, `${JSON.stringify(packJsonOf(manifest), null, 1)}\n`)
     const s = summaryOf(manifest.files)
     console.log(`pack ${manifest.digest} (PIPELINE ${manifest.pipeline}, layout schema ${layout.schema} version ${layout.version}): ${s.files} files, ${mb(s.bytes)}; ${s.objects} distinct objects, ${mb(s.objectBytes)}`)

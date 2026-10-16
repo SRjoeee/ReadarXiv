@@ -189,6 +189,7 @@ its comment is numbers, fixture names and links that open the layer lab on the m
 | `lab/pdf/spikes/rules-gate.mjs` | `run` (the gate's model tier in the production configuration, from the pack alone), `compare` (the verdict and the comment) and `engines` (the live-engines check). `tests/scripts/rules-gate.test.ts` holds its arithmetic on synthetic runs of numbers. |
 | `lab/pdf/spikes/rules-publish.mjs` | The two writes of the web Worker's rules routes: publish the file (unless `--next=<ref>` holds a newer version), move the pointer. The secret goes into one request header and is never printed. |
 | `lab/pdf/spikes/gate-pack.mjs`, `lab/pdf/gate-pack.json` | The fixture pack: made, restored by digest, verified. The JSON is its committed manifest. |
+| `lab/pdf/compile-image.json` | The compile image pinned by digest (TeX Live, the Debian base, Node), one value for the gate pack's made layouts and the web container. `gate-pack.mjs make` refuses to run unless the local texlive image has the pinned digest and writes the pin into the manifest (`compileImage`). `aptSnapshot` stays `null` until the web lane pins a dated apt snapshot. |
 | `lab/pdf/live-engines.json` | The engines readers run now. |
 | `lab/pdf/rulings/README.md` | How a regression that is meant is accepted. |
 

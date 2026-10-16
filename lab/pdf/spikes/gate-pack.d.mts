@@ -6,7 +6,9 @@ export declare const ROLE_WEIGHTS: string[]
 export declare function sha256(bytes: Uint8Array | string): string
 export interface PackFile { path: string; sha256: string; bytes: number }
 export interface LayoutVersion { schema: number; version: string }
-export interface Manifest { schema: number; pipeline: string; layout: LayoutVersion; made: string; digest: string; files: PackFile[] }
+/** lab/pdf/compile-image.json: the compile image pinned by digest, shared with the web container */
+export interface CompileImage { texlive: string; base: string; node: string; aptSnapshot: string | null; texFormat: Record<string, string | number> }
+export interface Manifest { schema: number; pipeline: string; layout: LayoutVersion; compileImage?: CompileImage; made: string; digest: string; files: PackFile[] }
 export interface PackJson extends Manifest { bucket: string; files: (PackFile & { url: string })[] }
 export declare function listingDigest(files: PackFile[]): string
 export declare function fontFiles(faces: Record<string, { file: string }>, known: { group: string; kai: string | null }[], used: { group: string; kai: string | null }[]): string[]
@@ -17,7 +19,11 @@ export declare const RECORD_INPUTS: string[]
 export declare function inputsOfRecord(record: unknown, o: { root: string; repo: string; flags?: Record<string, string | boolean | null | undefined>; exists?: (path: string) => boolean; home?: string }): { fixtures: string; records: string; refs: string; geometry: string }
 export declare function layoutOfEngine(engine: string): Promise<LayoutVersion>
 export declare function layoutVersionOf(fixtures: string, names: string[], expected: LayoutVersion): LayoutVersion
-export declare function makePack(o: { entries: { path: string; from: string }[]; out: string; pipeline: string; layout: LayoutVersion; made?: string }): Manifest
+export declare function makePack(o: { entries: { path: string; from: string }[]; out: string; pipeline: string; layout: LayoutVersion; compileImage?: CompileImage | null; made?: string }): Manifest
+export declare const COMPILE_IMAGE_FILE: string
+export declare function compileImageOf(file?: string): CompileImage
+export declare function localImageDigests(ref: string, run?: (cmd: string, args: string[], o: object) => string): string[]
+export declare function checkCompileImage(pinned: CompileImage, digests: readonly string[]): void
 export declare function packJsonOf(manifest: Manifest, bucket?: string): PackJson
 export declare function summaryOf(files: PackFile[]): { files: number; bytes: number; objects: number; objectBytes: number; kinds: { kind: string; files: number; bytes: number }[] }
 export declare function objectUrl(account: string, url: string, bucket?: string): string
