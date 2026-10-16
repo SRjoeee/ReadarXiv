@@ -6,7 +6,7 @@ import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { indexLayout, LAYOUT, type LayoutFile, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 
-// Synthetic papers for the order of the asks (1b-D design §5: S-A to S-D, and the fill paper): the same page of a PDF.js
+// Synthetic papers for the order of the asks (1b-D design §5: S-A to S-D, the fill paper, and S-E's shared lines): the same page of a PDF.js
 // document's shape as the take and local tests' (its text layer, its views; nothing drawn), a layout file and v0's geometry
 // built from one list of specs, so that a paper is opened by the run (`openRun`: openProto over every unit at once) or by
 // the reader's door (`bundleOf`, `rowsOf`: a bundle written and read back by the engine, its rows made by the engine's own
@@ -120,7 +120,21 @@ const fill: Paper = {
     para(5, [[4, 200, 4]], 16),
   ],
 }
-export const PAPERS: Paper[] = [chain, tables, float, footnote, { ...footnote, name: 'S-D footnote, page 4 unreadable', fail: 4 }, fill]
+/** S-E, shared lines (need.mjs rowLeadOf): a paragraph from page 1 to page 2 whose last row its part after a float continues
+ *  (unit 1 ranks before unit 0 on page 2: unit 0 waited on page 1), and a run-in head at page 2's foot whose text runs on to
+ *  page 3, which page 4's closure lays through a paragraph from page 3 on to page 4 (the head on no page of that closure's passes) */
+const shared: Paper = {
+  name: 'S-E shared line', pages: 4,
+  specs: [
+    { id: 0, kind: 'para', lines: [line(1, 270, 'Alpha beta gamma'), line(1, 258, 'delta epsilon zeta'), line(1, 246, 'eta theta iota'), line(2, 270, 'kappa lambda mu'), line(2, 258, 'nu xi. The', 20, 150)], chars: 110, at: 0x4e00 },
+    { id: 1, kind: 'para', lines: [line(2, 258, 'omicron pi', 160, 280), line(2, 246, 'rho sigma tau'), line(2, 234, 'upsilon phi chi')], chars: 30, at: 0x5200 },
+    { id: 2, kind: 'heading', lines: [line(2, 60, 'Encoder', 20, 80)], chars: 3, at: 0x5600 },
+    { id: 3, kind: 'para', lines: [line(2, 60, 'The encoder is', 90, 280), line(2, 48, 'composed of a stack'), line(3, 270, 'of identical layers'), line(3, 258, 'each with two')], chars: 40, at: 0x5800 },
+    para(4, [[3, 150, 2], [4, 270, 2]], 40),
+    para(5, [[4, 150, 2]], 20),
+  ],
+}
+export const PAPERS: Paper[] = [chain, tables, float, footnote, { ...footnote, name: 'S-D footnote, page 4 unreadable', fail: 4 }, fill, shared]
 
 /** a character's advance centre at its place in an item of equal advance (PDF.js's rule, links.mjs pointsOf): the item's first character is at index 0 */
 const centreOf = (l: Line, k: number) => l.x0 + ((k + 0.5) / l.text.length) * (l.x1 - l.x0)

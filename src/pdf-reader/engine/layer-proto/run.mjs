@@ -59,7 +59,7 @@ import * as LK from './links.mjs'
 import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
-import { closureOf } from './need.mjs'
+import { closureOf, rowLeadOf } from './need.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -184,7 +184,12 @@ export function pageTarget(units, continuing, band) {
 export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}) {
   const { band, track, size } = P.adaptiveFill
   const r3 = x => Math.round(x * 1000) / 1000
-  const at = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
+  // (a unit whose last row the next unit's first continues on a shared line, laid from where its fit ended there (`share`,
+  // layer2.mjs shareOf), is filled only where that stays so: no leading, tracking or size that sets its text there further
+  // right, or sets text there where its fit left the row free. Its fill leading is still its fit's, which the page's target
+  // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own)
+  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
+  const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l.lines) ? l : null }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
   const told = pageTarget(units, continuing, band)
@@ -218,10 +223,10 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   const grown = filled.filter(f => EVEN_KINDS.has(f.p.unit.kind))
   if (size > 1 && grown.length && grown.every(f => !f.full)) {
     const scaleOf = k => r3(1 + k * P.step)
-    const all = k => { const ls = []; for (const f of grown) { const l = at(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
+    const all = k => { const ls = []; for (const f of grown) { const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
     let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
     while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
-    if (ok) grown.forEach((f, i) => { f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
+    if (ok) grown.forEach((f, i) => { if (!L2.keepsShare(f.p.share, best[i].lines)) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
   }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
@@ -582,6 +587,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
   const K = [], candOf = new Map()
+  /** each unit whose last row another unit's first row continues on a shared line (K's `follows`), that unit's id */
+  const followers = new Map()
   // the pages each of a unit's sources would draw it on (which source is its row's to decide) and every page their
   // lines are on: what laying a page waits for (needsOf)
   const shownOf = rects => [...new Set(rects.filter(r => r[0] <= N).map(r => r[0]))]
@@ -597,6 +604,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // whether it is decided yet)
       c.reads = segPagesOf(c)
       c.group = tableGroups?.get(c.id) ?? null
+      // (and the unit before it in K whose last row its first row continues on one of TeX's lines, a shared line (need.mjs
+      // rowLeadOf): its lay reads that unit's (layout2's start), which Need lays with it, `follows`; that unit's lay reads that it
+      // has one, `followers`)
+      c.lead = tex?.use === 'lines' ? rowLeadOf(tex.index, c.id) : null
+      c.follows = c.lead && candOf.has(c.lead.id) ? c.lead.id : null
+      if (c.follows !== null) followers.set(c.follows, c.id)
       c.k = K.length
       c.decided = false
       for (const q of new Set(c.lists.flat())) undecided[q]++
@@ -1549,6 +1562,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!fileLines) b.indent = Math.max(b.indent, prep.label.x1 + 0.25 * s - b.x0)
       else if (prep.label.x1 > p.rects[0][1] + 0.1) b.indent = Math.max(b.indent, (prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s) - b.x0)
     }
+    // a first row TeX set on the line another unit's last row ends (a shared line, need.mjs rowLeadOf: a run-in heading's text,
+    // a paragraph's part after the float that split it) starts where that unit's translation ends on the row, the original's
+    // separation after it (`start`, slotsAt), or at the row's own start where that unit set no text there (shareOf): not where
+    // the original's did, after the English words' end (1810.04805's "Model Architecture" in Chinese ended 60 pt before its text
+    // began, 10.9 pt in the original). The first line shortens where that unit's translation ends further on, and gives way to
+    // the next row where none of it is left (slotsAt's sliver). That unit is laid before it (layIn), and its page's fill keeps
+    // where it ended (fillPage). The first line stays where TeX set it where that unit is the original's (not placed, refused, or
+    // its row kept), or anything of the page stands between the two on the row (a label or a name kept as the original's)
+    const row = fileLines ? candOf.get(p.id)?.lead : null
+    if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
+      const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
+      const between = (chars2[b.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size)
+      if (share && !between) b.start = share.end !== null ? share.end + Math.max(0, x - row.x1) : row.x0
+    }
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
     const t2 = lap()
     // (the label's own style: a class's bold or italic label)
@@ -1595,6 +1622,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       else { p.refused = true; unlead(p); return }
     }
     settleLayout(p)
+    // (a unit whose last row another unit's first continues on a shared line: where its translation ends on that row, which
+    // that unit is laid from, and which its page's fill keeps)
+    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null }
     const t4 = lap()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined || inkBefore !== undefined)) {
@@ -2243,7 +2273,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const units = []
       for (const i of C.lay) { const u = byId.get(K[i].id); if (u && !u.taken && (ORDER_FREE || groupPage.get(u.id) <= done)) units.push(u) }
       units.sort((a, b) => rankOf.get(a.id) - rankOf.get(b.id))
-      for (const u of units) {
+      // (a unit whose first row continues another's on a shared line reads that one's lay (layout2's start): that one is laid
+      // first, ahead of its rank where it ranks after it (a paragraph from the page before, 2608.16117's unit 57, whose last row
+      // its unit 59 continues on page 19), Need laying it with it (`follows`); every other unit in its rank. Its growth is its
+      // pages' rank's, whichever is laid first, and its lay reads nothing of the units after it)
+      const order2 = [], left = new Set(units)
+      const put = u => { if (!left.delete(u)) return; const a = byId.get(candOf.get(u.id)?.follows); if (a) put(a); order2.push(u) }
+      for (const u of units) put(u)
+      for (const u of order2) {
         if (disposed || !still()) return
         if (!planned) plan()
         for (const q of candOf.get(u.id).holds ?? []) {
