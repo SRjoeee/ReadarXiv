@@ -97,7 +97,7 @@ const bundleOf = (o?: Parameters<typeof partsOf>[0]): ReadBundle => readBundle(w
 function docOf(ready: Promise<unknown> | null = null) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const items = [1, 2].map(p => SPECS.flatMap(s => s.lines.filter(l => l[0] === p).map(([, x0, x1, b]) => ({ str: s.text, transform: [10, 0, 0, 10, x0, b], width: x1 - x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))))
-  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} })
+  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, getAnnotations: async () => [{ subtype: 'Link', rect: [270, 2, 290, 12], url: `https://example.org/p${n}`, overlaidText: '', borderStyle: { width: 0, style: 1 }, color: null }] })
   return { numPages: 2, getPage: async (n: number) => { await ready; return pageOf(n) } }
 }
 /** every face served whole, one slice over every code point; the faces asked, in turn */
@@ -112,7 +112,7 @@ function rowsOf(bundle: ReadBundle, tr: (id: number) => string = id => CJK(4, 0x
 const tick = () => new Promise(ok => setTimeout(ok, 0))
 /** the sheets in the page but the one of the faces' classes the SVG text names (layer2.mjs faceClass), which every run of
  *  the page shares, each face's class made once */
-const faceSheet = (e: HTMLStyleElement) => { const rules = [...(e.sheet?.cssRules ?? [])]; return rules.length > 0 && rules.every(r => /^\.axf\d+$/.test((r as CSSStyleRule).selectorText ?? '')) }
+const faceSheet = (e: HTMLStyleElement) => { const rules = [...(e.sheet?.cssRules ?? [])]; return rules.length > 0 && rules.every(r => /^\.axf[0-9a-z-]+$/.test((r as CSSStyleRule).selectorText ?? '')) }
 const styles = () => [...document.head.querySelectorAll('style')].filter(e => !faceSheet(e)).length
 
 beforeEach(() => { seen.opens.length = 0; seen.runs.length = 0; seen.urls.length = 0; facesAsked.length = 0 })
@@ -215,14 +215,14 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const layer = await openLayer({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl, rules: set as never })
     const o = seen.opens.at(-1) as unknown as Opened
     expect(o.rules).toBe(set)
-    expect(layer.stats().rules).toEqual({ schema: 3, version: 7 })
+    expect(layer.stats().rules).toEqual({ schema: 4, version: 7 })
     // (the face asked first is the set's: light beside Times, which the built-in set does not say)
     expect(facesAsked[0]).toBe('shs-sc-light')
     expect(firstFaceOf('zh', set as never)).toBe('shs-sc-light')
     expect(firstFaceOf('zh')).toBe('shs-sc-regular')
     layer.dispose()
     const built = await openLayer({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl })
-    expect(built.stats().rules).toEqual({ schema: 3, version: BUILTIN_RULES.version })
+    expect(built.stats().rules).toEqual({ schema: 4, version: BUILTIN_RULES.version })
     built.dispose()
   })
 
@@ -265,7 +265,8 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     pages.push(await layer.pageOf(2, { lang: 'zh-Hans' }))
     expect([1, 2].map(p => run.held(p))).toEqual([1, 2].map(() => ({ state: [], units: [], reads: 0 })))
     expect(run.rows.map(r => [Object.keys(r).includes('svg'), r.base, !!r.released])).toEqual([[false, true, false], [false, true, false]])
-    expect(await fed).toEqual([1, 2])
+    // (the pages complete in no order the pages have, each exactly once: the set of the pages told, sorted)
+    expect((await fed).sort()).toEqual([1, 2])
     pages.forEach((pg, i) => {
       expect(pg.svg).toBeInstanceOf(SVGSVGElement)
       expect([pg.w, pg.h, pg.svg.getAttribute('width'), pg.svg.getAttribute('height')]).toEqual([750, 750, '750', '750'])
@@ -278,8 +279,15 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const again = await layer.pageOf(1, { lang: 'zh-Hans' })
     expect(again.svg).not.toBe(pages[0]!.svg)
     expect(again.svg.outerHTML).toBe(pages[0]!.svg.outerHTML)
-    expect(again.words).toEqual({ tokens: [], spans: [], original: [] })
-    expect(again.links).toEqual([])
+    // (the word table: a copy of the page's record, new arrays on every ask)
+    expect(again.words.tokens.n).toBe(again.words.word.length)
+    expect(again.words).toEqual(pages[0]!.words)
+    expect(again.words.word).not.toBe(pages[0]!.words.word)
+    // (the links: a copy of the page's kept records, new objects on every ask; the margin's link with no glyph under it stays in place)
+    expect(again.links).toEqual([{ boxes: [270, 2, 290, 12], url: 'https://example.org/p1', name: '', moved: false, order: 0 }])
+    expect(again.links).toEqual(pages[0]!.links)
+    expect(again.links[0]).not.toBe(pages[0]!.links[0])
+    expect(layer.stats().links).toMatchObject({ total: 2, inPlace: 2, moved: 0, unsupported: 0, unread: 0 })
     const source = document.createElement('canvas')
     source.width = 1500
     source.height = 1500
@@ -296,7 +304,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(layer.unitAt(3, 100, 262)).toBeNull()
     expect(layer.unitAt(1, Number.NaN, 262)).toBeNull()
     const s = layer.stats()
-    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 3, version: BUILTIN_RULES.version } })
+    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 4, version: BUILTIN_RULES.version } })
     expect(Object.keys(s.pageMs)).toEqual(['1', '2'])
     expect(s.slowestTaskMs).toBeGreaterThanOrEqual(0)
     layer.dispose()
@@ -339,6 +347,9 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     layer.end()
     expect(layer.stats().dropped).toBe(5)
     await layer.pageOf(2, { lang: 'zh' })
+    // (page 2 laid by its closure alone: no unit of it runs on from page 1, so page 1 is drawn first and laid only when asked)
+    expect(layer.stats().pages).toEqual([2])
+    await layer.pageOf(1, { lang: 'zh' })
     expect(layer.stats().pages).toEqual([1, 2])
     expect(layer.stats().drawn).toBeGreaterThan(3)
     layer.dispose()
@@ -386,7 +397,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     source.height = 10
     expect(() => layer.copyOf(1, source, 2.5)).toThrow(/let go/)
     expect(layer.take(rowsOf(bundle))).toEqual({ complete: [] })
-    expect(layer.stats().rules).toEqual({ schema: 3, version: BUILTIN_RULES.version })
+    expect(layer.stats().rules).toEqual({ schema: 4, version: BUILTIN_RULES.version })
     expect(layer.unitAt(1, 100, 262)).toBe(0)
   })
 
@@ -589,16 +600,21 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
     layer.end()
     const run = seen.runs.at(-1) as Run
     const canvases = run.rows.map(r => r.left!)
-    // (page 2 asked for first: page 1 is laid on the way and its canvas never outlives its ink)
+    // (page 2 asked for first: page 1 is drawn first, page 2's closure, and its canvas never outlives its ink)
     const jump = await layer.pageOf(2, { lang: 'zh' })
     expect(canvases.map(c => c.width)).toEqual([0, 0])
-    // (and every page on the way let go of by the run once laid, each still drawn for a crop: no host's release)
+    // (page 2 let go of by the run once laid, still drawn for a crop: no host's release; page 1, drawn and not laid (a side
+    // page: its units are laid with its own closure), keeps what its laying reads until then: it is never drawn twice, M1)
     expect(run.rows.map(r => [r.left, r.base, r.released])).toEqual([[null, true, undefined], [null, true, undefined]])
-    expect([1, 2].map(p => run.held(p).state)).toEqual([[], []])
+    expect([1, 2].map(p => run.ready(p))).toEqual([false, true])
+    expect(run.held(1).state).toEqual(['chars', 'ink', 'laid'])
+    expect(run.held(2).state).toEqual([])
     expect((await layer.pageOf(2, { lang: 'zh' })).svg.outerHTML).toBe(jump.svg.outerHTML)
     const one = (await layer.pageOf(1, { lang: 'zh' })).svg
     one.removeAttribute('lang')
     expect(one.outerHTML).toBe(run.svgOf(1).outerHTML)
+    // (and let go of once its own closure is laid, M2)
+    expect([1, 2].map(p => run.held(p).state)).toEqual([[], []])
     const source = document.createElement('canvas')
     source.width = 750
     source.height = 750

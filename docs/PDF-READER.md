@@ -629,6 +629,128 @@ The reader's words go into the locale packs (`zh-CN`, `en`) under a new surface 
 with the popup's where they are the same (§15). Nothing in the reader is hard-coded any more; its status text, English
 today, goes.
 
+### 11.7 The reading view: one view for both readers
+
+The engine holds one reading view, `createReaderView(host)` in `engine/view/reader-view.mjs` (exported by `view.mjs`), which
+the web's reader and the extension's both run. It imports engine modules only: no extension module and no `pdfjs-dist`.
+PDF.js is the host's kit, so every PDF.js type the view names is structural.
+
+- **The host seam** (`ReaderHost`): the two panes' scrollers, PDF.js's kit (its library, `EventBus`, `PDFViewer`,
+  `PDFPageView`, `PDFLinkService`, `LinkTarget`, and the `getDocument` options its data files are found by), the words a page
+  is named by, the look (`ViewPrefs`: the view reads the highlight's on or off; the panes swapped, dimmed pages and the theme
+  are the host's sheet), a link out of the paper, a clock, whether `scrollend` comes, a title where the PDF's metadata has
+  none, and one channel for the view's events (`ViewEvent`). The view writes no preference: the display, the sync, a narrow
+  window, the zoom and the pinch are commands.
+- **The original takes no bytes.** `showOriginal(open)` calls the host's opener once, with the view's own `getDocument`
+  options, and owns the task it returns: a newer call supersedes one still loading (its task destroyed, its call
+  `'superseded'`), an opener that throws or a task that rejects is `'failed'`, and the call answers `'opened'` once the pages
+  are laid out. `dropOriginal(task)` lets go only of the task shown: the places' page views first, then the viewer emptied,
+  then the task. `originalData()` reads the bytes through the document.
+- **The right pane opens no document.** It holds the places (`places.mjs`): a page box for each of the original's pages,
+  sized by the left page box's own style under the left viewer's `--scale-factor`, so that both panes hold the same pages at
+  the same places at every zoom with nothing measured. A place near the view (one pane's height above and below) shows the
+  best version of its page there is: the layer's content once the layer side has laid it, else the original's page drawn
+  from the left's document by PDF.js's own page view (canvas, text layer, links through the view's jump), else, with no
+  original, the skeleton. A far place is an empty box: its page view goes, canvas and all. The places borrow the left's
+  document and never clean its pages up.
+- **The sync is the identity follower** (`sync.mjs` `createFollower`). Both panes hold the same pages, so the other pane moves
+  by the reader's own steps (on the compositor, by a ScrollTimeline, where the browser has one) and is levelled at rest by
+  the same point of the same page; a click levels the same point at the click's height. It is available once the places
+  exist. The web reader's fixes are plain behaviour: the scroll's end by a timer where no `scrollend` comes, no rest while
+  a finger is held, a rest an input called off armed again, a glide baked on input, a click's level calling off the rest
+  and the timer's end, the pair levelled once a zoom settles.
+- **The right zoomed through the left.** A zoom, a fit or a pinch over either pane scales the left's viewer, which the
+  places follow; the right shown alone is fitted to its own pane. A step and a pinch are drawn 400 ms after the last one
+  (one redraw a burst), the places' page views with them. A zoom and a display's change keep the reading place (the page and
+  the point at the reading line); a pinch reads every rectangle before it writes.
+- **The highlight** (`lighting.mjs`) reads a pane through its shapes alone (`Shapes`, the seam the shapes' PR builds); a
+  pointer over a page of either pane is a want of that page. The highlight's layer follows a pinch by transform and is kept
+  through PDF.js's redraws (§10.1–§10.2).
+- **The layer side's handle** is internal: `internalsOf(view)` (not exported by `view.mjs`) gives the right pane, its places
+  and their content swaps, the left's pages, the shapes' seam, the units, and the page-drawn, want, near and original
+  listeners. Disposing the view disposes its layer side first, then leaves no listener, observer, animation, document, task,
+  place or page view.
+
+The extension's host is `src/pdf-reader/session/host.ts`. Its development entry, `?layer=1` on the reader's address, runs
+the reader on the view: the original on both panes, as the reader shows a paper before its translation. The extension's own
+session stays the reader until the layer side and the links join the view. The entry is built only where the build is asked
+for it, `AXT_READER_VIEW=1 pnpm build` (`wxt.config.ts` `READER_VIEW`): a release build holds neither the entry nor its
+chunk, since the reader's page is reachable by address from arXiv's pages, and `scripts/check-output.mjs` checks each build
+for it either way. `pnpm e2e:reader` runs on a build asked for it, and its view section fails on one that is not. A link
+the view opens out of the paper is a web page or a mail address, never a script, data or a page of the browser's.
+The view's rows are `tests/pdf-reader/reader-view.test.ts` (V1–V14, on PDF.js stand-ins and a clock moved by hand) and
+`tests/pdf-reader/reader-view-bundle.test.ts` (a browser build of the view and layer entries reads nothing outside the engine,
+no `pdfjs-dist`, and nothing of the server's).
+
+### 11.8 The layer side: one sink for a paper's layer
+
+`createLayerSide(view, options)` (`engine/view/layer-side.mjs`, exported by `view.mjs`) is the reading view's one layer
+side. The host tells it what it hears of the paper's layer — refs, rows and their end, from any source, in any order — and
+gives it a transport (`fetchObject`, an object by its ref), the base's check (`bind`) and the composed document's opener
+(`composed`, arXiv's PDF followed by every tail told). No host calls the door.
+
+- **The feed** (`feed.mjs`) merges what is told, deduplicated by digest, fetches each object once while it is wanted and
+  reads it with the format's own readers (cap, digest against its ref, values, shape, chain): the units chunks and the head
+  into the index, then the parts in page order against the chain they make. An object's bytes go once it is read (the door
+  holds what it reads); a part that waits is not fetched before it joins. A part extends the chain where it begins after
+  the last one and names its digest as `prev` (a catalog's part, which names none, by its pages). One beginning at or
+  before the last told, under another digest, is a fork, and the chain is reset from its page, where it joins and is heard
+  later than every part it lets go (a source that comes late, a 202 made before a job's fork, does not undo it) or those
+  are refused. A tell with the parts' end whose parts reach it (the catalog; one of no part at an end of page 0) names the chain
+  whole: a part waiting from before it is let go (the same catalog told again keeps those heard since), and no later part
+  forks it; one may extend it. A part that does not follow yet waits; one refused stops the chain at the part before it, and is fetched and read
+  again when it is told again (an abort of the host's transport is a refusal too). A second head is passed over with one
+  warning.
+- **The order** (the reader view's contract §2.2): the index read; the base bound, once (false is no layer); the original
+  open; the composed document through the parts read so far opened with the view's assets, `PDF_OPTIONS` and
+  `disableAutoFetch`; the door opened over it with those parts; each later part added in page order, a part with a tail
+  over the composed document through it; the rows held until the door opens, then taken; the parts ended once the
+  catalog's `through` is added. A fork, a later attempt (`again()`), or parts past the end the door was told (a later
+  build's) dispose the door before it is opened again (one open layer a page): `again()` carries no row (the host takes
+  its rows again), the others every row so far (the units are the head's). Only the first open waits for the original: a
+  dropped original stops no later part, no `again()`. A part the door refuses stops the parts added to that door there,
+  with one warning; the side stays open. A refusal of the whole side carries a code (`head`, `units`, `index`, `base`,
+  `composed`, `open`).
+- **The documents** are the side's: each composed task is destroyed once no door reads it (the door's `onRetired`) and the
+  side holds a later one, at a refusal of the side (its feed's fetches with it, and the right's shapes the original's again),
+  and at dispose; none twice. `again()` reuses the latest.
+- **Each place shows the best version there is** (§11.7): its pre-layer content until the door has laid its page and the
+  place is near the view, then the layer's copy (the door's `copyOf` at the place's k: device pixels a PDF unit, within
+  2^24 pixels; from the left's canvas where PDF.js drew it within 2 % of that k, else the place's own page view's canvas,
+  else the page drawn from the composed document) and its SVG, put in one task, in place: the place's size and the pane's
+  scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
+  600 ms after it, nothing laid again. A page this door laid that leaves the view lets its SVG and its copy go and holds an
+  empty element (retired: the place shows no page, and no page view is made of it); a page the door makes ready while it
+  is far is retired at once, and committed directly when it comes near. A page that fails, or whose copy fails, shows the
+  original and is asked again on a zoom, on coming near or (a copy) on the next scroll; one asked, told `laying` and not
+  laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked again on the next scroll, its late
+  `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page
+  keeps its drawing until the new door's page is ready; leaving the view, that drawing goes and the place shows its own
+  content again. The window holds a copy for the places near the view alone: their pixels are bounded by the near area at
+  any zoom, so no copy of a far page is kept.
+- **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
+  page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own; the
+  right's from the laid page's words where its place shows the layer, the left's mirrored elsewhere (`layerShapes`); a
+  page's floats from what PDF.js drew the left's page by. The geometry is kept for the near pages and the last 20 wanted.
+- **The contents** (`contents.mjs`): the index's headings through `outline.ts`'s rule, each at its unit's first rectangle
+  once a part locates it, else at the page the left document's outline gives its title (matched in order), else none;
+  titled by its row once taken (`again()` lets the rows' titles go; a fork asks the outline again for the new contents).
+  `outline` is told at the index and after each change (once a frame), `heading` from the
+  scroll of either pane: the last heading at or above the reading line of the pane read.
+- **What it tells**: `layer` events (`opening`, `open` with the pages laid, `refused` with its why), `coverage()` and a
+  bounded `probe()` (counts, states, a ring of the last 32 commits), and `rowsFor(page)`, the units whose rows the door's
+  page still waits for (its closure's: the door lays a page asked by its closure alone, the newest ask first), which a host
+  translating as it shows translates first. The stall clock starts at the page's `laying`, which the door tells when its
+  drive takes the page, not at the ask. The door's stats tell no late rows and no skipped
+  units yet: `coverage()` gives 0 and {} for them.
+
+The extension's development entry makes a side on the harness's word (`__reader.openSide`) over `layerTransport`
+(`session/host.ts`: the layer API's objects by digest, the base checked against the original's bytes, the composed document
+over them and the tails); the run that tells it the layer and the rows, and the faces, are the extension's run's to come.
+The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `layer-side-door.test.ts` (the real door),
+`feed.test.ts`, `contents.test.ts` and `shapes.test.ts` SH5; `pnpm e2e:reader` runs it on the sample cut into BUNDLE 4's
+objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API.
+
 ## 12. Performance gates
 
 Each before the stage's pull request, on the heaviest demo paper, in a real window:
@@ -908,6 +1030,51 @@ within noise.
 - A copy made before the highlight lights by paragraph until it is translated again; an LLM's sentences are measured
   on one model (above); with Google the markers change the wording (above).
 
+### 17.8 On the layer path: the shapes made page by page
+
+- **One layout, made page by page** (`highlight.mjs` `pageLayout`, `layoutParts`, `layoutPage`; `shapes.mjs`
+  `createShapes`). On the layer path the left's tokens come a page at a time (the door's `leftPageOf`, on the first want
+  of the page) and its units' rectangles a part at a time. The document part — each page's columns, the columns' text
+  edges, the half leadings — is made again of every unit told whenever a part comes, and each page's geometry made before
+  is let go and made again from it (a part that tells no view or unit not told before changes nothing); a page's part
+  is its left part's tokens and spans when it lands. Built so, in any
+  order, it is the layout made whole: on the ten papers, both sides cut as the wire carries them and made again with the
+  pages shuffled among the parts, every page's geometry (4 049 runs on 483 pages) and every sentence shape (7 669, of
+  2 340 units' starts read from their pairs) equal the whole layout's (the highlight gate, 2026-10-15).
+- **Token ids are the side's stream**, from the left part's `first`, as the parts' units name their streams: they rise
+  page by page whatever order the pages come in, a unit's first token is known before its page comes (its head on the
+  page, whether a sentence began before a run), and they equal the whole layout's. Each page's tokens are a table of its
+  own; a layout made whole reads its arrays through views of them.
+- **A unit's sentences wait for all its pages** (`tokensIn`): a run's sentence shapes read the unit's tokens beyond the
+  run — whether a sentence began before it or goes on after it — so a unit over a page break lights whole on the pages
+  that have come until the others have, then by sentence.
+- **The right, mirrored** (`mirror`): until the layer's pages bring words of their own, the right's shapes are a layout of
+  the right's own over copies of the left's tokens and rectangles, following the left as it is told. Its blocks equal
+  the left's from run objects of its own: the paint keeps what it drew by the run, and a run shared would move the left's
+  element into the right's pane. A float passes through (the right's floats are the left's), and the right's sentence
+  shapes keep from under it as the left's do. Where its place shows the original, the mirror's starts are the left's (the
+  same tokens), so a unit lights by sentence on both panes as it does on the left.
+- **The left's starts** are its units' pairs (the left part's runs of words to tokens) read as `sentenceStarts` reads an
+  anchor's, once every page the unit is on has come. The reader takes every pair shipped, so the producer ships them only
+  for a unit `sentenceStarts` would read (located by its marks, or by its text over 80 % of it): on the ten papers, one
+  unit's pairs read where the whole layout's anchor refused them.
+- **An empty or refused left part** (a page past the left part's caps ships none, M8): no shapes on that page and
+  nothing thrown; a refusal warns once a page, and a later left part for it is taken. A left part whose token ids reach
+  into a page already in is refused, and the first of the two keeps its place: a bogus page that comes first leaves its
+  true neighbour refused, since nothing in the two tells which is wrong.
+- **The right on a laid page** (`layerShapes`): where its place shows the layer, the right's shapes are a layout of its own
+  over the page's words (the door's `LaidPage.words`: the tokens it drew, in the page's PDF units, each unit's spans in
+  paint order), its token ids the page's (page · 2^16 + its index), the units it shows as the original's over copies of
+  the left's tokens of them, made once the page's left part is in too; elsewhere the left's mirrored. A unit's stream on
+  the right is its first token on its first page, told when that page lays. The right's starts of a unit all on laid
+  pages are the tokens carrying its sentences' first words (`words.word` against the row's `sentences.tr`); of a unit on no
+  laid page, the left's; of one on both, none, and it lights whole.
+- **Floats and the view's window**: a page's floats are made of what its drawing gives (its figures and paths,
+  `floats`), and again on the page's first use after a part moves the document part — never in the part's task, which
+  would make every such page's geometry again at once. A page leaving the window (`forget`) lets its geometry, its
+  floats and their inputs go; its drawing gives them again. Inputs that throw are let go with one warning, and the page
+  has no floats.
+
 ## 18. Rules and their versions
 
 Three kinds of rule decide what the reader shows, and they change at three different costs. Each has its own identity,
@@ -950,7 +1117,7 @@ The edge cases, decided:
 | `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
-| `RULES_SCHEMA` (`rules/layout.mjs`, `3`) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `4`: `adaptiveFill.band` read against the page's own paragraphs, 1b-C; 3 before) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
@@ -1015,7 +1182,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `autospace` | script | fit | 0 to 1, step 0.05 | The space set between CJK text and Latin letters or digits, in em. |
 | `even` | script | fit | `0`, `1`, `2` | How a page's body units are set alike: 0 each at its own, 1 at one size, 2 at one size and one leading. |
 | `fillSize` | script | fit | 0 to 1.5, step 0.05 | How far a unit's size may grow to fill a loose original's paragraph, × the original's size; 0 is off. |
-| `adaptiveFill` | script | fit | band, track, size; or none | Spreading each unit's lines over its original's space, the page's body units to one leading and one size, the leading within a band of the page before's and of the fullest page's so far (D6); empty keeps the script's leading on the original's pitch alone (B). |
+| `adaptiveFill` | script | fit | band, track, size; or none | Spreading each unit's lines over its original's space, the page's body units to one leading and one size, the leading within a band of the page's own paragraphs' (D6, page by page); empty keeps the script's leading on the original's pitch alone (B). |
 | `fillLead` | script | fit | 1 to 3, step 0.05, or none | The loosest line pitch the fill spreads a unit's lines to, in em of the size it is drawn at; empty: the original's own pitch. |
 | `leftover` | script | fit | `foot`, `pack` | Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it. |
 | `keepAll` | script | breaking | yes or no | Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters. |
@@ -1065,7 +1232,7 @@ src/pdf-reader/engine/
   rules/        layout (the rule set and its reader), font-roles, font-coverage, script, arg-roles, latexml-args   both
   layer-proto/  run, reader (the reader's door), bundle, rows, fonts, hyph, removal, tex, check, layer1, layer2     the drawn layer: the browser
   layer/        pieces, swap, and check (the pixel checker the layer gate's instrument loads)                       the browser
-  view/         highlight, floats, figures, pointer, sync, overlay, outline, engine.css                              the browser
+  view/         reader-view, places, layer-side, feed, contents, lighting, highlight, shapes, floats, figures, pointer, sync, overlay, outline, engine.css   the browser
 ```
 
 What the engine does not hold: the extension's session (`src/pdf-reader/session/`), its translation client
@@ -1081,7 +1248,7 @@ instant layer (`parked/engine/`).
 | `translate` | Node and browser | The wires a unit goes out as and the reading back (`serialize`, `rehydrate`, `serializeTags`, `rehydrateTags`, `translateUnits`, the sentences, the batches); the table groups (`decideGroups`, `groupOf`); the units a target keeps (`authorsTranslated`); the rows (`rowOf`, `unitOf`, `layerRows`, `toTranslate`, `batchesOf`, `runRows`); `TRANSLATE_VERSION`. No DOM, no network. |
 | `rules` | Node and browser | The layout rule set and its reader (`readRules`, `parseRules`, `resolveRules`, `BUILTIN_RULES`, `RULES_SCHEMA`, `RULES_CAP`, `TARGETS`), the font roles (`FACES`, `rolesFor`, `faceFor`, `familyOfFonts`) and the script of a tag (`scriptOf`). |
 | `layer` | browser | The reader's door whole (`layer-proto/reader.mjs`): `openLayer`, `firstFaceOf`, `readBundle` and its caps and refusal, `BUNDLE`, `CTAG`, `VTAG`, `parseLayout`, `indexLayout`, `parseAddonManifest`, the rows' helpers it takes. |
-| `view` | browser | What is lit under the pointer (`highlight`, `floats`, `figures`, `pointer`), the synchronised scrolling (`sync`), the overlays kept through a zoom (`overlay`) and the outline. |
+| `view` | browser | The reading view both readers run (`createReaderView`, §11.7, and its types) and its layer side (`createLayerSide`, `PAGE_MS`, §11.8), what is lit under the pointer (`highlight`, `floats`, `figures`, `pointer`), the synchronised scrolling (`sync`), the overlays kept through a zoom (`overlay`) and the outline. |
 
 ### 19.3 What holds
 

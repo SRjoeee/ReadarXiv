@@ -179,6 +179,18 @@ class FakeLayer implements Layer {
     this.range(page)
     return this.state[page] as PageState
   }
+  /** the fake's own rule: in gate mode, the units of the parts through the page whose rows are not taken (none ended) */
+  rowsFor(page: number): number[] {
+    this.check()
+    this.range(page)
+    if (this.fake.opts.rows !== 'gate' || this.rowsEnded || this.state[page] === 'ready') return []
+    const out: number[] = []
+    for (const part of this.parts) {
+      if (part.pages[0] > page) break
+      for (const id of [...part.left.map(w => w[0]), ...part.fileOnly.map(e => e[0])]) if (!this.taken.has(id)) out.push(id)
+    }
+    return out.sort((a, b) => a - b)
+  }
   onPage(listener: (page: number, state: PageEvent) => void): () => void {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
@@ -266,7 +278,7 @@ class FakeLayer implements Layer {
     const text = document.createElementNS(SVG_NS, 'text')
     text.textContent = `page ${page}`
     svg.append(text)
-    return { svg, w, h, words: { tokens: [], spans: [], original: [] }, links: [] }
+    return { svg, w, h, words: { tokens: { n: 0, l: new Float32Array(0), r: new Float32Array(0), y: new Float32Array(0), h: new Float32Array(0), top: new Float32Array(0), bottom: new Float32Array(0) }, word: new Int32Array(0), spans: [], original: [] }, links: [] }
   }
 
   pageOf(page: number, o: { lang: string; signal?: AbortSignal }): Promise<LaidPage> {
@@ -378,6 +390,7 @@ class FakeLayer implements Layer {
     for (let p = 1; p <= this.N; p++) if (this.state[p] === 'ready') ready.push(p)
     return {
       units: this.o.index.units.filter(u => u !== null).length, drawn: ready.length, pages: ready, slowestTaskMs: 0, pageMs: {}, dropped: 0,
+      links: { total: 0, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 }, unsupported: 0, unread: 0 },
       rules: { schema: RULES_SCHEMA, version: (this.o.rules ?? BUILTIN_RULES).version },
       parts: { through: this.through, told: this.parts.length },
     }

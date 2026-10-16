@@ -8,6 +8,8 @@ import type { RemovalManifest } from '../layout/remove.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 import type { ReadPart } from './format.mjs'
+import type { OpenWords, PageWords } from './words.mjs'
+import type { LayerStats, LinkRecord } from './reader.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -38,19 +40,21 @@ export interface HybridOptions {
 }
 /** which source each placed unit's geometry is (ids), and why the others are v0's (by locatedWhole's why) */
 export interface Sources { tex: number[]; v0: number[]; why: Record<string, number>; texOnly?: number }
-/** a page's fill numbers (adaptiveFill's pass, fillPage's answer): its own target, the anchor its body units tell, the
- *  original's body lines on it, whether its body units told its target */
-export interface PageFill { own: number | null; anchor: number | null; lines: number; body: boolean }
+/** a page's fill numbers (adaptiveFill's pass, fillPage's answer): the median fill leading of the units begun on it (`own`),
+ *  that of every body unit drawn on it (`anchor`), the target (`own` held within the band of `anchor`; null where only a
+ *  continuation tells), whether its body units told its own */
+export interface PageFill { own: number | null; anchor: number | null; target: number | null; body: boolean }
 /** a page's record (the 1b design §1), kept for the run's life: its SVG at `w` × `h` CSS px as markup (the strings its names
  *  and units are set in, in turn: svgOf makes the element of them anew at each ask), its drawing as data (every painted
- *  unit's operations in turn: drawCopy draws them at any resolution), its view, its words and links (the engine's 2b and 3a:
- *  null until then), its fill numbers (null where no pass told them). Beside it the page's canvases at v0's own resolution
+ *  unit's operations in turn: drawCopy draws them at any resolution), its view, its words (the page's word table, words.mjs:
+ *  built as each unit is painted in `wordsOpen`, frozen into `words` once the page is final: null before) and its links (the
+ *  engine's 3a: null until then), its fill numbers (null where no pass told them). Beside it the page's canvases at v0's own resolution
  *  (the original, its copy where `copy` keeps one): where `copy` keeps none, the original is let go as soon as the page is
  *  drawn and its ink read, `left` null from then on. `base`: the page is drawn and its canvases held, which v0's own copy cuts
  *  its crops and restores from, until the page is released (whether a crop is drawn at all is the page's own: it was read
  *  and did not fail) */
 export interface Row {
-  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: unknown | null; links: unknown[] | null; fill: PageFill | null
+  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: PageWords | null; wordsOpen: OpenWords | null; links: LinkRecord[] | null; linksOpen: { rec: LinkRecord; stream?: number; id?: number; seq?: number; sources?: unknown }[] | null; fill: PageFill | null
   left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; base: boolean; released?: boolean
 }
 /** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the
@@ -66,19 +70,22 @@ export interface Rec {
   [more: string]: unknown
 }
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
+/** the most of its own work v0 runs in one task, ms: units are laid back to back under it, then it yields */
+export declare const SLICE_MS: number
+/** a slicer over a clock: `due()`, whether the work since its last yield has reached `budget` (SLICE_MS); `give()`, a yield
+ *  (scheduler.yield, else a macrotask), the clock started again after it */
+export declare function slicer(o?: { now?: () => number; budget?: number; give?: () => Promise<unknown> }): { due(): boolean; give(): Promise<void> }
 /** main.js's lay order, by the page whose drawing lays each unit: [page, ids] */
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
 /** a unit's layout made final: a CJK cell's lines moved into their bands between the rules at the size it is drawn at */
 export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
-/** the targets a page's fill is held to: the last page's, and the fullest page's own (`anchor`, of `lines` body lines) */
-export interface Held { last: number; anchor: number; lines: number }
-/** a page's fill pass's answer: its target and its own (null where the units begun on it tell none), whether its body told one, and for the anchor every body unit's lines on the page and their fill leadings' median */
-export interface Filled { target: number | null; own: number | null; body: boolean; lines: number; anchor: number | null }
-/** the page fill (adaptiveFill) over the units that begin on a page (`page`; `continuing`: the page's units begun before it, read for the anchor alone): each spread over its frame at its fitted state, the page's target held within the band of the last page's and of the fullest page's (`held`, null for none), the page's body grown at one size where it grows, each filled unit laid anew in place and settled, then onFilled; null where nothing tells */
-export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, held?: Held | null, onFilled?: (p: Placed, target: number) => void, o?: { page?: number | null; continuing?: unknown[] }): Filled | null
-/** the targets the next page is held to after a page's pass: its target the last where it told one, the fullest page's the anchor (the earliest of equals) */
-export declare function nextHeld(held: Held | null, r: Filled | null): Held | null
+/** a page's fill target (pageTarget's answer, fillPage's too): see PageFill */
+export type Filled = PageFill
+/** a page's fill target as a pure function of its page: the units that begin on it and those running on to it (each with its fit's `fillLead` and `fitLines`), and the band. Null where nothing tells a fill leading */
+export declare function pageTarget(units: readonly unknown[], continuing: readonly unknown[], band: number): Filled | null
+/** the page fill (adaptiveFill) over the units that begin on a page (`continuing`: the page's units begun before it, read for the anchor alone): each spread over its frame at its fitted state, the page's target held within the band of its own page's anchor (pageTarget), the page's body grown at one size where it grows, each filled unit laid anew in place and settled, then onFilled; null where nothing tells */
+export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, onFilled?: (p: Placed, target: number) => void, o?: { continuing?: unknown[] }): Filled | null
 /** the leftover packed (P.leftover 'pack'): a page's body units of one block moved up to keep the original's gap to the one above, the moves by id (PDF units up). `rects`: every unit's rectangles on the page, [id, [page, x0, y0, x1, y1]]; `chars`: the page's characters */
 export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[], stays?: ((x0: number, x1: number, y0: number, y1: number) => number | null) | null, gap?: number): Map<number, number>
 /** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away, and the add-on's dirty boxes; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
@@ -120,7 +127,7 @@ export interface ProtoRun {
   /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
    *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
    *  copy and set as SVG */
-  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number }[]
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number; links: number }[]
   /** each page's characters (with `free` and `records`, the shelf's: every page's, let go or not) */
   chars: (Char[] | undefined)[]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
@@ -130,11 +137,24 @@ export interface ProtoRun {
   readonly designs: { serif: string; sans: string; mono: string }
   /** the hybrid's: each placed unit's source (empty lists where `tex` is null) */
   readonly sources: Sources
-  /** the page after whose units page `page` is done; Infinity until the units it reads have come */
+  /** `page` once it is ready, Infinity before (the lab's and the gate's) */
   doneAt(page: number): number
-  /** every page up to the one that finishes page `page` drawn and its units laid, a unit a task, once they have come;
-   *  `still`, read between pages and at each wait, false ends it there (a page under way is finished first) */
+  /** every page up to `page` ready or failed: each page's closure laid in turn from page 1 (the gate's in-order run), in slices
+   *  of SLICE_MS, once what it reads has come; `still`, read between pages and units and at each wait, false ends it there (a page
+   *  under way is finished first) */
   until(page: number, still?: () => boolean): Promise<void>
+  /** page `page`'s closure laid (Need(p), the 1b-D design §2.1): page 1 drawn first, then its pages, its rows decided, and once
+   *  its parts and rows are in its units in their rank, back to back in slices of SLICE_MS; it ends once the page is ready or failed, or
+   *  `still` is false (what is done stays done). One closure at a time, as until's */
+  layFor(page: number, still?: () => boolean): Promise<void>
+  /** the page's closure over K so far (need.mjs closureOf; the prefix needsOf lays, where the rules lay in order) */
+  closure(page: number): import('./need.mjs').Closure
+  /** whether the page is ready: drawn and laid, final within the run */
+  ready(page: number): boolean
+  /** the ids of the units whose rows laying the page still waits for (its closure's over K so far), in id order */
+  rowsFor(page: number): number[]
+  /** the unit ids of K's entries (a closure's `lay` or `rows`, K indices), in their order */
+  idsOf(entries: readonly number[]): number[]
   /** parts: the next part, read by readPart against the chain (its layout merged into the hybrid's index before: facade.mjs) */
   grow(part: ReadPart): void
   /** parts: no more parts; every page past the last covered fails as it is reached */
@@ -144,12 +164,11 @@ export interface ProtoRun {
   /** the last page a part covers (every page, a whole open) */
   readonly through: number
   readonly partsEnded: boolean
-  /** the last page whose step has ended (its units laid, or it failed) */
+  /** the last page up to which every page is ready or failed */
   readonly drawnTo: number
-  /** how far into the stream every unit's row decides what it is */
-  extent(): number
-  /** whether until(page) waits for nothing more to come, neither a part nor a row (`at`: extent(), read once for many pages) */
-  inputs(page: number, at?: number): boolean
+  /** whether laying the page waits for nothing more to come, neither a part nor a row: its closure's bound covered (or the
+   *  parts ended) and every entry it decides in and settleable */
+  inputs(page: number): boolean
   /** whether the page failed: its drawing threw, or no part covers it and the parts have ended */
   failed(page: number): boolean
   /** a wait under way looks again at what it waits for */
@@ -157,12 +176,12 @@ export interface ProtoRun {
   /** units as they arrive (id → row): a row wins over one taken before it until its unit is placed; the hybrid's pieces
    *  read from each translated row's pieces' k; a row no unit of this paper's (not a unit's shape, its kind not the
    *  layout file's or the geometry's, its group not the open's `groups`, a k past its source's pieces) left the
-   *  original's, in `skipped`. The pages newly complete: those not reported complete before */
+   *  original's, in `skipped`. The pages newly complete (inputs: each by its own closure, out of the stream's order): those not
+   *  reported complete before */
   take(rows: ReadonlyMap<number, Unit>): { complete: number[] }
   /** no more units: every page is complete with what it holds */
   end(): void
-  /** whether every unit laying page `page` reads has come (or end()): until(page) waits for no take. It turns false
-   *  again only where a table cell's row is taken again before its group is read */
+  /** inputs(page): laying the page waits for no take and no part */
   complete(page: number): boolean
   /** every id taken whose row could no longer change the drawing, and changed nothing: its unit placed already (its
    *  page perhaps not laid yet), its row fixed by a table group read, taken after end(), or never expected. Never a
@@ -173,6 +192,14 @@ export interface ProtoRun {
   /** page `page`'s SVG, a new element each call, made of its record's markup (class, size and spacing as the page's own): a
    *  parse alone, no layout, face, ink or PDF.js call, 0.3 to 8.6 ms (420 to 12,000 elements) */
   svgOf(page: number): SVGSVGElement
+  /** the page's word table, a new record on every ask (words.mjs; the 1b design §4), frozen at the first ask if the page is not already; a RangeError for a page that is not final (ready) */
+  wordsOf(page: number): PageWords
+  /** the page's links, a new copy on every ask (links.mjs; the 3a design), frozen at the first ask if the page is not already; a RangeError for a page that is not final (ready) */
+  linksOf(page: number): LinkRecord[]
+  /** the counts of the links read and frozen so far (LayerStats.links), a copy */
+  readonly linkStats: LayerStats['links']
+  /** with `records` (the gate's): each record of the page's source annotations and the tier that made it, in the records' order; absent without */
+  linkSources?(page: number): { annots: [number, number][]; tier: string }[]
   /** what the run lets go (`free`), keeps of its units' records and audit (`records`), and keeps on the gate's shelf */
   held(): { free: boolean; records: boolean; shelf: boolean }
   /** what the run holds of a page */
@@ -261,7 +288,7 @@ export declare function openProto(o: {
   parts?: boolean
   /** a document the run read and no longer reads (a swap, dispose), told once */
   onRetired?: ((doc: unknown) => void) | null
-  /** a page's step ended: its units laid, or it failed */
+  /** a page is ready (or failed), told once */
   onStep?: ((page: number) => void) | null
   /** the run waits: for a part, or for rows (an instrument) */
   onWait?: ((what: 'part' | 'rows') => void) | null

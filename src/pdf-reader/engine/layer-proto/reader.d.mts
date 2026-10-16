@@ -8,6 +8,7 @@ import type { ReadBundle } from './bundle.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { LayerIndex, ReadLeftPart, ReadPart, Ref } from './format.mjs'
 import type { Row } from './rows.mjs'
+import type { PageWords } from './words.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS } from './run.mjs'
@@ -42,21 +43,42 @@ export interface LayerStats {
   pageMs: Readonly<Record<number, number>>
   /** the rows skipped as no unit of the paper's (unitOf's null) */
   dropped: number
+  /** the Link annotations of the pages read, by what became of them: `total` the ones a reader can carry, `inPlace` those left
+   *  over the original's ink, `moved` those laid over the layer's own drawing, `dropped` the rest by reason (`unmatched`: over
+   *  erased text and matched by nothing; `ambiguous`; `unplaced`), `unsupported` those it cannot carry (a named action, a script,
+   *  an attachment, a url outside the allow-list, a rectangle with no area), `unread` the pages whose annotations could not be
+   *  read. `inPlace`, `moved` and `dropped` count the pages frozen so far, the others the pages drawn */
+  links: { total: number; inPlace: number; moved: number; dropped: { unmatched: number; ambiguous: number; unplaced: number }; unsupported: number; unread: number }
   /** the layout rule set the layer was opened with: its schema and version */
   rules: { schema: typeof RULES_SCHEMA; version: number }
 }
 
 /** a page's state moves `waiting` > `laying` > `ready` or `failed`, nothing else (DR5), each told once (D-1). `waiting`: no
- *  part covers it yet, or what its closure needs is not in (a part, a row), or nobody has asked for it (the Layer lays what is
- *  asked, and the pages of an asked page's closure); `laying`: asked, or in an asked page's closure, with all of that in;
- *  `ready`: laid, final within the Layer (DR3); `failed`: its composed page did not render or read, or no part will cover it
- *  (after endParts()). A part with `layout: null` still covers its pages */
+ *  part covers it yet, or what its closure (Need(p): the pages and units laying it reads) needs is not in (a part, a row), or
+ *  the Layer has not taken it (it lays what is asked, a page by its closure alone, not every page before it); `laying`: taken
+ *  with all of that in, when the drive turns to it (an asked page at once where nothing else is laid; one an ask overtook
+ *  before the drive reached it is never taken), or laid with a page taken (its closure inside that one's); `ready`: laid, final
+ *  within the Layer (DR3), told too where another page's closure made it so; `failed`: its composed page did not render or
+ *  read, or no part will cover it (after endParts()). A page drawn for another page's closure and not laid with it stays
+ *  `waiting`. A part with `layout: null` still covers its pages */
 export type PageState = 'ready' | 'laying' | 'waiting' | 'failed'
 /** a state `onPage` tells: `waiting` is the state before any is told */
 export type PageEvent = Exclude<PageState, 'waiting'>
-/** the page's drawn tokens in drawing order, plain data (the engine's 2b; D-9: empty until then, the view mirrors the left) */
-export interface PageWords { readonly tokens: readonly unknown[]; readonly spans: readonly unknown[]; readonly original: readonly unknown[] }
-/** a link of a laid page, plain data (the engine's 3a; D-9: empty until then) */
+export type { PageWords } from './words.mjs'
+/** a link of a laid page, plain data (links.mjs, the engine's 3a: a link over text the layer redraws laid over what is drawn of
+ *  it, `moved: true`; one over the original's ink left where it stands, `moved: false`; one over erased text that matched
+ *  nothing dropped, never left). The contract the gate measures (lab/pdf/README.md, "The links"):
+ *  - `boxes`: [x0, y0, x1, y1] x n (x0 < x1, y0 < y1) in the page's PDF user space, unrotated, y up; moved, one box a drawn line
+ *  - `dest` or `url`, exactly one. `dest` as PDF.js gives it, never resolved by the engine; `url` PDF.js's validated url only,
+ *    and then of http:, https: or mailto: alone
+ *  - `name`, never empty for a link with glyphs: the drawn characters under it (moved), over a crop the original's text under it
+ *    (its overlaid text: what the crop shows there; the crop's own text where that is none and it is the crop's one link), the translated pair's
+ *    text, PDF.js's overlaid text (in place); '' only for a glyphless link in place, which the view names
+ *  - `moved`: true for every record laid over the layer's own drawing (a matched record), even where it lands on the original's
+ *    spot; false for one left over the original's ink
+ *  - `order`: the rank 0..n-1 of the list, sorted; a unit's links (in place ones too) at the unit's place in the reading order,
+ *    then those no unit owns, moved before in place, in drawing order or PDF order
+ *  - `border`: where the annotation has a border of a width and a colour; `style` as it draws */
 export interface LinkRecord {
   /** [x0, y0, x1, y1] × n, PDF units of the page, one for each drawn line */
   boxes: number[]
@@ -65,10 +87,11 @@ export interface LinkRecord {
   name: string
   moved: boolean
   order: number
-  border?: { width: number; rgb: [number, number, number] }
+  border?: { width: number; rgb: [number, number, number]; style?: 'solid' | 'dashed' | 'underline' }
 }
 /** a laid page, new on every call (DR1): `svg` a new element of equal `outerHTML`, `words` and `links` equal data that are not
- *  the same objects; lang set, scale 2.5; the host's to keep or drop */
+ *  the same objects (`words` always present: a page with no painted unit has an empty table, `tokens.n` 0); lang set, scale 2.5;
+ *  the host's to keep or drop */
 export interface LaidPage { svg: SVGSVGElement; w: number; h: number; words: PageWords; links: LinkRecord[] }
 /** a page of the left, parsed: the part's tokens, spans and pairs (an empty part, `table.n` 0, has no shapes) */
 export type LeftPage = ReadLeftPart
@@ -77,7 +100,9 @@ export type LeftPage = ReadLeftPart
  *  layer terminal: every page not ready is told `failed`, once; every pending and later pageOf (of a page not ready) and
  *  leftPageOf rejects with that error; addPart and endParts are no-ops; a ready page still answers, until dispose */
 export interface Layer {
-  /** each row as v0's unit: the pages that no longer wait for rows (a row that is no unit is skipped and counted) */
+  /** each row as v0's unit (a row that is no unit is skipped and counted): `complete`, the pages newly complete, each told once:
+   *  laying it waits for no row and no part more (its closure's, Need(p)), so pages come out of the stream's order (page 137
+   *  before page 3, whose closure waits for a float translated later) */
   take(rows: readonly Row[]): { complete: number[] }
   /** no more rows: every page is complete with what it holds */
   end(): void
@@ -96,11 +121,17 @@ export interface Layer {
   pageState(page: number): PageState
   /** each page's `laying`, then its `ready` or `failed`, once, in the order they happen (pages of a closure too). Returns the unsubscribe */
   onPage(listener: (page: number, state: PageEvent) => void): () => void
+  /** the ids of the units whose rows laying the page still waits for (taken neither, nor ended), in id order: its closure's
+   *  over the parts told so far (a later part may add to it), [] once it is ready or nothing waits. A host that translates as it
+   *  shows (the extension) translates a jump's units first by it. Throws after dispose */
+  rowsFor(page: number): number[]
   /**
    * The page laid, a fresh LaidPage on every call (D-2). On `waiting` or `laying` it resolves when laid. It rejects on
    * `failed`, on a page uncovered when endParts() ends the parts, on dispose, and on `signal` abort (an AbortError). An aborted
    * ask drops its page from the targets: a page still `waiting` is not laid when a part covers it unless asked again; a page
-   * already `laying` is laid anyway (a state never goes back). Throws synchronously after dispose
+   * already `laying` is laid anyway (a state never goes back). The newest ask is laid first, by its closure alone; a page told
+   * `laying` is finished before the drive goes idle, and a newer ask overtakes it once at most (no page told `laying` waits
+   * behind every later ask). Throws synchronously after dispose
    */
   pageOf(page: number, o: { lang: string; signal?: AbortSignal }): Promise<LaidPage>
   /**

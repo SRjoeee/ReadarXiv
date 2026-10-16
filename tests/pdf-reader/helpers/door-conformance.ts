@@ -30,10 +30,15 @@ export interface DoorHarness {
   /** gives the door the rows it waits for (a door that gates a page on its units' rows; the fake in `rows: 'gate'` mode): called
    *  after each part is added and at the open, before the suite expects a covered page to lay. Absent: the door asks for none */
   supplyRows?(): void | Promise<void>
-  /** the pages laid with `page`: page p becomes laid once the parts covering all of closure(p) are in. A door that lays each
-   *  page alone (the fake) says `[p]`; an exact in-order door lays a unit that runs onto the next page with it, and tells the
-   *  pages before it on the way (for the small paper: 1 and 2 give [1, 2], 3 gives [1, 2, 3], 4 gives [1, 2, 3, 4]) */
+  /** the pages laid with `page`, told `laying` then `ready` with it (and only those). A door that lays each page alone (the
+   *  fake) says `[p]`; an in-order door lays a unit that runs onto the next page with it, and tells the pages before it on the
+   *  way (for the small paper: 1 and 2 give [1, 2], 3 gives [1, 2, 3], 4 gives [1, 2, 3, 4]); the real door, which lays a page
+   *  by its closure alone (Need(p), the 1b-D design), the pages whose own closure lies inside it (1 gives [1], 2 gives [1, 2],
+   *  3 gives [3], 4 gives [4]: page 2 is drawn for page 1 but laid with its own closure) */
   closure(page: number): readonly number[]
+  /** the last page whose part laying `page` reads: page p becomes laid once the parts through need(p) are in (absent: the last
+   *  page of closure(p)). The real door's is its closure's bound (1 and 2 give 2, 3 gives 3, 4 gives 4) */
+  need?(page: number): number
   /** the composed document through `r` removed pages (numPages N + r), one object for each r; the one the door was opened with
    *  is `docFor(the last told part's chain.r)` */
   docFor(r: number): LayerDocument
@@ -66,9 +71,9 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       told = Math.max(told, i + 1)
       await h.supplyRows?.()
     }
-    /** the parts not yet added that cover every page of the page's closure */
+    /** the parts not yet added that cover every page laying the page reads */
     const cover = async (page: number) => {
-      const need = Math.max(...h.closure(page))
+      const need = h.need?.(page) ?? Math.max(...h.closure(page))
       while (told < M.readParts.length && (told === 0 ? 0 : M.readParts[told - 1]!.pages[1]) < need) await add(told)
     }
     /** what the door told of one page */

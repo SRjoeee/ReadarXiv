@@ -26,7 +26,9 @@ export type SessionEvent =
   /** the extension's settings, each time they land */
   | { type: 'settings'; config: Config; pack: PackState | null }
   | { type: 'display'; mode: EngineDisplay }
-  | { type: 'scale'; scale: number }
+  /** `zoom`: the fit or the scale applied, null after a step or a pinch; absent where the engine does not say (the zoom
+   *  chosen is then the controller's own) */
+  | { type: 'scale'; scale: number; zoom?: number | 'page-width' | 'page-fit' | 'page-actual' | null }
   /** the paper's PDF coming in, in bytes: the progress line while the reader loads */
   | { type: 'loading'; loaded: number; total: number }
   | { type: 'page'; side: 'left' | 'right'; page: number; pages: number }

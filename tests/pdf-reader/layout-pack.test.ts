@@ -4,6 +4,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { GLYPH_COLUMNS, type Glyph, packGlyphs, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 import { STREAM_COLUMNS } from '@/pdf-reader/engine/layout/stream.mjs'
+import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
 // The marks read and the layout maker keep a page's glyphs packed as columns (packGlyphs), not as a Glyph object each (the
 // prepare memory note of 2026-10-15). Over every page of the sample paper (tests/fixtures/pdf/sample-1, read by the pinned
@@ -14,7 +15,8 @@ import { STREAM_COLUMNS } from '@/pdf-reader/engine/layout/stream.mjs'
 type Ink = ReturnType<typeof pageInk>
 const read: { ink: Ink }[] = []
 beforeAll(async () => {
-  const task = getDocument({ data: new Uint8Array(readFileSync(new URL('../fixtures/pdf/sample-1/sample-1.pdf', import.meta.url))), verbosity: 0 })
+  await installLiteWorker()
+  const task = getDocument({ data: new Uint8Array(readFileSync(new URL('../fixtures/pdf/sample-1/sample-1.pdf', import.meta.url))), verbosity: 0, ...LITE })
   try {
     const doc = await task.promise
     for (let p = 1; p <= doc.numPages; p++) {

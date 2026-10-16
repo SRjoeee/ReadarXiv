@@ -37,8 +37,9 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
 /** the schema's number: the shape and how the engine reads it. 2 (D6, 2026-10-08): `grid` gone (every script's lines on the
  *  original's pitch while the size shrinks); `adaptiveFill` read for every original, its page's target held near the last
  *  page's and one size a page; `fillLead` and `leftover` added. 3 (D1a, 2026-10-08): `labels` holds every babel name
- *  (layout/names.mjs NAME_KEYS), the generated headings' as well as the floats' */
-export const RULES_SCHEMA = 3
+ *  (layout/names.mjs NAME_KEYS), the generated headings' as well as the floats'. 4 (1b-C, 2026-10-16): `adaptiveFill.band` is read
+ *  against the page's own paragraphs (run.mjs pageTarget), no longer against the page before's and the fullest page's */
+export const RULES_SCHEMA = 4
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
@@ -135,11 +136,11 @@ const SCRIPT_FIELDS = [
   {
     key: 'adaptiveFill', group: 'fit', kind: 'object', nullable: true,
     members: [
-      { key: 'band', min: 0, max: 0.5, step: 0.01, words: "how far above the page's target a unit's fill leading may stand, and the page's target from the page before's and from the fullest page's so far (the most body lines)" },
+      { key: 'band', min: 0, max: 0.5, step: 0.01, words: "how far above the page's target a unit's fill leading may stand, and how far the page's own median fill leading may stand from that of every body paragraph drawn on the page" },
       { key: 'track', min: 0, max: 0.2, step: 0.01, words: 'the letter spacing a unit short of its fill may take, in em' },
       { key: 'size', min: 1, max: 1.5, step: 0.05, words: "the one size a page's body units may then grow to, × the original's" },
     ],
-    words: "Spreading each unit's lines over its original's space, the page's body units to one leading and one size, the leading within a band of the page before's and of the fullest page's so far (D6); empty keeps the script's leading on the original's pitch alone (B).",
+    words: "Spreading each unit's lines over its original's space, the page's body units to one leading and one size, the leading within a band of the page's own paragraphs' (D6, page by page); empty keeps the script's leading on the original's pitch alone (B).",
     schema: () => z.nullable(z.strictObject({ band: range(0, 0.5), track: range(0, 0.2), size: range(1, 1.5) })),
   },
   // (D6's F6b, 2026-10-08: the top of a unit's fill leading, which replaced the script's leading on the original's pitch;

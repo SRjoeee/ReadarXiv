@@ -1,4 +1,4 @@
-// The engine's reading-view entry (browser): what is lit under the pointer, the floats and figures, the synchronised scrolling, the overlays kept through a zoom and the outline.
+// The engine's reading-view entry (browser): the reading view both readers run, what is lit under the pointer, the floats and figures, the synchronised scrolling, the overlays kept through a zoom and the outline.
 // Re-exports only: the directory is the contract (docs/PDF-READER.md, the engine's contract), tests/pdf-reader/engine-contract.json its snapshot.
 
 export { blockOf, bySentence, clickOf, hitOf, layoutOf, pageGeometry, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './view/highlight.mjs'
@@ -8,3 +8,5 @@ export { measurePane, pointOn, pointerPath } from './view/pointer.mjs'
 export { flowChain, knots, lineTable, makeMap, posAt } from './view/sync.mjs'
 export { keepOverlays, pinned } from './view/overlay.mjs'
 export { contentsOf, outlineOf } from './view/outline.ts'
+export { createReaderView } from './view/reader-view.mjs'
+export { createLayerSide, PAGE_MS } from './view/layer-side.mjs'

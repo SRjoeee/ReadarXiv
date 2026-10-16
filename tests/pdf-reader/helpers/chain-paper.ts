@@ -8,6 +8,7 @@ import { removerOf } from '@/pdf-reader/engine/layout/remove.mjs'
 import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
 import type { Whole } from './cut-paper'
 import { layoutOf, type UnitDef } from './layout-of'
+import { installLiteWorker, LITE } from './lite-pdfjs'
 
 // A paper for the chained add-on's tests (layout/chain.mjs): a PDF written here with a classic cross-reference table (or the
 // same saved by pdf-lib with a cross-reference stream), its layout file and the whole the cutter takes, one unit a page:
@@ -66,7 +67,8 @@ export const inflate = (b: Uint8Array, limit: number) => {
   const o = { finishFlush: zlibConstants.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }
   try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if ((e as { code?: string })?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) }
 }
-export const open = (data: Uint8Array) => getDocument({ data: data.slice(), verbosity: 0 }).promise
+// (read without the images' pixels, as the server reads arXiv's PDF: pdf-lite.mjs)
+export const open = async (data: Uint8Array) => { await installLiteWorker(); return getDocument({ data: data.slice(), verbosity: 0, ...LITE }).promise }
 export const concat = (parts: Uint8Array[]) => { const out = new Uint8Array(parts.reduce((n, b) => n + b.length, 0)); let o = 0; for (const b of parts) { out.set(b, o); o += b.length } return out }
 export const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 export { OPS }

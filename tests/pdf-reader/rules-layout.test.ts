@@ -62,8 +62,8 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('the built-in set', () => {
   it('parses, is canonical (writeRules gives the file\'s bytes) and has a version of at least 1', () => {
-    expect(RULES_SCHEMA).toBe(3)
-    expect(BUILTIN_RULES.schema).toBe(3)
+    expect(RULES_SCHEMA).toBe(4)
+    expect(BUILTIN_RULES.schema).toBe(4)
     expect(BUILTIN_RULES.version).toBeGreaterThanOrEqual(1)
     expect(BUILTIN_RULES.note.length).toBeGreaterThan(0)
     expect(writeRules(BUILTIN_RULES)).toBe(text(BUILTIN_FILE))
@@ -387,8 +387,9 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['a language without its labels', s => { delete s.languages.de.labels }, 'languages.de.labels'],
     ['schema 1 (a set before D6)', s => { s.schema = 1 }, 'schema'],
     ['schema 2 (a set before D1a)', s => { s.schema = 2 }, 'schema'],
-    ['schema not 3', s => { s.schema = 4 }, 'schema'],
-    ['schema a string', s => { s.schema = '3' }, 'schema'],
+    ['schema 3 (a set before 1b-C)', s => { s.schema = 3 }, 'schema'],
+    ['schema not 4', s => { s.schema = 5 }, 'schema'],
+    ['schema a string', s => { s.schema = '4' }, 'schema'],
     ['labels without a heading\'s name (a schema-2 set\'s labels)', s => { s.languages.de.labels = { figure: 'Abbildung', table: 'Tabelle' } }, 'languages.de.labels.abstract'],
     ['version 0', s => { s.version = 0 }, 'version'],
     ['version not an integer', s => { s.version = 1.5 }, 'version'],

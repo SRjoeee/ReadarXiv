@@ -89,6 +89,14 @@
 // over every block (100 points of 2608.06701 #227's second sentence, a word on a table's caption line, lit as the
 // table; on the ten papers no row past its ink comes under a float, so the guard itself is held by
 // tests/pdf-reader/floats.test.ts).
+// The layout made page by page (the shared reader view's contract §2.7, SH1: highlight-pages.mjs): each side cut as the
+// layer's wire carries it — parts by the doubling schedule with their views and units' rectangles, each page's left part
+// with its tokens, spans and pairs — and made again through the view's shapes (shapes.mjs createShapes), the pages
+// shuffled and interleaved with the parts, some pages' geometry made before the later parts move the document part; then
+// every page's geometry (runs, heads, fills, lines and owners) and every sentence shape of every unit with starts on the
+// side, its starts read from the pairs, held to the whole layout's, exactly. Fails on any difference; adds nothing to
+// the baseline. tests/pdf-reader/shapes.test.ts runs the same check on a paper of its own, and fails where the document
+// part's geometry is not let go when a part comes (layoutParts) and where a page's span is one token short.
 // WRITE_BASELINE=1 records the run as the baseline (counts only).
 // Counts only, no paper text. Pad beside a block: 3 CSS px at 100 % (2.25 PDF units). The browser's half — the pointer,
 // the paint, their costs against another build — is highlight-gate-browser.mjs.
@@ -128,6 +136,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { floatsOfPaper, floatsVerdict } from './highlight-gate-floats.mjs'
+import { pagesAgree } from './highlight-pages.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, startsAnchor, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
 import { readLeftPart, writeLeftPart } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
@@ -225,6 +234,8 @@ async function remake(set, runs, from, id, paper, sents) {
 }
 /** per paper and side: what the geometry took beyond the anchors, held to the baseline exactly */
 const taken = {}
+/** per paper and side: the layout made page by page against the whole one (SH1), and every difference found */
+const paged = {}, pagedDiffer = []
 /** per paper, side and kind: units anchored and lit, for the baseline */
 const counts = {}
 /** per paper and kind: the runs' units the tree now cuts otherwise (highlight-runs.mjs), judged absent: the baseline's
@@ -269,7 +280,7 @@ for (const id of ids) {
       startsMs.push(performance.now() - t0)
     }
     cost[`${id} ${S}`] = { pages: pdf.views.length, tokens: doc.length, layoutMs: +median(layoutMs).toFixed(2), allPagesMs: +median(pagesMs).toFixed(2), perPageMs: +(median(pagesMs) / pdf.views.length).toFixed(3), pageMaxMs: +median(pageMax).toFixed(2), startsMs: +median(startsMs).toFixed(2) }
-    sides[S] = { anchors, doc, layout: layoutOf(doc, pdf.views, anchors, kinds), starts }
+    sides[S] = { anchors, doc, layout: layoutOf(doc, pdf.views, anchors, kinds), starts, views: pdf.views, textOf, kinds }
     // the layer row (left-pages design T4): the left's starts as the view rebuilds them from the left parts the prepare writes (the
     // producer's page inputs through writeLeftPart and readLeftPart, each unit's anchor from the parts of its pages) against the gate's own
     if (S === 'L') {
@@ -442,6 +453,14 @@ for (const id of ids) {
       }
     }
   }
+  // the layout made page by page from the side cut as the wire carries it, against the whole (SH1)
+  for (const S of ['L', 'R']) {
+    const { anchors, layout, starts, views, textOf, kinds } = sides[S]
+    const sentencesOf = i => { const s = sents[i], text = textOf.get(i); return s && text != null ? { text, offsets: S === 'L' ? s.src : s.tr } : null }
+    const seed = [...`${id} ${S}`].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261)
+    const r = ((paged[id] ??= {})[S] = pagesAgree(layout, anchors, views, kinds, { starts, sentences: sentencesOf, seed }))
+    for (const d of r.differ) pagedDiffer.push(`${id} ${S} ${d}`)
+  }
   // what the geometry took beyond the anchors, page by page: heads by kind, words filled in; the pads' overlaps
   for (const S of ['L', 'R']) {
     const { layout } = sides[S], t = ((taken[id] ??= {})[S] ??= {})
@@ -595,6 +614,9 @@ if (wordsOutside.length) console.log('words outside their sentences:', wordsOuts
 if (inkCuts.length) console.log('boundaries through a word\'s estimated ink (inkEdges, the geometry against itself; the page\'s is the browser gate\'s):', inkCuts.join('; '))
 if (goesOnShort.length) console.log('pieces short of the edge over a break:', goesOnShort.join('; '))
 if (floatTaken.length) console.log('sentences lit as a float where painted:', floatTaken.join('; '))
+console.log('\nthe layout made page by page from the side cut as the wire carries it (SH1): pages, runs, units with starts, sentence shapes, units whose pairs the page-made side reads where the whole did not (the producer ships no such pairs); differences')
+for (const [id, t] of Object.entries(paged)) console.log(id.padEnd(12), Object.entries(t).map(([S, r]) => `${S} ${r.pages} ${r.runs} ${r.starts} ${r.sentences} ${r.extra} ${r.differ.length}`).join('   '))
+if (pagedDiffer.length) console.log('differences:', pagedDiffer.slice(0, 12).join('; '))
 console.log('\nthe left\'s starts by its text alone (B3c), against those with the marks: units of more than one sentence; both found; by the text alone; by the marks alone; starts both found, on the marks\' token, on their line')
 for (const [id, r] of Object.entries(textOnly)) console.log(id.padEnd(12), r.units, r.both, r.onlyText, r.onlyMarks, r.starts, r.sameToken, r.sameLine)
 console.log('\nthe ground truth (report-B\'s compiles): starts after the first of units of more than one sentence; found; with a mark for their sentence; on its line (AXtext: arXiv\'s PDF by its text alone)')
@@ -614,6 +636,7 @@ for (const [id, r] of Object.entries(layerRow)) {
 for (const c of ['unlitAnchored', 'holes', 'inkHoles', 'unreachable', 'fragmentedDisplays', 'overlapping']) if (sum[c] > 0) failures.push(`${c} ${sum[c]}`)
 for (const c of ['holes', 'otherSentence', 'wordsOutside', 'headsOutside', 'gaps', 'overlaps', 'goesOnShort', 'takenByFloat']) if (ssum[c] > 0) failures.push(`sentences: ${c} ${ssum[c]}`)
 if (!Object.keys(truth).length) failures.push(`no ground truth at ${GT}`)
+if (pagedDiffer.length) failures.push(`the layout made page by page differs from the whole: ${pagedDiffer.length} (${pagedDiffer.slice(0, 3).join('; ')})`)
 for (const [id, r] of Object.entries(textOnly)) if (r.sameLine < r.starts) failures.push(`${id}: ${r.starts - r.sameLine} of the left's starts by its text alone off the marks' line`)
 for (const [set, ps] of Object.entries(remade)) for (const [id, r] of Object.entries(ps)) if (r.differ) failures.push(`${set} ${id}: ${r.differ} units' sentences not what the reader's path makes from the answers kept${r.first.length ? ` (${r.first.join(', ')})` : ''}`)
 if (process.env.WRITE_BASELINE) {

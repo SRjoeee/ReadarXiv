@@ -90,6 +90,15 @@ export const MEASURES = [
   // (and the placeholders the content measure cannot place, LOST in the file or of a unit it does not hold: compared as
   // the others, so that a maker that loses more ink cannot lower the content measures by it)
   ['contentUnknown', 'model', 'defect', 'down', 'placeholders the content measure cannot place'],
+  // the links (3a-0, the gate's measures first; links.mjs): the share of the original's links (the Link annotations the reader
+  // can carry, T) that a record of the layer keeps with its own target, moved or in place on its rectangle; the share of the
+  // moved records whose drawn text is the original's (PDF.js's overlaid text, the translation's pair text where the link text is
+  // translated); and the records that are wrong (one in place over an erased glyph, one the attribution does not bear out, a url
+  // outside the allow-list, an empty name with glyphs). Kept and true can only rise (no value where there is nothing to share: no
+  // link, no moved record); wrong is 0 and gated at 0 (completenessRows below)
+  ['linksKept', 'model', 'share', 'up', 'links kept / the original\'s links'],
+  ['linksTrue', 'model', 'share', 'up', 'moved links whose drawn text is the original\'s'],
+  ['linksWrong', 'model', 'defect', 'down', 'links that are wrong'],
   ['glyphsLost', 'pixel', 'defect', 'down', 'erased glyphs not accounted for (strict)'],
   ['linesLeft', 'pixel', 'defect', 'down', "a drawn unit's own lines left intact"],
 ]
@@ -104,9 +113,14 @@ export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'],
 const REPORTED_COUNTS = ['cropNoTex', 'aloneUnits', 'linesOpened', 'linesUnopened']
 /** the content and line measures a page's model holds (measure.mjs) */
 const FILE_MEASURES = ['contentLost', 'textInDisplay', 'slotsSkipped', 'lineStartPunct', 'contentUnknown']
+/** the link counts a page's model holds (links.mjs linksPage), and the ones a fixture's totals sum: the shares are made of them */
+export const LINK_COUNTS = ['linksTotal', 'linksUnsupported', 'linksPlaceable', 'linksKeptN', 'linksMoved', 'linksInPlace', 'linksTrueN', 'linksUnverified']
 /** the placement counts, which a run without a layout file (v0 alone) has none of */
 const PLACEMENT = ['cropTextOverlap', 'cropBaselineOff', 'cropNoTex']
 export const TOLERANCE = { share: 0.002, ratio: 0.02, count: 0, defect: 0 }
+/** the links' minimums per output (3a-2, the owner's ruling): links kept ÷ the original's links, and moved links whose drawn text
+ *  is the reference's ÷ the moved links measured */
+export const LINKS_MIN = { kept: 0.95, true: 0.98 }
 /** the defects that are counts of things (their rates compared), and the counts each sums from a page */
 const DEFECTS = MEASURES.filter(m => m[2] === 'defect').map(m => m[0])
 
@@ -141,6 +155,7 @@ export function pageEntry(page, model, pixel) {
     cropForeign: m.cropForeign, wrongPageText: m.wrongPageText, droppedPh: m.droppedPh, modelCells: m.modelCells,
     ...Object.fromEntries(PLACEMENT.filter(k => m[k] !== undefined).map(k => [k, m[k]])),
     ...Object.fromEntries(FILE_MEASURES.filter(k => m[k] !== undefined).map(k => [k, m[k]])),
+    ...Object.fromEntries([...LINK_COUNTS, 'linksWrong'].filter(k => m[k] !== undefined).map(k => [k, m[k]])),
     missing: model.check.missing.length, twice: model.check.twice.length, brackets: model.check.brackets.length, duplicated: model.check.duplicated.length,
     clipped: model.check.clipped, markerResidue: model.check.markerResidue ?? 0, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
@@ -153,8 +168,9 @@ export function pageEntry(page, model, pixel) {
   if (ck) Object.assign(e, { rmRemoved: ck.removed + ck.rulesRemoved, rmMissed: ck.missed + ck.rulesMissed, rmOther: ck.other + ck.extra + ck.rulesOther, rmMoved: ck.moved, rmPOther: ck.pOther + ck.pMissing })
   if (pixel) {
     Object.assign(e, {
-      textCells: pixel.coverage.text.cells, textTranslatedCells: pixel.coverage.text.translated, textEnglishCells: pixel.coverage.text.english, textBlankCells: pixel.coverage.text.blank,
-      cellCells: pixel.coverage.cells.cells, cellTranslatedCells: pixel.coverage.cells.translated, neutral: pixel.neutral,
+      textCells: pixel.coverage.text.cells, textTranslatedCells: r(pixel.coverage.text.translated, 3), textEnglishCells: r(pixel.coverage.text.english, 3), textBlankCells: r(pixel.coverage.text.blank, 3),
+      // (areas, not counts: the coverage is the share of each cell drawn; measure.mjs pixelPage)
+      cellCells: pixel.coverage.cells.cells, cellTranslatedCells: r(pixel.coverage.cells.translated, 3), neutral: pixel.neutral,
       overlap: pixel.overlap, overlapPx: pixel.overlapPx, stray: pixel.stray, residue: pixel.residue, residuePx: pixel.residuePx, bites: pixel.bites, bitePx: pixel.bitePx,
       vanished: pixel.vanished, doubled: pixel.doubled, graphicsPx: pixel.graphics.px, graphicsErased: pixel.graphics.erased, graphicsOverdrawn: pixel.graphics.overdrawn, graphicsTouched: pixel.graphics.touched,
       lostInk: pixel.lostInk.regions, lostInkPx: pixel.lostInk.px, lostBoxes: pixel.lostInk.boxes, regionsAt: pixel.regionsAt,
@@ -191,6 +207,7 @@ export function fixtureTotals(pages, frames, tier) {
     generated: kindsOf(pages), generatedLeft: sum(pages, p => p.generatedLeft),
   }
   for (const k of PLACEMENT) if (pages.some(p => p[k] !== undefined)) t[k] = sum(pages, p => p[k])
+  Object.assign(t, linkTotals(pages))
   if (tier === 'pixel') {
     const tc = sum(pages, p => p.textCells), cc = sum(pages, p => p.cellCells)
     Object.assign(t, {
@@ -206,6 +223,18 @@ export function fixtureTotals(pages, frames, tier) {
   for (const d of DEFECTS) if (pages.some(p => p[d] !== undefined)) t[d] = sum(pages, p => p[d])
   t.rates = ratesOf(t, tier)
   t.modelRates = ratesOf(t, 'model')
+  return t
+}
+
+/** the link counts summed over pages (or fixtures) and the two shares made of them: kept ÷ the original's links, true ÷ moved
+ *  records; null where there is nothing to share (no link, no moved record), which no comparison reads. Nothing where no entry
+ *  has link counts (a record made before the measures) */
+function linkTotals(list) {
+  if (!list.some(p => p.linksTotal !== undefined || p.linksKeptN !== undefined)) return {}
+  const t = {}
+  for (const k of LINK_COUNTS) t[k] = sum(list, p => p[k])
+  t.linksKept = r(share(t.linksKeptN, t.linksTotal))
+  t.linksTrue = r(share(t.linksTrueN, t.linksMoved - (t.linksUnverified ?? 0)))
   return t
 }
 
@@ -244,6 +273,7 @@ export function pooled(list, tier) {
     generated: kindsOf(list), generatedLeft: sum(list, t => t.generatedLeft),
   }
   for (const k of [...PLACEMENT, ...REPORTED_COUNTS]) if (list.some(t => t[k] !== undefined && t[k] !== null)) out[k] = sum(list, t => t[k] ?? 0)
+  Object.assign(out, linkTotals(list))
   if (tier === 'pixel') {
     const tc = sum(list, t => t.textCells), cc = sum(list, t => t.cellCells)
     Object.assign(out, {
@@ -283,6 +313,8 @@ function pageView(p, tier) {
     scaleSpread: p.scaleSpread, overRight: p.frames ? p.overRight / p.frames : null, modelCells: p.modelCells, textTranslatedCells: p.textTranslatedCells,
     paraGap: p.paraGap ?? null, paraGapWide: p.paraGaps ? p.paraGapWide / p.paraGaps : null, generatedLeft: p.generatedLeft ?? 0,
     cropTextOverlap: p.cropTextOverlap ?? null, cropBaselineOff: p.cropBaselineOff ?? null,
+    // (the link shares from their counts; a page of a record made before the measures has none)
+    linksKept: p.linksTotal ? (p.linksKeptN ?? 0) / p.linksTotal : null, linksTrue: p.linksMoved - (p.linksUnverified ?? 0) > 0 ? (p.linksTrueN ?? 0) / (p.linksMoved - (p.linksUnverified ?? 0)) : null,
   }
   if (tier === 'pixel') Object.assign(v, { textTranslated: share(p.textTranslatedCells, p.textCells), textEnglish: share(p.textEnglishCells, p.textCells), textBlank: share(p.textBlankCells, p.textCells), cellsTranslated: share(p.cellTranslatedCells, p.cellCells) })
   for (const d of DEFECTS) if (p[d] !== undefined) v[d] = p[d]
@@ -322,6 +354,40 @@ export function compare(prev, cur, tier) {
     }
   }
   return out
+}
+
+/** the brief's completeness rows: per output, each check's count over its pages, and the checks that fail (any count above 0;
+ *  the pixel tier's lost ink too). Moved here from layer-gate.mjs (3a-0) so that its arithmetic is tested: `run.fixtures[name].totals` */
+export function completenessRows(run, tier) {
+  return Object.entries(run.fixtures).map(([name, f]) => {
+    const t = f.totals
+    // (the consistency checks, the table-groups brief: a table group drawn partly, a label the final names left in the
+    // source language; each must be 0. And the measures of TeX's file whose cause a pull request removed, gated at 0 in
+    // it, README: a drawn line over a display, since the display grouping read from the file, 2026-10-15; and a link that is
+    // wrong, gated at 0 from the first pull request of the links, 3a-0: links.mjs linksPage)
+    // (and a unit whose record the run could not make: drawn and measured by nothing, run.mjs recordErrors)
+    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0, textInDisplay: t.textInDisplay ?? 0, linksWrong: t.linksWrong ?? 0, recordErrors: f.summary?.recordErrors ?? 0 }
+    if (tier === 'pixel') row.lostInk = t.lostInk ?? 0
+    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay', 'linksWrong', 'recordErrors'].filter(k => row[k] > 0)
+    if (t.numbersShown < t.numbersTotal) row.fails.push('numbers')
+    // (and the links' two shares held to their minimums, 3a-2, the owner's ruling: none where there is nothing to share, no
+    // link or no moved record; the misses listed, the annotations not kept (`linksLost`, page:rank) and the moved records whose
+    // drawn text is not the reference's (`linksFalse`, page:rank))
+    // (decided on the counts, never on the share rounded for the report: 18,999 of 20,000 is below 0.95; the share alone where a
+    // record has no counts)
+    const counts = { linksKept: [t.linksKeptN, t.linksTotal], linksTrue: [t.linksTrueN, (t.linksMoved ?? 0) - (t.linksUnverified ?? 0)] }
+    for (const [k, min] of [['linksKept', LINKS_MIN.kept], ['linksTrue', LINKS_MIN.true]]) {
+      if (t[k] === null || t[k] === undefined) continue
+      row[k] = t[k]
+      const [n, d] = counts[k]
+      if ((Number.isFinite(n) && d > 0 ? n / d : t[k]) < min - 1e-12) row.fails.push(k)
+    }
+    // (and each wrong link's page, rank and reasons, links.mjs linksPage's `where`: names and numbers alone)
+    if (row.linksWrong > 0) row.linksWrongAt = (f.pages ?? []).flatMap(p => (p.where?.linksWrong ?? []).map(x => `p${p.p}:${x}`))
+    if (row.fails.includes('linksKept')) row.linksLost = f.summary?.linksLost ?? []
+    if (row.fails.includes('linksTrue')) row.linksFalse = (f.pages ?? []).flatMap(p => (p.where?.linksTrue ?? []).map(x => `${p.p}:${x}`))
+    return row
+  })
 }
 
 /**

@@ -5,7 +5,7 @@ import type { Params } from '../layer-proto/layer2.mjs'
 import type { NameKey } from '../layout/names.mjs'
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 3
+export declare const RULES_SCHEMA: 4
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
@@ -64,7 +64,7 @@ export type LanguageRules = Partial<ScriptRules> & {
   labels: Labels | null
 }
 export interface RuleSet {
-  schema: 3
+  schema: 4
   /** an integer ≥ 1, one more than the set it replaces */
   version: number
   /** at most 1,000 characters: what changed and why */

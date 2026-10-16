@@ -16,12 +16,13 @@
 //   next, a map of the paper's) and painted (what the restore counts as accounted) was the race between the two. Here the
 //   order is the one main.js's promises give when every page after the first is drawn after the last batch has been
 //   released (layGroups): the order the parity run of 2026-10-06 recorded on 8 of the 10 outputs it measured, and a
-//   deterministic one. In it a unit is laid when its last page is drawn, so the pages are drawn one at a time and each
-//   page's units laid and painted as it is (until), and a page no unit will paint again may be let go (release): the
-//   prototype held every page's canvases, which a paper of 147 pages does not fit. And what a unit and a page read is
-//   their own (the 1b design, §2.1): a unit learns its own citations and macros, its lines grow by its pages' growth
-//   steps, a crop is cut from any page of the paper that was read, and a page is painted in its own order, whatever
-//   order the units of other pages were laid in.
+//   deterministic one. It is the units' rank, and a page is drawn as if its units were laid in it: what a unit and a page
+//   read is their own (the 1b design, §2.1): a unit learns its own citations and macros, its lines grow by its pages'
+//   growth steps in their rank there, a crop is cut from any page of the paper that was read, and a page is painted in
+//   its own order, whatever order the units of other pages were laid in. So a page asked is laid with what it reads
+//   alone (its closure, Need(p): need.mjs closureOf, the 1b-D design), not every page before it (layFor), and a page no
+//   unit will paint again may be let go (release): the prototype held every page's canvases, which a paper of 147 pages
+//   does not fit.
 // - main.js showed its copy, a canvas at 1.25 CSS px a unit, scaled: at any other zoom everything not set as SVG text (a
 //   table, a figure, a kept line, a formula's crop) was that canvas's pixels, a low-resolution screenshot. Here the
 //   drawing is kept as data (each page's operations, unitOps'), and a view draws the page at its own resolution
@@ -29,8 +30,9 @@
 //   cut from that rendering; v0's own canvases at its own resolution are the analysis's (the ink maps) and the gate's
 //   (`copy`), never what a view shows.
 // - main.js was given every unit at once. Here the units may also arrive as a live run translates them (expect, take,
-//   end), and each page is laid exactly as one open over all of them lays it, once every unit it reads has come; a unit
-//   is laid a task at a time, a yield between two units' lays, so that no long task holds a page's units.
+//   end), and each page is laid exactly as one open over all of them lays it, once every unit it reads has come; units
+//   are laid back to back in slices of SLICE_MS, a yield between two slices, so that no long task holds a page's units
+//   and laying them spends no more turns of the event loop than that needs.
 // - The page's DOM (its rows, the banner, the status line), the timings and long tasks, the scorer's extras (score=1)
 //   and the compiled final drawn beside (compare) are the host's or the measurement's, and are left out. The checker's
 //   audit of every erase and crop (main.js check=1) is kept with `records`, the gate's and the lab's: it is what a gate
@@ -53,9 +55,11 @@ import { blocksOf, median, norm, wordsOf } from './layer1.mjs'
 import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
+import * as LK from './links.mjs'
 import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
-import { needsOf } from './need.mjs'
+import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
+import { closureOf } from './need.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -74,6 +78,18 @@ const r1 = x => Math.round(x * 100) / 100
 /** a run's `still` that never stops it */
 const ALWAYS = () => true
 const yieldNow = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise(ok => setTimeout(ok, 0)))
+/** the most of its own work v0 runs in one task, ms: units are laid back to back while their work since the last yield is
+ *  under it, then it gives way, so that no task of the engine's approaches a long task (50 ms, the web's budget) but by one
+ *  unit's own lay, and laying in turn spends no more turns than it needs (a frame waited for before every unit made the in-order
+ *  page steps 2.9 times as long, 123.8 s against 43.1 s over the 30 outputs, 2026-10-16; a yield before every unit chained
+ *  continuations into frames of 50 to 94 ms, the lp brief's item 3) */
+export const SLICE_MS = 8
+/** a slicer over a clock (`now`, ms): `due()`, whether the work since its last yield has reached `budget`; `give()`, a yield
+ *  (`give`: scheduler.yield, else a macrotask), its clock started again after it */
+export function slicer({ now = () => performance.now(), budget = SLICE_MS, give = yieldNow } = {}) {
+  let since = now()
+  return { due: () => now() - since >= budget, async give() { await give(); since = now() } }
+}
 
 /**
  * The order main.js lays its units in when every page after the first is drawn after its last batch is released: the
@@ -120,54 +136,60 @@ export function settleLayout(p) {
 }
 
 /**
- * adaptiveFill (P.adaptiveFill: { band, track, size }; D since 2026-10-07, generalised by D6's F6b on 2026-10-08; null
- * for B): the units that begin on a page (`units`, each laid already: tokens, blocks, s, P, layout), each spread over
- * its original's frame, the page's lines kept to one rhythm. A unit is filled at the state its fit set it at, its
+ * A page's fill target, a pure function of the page: the units that begin on it (`units`, each fitted: `fillLead`,
+ * `fitLines`, kind, `refused`) and those running on to it from a page before (`continuing`), and the band. `own` is the
+ * median fill leading of the units that begin on it and tell one (a unit of one line has no leading to tell, and tells only
+ * where no unit has more; the body kinds first, of all kinds where it has no body unit); `anchor` is the median fill leading
+ * of every body unit drawn on it, a unit running on from the page before included; the target is `own` held within `band` of
+ * `anchor`. Nothing is read from another page, a pass or the laying order (S3, 1b-C, the 1b design §2.2): a page's rhythm
+ * is the same however the paper is opened. Null where no unit begun on the page tells a fill leading; `target` null where
+ * only a continuation tells one. `body`: the page's body units told its own.
+ */
+export function pageTarget(units, continuing, band) {
+  const r3 = x => Math.round(x * 1000) / 1000
+  const tells = p => typeof p.fillLead === 'number'
+  const withLead = units.filter(p => !p.refused && tells(p))
+  const telling = withLead.filter(p => p.fitLines >= 2)
+  const body = telling.filter(p => EVEN_KINDS.has(p.unit.kind))
+  // (a unit running on from a page before is read at its fit's (`fit`, kept where the even pass lays a unit anew on its first
+  // page: set at fit, so that it does not depend on whether that page's pass has run))
+  const anchorOf = [...units, ...continuing.map(p => { const f = p.fit ?? p; return { unit: p.unit, refused: p.refused, fillLead: f.fillLead, fitLines: f.fitLines } })]
+  const anchorLeads = anchorOf.filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused && tells(p) && p.fitLines >= 2).map(p => p.fillLead)
+  const anchor = anchorLeads.length ? r3(median(anchorLeads)) : null
+  const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
+  if (!leads.length) return anchor === null ? null : { target: null, own: null, anchor, body: false }
+  const own = median(leads)
+  const target = r3(anchor === null ? own : Math.min(anchor + band, Math.max(anchor - band, own)))
+  return { target, own: r3(own), anchor, body: body.length > 0 }
+}
+
+/**
+ * adaptiveFill (P.adaptiveFill: { band, track, size }; D since 2026-10-07, generalised by D6's F6b on 2026-10-08, page-local
+ * since 1b-C; null for B): the units that begin on a page (`units`, each laid already: tokens, blocks, s, P, layout), each
+ * spread over its original's frame, the page's lines kept to one rhythm. A unit is filled at the state its fit set it at, its
  * leading apart: its fill leading is the loosest, from its fitted leading up to P.fillLead em of the size it is drawn
  * at (null: the original's own pitch), at which that state still sets it whole, so that its text reaches its frame's
- * foot. The page's target is the median of its body units' fill leadings (of all its units' where it has no body unit;
- * a unit of one line has no leading to tell, and tells only where no unit has more), held within `band` of `held.last`,
- * the target of the last page before it whose body units told it, and within `band` of `held.anchor`, the target of the
- * fullest page passed (the most body lines of the original's on it, `continuing` units, those running on from a page
- * before, counted with its own; the earliest of equals; nextHeld) (null: no page has): a page's rhythm moves from the
- * last page's by no more than the band, and the paper's comes to and stays within a band of its fullest page's, however
- * many pages it runs to (the coordinator's ruling of 2026-10-08, one rhythm across the paper, the maintainer's standing
- * preference; anchored on the fullest page, not the first, which a title page's few lines made the thesis's, holding
- * its pages a fifth of a pitch under their own). Each unit takes its fill leading, but never more than `band` over the
+ * foot. The page's target is pageTarget's: the median of its body units' fill leadings held within `band` of the median of
+ * every body unit drawn on it (`continuing`: the units begun on a page before and running on to it), however the paper is
+ * opened. Each unit takes its fill leading, but never more than `band` over the
  * target, so that neighbouring paragraphs keep one line spacing. A CJK unit the band or its fill leading's top stops
  * short of its fill then takes tracking, up to `track` em; and where every body unit of the page is still short with
  * all of it, the page's body units take one size, the largest up to `size` x the original's at which every one of them
  * is still set whole: one size a page where it grows, never a unit's own (D grew each unit apart, and a page mixed 1.0
  * and 1.1); a unit the fit had to shrink keeps its own largest fitting size. A unit its fitted state does not set again
  * (the text run past a display) keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
- * kept), then `onFilled(p, target)`. Returns the page's target, its own (`own`, before it is held), whether its body
- * units told it (`body`), and, for the anchor, the original's lines of every body unit on the page (`lines`) and their
- * fill leadings' median (`anchor`); a page whose units begun on it tell none answers its lines and anchor alone
- * (`target` null), and null where nothing tells.
+ * kept), then `onFilled(p, target)`. Returns pageTarget's answer: the page's target, its own (before it is held), the anchor
+ * and whether its body units told it; `target` null where only a continuation tells, and null where nothing tells.
  */
-export function fillPage(units, P, held = null, onFilled = () => {}, { page = units[0]?.pages[0] ?? null, continuing = [] } = {}) {
+export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}) {
   const { band, track, size } = P.adaptiveFill
   const r3 = x => Math.round(x * 1000) / 1000
   const at = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
-  const withLead = units.filter(p => p.fillLead !== null)
-  const telling = withLead.filter(p => p.layout.lines.length >= 2)
-  const body = telling.filter(p => EVEN_KINDS.has(p.unit.kind))
-  // (the page as the paper's anchor reads it: every body unit with lines on it, those running on from a page before as
-  // well, their original's lines on this page and the fill leadings of those that tell; their laying stays the page's
-  // they begin on)
-  const present = [...units, ...continuing].filter(p => EVEN_KINDS.has(p.unit.kind) && !p.refused)
-  const lines = present.reduce((n, p) => n + p.blocks.reduce((m, b) => m + (b.page === page ? b.B.length : 0), 0), 0)
-  const anchorLeads = present.filter(p => p.fillLead !== null && p.fillLead !== undefined && p.layout.lines.length >= 2).map(p => p.fillLead)
-  const anchor = anchorLeads.length ? r3(median(anchorLeads)) : null
-  const leads = (body.length ? body : telling.length ? telling : withLead).map(p => p.fillLead)
-  if (!leads.length) return anchor === null ? null : { target: null, own: null, body: false, lines, anchor }
-  const own = median(leads)
-  const hold = (v, at) => Math.min(at + band, Math.max(at - band, v))
-  // (the anchor's window first, the page before's step last: a page moves by the band at most, and so reaches a window it
-  // stands outside of, a band a page)
-  const target = r3(held === null ? own : hold(hold(own, held.anchor), held.last))
+  const told = pageTarget(units, continuing, band)
+  if (!told || told.target === null) return told
+  const { target } = told
   const filled = []
   for (const p of units) {
     if (p.fillLead === null) continue
@@ -213,7 +235,7 @@ export function fillPage(units, P, held = null, onFilled = () => {}, { page = un
     settleLayout(p)
     onFilled(p, target)
   }
-  return { target, own: r3(own), body: body.length > 0, lines, anchor }
+  return told
 }
 
 /**
@@ -238,25 +260,13 @@ function fillLeadsOf(p, P) {
   // layouts a unit where trying each hundredth from the top took up to forty. Monotone in practice, not by construction:
   // the greedy breaking's kinsoku and hanging marks could make a looser value set a unit a closer one does not; the linear
   // search from the top is the reference, and the halving drew the same on every fixture. So for the tracking and size)
+  p.fitLines = p.layout.lines.length
   const st = p.layout.state
   if (!at(p, st)) { p.fillLead = null; return }
   const lo = st.lead, hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
   let ok = 0, no = Math.round((hi - lo) / 0.01) + 1
   while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...st, lead: L(k) })) ok = k; else no = k }
   p.fillLead = ok ? L(ok) : lo
-}
-
-/**
- * The targets the next page's fill is held to, from the last held and a page's pass (fillPage's answer): the page's target
- * as the last, where its body told one, and as the anchor the target of the page with the most body lines passed so far
- * (its body units' fill leadings, those running on from a page before as well; the earliest of equals). A page that
- * tells neither changes nothing. Pages are passed in their laying order, so that no page reads a later one
- */
-export function nextHeld(held, r) {
-  if (!r) return held
-  if (held === null) return r.body ? { last: r.target, anchor: r.anchor ?? r.target, lines: r.lines } : null
-  const fuller = r.anchor !== null && r.lines > held.lines
-  return { last: r.body ? r.target : held.last, anchor: fuller ? r.anchor : held.anchor, lines: fuller ? r.lines : held.lines }
 }
 
 /**
@@ -446,6 +456,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const LINESKIP = tex?.index?.file?.lineskip ?? null
   /** whether a page's units are set together once all are laid (the even pass, the page fill, the leftover packed) */
   const PASSES = !!(P.even || P.adaptiveFill || P.leftover === 'pack')
+  /** whether a page may be laid with its closure alone, whatever was laid before it (the 1b-D design §1.4): every pass reads
+   *  only its own units' fits and fit-time numbers of a unit running on to it, and a page is painted in its own order at its
+   *  passes. Not where the even pass or the leftover's packing reads a unit running on to the page as laid on the page
+   *  before (1b-design C1), nor where no pass runs and each unit is painted as it is laid (no adaptive fill): those lay in
+   *  the stream's order, the prefix needsOf reads. No built-in rule set is so */
+  const ORDER_FREE = PASSES && !P.even && P.leftover !== 'pack'
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all(R.patterns.map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
@@ -474,13 +490,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** page i's row, at its view's size: its canvases and its record (the 1b design §1): the markup of its SVG, the strings its
    *  names and units are set in as each is painted (svgOf makes the element of them anew at each ask: the run holds no element
    *  of a page), its drawing as data, every painted unit's operations in turn, kept when the page's canvases are let go; its
-   *  words and links (the engine's 2b and 3a), its fill numbers (adaptiveFill's pass) */
+   *  words (the page's word table, built as each unit is painted in `wordsOpen` and frozen into `words` once the page is final:
+   *  words.mjs) and links (links.mjs: frozen into `links` once the page is final, null before; `linksOpen` holds the moved
+   *  records the units' matches make as they are made, each over the unit's drawing on this page: linkUnit), its fill numbers
+   *  (adaptiveFill's pass) */
   const makeRow = i => {
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
     const left = document.createElement('canvas'), right = copy ? document.createElement('canvas') : null
-    for (const c of [left, right]) if (c) { c.style.width = `${w}px`; c.style.height = `${h}px` }
-    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], markup: [], words: null, links: null, fill: null }
+    // (no pixels until the page is drawn, drawPageOn sizes them: a page never drawn holds its row alone, not a canvas's default
+    // 300 x 150, which a jump past a paper's pages kept on every page it did not draw)
+    for (const c of [left, right]) if (c) { c.width = 0; c.height = 0; c.style.width = `${w}px`; c.style.height = `${h}px` }
+    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], markup: [], words: null, wordsOpen: null, links: null, linksOpen: null, fill: null }
   }
   if (!partsMode) for (let i = 1; i <= N; i++) makeRow(i)
   const sheet = document.head.appendChild(document.createElement('style'))
@@ -506,7 +527,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return fontMapped.get(name)
   }
   const chars2 = [], inks = [], views = [], pageBottom = []
-  const fontTally = new Map()
 
   // the geometry's units with v0's own copy of their line rectangles: v0 grows and moves a unit's lines as it lays it,
   // and every other unit reads them as grown (its others), so the copy is shared by all of v0's reading; the geometry
@@ -573,6 +593,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const from = [c.rects, lu ? texRects(lu).rects : null].filter(Boolean)
       c.lists = from.map(shownOf).filter(l => l.length)
       c.reach = new Set(from.flatMap(rs => rs.map(r => r[0])))
+      // (and what Need reads of it besides (need.mjs NeedEntry): its placeholders' pages, its table group; its place in K, and
+      // whether it is decided yet)
+      c.reads = segPagesOf(c)
+      c.group = tableGroups?.get(c.id) ?? null
+      c.k = K.length
+      c.decided = false
+      for (const q of new Set(c.lists.flat())) undecided[q]++
       holdReads(c)
       K.push(c)
       candOf.set(c.id, c)
@@ -586,31 +613,176 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
 
   // ---- what the run holds (`free`, the 1b design §3). A page's analysis state is read by the units laid on it, by its pass
   // and its paints, and by a unit still to be laid whose lines or placeholders' segments are on it (a crop's ink and
-  // characters): so it is let go once the page is done (doneAt: every unit on it painted there), no unit still to be laid
-  // reads it (its count, `reads`) and no unit on it is still to be painted on another of its pages (awaitsPaint). A unit's
-  // own state is read by its growth (growOn, on each of its pages before it is laid), its paint and the passes of the pages
-  // it is on (a unit running on to a page is read there by its pass): so it goes once it is painted on all its pages, or is
-  // left the original's, and each of its pages has passed
-  /** each page's readers still to be laid: the units of K placed or still to be decided whose lay reads it */
+  // characters): so it is let go once the page is ready (every unit on it painted there), no unit still to be laid reads it
+  // (its count, `reads`) and no unit on it is still to be painted on another of its pages (awaitsPaint). A page drawn for
+  // another page's closure and not ready itself (a side page) keeps it until its own closure is laid: no page is drawn
+  // twice (PDF.js's later drawing of a page may differ from its first). A unit's own state is read by its growth (growOn, on
+  // each of its pages before it is laid), its paint and the passes of the pages it is on (a unit running on to a page is read
+  // there by its pass): so it goes once it is painted on all its pages, or is left the original's, and each of its pages has
+  // passed
+  /** each page's readers still to be laid: the units of K placed or still to be decided whose lay reads it (counted always:
+   *  only `free` lets a page's state go) */
   const reads = new Int32Array(N + 1)
-  /** the pages drawn and not let go yet (each of them is looked at by a sweep, every other page never again), and the last
-   *  page the sweeps have taken in */
+  /** each page's entries of K still to be decided (those whose sources may draw a unit on it) */
+  const undecided = new Int32Array(N + 1)
+  /** the pages whose state moved since the closure in hand last looked (drawn, an entry on it decided, a unit on it laid, its
+   *  pass run, a part of it painted): each told once it is ready (onStep) */
+  const touched = new Set()
+  /** the pages drawn and not let go yet (each of them is looked at by a sweep, every other page never again) */
   const unswept = new Set()
-  let sweptTo = 0
   /** what the run lets go kept for the gate's measures (`records` with `free`): each page's characters, each unit as laid */
   const shelf = free && records ? { chars: [], units: new Map() } : null
-  /** the pages a unit's lay reads, of those shown: the pages its sources' lines are on, and those of its placeholders'
-   *  segments in the layout file (a crop cut from a page it has no line on) */
-  const readsOf = c => {
-    const out = new Set([...c.reach].filter(q => q >= 1 && q <= N))
+  /** the pages of a unit's placeholders' segments in the layout file, of those shown (a crop cut from a page it may have no
+   *  line on): what its lay reads besides its lines' pages (Need's `reads`) */
+  const segPagesOf = c => {
+    const out = new Set()
     for (const row of (tex ? tex.index.unit(c.id)?.ph?.values() : null) ?? []) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o] >= 1 && row.segs[o] <= N) out.add(row.segs[o])
     return [...out]
   }
-  const holdReads = c => { if (!free) return; c.reads = readsOf(c); for (const q of c.reads) reads[q]++ }
-  /** a unit's lay is over (laid, or decided not placed): the pages it reads held for it no longer */
-  const dropReads = c => { if (!c?.reads) return; for (const q of c.reads) reads[q]--; c.reads = null }
+  /** the pages a unit's lay reads, of those shown (its sources' lines' and its placeholders' segments'), held for it until its
+   *  lay is over */
+  const holdReads = c => { c.holds = [...new Set([...[...c.reach].filter(q => q >= 1 && q <= N), ...c.reads])]; for (const q of c.holds) reads[q]++ }
+  /** a unit's lay is over (laid, or decided not placed): the pages it read held for it no longer */
+  const dropReads = c => { if (!c?.holds) return; for (const q of c.holds) reads[q]--; c.holds = null }
+  /** a page's word table frozen into its record once the page is final (every unit on it painted there): the columns cut to
+   *  the tokens, the open table dropped. The units left the original's are every unit with lines on the page (any of its
+   *  sources' pages) that has no span on it: skipped, unfit, withheld with its table group, refused, or untranslated (a row lost,
+   *  none, kept or never come), all shown as the original's. A page that has none painted keeps an empty table */
+  const freezeWordsOf = q => {
+    const r = rows[q - 1]
+    if (!r || r.words) return
+    const painted = new Set((r.wordsOpen?.spans ?? []).map(s => s[0]))
+    const original = []
+    for (const c of K) if (!painted.has(c.id) && c.lists.some(l => l.includes(q))) original.push(c.id)
+    r.words = freezeWords(r.wordsOpen, original)
+    r.wordsOpen = null
+  }
+  /** the annotations of each page (links.mjs annotsOf; null where the read failed), read once as the page is drawn and held
+   *  until the page is final; the ones a unit's match took, by page; the counts (LayerStats.links) and, with `records`, each
+   *  record's source annotations (the gate's attribution) */
+  const annots = [], consumed = [], linkSrc = []
+  const linkStats = { total: 0, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 }, unsupported: 0, unread: 0 }
+  /** a page's links frozen into its record once the page is final (every unit on it painted there, so the operations are final
+   *  and every match has run): an annotation no unit took whose glyph points the operations left unerased stays in place, any
+   *  other is dropped and counted. Pure of the order the pages were asked in: it reads this page's annotations, operations and
+   *  units alone. A page whose annotations could not be read has none */
+  /** the units with lines on page q as a link's owner is chosen among them, in the order it is read in (links.mjs ownersOf: the
+   *  first whose rectangles hold more than half of its points): the units placed with lines on q in their growth rank there, by the rectangles their
+   *  growth left, then every other unit of the original's side (K: left the original's or never placed, by the left side's) */
+  const linkUnitsOn = q => {
+    const out = new Map()
+    for (const u of rankedOnPage(q)) out.set(u.id, { id: u.id, stream: u.stream, rects: u.rects, grown: u.grownRects })
+    for (const c of K) if (!out.has(c.id) && c.rects?.some(r => r[0] === q)) out.set(c.id, { id: c.id, stream: c.stream, rects: c.rects })
+    return [...out.values()]
+  }
+  /** the units placed with lines on page q, in their growth rank there (the order a link's owner is read in, links.mjs ownersOf) */
+  const rankedOnPage = q => (onPage.get(q) ?? []).slice().sort((a, b) => (rankOf.get(a.id) ?? Infinity) - (rankOf.get(b.id) ?? Infinity))
+  const freezeLinksOf = q => {
+    const r = rows[q - 1]
+    if (!r || r.links) return
+    const t0 = performance.now()
+    const done = LK.freezeLinks({
+      list: annots[q - 1] ?? null, q, ops: r.ops, devOf: pxOf(q), consumed: consumed[q], why: whyOf[q],
+      units: linkUnitsOn(q), moved: r.linksOpen ?? [], sources: records,
+    })
+    r.links = done.records
+    r.linksOpen = null
+    if (records) linkSrc[q - 1] = done.sources
+    linkStats.inPlace += done.inPlace
+    linkStats.moved += done.moved
+    for (const k of ['unmatched', 'ambiguous', 'unplaced']) linkStats.dropped[k] += done.dropped[k]
+    timesOf(q).links += performance.now() - t0
+  }
+  /** why each annotation its owner's match did not take was left (links.mjs matchUnit, placeUnit: `ambiguous`, `unplaced`), by
+   *  page, which the freeze counts it dropped by where its ink is erased */
+  const whyOf = []
+  /** the modes of a rendering drawn as text in the page's face (tokensOf2), which a link is placed over by its characters */
+  const TEXT_MODES = new Set(['orig-text', 'source', 'cite-map', 'symbol'])
+  /**
+   * Unit p's links, matched and placed once, at its first paint (the 3a design §3.3, §3.4: links.mjs matchUnit, placeUnit): its
+   * layout is final on all its pages then, and what it was laid with alive (it lets go after its last paint). Its candidates are
+   * the annotations of its pages it owns (links.mjs ownedIn: the first unit of the page's growth rank whose rectangles hold more
+   * than half of the annotation's points; every unit before it there has grown, so that is final now), each annotation one
+   * owner's; its targets every placeholder, nested mark and link pair of its translation, with the page characters its
+   * rendering took, its segments in TeX's file, and how it is drawn. The records go to the pages their boxes are on (`linksOpen`), each annotation
+   * placed to `consumed` and each one left to `whyOf`: a page is frozen only once every unit on it is painted there, so every
+   * owner's match has run by then, whatever page was asked first. Reads the unit, its pages' annotations and the units ranked
+   * before it there alone; changes no drawing
+   */
+  const linkUnit = p => {
+    if (p.linked || !p.layout || !p.prep) return
+    p.linked = true
+    const t0 = performance.now()
+    const cands = []
+    for (const q of p.pages) {
+      const list = annots[q - 1]
+      if (!list) continue
+      // (the units placed with lines on q, in their growth rank there; those before p have grown, as p has. Each unit of the page
+      // a share of the page's work: a page is bounded by one budget, whatever order its units are matched in)
+      const ranked = rankedOnPage(q)
+      const at = ranked.indexOf(p)
+      if (at < 0) continue
+      // (an annotation whose owner the share left unread: `unplaced`, where no owner's match gives it another reason)
+      const skipped = new Set()
+      for (const a of LK.ownedIn(list, p, ranked.slice(0, at), q, { left: LK.WORK_MAX / ranked.length }, skipped)) cands.push({ q, a })
+      if (skipped.size) { const w = (whyOf[q] ??= new Map()); for (const i of skipped) if (!w.has(i)) w.set(i, 'unplaced') }
+    }
+    const budget = { left: LK.WORK_MAX / Math.max(1, rankedOnPage(p.pages[0]).length) }
+    if (!cands.length) return
+    const L = p.layout
+    const drawnText = new Set(), drawnCrop = new Set(), drawnPair = new Set()
+    for (const line of L.lines) for (const it of line.items) {
+      const t = it.t
+      if (t.crop) { if (hasSource(t.crop.page)) drawnCrop.add(t.crop.k) }
+      else if (typeof t.s === 'string' && !t.space) {
+        if (t.k !== undefined && t.ph !== undefined) drawnText.add(t.k)
+        if (t.st?.link !== undefined) drawnPair.add(t.st.link)
+      }
+    }
+    const lu = p.tex?.lu ?? (filed(p.id) ? tex.index.unit(p.id) : null)
+    const kOf = p.tex?.kOf ?? (lu ? kOfPieces(p.unit, tex.pieces.get(p.id)) : null)
+    const targets = []
+    // (each piece's index in the unit's source, by which a tier pairs pieces with annotations: the layout file's k, else the row's;
+    // never its place in the translation, which may set two of them the other way)
+    const ordOf = k => (kOf && kOf[k] >= 0 ? kOf[k] : Number.isInteger(p.unit.pieces[k]?.k) && p.unit.pieces[k].k >= 0 ? p.unit.pieces[k].k : null)
+    p.unit.pieces.forEach((piece, k) => {
+      const kind = LK.linkKindOf(piece)
+      if (piece.t === 'open') {
+        if (kind && L2.LINK_OPEN.test(piece.src) && piece.id !== undefined) targets.push({ ord: ordOf(k), pair: piece.id, ...kind, single: true, gap: null, segs: null, draw: drawnPair.has(piece.id) ? 'pair' : null })
+        return
+      }
+      if (piece.t !== 'ph' && piece.t !== 'nested') return
+      const r = p.prep.get(k)
+      const gap = r?.gap ? new Set(r.gap.chars.filter(c => !c.sep && !c.space).map(L2.charKey)) : null
+      const row = lu && kOf && kOf[k] >= 0 ? lu.ph.get(kOf[k]) : null
+      const segs = []
+      for (let o = 0; row && o + 5 < row.segs.length; o += 6) segs.push([row.segs[o], row.segs[o + 1], row.segs[o + 2], row.segs[o + 3], row.segs[o + 4], row.segs[o + 5]])
+      if (!gap && !segs.length && !kind) return
+      const draw = r && TEXT_MODES.has(r.mode) && drawnText.has(k) ? 'text' : r?.mode === 'crop' && drawnCrop.has(k) ? 'crop' : null
+      targets.push({ ord: ordOf(k), k, ...(kind ?? { kind: null }), single: LK.singleTarget(piece, kind), gap, segs: segs.length ? segs : null, draw })
+    })
+    const m = LK.matchUnit({ cands, targets, budget })
+    const lines = L.lines.map(line => ({ line, runs: L2.lineRuns(line, L) }))
+    const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, L, line.baseline), scale: L.scale, budget })
+    // (each page's records in the unit's drawing order there, after those of the units before it)
+    const byPage = new Map()
+    for (const r of placed.records) if (rows[r.page - 1]) (byPage.get(r.page) ?? byPage.set(r.page, []).get(r.page)).push(r)
+    for (const [pg, list] of byPage) {
+      list.sort((a, b) => a.li - b.li || a.x - b.x)
+      const row = rows[pg - 1]
+      list.forEach((r, seq) => {
+        ;(row.linksOpen ??= []).push({ rec: r.rec, stream: p.stream, id: p.id, seq, sources: r.sources })
+        for (const [q, i] of r.sources.annots) (consumed[q] ??= new Set()).add(i)
+      })
+    }
+    for (const t of [...m.tried, ...placed.tried]) (whyOf[t.q] ??= new Map()).set(t.i, t.why)
+    timesOf(p.pages[0]).links += performance.now() - t0
+  }
   /** a page's analysis state let go (its canvases, a copy's, are the gate's: release) */
   const letGoPage = q => {
+    freezeWordsOf(q)
+    freezeLinksOf(q)
+    annots[q - 1] = consumed[q] = whyOf[q] = undefined
     unswept.delete(q)
     chars2[q - 1] = undefined
     inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
@@ -618,17 +790,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** whether a unit on page q is still to be painted on one of its pages (its first page's part there not painted yet,
    *  paintOn): its paint elsewhere may cut a crop from q, on v0's own copy (release), and its own state stays until then */
   const awaitsPaint = q => PASSES && (laid[q] ?? []).some(u => !u.refused && u.pages.some(r => !partPainted(u, r)))
-  /** every done page no unit still to be laid reads, and none on it still to be painted elsewhere, let go: after each page's
-   *  step, and once the rows end. Only the pages drawn and not let go are looked at (a page let go is never again): a few a
-   *  step, the page in hand and those held for a unit still to come, not every page drawn at every step (half the pages'
-   *  count squared over a paper) */
+  /** every ready page no unit still to be laid reads, and none on it still to be painted elsewhere, let go: after each
+   *  closure laid, and once the rows end. Only the pages drawn and not let go are looked at (a page let go is never again): a
+   *  few a closure, those in hand and those held for a unit still to come, not every page drawn at every step */
   const sweep = () => {
     if (!free) return
-    for (; sweptTo < drawnTo; sweptTo++) unswept.add(sweptTo + 1)
-    for (const q of unswept) if (!reads[q] && doneAtOf(q) <= drawnTo && !awaitsPaint(q)) letGoPage(q)
+    for (const q of unswept) if (!reads[q] && readyOf(q) && !awaitsPaint(q)) letGoPage(q)
   }
   /** what a unit holds for its lay, its passes and its paint alone (and the file's lines it is laid by: `tex.lines`) */
-  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear']
+  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf']
   /** a unit nothing reads again: painted on every page it is on, or left the original's (refused, or withheld with its
    *  group), its table group settled, and each of its pages passed (with a page pass: a pass reads the units running on to
    *  its page) */
@@ -639,6 +809,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** a unit's own state let go: what stays is its place (id, stream, rects, pages), its row and its fill numbers */
   const letGoUnit = p => {
     if (!free || p.letGo) return
+    // (not before its growth has run on every page of its lines that can grow: a unit ranked after it there grows it, whatever
+    // it is (L1), and reads what it holds; a page that failed grows nothing. So the run that lets go grows as the one that keeps)
+    if (p.linePages && !p.linePages.every(g => p.grew.has(g) || failedPages.has(g))) return
     p.letGo = true
     if (shelf) shelf.units.set(p.id, { ...p, tex: p.tex && { ...p.tex } })
     for (const k of HEAVY) p[k] = undefined
@@ -835,6 +1008,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return plane === 'R' ? RM?.removed[j] ?? null : r.left
   }
   const paint = (p, pg) => {
+    // (its links matched and placed at its first paint, its layout final on every page: links.mjs; the drawing reads none of it)
+    if (!p.linked) linkUnit(p)
     const tOps = performance.now()
     const r = rows[pg - 1]
     // (what the unit accounts for is counted whichever way it is drawn: a unit drawn the old way after it puts back only
@@ -863,10 +1038,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (r.right) L2.drawOps(r.right.getContext('2d'), ops, 1, sourceOn)
     const tSvg = performance.now()
     r.markup.push(L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
+    const tWords = performance.now()
+    // (the page's word table, beside the markup: the unit's words in the order they are drawn; a page whose table is frozen is final)
+    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg), crop => hasSource(crop.page))
     const T = timesOf(pg)
     T.ops += tCompose - tOps
     T.compose += tSvg - tCompose
-    T.svg += performance.now() - tSvg
+    T.svg += tWords - tSvg
+    T.words += performance.now() - tWords
     // (painted on one more of its pages: on its last, and with its pages passed, it lets go of what it was laid with)
     p.painted = (p.painted ?? 0) + 1
     if (settledUnit(p)) letGoUnit(p)
@@ -1170,6 +1349,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const rankedOf = new Map(), grownTo = new Map()
   /** each placed unit's place in the lay order (plan) */
   let rankOf = new Map()
+  /** a list kept in the units' rank (each item a unit or its record: its `id`), an item put at its place: the units of a page
+   *  are laid in any order, and a page's pass, a group's paint and the records read them in their rank (L3). Two units laid
+   *  keep their order as more are placed: where they share a page they are peers of a closure that ranks them there, and
+   *  else their lay pages differ */
+  const byRank = (list, x) => {
+    const r = rankOf.get(x.id) ?? Infinity
+    let lo = 0, hi = list.length
+    while (lo < hi) { const mid = (lo + hi) >> 1; if ((rankOf.get(list[mid].id) ?? Infinity) <= r) lo = mid + 1; else hi = mid }
+    list.splice(lo, 0, x)
+  }
   const rankedOn = g => {
     const list = onPage.get(g) ?? []
     let line = rankedOf.get(g)
@@ -1185,6 +1374,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** a unit placed: its pages' growth to come (its lines' pages, the units on each) */
   const toGrow = p => {
     p.linePages = [...new Set(p.rects.map(r => r[0]))]
+    // (its first page as placed, before any of its lines is dropped: where its first line is read, L4)
+    p.firstPage = p.rects[0]?.[0]
     Object.assign(p, { local: [], dropped: 0, grown: 0, area: new Map(), grew: new Set() })
     for (const g of p.linePages) (onPage.get(g) ?? onPage.set(g, []).get(g)).push(p)
   }
@@ -1233,7 +1424,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const y0 = Math.min(...rs.map(r => r[2])) - 20, y1 = Math.max(...rs.map(r => r[4])) + 20
       bands[g - 1] = (chars2[g - 1] ?? []).filter(c => c.yb >= y0 && c.yb <= y1)
     }
-    const grown = L2.extendRects2(rs, p.local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands, p.rects[0])
+    // (the unit's first line, which grows to the left over math alone and before which its source's first words are looked for:
+    // the first of its lines on its first page as placed, read when that page grows; none on any other page, a first page
+    // whose lines were all another's included (L4). Its lines as they stand would make a page's growth read whether the
+    // unit's earlier page had grown yet, which a page laid by its closure need not have)
+    const first = p.rects[0]?.[0] === p.firstPage ? p.rects[0] : null
+    const grown = L2.extendRects2(rs, p.local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands, first)
     p.grown += grown
     // (and the unit's part of the page again where its lines grew past it: what they grew over is the unit's to read and
     // to account for, or its characters there were put back under the translation)
@@ -1242,19 +1438,23 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const gx0 = Math.min(x0, ...rs.map(r => r[1])), gx1 = Math.max(x1, ...rs.map(r => r[3]))
       if (gx0 < x0 || gx1 > x1) p.local[g - 1] = (chars2[g - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
     }
-    // its first line's edge snapped back to its first word's start, on its first page
-    if (!fileLines && p.rects[0]?.[0] === g) p.inkBefore = L2.snapFirstRect2(p.rects, p.local)
+    // its first line's edge snapped back to its first word's start, on its first page as placed alone (L4)
+    if (!fileLines && g === p.firstPage && p.rects[0]?.[0] === g) p.inkBefore = L2.snapFirstRect2(p.rects, p.local)
     p.area.set(g, textArea(g))
+    // (its rectangles on the page as its growth leaves them, which a link's owner is read by: its lay may move its first line's
+    // edge to its label after a unit ranked after it here is matched, links.mjs ownersOf)
+    ;(p.grownRects ??= new Map()).set(g, p.rects.filter(r => r[0] === g).map(r => r.slice()))
   }
   /** p's growth on each of its pages, after that of every unit ranked before it there, the rank taken a unit at a time from
-   *  where the page's growth stands; one that throws for another unit than p is that unit's, thrown as it is laid. A unit
-   *  ranked before p that is left the original's already (`refused`: for a page that failed, before it was laid) never
-   *  grows. Laid in order that is exact: every unit ranked before p on the page has been laid or left before p is, so a
-   *  unit's own state says it and no other page is read. Laying out of order (1b-D), a unit ranked before p may not have
-   *  been reached yet: one whose other page fails grows here, where in order it would not, unless the pages of the units
-   *  ranked before a laid unit are drawn first (and failed ones refused). A unit grown on the page already is never grown
-   *  again: laid in order the grown are a prefix of the rank, one placed later ranking after them (rankedOn); out of order
-   *  one may rank before them, and growing them again would move their lines twice, or read what a unit let go of (`free`) */
+   *  where the page's growth stands; one that throws for another unit than p is that unit's, thrown as it is laid. Every
+   *  unit placed on the page grows, whatever its other pages are: one left the original's for a page of it that failed
+   *  (refused 'page', never laid) or whose own growth threw on another page grows here too (the 1b-D design's L1). Laid in
+   *  order, such a unit was left before p was laid and did not grow; laid out of order, its other page may not have been
+   *  reached yet, so that what p grows over would depend on which pages were laid first: the page's growth reads that page
+   *  alone. That moves a drawing only beside a failed page (none on the 30 outputs). A unit grown on the page already is
+   *  never grown again: every unit with lines on a page is placed before the page's first growth (its units are rank peers
+   *  of every closure that grows there), so the grown are a prefix of the rank (rankedOn), and growing one again would move
+   *  its lines twice, or read what a unit let go of (`free`) */
   const growTo = p => {
     for (const g of p.linePages) {
       if (p.grew.has(g)) continue
@@ -1264,9 +1464,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         const q = line[i++]
         if (q.grew.has(g)) continue
         q.grew.add(g)
-        if (q === p || !q.refused) {
-          try { growOn(q, g) } catch (e) { if (q === p || isMemoryError(e)) { grownTo.set(g, i); throw e } q.stepError ??= e }
-        }
+        try { growOn(q, g) } catch (e) { if (q === p || isMemoryError(e)) { grownTo.set(g, i); throw e } q.stepError ??= e }
+        // (one whose lay was over, its growth now run on every page of its lines, lets go)
+        if (q !== p && settledUnit(q)) letGoUnit(q)
         if (q === p) break
       }
       grownTo.set(g, i)
@@ -1285,7 +1485,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading, each rendering proven
     // by the file (proofOf: a crop cut from its placeholder's own ink, page text in its segments), or the unit left the
     // original's where the file proves one not; a unit of a part with no layout as with no file (filed), through the same proof
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N }) : filed(p.id) ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id)), N) } : proof ? { proof: proofOf(null, null, N) } : null
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N, lineskip: LINESKIP }) : filed(p.id) ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id)), N) } : proof ? { proof: proofOf(null, null, N) } : null
     // (the citations and macros its renderings teach are the unit's own, learnt as it is read: a later placeholder of the
     // unit reads its earlier ones, never another unit's, S2. The paper's, learnt in lay order, made a unit's reading a
     // function of every unit laid before it; no unit of the 30 outputs is read otherwise without it, 2026-10-15)
@@ -1337,7 +1537,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const s = orig?.size ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
     const base = orig && orig.st.fam !== 'math' ? { ...orig.st } : { fam: 'serif', bold: p.unit.kind === 'heading', italic: false, caps: false, design: designs.serif }
     const keep = prep.keep?.length ? new Set(prep.keep) : null
-    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt)
+    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt)
     for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // a label the first line starts with stays the original's: the line starts after it. A file's first line starts at
@@ -1364,7 +1564,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (disposed) return
       if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; unlead(p); return }
     }
-    const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead)
+    const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
@@ -1381,7 +1581,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (adaptiveFill: every unit is laid at its leading relative to the original's own pitch, the script's own on a solid-set
     // original, and filled by its page's pass, fillPass. D filled a loose original's units alone (S3-12, against a band of
     // leading page by page moving the pages' pitches apart); D6's F6b fills every original's, its page's target held within
-    // the band of the last page's)
+    // the band of its own page's anchor (1b-C))
     if (P.adaptiveFill) {
       p.fillable = true
       p.P.leadBase = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
@@ -1432,7 +1632,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const match = x.orig !== undefined ? L2.styleMatch(x.orig, x.drawnRuns, x.drawnBase) : undefined
     // the record is the unit's at once: the page's even pass may run in the same task and update it
     p.rec = { id: p.id, kind: p.unit.kind, v: 2, pages: p.pages, cut: p.cut, ...x, sizeRatio: x.s ? r1(x.f / x.s) : undefined, s: x.s ? r1(x.s) : undefined, f: x.f ? r1(x.f) : undefined, orig: x.orig ? { key: x.orig.key, size: r1(x.orig.size), runs: x.orig.runs.length } : x.orig, match, drawnRuns: undefined, drawnBase: x.drawnBase }
-    stats.push(p.rec)
+    // (in the units' rank, the order they are laid in when the pages are laid in turn: whatever order they were laid in)
+    byRank(stats, p.rec)
   }
 
   // even=1: a page's body units laid out first, then all set at the smallest size any of them needs, then painted; a
@@ -1455,19 +1656,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
   // adaptiveFill's pass over a page's units that begin on it (fillPage), each filled unit's record updated from the layout
-  // it is drawn with (the lines TeX's rule opened among them: a looser leading may open none the fit's did); the paper's
-  // targets a page is held to, the last a page's body units told and the fullest page's own, in the order the pages'
-  // passes run (the
-  // units' laying order, the same whether the rows come at once or in parts: no page waits for a later one)
-  let held = null
+  // it is drawn with (the lines TeX's rule opened among them: a looser leading may open none the fit's did). A page's target
+  // is a function of its own units alone (pageTarget): no page reads another's, whatever the order the passes run in
   const fillPass = pg => {
-    const r = fillPage(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg), P, held, (p, target) => {
+    const begun = laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg)
+    // (after the even pass, which laid them anew: their fill leadings are the pass's, as they were)
+    if (P.even) for (const p of begun) fillLeadsOf(p, P)
+    const r = fillPage(begun, P, (p, target) => {
       const l = p.layout
       if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
-    }, { page: pg, continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
-    held = nextHeld(held, r)
+    }, { continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
     // (the page's fill numbers, kept with its record)
-    rows[pg - 1].fill = r && { own: r.own, anchor: r.anchor, lines: r.lines, body: r.body }
+    rows[pg - 1].fill = r && { own: r.own, anchor: r.anchor, target: r.target, body: r.body }
   }
   // the leftover packed (packPage) over a page's units laid, each moved unit's record updated
   const packPass = pg => {
@@ -1541,6 +1741,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const partsOf = q => [...(firstsOn[q] ?? [])].map(f => [f, passKey(f)]).sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1] || a[0] - b[0]).map(([f]) => f)
   /** page q's parts painted, in their order, as far as their passes have run */
   const paintOn = q => {
+    touched.add(q)
     const done = (paintedOn[q] ??= new Set())
     for (const f of partsOf(q)) {
       if (done.has(f)) continue
@@ -1564,6 +1765,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     passOrder[pg] = order.filter(u => !u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group)))
     settledAt[pg] = [...new Set(laid[pg].map(u => u.unit.group).filter(x => x && groupCells.has(x)))].filter(settleGroup)
     passed[pg] = 1
+    touched.add(pg)
     for (const q of new Set([pg, ...laid[pg].filter(u => u.pages[0] === pg).flatMap(u => u.pages)])) paintOn(q)
     // (the page passed: a unit on it every page of which has passed, painted on each (its paint lets it go) or left the
     // original's, lets go of what it was laid with)
@@ -1602,19 +1804,31 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // slice holds (`served`) or whose slice did not load (`face`))
     if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
-    if (g) (groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list.push(p)
+    // (each list a page's or a group's units laid, in their rank whatever order they were laid in (L3): a pass paints in it)
+    if (g) byRank((groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list, p)
+    for (const pg of p.pages) touched.add(pg)
     if (PASSES) {
       // (its fill leading is its fit's, fixed now (fillLeadsOf). With the even pass, which lays the units of a page anew before
-      // the fill, the fill leading is the pass's, as it was)
-      if (P.adaptiveFill && !P.even && p.fillable && !p.refused) fillLeadsOf(p, P)
+      // the fill, the fill leading of a unit on its own first page is the pass's, as it was (fillPass), and `fit` keeps the
+      // fit's, which is all a page it runs on to reads of it: no page's target then reads another page's even pass)
+      if (P.adaptiveFill && p.fillable && !p.refused) {
+        fillLeadsOf(p, P)
+        if (P.even) p.fit = { fillLead: p.fillLead, fitLines: p.fitLines }
+      }
       // (a page's pass sets the units that begin on it, which are then painted on each of their pages, each page in its
       // own order (paintOn): a unit is never painted from two layouts; a table's cells with their group, once it is laid
       // whole)
       for (const pg of p.pages) {
-        laid[pg].push(p)
-        if (laid[pg].length === expected[pg]) passPage(pg)
+        byRank(laid[pg], p)
+        // (every entry that may draw a unit on the page decided: a unit is laid only after its pages' entries are, its
+        // closure's rows)
+        if (laid[pg].length === expected[pg] && !undecided[pg]) passPage(pg)
       }
-    } else if (g) {
+      return
+    }
+    // (no page pass: each unit painted as it is laid, a page ready once every unit on it is)
+    for (const pg of p.pages) byRank(laid[pg], p)
+    if (g) {
       if (settleGroup(g)) paintGroup(g)
       // (a cell withheld with its group, or painted on its pages, lets go once its group is settled)
       for (const c of groupLaid.get(g).list) if (settledUnit(c)) letGoUnit(c)
@@ -1630,7 +1844,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // page, less the faces it waited for, fonts) and painted, their operations made (ops: the erase and its put-back, or
   // the swap's rectangles), drawn on the copy (compose) and set as SVG (svg)
   const pageTimes = []
-  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0 })
+  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0, links: 0 })
   // the documents read: the original (`doc`) and the text-removed one (`removal.doc`, often the same). Under parts the newest
   // composed document, swapped at a part with a tail (swap); each read of a page holds its document (using), and one no longer
   // the newest is told to the host (onRetired) once no read holds it, the newest at dispose: each once, none destroyed here
@@ -1664,6 +1878,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const textP = page.getTextContent()
       await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
       const tRendered = performance.now()
+      // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
+      // read before the page is cleaned up)
+      const annP = LK.readAnnots(page)
       timesOf(i).render += tRendered - tPage
       const tc = await textP
       if (i === 1 && lmP) await lmP
@@ -1683,7 +1900,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       chars2[i - 1] = L2.pageChars2(tc, fontOf, mappedOfPage(page))
       timesOf(i).text += performance.now() - tRendered
-      for (const c of chars2[i - 1]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; fontTally.set(key, (fontTally.get(key) ?? 0) + 1) }
+      // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
+      const raw = await annP
+      if (raw === null) { annots[i - 1] = null; linkStats.unread++ } else {
+        const read = LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars2[i - 1]))
+        annots[i - 1] = read.list
+        linkStats.total += read.total
+        linkStats.unsupported += read.unsupported
+      }
+      // (the request's latency from its dispatch to its answer, and the parse)
+      timesOf(i).links += performance.now() - tRendered
     } finally {
       // (its pixels and characters read, or the read thrown: nothing reads the proxy's rendering state again (lp item 2), a
       // view's copy renders the page anew (renderAt), and PDF.js keeps the state of a render still under way to the end)
@@ -1727,8 +1953,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       r.left = null
     }
     if (i === 1) {
-      // the paper's designs from its first page: the serif with most characters, and its sans and mono
-      const pick = fam => [...fontTally].filter(([k]) => k.startsWith(`${fam}:`)).sort((a, b) => b[1] - a[1])[0]?.[0].split(':')[1]
+      // the paper's designs from its first page: the serif with most characters, and its sans and mono, of page 1's own
+      // characters (L3: page 1 is drawn first, and no other page's drawing is read)
+      const tally = new Map()
+      for (const c of chars2[0]) if (c.st.fam !== 'math') { const key = `${c.st.fam}:${c.st.design}`; tally.set(key, (tally.get(key) ?? 0) + 1) }
+      const pick = fam => [...tally].filter(([k]) => k.startsWith(`${fam}:`)).sort((a, b) => b[1] - a[1])[0]?.[0].split(':')[1]
       const serif = pick('serif') ?? 'times'
       designs = { serif, sans: pick('sans') ?? (serif === 'cm' ? 'cmss' : 'helvetica'), mono: pick('mono') ?? (serif === 'cm' ? 'cmtt' : 'courier') }
       if (roles) {
@@ -1748,27 +1977,39 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
 
-  // ---- the units as they arrive (take, end). A page is laid as one open over every unit lays it: the units its drawing
-  // lays are layGroups' (each a batch's place in the stream, which counts the units placed before it), its page passes
-  // wait for every unit placed on it, and its units read the file's own units' lines on their pages. So a page is laid
-  // once every unit up to the last of those in the stream (`K`) is in and decided (needsOf), and the units are placed
-  // in the stream's order as each prefix is (`frontier`): an order fixed before the rows are read would not be the one
-  // open's (a unit not translated, an author, a cell whose group is withheld, the file's lines in place of the geometry's
-  // decide which units are placed, and so the batches). A unit's row is fixed once it is placed (a row taken for it
-  // later is late), and every row once a table's group is read
+  // ---- the units as they arrive (take, end). A page is laid as one open over every unit lays it: its units in their rank
+  // (layGroups' order: each a batch's place in the stream, which counts the units placed before it), each one's growth on a
+  // page after that of every unit ranked before it there, each page's pass once every unit placed on it is laid, its paint
+  // in its own order. So a page is laid once every page its closure reads is drawn and every entry of K it reads (its
+  // `rows`) is in and decided (need.mjs closureOf, the 1b-D design §1.2), and the laying of no other page changes it. An
+  // entry is decided by itself (consume), in any order, a unit placed taking its place in the stream's order: an order fixed
+  // before the rows are read would not be the one open's (a unit not translated, an author, a cell whose group is withheld,
+  // the file's lines in place of the geometry's decide which units are placed, and so the batches). A unit's row is fixed
+  // once it is decided (a row taken for it later is late), and every row once a table's group is read
   // (the geometry's units and the file's alone, in the stream's order: v0's sort is stable, so equal streams keep the
   // order the hybrid reports its sources in)
   addUnits(cands.slice().sort((a, b) => a.stream - b.stream))
-  /** what laying each page reads of K as it stands (needsOf). Under parts, until they end, an entry past K stands for every
-   *  part not told: framed on the page after the last covered, so that each lay, done and complete index of K's length or
-   *  more names a page that waits for a part, and each one below it is the whole paper's (the door design §0.3) */
-  const needNow = () => needsOf(partsEnded || through >= N ? K : [...K, { lists: [[through + 1]], reach: [through + 1], rects: true }], N, PASSES, c => !c.rects)
-  let need = needNow()
-  /** the units placed, in the stream's order, as layGroups and doneAt read them (`placed` is the same less each table
-   *  group withheld as its cells are laid), and by id */
+  /** K as laying the pages in order reads it (closureOf's prefix: the rules that lay in order, ORDER_FREE false). Under parts,
+   *  until they end, an entry past K stands for every part not told: framed on the page after the last covered, so that each
+   *  lay, done and complete index of K's length or more names a page that waits for a part, and each one below it is the
+   *  whole paper's (the door design §0.3) */
+  const inOrderK = () => (partsEnded || through >= N ? K : [...K, { lists: [[through + 1]], reach: [through + 1], rects: true }])
+  let KS = inOrderK()
+  /** each page's closure over K so far (closureOf), until a part adds to K or the parts end; where the rules lay in order,
+   *  closureOf's prefix */
+  let closures = new Map()
+  const closure = p => {
+    let C = closures.get(p)
+    if (!C) closures.set(p, (C = ORDER_FREE ? closureOf(K, N, p) : closureOf(KS, N, p, { orderFree: false, passes: PASSES })))
+    return C
+  }
+  /** K grew, or the parts ended: every closure taken again */
+  const regrown = () => { KS = inOrderK(); closures = new Map() }
+  /** the units placed, in the stream's order, as layGroups reads them (`placed` is the same less each table group withheld
+   *  as its cells are laid), and by id */
   const laidOut = [], byId = new Map()
   const fixed = new Set(), late = new Set(), deferred = []
-  let frontier = 0, ended = false
+  let ended = false
   /** whether the unit's row decides what it is: in, and a table cell's group readable (every row in) where it is placed */
   const settleable = c => {
     if (!c.lists.length || frozenAll) return true
@@ -1779,9 +2020,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (tableGroups && (membersOf.get(u.group) ?? []).every(id => !pending.has(id))) return true
     return !decisionOf(c).p
   }
-  /** the next unit in the stream placed, or not and why */
+  /** a unit put in a list of the stream's order (K's), at its place: entries are decided in any order */
+  const inStream = (list, p) => {
+    let lo = 0, hi = list.length
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid].k < p.k) lo = mid + 1; else hi = mid }
+    list.splice(lo, 0, p)
+  }
+  /** an entry of K decided, its row in (settleable): its unit placed, or not and why */
   const consume = c => {
-    frontier++
+    if (c.decided) return
+    c.decided = true
+    for (const q of new Set(c.lists.flat())) { undecided[q]--; touched.add(q) }
     // (drawn on no page shown: it places nothing, and why it is left is read at the end)
     if (!c.lists.length) { deferred.push(c); dropReads(c); return }
     fixed.add(c.id)
@@ -1794,36 +2043,43 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', chars: trCharsOf(u), pages: p.pages }); p = null }
     }
     if (!p) { dropReads(c); return }
-    laidOut.push(p)
-    placed.push(p)
+    p.k = c.k
+    inStream(laidOut, p)
+    inStream(placed, p)
     byId.set(p.id, p)
+    planned = false
     for (const pg of p.pages) expected[pg]++
     if (!c.rects) addRects(p.id, p.rects)
     toGrow(p)
     for (const pg of p.pages) { (firstsOn[pg] ??= new Set()).add(p.pages[0]); (unitsOn[pg] ??= []).push(p) }
   }
-  // each page's units, in the order of the page whose drawing lays them (a recorded order, where given, within it), and
-  // the page after whose units a page is done: the last that lays a unit with lines on it; over the units placed so far
-  // (their pages', where need says so)
+  // each placed unit's rank (layGroups' order, a recorded order, where given, within each page's group) and the page whose
+  // drawing lays it in order (its group's): over the units placed so far, planned again once more are
   const rank = orderIn ? new Map(orderIn.map((id, i) => [id, i])) : null
-  let groups = new Map(), doneAt = Array.from({ length: N + 1 }, (_, pg) => pg), plannedTo = 0
+  const groupPage = new Map()
+  let planned = true
   const plan = () => {
-    plannedTo = frontier
-    groups = new Map(layGroups(laidOut, batch).map(([pg, ids]) => [pg, rank ? ids.slice().sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity)) : ids]))
+    planned = true
+    doneCache = null
+    const groups = layGroups(laidOut, batch).map(([pg, ids]) => [pg, rank ? ids.slice().sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity)) : ids])
     // (each unit's place in the lay order, the pages' growth steps' rank: a unit placed later takes its place among them,
     // and the order of those placed before stays)
-    rankOf = new Map([...groups.values()].flat().map((id, i) => [id, i]))
-    const groupOf = new Map()
-    for (const [pg, ids] of groups) for (const id of ids) groupOf.set(id, pg)
-    doneAt = Array.from({ length: N + 1 }, (_, pg) => pg)
-    for (const p of laidOut) for (const pg of p.pages) doneAt[pg] = Math.max(doneAt[pg], groupOf.get(p.id) ?? pg)
-    // (with a page pass, PASSES (the even pass, the page fill, the leftover packed): a page is done once the first page
-    // of each unit on it is, whose pass sets that unit)
-    if (PASSES) for (let pg = 1; pg <= N; pg++) for (const p of laidOut) if (p.pages.includes(pg)) doneAt[pg] = Math.max(doneAt[pg], doneAt[p.pages[0]])
+    rankOf = new Map(groups.flatMap(([, ids]) => ids).map((id, i) => [id, i]))
+    groupPage.clear()
+    for (const [pg, ids] of groups) for (const id of ids) groupPage.set(id, pg)
   }
-  /** page pg's doneAt once the units it reads are placed and planned, else Infinity */
-  const doneAtOf = pg => (pg >= 1 && pg <= N && plannedTo <= need.done[pg] ? Infinity : doneAt[pg])
-  // (until's: waiting for a take or end(); one waiter, until's own chain)
+  /** laid in order (ORDER_FREE false), the page after whose units each page is done: the last whose drawing lays a unit with
+   *  lines on it, and with a page pass, the last that finishes the first page of each unit on it, whose pass sets that unit
+   *  (once a plan: it changes only as more units are placed) */
+  let doneCache = null
+  const doneAtAll = () => {
+    if (doneCache) return doneCache
+    const d = (doneCache = Array.from({ length: N + 1 }, (_, pg) => pg))
+    for (const p of laidOut) for (const pg of p.pages) d[pg] = Math.max(d[pg], groupPage.get(p.id) ?? pg)
+    if (PASSES) for (let pg = 1; pg <= N; pg++) for (const p of laidOut) if (p.pages.includes(pg)) d[pg] = Math.max(d[pg], d[p.pages[0]])
+    return d
+  }
+  // (a wait: for a take, a part, end() or a poke; one waiter, the closure in hand's)
   let wake = null
   /** whether the run was let go (dispose): nothing is drawn or laid after it */
   let disposed = false
@@ -1831,27 +2087,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** the one wait, until a take, a part, end() or a poke changes something: the waiter set before the instrument hears of it,
    *  so that what the instrument does at once is not lost */
   const waitFor = what => { const woken = new Promise(ok => { wake = ok }); onWait?.(what); return woken }
-  /** the units of the stream up to K[target()] placed, as their rows come (the index read again after each wait); `still`,
-   *  read at each wait, false ends it there */
-  // (parts: at the end of K so far, a target past it waits for a part, unless the parts have ended)
-  const settle = async (target, still = ALWAYS) => {
-    let ended = false
-    while (!disposed && frontier <= target() && (frontier < K.length || !partsEnded)) {
-      // (planned before waiting: doneAt never reads a placement it has not planned)
-      const what = frontier >= K.length ? 'part' : settleable(K[frontier]) ? null : 'rows'
-      if (what) { if (plannedTo < frontier) plan(); if (!still()) { ended = true; break } await waitFor(what); continue }
-      consume(K[frontier])
-    }
-    if (plannedTo < frontier) plan()
-    // (whether it reached its target: false where `still` ended it)
-    return !ended && !disposed
-  }
   /** every unit placed with what is in, and why each one left is left (once the parts have ended): the units no page shows,
    *  and those v0 neither holds nor the file alone locates */
   const settleAll = () => {
     pending.clear()
     freezeAll()
-    while (frontier < K.length) consume(K[frontier])
+    for (const c of K) consume(c)
     if (partsEnded) account()
     plan()
   }
@@ -1861,62 +2102,172 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const c of deferred.splice(0)) { fixed.add(c.id); const d = decisionOf(c); if (d.skip) skipped.push(d.skip) }
     U.forEach((u, id) => { if (!translated(u) || candOf.has(id)) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u)) })
   }
-  /** how far into the stream every unit's row decides what it is */
-  const extent = () => { let j = frontier; while (j < K.length && settleable(K[j])) j++; return j }
-  const isComplete = (pg, at = extent()) => ended || at > need.complete[Math.min(Math.max(pg, 0), N)]
-  const told = new Uint8Array(N + 1)
+  /** whether laying page p waits for nothing more to come, neither a part nor a row (the 1b-D design §2.1): the parts cover
+   *  its closure's bound, or have ended, and every entry it decides is in K and decided or settleable */
+  const inputsOf = p => {
+    const C = closure(p)
+    if (!partsEnded && through < C.bound) return false
+    for (const i of C.rows) { if (i >= K.length) return false; const c = K[i]; if (!c.decided && !settleable(c)) return false }
+    return true
+  }
+  /** the ids of the units whose rows laying page p still waits for, taken neither nor ended (its closure's over K so far: a
+   *  part may add more): its entries' and their table groups' cells' (a cell is decided with its group's rows), every row
+   *  awaited where the open was given no group */
+  const rowsFor = p => {
+    if (!pending.size) return []
+    const out = new Set()
+    for (const i of closure(p).rows) {
+      const c = K[i]
+      if (!c || c.decided || settleable(c)) continue
+      // (its own row; else it is a cell whose group waits: its group's cells' rows, every row where the open was given no group)
+      if (pending.has(c.id)) { out.add(c.id); continue }
+      if (!tableGroups) { for (const id of pending) out.add(id); break }
+      for (const id of membersOf.get(c.group) ?? []) if (pending.has(id)) out.add(id)
+    }
+    return [...out].sort((a, b) => a - b)
+  }
+  const toldComplete = new Uint8Array(N + 1)
   // (today's call, every unit given: placed at once, as the one open places them)
   if (!pending.size) settleAll()
   const order = [], pageMs = []
-  let drawnTo = 0, busy = Promise.resolve()
-  /** the next page drawn, then the units its drawing lays laid once they have come, a yield before each (no task lays
-   *  two; the page's passes run with the unit that completes it) */
-  // (parts: a page is drawn once a part covers it, the one wait `still` ends before anything is drawn; a page no part will
-  // cover, or whose drawing or names throw, is stepped over, failed: nothing of it drawn, and every unit on it, on any of its
-  // pages, left the original's, why `page`)
-  /** the page drawn and named whose units are not laid yet (its wait for rows ended by `still`): taken up where it stopped */
-  let drawn = 0
-  const layNext = async (still = ALWAYS) => {
-    const pg = drawnTo + 1
-    while (!disposed && through < pg && !partsEnded) { if (!still()) return; await waitFor('part') }
-    if (disposed) return
+  let busy = Promise.resolve()
+  /** the run's slices of work between two yields (SLICE_MS) */
+  const slices = slicer()
+  /** one closure laid at a time, each after the one before has ended (an until, a layFor) */
+  const serial = f => { const r = busy.then(f, f); busy = r.then(() => {}, () => {}); return r }
+  /** each page drawn (its drawing read, its names painted) and ready (readyOf, final), at most once */
+  const drawnPages = new Uint8Array(N + 1), readyAt = new Uint8Array(N + 1), toldStep = new Uint8Array(N + 1)
+  /** whether page q is ready: drawn, every entry of K that may draw a unit on it decided, every unit placed on it laid and,
+   *  with a page pass, its pass run and each of its parts painted (every first page's of a unit on it). Final: a page ready
+   *  never changes within the run */
+  const readyOf = q => {
+    if (!(q >= 1 && q <= N)) return false
+    if (readyAt[q]) return true
+    if (!drawnPages[q] || failedPages.has(q) || undecided[q] || laid[q].length !== expected[q]) return false
+    if (PASSES && expected[q]) {
+      if (!passed[q]) return false
+      for (const f of firstsOn[q] ?? []) if (!paintedOn[q]?.has(f)) return false
+    }
+    readyAt[q] = 1
+    return true
+  }
+  /** each page touched since the last look that is now ready or failed, told once (onStep), a ready one with the time the
+   *  closure in hand took since the page before it was ready (`ms()`: the closure's work so far, less what it waited for): each
+   *  ms counted for one page, so that the pages' times add up to the closures' (pageMs) */
+  const report = ms => {
+    for (const q of touched) {
+      if (q < 1 || q > N || toldStep[q] || !(failedPages.has(q) || readyOf(q))) continue
+      toldStep[q] = 1
+      if (readyAt[q]) { const t = ms(); pageMs[q] = t - (ms.last ?? 0); ms.last = t }
+      onStep?.(q)
+    }
+    touched.clear()
+  }
+  /**
+   * Page q drawn and its names painted (layer2.mjs nameInTarget: before its units), once a part covers it; a wait `still` may
+   * end (false then, nothing drawn). A page no part will cover, or whose drawing or names throw, is stepped over, failed:
+   * nothing of it drawn, and every unit on it, on any of its pages, left the original's, why `page`; but the run ends, never a
+   * page stepped over, on a memory error, a document opened without PDF_OPTIONS (#352's refusal) and page 1, whose drawing
+   * sets the paper's designs, family, patterns and faces that every later page is laid in. No page is drawn twice
+   */
+  const drawOne = async (q, still, wait) => {
+    while (!disposed && through < q && !partsEnded) { if (!still()) return false; await wait('part') }
+    if (disposed) return false
+    if (drawnPages[q] || failedPages.has(q)) return true
+    touched.add(q)
+    if (q > through) { failedPages.add(q); return true }
+    try {
+      await drawPage(q)
+      if (!disposed) await paintNames(q)
+    } catch (e) {
+      if (isMemoryError(e) || e?.refusesDocument || q === 1) throw e
+      failedPages.add(q)
+      // (none of it a source to cut a crop from)
+      if (rows[q - 1]) rows[q - 1].base = false
+      return true
+    }
+    if (disposed) return false
+    drawnPages[q] = 1
+    unswept.add(q)
+    return true
+  }
+  /**
+   * Page p's closure laid (the 1b-D design §2.1): page 1 drawn first; then, the closure taken again after every wait (a part
+   * may grow it), its pages drawn in order, its rows decided in the stream's order as each is in, and once the parts cover it
+   * and its rows are in, its units laid in their rank, back to back in slices (`slices`, SLICE_MS) (each unit's pages, and its
+   * placeholders', drawn before it is: in order too, L2). A unit on a page that failed is left the original's, why `page`, and
+   * the closure goes on, p's own failure too. Each page told as it is ready or failed (onStep). It ends once p is ready or failed, or `still` (read at every
+   * wait, between pages and between units) is false: what is done stays done, each step having run on complete inputs, and
+   * the next closure takes it up from there
+   */
+  const layIn = async (p, still) => {
+    if (disposed || readyOf(p)) return
     const t0 = performance.now()
-    if (drawn >= pg) { /* drawn already, its wait for rows ended before */ } else if (pg > through) failedPages.add(pg)
-    else {
-      try {
-        await drawPage(pg)
-        // (the page's names, before its units: layer2.mjs nameInTarget)
-        if (!disposed) await paintNames(pg)
-      } catch (e) {
-        // (the run ends, never a page stepped over: a memory error; a document opened without PDF_OPTIONS (#352's refusal); and
-        // page 1, whose drawing sets the paper's designs, family, patterns and faces that every later page is laid in)
-        if (isMemoryError(e) || e?.refusesDocument || pg === 1) throw e
-        failedPages.add(pg)
-        // (none of it a source to cut a crop from)
-        if (rows[pg - 1]) rows[pg - 1].base = false
+    let waited = 0
+    const wait = async what => { const t = performance.now(); await waitFor(what); waited += performance.now() - t }
+    const ms = () => performance.now() - t0 - waited
+    if (partsEnded && p > through) { failedPages.add(p); touched.add(p); report(ms); return }
+    for (;;) {
+      if (disposed || !still()) return
+      if (!(await drawOne(1, still, wait))) return
+      report(ms)
+      const C = closure(p)
+      // its pages, in order; a part told meanwhile may grow the closure: taken again
+      let again = false
+      for (const q of C.draw) {
+        // (a page not drawn yet waits while a newer target overtakes: a page's drawing is no unit, but no shorter)
+        if (!drawnPages[q] && !failedPages.has(q) && !still()) return
+        if (!(await drawOne(q, still, wait))) return
+        report(ms)
+        if (closures.get(p) !== C) { again = true; break }
       }
-    }
-    if (disposed) return
-    drawn = pg
-    const t1 = performance.now()
-    // (the units it lays wait for their rows: `still` ends that wait too, the page drawn and its units left to the next ask)
-    if (!(await settle(() => need.lay[pg], still))) return
-    const waited = performance.now() - t1
-    // (let go during the yield before a unit, as a host's dispose usually is: that unit is not laid either)
-    for (const id of groups.get(pg) ?? []) {
+      if (again) continue
+      // (a page that failed, p too, is stepped over: its units are left the original's as they would be laid, so that what
+      // was left and why is told whatever page was asked; a host's drive turns away from a failed page at once, `still`)
       if (disposed) return
-      const p = byId.get(id)
-      if (p.pages.some(q => failedPages.has(q))) { refuseUnit(p, 'page'); continue }
-      await yieldNow()
-      if (disposed) return
-      order.push(id)
-      await arrive(p)
+      // its rows, each decided once it is in; then every part it reads
+      let missing = null
+      for (const i of C.rows) {
+        if (i >= K.length) { missing = 'part'; break }
+        const c = K[i]
+        if (c.decided) continue
+        if (!settleable(c)) { missing = 'rows'; break }
+        consume(c)
+      }
+      if (!missing && !partsEnded && through < C.bound) missing = 'part'
+      if (missing) { report(ms); if (!still()) return; await wait(missing); continue }
+      if (!planned) plan()
+      report(ms)
+      // its units, in their rank (laid in order, the units its pages' drawings lay: those whose group page is p's doneAt at most)
+      const done = ORDER_FREE ? null : doneAtAll()[p]
+      const units = []
+      for (const i of C.lay) { const u = byId.get(K[i].id); if (u && !u.taken && (ORDER_FREE || groupPage.get(u.id) <= done)) units.push(u) }
+      units.sort((a, b) => rankOf.get(a.id) - rankOf.get(b.id))
+      for (const u of units) {
+        if (disposed || !still()) return
+        if (!planned) plan()
+        for (const q of candOf.get(u.id).holds ?? []) {
+          if (!drawnPages[q] && !failedPages.has(q) && !still()) return
+          if (!(await drawOne(q, still, wait))) return
+        }
+        if (disposed) return
+        if (u.pages.some(q => failedPages.has(q))) { u.taken = true; refuseUnit(u, 'page'); report(ms); continue }
+        // (the slice's work done: a yield; let go during it, as a host's dispose usually is, or overtaken by a newer target, that
+        // unit is not laid: it stays for its page's closure to lay)
+        if (slices.due()) { await slices.give(); if (disposed || !still()) return }
+        u.taken = true
+        order.push(u.id)
+        await arrive(u)
+        if (disposed) return
+        report(ms)
+      }
+      sweep()
+      report(ms)
+      if (readyOf(p) || failedPages.has(p) || disposed) return
+      // (laid in order, a page may be done after a page its first closure did not reach: on to it)
+      if (!ORDER_FREE && units.length) continue
+      throw new Error(`v0: page ${p} is not ready once its closure is laid`)
     }
-    if (disposed) return
-    drawnTo = pg
-    pageMs[pg] = performance.now() - t0 - waited
-    sweep()
-    onStep?.(pg)
   }
   const colsOf = pg => {
     // the page's columns: its paragraphs' lines' left and right edges, clustered
@@ -1987,6 +2338,47 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       return svg
     },
     /**
+     * Page `pg`'s word table (words.mjs; the 1b design §4): the drawn tokens in drawing order with each unit's span and each token's
+     * word in its translation, and the units left the original's. A new record on every ask, none of its arrays the run's (the
+     * caller may transfer or free them). Only a page that is final (ready) has one: it is frozen at the first ask if it is not
+     * already; a RangeError for another, never a table that would change
+     */
+    wordsOf(pg) {
+      const r = rows[pg - 1]
+      if (!r) throw new RangeError(`wordsOf: page ${pg} has no row`)
+      if (!readyOf(pg)) throw new RangeError(`wordsOf: page ${pg} is not final`)
+      freezeWordsOf(pg)
+      return copyWords(r.words)
+    },
+    /**
+     * Page `pg`'s links (links.mjs; the 3a design): the records of the page's Link annotations a reader can carry, sorted and
+     * ranked, a new copy on every ask (none of its objects the run's). Only a page that is final (ready) has them: frozen at the
+     * first ask if they are not already; a RangeError for another. A page whose annotations could not be read answers []
+     */
+    linksOf(pg) {
+      const r = rows[pg - 1]
+      if (!r) throw new RangeError(`linksOf: page ${pg} has no row`)
+      if (!readyOf(pg)) throw new RangeError(`linksOf: page ${pg} is not final`)
+      freezeLinksOf(pg)
+      return LK.copyLinks(r.links)
+    },
+    /** the counts of the links read and frozen so far (LayerStats.links), a copy */
+    get linkStats() { return { ...linkStats, dropped: { ...linkStats.dropped } } },
+    /**
+     * With `records`, the gate's: each of page `pg`'s records' source annotations and the tier that made it, in the records'
+     * order ({ annots: [[page, i], ...], tier }), the attribution the gate checks against the original's annotations (never
+     * trusted). A RangeError for a page that is not final
+     */
+    ...(records ? {
+      linkSources(pg) {
+        const r = rows[pg - 1]
+        if (!r) throw new RangeError(`linkSources: page ${pg} has no row`)
+        if (!readyOf(pg)) throw new RangeError(`linkSources: page ${pg} is not final`)
+        freezeLinksOf(pg)
+        return (linkSrc[pg - 1] ?? []).map(s => ({ annots: s.annots.map(a => a.slice()), tier: s.tier }))
+      },
+    } : {}),
+    /**
      * What the run holds (the 1b design §3). With no page: whether it lets go (`free`), keeps the units' records and the
      * audit (`records`), and keeps on the gate's shelf what it lets go (`shelf`). With a page: the analysis state it holds of
      * the page (`chars`, `ink`, `items`, `accounted`, `kept`, `laid`, and `canvas` and `removed`, a copy's), the units on it
@@ -2021,21 +2413,23 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (only) out.texOnly = only
       return out
     },
-    /** the page after whose units page `pg` is done (Infinity until the units it reads have come) */
-    doneAt: doneAtOf,
-    /** every page up to the one that finishes page `p` drawn, and the units each lays laid and painted, a unit a task:
-     *  page after page, each once the units it lays have come, up to p, then on to the page that finishes it (doneAt,
-     *  once the units on it have come). `still`, read between pages and at each wait for rows, false ends it there */
+    /** page `pg` once it is ready (the lab's and the gate's: a page is done once it is ready), Infinity before */
+    doneAt: pg => (readyOf(pg) ? pg : Infinity),
+    /** every page up to `p` ready (or failed): each page's closure laid in turn, from page 1 (the gate's in-order run, closure
+     *  by closure). `still`, read at each wait and between pages and units, false ends it there */
     until(p, still = ALWAYS) {
-      busy = busy.then(async () => {
-        const q = Math.min(p, N)
-        while (!disposed && still() && drawnTo < q) await layNext(still)
-        await settle(() => need.done[q] ?? -1, still)
-        const to = Math.min(N, doneAt[q] ?? p)
-        while (!disposed && still() && drawnTo < to) await layNext(still)
-      })
-      return busy
+      return serial(async () => { for (let q = 1; q <= Math.min(p, N) && !disposed && still(); q++) await layIn(q, still) })
     },
+    /** page `p`'s closure laid (layIn), and so every page it makes ready; `still` as until's */
+    layFor(p, still = ALWAYS) { return serial(() => layIn(p, still)) },
+    /** page `p`'s closure over K so far (need.mjs Closure): final once the parts cover its bound or have ended */
+    closure: p => closure(p),
+    /** whether page `p` is ready: drawn and laid, final within the run (its record is what stays of it) */
+    ready: p => readyOf(p),
+    /** the ids of the units whose rows laying page `p` still waits for (its closure's over K so far), in id order */
+    rowsFor: p => rowsFor(p),
+    /** the unit ids of K's entries (a closure's `lay` or `rows`, K indices), in their order */
+    idsOf: entries => entries.map(i => K[i]?.id),
     /**
      * Parts (`parts`: the open given no view and no left unit): the next part, read by readPart against the chain, its layout
      * merged into the hybrid's index by the host before (facade.mjs). The views of the pages it tells first and their rows;
@@ -2058,11 +2452,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (const c of entries) { cands.push(c); if (c.rects) GU.push([c.id, c.stream, c.rects]) }
       addUnits(entries)
       through = b
-      need = needNow()
+      regrown()
       // (the rows ended: what they decide is fixed, the groups the part tells read, its units placed)
       if (ended) {
         readGroups()
-        while (frontier < K.length) consume(K[frontier])
+        for (const c of K) consume(c)
         plan()
       }
       changed()
@@ -2071,7 +2465,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     endParts() {
       if (partsEnded) return
       partsEnded = true
-      need = needNow()
+      regrown()
       if (ended) { readGroups(); account(); plan() }
       changed()
     },
@@ -2087,12 +2481,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** the last page a part covers (every page, a whole open) */
     get through() { return through },
     get partsEnded() { return partsEnded },
-    /** the last page whose drawing's step has ended (its units laid, or it failed) */
-    get drawnTo() { return drawnTo },
-    /** how far into the stream every unit's row decides what it is (an index of K, its length where every one does) */
-    extent: () => extent(),
-    /** whether until(p) waits for nothing more to come, neither a part nor a row (`at`: extent(), read once for many pages) */
-    inputs: (p, at = extent()) => (partsEnded || need.complete[p] < K.length) && (ended || at > need.complete[p]),
+    /** the last page up to which every page is ready or failed (a prefix: the lab's and the tests' measure of until) */
+    get drawnTo() { let d = 0; while (d < N && (readyOf(d + 1) || failedPages.has(d + 1))) d++; return d },
+    /** whether laying page `p` waits for nothing more to come, neither a part nor a row (inputsOf) */
+    inputs: p => inputsOf(p),
     /** whether page p failed: its drawing threw, or no part covers it and the parts have ended */
     failed: p => failedPages.has(p) || (partsEnded && p > through),
     /** a wait under way looks again at what it waits for (its `still` among it) */
@@ -2114,8 +2506,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (tex) { const tr = translated(row) ? trPiecesOf(row.pieces, q => q.k) : null; if (tr) tex.pieces.set(id, tr); else tex.pieces.delete(id) }
       }
       changed()
-      const at = extent(), complete = []
-      for (let pg = 1; pg <= N; pg++) if (!told[pg] && isComplete(pg, at)) { told[pg] = 1; complete.push(pg) }
+      // (a page is complete once laying it waits for nothing more: its closure covered and its rows in, told once; pages
+      // come out of the stream's order, each by its own closure)
+      const complete = []
+      for (let pg = 1; pg <= N; pg++) if (!toldComplete[pg] && inputsOf(pg)) { toldComplete[pg] = 1; complete.push(pg) }
       return { complete }
     },
     /** no more units: every unit placed with what is in, every page complete */
@@ -2127,9 +2521,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       sweep()
       changed()
     },
-    /** whether every unit page `pg`'s laying reads has come (or end()): until(pg) then waits for no take. It turns false
-     *  again only where a table cell's row is taken again before its group is read */
-    complete: pg => isComplete(pg),
+    /** whether laying page `pg` waits for nothing more to come (inputsOf: its closure's parts and rows, or end()) */
+    complete: pg => inputsOf(pg),
     /** the ids of every row taken that could no longer change the drawing, and changed nothing: its unit placed already
      *  (its page may not be laid yet), its rows fixed by a table group read, taken after end(), or never expected. Not a
      *  page to draw again: no laid page ever changes */
@@ -2167,7 +2560,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
      *  page is laid: with no copy the run keeps no canvas of a page, and lets go of its analysis state by itself (`free`) */
     release(pg) {
       const r = rows[pg - 1]
-      if (!r || drawnTo < doneAtOf(pg)) return
+      if (!r || !readyOf(pg)) return
       // (nor while a unit on it is still to be painted on one of its pages: a crop may be cut from it there, on v0's own copy)
       // (a page let go, `free`, has none: sweep lets it go only then)
       if (awaitsPaint(pg)) return

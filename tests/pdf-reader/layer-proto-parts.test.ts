@@ -2,7 +2,7 @@ import { LAB_ON, LAB_PAPERS, labFiles } from './helpers/lab-data'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { cutBundle } from '@/pdf-reader/engine/layer-proto/cut.mjs'
+import { cutBundle, needFrontier } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import { layoutFacade } from '@/pdf-reader/engine/layer-proto/facade.mjs'
 import { type LayerIndex, mergeParts, type ReadPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
@@ -137,7 +137,7 @@ interface PartsOptions { before: number; ended: 'open' | 'last'; feed?: 'eager' 
  *  it ('parts', readiness alone: the rest, and end(), after the last part). Each page asked whose inputs are in is laid with no
  *  wait at all (Q1). It lets go of what it laid as the reader's run does (`free`), its records kept for the comparison (the
  *  gate's shelf); `records: false` (the reader's), their count alone. `onPage(run, p)`: after each page asked is laid */
-async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?: unknown; onPage?: (run: Run, p: number) => void }) {
+async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?: unknown; onPage?: (run: Run, p: number, grown: number) => void }) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const facade = layoutFacade(P.index.head)
   const doc = P.docFor(0)
@@ -151,7 +151,9 @@ async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?:
   const all = unitsOfRows(P.index, rowsOfIndex(P.index))
   const byParts = o.rows === 'parts'
   if (!byParts) { run.take(all as never); if (o.ended === 'open') run.end() }
+  let grown = 0
   const grow = (i: number) => {
+    grown++
     const part = P.parts[i]!
     facade.add(part)
     run.grow(part)
@@ -165,7 +167,7 @@ async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?:
       const sure = run.inputs(p), was = waits
       await run.until(p)
       if (sure && waits !== was) q1.push(`page ${p}: laid with its inputs in, it waited`)
-      o.onPage?.(run, p)
+      o.onPage?.(run, p, grown)
     }
   })()
   for (let i = o.before; i < P.parts.length; i++) {
@@ -180,7 +182,7 @@ async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?:
   return { run, q1 }
 }
 
-async function takePaper(spec: PaperSpec, ends?: number[], o: { addon?: boolean } = {}): Promise<Paper & { honoured: boolean }> {
+async function takePaper(spec: PaperSpec, ends?: number[], o: { addon?: boolean; extend?: boolean } = {}): Promise<Paper & { honoured: boolean }> {
   const c = await cutSpec(spec, ends, o)
   // (the parts' last pages: those asked, and the paper's last)
   const asked = ends ? [...ends, spec.pages].join() : null
@@ -262,7 +264,8 @@ describe('the run in parts: waits, failures and documents', () => {
   })
 
   it('waits for the part that covers a page, and draws nothing of it before', async () => {
-    const P = await takePaper(TAKE)
+    // (the doubling schedule alone: its first part is page 1)
+    const P = await takePaper(TAKE, undefined, { extend: false })
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const facade = layoutFacade(P.index.head)
     const doc = P.docFor(0) as ReturnType<Paper['docFor']>
@@ -282,14 +285,15 @@ describe('the run in parts: waits, failures and documents', () => {
     facade.add(P.parts[0]!)
     run.grow(P.parts[0]!)
     expect(run.rows[0]).not.toBeNull()
-    for (let i = 0; i < 100 && run.drawnTo < 1; i++) await tick()
-    await ticks()
-    // (page 1 drawn, its units laid; the unit running on to page 2 waits for the part that covers page 2)
-    expect(run.drawnTo).toBe(1)
-    expect(run.doneAt(1)).toBe(2)
+    for (let i = 0; i < 100 && waits.length < 2; i++) await tick()
+    // (page 1 drawn; its closure reads page 2, which a unit runs on to, and waits for the part that covers it: nothing laid, page 2
+    // not drawn)
+    expect(doc.reads).toEqual([1])
+    expect(waits).toEqual(['part', 'part'])
+    expect([run.drawnTo, run.order.length, run.doneAt(1)]).toEqual([0, 0, Infinity])
     for (const part of P.parts.slice(1)) { facade.add(part); run.grow(part) }
     await one
-    expect(run.drawnTo).toBe(2)
+    expect(run.ready(1)).toBe(true)
     run.dispose()
   })
 
@@ -360,8 +364,9 @@ describe('the run in parts: waits, failures and documents', () => {
     const run = await openWarm(P, doc)
     const laid = await run.until(3).then(() => 'laid', (e: Error) => e.message)
     expect(laid).toMatch(/PDF_OPTIONS/)
+    // (page 2 read with page 1, its closure, before any unit is laid)
     expect(doc.reads).toEqual([1, 2])
-    expect(run.drawnTo).toBe(1)
+    expect([run.drawnTo, run.order]).toEqual([0, []])
     run.dispose()
   })
 
@@ -435,7 +440,7 @@ describe('the run in parts: waits, failures and documents', () => {
   })
 
   it('fails the pages no part covers once the parts end, and completes the pages before them', async () => {
-    const P = await takePaper(TAKE)
+    const P = await takePaper(TAKE, undefined, { extend: false })
     const { run } = await partsRun({ ...P, parts: P.parts.slice(0, 1) }, { before: 1, ended: 'open' })
     expect([run.through, run.partsEnded, run.failed(1), run.failed(2), run.failed(3)]).toEqual([1, true, false, true, true])
     expect(run.drawnTo).toBe(3)
@@ -684,6 +689,51 @@ describe('the layout facade', () => {
       expect(text, f).not.toMatch(/lines\[[^\]]*\+\s*7\]/)
     }
   })
+})
+
+// ---------------------------------------------------------------- the schedule extended over the need bound (D2)
+describe('the cut extended over the need bound: a page is laid by the parts that cover its bound, and no more', () => {
+  /** a unit drawn on pages p and p + 1, lines and rectangles on both */
+  const crossing = (text: string, p: number, stream: number, b = 150) => ({ ...para(text, p, b, { stream }), lines: [[p, 20, 280, b], [p + 1, 20, 280, 270]] as [number, number, number, number][] })
+  const CHAIN: PaperSpec = {
+    pages: 6,
+    units: [crossing('One runs on', 1, 0), crossing('Two runs on', 2, 10), crossing('Three runs on', 3, 20), para('Four', 4, 250, { stream: 30 }), para('Five', 5, 250, { stream: 40 }), para('Six', 6, 250, { stream: 50 })],
+  }
+  const cut = async (spec: PaperSpec, extend: boolean) => {
+    const { needBound } = await import('@/pdf-reader/engine/layer-proto/need.mjs')
+    const whole = wholeOfSpec(spec)
+    let seen: readonly unknown[] = []
+    const c = await cutBundle(whole, { leftPages: leftPagesOfSpec(spec), extend, frontier: (K: readonly unknown[], N: number) => { seen = K; return needFrontier(K as never, N) } } as never)
+    const { index, parts } = await readCut(c)
+    const P: Paper = { N: spec.pages, index, parts, docFor: docsOf(spec) }
+    return { P, NB: needBound(seen as never, spec.pages), ends: parts.map(p => p.pages[1]) }
+  }
+
+  for (const [name, spec] of [['the take test\'s paper', TAKE], ['a float told late and a column across a page break', FLOAT], ['units running on, chained', CHAIN]] as const) {
+    it(`${name}: each page is laid once the parts covering its bound are in, and the extended cut covers more bounds in the part that holds them`, async () => {
+      const ready: Record<string, number> = {}
+      for (const extend of [false, true]) {
+        const { P, NB, ends } = await cut(spec, extend)
+        const idxOf = (page: number) => ends.findIndex(e => e >= page)
+        const grownAt: number[] = []
+        await partsRun(P, { before: 0, ended: 'open', feed: 'starved', onPage: (_run, p, grown) => { grownAt[p] = grown } })
+        let most = 0, readyInOwn = 0
+        for (let p = 1; p <= P.N; p++) {
+          most = Math.max(most, idxOf(NB[p]!) + 1)
+          // (the door waits for no part beyond the one covering the bound of this page or of one asked before it)
+          expect(grownAt[p], `${extend ? 'extended' : 'plain'}, page ${p} (bound ${NB[p]}, parts ending ${ends})`).toBeLessThanOrEqual(most)
+          if (NB[p]! <= ends[idxOf(p)]!) {
+            readyInOwn++
+            // a page whose bound its own part covers is laid by that part and those before it
+            expect(grownAt[p], `${extend ? 'extended' : 'plain'}, page ${p}`).toBeLessThanOrEqual(Math.max(idxOf(p) + 1, grownAt[p - 1] ?? 0))
+          }
+        }
+        ready[String(extend)] = readyInOwn
+      }
+      expect(ready.true!).toBeGreaterThanOrEqual(ready.false!)
+      if (spec === CHAIN) expect(ready.true!).toBeGreaterThan(ready.false!)
+    }, 120_000)
+  }
 })
 
 // ---------------------------------------------------------------- H4: the local papers (AXT_LAB and AXT_PACK, helpers/lab-data.ts)

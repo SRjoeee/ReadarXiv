@@ -27,6 +27,8 @@ import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
 import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
+import { annotationsOf, cropsShown, drawnCharsOf, erasedOf, glyphPointsOf, glyphsOfLink, linksPage, pairsOf, referenceOf, textUnder } from '/gate/links.mjs'
+
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
 const K = 2.5, INK_SCALE = 2, INK_MIN = 4
@@ -42,9 +44,8 @@ const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Er
 const json = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json() }
 const charKey = c => `${c.page}|${c.item}|${c.k}`
 
-/** the page's text items, with whether each is set in a math font (the fonts loaded: the page is drawn) */
-async function itemsOf(page) {
-  const tc = await page.getTextContent()
+/** the page's text items, with whether each is set in a math font (the fonts loaded: the page is drawn); `tc`: its text content */
+function itemsOf(page, tc) {
   const items = []
   for (const it of tc.items) {
     if (!it.str || !/\S/.test(it.str) || !it.transform) continue
@@ -493,6 +494,98 @@ function againstFileOf(p, recs, units, drawnLines, items, refOf, boxPdf) {
   }
 }
 
+/** the boxes [x0, y0, x1, y1] of a flat list */
+const boxesOf = flat => Array.from({ length: flat.length / 4 }, (_, i) => flat.slice(4 * i, 4 * i + 4))
+
+/**
+ * The drawn characters of page p's SVG, as PDF points (links.mjs drawnCharsOf): the SVG laid out in an offscreen box once the
+ * fonts are in. Read only for a page that has a moved link record: the engine of 3a-0 has none
+ */
+async function drawnPointsOf(p, page) {
+  await document.fonts.ready
+  const svg = S.run.svgOf(p)
+  const host = document.createElement('div')
+  host.style.cssText = 'position:absolute;left:-99999px;top:0;pointer-events:none'
+  host.append(svg)
+  document.body.append(host)
+  try {
+    // (the inverse of the viewport the SVG was made through: rotation, crop box and user unit included)
+    const vp = page.getViewport({ scale: K / devicePixelRatio })
+    return drawnCharsOf(svg, (x, y) => { const [px, py] = vp.convertToPdfPoint(x, y); return { x: px, y: py } })
+  } finally { host.remove() }
+}
+
+/**
+ * The link measures of page p (links.mjs; 3a-0): the original's links from PDF.js's annotations of arXiv's file (the document
+ * the instrument opened), the glyph points of the page's text items, the area the drawing's operations left erased, and the
+ * records the engine answers (`run.linksOf`, with its attribution `run.linkSources`: an engine before 3a has neither, and then
+ * no record is kept, `linksKept` is 0 of the original's). Returns the model's values and their `where`
+ */
+async function linksOfPage(p, page, tc) {
+  const { run, doc } = S
+  const L = S.links
+  // (a page the engine names that the document does not have (0, past the last, not an integer) has no annotation: the record is
+  // classified missing, the fixture goes on)
+  const parsedOf = async q => {
+    if (!L.parsed.has(q)) L.parsed.set(q, Number.isInteger(q) && q >= 1 && q <= doc.numPages ? annotationsOf(await (q === p ? page : await doc.getPage(q)).getAnnotations()) : annotationsOf([]))
+    return L.parsed.get(q)
+  }
+  const own = await parsedOf(p)
+  const records = run.linksOf ? run.linksOf(p) : []
+  const sources = records.length && run.linkSources ? run.linkSources(p) : null
+  for (const src of sources ?? []) for (const [q] of src?.annots ?? []) await parsedOf(q)
+  // (how many annotations each tier took, the engine's own claim, reported: which tier made the moved links)
+  for (const src of sources ?? []) if (src?.tier) L.tiers[src.tier] = (L.tiers[src.tier] ?? 0) + (src.annots?.length ?? 0)
+  const view = page.getViewport({ scale: K })
+  const glyphs = glyphPointsOf(tc.items)
+  const moved = records.some(r => r.moved)
+  const chars = moved ? await drawnPointsOf(p, page) : []
+  // (the reference of a translated link reads TeX's file and the glyph points of the page its annotation is on: a placeholder's
+  // segment, the unit whose line the point is on, the unit's translated pairs. The pages the records' sources are on, read here)
+  const glyphsOf = new Map([[p, glyphs]])
+  if (moved) for (const src of sources ?? []) for (const [q] of src?.annots ?? []) if (!glyphsOf.has(q) && Number.isInteger(q) && q >= 1 && q <= doc.numPages) glyphsOf.set(q, glyphPointsOf((await (await doc.getPage(q)).getTextContent()).items))
+  // (what the crops drawn on the page show, the drawing's own audit: each crop's source page and box, its drawn box and the clip
+  // it is drawn through, its source page's glyphs (read here) carried to where it is drawn: a moved record's truth over a crop)
+  const cropsHere = moved ? run.audit.filter(a => a.what === 'crop' && a.page === p && Number.isInteger(a.srcPage) && a.srcPage >= 1 && a.srcPage <= doc.numPages) : []
+  const viewOf = new Map([[p, page.view]])
+  for (const a of cropsHere) {
+    if (!glyphsOf.has(a.srcPage)) glyphsOf.set(a.srcPage, glyphPointsOf((await (await doc.getPage(a.srcPage)).getTextContent()).items))
+    if (!viewOf.has(a.srcPage)) viewOf.set(a.srcPage, (await doc.getPage(a.srcPage)).view)
+  }
+  const pdfBox = (v, b) => [v[0] + b[0] / K, v[3] - b[3] / K, v[0] + b[2] / K, v[3] - b[1] / K]
+  const crops = cropsShown(cropsHere.map(a => ({ srcPage: a.srcPage, src: a.src, dst: pdfBox(page.view, a.dst), clip: a.clip ? a.clip.map(([x, y, w, h]) => pdfBox(viewOf.get(a.srcPage), [x, y, x + w, y + h])) : null })), q => glyphsOf.get(q))
+  const within = (x, y, b) => x >= Math.min(b[0], b[2]) && x <= Math.max(b[0], b[2]) && y >= Math.min(b[1], b[3]) && y <= Math.max(b[1], b[3])
+  const ctxOf = q => {
+    const fp = S.file?.get(q), all = L.parsed.get(q).links.filter(a => a.ok)
+    return {
+      all, points: a => glyphsOfLink(a, glyphsOf.get(q) ?? []),
+      segment: (x, y, d = 0) => !!fp && [...fp.units.values()].some(u => u.phs.some(ph => ph.segs.some(b => within(x, y, [b[0] - d, b[1], b[2] + d, b[3]])))),
+      owner: (x, y) => { if (fp) for (const [id, u] of fp.units) if (u.lines.some(l => within(x, y, l.box))) return id; return null },
+      // (each pair with its index in the unit's source, the units file's: the references are read in the source's order)
+      pairsOf: id => pairsOf(S.byId.get(id)?.unit?.pieces, kOfPiecesOf(S.byId.get(id)?.unit?.pieces, S.trPieces.get(id))),
+    }
+  }
+  const m = linksPage({
+    page: p, parsed: q => L.parsed.get(q), counted: q => q <= S.pages, glyphs, erased: erasedOf(run.rows[p - 1]?.ops, (x, y) => view.convertToViewportPoint(x, y)), records, sources, claims: L.claims,
+    // (each annotation read with its own page's TeX's file and glyphs, a record a unit drew over a page break merging two pages'
+    // annotations; with no TeX's file to read, no reference can be had where a link's text is the translation's: unverified, so
+    // too where the file has no page an annotation is on, whose units are the hybrid's v0's alone)
+    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), crops, reference: (rec, annots) => (!S.file || annots.some(a => !S.file.get(a.page)) ? undefined : referenceOf(annots, q => (Number.isInteger(q) && q >= 1 && q <= doc.numPages && L.parsed.has(q) ? ctxOf(q) : null))),
+  })
+  const { where, ...values } = m
+  return { values, where: Object.fromEntries(Object.entries(where).filter(([, ids]) => ids.length)) }
+}
+
+/** the annotations of T on the pages the gate measures that no record kept (its own target, in no way wrong): page:rank */
+function linksLostOf() {
+  const L = S.links, out = []
+  for (const [q, parsed] of [...L.parsed].sort((a, b) => a[0] - b[0])) {
+    if (q > S.pages) continue
+    for (const a of parsed.links) if (a.ok && !L.claims.get(`${q}|${a.i}`)?.credited) out.push(`${q}:${a.i}`)
+  }
+  return out
+}
+
 window.gate = {
   /**
    * A fixture opened: v0, the made output's geometry, the units file asked for and arXiv's PDF. With `removal` (the
@@ -565,7 +658,7 @@ window.gate = {
     // version, whose segments are a glyph's font box, not its ink, and which holds no `held` lines; nor any layout file of
     // a maker before FILE_LAYOUT_MIN, the fixture's own included where the run is given those, --layouts=fixed or v0
     // alone, or a folder of them: then the measures against TeX's file are not taken)
-    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
+    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), links: { parsed: new Map(), claims: new Map(), tiers: {} }, pages, checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
     if (parts) {
       // one part a macrotask from the open on, beside the driver's pages (until), then end()
@@ -600,7 +693,8 @@ window.gate = {
     // the audit by unit and page, as the drawing adds to it
     for (; S.audited < run.audit.length; S.audited++) { const a = run.audit[S.audited], k = `${a.unit}|${a.page}`; if (!S.audit.has(k)) S.audit.set(k, []); S.audit.get(k).push(a) }
     const page = await doc.getPage(p)
-    const items = await itemsOf(page)
+    const tc = await page.getTextContent()
+    const items = itemsOf(page, tc)
     const view = page.view
     const toPdf = (x, y) => [view[0] + x / K, view[3] - y / K]
     const boxPdf = b => { const [ax, ay] = toPdf(b[0], b[3]), [bx, by] = toPdf(b[2], b[1]); return [ax, ay, bx, by] }
@@ -630,6 +724,9 @@ window.gate = {
     const kept = keptOf(S.layout, p, relabelledOf(recs))
     const against = S.file ? againstFileOf(p, recs, units, drawnLines, items, refOf, boxPdf) : null
     if (against) Object.assign(model, against.values)
+    // the links (3a-0): the original's, and what the layer does with them
+    const links = await linksOfPage(p, page, tc)
+    Object.assign(model, links.values)
     // the prototype's own checker on the page: what it finds there, by the unit it is in (none for --perf: v0 is opened
     // with no copy of its own, as a reader opens it, and the checker reads that copy)
     const ck = S.perf ? { a: { regions: 0 }, b: { list: { missing: [], duplicated: [], brackets: [] } }, c: { list: [] }, d: { found: 0, ok: 0 } } : run.checkPage(p)
@@ -666,6 +763,7 @@ window.gate = {
     for (const [key, ids] of Object.entries(model.cropWhere ?? {})) if (ids.length) where[key] = [...new Set(ids)]
     // (and of the content and line measures: a placeholder as unit:k:times shown)
     Object.assign(where, against?.where ?? {})
+    Object.assign(where, links.where)
     const clippedIds = recs.filter(r => r.pages[0] === p && r.lostChars).map(r => r.id)
     if (clippedIds.length) where.clipped = clippedIds
     // the style: each unit's base as drawn against the original's (styleMatch's base), on its first page
@@ -963,6 +1061,9 @@ window.gate = {
       ...(parts ? { parts } : {}),
       // (the units whose record could not be made: drawn, and measured by nothing, so a failure of the gate's)
       ...(run.recordErrors?.length ? { recordErrors: run.recordErrors.length } : {}),
+      // (the original's links of the pages measured that no record kept, page:rank: the misses of linksKept, read once every page's
+      // records are in, a record of a later page may keep one of an earlier; and the engine's own counts)
+      linksLost: linksLostOf(), linkTiers: S.links.tiers, ...(run.linkStats ? { links: run.linkStats } : {}),
     }
   },
 }

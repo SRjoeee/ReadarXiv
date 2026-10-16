@@ -94,10 +94,10 @@ export async function readCut(c: Cut): Promise<{ index: LayerIndex; parts: ReadP
   return { index, parts }
 }
 
-/** the spec's paper cut at `ends` (the cutter's target hook) and read back; `addon: false`, a paper with no add-on */
-export async function cutSpec(spec: PaperSpec, ends?: readonly number[], o: { addon?: boolean; layout?: boolean } = {}) {
+/** the spec's paper cut at `ends` (the cutter's target hook) and read back; `addon: false`, a paper with no add-on; `extend: false`, the doubling schedule alone (the default extends it over the need bound) */
+export async function cutSpec(spec: PaperSpec, ends?: readonly number[], o: { addon?: boolean; layout?: boolean; extend?: boolean } = {}) {
   const whole = wholeOfSpec(spec, o)
-  const cut = await cutBundle(whole, { leftPages: leftPagesOfSpec(spec), ...(ends ? { target: splitAt(ends) } : {}) } as never)
+  const cut = await cutBundle(whole, { leftPages: leftPagesOfSpec(spec), ...(ends ? { target: splitAt(ends) } : {}), ...(o.extend === undefined ? {} : { extend: o.extend }) } as never)
   return { whole, cut, ...(await readCut(cut)) }
 }
 
@@ -107,7 +107,22 @@ export function docsOf(spec: { pages: number; units: readonly { text: string; li
   const N = spec.pages
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const items = (p: number) => (p > N ? [] : spec.units.flatMap(u => u.lines.filter(l => l[0] === p).map(([, x0, x1, b]) => ({ str: u.text, transform: [10, 0, 0, 10, x0, b], width: (x1 as number) - (x0 as number), height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))))
-  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items(n), styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} })
+  // (the Link annotations of a page, PDF.js's shape: one over the first characters of each unit's first line there, and one in the margin with no glyph under it)
+  const annotationsOf = (p: number) => {
+    if (p > N) return []
+    const out: Record<string, unknown>[] = []
+    spec.units.forEach((u, id) => {
+      const l = u.lines.find(x => x[0] === p)
+      if (!l) return
+      const [, x0, x1, b] = l as [number, number, number, number]
+      const rect = [x0 + 1, b - 2, x0 + 40, b + 8]
+      const ov = [...u.text].filter((_, k) => x0 + ((k + 0.5) / u.text.length) * (x1 - x0) < rect[2]! && x0 + ((k + 0.5) / u.text.length) * (x1 - x0) > rect[0]!).join('')
+      out.push({ subtype: 'Link', rect, dest: `cite.${id}`, overlaidText: ov, borderStyle: { width: 0, style: 1 }, color: new Uint8ClampedArray([0, 255, 0]) })
+    })
+    out.push({ subtype: 'Link', rect: [270, 2, 290, 12], url: `https://example.org/p${p}`, overlaidText: '', borderStyle: { width: 0, style: 1 }, color: null })
+    return out
+  }
+  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items(n), styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, getAnnotations: async () => annotationsOf(n) })
   const docs = new Map<number, { numPages: number; reads: number[]; getPage(n: number): Promise<unknown> }>()
   return (r: number) => {
     let d = docs.get(r)
