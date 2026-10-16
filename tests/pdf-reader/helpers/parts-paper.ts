@@ -94,10 +94,10 @@ export async function readCut(c: Cut): Promise<{ index: LayerIndex; parts: ReadP
   return { index, parts }
 }
 
-/** the spec's paper cut at `ends` (the cutter's target hook) and read back; `addon: false`, a paper with no add-on */
-export async function cutSpec(spec: PaperSpec, ends?: readonly number[], o: { addon?: boolean; layout?: boolean } = {}) {
+/** the spec's paper cut at `ends` (the cutter's target hook) and read back; `addon: false`, a paper with no add-on; `extend: false`, the doubling schedule alone (the default extends it over the need bound) */
+export async function cutSpec(spec: PaperSpec, ends?: readonly number[], o: { addon?: boolean; layout?: boolean; extend?: boolean } = {}) {
   const whole = wholeOfSpec(spec, o)
-  const cut = await cutBundle(whole, { leftPages: leftPagesOfSpec(spec), ...(ends ? { target: splitAt(ends) } : {}) } as never)
+  const cut = await cutBundle(whole, { leftPages: leftPagesOfSpec(spec), ...(ends ? { target: splitAt(ends) } : {}), ...(o.extend === undefined ? {} : { extend: o.extend }) } as never)
   return { whole, cut, ...(await readCut(cut)) }
 }
 
