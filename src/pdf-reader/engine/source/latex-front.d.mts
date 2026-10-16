@@ -7,7 +7,10 @@ export declare function tableGrid(s: string, from: number, to: number): (Omit<Ce
 /** a source tree held in memory: path → bytes */
 export declare function inMemory(map: Map<string, Uint8Array>): { list(): string[]; read(path: string): Uint8Array | null }
 /** a paper's source read from its main file: its units, the paper's prose in reading order */
-export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inputenc: string | null }
+/** `inFloat`: the indices in `units` (rising) of the units written inside a float — figure, table (starred or not), wrapfigure,
+ *  sidewaystable, algorithm, listing, and whatever they hold; a longtable is none. Beside the units, in no unit's hash, text,
+ *  bundle row or patched source */
+export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inFloat: number[]; inputenc: string | null }
 /** a main file's \begin{document} and \end{document} as TeX finds them: -1 for `begin` and `body` where it has none */
 export declare function documentBounds(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { begin: number; body: number; end: number }
 /** the \usepackage[…]{inputenc} TeX acts on: where it stands and its options, or null */

@@ -7,7 +7,8 @@ import type { Readings } from './cache.mjs'
 import type { TrPiece } from '../layer/pieces.mjs'
 
 /** a paper's files (path → bytes) → what the pipeline works on */
-export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[] }; units: SourceUnit[]; kept: Set<SourceUnit> }
+/** `inFloat`: the indices in `units` (rising) of the units written inside a float (latex-front.mjs loadProject's) */
+export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[]; inFloat: number[] }; units: SourceUnit[]; inFloat: number[]; kept: Set<SourceUnit> }
 export declare function openPaper(files: Map<string, Uint8Array>): Paper
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
 /** `spans`, where given, gets `lines()`: each unit's lines and bytes in the files as written, worked out when asked */
