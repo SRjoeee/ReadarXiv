@@ -11,7 +11,9 @@ export declare function leftReach(doc: readonly DocToken[], units: readonly Unit
 export declare function leftOfPart(doc: DocToken[], units: UnitText[], o: LeftPartOptions & { frame: FrameRule }, pages: [number, number], reach?: [number, number][][]): { anchors: Map<number, Anchor>; read: number[]; before: number[] }
 /** what the left of pages a to b reads: the units that may touch them (C), theirs (V1), and V1's (V2): unit indices, and
  *  their pages as a flag a page */
-export declare function partSets(doc: readonly DocToken[], units: readonly UnitText[], pages: [number, number], reach: [number, number][][]): Record<'C' | 'V1' | 'V2', { units: number[]; pages: Uint8Array }>
+export declare function partSets(doc: readonly DocToken[], units: readonly UnitText[], pages: [number, number], reach: [number, number][][], ivs?: [number, number][][]): Record<'C' | 'V1' | 'V2', { units: number[]; pages: Uint8Array }>
+/** each unit's reach as page intervals (partSets' `ivs`, made once for the parts that read one reach) */
+export declare function pageReach(doc: readonly DocToken[], reach: [number, number][][]): [number, number][][]
 /** the units anchored by ranges of a page as their bounds become final (the page stream): each range once every unit its left
  *  reads has its match final, by leftOfPart under the whole document's frame */
 export interface RangedAnchors {
