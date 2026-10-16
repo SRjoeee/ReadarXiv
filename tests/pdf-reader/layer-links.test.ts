@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { annotationsOf, erasedOf as gateErased, glyphPointsOf } from '../../lab/pdf/spikes/layer-gate/links.mjs'
-import { type Annot, annotsOf, charPoints, copyLinks, erasedOf, freezeLinks, inPlaceOf, MAX_GLYPHS, MAX_LINKS, ownerOf, pointsOf, readAnnots, type Unsupported, WORK_MAX } from '@/pdf-reader/engine/layer-proto/links.mjs'
+import { type Annot, annotsOf, charPoints, copyLinks, erasedOf, freezeLinks, inPlaceOf, MAX_GLYPHS, MAX_LINKS, ownersOf, pointsOf, readAnnots, type Unsupported, WORK_MAX } from '@/pdf-reader/engine/layer-proto/links.mjs'
 
 // The links of a laid page (src/pdf-reader/engine/layer-proto/links.mjs; PR 3a-1, the 3a design §3.1 to §3.6): the annotations a
 // page keeps, which a reader carries (LK11) and which it does not, the owner of an annotation, what the page's operations leave
@@ -140,22 +140,29 @@ describe('what the operations leave erased', () => {
 })
 
 describe('the owner of an annotation', () => {
+  // (in their order: the growth rank of a page, then the units left the original's)
   const units = [
     { id: 4, stream: 40, rects: [[1, 90, 695, 140, 715]] },
     { id: 7, stream: 70, rects: [[1, 90, 695, 105, 715], [2, 0, 600, 500, 800]] },
     { id: 2, stream: 20, rects: [[1, 90, 695, 105, 715]] },
   ]
   const a = (rect: number[], text = 'abcdef', x = 100, w = 60) => kept(annotsOf([raw({ rect })], pointsOf([item(text, x, 700, w)])).list)[0]!
-  it('is the unit whose rectangles on the page hold most of the annotation\'s points, ties to the smaller area, then the smaller id', () => {
-    expect(ownerOf(a([100, 695, 130, 710]), units, 1)?.id).toBe(4)
-    // (one point in each of the three rectangles of a tie: 'ab' at 105 is in all, so 2 and 7 share it with 4; the smaller area wins, the one with the smaller id after it)
-    expect(ownerOf(a([100, 695, 106, 710], 'ab', 100, 10), units, 1)?.id).toBe(2)
-    expect(ownerOf(a([100, 695, 106, 710], 'ab', 100, 10), units, 2)?.id).toBe(7)
-    expect(ownerOf(a([100, 695, 106, 710], 'ab', 100, 10), units, 3)).toBeNull()
+  const owner = (an: Annot, list: typeof units, q: number) => { const at = ownersOf([an], list, q).get(an.i); return at === undefined ? null : list[at]!.id }
+  it('is the first unit in order whose rectangles on the page hold more than half of the annotation\'s points', () => {
+    expect(owner(a([100, 695, 130, 710]), units, 1)).toBe(4)
+    // (two of its points of 'ab' at 102.5 and 107.5: 4 holds both, 7 and 2 one: the first with a majority)
+    expect(owner(a([100, 695, 110, 710], 'ab', 100, 10), units, 1)).toBe(4)
+    expect(owner(a([100, 695, 110, 710], 'ab', 100, 10), units.slice(1), 1)).toBeNull()
+    expect(owner(a([100, 695, 106, 710], 'ab', 100, 10), units, 2)).toBe(7)
+    expect(owner(a([100, 695, 106, 710], 'ab', 100, 10), units, 3)).toBeNull()
   })
   it('is the one under its rectangle\'s centre where the link has no glyph, and none where no unit is', () => {
-    expect(ownerOf(a([95, 690, 99, 712], 'zz', 300, 10), units, 1)?.id).toBe(2)
-    expect(ownerOf(a([300, 10, 310, 20], 'zz', 500, 10), units, 1)).toBeNull()
+    expect(owner(a([95, 690, 99, 712], 'zz', 300, 10), units, 1)).toBe(4)
+    expect(owner(a([300, 10, 310, 20], 'zz', 500, 10), units, 1)).toBeNull()
+  })
+  it('reads a unit\'s rectangles as its growth left them on the page, whatever its lay moved after', () => {
+    const grown = { id: 5, stream: 5, rects: [[1, 0, 695, 300, 715]], grown: new Map([[1, [[1, 400, 695, 500, 715]]]]) }
+    expect(owner(a([100, 695, 130, 710]), [grown, ...units], 1)).toBe(4)
   })
 })
 

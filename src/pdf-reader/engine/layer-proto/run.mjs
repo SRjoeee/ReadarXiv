@@ -666,15 +666,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  and every match has run): an annotation no unit took whose glyph points the operations left unerased stays in place, any
    *  other is dropped and counted. Pure of the order the pages were asked in: it reads this page's annotations, operations and
    *  units alone. A page whose annotations could not be read has none */
-  /** the units with lines on page q as a link's owner is chosen among them: every unit of the original's side (K: those placed,
-   *  left the original's and never placed alike, each by the rectangles the left side gave it), and a unit only the layout file
-   *  holds (no rectangles of its own) by the lines it was placed on */
+  /** the units with lines on page q as a link's owner is chosen among them, in the order it is read in (links.mjs ownersOf: the
+   *  first holding most of its points): the units placed with lines on q in their growth rank there, by the rectangles their
+   *  growth left, then every other unit of the original's side (K: left the original's or never placed, by the left side's) */
   const linkUnitsOn = q => {
     const out = new Map()
-    for (const c of K) if (c.rects?.some(r => r[0] === q)) out.set(c.id, { id: c.id, stream: c.stream, rects: c.rects })
-    for (const u of laid[q] ?? []) if (!out.has(u.id)) out.set(u.id, { id: u.id, stream: u.stream, rects: u.rects })
+    for (const u of rankedOnPage(q)) out.set(u.id, { id: u.id, stream: u.stream, rects: u.rects, grown: u.grownRects })
+    for (const c of K) if (!out.has(c.id) && c.rects?.some(r => r[0] === q)) out.set(c.id, { id: c.id, stream: c.stream, rects: c.rects })
     return [...out.values()]
   }
+  /** the units placed with lines on page q, in their growth rank there (the order a link's owner is read in, links.mjs ownersOf) */
+  const rankedOnPage = q => (onPage.get(q) ?? []).slice().sort((a, b) => (rankOf.get(a.id) ?? Infinity) - (rankOf.get(b.id) ?? Infinity))
   const freezeLinksOf = q => {
     const r = rows[q - 1]
     if (!r || r.links) return
@@ -711,16 +713,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (p.linked || !p.layout || !p.prep) return
     p.linked = true
     const t0 = performance.now()
-    const cands = [], budget = { left: LK.WORK_MAX }
+    const cands = []
     for (const q of p.pages) {
       const list = annots[q - 1]
       if (!list) continue
-      // (the units placed with lines on q, in their growth rank there; those before p have grown, as p has)
-      const ranked = (onPage.get(q) ?? []).slice().sort((a, b) => (rankOf.get(a.id) ?? Infinity) - (rankOf.get(b.id) ?? Infinity))
+      // (the units placed with lines on q, in their growth rank there; those before p have grown, as p has. Each unit of the page
+      // a share of the page's work: a page is bounded by one budget, whatever order its units are matched in)
+      const ranked = rankedOnPage(q)
       const at = ranked.indexOf(p)
       if (at < 0) continue
-      for (const a of LK.ownedIn(list, p, ranked.slice(0, at), q, budget)) cands.push({ q, a })
+      for (const a of LK.ownedIn(list, p, ranked.slice(0, at), q, { left: LK.WORK_MAX / ranked.length })) cands.push({ q, a })
     }
+    const budget = { left: LK.WORK_MAX / Math.max(1, rankedOnPage(p.pages[0]).length) }
     if (!cands.length) return
     const L = p.layout
     const drawnText = new Set(), drawnCrop = new Set(), drawnPair = new Set()
@@ -735,10 +739,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const lu = p.tex?.lu ?? (filed(p.id) ? tex.index.unit(p.id) : null)
     const kOf = p.tex?.kOf ?? (lu ? kOfPieces(p.unit, tex.pieces.get(p.id)) : null)
     const targets = []
+    // (each piece's index in the unit's source, by which a tier pairs pieces with annotations: the layout file's k, else the row's;
+    // never its place in the translation, which may set two of them the other way)
+    const ordOf = k => (kOf && kOf[k] >= 0 ? kOf[k] : Number.isInteger(p.unit.pieces[k]?.k) && p.unit.pieces[k].k >= 0 ? p.unit.pieces[k].k : null)
     p.unit.pieces.forEach((piece, k) => {
       const kind = LK.linkKindOf(piece)
       if (piece.t === 'open') {
-        if (kind && L2.LINK_OPEN.test(piece.src) && piece.id !== undefined) targets.push({ ord: k, pair: piece.id, ...kind, gap: null, segs: null, draw: drawnPair.has(piece.id) ? 'pair' : null })
+        if (kind && L2.LINK_OPEN.test(piece.src) && piece.id !== undefined) targets.push({ ord: ordOf(k), pair: piece.id, ...kind, single: true, gap: null, segs: null, draw: drawnPair.has(piece.id) ? 'pair' : null })
         return
       }
       if (piece.t !== 'ph' && piece.t !== 'nested') return
@@ -749,11 +756,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (let o = 0; row && o + 5 < row.segs.length; o += 6) segs.push([row.segs[o], row.segs[o + 1], row.segs[o + 2], row.segs[o + 3], row.segs[o + 4], row.segs[o + 5]])
       if (!gap && !segs.length && !kind) return
       const draw = r && TEXT_MODES.has(r.mode) && drawnText.has(k) ? 'text' : r?.mode === 'crop' && drawnCrop.has(k) ? 'crop' : null
-      targets.push({ ord: k, k, ...(kind ?? { kind: null }), gap, segs: segs.length ? segs : null, draw })
+      targets.push({ ord: ordOf(k), k, ...(kind ?? { kind: null }), single: LK.singleTarget(piece, kind), gap, segs: segs.length ? segs : null, draw })
     })
     const m = LK.matchUnit({ cands, targets, budget })
     const lines = L.lines.map(line => ({ line, runs: L2.lineRuns(line, L) }))
-    const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, L, line.baseline), scale: L.scale })
+    const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, L, line.baseline), scale: L.scale, budget })
     // (each page's records in the unit's drawing order there, after those of the units before it)
     const byPage = new Map()
     for (const r of placed.records) if (rows[r.page - 1]) (byPage.get(r.page) ?? byPage.set(r.page, []).get(r.page)).push(r)
@@ -1431,6 +1438,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // its first line's edge snapped back to its first word's start, on its first page as placed alone (L4)
     if (!fileLines && g === p.firstPage && p.rects[0]?.[0] === g) p.inkBefore = L2.snapFirstRect2(p.rects, p.local)
     p.area.set(g, textArea(g))
+    // (its rectangles on the page as its growth leaves them, which a link's owner is read by: its lay may move its first line's
+    // edge to its label after a unit ranked after it here is matched, links.mjs ownersOf)
+    ;(p.grownRects ??= new Map()).set(g, p.rects.filter(r => r[0] === g).map(r => r.slice()))
   }
   /** p's growth on each of its pages, after that of every unit ranked before it there, the rank taken a unit at a time from
    *  where the page's growth stands; one that throws for another unit than p is that unit's, thrown as it is laid. Every

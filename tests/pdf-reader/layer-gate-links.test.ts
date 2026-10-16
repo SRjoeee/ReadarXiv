@@ -4,6 +4,8 @@ import {
   type Annots,
   annotationsOf,
   composedDiff,
+  cropsShown,
+  drawnCharsOf,
   erasedOf,
   glyphPointsOf,
   hrefUrlOf,
@@ -128,10 +130,10 @@ const page1 = () => {
 const noErase = () => false
 const unused = () => ''
 const noRef = () => null
-type Run = { records?: LinkRec[]; sources?: (LinkSource | null)[] | null; erased?: (x: number, y: number) => boolean; parsed?: (q: number) => Annots | undefined; claims?: Map<string, { page: number; label: string; credited: boolean; flagged: boolean }>; page?: number; drawn?: (r: LinkRec) => string; reference?: (r: LinkRec, a: Annot[]) => string | null | undefined }
+type Run = { records?: LinkRec[]; sources?: (LinkSource | null)[] | null; erased?: (x: number, y: number) => boolean; parsed?: (q: number) => Annots | undefined; claims?: Map<string, { page: number; label: string; credited: boolean; flagged: boolean }>; page?: number; drawn?: (r: LinkRec) => string; crops?: { srcPage: number; src: number[]; chars: Point[] }[]; reference?: (r: LinkRec, a: Annot[]) => string | null | undefined }
 const run = (o: Run = {}) => {
   const { annots, glyphs } = page1()
-  return linksPage({ page: o.page ?? 1, parsed: o.parsed ?? (q => (q === 1 ? annots : undefined)), glyphs, erased: o.erased ?? noErase, records: o.records ?? [], sources: o.sources ?? null, claims: o.claims ?? new Map(), drawn: o.drawn ?? unused, reference: o.reference ?? noRef })
+  return linksPage({ page: o.page ?? 1, parsed: o.parsed ?? (q => (q === 1 ? annots : undefined)), glyphs, erased: o.erased ?? noErase, records: o.records ?? [], sources: o.sources ?? null, claims: o.claims ?? new Map(), drawn: o.drawn ?? unused, ...(o.crops ? { crops: o.crops } : {}), reference: o.reference ?? noRef })
 }
 /** the border `raw` gives its annotations (width 1, green, solid) */
 const border = { width: 1, rgb: [0, 255, 0], style: 'solid' }
@@ -350,6 +352,41 @@ describe('true: the drawn text under a moved link against the reference', () => 
   })
 })
 
+describe('true over a crop: what the crop shows, its source\'s glyphs, never its copy text', () => {
+  const { glyphs } = page1()
+  // (a crop of page 1's "12", from 95 to 135 and 695 to 715, drawn at half its size from 300, 400 on another page)
+  const crop = { srcPage: 1, src: [95, 695, 135, 715], dst: [300, 400, 320, 410], clip: null }
+  it('carries the source page\'s glyphs inside the source box by the crop\'s own map, within its clip where it has one', () => {
+    const [shown] = cropsShown([crop], () => glyphs)
+    expect(shown!.chars).toEqual([{ x: 307.5, y: 402.5, ch: '1' }, { x: 312.5, y: 402.5, ch: '2' }])
+    expect(cropsShown([{ ...crop, clip: [[95, 695, 115, 715]] }], () => glyphs)[0]!.chars.map(c => c.ch)).toEqual(['1'])
+    // (a glyph outside the source box is not the crop's: "7" at 150)
+    expect(cropsShown([{ ...crop, src: [95, 695, 175, 715], dst: [300, 400, 340, 410] }], () => glyphs)[0]!.chars.map(c => c.ch)).toEqual(['1', '2', '7'])
+    expect(cropsShown(null, () => glyphs)).toEqual([])
+  })
+  it('counts a moved record over a crop true where what it shows under it is the overlaid text, whatever its copy text', () => {
+    const rec = moved('cite.a', [305, 401, 316, 405], { name: 'parikh-etal:2016' })
+    const crops = cropsShown([crop], () => glyphs)
+    // (no character of the SVG under it: a crop's copy text is no drawn text)
+    const m = run({ records: [rec], sources: [{ annots: [[1, 0]] }], drawn: () => '', crops, reference: () => '12' })
+    expect(m).toMatchObject({ linksTrueN: 1, linksWrong: 0, where: { linksTrue: [] } })
+    expect(run({ records: [rec], sources: [{ annots: [[1, 0]] }], drawn: () => '', crops, reference: () => '13' }).linksTrueN).toBe(0)
+  })
+  it('reads no crop whose source box misses the annotation\'s rectangle: a crop of another place\'s "12" shows nothing of this link', () => {
+    const rec = moved('cite.a', [305, 401, 316, 405])
+    const elsewhere = [{ srcPage: 1, src: [100, 500, 140, 512], chars: [{ x: 307.5, y: 402.5, ch: '1' }, { x: 312.5, y: 402.5, ch: '2' }] }]
+    expect(run({ records: [rec], sources: [{ annots: [[1, 0]] }], drawn: () => '', crops: elsewhere, reference: () => '12' })).toMatchObject({ linksTrueN: 0, where: { linksTrue: ['0'] } })
+    // (nor one of the annotation's place on another page)
+    const otherPage = [{ ...elsewhere[0]!, srcPage: 2, src: [95, 695, 135, 715] }]
+    expect(run({ records: [rec], sources: [{ annots: [[1, 0]] }], drawn: () => '', crops: otherPage, reference: () => '12' }).linksTrueN).toBe(0)
+  })
+  it('never reads a crop\'s transparent copy text as drawn', () => {
+    const tspan = (text: string, opacity: string | null, x: number) => ({ textContent: text, getAttribute: (k: string) => (k === 'fill-opacity' ? opacity : null), getNumberOfChars: () => text.length, getStartPositionOfChar: (i: number) => ({ x: x + 10 * i, y: 100 }), getEndPositionOfChar: (i: number) => ({ x: x + 10 * i + 10, y: 100 }) })
+    const svg = { querySelectorAll: () => [tspan('ab', null, 0), tspan('keys', '0', 50)] }
+    expect(drawnCharsOf(svg as never, (x, y) => ({ x, y })).map(c => c.ch)).toEqual(['a', 'b'])
+  })
+})
+
 describe('the reference: overlaid text, or the translation\'s pair text where the link text is translated', () => {
   const annots = annotationsOf([
     raw({ rect: [100, 700, 130, 712], url: 'https://example.org/a?b=1', dest: undefined, overlaidText: 'our website' }),
@@ -367,14 +404,14 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
   })
   it('is the pair text of the \\href with the annotation\'s URL', () => {
     const pairs = pairsOf([{ t: 'text', s: 'Voir ' }, { t: 'open', id: 1, src: '\\href{https://example.org/a?b=1}{our website}' }, { t: 'text', s: 'notre site' }, { t: 'close', id: 1 }, { t: 'text', s: '.' }])
-    expect(pairs).toEqual([{ src: '\\href{https://example.org/a?b=1}{our website}', text: 'notre site' }])
+    expect(pairs).toEqual([{ src: '\\href{https://example.org/a?b=1}{our website}', text: 'notre site', k: null }])
     expect(referenceOf([all[0]!], { ...base, pairsOf: () => pairs })).toBe('notre site')
   })
   it('is the owner\'s i-th \\hyperref or \\hyperlink pair, where the pairs are as many as its internal links', () => {
     const pairs = pairsOf([
       { t: 'open', id: 1, src: '\\hyperref[a]{Section 3}' }, { t: 'text', s: 'section 3 (fr)' }, { t: 'close', id: 1 },
-      { t: 'open', id: 2, src: '\\hyperlink{k}{21}' }, { t: 'text', s: 'vingt et un' }, { t: 'close', id: 2 },
-    ])
+      { t: 'open', id: 2, src: '\\hyperlink{cite.k}{21}' }, { t: 'text', s: 'vingt et un' }, { t: 'close', id: 2 },
+    ], [1, -1, 1, 4, -1, 4])
     expect(referenceOf([all[1]!], { ...base, pairsOf: () => pairs })).toBe('section 3 (fr)')
     expect(referenceOf([all[2]!], { ...base, pairsOf: () => pairs })).toBe('vingt et un')
     // fewer pairs than internal links: not found
@@ -391,7 +428,7 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
     const pairs = pairsOf([
       { t: 'open', id: 1, src: '\\href{https://example.org/a}{here}' }, { t: 'text', s: 'ici' }, { t: 'close', id: 1 },
       { t: 'open', id: 2, src: '\\href{https://example.org/a}{there}' }, { t: 'text', s: 'la-bas' }, { t: 'close', id: 2 },
-    ])
+    ], [0, -1, 0, 3, -1, 3])
     const ctx = { ...base, all: both, points: (a: Annot) => [{ x: 1, y: a.i, ch: 'x' }], pairsOf: () => pairs }
     expect(referenceOf([both[0]!], ctx)).toBe('ici')
     expect(referenceOf([both[1]!], ctx)).toBe('la-bas')
@@ -399,9 +436,27 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
     // the record that merges them has it once)
     expect(referenceOf([both[1]!], { ...ctx, pairsOf: () => pairs.slice(0, 1) })).toBe('ici')
     expect(referenceOf([both[0]!, both[1]!], { ...ctx, pairsOf: () => pairs.slice(0, 1) })).toBe('ici')
+    // (the pairs made anew at every ask, as the page's context makes them: still once)
+    const pieces = [{ t: 'open', id: 1, src: '\\href{https://example.org/a}{here}' }, { t: 'text', s: 'ici' }, { t: 'close', id: 1 }]
+    expect(referenceOf([both[0]!, both[1]!], { ...ctx, pairsOf: () => pairsOf(pieces) })).toBe('ici')
+    // (two pairs of the URL with no place in the source to order them by: not found)
+    expect(referenceOf([both[0]!], { ...ctx, pairsOf: () => pairsOf([{ t: 'open', id: 1, src: '\\href{https://example.org/a}{x}' }, { t: 'close', id: 1 }, { t: 'open', id: 2, src: '\\href{https://example.org/a}{y}' }, { t: 'close', id: 2 }]) })).toBeNull()
     // (more annotations of the URL than pairs, and more than one pair: not found)
     const three = annotationsOf([0, 1, 2].map(k => raw({ rect: [100, 700 - 20 * k, 130, 712 - 20 * k], url: 'https://example.org/a', dest: undefined, overlaidText: 'x' }))).links.filter(a => a.ok)
     expect(referenceOf([three[2]!], { ...ctx, all: three })).toBeNull()
+  })
+  it('reads the pairs in the SOURCE\'s order: a translation that sets two \\hyperref pairs the other way gives each link its own text', () => {
+    const two = annotationsOf([
+      raw({ rect: [100, 700, 130, 712], dest: 'section.a', overlaidText: 'A' }),
+      raw({ rect: [100, 680, 130, 692], dest: 'section.b', overlaidText: 'B' }),
+    ]).links.filter(a => a.ok)
+    // (the translation sets B's pair (source index 5) before A's (source index 2))
+    const pieces = [{ t: 'open', id: 2, src: '\\hyperref[b]{B}' }, { t: 'text', s: 'bee' }, { t: 'close', id: 2 }, { t: 'open', id: 1, src: '\\hyperref[a]{A}' }, { t: 'text', s: 'ay' }, { t: 'close', id: 1 }]
+    const ctx = { ...base, all: two, points: (a: Annot) => [{ x: 1, y: a.i, ch: 'x' }], pairsOf: () => pairsOf(pieces, [5, -1, 5, 2, -1, 2]) }
+    expect(referenceOf([two[0]!], ctx)).toBe('ay')
+    expect(referenceOf([two[1]!], ctx)).toBe('bee')
+    // (with no source index for them, no reference: never the translation's order)
+    expect(referenceOf([two[0]!], { ...ctx, pairsOf: () => pairsOf(pieces) })).toBeNull()
   })
   it('is the overlaid text of a link of a unit with no pair: only a pair\'s text is a link\'s own translated text', () => {
     // (a glyph off every segment on a unit's line: the unit has no pair, so the link is over its placeholders' ink)
@@ -427,6 +482,7 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
   })
   it('reads an \\href\'s URL as a URL, TeX\'s escapes undone', () => {
     expect(hrefUrlOf('\\href{https://example.org/a_b\\_c?x=1\\&y=2}{t}')).toBe('https://example.org/a_b_c?x=1&y=2')
+    expect(hrefUrlOf('\\href*{https://example.org/s}{t}')).toBe('https://example.org/s')
     expect(hrefUrlOf('\\hyperref[a]{t}')).toBeNull()
     expect(hrefUrlOf('\\href{not a url}{t}')).toBeNull()
   })

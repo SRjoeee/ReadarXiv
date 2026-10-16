@@ -39,10 +39,12 @@ export interface Unsupported { i: number; unsupported: true }
 export declare function annotsOf(raw: readonly unknown[] | null | undefined, points: GlyphPoints, points2?: GlyphPoints | null): { list: (Annot | Unsupported)[]; total: number; unsupported: number }
 /** whether a point (device pixels) lies where the operations left the paper erased */
 export declare function erasedOf(ops: readonly unknown[] | null | undefined): (x: number, y: number) => boolean
-/** a unit placed on a page, as ownership reads it: its rectangles [page, x0, y0, x1, y1] */
-export interface OwnerUnit { id: number; stream: number; rects: readonly (readonly number[])[] }
-/** the unit whose rectangles on page q hold most of the annotation's points (ties: the smaller area, then the smaller id), or null */
-export declare function ownerOf(a: Annot, units: readonly OwnerUnit[], q: number): OwnerUnit | null
+/** a unit with lines on a page, as ownership reads it: its rectangles [page, x0, y0, x1, y1], and those its growth left on each
+ *  page where it has grown (run.mjs) */
+export interface OwnerUnit { id: number; stream: number; rects: readonly (readonly number[])[] | null; grown?: ReadonlyMap<number, readonly (readonly number[])[]>; grownRects?: ReadonlyMap<number, readonly (readonly number[])[]> }
+/** the owner of each annotation of page q (its index in `ranked`, by annotation `i`): the first unit in order whose rectangles
+ *  hold more than half of its points; `stop`, the last index looked at; `budget`, the tests it may spend */
+export declare function ownersOf(list: readonly (Annot | Unsupported)[] | null | undefined, ranked: readonly Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>[], q: number, o?: { stop?: number; budget?: { left: number } }): Map<number, number>
 /** the record of an annotation left over the original's ink (`order` set when the list is ranked). Its `name` is text from the
  *  PDF, which may hold control and bidirectional characters: a view sets it as text, never as markup */
 export declare function inPlaceOf(a: Annot): LinkRecord
@@ -51,21 +53,28 @@ export declare function inPlaceOf(a: Annot): LinkRecord
 export interface LinkSource { annots: [number, number][]; tier: string }
 /** the annotations of page q unit `u` owns: of the units with lines on q in their growth rank there, the first whose rectangles
  *  hold most of an annotation's points (`before`: those ranked before u); `budget`: the tests it may spend */
-export declare function ownedIn(list: readonly (Annot | Unsupported)[] | null | undefined, u: { rects: readonly (readonly number[])[] }, before: readonly { rects: readonly (readonly number[])[] }[], q: number, budget?: { left: number }): Annot[]
+export declare function ownedIn(list: readonly (Annot | Unsupported)[] | null | undefined, u: Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>, before: readonly Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>[], q: number, budget?: { left: number }): Annot[]
 /** what an annotation points to, as the match tells its kinds apart */
 export declare function kindOfAnnot(a: Annot): 'url' | 'cite' | 'note' | 'internal'
 /** a URL as the match compares two: TeX's escapes undone, the WHATWG parser's form; null where it is none */
 export declare function urlOf(arg: unknown): string | null
 /** the link a unit's piece may carry, by its source */
-export declare function linkKindOf(piece: { t: string; src?: string } | null | undefined): { kind: 'cite'; keys: string[] } | { kind: 'url'; url: string } | { kind: 'internal' } | { kind: 'note' } | null
+export declare function linkKindOf(piece: { t: string; src?: string } | null | undefined): { kind: 'cite'; keys: string[] } | { kind: 'url'; url: string } | { kind: 'internal'; name?: string } | { kind: 'note' } | null
+/** whether a piece's source names one link target alone (a citation of one key, a url, a reference to one label, a mark) */
+export declare function singleTarget(piece: { t: string; src?: string } | null | undefined, kind: ReturnType<typeof linkKindOf>): boolean
 /** a piece of a unit a link may be matched to: a placeholder (its index `k`) or a link pair (its open's id), in the source's order */
 export interface LinkTarget {
-  ord: number
+  /** its piece's index in the unit's source (never the translation's place), or null where unknown */
+  ord: number | null
   k?: number
   pair?: number
   kind: 'cite' | 'url' | 'internal' | 'note' | null
   keys?: string[]
   url?: string
+  /** a `\hyperlink`'s destination */
+  name?: string
+  /** its source names one target alone */
+  single?: boolean
   /** the page characters its rendering took, by key `page|item|k` */
   gap: ReadonlySet<string> | null
   /** its segments in TeX's file: [page, x0, baseline, x1, top, bottom] */
@@ -86,6 +95,7 @@ export declare function placeUnit(o: {
   edge: (line: Line, run: LineRun, at: number) => number
   band: (t: Token, line: Line) => { top: number; bottom: number }
   scale: number
+  budget?: { left: number }
 }): { records: { page: number; li: number; x: number; rec: LinkRecord; sources: LinkSource }[]; tried: { q: number; i: number; why: 'unplaced' }[] }
 /** a page's links once it is final: the annotations no unit took and none of whose points is erased, in place; any other dropped and counted by reason; sorted and ranked */
 export declare function freezeLinks(o: {

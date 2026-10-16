@@ -108,6 +108,8 @@ describe('links moved over a run', () => {
     })
   }
 
+  // (LK14 holds that the links never move the drawing; it is no guard of svgOfUnit's own walk (layer2.mjs lineRuns), whose
+  // refactor is held by the engine golden and the gate's door and model equality against the drawing before it)
   it('LK14: a page draws the same whether its annotations are read or not: the links are data, the drawing never reads them', async () => {
     const withLinks = await open(paper()), without = await open(paper({ annots: false }))
     for (const p of pages) { await withLinks.layFor(p); await without.layFor(p) }

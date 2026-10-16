@@ -71,7 +71,8 @@ export type { PageWords } from './words.mjs'
  *  - `boxes`: [x0, y0, x1, y1] x n (x0 < x1, y0 < y1) in the page's PDF user space, unrotated, y up; moved, one box a drawn line
  *  - `dest` or `url`, exactly one. `dest` as PDF.js gives it, never resolved by the engine; `url` PDF.js's validated url only,
  *    and then of http:, https: or mailto: alone
- *  - `name`, never empty for a link with glyphs: the drawn characters under it (moved), the crop's text, the translated pair's
+ *  - `name`, never empty for a link with glyphs: the drawn characters under it (moved), over a crop the original's text under it
+ *    (its overlaid text: what the crop shows there; the crop's own text where that is none and it is the crop's one link), the translated pair's
  *    text, PDF.js's overlaid text (in place); '' only for a glyphless link in place, which the view names
  *  - `moved`: true for every record laid over the layer's own drawing (a matched record), even where it lands on the original's
  *    spot; false for one left over the original's ink

@@ -206,67 +206,54 @@ function pointsOfAnnot(a) {
   return out
 }
 
-/** the units of a page as ownership reads them: each with its rectangles on page q and their area */
-function prepare(units, q) {
-  return units.map(u => {
-    const here = u.rects.filter(r => r[0] === q)
-    return { u, here, area: here.reduce((s, r) => s + (r[3] - r[1]) * (r[4] - r[2]), 0) }
-  })
+/** a unit's rectangles on page q as ownership reads them: those its growth there left (`grown`, run.mjs growOn's, final once it
+ *  has grown on q: a unit's lay may still move its first line's edge to its label, after the units ranked after it were matched),
+ *  else its rectangles there; with their bounding box, or null where it has none on q */
+function rectsOn(w, q) {
+  // (a placed unit's own `grownRects`, or a unit as the freeze lists it, `grown`)
+  const g = w.grownRects instanceof Map ? w.grownRects : w.grown instanceof Map ? w.grown : null
+  const rs = g?.get(q) ?? (w.rects ?? []).filter(r => r[0] === q)
+  return rs.length ? { rs, box: [Math.min(...rs.map(r => r[1])), Math.min(...rs.map(r => r[2])), Math.max(...rs.map(r => r[3])), Math.max(...rs.map(r => r[4]))] } : null
 }
-function ownerIn(pts, prepared) {
-  let best = null
-  for (const e of prepared) {
-    let n = 0
-    for (const [x, y] of pts) if (e.here.some(r => x >= r[1] && x <= r[3] && y >= r[2] && y <= r[4])) n++
-    if (!n) continue
-    if (!best || n > best.n || (n === best.n && (e.area < best.area || (e.area === best.area && e.u.id < best.u.id)))) best = { u: e.u, n, area: e.area }
+/** whether rectangles (rectsOn's) hold more than half of the points, charging the budget a test a point (and a rectangle) */
+function holdsMost(h, pts, budget) {
+  const need = Math.floor(pts.length / 2) + 1
+  let n = 0
+  for (const [x, y] of pts) {
+    budget.left--
+    if (x < h.box[0] || x > h.box[2] || y < h.box[1] || y > h.box[3]) continue
+    budget.left -= h.rs.length
+    if (h.rs.some(r => x >= r[1] && x <= r[3] && y >= r[2] && y <= r[4])) n++
   }
-  return best?.u ?? null
+  return n >= need
 }
 /**
- * The unit that owns an annotation (page q, order free): of `units` ({ id, stream, rects: [page, x0, y0, x1, y1] ... }, those
- * with lines on q), the one whose rectangles on q hold most of the annotation's points; a tie goes to the smaller area of
- * rectangles on q, then the smaller id (unitAt's rule). null where no unit holds any
+ * The owner of each annotation of page q, one rule for the match and the freeze (the 3a design §3.2, as the run lays a page):
+ * of `ranked` (units with rectangles on q, in order: the units placed with lines on q in their growth rank there, then for the
+ * freeze's ranking the units left the original's), the first whose rectangles on q (rectsOn: as grown) hold more than half of
+ * the annotation's points (both readings) owns it. Not "most points" (the design's first wording): a unit ranked after another
+ * may not have grown when the other is matched, and what it holds then is not final; the first with a majority is final once
+ * every unit ranked before it has grown, which each has before it is laid. No unit with a majority: no owner, never matched.
+ * `stop`: the index past which no owner is looked for (a unit's match: itself); `budget` ({ left }): the tests it may spend,
+ * past which an annotation has no owner. Returns a Map of annotation `i` to the owner's index in `ranked`
  */
-export function ownerOf(a, units, q) {
-  return ownerIn(pointsOfAnnot(a), prepare(units, q))
-}
-
-/**
- * The annotations of page q that unit `u` owns, for its match (the 3a design §3.2 as the run lays a page): of the units placed
- * with lines on q in their growth rank there (run.mjs onPage, rankOf), the first whose rectangles on q (`rects`, [page, x0, y0,
- * x1, y1] ..., as grown) hold more than half of an annotation's points owns it. `before`: the units ranked before u there. Each
- * of them has grown on q before u is laid (a page's growth runs in its rank), and u has, so the answer is final once u is laid,
- * whatever page was asked first or which units of q are laid after u: the run asks it at u's first paint, and the page's freeze
- * reads only what the matches took. An annotation no unit holds a majority of has no owner and is never matched. `budget` ({
- * left }): the point-against-rectangle tests it may spend (a hostile page), what is past it owned by none
- */
-export function ownedIn(list, u, before, q, budget = { left: WORK_MAX }) {
-  const here = w => { const rs = w.rects.filter(r => r[0] === q); return rs.length ? { rs, box: [Math.min(...rs.map(r => r[1])), Math.min(...rs.map(r => r[2])), Math.max(...rs.map(r => r[3])), Math.max(...rs.map(r => r[4]))] } : null }
-  const mine = here(u)
-  if (!mine) return []
-  const others = before.map(here).filter(Boolean)
-  const out = []
+export function ownersOf(list, ranked, q, { stop = ranked.length - 1, budget = { left: WORK_MAX } } = {}) {
+  const on = ranked.slice(0, stop + 1).map(w => rectsOn(w, q))
+  const out = new Map()
   for (const a of list ?? []) {
     if (a.unsupported) continue
-    const pts = pointsOfAnnot(a)
-    const need = Math.floor(pts.length / 2) + 1
-    const holds = h => {
-      let n = 0
-      for (const [x, y] of pts) {
-        if (x < h.box[0] || x > h.box[2] || y < h.box[1] || y > h.box[3]) continue
-        budget.left -= h.rs.length
-        if (h.rs.some(r => x >= r[1] && x <= r[3] && y >= r[2] && y <= r[4])) n++
-      }
-      return n >= need
-    }
     if (budget.left <= 0) break
-    if (!holds(mine)) continue
-    if (others.some(holds)) continue
+    const pts = pointsOfAnnot(a)
+    const at = on.findIndex(h => h && holdsMost(h, pts, budget))
     if (budget.left < 0) break
-    out.push(a)
+    if (at >= 0) out.set(a.i, at)
   }
   return out
+}
+/** the annotations of page q that unit `u` owns (ownersOf, its match): `before`, the units ranked before it there */
+export function ownedIn(list, u, before, q, budget = { left: WORK_MAX }) {
+  const owners = ownersOf(list, [...before, u], q, { budget })
+  return (list ?? []).filter(a => !a.unsupported && owners.get(a.i) === before.length)
 }
 
 /** what an annotation points to, as the match tells its kinds apart: a citation (hyperref's `cite.<key>`), a footnote's mark
@@ -281,8 +268,8 @@ export function kindOfAnnot(a) {
 const CITE_SRC = /^\\(?![Nn]ocite)[A-Za-z]*[Cc]ite[A-Za-z]*\*?(?:\[[^\]]*\])*\{([^{}]*)\}/
 const REF_SRC = /^\\(?:ref|eqref|autoref|Autoref|cref|Cref|crefrange|Crefrange|cpageref|Cpageref|pageref|nameref|Nameref|vref|Vref|labelcref|subref|hyperref|hyperlink)\*?(?![A-Za-z])/
 const NOTE_SRC = /^\\(?:footnote|footnotemark)(?![A-Za-z])/
-const URL_SRC = /^\\url\s*\{((?:[^{}]|\{[^{}]*\})*)\}/
-const HREF_SRC = /^\\href\s*\{((?:[^{}]|\{[^{}]*\})*)\}/
+const URL_SRC = /^\\url\*?\s*\{((?:[^{}]|\{[^{}]*\})*)\}/
+const HREF_SRC = /^\\href\*?\s*\{((?:[^{}]|\{[^{}]*\})*)\}/
 
 /** a URL as the match compares two: TeX's escapes undone in its argument (`\#`, `\%`, `\_`, `\&`, `\~`, `\$`), then the WHATWG
  *  parser's form of it; null where it is none */
@@ -299,6 +286,9 @@ export function linkKindOf(piece) {
   if (piece?.t === 'open') {
     const h = HREF_SRC.exec(src)
     if (h) { const url = urlOf(h[1]); return url ? { kind: 'url', url } : null }
+    // (\hyperlink{name}{...} names its destination as the PDF does: matched by it)
+    const n = /^\\hyperlink\s*\{([^{}]+)\}/.exec(src)
+    if (n) return { kind: 'internal', name: n[1].trim() }
     return /^\\(?:hyperref|hyperlink)(?![A-Za-z])/.test(src) ? { kind: 'internal' } : null
   }
   if (piece?.t !== 'ph') return null
@@ -311,6 +301,15 @@ export function linkKindOf(piece) {
   return null
 }
 
+/** whether a piece's source names one link target alone: a citation of one key, a url, a reference to one label, a footnote's
+ *  mark (where its text is not found in its drawing, a link it took by key or url may then be laid over it whole) */
+export function singleTarget(piece, kind) {
+  if (!kind) return false
+  if (kind.kind === 'cite') return kind.keys.length === 1
+  if (kind.kind === 'internal') { const arg = /\{([^{}]*)\}/.exec(piece?.src ?? ''); return !!arg && !arg[1].includes(',') }
+  return true
+}
+
 const sameTarget = (a, b) => (a.url !== undefined ? a.url === b.url : b.url === undefined && JSON.stringify(a.dest) === JSON.stringify(b.dest))
 const within = (x, y, s) => x >= s[1] - 0.5 && x <= s[3] + 0.5 && y >= s[5] - 0.5 && y <= s[4] + 0.5
 
@@ -321,16 +320,20 @@ const within = (x, y, s) => x >= s[1] - 0.5 && x <= s[3] + 0.5 && y >= s[5] - 0.
  *     the page characters it took), else every one of their points in one piece's segments of TeX's file (`segs`: a rendering
  *     with no characters, a source's or a citation's as the page wrote it before); a piece so found that is drawn as nothing or
  *     kept where it stands takes none (the annotation is the freeze's: in place over its ink, or dropped)
- *  2. key: a citation's `cite.X` against the unit's drawn citations holding X that took no annotation of it
+ *  2. key: a citation's `cite.X` against the unit's drawn citations holding X that took no annotation of it; a destination
+ *     against the `\hyperlink` pairs that name it
  *  3. url: against its drawn `\url` and `\href` pieces and `\href` pairs of the same url that took none of it
  *  4. order, by kind: a footnote's mark against its drawn marks, another destination against its references and `\hyperref`
  *     or `\hyperlink` pairs, that took none of their kind.
- * In 2 to 4 the annotations (page, then PDF order) and the pieces (the source's order) are paired in turn where they are as
- * many, all to the one piece where there is one and they are of one target (a citation's name and year, a url over two
- * lines), else none of them (`ambiguous`). `cands`: [{ q, a }] in page then PDF order; `targets`: [{ ord (its piece's index), k | pair, kind, keys, url,
- * gap (Set of `page|item|k`) | null, segs ([page, x0, baseline, x1, top, bottom] ...) | null, draw ('text' | 'crop' | 'pair' |
- * null) }] in the source's order; `budget` ({ left }): the tests it may spend, past which an annotation is `unplaced`. Returns
- * { groups: [{ to: target, annots: [{ q, a, tier }] }], tried: [{ q, i, why }] }
+ * In 2 to 4 the annotations (page, then PDF order: TeX set them in the source's order) and the pieces in the SOURCE's order
+ * (`ord`, each piece's index in the unit's source, never the translation's order, which may set two of them the other way) are
+ * paired in turn where they are as many, all to the one piece where there is one and they are of one target (a citation's
+ * name and year, a url over two lines), else none of them (`ambiguous`); so too where two pieces could take them and one has
+ * no source index to order it by. `cands`: [{ q, a }] in page then PDF order; `targets`: [{ ord (its piece's index in the
+ * source, or null), k | pair, kind, keys, url, name (a `\hyperlink`'s destination), single (its source names one target), gap
+ * (Set of `page|item|k`) | null, segs ([page, x0, baseline, x1, top, bottom] ...) | null, draw ('text' | 'crop' | 'pair' |
+ * null) }]; `budget` ({ left }): the tests it may spend, past which an annotation is `unplaced`. Returns { groups: [{ to:
+ * target, annots: [{ q, a, tier }] }], tried: [{ q, i, why }] }
  */
 export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
   const took = new Map(), tried = []
@@ -344,7 +347,11 @@ export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
     if (budget.left < 0) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
     if (g.key?.length) {
       for (const T of targets) if (T.gap && g.key.every(key => T.gap.has(`${c.q}|${key}`))) { hit = T; n++ }
-      if (!n) for (const T of targets) if (T.segs?.length && g.x.every((x, j) => T.segs.some(s => s[0] === c.q && within(x, g.y[j], s)))) { hit = T; n++ }
+      if (!n) for (const T of targets) {
+        if (!T.segs?.length) continue
+        budget.left -= T.segs.length * g.x.length
+        if (g.x.every((x, j) => T.segs.some(s => s[0] === c.q && within(x, g.y[j], s)))) { hit = T; n++ }
+      }
     }
     if (n !== 1) { left.push(c); continue }
     if (hit.draw) add(hit, c, 'geometry')
@@ -352,9 +359,13 @@ export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
   // (what a target took already, by kind and target: a later tier pairs only the targets that took none of its own)
   const tookOf = (T, f) => (took.get(T) ?? []).some(x => f(x.a))
   const done = new Set()
-  const assign = (anns, tgts, tier) => {
-    if (!anns.length || !tgts.length) return
+  // (the pieces a tier pairs, in the source's order; null where two or more could take them and one has no place in the source)
+  const inSource = list => (list.length > 1 && list.some(T => !Number.isInteger(T.ord)) ? null : list.slice().sort((a, b) => a.ord - b.ord))
+  const assign = (anns, list, tier) => {
+    if (!anns.length || !list.length) return
     for (const c of anns) done.add(c)
+    const tgts = inSource(list)
+    if (!tgts) { for (const c of anns) tried.push({ q: c.q, i: c.a.i, why: 'ambiguous' }); return }
     if (anns.length === tgts.length) anns.forEach((c, j) => add(tgts[j], c, tier))
     // (all to the one piece only where they are of one target: a pair's text, which no text found tells apart, is one link)
     else if (tgts.length === 1 && anns.every(c => sameTarget(c.a, anns[0].a))) for (const c of anns) add(tgts[0], c, tier)
@@ -365,6 +376,10 @@ export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
   const byKey = new Map()
   for (const c of left) if (kindOfAnnot(c.a) === 'cite') { const x = c.a.dest.slice(5); (byKey.get(x) ?? byKey.set(x, []).get(x)).push(c) }
   for (const [x, anns] of byKey) assign(anns, drawn.filter(T => T.kind === 'cite' && T.keys?.includes(x) && !tookOf(T, a => a.dest === `cite.${x}`)), 'key')
+  // (and a destination a \hyperlink names)
+  const byName = new Map()
+  for (const c of left) if (!done.has(c) && kindOfAnnot(c.a) === 'internal' && typeof c.a.dest === 'string' && drawn.some(T => T.name === c.a.dest)) (byName.get(c.a.dest) ?? byName.set(c.a.dest, []).get(c.a.dest)).push(c)
+  for (const [name, anns] of byName) assign(anns, drawn.filter(T => T.name === name && !tookOf(T, a => a.dest === name)), 'key')
   // 3. url
   const byUrl = new Map()
   for (const c of left) if (kindOfAnnot(c.a) === 'url') { const u = urlOf(c.a.url) ?? c.a.url; (byUrl.get(u) ?? byUrl.set(u, []).get(u)).push(c) }
@@ -372,7 +387,8 @@ export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
   // 4. order
   for (const kind of ['note', 'internal']) {
     const anns = left.filter(c => !done.has(c) && kindOfAnnot(c.a) === kind)
-    assign(anns, drawn.filter(T => T.kind === kind && !tookOf(T, a => kindOfAnnot(a) === kind)), 'order')
+    // (a \hyperlink, which names its destination, is matched by it alone)
+    assign(anns, drawn.filter(T => T.kind === kind && T.name === undefined && !tookOf(T, a => kindOfAnnot(a) === kind)), 'order')
   }
   return { groups: [...took].map(([to, annots]) => ({ to, annots })), tried }
 }
@@ -397,19 +413,27 @@ function normed(chars, keep) {
  *   digits (every non-space character where it has none), widened over the marks at its ends that are its own (a hyphen, a
  *   full stop); each drawn line of what was
  *   found a box, across from the edge before its first character to the edge after its last (`edge`: the run's, as the SVG
- *   lays it out) and up and down its tokens' bands (`band`: the word table's). Not found: the piece whole where the annotation
- *   is its only one, else none (`unplaced`). Two of one target whose ranges abut (no other character between) are one record
- *   (a link TeX broke over two lines: "Rad-" and "ford et al.").
- * - A crop: the annotation's rectangle mapped by the crop's own map from its source to where it is drawn, cut to the drawn box.
+ *   lays it out) and up and down its tokens' bands (`band`: the word table's). A word or number is found whole (no letter or
+ *   digit of the drawing beside it: the "2" of "[12, 2]" is never the 2 of 12) unless an annotation of its target abuts it.
+ *   Not found: the piece whole only where the annotation is its only one, the match told its target by its geometry, key or url
+ *   (never by order alone) and the piece names one target (`single`), else none (`unplaced`). Two of one target whose ranges
+ *   abut (no other character between) are one record (a link TeX broke over two lines: "Rad-" and "ford et al.").
+ * - A crop: the annotation's rectangle mapped by the crop's own map from its source to where it is drawn, cut to the drawn box;
+ *   named by the original's text under it (its overlaid text), what the crop shows there.
  * - A pair: each drawn line of its tokens (from the first to the last) a box; every annotation of it one record.
  * A record is named by what is drawn under it (a crop by its text), white space collapsed. One whose boxes lie on two pages (a
  * piece the layer set over a page break) keeps those of its first page alone: each annotation one record.
  * `lines`: the unit's laid lines, each { line, runs } (layer2.mjs lineRuns); `edge(line, run, at)`, `band(t, line)` ({ top,
- * bottom }); `scale`, the layout's. Returns { records: [{ page, li, x, rec, sources }], tried: [{ q, i, why }] }
+ * bottom }); `scale`, the layout's; `budget` ({ left }): the work it may spend, past which a group is `unplaced`. Returns
+ * { records: [{ page, li, x, rec, sources }], tried: [{ q, i, why }] }
  */
-export function placeUnit({ groups, lines, edge, band, scale }) {
+export function placeUnit({ groups, lines, edge, band, scale, budget = { left: WORK_MAX } }) {
   const records = [], tried = []
+  const items = lines.reduce((n, l) => n + l.line.items.length, 0) + 1
   for (const { to, annots } of groups) {
+    // (each group reads the unit's drawn items once and searches its piece's text: past the budget, nothing more is placed)
+    budget.left -= items * (annots.length + 1)
+    if (budget.left < 0) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
     if (to.draw === 'crop') placeCrop(to, annots, lines, scale, records, tried)
     else if (to.draw === 'pair') placePair(to, annots, lines, edge, band, records, tried)
     else placeText(to, annots, lines, edge, band, records, tried)
@@ -470,20 +494,36 @@ function placeText(to, annots, lines, edge, band, records, tried) {
   const found = []
   let from = 0
   // (in the original's order, page then PDF order, whichever tier matched each: each is looked for after the one before)
-  for (const c of annots.slice().sort((a, b) => a.q - b.q || a.a.i - b.a.i)) {
-    // (its own text: PDF.js's overlaid text, read from the glyphs' own places; the engine's characters under it where that is
-    // empty, whose places are its widths' estimate and may take a neighbour for one of its own)
-    const own = c.a.ov ? [...c.a.ov] : c.a.g2.ch
-    let mode = 'letters', A = normed(own, LETTER)
-    if (!A.s) { mode = 'ink'; A = normed(own, INK) }
+  const sorted = annots.slice().sort((a, b) => a.q - b.q || a.a.i - b.a.i)
+  // (its own text: PDF.js's overlaid text, read from the glyphs' own places; the engine's characters under it where that is
+  // empty, whose places are its widths' estimate and may take a neighbour for one of its own)
+  const ownOf = c => (c.a.ov ? [...c.a.ov] : c.a.g2.ch)
+  const formOf = own => { const A = normed(own, LETTER); return A.s ? { mode: 'letters', A } : { mode: 'ink', A: normed(own, INK) } }
+  // (a word or a number found whole: no letter or digit of the drawing just before or after it, unless the annotation before it,
+  // of its target, ended there, or the one after it, of its target, starts there: "Rad-" and "ford et al." drawn "Radford")
+  const isLetter = j => j >= 0 && j < D.length && LETTER.test(D[j].ch)
+  sorted.forEach((c, n) => {
+    const own = ownOf(c), { mode, A } = formOf(own)
     const F = forms[mode]
+    const prev = found.at(-1), next = sorted[n + 1]
+    const nextS = next && sameTarget(next.a, c.a) ? formOf(ownOf(next)) : null
     let s0 = -1
-    if (A.s) { let u = F.at.findIndex(j => j >= from); if (u < 0) u = F.s.length; s0 = F.s.indexOf(A.s, u) }
+    if (A.s) {
+      let u = F.at.findIndex(j => j >= from)
+      if (u < 0) u = F.s.length
+      for (let at = F.s.indexOf(A.s, u); at >= 0; at = F.s.indexOf(A.s, at + 1)) {
+        const ds = F.at[at], de = F.at[at + A.s.length - 1]
+        const leftOk = mode !== 'letters' || !isLetter(ds - 1) || (prev && prev.de === ds - 1 && sameTarget(prev.c.a, c.a))
+        const rightOk = mode !== 'letters' || !isLetter(de + 1) || (nextS?.mode === 'letters' && F.s.startsWith(nextS.A.s, at + A.s.length))
+        if (leftOk && rightOk) { s0 = at; break }
+      }
+    }
     if (s0 < 0) {
-      // (not found: the piece whole, where this is its only annotation)
-      if (annots.length === 1) found.push({ c, ds: 0, de: D.length - 1 })
+      // (not found: the piece whole, only where this is its one annotation, the match told its target (by its geometry, its
+      // key or its url, never its order alone) and the piece names that target alone; else none)
+      if (annots.length === 1 && c.tier !== 'order' && to.single) found.push({ c, ds: 0, de: D.length - 1 })
       else tried.push({ q: c.q, i: c.a.i, why: 'unplaced' })
-      continue
+      return
     }
     let ds = F.at[s0], de = F.at[s0 + A.s.length - 1]
     // (the marks at its ends that are its own: "Rad-" with its hyphen, "al." with its full stop)
@@ -495,7 +535,7 @@ function placeText(to, annots, lines, edge, band, records, tried) {
     }
     found.push({ c, ds, de })
     from = de + 1
-  }
+  })
   // (two of one target whose ranges abut: one record)
   const merged = []
   for (const f of found) {
@@ -523,7 +563,9 @@ function placeCrop(to, annots, lines, scale, records, tried) {
     const ar = c.a.rect
     const box = [Math.max(drawn[0], X(ar[0])), Math.max(drawn[1], Y(ar[1])), Math.min(drawn[2], X(ar[2])), Math.min(drawn[3], Y(ar[3]))]
     if (!sound4(box) || !box.every(Number.isFinite)) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
-    const name = collapse(r.text || c.a.ov || c.a.g2.ch.join(''))
+    // (named by what the crop shows under it: the original's text there, PDF.js's overlaid text; the crop's copy text names the
+    // whole crop, which two links over one crop would share, and may not be what it shows)
+    const name = collapse(c.a.ov || (annots.length === 1 ? r.text : '') || c.a.g2.ch.join(''))
     records.push({ page: line.page, li: at.li, x: box[0], rec: recordOf(c.a, box, name), sources: { annots: [[c.q, c.a.i]], tier: c.tier } })
   }
 }
@@ -572,8 +614,9 @@ export function inPlaceOf(a) {
 export function freezeLinks({ list, q, ops, devOf, units, consumed = null, why = null, moved = [], sources = false }) {
   const erased = erasedOf(ops)
   const cost = (ops?.length ?? 0) + 1
-  const prepared = prepare(units, q)
-  const rects = prepared.reduce((s, e) => s + e.here.length, 0) + 1
+  // (each annotation's owner for the ranking, by the match's rule: `units` in their order)
+  const ownerBudget = { left: WORK_MAX }
+  const owners = ownersOf(list, units, q, { budget: ownerBudget })
   const entries = moved.map((m, k) => ({ rec: m.rec, stream: m.stream ?? Infinity, id: m.id ?? Infinity, kind: 0, seq: m.seq ?? k, src: m.sources ?? null }))
   const dropped = { unmatched: 0, ambiguous: 0, unplaced: 0 }
   let inPlace = 0, work = 0
@@ -584,8 +627,7 @@ export function freezeLinks({ list, q, ops, devOf, units, consumed = null, why =
     if (work > WORK_MAX) { dropped.unplaced++; continue }
     if (pts.some(([x, y]) => { const [dx, dy] = devOf(x, y); return erased(dx, dy) })) { dropped[why?.get(a.i) ?? 'unmatched']++; continue }
     inPlace++
-    work += pts.length * rects
-    const owner = work > WORK_MAX ? null : ownerIn(pts, prepared)
+    const owner = owners.has(a.i) ? units[owners.get(a.i)] : null
     entries.push({ rec: inPlaceOf(a), stream: owner?.stream ?? Infinity, id: owner?.id ?? Infinity, kind: 1, seq: a.i, src: { annots: [[q, a.i]], tier: 'place' } })
   }
   entries.sort((a, b) => (a.stream !== b.stream ? (a.stream < b.stream ? -1 : 1) : a.id !== b.id ? (a.id < b.id ? -1 : 1) : a.kind - b.kind || a.seq - b.seq))

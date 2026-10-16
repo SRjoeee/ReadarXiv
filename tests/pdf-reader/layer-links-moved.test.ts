@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { type Annot, freezeLinks, type LinkCandidate, type LinkTarget, matchUnit, ownedIn, placeUnit } from '@/pdf-reader/engine/layer-proto/links.mjs'
+import { type Annot, freezeLinks, type LinkCandidate, linkKindOf, type LinkTarget, matchUnit, ownedIn, placeUnit } from '@/pdf-reader/engine/layer-proto/links.mjs'
 import { tokenBand } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
@@ -41,7 +41,7 @@ const placing = (L: ReturnType<typeof lay>) => ({ lines: L.lines.map(line => ({ 
 const ann = (i: number, target: { dest?: string; url?: string }, chars: string, keys: string[] = [], rect = [0, 0, 1, 1], ov = chars): Annot => ({ i, rect, boxes: [rect], ...target, ov, border: null, g: { x: [], y: [], ch: [] }, g2: { x: keys.map(() => 0), y: keys.map(() => 0), ch: [...chars], key: keys } })
 const cand = (a: Annot, q = 1): LinkCandidate => ({ q, a })
 /** a target: a placeholder k of the unit's, drawn as text unless told otherwise */
-const target = (k: number, o: Partial<LinkTarget> = {}): LinkTarget => ({ ord: k, k, kind: null, gap: null, segs: null, draw: 'text', ...o })
+const target = (k: number, o: Partial<LinkTarget> = {}): LinkTarget => ({ ord: k, k, kind: null, single: true, gap: null, segs: null, draw: 'text', ...o })
 /** the text drawn on a layout's lines between two PDF x, by its items (a character's middle inside) */
 function drawnBetween(L: ReturnType<typeof lay>, page: number, b: number[]) {
   const box = b as [number, number, number, number]
@@ -176,13 +176,15 @@ describe('LK5: a footnote\'s mark, by order', () => {
   const pieces = [text('\u4e00'), { t: 'nested' }, text('\u4e8c'), { t: 'nested' }, text('\u4e09')]
   const L = () => lay(pieces as Piece[], { 1: { mode: 'source', text: '*', sup: true }, 3: { mode: 'source', text: '†', sup: true } })
   const marks = [target(1, { kind: 'note' }), target(3, { kind: 'note' })]
-  it('pairs the unit\'s marks with its footnote annotations in turn where they are as many', () => {
+  it('pairs the unit\'s marks with its footnote annotations in turn, in the source\'s order, where they are as many', () => {
     const anns = [ann(0, { dest: 'Hfootnote.1' }, '1'), ann(1, { dest: 'Hfootnote.2' }, '2')]
     const m = matchUnit({ cands: anns.map(a => cand(a)), targets: marks })
     expect(m.groups.map(g => [g.to.k, g.annots.map(c => [c.a.dest, c.tier])])).toEqual([[1, [['Hfootnote.1', 'order']]], [3, [['Hfootnote.2', 'order']]]])
-    const { records } = placeUnit({ groups: m.groups, ...placing(L()) })
-    // (the mark drawn is the source's: the annotation's own "1" is not found, and the mark is its one annotation, so the mark whole)
-    expect(records.map(r => [r.rec.dest, r.rec.name])).toEqual([['Hfootnote.1', '*'], ['Hfootnote.2', '†']])
+    const { records, tried } = placeUnit({ groups: m.groups, ...placing(L()) })
+    // (the marks drawn are the source's "*" and "†": the annotations' own "1" and "2" are not found, and order alone told their
+    // targets: left, never laid over a mark nothing confirms)
+    expect(records).toEqual([])
+    expect(tried.map(t => t.why)).toEqual(['unplaced', 'unplaced'])
   })
   it('gives two annotations of two targets to no one piece: one mark of two footnotes is ambiguous', () => {
     const m = matchUnit({ cands: [cand(ann(0, { dest: 'Hfootnote.1' }, '1')), cand(ann(1, { dest: 'Hfootnote.2' }, '2'))], targets: [target(1, { kind: 'note' })] })
@@ -214,6 +216,85 @@ describe('LK6: a citation drawn as the page wrote it before (no characters), by 
   it('one piece and two annotations of its key (a name and a year): both to it', () => {
     const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.p' }, 'Peters')), cand(ann(1, { dest: 'cite.p' }, '2018'))], targets: [target(1, { kind: 'cite', keys: ['p'] })] })
     expect(m.groups.map(g => g.annots.map(c => c.a.i))).toEqual([[0, 1]])
+  })
+})
+
+describe('the link a piece may carry', () => {
+  it('reads it from the source: a citation\'s keys, a url (\\url, \\href, starred or not), a reference, a mark; none for a formula', () => {
+    expect(linkKindOf({ t: 'ph', src: '\\citep[see][]{a, b}' })).toEqual({ kind: 'cite', keys: ['a', 'b'] })
+    expect(linkKindOf({ t: 'ph', src: '\\nocite{a}' })).toBeNull()
+    expect(linkKindOf({ t: 'ph', src: '\\url{https://x.org/a_b}' })).toEqual({ kind: 'url', url: 'https://x.org/a_b' })
+    expect(linkKindOf({ t: 'open', src: '\\href{https://x.org/\\#top}{' })).toEqual({ kind: 'url', url: 'https://x.org/#top' })
+    expect(linkKindOf({ t: 'open', src: '\\href*{https://x.org/s}{' })).toEqual({ kind: 'url', url: 'https://x.org/s' })
+    expect(linkKindOf({ t: 'open', src: '\\hyperref[sec:a]{' })).toEqual({ kind: 'internal' })
+    expect(linkKindOf({ t: 'open', src: '\\textbf{' })).toBeNull()
+    expect(linkKindOf({ t: 'ph', src: '\\eqref{eq:1}' })).toEqual({ kind: 'internal' })
+    expect(linkKindOf({ t: 'ph', src: '\\footnotemark' })).toEqual({ kind: 'note' })
+    expect(linkKindOf({ t: 'nested' })).toEqual({ kind: 'note' })
+    expect(linkKindOf({ t: 'ph', src: '$x^2$' })).toBeNull()
+  })
+})
+
+describe('a translation that sets the pieces in another order: the right link, or none, never two swapped', () => {
+  // (the source has \\hyperref[a]{A} before \\hyperref[b]{B}; the translation sets B's pair first: in its pieces B's open comes
+  // first, its source index 3, A's after it, its source index 1. The PDF sets A's annotation before B's)
+  const anns = () => [cand(ann(0, { dest: 'section.a' }, 'A')), cand(ann(1, { dest: 'section.b' }, 'B'))]
+  const pairB: LinkTarget = { ord: 3, pair: 9, kind: 'internal', single: true, gap: null, segs: null, draw: 'pair' }
+  const pairA: LinkTarget = { ord: 1, pair: 7, kind: 'internal', single: true, gap: null, segs: null, draw: 'pair' }
+  it('pairs the annotations with the pairs in the source\'s order, not the translation\'s', () => {
+    const m = matchUnit({ cands: anns(), targets: [pairB, pairA] })
+    expect(m.groups.map(g => [g.to.pair, g.annots.map(c => c.a.dest)])).toEqual(expect.arrayContaining([[7, ['section.a']], [9, ['section.b']]]))
+    expect(m.groups.length).toBe(2)
+  })
+  it('pairs no annotation where two pieces could take them and one has no place in the source: ambiguous, dropped', () => {
+    const m = matchUnit({ cands: anns(), targets: [{ ...pairB, ord: null }, pairA] })
+    expect(m.groups).toEqual([])
+    expect(m.tried.map(t => t.why)).toEqual(['ambiguous', 'ambiguous'])
+  })
+  it('matches a \\hyperlink by the destination it names, whatever the order', () => {
+    const named = (ord: number, pair: number, name: string): LinkTarget => ({ ord, pair, kind: 'internal', name, single: true, gap: null, segs: null, draw: 'pair' })
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'n.first' }, 'x')), cand(ann(1, { dest: 'n.second' }, 'y'))], targets: [named(1, 7, 'n.second'), named(3, 9, 'n.first')] })
+    expect(m.groups.map(g => [g.to.name, g.annots.map(c => [c.a.dest, c.tier])])).toEqual(expect.arrayContaining([['n.first', [['n.first', 'key']]], ['n.second', [['n.second', 'key']]]]))
+  })
+  it('sets the footnote marks a translation reorders on their own marks', () => {
+    const L = lay([text('\u4e00'), { t: 'nested' }, text('\u4e8c'), { t: 'nested' }] as Piece[], { 1: { mode: 'orig-text', text: '2', sup: true }, 3: { mode: 'orig-text', text: '1', sup: true } })
+    // (the translation's first mark is the source's second: its index there 4, the other's 2)
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'Hfootnote.1' }, '1')), cand(ann(1, { dest: 'Hfootnote.2' }, '2'))], targets: [target(1, { kind: 'note', ord: 4, single: true }), target(3, { kind: 'note', ord: 2, single: true })] })
+    const { records } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records.map(r => [r.rec.dest, r.rec.name]).sort()).toEqual([['Hfootnote.1', '1'], ['Hfootnote.2', '2']])
+  })
+})
+
+describe('a link\'s text found whole, or the link left: never over a part of another', () => {
+  it('"[12, 2]": the annotation of "2" alone, the 12 not its piece\'s, is laid over the "2", never the 2 of 12', () => {
+    const L = lay([text('\u89c1'), ph('\\cite{a,b}'), text('\u3002')], { 1: { mode: 'orig-text', text: '[12, 2]' } })
+    const m = matchUnit({ cands: [cand(ann(1, { dest: 'cite.b' }, '2'))], targets: [target(1, { kind: 'cite', keys: ['a', 'b'] })] })
+    const { records } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records.length).toBe(1)
+    // ("[12," from 110: its "1" 115 to 120, its "2" to 125; "2]" after the space of 5: its "2" from 135)
+    expect(records[0]!.rec.boxes[0]).toBeCloseTo(135, 6)
+    expect(drawnBetween(L, 2, records[0]!.rec.boxes)).toBe('2')
+  })
+  it('"[12]" with the annotation of "2" alone: no whole number "2" in it: none, never the 2 of 12', () => {
+    const L = lay([text('\u89c1'), ph('\\cite{b}'), text('\u3002')], { 1: { mode: 'orig-text', text: '[12]' } })
+    const m = matchUnit({ cands: [cand(ann(1, { dest: 'cite.b' }, '2'))], targets: [target(1, { kind: 'cite', keys: ['b'], single: true })] })
+    // (its key told its target, and the piece names it alone: the piece whole, not a part of "12")
+    const { records } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records.map(r => r.rec.name)).toEqual(['[12]'])
+  })
+  it('an order match whose text is not found is left, never the piece whole: dest a by order on a \\ref{b} drawn "3"', () => {
+    const L = lay([text('\u89c1'), ph('\\ref{b}'), text('\u3002')], { 1: { mode: 'orig-text', text: '3' } })
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'section.a' }, '2'))], targets: [target(1, { kind: 'internal', ord: 1, single: true })] })
+    expect(m.groups[0]!.annots[0]!.tier).toBe('order')
+    const { records, tried } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records).toEqual([])
+    expect(tried).toEqual([{ q: 1, i: 0, why: 'unplaced' }])
+  })
+  it('a key match on a citation of two keys whose text is not found is left, never the whole "[21, 41]"', () => {
+    const L = lay([text('\u89c1'), ph('\\cite{a,b}'), text('\u3002')], { 1: { mode: 'cite-map', text: '[21, 41]' } })
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.a' }, '7'))], targets: [target(1, { kind: 'cite', keys: ['a', 'b'], single: false })] })
+    expect(m.groups[0]!.annots[0]!.tier).toBe('key')
+    expect(placeUnit({ groups: m.groups, ...placing(L) }).records).toEqual([])
   })
 })
 
