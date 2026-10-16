@@ -1343,6 +1343,18 @@ describe('makeLayout over arXiv\'s text read once (the prepare\'s step T, layout
     expect(calls[0]).toBeGreaterThan(0)
   })
 
+  it('the page stream places a range\'s units alone: it takes no frame by default (pageFrame over them is not the whole\'s), a TypeError', async () => {
+    const marks = await marksOf(DISPLAY)
+    const base = { units: DISPLAY.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const first = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages) })
+    if ('refused' in first && first.refused) throw new Error('refused')
+    for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+    await first.whole()
+    const m = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages), columnEdges: first.edges() })
+    if ('refused' in m && m.refused) throw new Error('refused')
+    await expect(m.byStream()).rejects.toThrow(/frame/)
+  })
+
   it('a text of another page count than the document is the caller\'s mistake', async () => {
     const marks = await marksOf(DISPLAY)
     const text = await readArxivText(arxivOf([...DISPLAY.pages, ...DISPLAY.pages]))

@@ -21,8 +21,9 @@ export interface MakeInput {
   text?: ArxivText | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
-  /** the pages' frame's rule the maker's anchors are placed under (anchors.mjs pageFrame, today's) */
-  frame?: FrameRule
+  /** the pages' frame's rule the maker's anchors are placed under (anchors.mjs pageFrame, today's, where none is given); the
+   *  page stream (makerOf's stream, byStream) needs one given, the whole document's: it throws a TypeError without */
+  frame?: FrameRule | null
   /** the columns' text edges the names, the displays' numbers and the centred flag read (`page|column`,
    *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of every placed unit's body lines (today's) */
   columnEdges?: ReadonlyMap<string, [number, number]> | null
@@ -94,7 +95,7 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     carrying(): 'carry' | null
     /** each marked page's lines [carried, total], once carried */
     pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
-    /** the maker a page at a time (after carrying(), the columns' edges given) */
+    /** the maker a page at a time (after carrying(), the columns' edges and the whole document's frame rule given) */
     stream(): MakerStream
     /** carrying(), then stream() over every page read here, finished */
     byStream(): Promise<MakerStream | { refused: 'carry'; stats: LayoutStats }>

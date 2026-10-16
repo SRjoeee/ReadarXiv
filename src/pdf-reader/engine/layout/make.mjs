@@ -372,7 +372,8 @@ async function gzipSize(bytes) {
  * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
- * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's). `plans`:
+ * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's, where none is given; the page
+ * stream, which places a range's units alone, needs one given, the whole document's). `plans`:
  * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
  * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again (null where they
  * fail, `plansFailed` why: the add-on's loss, never the file's). A page whose ink
@@ -397,7 +398,7 @@ export async function makeLayout(o) {
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
  * flag read, given; else made of every placed unit's body lines once the lines are placed (today's rule: `columnEdgesOf`)
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame = pageFrame, plans: wantPlans = false, parts = false, columnEdges = null, check = false }) {
+export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false }) {
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
@@ -562,7 +563,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
     linesTeX = new Map(marks.lines)
-    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame })
+    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame })
     stats.ms.anchor = now() - t
   }
 
@@ -1687,6 +1688,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    */
   function stream() {
     if (!edges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`)')
+    // (its ranges are placed from their own units: pageFrame over them is not the whole paper's frame, so none is assumed)
+    if (!frame) throw new TypeError('the page stream needs the whole document\'s frame rule given (`frame`)')
     const floating = id => FLOATING.has(units[id]?.kind ?? '')
     const n = units.length
     // ---- each unit's own marks, carried once the pages they are carried to are read (anchoring()'s, a unit at a time)

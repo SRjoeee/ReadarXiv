@@ -11,11 +11,12 @@
 // known before it is matched: a bounded unit its bounds; one without marks the window it is searched in, between its marked
 // neighbours and MARGIN beyond (a float: that window, and its match over the whole document, floatMatches', made at step
 // T); with no marks at all, the whole document. Two things are the whole document's still, and given: the frame (`frame`,
-// pageFrame's rule reads every located unit) and, for a float, the marks of its neighbours (its search between them comes
-// first). A unit is told in the part of its first rectangle's page.
+// pageFrame's rule reads every located unit, so pageFrame over a part's units alone is another frame: there is no default)
+// and, for a float, the marks of its neighbours (its search between them comes first). A unit is told in the part of its
+// first rectangle's page.
 //
 // An original module (no port statement). Pure: no PDF.js, no `node:*` module.
-import { matchUnits, pageFrame, placeUnits } from './anchors.mjs'
+import { matchUnits, placeUnits } from './anchors.mjs'
 
 /** a unit without marks is searched this far past its marked neighbours (anchors.mjs MARGIN) */
 const MARGIN = 100
@@ -54,12 +55,15 @@ export function leftReach(doc, units, { bounds, floating = () => false, floatMat
 
 /**
  * The left of the part of pages a to b: Map id → Anchor of the units whose first rectangle stands on a page from a to b,
- * each as anchorUnits over the whole paper places it, under the frame `frame` gives (the whole document's, until a frame
- * of arXiv's text alone is the rule). `reach` leftReach's (made once for every part). Also the units the place was made of
- * (`read`, indices into `units`), for the record, and the ids of those placed with their first rectangle before page a
- * (`before`: a part's that came before, or, cut a range at a time, a unit its ranges passed over)
+ * each as anchorUnits over the whole paper places it, under the frame `frame` gives: required, a rule whose frame is the
+ * whole document's (one made over the whole paper's units, or one of arXiv's text alone), never pageFrame over the part's
+ * units, which reads only the located units it is given (a TypeError where none is given). `reach` leftReach's (made once
+ * for every part). Also the units the place was made of (`read`, indices into `units`), for the record, and the ids of
+ * those placed with their first rectangle before page a (`before`: a part's that came before, or, cut a range at a time, a
+ * unit its ranges passed over)
  */
-export function leftOfPart(doc, units, { bounds, floating = () => false, floatMatch = null, frame = pageFrame, minCoverage = 0.6 }, [a, b], reach = leftReach(doc, units, { bounds, floating, floatMatch })) {
+export function leftOfPart(doc, units, { bounds, floating = () => false, floatMatch = null, frame, minCoverage = 0.6 }, [a, b], reach = leftReach(doc, units, { bounds, floating, floatMatch })) {
+  if (typeof frame !== 'function') throw new TypeError('leftOfPart: `frame`, the whole document\'s frame rule (pageFrame over a part\'s units is not the whole paper\'s)')
   const { C, V2 } = partSets(doc, units, [a, b], reach)
   const read = V2.units
   const found = matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(read) })
