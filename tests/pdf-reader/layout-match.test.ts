@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { matcherOf } from '@/pdf-reader/engine/layout/match.mjs'
+import { MATCH_PAGE_WORK, matcherOf } from '@/pdf-reader/engine/layout/match.mjs'
 
 // The matcher's two guards (the 6b review's I3): a piece's own glyphs carried to arXiv's page and matched there, each
 // next glyph at its matched neighbour's offset first, and a match whose offset jumps away from both its neighbours'
@@ -33,5 +33,25 @@ describe('matcherOf: the guards', () => {
     const m = matcherOf({ ink: [null, P], carry })
     expect(m.match([item('x', 100), item('y', 105), item('z', 110)], [], null, null)).toEqual({ why: "its glyphs not all matched on arXiv's page" })
     expect(m.stats.rejected).toBeGreaterThan(0)
+  })
+})
+
+describe('matcherOf: the work bound, a page\'s', () => {
+  it('a page past its work loses the pieces that start on it; another page\'s pieces are matched still', () => {
+    expect(MATCH_PAGE_WORK).toBe(5_000_000)
+    // page 1: 2,000 glyphs on one baseline (each scan of a piece there visits them all); page 2: one glyph
+    const dense = page(Array.from({ length: 2000 }, (_, k) => ({ u: 'a', x: 72 + k * 0.25, y: 700 })))
+    const lone = page([{ u: 'b', x: 100, y: 700 }])
+    const carry = (p: number, x: number, y: number) => ({ page: p, x, y })
+    const m = matcherOf({ ink: [null, dense, lone], carry, pageWork: 10_000 })
+    const on1 = (x: number) => [{ page: 1, x0: x, y: 700, size: 10, u: 'a' }]
+    const got = Array.from({ length: 12 }, (_, k) => m.match(on1(72 + k * 0.25), [], null, null))
+    // the first pieces matched until page 1's work passes the bound, then each piece there LOST
+    const lost = got.findIndex(r => 'why' in r && r.why === "past the matcher's work bound")
+    expect(lost).toBeGreaterThan(0)
+    expect(got.slice(0, lost).every(r => !('why' in r))).toBe(true)
+    expect(got.slice(lost).every(r => 'why' in r)).toBe(true)
+    expect(m.stats.over).toBe(12 - lost)
+    expect(m.match([{ page: 2, x0: 100, y: 700, size: 10, u: 'b' }], [], null, null)).toEqual({ glyphs: [[2, 0]], boxes: [] })
   })
 })

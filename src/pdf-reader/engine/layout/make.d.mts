@@ -74,6 +74,21 @@ export interface LayoutStats {
 }
 /** a paper's layout file, or why none is made */
 export declare function makeLayout(o: MakeInput): Promise<{ file: LayoutFile; stats: LayoutStats; plans?: Map<number, PagePlan> | null; plansFailed?: string; lines?: ReadonlyMap<number, readonly [carried: number, total: number]> } | { refused: 'carry' | 'pages' | 'bounds'; stats: LayoutStats }>
+/** a task of the maker's passes: its key in the whole order (compared element by element), the pages it reads and writes */
+export interface MakerTask { key: number[]; pages: number[]; run(): void }
+/** tasks run in an order the whole order allows: each page's tasks in their order; `pick` the next of those that may run */
+export declare function runInOrder(tasks: readonly MakerTask[], pick?: (ready: readonly MakerTask[]) => number): void
+type Made = Awaited<ReturnType<typeof makeLayout>>
+/**
+ * The maker of a paper's layout file (makeLayout's), its pages read one at a time (`readPage`, in page order) and its passes
+ * run whole (`whole()`: makeLayout's order) or as tasks in another order the whole order allows (`byTasks(pick)`, the
+ * columns' edges given): the same file. `check`: a task reading ink outside its pages throws. `edges()` the columns' edges
+ * the passes read (the whole run's, once made)
+ */
+export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
+  | { refused: 'pages'; stats: LayoutStats }
+  | { refused?: undefined; pages: number; stats: LayoutStats; readPage(p: number): Promise<void>; whole(): Promise<Made>; byTasks(pick?: (ready: readonly MakerTask[]) => number): Promise<Made>; edges(): Map<string, [number, number]> | null }
+>
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number
 /** a page's operator list waited for at most, ms */

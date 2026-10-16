@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
-import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS } from '@/pdf-reader/engine/layout/make.mjs'
+import { CARRY_MIN, fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -12,12 +12,35 @@ import { arxivOf, endOf, FONTS, type Mark, marksOf, type Page, PATHS, ph, type R
 // The layout maker over the fake world of helpers/make-world.ts
 
 const make = async (w: World, log = '', asked: number[] = []) => makeLayout({ units: w.units, marks: await marksOf(w, log), arxiv: arxivOf(w.pages, asked), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
-/** a made file: it parses, and made again it is the same bytes */
+/** a seeded generator */
+const seeded = (seed: number) => () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32 }
+let seeds = 1
+/**
+ * The same world's file with its passes run as tasks (makerOf byTasks) in an order a seeded pick makes of those the whole
+ * order allows, each task confined to its own pages (`check`), the columns' edges the whole run's
+ */
+async function inOtherOrder(w: World, log: string) {
+  const input = { units: w.units, marks: await marksOf(w, log), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+  const first = await makerOf({ ...input, arxiv: arxivOf(w.pages) })
+  if ('refused' in first) return first
+  for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+  await first.whole()
+  const m = await makerOf({ ...input, arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true })
+  if ('refused' in m) return m
+  for (let p = 1; p <= m.pages; p++) await m.readPage(p)
+  const rand = seeded(seeds++)
+  return m.byTasks(ready => Math.floor(rand() * ready.length))
+}
+/** what a file's stats count, but its times and its gzip size */
+const counted = (s: LayoutStats) => { const { ms: _ms, bytes, ...rest } = s; return { ...rest, raw: bytes.raw } }
+/** a made file: it parses, and made again it is the same bytes, its passes in another order the whole order allows too */
 async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: LayoutStats }> {
-  const one = await make(w, log), two = await make(w, log)
-  if (!('file' in one) || !('file' in two)) throw new Error(`refused: ${JSON.stringify('refused' in one ? one : two)}`)
+  const one = await make(w, log), two = await make(w, log), three = await inOtherOrder(w, log)
+  if (!('file' in one) || !('file' in two) || !('file' in three)) throw new Error(`refused: ${JSON.stringify('refused' in one ? one : 'refused' in two ? two : three)}`)
   const text = encodeLayout(one.file)
   expect(encodeLayout(two.file)).toBe(text)
+  expect(encodeLayout(three.file)).toBe(text)
+  expect(counted(three.stats)).toEqual(counted(one.stats))
   expect(parseLayout(new TextEncoder().encode(text))).toEqual(one.file)
   for (const [, rows] of one.file.erase) expect(rows.length).toBeGreaterThan(0)
   return one
@@ -1327,5 +1350,59 @@ describe('makeLayout with the add-on\'s plans (`plans`): each page\'s operator l
     expect(plans.has(4)).toBe(false)
     // without `plans`, none
     expect('plans' in want).toBe(false)
+  })
+})
+
+describe('makerOf: the passes as tasks, in any order the whole order allows', () => {
+  it('runInOrder runs each page\'s tasks in their order, whatever it picks among those that may run', () => {
+    const rand = seeded(11)
+    const log: [number, string][] = []
+    // tasks of four passes over six units, each on one or two pages of five, and a page task a page
+    const tasks: { key: number[]; pages: number[]; run: () => void }[] = []
+    for (let x = 0; x < 4; x++) for (let i = 0; i < 6; i++) { const pages = i % 3 === 0 ? [1 + (i % 5), 2 + (i % 4)] : [1 + (i % 5)]; tasks.push({ key: [x, i], pages, run: () => { for (const q of pages) log.push([q, `${x}.${i}`]) } }) }
+    for (let q = 1; q <= 5; q++) tasks.push({ key: [1.5, q], pages: [q], run: () => log.push([q, `b.${q}`]) })
+    tasks.push({ key: [9, 0], pages: [], run: () => {} })
+    for (let s = 0; s < 20; s++) {
+      log.length = 0
+      runInOrder(tasks.slice().reverse(), ready => Math.floor(rand() * ready.length))
+      for (let q = 1; q <= 5; q++) {
+        const want = tasks.filter(t => t.pages.includes(q)).sort((a, b) => a.key[0]! - b.key[0]! || a.key[1]! - b.key[1]!).map(t => (t.key[0] === 1.5 ? `b.${t.key[1]}` : `${t.key[0]}.${t.key[1]}`))
+        expect(log.filter(([p]) => p === q).map(([, k]) => k)).toEqual(want)
+      }
+    }
+  })
+
+  it('a paper of three pages, paragraphs across their breaks, a display and a note: the same file in every order tried', async () => {
+    const lines = (page: number, from: number, n: number): Run[] => Array.from({ length: n }, (_, j) => ({ s: words(1000 * page + from + 10 * j, 10), x: 72, y: 700 - 12 * j }))
+    const p1 = [...lines(1, 0, 6), { s: 'a=b', x: 150, y: 620 }, { s: '(1)', x: 252, y: 620 }, ...lines(1, 100, 4).map(r => ({ ...r, y: r.y - 96 }))]
+    const p2 = [...lines(2, 0, 8), { s: 'and a note', x: 72, y: 600 }, { s: '1', x: 122, y: 603.5, size: 7 }, { s: '. Then more', x: 125.5, y: 600 }]
+    const p3 = lines(3, 0, 5)
+    const pages: Page[] = [{ runs: p1 }, { runs: p2 }, { runs: p3 }]
+    const last2 = p2.at(-1) as Run
+    const note = unit('footnote', [text('A note.')])
+    const w: World = {
+      pages,
+      marks: [
+        ['0s', 1, 72, 700], ['0e', 1, endOf(p1[5] as Run), 640], ['p1.1a', 1, 150, 620],
+        ['1s', 1, 72, 604], ['1e', 2, endOf(p2[7] as Run), 616], ['2s', 2, 72, 600], ['2e', 2, endOf(last2), 600], ['n2.2a', 2, 122, 600],
+        ['3s', 3, 72, 700], ['3e', 3, endOf(p3[4] as Run), 652],
+      ],
+      units: [
+        unit('para', [text(lines(1, 0, 6).map(r => r.s).join(' '))]),
+        unit('para', [text(`${lines(1, 100, 4).map(r => r.s).join(' ')} `), ph('\\begin{equation}a=b\\end{equation}'), text(` ${lines(2, 0, 8).map(r => r.s).join(' ')}`)]),
+        unit('para', [text('and a note'), { t: 'nested', unit: note }, text('. Then more')]),
+        unit('para', [text(p3.map(r => r.s).join(' '))]),
+        note,
+      ],
+    }
+    const want = await made(w)
+    // (every paragraph placed, the second across the break)
+    expect(want.file.units.map(u => u[0])).toEqual([0, 1, 2, 3])
+    expect(new Set(rowsOf(want.file, 1, 'lines').filter((_, j) => j % 8 === 0))).toEqual(new Set([1, 2]))
+    for (let s = 0; s < 12; s++) {
+      const got = await inOtherOrder(w, '')
+      if (!('file' in got)) throw new Error('refused')
+      expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
+    }
   })
 })

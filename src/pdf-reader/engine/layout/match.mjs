@@ -24,8 +24,10 @@ const VOTE_WIN = 80, VOTE_TOL = 0.4, VOTE_MIN = 3
 const RULE_TOL = 1.2
 /** a glyph with no line of its own (a raised big operator) carried at a mark's line it stands within this of */
 const SCRIPT = size => 0.6 * Math.max(size, 5) + 1.5
-/** the glyph visits a paper's matching may cost: the real papers' heaviest costs a few million */
-export const MATCH_WORK = 50_000_000
+/** the glyph and box visits a page's matching may cost (charged to the page visited): a piece whose pages are past it is
+ *  LOST. The real papers' heaviest costs a few million in all (2307.16209's 2.3 M). A page's alone, so that the bound
+ *  holds whatever order the units are matched in (the page stream's passes run in any order the whole order allows) */
+export const MATCH_PAGE_WORK = 5_000_000
 
 /** a glyph's character as two PDFs are compared by it: NFKC, no white space, no variation selector (TeX Live 2026's cmex
  *  sets one after a big operator or delimiter: ∑ U+FE01, which arXiv's older TeX gives plain) */
@@ -37,11 +39,13 @@ const NF = s => s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '')
  * `match(items, rules, A, B)` matches a piece's own glyphs ({ page, x0, y, size, u } of the marked compile, in stream
  * order) and rules ({ page, x0, y0, x1, y1 }), A and B its opening and closing marks ({ page, x, y } or null): every one
  * matched, { glyphs, boxes } ([page, index] on arXiv's PDF, in the items' order), or { why }. What it matched is taken,
- * whole or not. `stats`: the matches by kind, those rejected, and the work
+ * whole or not. `stats`: the matches by kind, those rejected, and the work. `pageWork` a page's work at most (MATCH_PAGE_WORK)
  */
-export function matcherOf({ ink, carry }) {
+export function matcherOf({ ink, carry, pageWork = MATCH_PAGE_WORK }) {
   const stats = { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 }
-  let work = 0
+  /** each page's work so far */
+  const work = new Map()
+  const spend = page => { work.set(page, (work.get(page) ?? 0) + 1); stats.work++ }
   const lowest = (P, y) => { let lo = 0, hi = P.n; while (lo < hi) { const m = (lo + hi) >> 1; if (P.y[m] < y) lo = m + 1; else hi = m } return lo }
 
   /** one glyph's match on arXiv's page near (X, Y), none taken nor in `local`: the same character within tx and ty;
@@ -54,7 +58,7 @@ export function matcherOf({ ink, carry }) {
     const scan = (yt, test) => {
       let best = -1, d = Infinity
       for (let g = lowest(P, Y - yt); g < P.n && P.y[g] <= Y + yt; g++) {
-        work++
+        spend(page)
         if (P.taken[g] || local.has(`${page}|${g}`) || !test(g)) continue
         const dd = Math.abs(P.x0[g] - X) + Math.abs(P.y[g] - Y)
         if (dd < d) { d = dd; best = g }
@@ -128,7 +132,7 @@ export function matcherOf({ ink, carry }) {
         if (!guess) return
         const u = NF(it.u)
         for (let g = lowest(P, guess.Y - VOTE_WIN); g < P.n && P.y[g] <= guess.Y + VOTE_WIN; g++) {
-          work++
+          spend(page)
           if (Math.abs(P.x0[g] - guess.X) > VOTE_WIN || P.taken[g] || (P.u[g] !== it.u && NF(P.u[g]) !== u)) continue
           const k = `${page}|${Math.round((P.x0[g] - it.x0) * 5)}|${Math.round((P.y[g] - it.y) * 5)}`
           votes.set(k, (votes.get(k) ?? 0) + 1)
@@ -181,7 +185,7 @@ export function matcherOf({ ink, carry }) {
       const X0 = r.x0 + best.dx, Y0 = r.y0 + best.dy, X1 = r.x1 + best.dx, Y1 = r.y1 + best.dy
       let hit = -1, e = Infinity
       for (let b = 0; b < P.boxes.length; b++) {
-        work++
+        spend(best.page)
         if (P.boxTaken[b]) continue
         const B = P.boxes[b], de = Math.abs(B[0] - X0) + Math.abs(B[1] - Y0) + Math.abs(B[2] - X1) + Math.abs(B[3] - Y1)
         if (Math.abs(B[0] - X0) <= RULE_TOL && Math.abs(B[1] - Y0) <= RULE_TOL && Math.abs(B[2] - X1) <= RULE_TOL && Math.abs(B[3] - Y1) <= RULE_TOL && de < e) { e = de; hit = b }
@@ -194,9 +198,10 @@ export function matcherOf({ ink, carry }) {
   }
 
   function match(items, list, A, B) {
-    if (work > MATCH_WORK) { stats.over++; return { why: "past the matcher's work bound" } }
     const cs = predict(items, A, B)
     const ca = A ? carry(A.page, A.x, A.y) : null, cb = B ? carry(B.page, B.x, B.y) : null
+    // (the pages it starts on: past their work, LOST)
+    for (const c of [...cs, ca, cb]) if (c && (work.get(c.page) ?? 0) > pageWork) { stats.over++; return { why: "past the matcher's work bound" } }
     const x0 = items[0], xl = items.at(-1)
     const starts = [j => cs[j]]
     if (ca && x0) starts.push(j => ({ page: ca.page, X: ca.x + (items[j].x0 - x0.x0), Y: ca.y + (items[j].y - x0.y) }))
@@ -207,7 +212,7 @@ export function matcherOf({ ink, carry }) {
       const P = ink[ref.page], u = NF(x0.u), sz = x0.size
       let next = null, prev = null
       for (let g = lowest(P, ref.y - 3 * sz); g < P.n && P.y[g] <= ref.y + 3 * sz; g++) {
-        work++
+        spend(ref.page)
         if (NF(P.u[g]) !== u) continue
         const dy = P.y[g] - ref.y
         if (dy < -0.8 * sz && (!next || P.x0[g] < next.x)) next = { x: P.x0[g], y: P.y[g] }
@@ -230,7 +235,6 @@ export function matcherOf({ ink, carry }) {
       if (v && n > best.n) best = { out: v, n }
     }
     const out = rigid(best.out)
-    stats.work = work
     for (const x of out) if (x) { ink[x.page].taken[x.g] = 1; stats[x.how]++ }
     if (out.some(x => !x)) return { why: "its glyphs not all matched on arXiv's page" }
     const boxes = list.length ? rules(list, items, out, ca, A) : []
