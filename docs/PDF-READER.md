@@ -1244,7 +1244,7 @@ instant layer (`parked/engine/`).
 
 | Entry | Loads in | What it gives |
 |---|---|---|
-| `pipeline` | Node (the server) | A paper's source to its units (`openPaper`, `loadProject`, `unpackSource`, `analyze`); the marked original and the probes (`originalFiles`, `probeFiles`, `readingsOf`, `stoppedShort`); the left geometry (`anchors`); the layout marks, the layout maker and the add-on's maker (`layoutMarksOfPaper`, `makeLayout`, `paperAddon`, the remover); the layout file and the add-on's manifest, with their caps; the bundle's writer (`writeBundle`, `bundleUnitsOf`); the faces' coverage; `PIPELINE_VERSION`, `PDFJS`. Not the compile path's typesetting, strategies or cache, and not `runLive`. |
+| `pipeline` | Node (the server) | A paper's source to its units (`openPaper`, `loadProject`, `unpackSource`, `analyze`); the marked original and the probes (`originalFiles`, `probeFiles`, `readingsOf`, `stoppedShort`); the left geometry (`anchors`); the layout marks, the layout maker and the add-on's maker (`layoutMarksOfPaper`, `makeLayout`, `paperAddon`, the remover); the page pass, a paper's layer told a part at a time (`layerOfPaper`, §19.6), and its cut (`partCutter`, `wholeCutter`, `cutBundle`); the layout file and the add-on's manifest, with their caps; the bundle's writer (`writeBundle`, `bundleUnitsOf`); the faces' coverage; `PIPELINE_VERSION`, `PDFJS`. Not the compile path's typesetting, strategies or cache, and not `runLive`. |
 | `translate` | Node and browser | The wires a unit goes out as and the reading back (`serialize`, `rehydrate`, `serializeTags`, `rehydrateTags`, `translateUnits`, the sentences, the batches); the table groups (`decideGroups`, `groupOf`); the units a target keeps (`authorsTranslated`); the rows (`rowOf`, `unitOf`, `layerRows`, `toTranslate`, `batchesOf`, `runRows`); `TRANSLATE_VERSION`. No DOM, no network. |
 | `rules` | Node and browser | The layout rule set and its reader (`readRules`, `parseRules`, `resolveRules`, `BUILTIN_RULES`, `RULES_SCHEMA`, `RULES_CAP`, `TARGETS`), the font roles (`FACES`, `rolesFor`, `faceFor`, `familyOfFonts`) and the script of a tag (`scriptOf`). |
 | `layer` | browser | The reader's door whole (`layer-proto/reader.mjs`): `openLayer`, `firstFaceOf`, `readBundle` and its caps and refusal, `BUNDLE`, `CTAG`, `VTAG`, `parseLayout`, `indexLayout`, `parseAddonManifest`, the rows' helpers it takes. |
@@ -1316,3 +1316,54 @@ them. The extension's own modules are not importable from the web, and a module 
 request for an entry's change, made here with its test, not an import by path. The shared interface it imports besides
 (`controller.ts`, `src/pdf-reader/ui/**`) stays under the licence rule of section 19.3: the four ported files are replaced by
 its seams or left out of its bundle until they are cut from it.
+
+### 19.6 The page pass
+
+`layerOfPaper` (`pipeline/page-pass.mjs`, in the `pipeline` entry) makes a paper's layer (bundle 4) from its marks and arXiv's
+PDF and tells it to its host a part at a time: the left (anchored on arXiv's tokens under the unit marks), the layout file
+(`makeLayout`'s, each page's operator list read once for the maker and the add-on's plans), the add-on chained over the host's
+remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
+
+- **In.** `paper { id, version }`; `source` (`openPaper`'s); `marks` (`layoutMarksOfPaper`'s: `{ marks, unitMarks }` or
+  `{ refused }`); `arxiv { doc, text? }` (a PDF.js document of arXiv's PDF, the caller's to open and destroy, and its text as
+  `readArxivText` read it, else read here); `OPS`; `pdfjs`; `base { bytes, sha256, xref }`; `image`; `remove` (the remover's
+  transport, or null: no add-on); the rules (`frame`, `columns`, today's by default); `verdicts` (default on).
+- **Out, in order.** `onHead(head, chunks)`, then for each part its left parts (`onLeft`) and the part (`onPart(part, note)`),
+  each awaited; `note` is `{ pages, layout: 'kept' | 'none' | { refused, … }, lines: [carried, total] }`. It returns
+  `{ through, count, stats }`, or `{ refused: 'anchors', why }` before anything is told.
+- **Per part.** Each part is judged as it is cut (`verdicts`): the carry's share of the lines of its marked pages at least
+  `CARRY_MIN`, and its own reader taking it (`readPart` against the head, the chunks and the parts before); a part refused
+  either way is its pages with no layout (C1.4: drawn from the left), never the paper's refusal. Every bound a part holds is the
+  part's (`LINES_ALL`, `PAGE_TEXT_ALL`, `NAMES_MAX`, `FONTS_MAX`, the part's caps): an over-bound part is shortened, a first page
+  alone past them has no layout, nothing is truncated. A page whose operator list passes `OPS_CAP` operations, `GLYPHS_PAGE`
+  glyphs or `BOXES_CAP` boxes (one operation's placements and glyphs set turned counted within it), or does not come within
+  `OPS_MS`, is dark (its units stay the original's), that page alone; past `GIVEN_UP_MAX` (8) such pages, every later page is
+  dark unread (its operator list never asked: a count, not a clock, so which pages are dark hangs on the pages before them).
+- **Today's rules.** The maker's frame, the columns' edges and the far-push columns read the whole document, so every part is
+  cut once the whole is made, and the parts are `cutBundle`'s of the same whole, byte for byte. With the oracle (`oracle {
+  frame, columnEdges }`, a whole run's, for tests and the lab) the maker is made a page at a time and each part cut as soon as
+  everything it reads is final: the same parts, cut early (`stats.closed`).
+- **Memory, a part's ceiling.** What the pass holds of arXiv's ink is each page's glyphs, `GLYPHS_PAGE` (100,000) at most, and
+  its boxes, one an operation, `OPS_CAP` (150,000) at most, about 22 MiB a page (the corpus's densest page holds 9,332 glyphs,
+  about 1 MiB; its busiest 146,115 operations; its most boxes 22,101); one operation may place more (an image repeat's or
+  group's placements, which PDF.js's list for `getOperatorList` never holds, and a run of glyphs set turned, a box each), and
+  `BOXES_CAP` (1,000,000, some 140 bytes a box in all) bounds them, the very most of a hostile page; a page past any of these
+  is dark
+  (`tests/pdf-reader/layout-hostile.test.ts`, on the lite worker, which decodes no image's pixels). Today the ink of every page
+  is held until the cut (2307.16209's 147 pages: 17 MiB of typed arrays). Made a page at a time, a page's ink is let go once
+  its tasks have run and its plan is made, so the ink held is that of the pages decided and not yet done (on 2307.16209 up to
+  96 pages while a float's whole-document match on its List of Figures keeps the early pages undecided, then none); a unit's
+  rows are held until its part is written, a told unit's as the few numbers K reads of it, and the parts are the host's once
+  told. Besides, per paper: both PDFs' tokens and the carrier, the PDF bytes, PDF.js's state of the document (its fonts and
+  images), the remover's.
+- **What these do not bound.** The caps apply to what the pass keeps of a page, after PDF.js has parsed it: PDF.js's own
+  operator list for the page being read is bounded by `OPS_MS` alone (a page of `q 1 0 0 1 72 72 cm /Im1 Do Q` 200,000 times
+  parses to 800,804 operations in 0.44 s: in 10 s some 18 million, gigabytes, before the page is capped). The marked
+  original's ink (its owned glyphs, `markedPages`) is read with no glyph cap and no `OPS_MS`, and the marked original is as
+  hostile as its author's source. What is held is the pages' sum: the whole paper's today, up to the whole of it made a page
+  at a time while a float's match keeps the early pages undecided. And no bound of the engine's is the paper's time: what it
+  bounds across a paper are counts (`GIVEN_UP_MAX` pages given up on, so a paper whose every page stalls waits 8 times
+  `OPS_MS`; the carrier's 20 million steps, counted in page order), while a paper of pages that each answer within `OPS_MS`
+  may take their sum, and its matching its pages times `MATCH_PAGE_WORK` (a piece's search given up at its page's bound); the
+  host's job clock is the only paper-wide bound of time.
+

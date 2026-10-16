@@ -348,7 +348,8 @@ async function layoutOf(id, paper, dir) {
     })
     if (fault) throw fault
     if (!('marks' in made)) return { refused: made.refused, stats: null }
-    marksBytes = Buffer.from(made.marks)
+    // (an engine of the page stream hands the marks on in memory: their file, as the lab keeps it)
+    marksBytes = Buffer.from(made.marks instanceof Uint8Array ? made.marks : MARKS.marksFile(made.marks))
     asked = true
   }
   if (!marksBytes) return { refused: 'compile', stats: null }

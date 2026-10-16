@@ -17,11 +17,16 @@
 // is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
 // it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
-import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokenizeDocument, tokens } from '../pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, markWords, pageFrame, pageIndex, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
+import { leftOfPart, leftReach, partSets } from '../pipeline/left-part.mjs'
+import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
-import { encodeLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, NAMES_MAX, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { packGlyphs, pageInk } from './ink.mjs'
+import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
+import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { pagePlanOf } from './addon.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
+import { alignOf } from './remove.mjs'
 import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
@@ -31,11 +36,12 @@ const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
 
 /** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
 export const CARRY_MIN = 0.9
-/** a page's operator list is waited for at most OPS_MS, and a paper's in all OPS_PAPER_MS: past either the page has no
- *  ink, and the page's parse is given up (giveUp). PDF.js parses a page's whole content stream before it answers: 0.9 to
- *  2.8 s for 2608.18626's page 8 (102,052 operations) on a laptop, 2 to 4 times that reckoned on one vCPU; the corpus's
- *  2,793 pages take 36.9 s in all, a paper's at most a few seconds */
-export const OPS_MS = 10_000, OPS_PAPER_MS = 60_000
+/** a page's operator list is waited for at most OPS_MS: past it the page has no ink, and the page's parse is given up
+ *  (giveUp). PDF.js parses a page's whole content stream before it answers: 0.9 to 2.8 s for 2608.18626's page 8 (102,052
+ *  operations) on a laptop, 2 to 4 times that reckoned on one vCPU; the corpus's 2,793 pages take 36.9 s in all, a paper's
+ *  at most a few seconds. A page's alone: no bound of the paper's time makes a page's ink hang on the pages before it (the
+ *  page stream's darkness is page-local, E2b) */
+export const OPS_MS = 10_000
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
 /** units TeX sets away from where the source has them (anchors.mjs `floating`) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
@@ -120,7 +126,7 @@ function within(promise, ms) {
 /** a page's operator list given up on: PDF.js's own cancellation (its rendering's, PDFPageProxy._abortOperatorList on
  *  its _intentStates, read on the pinned PDF.js by layout-make.test.ts), so that the worker stops parsing. Where a PDF.js
  *  has none, a warning, once a paper (`seen`), and the maker goes on waiting: the worker parses the page to its end, the
- *  pages after it wait behind it, and each is still given up past OPS_MS and the paper past OPS_PAPER_MS */
+ *  pages after it wait behind it, and each is still given up past OPS_MS */
 function giveUp(page, seen) {
   if (typeof page?._abortOperatorList !== 'function' || !(page?._intentStates instanceof Map)) {
     if (!seen.warned) console.warn('layout maker: this PDF.js cancels no operator list; the pages after a slow one wait behind it')
@@ -149,7 +155,48 @@ function glyphsOf(got, fontIds) {
   })
   const P = { ...packGlyphs(got.glyphs, { order, fontIds }), owner: new Int32Array(order.length).fill(-1), taken: new Uint8Array(order.length), boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2) }
   for (let i = 0; i + 3 < got.boxes.length; i += 4) P.boxes.push([got.boxes[i], got.boxes[i + 1], got.boxes[i + 2], got.boxes[i + 3]])
+  // (read with the remover's indices: what the add-on's plan reads of the page besides, kept beside the maker's columns, so
+  // that the page's one operator list gives both: each glyph's place in the stream, its showing operation and its place
+  // there, whether it is blank, its own ink across as read; each box's path)
+  if (got.paths) {
+    const n = order.length, stream = new Int32Array(n), on = new Int32Array(n), at = new Int32Array(n), blank = new Uint8Array(n), rix0 = new Float64Array(n), rix1 = new Float64Array(n)
+    for (let i = 0; i < n; i++) {
+      const g = got.glyphs[order[i]]
+      stream[i] = order[i]; on[i] = g.n; at[i] = g.k; blank[i] = g.blank ? 1 : 0; rix0[i] = g.ix0; rix1[i] = g.ix1
+    }
+    P.plan = { stream, on, at, blank, rix0, rix1, paths: Int32Array.from(got.paths), shows: got.shows }
+  }
   return P
+}
+
+/** a page's ink as the add-on's plan reads it (pageInk with `indices`), made again of the maker's columns and the plan's
+ *  (glyphsOf): its glyphs in stream order, each with what the plan reads of it, its boxes, paths and showing operations */
+function planInkOf(P) {
+  const { stream, on, at, blank, rix0, rix1, paths, shows } = P.plan, glyphs = new Array(P.n)
+  for (let i = 0; i < P.n; i++) {
+    const g = { u: P.u[i], x0: P.x0[i], x1: P.x1[i], y: P.y[i], top: P.top[i], bottom: P.bottom[i], size: P.size[i], ix0: rix0[i], ix1: rix1[i], n: on[i], k: at[i] }
+    if (blank[i]) g.blank = true
+    glyphs[stream[i]] = g
+  }
+  const boxes = []
+  for (const b of P.boxes) boxes.push(b[0], b[1], b[2], b[3])
+  return { glyphs, boxes, points: [], boxAt: [], paths: Array.from(paths), shows, capped: false, rotated: false }
+}
+/** a page's alignment facts (remove.mjs alignOf) packed: each showing operation's codes in one column (null as NaN), where
+ *  each begins, and the paths' count; and back */
+function packFacts({ codes, paths }) {
+  let n = 0
+  for (const row of codes) n += row.length
+  const all = new Float64Array(n), from = new Int32Array(codes.length + 1)
+  let i = 0
+  codes.forEach((row, r) => { from[r] = i; for (const c of row) all[i++] = c === null ? Number.NaN : c })
+  from[codes.length] = i
+  return { all, from, paths }
+}
+function unpackFacts({ all, from, paths }) {
+  const codes = []
+  for (let r = 0; r + 1 < from.length; r++) { const row = []; for (let i = from[r]; i < from[r + 1]; i++) row.push(Number.isNaN(all[i]) ? null : all[i]); codes.push(row) }
+  return { codes, paths }
 }
 /** the first index whose baseline is at least y */
 function lowest(P, y) {
@@ -297,13 +344,22 @@ function sameWord(doc, byPage, c, start, ours) {
   return (a !== null && a === ours) || (b !== null && b === theirs) || (a !== null && a === b) ? doc[k].t : ours
 }
 
+/** the pages of a paper whose operator lists are given up on, at most: past OPS_MS, or capped (ink.mjs OPS_CAP, GLYPHS_PAGE).
+ *  Past it every later page is dark unread (stats.timedOut), so that a paper whose every page stalls costs GIVEN_UP_MAX
+ *  times OPS_MS, not its pages' (10,000 pages of 10 s each: 28 hours, and as many parses left running where PDF.js cannot
+ *  cancel one). A count, no clock of the paper's: which pages are dark hangs on the pages before them alone, as each page's
+ *  own verdict does. The corpus's 3,036 pages hold none over a cap, the heaviest 146,115 operations; no paper has more than
+ *  three pages of 50,000 operations or one of 100,000 (2608.12606, 2608.18626, 2608.27728, 2608.08880), each read in under
+ *  3 s on a laptop */
+export const GIVEN_UP_MAX = 8
+
 /** stats before anything is read */
 function blank(units) {
   return {
     lines: { carried: 0, total: 0, held: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
     ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
-    match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
+    match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0, most: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
     capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
@@ -322,136 +378,105 @@ async function gzipSize(bytes) {
  * indices); `marks` the marks file of its layout compile; `arxiv` a PDF.js document of arXiv's PDF, which the caller
  * opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
  * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
- * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes
+ * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
+ * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
+ * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
+ * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's, where none is given; the page
+ * stream, which places a range's units alone, needs one given, the whole document's). `plans`:
+ * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
+ * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again (null where they
+ * fail, `plansFailed` why: the add-on's loss, never the file's). A page whose ink
+ * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone. `parts`: the file is cut into parts (layer-proto/
+ * cut.mjs partCutter), which hold the bounds of what a part holds and the carry's share, each part's: the file is made
+ * whatever share of the lines is carried (some), and checked without the bounds a part holds of its own (file.mjs
+ * parseLayout `sized`); `lines` in the result, each marked page's lines [carried, total] (carry.mjs pageLines)
  */
-export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs }) {
+export async function makeLayout(o) {
+  const m = await makerOf(o)
+  if (m.refused) return { refused: m.refused, stats: m.stats }
+  for (let p = 1; p <= m.pages; p++) await m.readPage(p)
+  return m.whole()
+}
+
+/**
+ * The maker of a paper's layout file (makeLayout's), its work a page and a unit at a time: `readPage(p)` reads arXiv's page p's
+ * ink (pages in order: a font's id is its first appearance's); `carrying()`, the marks carried to arXiv's PDF; `anchoring()`,
+ * the units located on arXiv's tokens; then, a unit at a time and pass by pass, `place(i)` (its lines), the names (`nameAt`),
+ * `phOf`, `heldOf`, `outsideOf`, `labelOf`, `rowsOf`; `bars()` and `assemble()` the file. `whole()` runs them in their order
+ * over every unit. Each pass reads and writes the ink of its own pages alone. `columnEdges`: the columns' text edges (Map
+ * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
+ * flag read, given; else made of every placed unit's body lines once the lines are placed (today's rule: `columnEdgesOf`)
+ */
+export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false }) {
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
   if (!Number.isInteger(pages) || pages < 1 || pages > PAGES_MAX) return { refused: 'pages', stats }
   // ---------------------------------------------------------------- arXiv's text, page by page
-  let t = now()
-  const views = [], text = [], held = [], dark = new Set()
+  const t = now()
+  const read = text ?? await readArxivText(arxiv)
+  if (read.pages !== pages) throw new TypeError(`arXiv's text is of ${read.pages} pages, its document of ${pages}`)
+  const views = [], dark = new Set()
   for (let p = 1; p <= pages; p++) {
-    let page = null, view = null, items = [], styles = {}
-    try {
-      page = await arxiv.getPage(p)
-      view = viewOf(page.view)
-      const tc = await page.getTextContent()
-      items = Array.isArray(tc?.items) ? tc.items : []
-      styles = tc?.styles ?? {}
-    } catch { page = null }
+    // a page that could not be had has no view; one whose text could not be read keeps its own
+    let view = read.views[p - 1] == null ? null : viewOf(read.views[p - 1])
     if (!view) { view = views.length ? views.slice(-4) : [0, 0, 612, 792]; dark.add(p) }
-    if (!page) dark.add(p)
+    if (!read.ok[p - 1]) dark.add(p)
     views.push(...view)
-    text.push({ page: p, items, styles })
-    held.push(page)
   }
-  const doc = tokenizeDocument(text)
+  // (the pages whose ink is never read: dark by their text alone; and those whose ink was read, whether or not it is held still)
+  const unread = new Set(dark), inked = new Uint8Array(pages + 1)
+  const doc = read.tokens
   const viewAt = p => views.slice(4 * (p - 1), 4 * p)
   stats.ms.text = now() - t
   // ---------------------------------------------------------------- arXiv's ink: glyphs and graphics, page by page
-  t = now()
-  const ink = new Array(pages + 1).fill(null), names = [], nameId = new Map()
+  // (`check`: a pass reading a page's ink outside the pages it was given throws, the pages a task in another order may run on
+  // being exactly those: `allowed`, null where any page is a pass's)
+  let allowed = null
+  const pagesInk = new Array(pages + 1).fill(null), facts = new Array(pages + 1).fill(null), names = [], nameId = new Map()
+  const ink = check ? new Proxy(pagesInk, {
+    get(target, key, receiver) {
+      if (allowed !== null && typeof key === 'string' && /^\d+$/.test(key) && !allowed.has(Number(key))) throw new RangeError(`a pass read page ${key}'s ink, outside its pages`)
+      return Reflect.get(target, key, receiver)
+    },
+  }) : pagesInk
   const fontIds = raw => { const n = fontName(raw); if (!nameId.has(n)) { nameId.set(n, names.length); names.push(n) } return nameId.get(n) }
-  let waited = 0
   const seen = { warned: false }
-  for (let p = 1; p <= pages; p++) {
-    const page = held[p - 1]
-    if (!page || dark.has(p)) continue
-    if (waited >= OPS_PAPER_MS) { stats.timedOut.push(p); dark.add(p); continue }
+  /** page p's ink, read once, its time spent on the paper's `ms.ops` */
+  async function readPage(p) {
     const t0 = now()
+    await inkOf(p)
+    stats.ms.ops += now() - t0
+  }
+  async function inkOf(p) {
+    if (unread.has(p)) return
+    // (past GIVEN_UP_MAX pages given up on, the page is dark unread: its operator list is never asked)
+    if (stats.timedOut.length + stats.capped.length >= GIVEN_UP_MAX) { stats.timedOut.push(p); dark.add(p); return }
+    // (the page its text was read from: PDF.js keeps each page's proxy)
+    let page = null
+    try { page = await arxiv.getPage(p) } catch {}
+    if (!page) { dark.add(p); return }
     let ops = null
-    try { ops = await within(page.getOperatorList(), Math.min(OPS_MS, OPS_PAPER_MS - waited)) } catch {}
-    waited += now() - t0
+    try { ops = await within(page.getOperatorList(), OPS_MS) } catch {}
     // a page given up on let go as well: a list that failed has no stream left to cancel, and giveUp's cancellation of
     // it cleans up nothing (PDF.js's _abortOperatorList returns early); after a cancellation, cleaning up is a no-op
-    if (!ops) { giveUp(page, seen); page.cleanup?.(); stats.timedOut.push(p); dark.add(p); continue }
-    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
+    if (!ops) { giveUp(page, seen); page.cleanup?.(); stats.timedOut.push(p); dark.add(p); return }
+    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE })
+    // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
+    if (wantPlans && !got.capped && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
     // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
     // not every page's to the document's end (48 MiB on 2303.18223's 144 pages; an image a late decode brings is dropped
     // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the
-    // add-on, which reads lists again, is made from a document of its own: addon.mjs)
+    // add-on's plans are made of what was read here where `plans` asks, else of a document of its own: addon.mjs)
     page.cleanup?.()
     if (got.capped) stats.capped.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part
-    if (got.capped || got.rotated) { dark.add(p); continue }
+    if (got.capped || got.rotated) { dark.add(p); return }
     ink[p] = glyphsOf(got, fontIds)
-  }
-  stats.ms.ops = now() - t
-  // ---------------------------------------------------------------- the marks carried to arXiv's PDF by line
-  t = now()
-  // a draft image frame's name (graphicx's draft, g<n>a, g<n>b, g<n>t) is no line of the paper's
-  const at = new Map(marks.marks.map(([n, page, x, y]) => [n, { page, x, y }]))
-  const frames = []
-  for (const [n, a] of at) {
-    const g = /^g(\d+)a$/.exec(n)
-    const b = g && at.get(`g${g[1]}b`), top = g && at.get(`g${g[1]}t`)
-    if (b && top && b.page === a.page && top.page === a.page) frames.push([a.page, Math.min(a.x, b.x) - 1, Math.min(a.y, top.y) - 1, Math.max(a.x, b.x, top.x) + 1, Math.max(a.y, top.y) + 1])
-  }
-  const drawn = tk => !frames.some(([p, x0, y0, x1, y1]) => tk.page === p && tk.x + tk.w / 2 >= x0 && tk.x + tk.w / 2 <= x1 && tk.y >= y0 && tk.y <= y1)
-  const ours = tokensOfMarks(marks).filter(drawn)
-  const carrier = carrierOf(ours, doc)
-  for (const p of carrier.over) { stats.over.push(p); if (p >= 1 && p <= pages) dark.add(p) }
-  const L = carrier.lines
-  stats.lines.total = L.total
-  stats.lines.carried = L.same + L.moved + L.respaced + L.fuzzy
-  stats.ms.carry = now() - t
-  if (!(L.total > 0 && stats.lines.carried >= CARRY_MIN * L.total)) return { refused: 'carry', stats }
-  /** a position of the marked original on arXiv's PDF: carried by its line, on a page with ink, within its view */
-  const carry = (page, x, y) => {
-    const c = carrier.carry(page, x, y)
-    if (!c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages || dark.has(c.page) || !ink[c.page]) return null
-    const v = viewAt(c.page)
-    return c.x >= v[0] - 1 && c.x <= v[2] + 1 && c.y >= v[1] - 1 && c.y <= v[3] + 1 ? c : null
-  }
-  const dropped = new Set(marks.dropped)
-  const markOf = name => { const m = dropped.has(name) ? null : at.get(name); return m ? carry(m.page, m.x, m.y) : null }
-  /** a mark the carrier does not place (past its line's last word), on the line of its partner, which moved whole: by
-   *  the partner's offset */
-  const besideOf = (partner, carried, name) => {
-    const p = at.get(partner), m = dropped.has(name) ? null : at.get(name)
-    if (!carried?.whole || !p || !m || p.page !== m.page || Math.abs(p.y - m.y) > 0.01) return null
-    const x = m.x + carried.x - p.x, y = m.y + carried.y - p.y, v = viewAt(carried.page)
-    return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: carried.page, x, y, whole: true } : null
+    inked[p] = 1
   }
 
-  // ---------------------------------------------------------------- the units located on arXiv's tokens
-  t = now()
-  const unitMarks = new Map(), nameOf = new Map()
-  for (const [n, m] of at) {
-    const r = /^[th]?(\d+)([se])$/.exec(n)
-    if (r && Number(r[1]) < units.length) { unitMarks.set(`${Number(r[1])}${r[2]}`, m); nameOf.set(`${Number(r[1])}${r[2]}`, n) }
-  }
-  const carriedUnit = new Map(), byPage = new Map(), withWords = markWords(ours, unitMarks), raw = new Map()
-  doc.forEach((t, k) => (byPage.get(t.page) ?? byPage.set(t.page, []).get(t.page)).push(k))
-  for (const [k] of withWords) raw.set(k, markOf(nameOf.get(k)))
-  // a unit's mark past its line's last word in the marks file (a heading in small capitals, whose words' rests the
-  // file keeps no box of), on the line of its other mark: by that one's offset
-  for (const [k] of withWords) {
-    if (raw.get(k)) continue
-    const other = `${k.slice(0, -1)}${k.endsWith('s') ? 'e' : 's'}`
-    if (nameOf.has(other)) raw.set(k, besideOf(nameOf.get(other), raw.get(other), nameOf.get(k)))
-  }
-  for (const [k, m] of withWords) {
-    const c = raw.get(k)
-    if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), m.t) })
-  }
-  const bounds = boundsFromMarks(doc, carriedUnit)
-  // a unit whose own marks were set but not carried (its lines reflowed, or set otherwise on arXiv's), or not on the same
-  // words there, stays the original's: arXiv's text alone would place it, maybe wrongly
-  const unplaced = new Set()
-  for (let i = 0; i < units.length; i++) {
-    const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
-    if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
-  }
-  const linesTeX = new Map(marks.lines)
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
-  const anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? '') })
-  stats.ms.anchor = now() - t
-
-  // ---------------------------------------------------------------- each located unit's lines
-  t = now()
   /** a line's column: 0 or 1 on a page of two columns, 2 for a line across both, 0 on a page of one */
   const twoCols = p => marks.columns[p - 1] === 2
   const middle = p => { const v = viewAt(p); return (v[0] + v[2]) / 2 }
@@ -465,13 +490,103 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const [small, big] = o.size < r.size ? [o, r] : [r, o]
     return small.size < SCRIPT_SIZE * big.size && Math.abs(small.base - big.base) < SCRIPT(small.size) && small.x0 < big.x1 + big.size && small.x1 > big.x0 - big.size
   }
-  const placed = []
-  for (let i = 0; i < units.length; i++) {
+
+  // ---------------------------------------------------------------- the marks carried to arXiv's PDF by line
+  let at = null, ours = null, carrier = null, dropped = null, carry = null, markOf = null, anchorMarkOf = null, besideOf = null, matcher = null
+  /** the marks carried to arXiv's PDF by line: null, or 'carry' where too few of the marked original's lines are */
+  function carrying() {
+    const t = now()
+    // a draft image frame's name (graphicx's draft, g<n>a, g<n>b, g<n>t) is no line of the paper's
+    at = new Map(marks.marks.map(([n, page, x, y]) => [n, { page, x, y }]))
+    const frames = []
+    for (const [n, a] of at) {
+      const g = /^g(\d+)a$/.exec(n)
+      const b = g && at.get(`g${g[1]}b`), top = g && at.get(`g${g[1]}t`)
+      if (b && top && b.page === a.page && top.page === a.page) frames.push([a.page, Math.min(a.x, b.x) - 1, Math.min(a.y, top.y) - 1, Math.max(a.x, b.x, top.x) + 1, Math.max(a.y, top.y) + 1])
+    }
+    const drawn = tk => !frames.some(([p, x0, y0, x1, y1]) => tk.page === p && tk.x + tk.w / 2 >= x0 && tk.x + tk.w / 2 <= x1 && tk.y >= y0 && tk.y <= y1)
+    ours = tokensOfMarks(marks).filter(drawn)
+    carrier = carrierOf(ours, doc)
+    for (const p of carrier.over) { stats.over.push(p); if (p >= 1 && p <= pages) dark.add(p) }
+    const L = carrier.lines
+    stats.lines.total = L.total
+    stats.lines.carried = L.same + L.moved + L.respaced + L.fuzzy
+    stats.ms.carry = now() - t
+    // (for parts, the share is the cut's verdict on each part's pages: `parts`)
+    if (!(L.total > 0 && (parts || stats.lines.carried >= CARRY_MIN * L.total))) return 'carry'
+    /** a position of the marked original on arXiv's PDF: carried by its line, on a page with ink, within its view */
+    carry = (page, x, y) => {
+      const c = carrier.carry(page, x, y)
+      if (!c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages || dark.has(c.page) || !inked[c.page]) return null
+      const v = viewAt(c.page)
+      return c.x >= v[0] - 1 && c.x <= v[2] + 1 && c.y >= v[1] - 1 && c.y <= v[3] + 1 ? c : null
+    }
+    dropped = new Set(marks.dropped)
+    markOf = name => { const m = dropped.has(name) ? null : at.get(name); return m ? carry(m.page, m.x, m.y) : null }
+    /** a unit's own mark as the anchors take it. The rule today: carried as every mark is, so none onto a page whose ink is not
+     *  whole (past OPS_CAP, given up on, rotated, past the carry's bound): such a page drops its units' marks before anchoring,
+     *  and moves the anchors (the page stream's design, Appendix A Q2). A page-local rule would carry them regardless and leave
+     *  a dark page's units to the rows' own check (a unit with a line on a dark page is not placed): this function alone */
+    anchorMarkOf = markOf
+    /** a mark the carrier does not place (past its line's last word), on the line of its partner, which moved whole: by
+     *  the partner's offset */
+    besideOf = (partner, carried, name) => {
+      const p = at.get(partner), m = dropped.has(name) ? null : at.get(name)
+      if (!carried?.whole || !p || !m || p.page !== m.page || Math.abs(p.y - m.y) > 0.01) return null
+      const x = m.x + carried.x - p.x, y = m.y + carried.y - p.y, v = viewAt(carried.page)
+      return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: carried.page, x, y, whole: true } : null
+    }
+    matcher = matcherOf({ ink, carry })
+    return null
+  }
+
+  // ---------------------------------------------------------------- the units located on arXiv's tokens
+  let unitMarks = null, nameOf = null, carriedUnit = null, unplaced = null, linesTeX = null, anchors = null
+  /** the units' own marks carried, and the units located on arXiv's tokens under them */
+  function anchoring() {
+    const t = now()
+    unitMarks = new Map(); nameOf = new Map()
+    for (const [n, m] of at) {
+      const r = /^[th]?(\d+)([se])$/.exec(n)
+      if (r && Number(r[1]) < units.length) { unitMarks.set(`${Number(r[1])}${r[2]}`, m); nameOf.set(`${Number(r[1])}${r[2]}`, n) }
+    }
+    carriedUnit = new Map()
+    const byPage = new Map(), withWords = markWords(ours, unitMarks), raw = new Map()
+    doc.forEach((t, k) => (byPage.get(t.page) ?? byPage.set(t.page, []).get(t.page)).push(k))
+    for (const [k] of withWords) raw.set(k, anchorMarkOf(nameOf.get(k)))
+    // a unit's mark past its line's last word in the marks file (a heading in small capitals, whose words' rests the
+    // file keeps no box of), on the line of its other mark: by that one's offset
+    for (const [k] of withWords) {
+      if (raw.get(k)) continue
+      const other = `${k.slice(0, -1)}${k.endsWith('s') ? 'e' : 's'}`
+      if (nameOf.has(other)) raw.set(k, besideOf(nameOf.get(other), raw.get(other), nameOf.get(k)))
+    }
+    for (const [k, m] of withWords) {
+      const c = raw.get(k)
+      if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), m.t) })
+    }
+    const bounds = boundsFromMarks(doc, carriedUnit)
+    // a unit whose own marks were set but not carried (its lines reflowed, or set otherwise on arXiv's), or not on the same
+    // words there, stays the original's: arXiv's text alone would place it, maybe wrongly
+    unplaced = new Set()
+    for (let i = 0; i < units.length; i++) {
+      const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
+      if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
+    }
+    linesTeX = new Map(marks.lines)
+    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame })
+    stats.ms.anchor = now() - t
+  }
+
+  // ---------------------------------------------------------------- each located unit's lines
+  const placed = [], placedById = new Map()
+  /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none */
+  function place(i) {
     const u = units[i], a = anchors.get(i)
     if (a && unplaced.has(i)) stats.units.unplaced++
-    if (!a || unplaced.has(i) || !KIND.has(u.kind) || u.pieces.length > PIECES_MAX) continue
+    if (!a || unplaced.has(i) || !KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return
     const rects = rectsOf(doc, a.tokens)
-    if (!rects.length || rects.length !== a.rects.length || rects.length > LINES_UNIT || rects.some(r => dark.has(r.page) || !ink[r.page])) continue
+    if (!rects.length || rects.length !== a.rects.length || rects.length > LINES_UNIT || rects.some(r => dark.has(r.page) || !inked[r.page])) return
     const S = carriedUnit.get(`${i}s`), E = carriedUnit.get(`${i}e`)
     const onRect = (m, r) => m && m.page === r.page && Math.abs(m.y - r.base) < 0.5 * r.h
     const rows = []
@@ -482,7 +597,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) { rows.length = 0; break }
       rows.push(row)
     }
-    if (!rows.length) continue
+    if (!rows.length) return
     // the anchor's rectangles of one line (its tokens out of order: a script before its base, the line's two parts
     // either side of a formula, 1706.03762's note): one line, wherever the second begins
     // again over the merged rows until none is left to merge: a row may match one only once another merge has made it
@@ -499,12 +614,16 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       }
     }
     for (const row of rows) for (const g of row.gl) ink[row.page].owner[g] = i
-    placed.push({ id: i, u, a, rows, S, E })
+    const one = { id: i, u, a, rows, S, E }
+    placed.push(one)
+    placedById.set(i, one)
   }
   // each column's text edges, the most common start and end of the body's lines (its own page's, else those of the
   // pages like it: the same columns, the same side of a spread, then the same columns)
-  const edges = new Map()
-  {
+  let edges = columnEdges
+  /** the columns' text edges of the placed units' body lines (`columnEdges` where none is given) */
+  function columnEdgesOf() {
+    edges = new Map()
     const seen = new Map()
     const note = (key, x0, x1) => { const e = seen.get(key) ?? seen.set(key, { x0: new Map(), x1: new Map() }).get(key); const a = Math.round(x0), b = Math.round(x1); e.x0.set(a, (e.x0.get(a) ?? 0) + 1); e.x1.set(b, (e.x1.get(b) ?? 0) + 1) }
     for (const { u, rows } of placed) {
@@ -546,53 +665,50 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
    * caption is its label (longtable's, whose captions set no \@captype), the label path's: no row
    */
   const named = []
-  {
-    const ourWords = (page, x0, x1, y) => ours.filter(t => t.page === page && Math.abs(t.y - y) < 0.5 * t.h && t.x + t.w / 2 >= x0 - 0.5 && t.x + t.w / 2 <= x1 + 0.5).map(t => t.t).join('')
-    const theirWords = (page, x0, x1, y) => doc.filter(t => t.page === page && Math.abs(t.y - y) < 0.5 * t.h && t.x + t.w / 2 >= x0 - 0.5 && t.x + t.w / 2 <= x1 + 0.5).map(t => t.t).join('')
-    const why = w => { stats.names.why[w] = (stats.names.why[w] ?? 0) + 1 }
-    for (const [n, a] of at) {
-      const x = NAME_START.exec(n), key = x ? NAME_KEYS.indexOf(x[2]) : -1
-      if (key < 0) continue
-      stats.names.marked++
-      const e = `n${x[1]}.${x[2]}.e`, b = dropped.has(e) ? null : at.get(e)
-      if (dropped.has(n) || !b) { why('a mark not set, or set twice'); continue }
-      if (b.page !== a.page || Math.abs(b.y - a.y) > 0.5 || b.x <= a.x) { why('not on one line'); continue }
-      const S0 = markOf(n), E0 = markOf(e)
-      const S = S0 ?? besideOf(e, E0, n), E = E0 ?? besideOf(n, S0, e)
-      if (!S || !E || S.page !== E.page || Math.abs(S.y - E.y) > 1 || E.x <= S.x) { why('not carried'); continue }
-      const want = letters(ourWords(a.page, a.x, b.x, a.y))
-      if (!want || letters(theirWords(S.page, S.x, E.x, S.y)) !== want) { why("not arXiv's text there"); continue }
-      const P = ink[S.page]
-      const gs = band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most)).filter(g => Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) >= S.x - 0.05 && mid(P, g) <= E.x + 0.05)
-      if (!gs.length || gs.some(g => P.owner[g] !== -1 || P.taken[g])) { why(gs.length ? "its glyphs another's" : 'no glyph'); continue }
-      if (letters(gs.slice().sort((g, h) => P.x0[g] - P.x0[h] || g - h).map(g => P.u[g]).join('')) !== want) { why("not arXiv's glyphs there"); continue }
-      const row = rowOf(P, gs, S.page, [], S.y)
-      if (!(r2(row.size) > 0 && row.size <= SIZE_MAX)) { why('no size'); continue }
-      // the unit it leads: the first unit start after its end on its line (its column's: the other column's first line
-      // may share its baseline) in our compile, carried after it on that line
-      const colAt = m => columnOf(m.page, m.x, m.x)
-      let lead = -1, leadX = Infinity
-      for (const [k, m] of unitMarks) if (k.endsWith('s') && m.page === b.page && Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && m.x < leadX) { lead = Number(k.slice(0, -1)); leadX = m.x }
-      let glue = 0
-      if (lead >= 0) {
-        const L = carriedUnit.get(`${lead}s`)
-        if (!L || L.page !== E.page || Math.abs(L.y - E.y) > 1 || L.x < E.x - 0.05 || colAt(L) !== colAt(E)) { why('leading a unit, not carried'); continue }
-        if ((x[2] === 'figure' || x[2] === 'table') && units[lead].kind === 'caption') { why("a caption's label"); continue }
-        // its joint's last advance (IEEEtran's dash), else its own end; the glue past it to the unit's text
-        let end = E.x
-        for (const g of band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most))) if (Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) > E.x && mid(P, g) < L.x) end = Math.max(end, P.x1[g])
-        glue = L.x - end > 0.05 ? L.x - end : 0
-      }
-      // centred as a unit is (its one line's centre its column's, the line short of it)
-      const col = columnOf(S.page, row.x0, row.x1), edge = edgesOf(S.page, col)
-      const centred = !!edge && Math.abs((row.x0 + row.x1) / 2 - (edge[0] + edge[1]) / 2) <= CENTRE && row.x1 - row.x0 < SHORT * (edge[1] - edge[0])
-      const cased = [...gs.map(g => P.u[g]).join('').normalize('NFKC')].filter(c => c.toUpperCase() !== c.toLowerCase())
-      const capitals = cased.length >= 2 && cased.every(c => c === c.toUpperCase()) && marks.marking.names?.[x[2]] === 1
-      for (const g of gs) P.owner[g] = NAME_OWNER
-      named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) | (lead >= 0 ? NAME_FLAG.RUN_IN : 0), lead, glue, column: edge ?? [row.x0, row.x1] })
+  const ourWords = (page, x0, x1, y) => ours.filter(t => t.page === page && Math.abs(t.y - y) < 0.5 * t.h && t.x + t.w / 2 >= x0 - 0.5 && t.x + t.w / 2 <= x1 + 0.5).map(t => t.t).join('')
+  const theirWords = (page, x0, x1, y) => doc.filter(t => t.page === page && Math.abs(t.y - y) < 0.5 * t.h && t.x + t.w / 2 >= x0 - 0.5 && t.x + t.w / 2 <= x1 + 0.5).map(t => t.t).join('')
+  const why = w => { stats.names.why[w] = (stats.names.why[w] ?? 0) + 1 }
+  /** the occurrence of a babel name whose start mark is `n` (at `a`), located, or why not (`stats.names.why`) */
+  function nameAt(n, a) {
+    const x = NAME_START.exec(n), key = x ? NAME_KEYS.indexOf(x[2]) : -1
+    if (key < 0) return
+    stats.names.marked++
+    const e = `n${x[1]}.${x[2]}.e`, b = dropped.has(e) ? null : at.get(e)
+    if (dropped.has(n) || !b) { why('a mark not set, or set twice'); return }
+    if (b.page !== a.page || Math.abs(b.y - a.y) > 0.5 || b.x <= a.x) { why('not on one line'); return }
+    const S0 = markOf(n), E0 = markOf(e)
+    const S = S0 ?? besideOf(e, E0, n), E = E0 ?? besideOf(n, S0, e)
+    if (!S || !E || S.page !== E.page || Math.abs(S.y - E.y) > 1 || E.x <= S.x) { why('not carried'); return }
+    const want = letters(ourWords(a.page, a.x, b.x, a.y))
+    if (!want || letters(theirWords(S.page, S.x, E.x, S.y)) !== want) { why("not arXiv's text there"); return }
+    const P = ink[S.page]
+    const gs = band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most)).filter(g => Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) >= S.x - 0.05 && mid(P, g) <= E.x + 0.05)
+    if (!gs.length || gs.some(g => P.owner[g] !== -1 || P.taken[g])) { why(gs.length ? "its glyphs another's" : 'no glyph'); return }
+    if (letters(gs.slice().sort((g, h) => P.x0[g] - P.x0[h] || g - h).map(g => P.u[g]).join('')) !== want) { why("not arXiv's glyphs there"); return }
+    const row = rowOf(P, gs, S.page, [], S.y)
+    if (!(r2(row.size) > 0 && row.size <= SIZE_MAX)) { why('no size'); return }
+    // the unit it leads: the first unit start after its end on its line (its column's: the other column's first line
+    // may share its baseline) in our compile, carried after it on that line
+    const colAt = m => columnOf(m.page, m.x, m.x)
+    let lead = -1, leadX = Infinity
+    for (const [k, m] of unitMarks) if (k.endsWith('s') && m.page === b.page && Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && m.x < leadX) { lead = Number(k.slice(0, -1)); leadX = m.x }
+    let glue = 0
+    if (lead >= 0) {
+      const L = carriedUnit.get(`${lead}s`)
+      if (!L || L.page !== E.page || Math.abs(L.y - E.y) > 1 || L.x < E.x - 0.05 || colAt(L) !== colAt(E)) { why('leading a unit, not carried'); return }
+      if ((x[2] === 'figure' || x[2] === 'table') && units[lead].kind === 'caption') { why("a caption's label"); return }
+      // its joint's last advance (IEEEtran's dash), else its own end; the glue past it to the unit's text
+      let end = E.x
+      for (const g of band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most))) if (Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) > E.x && mid(P, g) < L.x) end = Math.max(end, P.x1[g])
+      glue = L.x - end > 0.05 ? L.x - end : 0
     }
-    named.sort((p, q) => p.occurrence - q.occurrence)
-    if (named.length > NAMES_MAX) named.length = NAMES_MAX
+    // centred as a unit is (its one line's centre its column's, the line short of it)
+    const col = columnOf(S.page, row.x0, row.x1), edge = edgesOf(S.page, col)
+    const centred = !!edge && Math.abs((row.x0 + row.x1) / 2 - (edge[0] + edge[1]) / 2) <= CENTRE && row.x1 - row.x0 < SHORT * (edge[1] - edge[0])
+    const cased = [...gs.map(g => P.u[g]).join('').normalize('NFKC')].filter(c => c.toUpperCase() !== c.toLowerCase())
+    const capitals = cased.length >= 2 && cased.every(c => c === c.toUpperCase()) && marks.marking.names?.[x[2]] === 1
+    for (const g of gs) P.owner[g] = NAME_OWNER
+    named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) | (lead >= 0 ? NAME_FLAG.RUN_IN : 0), lead, glue, column: edge ?? [row.x0, row.x1] })
   }
 
   // ---------------------------------------------------------------- placeholders, by unit and source piece index
@@ -619,10 +735,10 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   const ph = [], kept = new Map() // kept: page → the rectangles erasing leaves out (displays' segments, labels)
   const keep = (p, r) => (kept.get(p) ?? kept.set(p, []).get(p)).push(r)
   const ownInk = new Map(marks.owned.map(e => [e[0], e]))
-  const matcher = matcherOf({ ink, carry })
   /** a found piece's matched glyphs, by its key: the twice bar's */
   const matchedBy = new Map()
-  for (const one of placed) {
+  /** unit i's placeholders, each found on arXiv's page (matched), LOST, EMPTY or JOINED, its rows' ink taken in */
+  function phOf(one) {
     const { id: i, u, a, rows } = one
     /** whether a glyph is a letter of a word of the unit's text, as the anchor paired the word: running text, never a
      *  placeholder's (counted, `textTaken`). A word's box is its item's even share, so a bracket beside it may fall in it:
@@ -736,7 +852,8 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       const before = u.pieces[k - 1], after = u.pieces[k + 1]
       let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
       const n = e[2], items = [], rules = []
-      for (let j = 3; j < 3 + 5 * n; j += 5) items.push({ page: e[j], x0: e[j + 1], y: e[j + 2], size: e[j + 3], u: marks.chars[e[j + 4]] ?? '' })
+      // (a glyph's character: an index into the marks' table, or the character itself, as the page stream hands a row on)
+      for (let j = 3; j < 3 + 5 * n; j += 5) items.push({ page: e[j], x0: e[j + 1], y: e[j + 2], size: e[j + 3], u: typeof e[j + 4] === 'string' ? e[j + 4] : marks.chars[e[j + 4]] ?? '' })
       for (let j = 3 + 5 * n; j < e.length; j += 5) rules.push({ page: e[j], x0: e[j + 1], y0: e[j + 2], x1: e[j + 3], y1: e[j + 4] })
       // EMPTY only where its points hold nothing between them: the piece draws nothing
       if (!items.length && !rules.length) { ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
@@ -831,7 +948,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // true by the matcher's own rule); and what the layer draws: an arXiv glyph inside a found inline piece's segments
   // (its crop) that is not its own (`foreign`), and one inside two found pieces' segments (`shared`), by its own ink,
   // half of it or more inside (none, both: the 6b review's I2)
-  {
+  function bars() {
     const seen = new Map()
     for (const gs of matchedBy.values()) for (const [p, g] of gs) { const key = `${p}|${g}`; seen.set(key, (seen.get(key) ?? 0) + 1) }
     for (const n of seen.values()) if (n > 1) stats.ph.twice++
@@ -854,6 +971,36 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
         }
       }
     }
+    for (const at of inside.values()) if (at.size > 1) stats.ph.shared++
+  }
+  /** the bars of page q (bars' of the whole, a page at a time: each count a sum of its pages'), of the units `ids` whose
+   *  pages it is among, once their placeholders are found and before anything else is (the heads and tails held) */
+  function barsOn(q, ids) {
+    const seen = new Map(), inside = new Map()
+    for (const i of ids) {
+      const one = placedById.get(i)
+      if (!one?.entries) continue
+      for (let x = one.entries[0]; x < one.entries[1]; x++) {
+        const e = ph[x]
+        if (e.state !== 'found') continue
+        const r = e.row, mine = matchedBy.get(`${r[0]}.${r[1]}`) ?? [], own = new Set()
+        for (const [p, g] of mine) if (p === q) { own.add(g); seen.set(g, (seen.get(g) ?? 0) + 1) }
+        for (let o = 4; o + 5 < r.length; o += 6) {
+          if (r[o] !== q) continue
+          const x0 = r[o + 1], x1 = r[o + 3], top = r[o + 4], bottom = r[o + 5], P = ink[q]
+          if (!P) continue
+          for (const g of band(P, bottom - 2 * P.most, top + 2 * P.most)) {
+            const w = Math.min(x1, P.ix1[g]) - Math.max(x0, P.ix0[g]), h = Math.min(top, P.top[g]) - Math.max(bottom, P.bottom[g])
+            const area = (P.ix1[g] - P.ix0[g]) * (P.top[g] - P.bottom[g])
+            if (w <= 0 || h <= 0 || !(area > 0) || w * h < 0.5 * area) continue
+            const at = inside.get(g) ?? inside.set(g, new Set()).get(g)
+            at.add(`${r[0]}.${r[1]}`)
+            if (e.cls !== 'display' && !own.has(g)) stats.ph.foreign++
+          }
+        }
+      }
+    }
+    for (const n of seen.values()) if (n > 1) stats.ph.twice++
     for (const at of inside.values()) if (at.size > 1) stats.ph.shared++
   }
 
@@ -1098,9 +1245,9 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // the rest of a word given in parts (a token of no text, tokenizeDocument) as its first part does: a paragraph's last
   // line that holds only the rest of a word cut by a hyphen ("mod-" / "els.") is the unit's. A word of its own hyphen
   // cut there is one word in the text layer ("fine-" / "tuning.": finetuning), so the source's words count joined too
-  for (const one of placed) {
+  function heldOf(one) {
     const { id: i, a, rows } = one
-    if (rows.length < 2) continue
+    if (rows.length < 2) return
     const paired = new Set(a.pairs?.values() ?? [])
     const words = new Set([texts[i].text, texts[i].text.replace(/(?<=\p{L})-(?=\p{L})/gu, '')].flatMap(s => tokens(s).map(t => t.t)).filter(t => t.length >= 3 && /\p{L}/u.test(t)))
     const boxed = new Set((one.boxes ?? []).map(([row]) => row))
@@ -1135,14 +1282,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       cutAtStart(one)
       if (one.heads) besideMarks(one, false)
     }
-    if (rows.length < 2) continue
+    if (rows.length < 2) return
     const held = new Set()
     rows.forEach((r, j) => {
       if (j === 0 || r.extra?.length || boxed.has(j)) return
       const { n, hits } = wordsOn(r)
       if (hits === 0 || (n >= 4 && hits < 0.2 * n)) held.add(j)
     })
-    if (!held.size) continue
+    if (!held.size) return
     // held at the unit's end: no line of the unit's
     while (rows.length > 1 && held.has(rows.length - 1)) { free(rows.at(-1)); held.delete(rows.length - 1); rows.pop(); stats.lines.held++ }
     for (const j of held) free(rows[j])
@@ -1153,9 +1300,9 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   // first line (the rows before it no line of the unit's: above), or a display after its end mark (it ends the unit,
   // after its last words: MARK_DEF sets the end mark before it), where that mark stands on its last line. No line of the
   // unit's holds its ink, which is never erased, and the layer draws it as nothing, its ink the original's
-  for (const one of placed) {
+  function outsideOf(one) {
     const { id: i, u, rows, S, E } = one
-    if (!one.entries || !rows.length) continue
+    if (!one.entries || !rows.length) return
     const on = (M, r) => !!M && M.page === r.page && Math.abs(M.y - r.base) < 0.5 * r.size
     const tail = k => u.pieces.slice(k + 1).every(p => !classOf(p) || classOf(p) === 'display' || (p.t === 'text' && !/\S/.test(p.s ?? '')))
     for (let q = one.entries[0]; q < one.entries[1]; q++) {
@@ -1200,16 +1347,16 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     const base = Math.min(ld, Math.max(lc, baselineOf(P, head, r0.base)))
     return [i, LABEL_OF[u.kind] ?? 1, r0.page, la, base, lb, ld, lc]
   }
-  const labels = []
+  const labels = [], labelAt = new Map(), labelRows = new Map()
   const owned = (p, g, unit) => ink[p].owner[g] !== -1 && ink[p].owner[g] !== unit
-  for (const one of placed) {
+  function labelOf(one) {
     const { id: i, u, rows, S } = one
     const r0 = rows[0]
     const headOf = () => {
       const head = headLabel(one)
-      if (head) { labels.push(head); keep(head[2], [head[3], head[7], head[5], head[6]]); one.label = true }
+      if (head) { labels.push(head); labelAt.set(head[0], head[3]); labelRows.set(head[0], head); keep(head[2], [head[3], head[7], head[5], head[6]]); one.label = true }
     }
-    if (!S || S.page !== r0.page || Math.abs(S.y - r0.base) >= 0.5 * r0.size) { headOf(); continue }
+    if (!S || S.page !== r0.page || Math.abs(S.y - r0.base) >= 0.5 * r0.size) { headOf(); return }
     one.label = false
     const P = ink[S.page], [cx0] = sideOf(S.page, columnOf(S.page, S.x, S.x))
     const cand = band(P, S.y - 0.35 * P.most, S.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > S.y - 0.35 * P.size[g] && P.y[g] < S.y + 0.75 * Math.max(P.size[g], 6) && P.x1[g] <= S.x + 0.05 && P.x0[g] >= cx0 - 1 && !owned(S.page, g, -2) && !P.taken[g]).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
@@ -1219,12 +1366,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     // wholly left of the unit's first line
     const mine = run.filter(g => P.x1[g] <= r0.x0 + 0.01)
     // or the class's own mark that the first line begins with, the unit's start mark set before it
-    if (!mine.length) { headOf(); continue }
+    if (!mine.length) { headOf(); return }
     let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
     for (const g of mine) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
     const view = viewAt(S.page), [a, c, b, d] = solid(view, x0, bottom, x1, top)
     const base = Math.min(d, Math.max(c, baselineOf(P, mine, S.y)))
     labels.push([i, LABEL_OF[u.kind] ?? 1, S.page, a, base, b, d, c])
+    labelAt.set(i, a)
+    labelRows.set(i, labels.at(-1))
     keep(S.page, [a, c, b, d])
     one.label = true
   }
@@ -1233,11 +1382,10 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
   const fontIndex = new Map(), fonts = []
   const fontOf = id => { if (!fontIndex.has(id)) { fontIndex.set(id, fonts.length); fonts.push(names[id]) } return fontIndex.get(id) }
   const outUnits = [], outLines = [], outFrames = [], outErase = [], outHeadings = [], outHeld = []
-  const labelAt = new Map(labels.map(l => [l[0], l[3]]))
   const inside = (p, x, y) => (kept.get(p) ?? []).some(([a, c, b, d]) => x >= a && x <= b && y >= c && y <= d)
   const meets = (p, a, c, b, d) => (kept.get(p) ?? []).some(([e, f, g, h]) => a < g && b > e && c < h && d > f)
-  for (const one of placed) {
-    const { id: i, u, rows, S, E } = one
+  function rowsOf(one) {
+    const { id: i, u, rows } = one
     // the erase: each line's own glyphs and its placeholders' rules, but what erasing leaves out, merged
     const erase = []
     let refuse = false
@@ -1270,15 +1418,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
       }
       for (const e of merged) erase.push(j, ...solid(view, e[0], e[1], e[2], e[3]))
     })
-    // a unit whose faces would take the file past FONTS_MAX names stays the original's: a count never gets it refused
-    if (refuse || fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) continue
-    // lines
+    if (refuse) return
+    // lines (each its font's id; the file's index is admit's)
     const lines = []
     for (const r of rows) {
       const view = viewAt(r.page)
       const [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
       const base = Math.min(top, Math.max(bottom, r2(r.base)))
-      lines.push(r.page, x0, x1, base, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font))
+      lines.push(r.page, x0, x1, base, top, bottom, r2(Math.min(SIZE_MAX, r.size)), r.font)
     }
     // frames: its lines by page and column, in reading order, each with its share of the source and the room below it
     const words = tokens(texts[i].text).length || 1
@@ -1321,7 +1468,20 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     })
     const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (centred && short ? UNIT_FLAG.CENTRED : 0)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
-    outUnits.push([i, KIND.get(u.kind), depth, flags, u.pieces.length])
+    one.out = { unit: [i, KIND.get(u.kind), depth, flags, u.pieces.length], lines, frames, erase, splits: fs.length > 1 }
+  }
+
+  /**
+   * Unit i's rows into the file, in the file's order of units (rowsOf's, where it made them): its lines' fonts given the
+   * file's index of each; a unit whose faces would take the file past FONTS_MAX names stays the original's (a count never
+   * gets it refused)
+   */
+  function admit(one) {
+    const { id: i, u, rows, S, E, out } = one
+    if (!out || fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) return false
+    const { lines, frames, erase } = out
+    for (let j = 7; j < lines.length; j += 8) lines[j] = fontOf(lines[j])
+    outUnits.push(out.unit)
     outLines.push([i, lines])
     outFrames.push([i, frames])
     if (erase.length) outErase.push([i, erase])
@@ -1335,69 +1495,581 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     stats.units.located++
     stats.units.byKind[u.kind][0]++
     stats.frames.units++
-    if (fs.length > 1) stats.frames.split++
+    if (out.splits) stats.frames.split++
     const n = linesTeX.get(i)
     if (n !== undefined && (u.kind === 'para' || u.kind === 'abstract') && !texts[i].lead && !texts[i].trail && !texts[i].inner) { stats.frames.lineCountChecked++; if (n === rows.length) stats.frames.lineCountEqual++ }
     if (S && S.page === rows[0].page && Math.abs(S.y - rows[0].base) < 0.5 * rows[0].size) stats.baselines.first.push(Math.abs(r2(rows[0].base) - S.y))
     if (E && E.page === rows.at(-1).page && Math.abs(E.y - rows.at(-1).base) < 0.5 * rows.at(-1).size) stats.baselines.last.push(Math.abs(r2(rows.at(-1).base) - E.y))
+    return true
   }
-  // what the file holds of the units it does not: nothing; their placeholders and labels go with them
-  const kept1 = new Set(outUnits.map(r => r[0]))
-  // the names, on a page with ink: a name whose face would take the file past FONTS_MAX names stays the original's, and
-  // one leading a unit the file does not hold stays with it
-  const outNames = []
-  const nameWhy = w => { stats.names.why[w] = (stats.names.why[w] ?? 0) + 1 }
-  for (const nm of named) {
-    const r = nm.row
-    if (nm.lead >= 0 && !kept1.has(nm.lead)) { nameWhy('leading a unit the file does not hold'); continue }
-    if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { nameWhy('past the fonts a file may name'); continue }
-    const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
-    const cx0 = Math.max(view[0] - 1, r2(nm.column[0])), cx1 = Math.min(view[2] + 1, r2(nm.column[1]))
-    outNames.push([nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, r2(nm.glue), cx0, cx1])
-    stats.names.located++
-    if (nm.lead >= 0) stats.names.runIn++
+
+  // ---------------------------------------------------------------- the file
+  async function assemble() {
+    // (all of them: the file's NAMES_MAX is a bound of what a file or a part holds, its refusal, never a truncation here)
+    named.sort((p, q) => p.occurrence - q.occurrence)
+    // what the file holds of the units it does not: nothing; their placeholders and labels go with them. Each by unit (in
+    // the order of the passes over the units' ids, where they ran in it: a unit's own in the order its pass made them)
+    const kept1 = new Set(outUnits.map(r => r[0]))
+    const phs = ph.slice().sort((x, y) => x.row[0] - y.row[0]), labeled = labels.slice().sort((x, y) => x[0] - y[0])
+    // the names, on a page with ink: a name whose face would take the file past FONTS_MAX names stays the original's, and
+    // one leading a unit the file does not hold stays with it
+    const outNames = []
+    const nameWhy = w => { stats.names.why[w] = (stats.names.why[w] ?? 0) + 1 }
+    for (const nm of named) {
+      const r = nm.row
+      if (nm.lead >= 0 && !kept1.has(nm.lead)) { nameWhy('leading a unit the file does not hold'); continue }
+      if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { nameWhy('past the fonts a file may name'); continue }
+      const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
+      const cx0 = Math.max(view[0] - 1, r2(nm.column[0])), cx1 = Math.min(view[2] + 1, r2(nm.column[1]))
+      outNames.push([nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, r2(nm.glue), cx0, cx1])
+      stats.names.located++
+      if (nm.lead >= 0) stats.names.runIn++
+    }
+    const file = {
+      schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts,
+      units: outUnits, lines: outLines, frames: outFrames, erase: outErase,
+      ph: phs.filter(p => kept1.has(p.row[0])).map(p => p.row), labels: labeled.filter(r => kept1.has(r[0])), headings: outHeadings,
+      pageText: phs.filter(p => kept1.has(p.row[0]) && p.text).map(p => [p.row[0], p.row[1], p.text]),
+      held: outHeld,
+      names: outNames,
+      // the paper's \lineskip and \lineskiplimit as TeX gave them (marks.mjs readSkipProbe), which the layer opens a line by
+      lineskip: marks.marking.lineskip ?? null,
+    }
+    stats.ph.texts = file.pageText.length
+    Object.assign(stats.match, matcher.stats)
+    // the placeholders and labels counted as the file holds them
+    for (const p of ph) {
+      if (!kept1.has(p.row[0])) continue
+      if (p.outside) stats.ph.outside++
+      if (p.state === 'unmarked') { stats.ph.unmarked++; continue }
+      if (p.state === 'text') { stats.ph.symbols++; continue }
+      if (p.head) { stats.ph.heads[p.state === 'found' ? 0 : 1]++; continue }
+      const tally = stats.ph.byKind[p.cls] ??= [0, 0]
+      stats.ph.marked++
+      tally[1]++
+      if (p.state === 'found') { stats.ph.found++; tally[0]++; if (p.inferred) stats.ph.inferred++ } else if (p.state === 'empty') stats.ph.empty++
+      else if (p.state === 'joined') stats.ph.joined++
+      else { stats.ph.lost++; stats.ph.why[p.why] = (stats.ph.why[p.why] ?? 0) + 1 }
+    }
+    for (const one of placed) {
+      if (!kept1.has(one.id) || one.label === undefined) continue
+      const tally = stats.labels[one.u.kind] ??= [0, 0]
+      tally[1]++
+      if (one.label) tally[0]++
+    }
+    const bytes = new TextEncoder().encode(encodeLayout(file))
+    stats.bytes.raw = bytes.length
+    let parsed
+    try { parsed = parseLayout(bytes, { sized: !parts }) } catch (e) {
+      if (!(e instanceof LayoutRefusal)) throw e
+      stats.refusal = { path: e.path, why: e.why }
+      return { refused: 'bounds', stats }
+    }
+    stats.bytes.gzip = await gzipSize(bytes)
+    const made = parts ? { file: parsed, stats, lines: carrier.pageLines } : { file: parsed, stats }
+    if (!wantPlans) return made
+    // ---------------------------------------------------------------- the add-on's plans, of the ink read above
+    // (each page's as addon.mjs pagePlansOf makes it of the page's operator list read again: the same ink, the same facts)
+    // (the plans failing are the add-on's alone, never the file's: `plans` null, why in `plansFailed`; a failed allocation the
+    // paper's)
+    try {
+      const index = indexLayout(parsed), plans = new Map()
+      for (let p = 1; p <= pages; p++) {
+        if (!ink[p]?.plan) continue
+        const plan = pagePlanOf(index, p, planInkOf(ink[p]), () => unpackFacts(facts[p]))
+        if (plan) plans.set(p, plan)
+      }
+      return { ...made, plans }
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      return { ...made, plans: null, plansFailed: String(e?.message ?? e).slice(0, 200) }
+    }
   }
-  const file = {
-    schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts,
-    units: outUnits, lines: outLines, frames: outFrames, erase: outErase,
-    ph: ph.filter(p => kept1.has(p.row[0])).map(p => p.row), labels: labels.filter(r => kept1.has(r[0])), headings: outHeadings,
-    pageText: ph.filter(p => kept1.has(p.row[0]) && p.text).map(p => [p.row[0], p.row[1], p.text]),
-    held: outHeld,
-    names: outNames,
-    // the paper's \lineskip and \lineskiplimit as TeX gave them (marks.mjs readSkipProbe), which the layer opens a line by
-    lineskip: marks.marking.lineskip ?? null,
+
+  /** the paper's file: every pass in its order over every unit (makeLayout's) */
+  async function whole() {
+    const refused = carrying()
+    if (refused) return { refused, stats }
+    anchoring()
+    const t = now()
+    for (let i = 0; i < units.length; i++) place(i)
+    if (!columnEdges) columnEdgesOf()
+    for (const [n, a] of at) nameAt(n, a)
+    for (const one of placed) phOf(one)
+    bars()
+    for (const one of placed) heldOf(one)
+    for (const one of placed) outsideOf(one)
+    for (const one of placed) labelOf(one)
+    for (const one of placed) { rowsOf(one); admit(one) }
+    stats.ms.rows = now() - t
+    return assemble()
   }
-  stats.ph.texts = file.pageText.length
-  Object.assign(stats.match, matcher.stats)
-  // the placeholders and labels counted as the file holds them
-  for (const p of ph) {
-    if (!kept1.has(p.row[0])) continue
-    if (p.outside) stats.ph.outside++
-    if (p.state === 'unmarked') { stats.ph.unmarked++; continue }
-    if (p.state === 'text') { stats.ph.symbols++; continue }
-    if (p.head) { stats.ph.heads[p.state === 'found' ? 0 : 1]++; continue }
-    const tally = stats.ph.byKind[p.cls] ??= [0, 0]
-    stats.ph.marked++
-    tally[1]++
-    if (p.state === 'found') { stats.ph.found++; tally[0]++; if (p.inferred) stats.ph.inferred++ } else if (p.state === 'empty') stats.ph.empty++
-    else if (p.state === 'joined') stats.ph.joined++
-    else { stats.ph.lost++; stats.ph.why[p.why] = (stats.ph.why[p.why] ?? 0) + 1 }
+
+  // ---------------------------------------------------------------- the passes as tasks, in any order the whole order allows
+  /** a carried position's page where the carrier puts it, whatever that page's ink (a superset of carry's) */
+  const carriedPage = (page, x, y) => { const c = carrier.carry(page, x, y); return c && Number.isInteger(c.page) && c.page >= 1 && c.page <= pages ? c.page : null }
+  /**
+   * The pages unit i's passes read and write, rising: its anchor's, its own marks' carried pages, and every page its pieces'
+   * own glyphs, rules and marks are carried to (the matcher's every start: carriedPage's, a superset of where it looks)
+   */
+  function unitPages(i) {
+    const a = anchors.get(i)
+    if (!a) return []
+    const set = new Set(carriedPagesOf(i))
+    for (const k of a.tokens) set.add(doc[k].page)
+    for (const end of ['s', 'e']) { const m = carriedUnit.get(`${i}${end}`); if (m) set.add(m.page) }
+    return [...set].sort((x, y) => x - y)
   }
-  for (const one of placed) {
-    if (!kept1.has(one.id) || one.label === undefined) continue
-    const tally = stats.labels[one.u.kind] ??= [0, 0]
-    tally[1]++
-    if (one.label) tally[0]++
+  /** the pages unit i's own marks and its pieces' own glyphs, rules and marks are carried to (carriedPage's), rising: those
+   *  it may touch whatever its anchor */
+  function carriedPagesOf(i) {
+    const set = new Set()
+    const add = v => { if (v !== null) set.add(v) }
+    for (const end of ['s', 'e']) { const name = nameOf.get(`${i}${end}`), m = name === undefined || dropped.has(name) ? null : at.get(name); if (m) add(carriedPage(m.page, m.x, m.y)) }
+    units[i].pieces.forEach((piece, k) => {
+      const cls = classOf(piece)
+      if (!cls) return
+      const prefix = cls === 'footnote' ? 'n' : 'p', A = at.get(`${prefix}${i}.${k}a`) ?? null, B = at.get(`${prefix}${i}.${k}b`) ?? null
+      for (const M of [A, B]) if (M) add(carriedPage(M.page, M.x, M.y))
+      const e = ownInk.get(`${prefix}${i}.${k}a`)
+      if (!e) return
+      const n = e[2]
+      for (let j = 3; j < 3 + 5 * n; j += 5) {
+        add(carriedPage(e[j], e[j + 1], e[j + 2]))
+        for (const M of [A, B]) if (M && M.page === e[j]) add(carriedPage(e[j], e[j + 1], M.y))
+      }
+      for (let j = 3 + 5 * n; j + 4 < e.length; j += 5) add(carriedPage(e[j], e[j + 1], e[j + 2]))
+    })
+    return [...set].sort((x, y) => x - y)
   }
-  stats.ms.rows = now() - t
-  const bytes = new TextEncoder().encode(encodeLayout(file))
-  stats.bytes.raw = bytes.length
-  let parsed
-  try { parsed = parseLayout(bytes) } catch (e) {
-    if (!(e instanceof LayoutRefusal)) throw e
-    stats.refusal = { path: e.path, why: e.why }
-    return { refused: 'bounds', stats }
+  /** the pages a babel name's occurrence reads and writes: its two marks' carried pages */
+  function namePages(n) {
+    const x = NAME_START.exec(n)
+    if (!x) return []
+    const set = new Set()
+    for (const m of [n, `n${x[1]}.${x[2]}.e`]) { const c = markOf(m); if (c) set.add(c.page) }
+    return [...set].sort((p, q) => p - q)
   }
-  stats.bytes.gzip = await gzipSize(bytes)
-  return { file: parsed, stats }
+  /**
+   * Every pass's tasks, each with its key in the whole order ([pass, its place in it]) and its pages: each unit's place,
+   * placeholders, held lines, outside pieces, labels and rows (its pages, unitPages'), each name's occurrence (namePages'),
+   * each page's bars ({ q }: of the units whose pages q is among). After carrying() and anchoring(); the columns' edges given
+   */
+  function tasks() {
+    if (!edges) throw new TypeError('the passes as tasks need the columns\' edges given (`columnEdges`)')
+    const out = [], on = new Map()
+    for (let i = 0; i < units.length; i++) {
+      const pg = unitPages(i)
+      for (const q of pg) (on.get(q) ?? on.set(q, []).get(q)).push(i)
+      out.push({ key: [0, i], pages: pg, run: () => place(i) })
+      for (const [x, f] of [[2, phOf], [4, heldOf], [5, outsideOf], [6, labelOf], [7, rowsOf]]) out.push({ key: [x, i], pages: pg, run: () => { const one = placedById.get(i); if (one) f(one) } })
+    }
+    let n = 0
+    for (const [name, a] of at) if (NAME_START.test(name)) out.push({ key: [1, n++], pages: namePages(name), run: () => nameAt(name, a) })
+    for (let q = 1; q <= pages; q++) { const ids = on.get(q) ?? []; out.push({ key: [3, q], pages: [q], run: () => barsOn(q, ids) }) }
+    return out
+  }
+  /** a task run on its own pages alone (with `check`, any other's ink throws) */
+  const confined = t => () => { allowed = new Set(t.pages); try { t.run() } finally { allowed = null } }
+  /** the paper's file, its passes run as tasks in the order `pick` makes of those the whole order allows (runInOrder): the
+   *  file whole() makes, the same bytes, where no bound of the paper's (FONTS_MAX) binds */
+  async function byTasks(pick) {
+    const refused = carrying()
+    if (refused) return { refused, stats }
+    anchoring()
+    const t = now()
+    runInOrder(tasks().map(x => ({ ...x, run: confined(x) })), pick)
+    stats.ph.unmatched = stats.ph.owned - stats.ph.matched
+    for (const one of [...placed].sort((x, y) => x.id - y.id)) admit(one)
+    stats.ms.rows = now() - t
+    return assemble()
+  }
+
+  // ---------------------------------------------------------------- the page stream (E2b's oracle-early mode; stage 2's)
+  /**
+   * The maker a page at a time, after carrying(), the columns' edges given. arXiv's pages are read in order (`readPage(p)`,
+   * then `pageRead(p)`); as each is: every unit whose own marks are carried to pages read has them carried (anchoring()'s, a
+   * unit at a time); the units are anchored by ranges of a page (pipeline/left-part.mjs leftOfPart over those marks'
+   * bounds, under `frame`), a range once every unit it reads has its match final; each anchored unit's passes run as tasks
+   * (byTasks'), a task once its pages are decided (no unit that may touch them is still to be anchored) and read and every
+   * task before it in the whole order on them has run; a page is let go (its ink and facts dropped) once its tasks have run,
+   * its names are taken in and its plan is made (`plans`). A unit's rows are the file's (`layout()`, a unit's as the whole
+   * file's parse holds them) once they are made. `finish()` after the last page. `released()` the pages from 1 let go;
+   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed)
+   */
+  function stream() {
+    if (!edges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`)')
+    // (its ranges are placed from their own units: pageFrame over them is not the whole paper's frame, so none is assumed)
+    if (!frame) throw new TypeError('the page stream needs the whole document\'s frame rule given (`frame`)')
+    const floating = id => FLOATING.has(units[id]?.kind ?? '')
+    const n = units.length
+    // ---- each unit's own marks, carried once the pages they are carried to are read (anchoring()'s, a unit at a time)
+    unitMarks = new Map(); nameOf = new Map()
+    for (const [nm, m] of at) {
+      const r = /^[th]?(\d+)([se])$/.exec(nm)
+      if (r && Number(r[1]) < n) { unitMarks.set(`${Number(r[1])}${r[2]}`, m); nameOf.set(`${Number(r[1])}${r[2]}`, nm) }
+    }
+    carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); anchors = new Map()
+    const byPage = pageIndex(doc), withWords = markWords(ours, unitMarks)
+    const bounds = new Map(), marked = new Uint8Array(n), waits = Array.from({ length: pages + 1 }, () => []), ownHigh = new Int32Array(n)
+    let markedCount = 0
+    // (and the least of those pages: where a unit's bounds would begin, its marks carried)
+    const ownLow = new Int32Array(n)
+    {
+      const wait = new Int32Array(n)
+      for (const [k] of withWords) {
+        const i = Number(k.slice(0, -1)), name = nameOf.get(k), m = dropped.has(name) ? null : at.get(name)
+        const c = m ? carriedPage(m.page, m.x, m.y) : null
+        if (c !== null) { wait[i] = Math.max(wait[i], c); ownLow[i] = ownLow[i] ? Math.min(ownLow[i], c) : c }
+      }
+      for (let i = 0; i < n; i++) waits[wait[i]].push(i)
+      for (let i = 0; i < n; i++) ownHigh[i] = wait[i]
+    }
+    const markUnit = i => {
+      const ks = [`${i}s`, `${i}e`].filter(k => withWords.has(k)), raw = new Map()
+      for (const k of ks) raw.set(k, anchorMarkOf(nameOf.get(k)))
+      for (const k of ks) {
+        if (raw.get(k)) continue
+        const other = `${i}${k.endsWith('s') ? 'e' : 's'}`
+        if (nameOf.has(other)) raw.set(k, besideOf(nameOf.get(other), raw.get(other), nameOf.get(k)))
+      }
+      for (const k of ks) { const c = raw.get(k); if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), withWords.get(k).t) }) }
+      const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage).get(String(i))
+      if (b) bounds.set(String(i), b)
+      const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
+      if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !b))) unplaced.add(i)
+      marked[i] = 1
+      markedCount++
+    }
+    // ---- the pages each unit may touch before its anchor is known: those its own marks and pieces are carried to
+    const lowCount = new Int32Array(pages + 2), rawLow = new Int32Array(n)
+    for (let i = 0; i < n; i++) { const pg = carriedPagesOf(i); rawLow[i] = pg.length ? pg[0] : pages + 1; lowCount[rawLow[i]]++ }
+    let lowAt = 1
+    // ---- the tasks, a queue a page; a page's opened once it is decided and read
+    const queue = new Map(), touching = new Map(), work = []
+    const cmp = (x, y) => { for (let j = 0; j < Math.max(x.length, y.length); j++) { const d = (x[j] ?? -Infinity) - (y[j] ?? -Infinity); if (d) return d } return 0 }
+    const insert = t => {
+      for (const q of t.pages) {
+        const Q = queue.get(q) ?? queue.set(q, { list: [], head: 0 }).get(q)
+        // (a page's tasks are all known before any of them runs: it is decided after every unit that may touch it is)
+        if (Q.head > 0 || q <= decidedTo) throw new Error(`a task of page ${q} came after the page was decided`)
+        let at = Q.list.length
+        while (at > 0 && cmp(Q.list[at - 1].key, t.key) > 0) at--
+        Q.list.splice(at, 0, t)
+      }
+    }
+    let X = 0, am = 1, decidedTo = 0, decidedCount = 0, releasedTo = 0
+    const decided = new Uint8Array(n), settledU = new Uint8Array(n), released = new Uint8Array(pages + 2)
+    const inFile = new Set(), unitRows = new Map(), nameRows = new Map(), namedOn = new Map()
+    const plans = wantPlans ? new Map() : null
+    let plansFailed = null
+    /** unit i's rows as the whole file's parse holds them (encodeLayout's numbers, parseLayout's zeroes): the file's
+     *  index of its lines' fonts the one `fonts` holds the names of */
+    const fileRowsOf = one => {
+      const i = one.id
+      if (!admit(one)) return
+      inFile.add(i)
+      const last = (list, j = 0) => (list.at(-1)?.[j] === i ? [list.at(-1)] : [])
+      const phs = [], texts_ = []
+      for (let x = one.entries?.[0] ?? 0; x < (one.entries?.[1] ?? 0); x++) { phs.push(ph[x].row); if (ph[x].text) texts_.push([ph[x].row[0], ph[x].row[1], ph[x].text]) }
+      const mini = { fonts: [], units: [outUnits.at(-1)], lines: [outLines.at(-1)], frames: [outFrames.at(-1)], erase: last(outErase), ph: phs, labels: labelRows.has(i) ? [labelRows.get(i)] : [], headings: last(outHeadings), pageText: texts_, held: last(outHeld), names: [] }
+      unitRows.set(i, JSON.parse(JSON.stringify(layoutPartRows(mini))))
+      // (admit's file of the whole holds none of them here: the stream's rows are unitRows')
+      outUnits.length = 0; outLines.length = 0; outFrames.length = 0; outErase.length = 0; outHeld.length = 0; outHeadings.length = 0
+    }
+    /** a unit settled: what its passes held let go (its lines' glyphs, its anchor, its pieces' matches); its rows are the file's */
+    const freeUnit = one => {
+      for (let x = one.entries?.[0] ?? 0; x < (one.entries?.[1] ?? 0); x++) matchedBy.delete(`${ph[x].row[0]}.${ph[x].row[1]}`)
+      anchors.delete(one.id)
+      one.rows = null; one.a = null; one.boxes = null; one.out = null; one.heads = null; one.tails = null; one.symbols = null; one.headSymbols = null
+    }
+    /** the rows K reads of a unit told (layer-proto/cut.mjs entriesOf: its unit row, its lines' pages, its placeholders'
+     *  segments' pages and its labels' pages), one row a page: what the cut of the parts after its own reads of it */
+    const stubOf = (i, r) => {
+      const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j < v.length; j += stride) set.add(v[j]); return [...set] }
+      const lines = pagesIn(r.lines.map(e => e[1]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2]))]
+      return {
+        units: r.units, lines: lines.length ? [[i, lines.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
+        labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: [], erase: [], headings: [], pageText: [], held: [],
+      }
+    }
+    const decide = i => {
+      if (decided[i]) return
+      decided[i] = 1
+      decidedCount++
+      lowCount[rawLow[i]]--
+      if (!anchors.get(i)) { settledU[i] = 1; return }
+      const pg = unitPages(i)
+      for (const q of pg) (touching.get(q) ?? touching.set(q, []).get(q)).push(i)
+      const of = f => () => { const one = placedById.get(i); if (one) f(one) }
+      insert({ key: [0, i], pages: pg, run: () => place(i) })
+      for (const [x, f] of [[2, phOf], [4, heldOf], [5, outsideOf], [6, labelOf]]) insert({ key: [x, i], pages: pg, run: of(f) })
+      insert({ key: [7, i], pages: pg, run: () => { of(one => { rowsOf(one); fileRowsOf(one); freeUnit(one) })(); settledU[i] = 1 } })
+    }
+    const lastPage = doc.length ? doc[doc.length - 1].page : 0
+    // each page's first token and last (the tokens are in page order): a page's tokens, as a reach's interval
+    const firstTok = new Int32Array(lastPage + 2).fill(doc.length), lastTok = new Int32Array(lastPage + 2).fill(-1)
+    doc.forEach((t, k) => { if (k < firstTok[t.page]) firstTok[t.page] = k; lastTok[t.page] = k })
+    for (let p = lastPage; p >= 1; p--) if (firstTok[p] === doc.length) firstTok[p] = firstTok[p + 1] ?? doc.length
+    for (let p = 1; p <= lastPage; p++) if (lastTok[p] < 0) lastTok[p] = lastTok[p - 1] ?? -1
+    const inText = j => bounds.has(String(j)) && !floating(j)
+    /**
+     * Each unit's match final (matchUnits' is the whole paper's): its marks carried and, where it has no bounds, every unit
+     * between it and its nearest bounded neighbour in the text either side (anchors.mjs neighbours) carried too. And the
+     * reach of every unit whose match is not (design §1.2, conservative): its own marks' pages (where its bounds would be) and
+     * the window it would have unbounded between the neighbours it may yet have — from the earliest end any unit still to be
+     * carried between it and its last bounded neighbour may get to the latest start any on its other side may (a figure's text
+     * box, a paragraph by kind, is set after the text that follows it: the units' order is not their bounds' order) — with its
+     * MARGIN, and a float's match over the whole document (leftReach's). A unit whose match is final reaches what leftReach says
+     */
+    const finalOf = () => {
+      const fin = new Uint8Array(n), out = leftReach(doc, texts, { bounds, floating, floatMatch })
+      const N = doc.length, MARGIN = 100
+      const pendBefore = new Uint8Array(n), pendAfter = new Uint8Array(n), lo = new Int32Array(n), hi = new Int32Array(n)
+      for (let u = 0, pend = 0, low = -1; u < n; u++) {
+        pendBefore[u] = pend; lo[u] = low
+        if (inText(u)) { pend = 0; low = bounds.get(String(u))[1] } else if (!marked[u]) { pend = 1; if (!floating(u) && ownLow[u]) low = Math.min(low, firstTok[ownLow[u]]) }
+      }
+      for (let u = n - 1, pend = 0, high = N; u >= 0; u--) {
+        pendAfter[u] = pend; hi[u] = high
+        if (inText(u)) { pend = 0; high = bounds.get(String(u))[0] } else if (!marked[u]) { pend = 1; if (!floating(u) && ownHigh[u]) high = Math.max(high, lastTok[ownHigh[u]]) }
+      }
+      for (let u = 0; u < n; u++) {
+        fin[u] = marked[u] && (bounds.has(String(u)) || (!pendBefore[u] && !pendAfter[u])) ? 1 : 0
+        if (fin[u]) continue
+        const more = [[Math.max(0, lo[u] + 1 - MARGIN), Math.min(N - 1, hi[u] - 1 + MARGIN)]]
+        if (!marked[u] && ownLow[u]) more.push([firstTok[ownLow[u]], lastTok[ownHigh[u]]])
+        out[u] = [...out[u], ...more.filter(([a, b]) => a <= b)]
+      }
+      return { fin, reach: out }
+    }
+    /** the ranges anchored from `am` on, a page each, while every unit a range reads has its match final (and the paper's
+     *  bounds are known to be some, matchUnits' switch): its units first framed on its page anchored, every unit whose match
+     *  is final and which may reach no later page decided. A unit placed before the page anchored and not decided is a
+     *  defect of the readiness: thrown */
+    const anchorRanges = () => {
+      while (am <= lastPage) {
+        if (!(bounds.size > 0 || markedCount === n)) return
+        const { fin, reach } = finalOf()
+        if (!partSets(doc, texts, [am, am], reach).V2.units.every(u => fin[u])) return
+        const got = leftOfPart(doc, texts, { bounds, floating, floatMatch, frame }, [am, am], reach)
+        for (const id of got.before) if (!decided[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
+        for (const [id, an] of got.anchors) anchors.set(id, an)
+        for (const id of got.anchors.keys()) decide(id)
+        am++
+        reach.forEach((iv, u) => { if (!decided[u] && fin[u] && iv.every(([, hi]) => doc[hi].page < am)) decide(u) })
+      }
+      for (let u = 0; u < n; u++) decide(u)
+    }
+    /** the pages decided: before every range still to be anchored, and before the least page an undecided unit's marks or
+     *  pieces are carried to */
+    const decidable = () => {
+      if (decidedCount === n) return pages
+      while (lowAt <= pages && lowCount[lowAt] === 0) lowAt++
+      return Math.min(am - 1, lowAt - 1, pages)
+    }
+    const advance = () => {
+      const to = decidable()
+      for (let q = decidedTo + 1; q <= to; q++) {
+        const ids = (touching.get(q) ?? []).slice().sort((x, y) => x - y)
+        insert({ key: [3, q], pages: [q], run: () => barsOn(q, ids) })
+      }
+      for (let q = decidedTo + 1; q <= to; q++) work.push(q)
+      decidedTo = Math.max(decidedTo, to)
+    }
+    const open = q => q <= decidedTo && q <= X
+    /** a page let go: its names taken into the file, its plan made, its ink and facts dropped */
+    const release = q => {
+      if (released[q] || !open(q)) return
+      const Q = queue.get(q)
+      if (Q && Q.head < Q.list.length) return
+      for (const nm of namedOn.get(q) ?? []) nameRowOf(nm)
+      if (plans && pagesInk[q]?.plan) {
+        try {
+          const ids = (touching.get(q) ?? []).filter(i => unitRows.has(i)).sort((x, y) => x - y)
+          const plan = pagePlanOf(indexLayout(partOf(ids, [...(namedOn.get(q) ?? [])].map(nm => nameRows.get(nm.occurrence)).filter(Boolean))), q, planInkOf(pagesInk[q]), () => unpackFacts(facts[q]))
+          if (plan) plans.set(q, plan)
+        } catch (e) {
+          if (isMemoryError(e)) throw e
+          plansFailed ??= String(e?.message ?? e).slice(0, 200)
+        }
+      }
+      pagesInk[q] = null
+      facts[q] = null
+      // (and what its tasks held: every one of them ran)
+      queue.delete(q); touching.delete(q); namedOn.delete(q); kept.delete(q)
+      released[q] = 1
+      while (released[releasedTo + 1]) releasedTo++
+    }
+    const pump = () => {
+      while (work.length) {
+        const q = work.pop(), Q = queue.get(q)
+        if (!open(q)) continue
+        const t = Q?.list[Q.head]
+        if (!t) { release(q); continue }
+        if (!t.pages.every(p => open(p) && queue.get(p).list[queue.get(p).head] === t)) continue
+        allowed = new Set(t.pages)
+        try { t.run() } finally { allowed = null }
+        for (const p of t.pages) { queue.get(p).head++; work.push(p) }
+      }
+    }
+    /** a name taken into the file as assemble takes it: the unit it leads held, its face within FONTS_MAX */
+    const nameWhy = w => { stats.names.why[w] = (stats.names.why[w] ?? 0) + 1 }
+    const nameRowOf = nm => {
+      const r = nm.row
+      if (nm.lead >= 0 && !inFile.has(nm.lead)) { nameWhy('leading a unit the file does not hold'); return }
+      if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { nameWhy('past the fonts a file may name'); return }
+      const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
+      const cx0 = Math.max(view[0] - 1, r2(nm.column[0])), cx1 = Math.min(view[2] + 1, r2(nm.column[1]))
+      const row = [nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, r2(nm.glue), cx0, cx1]
+      nameRows.set(nm.occurrence, JSON.parse(JSON.stringify(layoutPartRows({ fonts: [], units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [row] }).names[0])))
+      stats.names.located++
+      if (nm.lead >= 0) stats.names.runIn++
+    }
+    /** the rows of units `ids` (rising) and names `rows`, as a layout file holds them (its views and pages the paper's) */
+    const partOf = (ids, rows) => {
+      const out = { schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts: fonts.slice(), lineskip: marks.marking.lineskip ?? null }
+      for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key] = []
+      for (const i of ids) { const r = unitRows.get(i); for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key].push(...r[key]) }
+      out.names = rows
+      return out
+    }
+    // the names, each a task on the pages its marks are carried to, and those of the unit it would lead (nameAt reads that
+    // unit's carried start mark)
+    const loose = []
+    let nth = 0
+    for (const [nm, a] of at) {
+      const x = NAME_START.exec(nm)
+      if (!x) continue
+      const set = new Set(), e = `n${x[1]}.${x[2]}.e`, b = dropped.has(e) ? null : at.get(e)
+      for (const m of [nm, e]) { const p = dropped.has(m) ? null : at.get(m), c = p ? carriedPage(p.page, p.x, p.y) : null; if (c !== null) set.add(c) }
+      if (b) {
+        const colAt = m => columnOf(m.page, m.x, m.x)
+        let lead = -1, leadX = Infinity
+        for (const [k, m] of unitMarks) if (k.endsWith('s') && m.page === b.page && Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && m.x < leadX) { lead = Number(k.slice(0, -1)); leadX = m.x }
+        if (lead >= 0) for (const end of ['s', 'e']) { const name = nameOf.get(`${lead}${end}`), m = name === undefined || dropped.has(name) ? null : at.get(name), c = m ? carriedPage(m.page, m.x, m.y) : null; if (c !== null) set.add(c) }
+      }
+      const t = {
+        key: [1, nth++], pages: [...set].sort((p, q) => p - q),
+        run: () => {
+          const before = named.length
+          nameAt(nm, a)
+          for (let j = before; j < named.length; j++) { const pg = named[j].row.page; (namedOn.get(pg) ?? namedOn.set(pg, []).get(pg)).push(named[j]) }
+        },
+      }
+      if (t.pages.length) insert(t)
+      else loose.push(t)
+    }
+    // (a name carried to no page reads no ink: it is not located, whatever runs before it)
+    for (const t of loose) t.run()
+    for (const i of waits[0]) markUnit(i)
+
+    /** arXiv's page p read (after readPage(p), pages in order) */
+    function pageRead(p) {
+      X = p
+      for (const i of waits[p] ?? []) markUnit(i)
+      anchorRanges()
+      advance()
+      for (let q = Math.max(1, releasedTo + 1); q <= Math.min(X, decidedTo); q++) work.push(q)
+      pump()
+    }
+    /** every page read: the rest anchored, every task run, every page let go */
+    function finish() {
+      X = pages
+      for (let i = 0; i < n; i++) if (!marked[i]) markUnit(i)
+      anchorRanges()
+      for (let u = 0; u < n; u++) decide(u)
+      advance()
+      for (let q = 1; q <= pages; q++) work.push(q)
+      pump()
+      for (const [q, Q] of queue) if (Q.head < Q.list.length) throw new Error(`page ${q}'s tasks did not all run`)
+      for (let q = 1; q <= pages; q++) if (!released[q]) throw new Error(`page ${q} was not let go`)
+      stats.ph.unmatched = stats.ph.owned - stats.ph.matched
+      // (the placeholders and labels counted as the file holds them: assemble's)
+      for (const e of ph) {
+        if (!inFile.has(e.row[0])) continue
+        if (e.outside) stats.ph.outside++
+        if (e.state === 'unmarked') { stats.ph.unmarked++; continue }
+        if (e.state === 'text') { stats.ph.symbols++; continue }
+        if (e.head) { stats.ph.heads[e.state === 'found' ? 0 : 1]++; continue }
+        const tally = stats.ph.byKind[e.cls] ??= [0, 0]
+        stats.ph.marked++
+        tally[1]++
+        if (e.state === 'found') { stats.ph.found++; tally[0]++; if (e.inferred) stats.ph.inferred++ } else if (e.state === 'empty') stats.ph.empty++
+        else if (e.state === 'joined') stats.ph.joined++
+        else { stats.ph.lost++; stats.ph.why[e.why] = (stats.ph.why[e.why] ?? 0) + 1 }
+      }
+      for (const one of placed) {
+        if (!inFile.has(one.id) || one.label === undefined) continue
+        const tally = stats.labels[one.u.kind] ??= [0, 0]
+        tally[1]++
+        if (one.label) tally[0]++
+      }
+      stats.ph.texts = [...unitRows.values()].reduce((m, r) => m + r.pageText.length, 0)
+      Object.assign(stats.match, matcher.stats)
+    }
+    return {
+      pageRead, finish, plans, plansFailed: () => plansFailed,
+      /** the file's rows of the units settled so far (`ids`, rising: those of them it holds) and the names taken in */
+      layout: (ids = [...unitRows.keys()].sort((x, y) => x - y)) => partOf(ids.filter(i => unitRows.has(i)), [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
+      released: () => releasedTo,
+      settled: i => settledU[i] === 1,
+      /** units `ids` told by the parts through page `through`: their rows the stubs K reads (stubOf), the names on those pages
+       *  and their plans let go */
+      tell: (ids, through) => {
+        for (const i of ids) { const r = unitRows.get(i); if (r && !r.stub) unitRows.set(i, { ...stubOf(i, r), stub: true }) }
+        for (const [k, row] of nameRows) if (row[2] <= through) nameRows.delete(k)
+        if (plans) for (const p of plans.keys()) if (p <= through) plans.delete(p)
+      },
+      /** where the stream stands: the page read last, the pages anchored, decided and let go */
+      progress: () => {
+        let held = 0, glyphs = 0
+        for (let q = 1; q <= pages; q++) if (pagesInk[q]) { held++; glyphs += pagesInk[q].n }
+        return { read: X, anchored: am - 1, decided: decidedTo, released: releasedTo, held, glyphs }
+      },
+    }
+  }
+  /** the paper's rows made a page at a time (stream's), every page read here: the stream, finished, or the carry's refusal */
+  async function byStream() {
+    const refused = carrying()
+    if (refused) return { refused, stats }
+    const t = now()
+    const st = stream()
+    st.trace = []
+    for (let p = 1; p <= pages; p++) { await readPage(p); st.pageRead(p); st.trace.push(st.progress()) }
+    st.finish()
+    stats.ms.rows = now() - t
+    return st
+  }
+  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map() }
+}
+
+/**
+ * Tasks run in an order the whole order allows: each { key, pages, run }, `key` its place in the whole order (compared
+ * element by element), `pages` what it reads and writes; a task runs once every task before it in the whole order that
+ * shares a page with it has run (each page's tasks in the whole order), so that each page sees its tasks as the whole
+ * order runs them. `pick(ready)` the index of the next among those that may run (the first by default). Throws where a task
+ * cannot run (no task may wait for itself: the order is total)
+ */
+export function runInOrder(tasks, pick = () => 0) {
+  const cmp = (x, y) => { for (let j = 0; j < Math.max(x.key.length, y.key.length); j++) { const d = (x.key[j] ?? -Infinity) - (y.key[j] ?? -Infinity); if (d) return d } return 0 }
+  const order = tasks.slice().sort(cmp)
+  const queues = new Map(), heads = new Map(), at = new Map()
+  for (const t of order) for (const q of t.pages) (queues.get(q) ?? queues.set(q, []).get(q)).push(t)
+  for (const t of order) at.set(t, 0)
+  const ready = []
+  for (const t of order) if (t.pages.length === 0) ready.push(t)
+  for (const [q, list] of queues) { heads.set(q, 0); const t = list[0]; at.set(t, at.get(t) + 1); if (at.get(t) === t.pages.length) ready.push(t) }
+  let done = 0
+  while (ready.length) {
+    const t = ready.splice(pick(ready), 1)[0]
+    t.run()
+    done++
+    for (const q of t.pages) {
+      const list = queues.get(q), h = heads.get(q) + 1
+      heads.set(q, h)
+      if (h < list.length) { const u = list[h]; at.set(u, at.get(u) + 1); if (at.get(u) === u.pages.length) ready.push(u) }
+    }
+  }
+  if (done !== tasks.length) throw new Error(`${tasks.length - done} tasks never ran`)
 }

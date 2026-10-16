@@ -23,3 +23,11 @@ export interface Follow { closing: boolean; want: string; ends: string[]; blocke
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }
 /** each piece's own glyphs and rules in the marked compile, by its opening point's name */
 export declare function ownedOf(pages: readonly StreamPage[], o: { follows: (name: string) => Follow | null; dropped?: readonly string[] }): Map<string, Owned>
+/** ownedOf a page at a time: the pages added in order (`add`), each piece found once every page it may read is in (`take`,
+ *  over the window held: `pages[p - 1]` page p), the rest at `end`; `twice()` the point names read more than once (the
+ *  caller's 'a mark set twice'). `closing(name)`: the page of an opening point's piece's closing destination, or null */
+export declare function ownedPages(o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; closing?: (name: string) => number | null }): {
+  add(p: number, page: StreamPage, take: (name: string, e: Owned, pages: readonly StreamPage[]) => void): void
+  end(take: (name: string, e: Owned, pages: readonly StreamPage[]) => void): void
+  twice(): Set<string>
+}

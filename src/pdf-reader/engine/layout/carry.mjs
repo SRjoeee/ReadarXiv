@@ -39,7 +39,9 @@ const NEAR = 5
 /** the work a marked page may cost, and a paper: the words compared with a partner's, the lines looked at and the cells
  *  of the runs between two lines. On the four researched papers the heaviest page costs 88,874 and the heaviest paper
  *  666,069 (2307.16209, 147 pages); a page past PAGE_WORK, or once the paper is past PAPER_WORK, carries none of its lines
- *  (8,000 lines of one word alike on a page cost 64 million) */
+ *  (8,000 lines of one word alike on a page cost 64 million). The paper's is counted over the pages in page order as they
+ *  are added, so that a page is still carried as soon as its tokens are read (the page stream, E2a): what a page carries
+ *  hangs on the pages before it alone, and a paper of 10,000 pages costs 20 million at most, not 10,000 pages' bounds */
 const PAGE_WORK = 2_000_000, PAPER_WORK = 20_000_000
 /** the lines near a position looked at, at most */
 const SCAN = 64
@@ -58,12 +60,13 @@ const usable = t => !!t && typeof t.t === 'string' && t.t.length > 0 && Number.i
  * its baseline. A token with no text (the rest of a word given in parts) or with a number that is not finite is no word
  * of a line. A line's baseline is the one most of its characters share (to a hundredth), its height its median one, its
  * extent all of its tokens'; `tokens` and `sig` are its words on that baseline (within SIG_BASE of their height, of at
- * least SIG_FLOOR of the median height; all its words when none is), `tokens` as indices into the given list
+ * least SIG_FLOOR of the median height; all its words when none is), `tokens` as indices into the given list. Of the tokens
+ * `from` to `to` alone where they are given (a line never crosses a page, so a page's tokens make its own lines)
  */
-export function linesOf(tokens) {
+export function linesOf(tokens, from = 0, to = tokens.length) {
   const groups = []
   let cur = null
-  for (let k = 0; k < tokens.length; k++) {
+  for (let k = from; k < to; k++) {
     const t = tokens[k]
     if (!usable(t)) continue
     // a line opened by a smaller token (a footnote's number, raised) is a line of the next one's baseline, within half
@@ -116,42 +119,83 @@ function commonRun(a, b, A, B) {
  * distance less the words matched) within WINDOW of its baseline on its page, or anywhere on the next or the previous
  * page, whose longest common run of words holds FUZZY of the longer line's and at least FUZZY_PAIRS. The work a marked
  * page and a paper cost is bounded (PAGE_WORK, PAPER_WORK): a page past it carries none of its lines and is listed in
- * `over`, which the maker takes as a page with no ink. `lines`: every marked line (`total`), and those carried, each
- * counted once: at the same place (`same`), moved whole (`moved`), the same words at other spaces (`respaced`), matched
- * by most of their words (`fuzzy`)
+ * `over`, which the maker takes as a page with no ink. `lines`: every marked line (`total`), and those carried, each counted once: at the same place
+ * (`same`), moved whole (`moved`), the same words at other spaces (`respaced`), matched by most of their words (`fuzzy`)
  */
 export function carrierOf(marked, arxiv) {
-  const ours = linesOf(marked), theirs = linesOf(arxiv)
+  const c = carrier(marked, arxiv)
+  c.add(0, marked.length)
+  return c
+}
+
+/**
+ * carrierOf a page at a time (the page stream, E2a): arXiv's tokens whole (the prepare's step T reads them before any marked
+ * page), the marked original's added as they are read, `add(from, to)` the tokens of whole pages, none added before: a page's
+ * lines are matched there, from its own lines and arXiv's on its page and the two beside it, and are carried from then on.
+ * `marked` is the list the tokens are added to, read at the indices added. Added page by page in page order, or all at once,
+ * it is carrierOf
+ */
+export function carrier(marked, arxiv) {
+  const theirs = linesOf(arxiv)
   const bySig = new Map(), byPage = new Map(), counts = new Map()
   for (const c of theirs) {
     const key = `${c.page}\u0000${c.sig}`
     ;(bySig.get(key) ?? bySig.set(key, []).get(key)).push(c)
     ;(byPage.get(c.page) ?? byPage.set(c.page, []).get(c.page)).push(c)
   }
-  const oursOn = new Map()
-  for (const l of ours) {
-    const key = `${l.page}\u0000${l.sig}`
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-    ;(oursOn.get(l.page) ?? oursOn.set(l.page, []).get(l.page)).push(l)
-  }
   const X = (ts, l, j) => ts[l.tokens[j]].x
-  const match = new Map(), over = []
-  const lines = { total: ours.length, same: 0, moved: 0, respaced: 0, fuzzy: 0 }
+  const match = new Map(), over = [], added = new Set()
+  const lines = { total: 0, same: 0, moved: 0, respaced: 0, fuzzy: 0 }
+  // (each marked page's lines: [carried, total]; the work spent on the pages added so far, the paper's)
+  const pageLines = new Map()
   let spent = 0
-  for (const page of [...oursOn.keys()].sort((a, b) => a - b)) {
-    const ls = oursOn.get(page)
-    let work = 0
-    /** whether the page, or the paper, is past its work with n more */
-    const spend = n => (work += n) > PAGE_WORK || spent + work > PAPER_WORK
-    const found = spent > PAPER_WORK ? null : matchPage(ls, spend)
-    spent += work
-    if (found === null) { over.push(page); continue }
-    for (const [l, best] of found) {
-      match.set(l, best)
-      if (best.fuzzy) lines.fuzzy++
-      else if (!best.whole) lines.respaced++
-      else if (best.page === l.page && Math.abs(best.dx) < SAME && Math.abs(best.dy) < SAME) lines.same++
-      else lines.moved++
+  // each page's lines by baseline, for the lines near a position; each token's line; the rests of words given in parts
+  const nearby = new Map(), lineOf = new Map(), restsOn = new Map()
+
+  /** the marked tokens `from` to `to`, whole pages none of which was added */
+  function add(from = 0, to = marked.length) {
+    const ours = linesOf(marked, from, to)
+    const oursOn = new Map()
+    for (const l of ours) {
+      const key = `${l.page}\u0000${l.sig}`
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+      ;(oursOn.get(l.page) ?? oursOn.set(l.page, []).get(l.page)).push(l)
+    }
+    for (const page of oursOn.keys()) if (added.has(page)) throw new RangeError(`the marked page ${page} was added already`)
+    lines.total += ours.length
+    for (const page of [...oursOn.keys()].sort((a, b) => a - b)) {
+      let work = 0
+      /** whether the page, or the paper, is past its work with n more */
+      const spend = n => (work += n) > PAGE_WORK || spent + work > PAPER_WORK
+      const found = spent > PAPER_WORK ? null : matchPage(oursOn.get(page), spend)
+      spent += work
+      pageLines.set(page, [found === null ? 0 : found.size, oursOn.get(page).length])
+      if (found === null) { over.push(page); continue }
+      for (const [l, best] of found) {
+        match.set(l, best)
+        if (best.fuzzy) lines.fuzzy++
+        else if (!best.whole) lines.respaced++
+        else if (best.page === l.page && Math.abs(best.dx) < SAME && Math.abs(best.dy) < SAME) lines.same++
+        else lines.moved++
+      }
+    }
+    for (const [page, ls] of oursOn) {
+      added.add(page)
+      const by = [...ls].sort((a, b) => a.y - b.y)
+      let h = 0
+      for (const l of by) if (l.h > h) h = l.h
+      nearby.set(page, { ys: Float64Array.from(by, l => l.y), by, h })
+    }
+    // the rest of each word given in parts (a token with no text after its first part's, tokenizeDocument), ours by page:
+    // its first part's index and how many parts on it is, the first part on a line of ours
+    for (const l of ours) for (const k of l.tokens) lineOf.set(k, l)
+    for (let k = Math.max(1, from); k < to; k++) {
+      const r = marked[k]
+      if (r.t !== '' || !Number.isInteger(r.page) || ![r.x, r.y, r.w, r.h].every(Number.isFinite)) continue
+      let f = k - 1
+      while (f >= 0 && marked[f].t === '') f--
+      if (f < 0 || !usable(marked[f]) || !lineOf.has(f)) continue
+      ;(restsOn.get(r.page) ?? restsOn.set(r.page, []).get(r.page)).push({ r, f, n: k - f })
     }
   }
 
@@ -293,27 +337,6 @@ export function carrierOf(marked, arxiv) {
     }
     return x + (last[1] - last[0])
   }
-  // each page's lines by baseline, for the lines near a position
-  const nearby = new Map()
-  for (const [page, ls] of oursOn) {
-    const by = [...ls].sort((a, b) => a.y - b.y)
-    let h = 0
-    for (const l of by) if (l.h > h) h = l.h
-    nearby.set(page, { ys: Float64Array.from(by, l => l.y), by, h })
-  }
-  // the rest of each word given in parts (a token with no text after its first part's, tokenizeDocument), ours by page:
-  // its first part's index and how many parts on it is, the first part on a line of ours
-  const lineOf = new Map()
-  for (const l of ours) for (const k of l.tokens) lineOf.set(k, l)
-  const restsOn = new Map()
-  for (let k = 1; k < marked.length; k++) {
-    const r = marked[k]
-    if (r.t !== '' || !Number.isInteger(r.page) || ![r.x, r.y, r.w, r.h].every(Number.isFinite)) continue
-    let f = k - 1
-    while (f >= 0 && marked[f].t === '') f--
-    if (f < 0 || !usable(marked[f]) || !lineOf.has(f)) continue
-    ;(restsOn.get(r.page) ?? restsOn.set(r.page, []).get(r.page)).push({ r, f, n: k - f })
-  }
   /** a rest of ours carried as its first part's partner's same rest: arXiv's token as many on from the first part's
    *  partner, a rest of that token's, or null */
   const restCarried = ({ r, f, n }) => {
@@ -329,7 +352,9 @@ export function carrierOf(marked, arxiv) {
   }
   return {
     lines,
+    pageLines,
     over,
+    add,
     /** the marked line a position stands on — on its page, within half its height of its baseline, from its height
      *  before its start to PAST of its height past its end (a unit's end mark after the formula its line ends with:
      *  1706's "… by 1/√dk", the formula no word), the nearest across of the SCAN lines nearest it, then by baseline —

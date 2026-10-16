@@ -38,7 +38,7 @@ import { openPaper, originalFiles } from '../src/pdf-reader/engine/pipeline/live
 import { paperAddon } from '../src/pdf-reader/engine/layout/addon.mjs'
 import { encodeLayout, indexLayout, parseLayout } from '../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../src/pdf-reader/engine/layout/make.mjs'
-import { parseLayoutMarks } from '../src/pdf-reader/engine/layout/marks.mjs'
+import { marksFile } from '../src/pdf-reader/engine/layout/marks.mjs'
 import { layoutMarksOfPaper } from '../src/pdf-reader/engine/layout/paper.mjs'
 import { displayEdges, unitText } from '../src/pdf-reader/engine/translate/mt.mjs'
 import { PDFJS } from '../src/pdf-reader/engine/pipeline/versions.mjs'
@@ -179,11 +179,11 @@ const made = await layoutMarksOfPaper(paper, {
 })
 if (compileFault) throw compileFault
 if (!('marks' in made)) throw new Error(`the layout marks were refused at the ${made.refused}`)
-console.log(`   ${made.marks.length} bytes`)
+console.log(`   ${marksFile(made.marks).length} characters of marks`)
 
 // 5. the layout file
 step(5, 'the layout file')
-const layoutMade = await makeLayout({ units: paper.units, marks: parseLayoutMarks(made.marks), arxiv: arxivDoc, OPS, paper: PAPER, left: '', pdfjs: PDFJS })
+const layoutMade = await makeLayout({ units: paper.units, marks: made.marks, arxiv: arxivDoc, OPS, paper: PAPER, left: '', pdfjs: PDFJS })
 if (!('file' in layoutMade)) throw new Error(`the layout maker refused the paper (${layoutMade.refused})`)
 const layoutText = encodeLayout(layoutMade.file)
 const layoutBytes = new TextEncoder().encode(layoutText)

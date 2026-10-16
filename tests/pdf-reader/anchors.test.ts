@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorUnits, boundsFromMarks, type DocToken, inkEdges, markWords, sentenceStarts, startRuns, startsAnchor, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, type DocToken, floatMatches, inkEdges, markWords, matchUnits, pageFrame, placeUnits, sentenceStarts, startRuns, startsAnchor, type TextPage, tokenizeDocument, tokens, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // Where each unit sits in a PDF, found from the text layer (anchors.mjs): the page given as PDF.js's text items, the
 // units as the reader passes them. Heights are 10 PDF units, lines 12 apart down from y = 700
@@ -644,5 +644,49 @@ describe('startRuns and startsAnchor: sentenceStarts read from a left part\'s ru
     expect(gated).toBeGreaterThan(50)
     // E0 (a unit through the gate whose every pair was filtered, asked for no sentence) is the one difference: [] raw, null rebuilt
     expect(e0).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('anchorUnits in two halves: matchUnits, then placeUnits (the page stream, E2a)', () => {
+  // three pages: two paragraphs with marks on page 1, a caption set two pages on (its search between its neighbours finds
+  // nothing, the whole document's does), a heading with no marks between the paragraphs, a paragraph on page 3
+  const pages = [
+    page([['the', 'first', 'paragraph', 'of', 'words'], ['results', 'of', 'the', 'method'], ['a', 'second', 'paragraph', 'here', 'now']], 1),
+    page([['filler', 'text', 'on', 'the', 'second', 'page', 'only']], 2),
+    page([['figure', 'one', 'shows', 'the', 'curves', 'we', 'drew'], ['the', 'last', 'paragraph', 'of', 'all']], 3),
+  ]
+  const doc = tokenizeDocument(pages)
+  const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+  const units: UnitText[] = [
+    { id: 0, text: 'the first paragraph of words' }, { id: 1, text: 'results of the method' }, { id: 2, text: 'figure one shows the curves we drew' },
+    { id: 3, text: 'a second paragraph here now' }, { id: 4, text: 'the last paragraph of all' },
+  ]
+  const bounds = new Map<string, [number, number]>([['0', [0, 4]], ['3', [at('a'), at('now')]], ['4', [at('last') - 1, at('all')]]])
+  const floating = (id: number) => id === 2
+  const plain = (m: Map<number, unknown>) => JSON.stringify([...m], (_, v) => (v instanceof Map ? [...v] : v))
+
+  it('a float found over the whole document: the same with its match made beforehand (floatMatches, the step T)', () => {
+    const whole = anchorUnits(doc, units, { bounds, floating })
+    expect(whole.get(2)?.tokens.map(k => doc[k]?.t)).toEqual(['figure', 'one', 'shows', 'the', 'curves', 'we', 'drew'])
+    const floatMatch = floatMatches(doc, units, floating)
+    expect([...floatMatch.keys()]).toEqual([2])
+    expect(plain(anchorUnits(doc, units, { bounds, floating, floatMatch }))).toBe(plain(whole))
+  })
+
+  it('the two halves are anchorUnits; a unit matched alone (`only`) is matched as among all, its neighbours read from every bound', () => {
+    const found = matchUnits(doc, units, { bounds, floating })
+    expect(plain(placeUnits(doc, units, found))).toBe(plain(anchorUnits(doc, units, { bounds, floating })))
+    for (let u = 0; u < units.length; u++) {
+      const alone = matchUnits(doc, units, { bounds, floating, floatMatch: floatMatches(doc, units, floating), only: new Set([u]) })
+      expect(JSON.stringify(alone[u], (_, v) => (v instanceof Map ? [...v] : v)), String(u)).toBe(JSON.stringify(found[u], (_, v) => (v instanceof Map ? [...v] : v)))
+      expect(alone.filter((f, v) => v !== u && f !== null)).toEqual([])
+    }
+  })
+
+  it('the frame is a rule given: today\'s pageFrame by default', () => {
+    let calls = 0
+    const rule = (d: DocToken[], ms: readonly (number[] | null)[]) => { calls++; return pageFrame(d, ms) }
+    expect(plain(anchorUnits(doc, units, { bounds, floating, frame: rule }))).toBe(plain(anchorUnits(doc, units, { bounds, floating })))
+    expect(calls).toBe(1)
   })
 })

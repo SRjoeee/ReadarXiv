@@ -6,8 +6,9 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
+import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
@@ -785,7 +786,9 @@ describe('reading the marked original', () => {
     // the paper's \\lineskip and \\lineskiplimit as readSkipProbe gives them (PDF units: 1pt is 0.9962640099626402), written to
     // a hundredth like every number of the file
     const skips = await layoutMarksOf(doc, '', { engine: 'pdflatex', lineskip: [0.9962640099626402, -0.004] })
-    expect(skips.marking.lineskip).toEqual([0.9962640099626402, -0.004])
+    // (held as the file holds them: the marks in memory are their file's)
+    expect(skips.marking.lineskip).toEqual([1, 0])
+    expect(Object.is(skips.marking.lineskip?.[1], 0)).toBe(true)
     expect(encodeLayoutMarks(skips)).toContain('"lineskip":[1,0]')
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(skips))).marking.lineskip).toEqual([1, 0])
     // TeX's \maxdimen, which \offinterlineskip sets \lineskiplimit to, from the probe to the file and back: written
@@ -832,8 +835,8 @@ describe('reading the marked original', () => {
     }
   }, 60_000)
   it('layoutMarksOf: past OWNED_ALL a paper\'s pieces are not owned, and past MARKS_CAP its last owned pieces are cut, never the file refused', async () => {
-    // 14 pieces, in name order (p0.1a, p0.11a, …) 12 of 20,000 glyphs and one of 9,999: 249,999 owned; the last, 20,000
-    // more, past OWNED_ALL
+    // 14 pieces, counted in their opening points' order (p0.1a, p0.3a, …: the page stream finds them so, E2a) 12 of 20,000
+    // glyphs and one of 9,999: 249,999 owned; the last, p0.27a, 20,000 more, past OWNED_ALL
     const n = 14, per = 20_000, past = OWNED_HOW.indexOf('past the glyphs a paper may own')
     const units = [unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())]
     const run = async (big: boolean) => {
@@ -856,10 +859,11 @@ describe('reading the marked original', () => {
     }
     // within the cap: the last piece alone past OWNED_ALL
     const small = await run(false)
-    expect(small.owned.at(-1)).toEqual(['p0.9a', past])
+    expect(small.owned.find(e => e[0] === 'p0.27a')).toEqual(['p0.27a', past])
     expect(small.owned.filter(e => e.length === 2).length).toBe(1)
-    // past the cap: owned pieces from the last cut to fit the file, never the file refused
+    // past the cap: owned pieces from the last by name cut to fit the file, never the file refused
     const large = await run(true)
+    expect(large.owned.find(e => e[0] === 'p0.27a')).toEqual(['p0.27a', past])
     expect(large.owned.at(-1)).toEqual(['p0.9a', past])
     expect(large.owned.filter(e => e.length === 2 && e[1] === past).length).toBeGreaterThan(1)
     expect(large.owned.some(e => e.length > 2)).toBe(true)
@@ -1112,4 +1116,119 @@ describe('the marks file', () => {
     many.words.push('one more')
     expect(refusal(bytes(many))).toBe('words')
   })
+})
+
+describe('readMarked: the marked original read once, a page at a time (the page stream, E2a)', () => {
+  // two pages: a paragraph across them, a placeholder on each (one closed on its page, one closed on the next page across
+  // the bodies), a heading and a cell's marks, the unit marks the left is anchored by
+  const units = [unit('para', [text('the model '), ph('$x$'), text(' and more words '), ph('$y$'), text(' here')]), unit('heading', [text('Results')])]
+  const pages = [
+    { view: [0, 0, 612, 792], items: [item('the model', 72, 700), item('and more words', 120, 700)], shown: [{ at: 'bs1' }, { at: '0s' }, ['the model ', 72, 700], { at: 'p0.1a' }, ['x', 122, 700], { at: 'p0.1b' }, [' and more words ', 130, 700], { at: 'p0.3a' }, ['y1', 200, 700], { at: 'be1' }] as Shown[] },
+    { view: [0, 0, 612, 792], items: [item('here', 72, 700), item('Results', 72, 650)], shown: [{ at: 'bs2' }, ['y2', 72, 712], { at: 'p0.3b' }, [' here', 80, 700], { at: '0e' }, { at: 'h1s' }, ['Results', 72, 650], { at: 'h1e' }, { at: 'be2' }] as Shown[] },
+  ]
+  const dests: [string, number, number, number][] = [['axt-0s', 1, 72, 700], ['axt-p0.1a', 1, 122, 700], ['axt-p0.1b', 1, 127, 700], ['axt-p0.3a', 1, 200, 700], ['axt-p0.3b', 2, 82, 712], ['axt-0e', 2, 100, 700], ['axt-h1s', 2, 72, 650], ['axt-h1e', 2, 107, 650]]
+  /** the document, with each page's reads counted */
+  const counted = () => {
+    const reads = { text: [] as number[], ops: [] as number[], cleanup: [] as number[], index: 0 }
+    const doc = streamDocument(pages, dests)
+    return {
+      reads,
+      doc: {
+        ...doc,
+        getPageIndex: async (ref: { num: number }) => { reads.index++; return doc.getPageIndex(ref) },
+        getPage: async (n: number) => {
+          const p = await doc.getPage(n)
+          return { ...p, getTextContent: async () => { reads.text.push(n); return p.getTextContent() }, getOperatorList: async () => { reads.ops.push(n); return p.getOperatorList() }, cleanup: () => { reads.cleanup.push(n) } }
+        },
+      },
+    }
+  }
+
+  it('each page\'s text and operator list read once, each page looked up once; the marks in memory are their file\'s, layoutMarksOf\'s', async () => {
+    const one = counted()
+    const { marks, unitMarks } = await readMarked(one.doc, '', { engine: 'pdflatex', units, OPS })
+    expect(one.reads).toEqual({ text: [1, 2], ops: [1, 2], cleanup: [1, 2], index: 2 })
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(marks)))).toEqual(marks)
+    expect(encodeLayoutMarks(marks)).toBe(encodeLayoutMarks(await layoutMarksOf(counted().doc, '', { engine: 'pdflatex', units, OPS })))
+    // the piece closed on the next page owns its ink on both, the one closed on its own page its own
+    const own = new Map(marks.owned.map(e => [e[0], e]))
+    expect(own.get('p0.1a')?.slice(0, 3)).toEqual(['p0.1a', OWNED_HOW.indexOf('closed'), 1])
+    expect(own.get('p0.3a')?.slice(0, 3)).toEqual(['p0.3a', OWNED_HOW.indexOf('closed'), 4])
+    expect(marks.chars).toEqual(['x', 'y', '1', '2'])
+    expect(unitMarks).not.toBeNull()
+  })
+
+  it('the unit marks are what the web read of the same document: its marks with their words (marksOfDoc), in the names\' order', async () => {
+    const { doc } = counted()
+    const { unitMarks } = await readMarked(doc, '', { engine: 'pdflatex', units, OPS })
+    // the web's reading (container/src/run/geometry.ts marksOfDoc): every page's text, then each unit mark's page looked up
+    const text = []
+    for (let p = 1; p <= doc.numPages; p++) { const tc = await (await doc.getPage(p)).getTextContent(); text.push({ page: p, items: tc.items, styles: tc.styles }) }
+    const pdfMarks = new Map()
+    for (const [name, d] of await doc.getDestinations()) if (/^axt-\d+[se]$/.test(name) && d) pdfMarks.set(name.slice(4), { page: (await doc.getPageIndex(d[0] as { num: number })) + 1, x: d[2], y: d[3] })
+    const web = markWords(tokenizeDocument(text), pdfMarks)
+    expect([...(unitMarks ?? [])]).toEqual([...web])
+    expect(unitMarks?.get('0s')?.t).toBe('the')
+    expect(unitMarks?.get('0e')?.t).toBe('here')
+  })
+
+  it('no unit marks where a unit mark\'s page cannot be looked up, as the web\'s reading threw; the marks all the same', async () => {
+    const { doc } = counted()
+    const broken = { ...doc, getPageIndex: async (ref: { num: number }) => { if (ref.num === 102) throw new Error('no such page'); return doc.getPageIndex(ref) } }
+    const { marks, unitMarks } = await readMarked(broken, '', { engine: 'pdflatex', units, OPS })
+    expect(unitMarks).toBeNull()
+    expect(marks.marks.map(m => m[0])).toEqual(['0s', 'p0.1a', 'p0.1b', 'p0.3a'])
+  })
+})
+
+describe('markedPages: the marked original a page at a time (the page stream, E2b)', () => {
+  const units = [unit('para', [text('the model '), ph('$x$'), text(' and more words '), ph('$y$'), text(' here')]), unit('heading', [text('Results')])]
+  const pages = [
+    { view: [0, 0, 612, 792], items: [item('the model', 72, 700), item('and more words', 120, 700)], shown: [{ at: 'bs1' }, { at: '0s' }, ['the model ', 72, 700], { at: 'p0.1a' }, ['x', 122, 700], { at: 'p0.1b' }, [' and more words ', 130, 700], { at: 'p0.3a' }, ['y1', 200, 700], { at: 'be1' }] as Shown[] },
+    { view: [0, 0, 612, 792], items: [item('here', 72, 700), item('Results', 72, 650)], shown: [{ at: 'bs2' }, ['y2', 72, 712], { at: 'p0.3b' }, [' here', 80, 700], { at: '0e' }, { at: 'h1s' }, ['Results', 72, 650], { at: 'h1e' }, { at: 'be2' }] as Shown[] },
+  ]
+  const dests: [string, number, number, number][] = [['axt-0s', 1, 72, 700], ['axt-p0.1a', 1, 122, 700], ['axt-p0.1b', 1, 127, 700], ['axt-p0.3a', 1, 200, 700], ['axt-p0.3b', 2, 82, 712], ['axt-0e', 2, 100, 700], ['axt-h1s', 2, 72, 650], ['axt-h1e', 2, 107, 650]]
+
+  it('the head first, each page in order with what it found, the end; drained it is readMarked', async () => {
+    const events: unknown[] = []
+    for await (const x of markedPages(streamDocument(pages, dests), '', { engine: 'pdflatex', units, OPS })) events.push(x)
+    const [head, p1, p2, end] = events as [{ head: { pages: number; unitMarks: Map<string, unknown> } }, { page: { p: number; owned: [string, unknown[]][]; words: string[]; tokens: number[] } }, { page: { p: number; owned: [string, unknown[]][]; words: string[] } }, { end: { owned: unknown[]; twice: Set<string> } }]
+    expect(events).toHaveLength(4)
+    expect(head.head.pages).toBe(2)
+    expect([...head.head.unitMarks.keys()]).toEqual(['0s', '0e'])
+    // page 1 finds nothing: its pieces wait for the one closed on page 2; page 2 finds both, each glyph's character itself
+    expect(p1.page.p).toBe(1)
+    expect(p1.page.owned).toEqual([])
+    expect(p1.page.words).toEqual(['the', 'model', 'and', 'more', 'words'])
+    expect(p2.page.owned.map(([name]) => name)).toEqual(['p0.1a', 'p0.3a'])
+    expect(p2.page.owned[1]?.[1].filter(v => typeof v === 'string').slice(1)).toEqual(['y', '1', 'y', '2'])
+    expect(p2.page.words).toEqual(['here', 'results'])
+    expect(end.end.owned).toEqual([])
+    expect(end.end.twice.size).toBe(0)
+  })
+
+  it('a page whose view is no view is refused there, with the place the marks\' view check names', async () => {
+    const bad = [pages[0] as typeof pages[number], { ...(pages[1] as typeof pages[number]), view: [0, 0, 0, 792] }]
+    const seen: number[] = []
+    await expect((async () => { for await (const x of markedPages(streamDocument(bad, dests), '', { engine: 'pdflatex', units, OPS })) if ('page' in x) seen.push((x as { page: { p: number } }).page.p) })()).rejects.toThrow(/views\[6\]/)
+    expect(seen).toEqual([1])
+  })
+
+  it('the paper-wide bounds (OWNED_ALL, WORDS_MAX) are the lab file\'s alone: the server\'s marks are bounded per piece', async () => {
+    // 14 pieces of 20,000 glyphs but one: past OWNED_ALL in all, each within GLYPHS_PIECE
+    const n = 14, per = 20_000
+    const many = [unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())]
+    const shown: Shown[] = [{ at: '0s' }], ds: [string, number, number, number][] = [['0s', 1, 72, 700]]
+    for (let q = 0; q < n; q++) {
+      const k = 2 * q + 1, y = 700 - 12 * q
+      shown.push({ at: `p0.${k}a` }, { glyphs: Array.from({ length: q === n - 2 ? 9_999 : per }, () => 'x'), x: 72, y, size: 10, step: 0.01 }, { at: `p0.${k}b` })
+      ds.push([`p0.${k}a`, 1, 72, y], [`p0.${k}b`, 1, 80, y])
+    }
+    shown.push({ at: '0e' }); ds.push(['0e', 1, 80, 500])
+    const doc = () => streamDocument([{ view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown }], ds.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
+    const server = await readMarked(doc(), '', { engine: 'pdflatex', units: many, OPS })
+    expect(server.marks.owned.every(e => e.length > 2)).toBe(true)
+    const file = parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(doc(), '', { engine: 'pdflatex', units: many, OPS }))))
+    expect(file.owned.filter(e => e.length === 2).map(e => e[0])).toEqual(['p0.27a'])
+  }, 120_000)
 })

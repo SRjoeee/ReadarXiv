@@ -1,5 +1,6 @@
 // paper.mjs's types: a paper's layout marks in one call, for the server's prepare child, the extension's reader and the layer gate's maker
 import type { Compiled, CompileRequest, Paper } from '../pipeline/live.mjs'
+import type { LayoutMarks, UnitMarks } from './marks.mjs'
 
 /** CM's record (converge then mark): the unmarked original's draft passes, the marked original's passes, whether the
  *  last marked pass wrote the files it was given (else the bound of five TeX passes was reached and its PDF kept), and
@@ -10,8 +11,9 @@ export interface ConvergeRecord { drafts: number; marked: number; settled: boole
 /**
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read
  * (readMarkProbe, readInkProbe, readInkTexts), then the layout-marked original compiled (originalFiles(paper, { lines:
- * true, layout: LAYOUT_CLASSES, switches, inkless })) and its marks read (layoutMarksOf over a document of its PDF and
- * its last pass's log, with the units and OPS), encoded (encodeLayoutMarks). `ms` times each stage. A stage that fails
+ * true, layout: LAYOUT_CLASSES, switches, inkless })) and read once (readMarked over a document of its PDF and its last
+ * pass's log, with the units and OPS): `marks` in memory, as the maker takes them (marksFile writes them as the lab's file, or refuses where they pass the file's bounds),
+ * and `unitMarks`, the unit marks the left is anchored by (null: by its text alone). `ms` times each stage. A stage that fails
  * gives { refused } naming it, with the times of the stages that ran: the probe where its compile gave no log, the
  * compile where the original's gave no PDF, the marks where `open` or the reading failed. `open` is called once, on the
  * original's PDF, and its `close` is called whatever the reading did. The compile and the PDF opening are the caller's
@@ -36,4 +38,4 @@ export declare function layoutMarksOfPaper(paper: Paper, o: {
    *  back accumulate across passes: before each pass that would carry them (carried + the previous pass's returned, the pass's
    *  own overrides aside) they are held to it, and past it today's compile is asked (`files-bound`). Absent: unlimited */
   filesBound?: { count: number; bytes: number } | null
-}): Promise<{ marks: Uint8Array; ms: { probe: number; compile: number; marks: number }; cm?: ConvergeRecord } | { refused: 'probe' | 'compile' | 'marks'; ms: Record<string, number>; cm?: ConvergeRecord }>
+}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number }; cm?: ConvergeRecord } | { refused: 'probe' | 'compile' | 'marks'; ms: Record<string, number>; cm?: ConvergeRecord }>

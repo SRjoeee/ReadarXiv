@@ -173,15 +173,18 @@ function zeroes(r) {
 }
 
 // ---------------------------------------------------------------- the parser
-/** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal */
-export function parseLayout(bytes) {
+/** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; throws LayoutRefusal.
+ *  `sized` false: none of the bounds a part holds of its own (the file's bytes and values, LINES_ALL, PAGE_TEXT_ALL,
+ *  NAMES_MAX, FONTS_MAX), for a file that is cut into parts, each checked against them (checkLayoutPart) */
+export function parseLayout(bytes, { sized = true } = {}) {
   if (!(bytes instanceof Uint8Array)) throw refuse('', `not bytes (${kindOf(bytes)})`)
-  return checkLayout(boundedJson(bytes, { cap: LAYOUT_CAP, values: LAYOUT_VALUES, depth: LAYOUT_DEPTH }))
+  const caps = sized ? { cap: LAYOUT_CAP, values: LAYOUT_VALUES } : { cap: Number.POSITIVE_INFINITY, values: Number.POSITIVE_INFINITY }
+  return checkLayout(boundedJson(bytes, { ...caps, depth: LAYOUT_DEPTH }), { sized })
 }
 
 /** a file already parsed, within the bounds of what holds it (a layer bundle, layer-proto/bundle.mjs): every bound
- *  parseLayout checks past JSON.parse. Returns the value itself, its -0s written 0; throws LayoutRefusal */
-export function checkLayout(value) {
+ *  parseLayout checks past JSON.parse (`sized` as there). Returns the value itself, its -0s written 0; throws LayoutRefusal */
+export function checkLayout(value, { sized = true } = {}) {
   // (its schema first: a file of another names other fields, and is refused for what it is)
   if (isObject(value) && Object.hasOwn(value, 'schema') && value.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
   const f = exactKeys(value, KEYS, '')
@@ -196,7 +199,7 @@ export function checkLayout(value) {
   const views = checkViews(f.views, pages, 'views')
   zeroes(views)
 
-  checkRows(f, { views, lo: 1, hi: pages })
+  checkRows(f, { views, lo: 1, hi: pages, sized })
 
   checkLineskip(f.lineskip, 'lineskip')
   return f
@@ -233,12 +236,13 @@ export function checkLayoutPart(value, { pages, views, lo, hi }) {
 
 /**
  * The rows and tables of a layout file or part, from `fonts` to `names`: the pages a row names are `lo` to `hi`, and
- * `views` those pages' views (stride 4, from page lo). Bounds are of what `f` holds, so a part's are per part
+ * `views` those pages' views (stride 4, from page lo). Bounds are of what `f` holds, so a part's are per part; `sized`
+ * false, none of the four of what `f` holds in all (a whole file cut into parts)
  */
-function checkRows(f, { views, lo, hi }) {
+function checkRows(f, { views, lo, hi, sized = true }) {
   const span = { lo, hi }
   const fonts = array(f.fonts, 'fonts')
-  if (fonts.length > FONTS_MAX) throw new LayoutRefusal('fonts', `more than ${FONTS_MAX} names`, 'rows')
+  if (sized && fonts.length > FONTS_MAX) throw new LayoutRefusal('fonts', `more than ${FONTS_MAX} names`, 'rows')
   for (let i = 0; i < fonts.length; i++) if (!printable(fonts[i], 1, FONT_MAX)) throw refuse(`fonts[${i}]`, `not 1 to ${FONT_MAX} printable ASCII characters (${kindOf(fonts[i])})`)
 
   // units: by id, their index in units; each unit's kind, pieces and line rows by that index
@@ -268,7 +272,7 @@ function checkRows(f, { views, lo, hi }) {
     const e = lines[i], u = entry(e, i, 'lines', last, slot, 8), r = e[1]
     if (r.length > 8 * LINES_UNIT) throw refuse(`lines[${i}][1]`, `more than ${LINES_UNIT} lines`)
     total += r.length / 8
-    if (total > LINES_ALL) throw new LayoutRefusal('lines', `more than ${LINES_ALL} lines`, 'rows')
+    if (sized && total > LINES_ALL) throw new LayoutRefusal('lines', `more than ${LINES_ALL} lines`, 'rows')
     for (let j = 0; j < r.length; j += 8) {
       checkBox(r, j, 1, 2, 3, 4, 5, true, views, span, 'lines', i, 1)
       const size = r[j + 6]
@@ -410,7 +414,7 @@ function checkRows(f, { views, lo, hi }) {
     const text = e[2]
     if (!isPageText(text)) throw refuse(`pageText[${i}][2]`, `not 1 to ${TEXT_MAX} code units of text (${kindOf(text)})`)
     all += text.length
-    if (all > PAGE_TEXT_ALL) throw new LayoutRefusal('pageText', `more than ${PAGE_TEXT_ALL} code units`, 'rows')
+    if (sized && all > PAGE_TEXT_ALL) throw new LayoutRefusal('pageText', `more than ${PAGE_TEXT_ALL} code units`, 'rows')
     if (e[0] === 0) e[0] = 0
     symbols.delete(key)
   }
@@ -439,7 +443,7 @@ function checkRows(f, { views, lo, hi }) {
   // file's), else -1; glue: the original's space between its joint and the unit's text (0 where not RUN_IN); the column:
   // its TeX column's text edges on the page, the room a name has
   const names = array(f.names, 'names')
-  if (names.length > NAMES_MAX) throw new LayoutRefusal('names', `more than ${NAMES_MAX} names`, 'rows')
+  if (sized && names.length > NAMES_MAX) throw new LayoutRefusal('names', `more than ${NAMES_MAX} names`, 'rows')
   last = -1
   for (let i = 0; i < names.length; i++) {
     const r = names[i]
