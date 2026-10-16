@@ -31,6 +31,12 @@ export const OPS_MS = 10_000
  *  three pages of 50,000 operations or one of 100,000 (2608.12606, 2608.18626, 2608.27728, 2608.08880), each read in under
  *  3 s on a laptop */
 export const GIVEN_UP_MAX = 8
+/** a reader's count of its pages given up on (GIVEN_UP_MAX's): `over()` whether every later page is to be dark unread, `spend()`
+ *  a page given up on or capped */
+export function givenUpBudget() {
+  let n = 0
+  return { over: () => n >= GIVEN_UP_MAX, spend: () => { n++ } }
+}
 /** a promise's value, or null where it does not come within `ms` or fails */
 export function within(promise, ms) {
   let timer

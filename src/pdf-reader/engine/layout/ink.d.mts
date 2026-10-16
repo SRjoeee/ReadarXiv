@@ -18,6 +18,8 @@ export declare const GLYPHS_PAGE: number
 export declare const OPS_MS: number
 /** a paper's pages given up on (past OPS_MS) or capped, at most: past it every later page is dark unread (both readers) */
 export declare const GIVEN_UP_MAX: number
+/** a reader's count of its pages given up on: `over()` every later page dark unread, `spend()` one more */
+export declare function givenUpBudget(): { over(): boolean; spend(): void }
 /** a promise's value, or null where it does not come within `ms` or fails */
 export declare function within<T>(promise: Promise<T> | T, ms: number): Promise<T | null>
 /** a page's operator list given up on (PDF.js's own cancellation); where the PDF.js has none, a warning once (`seen`) */
