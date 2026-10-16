@@ -23,7 +23,7 @@ import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrier as carrierFor, carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { giveUp, GLYPHS_PAGE, OPS_MS, packGlyphs, pageInk, within } from './ink.mjs'
+import { GIVEN_UP_MAX, giveUp, GLYPHS_PAGE, OPS_MS, packGlyphs, pageInk, within } from './ink.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf } from './remove.mjs'
@@ -341,14 +341,8 @@ function sameWord(doc, byPage, c, start, ours) {
   return (a !== null && a === ours) || (b !== null && b === theirs) || (a !== null && a === b) ? doc[k].t : ours
 }
 
-/** the pages of a paper whose operator lists are given up on, at most: past OPS_MS, or capped (ink.mjs OPS_CAP, GLYPHS_PAGE).
- *  Past it every later page is dark unread (stats.timedOut), so that a paper whose every page stalls costs GIVEN_UP_MAX
- *  times OPS_MS, not its pages' (10,000 pages of 10 s each: 28 hours, and as many parses left running where PDF.js cannot
- *  cancel one). A count, no clock of the paper's: which pages are dark hangs on the pages before them alone, as each page's
- *  own verdict does. The corpus's 3,036 pages hold none over a cap, the heaviest 146,115 operations; no paper has more than
- *  three pages of 50,000 operations or one of 100,000 (2608.12606, 2608.18626, 2608.27728, 2608.08880), each read in under
- *  3 s on a laptop */
-export const GIVEN_UP_MAX = 8
+/** a paper's pages given up on, at most (ink.mjs GIVEN_UP_MAX: arXiv's PDF's read and the marked original's) */
+export { GIVEN_UP_MAX }
 
 /** stats before anything is read */
 function blank(units) {

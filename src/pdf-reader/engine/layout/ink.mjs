@@ -22,6 +22,15 @@ export const OPS_CAP = 150_000
  *  the corpus's 2,793 pages take 36.9 s in all, a paper's at most a few seconds. A page's alone: no bound of the paper's time
  *  makes a page's ink hang on the pages before it (the page stream's darkness is page-local, E2b) */
 export const OPS_MS = 10_000
+/** the pages of a paper whose operator lists are given up on, at most (the layout maker's read of arXiv's PDF, and the marked
+ *  original's read): past OPS_MS, or capped (OPS_CAP, GLYPHS_PAGE).
+ *  Past it every later page is dark unread (stats.timedOut), so that a paper whose every page stalls costs GIVEN_UP_MAX
+ *  times OPS_MS, not its pages' (10,000 pages of 10 s each: 28 hours, and as many parses left running where PDF.js cannot
+ *  cancel one). A count, no clock of the paper's: which pages are dark hangs on the pages before them alone, as each page's
+ *  own verdict does. The corpus's 3,036 pages hold none over a cap, the heaviest 146,115 operations; no paper has more than
+ *  three pages of 50,000 operations or one of 100,000 (2608.12606, 2608.18626, 2608.27728, 2608.08880), each read in under
+ *  3 s on a laptop */
+export const GIVEN_UP_MAX = 8
 /** a promise's value, or null where it does not come within `ms` or fails */
 export function within(promise, ms) {
   let timer

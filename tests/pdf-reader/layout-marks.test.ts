@@ -8,7 +8,7 @@ import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
-import { GLYPHS_PAGE, OPS_MS } from '@/pdf-reader/engine/layout/ink.mjs'
+import { GIVEN_UP_MAX, GLYPHS_PAGE, OPS_MS } from '@/pdf-reader/engine/layout/ink.mjs'
 import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
@@ -959,6 +959,21 @@ describe('reading the marked original', () => {
     expect(rowOf(capped, 'p1.1a')).toEqual(rowOf(want, 'p1.1a'))
     // and nothing of the kind on the pages as they are
     expect(want.dark).toEqual({ timedOut: [], capped: [] })
+  }, 60_000)
+
+  it('past GIVEN_UP_MAX pages given up on, every later page of the marked read is dark unread, its operator list never asked', async () => {
+    const n = GIVEN_UP_MAX + 3
+    const pg = { view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown: [['see', 72, 700]] as Shown[] }
+    const base = streamDocument(Array.from({ length: n }, () => pg), [])
+    const asked: number[] = []
+    const stuck = { ...base, getPage: async (k: number) => { const p = await base.getPage(k); return { ...p, getOperatorList: () => { asked.push(k); return new Promise(() => {}) } } } }
+    vi.useFakeTimers()
+    const reading = readMarked(stuck, '', { engine: 'pdflatex', units: [unit('para', [text('see')])], OPS } as never)
+    await vi.advanceTimersByTimeAsync((GIVEN_UP_MAX + 1) * OPS_MS)
+    const got = await reading
+    vi.useRealTimers()
+    expect(asked).toEqual(Array.from({ length: GIVEN_UP_MAX }, (_, i) => i + 1))
+    expect(got.dark.timedOut).toEqual(Array.from({ length: n }, (_, i) => i + 1))
   }, 60_000)
 
   it('layoutMarksOf owns no ink off its page: the piece is written as not owned, and the file parses', async () => {

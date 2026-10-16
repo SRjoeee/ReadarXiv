@@ -16,6 +16,8 @@ export declare const OPS_CAP: number
 export declare const GLYPHS_PAGE: number
 /** a page's operator list waited for at most, in milliseconds (the layout maker's read of arXiv's PDF, the marked original's) */
 export declare const OPS_MS: number
+/** a paper's pages given up on (past OPS_MS) or capped, at most: past it every later page is dark unread (both readers) */
+export declare const GIVEN_UP_MAX: number
 /** a promise's value, or null where it does not come within `ms` or fails */
 export declare function within<T>(promise: Promise<T> | T, ms: number): Promise<T | null>
 /** a page's operator list given up on (PDF.js's own cancellation); where the PDF.js has none, a warning once (`seen`) */
