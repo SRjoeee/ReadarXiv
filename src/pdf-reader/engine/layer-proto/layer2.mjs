@@ -489,16 +489,19 @@ export function extendFirstLines(rects, pageViews, others) {
  * "Model Architecture", 1706.03762's "Encoder:"), over which the translation was laid and which it never erased; a
  * layout file's first line starts at the unit's own mark (IEEE's "Index Terms—" before it).
  * `breakAt`: a forced break's region by the key of the line TeX set after it (finishUnit), referenced: a block starts
- * at that line and counts the region before it, as one after a kept region does.
+ * at that line and counts the region before it, as one after a kept region does. `joinAt`: a forced break inside a frame,
+ * by the key of the line TeX set after it (finishUnit): that line goes on the block of the line before it, whatever the
+ * gap TeX's room opened between them (blocks2 closes it), and the gap is no pitch the next line is read by.
  */
-export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null) {
+export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null, joinAt = null) {
   const kept = r => !!keep?.has(rectKey(r))
   const blocks = []
   let cur = null
   for (const [page, x0, y0, x1, y1] of rects) {
     const prev = cur?.rects.at(-1)
-    const pitchSoFar = cur && cur.rects.length > 1 ? cur.rects.at(-2)[4] - prev[4] : prev ? (prev[4] - prev[2]) * 1.4 : 0
-    const follows = cur && cur.page === page && x0 < prev[3] && x1 > prev[1] && y1 < prev[4] && prev[2] - y1 < Math.max(pitchSoFar, (prev[4] - prev[2]) * 1.4) * 0.9
+    const pitchSoFar = cur && cur.rects.length > 1 && !joinAt?.has(rectKey(prev)) ? cur.rects.at(-2)[4] - prev[4] : prev ? (prev[4] - prev[2]) * 1.4 : 0
+    const joined = !!cur && cur.page === page && !!joinAt?.has(rectKey([page, x0, y0, x1, y1]))
+    const follows = joined || (cur && cur.page === page && x0 < prev[3] && x1 > prev[1] && y1 < prev[4] && prev[2] - y1 < Math.max(pitchSoFar, (prev[4] - prev[2]) * 1.4) * 0.9)
     if (!follows) {
       cur = { page, rects: [] }
       blocks.push(cur)
@@ -674,8 +677,8 @@ function rectStyle(uc) {
  *   placeholder's own ink, page text or kept ink in its segments, the file's own rendering), or the placeholder whose
  *   ink no source proves (`unproven`, its k: the unit is then left the original's);
  *   and the finish (finishUnit): the kept lines in regions, a forced break the source locates (`breaks`, tex.mjs
- *   forcedBreaks) a region of no lines before the line TeX set after it, each character's category (what the restore and
- *   the checker read).
+ *   forcedBreaks) inside a frame its room on the line after it (`joinAt`), one whose next line opens another frame a
+ *   region of no lines before that line, each character's category (what the restore and the checker read).
  * `charsByPage`: pageChars2's (the unit's own part of each page).
  */
 export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = null, parts = null) {
@@ -1208,17 +1211,24 @@ function finishUnit(out, unit, rects, charsByPage) {
   // numerator line it holds less of was laid over and erased)
   out.keep = [...new Set([...(out.keep ?? []), ...displayTouched(out, uc)])]
   // the kept lines in runs (regions), in the unit's order: the text after a kept placeholder starts below its region. A
-  // forced break the source locates (`breaks`: its pieces, each with the file's line TeX set after it) is a region of no
-  // lines of its own just before that line (`breakAt`, by its key), which its pieces hold: the text after it starts there
+  // forced break the source locates (`breaks`: its pieces, each with the file's line TeX set after it and TeX's room
+  // between the two) ends the laid line where its pieces are. Inside a frame its frame's pitch is kept on the line after it
+  // (`joinAt`, by its key: the rows on both sides of the gap one block, the gap closed to that pitch, blocks2) and its room
+  // on its pieces (left in the drawing's pitches after the line it ends, breakLines), so that the unit is laid on one grid at one leading and what its
+  // translation does not use of its lines is at its end. One whose next line opens another frame is a region of no lines
+  // of its own just before that line (`breakAt`, by its key), which its pieces hold: the text after it starts there
   const keepSet = new Set(out.keep ?? [])
   out.regionOf = new Map()
   out.breakAt = new Map()
-  const breakNext = new Set(out.breaks?.values() ?? []), breakOf = new Map()
+  out.joinAt = new Map()
+  const breakNext = new Set(), joinNext = new Map(), breakOf = new Map(), joined = new Set()
+  for (const { next, room, pitch } of out.breaks?.values() ?? []) { if (room === null) breakNext.add(next); else joinNext.set(next, pitch) }
   let region = -1, inRun = false
   for (const r of rects) {
     const k = rectKey(r)
-    const j = breakNext.size ? out.lineInfo.get(k)?.j : undefined
+    const j = breakNext.size || joinNext.size ? out.lineInfo.get(k)?.j : undefined
     if (j !== undefined && breakNext.has(j) && !keepSet.has(k) && !breakOf.has(j)) { region++; inRun = false; out.breakAt.set(k, region); breakOf.set(j, region) }
+    if (j !== undefined && joinNext.has(j) && !keepSet.has(k) && !joined.has(j)) { out.joinAt.set(k, joinNext.get(j)); joined.add(j) }
     if (keepSet.has(k)) { if (!inRun) region++; inRun = true; out.regionOf.set(k, region) }
     else inRun = false
   }
@@ -1229,9 +1239,13 @@ function finishUnit(out, unit, rects, charsByPage) {
     const regs = [...r.gap.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`), ...(r.gap.held ?? [])].map(k => out.regionOf.get(k)).filter(g => g !== undefined)
     if (regs.length) { r.region = Math.max(...regs); out.referenced.add(r.region) }
   }
-  for (const [i, j] of out.breaks ?? []) {
-    const r = out.get(i), g = breakOf.get(j)
-    if (!r || g === undefined) continue
+  for (const [i, { next, room }] of out.breaks ?? []) {
+    const r = out.get(i)
+    if (!r) continue
+    // (inside a frame: its room, and the line after it, by which its group's pieces are one break, tokensOf2)
+    if (room !== null) { if (joined.has(next)) Object.assign(r, { brk: true, room, brkAt: next }); continue }
+    const g = breakOf.get(next)
+    if (g === undefined) continue
     Object.assign(r, { region: g, brk: true })
     out.referenced.add(g)
   }
@@ -1994,8 +2008,15 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     const r = resolved.get(k)
     if (!r) return
-    // (a forced break the file locates, finishUnit's: the laid line ends there, and the text after it starts on the line
-    // TeX set after the original's break, as after a display)
+    // (a forced break the file locates inside a frame, finishUnit's: the laid line ends there, and TeX's room after it is
+    // left before the next line, `newline` the file's line after it, by which a group's later pieces are the same break)
+    if (r.brk && r.room !== undefined) {
+      while (tokens.at(-1)?.space) tokens.pop()
+      if (tokens.at(-1)?.newline !== r.brkAt) tokens.push({ newline: r.brkAt, room: r.room, w100: 0 })
+      return
+    }
+    // (one whose next line opens another frame: the laid line ends there, and the text after it starts on the line TeX
+    // set after the original's break, as after a display)
     if (r.brk && r.region !== undefined && resolved.referenced?.has(r.region)) {
       while (tokens.at(-1)?.space) tokens.pop()
       // (a group's later pieces are the same break)
@@ -2052,15 +2073,33 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
 
 // ---- the unit's blocks, with the original's baselines
 
-/** blocksOf's blocks, each with its lines' measured baselines (B), sizes, pitch and the free space below it */
-export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null) {
-  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt)
+/**
+ * blocksOf's blocks, each with its lines' measured baselines (B), sizes, pitch and the free space below it. A block that
+ * holds a forced break of TeX's inside its frame (`joinAt`, finishUnit's: the line after it, its frame's pitch) has its
+ * grid `G`: B with each such gap closed to that pitch, TeX's room and any opening its rule set for a tall next line with
+ * it (which the drawing's own rule opens again where its line is tall: breakLines settle), the lines after it moved up by
+ * the rest, its foot (B's last) kept. The drawing leaves the room after the line the break ends
+ * wherever its translation sets it (breakLines), so that on the original's own pitch a break the translation sets where
+ * TeX did puts the line after it on TeX's own, and the room the translation does not use of the block is at its foot.
+ * The block's pitch is its grid's.
+ */
+export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null, joinAt = null) {
+  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt, joinAt)
   const info = r => lineInfo.get(rectKey(r)) ?? lineInfo.get(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`)
   for (const b of blocks) {
     b.B = b.rects.map(r => info(r)?.baseline ?? r[2] + 0.24 * (r[4] - r[2]))
     b.exact = b.rects.map(r => !!info(r)?.exact)
     b.sizes = b.rects.map(r => info(r)?.size ?? (r[4] - r[2]) / 0.894)
-    const d = b.B.slice(1).map((y, i) => b.B[i] - y).filter(v => v > 0)
+    if (joinAt?.size && b.rects.some((r, i) => i > 0 && joinAt.has(rectKey(r)))) {
+      let up = 0
+      b.G = b.B.map((y, i) => {
+        const pitch = i > 0 ? joinAt.get(rectKey(b.rects[i])) : undefined
+        if (pitch !== undefined) up += Math.max(0, b.B[i - 1] - y - pitch)
+        return y + up
+      })
+    }
+    const G = b.G ?? b.B
+    const d = G.slice(1).map((y, i) => G[i] - y).filter(v => v > 0)
     b.pitch0 = d.length ? median(d) : null
     // (a layout file's baselines, `file`, are written to a hundredth: an evenly set block's pitch is its gaps' mean, which
     // the rounding does not move, where their median may be off by a few thousandths and its lines' slots so a line off
@@ -2183,8 +2222,10 @@ function slotsAt(blocks, st, P, s) {
     const pitch = p0 * st.lead
     const onGrid = Math.abs(st.lead - 1) < 1e-6
     const low = lows[bi]
+    // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own)
+    const G = b.G ?? b.B
     for (let k = 0; k < 400; k++) {
-      let y = onGrid ? (k < b.B.length ? b.B[k] : b.B.at(-1) - (k - b.B.length + 1) * pitch) : b.B[0] - k * pitch
+      let y = onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
       if (y < low - 0.05) break
@@ -2272,6 +2313,21 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // line: the rule only opens (a \lineskiplimit over \lineskip that would set two lines nearer is not applied). No values
   // (a file that has none, v0 alone): no line opens
   let over = null
+  // (the later slots of a line's flow from slot `from` pushed down by `push`, `above` where the slot over them was: each
+  // only as far as it then comes within its pitch of the slot above it; one pushed past its foot dropped, and the next
+  // held to the one before it, not to the slot that is gone)
+  const pushDown = (from, push, above, ref) => {
+    for (let q = from; q < slots.length; q++) {
+      const sl = slots[q]
+      if (!inFlow(sl, ref) || !(sl.baseline < above)) continue
+      const by = Math.max(0, push - Math.max(0, above - sl.baseline - sl.pitch))
+      if (!(by > 0)) break
+      if (sl.baseline - by < sl.foot - 0.05) { slots.splice(q, 1); q--; continue }
+      slots[q] = { ...sl, baseline: sl.baseline - by }
+      push = by
+      above = sl.baseline
+    }
+  }
   const settle = () => {
     if (!P.lineskip || !line?.items.length || over !== null) return
     let k = lines.length - 2
@@ -2290,20 +2346,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     const was = line.baseline
     line.baseline -= shift
     line.opened = shift
-    // (`above` and `push`: the last slot that stays, where it was and how far it moved; a slot dropped past its foot moves
-    // nothing, and the next is held to the one before it: a block's last slot dropped, the next block's first is a pitch
-    // under the line set lower, not under the slot that is gone)
-    let push = shift, above = was
-    for (let q = li + 1; q < slots.length; q++) {
-      const sl = slots[q]
-      if (!inFlow(sl, line) || !(sl.baseline < above)) continue
-      const by = Math.max(0, push - Math.max(0, above - sl.baseline - sl.pitch))
-      if (!(by > 0)) break
-      if (sl.baseline - by < sl.foot - 0.05) { slots.splice(q, 1); q--; continue }
-      slots[q] = { ...sl, baseline: sl.baseline - by }
-      push = by
-      above = sl.baseline
-    }
+    // (a block's last slot dropped, the next block's first is a pitch under the line set lower, not under the slot that is
+    // gone)
+    pushDown(li + 1, shift, was, line)
     if (line.baseline < line.foot - 0.05) { over = line.from; stop = true }
   }
   // iteration 3: the kept regions the text has passed (a break token each); the text may not run on into a block below
@@ -2320,14 +2365,43 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     }
     open()
   }
+  // (a line's trailing spaces dropped)
+  const trim = l => { while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w } }
   if (slots.length) open()
   while (i < tokens.length && li < slots.length && !stop) {
+    // a forced break of TeX's inside a frame (tokensOf2's `newline`): the laid line ends there (a line it finds empty, the
+    // text before it having filled the last, is no line of its own, as TeX's break at a full line's end sets none), and
+    // TeX's room after it, in pitches (`room`), is left before the next line, the later slots of the ended line's flow
+    // pushed down by it as TeX's rule pushes them (pushDown): the room is wherever the translation sets the break, and
+    // what the unit does not use of its slots stays at its end. A next slot in another flow (the break at a frame's
+    // foot) takes no room: TeX drops glue at a frame's head
+    if (tokens[i].newline !== undefined) {
+      const room = tokens[i].room ?? 0
+      i++
+      if (line.items.length) { trim(line); advance() }
+      if (stop || li >= slots.length || !(room > 0)) continue
+      let k = lines.length - 2
+      while (k >= 0 && !lines[k].items.length) k--
+      const prev = lines[k]
+      if (!prev || !inFlow(prev, slots[li])) continue
+      pushDown(li, room * slots[li].pitch, prev.baseline, prev)
+      // (the empty line opened on its slot before the room moved it: opened again where the slot now is, or on the next
+      // where it was dropped)
+      lines.pop()
+      if (li >= slots.length) continue
+      if ((slots[li].after ?? 0) > consumed) {
+        if (strict === true) { stop = true; continue }
+        spilled = true
+      }
+      open()
+      continue
+    }
     if (tokens[i].blockTo !== undefined) {
       const fresh = tokens[i].blockTo + 1 > consumed
       consumed = Math.max(consumed, tokens[i].blockTo + 1)
       if (flow) {
         // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
-        if (fresh && line.items.length) { while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w } advance() }
+        if (fresh && line.items.length) { trim(line); advance() }
         if ((slots[li]?.after ?? 0) < consumed) spilled = true
         i++
         continue
@@ -2339,7 +2413,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
           // (the slot by itself, not by its index: settle may drop slots of this line's flow above the display, before
           // it; the slot below the display is of another flow, which settle never moves)
           const to = slots[q]
-          while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w }
+          trim(line)
           settle()
           if (stop) break
           li = slots.indexOf(to)
@@ -2447,14 +2521,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       }
     }
     // the line is closed: its trailing spaces dropped
-    while (line.items.at(-1)?.t.space) { const sp = line.items.pop(); line.x -= sp.w; line.spaces -= sp.w }
+    trim(line)
     advance()
   }
-  for (const l of lines) while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w }
+  for (const l of lines) trim(l)
   // (the last line, settled as the others were when they closed)
   if (!stop) settle()
   // break tokens left at the end place nothing
-  while (i < tokens.length && tokens[i].blockTo !== undefined) i++
+  while (i < tokens.length && (tokens[i].blockTo !== undefined || tokens[i].newline !== undefined)) i++
   return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
