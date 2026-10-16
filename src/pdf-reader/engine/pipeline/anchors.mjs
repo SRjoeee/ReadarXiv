@@ -904,6 +904,24 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
  * reads the matches of the units whose tokens share its pages, and of those that share theirs (their walks), and the
  * frame (`frame(doc, ms)`, its rule: pageFrame, which reads every located unit)
  */
+/** placeUnits' lines of the document (runs of the stream on one baseline) and each line's tokens, made once a document: a
+ *  function of the tokens alone, which the page stream places a range at a time */
+const linesMade = new WeakMap()
+function placeLines(doc) {
+  let made = linesMade.get(doc)
+  if (made) return made
+  const line = new Int32Array(doc.length)
+  for (let k = 1, n = 0; k < doc.length; k++) {
+    const a = doc[k - 1], b = doc[k]
+    if (b.page !== a.page || Math.abs(b.y - a.y) > Math.min(a.h, b.h) * 0.5 || b.x + b.w < a.x - a.h * 30) n++
+    line[k] = n
+  }
+  const counts = new Int32Array(doc.length ? line[doc.length - 1] + 1 : 0)
+  for (let k = 0; k < doc.length; k++) counts[line[k]]++
+  made = { line, lineSize: { get: l => counts[l] } }
+  linesMade.set(doc, made)
+  return made
+}
 export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
   // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
   // is the footnote's); an unmarked unit its matched words
@@ -914,14 +932,7 @@ export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
   // a unit's words on a line where they are few count only next to a line where they are most: its first line after a
   // theorem's label or its last line of formula stay, three words it shares with a table row it passes by go (lines
   // are runs of the stream on one baseline, so two columns never share one)
-  const line = new Int32Array(doc.length)
-  for (let k = 1, n = 0; k < doc.length; k++) {
-    const a = doc[k - 1], b = doc[k]
-    if (b.page !== a.page || Math.abs(b.y - a.y) > Math.min(a.h, b.h) * 0.5 || b.x + b.w < a.x - a.h * 30) n++
-    line[k] = n
-  }
-  const lineSize = new Map()
-  for (let k = 0; k < doc.length; k++) lineSize.set(line[k], (lineSize.get(line[k]) ?? 0) + 1)
+  const { line, lineSize } = placeLines(doc)
   // each located unit's words
   const ms = units.map((_, u) => {
     const f = found[u]

@@ -86,27 +86,31 @@ export function leftOfPart(doc, units, { bounds, floating = () => false, floatMa
   return { anchors: out, read, before }
 }
 
+/** each unit's reach (leftReach's) as page intervals, for partSets: made once for the parts that read one reach */
+export const pageReach = (doc, reach) => reach.map(iv => iv.map(([lo, hi]) => [doc[lo].page, doc[hi].page]))
+
 /**
  * What the left of pages a to b reads (leftOfPart's): the units that may touch those pages (C), those that may touch theirs
  * (V1), and those that may touch V1's (V2), each { units: indices into `units`, pages: a flag a page }, from `reach`
  * (leftReach's, or any reach that holds each unit's)
  */
-export function partSets(doc, units, [a, b], reach) {
-  const pageOf = k => doc[k].page
+export function partSets(doc, units, [a, b], reach, ivs = pageReach(doc, reach)) {
   const N = doc.length ? doc[doc.length - 1].page : 0
   /** the pages a unit may reach, as page intervals */
-  const pagesOf = u => reach[u].map(([lo, hi]) => [pageOf(lo), pageOf(hi)])
+  const pagesOf = u => ivs[u]
   /** the units whose reach meets a set of pages (a flag a page), and the set of pages theirs makes */
   const meeting = pages => {
     const sum = new Int32Array(N + 2)
     for (let p = 1; p <= N; p++) sum[p] = sum[p - 1] + (pages[p] ? 1 : 0)
-    const units_ = [], next = new Uint8Array(N + 2)
+    // (the pages the units met reach, as a difference a page: a reach of the whole document costs two writes, not its pages)
+    const units_ = [], diff = new Int32Array(N + 2), next = new Uint8Array(N + 2)
     for (let u = 0; u < units.length; u++) {
       const iv = pagesOf(u)
       if (!iv.some(([x, y]) => sum[Math.min(y, N)] - sum[Math.max(x, 1) - 1] > 0)) continue
       units_.push(u)
-      for (const [x, y] of iv) for (let p = Math.max(x, 1); p <= Math.min(y, N); p++) next[p] = 1
+      for (const [x, y] of iv) { const a = Math.max(x, 1), b = Math.min(y, N); if (a <= b) { diff[a]++; diff[b + 1]-- } }
     }
+    for (let p = 1, run = 0; p <= N; p++) { run += diff[p]; if (run > 0) next[p] = 1 }
     return { units: units_, pages: next }
   }
   const part = new Uint8Array(N + 2)
@@ -209,14 +213,25 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
     isMarked: u => marked[u] === 1,
     isSettled: u => settled[u] === 1,
     run(onAnchor, onSettle) {
+      if (am > lastPage || !(bounds.size > 0 || (boundsKnown ? boundsKnown() : markedCount === n))) {
+        if (am > lastPage) for (let u = 0; u < n; u++) settle(u, onSettle)
+        return
+      }
+      // (the matches' finality and the reaches are those of the marks known now, whatever page the ranges reach)
+      const { fin, reach } = finalOf()
+      const ivs = pageReach(doc, reach)
+      const ready = (a, b) => partSets(doc, units, [a, b], reach, ivs).V2.units.every(u => fin[u])
       while (am <= lastPage) {
-        if (!(bounds.size > 0 || (boundsKnown ? boundsKnown() : markedCount === n))) return
-        const { fin, reach } = finalOf()
-        if (!partSets(doc, units, [am, am], reach).V2.units.every(u => fin[u])) return
-        const got = leftOfPart(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex }, [am, am], reach)
+        // the pages from `am` anchored in one range as far as every unit the range reads has its match final (a range's
+        // anchors are the whole paper's, as a page at a time would make them: leftOfPart)
+        if (!ready(am, am)) return
+        let to = am
+        if (fin.every(Boolean)) to = lastPage
+        else while (to < lastPage && ready(am, to + 1)) to++
+        const got = leftOfPart(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex }, [am, to], reach)
         for (const id of got.before) if (!settled[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
         for (const [id, an] of got.anchors) settle(id, u => onAnchor(u, an))
-        am++
+        am = to + 1
         reach.forEach((iv, u) => { if (!settled[u] && fin[u] && iv.every(([, hi]) => doc[hi].page < am)) settle(u, onSettle) })
       }
       for (let u = 0; u < n; u++) settle(u, onSettle)
