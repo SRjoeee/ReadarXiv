@@ -122,3 +122,24 @@ describe('links moved over a run', () => {
     expect(without.linkStats.unread).toBe(PAGES)
   })
 })
+
+// openProto reads each font's map through fontMappedOf (layer2.mjs): a document opened without PDF_OPTIONS (a non-Type3
+// font with no `toUnicode` key) is refused when a page's fonts are read, never drawn as one whose fonts have no map. The
+// test holds the call in run.mjs: take it out and the first case resolves
+describe('openProto and the font maps', () => {
+  const fontsAre = (font: object) => {
+    const P = paper()
+    const getPage = P.doc.getPage
+    P.doc.getPage = async (n: number) => ({ ...(await getPage(n)), commonObjs: { get: () => font } }) as never
+    return P
+  }
+  it('a document opened without PDF_OPTIONS throws the PDF_OPTIONS error as page 1 is laid', async () => {
+    const run = await open(fontsAre({ name: 'Times-Roman', isType3Font: false }))
+    await expect(run.layFor(1)).rejects.toThrow(/PDF_OPTIONS/)
+  })
+  it('the same document opened with them (the font carries its map, here none to read) is laid', async () => {
+    const run = await open(fontsAre({ name: 'Times-Roman', isType3Font: false, toUnicode: undefined }))
+    await run.layFor(1)
+    expect(run.rows[0]!.markup.length).toBeGreaterThan(0)
+  })
+})
