@@ -8,32 +8,33 @@
 // Each check has a positive control: the same assertion, run where its target is removed, must fail (a `control:` line, or
 // a check that is false before the change it is about and true after it). A check that cannot fail checks nothing.
 //
-// What it holds today, on the reader that ships (the experiment's, which frames the TeX page for a translated view):
+// What it holds, on the reader that ships (the reading view on the layer, Stage 5):
 //   - the guard and the stand-in on its hosts, in a real browser;
 //   - entries: the PDF page opens the reader on the sample, and so do its floating button's panel and the popup;
-//   - viewer faults, those that need no translated view: the original display finishes loading, a link out of the paper
-//     opens in a new tab, and a PDF that cannot be fetched (an error, nothing, a page that is no PDF) says so and mends;
-//   - reader settings: the display and the sync follow the extension's settings and are written back.
-//   - the reading view, on its development entry (?layer=1): the original on both panes, the places at the left's page boxes
-//     and what they show, the follower levelling the pair at rest, a zoom, a pinch over the right, a narrow window;
-//   - the reading view on the layer (?layer=1, its layer side): the sample cut into BUNDLE 4's objects (lib/layer-cut.mjs),
-//     told from the stand-in's 202s and catalog, its objects fetched by digest, a translation's rows taken: the pages laid on
-//     the right in place, the original until then, the place kept, the highlight on both panes (the left's part fetched on
-//     the first want alone), a figure lit whole, the dark look, the contents and the heading read, the pair level.
-// To come with the layer reader (Tasks 7 to 12): the reader's states on the layer (preparing, drawn, a unit lit, a
-// refusal), the faults of the layer API (refused, none, 5xx, nothing, which the stand-in already answers) and the
-// reading place kept between displays. The shipped reader's translated displays, which need the TeX page, are not checked.
+//   - viewer faults: the original display finishes loading, a link out of the paper opens in a new tab, and a PDF that
+//     cannot be fetched (an error, nothing, a page that is no PDF) says so and mends;
+//   - reader settings: the display and the sync follow the extension's settings and are written back;
+//   - the reading view, its layer held back: the original on both panes, the places at the left's page boxes and what they
+//     show, the follower levelling the pair at rest, a zoom, a pinch over the right, a narrow window;
+//   - the reader on the layer: the sample cut into BUNDLE 4's objects (lib/layer-cut.mjs), prepared by the stand-in
+//     (a GET's 404, the run's prepare, the 202s with the objects made so far, the catalog), its objects fetched by digest,
+//     the extension's own translation (the echo endpoint) taken as rows: the pages laid on the right in place, the original
+//     until then, the highlight on both panes (the left's part fetched on the first want alone), a figure lit whole, the dark
+//     look, the links (named, reached by Tab, followed by Enter on the left's document, out of the paper through the host,
+//     axe's link-name, kept through a zoom), the contents and the heading read, the pair level, the window;
+//   - the reader's states on the layer: none for the paper, refused, a server error, a reset and its retry, and arXiv's
+//     bytes not the layer's base (our copy shown).
 //
-// Usage: AXT_READER_VIEW=1 pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
-// The build is asked for the reading view's development entry (AXT_READER_VIEW=1, wxt.config.ts), which a release build
-// leaves out: a build without it fails the view's section, saying so.
+// Usage: pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
 import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import AxeBuilder from '@axe-core/playwright'
+import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
 import { readBundle, VTAG } from '../../src/pdf-reader/engine/layer-proto/bundle.mjs'
 import { CTAG4 } from '../../src/pdf-reader/engine/layer-proto/format.mjs'
-import { cutSample, rowsOf, sampleFiles } from './lib/layer-cut.mjs'
+import { cutSample, sampleFiles } from './lib/layer-cut.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { launchWithReader } from './lib/extension.mjs'
@@ -49,20 +50,23 @@ const SHOTS = `${HERE}.shots`
 // ---- the paper, and the stand-in of the layer API over it
 /** the sample as BUNDLE 4's objects, which the stand-in serves under CTAG4 beside BUNDLE 3's bundle */
 const sampleCut = await cutSample(sampleFiles())
-const api = layerApi({ layer4: sampleCut })
-/** a face for the layer's Latin text, of the PDF.js package this tree holds (the extension's served faces are its run's, PR 5) */
+/** a face for the layer's Latin text, of the PDF.js package this tree holds: the stand-in's faces' table serves every face of
+ *  the role table as one slice of it (the reader's target German, whose text it holds) */
 const LATIN_FACE = readFileSync(fileURLToPath(new URL('../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url)))
+const api = layerApi({ layer4: sampleCut, faces: { ids: Object.keys(FACES), ranges: [32, 126, 160, 255, 0x2010, 0x2027], bytes: new Uint8Array(LATIN_FACE) } })
 const { sample } = api
 const PAPER = sample.id
 const TITLE = 'Counting Lattice Paths Around Blocked Cells'
 const bundle = readBundle(sample.bundle)
-const ABSTRACT_PAGE = `<!doctype html><title>stand-in abstract</title><meta name="citation_title" content="${TITLE}">`
+// (with its submission history, as arXiv's has: the version the reader asks the layer for, the address naming none)
+const ABSTRACT_PAGE = `<!doctype html><title>stand-in abstract</title><meta name="citation_title" content="${TITLE}"><div class="submission-history"><strong>[v${sample.version}]</strong></div>`
 /** the hosts of the layer API: production's, and staging's where the build names it (the extension's page for the website) */
 const manifest = readFileSync(`${BUILD}/manifest.json`, 'utf8')
 const LAYER_HOSTS = ['https://readarxiv.com', ...['https://app-staging.readarxiv.org'].filter(host => manifest.includes(host))]
 const LINK = 'https://example.invalid/sample-1'
-/** whether the build holds the reading view's development entry: its places' code, in a chunk (wxt.config.ts READER_VIEW) */
+/** whether the build holds the reading view: its places' code, in a chunk */
 const viewBuilt = readdirSync(`${BUILD}/chunks`).some(f => f.endsWith('.js') && readFileSync(`${BUILD}/chunks/${f}`, 'utf8').includes('axt-place-view'))
+if (!viewBuilt) throw new Error(`no chunk of ${BUILD} holds the reading view: build it with pnpm build`)
 /** the panel's and the popup's two entries, by their words in either interface language */
 const ENTRY = { html: /Translate HTML|HTML 翻译/, pdf: /Translate PDF|PDF 翻译/ }
 
@@ -101,6 +105,8 @@ const arxiv = (route, url) => {
     case 'not a PDF': return route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><p>This is no PDF</p>' })
     case 'cut short': return route.fulfill({ status: 200, contentType: 'application/pdf', body: Buffer.from(sample.pdf.subarray(0, 5000)) })
     case 'reset': return route.abort('connectionreset')
+    // the PDF as arXiv may serve it rebuilt: other bytes than the layer's base (a comment after its end)
+    case 'other': return route.fulfill({ status: 200, contentType: 'application/pdf', body: Buffer.concat([Buffer.from(sample.pdf), Buffer.from('\n% rebuilt\n')]) })
     default: throw new Error(`no such answer: ${pdfAnswer}`)
   }
 }
@@ -128,14 +134,9 @@ const guard = await routeTable(context, [
   ['https://example.invalid', outside],
   ['https://tex.readarxiv.org', tex],
   [echo.origin, route => route.continue()],
-  // (the stand-in's three routes only: any other path of these hosts is not handled, and so is a violation of the guard)
-  ...LAYER_HOSTS.map(host => [host, (route, url) => {
-    if (serves(url.pathname)) return api.route(route)
-    // the site's face the layer side is given, and no hyphenation patterns (the layer draws without them)
-    if (url.pathname === '/fonts/LiberationSans-Regular.ttf') return route.fulfill({ status: 200, contentType: 'font/ttf', headers: { 'access-control-allow-origin': '*' }, body: LATIN_FACE })
-    if (/^\/hyph\/[a-z-]+\.json$/.test(url.pathname)) return route.fulfill({ status: 404, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"why":"none"}' })
-    return false
-  }]),
+  // (the stand-in's routes only — the layer API, the faces' table and its file, the hyphenation —: any other path of these hosts
+  // is not handled, and so is a violation of the guard)
+  ...LAYER_HOSTS.map(host => [host, (route, url) => (serves(url.pathname) ? api.route(route) : false)]),
 ])
 console.log(`route table: ${guard.hosts.join(', ')}`)
 console.log(`echo endpoint at ${echo.baseURL}; the layer API's bundle key ${VTAG}`)
@@ -143,6 +144,8 @@ console.log(`echo endpoint at ${echo.baseURL}; the layer API's bundle key ${VTAG
 for (let tries = 0; tries < 50 && !(await worker.evaluate(() => chrome.storage.local.get('config').then(r => !!r.config))); tries++) await sleep(200)
 // (a service's id is `svc-` and eight of [a-z0-9], or the stored settings cannot be read and the extension runs on its defaults)
 await seedService(worker, { id: 'svc-e2eecho0', name: 'echo', baseURL: echo.baseURL, model: 'local-echo' })
+// the layer's target: German, whose text the stand-in's one Latin face holds (a CJK target would leave every unit the original's)
+await worker.evaluate(async () => { const { config } = await chrome.storage.local.get('config'); await chrome.storage.local.set({ config: { ...config, targetLanguage: 'deu' } }) })
 
 const pageErrors = []
 const track = page => { page.on('pageerror', e => pageErrors.push(e.message)); return page }
@@ -363,8 +366,10 @@ try {
         return { ok: complete, detail: await page.evaluate(() => document.readyState).catch(() => 'no document') }
       } finally { await page.close() }
     }
+    // (framed by arXiv's page, as the PDF page frames it: the extension's own pages frame nothing, frame-src 'none')
     const framedLoadOf = async (frameUrl, timeout = 15_000) => {
-      const host = await extensionPage()
+      const host = track(await context.newPage())
+      await host.goto(`https://arxiv.org/abs/${PAPER}`)
       try {
         const loaded = await host.evaluate(({ url, timeout }) => new Promise(resolve => {
           const f = Object.assign(document.createElement('iframe'), { src: url })
@@ -379,7 +384,7 @@ try {
     const loaded = await loadsOf(original)
     check('the original display finishes loading though nothing is translated', loaded.ok, loaded.detail)
     const framed = await framedLoadOf(original)
-    check('framed by an extension page, as arXiv\'s PDF page frames it, its frame fires load', framed.ok, framed.detail)
+    check('framed by arXiv\'s page, as its PDF page frames it, its frame fires load', framed.ok, framed.detail)
     const never = [await loadsOf('https://example.invalid/never', 2500), await framedLoadOf('https://example.invalid/never', 2500)]
     control('a document that never comes does not finish loading, nor does its frame fire load', { ok: never.some(r => r.ok), detail: never.map(r => r.detail).join('; ') })
 
@@ -523,7 +528,8 @@ try {
     check('unreadable settings: a refused write says so, and it was not so before', unreadableBefore === false && after.settingsUnreadable === true, `before ${unreadableBefore}, after ${after.settingsUnreadable}`)
     check('unreadable settings: the display chosen holds', displayBefore !== 'original' && after.display === 'original', `${displayBefore}, then ${after.display}`)
     check('unreadable settings: nothing thrown', errors.length === 0, errors.join('; '))
-    const d = await open()
+    // (in the original: settings that cannot be read stand in the defaults, whose service is none the route table names)
+    const d = await open({ mode: 'original' })
     check('unreadable settings: a reader opened on them knows at once', (await readerState(d)).settingsUnreadable === true)
     control('a reader that was open before, and has written nothing, does not know it yet', { ok: (await readerState(a)).settingsUnreadable === true, detail: `settingsUnreadable ${(await readerState(a)).settingsUnreadable}` })
     await d.close()
@@ -547,15 +553,16 @@ try {
     for (const page of [a, b, c, e]) await page.close()
   }
 
-  // ------------------------------------------------------------------------------- the reading view, its development entry
-  section('the reading view (?layer=1): the original on both panes, the places, the follower, zoom, pinch, narrow')
-  if (!viewBuilt) check('the build holds the reading view\'s development entry: build it with AXT_READER_VIEW=1 pnpm build', false, `no chunk of ${BUILD} holds the places`)
-  else {
-    const page = await openReader({ layer: '1', mode: 'bilingual' })
+  // ------------------------------------------------------------------------------------------------ the reading view
+  section('the reading view, its layer held back: the original on both panes, the places, the follower, zoom, pinch, narrow')
+  {
+    // (the layer API answers nothing for this section: the places show the original's pages, as before a layer comes)
+    api.set({ layer: mode.hang() })
+    const page = await openReader({ mode: 'bilingual' })
     const probe = () => page.evaluate(() => window.__reader.view.probe())
     const opened = await page.waitForFunction(() => window.__reader?.view?.probe().original === 'open', null, { timeout: 30_000 }).then(() => true, () => false)
     const p0 = opened ? await probe() : {}
-    check('the development entry opens the sample in the view: the left\'s pages, a place for each on the right, one loading task', opened && p0.pages === bundle.paper.pages && p0.places === bundle.paper.pages && p0.tasks === 1 && p0.opens === 1, JSON.stringify({ pages: p0.pages, places: p0.places, tasks: p0.tasks }))
+    check('the reader opens the sample in the view: the left\'s pages, a place for each on the right, one loading task', opened && p0.pages === bundle.paper.pages && p0.places === bundle.paper.pages && p0.tasks === 1 && p0.opens === 1, JSON.stringify({ pages: p0.pages, places: p0.places, tasks: p0.tasks }))
     // the sample's PDF has no title of its own: the host's fallback, the abstract page's citation_title
     const titled = await page.waitForFunction(t => window.__reader.controller.getState().paper.title === t, TITLE, { timeout: 10_000 }).then(() => true, () => false)
     check('the paper\'s title, which its PDF lacks, is the abstract page\'s, through the host', titled && asked.arxiv.includes('GET /abs'), `${await page.evaluate(() => window.__reader.controller.getState().paper.title)}`)
@@ -634,65 +641,53 @@ try {
     if (drawn) await out.first().click()
     const tab = await tabbed
     await tab?.waitForLoadState('load').catch(() => undefined)
-    check('a link out of the paper on the right opens in a new tab through the host, the reader staying where it is', drawn && tab?.url() === LINK && page.url().includes('layer=1'), `drawn ${drawn}, opened ${tab?.url() ?? 'nothing'}`)
+    check('a link out of the paper on the right opens in a new tab through the host, the reader staying where it is', drawn && tab?.url() === LINK && page.url().includes('pdf-reader.html'), `drawn ${drawn}, opened ${tab?.url() ?? 'nothing'}`)
     await tab?.close()
     await page.screenshot({ path: `${SHOTS}/reader-view.png` })
     await page.close()
+    api.set({ layer: mode.ready() })
+    await api.release()
   }
 
-  // --------------------------------------------------------------------------------- the reading view on the layer (VC)
-  section('the reading view on the layer (?layer=1): the pages laid on the right, the original until then, the place kept, the highlight on both panes, the contents')
-  if (!viewBuilt) check('the build holds the reading view\'s development entry: build it with AXT_READER_VIEW=1 pnpm build', false, `no chunk of ${BUILD} holds the places`)
-  else {
-    const page = await openReader({ layer: '1', mode: 'bilingual' })
+  // ------------------------------------------------------------------------------------------ the reader on the layer
+  section('the reader on the layer: prepared, laid on the right as the extension translates, the original until then, the place kept, the highlight on both panes, the contents, the links')
+  {
+    // a paper not prepared yet: the run's GET says so, it asks the prepare, the 202s carry the objects made so far, then the catalog
+    api.set({ layer: mode.preparing(2500, { begun: false }) })
+    const asked0 = api.requests.length
+    const page = await openReader({ mode: 'bilingual' })
     const probe = () => page.evaluate(() => window.__reader.view.probe())
-    const side = () => page.evaluate(() => window.__reader.side?.probe() ?? null)
+    const side = () => page.evaluate(() => window.__reader.side()?.probe() ?? null)
+    // the phases the reader passes through, read as they come
+    await page.waitForFunction(() => !!window.__reader?.controller, null, { timeout: 30_000 }).catch(() => undefined)
+    await page.evaluate(() => { window.__phases = []; const c = window.__reader.controller; const tell = () => { const p = c.getState().phase; if (window.__phases.at(-1) !== p) window.__phases.push(p) }; tell(); c.subscribe(tell) })
     const opened = await page.waitForFunction(() => window.__reader?.view?.probe().original === 'open', null, { timeout: 30_000 }).then(() => true, () => false)
-    check('the development entry opens the sample in the view', opened, JSON.stringify(opened ? await probe() : {}))
-    await page.waitForTimeout(600)
-    // the main thread's long tasks while the layer works: a reading (L7 is reader-perf's, on a quiet machine)
+    check('the reader opens the sample in the view', opened, JSON.stringify(opened ? await probe() : {}))
     await page.evaluate(() => { window.__long = []; new PerformanceObserver(l => { for (const e of l.getEntries()) window.__long.push(Math.round(e.duration)) }).observe({ type: 'longtask' }) })
     const objectsAsked = () => api.requests.filter(r => /\/o\/[0-9a-f]{64}$/.test(r.path)).map(r => r.path.slice(-64))
     const lefts = new Set(Object.values(sampleCut.leftRefs))
-    const opts = { api: 'https://readarxiv.com', paper: { id: PAPER, version: sample.version }, target: 'de', faces: [{ url: 'https://readarxiv.com/fonts/LiberationSans-Regular.ttf', ranges: [32, 126, 160, 255] }] }
-    await page.evaluate(o => window.__reader.openSide(o), opts)
     /** what each place shows: the layer (its copy drawn, its SVG's text), the original's page view, nothing */
     const shown = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => {
       const l = p.querySelector('.axt-place-view > .axt-layer')
       return { layer: p.hasAttribute('data-axt-layer'), copy: l?.querySelector('canvas.axt-layer-copy')?.width ?? 0, text: l?.querySelector('svg')?.textContent ?? '', original: !!p.querySelector('.axt-place-view > .page canvas') }
     }))
+    await page.waitForFunction(() => !!document.querySelector('#right .axt-place .axt-place-view > .page canvas'), null, { timeout: 15_000 }).catch(() => undefined)
     const s0 = await shown()
-    check('before the layer is told, the places near the view show the original\'s page view, none the layer', s0[0]?.original && s0.every(p => !p.layer), JSON.stringify(s0.map(p => p.original)))
-
-    // the look: 202s with the objects made so far, then the catalog, each told to the side as the extension's run will
-    api.set({ layer: mode.preparing(1600) })
-    const look = () => page.evaluate(async path => {
-      const r = await fetch(path, { credentials: 'omit' }), body = await r.json()
-      if (r.status === 202 && body.layer) window.__reader.side.tell(body.layer)
-      if (r.status === 200) window.__reader.side.tell({ head: body.head, units: body.units, parts: body.parts, end: body.end })
-      return { status: r.status, parts: body.layer?.parts?.length ?? body.parts?.length ?? 0 }
-    }, `https://readarxiv.com/api/v1/layer/${sample.segment}/${CTAG4}`)
-    const looks = []
-    for (let i = 0; i < 12; i++) { const a = await look(); looks.push(a); if (a.status === 200) break; await page.waitForTimeout(400) }
-    api.set({ layer: mode.ready() })
-    await page.waitForFunction(() => window.__reader.side.probe().ended === true, null, { timeout: 15_000 }).catch(() => undefined)
-    const p1 = await side()
-    check('the look\'s 202s carry the objects made so far, the catalog the rest: the side reads them all, its parts through the end', looks.some(a => a.status === 202 && a.parts > 0) && looks.at(-1)?.status === 200 && p1?.ended === true && p1?.parts === sampleCut.refs.parts.length, `${JSON.stringify(looks)} ${JSON.stringify(p1)}`)
-    // no row yet: every page waits for its rows, and its place keeps the original's page
-    await page.waitForTimeout(500)
-    const s1 = await shown()
     const before = await page.evaluate(() => { const p = document.querySelector('#right .axt-place'), r = p.getBoundingClientRect(); return { scroll: document.getElementById('right').scrollTop, box: [r.top, r.width, r.height] } })
-    check('the parts in, no row yet: the places the original\'s, none laid', s1[0]?.original && s1.every(p => !p.layer) && (await side())?.ready === 0, JSON.stringify((await side())))
-    // the rows, in two batches, then their end
-    const rows = rowsOf(sampleCut.index, 'de', (id, text) => `Ubersetzt ${id} ${text.replace(/[^A-Za-z0-9 ,.]/g, '').slice(0, 40)}`)
-    await page.evaluate(r => window.__reader.side.take(r), rows.slice(0, rows.length >> 1))
-    await page.evaluate(r => { window.__reader.side.take(r); window.__reader.side.end() }, rows.slice(rows.length >> 1))
-    const laid = await page.waitForFunction(() => { const l = document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer'); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 && /Ubersetzt/.test(l.querySelector('svg')?.textContent ?? '') }, null, { timeout: 30_000 }).then(() => true, () => false)
+    check('while the paper is prepared, the places near the view show the original\'s page view, none the layer', s0[0]?.original && s0.every(p => !p.layer), JSON.stringify(s0.map(p => p.original)))
+    const laid = await page.waitForFunction(() => { const l = document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer'); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 && /\[echo\]/.test(l.querySelector('svg')?.textContent ?? '') }, null, { timeout: 60_000 }).then(() => true, () => false)
+    // (the first page may be laid before the catalog: its part came with a 202)
+    await page.waitForFunction(() => window.__reader.side()?.probe().ended === true, null, { timeout: 30_000 }).catch(() => undefined)
+    const layerAsked = api.requests.slice(asked0).filter(r => r.path.startsWith(`/api/v1/layer/${sample.segment}/${CTAG4}`) && !/\/o\//.test(r.path)).map(r => `${r.method} ${r.answered}`)
+    const phases = await page.evaluate(() => window.__phases)
+    check('the run asks the layer, then its prepare once, follows the 202s to the catalog, and the reader says it is preparing meanwhile', layerAsked[0] === 'GET 404' && layerAsked.filter(a => a.startsWith('POST')).length === 1 && layerAsked.some(a => a === 'GET 202') && layerAsked.at(-1) === 'GET 200' && phases.includes('preparing'), `${layerAsked.join(', ')}; phases ${phases.join(' > ')}`)
     const s2 = await shown()
-    check('the rows taken: the page laid on the right in place, its copy drawn and its translation drawn as text, no page view left in it', laid && s2[0]?.layer && !s2[0]?.original, JSON.stringify({ ...s2[0], text: s2[0]?.text.slice(0, 60) }))
-    control('a place the layer has not drawn shows no translation: the last page, far from the view', { ok: /Ubersetzt/.test(s2.at(-1)?.text ?? ''), detail: JSON.stringify(s2.at(-1)) })
+    check('the extension\'s translation taken: the page laid on the right in place, its copy drawn and its translation drawn as text, no page view left in it', laid && s2[0]?.layer && !s2[0]?.original, JSON.stringify({ ...s2[0], text: s2[0]?.text.slice(0, 60) }))
+    control('a place the layer has not drawn shows no translation: the last page, far from the view', { ok: /\[echo\]/.test(s2.at(-1)?.text ?? ''), detail: JSON.stringify(s2.at(-1)) })
     const after = await page.evaluate(() => { const p = document.querySelector('#right .axt-place'), r = p.getBoundingClientRect(); return { scroll: document.getElementById('right').scrollTop, box: [r.top, r.width, r.height] } })
     check('laid in place: the place\'s box and the pane\'s scroll as they were', JSON.stringify(after) === JSON.stringify(before), `${JSON.stringify(before)} then ${JSON.stringify(after)}`)
+    const p1 = await side()
+    check('the side read every object: its parts through the end', p1?.ended === true && p1?.parts === sampleCut.refs.parts.length, JSON.stringify(p1))
 
     // the highlight: nothing of the left fetched before the pointer wants a page (trap 2); a want over the right fetches it once
     check('nothing of the left is fetched before the pointer wants a page', objectsAsked().filter(x => lefts.has(x)).length === 0, `${objectsAsked().length} objects fetched`)
@@ -723,11 +718,11 @@ try {
     check('the pointer over the left lights the unit on both panes; the page\'s left part not fetched again', lightLeft && h2.left > 0 && h2.right > 0 && objectsAsked().filter(x => lefts.has(x)).length === 1, JSON.stringify(h2))
     // the dark look: the layer's text dimmed by the reader's filter, its copy by the page canvas's, the wash over the layer screened
     await page.evaluate(() => document.documentElement.setAttribute('data-axt-dim', ''))
-    const dark = await page.evaluate(() => ({ svg: getComputedStyle(document.querySelector('#right .axt-layer > svg')).filter, copy: getComputedStyle(document.querySelector('#right .axt-layer > canvas')).filter, wash: getComputedStyle(document.querySelector('#right .axt-hl') ?? document.body).mixBlendMode }))
-    check('the dark look over the layer: its SVG and its copy dimmed alike, the wash screened', /invert/.test(dark.svg) && dark.svg === dark.copy && dark.wash === 'screen', JSON.stringify(dark))
+    const dark = await page.evaluate(() => { const css = sel => (document.querySelector(sel) ? getComputedStyle(document.querySelector(sel)) : null); return { svg: css('#right .axt-layer > svg')?.filter ?? null, copy: css('#right .axt-layer > canvas')?.filter ?? null, wash: css('#right .axt-hl')?.mixBlendMode ?? null, links: css('#right .axt-layer > .axt-links')?.filter ?? null } })
+    check('the dark look over the layer: its SVG and its copy dimmed alike, the wash screened, the links not inverted', /invert/.test(dark.svg) && dark.svg === dark.copy && dark.wash === 'screen' && dark.links === 'none', JSON.stringify(dark))
     await page.screenshot({ path: `${SHOTS}/reader-layer-dark.png` })
     await page.evaluate(() => document.documentElement.removeAttribute('data-axt-dim'))
-    // a figure: its caption lights the float whole, on both panes
+    // a figure: its caption lights its float whole, on both panes
     const caption = sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'caption')
     if (caption) {
       await page.mouse.move(5, 5)
@@ -743,19 +738,73 @@ try {
       await page.screenshot({ path: `${SHOTS}/reader-layer-float.png` })
     }
 
+    // ---- the links (3b): real links over the laid pages, in reading order, named, reached by Tab, followed by Enter
+    await page.mouse.move(5, 5)
+    await page.evaluate(() => window.__reader.controller.goToPage('right', 1))
+    await page.waitForTimeout(1200)
+    const linkInfo = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-layer .axt-links a.axt-link')].map(a => ({ name: a.getAttribute('aria-label'), href: a.getAttribute('href'), page: Number(a.closest('.axt-place')?.dataset.pageNumber), boxes: a.querySelectorAll(':scope > span.axt-link-box').length })))
+    await page.waitForFunction(() => document.querySelectorAll('#right .axt-layer .axt-links a.axt-link').length > 0, null, { timeout: 15_000 }).catch(() => undefined)
+    const links = await linkInfo()
+    check('the laid pages carry their links: an anchor each, named, with its boxes, inside the paper or out of it', links.length > 0 && links.every(l => l.name && l.boxes > 0) && links.some(l => l.href?.startsWith('#')), JSON.stringify(links.slice(0, 6)))
+    // Tab from the toolbar reaches a link of the right's layer, its ring the reader's
+    await page.evaluate(() => { const b = [...document.querySelectorAll('header button, header a')].filter(e => e.offsetParent).at(-1); b?.focus() })
+    let tabs = 0, reached = null
+    for (; tabs < 400 && !reached; tabs++) {
+      await page.keyboard.press('Tab')
+      reached = await page.evaluate(() => { const a = document.activeElement; return a?.matches?.('#right a.axt-link') ? { name: a.getAttribute('aria-label'), ring: getComputedStyle(a.querySelector('span.axt-link-box')).outlineStyle, width: getComputedStyle(a.querySelector('span.axt-link-box')).outlineWidth } : null })
+    }
+    check('Tab reaches a link of the laid page, after the left\'s, its focus ring drawn (2 px, solid)', !!reached && reached.ring === 'solid' && reached.width === '2px', `${tabs} Tab(s): ${JSON.stringify(reached)}`)
+    // Enter on a link inside the paper: the right jumps (the pane it is on), the left follows with the sync on, nothing levelled
+    const internal = await page.evaluate(() => { const a = [...document.querySelectorAll('#right a.axt-link[href^="#"]')][0]; a?.focus(); return a ? a.getAttribute('aria-label') : null })
+    const jumpFrom = await page.evaluate(() => ({ right: document.getElementById('right').scrollTop, align: window.__reader.view.probe().lastAlign }))
+    await page.keyboard.press('Enter')
+    await page.waitForFunction(y => document.getElementById('right').scrollTop !== y, jumpFrom.right, { timeout: 5000 }).catch(() => undefined)
+    await page.waitForFunction(() => window.__reader.view.probe().motion === null, null, { timeout: 5000 }).catch(() => undefined)
+    await page.waitForTimeout(900)
+    const jumped = await page.evaluate(() => ({ right: document.getElementById('right').scrollTop, ...(({ driver, levelError, lastAlign }) => ({ driver, levelError, lastAlign }))(window.__reader.view.probe()), focus: document.activeElement?.className ?? '' }))
+    check('Enter on a link inside the paper: the right jumps to its destination (resolved on the left\'s document), the left follows level, and the jump levels nothing of its own', internal !== null && jumped.right !== jumpFrom.right && jumped.driver === 'right' && Math.abs(jumped.levelError ?? 999) <= 24 && jumped.lastAlign === jumpFrom.align, `“${internal}”: ${JSON.stringify(jumpFrom)} then ${JSON.stringify(jumped)}`)
+    // with the sync off, the same jump leaves the left where it is
+    await page.evaluate(() => window.__reader.controller.setSync(false))
+    await page.evaluate(() => window.__reader.controller.goToPage('right', 1))
+    await page.waitForTimeout(1200)
+    const leftBefore = await page.evaluate(() => document.getElementById('left').scrollTop)
+    await page.evaluate(() => { const a = [...document.querySelectorAll('#right a.axt-link[href^="#"]')][0]; a?.click() })
+    await page.waitForTimeout(1200)
+    const offJump = await page.evaluate(() => ({ left: document.getElementById('left').scrollTop }))
+    control('with the sync off a link\'s jump does not move the left: the follow-check fails there', { ok: offJump.left !== leftBefore, detail: `left ${leftBefore} then ${offJump.left}` })
+    await page.evaluate(() => window.__reader.controller.setSync(true))
+    // a link out of the paper: through the host alone, a new tab with no opener, the reader kept
+    const outside = await page.evaluate(() => !!document.querySelector('#right a.axt-link[href^="http"]'))
+    if (outside) {
+      const tabbed = context.waitForEvent('page', { timeout: 10_000 }).catch(() => null)
+      await page.evaluate(() => document.querySelector('#right a.axt-link[href^="http"]')?.click())
+      const tab = await tabbed
+      await tab?.waitForLoadState('load').catch(() => undefined)
+      const opener = tab ? await tab.evaluate(() => window.opener === null).catch(() => null) : null
+      check('a link of the layer out of the paper opens in a new tab through the host, with no opener, the reader staying', !!tab && opener === true && page.url().includes('pdf-reader.html'), `opened ${tab?.url() ?? 'nothing'}, no opener ${opener}`)
+      await tab?.close()
+    } else note('the laid pages near the view hold no link out of the paper (the sample\'s \\href is elsewhere)')
+    // the links name themselves to assistive technology: axe's link-name over the right, none failing
+    const axe = await new AxeBuilder({ page }).include('#right .axt-links').withRules(['link-name', 'nested-interactive', 'aria-hidden-focus']).analyze().catch(e => ({ violations: [{ id: `axe did not run: ${e.message}` }] }))
+    check('axe over the layer\'s links: no link without a name, none hidden while focusable', axe.violations.length === 0, axe.violations.map(v => v.id).join(', ') || 'none')
+    // a zoom: each link keeps its place on the page, by shares (nothing measured)
+    const rel = () => page.evaluate(() => { const a = document.querySelector('#right a.axt-link'), p = a?.closest('.axt-place')?.getBoundingClientRect(), r = a?.querySelector('span.axt-link-box')?.getBoundingClientRect(); return p && r ? [(r.left - p.left) / p.width, (r.top - p.top) / p.height, r.width / p.width, r.height / p.height] : null })
+    const r0 = await rel()
+
     // the zoom keeps the place; the laid pages' copies are drawn again at the new k, none laid again
     const pz = await side()
     await page.evaluate(() => window.__reader.controller.zoomTo(1.5))
     await page.waitForTimeout(1600)
-    const z = await probe(), pz2 = await side()
+    const z = await probe(), pz2 = await side(), r1 = await rel()
     check('a zoom: the left and the places at 1.5, the laid pages\' copies drawn again, no page asked again for a layer it holds', Math.abs(z.scale - 1.5) < 1e-3 && pz2.copies > pz.copies && pz2.ready === pz.ready, JSON.stringify({ scale: z.scale, copies: [pz.copies, pz2.copies], ready: [pz.ready, pz2.ready] }))
+    check('a link keeps its place on its page through the zoom (its box\'s shares of the page)', !!r0 && !!r1 && r0.every((v, i) => Math.abs(v - r1[i]) < 0.003), `${JSON.stringify(r0)} then ${JSON.stringify(r1)}`)
     await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
     await page.waitForTimeout(800)
 
     // the contents: the index's headings, their pages from the parts, their titles from the rows; the heading read on a scroll
     const st = await page.evaluate(() => window.__reader.controller.getState())
     const located = st.outline.filter(e => e.page)
-    check('the contents: the paper\'s headings, located by the parts, titled by the rows', st.outline.length >= 5 && located.length === st.outline.length && st.outline.every(e => /^Ubersetzt/.test(e.title) && e.original && !/^Ubersetzt/.test(e.original)), JSON.stringify(st.outline.slice(0, 3)))
+    check('the contents: the paper\'s headings, located by the parts, titled by the rows', st.outline.length >= 5 && located.length === st.outline.length && st.outline.every(e => /\[echo\]/.test(e.title) && e.original && !/\[echo\]/.test(e.original)), JSON.stringify(st.outline.slice(0, 3)))
     const L0 = await page.locator('#left').boundingBox()
     await page.mouse.move(L0.x + L0.width / 2, L0.y + L0.height / 2)
     await page.mouse.wheel(0, 6000)
@@ -768,9 +817,9 @@ try {
     // the window: through the paper and back, the right holds the layer near the view alone (§3.2), what it let go released
     const R1 = await page.locator('#right').boundingBox()
     const held = async () => page.evaluate(() => {
-      const near = window.__reader.view.probe().nearPlaces, sp = window.__reader.side.probe()
+      const near = window.__reader.view.probe().nearPlaces, sp = window.__reader.side().probe()
       const right = document.getElementById('right')
-      return { near, laid: sp.laid, retired: sp.retired, svgs: right.querySelectorAll('.axt-layer > svg').length, copies: [...right.querySelectorAll('canvas.axt-layer-copy')].filter(c => c.width > 0).length, nodes: right.querySelectorAll('*').length, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null }
+      return { near, laid: sp.laid, retired: sp.retired, svgs: right.querySelectorAll('.axt-layer > svg').length, links: right.querySelectorAll('.axt-layer > .axt-links').length, copies: [...right.querySelectorAll('canvas.axt-layer-copy')].filter(c => c.width > 0).length, nodes: right.querySelectorAll('*').length, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null }
     })
     const w0 = await held()
     await page.mouse.move(R1.x + R1.width / 2, R1.y + R1.height / 2)
@@ -778,14 +827,68 @@ try {
     await page.waitForFunction(() => window.__reader.view.probe().motion === null, null, { timeout: 5000 }).catch(() => undefined)
     await page.waitForTimeout(1200)
     const w1 = await held()
-    check('through the paper and back: the layer held near the view alone, each page far from it let go (its copy and SVG)', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}`)
-    note(`the window on the sample (4 pages; JS heap in MB): before ${JSON.stringify(w0)}, after a scroll through it and back ${JSON.stringify(w1)}. A paper of a hundred pages is the web's layer-memory row at the pin move`)
+    check('through the paper and back: the layer held near the view alone, each page far from it let go (its copy, its SVG and its links)', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}`)
+    note(`the window on the sample (4 pages; JS heap in MB): before ${JSON.stringify(w0)}, after a scroll through it and back ${JSON.stringify(w1)}`)
     const long = await page.evaluate(() => window.__long)
     note(`the layer's longest main-thread task in this run: ${Math.max(0, ...long)} ms over ${long.length} long task(s) (a reading on a shared machine: L7 is reader-perf's)`)
     const ps = await side()
     note(`the side: ${JSON.stringify({ ready: ps.ready, laid: ps.laid, retired: ps.retired, commits: ps.commits, copies: ps.copies, leftParts: ps.leftParts, composed: ps.composed, docs: ps.docs })}`)
     await page.screenshot({ path: `${SHOTS}/reader-layer.png` })
     await page.close()
+    api.set({ layer: mode.ready() })
+  }
+
+  // --------------------------------------------------------------------------------- the reader's states on the layer
+  section('the reader\'s states on the layer: none for the paper, refused, unreachable, a retry, arXiv\'s bytes not the base (Task 12)')
+  {
+    // (the papers' store emptied first: a paper whose catalog this machine holds opens with our server out of reach)
+    const cleaner = await extensionPage()
+    await cleaner.evaluate(() => new Promise(resolve => { const r = indexedDB.deleteDatabase('axt-layer'); r.onsuccess = r.onerror = r.onblocked = () => resolve(null) }))
+    await cleaner.close()
+    const stateOf = page => page.evaluate(() => { const s = window.__reader.controller.getState(); return { phase: s.phase, available: s.available, display: s.display, unavailable: s.unavailable, laid: s.layer.laid, capsule: document.querySelector('.capsule:not([data-out])')?.getAttribute('data-kind') ?? null, chips: [...document.querySelectorAll('.capsule:not([data-out]) [data-action]')].map(e => e.textContent) } })
+    /** a wait on the controller's state (the reader's page allows no eval: each test is a function of its own) */
+    const waitState = (page, test, arg, timeout = 15_000) => page.waitForFunction(test, arg, { timeout }).then(() => true, () => false)
+    const whyIs = ([...whys]) => whys.includes(window.__reader?.controller?.getState().unavailable?.why)
+    // none for the paper: the original, the translated displays greyed, the capsule; nothing asked again
+    api.set({ layer: mode.none('no-source') })
+    const none = await openReader({ mode: 'bilingual' })
+    await waitState(none, whyIs, ['no-source'])
+    await none.waitForTimeout(400)
+    const n = await stateOf(none)
+    check('no source for the paper: the original shown, the translated displays greyed, the capsule says so', n.available === false && n.display === 'original' && n.capsule === 'unavailable' && n.laid === 0, JSON.stringify(n))
+    await none.close()
+    // refused, and our server out of reach: the original, the capsule with its retry; the retry brings the layer once it is there
+    for (const [name, m] of [['refused', mode.refused(60_000)], ['a server error', mode.error(503)], ['a reset', mode.reset()]]) {
+      api.set({ layer: m })
+      const page = await openReader({ mode: 'bilingual' })
+      const said = await waitState(page, whyIs, ['refused', 'unreachable'], 20_000)
+      await page.waitForTimeout(400)
+      const st = await stateOf(page)
+      check(`${name}: the original readable, the capsule says the bilingual version cannot be had now, with its retry`, said && st.capsule === 'notNow' && st.available === true && st.display === 'bilingual' && st.chips.length >= 1, JSON.stringify(st))
+      if (name === 'a reset') {
+        api.set({ layer: mode.ready() })
+        await page.locator('.capsule[data-kind="notNow"] button[data-action]').click()
+        const came = await page.waitForFunction(() => /\[echo\]/.test(document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer svg')?.textContent ?? ''), null, { timeout: 60_000 }).then(() => true, () => false)
+        const back = await stateOf(page)
+        check('… and its retry, our server back, brings the layer: the page laid, the capsule gone', came && back.capsule !== 'notNow' && back.unavailable === null, JSON.stringify(back))
+      }
+      await page.close()
+    }
+    api.set({ layer: mode.ready() })
+    await api.release()
+    // arXiv's bytes that are not the layer's base: our copy fetched, checked and shown, and the layer laid over it
+    pdfAnswer = 'other'
+    const other = await openReader({ mode: 'bilingual' })
+    const laidOver = await other.waitForFunction(() => /\[echo\]/.test(document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer svg')?.textContent ?? ''), null, { timeout: 60_000 }).then(() => true, () => false)
+    const ours = await other.evaluate(() => window.__reader.run?.probe().ours ?? null)
+    const copyAsked = api.requests.some(r => r.path === `/api/v1/original/${sample.segment}`)
+    check('arXiv\'s bytes not the base: our copy fetched and shown on the left, the layer laid over it', laidOver && ours === true && copyAsked, `laid ${laidOver}, our copy shown ${ours}, asked ${copyAsked}`)
+    await other.close()
+    pdfAnswer = 'ok'
+    const same = await openReader({ mode: 'bilingual' })
+    await same.waitForFunction(() => /\[echo\]/.test(document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer svg')?.textContent ?? ''), null, { timeout: 60_000 }).catch(() => undefined)
+    control('arXiv\'s bytes that are the base fetch no copy of ours (the same assertion, on the sample as arXiv serves it)', { ok: (await same.evaluate(() => window.__reader.run?.probe().ours ?? null)) === true, detail: 'our copy not shown' })
+    await same.close()
   }
 
   // ----------------------------------------------------------------------------------------------------- what nothing did
@@ -795,7 +898,7 @@ try {
   check('no request left the route table', guard.violations.length === 0, guard.violations.length ? guard.violations.map(v => `${v.method} ${v.url} from ${v.from}`).join('; ') : `${guard.hosts.length} origins named, none else asked`)
   check('no page of the reader or of the extension threw', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '))
   check('the TeX page was not asked for anything: no display checked here is one it types', asked.tex.length === 0, asked.tex.join(', ') || 'none asked')
-  note(`the echo endpoint was asked ${echo.seen.post} time(s) (nothing translates yet: no translated view is checked here)`)
+  note(`the echo endpoint was asked ${echo.seen.post} time(s): the extension's own translation of the layer's units`)
 } finally {
   await context.close().catch(() => undefined)
   await echo.close()

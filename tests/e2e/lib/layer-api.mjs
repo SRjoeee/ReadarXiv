@@ -89,8 +89,15 @@ const LAYER_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+?)(\/prepare)?$/
 const ORIGINAL_ROUTE = /^\/api\/v1\/original\/([^/]+)$/
 /** an object of BUNDLE 4's layer by its digest (the capture groups: the segment, the ctag, the digest) */
 const OBJECT_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+)\/o\/([0-9a-f]{64})$/
+/** the served faces' table and its files (eb-report G1: `/static-fonts/index.json`, `/static-fonts/<group>.json`, a slice's
+ *  file `/static-fonts/<16 hex>.woff2`), and the hyphenation patterns (`/hyph/<lang>.json`) */
+const FACES_ROUTE = /^\/static-fonts\/(index|[a-z0-9-]+)\.json$/
+const FACE_FILE_ROUTE = /^\/static-fonts\/([0-9a-f]{16})\.woff2$/
+const HYPH_ROUTE = /^\/hyph\/[a-z-]+\.json$/
+/** the one group the stand-in serves every face in, and its one slice's file */
+export const FACE_GROUP = 'e2e', FACE_FILE = '0123456789abcdef'
 /** whether a path is one of the stand-in's routes: what a route table gives it, and answers no other path with it */
-export const serves = path => LAYER_ROUTE.test(path) || ORIGINAL_ROUTE.test(path) || OBJECT_ROUTE.test(path)
+export const serves = path => LAYER_ROUTE.test(path) || ORIGINAL_ROUTE.test(path) || OBJECT_ROUTE.test(path) || FACES_ROUTE.test(path) || FACE_FILE_ROUTE.test(path) || HYPH_ROUTE.test(path)
 /** a request's body kept in the record: its text at most this long (the length is kept whole) */
 const BODY_TEXT_MAX = 200
 const NO_STORE = 'no-store'
@@ -118,7 +125,7 @@ function rangeOf(header, size) {
  * a preparing answer asks to wait before the next GET, `now` the clock. `layer4`: the sample's BUNDLE 4 objects
  * (layer-cut.mjs cutSample: `objects` by digest, `refs` as a job tells them, `catalog` its bytes), held under CTAG4
  */
-export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now, layer4 = null } = {}) {
+export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now, layer4 = null, faces = null } = {}) {
   let layer = checked('ready'), original = checked('ready')
   /** when the preparation began, ms on `now`'s clock; null until it has */
   let since = null
@@ -150,7 +157,8 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     const progress = layer.ms === 0 ? 1 : Math.floor((elapsed / layer.ms) * 100) / 100
     // BUNDLE 4's objects made so far: the chunks and the head at once, each part once the progress passes its share
     const made = four ? { layer: { units: layer4.refs.units, head: layer4.refs.head, parts: layer4.refs.parts.slice(0, Math.floor(progress * (layer4.refs.parts.length + 1))) } } : {}
-    return json(202, { position: 0, stage: STAGES[Math.min(STAGES.length - 1, Math.floor(progress * STAGES.length))], progress, retryAfterMs: Math.max(1, Math.min(pollMs, Math.ceil(left))), ...made }, NO_STORE)
+    // (the web's shape: a place in the queue is 1 or more, null where it is not known; layer-api.ts PreparingSchema)
+    return json(202, { position: null, stage: STAGES[Math.min(STAGES.length - 1, Math.floor(progress * STAGES.length))], progress, retryAfterMs: Math.max(1, Math.min(pollMs, Math.ceil(left))), ...made }, NO_STORE)
   }
 
   function layerAnswer({ headers, body }, segment, tag, prepare) {
@@ -197,8 +205,20 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
    * (lower-case names), body }: { status, headers, body }, or { fault: 'reset' | 'hang' } where the connection is to be reset
    * or left unanswered.
    */
+  /** the faces' table: every face of `faces.ids` in one group of one slice (`faces.ranges`), its file `faces.bytes`; the
+   *  hyphenation none (the layer draws without it). With no `faces`, none of it is served */
+  function facesAnswer(path) {
+    const table = FACES_ROUTE.exec(path), file = FACE_FILE_ROUTE.exec(path)
+    if (HYPH_ROUTE.test(path)) return json(404, { why: 'none' }, SHORT)
+    if (!faces) return missing('not-found')
+    if (table?.[1] === 'index') return json(200, { schema: 1, fonts: 'e2e', groups: [FACE_GROUP], faces: Object.fromEntries(faces.ids.map(id => [id, { group: FACE_GROUP, sha256: '' }])), sources: {} }, IMMUTABLE)
+    if (table?.[1] === FACE_GROUP) return json(200, { schema: 1, group: FACE_GROUP, plan: 'latin', slices: [faces.ranges], faces: Object.fromEntries(faces.ids.map(id => [id, [{ path: `static-fonts/${FACE_FILE}.woff2`, sha256: '', bytes: faces.bytes.length }]])), shared: null }, IMMUTABLE)
+    if (file?.[1] === FACE_FILE) return { status: 200, headers: { ...COMMON, 'content-type': 'font/woff2', 'cache-control': IMMUTABLE }, body: faces.bytes }
+    return missing('not-found')
+  }
   function answer(request) {
     const { method, path } = request
+    if (FACES_ROUTE.test(path) || FACE_FILE_ROUTE.test(path) || HYPH_ROUTE.test(path)) return method === 'GET' ? facesAnswer(path) : json(405, { why: 'method-not-allowed' }, NO_STORE, { allow: 'GET' })
     const objectRoute = OBJECT_ROUTE.exec(path)
     const layerRoute = objectRoute ? null : LAYER_ROUTE.exec(path)
     const originalRoute = ORIGINAL_ROUTE.exec(path)

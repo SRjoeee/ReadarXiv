@@ -52,4 +52,8 @@ export interface LayerApi {
 }
 /** BUNDLE 4's objects of the sample (layer-cut.mjs cutSample's) */
 export interface Layer4 { objects: Map<string, Uint8Array>; refs: { head: unknown; units: unknown[]; parts: unknown[]; end: unknown }; catalog: Uint8Array }
-export declare function layerApi(o?: { sample?: Sample; vtag?: string; pollMs?: number; now?: () => number; layer4?: Layer4 | null }): LayerApi
+/** the served faces the stand-in gives every face it is told of: their ids, one slice's code points, its file's bytes */
+export interface StandInFaces { ids: readonly string[]; ranges: readonly number[]; bytes: Uint8Array }
+export declare const FACE_GROUP: string
+export declare const FACE_FILE: string
+export declare function layerApi(o?: { sample?: Sample; vtag?: string; pollMs?: number; now?: () => number; layer4?: Layer4 | null; faces?: StandInFaces | null }): LayerApi
