@@ -41,6 +41,8 @@ export type RunEvent =
   | { type: 'preparing'; position: number | null; progress: number | null }
   /** the layer is coming: a catalog, or a prepare's first objects (any `unavailable` before it no longer holds) */
   | { type: 'layer' }
+  /** the layer's catalog: the prepare, where there was one, is over (told after `layer`) */
+  | { type: 'prepared' }
   /** the translation under way: the units with rows, of those the target translates, and those lost to the service */
   | { type: 'translating'; got: number; total: number; lost: number }
   /** the translation done for this attempt: `stopped`, why it stopped short (the service's error kind), or null */
@@ -291,7 +293,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
         // our server out of reach: a catalog this machine holds of the paper opens it on the layer (decision 7)
         const kept = await host.store?.catalog(seg)
         const catalog = kept ? await readCatalog(kept, { paper }).catch(() => null) : null
-        if (catalog && !gone()) { state = 'open'; emit({ type: 'layer' }); tellCatalog(catalog); return }
+        if (catalog && !gone()) { state = 'open'; emit({ type: 'layer' }); emit({ type: 'prepared' }); tellCatalog(catalog); return }
         console.warn('[reader] the layer is not to be had now:', (e as Error)?.message ?? e)
         return unavailable('unreachable')
       }
@@ -303,6 +305,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
           void host.store?.opened(seg)
           state = 'open'
           emit({ type: 'layer' })
+          emit({ type: 'prepared' })
           tellCatalog(a.catalog)
           return
         case 'preparing':

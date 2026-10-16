@@ -176,6 +176,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
         }
         if (e.type === 'fail') { host.emit({ type: 'fail', event: 'service', text: `Cannot translate ${paper} (${e.kind})`, kind: e.kind }); return }
         if (e.type === 'layer') { host.emit({ type: 'coming' }); return }
+        if (e.type === 'prepared') { host.emit({ type: 'prepared' }); return }
         if (e.type === 'original') return
         host.emit(e)
       },

@@ -124,6 +124,11 @@ describe('Review Focus 1: our server\'s every answer', () => {
     expect(a.s.layerLooks()).toBe(2)
     await vi.advanceTimersByTimeAsync(1)
     expect(a.s.layerLooks()).toBe(3)
+    // the 202s' objects are the layer coming; only its catalog ends the prepare
+    await vi.waitFor(() => expect(kinds(a.events)).toContain('prepared'))
+    expect(kinds(a.events).filter(k => k === 'layer')).toHaveLength(2)
+    expect(kinds(a.events).filter(k => k === 'prepared')).toHaveLength(1)
+    expect(kinds(a.events).indexOf('prepared')).toBeGreaterThan(kinds(a.events).lastIndexOf('preparing'))
     // the reader's close lets the look go
     a.r.dispose()
   })
@@ -160,7 +165,7 @@ describe('Review Focus 1: our server\'s every answer', () => {
     expect(b.s.layerLooks()).toBe(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(b.s.layerLooks()).toBe(2)
-    await vi.waitFor(() => expect(kinds(b.events).at(-1)).toBe('layer'))
+    await vi.waitFor(() => expect(kinds(b.events).slice(-2)).toEqual(['layer', 'prepared']))
   })
 
   it('unreachable (a 5xx twice, the network): the bilingual version not to be had now; a catalog this machine holds opens it all the same', async () => {
@@ -219,7 +224,7 @@ describe('Review Focus 2 (B5): the base', () => {
   })
 })
 
-describe('the bind: arXiv\'s whole file not waited for (eb-report, the bind)', () => {
+describe('the bind: arXiv\'s whole file not waited for (DESIGN §16)', () => {
   /** our copy of 300 bytes, its startxref at 250; the catalog's answer naming its tag */
   const ours = Uint8Array.from({ length: 300 }, (_, i) => i % 251)
   const base = async () => ({ bytes: ours.length, sha256: await sha256Of(ours), xref: 250 })
