@@ -6,7 +6,7 @@ import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
-import { floatMatches } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The layout maker over a fake PDF.js document of arXiv's PDF and a marks file made, as the run makes it, from a fake
@@ -1382,6 +1382,19 @@ describe('makeLayout over arXiv\'s text read once (the prepare\'s step T, layout
       expect(read.reads).toEqual(w.pages.map((_, i) => i + 1))
     })
   }
+
+  it('the frame\'s rule is the caller\'s: by default today\'s (pageFrame), the same bytes; one given is the rule the anchors are placed under', async () => {
+    const marks = await marksOf(DISPLAY)
+    const base = { units: DISPLAY.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const want = await makeLayout({ ...base, arxiv: arxivOf(DISPLAY.pages) })
+    const calls: number[] = []
+    const got = await makeLayout({ ...base, arxiv: arxivOf(DISPLAY.pages), frame: (doc, ms) => { calls.push(doc.length); return pageFrame(doc, ms) } })
+    if (!('file' in want) || !('file' in got)) throw new Error('refused')
+    expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
+    // asked once, of arXiv's tokens
+    expect(calls.length).toBe(1)
+    expect(calls[0]).toBeGreaterThan(0)
+  })
 
   it('a text of another page count than the document is the caller\'s mistake', async () => {
     const marks = await marksOf(DISPLAY)

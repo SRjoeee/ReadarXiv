@@ -1,6 +1,7 @@
 // make.mjs's types (JavaScript until the engine's port), for the container's prepare and the maker's tests
 import type { SourceUnit } from '../source/latex-front.mjs'
 import type { LayoutFile } from './file.mjs'
+import type { FrameRule } from '../pipeline/anchors.mjs'
 import type { ArxivText } from './arxiv.mjs'
 import type { LayoutMarks } from './marks.mjs'
 
@@ -19,6 +20,8 @@ export interface MakeInput {
   text?: ArxivText | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
+  /** the pages' frame's rule the maker's anchors are placed under (anchors.mjs pageFrame, today's) */
+  frame?: FrameRule
 }
 export interface LayoutStats {
   lines: { carried: number; total: number; held: number }

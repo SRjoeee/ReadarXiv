@@ -17,7 +17,7 @@
 // is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
 // it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
-import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, markWords, pageFrame, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
@@ -325,9 +325,10 @@ async function gzipSize(bytes) {
  * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
  * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
- * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here
+ * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
+ * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's)
  */
-export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null }) {
+export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame = pageFrame }) {
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
@@ -452,7 +453,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
   }
   const linesTeX = new Map(marks.lines)
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
-  const anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch })
+  const anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame })
   stats.ms.anchor = now() - t
 
   // ---------------------------------------------------------------- each located unit's lines
