@@ -305,6 +305,9 @@ function documentOf(views, units, kindOf, { vote = false } = {}) {
   const edge = (xs, far) => {
     const count = new Map()
     for (const x of xs) { const b = Math.round(x); count.set(b, (count.get(b) ?? 0) + 1) }
+    // (a case of the text's lines, columnsOfTokens', that passes this bound narrowly: on 2608.01890 its odd pages' right column
+    // keeps 9 lines read to 586, against the 9.5 this asks, where the text ends at 562 — PDF.js reads text an inserted figure
+    // clips. Its cause is that reading, not this share: neither is to be tuned to it)
     const need = Math.max(EDGE_LINES, xs.length * EDGE_SHARE)
     let best = null
     for (const b of count.keys()) if ((count.get(b - 1) ?? 0) + count.get(b) + (count.get(b + 1) ?? 0) >= need && (best === null || (far ? b > best : b < best))) best = b

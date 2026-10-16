@@ -256,6 +256,45 @@ describe('columnsOfTokens on the shapes the plain text lines failed on', () => {
   })
 })
 
+describe('columnsOfTokens: a page\'s columns by a vote of its text\'s long lines', () => {
+  // L, R: the long lines in the page's left and right halves; F: those across its middle. Two where L >= 4, R >= 4 and L + R >= F;
+  // one where F > 0 and F >= L + R; else the document's majority, as today's rule falls through to it
+  const two = (y: number, n: number) => [...prose(y, n, 72, 300, 9), ...prose(y - 12 * n, n, 312, 540, 9)]
+  const lines = (y: number, n: number, x0: number, x1: number, words: number) => prose(y, n, x0, x1, words)
+  /** a full line broken by a wide space (a display's, a formula's) into a left and a right half, each long */
+  const broken = (y: number, n: number): Item[] => {
+    const out: Item[] = []
+    for (let l = 0; l < n; l++) out.push(...line(Array.from({ length: 7 }, () => word(fresh++)), y - 12 * l, 72, 250), ...line(Array.from({ length: 9 }, () => word(fresh++)), y - 12 * l, 320, 540))
+    return out
+  }
+  const columnsOf = (pages: Item[][]) => columnsOfTokens(docOf(pages), pages.map(() => VIEW)) as (Page | null)[]
+  /** a document of one column (three pages) and one of two (three pages), each with its pages of the cases after them */
+  const ONE = [prose(700, 30, 72, 540), prose(700, 30, 72, 540), prose(700, 30, 72, 540)]
+  const TWO = [two(700, 30), two(700, 30), two(700, 30)]
+
+  it('a page of one column whose wide spaces cut five lines into halves stays one: F 14 >= L 5 + R 5 (gap cuts alone gave two)', () => {
+    const cols = columnsOf([...ONE, [...prose(700, 14, 72, 540), ...broken(520, 5)]])
+    expect((cols[4] as Page).two).toBe(false)
+  })
+
+  it('one where the lines across are as many as the others, though too few for today\'s rule: F 2, L 0, R 0 on a paper of two columns', () => {
+    const cols = columnsOf([...TWO, prose(700, 2, 72, 540)])
+    expect((cols[1] as Page).two).toBe(true)
+    expect((cols[4] as Page).two).toBe(false)
+  })
+
+  it('two where both halves have four lines and together outnumber those across: L 5, R 5, F 3 on a paper of one column', () => {
+    const cols = columnsOf([...ONE, [...prose(700, 3, 72, 540), ...lines(650, 5, 72, 300, 9), ...lines(590, 5, 312, 540, 9)]])
+    expect((cols[1] as Page).two).toBe(false)
+    expect((cols[4] as Page).two).toBe(true)
+  })
+
+  it('neither, and the document\'s majority, where today\'s rule says one: L 6, R 2, F 4 on a paper of two columns', () => {
+    const cols = columnsOf([...TWO, [...prose(700, 4, 72, 540), ...lines(640, 6, 72, 300, 9), ...lines(560, 2, 312, 540, 9)]])
+    expect((cols[4] as Page).two).toBe(true)
+  })
+})
+
 // ---------------------------------------------------------------- what the two rules buy: a part's left from its own units
 /** a paper whose units are its paragraphs (two a page, the second running onto the next page), each bounded, with a proof's
  *  box set apart at the column's edge after each page's last paragraph's last word */
