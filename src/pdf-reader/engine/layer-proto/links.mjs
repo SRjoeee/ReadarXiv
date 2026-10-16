@@ -30,6 +30,12 @@ const BORDER_STYLES = { 1: 'solid', 2: 'dashed', 5: 'underline' }
 export const MAX_LINKS = 2000
 export const MAX_GLYPHS = 200
 export const WORK_MAX = 2e7
+/**
+ * How far a browser's advances may part from the layout's measure, as a share of the distance from a run's start: Chromium on
+ * the Linux runner draws a long Latin word some 6 % wider than measured (its advances rounded to pixels), and glyphs drift along
+ * a run from its start, which is fixed. A box at distance d into a run stands up to DRIFT_BOUND x d off its glyphs
+ */
+export const DRIFT_BOUND = 0.06
 
 const finite = xs => xs.every(x => typeof x === 'number' && Number.isFinite(x))
 const box4 = (a, b, c, d) => [Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)]
@@ -242,7 +248,7 @@ function holdsMost(h, pts, budget) {
  * The owner of each annotation of page q, one rule for the match and the freeze (the 3a design §3.2, as the run lays a page):
  * of `ranked` (units with rectangles on q, in order: the units placed with lines on q in their growth rank there, then for the
  * freeze's ranking the units left the original's), the first whose rectangles on q (rectsOn: as grown) hold more than half of
- * the annotation's points (both readings) owns it. Not "most points" (the design's first wording): a unit ranked after another
+ * the annotation's points (both readings) owns it. Not "the most points" (the design's first wording): a unit ranked after another
  * may not have grown when the other is matched, and what it holds then is not final; the first with a majority is final once
  * every unit ranked before it has grown, which each has before it is laid. No unit with a majority: no owner, never matched.
  * `stop`: the index past which no owner is looked for (a unit's match: itself); `budget` ({ left }): the tests it may spend,
@@ -436,7 +442,10 @@ function normed(chars, keep) {
  *   Not found: the piece whole only where the annotation is its only one, the match told its target by its geometry, key or url
  *   (never by order alone) and the piece names one target (`single`), else none (`unplaced`). Two of one target whose ranges
  *   abut (no other character between) are one record (a link TeX broke over two lines: "Rad-" and "ford et al.").
- * - A crop: the annotation's rectangle mapped by the crop's own map from its source to where it is drawn, cut to the drawn box;
+ *   A range that starts deep inside a run, where the drift the run gathers before it (DRIFT_BOUND x its distance from the run's
+ *   start) could reach half its first character's width, is `unplaced`: its box could stand over its neighbour's glyphs, another
+ *   link's among them ("Sicherheitsbewertungsverfahren[12,13]" drawn as one run), and a wrong link is worse than none.
+ * - A crop: the annotation's boxes mapped by the crop's own map from its source to where it is drawn, cut to the drawn box;
  *   named by the original's text under it (its overlaid text), what the crop shows there.
  * - A pair: each drawn line of its tokens (from the first to the last) a box; every annotation of it one record.
  * A record is named by what is drawn under it (a crop by its text), white space collapsed. One whose boxes lie on two pages (a
@@ -453,8 +462,8 @@ export function placeUnit({ groups, lines, edge, band, scale, budget = { left: W
     budget.left -= items * (annots.length + 1)
     if (budget.left < 0) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
     if (to.draw === 'crop') placeCrop(to, annots, lines, scale, records, tried)
-    else if (to.draw === 'pair') placePair(to, annots, lines, edge, band, records, tried)
-    else placeText(to, annots, lines, edge, band, records, tried)
+    else if (to.draw === 'pair') placePair(to, annots, lines, edge, band, records, tried, budget)
+    else placeText(to, annots, lines, edge, band, records, tried, budget)
   }
   return { records, tried }
 }
@@ -492,7 +501,15 @@ function spanOf(line, e0, e1, edge, pad) {
   return { x0, x1 }
 }
 
-/** the record of a drawn range of a unit's lines: one box a line, those of its first page alone; null where none is sound */
+/** whether a drawn range's part on one line starts so deep inside its run that the drift the run gathers before it could carry
+ *  a glyph across its box's edge: DRIFT_BOUND x its distance from the run's start, against half its first character's width */
+function tooDeep(line, e0, edge) {
+  const start = edge(line, e0.run, 0), x0 = edge(line, e0.run, e0.at), w0 = edge(line, e0.run, e0.end) - x0
+  return !(DRIFT_BOUND * Math.abs(x0 - start) < Math.abs(w0) / 2)
+}
+
+/** the record of a drawn range of a unit's lines: one box a line, those of its first page alone; null where none is sound, or
+ *  where a line's part starts too deep inside its run (tooDeep) */
 function rangeRecord(entries, lines, edge, band) {
   if (!entries.length) return null
   const page = lines[entries[0].li].line.page
@@ -501,6 +518,7 @@ function rangeRecord(entries, lines, edge, band) {
   for (const li of [...new Set(mine.map(e => e.li))]) {
     const on = mine.filter(e => e.li === li), { line } = lines[li]
     const e0 = on[0], e1 = on.at(-1)
+    if (tooDeep(line, e0, edge)) return null
     let top = Number.NEGATIVE_INFINITY, bottom = Number.POSITIVE_INFINITY
     for (const n of new Set(on.map(e => e.n))) { const b = band(line.items[n].t, line); if (b.top > top) top = b.top; if (b.bottom < bottom) bottom = b.bottom }
     const { x0, x1 } = spanOf(line, e0, e1, edge, 0.25 * (top - bottom))
@@ -518,7 +536,7 @@ function rangeRecord(entries, lines, edge, band) {
   return { page, li: lineOf[0], x: boxes[0][0], boxes: boxes.flat(), name: collapse(name) }
 }
 
-function placeText(to, annots, lines, edge, band, records, tried) {
+function placeText(to, annots, lines, edge, band, records, tried, budget) {
   // the piece's drawn characters, in drawing order
   const D = []
   lines.forEach(({ line, runs }, li) => {
@@ -533,15 +551,18 @@ function placeText(to, annots, lines, edge, band, records, tried) {
     }
   })
   if (!D.length) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); return }
+  // (the search reads the drawn characters for each annotation, and each place its text is found at: charged before it is made)
+  const ownOf = c => (c.a.ov ? [...c.a.ov] : c.a.g2.ch)
+  budget.left -= D.length * annots.reduce((n, c) => n + ownOf(c).length + 1, 1)
+  if (budget.left < 0) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); return }
   const dChars = D.map(e => e.ch)
   const forms = { letters: normed(dChars, LETTER), ink: normed(dChars, INK) }
   const found = []
   let from = 0
   // (in the original's order, page then PDF order, whichever tier matched each: each is looked for after the one before)
   const sorted = annots.slice().sort((a, b) => a.q - b.q || a.a.i - b.a.i)
-  // (its own text: PDF.js's overlaid text, read from the glyphs' own places; the engine's characters under it where that is
-  // empty, whose places are its widths' estimate and may take a neighbour for one of its own)
-  const ownOf = c => (c.a.ov ? [...c.a.ov] : c.a.g2.ch)
+  // (its own text, ownOf: PDF.js's overlaid text, read from the glyphs' own places; the engine's characters under it where that
+  // is empty, whose places are its widths' estimate and may take a neighbour for one of its own)
   const formOf = own => { const A = normed(own, LETTER); return A.s ? { mode: 'letters', A } : { mode: 'ink', A: normed(own, INK) } }
   // (a word or a number found whole: no letter or digit of the drawing just before or after it, unless the annotation before it,
   // of its target, ended there, or the one after it, of its target, starts there: "Rad-" and "ford et al." drawn "Radford")
@@ -619,7 +640,7 @@ function placeCrop(to, annots, lines, scale, records, tried) {
   }
 }
 
-function placePair(to, annots, lines, edge, band, records, tried) {
+function placePair(to, annots, lines, edge, band, records, tried, budget) {
   const D = []
   lines.forEach(({ line, runs }, li) => {
     for (const run of runs) {
@@ -634,6 +655,9 @@ function placePair(to, annots, lines, edge, band, records, tried) {
   })
   // (one pair's text is one record, of one border: annotations of it drawn otherwise cannot be told apart in it)
   if (annots.some(c => !sameBorder(c.a, annots[0].a))) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'ambiguous' }); return }
+  // (its characters read once a line it is on: charged before)
+  budget.left -= D.length * (annots.length + 1)
+  if (budget.left < 0) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); return }
   const r = rangeRecord(D, lines, edge, band)
   if (!r) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); return }
   records.push({ page: r.page, li: r.li, x: r.x, rec: recordOf(annots[0].a, r.boxes, r.name), sources: { annots: annots.map(c => [c.q, c.a.i]), tier: annots[0].tier } })

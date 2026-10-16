@@ -667,7 +667,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  other is dropped and counted. Pure of the order the pages were asked in: it reads this page's annotations, operations and
    *  units alone. A page whose annotations could not be read has none */
   /** the units with lines on page q as a link's owner is chosen among them, in the order it is read in (links.mjs ownersOf: the
-   *  first holding most of its points): the units placed with lines on q in their growth rank there, by the rectangles their
+   *  first whose rectangles hold more than half of its points): the units placed with lines on q in their growth rank there, by the rectangles their
    *  growth left, then every other unit of the original's side (K: left the original's or never placed, by the left side's) */
   const linkUnitsOn = q => {
     const out = new Map()

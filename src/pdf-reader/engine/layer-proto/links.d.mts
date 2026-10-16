@@ -16,6 +16,9 @@ export declare function pointsOf(items: readonly unknown[] | null | undefined): 
 export declare const MAX_LINKS: number
 export declare const MAX_GLYPHS: number
 export declare const WORK_MAX: number
+/** how far a browser's advances may part from the layout's, as a share of the distance from a run's start (a range starting
+ *  deeper than half its first character's width allows is not placed) */
+export declare const DRIFT_BOUND: number
 /** the advance centres of the engine's characters on their baselines (pageChars2's), non-space only, each with its key */
 export declare function charPoints(chars: readonly { ch: string; x0: number; x1: number; yb: number; item?: number; k?: number }[] | null | undefined): GlyphPoints
 /** a Link annotation a reader can carry, as the page keeps it until it is final */

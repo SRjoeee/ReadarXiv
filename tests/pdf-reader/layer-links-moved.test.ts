@@ -4,9 +4,9 @@ import { tokenBand } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The links moved with the text the layer redraws (PR 3a-2; the 3a design §3.2 to §3.4, §5): a unit's annotations owned (the
-// first unit of the page's growth rank holding most of an annotation's points), matched to its pieces (geometry, a citation's
-// key, a url, the order of a kind; ambiguous: none) and placed over what is drawn of them, from the layout's own numbers (the
-// run's walk the SVG draws by, layer2.mjs lineRuns and runEdge, and the word table's bands). Units laid by the engine's own
+// first unit of the page's growth rank whose rectangles hold more than half of an annotation's points), matched to its pieces
+// (geometry, a citation's key, a url, the order of a kind; ambiguous: none) and placed over what is drawn of them, from the
+// layout's own numbers (the run's walk the SVG draws by, layer2.mjs lineRuns and runEdge, and the word table's bands). Units laid by the engine's own
 // tokensOf2 and layoutUnit2 at 10 pt in a canvas that measures a character as half an em (a CJK one as one), so that every box
 // is a number the test can write down: LK1 to LK6 and LK13 here, LK10 and LK14 over a run (layer-proto-moved-links.test.ts)
 
@@ -306,6 +306,29 @@ describe('a link\'s box where the browser lays its run a little wider or narrowe
     // a little narrower too)
     for (const drift of [1, 1.04, 1.08, 0.97]) expect(records.map(r => letters(drawnBetween(L, 2, r.rec.boxes, drift))), `drift ${drift}`).toEqual(['Taylor', '1953'])
   })
+  it('leaves a link that starts deep inside a run: "Sicherheitsbewertungsverfahren[12,13]" drawn as one run', () => {
+    const L = lay([text('\u5982 '), ph('\\cite{a,b}'), text('\u6240')], { 1: { mode: 'orig-text', text: 'Sicherheitsbewertungsverfahren[12,13]' } })
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.a' }, '12')), cand(ann(1, { dest: 'cite.b' }, '13'))], targets: [target(1, { kind: 'cite', keys: ['a', 'b'] })] })
+    const { records, tried } = placeUnit({ groups: m.groups, ...placing(L) })
+    // (dropped or right, never wrong, as the run is drawn as measured or wider)
+    for (const drift of [1, 1.04, 1.08]) for (const r of records) expect(letters(drawnBetween(L, 2, r.rec.boxes, drift)), `drift ${drift}`).toBe(letters(r.rec.name))
+    // ("12" starts 155 pt into the run: the 6 % (DRIFT_BOUND) its glyphs may drift there is 9.3 pt, past half its "1"; a box
+    // there could stand over "[1", or over the other link's "12,")
+    expect(records).toEqual([])
+    expect(tried).toEqual([{ q: 1, i: 0, why: 'unplaced' }, { q: 1, i: 1, why: 'unplaced' }])
+  })
+  it('keeps a citation a translation glues to a short Latin word, and is right as the run drifts; leaves one deep in a long word', () => {
+    const glued = (word: string) => lay([text(`\u5982\u56fe\u6240\u793a\u7684${word}`), ph('\\cite{a}'), text('\u6240\u793a')], { 1: { mode: 'orig-text', text: '[12]' } })
+    const place = (L: ReturnType<typeof lay>) => placeUnit({ groups: matchUnit({ cands: [cand(ann(0, { dest: 'cite.a' }, '12'))], targets: [target(1, { kind: 'cite', keys: ['a'] })] }).groups, ...placing(L) })
+    // ("BERT[12]" is one run after the Chinese one: "12" 25 pt into it, its drift there at most 1.5 pt, under half its "1")
+    const short = glued('BERT'), kept = place(short).records
+    expect(kept.map(r => r.rec.name)).toEqual(['12'])
+    for (const drift of [1, 1.04, 1.08]) expect(letters(drawnBetween(short, 2, kept[0]!.rec.boxes, drift)), `drift ${drift}`).toBe('12')
+    // ("TransformerXL[12]": 70 pt in, a drift of 4.2 pt: left, never laid over the word's end)
+    const long = place(glued('TransformerXL'))
+    expect(long.records).toEqual([])
+    expect(long.tried).toEqual([{ q: 1, i: 0, why: 'unplaced' }])
+  })
   it('takes no letter of the word before it, whose run drifts toward it across the space', () => {
     const L = lay([text('\u5982 Sicherheitsbewertungen '), ph('\\cite{a}'), text('\u6240')], { 1: { mode: 'orig-text', text: '[32]' } })
     const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.a' }, '32'))], targets: [target(1, { kind: 'cite', keys: ['a'] })] })
@@ -366,6 +389,19 @@ describe('what the match never does', () => {
     const m = matchUnit({ cands: many, targets: Array.from({ length: 20 }, (_, k) => target(k)), budget: { left: 1000 } })
     expect(m.tried.filter(t => t.why === 'unplaced').length).toBe(45)
   })
+  it('charges the search of a piece\'s drawn text to its budget: a hostile piece and citation are left, in a bounded time', () => {
+    // (one drawn token of 50,000 letters, a \\cite of 2,000 keys whose annotations each read "x": found at every place, whole at none)
+    const s = 'x'.repeat(50_000)
+    const line = { page: 2, baseline: 500, x0: 100, items: [{ t: { s, k: 1, ph: 0 }, x: 100, w: 10 }] }
+    const where = { lines: [{ line, runs: [{ items: [[0, 0]], text: s }] }], edge: () => 0, band: () => ({ top: 510, bottom: 495 }), scale: 1 }
+    const annots = Array.from({ length: 2000 }, (_, i) => ({ ...cand(ann(i, { dest: `cite.k${i}` }, 'x')), tier: 'key' }))
+    const start = performance.now()
+    const { records, tried } = placeUnit({ groups: [{ to: target(1, { kind: 'cite', keys: annots.map((_, i) => `k${i}`) }), annots }], ...where } as never)
+    expect(performance.now() - start).toBeLessThan(1000)
+    expect(records).toEqual([])
+    expect(tried.length).toBe(2000)
+    expect(new Set(tried.map(t => t.why))).toEqual(new Set(['unplaced']))
+  })
   it('makes no geometry match past its budget in TeX\'s segments: the annotation is unplaced', () => {
     // (two characters at y 500 in a segment of page 1; no rendering took them)
     const a = { ...ann(0, { dest: 'cite.a' }, 'ab', ['1|0', '1|1']), g2: { x: [110, 120], y: [500, 500], ch: ['a', 'b'], key: ['1|0', '1|1'] } }
@@ -383,7 +419,7 @@ describe('the owner of an annotation', () => {
   // (three units with lines on page 1, in their growth rank: 1, then 2, then 3; an annotation's points at y 500)
   const rects = (x0: number, x1: number) => [[1, x0, 495, x1, 510]]
   const a = { ...ann(0, { dest: 'cite.a' }, 'abcd'), g2: { x: [10, 20, 30, 40], y: [500, 500, 500, 500], ch: ['a', 'b', 'c', 'd'], key: [] } }
-  it('is the first unit of the rank whose rectangles hold most of its points, whatever those after it hold', () => {
+  it('is the first unit of the rank whose rectangles hold more than half of its points, whatever those after it hold', () => {
     const u1 = { rects: rects(0, 15) }, u2 = { rects: rects(0, 35) }, u3 = { rects: rects(0, 50) }
     expect(ownedIn([a], u1, [], 1).length).toBe(0)
     expect(ownedIn([a], u2, [u1], 1).length).toBe(1)
