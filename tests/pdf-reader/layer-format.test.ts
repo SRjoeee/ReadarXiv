@@ -255,7 +255,7 @@ const READERS: { kind: 'units' | 'head' | 'part' | 'left' | 'catalog'; cap: numb
   { kind: 'units', cap: UNITS_CAP, values: UNITS_VALUES, depth: 5, sample: () => M.chunks[0]!, read: (b, ref, caps) => readUnitsChunk(b, { ref: ref!, before: null, caps }) },
   { kind: 'head', cap: HEAD_CAP, values: HEAD_VALUES, depth: 3, sample: () => M.head, read: (b, ref, caps) => readHead(b, { ref: ref!, caps }) },
   { kind: 'part', cap: PART_CAP, values: PART_VALUES, depth: 7, sample: () => M.parts[0]!, read: (b, ref, caps) => readPart(b, { ref: ref!, index: M.index, chain: null, caps }) },
-  { kind: 'left', cap: LEFT_CAP, values: LEFT_VALUES, depth: 4, sample: () => M.lefts[1]!, read: (b, ref, caps) => readLeftPart(b, { ref: ref as never, streamOf: id => STREAM.get(id), caps }) },
+  { kind: 'left', cap: LEFT_CAP, values: LEFT_VALUES, depth: 5, sample: () => M.lefts[1]!, read: (b, ref, caps) => readLeftPart(b, { ref: ref as never, streamOf: id => STREAM.get(id), caps }) },
   { kind: 'catalog', cap: CATALOG_CAP, values: CATALOG_VALUES, depth: 3, sample: () => CAT, read: (b, _ref, caps) => readCatalog(b, { caps }) },
 ]
 /** `bytes` with a ref that is theirs (their length and digest) */
@@ -1544,16 +1544,16 @@ describe('a left part', () => {
   })
 
   it('a page that would pass its caps ships an empty left part, never a throw (amendment M8)', async () => {
-    expect([LEFT_CAP, LEFT_VALUES, TOKENS_PAGE]).toEqual([1024 * 1024, 200_000, 15_000])
+    expect([LEFT_CAP, LEFT_VALUES, TOKENS_PAGE]).toEqual([2 * 1024 * 1024, 320_000, 15_000])
     // n past TOKENS_PAGE
     const big = await writeLeftPart({ paper: PAPER, page: 3, first: 40, tokens: tokenWire(TOKENS_PAGE + 1), spans: [[4, [1, 1]]], pairs: [] })
     expect(big.emptied).toBe(true)
     const e = await readLeftPart(big.bytes, { ref: big.ref as never, streamOf })
     expect(e).toMatchObject({ page: 3, first: 40, spans: [], pairs: [] })
     expect(e.table.n).toBe(0)
-    // values past LEFT_VALUES: 15,000 tokens of six fields are 90,000; a page of many small spans names more
+    // values past LEFT_VALUES: 15,000 tokens of six fields are 90,000; a page of many small spans and a run each names more
     const spans = Array.from({ length: 30_000 }, (_, i) => [i, [0, 1]] as [number, number[]])
-    const many = await writeLeftPart({ paper: PAPER, page: 3, first: 40, tokens: tokenWire(TOKENS_PAGE), spans, pairs: [] })
+    const many = await writeLeftPart({ paper: PAPER, page: 3, first: 40, tokens: tokenWire(TOKENS_PAGE), spans, pairs: spans.map(([id]) => [id, [0, 0, 1]] as [number, number[]]) })
     expect(many.emptied).toBe(true)
     expect(many.bytes.length).toBeLessThan(500)
     // a page within the caps is not emptied

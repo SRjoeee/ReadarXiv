@@ -3,6 +3,7 @@ import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
 import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { ReadBundle } from './bundle.mjs'
 import type { BundleUnit } from './units.mjs'
+import type { Draw, DrawSource } from './draw.mjs'
 
 export type { UnitWire } from './bundle.mjs'
 import type { UnitWire } from './bundle.mjs'
@@ -148,6 +149,8 @@ export interface ReadLeftPart {
   kind: 'left'; sha256: string; bytes: number; page: number; first: number
   table: { n: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array }
   spans: [id: number, ranges: number[]][]; pairs: [id: number, runs: number[]][]
+  /** the page's draw geometry (E-C), checked; null: the browser reads the page itself */
+  draw: Draw | null
 }
 export interface ReadCatalog {
   kind: 'catalog'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }; versions: HeadVersions
@@ -241,7 +244,9 @@ export declare function writeHead(o: {
 export declare function writeLeftPart(o: {
   paper: { id: string; version: number }; page: number; first: number; tokens: TokenWire
   spans: readonly (readonly [number, readonly number[]])[]; pairs: readonly (readonly [number, readonly number[]])[]
-}): Promise<Written & { page: number; emptied: boolean }>
+  /** the page's draw geometry in PDF.js's shapes (draw.mjs wireOf): shed to null, never thrown, for any reason the reader would refuse it */
+  draw?: DrawSource | Draw | null
+}): Promise<Written & { page: number; emptied: boolean; drawShed: boolean }>
 export declare function writePart(o: {
   paper: { id: string; version: number }; head: string; prev: string | null; pages: readonly [number, number]; views: readonly number[]
   left: readonly UnitWire[]; fileOnly: readonly (readonly [number, number])[]; layout: LayoutPart | null

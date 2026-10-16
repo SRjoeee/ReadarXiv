@@ -27,6 +27,7 @@ import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
 import { groupOf } from '../translate/groups.mjs'
 import { plainSource } from '../translate/mt.mjs'
 import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
+import { checkDraw, DrawRefusal, wireOf } from './draw.mjs'
 import { sourceUnitsOf } from './rows.mjs'
 import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
 
@@ -60,8 +61,8 @@ const HEAD_DEPTH = 3
 export const PART_CAP = 6 * 2 ** 20, PART_VALUES = 1_000_000
 const PART_DEPTH = 7
 /** a left part's: the object, `spans` or `pairs`, an entry, its ranges or runs */
-export const LEFT_CAP = 1024 * 1024, LEFT_VALUES = 200_000
-const LEFT_DEPTH = 4
+export const LEFT_CAP = 2 * 1024 * 1024, LEFT_VALUES = 320_000
+const LEFT_DEPTH = 5
 /** the catalog's: the object, a list, a ref */
 export const CATALOG_CAP = 2 * 2 ** 20, CATALOG_VALUES = 200_000
 const CATALOG_DEPTH = 3
@@ -964,7 +965,7 @@ export async function writePart({ paper, head, prev, pages, views, left, fileOnl
 }
 
 // ---------------------------------------------------------------- the left parts
-const LEFT_KEYS = ['bundle', 'kind', 'page', 'first', 'tokens', 'spans', 'pairs']
+const LEFT_KEYS = ['bundle', 'kind', 'page', 'first', 'tokens', 'spans', 'pairs', 'draw']
 const TOKEN_KEYS = ['perPage', 'l', 'r', 'y', 'h', 'top', 'bottom']
 /** the six coded fields of a left part's tokens, in the wire's order */
 export const TOKEN_FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
@@ -1036,7 +1037,15 @@ function leftShape(v) {
       nextWord = r[j] + r[j + 2]
     }
   }
-  return { page: v.page, first: v.first, table, spans, pairs }
+  // the page's draw geometry (E-C): null, or checked by draw.mjs
+  let draw = null
+  if (v.draw !== null) {
+    try { draw = checkDraw(v.draw) } catch (e) {
+      if (e instanceof DrawRefusal) throw refuse(K, e.path, e.why)
+      throw e
+    }
+  }
+  return { page: v.page, first: v.first, table, spans, pairs, draw }
 }
 
 /**
@@ -1057,13 +1066,13 @@ export async function readLeftPart(bytes, { ref, streamOf, caps }) {
     const rel = stream - s.first
     if (rel >= 0 && rel < s.table.n && ranges[0] !== rel) throw refuse(K, `spans[${i}][1][0]`, `not the unit's stream, ${rel} on this page`)
   }
-  return { kind: 'left', sha256, bytes: bytes.length, page: s.page, first: s.first, table: s.table, spans: s.spans, pairs: s.pairs }
+  return { kind: 'left', sha256, bytes: bytes.length, page: s.page, first: s.first, table: s.table, spans: s.spans, pairs: s.pairs, draw: s.draw }
 }
 
 /** the left part of a page with no tokens (n = 0, no spans, no pairs): what a page whose part would pass its caps ships */
 const emptyLeft = (page, first) => ({
   bundle: BUNDLE4, kind: 'left', page, first,
-  tokens: { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }, spans: [], pairs: [],
+  tokens: { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }, spans: [], pairs: [], draw: null,
 })
 
 /**
@@ -1072,13 +1081,16 @@ const emptyLeft = (page, first) => ({
  * page without its tokens loses its highlight and nothing else), and the result says so (`emptied`); it never throws for
  * size. It throws BundleRefusal for what its reader would refuse of it for another reason
  */
-export async function writeLeftPart({ paper, page, first, tokens, spans, pairs }) {
+export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, draw = null }) {
   const obj = {
     bundle: BUNDLE4, kind: 'left', page, first,
     tokens: { perPage: [...tokens.perPage], l: [...tokens.l], r: [...tokens.r], y: [...tokens.y], h: [...tokens.h], top: [...tokens.top], bottom: [...tokens.bottom] },
     spans: spans.map(([id, ranges]) => [id, [...ranges]]),
     pairs: pairs.map(([id, runs]) => [id, [...runs]]),
+    // (the draw geometry: shed to null for any reason its reader would refuse it, never thrown)
+    draw: wireOf(draw),
   }
+  let drawShed = draw != null && obj.draw === null
   // (what the reader refuses of a page for its size, the writer empties; what it refuses for anything else, the writer throws)
   let emptied = obj.tokens.perPage[0] > TOKENS_PAGE
   if (!emptied) {
@@ -1087,14 +1099,16 @@ export async function writeLeftPart({ paper, page, first, tokens, spans, pairs }
       emptied = true
     }
   }
-  if (!emptied) {
-    const text = JSON.stringify(obj)
-    emptied = encoder.encode(text).length > LEFT_CAP || inside('left', '', () => countValues(text, LEFT_VALUES, LEFT_DEPTH)) > LEFT_VALUES
+  const tooBig = o => { const text = JSON.stringify(o); return encoder.encode(text).length > LEFT_CAP || inside('left', '', () => countValues(text, LEFT_VALUES, LEFT_DEPTH)) > LEFT_VALUES }
+  if (!emptied && tooBig(obj)) {
+    // (the geometry goes before the tokens: a page without its draw is read by the browser, without its tokens loses its highlight)
+    if (obj.draw !== null) { obj.draw = null; drawShed = true }
+    emptied = tooBig(obj)
   }
   const out = emptied ? emptyLeft(page, first) : obj
   if (emptied) leftShape(out)
   const w = await written('left', out, LEFT_DEF, paper, { page })
-  return { ...w, emptied }
+  return { ...w, emptied, drawShed: drawShed || (emptied && draw != null) }
 }
 
 // ---------------------------------------------------------------- the catalog
