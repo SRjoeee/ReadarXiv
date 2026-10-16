@@ -344,6 +344,15 @@ function sameWord(doc, byPage, c, start, ours) {
   return (a !== null && a === ours) || (b !== null && b === theirs) || (a !== null && a === b) ? doc[k].t : ours
 }
 
+/** the pages of a paper whose operator lists are given up on, at most: past OPS_MS, or capped (ink.mjs OPS_CAP, GLYPHS_PAGE).
+ *  Past it every later page is dark unread (stats.timedOut), so that a paper whose every page stalls costs GIVEN_UP_MAX
+ *  times OPS_MS, not its pages' (10,000 pages of 10 s each: 28 hours, and as many parses left running where PDF.js cannot
+ *  cancel one). A count, no clock of the paper's: which pages are dark hangs on the pages before them alone, as each page's
+ *  own verdict does. The corpus's 3,036 pages hold none over a cap, the heaviest 146,115 operations; no paper has more than
+ *  three pages of 50,000 operations or one of 100,000 (2608.12606, 2608.18626, 2608.27728, 2608.08880), each read in under
+ *  3 s on a laptop */
+export const GIVEN_UP_MAX = 8
+
 /** stats before anything is read */
 function blank(units) {
   return {
@@ -441,6 +450,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   async function inkOf(p) {
     if (unread.has(p)) return
+    // (past GIVEN_UP_MAX pages given up on, the page is dark unread: its operator list is never asked)
+    if (stats.timedOut.length + stats.capped.length >= GIVEN_UP_MAX) { stats.timedOut.push(p); dark.add(p); return }
     // (the page its text was read from: PDF.js keeps each page's proxy)
     let page = null
     try { page = await arxiv.getPage(p) } catch {}
