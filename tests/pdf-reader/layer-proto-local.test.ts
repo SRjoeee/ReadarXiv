@@ -389,9 +389,10 @@ const para = (id: number, pages: [number, number, number][], chars: number, at =
 }
 
 describe("S3: a page's fill target is a function of its page", () => {
-  // The fill leading of a paragraph is how loosely its translation can be spread over its original's frame: 1.0 for a long one
-  // on a short frame, up to the script's top for a short one. Page 1 is a title page (one paragraph at 1.0), page 2 a fuller
-  // page (1.25), page 3 two paragraphs at the top (1.667) and page 4 one at 1.5; a paragraph runs from page 2 to page 4, laid
+  // The fill leading of a paragraph is how loosely its translation can be spread over its original's frame, its lines as line
+  // boxes (layer2.mjs lineBoxes: k lines at L in a frame of n where k L <= n): 1.0 for a long one on a short frame, up to the
+  // script's top for a short one. Page 1 is a title page (one paragraph at 1.0), page 2 a fuller page (1.2, five lines in six),
+  // page 3 two paragraphs at the top (1.667) and page 4 one at 1.33 (three in four); a paragraph runs from page 2 to page 4, laid
   // as page 4 is drawn, so that page 3's pass runs before page 2's (on next, page 3 is held to the title page's
   // rhythm: the targets there depend on the order the passes run in)
   const specs: Spec[] = [
@@ -410,8 +411,8 @@ describe("S3: a page's fill target is a function of its page", () => {
     await run.until(4)
     // (page 3 is passed with page 1, before page 2 and page 4, which wait for the paragraph laid as page 4 is drawn: page 3 is
     // not held to the title page's 1.0, nor page 2 to anything)
-    expect(run.rows.map(r => r.fill?.target)).toEqual([1, 1.25, 1.667, 1.5])
-    expect(run.rows.map(r => r.fill?.anchor)).toEqual([1, 1.25, 1.667, 1.5])
+    expect(run.rows.map(r => r.fill?.target)).toEqual([1, 1.2, 1.667, 1.33])
+    expect(run.rows.map(r => r.fill?.anchor)).toEqual([1, 1.2, 1.667, 1.33])
     expect(Object.keys(run.rows[1]!.fill!).sort()).toEqual(['anchor', 'body', 'own', 'target'])
   })
   it('draws every page alike, the units of a page laid in any order: fill, markup and operations', async () => {

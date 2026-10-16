@@ -121,6 +121,20 @@ it by those marks alone, by at most their own width, is `hanging` (reported, not
 closing mark's blank half the breaker hangs). On `next` the old count, 432 of 3,342 frames (12.9 %), is 137 past the edge
 (4.1 %) and 295 hanging (8.8 %): ja 77 to 9 and 68, zh 298 to 77 and 221.
 
+**The gap between two paragraphs against their lines** (`paraGapTight`, model, defect; the half-leading round, 2026-10-17).
+`paraGap` holds the drawn gap between two body frames one above the other in a column to the original's, foot to top,
+whatever the drawn leading: a paragraph spread at 1.4 pitches from its frame's first baseline to its last stood a pitch from
+the next and read 1.0 (1512.03385 page 12 in Chinese, the maintainer's report: gaps of 11.95 between lines 14.9 to 16.7
+apart). `paraGapTight` counts the pairs of two units (`measure.mjs paraGapsOf`, `tight`) whose drawn baselines' gap less the
+drawn leading (the mean of the two frames' own, each the lower median gap of its consecutive lines within a flow segment)
+falls short of the original's room past its pitch (its gap less the pitch, the lower median of the two frames' own gaps:
+a `\parskip`, capped at a pitch, so that a line borrowed into a wider room is no tight gap) by more than 0.05 of a pitch;
+no pair where neither frame draws two lines. It entered as a defect, `next`'s value its baseline: 250 pairs on the 30
+outputs (1512.03385-zh 52, 1706.03762-zh 27, 1810.04805-zh 33, 2608.04322-zh 43, the thesis 39, 2608.16117 10, the Korean
+39, the Japanese 3, the alphabets 4). With the lines as line boxes (`layer-proto/layer2.mjs lineBoxes`) 68, the alphabets'
+4 unchanged; what is left is mostly a frame of one line (a paragraph's line at a column's head or foot, which has no room
+to give) and a first line a run-in heading or a kept label shares, which keeps its baseline.
+
 **The links** (3a-0, the first of the links' pull requests: the instrument before the engine's anchors; `layer-gate/links.mjs`, `tests/pdf-reader/layer-gate-links.test.ts`). The owner's ruling: links kept / total at least 0.95, the text drawn under each moved link equal to PDF.js's overlaid text at least 0.98, links over erased text 0. The original's links are the Link annotations PDF.js reports on arXiv's file (`getAnnotations()`) that the reader can carry (T: a rectangle with an area and a non-empty destination, or a url of http:, https: or mailto:); the rest are reported (U: a named action, JavaScript with no url, an attachment, `unsafeUrl` alone, another scheme). The engine's answer is `run.linksOf(p)` (records, plain data) and `run.linkSources(p)` (gate-only: each record's source annotations `[page, i]`, `i` the rank among the page's Link annotations, and its tier); an engine with neither has no record, and the measures read it so (kept 0). The attribution is the engine's own claim, checked and not trusted: by target, by the in-place rectangle, by uniqueness and, for a moved record, by the drawn text. What no check can tell is a right link from a wrong one that has the same target and the same rectangle; the gate accepts that.
 
 | Measure | Class | What is counted |
