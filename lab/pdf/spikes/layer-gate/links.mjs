@@ -188,7 +188,7 @@ export function cropsShown(crops, glyphsOf) {
       if (!inside(g.x, g.y, c.src) || (c.clip && !c.clip.some(b => g.x >= b[0] && g.x <= b[2] && g.y >= b[1] && g.y <= b[3]))) continue
       chars.push({ x: X0 + (g.x - x0) * sx, y: Y0 + (g.y - y0) * sy, ch: g.ch })
     }
-    return { srcPage: c.srcPage, src: c.src, chars }
+    return { srcPage: c.srcPage, src: c.src, dst: c.dst, chars }
   })
 }
 
@@ -227,9 +227,10 @@ export function pairsOf(pieces, kOf = null) {
   }
   return out.every(e => e.k !== null) ? out.sort((a, b) => a.k - b.k) : out
 }
-/** pairs that are read by their rank: in the source's order (each with its `k`), or null where two or more are and one has no
- *  place in the source to order it by (a pair's text then cannot be told an annotation's) */
-const inSource = list => (list.length > 1 && list.some(e => !Number.isInteger(e.k)) ? null : list)
+/** pairs that are read by their rank: in the source's order (each with its `k`; the pairs that could be the link's alone, whatever
+ *  the unit's others), or null where two or more are and one has no place in the source to order it by (a pair's text then
+ *  cannot be told an annotation's) */
+const inSource = list => (list.length > 1 && list.some(e => !Number.isInteger(e.k)) ? null : list.slice().sort((a, b) => (a.k ?? 0) - (b.k ?? 0)))
 /** the destination a \hyperlink's source names (`\hyperlink{name}{`), or null */
 export function hyperlinkNameOf(src) {
   const m = /^\\hyperlink\s*\{([^{}]+)\}/.exec(src)
@@ -305,8 +306,9 @@ export function referenceOf(annots, ctxIn) {
       }
     }
     if (!pair) return null
-    // (one pair by its place among the owner's pairs on that page, never by the object: pairsOf makes them anew at each ask)
-    const key = `${a.page ?? ''}|${owner}|${pairs.indexOf(pair)}`
+    // (one pair by its owner and its place among the owner's pairs, never by the object, which pairsOf makes anew at each ask;
+    // nor by the annotation's page: a unit over a page break is one unit, its pair one, whose text is given once)
+    const key = `${owner}|${pairs.indexOf(pair)}`
     if (key !== last) parts.push(pair.text)
     last = key
   }
@@ -346,7 +348,8 @@ export function referenceOf(annots, ctxIn) {
  *   shape    its boxes are not [x0 < x1, y0 < y1] times n
  *   order    its `order` is not its rank in the list (an integer, 0..n-1, in order)
  *   border   its border is not its annotation's (none, or the same width, colour and style)
- *   name     (also) its name is not the drawn text under it (moved) or its annotation's overlaid text (in place)
+ *   name     (also) its name is not the drawn text under it (moved), its annotations' overlaid text (moved over a crop, with no
+ *            drawn text under it) or its annotation's overlaid text (in place)
  */
 export function linksPage(o) {
   const own = o.parsed(o.page)
@@ -400,9 +403,15 @@ export function linksPage(o) {
     const drawnText = wantDrawn ? o.drawn(rec) : ''
     const cropText = wantDrawn ? textUnder((o.crops ?? []).filter(c => good.some(({ q, a }) => q === c.srcPage && a.rect && meets(a.rect, c.src))).flatMap(c => c.chars), boxesOf(rec.boxes)) : ''
     const shownText = `${drawnText}${cropText}`
+    // (a moved record with no drawn text under it, over a crop drawn on the page: named by what the crop shows there, its
+    // annotations' overlaid text (the original's text under the rectangle the crop carries); read by the overlaid text, never
+    // the instrument's estimate of the crop's glyphs, which places a glyph within its item by equal advances)
+    const overCrop = wantDrawn && !/\S/u.test(drawnText) && (o.crops ?? []).some(c => c.dst && boxesOf(rec.boxes).some(b => meets(b, c.dst)))
+    const ovText = good.length && good.every(({ a }) => /\S/u.test(a.ov ?? '')) ? good.map(({ a }) => a.ov).join(' ') : ''
     if (typeof rec.name !== 'string') reasons.push('name')
     else if (!rec.name && (rec.moved || good.some(({ a }) => pointsIn(o.glyphs, a.boxes).length))) reasons.push('name')
     else if (rec.name && rec.moved && /\S/u.test(drawnText) && !sameText(rec.name, drawnText)) reasons.push('name')
+    else if (rec.name && overCrop && ovText && !sameText(rec.name, ovText)) reasons.push('name')
     else if (rec.name && !rec.moved && good.length === 1 && /\S/u.test(good[0].a.ov) && !sameText(rec.name, good[0].a.ov)) reasons.push('name')
     if (rec.moved) out.linksMoved++
     else out.linksInPlace++

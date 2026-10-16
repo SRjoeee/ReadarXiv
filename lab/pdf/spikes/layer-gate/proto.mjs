@@ -568,8 +568,9 @@ async function linksOfPage(p, page, tc) {
   const m = linksPage({
     page: p, parsed: q => L.parsed.get(q), counted: q => q <= S.pages, glyphs, erased: erasedOf(run.rows[p - 1]?.ops, (x, y) => view.convertToViewportPoint(x, y)), records, sources, claims: L.claims,
     // (each annotation read with its own page's TeX's file and glyphs, a record a unit drew over a page break merging two pages'
-    // annotations; with no TeX's file to read, no reference can be had where a link's text is the translation's: unverified)
-    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), crops, reference: (rec, annots) => (!S.file ? undefined : referenceOf(annots, q => (Number.isInteger(q) && q >= 1 && q <= doc.numPages && L.parsed.has(q) ? ctxOf(q) : null))),
+    // annotations; with no TeX's file to read, no reference can be had where a link's text is the translation's: unverified, so
+    // too where the file has no page an annotation is on, whose units are the hybrid's v0's alone)
+    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), crops, reference: (rec, annots) => (!S.file || annots.some(a => !S.file.get(a.page)) ? undefined : referenceOf(annots, q => (Number.isInteger(q) && q >= 1 && q <= doc.numPages && L.parsed.has(q) ? ctxOf(q) : null))),
   })
   const { where, ...values } = m
   return { values, where: Object.fromEntries(Object.entries(where).filter(([, ids]) => ids.length)) }

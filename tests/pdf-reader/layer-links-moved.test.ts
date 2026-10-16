@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { type Annot, freezeLinks, type LinkCandidate, linkKindOf, type LinkTarget, matchUnit, ownedIn, placeUnit } from '@/pdf-reader/engine/layer-proto/links.mjs'
+import { type Annot, freezeLinks, type LinkCandidate, linkKindOf, type LinkTarget, matchUnit, ownedIn, ownersOf, placeUnit } from '@/pdf-reader/engine/layer-proto/links.mjs'
 import { tokenBand } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
@@ -124,6 +124,14 @@ describe('LK2: a link TeX broke over two lines', () => {
     expect(records.map(r => r.rec.name)).toEqual(['Peters et al.', '2018a'])
     expect(records.map(r => letters(drawnBetween(L, 2, r.rec.boxes)))).toEqual(['Petersetal', '2018a'])
   })
+  it('two halves drawn otherwise (their borders) are two records, each its own border', () => {
+    const L = lay(pieces, { 1: { mode: 'orig-text', text: 'Radford et al.' } })
+    const [h0, h1] = halves()
+    const boxed = { ...h1!, border: { width: 1, rgb: [255, 0, 0], style: 'solid' as const } }
+    const m = matchUnit({ cands: [cand(h0!), cand(boxed)], targets: [target(1, { kind: 'cite', keys: ['radford'], gap })] })
+    const { records } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records.map(r => [r.rec.name, r.rec.border ?? null])).toEqual([['Rad', null], ['ford et al.', { width: 1, rgb: [255, 0, 0], style: 'solid' }]])
+  })
 })
 
 describe('LK3: a link over a crop', () => {
@@ -165,6 +173,15 @@ describe('LK4: a link whose text is translated (\\href)', () => {
     expect(records[0]!.rec.name.replace(/\s/g, '')).toBe('\u6211\u4eec\u7684\u4ee3\u7801\u5e93\u548c\u6570\u636e\u96c6')
     const b = records[0]!.rec.boxes
     expect(drawnBetween(L, 2, b.slice(0, 4)) + drawnBetween(L, 2, b.slice(4))).toBe('\u6211\u4eec\u7684\u4ee3\u7801\u5e93\u548c\u6570\u636e\u96c6')
+  })
+  it('a pair whose annotations are drawn otherwise (their borders) is left ambiguous: one record has one border', () => {
+    const pieces: Piece[] = [text('\u4ee3\u7801\u89c1'), { t: 'open', id: 7, src: '\\href{https://x.org/code}{' }, text('\u6211\u4eec\u7684\u4ee3\u7801'), { t: 'close', id: 7 }, text('\u3002')]
+    const L = lay(pieces, {})
+    const a = ann(4, { url: 'https://x.org/code' }, 'our', ['9|0']), b = { ...ann(5, { url: 'https://x.org/code' }, 'code', ['10|0']), border: { width: 1, rgb: [0, 0, 255], style: 'solid' as const } }
+    const m = matchUnit({ cands: [cand(a), cand(b)], targets: [{ ord: 1, pair: 7, kind: 'url', url: 'https://x.org/code', gap: null, segs: null, draw: 'pair' }] })
+    const { records, tried } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records).toEqual([])
+    expect(tried).toEqual([{ q: 1, i: 4, why: 'ambiguous' }, { q: 1, i: 5, why: 'ambiguous' }])
   })
   it('tags each token of the pair with its id, which no drawing reads: the SVG is the one without the tag', () => {
     const pieces: Piece[] = [text('\u89c1'), { t: 'open', id: 7, src: '\\href{https://x.org/}{' }, text('\u4ee3\u7801'), { t: 'close', id: 7 }]
@@ -229,6 +246,9 @@ describe('LK6: a citation drawn as the page wrote it before (no characters), by 
 describe('the link a piece may carry', () => {
   it('reads it from the source: a citation\'s keys, a url (\\url, \\href, starred or not), a reference, a mark; none for a formula', () => {
     expect(linkKindOf({ t: 'ph', src: '\\citep[see][]{a, b}' })).toEqual({ kind: 'cite', keys: ['a', 'b'] })
+    // (the spaces TeX skips after a command's name and between its arguments)
+    expect(linkKindOf({ t: 'ph', src: '\\cite {smith}' })).toEqual({ kind: 'cite', keys: ['smith'] })
+    expect(linkKindOf({ t: 'ph', src: '\\citep [see] [p. 3] {a}' })).toEqual({ kind: 'cite', keys: ['a'] })
     expect(linkKindOf({ t: 'ph', src: '\\nocite{a}' })).toBeNull()
     expect(linkKindOf({ t: 'ph', src: '\\url{https://x.org/a_b}' })).toEqual({ kind: 'url', url: 'https://x.org/a_b' })
     expect(linkKindOf({ t: 'open', src: '\\href{https://x.org/\\#top}{' })).toEqual({ kind: 'url', url: 'https://x.org/#top' })
@@ -342,6 +362,17 @@ describe('what the match never does', () => {
     const m = matchUnit({ cands: many, targets: Array.from({ length: 20 }, (_, k) => target(k)), budget: { left: 1000 } })
     expect(m.tried.filter(t => t.why === 'unplaced').length).toBe(45)
   })
+  it('makes no geometry match past its budget in TeX\'s segments: the annotation is unplaced', () => {
+    // (two characters at y 500 in a segment of page 1; no rendering took them)
+    const a = { ...ann(0, { dest: 'cite.a' }, 'ab', ['1|0', '1|1']), g2: { x: [110, 120], y: [500, 500], ch: ['a', 'b'], key: ['1|0', '1|1'] } }
+    const segs = Array.from({ length: 50 }, () => [1, 100, 500, 200, 508, 498])
+    const T = target(1, { kind: 'cite', keys: ['a'], segs })
+    expect(matchUnit({ cands: [cand(a)], targets: [T] }).groups.map(g => g.annots.map(c => c.tier))).toEqual([['geometry']])
+    // (the segments cost 50 a point, 100 for the two: a budget of 60 runs out among them)
+    const m = matchUnit({ cands: [cand(a)], targets: [T], budget: { left: 60 } })
+    expect(m.groups).toEqual([])
+    expect(m.tried).toEqual([{ q: 1, i: 0, why: 'unplaced' }])
+  })
 })
 
 describe('the owner of an annotation', () => {
@@ -357,6 +388,20 @@ describe('the owner of an annotation', () => {
     expect(ownedIn([a], { rects: rects(0, 25) }, [], 1).length).toBe(0)
     // (rectangles of another page hold none)
     expect(ownedIn([a], { rects: [[2, 0, 495, 50, 510]] }, [], 1).length).toBe(0)
+  })
+  it('makes no test past its budget: what it left unread has no owner, and is listed', () => {
+    const b = { ...a, i: 1 }, units = [{ rects: rects(0, 15) }, { rects: rects(0, 50) }]
+    expect([...ownersOf([a, b], units, 1)]).toEqual([[0, 1], [1, 1]])
+    // (a test a point against a unit, one more a point inside its box: a's 5 against the first unit and 8 against the second;
+    // b's 5 and 3, its third point past the budget)
+    const budget = { left: 20 }, skipped = new Set<number>()
+    expect([...ownersOf([a, b], units, 1, { budget, skipped })]).toEqual([[0, 1]])
+    expect([...skipped]).toEqual([1])
+    // (no test once the budget is spent: it stops at the first point past it)
+    expect(budget.left).toBe(-1)
+    const none = new Set<number>()
+    expect(ownedIn([a, b], units[1]!, [units[0]!], 1, { left: 5 }, none)).toEqual([])
+    expect([...none]).toEqual([0, 1])
   })
 })
 

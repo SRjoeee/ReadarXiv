@@ -43,8 +43,9 @@ export declare function erasedOf(ops: readonly unknown[] | null | undefined): (x
  *  page where it has grown (run.mjs) */
 export interface OwnerUnit { id: number; stream: number; rects: readonly (readonly number[])[] | null; grown?: ReadonlyMap<number, readonly (readonly number[])[]>; grownRects?: ReadonlyMap<number, readonly (readonly number[])[]> }
 /** the owner of each annotation of page q (its index in `ranked`, by annotation `i`): the first unit in order whose rectangles
- *  hold more than half of its points; `stop`, the last index looked at; `budget`, the tests it may spend */
-export declare function ownersOf(list: readonly (Annot | Unsupported)[] | null | undefined, ranked: readonly Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>[], q: number, o?: { stop?: number; budget?: { left: number } }): Map<number, number>
+ *  hold more than half of its points; `stop`, the last index looked at; `budget`, the tests it may spend; `skipped`, given, takes
+ *  the `i` of each annotation the budget left unread */
+export declare function ownersOf(list: readonly (Annot | Unsupported)[] | null | undefined, ranked: readonly Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>[], q: number, o?: { stop?: number; budget?: { left: number }; skipped?: Set<number> | null }): Map<number, number>
 /** the record of an annotation left over the original's ink (`order` set when the list is ranked). Its `name` is text from the
  *  PDF, which may hold control and bidirectional characters: a view sets it as text, never as markup */
 export declare function inPlaceOf(a: Annot): LinkRecord
@@ -52,8 +53,9 @@ export declare function inPlaceOf(a: Annot): LinkRecord
  *  for a moved record, 'place' for one in place) */
 export interface LinkSource { annots: [number, number][]; tier: string }
 /** the annotations of page q unit `u` owns: of the units with lines on q in their growth rank there, the first whose rectangles
- *  hold most of an annotation's points (`before`: those ranked before u); `budget`: the tests it may spend */
-export declare function ownedIn(list: readonly (Annot | Unsupported)[] | null | undefined, u: Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>, before: readonly Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>[], q: number, budget?: { left: number }): Annot[]
+ *  hold more than half of an annotation's points (`before`: those ranked before u); `budget`: the tests it may spend; `skipped`,
+ *  given, takes the `i` of each annotation the budget left unread */
+export declare function ownedIn(list: readonly (Annot | Unsupported)[] | null | undefined, u: Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>, before: readonly Pick<OwnerUnit, 'rects' | 'grown' | 'grownRects'>[], q: number, budget?: { left: number }, skipped?: Set<number> | null): Annot[]
 /** what an annotation points to, as the match tells its kinds apart */
 export declare function kindOfAnnot(a: Annot): 'url' | 'cite' | 'note' | 'internal'
 /** a URL as the match compares two: TeX's escapes undone, the WHATWG parser's form; null where it is none */

@@ -722,7 +722,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const ranked = rankedOnPage(q)
       const at = ranked.indexOf(p)
       if (at < 0) continue
-      for (const a of LK.ownedIn(list, p, ranked.slice(0, at), q, { left: LK.WORK_MAX / ranked.length })) cands.push({ q, a })
+      // (an annotation whose owner the share left unread: `unplaced`, where no owner's match gives it another reason)
+      const skipped = new Set()
+      for (const a of LK.ownedIn(list, p, ranked.slice(0, at), q, { left: LK.WORK_MAX / ranked.length }, skipped)) cands.push({ q, a })
+      if (skipped.size) { const w = (whyOf[q] ??= new Map()); for (const i of skipped) if (!w.has(i)) w.set(i, 'unplaced') }
     }
     const budget = { left: LK.WORK_MAX / Math.max(1, rankedOnPage(p.pages[0]).length) }
     if (!cands.length) return

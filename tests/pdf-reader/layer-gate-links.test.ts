@@ -130,7 +130,7 @@ const page1 = () => {
 const noErase = () => false
 const unused = () => ''
 const noRef = () => null
-type Run = { records?: LinkRec[]; sources?: (LinkSource | null)[] | null; erased?: (x: number, y: number) => boolean; parsed?: (q: number) => Annots | undefined; claims?: Map<string, { page: number; label: string; credited: boolean; flagged: boolean }>; page?: number; drawn?: (r: LinkRec) => string; crops?: { srcPage: number; src: number[]; chars: Point[] }[]; reference?: (r: LinkRec, a: Annot[]) => string | null | undefined }
+type Run = { records?: LinkRec[]; sources?: (LinkSource | null)[] | null; erased?: (x: number, y: number) => boolean; parsed?: (q: number) => Annots | undefined; claims?: Map<string, { page: number; label: string; credited: boolean; flagged: boolean }>; page?: number; drawn?: (r: LinkRec) => string; crops?: { srcPage: number; src: number[]; dst?: number[]; chars: Point[] }[]; reference?: (r: LinkRec, a: Annot[]) => string | null | undefined }
 const run = (o: Run = {}) => {
   const { annots, glyphs } = page1()
   return linksPage({ page: o.page ?? 1, parsed: o.parsed ?? (q => (q === 1 ? annots : undefined)), glyphs, erased: o.erased ?? noErase, records: o.records ?? [], sources: o.sources ?? null, claims: o.claims ?? new Map(), drawn: o.drawn ?? unused, ...(o.crops ? { crops: o.crops } : {}), reference: o.reference ?? noRef })
@@ -365,12 +365,20 @@ describe('true over a crop: what the crop shows, its source\'s glyphs, never its
     expect(cropsShown(null, () => glyphs)).toEqual([])
   })
   it('counts a moved record over a crop true where what it shows under it is the overlaid text, whatever its copy text', () => {
-    const rec = moved('cite.a', [305, 401, 316, 405], { name: 'parikh-etal:2016' })
+    const rec = moved('cite.a', [305, 401, 316, 405])
     const crops = cropsShown([crop], () => glyphs)
     // (no character of the SVG under it: a crop's copy text is no drawn text)
     const m = run({ records: [rec], sources: [{ annots: [[1, 0]] }], drawn: () => '', crops, reference: () => '12' })
     expect(m).toMatchObject({ linksTrueN: 1, linksWrong: 0, where: { linksTrue: [] } })
     expect(run({ records: [rec], sources: [{ annots: [[1, 0]] }], drawn: () => '', crops, reference: () => '13' }).linksTrueN).toBe(0)
+  })
+  it('names a moved record over a crop by what the crop shows: its annotation\'s overlaid text, never the crop\'s copy text', () => {
+    const crops = cropsShown([crop], () => glyphs)
+    const named = (name: string) => run({ records: [moved('cite.a', [305, 401, 316, 405], { name })], sources: [{ annots: [[1, 0]] }], drawn: () => '', crops, reference: () => '12' })
+    expect(named('12')).toMatchObject({ linksWrong: 0 })
+    expect(named('parikh-etal:2016')).toMatchObject({ linksWrong: 1, where: { linksWrong: ['0:name'] } })
+    // (a record over no crop with nothing drawn under it is not read so: no evidence of its name)
+    expect(run({ records: [moved('cite.a', [505, 401, 516, 405], { name: 'x' })], sources: [{ annots: [[1, 0]] }], drawn: () => '', crops, reference: () => '12' }).linksWrong).toBe(0)
   })
   it('reads no crop whose source box misses the annotation\'s rectangle: a crop of another place\'s "12" shows nothing of this link', () => {
     const rec = moved('cite.a', [305, 401, 316, 405])
@@ -457,6 +465,11 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
     expect(referenceOf([two[1]!], ctx)).toBe('bee')
     // (with no source index for them, no reference: never the translation's order)
     expect(referenceOf([two[0]!], { ...ctx, pairsOf: () => pairsOf(pieces) })).toBeNull()
+    // (a pair of another kind with no source index leaves the two \hyperref pairs in the source's order still)
+    const more = [...pieces, { t: 'open', id: 3, src: '\\href{https://example.org/z}{' }, { t: 'text', s: 'zed' }, { t: 'close', id: 3 }]
+    const mixed = { ...ctx, pairsOf: () => pairsOf(more, [5, -1, 5, 2, -1, 2, -1, -1, -1]) }
+    expect(referenceOf([two[0]!], mixed)).toBe('ay')
+    expect(referenceOf([two[1]!], mixed)).toBe('bee')
   })
   it('is the overlaid text of a link of a unit with no pair: only a pair\'s text is a link\'s own translated text', () => {
     // (a glyph off every segment on a unit's line: the unit has no pair, so the link is over its placeholders' ink)
@@ -479,6 +492,12 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
     expect(referenceOf([a, b], (q?: number) => { pages.push(q!); return q === 1 ? p1 : p2 })).toBe('21Section 3')
     expect(pages).toEqual([1, 2])
     expect(referenceOf([a, b], () => null)).toBeNull()
+  })
+  it('gives one pair\'s text once to a record whose annotations of it are on two pages: one unit over a page break', () => {
+    const two = annotationsOf([raw({ rect: [100, 700, 130, 712], url: 'https://example.org/a', dest: undefined, overlaidText: 'here' })]).links.filter(a => a.ok)
+    const pieces = [{ t: 'open', id: 1, src: '\\href{https://example.org/a}{' }, { t: 'text', s: 'ici' }, { t: 'close', id: 1 }]
+    const ctx = { ...base, all: two, pairsOf: () => pairsOf(pieces) }
+    expect(referenceOf([{ ...two[0]!, page: 3 }, { ...two[0]!, page: 4 }], () => ctx)).toBe('ici')
   })
   it('reads an \\href\'s URL as a URL, TeX\'s escapes undone', () => {
     expect(hrefUrlOf('\\href{https://example.org/a_b\\_c?x=1\\&y=2}{t}')).toBe('https://example.org/a_b_c?x=1&y=2')
@@ -589,6 +608,12 @@ describe('the links\' minimums, 3a-2: kept and true per output', () => {
     expect(row('low').fails).toEqual(['linksKept', 'linksTrue'])
     expect(row('low').linksLost).toEqual(['3:1', '5:2'])
     expect(row('low').linksFalse).toEqual(['3:0', '3:4'])
+  })
+  it('decides on the counts, never the share rounded for the report', () => {
+    // (18,999 of 20,000 kept is 0.94995, which the report rounds to 0.95)
+    const rows = completenessRows({ fixtures: { near: output({ linksKept: 0.95, linksKeptN: 18999, linksTotal: 20000, linksTrue: 0.98, linksTrueN: 98, linksMoved: 100, linksUnverified: 0 }) } } as never, 'model')
+    expect(rows[0]!.fails).toEqual(['linksKept'])
+    expect(rows[0]!.linksKept).toBe(0.95)
   })
   it('lists each wrong link\'s page, rank and reasons', () => {
     const rows = completenessRows({ fixtures: { w: output({ linksWrong: 2 }, [{ p: 2, where: { linksWrong: ['1:name', 'p1/0:twice'] } }]) } } as never, 'model')

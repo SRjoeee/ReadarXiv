@@ -373,10 +373,14 @@ export function completenessRows(run, tier) {
     // (and the links' two shares held to their minimums, 3a-2, the owner's ruling: none where there is nothing to share, no
     // link or no moved record; the misses listed, the annotations not kept (`linksLost`, page:rank) and the moved records whose
     // drawn text is not the reference's (`linksFalse`, page:rank))
+    // (decided on the counts, never on the share rounded for the report: 18,999 of 20,000 is below 0.95; the share alone where a
+    // record has no counts)
+    const counts = { linksKept: [t.linksKeptN, t.linksTotal], linksTrue: [t.linksTrueN, (t.linksMoved ?? 0) - (t.linksUnverified ?? 0)] }
     for (const [k, min] of [['linksKept', LINKS_MIN.kept], ['linksTrue', LINKS_MIN.true]]) {
       if (t[k] === null || t[k] === undefined) continue
       row[k] = t[k]
-      if (t[k] < min - 1e-12) row.fails.push(k)
+      const [n, d] = counts[k]
+      if ((Number.isFinite(n) && d > 0 ? n / d : t[k]) < min - 1e-12) row.fails.push(k)
     }
     // (and each wrong link's page, rank and reasons, links.mjs linksPage's `where`: names and numbers alone)
     if (row.linksWrong > 0) row.linksWrongAt = (f.pages ?? []).flatMap(p => (p.where?.linksWrong ?? []).map(x => `p${p.p}:${x}`))

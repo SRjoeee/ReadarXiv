@@ -215,12 +215,13 @@ function rectsOn(w, q) {
   const rs = g?.get(q) ?? (w.rects ?? []).filter(r => r[0] === q)
   return rs.length ? { rs, box: [Math.min(...rs.map(r => r[1])), Math.min(...rs.map(r => r[2])), Math.max(...rs.map(r => r[3])), Math.max(...rs.map(r => r[4]))] } : null
 }
-/** whether rectangles (rectsOn's) hold more than half of the points, charging the budget a test a point (and a rectangle) */
+/** whether rectangles (rectsOn's) hold more than half of the points, charging the budget a test a point (and a rectangle);
+ *  false once the budget is spent (the caller then reads no owner) */
 function holdsMost(h, pts, budget) {
   const need = Math.floor(pts.length / 2) + 1
   let n = 0
   for (const [x, y] of pts) {
-    budget.left--
+    if (--budget.left < 0) return false
     if (x < h.box[0] || x > h.box[2] || y < h.box[1] || y > h.box[3]) continue
     budget.left -= h.rs.length
     if (h.rs.some(r => x >= r[1] && x <= r[3] && y >= r[2] && y <= r[4])) n++
@@ -235,24 +236,27 @@ function holdsMost(h, pts, budget) {
  * may not have grown when the other is matched, and what it holds then is not final; the first with a majority is final once
  * every unit ranked before it has grown, which each has before it is laid. No unit with a majority: no owner, never matched.
  * `stop`: the index past which no owner is looked for (a unit's match: itself); `budget` ({ left }): the tests it may spend,
- * past which an annotation has no owner. Returns a Map of annotation `i` to the owner's index in `ranked`
+ * past which no test is made and an annotation has no owner (`skipped`, a Set given: the `i` of each annotation so left).
+ * Returns a Map of annotation `i` to the owner's index in `ranked`
  */
-export function ownersOf(list, ranked, q, { stop = ranked.length - 1, budget = { left: WORK_MAX } } = {}) {
+export function ownersOf(list, ranked, q, { stop = ranked.length - 1, budget = { left: WORK_MAX }, skipped = null } = {}) {
   const on = ranked.slice(0, stop + 1).map(w => rectsOn(w, q))
   const out = new Map()
   for (const a of list ?? []) {
     if (a.unsupported) continue
-    if (budget.left <= 0) break
-    const pts = pointsOfAnnot(a)
-    const at = on.findIndex(h => h && holdsMost(h, pts, budget))
-    if (budget.left < 0) break
-    if (at >= 0) out.set(a.i, at)
+    if (budget.left > 0) {
+      const pts = pointsOfAnnot(a)
+      const at = on.findIndex(h => h && budget.left >= 0 && holdsMost(h, pts, budget))
+      if (budget.left >= 0) { if (at >= 0) out.set(a.i, at); continue }
+    }
+    skipped?.add(a.i)
   }
   return out
 }
-/** the annotations of page q that unit `u` owns (ownersOf, its match): `before`, the units ranked before it there */
-export function ownedIn(list, u, before, q, budget = { left: WORK_MAX }) {
-  const owners = ownersOf(list, [...before, u], q, { budget })
+/** the annotations of page q that unit `u` owns (ownersOf, its match): `before`, the units ranked before it there; `skipped`, a
+ *  Set given, takes the `i` of those its budget left unread (whose owner is not known: the match's `unplaced`) */
+export function ownedIn(list, u, before, q, budget = { left: WORK_MAX }, skipped = null) {
+  const owners = ownersOf(list, [...before, u], q, { budget, skipped })
   return (list ?? []).filter(a => !a.unsupported && owners.get(a.i) === before.length)
 }
 
@@ -265,7 +269,7 @@ export function kindOfAnnot(a) {
   return 'internal'
 }
 
-const CITE_SRC = /^\\(?![Nn]ocite)[A-Za-z]*[Cc]ite[A-Za-z]*\*?(?:\[[^\]]*\])*\{([^{}]*)\}/
+const CITE_SRC = /^\\(?![Nn]ocite)[A-Za-z]*[Cc]ite[A-Za-z]*\*?\s*(?:\[[^\]]*\]\s*)*\{([^{}]*)\}/
 const REF_SRC = /^\\(?:ref|eqref|autoref|Autoref|cref|Cref|crefrange|Crefrange|cpageref|Cpageref|pageref|nameref|Nameref|vref|Vref|labelcref|subref|hyperref|hyperlink)\*?(?![A-Za-z])/
 const NOTE_SRC = /^\\(?:footnote|footnotemark)(?![A-Za-z])/
 const URL_SRC = /^\\url\*?\s*\{((?:[^{}]|\{[^{}]*\})*)\}/
@@ -311,6 +315,8 @@ export function singleTarget(piece, kind) {
 }
 
 const sameTarget = (a, b) => (a.url !== undefined ? a.url === b.url : b.url === undefined && JSON.stringify(a.dest) === JSON.stringify(b.dest))
+/** two annotations drawn alike: no border either, or the same width, colour and style (a record carries one border) */
+const sameBorder = (a, b) => (!a.border || !b.border ? !a.border && !b.border : a.border.width === b.border.width && a.border.style === b.border.style && a.border.rgb.every((v, i) => v === b.border.rgb[i]))
 const within = (x, y, s) => x >= s[1] - 0.5 && x <= s[3] + 0.5 && y >= s[5] - 0.5 && y <= s[4] + 0.5
 
 /**
@@ -350,9 +356,11 @@ export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
       if (!n) for (const T of targets) {
         if (!T.segs?.length) continue
         budget.left -= T.segs.length * g.x.length
+        if (budget.left < 0) break
         if (g.x.every((x, j) => T.segs.some(s => s[0] === c.q && within(x, g.y[j], s)))) { hit = T; n++ }
       }
     }
+    if (budget.left < 0) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
     if (n !== 1) { left.push(c); continue }
     if (hit.draw) add(hit, c, 'geometry')
   }
@@ -562,11 +570,11 @@ function placeText(to, annots, lines, edge, band, records, tried) {
     found.push({ c, ds, de })
     from = de + 1
   })
-  // (two of one target whose ranges abut: one record)
+  // (two of one target, drawn alike, whose ranges abut: one record)
   const merged = []
   for (const f of found) {
     const prev = merged.at(-1)
-    if (prev && prev.de + 1 === f.ds && sameTarget(prev.annots[0].a, f.c.a)) { prev.de = f.de; prev.annots.push(f.c) }
+    if (prev && prev.de + 1 === f.ds && sameTarget(prev.annots[0].a, f.c.a) && sameBorder(prev.annots[0].a, f.c.a)) { prev.de = f.de; prev.annots.push(f.c) }
     else merged.push({ ds: f.ds, de: f.de, annots: [f.c] })
   }
   for (const m of merged) {
@@ -609,6 +617,8 @@ function placePair(to, annots, lines, edge, band, records, tried) {
       }
     }
   })
+  // (one pair's text is one record, of one border: annotations of it drawn otherwise cannot be told apart in it)
+  if (annots.some(c => !sameBorder(c.a, annots[0].a))) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'ambiguous' }); return }
   const r = rangeRecord(D, lines, edge, band)
   if (!r) { for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); return }
   records.push({ page: r.page, li: r.li, x: r.x, rec: recordOf(annots[0].a, r.boxes, r.name), sources: { annots: annots.map(c => [c.q, c.a.i]), tier: annots[0].tier } })
