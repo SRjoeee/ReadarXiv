@@ -2,7 +2,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
-import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_PAGE, INK_MS, OPS_CAP, STACK_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
 
@@ -18,7 +18,7 @@ const CH = 0.5
 /** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32); `one`: the whole
  *  string one glyph's Unicode (a character and its variation selector) */
 type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
-type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
+type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 type Mark = [name: string, page: number, x: number, y: number]
 type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
 
@@ -76,7 +76,18 @@ function opsOf(p: Page, points: [string, number, number][] = []) {
   }
   at(p.runs.length, 0)
   for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
-  if (p.ops === 'capped') while (ops.length <= OPS_CAP) ops.push([OPS.save, []])
+  // (past OPS_CAP: operations the walk reads and does nothing with, after the page's own, as one typed array)
+  if (p.ops === 'capped') { const fn = new Uint16Array(OPS_CAP + 1).fill(OPS.setFillRGBColor); fn.set(ops.map(o => o[0])); return { fnArray: fn, argsArray: ops.map(o => o[1]) } }
+  // (after the page's own: saves past STACK_MAX; one painted path more than BOXES_PAGE, off the page's columns, one operand
+  // each; or two thousand operations the walk does nothing with, more steps than come between two readings of its clock)
+  if (p.ops === 'deep') for (let i = 0; i <= STACK_MAX; i++) ops.push([OPS.save, []])
+  if (p.ops === 'dense' || p.ops === 'slow') {
+    const extra = p.ops === 'dense' ? BOXES_PAGE + 1 : 2000, own = ops.length
+    const fn = new Uint16Array(own + extra).fill(p.ops === 'dense' ? OPS.constructPath : OPS.setFillRGBColor)
+    fn.set(ops.map(o => o[0]))
+    const path = [OPS.fill, [Float32Array.from([0])], Float32Array.from([-100, 0, -90, 10])]
+    return { fnArray: fn, argsArray: [...ops.map(o => o[1]), ...new Array(extra).fill(p.ops === 'dense' ? path : [])] }
+  }
   return { fnArray: ops.map(o => o[0]), argsArray: ops.map(o => o[1]) }
 }
 /** PDF.js's glyph outlines (where it draws glyphs as paths, as in Node), by `<loadedName>_path_<fontChar>`: DrawOPS in em */
@@ -375,6 +386,42 @@ describe('makeLayout', () => {
     expect(done.file.units.map(u => u[0])).toEqual([0])
     expect(done.stats.timedOut).toEqual([2, 3])
     expect(done.stats.capped).toEqual([4])
+  })
+
+  it('a page whose walk goes too deep has no ink (capped); one past the box budget keeps it, its file the same (degraded)', async () => {
+    const page = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }] })
+    const pages = [page('alpha beta gamma'), page('delta epsilon zeta'), page('eta theta iota')]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700], ['2s', 3, 72, 700], ['2e', 3, 142, 700]]
+    const units = ['alpha beta gamma', 'delta epsilon zeta', 'eta theta iota'].map(s => unit('para', [text(s)]))
+    const of = (w: World) => make(w).then(d => { if (!('file' in d)) throw new Error('refused'); return d })
+    const dense = await of({ pages: [pages[0] as Page, { ...pages[1] as Page, ops: 'deep' }, { ...pages[2] as Page, ops: 'dense' }], marked: pages, marks, units })
+    const plain = await of({ pages: [pages[0] as Page, { ...pages[1] as Page, ops: 'deep' }, pages[2] as Page], marked: pages, marks, units })
+    expect(dense.stats.capped).toEqual([2])
+    expect(dense.stats.timedOut).toEqual([])
+    expect(dense.stats.degraded).toEqual([3])
+    expect(plain.stats.degraded).toEqual([])
+    // page 2's unit stays the original's; page 3's is located as on the page without the paths, byte for byte
+    expect(dense.file.units.map(u => u[0])).toEqual([0, 2])
+    expect(encodeLayout(dense.file)).toBe(encodeLayout(plain.file))
+  })
+
+  it('a page whose walk passes INK_MS has no ink (timedOut), the others theirs', async () => {
+    const page = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }] })
+    const pages = [page('alpha beta gamma'), page('delta epsilon zeta')]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700]]
+    const units = ['alpha beta gamma', 'delta epsilon zeta'].map(s => unit('para', [text(s)]))
+    const marksFile = await marksOf({ pages, marks, units })
+    // (a clock that moves INK_MS on at each reading: a page read in fewer steps than come between two readings never sees it)
+    const real = performance.now.bind(performance)
+    let skew = 0
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => { skew += INK_MS; return real() + skew })
+    try {
+      const done = await makeLayout({ units, marks: marksFile, arxiv: arxivOf([pages[0] as Page, { ...pages[1] as Page, ops: 'slow' }]), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+      if (!('file' in done)) throw new Error('refused')
+      expect(done.stats.timedOut).toEqual([2])
+      expect(done.stats.capped).toEqual([])
+      expect(done.file.units.map(u => u[0])).toEqual([0])
+    } finally { clock.mockRestore() }
   })
 
   it('each page let go once read, one cleanup a page after its list, or once given up on; the file the same', async () => {

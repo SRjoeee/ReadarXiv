@@ -10,14 +10,24 @@ export interface Glyph {
 }
 /** a glyph's outline box in em from its origin ([x0, y0, x1, y1], y up), [] for none drawn, null where PDF.js gives none */
 export declare function outlineBox(commonObjs: unknown, font: unknown, fontChar: unknown): number[] | null
-/** the operations read on a page at most */
+/** the operations read on a page at most: past it the page is capped */
 export declare const OPS_CAP: number
+/** the boxes a page's ink keeps one by one at most where its reader asks (`boxesMax`): past it the page is degraded */
+export declare const BOXES_PAGE: number
+/** a page's walk at most this long, in milliseconds (`msMax`'s default): past it the page is timed out */
+export declare const INK_MS: number
+/** the graphics state's stack at most this deep: past it the page is capped */
+export declare const STACK_MAX: number
+/** a merged box's kind in `paths` (a degraded page's): no path of the page's own */
+export declare const MERGED: number
 /** a point of the marked compile (`/axt-<name> ri`): its name, and the glyphs and boxes the page showed before it */
 export interface InkPoint { name: string; glyph: number; box: number }
 /** a page's glyphs and graphics boxes (images, paths: x0, y0, x1, y1) from its operator list, in stream order, every
  *  painted glyph whatever its Unicode; the marked compile's points among them, and each glyph's boxes before it; `capped`
- *  when the walk stopped at OPS_CAP; `rotated` when the page's /Rotate is not 0 (then nothing is returned) */
-export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paths?: number[]; shows?: number; capped: boolean; rotated: boolean }
+ *  when the walk stopped at OPS_CAP or STACK_MAX, `timedOut` when it stopped past `msMax` (INK_MS); `degraded` when the
+ *  boxes past `boxesMax` were merged by the grid's cells (after the others, each MERGED in `paths`); `rotated` when the
+ *  page's /Rotate is not 0 (then nothing is returned) */
+export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; boxesMax?: number; msMax?: number }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paths?: number[]; shows?: number; capped: boolean; timedOut: boolean; degraded: boolean; rotated: boolean }
 /** a page's glyphs packed as columns (packGlyphs): the i-th of each the glyph `order[i]` (each in its own place where no
  *  order is given); `ix0` and `ix1` its ink across with its advance; `font` the id `fontIds` gives (-1 where none is
  *  asked); `most` the largest size */

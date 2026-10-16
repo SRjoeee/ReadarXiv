@@ -579,6 +579,10 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     // (a unit whose record the run could not make: drawn, measured by nothing)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [recordErrors]`)).toContain(`${NAME} [recordErrors]`)
     expect(publicLine('completeness (spec §5): every one of 29 outputs passes')).toContain('every one of 29')
+    // (the pages whose ink the add-on's walk did not read whole, or read degraded: counts by output, never silent)
+    for (const l of ["ink (the add-on's reading of arXiv's pages): whole on every one of 30 outputs", `ink (the add-on's reading of arXiv's pages): 1 of 30 outputs not whole: ${NAME} [capped 1, timed out 0, degraded 2]`,
+      `ink (the add-on's reading of arXiv's pages): 2 of 29 outputs not whole: ${NAME} [capped 0, timed out 1, degraded 0]; 1706.03762v7-de [capped 0, timed out 0, degraded 1]; 1 not told`, "ink (the add-on's reading of arXiv's pages): not told by any output"]) expect(publicLine(l)).toBe(l)
+    expect(publicLine(`ink (the add-on's reading of arXiv's pages): 1 of 30 outputs not whole: ${NAME} [${TEXT}]`)).toBeNull()
   })
   it('holds back everything else: a stack, a reason, a table, a line of a debug print, an ok line that carries more than numbers', () => {
     for (const line of [

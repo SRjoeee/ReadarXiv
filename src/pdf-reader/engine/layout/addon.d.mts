@@ -27,7 +27,7 @@ export interface AddonDocument { numPages: number; getPage(page: number): Promis
 export declare function paperAddon(o: {
   bytes: Uint8Array; index: LayoutIndex; doc: AddonDocument; OPS: Record<string, number>; PL: PdfLib
   deflate(bytes: Uint8Array): Uint8Array; inflate(bytes: Uint8Array, limit: number): Uint8Array
-}): Promise<{ ok: true; tail: Uint8Array; manifest: RemovalManifest; ms: Record<string, number> } | { ok: false; refused: string }>
+}): Promise<{ ok: true; tail: Uint8Array; manifest: RemovalManifest; ms: Record<string, number>; ink: InkRead } | { ok: false; refused: string }>
 
 /** the boxes' share of the manifest's caps (half of each): a paper-wide bound, spent in page order over the paper's parts */
 export declare const BOXES_BYTES: number
@@ -43,7 +43,9 @@ export interface PagePlan { dirty: number[]; rules: number[]; unfit: string | nu
  *  function giving them) the page's alignment facts, read only for a page with kept ink the manifest can hold. Pure */
 export declare function pagePlanOf(index: LayoutIndex, p: number, ink: ReturnType<typeof pageInk>, facts: AlignFacts | (() => AlignFacts)): PagePlan | null
 /** every planned page's plan over PDF.js's document of arXiv's PDF, and the time its operator lists, inks and plans took */
-export declare function pagePlansOf(o: { doc: AddonDocument; OPS: Record<string, number>; index: LayoutIndex }): Promise<{ plans: Map<number, PagePlan>; ms: { ops: number; ink: number; plan: number } }>
+/** the pages whose ink the walk did not read whole (capped, timed out: no plan) or read with its boxes past BOXES_PAGE merged */
+export interface InkRead { capped: number[]; timedOut: number[]; degraded: number[] }
+export declare function pagePlansOf(o: { doc: AddonDocument; OPS: Record<string, number>; index: LayoutIndex }): Promise<{ plans: Map<number, PagePlan>; ms: { ops: number; ink: number; plan: number }; ink: InkRead }>
 /** a manifest entry as the plans make it, before the remover: null for a page the remover is asked about */
 export type PlannedEntry = RemovalManifest['page'][number] | null
 /** pages `from` to `to` before the remover, the boxes' share spent in page order from `spent`: their entries, the pages the
