@@ -32,7 +32,7 @@ describe("a spacing accent TeX's \\accent set apart", () => {
     expect(cs.some(c => c.ch === '¨')).toBe(false)
     // (the citation as a unit's line reads it: the accent no longer at the line's end)
     const rects = [[1, 79.37, 184, 533, 196], [1, 79.37, 170, 533, 181]] as never
-    const uc = L2.charsOfUnit2(rects, [cs as never], null)
+    const uc = L2.charsOfUnit2(rects, [cs as never], undefined)
     expect(uc.map(c => c.ch).join('').trim()).toBe('integrity (Picu, 2011; Münster et al., 2013). Individual fibers')
   })
 

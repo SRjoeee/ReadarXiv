@@ -36,7 +36,7 @@ const cover = (px: number, py: number, r: number[]) => Math.max(0, Math.min(px +
  *  canvas antialiases a glyph by the area of its pixels it covers), what the clip leaves of it (one minus the clip's cover) */
 function residueAt(k: number, glyph: number[], snap: boolean) {
   const { ctx, paths } = recorder()
-  L2.drawOps(ctx, [{ op: 'swap', page: 1, rects: swapRects([glyph]).map(dev) }], k / V0, () => ({}) as never, snap ? k : null)
+  L2.drawOps(ctx, [{ op: 'swap', page: 1, rects: swapRects([glyph]).map(dev) }] as never, k / V0, () => ({}) as never, snap ? k : null)
   const clip = paths[0]!.rects
   const [x0, y0, w, h] = dev(glyph).map(v => v * (k / V0)) as [number, number, number, number]
   let most = 0
