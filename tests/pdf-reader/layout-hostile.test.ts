@@ -131,7 +131,7 @@ describe('a hostile page\'s ink is bounded (the per-part memory ceiling)', () =>
     for (const kind of [{ isType3Font: true }, { isInvalidPDFjsFont: true }]) {
       read = 0
       const f = { ...font, ...kind }
-      const g = pageInk(OPS, ops, { get: (id: string) => (id === 'F1' ? f : null), has: () => false }, { rotate: 0, glyphsMax: 10 })
+      const g = pageInk(OPS, ops, { get: (id: string) => (id === 'F1' ? f : null) }, { rotate: 0, glyphsMax: 10 })
       expect(g.capped).toBe(true)
       expect(read).toBeLessThanOrEqual(2 * 11)
     }
