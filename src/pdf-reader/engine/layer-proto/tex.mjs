@@ -14,6 +14,7 @@
 // page characters are PDF.js's in both, so that the paper's citations and macros a unit learns, and the characters the
 // restore counts as accounted for, are the same keys whichever source a unit took.
 import { PH_FLAG } from '../layout/file.mjs'
+import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
 import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
@@ -241,17 +242,18 @@ const SHORT = 0.5
  * share). The groups pair with TeX's breaks in order, as D4 pairs
  * displays with held runs (displayCover): only where they are as many; and the pairing holds only where every placeholder
  * the file finds (its segments, by the unit's line nearest each on its page) stands between the breaks its place in the
- * row says, as TeX set it. Returns a Map of each piece of a paired group, by its index, to { next, room }: `next` the
- * file's line after its break, the line TeX set the text after it on; `room` what TeX left between the two lines beyond
- * the unit's pitch, in pitches (the gap over the pitch less one, never below 0: 1 for `\\ \\`, whose second break sets an
+ * row says, as TeX set it. Returns a Map of each piece of a paired group, by its index, to { next, room, pitch }: `next`
+ * the file's line after its break, the line TeX set the text after it on; `pitch` its frame's (break-room.mjs pitchOf:
+ * its lines' gaps, its breaks' aside); `room` what TeX left between the two lines beyond the pitch, in pitches
+ * (break-room.mjs roomOf: the gap over the pitch less one, never below 0: 1 for `\\ \\`, whose second break sets an
  * empty line, 0 for a lone `\\`, 0.63 for `\vspace{0.3cm}\\` at a pitch of 13.6), the unit's own rows' alone. Where TeX's
  * rule between two lines (`lineskip`, the paper's \lineskip and \lineskiplimit: the layout file's) set the next line
  * lower for its height, the short line's depth, the next line's height and \lineskip (their boxes the file's, as blocks2
  * reads a tall line's opening), the gap is measured from there: that opening is the tall line's, no room of the break's
- * (a lone `\\` before a fraction, 17 apart at a pitch of 12, is room 0, not 0.42). `room` is
+ * (a lone `\\` before a fraction, 17 apart at a pitch of 12, is room 0, not 0.42). `room` and `pitch` are
  * null where `next` opens another frame (TeX drops glue at a frame's head, and the file says nothing more: the text after
- * it starts there), or where the unit has no two lines of its own next to each other in a frame besides its breaks' (no
- * pitch to measure the gap by). The fix of 2026-10-16: within a frame, the break ends the laid line and leaves its room
+ * it starts there), or where the frame has no two lines of its own next to each other besides its breaks' (no pitch of
+ * its own to measure the gap by: another frame's leading may be another, and the text after it starts on TeX's line). The fix of 2026-10-16: within a frame, the break ends the laid line and leaves its room
  * in the drawing's pitches wherever the translation sets it (layer2.mjs breakLines), so that the unit keeps one leading
  * and its unused room is at its end, where the fill closes it; pinned to TeX's line, the room the translation of the text
  * before it did not use stood as a band before that line (2608.16117 page 3, unit 8: 4.4 pitches where TeX set 2).
@@ -320,28 +322,21 @@ export function forcedBreaks(lu, unit, kOf = null, lineskip = null) {
       }
     }
   }
-  // (the unit's pitch: the median gap of two of its own lines next to each other in one frame, its breaks' aside)
+  // (each frame's pitch: the median gap of two of its own lines next to each other, its breaks' aside; a break's room is
+  // its own frame's, where the unit changes its leading between frames)
   const frameOf = new Int32Array(n).fill(-1)
   for (let f = 0; f < F.length; f += 6) for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) frameOf[j] = f
-  const brk = new Set(cands), gaps = []
+  const brk = new Set(cands), gaps = new Map()
   for (let j = 0; j + 1 < n; j++) {
     if (brk.has(j) || held.has(j) || held.has(j + 1) || frameOf[j] < 0 || frameOf[j] !== frameOf[j + 1]) continue
-    const g = L[8 * j + 3] - L[8 * (j + 1) + 3]
-    if (g > 0) gaps.push(g)
-  }
-  gaps.sort((a, b) => a - b)
-  const p0 = gaps.length ? (gaps[(gaps.length - 1) >> 1] + gaps[gaps.length >> 1]) / 2 : null
-  // (the two lines' distance with no break between them: the pitch, or TeX's rule's where the pitch would set the next
-  // line's top nearer the short line's foot than \lineskiplimit: the one's depth, the other's height and \lineskip)
-  const natural = j => {
-    if (!lineskip) return p0
-    const d = L[8 * j + 3] - L[8 * j + 5], h = L[8 * (j + 1) + 4] - L[8 * (j + 1) + 3]
-    return p0 - d - h < lineskip[1] ? Math.max(p0, d + h + lineskip[0]) : p0
+    ;(gaps.get(frameOf[j]) ?? gaps.set(frameOf[j], []).get(frameOf[j])).push(L[8 * j + 3] - L[8 * (j + 1) + 3])
   }
   breaks.forEach((g, b) => {
-    const j = cands[b]
-    const room = p0 === null || frameOf[j] !== frameOf[j + 1] ? null : Math.max(0, Math.round(((L[8 * j + 3] - L[8 * (j + 1) + 3] - natural(j)) / p0) * 1000) / 1000)
-    for (const i of g.members) out.set(i, { next: j + 1, room })
+    const j = cands[b], f = frameOf[j]
+    const pitch = f === frameOf[j + 1] ? pitchOf(gaps.get(f) ?? []) : null
+    // (the gap less the two lines' distance with no break, TeX's rule's for a tall next line: break-room.mjs)
+    const room = pitch === null ? null : roomOf(L[8 * j + 3] - L[8 * (j + 1) + 3], pitch, naturalOf(pitch, L[8 * j + 3] - L[8 * j + 5], L[8 * (j + 1) + 4] - L[8 * (j + 1) + 3], lineskip))
+    for (const i of g.members) out.set(i, { next: j + 1, room, pitch })
   })
   return out
 }

@@ -301,6 +301,9 @@ const CHECKER = join(REPO, 'src/pdf-reader/engine/layer/check.mjs')
 /** the UAX 14 table the measure reads (measure.mjs imports it by its address in this repository): this repository's, as
  *  the checker is, whichever engine is measured */
 const NO_START_PATH = '/src/pdf-reader/engine/layer-proto/no-start.mjs', NO_START_FILE = join(REPO, NO_START_PATH.slice(1))
+/** TeX's room after a forced break, the drawing's and the measure's one reading of it (measure.mjs imports it by its address
+ *  in this repository): this repository's, as the UAX 14 table is */
+const BREAK_ROOM_PATH = '/src/pdf-reader/engine/layer-proto/break-room.mjs', BREAK_ROOM_FILE = join(REPO, BREAK_ROOM_PATH.slice(1))
 const PROGRESS = process.env.LAYER_PROGRESS ?? join(homedir(), 'Downloads/readarxiv-test/layer-progress')
 const ONLY = typeof arg('only') === 'string' ? arg('only').split(',').filter(Boolean) : null
 const PAGES = typeof arg('pages') === 'string' ? Number(arg('pages')) : null
@@ -387,6 +390,7 @@ function fileFor(path) {
   if (path.startsWith('/proto-fonts/')) return /^\/proto-fonts\/lm(?:roman|sans|mono)10-[a-z]+\.otf$/.test(path) ? join(TEXMF, 'fonts/opentype/public/lm', path.slice(13)) : null
   if (path === '/engine/layer/check.mjs') return CHECKER
   if (path === NO_START_PATH) return NO_START_FILE
+  if (path === BREAK_ROOM_PATH) return BREAK_ROOM_FILE
   if (path === '/rules/layout-rules.json') return RULES_FILE
   if (path.startsWith('/zod/')) return /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice(5)) : null
   if (path.startsWith('/engine/')) return /\.(m?js|json)$/.test(path) ? under(join(ENGINE, 'src/pdf-reader/engine'), path.slice(8)) : null
@@ -488,7 +492,7 @@ const inputs = {
   layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : shownPath(FIXTURES, ROOT), ...(RECORDS ? { records: shownPath(RECORDS, ROOT) } : {}), ...(process.env.LAYER_REFS ? { refs: shownPath(REFS, ROOT) } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: shownPath(resolve(PROTO_GEOMETRY), ROOT) } : {}), chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic, and the page that draws and accounts (lost ink's own glyphs)
-  measures: sha256([...['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => join(GATE, f)), NO_START_FILE].map(f => readFileSync(f)).join('\n')).slice(0, 16),
+  measures: sha256([...['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => join(GATE, f)), NO_START_FILE, BREAK_ROOM_FILE].map(f => readFileSync(f)).join('\n')).slice(0, 16),
   ...(PARTS ? { parts: String(PARTS) } : {}),
   ...(PROTO ? { kind: 'proto', protoUnits: PROTO_UNITS, place: PROTO_PLACE ? 'the prototype page\'s' : 'the gate\'s', order: PROTO_ORDER ? 'given' : 'layGroups', faces: PROTO_FACES ?? 'the engine\'s default', tex: TEX ? JSON.stringify(TEX) : 'none', rules: { version: RULES.version, sha256: RULES_SHA }, hyphenation: sha256([...HYPH].map(([l, j]) => `${l}:${j}`).join('\n')).slice(0, 16), removal: REMOVAL ?? 'none', ...(REMOVAL ? { remover: removerDigest() } : {}) } : {}),
 }

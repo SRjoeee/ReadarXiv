@@ -678,7 +678,7 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
   it("fix 3: pairs each forced break between two visible pieces with a line TeX ended short, in order, never one at an edge", () => {
     // (with TeX's room after it, in the unit's pitches: the gap to the next line, 24, over the pitch, 12, less one, the
     // empty line the second `\\` sets)
-    expect([...T.forcedBreaks(unitOf(lines) as never, u)]).toEqual([[1, { next: 2, room: 1 }], [2, { next: 2, room: 1 }]])
+    expect([...T.forcedBreaks(unitOf(lines) as never, u)]).toEqual([[1, { next: 2, room: 1, pitch: 12 }], [2, { next: 2, room: 1, pitch: 12 }]])
     // a break before a display ends no line of the text: the display does
     const D = '\\begin{equation}x=1\\end{equation}'
     expect(T.forcedBreaks(unitOf(lines) as never, unit(text('\u7532'), ph(BR), ph(D), text(' \u4E59'))).size).toBe(0)
@@ -691,13 +691,13 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     const cited = unit(text('\u7532'), ph(BR), text(' \u4E59'), ph('\\cite{x}'), text('\u4E19'))
     const kOf = [-1, -1, -1, 3, -1]
     expect(T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 500, 80, 507, 498]]]) as never, cited, kOf).size).toBe(0)
-    expect([...T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 464, 80, 471, 462]]]) as never, cited, kOf)]).toEqual([[1, { next: 2, room: 1 }]])
+    expect([...T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 464, 80, 471, 462]]]) as never, cited, kOf)]).toEqual([[1, { next: 2, room: 1, pitch: 12 }]])
   })
   it('pairs nothing in a unit in two columns of one page, nor at a short line that is a display\'s row (#367 review)', () => {
     // two columns of page 1: the left one's line 1 ends short, as the break's line would
     const two = { ...(unitOf([L(500), L(488, 90), [1, 320, 520, 500, 507, 498, 10, 0], [1, 320, 520, 488, 495, 486, 10, 0]]) as object), frames: Float64Array.from([1, 0, 0, 2, -1, 0, 1, 1, 2, 2, 500, 0]) }
     const one = unit(text('\u7532'), ph(BR), text(' \u4E59'))
-    expect([...T.forcedBreaks(unitOf([L(500), L(488, 90), L(464), L(452)]) as never, one)]).toEqual([[1, { next: 2, room: 1 }]])
+    expect([...T.forcedBreaks(unitOf([L(500), L(488, 90), L(464), L(452)]) as never, one)]).toEqual([[1, { next: 2, room: 1, pitch: 12 }]])
     expect(T.forcedBreaks(two as never, one).size).toBe(0)
     // a display's row the file does not hold, short of the measure: no line a forced break ends
     const row = unitOf([L(500), L(488, 90), L(464), L(452, 120)], [[7, 0, [1, 40, 488, 90, 495, 486]]]) as { ph: Map<number, { kind: string }> }
@@ -710,14 +710,14 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
   const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
   const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
   const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0, borrow: 0 }
-  const laid = (rows: number[][], pieces: object[]) => {
+  const laid = (rows: number[][], pieces: object[], lineskip: [number, number] | null = null) => {
     const lu = unitOf(rows)
     const t = T.texRects(lu)
     const pages = Math.max(...rows.map(r => r[0] ?? 1))
     // (each line's page text one letter of the source's at its start)
     const charsByPage = Array.from({ length: pages }, (_, p) => rows.flatMap((r, j) => (r[0] === p + 1 ? item(String.fromCharCode(97 + j), 10, r[3] ?? 0, 10, j) : [])))
     const u = { kind: 'para', src: rows.map((_, j) => String.fromCharCode(97 + j)).join(' '), pieces } as never
-    const prep = L2.prepareUnit(u, t.rects as never, charsByPage as never, new Map() as never, null, T.texParts(lu, pieces.map(() => -1), { use: 'lines', lines: t }) as never)
+    const prep = L2.prepareUnit(u, t.rects as never, charsByPage as never, new Map() as never, null, T.texParts(lu, pieces.map(() => -1), { use: 'lines', lines: t, lineskip }) as never)
     const blocks = L2.blocks2(t.rects as never, Array.from({ length: pages }, () => [0, 0, 612, 792]), prep.keep?.length ? new Set(prep.keep) : null, prep.lineInfo, prep.regionOf, prep.referenced, null, prep.breakAt, prep.joinAt)
     const tokens = L2.tokensOf2(u, prep, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 50)
     const lines = (l: { lines: { page: number; baseline: number; items: { t: { s?: string } }[] }[] }) => l.lines.filter(x => x.items.some(it => it.t.s)).map(x => [x.page, Math.round(x.baseline * 100) / 100, x.items.map(it => it.t.s ?? '').join('')])
@@ -756,7 +756,7 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
   it('a lone `\\\\` leaves no room: the text after it on the next line', () => {
     const rows = [L(500), L(488, 90), L(476), L(464), L(452, 120)]
     const z = laid(rows, [text(A), ph(BR), text(` ${Bc}`)])
-    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces: [text(A), ph(BR), text(` ${Bc}`)] } as never)]).toEqual([[1, { next: 2, room: 0 }]])
+    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces: [text(A), ph(BR), text(` ${Bc}`)] } as never)]).toEqual([[1, { next: 2, room: 0, pitch: 12 }]])
     expect(z.lines(z.fit())).toEqual([[1, 500, A], [1, 484.4, Bc]])
   })
 
@@ -765,16 +765,37 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     // where the pitch is 12 (the file's boxes, as blocks2 reads a tall line's opening)
     const rows = [L(500), L(488, 90), [1, 10, 200, 471, 485, 469, 10, 0], L(459), L(447, 120)]
     const one = { kind: 'para', src: '', pieces: [text(A), ph(BR), text(` ${Bc}`)] } as never
-    expect([...T.forcedBreaks(unitOf(rows) as never, one, null, [1, 0])]).toEqual([[1, { next: 2, room: 0 }]])
+    expect([...T.forcedBreaks(unitOf(rows) as never, one, null, [1, 0])]).toEqual([[1, { next: 2, room: 0, pitch: 12 }]])
     // with no values for TeX's rule, all of the gap beyond the pitch
-    expect([...T.forcedBreaks(unitOf(rows) as never, one)]).toEqual([[1, { next: 2, room: 0.417 }]])
+    expect([...T.forcedBreaks(unitOf(rows) as never, one)]).toEqual([[1, { next: 2, room: 0.417, pitch: 12 }]])
+  })
+
+  it("a break's room is measured by its own frame's pitch, and a frame with no pitch of its own keeps the pin (#383 review)", () => {
+    const P2 = (y: number, x1 = 200) => [2, 10, x1, y, y + 7, y - 2, 10, 0]
+    const two = { kind: 'para', src: '', pieces: [text(A), ph(BR), ph(BR), text(` ${Bc}`)] } as never
+    // page 1's frame at a pitch of 12, `\\ \\` after its line 1; page 2's at 20: the break's empty line is one of 12, room 1
+    // (pooled with page 2's gaps, the pitch read 20 and the room 0.2)
+    expect([...T.forcedBreaks(unitOf([L(500), L(488, 90), L(464), P2(500), P2(480), P2(460), P2(440, 120)]) as never, two)]).toEqual([[1, { next: 2, room: 1, pitch: 12 }], [2, { next: 2, room: 1, pitch: 12 }]])
+    // page 1's frame no more than the break's two lines: nothing measures its pitch, and the text after it starts on TeX's line
+    expect([...T.forcedBreaks(unitOf([L(500, 90), L(476), P2(500), P2(488), P2(476, 120)]) as never, two)]).toEqual([[1, { next: 1, room: null, pitch: null }], [2, { next: 1, room: null, pitch: null }]])
+  })
+
+  it("the grid closes a break's gap to one pitch, a tall next line's opening with it: the room alone is left (#383 review)", () => {
+    // `\vspace{0.5em}\\` before a tall line (14 over its baseline): TeX's distance with no break 17 (2 + 14 + \lineskip 1), and
+    // the glue's 6: the next line 23 under the short one, room 0.5 at the frame's pitch of 12
+    const rows = [L(500), L(488, 90), [1, 10, 200, 465, 479, 463, 10, 0], L(453), L(441, 120)]
+    const z = laid(rows, [text(cjk(39, 0x4e00)), ph('\\vspace{0.5em}'), ph(BR), text(` ${Bc}`)], [1, 0])
+    expect(z.prep.get(2)).toMatchObject({ brk: true, room: 0.5 })
+    expect(z.blocks.map(b => b.G)).toEqual([[500, 488, 476, 464, 452]])
+    // on the original's pitch: the translation's next line, no taller than the text, half a pitch under its grid line
+    expect(z.lines(z.at(1)).map(x => x[1])).toEqual([500, 488, 470])
   })
 
   it("`\\vspace{0.3cm}\\\\`: TeX's room is the glue it set, 0.63 of a pitch, kept at the drawing's pitch", () => {
     // 0.3 cm, 8.54 pt, at a pitch of 13.6: line 2 is 1.63 pitches under line 1 (here 12 \u00D7 1.63 = 19.56)
     const rows = [L(500), L(488, 90), L(468.44), L(456.44), L(444.44, 120)]
     const pieces = [text(A), ph('\\vspace{0.3cm}'), ph(BR), text(` ${Bc}`)]
-    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces } as never)]).toEqual([[2, { next: 2, room: 0.63 }]])
+    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces } as never)]).toEqual([[2, { next: 2, room: 0.63, pitch: 12 }]])
     const z = laid(rows, pieces)
     const got = z.lines(z.fit())
     expect(got.map(x => x[2])).toEqual([A, Bc])
@@ -787,7 +808,7 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     const P2 = (y: number, x1 = 200) => [2, 10, x1, y, y + 7, y - 2, 10, 0]
     const rows = [L(500), L(488), L(476, 90), P2(500), P2(488, 120)]
     const pieces = [text(A), ph(BR), text(` ${Bc}`)]
-    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces } as never)]).toEqual([[1, { next: 3, room: null }]])
+    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces } as never)]).toEqual([[1, { next: 3, room: null, pitch: null }]])
     const z = laid(rows, pieces)
     expect(z.prep.get(1)).toMatchObject({ brk: true })
     expect(z.prep.get(1)?.region).toBeDefined()

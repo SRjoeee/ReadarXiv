@@ -41,7 +41,7 @@ export declare function markupResidueOf(text: string, src: string): string[]
 export interface FileLine { j: number; box: number[]; baseline: number; size: number; held: boolean }
 /** a line end of TeX's that a forced break shapes (fileIndexOf): between the two baselines, the next line's, its column;
  *  `room`, TeX's room between the two lines in pitches (fileIndexOf's; slotsSkippedOf reads it from the gap where it is not given) */
-export interface FileBreak { y: number; next: number; x0: number; x1: number; room?: number }
+export interface FileBreak { y: number; next: number; x0: number; x1: number; room?: number; tall?: number }   // tall: the opening TeX's \lineskip rule set for a tall next line beyond the pitch
 export interface FilePage { units: Map<number, { phs: { k: number; kind: string; segs: number[][] }[]; lines: FileLine[]; lost: number[]; pitch: number | null; breaks: FileBreak[]; breaksAll: number; rows: Map<number, string> }>; displays: number[][] }
 export declare function fileIndexOf(layout: { lines?: [number, number[]][]; ph?: number[][]; held?: [number, number[]][]; lineskip?: readonly number[] | null }): Map<number, FilePage>
 export declare function displayRowsOf(page: FilePage | undefined): number[][]

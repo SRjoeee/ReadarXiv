@@ -1212,9 +1212,9 @@ function finishUnit(out, unit, rects, charsByPage) {
   out.keep = [...new Set([...(out.keep ?? []), ...displayTouched(out, uc)])]
   // the kept lines in runs (regions), in the unit's order: the text after a kept placeholder starts below its region. A
   // forced break the source locates (`breaks`: its pieces, each with the file's line TeX set after it and TeX's room
-  // between the two) ends the laid line where its pieces are. Inside a frame its room is kept on the line after it
-  // (`joinAt`, by its key: the rows on both sides of the gap one block, blocks2, and the room left in the drawing's
-  // pitches after the line it ends, breakLines), so that the unit is laid on one grid at one leading and what its
+  // between the two) ends the laid line where its pieces are. Inside a frame its frame's pitch is kept on the line after it
+  // (`joinAt`, by its key: the rows on both sides of the gap one block, the gap closed to that pitch, blocks2) and its room
+  // on its pieces (left in the drawing's pitches after the line it ends, breakLines), so that the unit is laid on one grid at one leading and what its
   // translation does not use of its lines is at its end. One whose next line opens another frame is a region of no lines
   // of its own just before that line (`breakAt`, by its key), which its pieces hold: the text after it starts there
   const keepSet = new Set(out.keep ?? [])
@@ -1222,7 +1222,7 @@ function finishUnit(out, unit, rects, charsByPage) {
   out.breakAt = new Map()
   out.joinAt = new Map()
   const breakNext = new Set(), joinNext = new Map(), breakOf = new Map(), joined = new Set()
-  for (const { next, room } of out.breaks?.values() ?? []) { if (room === null) breakNext.add(next); else joinNext.set(next, room) }
+  for (const { next, room, pitch } of out.breaks?.values() ?? []) { if (room === null) breakNext.add(next); else joinNext.set(next, pitch) }
   let region = -1, inRun = false
   for (const r of rects) {
     const k = rectKey(r)
@@ -2075,9 +2075,10 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
 
 /**
  * blocksOf's blocks, each with its lines' measured baselines (B), sizes, pitch and the free space below it. A block that
- * holds a forced break of TeX's inside its frame (`joinAt`, finishUnit's: the line after it, TeX's room between the two
- * in pitches) has its grid `G`: B with each such gap closed to one pitch (the gap over one and its room), the lines
- * after it moved up by the rest, its foot (B's last) kept. The drawing leaves the room after the line the break ends
+ * holds a forced break of TeX's inside its frame (`joinAt`, finishUnit's: the line after it, its frame's pitch) has its
+ * grid `G`: B with each such gap closed to that pitch, TeX's room and any opening its rule set for a tall next line with
+ * it (which the drawing's own rule opens again where its line is tall: breakLines settle), the lines after it moved up by
+ * the rest, its foot (B's last) kept. The drawing leaves the room after the line the break ends
  * wherever its translation sets it (breakLines), so that on the original's own pitch a break the translation sets where
  * TeX did puts the line after it on TeX's own, and the room the translation does not use of the block is at its foot.
  * The block's pitch is its grid's.
@@ -2092,8 +2093,8 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     if (joinAt?.size && b.rects.some((r, i) => i > 0 && joinAt.has(rectKey(r)))) {
       let up = 0
       b.G = b.B.map((y, i) => {
-        const room = i > 0 ? joinAt.get(rectKey(b.rects[i])) : undefined
-        if (room !== undefined) up += ((b.B[i - 1] - y) * room) / (1 + room)
+        const pitch = i > 0 ? joinAt.get(rectKey(b.rects[i])) : undefined
+        if (pitch !== undefined) up += Math.max(0, b.B[i - 1] - y - pitch)
         return y + up
       })
     }

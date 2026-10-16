@@ -102,12 +102,12 @@ export interface Prepared extends Map<number, Resolved> {
   referenced: Set<number>
   /** a source's forced breaks (tex.mjs forcedBreaks): each break piece's index to the file's line TeX set after it and
    *  TeX's room between the two (null: that line opens another frame) */
-  breaks?: Map<number, { next: number; room: number | null }> | null
+  breaks?: Map<number, { next: number; room: number | null; pitch: number | null }> | null
   /** the finish: a forced break whose next line opens another frame, its region (no lines of its own) by the key of that
    *  line, which its pieces hold (their resolutions' `region`, with `brk`) */
   breakAt?: Map<string, number>
-  /** the finish: a forced break inside a frame, TeX's room after it (in pitches) by the key of the line after it, which
-   *  its pieces hold (their resolutions' `room`, with `brk`): the rows on both sides one block, its gap closed */
+  /** the finish: a forced break inside a frame, its frame's pitch by the key of the line after it (its pieces hold TeX's
+   *  room after it: their resolutions' `room`, with `brk`): the rows on both sides one block, its gap closed to the pitch */
   joinAt?: Map<string, number>
   /** the finish: what became of each of the unit's page characters, by its key */
   cat: Map<string, 'acc' | 'keep' | 'orphan' | 'undrawn'>
@@ -155,7 +155,7 @@ export interface UnitParts {
   proof?: (out: Prepared) => number
   /** where the unit's forced breaks end its lines (with part 1's lines, the file's): each break piece's index to the line
    *  set after it, by its index in the file (LineInfo.j) */
-  breaks?: (unit: Unit) => Map<number, { next: number; room: number | null }>
+  breaks?: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it

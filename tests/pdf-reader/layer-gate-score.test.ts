@@ -588,7 +588,7 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     const file = (rows: number[][], held: number[] = []) => fileIndexOf({ lines: [[3, rows.flat()]], held: [[3, held]], ph: [] }).get(1)!.units.get(3)!
     const u = file([line(1, 72, 472, 700), line(1, 72, 300, 688), line(1, 72, 472, 664), line(1, 72, 200, 652)])
     // (its room TeX's: the gap beyond the pitch, in pitches)
-    expect(u.breaks).toEqual([{ y: 676, next: 664, x0: 72, x1: 472, room: 1 }])
+    expect(u.breaks).toEqual([{ y: 676, next: 664, x0: 72, x1: 472, room: 1, tall: 0 }])
     expect(u.breaksAll).toBe(1)
     // none where the next line is a display's row, the line reaches its measure, or it is the unit's last
     expect(file([line(1, 72, 472, 700), line(1, 72, 300, 688), line(1, 150, 400, 664), line(1, 72, 472, 640)], [2]).breaks).toEqual([])
@@ -607,9 +607,14 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     // a lone break before a tall line (14.5 over its baseline): the gap TeX's \lineskip opened (the short line's depth, the
     // next line's height and \lineskip, by the file's boxes) is no room of the break's; with no values for the rule, all of
     // the gap beyond the pitch is
-    const tall = (lineskip: number[] | null) => fileIndexOf({ lines: [[3, [line(1, 72, 472, 718), line(1, 72, 472, 706), line(1, 72, 300, 694), [1, 72, 472, 676, 690.5, 673.5, 10, 0], line(1, 72, 472, 664)].flat()]], held: [[3, []]], ph: [], lineskip }).get(1)!.units.get(3)!.breaks.map(k => k.room)
-    expect(tall([1, 0])).toEqual([0])
-    expect(tall(null)).toEqual([0.5])
+    // (its `tall`, the opening the rule set beyond the pitch: TeX's room at its place, the tall line's)
+    const tall = (lineskip: number[] | null) => fileIndexOf({ lines: [[3, [line(1, 72, 472, 718), line(1, 72, 472, 706), line(1, 72, 300, 694), [1, 72, 472, 676, 690.5, 673.5, 10, 0], line(1, 72, 472, 664)].flat()]], held: [[3, []]], ph: [], lineskip }).get(1)!.units.get(3)!.breaks.map(k => [k.room, k.tall])
+    expect(tall([1, 0])).toEqual([[0, 6]])
+    expect(tall(null)).toEqual([[0.5, 0]])
+    // the pitch the room is read by is the unit's lines' with its breaks' gaps aside: `\\ \\ \\` after 700, two empty lines (a
+    // pitch of 12, room 2; with the break's gap among them, the pitch read 24 and the room 0.5, the #383 review)
+    const wide = file([line(1, 72, 300, 700), line(1, 72, 472, 664), line(1, 72, 200, 652)])
+    expect([wide.pitch, wide.breaks.map(k => k.room)]).toEqual([12, [2]])
   })
 
   it("an empty slot: a forced break's room is TeX's (its gap past the pitch), credited once in its frame wherever the drawing sets it", async () => {
@@ -633,6 +638,18 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(of([700, 652])).toBe(2)
     // a break in another column holds no room of this one (TeX's blank here its own room, as with none)
     expect(of([700, 664], [{ ...brk[0]!, x0: 480, x1: 540 }])).toBe(1)
+  })
+
+  it("a break before a tall line: the opening TeX's rule set for the line is its own room at its place, the break's room apart (#383 review)", async () => {
+    const { slotsSkippedOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const drawnAt = (bs: number[]) => bs.map(baseline => ({ baseline, size: 10, x0: 72, x1: 472, pitch: 12 }))
+    // a lone `\\` after 688, the next line tall: TeX set it 26 under (14 beyond the pitch, the line's opening; no room of the break's)
+    const tex = [700, 688, 662, 650, 638].map(baseline => ({ baseline, x0: 72, x1: 472 }))
+    const of = (bs: number[], tall: number) => slotsSkippedOf([{ id: 11, orig: lines(6), lines: drawnAt(bs), tex, held: [], texPitch: 12, keptRows: [], breaks: [{ y: 675, next: 662, x0: 72, x1: 472, room: 0, tall }] }]).slotsSkipped
+    // the translation's line after it as tall, opened as TeX's was: no slot skipped
+    expect(of([700, 688, 662, 650], 14)).toBe(0)
+    // (with no opening of TeX's there the 26 would leave one)
+    expect(of([700, 688, 662, 650], 0)).toBe(1)
   })
 
   it("a break's room a fraction of a pitch goes to the gap nearest it: a real empty slot elsewhere in the frame is not hidden (#383 review)", async () => {
