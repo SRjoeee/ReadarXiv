@@ -438,7 +438,9 @@ export function createLayerSide(view, o) {
     ring.push(`${n}@${Math.round(clock.now())}`)
     if (ring.length > RING) ring.shift()
     // the right's shapes of the page: its words (the units the layer shows as the original's from the left's tokens)
-    if (right?.lay(n, laid.words) || right?.show(n)) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
+    // (both: the words given, and the page shown again where an earlier fallback hid it)
+    const given = right?.lay(n, laid.words), shown = right?.show(n)
+    if (given || shown) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
   }
   /** a laid page's copy drawn again at the place's new k (a zoom): from the left's canvas once PDF.js drew it at that k */
   async function recopy(n) {

@@ -304,7 +304,7 @@ export function layerShapes(source) {
     laid,
     /** a laid page whose place shows the original again (its copy failed, a stall): the mirror's there until it is shown
      *  again; whether that changed anything */
-    hide: p => { if (!made.has(p) || hidden.has(p)) return false; hidden.add(p); return true },
+    hide: p => { if (hidden.has(p)) return false; hidden.add(p); return made.has(p) },
     show: p => hidden.delete(p),
     starts(id, text, offsets, left) {
       const m = mode(id)

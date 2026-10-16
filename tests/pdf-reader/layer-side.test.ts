@@ -771,6 +771,52 @@ describe('the PR\'s review, second round', () => {
   })
 })
 
+describe('the PR\'s review, third round (#379)', () => {
+  async function want(s: Setup, n: number) {
+    const c = clientOf(s.panes.right, n, 300, 400)
+    s.panes.right.dispatchEvent(new MouseEvent('mousemove', { clientX: c.clientX, clientY: c.clientY, bubbles: true }))
+    await s.clock.advance(20)
+    await settle(s, 6)
+  }
+
+  it('a page shown as the original again before its left part came: the left part landing later makes no translated shapes there (4289273765, 4289274948)', async () => {
+    const s = await setup({ copyFails: (d, n, before) => d === 0 && n === 1 && before === 1 })
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s)
+    // committed with no want yet: its words in, its left part not
+    expect(content(s, 1)).toBe('layer')
+    expect(s.side.probe().shapesLaid).toBe(0)
+    await nearOn(s, [1], false)
+    await nearOn(s, [1])
+    await settle(s)
+    expect(content(s, 1)).toBe('original')
+    await want(s, 1)
+    expect(s.side.probe().leftParts).toBe(1)
+    expect(s.side.probe().shapesLaid).toBe(0)
+    // laid again on the next scroll: the layer's shapes there with it
+    s.panes.right.scrollTop = 30
+    await flush(10)
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    expect(s.side.probe().shapesLaid).toBe(1)
+  })
+
+  it('a page that stalled (shown as the original) and is laid late takes the layer\'s shapes with its drawing', async () => {
+    const m = await M()
+    const s = await setup()
+    await nearOn(s, [1])
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [jobRef(m, 0)] })
+    for (let i = 0; i < 20; i++) { await macrotask(); await s.clock.advance(1) }
+    expect(s.door.layer?.pageState(1)).toBe('laying')
+    await s.clock.advance(PAGE_MS + 10)
+    expect(s.side.coverage().stalled).toBe(1)
+    await want(s, 1)
+    expect(content(s, 1)).toBe('layer')
+    expect(s.side.probe().shapesLaid).toBe(1)
+  })
+})
+
 describe('the side: one a view, and its dispose', () => {
   it('a second side while one lives throws; after its dispose another may be made', async () => {
     const s = await setup()
