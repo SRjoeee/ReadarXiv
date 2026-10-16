@@ -17,23 +17,26 @@
 // first rectangle's page.
 //
 // An original module (no port statement). Pure: no PDF.js, no `node:*` module.
-import { matchUnits, placeUnits } from './anchors.mjs'
+import { buildIndexOf, forwardSpans, matchUnits, pageStarts, placeUnits } from './anchors.mjs'
 
 /** a unit without marks is searched this far past its marked neighbours (anchors.mjs MARGIN) */
 const MARGIN = 100
 
 /**
  * Where each unit may reach, as token intervals [lo, hi] (at most two), by the units' order: before any unit is matched,
- * from the bounds and the floats' whole-document matches alone. `bounds`, `floating`, `floatMatch` anchorUnits' (`floatMatch`
- * floatMatches' of these units, every float of K words or more in it: one not in it is a shorter one's)
+ * from the bounds and the floats' whole-document matches alone. `bounds`, `floating`, `floatMatch`, `forward` anchorUnits'
+ * (`floatMatch` floatMatches' of these units, every float of K words or more in it: one not in it is a shorter one's; under
+ * rule 5, `forward`, a float's search of the whole document from the page of its last body neighbour on: the stretch that
+ * search takes where `forwardSpan` (anchors.mjs forwardSpans') is given, else the document from that page)
  */
-export function leftReach(doc, units, { bounds, floating = () => false, floatMatch = null }) {
+export function leftReach(doc, units, { bounds, floating = () => false, floatMatch = null, forward = null, forwardSpan = null }) {
   const N = doc.length
   const hard = units.map(u => bounds?.get(String(u.id)) ?? null)
-  const before = [], after = []
+  const before = [], after = [], body = []
   const inText = u => hard[u] && !floating(units[u].id)
-  for (let u = 0, e = -1; u < units.length; u++) { before[u] = e; if (inText(u)) e = hard[u][1] }
+  for (let u = 0, e = -1, b = -1; u < units.length; u++) { before[u] = e; body[u] = b; if (inText(u)) { e = hard[u][1]; if (forward && !forward.has(u)) b = hard[u][1] } }
   for (let u = units.length - 1, a = N; u >= 0; u--) { after[u] = a; if (inText(u)) a = hard[u][0] }
+  const start = forward ? pageStarts(doc) : null
   return units.map(({ id }, u) => {
     if (hard[u]) return [hard[u]]
     if (!N) return []
@@ -42,8 +45,12 @@ export function leftReach(doc, units, { bounds, floating = () => false, floatMat
     const lo = Math.max(0, before[u] + 1 - MARGIN), hi = Math.min(N - 1, after[u] - 1 + MARGIN)
     if (lo <= hi) out.push([lo, hi])
     // a float's search over the whole document (one of K words or more): its match given (floatMatches makes one for each
-    // such float, none for a shorter one, which is only looked for between its neighbours), else anywhere
-    if (floating(id)) {
+    // such float, none for a shorter one, which is only looked for between its neighbours), else anywhere; under rule 5
+    // (`forward`), from the page of its last body neighbour on (anchors.mjs matchUnits)
+    if (floating(id) && forward) {
+      // (the stretch its search from there takes, where its hits are known: forwardSpans'; else the document from there)
+      if (!floatMatch || floatMatch.has(id)) { const from = start(body[u]), sp = forwardSpan ? forwardSpan(id, from) : { lo: from, hi: N - 1 }; if (sp) out.push([sp.lo, sp.hi]) }
+    } else if (floating(id)) {
       if (!floatMatch) out.push([0, N - 1])
       else {
         const m = floatMatch.get(id)
@@ -63,11 +70,11 @@ export function leftReach(doc, units, { bounds, floating = () => false, floatMat
  * those placed with their first rectangle before page a (`before`: a part's that came before, or, cut a range at a time, a
  * unit its ranges passed over)
  */
-export function leftOfPart(doc, units, { bounds, floating = () => false, floatMatch = null, frame, minCoverage = 0.6 }, [a, b], reach = leftReach(doc, units, { bounds, floating, floatMatch })) {
+export function leftOfPart(doc, units, { bounds, floating = () => false, floatMatch = null, frame, minCoverage = 0.6, forward = null, wholeIndex = null }, [a, b], reach = leftReach(doc, units, { bounds, floating, floatMatch, forward })) {
   if (typeof frame !== 'function') throw new TypeError('leftOfPart: `frame`, the whole document\'s frame rule (pageFrame over a part\'s units is not the whole paper\'s)')
   const { C, V2 } = partSets(doc, units, [a, b], reach)
   const read = V2.units
-  const found = matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(read) })
+  const found = matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(read), forward, wholeIndex })
   const placed = placeUnits(doc, read.map(u => units[u]), read.map(u => found[u]), { frame })
   const out = new Map(), before = []
   for (const u of C.units) {
@@ -125,7 +132,7 @@ export function partSets(doc, units, [a, b], reach) {
  * past the last page every unit left is settled. A unit placed before the page anchored and not settled is a defect of the
  * readiness: thrown. The units' ids are their indices
  */
-export function rangedAnchors(doc, units, { floating = () => false, floatMatch = null, frame, boundsKnown = null } = {}) {
+export function rangedAnchors(doc, units, { floating = () => false, floatMatch = null, frame, boundsKnown = null, forward = null } = {}) {
   if (typeof frame !== 'function') throw new TypeError('rangedAnchors: `frame`, the whole document\'s frame rule (leftOfPart\'s)')
   const n = units.length, N = doc.length
   const bounds = new Map(), marked = new Uint8Array(n), settled = new Uint8Array(n), ownLow = new Int32Array(n), ownHigh = new Int32Array(n)
@@ -138,22 +145,49 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   for (let p = 1; p <= lastPage; p++) if (lastTok[p] < 0) lastTok[p] = lastTok[p - 1] ?? -1
   const key = u => String(units[u].id)
   const inText = u => bounds.has(key(u)) && !floating(units[u].id)
+  // (rule 5: a float's whole-document search from the page of its last body neighbour, a unit not written inside a float, on;
+  // the whole document's index its searches read, made once)
+  const start = forward ? pageStarts(doc) : null, wholeIndex = forward ? { index: null } : null
+  const body = u => !forward?.has(u)
+  // (the stretches a float's search from a page on takes, of its hits in the whole document's index, made once)
+  let spans = null
+  const forwardSpan = (id, from) => (spans ??= forwardSpans(doc, units, floating, (wholeIndex.index ??= buildIndexOf(doc))))(id, from)
+  const pageAfter = k => { let q = k; while (q < N && doc[q].page === doc[k].page) q++; return q }
   const finalOf = () => {
-    const fin = new Uint8Array(n), out = leftReach(doc, units, { bounds, floating, floatMatch })
+    const fin = new Uint8Array(n), out = leftReach(doc, units, { bounds, floating, floatMatch, forward, forwardSpan: forward ? forwardSpan : null })
     const pendBefore = new Uint8Array(n), pendAfter = new Uint8Array(n), lo = new Int32Array(n), hi = new Int32Array(n)
-    for (let u = 0, pend = 0, low = -1; u < n; u++) {
+    // (rule 5: whether a unit still to be marked between a float and its last body neighbour may become a nearer one, and the
+    // earliest end its body neighbour may get to: its start's lower bound)
+    const pendBody = forward ? new Uint8Array(n) : null, bodyLow = forward ? new Int32Array(n) : null, bodyHigh = forward ? new Int32Array(n) : null
+    for (let u = 0, pend = 0, low = -1, pb = 0, lb = -1, hb = -1; u < n; u++) {
       pendBefore[u] = pend; lo[u] = low
+      if (forward) { pendBody[u] = pb; bodyLow[u] = lb; bodyHigh[u] = hb }
       if (inText(u)) { pend = 0; low = bounds.get(key(u))[1] } else if (!marked[u]) { pend = 1; if (!floating(units[u].id) && ownLow[u]) low = Math.min(low, firstTok[ownLow[u]]) }
+      if (forward && body(u)) {
+        if (inText(u)) { pb = 0; lb = hb = bounds.get(key(u))[1] } else if (!marked[u] && !floating(units[u].id) && ownLow[u]) { pb = 1; lb = Math.min(lb, firstTok[ownLow[u]]); hb = Math.max(hb, lastTok[ownHigh[u]]) } else if (!marked[u] && !floating(units[u].id)) pb = 1
+      }
     }
     for (let u = n - 1, pend = 0, high = N; u >= 0; u--) {
       pendAfter[u] = pend; hi[u] = high
       if (inText(u)) { pend = 0; high = bounds.get(key(u))[0] } else if (!marked[u]) { pend = 1; if (!floating(units[u].id) && ownHigh[u]) high = Math.max(high, lastTok[ownHigh[u]]) }
     }
     for (let u = 0; u < n; u++) {
-      fin[u] = marked[u] && (bounds.has(key(u)) || (!pendBefore[u] && !pendAfter[u])) ? 1 : 0
+      const float = floating(units[u].id)
+      fin[u] = marked[u] && (bounds.has(key(u)) || (!pendBefore[u] && !pendAfter[u] && !(forward && float && pendBody[u]))) ? 1 : 0
       if (fin[u]) continue
       const more = [[Math.max(0, lo[u] + 1 - MARGIN), Math.min(N - 1, hi[u] - 1 + MARGIN)]]
       if (!marked[u] && ownLow[u]) more.push([firstTok[ownLow[u]], lastTok[ownHigh[u]]])
+      // (rule 5: a float's search of the whole document from each page its last body neighbour may end on: the stretches those
+      // searches take, the search from a page taking the same stretch while the page starts at or before its first hit)
+      if (forward && float && N && (!floatMatch || floatMatch.has(units[u].id))) {
+        const top = start(bodyHigh[u])
+        for (let from = start(bodyLow[u]); from <= top;) {
+          const sp = forwardSpan(units[u].id, from)
+          if (!sp) break
+          more.push([sp.lo, sp.hi])
+          from = pageAfter(sp.first)
+        }
+      }
       out[u] = [...out[u], ...more.filter(([a, b]) => a <= b)]
     }
     return { fin, reach: out }
@@ -179,7 +213,7 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
         if (!(bounds.size > 0 || (boundsKnown ? boundsKnown() : markedCount === n))) return
         const { fin, reach } = finalOf()
         if (!partSets(doc, units, [am, am], reach).V2.units.every(u => fin[u])) return
-        const got = leftOfPart(doc, units, { bounds, floating, floatMatch, frame }, [am, am], reach)
+        const got = leftOfPart(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex }, [am, am], reach)
         for (const id of got.before) if (!settled[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
         for (const [id, an] of got.anchors) settle(id, u => onAnchor(u, an))
         am++

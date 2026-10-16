@@ -1577,7 +1577,7 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
     marks: [['0s', 1, cap[0]?.x ?? 0, 600], ['0e', 1, endOf(cap[1] as Run), 588], ['1s', 2, 72, 700], ['1e', 2, endOf(para[4] as Run), 652]],
     units: [unit('caption', [text(ws(cap))]), unit('para', [text(ws(para))])],
   }
-  const input = async (rules: object | null) => ({ units: w.units, marks: await marksOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', rules: rules as never })
+  const input = async (rules: object | null) => ({ units: w.units, marks: await marksOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', rules: rules as never, inFloat: [] })
 
   it('today\'s edges are every page\'s like it; rule 3\'s those before a page and its own, a cover page the first later one\'s: page 1\'s caption CENTRED both ways', async () => {
     const today = await makeLayout({ ...(await input(null)), arxiv: arxivOf(w.pages) })
@@ -1596,7 +1596,7 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
   })
 
   it('under rule 3 (and rule 1) a page at a time and the passes in another order make the whole run\'s file', async () => {
-    for (const rules of [{ edges: 'earlier' }, { frame: 'tokens', edges: 'earlier' }]) {
+    for (const rules of [{ edges: 'earlier' }, { frame: 'tokens', edges: 'earlier' }, { frame: 'tokens', edges: 'earlier', floatSearch: 'forward' }]) {
       // (today's frame the whole run's, given to the stream; rule 1's the text's, made by each)
       let frameOf: unknown = null
       const whole1 = rules.frame ? {} : { frame: ((d: never, ms: never) => { frameOf = pageFrame(d, ms); return frameOf }) as never }

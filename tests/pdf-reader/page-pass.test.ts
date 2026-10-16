@@ -30,7 +30,7 @@ function worldOf(changed: (page: number, j: number) => boolean = () => false): W
   for (const p of [1, 2, 3]) { const ls = linesOf(p); marks.push([`${p - 1}s`, p, 72, 700], [`${p - 1}e`, p, endOf(ls[9] as Run), 592]) }
   return { pages, marked, marks, units: [1, 2, 3].map(p => unit('para', [text(words(100 * p, 100))])) }
 }
-const source = (w: World) => ({ units: w.units, kept: new Set() }) as never
+const source = (w: World) => ({ units: w.units, kept: new Set(), inFloat: [] }) as never
 const readOf = (w: World) => readMarked(markedOf(w.marked ?? w.pages, w.marks), '', { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, units: w.units, OPS } as never)
 
 /** the layer as the page pass tells it: the head and chunks, the left parts and parts in the order told, the notes */
@@ -283,13 +283,13 @@ describe('layerOfPaper: the marked original read by the pass (stage 2)', () => {
   })
 })
 
-describe('layerOfPaper: the page stream\'s rules (`rules`: rules 1, 3 and 4)', () => {
-  it('today\'s by default; under the three rules each oracle tells the whole run\'s layer', async () => {
+describe('layerOfPaper: the page stream\'s rules (`rules`: rules 1, 3, 4 and 5)', () => {
+  it('today\'s by default; under the four rules each oracle tells the whole run\'s layer', async () => {
     const w = deferredWorld()
     const today = await passOf(w)
-    const named = await passOf(w, { rules: { frame: 'units', edges: 'all', columns: 'units' } })
+    const named = await passOf(w, { rules: { frame: 'units', edges: 'all', columns: 'units', floatSearch: 'whole' } })
     expect(shas(named.parts)).toEqual(shas(today.parts))
-    const rules = { frame: 'tokens', edges: 'earlier', columns: 'tokens' } as const
+    const rules = { frame: 'tokens', edges: 'earlier', columns: 'tokens', floatSearch: 'forward' } as const
     const capture: Record<string, unknown> = {}
     const want = await passOf(w, { rules, marks: null, marked: markedIn(w) as never, capture: capture as never })
     for (const o of [{ oracle: capture }, { oracle: capture, marks: null, marked: markedIn(w) }]) {
@@ -300,7 +300,8 @@ describe('layerOfPaper: the page stream\'s rules (`rules`: rules 1, 3 and 4)', (
     }
   })
 
-  it('a rule that is none is refused', async () => {
+  it('a rule that is none is refused; rule 5 needs the units written inside a float', async () => {
     await expect(passOf(worldOf(), { rules: { columns: 'lines' } as never })).rejects.toThrow(TypeError)
+    await expect(passOf(worldOf(), { rules: { floatSearch: 'forward' }, source: { units: worldOf().units, kept: new Set() } as never })).rejects.toThrow(/inFloat/)
   })
 })

@@ -1,9 +1,10 @@
 // left-part.mjs's types: the left of a part, its units placed from those that may touch its pages
 import type { Anchor, DocToken, FrameRule, UnitText } from './anchors.mjs'
 
-export interface LeftPartOptions { bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null; frame?: FrameRule; minCoverage?: number }
+/** `forward` (rule 5): the indices of the units written inside a float; `wholeIndex` the whole document's index a holder keeps */
+export interface LeftPartOptions { bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null; frame?: FrameRule; minCoverage?: number; forward?: ReadonlySet<number> | null; wholeIndex?: { index: unknown } | null }
 /** where each unit may reach, as token intervals [lo, hi] (at most two), by the units' order, before any is matched */
-export declare function leftReach(doc: readonly DocToken[], units: readonly UnitText[], o: Omit<LeftPartOptions, 'frame' | 'minCoverage'>): [number, number][][]
+export declare function leftReach(doc: readonly DocToken[], units: readonly UnitText[], o: Omit<LeftPartOptions, 'frame' | 'minCoverage'> & { forwardSpan?: ((id: number, from: number) => { lo: number; hi: number } | null) | null }): [number, number][][]
 /** the anchors of the units whose first rectangle stands on pages a to b, as anchorUnits over the whole paper places them under
  *  the frame given: required, the whole document's frame rule (pageFrame over the part's units is another frame; a TypeError
  *  where none is given); `read` the units (indices) the place was made of */
@@ -31,4 +32,4 @@ export interface RangedAnchors {
    *  settled without one; past the last page every unit left settled */
   run(onAnchor: (id: number, anchor: Anchor) => void, onSettle: (u: number) => void): void
 }
-export declare function rangedAnchors(doc: readonly DocToken[], units: readonly UnitText[], o: Omit<LeftPartOptions, 'bounds' | 'minCoverage' | 'frame'> & { frame: FrameRule; boundsKnown?: (() => boolean) | null }): RangedAnchors
+export declare function rangedAnchors(doc: readonly DocToken[], units: readonly UnitText[], o: Omit<LeftPartOptions, 'bounds' | 'minCoverage' | 'frame' | 'wholeIndex'> & { frame: FrameRule; boundsKnown?: (() => boolean) | null }): RangedAnchors

@@ -15,7 +15,7 @@ export interface PartNote { pages: [number, number]; layout: 'kept' | 'none' | P
 export interface LayerOptions {
   paper: { id: string; version: number }
   /** openPaper's paper: its units (ids their indices) and those it keeps */
-  source: { units: readonly { kind: string; pieces: unknown[] }[]; kept: ReadonlySet<unknown> }
+  source: { units: readonly { kind: string; pieces: unknown[] }[]; kept: ReadonlySet<unknown>; inFloat?: readonly number[] }
   /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none (or `marked`) */
   marks?: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string } | null
   /** the marked original to be read here instead (a PDF.js document of it, the caller's to open and destroy, its last pass's log,

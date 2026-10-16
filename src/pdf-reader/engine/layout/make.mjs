@@ -100,8 +100,10 @@ const EVEN = new Set(['para', 'abstract', 'theorem'])
  *  first: `frame` the pages' frame the anchors are placed under ('units': pageFrame of the located units; 'tokens': anchors.mjs
  *  frameOfTokens, arXiv's text alone, rule 1); `edges` the columns' text edges a page without its own takes ('all': those of
  *  every page like it; 'earlier': of the pages before it and its own alone, rule 3); `columns` the left side's far-push columns
- *  (the page pass's: 'units' pageColumns, 'tokens' columnsOfTokens, rule 4; the maker reads none) */
-export const RULES = Object.freeze({ frame: Object.freeze(['units', 'tokens']), edges: Object.freeze(['all', 'earlier']), columns: Object.freeze(['units', 'tokens']) })
+ *  (the page pass's: 'units' pageColumns, 'tokens' columnsOfTokens, rule 4; the maker reads none); `floatSearch` a float's
+ *  search of the whole document where it is not found between its neighbours ('whole': step T's match of it, anywhere;
+ *  'forward': from the page of its last body neighbour on, a unit not written inside a float, rule 5: `inFloat` given) */
+export const RULES = Object.freeze({ frame: Object.freeze(['units', 'tokens']), edges: Object.freeze(['all', 'earlier']), columns: Object.freeze(['units', 'tokens']), floatSearch: Object.freeze(['whole', 'forward']) })
 /** a rule set checked, each rule today's where it is not given */
 export function rulesOf(rules = null) {
   if (rules !== null && (typeof rules !== 'object' || Array.isArray(rules))) throw new TypeError('rules: an object of the page stream\'s rules')
@@ -407,8 +409,11 @@ export async function makeLayout(o) {
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
  * flag read, given; else made of every placed unit's body lines once the lines are placed (today's rule: `columnEdgesOf`)
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null }) {
+export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null }) {
   const rules = rulesOf(rulesGiven)
+  // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
+  if (rules.floatSearch === 'forward' && !Array.isArray(inFloat)) throw new TypeError('inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
+  const forward = rules.floatSearch === 'forward' ? new Set(inFloat) : null
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
@@ -608,7 +613,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
     linesTeX = new Map(marks.lines)
-    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame })
+    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
     stats.ms.anchor = now() - t
   }
 
@@ -1819,7 +1824,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (NAME_START.test(nm)) nameList.push(nm)
     })
     // ---- each unit: its keys (final once every name of them is read), its pieces' own ink and marks (known once found)
-    const R = rangedAnchors(doc, texts, { floating, floatMatch, frame })
+    const R = rangedAnchors(doc, texts, { floating, floatMatch, frame, forward })
     const keyLeft = new Map([...keyNames].map(([k, list]) => [k, mh ? list.length : 0]))
     const keysLeft = new Int32Array(n), rowsLeft = new Int32Array(n), known = new Uint8Array(n), wantDecide = new Uint8Array(n), phRan = new Uint8Array(n)
     for (const k of keyNames.keys()) keysLeft[Number(k.slice(0, -1))]++
