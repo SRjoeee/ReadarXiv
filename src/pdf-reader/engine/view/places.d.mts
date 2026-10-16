@@ -14,12 +14,17 @@ export interface Places {
   contentOf(n: number): PlaceContent
   near(n: number): boolean
   page(n: number): HTMLElement | null
+  /** the focus given to place n (a keyboard's jump to it): at once where it shows a page, else once it does, within
+   *  FOCUS_WAIT_MS; given up where the focus moves meanwhile */
+  focus(n: number): void
   count(): number
   views(): { get(n: number): PlaceView | null; all(): PlaceView[]; count(): number }
   rename(): void
   probe(): { places: number; pageViews: number; skeletons: number; laidPlaces: number; nearPlaces: number; pageViewsMade: number }
   dispose(): void
 }
+/** how long after a keyboard's jump the place jumped to may still take the focus when it comes to show its page */
+export declare const FOCUS_WAIT_MS: number
 export declare function createPlaces(o: {
   stack: HTMLElement
   root: HTMLElement

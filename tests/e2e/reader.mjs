@@ -761,6 +761,28 @@ try {
       reached = await page.evaluate(() => { const a = document.activeElement; return a?.matches?.('#right a.axt-link') ? { name: a.getAttribute('aria-label'), ring: getComputedStyle(a.querySelector('span.axt-link-box')).outlineStyle, width: getComputedStyle(a.querySelector('span.axt-link-box')).outlineWidth } : null })
     }
     check('Tab reaches a link of the laid page, after the left\'s, its focus ring drawn (2 px, solid)', !!reached && reached.ring === 'solid' && reached.width === '2px', `${tabs} Tab(s): ${JSON.stringify(reached)}`)
+    // the ring reads on the page in the dark theme too, the pages undimmed (white paper) and dimmed: 3:1 at least on the
+    // paper under it (WCAG 2.2 SC 1.4.11), its colour drawn on a canvas to be read
+    const ringOn = async (dim) => {
+      await setConfig({ theme: 'dark', pdfReader: { dimPages: dim } })
+      await page.waitForFunction(d => document.documentElement.dataset.theme === 'dark' && document.documentElement.hasAttribute('data-axt-dim') === d, dim, { timeout: 10_000 }).catch(() => undefined)
+      return page.evaluate(dim => {
+        const a = document.activeElement?.matches?.('#right a.axt-link') ? document.activeElement : null
+        const box = a?.querySelector('span.axt-link-box')
+        if (!box) return null
+        const c = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+        const rgb = colour => { c.clearRect(0, 0, 1, 1); c.fillStyle = '#000'; c.fillStyle = colour; c.fillRect(0, 0, 1, 1); return [...c.getImageData(0, 0, 1, 1).data.slice(0, 3)] }
+        const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b) }
+        const ratio = (x, y) => (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+        const ring = rgb(getComputedStyle(box).outlineColor)
+        // the paper: white, or white through the layer's dimming filter (invert(88.8%): 0.112 of each channel)
+        const paper = dim ? [29, 29, 29] : [255, 255, 255]
+        return { ring, contrast: Math.round(ratio(lum(ring), lum(paper)) * 10) / 10 }
+      }, dim)
+    }
+    const darkPaper = await ringOn(false), darkDimmed = await ringOn(true)
+    await setConfig({ theme: 'system', pdfReader: { dimPages: true } })
+    check('the focus ring reads on the page in the dark theme, on white paper and on dimmed pages alike (3:1 at least)', (darkPaper?.contrast ?? 0) >= 3 && (darkDimmed?.contrast ?? 0) >= 3, `undimmed ${JSON.stringify(darkPaper)}, dimmed ${JSON.stringify(darkDimmed)}`)
     // Enter on a link inside the paper: the right jumps (the pane it is on), the left follows with the sync on, nothing levelled
     const internal = await page.evaluate(() => { const a = [...document.querySelectorAll('#right a.axt-link[href^="#"]')][0]; a?.focus(); return a ? a.getAttribute('aria-label') : null })
     const jumpFrom = await page.evaluate(() => ({ right: document.getElementById('right').scrollTop, align: window.__reader.view.probe().lastAlign }))
@@ -770,6 +792,9 @@ try {
     await page.waitForTimeout(900)
     const jumped = await page.evaluate(() => ({ right: document.getElementById('right').scrollTop, ...(({ driver, levelError, lastAlign }) => ({ driver, levelError, lastAlign }))(window.__reader.view.probe()), focus: document.activeElement?.className ?? '' }))
     check('Enter on a link inside the paper: the right jumps to its destination (resolved on the left\'s document), the left follows level, and the jump levels nothing of its own', internal !== null && jumped.right !== jumpFrom.right && jumped.driver === 'right' && Math.abs(jumped.levelError ?? 999) <= 24 && jumped.lastAlign === jumpFrom.align, `“${internal}”: ${JSON.stringify(jumpFrom)} then ${JSON.stringify(jumped)}`)
+    // … and the focus is the place jumped to, a stop of its own (Tab goes on from there), never the document's body
+    const focused = await page.evaluate(() => { const a = document.activeElement; return { place: a?.matches?.('#right .axt-place') ? Number(a.dataset.pageNumber) : null, tabindex: a?.getAttribute?.('tabindex') ?? null, body: a === document.body, shown: a?.getAttribute?.('aria-hidden') !== 'true' } })
+    check('… and the focus goes to the place jumped to, shown and a stop of its own, not the document', focused.place !== null && focused.tabindex === '-1' && focused.shown && !focused.body, JSON.stringify(focused))
     // with the sync off, the same jump leaves the left where it is
     await page.evaluate(() => window.__reader.controller.setSync(false))
     await page.evaluate(() => window.__reader.controller.goToPage('right', 1))

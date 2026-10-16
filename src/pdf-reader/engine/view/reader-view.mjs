@@ -739,10 +739,8 @@ export function createReaderView(host) {
       const n = ref && typeof ref === 'object' ? (await doc.getPageIndex(ref)) + 1 : Number.isInteger(ref) ? ref + 1 : null
       if (disposed || current?.doc !== doc || !laid || !Number.isInteger(n) || n < 1 || n > places.count()) return
       jump(R, { pageNumber: n, destArray: explicit })
-      if (how.keyboard) {
-        const div = places.page(n)
-        if (div && div.getAttribute('aria-hidden') !== 'true') { div.tabIndex = -1; div.focus({ preventScroll: true }) }
-      }
+      // (a far place shows its page only once the jump has brought it near: the focus waits for it)
+      if (how.keyboard) places.focus(n)
     } catch (e) { warn('a link\'s destination', e) }
   }
   function goToPage(which, n) {

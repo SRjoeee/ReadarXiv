@@ -259,6 +259,39 @@ describe('the layer side: links with the laid page (the fake door)', () => {
     expect(places(s)[1]?.getAttribute('tabindex')).toBe('-1')
   })
 
+  it('LS6b: a keyboard\'s jump to a far page: the focus waits for its place to show the page, takes it then, and keeps it when the page left goes; the reader\'s own focus first gives it up', async () => {
+    const s = await opened((_n, door) => [rec({ boxes: [100, 700, 160, 712], dest: 'refs', name: `a${door}` }), rec({ boxes: [100, 600, 160, 612], url: 'https://example.org', name: `b${door}`, order: 1 })])
+    const d = await doc(s)
+    d.getDestination = vi.fn(async () => [{ num: 4, gen: 0 }, { name: 'XYZ' }, 0, 792, null])
+    d.getPageIndex = vi.fn(async () => 3)
+    const link = anchors(layerOf(s, 1))[0] as HTMLAnchorElement
+    link.focus()
+    link.click()
+    await flush(10)
+    // page 4 is far: its place shows nothing yet, and the focus stays where it was
+    expect(places(s)[3]?.getAttribute('aria-hidden')).toBe('true')
+    expect(document.activeElement).toBe(link)
+    // the jump's scroll brings it near: the focus goes to it, and stays there when the pages left go
+    await nearOn(s, [4])
+    expect(document.activeElement).toBe(places(s)[3])
+    expect(places(s)[3]?.getAttribute('tabindex')).toBe('-1')
+    await nearOn(s, [1, 2], false)
+    await settle(s)
+    expect(document.activeElement).toBe(places(s)[3])
+    // the reader's own move before the place shows: the jump gives the focus up
+    await nearOn(s, [1, 2])
+    await nearOn(s, [4], false)
+    await settle(s)
+    const again = anchors(layerOf(s, 1))[0] as HTMLAnchorElement
+    again.focus()
+    again.click()
+    await flush(10)
+    const other = anchors(layerOf(s, 1))[1] as HTMLAnchorElement
+    other.focus()
+    await nearOn(s, [4])
+    expect(document.activeElement).toBe(other)
+  })
+
   it('LS7: a click on a link levels nothing (alignClick\'s guard), where the same click beside it does', async () => {
     const s = await opened()
     const box = anchors(layerOf(s, 1))[0]?.querySelector('span') as HTMLElement

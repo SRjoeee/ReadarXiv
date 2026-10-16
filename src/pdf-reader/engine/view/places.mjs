@@ -64,6 +64,9 @@ function skeleton(n) {
  * viewer's: no second one); `o.eventBus` the right's (its page views tell `pagerendered` there); `o.name(n)` a place's name
  * when it shows a page; `o.near(n, on)` a place come near or gone far; `o.clock`, `o.signal`, `o.warn`
  */
+/** how long after a keyboard's jump the place jumped to may still take the focus when it comes to show its page: the jump's
+ *  scroll brings it near within a frame or two; a place that comes near later is the reader's own scroll */
+export const FOCUS_WAIT_MS = 2000
 export function createPlaces(o) {
   const { stack, root, kit, clock } = o
   /** each place: its element, its holder, what it shows, whether it is near; and each as a page view is read */
@@ -73,6 +76,12 @@ export function createPlaces(o) {
   const queue = []
   let drawing = null
   const counts = { made: 0, released: 0 }
+  /** the place a keyboard's jump gives the focus to once it shows a page (`n`), within FOCUS_WAIT_MS of the jump: a far
+   *  place shows nothing until it comes near, and the focus left on the link would fall to the document once that link's
+   *  page goes. Given up where the focus moves meanwhile */
+  let pending = null
+  const giveUp = e => { if (pending && e.target !== list[pending.n - 1]?.div) pending = null }
+  document.addEventListener('focusin', giveUp, true)
 
   const near = new IntersectionObserver(entries => {
     for (const e of [...entries].sort((a, b) => Number(a.target.dataset.pageNumber) - Number(b.target.dataset.pageNumber))) {
@@ -161,8 +170,7 @@ export function createPlaces(o) {
     const to = focus !== '' ? p.holder.querySelector(`a[data-axt-link="${focus}"]`) : null
     if (to) { to.focus({ preventScroll: true }); return }
     if (p.div.getAttribute('aria-hidden') === 'true') return
-    p.div.tabIndex = -1
-    p.div.focus({ preventScroll: true })
+    focusPlace(p)
   }
   function enqueue(p) {
     if (!queue.includes(p)) queue.push(p)
@@ -181,12 +189,19 @@ export function createPlaces(o) {
       pump()
     })
   }
+  /** the focus given to place p, a stop of its own (no tab stop: Tab goes on from there to its links) */
+  function focusPlace(p) {
+    pending = null
+    p.div.tabIndex = -1
+    p.div.focus({ preventScroll: true })
+  }
   /** a place's name for assistive technology: a page of the right where it shows one, else hidden (a skeleton, nothing) */
   function name(p) {
     if ((p.side && !p.blank) || p.view) {
       p.div.removeAttribute('aria-hidden')
       p.div.setAttribute('role', 'region')
       p.div.setAttribute('aria-label', o.name(p.n))
+      if (pending?.n === p.n) { if (clock.now() <= pending.until) focusPlace(p); else pending = null }
     } else {
       p.div.setAttribute('aria-hidden', 'true')
       p.div.removeAttribute('role')
@@ -299,6 +314,14 @@ export function createPlaces(o) {
     },
     near: n => !!list[n - 1]?.near,
     page: n => list[n - 1]?.div ?? null,
+    /** the focus given to place n (a keyboard's jump to it): at once where it shows a page, else once it does, within
+     *  FOCUS_WAIT_MS */
+    focus(n) {
+      const p = list[n - 1]
+      if (disposed || !p) return
+      if (p.div.getAttribute('aria-hidden') !== 'true') { focusPlace(p); return }
+      pending = { n, until: clock.now() + FOCUS_WAIT_MS }
+    },
     count: () => list.length,
     /** the places as page views are read: place n's element with the left's viewport and page box for page n */
     views: () => views,
@@ -312,6 +335,8 @@ export function createPlaces(o) {
     dispose() {
       if (disposed) return
       disposed = true
+      pending = null
+      document.removeEventListener('focusin', giveUp, true)
       clock.clear(redrawTimer)
       near.disconnect()
       remove()
