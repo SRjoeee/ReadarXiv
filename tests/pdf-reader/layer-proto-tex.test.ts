@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { indexLayout, PH_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { makeLayout } from '@/pdf-reader/engine/layout/make.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
+import { arxivOf, marksOf, ph as phPiece, type Run, text as textPiece, unit as unitPiece, type World } from './helpers/make-world'
 
 // The layer's hybrid (layer-proto/tex.mjs): v0's per-unit reading with its parts from the layout file wherever the file
 // locates the unit whole; and v0's fallback fixes of step 2 (layer2.mjs). The drawing is measured by the layer gate
@@ -850,5 +852,23 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     expect(got.filter(of(S2)).map(x => [x[0], x[1]])).toEqual([[2, 470], [2, 455], [2, 440], [2, 425], [2, 410], [3, 500]])
     // S3 two lines under S2's last, not at TeX's line after the break (464) under a band of S2's unused room
     expect(got.filter(of(S3)).map(x => [x[0], x[1]])).toEqual([[3, 470], [3, 455], [3, 440]])
+  })
+})
+
+describe("a cell whose citation wrapped onto the cell's next line, made by the maker (2609.26457 Table 3)", () => {
+  it('is located whole, its text area both lines: its table group is not withheld for it', async () => {
+    // the citation after the cell's last word (the end mark before it), its second line no word of the cell's source
+    const runs: Run[] = [{ s: 'decaying exploration', x: 72, y: 700 }, { s: '(Sutton and', x: 177, y: 700 }, { s: 'Barto, 2018)', x: 72, y: 688 }]
+    const w: World = {
+      pages: [{ runs, points: { 'p0.1b': [2, 12] } }],
+      marks: [['t0s', 1, 72, 700], ['t0e', 1, 177, 700], ['p0.1a', 1, 177, 700], ['p0.1b', 1, 132, 688]],
+      units: [unitPiece('cell', [textPiece(' decaying exploration '), phPiece('\\citep{sutton}'), textPiece(' ')])],
+    }
+    const out = await makeLayout({ units: w.units, marks: await marksOf(w), arxiv: arxivOf(w.pages), OPS, paper: { id: '2609.26457', version: 1 }, left: '', pdfjs: '6.3.289' })
+    if (!('file' in out)) throw new Error('refused')
+    const lu = indexLayout(out.file).unit(0)
+    const cell = { kind: 'cell', pieces: w.units[0]?.pieces } as never
+    expect(T.locatedWhole(lu, cell, [[0, ' exploration decroissante '], [1, 1], [0, ' ']], { held: true })).toMatchObject({ ok: true, kOf: [-1, 1, -1] })
+    expect(T.texRects(lu as never).rects.map(r => [r[0], r[1], r[3]])).toEqual([[1, 72, 232], [1, 72, 132]])
   })
 })
