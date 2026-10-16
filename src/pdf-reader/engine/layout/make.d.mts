@@ -21,8 +21,11 @@ export interface MakeInput {
   text?: ArxivText | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
-  /** the pages' frame's rule the maker's anchors are placed under (anchors.mjs pageFrame, today's) */
-  frame?: FrameRule
+  /** the pages' frame's rule the maker's anchors are placed under (a whole run's, given; else the rule set's: anchors.mjs
+   *  pageFrame, today's, or frameOfTokens) */
+  frame?: FrameRule | null
+  /** the page stream's rules (RULES), today's each where not given: the maker reads `frame` and `edges` */
+  rules?: Partial<PageStreamRules> | null
   /** the columns' text edges the names, the displays' numbers and the centred flag read (`page|column`,
    *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of every placed unit's body lines (today's) */
   columnEdges?: ReadonlyMap<string, [number, number]> | null
@@ -128,6 +131,13 @@ export interface MakerStream {
   progress(): { read: number; marked?: number; anchored: number; decided: number; released: number; held: number; glyphs: number }
   trace?: { read: number; marked?: number; anchored: number; decided: number; released: number; held: number; glyphs: number }[]
 }
+/** the page stream's rules, each rule's values today's first: the pages' frame ('units' | 'tokens', rule 1), the columns'
+ *  text edges a page without its own takes ('all' | 'earlier', rule 3), the left side's far-push columns ('units' | 'tokens',
+ *  rule 4: the page pass's) */
+export interface PageStreamRules { frame: 'units' | 'tokens'; edges: 'all' | 'earlier'; columns: 'units' | 'tokens' }
+export declare const RULES: { readonly [K in keyof PageStreamRules]: readonly PageStreamRules[K][] }
+/** a rule set checked, each rule today's where it is not given; a TypeError for a rule or a value that is none */
+export declare function rulesOf(rules?: Partial<PageStreamRules> | null): PageStreamRules
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number
 /** a page's operator list waited for at most, ms */

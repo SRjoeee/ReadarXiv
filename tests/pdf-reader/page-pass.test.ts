@@ -272,3 +272,25 @@ describe('layerOfPaper: the marked original read by the pass (stage 2)', () => {
     expect(got.told).toEqual([])
   })
 })
+
+describe('layerOfPaper: the page stream\'s rules (`rules`: rules 1, 3 and 4)', () => {
+  it('today\'s by default; under the three rules each oracle tells the whole run\'s layer', async () => {
+    const w = deferredWorld()
+    const today = await passOf(w)
+    const named = await passOf(w, { rules: { frame: 'units', edges: 'all', columns: 'units' } })
+    expect(shas(named.parts)).toEqual(shas(today.parts))
+    const rules = { frame: 'tokens', edges: 'earlier', columns: 'tokens' } as const
+    const capture: Record<string, unknown> = {}
+    const want = await passOf(w, { rules, marks: null, marked: markedIn(w) as never, capture: capture as never })
+    for (const o of [{ oracle: capture }, { oracle: capture, marks: null, marked: markedIn(w) }]) {
+      const got = await passOf(w, { rules, ...o } as never)
+      expect(got.told).toEqual(want.told)
+      expect(shas(got.parts)).toEqual(shas(want.parts))
+      expect(got.notes).toEqual(want.notes)
+    }
+  })
+
+  it('a rule that is none is refused', async () => {
+    await expect(passOf(worldOf(), { rules: { columns: 'lines' } as never })).rejects.toThrow(TypeError)
+  })
+})

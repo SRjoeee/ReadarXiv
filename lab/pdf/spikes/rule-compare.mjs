@@ -6,12 +6,16 @@
 //   frame    rule 1: the frame of arXiv's tokens alone (anchors.mjs frameOfTokens), for the maker's anchors and the left's
 //   columns  rule 4: the columns of arXiv's tokens alone (view/highlight.mjs columnsOfTokens), for the left side's far push
 //   both     rules 1 and 4
+//   edges    rule 3: the maker's columns' text edges of the pages before a page and its own alone (make.mjs rules.edges
+//            'earlier'), for the names, the displays' numbers and the centred flag
+//   all      rules 1, 3 and 4
 // Rule 1 moves the layout file (the maker's anchors), the left (anchorUnits over arXiv's tokens under the unit marks) and so the
-// left side; rule 4 moves the left side alone (its tokens' far push): the maker reads no columns.
-//   pnpm exec tsx lab/pdf/spikes/rule-compare.mjs [--papers=<id>v<n>,…] [--rules=off,frame,columns,both] [--out=<dir>]
+// left side; rule 4 moves the left side alone (its tokens' far push): the maker reads no columns; rule 3 moves the layout file
+// alone (the left reads no edges).
+//   pnpm exec tsx lab/pdf/spikes/rule-compare.mjs [--papers=<id>v<n>,…] [--rules=off,frame,columns,both,edges,all] [--out=<dir>]
 //       [--of=<fixtures folder>] [--engine=<worktree>] [--corpus=<dir>]
 // --papers: the papers (default: every folder of <data>/layout that holds source.gz and arxiv.pdf). --rules: the rule sets
-// (default all four; off is always made, the baseline). --of: a fixtures folder (the gate pack's fixtures/, or a layer-fixtures
+// (default all six; off is always made, the baseline). --of: a fixtures folder (the gate pack's fixtures/, or a layer-fixtures
 // folder: <id>v<n>-<target>/ holding layout.json and its other files): each of its outputs of a paper made here is written
 // again under each rule set, its layout.json this run's and its other files linked, so that the layer gate runs on it
 // (layer-gate.mjs --fixtures=<out>/<rule>/fixtures, its model and pixel tiers; the gate's baseline is this run's off, made from
@@ -64,7 +68,10 @@ const COMPILES = process.env.COMPILES ? resolve(process.env.COMPILES) : null
 const OUT = resolve(argOf('out') ?? join(root, 'out/rule-compare'))
 const OF = argOf('of') ? resolve(argOf('of')) : null
 const CORPUS = argOf('corpus') ? resolve(argOf('corpus')) : null
-const RULES = { off: { frame: false, columns: false }, frame: { frame: true, columns: false }, columns: { frame: false, columns: true }, both: { frame: true, columns: true } }
+const RULES = {
+  off: { frame: false, columns: false, edges: false }, frame: { frame: true, columns: false, edges: false }, columns: { frame: false, columns: true, edges: false },
+  both: { frame: true, columns: true, edges: false }, edges: { frame: false, columns: false, edges: true }, all: { frame: true, columns: true, edges: true },
+}
 const asked = (argOf('rules') ?? Object.keys(RULES).join(',')).split(',').filter(Boolean)
 for (const r of asked) if (!RULES[r]) throw new Error(`--rules: ${r} is none of ${Object.keys(RULES).join(', ')}`)
 const rules = ['off', ...asked.filter(r => r !== 'off')]
@@ -163,15 +170,16 @@ for (const id of papers) {
       const bounds = made?.unitMarks ? boundsFromMarks(doc, made.unitMarks) : undefined
       const byFrame = new Map()
       for (const rule of rules) {
-        const { frame, columns } = RULES[rule]
-        // the maker and the left read the frame alone: made once a frame
-        if (!byFrame.has(frame)) {
+        const { frame, columns, edges } = RULES[rule]
+        // the maker reads the frame and the edges, the left the frame alone: made once a frame and edges
+        const key = `${frame}|${edges}`
+        if (!byFrame.has(key)) {
           const rule1 = frame ? () => F : pageFrame
-          const out = made ? await makeLayout({ units: paper.units, marks: made.marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1 }) : null
+          const out = made ? await makeLayout({ units: paper.units, marks: made.marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1, ...(edges ? { rules: { edges: 'earlier' } } : {}) }) : null
           const left = anchorUnits(doc, texts, { bounds, floating, floatMatch, frame: rule1 })
-          byFrame.set(frame, { layout: out && 'file' in out ? encodeLayout(out.file) : null, refused: !out ? 'text only' : 'file' in out ? null : out.refused, stats: out?.stats ?? null, left })
+          byFrame.set(key, { layout: out && 'file' in out ? encodeLayout(out.file) : null, refused: !out ? 'text only' : 'file' in out ? null : out.refused, stats: out?.stats ?? null, left })
         }
-        const f = byFrame.get(frame)
+        const f = byFrame.get(key)
         const side = leftSideOf({ doc, views: text.views, anchors: f.left, edges: text.edges, ...(columns ? { columns: tokenColumns } : {}) })
         const pages = []
         for (let p = 1; p <= text.pages; p++) pages.push(side.leftPages(p))

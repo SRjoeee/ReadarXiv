@@ -17,7 +17,7 @@
 // is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
 // it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
-import { anchorUnits, boundsFromMarks, markWords, pageFrame, pageIndex, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, pageFrame, pageIndex, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
 import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
@@ -96,6 +96,24 @@ const NAME_START = /^n(\d+)\.([a-z]+)\.s$/
 /** a name's text as it is compared: letters and digits, folded */
 const letters = s => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
 const EVEN = new Set(['para', 'abstract', 'theorem'])
+/** the page stream's rules (E2b design §0: a rule of today's reads the whole document) and today's, each rule's values, today's
+ *  first: `frame` the pages' frame the anchors are placed under ('units': pageFrame of the located units; 'tokens': anchors.mjs
+ *  frameOfTokens, arXiv's text alone, rule 1); `edges` the columns' text edges a page without its own takes ('all': those of
+ *  every page like it; 'earlier': of the pages before it and its own alone, rule 3); `columns` the left side's far-push columns
+ *  (the page pass's: 'units' pageColumns, 'tokens' columnsOfTokens, rule 4; the maker reads none) */
+export const RULES = Object.freeze({ frame: Object.freeze(['units', 'tokens']), edges: Object.freeze(['all', 'earlier']), columns: Object.freeze(['units', 'tokens']) })
+/** a rule set checked, each rule today's where it is not given */
+export function rulesOf(rules = null) {
+  if (rules !== null && (typeof rules !== 'object' || Array.isArray(rules))) throw new TypeError('rules: an object of the page stream\'s rules')
+  const out = {}
+  for (const k of Object.keys(rules ?? {})) if (!Object.hasOwn(RULES, k)) throw new TypeError(`rules.${k}: no rule of the page stream's`)
+  for (const [k, values] of Object.entries(RULES)) {
+    const v = rules?.[k] ?? values[0]
+    if (!values.includes(v)) throw new TypeError(`rules.${k}: ${String(v)} is none of ${values.join(', ')}`)
+    out[k] = v
+  }
+  return out
+}
 
 const r2 = v => Math.round(v * 100) / 100
 /** a number to a hundredth as the marks file writes it (marks.mjs: -0 written 0) */
@@ -377,7 +395,8 @@ export async function makeLayout(o) {
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
  * flag read, given; else made of every placed unit's body lines once the lines are placed (today's rule: `columnEdgesOf`)
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame = pageFrame, plans: wantPlans = false, parts = false, columnEdges = null, check = false }) {
+export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null }) {
+  const rules = rulesOf(rulesGiven)
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
@@ -397,6 +416,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // (the pages whose ink is never read: dark by their text alone; and those whose ink was read, whether or not it is held still)
   const unread = new Set(dark), inked = new Uint8Array(pages + 1)
   const doc = read.tokens
+  // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of arXiv's text, made once
+  let tokensFrame = null
+  const frame = frameGiven ?? (rules.frame === 'tokens' ? () => (tokensFrame ??= frameOfTokens(doc)) : pageFrame)
   const viewAt = p => views.slice(4 * (p - 1), 4 * p)
   stats.ms.text = now() - t
   // ---------------------------------------------------------------- arXiv's ink: glyphs and graphics, page by page
@@ -616,24 +638,44 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     placedById.set(i, one)
   }
   // each column's text edges, the most common start and end of the body's lines (its own page's, else those of the
-  // pages like it: the same columns, the same side of a spread, then the same columns)
+  // pages like it: the same columns, the same side of a spread, then the same columns; under rule 3, of those pages the ones
+  // before it and its own alone, written under its own name: `<page><<key>`)
   let edges = columnEdges
   /** the columns' text edges of the placed units' body lines (`columnEdges` where none is given) */
   function columnEdgesOf() {
     edges = new Map()
     const seen = new Map()
     const note = (key, x0, x1) => { const e = seen.get(key) ?? seen.set(key, { x0: new Map(), x1: new Map() }).get(key); const a = Math.round(x0), b = Math.round(x1); e.x0.set(a, (e.x0.get(a) ?? 0) + 1); e.x1.set(b, (e.x1.get(b) ?? 0) + 1) }
+    const modeOf = (m, low) => { let best = null, most = 1; for (const [x, n] of m) if (n > most || (n === most && best !== null && (low ? x < best : x > best))) { best = x; most = n } return best }
+    const edgeOf = e => { const x0 = modeOf(e.x0, true), x1 = modeOf(e.x1, false); return x0 !== null && x1 !== null && x0 < x1 ? [x0, x1] : null }
+    const pooled = [p => `${twoCols(p)}|${p % 2}`, p => `${twoCols(p)}`]
+    if (rules.edges === 'earlier') {
+      const on = new Map()
+      for (const { u, rows } of placed) if (EVEN.has(u.kind)) for (const r of rows) (on.get(r.page) ?? on.set(r.page, []).get(r.page)).push(r)
+      for (let p = 1; p <= pages; p++) {
+        for (const r of on.get(p) ?? []) {
+          const c = columnOf(r.page, r.x0, r.x1)
+          note(`${p}|${c}`, r.x0, r.x1)
+          for (const k of pooled) note(`${k(p)}|${c}`, r.x0, r.x1)
+        }
+        // (the pools as they stand with page p: page p's, each a page its pages before it and its own give)
+        for (const c of [0, 1, 2]) for (const k of pooled) { const key = `${k(p)}|${c}`, e = seen.get(key), v = e ? edgeOf(e) : null; if (v) edges.set(`${p}<${key}`, v) }
+        for (const c of [0, 1, 2]) { const e = seen.get(`${p}|${c}`), v = e ? edgeOf(e) : null; if (v) edges.set(`${p}|${c}`, v) }
+      }
+      return
+    }
     for (const { u, rows } of placed) {
       if (!EVEN.has(u.kind)) continue
       for (const r of rows) {
         const c = columnOf(r.page, r.x0, r.x1)
-        for (const key of [`${r.page}|${c}`, `${twoCols(r.page)}|${r.page % 2}|${c}`, `${twoCols(r.page)}|${c}`]) note(key, r.x0, r.x1)
+        for (const key of [`${r.page}|${c}`, ...pooled.map(k => `${k(r.page)}|${c}`)]) note(key, r.x0, r.x1)
       }
     }
-    const modeOf = (m, low) => { let best = null, most = 1; for (const [x, n] of m) if (n > most || (n === most && best !== null && (low ? x < best : x > best))) { best = x; most = n } return best }
-    for (const [key, e] of seen) { const x0 = modeOf(e.x0, true), x1 = modeOf(e.x1, false); if (x0 !== null && x1 !== null && x0 < x1) edges.set(key, [x0, x1]) }
+    for (const [key, e] of seen) { const v = edgeOf(e); if (v) edges.set(key, v) }
   }
-  const edgesBy = (p, c) => edges.get(`${p}|${c}`) ?? edges.get(`${twoCols(p)}|${p % 2}|${c}`) ?? edges.get(`${twoCols(p)}|${c}`) ?? null
+  const edgesBy = rules.edges === 'earlier'
+    ? (p, c) => edges.get(`${p}|${c}`) ?? edges.get(`${p}<${twoCols(p)}|${p % 2}|${c}`) ?? edges.get(`${p}<${twoCols(p)}|${c}`) ?? null
+    : (p, c) => edges.get(`${p}|${c}`) ?? edges.get(`${twoCols(p)}|${p % 2}|${c}`) ?? edges.get(`${twoCols(p)}|${c}`) ?? null
   /** a column's text edges; a line across two columns, the left one's start and the right one's end */
   const edgesOf = (p, c) => {
     const e = edgesBy(p, c)

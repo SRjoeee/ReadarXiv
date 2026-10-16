@@ -17,11 +17,11 @@ import { needBound } from '../layer-proto/need.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
 import { chainedAddon } from '../layout/chain.mjs'
-import { CARRY_MIN, makerOf } from '../layout/make.mjs'
+import { CARRY_MIN, makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
 import { displayEdges, unitText } from '../translate/mt.mjs'
-import { pageColumns } from '../view/highlight.mjs'
-import { anchorUnits, boundsFromMarks, floatMatches, pageFrame, pageIndex } from './anchors.mjs'
+import { columnsOfTokens, pageColumns } from '../view/highlight.mjs'
+import { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, pageFrame, pageIndex } from './anchors.mjs'
 import { rangedAnchors } from './left-part.mjs'
 import { leftSideOf, leftSideStream } from './left-side.mjs'
 import { isMemoryError } from './memory.mjs'
@@ -56,7 +56,11 @@ function fitted(text) {
  * text as readArxivText read it (step T), else read here; `OPS` PDF.js's operator codes; `pdfjs` its version; `base` { bytes,
  * sha256, xref } of arXiv's PDF (the head's); `image` the compiler image's name; `remove({ from, to, plans })` the remover's
  * transport (chain.mjs), null for none (no part has an add-on, M20). `frame`: the frame's rule both anchorings are placed
- * under (anchors.mjs pageFrame, today's); `columns`: the left's far-push columns' rule (view/highlight.mjs, today's).
+ * under (anchors.mjs pageFrame, today's); `columns`: the left's far-push columns' rule (view/highlight.mjs, today's). `rules`
+ * (layout/make.mjs RULES, today's each where not given): `frame` 'tokens' both anchorings under the frame of arXiv's text alone
+ * (rule 1, anchors.mjs frameOfTokens, made once), `edges` 'earlier' the maker's columns' edges of the pages before a page and
+ * its own alone (rule 3), `columns` 'tokens' the left's far push under the columns of arXiv's text alone (rule 4,
+ * view/highlight.mjs columnsOfTokens); a rule given there is taken over `frame` and `columns`.
  * `verdicts` (default on): each part judged as it is cut, the carry's share of its marked pages' lines at least CARRY_MIN
  * (the last part's to the marked original's end) and its reader taking it; off, the parts are cutBundle's of the same whole.
  *
@@ -79,7 +83,8 @@ function fitted(text) {
  * addon } }, or { refused: 'anchors', why } before anything is told (arXiv's PDF read for no unit, or not read). A failed
  * allocation is thrown; a throw of the maker's is the layout's (none, `stats.layout`), never the paper's
  */
-export async function layerOfPaper({ paper, source, marks = null, marked = null, arxiv, OPS, pdfjs, base, image, remove = null, onHead = null, onLeft, onPart, verdicts = true, frame = pageFrame, columns = undefined, oracle = null, capture = null }) {
+export async function layerOfPaper({ paper, source, marks = null, marked = null, arxiv, OPS, pdfjs, base, image, remove = null, onHead = null, onLeft, onPart, verdicts = true, frame: frameGiven = pageFrame, columns: columnsGiven = undefined, rules: rulesGiven = null, oracle = null, capture = null }) {
+  const rules = rulesOf(rulesGiven)
   if (typeof onLeft !== 'function' || typeof onPart !== 'function') throw new TypeError('onLeft, onPart: the host\'s sinks')
   if (marks && marked) throw new TypeError('marks or marked: the marked original read, or to be read here, not both')
   if (!Number.isInteger(base?.bytes) || typeof base?.sha256 !== 'string' || !Number.isInteger(base?.xref)) throw new TypeError('base: arXiv\'s PDF\'s bytes, digest and startxref')
@@ -98,11 +103,16 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const leftFloats = left.tokens === text.tokens ? floatMatches(text.tokens, texts, floating) : floatMatches(left.tokens, texts, floating)
   const floatMatch = left.tokens === text.tokens ? leftFloats : floatMatches(text.tokens, texts, floating)
   const bundle = bundleUnitsOf(source)
+  // the rule set's frame and columns, of arXiv's text alone where it says so (rules 1 and 4: made once, at step T), each side's
+  // of its own tokens; else the rules given (today's)
+  const frameOn = tokens => (rules.frame === 'tokens' ? (F => () => F)(frameOfTokens(tokens)) : frameGiven)
+  const frame = frameOn(text.tokens), leftFrameRule = left.tokens === text.tokens ? frame : frameOn(left.tokens)
+  const columns = rules.columns === 'tokens' ? views => columnsOfTokens(left.tokens, views) : columnsGiven
   // (the marked original to be read here: a page at a time beside arXiv's under the oracle, else whole first, readMarked as the
   // prepare's marks stage reads it, its refusal or throw the marks' refusal)
   const markedOptions = marked ? { ...marked.options, units, OPS } : null
   if (marked && oracle) {
-    const r = await markedStream({ paper, units, texts, floating, text, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, base, image, remove, onHead, onLeft, onPart, verdicts, oracle })
+    const r = await markedStream({ paper, units, texts, floating, text, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, base, image, remove, onHead, onLeft, onPart, verdicts, oracle, rules })
     if (r) return r
     marks = { refused: 'marks' }
   } else if (marked) {
@@ -112,7 +122,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
     }
   }
   const unitMarks = marks && 'marks' in marks ? marks.unitMarks : null
-  const leftFrame = capture ? (d, ms) => { capture.leftFrame = frame(d, ms); return capture.leftFrame } : frame
+  const leftFrame = capture ? (d, ms) => { capture.leftFrame = leftFrameRule(d, ms); return capture.leftFrame } : leftFrameRule
   const anchors = anchorUnits(left.tokens, texts, { ...(unitMarks ? { bounds: boundsFromMarks(left.tokens, unitMarks) } : {}), floating, floatMatch: leftFloats, frame: leftFrame })
   const leftColumns = capture ? (v, a, k) => { capture.columns = (columns ?? pageColumns)(v, a, k); return capture.columns } : columns
   const side = leftSideOf({ doc: left.tokens, views: text.views, anchors, edges: left.edges, ...(leftColumns ? { columns: leftColumns } : {}) })
@@ -124,7 +134,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   if (marks && 'marks' in marks) {
     const makerFrame = oracle ? () => oracle.frame : capture ? (d, ms) => { capture.frame = frame(d, ms); return capture.frame } : frame
     try {
-      maker = await makerOf({ units, marks: marks.marks, arxiv: doc, OPS, paper, left: '', pdfjs, text, floatMatch, frame: makerFrame, plans: true, parts: true, ...(oracle ? { columnEdges: oracle.columnEdges } : {}) })
+      maker = await makerOf({ units, marks: marks.marks, arxiv: doc, OPS, paper, left: '', pdfjs, text, floatMatch, frame: makerFrame, plans: true, parts: true, rules, ...(oracle ? { columnEdges: oracle.columnEdges } : {}) })
       if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null }
     } catch (e) {
       if (isMemoryError(e)) throw e
@@ -460,7 +470,7 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, oracle,
  * going on with the unit marks read (the whole path refuses the marks then, its left placed without them: not this one's)
  */
 async function markedStream(o) {
-  const { paper, units, texts, floating, text, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, base, image, remove, onHead, onLeft, onPart, verdicts, oracle } = o
+  const { paper, units, texts, floating, text, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, base, image, remove, onHead, onLeft, onPart, verdicts, oracle, rules } = o
   for (const k of ['frame', 'columnEdges', 'leftFrame', 'columns']) if (oracle[k] === undefined) throw new TypeError(`oracle.${k}: a whole run's (capture), for the marked original read a page at a time`)
   const events = markedPages(marked.doc, marked.log, markedOptions)
   let head = null
@@ -469,7 +479,7 @@ async function markedStream(o) {
   const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, floating, floatMatch: leftFloats, oracle, unitMarks: head.unitMarks })
   let maker = null, st = null, made = null
   try {
-    maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text, floatMatch, frame: () => oracle.frame, plans: true, parts: true, columnEdges: oracle.columnEdges })
+    maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text, floatMatch, frame: () => oracle.frame, plans: true, parts: true, rules, columnEdges: oracle.columnEdges })
     if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null } else st = maker.stream({ marked: head })
   } catch (e) {
     if (isMemoryError(e)) throw e

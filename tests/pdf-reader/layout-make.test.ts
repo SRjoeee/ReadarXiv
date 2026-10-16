@@ -1539,3 +1539,58 @@ describe('makerOf, the marked original a page at a time (stage 2): its pages rea
     expect(trace[2]!.released).toBe(2)
   })
 })
+
+describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edges of the pages before a page and its own', () => {
+  // page 1 holds a caption alone, centred on the column a paragraph on page 2 sets: today its edges are the pages like it, page
+  // 2's among them; under rule 3 those before it alone, none
+  const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
+  para.push({ s: 'last line of it', x: 72, y: 652 })
+  const cap = [{ s: 'Figure caption text', x: 172 - 47.5, y: 600 }, { s: 'its end', x: 172 - 17.5, y: 588 }]
+  const ws = (rs: Run[]) => rs.map(r => r.s).join(' ')
+  const w: World = {
+    pages: [{ runs: cap }, { runs: para }],
+    marks: [['0s', 1, cap[0]?.x ?? 0, 600], ['0e', 1, endOf(cap[1] as Run), 588], ['1s', 2, 72, 700], ['1e', 2, endOf(para[4] as Run), 652]],
+    units: [unit('caption', [text(ws(cap))]), unit('para', [text(ws(para))])],
+  }
+  const input = async (rules: object | null) => ({ units: w.units, marks: await marksOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', rules: rules as never })
+
+  it('today\'s edges are every page\'s like it; rule 3\'s the pages\' before a page and its own: page 1\'s caption is no longer CENTRED', async () => {
+    const today = await makeLayout({ ...(await input(null)), arxiv: arxivOf(w.pages) })
+    const rule3 = await makeLayout({ ...(await input({ edges: 'earlier' })), arxiv: arxivOf(w.pages) })
+    if (!('file' in today) || !('file' in rule3)) throw new Error('refused')
+    expect((today.file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
+    expect((rule3.file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(0)
+    // (the default is today's: the same bytes as rules given today's values)
+    const named = await makeLayout({ ...(await input({ frame: 'units', edges: 'all', columns: 'units' })), arxiv: arxivOf(w.pages) })
+    if (!('file' in named)) throw new Error('refused')
+    expect(encodeLayout(named.file)).toBe(encodeLayout(today.file))
+  })
+
+  it('under rule 3 (and rule 1) a page at a time and the passes in another order make the whole run\'s file', async () => {
+    for (const rules of [{ edges: 'earlier' }, { frame: 'tokens', edges: 'earlier' }]) {
+      const first = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages) })
+      if ('refused' in first) throw new Error('refused')
+      for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+      const whole = await first.whole()
+      if (!('file' in whole)) throw new Error('refused')
+      const m = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true })
+      if ('refused' in m) throw new Error('refused')
+      const st = await m.byStream()
+      if ('refused' in st) throw new Error('refused')
+      const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+      expect(rows(mergeLayout([st.layout() as never]) as never)).toEqual(rows(whole.file as never))
+      const t = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true })
+      if ('refused' in t) throw new Error('refused')
+      for (let p = 1; p <= t.pages; p++) await t.readPage(p)
+      const rand = seeded(seeds++)
+      const tasks = await t.byTasks(ready => Math.floor(rand() * ready.length))
+      if (!('file' in tasks)) throw new Error('refused')
+      expect(encodeLayout(tasks.file)).toBe(encodeLayout(whole.file))
+    }
+  })
+
+  it('a rule that is none is refused', async () => {
+    await expect(makerOf({ ...(await input({ edges: 'later' })), arxiv: arxivOf(w.pages) })).rejects.toThrow(TypeError)
+    await expect(makerOf({ ...(await input({ float: 'forward' })), arxiv: arxivOf(w.pages) })).rejects.toThrow(TypeError)
+  })
+})

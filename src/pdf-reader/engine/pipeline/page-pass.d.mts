@@ -3,7 +3,7 @@ import type { PartRefusal } from '../layer-proto/cut.mjs'
 import type { Written } from '../layer-proto/format.mjs'
 import type { ArxivText } from '../layout/arxiv.mjs'
 import type { AddonChainState, RemoverAnswer } from '../layout/chain.mjs'
-import type { LayoutStats } from '../layout/make.mjs'
+import type { LayoutStats, PageStreamRules } from '../layout/make.mjs'
 import type { LayoutMarks, MarkedOptions, UnitMarks } from '../layout/marks.mjs'
 import type { ColumnRule } from '../view/highlight.mjs'
 import type { FrameRule } from './anchors.mjs'
@@ -38,6 +38,9 @@ export interface LayerOptions {
   verdicts?: boolean
   frame?: FrameRule
   columns?: ColumnRule
+  /** the page stream's rules (layout/make.mjs RULES), today's each where not given; a rule given there is taken over `frame`
+   *  and `columns` */
+  rules?: Partial<PageStreamRules> | null
   /** tests and the lab: a whole run's maker frame predicate and columns' edges (`capture`'s); the maker made a page at a time
    *  and each part cut as soon as what it reads is final (`stats.closed`) */
   oracle?: LayerOracle | null
