@@ -450,31 +450,27 @@ const sound4 = b => b[0] < b[2] && b[1] < b[3]
 
 /**
  * A drawn range's extent across on one line: from the edge before its first character to the edge after its last, each end
- * carried on where nothing of a word stands beside it: over its token's marks that are no letter or digit ("(" and "," of
- * "(Taylor,"), and half way into the gap to the next item (`pad` past a line's end, where there is none). A browser lays a run's
- * glyphs by its own advances, which the layout's measure is near but not exactly (Chromium on Linux rounds them): an end at a
- * glyph's edge where a mark or a gap stands beside it would leave a glyph the drift carries out of the box, which this keeps in,
- * and no letter of another word comes in
+ * carried on where nothing of its word stands beside it: over its token's marks that are no letter or digit ("(" and "," of
+ * "(Taylor,"), and at its right end on to where the next item starts, where that item begins a run of its own (its glyphs at
+ * their own place), or a quarter em past a line's end. A browser lays a run's glyphs by its own advances, which the layout's
+ * measure is near but not exactly (Chromium on Linux, wider): the glyphs drift right along a run from its start. So a box ends no
+ * nearer than the next run's start, which drift never crosses, and starts at its own token's start, never into the gap before
+ * it, which the run before drifts into
  */
 function spanOf(line, e0, e1, edge, pad) {
   const startOf = (run, n) => run.items.find(([m]) => m === n)?.[1] ?? 0
   const items = line.items
   let x0 = edge(line, e0.run, e0.at), x1 = edge(line, e1.run, e1.end)
   const t0 = items[e0.n].t, s0 = startOf(e0.run, e0.n)
-  if (!LETTER.test(t0.s.slice(0, e0.at - s0))) {
-    const start = edge(line, e0.run, s0)
-    let m = e0.n - 1
-    while (m >= 0 && items[m].t.space) m--
-    const prevEnd = m >= 0 ? items[m].x + items[m].w : null
-    x0 = prevEnd === null ? start - pad : prevEnd < start ? (prevEnd + start) / 2 : start
-  }
+  if (!LETTER.test(t0.s.slice(0, e0.at - s0))) x0 = edge(line, e0.run, s0)
   const t1 = items[e1.n].t, s1 = startOf(e1.run, e1.n)
   if (!LETTER.test(t1.s.slice(e1.end - s1))) {
     const end = edge(line, e1.run, s1 + t1.s.length)
     let m = e1.n + 1
     while (m < items.length && items[m].t.space) m++
-    const nextStart = m < items.length ? items[m].x : null
-    x1 = nextStart === null ? end + pad : nextStart > end ? (end + nextStart) / 2 : end
+    if (m >= items.length) x1 = end + pad
+    else if (!e1.run.items.some(([k]) => k === m) && items[m].x > end) x1 = items[m].x
+    else x1 = end
   }
   return { x0, x1 }
 }

@@ -81,10 +81,10 @@ describe('LK1: one annotation a number of a citation drawn as the page wrote it'
       expect(letters(drawnBetween(L, 2, r.rec.boxes))).toBe(r.rec.name)
     }
     // ("[21," starts after the CJK character's em, 110, and ends at 130, "41]" starts after the space, at 135: the box of "21" is
-    // carried over its marks and half way into the space, that of "41" from there; the box is the line's band)
+    // carried over its marks and on to where "41]" starts, that of "41" from its token's start; the box is the line's band)
     const [x0, y0, x1, y1] = records[0]!.rec.boxes
-    expect([x0, x1]).toEqual([110, 132.5])
-    expect(records[1]!.rec.boxes[0]).toBe(132.5)
+    expect([x0, x1]).toEqual([110, 135])
+    expect(records[1]!.rec.boxes[0]).toBe(135)
     expect([y0!, y1!].map(v => Math.round(v * 100) / 100)).toEqual([497.8, 507.5])
   })
 })
@@ -277,8 +277,16 @@ describe('a link\'s box where the browser lays its run a little wider or narrowe
     const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.taylor' }, 'Taylor')), cand(ann(1, { dest: 'cite.taylor' }, '1953'))], targets: [target(1, { kind: 'cite', keys: ['taylor'], gap: null })] })
     const { records } = placeUnit({ groups: m.groups, ...placing(L) })
     expect(records.map(r => r.rec.name)).toEqual(['Taylor', '1953'])
-    // (as measured, and with each glyph 6 % wider or narrower than measured, the drift a run of eight glyphs gathers)
-    for (const drift of [1, 1.06, 0.94]) expect(records.map(r => letters(drawnBetween(L, 2, r.rec.boxes, drift))), `drift ${drift}`).toEqual(['Taylor', '1953'])
+    // (as measured, and with each glyph up to 8 % wider than measured, the drift a run of glyphs gathers on Chromium for Linux;
+    // a little narrower too)
+    for (const drift of [1, 1.04, 1.08, 0.97]) expect(records.map(r => letters(drawnBetween(L, 2, r.rec.boxes, drift))), `drift ${drift}`).toEqual(['Taylor', '1953'])
+  })
+  it('takes no letter of the word before it, whose run drifts toward it across the space', () => {
+    const L = lay([text('\u5982 Sicherheitsbewertungen '), ph('\\cite{a}'), text('\u6240')], { 1: { mode: 'orig-text', text: '[32]' } })
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.a' }, '32'))], targets: [target(1, { kind: 'cite', keys: ['a'] })] })
+    const { records } = placeUnit({ groups: m.groups, ...placing(L) })
+    // (a word of 22 glyphs 4 % wide gathers 4.4 pt, under the space and half its last glyph: drawn over the next word past that)
+    for (const drift of [1, 1.04]) expect(letters(drawnBetween(L, 2, records[0]!.rec.boxes, drift)), `drift ${drift}`).toBe('32')
   })
 })
 
@@ -288,8 +296,8 @@ describe('a link\'s text found whole, or the link left: never over a part of ano
     const m = matchUnit({ cands: [cand(ann(1, { dest: 'cite.b' }, '2'))], targets: [target(1, { kind: 'cite', keys: ['a', 'b'] })] })
     const { records } = placeUnit({ groups: m.groups, ...placing(L) })
     expect(records.length).toBe(1)
-    // ("[12," from 110 to 130; "2]" after the space of 5, from 135: the box from half way into the space, never over "12")
-    expect(records[0]!.rec.boxes[0]).toBeCloseTo(132.5, 6)
+    // ("[12," from 110 to 130; "2]" after the space of 5, from 135: the box from its token's start, never over "12")
+    expect(records[0]!.rec.boxes[0]).toBeCloseTo(135, 6)
     expect(letters(drawnBetween(L, 2, records[0]!.rec.boxes))).toBe('2')
   })
   it('"[12]" with the annotation of "2" alone: no whole number "2" in it: none, never the 2 of 12', () => {
