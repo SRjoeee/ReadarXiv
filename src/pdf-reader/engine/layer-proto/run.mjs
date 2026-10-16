@@ -1853,7 +1853,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // composed document, swapped at a part with a tail (swap); each read of a page holds its document (using), and one no longer
   // the newest is told to the host (onRetired) once no read holds it, the newest at dispose: each once, none destroyed here
   let D = doc, RD = removal?.doc ?? null
-  const uses = new Map(), retiring = new Set(), retired = new Set()
+  // (`retired` weakly: it only says a document was told already, and a strong set would keep every document the host has since destroyed, with its pages, for the run's length)
+  const uses = new Map(), retiring = new Set(), retired = new WeakSet()
   const tellRetired = d => { if (retired.has(d)) return; retired.add(d); onRetired?.(d) }
   const retire = d => { if (!d || retired.has(d)) return; if (uses.get(d)) retiring.add(d); else tellRetired(d) }
   const using = async (docs, f) => {
