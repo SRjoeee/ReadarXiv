@@ -14,9 +14,10 @@ type Tex = typeof import('@/pdf-reader/engine/layer-proto/tex.mjs')
 let L2: L2
 let T: Tex
 beforeAll(async () => {
-  // layer2.mjs measures with a canvas made when it loads; the test environment has none, and these rules measure nothing
+  // layer2.mjs measures with a canvas made when it loads; the test environment's draws nothing (its context is null), and
+  // these rules measure nothing but a laid line's ink (lineExtent: 0.7 of the size over its baseline, 0.2 under)
   const g = globalThis as { OffscreenCanvas?: unknown }
-  g.OffscreenCanvas ??= class { getContext() { return { font: '', measureText: (s: string) => ({ width: 50 * s.length }) } } }
+  g.OffscreenCanvas = class { getContext() { return { font: '', measureText: (s: string) => ({ width: 50 * s.length, actualBoundingBoxAscent: 70, actualBoundingBoxDescent: 20 }) } } }
   L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
   T = await import('@/pdf-reader/engine/layer-proto/tex.mjs')
 })
@@ -675,7 +676,9 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
   const unit = (...p: object[]) => ({ kind: 'para', src: 'a b c d', pieces: p }) as never
   const u = unit(text('\u7532'), ph(BR), ph(BR), text(' \u4E59'), ph(BR), ph(BR), text('\n'))
   it("fix 3: pairs each forced break between two visible pieces with a line TeX ended short, in order, never one at an edge", () => {
-    expect([...T.forcedBreaks(unitOf(lines) as never, u)]).toEqual([[1, 2], [2, 2]])
+    // (with TeX's room after it, in the unit's pitches: the gap to the next line, 24, over the pitch, 12, less one, the
+    // empty line the second `\\` sets)
+    expect([...T.forcedBreaks(unitOf(lines) as never, u)]).toEqual([[1, { next: 2, room: 1 }], [2, { next: 2, room: 1 }]])
     // a break before a display ends no line of the text: the display does
     const D = '\\begin{equation}x=1\\end{equation}'
     expect(T.forcedBreaks(unitOf(lines) as never, unit(text('\u7532'), ph(BR), ph(D), text(' \u4E59'))).size).toBe(0)
@@ -688,13 +691,13 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     const cited = unit(text('\u7532'), ph(BR), text(' \u4E59'), ph('\\cite{x}'), text('\u4E19'))
     const kOf = [-1, -1, -1, 3, -1]
     expect(T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 500, 80, 507, 498]]]) as never, cited, kOf).size).toBe(0)
-    expect([...T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 464, 80, 471, 462]]]) as never, cited, kOf)]).toEqual([[1, 2]])
+    expect([...T.forcedBreaks(unitOf(lines, [[3, 0, [1, 60, 464, 80, 471, 462]]]) as never, cited, kOf)]).toEqual([[1, { next: 2, room: 1 }]])
   })
   it('pairs nothing in a unit in two columns of one page, nor at a short line that is a display\'s row (#367 review)', () => {
     // two columns of page 1: the left one's line 1 ends short, as the break's line would
     const two = { ...(unitOf([L(500), L(488, 90), [1, 320, 520, 500, 507, 498, 10, 0], [1, 320, 520, 488, 495, 486, 10, 0]]) as object), frames: Float64Array.from([1, 0, 0, 2, -1, 0, 1, 1, 2, 2, 500, 0]) }
     const one = unit(text('\u7532'), ph(BR), text(' \u4E59'))
-    expect([...T.forcedBreaks(unitOf([L(500), L(488, 90), L(464), L(452)]) as never, one)]).toEqual([[1, 2]])
+    expect([...T.forcedBreaks(unitOf([L(500), L(488, 90), L(464), L(452)]) as never, one)]).toEqual([[1, { next: 2, room: 1 }]])
     expect(T.forcedBreaks(two as never, one).size).toBe(0)
     // a display's row the file does not hold, short of the measure: no line a forced break ends
     const row = unitOf([L(500), L(488, 90), L(464), L(452, 120)], [[7, 0, [1, 40, 488, 90, 495, 486]]]) as { ph: Map<number, { kind: string }> }
@@ -702,25 +705,105 @@ describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 
     if (d) d.kind = 'display'
     expect(T.forcedBreaks(row as never, one).size).toBe(0)
   })
-  it('breaks the text there: the laid line ends at the break, the text after it starts on the line TeX set after it', () => {
-    const lu = unitOf(lines)
+  // the unit laid on the file's lines (a line of 190 pt holds 38 characters at size 10): its parts, its blocks, its tokens,
+  // and its layout at its fit or at one state (`at`)
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0, borrow: 0 }
+  const laid = (rows: number[][], pieces: object[]) => {
+    const lu = unitOf(rows)
     const t = T.texRects(lu)
-    const page = [...item('a', 10, 500, 10, 0), ...item('b', 10, 488, 10, 1), ...item('c', 10, 464, 10, 2), ...item('d', 10, 452, 10, 3)]
-    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, -1, -1, -1, -1, -1, -1], { use: 'lines', lines: t }) as never)
-    const r = prep.get(1)
-    expect(r).toMatchObject({ mode: 'none', brk: true })
-    expect(prep.get(2)?.region).toBe(r?.region)
-    expect(prep.referenced.has(r?.region as number)).toBe(true)
-    // (the edge break is a space, as before)
-    expect(prep.get(4)?.brk).toBeUndefined()
-    const blocks = L2.blocks2(t.rects as never, [[0, 0, 612, 792]], prep.keep ? new Set(prep.keep) : null, prep.lineInfo, prep.regionOf, prep.referenced, null, prep.breakAt)
-    expect(blocks.map(b => [b.B, b.after])).toEqual([[[500, 488], 0], [[464, 452], 1]])
-    const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
-    const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0, borrow: 0 }
-    const tokens = L2.tokensOf2(u, prep, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 50)
-    expect(tokens.map(x => (x.blockTo !== undefined ? '|' : x.space ? '_' : x.s)).join('')).toBe('\u7532|_\u4E59')
-    const l = L2.layoutUnit2(tokens, blocks as never, 10, P as never)
+    const pages = Math.max(...rows.map(r => r[0] ?? 1))
+    // (each line's page text one letter of the source's at its start)
+    const charsByPage = Array.from({ length: pages }, (_, p) => rows.flatMap((r, j) => (r[0] === p + 1 ? item(String.fromCharCode(97 + j), 10, r[3] ?? 0, 10, j) : [])))
+    const u = { kind: 'para', src: rows.map((_, j) => String.fromCharCode(97 + j)).join(' '), pieces } as never
+    const prep = L2.prepareUnit(u, t.rects as never, charsByPage as never, new Map() as never, null, T.texParts(lu, pieces.map(() => -1), { use: 'lines', lines: t }) as never)
+    const blocks = L2.blocks2(t.rects as never, Array.from({ length: pages }, () => [0, 0, 612, 792]), prep.keep?.length ? new Set(prep.keep) : null, prep.lineInfo, prep.regionOf, prep.referenced, null, prep.breakAt, prep.joinAt)
+    const tokens = L2.tokensOf2(u, prep, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 50)
+    const lines = (l: { lines: { page: number; baseline: number; items: { t: { s?: string } }[] }[] }) => l.lines.filter(x => x.items.some(it => it.t.s)).map(x => [x.page, Math.round(x.baseline * 100) / 100, x.items.map(it => it.t.s ?? '').join('')])
+    const at = (lead: number) => L2.layoutAt(tokens, blocks as never, 10, P as never, { lead, track: 0, trackLatin: 0, compress: 0, borrow: 0, scale: 1, knob: 'none' } as never)
+    return { prep, blocks, tokens, lines, at, fit: () => L2.layoutUnit2(tokens, blocks as never, 10, P as never) }
+  }
+  /** n CJK characters from `from` */
+  const cjk = (n: number, from: number) => Array.from({ length: n }, (_, i) => String.fromCharCode(from + i)).join('')
+  const A = cjk(1, 0x7532), Bc = cjk(1, 0x4e59)
+
+  it("breaks the text there, in one frame: the laid line ends, and TeX's room after the break is one empty line of the drawing's, its grid unbroken", () => {
+    // `\\ \\` after line 1 (ended short), the original's empty line, four lines of the second paragraph: a frame whose
+    // second paragraph's translation leaves its slots to spare
+    const rows = [L(500), L(488, 90), L(464), L(452), L(440), L(428, 120)]
+    const z = laid(rows, [text(A), ph(BR), ph(BR), text(` ${Bc}`), ph(BR), ph(BR), text('\n')])
+    expect(z.prep.get(1)).toMatchObject({ mode: 'none', brk: true, room: 1 })
+    // (no region of its own: the break is no kept place the text jumps to; the edge break a space, as before)
+    expect(z.prep.get(1)?.region).toBeUndefined()
+    expect(z.prep.breakAt?.size).toBe(0)
+    expect(z.prep.get(4)?.brk).toBeUndefined()
+    // the rows on both sides of the gap one block: the file's own baselines, its pitch the paragraph's, its foot kept
+    expect(z.blocks.map(b => [b.B, b.after, b.pitch0])).toEqual([[[500, 488, 464, 452, 440, 428], 0, 12]])
+    expect(z.tokens.map(x => ((x as { newline?: number }).newline !== undefined ? '/' : x.blockTo !== undefined ? '|' : x.space ? '_' : x.s)).join('')).toBe(`${A}/_${Bc}`)
+    // at the script's leading (1.3, a pitch of 15.6): the second paragraph two lines under the first's last, the room the
+    // translation does not use at the unit's end, no band before a line pinned to TeX's (464)
+    const l = z.fit()
     expect(l.clipped).toBe(false)
-    expect(l.lines.filter(x => x.items.some(it => it.t.s)).map(x => [x.baseline, x.items.map(it => it.t.s ?? '').join('')])).toEqual([[500, '\u7532'], [464, '\u4E59']])
+    expect(z.lines(l)).toEqual([[1, 500, A], [1, 468.8, Bc]])
+    // on the original's own pitch: the same, one empty line; and where the first paragraph takes the original's two lines,
+    // the second starts on TeX's own line after the break
+    expect(z.lines(z.at(1))).toEqual([[1, 500, A], [1, 476, Bc]])
+    const two = laid(rows, [text(cjk(39, 0x4e00)), ph(BR), ph(BR), text(` ${Bc}`)])
+    expect(two.lines(two.at(1)).map(x => x[1])).toEqual([500, 488, 464])
+  })
+
+  it('a lone `\\\\` leaves no room: the text after it on the next line', () => {
+    const rows = [L(500), L(488, 90), L(476), L(464), L(452, 120)]
+    const z = laid(rows, [text(A), ph(BR), text(` ${Bc}`)])
+    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces: [text(A), ph(BR), text(` ${Bc}`)] } as never)]).toEqual([[1, { next: 2, room: 0 }]])
+    expect(z.lines(z.fit())).toEqual([[1, 500, A], [1, 484.4, Bc]])
+  })
+
+  it("`\\vspace{0.3cm}\\\\`: TeX's room is the glue it set, 0.63 of a pitch, kept at the drawing's pitch", () => {
+    // 0.3 cm, 8.54 pt, at a pitch of 13.6: line 2 is 1.63 pitches under line 1 (here 12 \u00D7 1.63 = 19.56)
+    const rows = [L(500), L(488, 90), L(468.44), L(456.44), L(444.44, 120)]
+    const pieces = [text(A), ph('\\vspace{0.3cm}'), ph(BR), text(` ${Bc}`)]
+    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces } as never)]).toEqual([[2, { next: 2, room: 0.63 }]])
+    const z = laid(rows, pieces)
+    const got = z.lines(z.fit())
+    expect(got.map(x => x[2])).toEqual([A, Bc])
+    // (1.63 drawn pitches of 15.6 under the first line)
+    expect(got[1]?.[1]).toBeCloseTo(500 - 1.63 * 15.6, 2)
+  })
+
+  it("a break whose next line opens another frame keeps the pin: the text after it starts on that frame's line TeX set", () => {
+    // line 2, page 1's last, ends short; the text after the break is on page 2's first (TeX drops glue at a frame's head)
+    const P2 = (y: number, x1 = 200) => [2, 10, x1, y, y + 7, y - 2, 10, 0]
+    const rows = [L(500), L(488), L(476, 90), P2(500), P2(488, 120)]
+    const pieces = [text(A), ph(BR), text(` ${Bc}`)]
+    expect([...T.forcedBreaks(unitOf(rows) as never, { kind: 'para', src: '', pieces } as never)]).toEqual([[1, { next: 3, room: null }]])
+    const z = laid(rows, pieces)
+    expect(z.prep.get(1)).toMatchObject({ brk: true })
+    expect(z.prep.get(1)?.region).toBeDefined()
+    expect(z.prep.joinAt?.size).toBe(0)
+    expect(z.lines(z.fit())).toEqual([[1, 500, A], [2, 500, Bc]])
+  })
+
+  it("2608.16117's unit 8: three paragraphs, `\\\\ \\\\` in two frames, one leading for the unit and its unused room at its end", () => {
+    // TeX: S1 on page 1's four lines and page 2's first two (the second ended short), the empty line, S2 on six lines and
+    // page 3's first two (ended short), the empty line, S3 on three
+    const at = (page: number) => (y: number, x1 = 200) => [page, 10, x1, y, y + 7, y - 2, 10, 0]
+    const [p1, p2, p3] = [at(1), at(2), at(3)]
+    const rows = [p1(500), p1(488), p1(476), p1(464), p2(500), p2(488, 90), p2(464), p2(452), p2(440), p2(428), p2(416), p2(404), p3(500), p3(488, 90), p3(464), p3(452), p3(440, 120)]
+    // the translation: S1 four lines of 40 characters, S2 six, S3 three; with the two empty lines, fifteen slots
+    const [S1, S2, S3] = [cjk(150, 0x4e00), cjk(220, 0x5000), cjk(100, 0x5200)]
+    const z = laid(rows, [text(S1), ph(BR), ph(BR), text(S2), ph(BR), ph(BR), text(S3)])
+    expect(z.blocks.map(b => [b.page, b.B.length])).toEqual([[1, 4], [2, 8], [3, 5]])
+    const l = z.fit()
+    expect(l.clipped).toBe(false)
+    // one leading, 1.25 (a pitch of 15): every line on its frame's grid from its first line, an empty slot after each break
+    expect(l.state.lead).toBe(1.25)
+    const got = z.lines(l)
+    const of = (s: string) => (x: (string | number)[]) => s.includes(String(x[2]).slice(0, 1))
+    expect(got.filter(of(S1)).map(x => [x[0], x[1]])).toEqual([[1, 500], [1, 485], [1, 470], [2, 500]])
+    expect(got.filter(of(S2)).map(x => [x[0], x[1]])).toEqual([[2, 470], [2, 455], [2, 440], [2, 425], [2, 410], [3, 500]])
+    // S3 two lines under S2's last, not at TeX's line after the break (464) under a band of S2's unused room
+    expect(got.filter(of(S3)).map(x => [x[0], x[1]])).toEqual([[3, 470], [3, 455], [3, 440]])
   })
 })

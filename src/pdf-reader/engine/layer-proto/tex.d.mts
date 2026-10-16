@@ -19,10 +19,12 @@ export declare function displayCover(lu: LayoutUnit, unit: Unit, kOf: readonly n
 export declare function inklessOf(lu: LayoutUnit, kOf: readonly number[], p: { k: number; cls: string }): boolean
 /** LaTeX's forced line breaks: `\\` (starred, or with its optional space) and \newline */
 export declare const FORCED_BREAK: RegExp
+/** a forced break TeX set: the file's line after it, and the room TeX left between the two beyond the unit's pitch, in
+ *  pitches (1 for `\\ \\`, 0 for a lone `\\`); null where that line opens another frame (the text after it starts there) */
+export interface ForcedBreak { next: number; room: number | null }
 /** where each forced break of the unit's row ends a line of the file: each piece of a break group paired with TeX's breaks
- *  in order (the lines ended short of their frame's measure), by its index, to the file's line set after it; empty where
- *  nothing pairs */
-export declare function forcedBreaks(lu: LayoutUnit | null, unit: Unit, kOf?: readonly number[] | null): Map<number, number>
+ *  in order (the lines ended short of their frame's measure), by its index, to its break; empty where nothing pairs */
+export declare function forcedBreaks(lu: LayoutUnit | null, unit: Unit, kOf?: readonly number[] | null): Map<number, ForcedBreak>
 /** the unit's lines from the file, on the pages up to maxPage; `held` those its source does not write, kept */
 export declare function texRects(lu: LayoutUnit, maxPage?: number): TexLines
 /** a placeholder's rendering from its segments (stride 6): the unit's characters inside them and its ink's box */

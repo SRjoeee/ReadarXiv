@@ -241,9 +241,18 @@ const SHORT = 0.5
  * share). The groups pair with TeX's breaks in order, as D4 pairs
  * displays with held runs (displayCover): only where they are as many; and the pairing holds only where every placeholder
  * the file finds (its segments, by the unit's line nearest each on its page) stands between the breaks its place in the
- * row says, as TeX set it. Returns a Map of each piece of a paired group, by its index, to the file's line after its
- * break, the line the text after it starts on; empty where nothing pairs (a ragged or centred unit's short lines, a break
- * TeX set at a line's end), and the unit's text then runs through as before.
+ * row says, as TeX set it. Returns a Map of each piece of a paired group, by its index, to { next, room }: `next` the
+ * file's line after its break, the line TeX set the text after it on; `room` what TeX left between the two lines beyond
+ * the unit's pitch, in pitches (the gap over the pitch less one, never below 0: 1 for `\\ \\`, whose second break sets an
+ * empty line, 0 for a lone `\\`, 0.63 for `\vspace{0.3cm}\\` at a pitch of 13.6), the unit's own rows' alone. `room` is
+ * null where `next` opens another frame (TeX drops glue at a frame's head, and the file says nothing more: the text after
+ * it starts there), or where the unit has no two lines of its own next to each other in a frame besides its breaks' (no
+ * pitch to measure the gap by). The fix of 2026-10-16: within a frame, the break ends the laid line and leaves its room
+ * in the drawing's pitches wherever the translation sets it (layer2.mjs breakLines), so that the unit keeps one leading
+ * and its unused room is at its end, where the fill closes it; pinned to TeX's line, the room the translation of the text
+ * before it did not use stood as a band before that line (2608.16117 page 3, unit 8: 4.4 pitches where TeX set 2).
+ * Empty where nothing pairs (a ragged or centred unit's short lines, a break TeX set at a line's end), and the unit's text
+ * then runs through as before.
  */
 export function forcedBreaks(lu, unit, kOf = null) {
   const out = new Map()
@@ -307,7 +316,22 @@ export function forcedBreaks(lu, unit, kOf = null) {
       }
     }
   }
-  breaks.forEach((g, b) => { for (const i of g.members) out.set(i, cands[b] + 1) })
+  // (the unit's pitch: the median gap of two of its own lines next to each other in one frame, its breaks' aside)
+  const frameOf = new Int32Array(n).fill(-1)
+  for (let f = 0; f < F.length; f += 6) for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) frameOf[j] = f
+  const brk = new Set(cands), gaps = []
+  for (let j = 0; j + 1 < n; j++) {
+    if (brk.has(j) || held.has(j) || held.has(j + 1) || frameOf[j] < 0 || frameOf[j] !== frameOf[j + 1]) continue
+    const g = L[8 * j + 3] - L[8 * (j + 1) + 3]
+    if (g > 0) gaps.push(g)
+  }
+  gaps.sort((a, b) => a - b)
+  const p0 = gaps.length ? (gaps[(gaps.length - 1) >> 1] + gaps[gaps.length >> 1]) / 2 : null
+  breaks.forEach((g, b) => {
+    const j = cands[b]
+    const room = p0 === null || frameOf[j] !== frameOf[j + 1] ? null : Math.max(0, Math.round(((L[8 * j + 3] - L[8 * (j + 1) + 3]) / p0 - 1) * 1000) / 1000)
+    for (const i of g.members) out.set(i, { next: j + 1, room })
+  })
   return out
 }
 

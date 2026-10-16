@@ -239,7 +239,9 @@ const PH_KINDS = ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro'
  * held line of the column between, over all its pages), the line ends a forced break shapes (`breaks`, { y, next, x0, x1 }:
  * a text line whose ink ends short of its column's measure, the column's rightmost text ink, by more than SHORT of its
  * size, with the unit's next line in the file a text line of that column on the page; `y` between the two baselines,
- * `next` the next line's; `breaksAll`, the unit's count of them over all its pages), and on its first
+ * `next` the next line's; `breaksAll`, the unit's count of them over all its pages, with those whose next line, a text
+ * line, opens another column or page: a break the engine counts too, whose text after it starts there, no room in the
+ * frame it ends), and on its first
  * page the placeholders the file has LOST (`lost`, their k: ink no measure can place); `displays`, every display's
  * segments
  */
@@ -273,6 +275,9 @@ export function fileIndexOf(layout) {
   // spans overlap, chained), no held line of the column between)
   const gaps = new Map(), breaks = new Map()
   const overlaps = (a, b) => Math.min(a.box[2], b.box[2]) > Math.max(a.box[0], b.box[0])
+  // (each unit's text lines of the file, by their index: a break's next line may be on another page)
+  const textJ = new Map()
+  for (const pg of pages.values()) for (const [id, u] of pg.units) for (const l of u.lines) if (!l.held) (textJ.get(id) ?? textJ.set(id, new Set()).get(id)).add(l.j)
   for (const pg of pages.values()) for (const [id, u] of pg.units) {
     const columns = []
     for (const l of u.lines.filter(l => !l.held)) {
@@ -294,10 +299,14 @@ export function fileIndexOf(layout) {
       // (TeX's line breaks a forced break shapes: a text line its ink ends short of its column's measure, the next line of
       // the unit in the file a text line of the column)
       const measure = Math.max(...c.map(l => l.box[2])), x0 = Math.min(...c.map(l => l.box[0]))
+      let across = 0
       for (const l of c) {
         const n = c.find(m => m.j === l.j + 1)
-        if (n && l.box[2] < measure - SHORT * l.size) u.breaks.push({ y: (l.baseline + n.baseline) / 2, next: n.baseline, x0, x1: measure })
+        if (!(l.box[2] < measure - SHORT * l.size)) continue
+        if (n) u.breaks.push({ y: (l.baseline + n.baseline) / 2, next: n.baseline, x0, x1: measure })
+        else if (textJ.get(id)?.has(l.j + 1) && !u.lines.some(m => m.j === l.j + 1)) across++
       }
+      breaks.set(id, (breaks.get(id) ?? 0) + across)
     }
     breaks.set(id, (breaks.get(id) ?? 0) + u.breaks.length)
   }
@@ -431,52 +440,59 @@ export function overDisplayOf({ lines, boxes }) {
  * left between two lines of the frame next to each other beyond their slots' pitch (`pitch`, the drawing's own, the
  * larger of the two) that the original does not leave there itself, in slots (rounded as a frame's blank lines are). Two
  * lines with a held line of the unit between them across the frame's column (`held`, its boxes: a display's rows) are no
- * pair: the room before a display is the frame's blank lines', not a slot skipped. What the original leaves is TeX's: the room between two of the
- * unit's own text lines of the file in the frame's column beyond its pitch (a blank line between paragraphs, a tall
- * line's opening: `tex`, { baseline, x0, x1 }, and `texPitch`), the share of it that lies between the two drawn lines;
- * and a line of the unit's text the drawing keeps as the original's (`keptRows`, their middles, no held line among
- * them), a pitch of TeX's each. A forced break of TeX's between the two lines (`breaks`, fileIndexOf's: a line TeX ended
- * short, where the unit's source sets as many forced breaks as the file has such lines, forcedBreaksIn) sets aside the room
- * above the line TeX set after it (`next`), as the room before a display is set aside: the text before the break ends where
- * its translation does, and the text after it starts on that line. The room from that line down is counted as any (a
- * drawing that starts the text after the break lower skips those slots). `units`: the drawn units, { id, orig, lines:
- * [{ baseline, size, x0, x1, pitch }], tex, held, texPitch, keptRows, breaks }. Returns { slotsSkipped, where: the units,
- * once a slot }
+ * pair: the room before a display is the frame's blank lines', not a slot skipped. What the original leaves is TeX's: the
+ * room between two of the unit's own text lines of the file in the frame's column beyond its pitch (a blank line between
+ * paragraphs, a tall line's opening: `tex`, { baseline, x0, x1 }, and `texPitch`), the share of it that lies between the
+ * two drawn lines; and a line of the unit's text the drawing keeps as the original's (`keptRows`, their middles, no held
+ * line among them), a pitch of TeX's each. A forced break of TeX's in the frame (`breaks`, fileIndexOf's: a line TeX ended
+ * short, the next a text line of the column, where the unit's source sets as many forced breaks as the file has such
+ * line ends, forcedBreaksIn) leaves its own room, its gap beyond the pitch in pitches (the empty line of `\\ \\`, none for a
+ * lone `\\`): the drawing ends the laid line at the break and leaves that room wherever its translation sets the break
+ * (layer-proto/tex.mjs forcedBreaks, the fix of 2026-10-16), not at TeX's place. So the gap is not counted by its place,
+ * and each break's room is credited once in its frame, to the pairs that leave the most room first: a drawing that holds
+ * the text after a break on TeX's own line, under the room the text before it did not use, skips those slots. `units`:
+ * the drawn units, { id, orig, lines: [{ baseline, size, x0, x1, pitch }], tex, held, texPitch, keptRows, breaks }.
+ * Returns { slotsSkipped, where: the units, once a slot }
  */
 export function slotsSkippedOf(units) {
   const where = []
   for (const u of units) {
     const p0 = u.texPitch ?? 0, frames = frameGroups(u.orig)
+    // (each break's short line's baseline and its room, TeX's: its gap beyond the pitch, in pitches)
+    const breaks = (u.breaks ?? []).map(k => ({ ...k, hi: 2 * k.y - k.next, room: p0 > 0 ? Math.max(0, (2 * (k.y - k.next)) / p0 - 1) : 0, frame: -1 }))
+    for (const k of breaks) k.frame = frames.findIndex(fr => Math.min(k.x1, fr.x1) > Math.max(k.x0, fr.x0) && k.y < fr.first + 0.5 && k.y > fr.last - 0.5)
     linesOfFrames(u, frames).forEach((inFrame, f) => {
       const fr = frames[f]
+      const own = breaks.filter(k => k.frame === f)
+      const isBreak = (hi, lo) => own.some(k => Math.abs(k.hi - hi) < 0.05 && Math.abs(k.next - lo) < 0.05)
       const tex = (u.tex ?? []).filter(l => Math.min(l.x1, fr.x1) > Math.max(l.x0, fr.x0)).map(l => l.baseline).sort((a, b) => b - a)
       const mine = inFrame.slice().sort((a, b) => b.baseline - a.baseline)
+      const left = []
       for (let j = 1; j < mine.length; j++) {
         const a = mine[j - 1].baseline, b = mine[j].baseline, pitch = Math.max(mine[j - 1].pitch ?? 0, mine[j].pitch ?? 0)
         if (!(pitch > 0)) continue
         // (across the frame's column and the two lines: a display's rows stand beside a short line too)
         const x0 = Math.min(fr.x0, mine[j - 1].x0, mine[j].x0), x1 = Math.max(fr.x1, mine[j - 1].x1, mine[j].x1)
         if ((u.held ?? []).some(h => { const y = (h[1] + h[3]) / 2; return y > b && y < a && Math.min(h[2], x1) > Math.max(h[0], x0) })) continue
-        // (a forced break between them: counted from the line TeX set after it, `from`, as from a slot a pitch over it, the
-        // lower drawn line on that line skipping none)
-        // (two breaks or more between them: the text between two of them is laid nowhere there, each of TeX's lines of it a
-        // slot skipped)
-        const between = (u.breaks ?? []).filter(k => k.y > b && k.y < a && Math.min(k.x1, x1) > Math.max(k.x0, x0)).sort((p, q) => q.y - p.y)
-        for (let i = 1; i < between.length; i++) for (const t of tex) if (t < between[i - 1].y && t > between[i].y) where.push(u.id)
-        const from = between.length ? between.at(-1).next : a
-        if (from < a && b >= from - 0.5) continue
-        const top = from < a ? from + pitch : a
-        // (TeX's own room between them: each gap of its text lines past its pitch, by the share of it they span)
+        // (TeX's own room between them: each gap of its text lines past its pitch, by the share of it they span, a forced
+        // break's aside)
         let room = 0
         if (p0 > 0) {
           for (let i = 1; i < tex.length; i++) {
-            const hi = tex[i - 1], lo = tex[i], span = Math.min(hi, from) - Math.max(lo, b)
-            if (span > 0 && hi - lo > p0) room += ((hi - lo - p0) * span) / (hi - lo)
+            const hi = tex[i - 1], lo = tex[i], span = Math.min(hi, a) - Math.max(lo, b)
+            if (span > 0 && hi - lo > p0 && !isBreak(hi, lo)) room += ((hi - lo - p0) * span) / (hi - lo)
           }
-          room += p0 * (u.keptRows ?? []).filter(y => y > b && y < from).length
+          room += p0 * (u.keptRows ?? []).filter(y => y > b && y < a).length
         }
-        const slots = Math.floor(rd((top - b - pitch - room) / pitch, 2))
-        for (let s = 0; s < slots; s++) where.push(u.id)
+        const over = rd((a - b - pitch - room) / pitch, 2)
+        if (over > 0) left.push(over)
+      }
+      // (each break's room, once: the pairs that leave the most room first)
+      let credit = own.reduce((t, k) => t + k.room, 0)
+      for (const over of left.sort((p, q) => q - p)) {
+        const take = Math.min(over, credit)
+        credit -= take
+        for (let s = 0; s < Math.floor(rd(over - take, 2)); s++) where.push(u.id)
       }
     })
   }
