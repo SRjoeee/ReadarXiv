@@ -128,6 +128,9 @@ export interface ProtoRun {
    *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
    *  copy and set as SVG */
   pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number; links: number }[]
+  /** the deterministic work counters of each page (work.mjs): integer counts, the same for the same input */
+  pageWork: (import('./work.mjs').Work | undefined)[]
+  workTotal(): import('./work.mjs').Work
   /** each page's characters (with `free` and `records`, the shelf's: every page's, let go or not) */
   chars: (Char[] | undefined)[]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]

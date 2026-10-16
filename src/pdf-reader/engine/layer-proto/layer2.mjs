@@ -52,6 +52,7 @@
 // - Erasing: what a unit's erasing covers that no painted unit accounts for is put back from the original (kept lines
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
 import { noStart } from './no-start.mjs'
+import { work } from './work.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -1830,6 +1831,7 @@ const mcache = new Map(), icache = new Map()
 const inkOfMetrics = m => ({ a: Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : 0, d: Number.isFinite(m.actualBoundingBoxDescent) ? m.actualBoundingBoxDescent : 0 })
 /** a run's width at 100 px in its face (canvas measureText, cached; its ink beside it, ink100) */
 function w100(s, face) {
+  work.measures++
   const font = fontString(face, 100)
   const key = `${font}|${s}`
   let w = mcache.get(key)
@@ -2322,6 +2324,7 @@ const tokW = (t, f, st, scale) => {
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
  */
 function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
+  work.breaks++
   // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
   // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
   const flow = strict === 'flow'
@@ -2664,6 +2667,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
   let last = null, tried = 0
   for (const st of statesOf(P, blocks, s)) {
     tried++
+    work.fit++
     const f = s * st.scale
     const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
     last = { r, st, f }
@@ -2678,6 +2682,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
   if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
     for (const st of statesOf(P, blocks, s)) {
       tried++
+      work.fit++
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow')
       if (r.rest >= r.total) { last = { r, st, f }; break }
@@ -2688,6 +2693,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
   // filled by its text's size, not by lines looser than the original's own)
   if (P.growTo > 1 && tried === 1 && last.r.rest >= last.r.total) {
     for (let k = Math.round((Math.min(P.growTo, P.capScale ?? Infinity) - 1) / P.step); k >= 1; k--) {
+      work.fit++
       const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
@@ -2721,6 +2727,7 @@ function laidOut({ r, st, f }, s, P, tried) {
  * leading, tracking or size): layoutUnit2's answer, clipped where the state does not set every token in the text's order
  */
 export function layoutAt(tokens, blocks, s, P, st) {
+  work.fit++
   const f = s * st.scale
   return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1)
 }

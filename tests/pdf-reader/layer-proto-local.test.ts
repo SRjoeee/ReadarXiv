@@ -286,6 +286,35 @@ describe('S4 with a first page all another\'s: the first line grows over the mat
   })
 })
 
+describe('the work counters (work.mjs): integer counts of what a page cost, the same for the same input', () => {
+  const Q2 = line(2, 200, [20, 'Alpha beta']), Q3 = line(3, 200, [20, 'gamma delta'])
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'geometry', tr: [text(CJK(5))] },
+    { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [Q2, Q3], rects: [[2, 20, 197.85, 70, 206.83], [3, 20, 197.85, 80, 206.83]], from: 'geometry', tr: [text(CJK(8, 0x4e20))] },
+    { id: 2, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], from: 'geometry', tr: [text(CJK(8, 0x4e60))] },
+  ]
+  const KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops']
+  const laid = async (order: number[]) => {
+    const run = await open(paper(specs, 4))
+    for (const p of order) await run.layFor(p)
+    await run.until(4)
+    return run
+  }
+  it('are integers for every page, counted for the lay, the measures, the breaks, the ink map and the operations, and a rerun gives the same counts', async () => {
+    const a = await laid([1, 2, 3, 4]), b = await laid([1, 2, 3, 4])
+    const total = a.workTotal() as unknown as Record<string, number>
+    expect(Object.keys(total)).toEqual(KEYS)
+    for (const k of ['fit', 'measures', 'breaks', 'inkSteps', 'ops']) expect(total[k], k).toBeGreaterThan(0)
+    for (const w of a.pageWork) if (w) for (const k of KEYS) expect(Number.isInteger((w as unknown as Record<string, number>)[k]), k).toBe(true)
+    expect(a.pageWork).toEqual(b.pageWork)
+    expect(b.workTotal()).toEqual(a.workTotal())
+  })
+  it('add up to the same total whatever order the pages were asked in', async () => {
+    const want = (await laid([1, 2, 3, 4])).workTotal()
+    for (const order of [[4], [3, 1], [4, 3, 2, 1]]) expect((await laid(order)).workTotal(), `${order} first`).toEqual(want)
+  })
+})
+
 describe('L1: a unit left the original\'s for a page that cannot be read grows on its other pages as a unit ranked after it there needs', () => {
   // q (unit 1, v0's geometry) on pages 2 and 3, its page-2 line anchored on "beta" alone ("Alpha" before it its own), page 3
   // unreadable: q is refused 'page' and never laid. u (unit 2) on pages 2 and 4 ranks after it on page 2 and grows it there
