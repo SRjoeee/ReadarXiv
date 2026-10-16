@@ -45,3 +45,28 @@ text, whose fonts are fetched on top.
    27 MB: the window holds the near pages' layer alone). Proposed budget: the reader's JS heap within 64 MB at rest after
    any corpus paper, measured by this spike's `heapMB`; the renderers' RSS read with the web's `layer-memory` on a quiet
    machine before a number is fixed for it.
+
+## The bind, before and after (2026-10-17 01:52–01:55 JST)
+
+The base check no longer waits for arXiv's whole PDF (`session/run.ts` bind, `session/ranges.ts`; DESIGN §16). Measured
+with this spike on two staging builds back to back, the pre-bind build and the bind's (`AXT_EXT_DIR`), alternating
+before, after, before, after, a fresh profile each, the machine otherwise quiet (load average 6.3 at the start, 5.0 at the
+end). ms from the reader's address loaded:
+
+| Paper | Build | Original on screen | First page laid | Laid after the original | Composed over | JS heap (MB) |
+|---|---|---|---|---|---|---|
+| 2608.16117v1 (46 MB) | before | 20 963 | 42 698 | 21 735 | the left's bytes, read whole | 30.8 |
+| 2608.16117v1 | after | 21 574 | 24 461 | 2 887 | our copy by ranges | 20.0 |
+| 2608.16117v1 | before | 21 022 | 36 724 | 15 702 | the left's bytes, read whole | 29.7 |
+| 2608.16117v1 | after | 21 552 | 25 095 | 3 543 | our copy by ranges | 20.6 |
+| 1706.03762v7 (2 MB) | before | 2 415 | 2 638 | 223 | the left's bytes | 22.6 |
+| 1706.03762v7 | after | 3 158 | 3 399 | 241 | the left's bytes (the proof within 100 ms) | 21.5 |
+| 1706.03762v7 | before | 1 713 | 2 141 | 428 | the left's bytes | 30.5 |
+| 1706.03762v7 | after | 2 624 | 2 932 | 308 | the left's bytes | 25.4 |
+
+- The large paper's first page now follows its original by 2.9–3.5 s, against 15.7–21.7 s (9.5 s in the reading above, at
+  another load: the old check's wait was the rest of arXiv's download, asked twice, and so varied with the link). The
+  original's own 21 s is unchanged: arXiv's file through PDF.js's stream and ranges (eb-report, debt).
+- A small paper is as before: its bytes are in within the 100 ms the proof is given, nothing is asked of anyone.
+- The heap is 10 MB lower on the large paper: the composed document no longer holds a whole copy of the original.
+- No long task over 51 ms in any run; the renderers' resident memory 0.91–0.98 GB in both builds.
