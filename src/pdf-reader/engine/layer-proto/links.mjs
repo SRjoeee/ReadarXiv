@@ -448,6 +448,37 @@ const recordOf = (a, boxes, name) => {
 }
 const sound4 = b => b[0] < b[2] && b[1] < b[3]
 
+/**
+ * A drawn range's extent across on one line: from the edge before its first character to the edge after its last, each end
+ * carried on where nothing of a word stands beside it: over its token's marks that are no letter or digit ("(" and "," of
+ * "(Taylor,"), and half way into the gap to the next item (`pad` past a line's end, where there is none). A browser lays a run's
+ * glyphs by its own advances, which the layout's measure is near but not exactly (Chromium on Linux rounds them): an end at a
+ * glyph's edge where a mark or a gap stands beside it would leave a glyph the drift carries out of the box, which this keeps in,
+ * and no letter of another word comes in
+ */
+function spanOf(line, e0, e1, edge, pad) {
+  const startOf = (run, n) => run.items.find(([m]) => m === n)?.[1] ?? 0
+  const items = line.items
+  let x0 = edge(line, e0.run, e0.at), x1 = edge(line, e1.run, e1.end)
+  const t0 = items[e0.n].t, s0 = startOf(e0.run, e0.n)
+  if (!LETTER.test(t0.s.slice(0, e0.at - s0))) {
+    const start = edge(line, e0.run, s0)
+    let m = e0.n - 1
+    while (m >= 0 && items[m].t.space) m--
+    const prevEnd = m >= 0 ? items[m].x + items[m].w : null
+    x0 = prevEnd === null ? start - pad : prevEnd < start ? (prevEnd + start) / 2 : start
+  }
+  const t1 = items[e1.n].t, s1 = startOf(e1.run, e1.n)
+  if (!LETTER.test(t1.s.slice(e1.end - s1))) {
+    const end = edge(line, e1.run, s1 + t1.s.length)
+    let m = e1.n + 1
+    while (m < items.length && items[m].t.space) m++
+    const nextStart = m < items.length ? items[m].x : null
+    x1 = nextStart === null ? end + pad : nextStart > end ? (end + nextStart) / 2 : end
+  }
+  return { x0, x1 }
+}
+
 /** the record of a drawn range of a unit's lines: one box a line, those of its first page alone; null where none is sound */
 function rangeRecord(entries, lines, edge, band) {
   if (!entries.length) return null
@@ -457,9 +488,9 @@ function rangeRecord(entries, lines, edge, band) {
   for (const li of [...new Set(mine.map(e => e.li))]) {
     const on = mine.filter(e => e.li === li), { line } = lines[li]
     const e0 = on[0], e1 = on.at(-1)
-    const x0 = edge(line, e0.run, e0.at), x1 = edge(line, e1.run, e1.end)
     let top = Number.NEGATIVE_INFINITY, bottom = Number.POSITIVE_INFINITY
     for (const n of new Set(on.map(e => e.n))) { const b = band(line.items[n].t, line); if (b.top > top) top = b.top; if (b.bottom < bottom) bottom = b.bottom }
+    const { x0, x1 } = spanOf(line, e0, e1, edge, 0.25 * (top - bottom))
     const box = [Math.min(x0, x1), bottom, Math.max(x0, x1), top]
     if (sound4(box) && box.every(Number.isFinite)) { boxes.push(box); lineOf.push(li) }
   }

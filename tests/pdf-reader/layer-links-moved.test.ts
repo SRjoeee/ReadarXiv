@@ -43,8 +43,10 @@ const cand = (a: Annot, q = 1): LinkCandidate => ({ q, a })
 /** a target: a placeholder k of the unit's, drawn as text unless told otherwise */
 const target = (k: number, o: Partial<LinkTarget> = {}): LinkTarget => ({ ord: k, k, kind: null, single: true, gap: null, segs: null, draw: 'text', ...o })
 /** the text drawn on a layout's lines between two PDF x, by its items (a character's middle inside) */
-function drawnBetween(L: ReturnType<typeof lay>, page: number, b: number[]) {
+function drawnBetween(L: ReturnType<typeof lay>, page: number, b: number[], drift = 1) {
   const box = b as [number, number, number, number]
+  // (a browser laying a run's glyphs `drift` times as wide as the layout measured them, from the run's own start)
+  const measure = (t: string) => [...t].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? 100 : 50), 0) * drift
   let out = ''
   for (const line of L.lines) {
     if (line.page !== page || !(line.baseline > box[1] && line.baseline < box[3])) continue
@@ -53,7 +55,7 @@ function drawnBetween(L: ReturnType<typeof lay>, page: number, b: number[]) {
       const r = run as import('@/pdf-reader/engine/layer-proto/layer2.mjs').LineRun
       let at = 0
       for (const ch of r.text) {
-        const mid = (L2.runEdge(r, at, line as never, L as never) + L2.runEdge(r, at + ch.length, line as never, L as never)) / 2
+        const mid = (L2.runEdge(r, at, line as never, L as never, measure as never) + L2.runEdge(r, at + ch.length, line as never, L as never, measure as never)) / 2
         if (/\S/.test(ch) && mid > box[0] && mid < box[2]) out += ch
         at += ch.length
       }
@@ -62,6 +64,8 @@ function drawnBetween(L: ReturnType<typeof lay>, page: number, b: number[]) {
   return out
 }
 const gapOf = (q: number, item: number, n: number) => new Set(Array.from({ length: n }, (_, k) => `${q}|${item}|${k}`))
+/** a text's letters and digits, as the gate compares a link's name with what is drawn under it */
+const letters = (t: string) => t.replace(/[^\p{L}\p{N}]/gu, '')
 
 describe('LK1: one annotation a number of a citation drawn as the page wrote it', () => {
   it('"[21, 41]": two records, over the drawn "21" and "41" alone, named by them', () => {
@@ -74,11 +78,13 @@ describe('LK1: one annotation a number of a citation drawn as the page wrote it'
     expect(records.map(r => [r.rec.name, r.rec.dest, r.rec.moved, r.page, r.sources])).toEqual([['21', 'cite.a', true, 2, { annots: [[1, 0]], tier: 'geometry' }], ['41', 'cite.b', true, 2, { annots: [[1, 1]], tier: 'geometry' }]])
     for (const r of records) {
       expect(r.rec.boxes.length).toBe(4)
-      expect(drawnBetween(L, 2, r.rec.boxes)).toBe(r.rec.name)
+      expect(letters(drawnBetween(L, 2, r.rec.boxes))).toBe(r.rec.name)
     }
-    // ("[21," starts after the CJK character's em, 110: its "2" from 115 to 120, its "1" to 125; the box is the line's band)
+    // ("[21," starts after the CJK character's em, 110, and ends at 130, "41]" starts after the space, at 135: the box of "21" is
+    // carried over its marks and half way into the space, that of "41" from there; the box is the line's band)
     const [x0, y0, x1, y1] = records[0]!.rec.boxes
-    expect([x0, x1]).toEqual([115, 125])
+    expect([x0, x1]).toEqual([110, 132.5])
+    expect(records[1]!.rec.boxes[0]).toBe(132.5)
     expect([y0!, y1!].map(v => Math.round(v * 100) / 100)).toEqual([497.8, 507.5])
   })
 })
@@ -115,7 +121,7 @@ describe('LK2: a link TeX broke over two lines', () => {
     const m = matchUnit({ cands: [cand(name), cand(year)], targets: [target(1, { kind: 'cite', keys: ['peters'], gap: gapOf(1, 3, 21) })] })
     const { records } = placeUnit({ groups: m.groups, ...placing(L) })
     expect(records.map(r => r.rec.name)).toEqual(['Peters et al.', '2018a'])
-    expect(records.map(r => drawnBetween(L, 2, r.rec.boxes))).toEqual(['Petersetal.', '2018a'])
+    expect(records.map(r => letters(drawnBetween(L, 2, r.rec.boxes)))).toEqual(['Petersetal', '2018a'])
   })
 })
 
@@ -205,7 +211,7 @@ describe('LK6: a citation drawn as the page wrote it before (no characters), by 
     const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.smith' }, '3'))], targets: [target(1, { kind: 'cite', keys: ['smith'] })] })
     expect(m.groups[0]!.annots[0]!.tier).toBe('key')
     const { records } = placeUnit({ groups: m.groups, ...placing(L) })
-    expect(records.map(r => [r.rec.name, drawnBetween(L, 2, r.rec.boxes)])).toEqual([['3', '3']])
+    expect(records.map(r => [r.rec.name, letters(drawnBetween(L, 2, r.rec.boxes))])).toEqual([['3', '3']])
   })
   it('two pieces of one key against three annotations: none, ambiguous', () => {
     const anns = [0, 1, 2].map(i => ann(i, { dest: 'cite.smith' }, String(i + 3)))
@@ -265,15 +271,26 @@ describe('a translation that sets the pieces in another order: the right link, o
   })
 })
 
+describe('a link\'s box where the browser lays its run a little wider or narrower than measured', () => {
+  it('keeps every letter of the link and no letter of another: its ends carried over its marks and into the gaps beside it', () => {
+    const L = lay([text('\u5982'), ph('\\citet{taylor}'), text('\u6240\u793a')], { 1: { mode: 'orig-text', text: '(Taylor, 1953)' } })
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.taylor' }, 'Taylor')), cand(ann(1, { dest: 'cite.taylor' }, '1953'))], targets: [target(1, { kind: 'cite', keys: ['taylor'], gap: null })] })
+    const { records } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records.map(r => r.rec.name)).toEqual(['Taylor', '1953'])
+    // (as measured, and with each glyph 6 % wider or narrower than measured, the drift a run of eight glyphs gathers)
+    for (const drift of [1, 1.06, 0.94]) expect(records.map(r => letters(drawnBetween(L, 2, r.rec.boxes, drift))), `drift ${drift}`).toEqual(['Taylor', '1953'])
+  })
+})
+
 describe('a link\'s text found whole, or the link left: never over a part of another', () => {
   it('"[12, 2]": the annotation of "2" alone, the 12 not its piece\'s, is laid over the "2", never the 2 of 12', () => {
     const L = lay([text('\u89c1'), ph('\\cite{a,b}'), text('\u3002')], { 1: { mode: 'orig-text', text: '[12, 2]' } })
     const m = matchUnit({ cands: [cand(ann(1, { dest: 'cite.b' }, '2'))], targets: [target(1, { kind: 'cite', keys: ['a', 'b'] })] })
     const { records } = placeUnit({ groups: m.groups, ...placing(L) })
     expect(records.length).toBe(1)
-    // ("[12," from 110: its "1" 115 to 120, its "2" to 125; "2]" after the space of 5: its "2" from 135)
-    expect(records[0]!.rec.boxes[0]).toBeCloseTo(135, 6)
-    expect(drawnBetween(L, 2, records[0]!.rec.boxes)).toBe('2')
+    // ("[12," from 110 to 130; "2]" after the space of 5, from 135: the box from half way into the space, never over "12")
+    expect(records[0]!.rec.boxes[0]).toBeCloseTo(132.5, 6)
+    expect(letters(drawnBetween(L, 2, records[0]!.rec.boxes))).toBe('2')
   })
   it('"[12]" with the annotation of "2" alone: no whole number "2" in it: none, never the 2 of 12', () => {
     const L = lay([text('\u89c1'), ph('\\cite{b}'), text('\u3002')], { 1: { mode: 'orig-text', text: '[12]' } })
