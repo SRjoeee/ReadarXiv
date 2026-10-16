@@ -1486,3 +1486,77 @@ describe('makerOf, a page at a time: no unit decided before its match is final (
     expect(file.units.map(u => u[0])).toEqual([0, 1, 2, 3])
   })
 })
+
+describe('makeLayout, a piece TeX broke over lines past the unit\'s lines (2609.26457 Table 3)', () => {
+  // a table's cell whose citation, after its last word (the end mark set before it), wraps onto the cell's next line, a
+  // line that holds no word of the cell's source; and the cell beside it, two lines on the same baselines
+  const cellRuns: Run[] = [
+    { s: 'decaying exploration', x: 72, y: 700 }, { s: '(Sutton and', x: 177, y: 700 }, { s: 'Barto, 2018)', x: 72, y: 688 },
+    { s: 'within noise', x: 300, y: 700 }, { s: 'here too', x: 300, y: 688 },
+  ]
+  const cells: World = {
+    // (the citation's closing point after its last glyph, on its second line)
+    pages: [{ runs: cellRuns, points: { 'p0.1b': [2, 12] } }],
+    marks: [['t0s', 1, 72, 700], ['t0e', 1, 177, 700], ['p0.1a', 1, 177, 700], ['p0.1b', 1, 132, 688], ['t1s', 1, 300, 700], ['t1e', 1, 340, 688]],
+    units: [unit('cell', [text(' decaying exploration '), ph('\\citep{sutton}'), text(' ')]), unit('cell', [text(' within noise here too ')])],
+  }
+  it("a cell's citation wrapped onto its next line: that line is the cell's, the citation found on both", async () => {
+    const { file, stats } = await made(cells)
+    expect(chunk(rowsOf(file, 0, 'lines'), 8)).toEqual([[1, 72, 232, 700, 707.5, 697.5, 10, 0], [1, 72, 132, 688, 695.5, 685.5, 10, 0]])
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 2, 0, 1, 177, 700, 232, 707.5, 697.5, 1, 72, 688, 132, 695.5, 685.5])
+    expect(file.pageText).toEqual([[0, 1, '(Sutton and Barto, 2018)']])
+    // one frame of both lines; the second line erased, as the cell's
+    expect(chunk(rowsOf(file, 0, 'frames'), 6).map(f => f.slice(0, 4))).toEqual([[1, 0, 0, 2]])
+    expect(chunk(rowsOf(file, 0, 'erase'), 5).some(e => e[0] === 1 && (e[1] as number) <= 72 && (e[3] as number) >= 132)).toBe(true)
+    expect(stats.ph).toMatchObject({ found: 1, lost: 0, why: {} })
+    // the cell beside it keeps its own two lines
+    expect(chunk(rowsOf(file, 1, 'lines'), 8).map(l => l.slice(0, 4))).toEqual([[1, 300, 360, 700], [1, 300, 340, 688]])
+  })
+
+  it('a citation after a paragraph\'s last word wrapped onto the next line: that line is the paragraph\'s', async () => {
+    const runs: Run[] = [
+      { s: words(0, 10), x: 72, y: 700 }, { s: 'w10 w11 w12 w13', x: 72, y: 688 }, { s: '(Smith and', x: 152, y: 688 }, { s: 'Winkler, 2006)', x: 72, y: 676 },
+      { s: words(20, 10), x: 72, y: 652 },
+    ]
+    const { file } = await made({
+      pages: [{ runs, points: { 'p0.1b': [3, 14] } }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 152, 688], ['p0.1a', 1, 152, 688], ['p0.1b', 1, 142, 676], ['1s', 1, 72, 652], ['1e', 1, endOf(runs[4] as Run), 652]],
+      units: [unit('para', [text(`${words(0, 10)} w10 w11 w12 w13 `), ph('\\citep{smith}')]), unit('para', [text(words(20, 10))])],
+    })
+    expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => l.slice(0, 4))).toEqual([[1, 72, endOf(runs[0] as Run), 700], [1, 72, 202, 688], [1, 72, 142, 676]])
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 2, 0, 1, 152, 688, 202, 695.5, 685.5, 1, 72, 676, 142, 683.5, 673.5])
+    expect(chunk(rowsOf(file, 0, 'frames'), 6).map(f => f.slice(0, 4))).toEqual([[1, 0, 0, 3]])
+    expect(chunk(rowsOf(file, 1, 'lines'), 8).map(l => l.slice(0, 4))).toEqual([[1, 72, endOf(runs[4] as Run), 652]])
+  })
+
+  it("a cell's citation TeX set whole on the next line, its line broken right after the opening point: that line is the cell's", async () => {
+    // (2609.26457's cell 113: its opening point and its end mark at line 1's end, every glyph of it on line 2)
+    const runs: Run[] = [{ s: 'majority voting', x: 72, y: 700 }, { s: '(Wang et al., 2023)', x: 72, y: 688 }]
+    const { file } = await made({
+      pages: [{ runs, points: { 'p0.1b': [1, 19] } }],
+      marks: [['t0s', 1, 72, 700], ['t0e', 1, 152, 700], ['p0.1a', 1, 152, 700], ['p0.1b', 1, 167, 688]],
+      units: [unit('cell', [text(' majority voting '), ph('\\citep{wang}'), text(' ')])],
+    })
+    expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => l.slice(0, 4))).toEqual([[1, 72, 147, 700], [1, 72, 167, 688]])
+    expect(phOf(file, 0, 1)).toEqual([0, 1, 2, 0, 1, 72, 688, 167, 695.5, 685.5])
+    expect(file.pageText).toEqual([[0, 1, '(Wang et al., 2023)']])
+  })
+
+  it('a line is added only where its run goes on to the very next line, a line of no other unit\'s', async () => {
+    // (where TeX's points stand on one line, a part on no line of the unit's is LOST: 2307 128.5's, above.) Its run going
+    // on three lines below, not on the next line
+    const far: Run[] = [cellRuns[0] as Run, cellRuns[1] as Run, { s: 'Barto, 2018)', x: 72, y: 664 }, ...cellRuns.slice(3)]
+    const gap = await made({ ...cells, pages: [{ runs: far, points: { 'p0.1b': [2, 12] } }] })
+    expect(phOf(gap.file, 0, 1)).toEqual([0, 1, 2, PH_FLAG.LOST])
+    expect(rowsOf(gap.file, 0, 'lines')).toHaveLength(8)
+    // the line it goes on to is another unit's: its glyphs that unit's line
+    const theirs: Run[] = [cellRuns[0] as Run, cellRuns[1] as Run, { s: 'Barto, 2018) more of it', x: 72, y: 688 }]
+    const taken = await made({
+      pages: [{ runs: theirs, points: { 'p0.1b': [2, 12] } }],
+      marks: [['t0s', 1, 72, 700], ['t0e', 1, 177, 700], ['p0.1a', 1, 177, 700], ['p0.1b', 1, 132, 688], ['1s', 1, 72, 688], ['1e', 1, endOf(theirs[2] as Run), 688]],
+      units: [unit('cell', [text(' decaying exploration '), ph('\\citep{sutton}'), text(' ')]), unit('para', [text('Barto 2018 more of it')])],
+    })
+    expect(phOf(taken.file, 0, 1)).toEqual([0, 1, 2, PH_FLAG.LOST])
+    expect(rowsOf(taken.file, 0, 'lines')).toHaveLength(8)
+  })
+})

@@ -84,6 +84,9 @@ const PART_MAIN = 0.85, PART_ON = 0.2, PART_NEAR = 0.6
  *  BREAK_FAR across (the next column); each part on the unit's line its own baseline stands on, the nearest within
  *  INK_OFF of the line's size (a limit, a raised big operator, a fraction's numerator stay with their line's part) */
 const BREAK_X = 20, BREAK_Y = 4, BREAK_UP = 3, BREAK_FAR = 150, INK_OFF = 2.5
+/** a part of a piece TeX broke over lines, on the line after its part before: its baseline below that one's by half
+ *  their size to WRAP of it (a line's pitch is 1.2 of its size in a cell, a note or a column alike: 2609.26457's Table 3) */
+const WRAP = 2.5
 /** a space in a page text where two glyphs stand this share of their size apart (PDF.js's text layer, TRACKING_SPACE) */
 const TEXT_SPACE = 0.102
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS)
@@ -803,6 +806,28 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const j of cands) { const e = Math.abs(rows[j].base - mid); if (near(j) && e < d) { d = e; best = j } }
       return best
     }
+    /**
+     * The line a part of an inline piece stands on where no line of the unit's holds it, when TeX broke the piece over
+     * lines (its own two points on two lines of the marked compile: `broken`): its glyph run went on to the next line, a
+     * line of the unit's that holds no word of its source (a citation after a table cell's last word, before which the
+     * end mark stands, wrapped onto the cell's next line, or set whole there, TeX's break right after its opening point;
+     * so in a narrow column or a note). The part is the piece's next line after `prev`, the line its part before stands
+     * on (its first part's: the line its opening point stands on): on its page and in its column, below it within WRAP of
+     * their size, no line of the unit's (`rows`, and those `wrapped` before it) between them or on its baseline; its
+     * glyphs no other unit's; the unit within LINES_UNIT lines. The line is the part's glyphs (rowOf), no word of the
+     * text layer's; null for none (the piece is LOST, as before)
+     */
+    const wrapOf = (part, prev, wrapped) => {
+      if (rows.length + wrapped.length >= LINES_UNIT || part.page !== prev.page) return null
+      const P = ink[part.page]
+      if (part.gs.some(g => P.owner[g] !== -1 && P.owner[g] !== i)) return null
+      const row = rowOf(P, part.gs, part.page, [], P.y[part.gs[0]])
+      if (!(r2(row.size) > 0 && row.size <= SIZE_MAX)) return null
+      const col = columnOf(part.page, row.x0, row.x1), size = Math.max(prev.size, row.size), drop = prev.base - row.base
+      if (col !== columnOf(prev.page, prev.x0, prev.x1) || drop < 0.5 * size || drop > WRAP * size) return null
+      for (const r of [...rows, ...wrapped.map(w => w.row)]) if (r !== prev && r.page === part.page && columnOf(r.page, r.x0, r.x1) === col && r.base > row.base - 0.5 * size && r.base < prev.base) return null
+      return row
+    }
     const head = headEnd(u.pieces, 0), last = u.pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s ?? ''))
     /** whether the last visible piece is a display found, or one JOINED to a display found (a later display of the same
      *  group, stream.mjs, may then be JOINED); text and any other piece end the group */
@@ -876,9 +901,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
           if (!cur || cur.page !== p || (dx < -BREAK_X && dy < -BREAK_Y) || dy > BREAK_UP * Math.max(P.size[g], P.size[last]) || Math.abs(dx) > BREAK_FAR) parts.push({ page: p, gs: [g] })
           else cur.gs.push(g)
         }
-        const byRow = new Map(), partRow = []
+        // (each part's line by the line itself, not its index: a line the piece's run wraps onto enters the unit's lines
+        // once the piece is found, after the line before it)
+        const byRow = new Map(), partRow = [], wrapped = []
         let off = false
-        const openAt = markOf(name), closeAt = markOf(`${prefix}${i}.${k}b`)
+        const closeName = `${prefix}${i}.${k}b`, openAt = markOf(name), closeAt = markOf(closeName)
         // both its marks on one line of the unit: TeX broke no line between them, so the whole piece is in that line's box
         // (a fraction's numerator and denominator, a limit, whatever their baselines). A part the part rule puts on no
         // line goes there where its glyphs stand within the line's size of its baseline on arXiv's page; where arXiv's
@@ -886,25 +913,41 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         const on = (M, j) => !!M && M.page === rows[j].page && Math.abs(M.y - rows[j].base) < 0.5 * rows[j].size
         const both = openAt && closeAt ? rows.findIndex((_, j) => on(openAt, j) && on(closeAt, j)) : -1
         const onLine = part => both >= 0 && part.page === rows[both].page && part.gs.every(g => Math.abs(ink[part.page].y[g] - rows[both].base) <= rows[both].size)
+        // its two points on two lines of the marked compile: TeX broke the piece over lines (wrapOf)
+        const pa = dropped.has(name) ? null : at.get(name), pb = dropped.has(closeName) ? null : at.get(closeName)
+        const broken = !!pa && !!pb && (pa.page !== pb.page || Math.abs(pa.y - pb.y) > 0.5)
+        // (the line its opening point stands on, where TeX broke the line right after it: its first part's line before)
+        const openRow = broken && openAt ? (rows.find((_, j) => on(openAt, j)) ?? null) : null
         for (const [q, part] of parts.entries()) {
           let j = rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
           if (j < 0 && onLine(part)) j = both
-          if (j < 0) { off = true; break }
-          partRow.push(j)
-          ;(byRow.get(j) ?? byRow.set(j, { gs: [], boxes: [] }).get(j)).gs.push(...part.gs)
+          const prev = q > 0 ? partRow[q - 1] : openRow
+          const r = j >= 0 ? rows[j] : broken && prev ? wrapOf(part, prev, wrapped) : null
+          if (!r) { off = true; break }
+          if (j < 0) wrapped.push({ row: r, after: prev })
+          partRow.push(r)
+          ;(byRow.get(r) ?? byRow.set(r, { gs: [], boxes: [] }).get(r)).gs.push(...part.gs)
         }
         for (const [p, b] of off ? [] : bs) {
           const B = ink[p].boxes[b], cx = (B[0] + B[2]) / 2, cy = (B[1] + B[3]) / 2
-          let j = -1, d = Infinity
-          parts.forEach((part, q) => { if (part.page !== p) return; const P = ink[p]; for (const g of part.gs) { const dd = Math.hypot(mid(P, g) - cx, P.y[g] - cy); if (dd < d) { d = dd; j = partRow[q] } } })
-          if (j < 0) j = rowFor(p, B[0], B[2], cy)
-          if (j < 0) { off = true; break }
-          ;(byRow.get(j) ?? byRow.set(j, { gs: [], boxes: [] }).get(j)).boxes.push(B)
+          let r = null, d = Infinity
+          parts.forEach((part, q) => { if (part.page !== p) return; const P = ink[p]; for (const g of part.gs) { const dd = Math.hypot(mid(P, g) - cx, P.y[g] - cy); if (dd < d) { d = dd; r = partRow[q] } } })
+          if (!r) { const j = rowFor(p, B[0], B[2], cy); if (j >= 0) r = rows[j] }
+          if (!r) { off = true; break }
+          ;(byRow.get(r) ?? byRow.set(r, { gs: [], boxes: [] }).get(r)).boxes.push(B)
         }
         if (off) { lost("its ink on no line of the unit's"); continue }
         if (byRow.size > SEGS_INLINE) { lost('more lines than an inline placeholder may have'); continue }
-        for (const j of [...byRow.keys()].sort((x, y) => x - y)) {
-          const r = rows[j], P = ink[r.page], { gs: own, boxes } = byRow.get(j)
+        // the lines its run wrapped onto are the unit's from here on, each right after the line before it (the rows the
+        // unit's boxes name moved with them)
+        if (wrapped.length) {
+          const boxed = (one.boxes ?? []).map(([j, B]) => [rows[j], B])
+          for (const w of wrapped) rows.splice(rows.indexOf(w.after) + 1, 0, w.row)
+          if (one.boxes) one.boxes = boxed.map(([r, B]) => [rows.indexOf(r), B])
+        }
+        const index = new Map([...byRow.keys()].map(r => [r, rows.indexOf(r)]))
+        for (const r of [...byRow.keys()].sort((x, y) => index.get(x) - index.get(y))) {
+          const j = index.get(r), P = ink[r.page], { gs: own, boxes } = byRow.get(r)
           let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
           for (const g of own) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
           for (const b of boxes) { x0 = Math.min(x0, b[0]); x1 = Math.max(x1, b[2]); top = Math.max(top, b[3]); bottom = Math.min(bottom, b[1]) }
