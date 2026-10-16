@@ -506,24 +506,31 @@ export function frameOfTokens(doc) {
 
 /** a letter, no digit: what a body word has (bodyWords) */
 const A_LETTER = /\p{L}/u
-/** a word set this many times the document's body size is no body word: arXiv's stamp at 20 pt beside a 10 pt body, a title */
-const BIG = 1.5
+/** a word set more than this many times the document's body size is no body word: arXiv's stamp at 20 pt beside a 10 pt body,
+ *  a title */
+const BODY_MAX = 1.5
+
+/** the largest a body word is set: BODY_MAX times the document's body size, the height most of its tokens with text have, to
+ *  a tenth (the smaller of two as common) */
+export function bodyMax(doc) {
+  const sizes = new Map()
+  for (const t of doc) if (t.t) { const s = Math.round(t.h * 10); sizes.set(s, (sizes.get(s) ?? 0) + 1) }
+  let size = 0, most = 0
+  for (const [s, c] of sizes) if (c > most || (c === most && s < size)) { size = s; most = c }
+  return (BODY_MAX * size) / 10
+}
 
 /**
  * The document's body words, a flag a token: what stands where the units' words stand, told from the text alone. A token
- * with a letter (a page's number, a line's, a row of digits are none), set at most BIG times the body size (the size most
- * of the document's tokens with text have, to a tenth), on a line that does not recur: a line (a run of the stream on one
+ * with a letter (a page's number, a line's, a row of digits are none), set at most BODY_MAX times the body size (bodyMax),
+ * on a line that does not recur: a line (a run of the stream on one
  * baseline, as placeUnits cuts them) whose words, digits dropped, stand at the same baseline (rounded) on another page is a
  * running head or foot, which a unit never is
  */
 function bodyWords(doc) {
   const n = doc.length, body = new Uint8Array(n)
   if (!n) return body
-  const sizes = new Map()
-  for (const t of doc) if (t.t) { const s = Math.round(t.h * 10); sizes.set(s, (sizes.get(s) ?? 0) + 1) }
-  let size = 0, most = 0
-  for (const [s, c] of sizes) if (c > most || (c === most && s < size)) { size = s; most = c }
-  const big = (BIG * size) / 10
+  const big = bodyMax(doc)
   // each line's words with a letter, digits dropped, its first such word's baseline and its page
   const line = linesOf(doc), words = new Map()
   for (let k = 0; k < n; k++) {

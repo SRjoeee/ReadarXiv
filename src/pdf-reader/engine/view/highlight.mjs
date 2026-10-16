@@ -18,7 +18,7 @@
 // sentences on one row meeting halfway through the space between them — one outline per run, the hit test the same
 // shapes.
 
-import { frameOfTokens, inkEdges, lineRects } from '../pipeline/anchors.mjs'
+import { bodyMax, frameOfTokens, inkEdges } from '../pipeline/anchors.mjs'
 // floats.mjs imports this module's geometry; its shapes are read here only when a sentence is drawn (reachAt)
 import { floatShapes } from './floats.mjs'
 
@@ -196,16 +196,49 @@ export function pageColumns(views, anchors, kindOf = () => undefined) {
 /**
  * Each page's columns from the side's tokens alone (the page stream's rule 4, made at step T before any unit is located):
  * pageColumns' arithmetic — the columns of each page, the text edges per page size, parity and column, the half leadings —
- * over the text's lines in place of the located units' lines. The lines: the tokens inside the pages' frame (`inFrame`,
- * frameOfTokens' by default: no running head or foot, no margin), cut as a unit's lines are (lineRects), told as the lines
- * of one unit of no kind. A function of `doc` and `views` alone — of every page's tokens, so final once the text is read,
- * whatever the units and their anchors; a rule of some pages' tokens is not that of the whole. Read by the far push alone
- * (layoutOf's `columns`: `() => columnsOfTokens(doc, views)`, made once)
+ * over the text's lines (textLines) in place of the located units' lines, a page's columns by their vote (documentOf's
+ * `vote`). A function of `doc` and `views` alone — of every page's tokens, so final once the text is read, whatever the units
+ * and their anchors; a rule of some pages' tokens is not that of the whole. Read by the far push alone (layoutOf's `columns`:
+ * `() => columnsOfTokens(doc, views)`, made once)
  */
 export function columnsOfTokens(doc, views, inFrame = frameOfTokens(doc)) {
-  const inside = []
-  for (let k = 0; k < doc.length; k++) if (inFrame(doc[k])) inside.push(k)
-  return documentOf(views, [[-1, lineRects(doc, inside)]], () => undefined).page
+  return documentOf(views, [[-1, textLines(doc, inFrame)]], () => undefined, { vote: true }).page
+}
+
+/** the share of a text line's tokens with text that must be words of the body (columnsOfTokens), and how many at least */
+const LINE_WORDS = 0.6, LINE_WORDS_MIN = 4
+const A_LETTER = /\p{L}/u
+
+/**
+ * The text's lines, as the lines of one unit of no kind: the tokens inside the pages' frame (`inFrame`, frameOfTokens' by
+ * default: no running head or foot, no margin), cut as a unit's lines are (anchors.mjs lineRects) and where the space between
+ * two tokens is more than the taller one's size (cells side by side, a table's columns, the two halves of a page), and kept
+ * where LINE_WORDS_MIN of their tokens with text, and LINE_WORDS of them, are body words — a letter, at most anchors.mjs
+ * bodyMax — so that a table's rows of numbers, a display's symbols and a figure's labels are none. What each prevents, as
+ * measured on the 124 papers' pages with their columns drawn (2026-10-17): text that a figure clips, past the column, made its
+ * edge; an all-table page's number column made the text's edge; two tables side by side, and a page of displays, made two
+ * columns
+ */
+function textLines(doc, inFrame) {
+  const big = bodyMax(doc), out = []
+  let cur = null, prev = null
+  const close = () => { if (cur && cur.words >= LINE_WORDS_MIN && cur.words >= LINE_WORDS * cur.n) out.push({ page: cur.page, x0: cur.x0, y0: cur.y0, x1: cur.x1, y1: cur.y1 }) }
+  for (let k = 0; k < doc.length; k++) {
+    const w = doc[k]
+    if (!inFrame(w)) continue
+    if (!cur || w.page !== cur.page || Math.abs(w.y - cur.base) > cur.h * 0.5 || w.x + w.w < cur.x0 - cur.h * 30 || (prev && w.x - (prev.x + prev.w) > Math.max(w.h, prev.h))) {
+      close()
+      cur = { page: w.page, x0: w.x, x1: w.x + w.w, y0: w.bottom, y1: w.top, base: w.y, h: w.h, n: 0, words: 0 }
+    } else {
+      cur.x0 = Math.min(cur.x0, w.x); cur.x1 = Math.max(cur.x1, w.x + w.w)
+      // a line's box is its body text's: a sub- or superscript glyph does not stretch it (lineRects)
+      if (Math.abs(w.y - cur.base) < cur.h * 0.2) { cur.y0 = Math.min(cur.y0, w.bottom); cur.y1 = Math.max(cur.y1, w.top) }
+    }
+    if (w.t) { cur.n++; if (A_LETTER.test(w.t) && w.h <= big) cur.words++ }
+    prev = w
+  }
+  close()
+  return out
 }
 
 /**
@@ -215,7 +248,7 @@ export function columnsOfTokens(doc, views, inFrame = frameOfTokens(doc)) {
  * unit. `views` each page's box (null for a page not yet told: no page part, its rectangles none), `units` [id, rects]
  * in the order the layout takes them (a page's units in it: the first holding a token owns it)
  */
-function documentOf(views, units, kindOf) {
+function documentOf(views, units, kindOf, { vote = false } = {}) {
   const pages = views.length
   // each page's columns: two where four long lines stand in each half, one where four cross the middle, else as most
   // pages have them; the lines are the units' (running heads, page numbers and floats' texts are no text block's)
@@ -248,7 +281,11 @@ function documentOf(views, units, kindOf) {
   for (let p = 1; p <= pages; p++) {
     const P = page[p]
     if (!P) continue
-    P.two = P.L >= COLUMN_LINES && P.R >= COLUMN_LINES ? true : P.F >= COLUMN_LINES ? false : null
+    // (by a vote, columnsOfTokens': two where the lines in either half are as many as those across, one where the lines across
+    // are as many as the others; a page of displays has lines in both halves, and a table's page some across)
+    P.two = vote
+      ? P.L >= COLUMN_LINES && P.R >= COLUMN_LINES && P.L + P.R >= P.F ? true : P.F > 0 && P.F >= P.L + P.R ? false : null
+      : P.L >= COLUMN_LINES && P.R >= COLUMN_LINES ? true : P.F >= COLUMN_LINES ? false : null
     if (P.two === true) twos++
     else if (P.two === false) ones++
   }

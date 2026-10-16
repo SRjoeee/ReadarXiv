@@ -41,7 +41,7 @@ const VIEW = [0, 0, 612, 792]
 /**
  * A paper of `pages` pages: a running head (the same words at one baseline) from page 2 on, a page number at the foot, a line's
  * number in the left margin beside each line of text, arXiv's stamp on page 1 (20 units, at the margin), and ten lines of the
- * text's own words a page (one column from 72 to 540, or two: 72 to 300 and 312 to 540)
+ * text's own words a page, a word's space less than its size (one column from 72 to 540, or two: 72 to 300 and 312 to 540)
  */
 function paper(pages: number, { two = false } = {}) {
   let n = 0
@@ -53,7 +53,7 @@ function paper(pages: number, { two = false } = {}) {
     for (const [x0, x1] of two ? [[72, 300], [312, 540]] : [[72, 540]]) {
       for (let l = 0; l < 10; l++) {
         if (x0 === 72) items.push(item(String(l + 1), 40, 700 - 12 * l, { size: 7 }))
-        items.push(...line(Array.from({ length: two ? 4 : 8 }, () => word(n++)), 700 - 12 * l, x0, x1))
+        items.push(...line(Array.from({ length: two ? 9 : 19 }, () => word(n++)), 700 - 12 * l, x0, x1))
       }
     }
     items.push(item(String(p), 300, 40))
@@ -149,9 +149,9 @@ describe('columnsOfTokens: the pages\' columns from the tokens alone (rule 4)', 
     const want = plain(columnsOfTokens(doc, views))
     expect(plain(columnsOfTokens(doc, views))).toBe(want)
     expect(plain(columnsOfTokens(doc.map(t => ({ ...t, item: null })), views))).toBe(want)
-    // the frame given is the one read: with every token inside, the stamp's line is the page's widest
-    const all = columnsOfTokens(doc, views, () => true) as { x0: number }[]
-    expect((all[1] as { x0: number }).x0).toBeLessThan(72)
+    // the frame given is the one read: with no token inside, no line, and no edge
+    const none = columnsOfTokens(doc, views, () => false) as { x0: number }[]
+    expect(Number.isFinite((none[1] as { x0: number }).x0)).toBe(false)
     expect(((columnsOfTokens(doc, views) as { x0: number }[])[1] as { x0: number }).x0).toBeCloseTo(72)
   })
 
@@ -162,6 +162,97 @@ describe('columnsOfTokens: the pages\' columns from the tokens alone (rule 4)', 
     const want = layoutOf(doc, [VIEW, VIEW], anchors) as unknown as { page: unknown[] }
     const got = layoutOf(doc, [VIEW, VIEW], anchors, undefined, { columns: () => columnsOfTokens(doc, [VIEW, VIEW]) }) as unknown as { page: unknown[] }
     expect(plain(got.page)).toBe(plain(want.page))
+  })
+})
+
+// ---------------------------------------------------------------- the shapes the text's lines failed on (the corpus, 2026-10-17)
+// Each a page the first rule 4 (every line of the tokens in the frame) read wrongly, drawn on the 124 papers' pages: its far push
+// at a column edge that is no text's. The text's lines are now cut at a space wider than the taller token and kept with four body
+// words that are 60 % of their tokens, and a page's columns are a vote
+/** cells at given places on a baseline: [text, x] */
+const cells = (y: number, cs: [string, number][], size = 10): Item[] => cs.map(([t, x], k) => item(t, x, y, { size, eol: k === cs.length - 1 }))
+/** n lines of prose from y down, 12 apart, each from x0 to x1, a word's space less than its size: words no other line has */
+let fresh = 20_000
+const prose = (y: number, n: number, x0: number, x1: number, words = 19): Item[] => {
+  const out: Item[] = []
+  for (let l = 0; l < n; l++) out.push(...line(Array.from({ length: words }, () => word(fresh++)), y - 12 * l, x0, x1))
+  return out
+}
+const docOf = (pages: Item[][]) => tokenizeDocument(pages.map((items, i) => ({ page: i + 1, items, styles: {} })))
+/** the far push a token gets under the text's columns (layoutOf, no unit placed) */
+const pushedR = (doc: DocToken[], views: number[][], k: number) => (layoutOf(doc, views, new Map(), undefined, { columns: () => columnsOfTokens(doc, views) }) as unknown as { tok: { r: Float32Array } }).tok.r[k]
+type Page = { two: boolean; cols: Record<string, { x0: number; x1: number }> }
+
+describe('columnsOfTokens on the shapes the plain text lines failed on', () => {
+  it('text past the column\'s edge, broken by wide spaces (a figure\'s clipped text), does not make the edge', () => {
+    // two columns, the text to 540 on the right; on page 5, 12 lines read 24 past it, 8 of them broken by a formula's space
+    const pages = [1, 2, 3, 4, 5, 6].map(p => {
+      const items = [...prose(700, 30, 72, 300, 9)]
+      if (p !== 5) items.push(...prose(700, 30, 312, 540, 9))
+      else {
+        items.push(...prose(700, 18, 312, 540, 9))
+        for (let l = 0; l < 12; l++) {
+          const y = 484 - 12 * l, ws = Array.from({ length: 9 }, () => word(fresh++))
+          items.push(...(l < 8 ? [...line(ws.slice(0, 7), y, 312, 470), ...line(ws.slice(7), y, 520, 564)] : line(ws, y, 312, 564)))
+        }
+      }
+      // a proof's box at the right column's edge, set apart after a line's last word
+      if (p === 3) items.push(item('end', 312, 330), item('∎', 535, 330, { width: 5, eol: true }))
+      return items
+    })
+    const doc = docOf(pages), views = pages.map(() => VIEW)
+    const cols = columnsOfTokens(doc, views) as (Page | null)[]
+    expect((cols[3] as Page).two).toBe(true)
+    expect((cols[3] as Page).cols.R?.x1).toBeCloseTo(540)
+    expect((cols[5] as Page).cols.R?.x1).toBeCloseTo(540)
+    const k = doc.findIndex(t => t.t === 'end')
+    expect(doc[k]?.far).toBe(540)
+    expect(pushedR(doc, views, k)).toBe(540)
+  })
+
+  it('a page of tables alone: its rows of numbers do not make the text\'s edge', () => {
+    // one column, the text to 540; page 2 all table (80 rows, the number column to 520), page 4 three lines of text and a box
+    const rows: Item[] = []
+    for (let r = 0; r < 80; r++) rows.push(...cells(760 - 9 * r, [['total', 72], ['12.5', 300], ['34.5', 400], ['56.5', 500]]))
+    const pages = [prose(700, 30, 72, 540), rows, prose(700, 30, 72, 540), [...prose(700, 3, 72, 540), item('end', 72, 640), item('∎', 535, 640, { width: 5, eol: true })]]
+    const doc = docOf(pages), views = pages.map(() => VIEW)
+    const cols = columnsOfTokens(doc, views) as (Page | null)[]
+    expect((cols[4] as Page).cols.F?.x1).toBeCloseTo(540)
+    const k = doc.findIndex(t => t.t === 'end')
+    expect(doc[k]?.far).toBe(540)
+    expect(pushedR(doc, views, k)).toBe(540)
+  })
+
+  it('two tables side by side on a page of one column are no two columns', () => {
+    // one column; page 2 three lines of text across, then a table in each half of the page, its number column to 295; in one row
+    // of the left one a shorter number and a mark set apart at that column's end
+    const tables: Item[] = []
+    for (let r = 0; r < 20; r++) tables.push(...cells(640 - 12 * r, r === 5 ? [['method', 72], ['12.5', 200], ['3', 260]] : [['method', 72], ['12.5', 200], ['34.5', 275]]), ...(r === 5 ? [item('†', 290, 640 - 12 * r, { width: 5 })] : []))
+    for (let r = 0; r < 20; r++) tables.push(...cells(640 - 12 * r, [['model', 320], ['56.5', 450], ['78.5', 520]]))
+    const pages = [prose(700, 30, 72, 540), [...prose(700, 3, 72, 540), ...tables], prose(700, 30, 72, 540)]
+    const doc = docOf(pages), views = pages.map(() => VIEW)
+    const cols = columnsOfTokens(doc, views) as (Page | null)[]
+    expect((cols[2] as Page).two).toBe(false)
+    const k = doc.findIndex(t => t.far === 295)
+    expect(k).toBeGreaterThanOrEqual(0)
+    expect(pushedR(doc, views, k)).not.toBe(295)
+  })
+
+  it('a page of displays, their rows in each half, is no two columns', () => {
+    // one column; page 2 four lines of text across, then six rows of a display in each half, 185 across (single letters and
+    // digits, as a display's symbols read: half of them letters), one of the left's shorter, its full stop set apart at the end
+    const display: Item[] = []
+    const glyphs = 'a1b2c3d4e5f6g7h8'
+    const row = (y: number, x0: number, n = 16) => [...glyphs.slice(0, n)].map((t, i) => item(t, x0 + 12 * i, y))
+    for (let r = 0; r < 6; r++) display.push(...(r === 2 ? [...row(640 - 12 * r, 100, 12), item('.', 280, 640 - 12 * r, { width: 5 })] : row(640 - 12 * r, 100)))
+    for (let r = 0; r < 6; r++) display.push(...row(640 - 12 * r, 340))
+    const pages = [prose(700, 30, 72, 540), [...prose(700, 4, 72, 540), ...display], prose(700, 30, 72, 540)]
+    const doc = docOf(pages), views = pages.map(() => VIEW)
+    const cols = columnsOfTokens(doc, views) as (Page | null)[]
+    expect((cols[2] as Page).two).toBe(false)
+    const k = doc.findIndex(t => t.far === 285)
+    expect(k).toBeGreaterThanOrEqual(0)
+    expect(pushedR(doc, views, k)).not.toBe(285)
   })
 })
 
@@ -177,7 +268,7 @@ function bounded(pages: number) {
     const items: Item[] = []
     if (p > 1) items.push(...line(['A', 'Study', 'of', 'Things'], 760, 250, 362))
     for (let l = 0; l < 10; l++) {
-      const ws = Array.from({ length: 8 }, () => word(n++))
+      const ws = Array.from({ length: 19 }, () => word(n++))
       words.push(...ws)
       items.push(...line(ws, 700 - 12 * l))
     }

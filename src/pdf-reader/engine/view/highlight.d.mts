@@ -17,8 +17,9 @@ export declare function bySentence(kind: string | undefined): boolean
 export type ColumnRule = (views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined) => unknown[]
 export declare const pageColumns: ColumnRule
 /** each page's columns from the side's tokens alone (rule 4 of the page stream, made at step T): pageColumns' arithmetic over the
- *  lines of the tokens inside the frame (`inFrame`, anchors.mjs frameOfTokens' by default), the same structure; a function of
- *  `doc` and `views` alone. As layoutOf's `columns` (the far push alone): `() => columnsOfTokens(doc, views)` */
+ *  text's lines — the tokens inside the frame (`inFrame`, anchors.mjs frameOfTokens' by default), cut also at a space wider than
+ *  the taller token, kept with 4 body words and 60 % of their tokens body words — the columns by a vote; the same structure; a
+ *  function of `doc` and `views` alone. As layoutOf's `columns` (the far push alone): `() => columnsOfTokens(doc, views)` */
 export declare function columnsOfTokens(doc: readonly DocToken[], views: readonly (readonly number[] | null)[], inFrame?: (t: DocToken) => boolean): unknown[]
 export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined, o?: { edges?: { l: ArrayLike<number>; r: ArrayLike<number> } | null; columns?: ColumnRule | null }): Layout
 /** a page's tokens as a layout keeps them (format.mjs ReadLeftPart's table): ink across, baseline, size, the glyphs' top and foot */
