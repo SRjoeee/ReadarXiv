@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
-import { CARRY_MIN, fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
+import { CARRY_MIN, fontName, GIVEN_UP_MAX, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -614,15 +614,27 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT, UNIT_FLAG.FRONT, 0])
   })
 
-  it("each page's operator list is waited for OPS_MS alone: no bound of the paper's makes a page dark for the pages before it", async () => {
-    const pages = Array.from({ length: 8 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'never' }))
+  it("each page's operator list is waited for OPS_MS alone, and a paper's pages given up on are GIVEN_UP_MAX at most: every page after is dark, unread", async () => {
+    expect(GIVEN_UP_MAX).toBe(8)
+    // twelve pages whose lists never come: the first eight each waited for OPS_MS and given up, the four after never asked
+    // (a count, no clock of the paper's: a paper of 10,000 such pages costs 8 times OPS_MS)
+    const pages = Array.from({ length: 12 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'never' }))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     const asked: number[] = []
     const out = make({ pages, marked: pages.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked)
-    await vi.advanceTimersByTimeAsync(9 * OPS_MS)
+    await vi.advanceTimersByTimeAsync(13 * OPS_MS)
     const done = await out
     expect(asked).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
-    expect(done.stats.timedOut).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(done.stats.timedOut).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    // a capped page is given up on too: seven pages past OPS_CAP and a slow one, then the rest unread
+    const mixed = pages.map((p, j): Page => ({ ...p, ops: j < 7 ? 'capped' : 'never' }))
+    const asked2: number[] = []
+    const out2 = make({ pages: mixed, marked: mixed.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked2)
+    await vi.advanceTimersByTimeAsync(6 * OPS_MS)
+    const done2 = await out2
+    expect(asked2).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(done2.stats.capped).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(done2.stats.timedOut).toEqual([8, 9, 10, 11, 12])
   })
 
   it('the pinned PDF.js has the cancel the maker gives a page up with; without it the maker warns once and goes on', async () => {
@@ -1354,6 +1366,18 @@ describe('makeLayout over arXiv\'s text read once (the prepare\'s step T, layout
     expect(calls[0]).toBeGreaterThan(0)
   })
 
+  it('the page stream places a range\'s units alone: it takes no frame by default (pageFrame over them is not the whole\'s), a TypeError', async () => {
+    const marks = await marksOf(DISPLAY)
+    const base = { units: DISPLAY.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const first = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages) })
+    if ('refused' in first && first.refused) throw new Error('refused')
+    for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+    await first.whole()
+    const m = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages), columnEdges: first.edges() })
+    if ('refused' in m && m.refused) throw new Error('refused')
+    await expect(m.byStream()).rejects.toThrow(/frame/)
+  })
+
   it('a text of another page count than the document is the caller\'s mistake', async () => {
     const marks = await marksOf(DISPLAY)
     const text = await readArxivText(arxivOf([...DISPLAY.pages, ...DISPLAY.pages]))
@@ -1568,18 +1592,22 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
 
   it('under rule 3 (and rule 1) a page at a time and the passes in another order make the whole run\'s file', async () => {
     for (const rules of [{ edges: 'earlier' }, { frame: 'tokens', edges: 'earlier' }]) {
-      const first = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages) })
+      // (today's frame the whole run's, given to the stream; rule 1's the text's, made by each)
+      let frameOf: unknown = null
+      const whole1 = rules.frame ? {} : { frame: ((d: never, ms: never) => { frameOf = pageFrame(d, ms); return frameOf }) as never }
+      const given = () => (rules.frame ? {} : { frame: (() => frameOf) as never })
+      const first = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), ...whole1 })
       if ('refused' in first) throw new Error('refused')
       for (let p = 1; p <= first.pages; p++) await first.readPage(p)
       const whole = await first.whole()
       if (!('file' in whole)) throw new Error('refused')
-      const m = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true })
+      const m = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true, ...given() })
       if ('refused' in m) throw new Error('refused')
       const st = await m.byStream()
       if ('refused' in st) throw new Error('refused')
       const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
       expect(rows(mergeLayout([st.layout() as never]) as never)).toEqual(rows(whole.file as never))
-      const t = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true })
+      const t = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true, ...given() })
       if ('refused' in t) throw new Error('refused')
       for (let p = 1; p <= t.pages; p++) await t.readPage(p)
       const rand = seeded(seeds++)

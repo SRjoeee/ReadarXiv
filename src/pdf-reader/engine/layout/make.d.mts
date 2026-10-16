@@ -21,8 +21,9 @@ export interface MakeInput {
   text?: ArxivText | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
-  /** the pages' frame's rule the maker's anchors are placed under (a whole run's, given; else the rule set's: anchors.mjs
-   *  pageFrame, today's, or frameOfTokens) */
+  /** the pages' frame's rule the maker's anchors are placed under, given (a whole run's); else the rule set's: frameOfTokens
+   *  (rule 1), or pageFrame (today's) for the whole paper alone: the page stream (makerOf's stream, byStream) needs one, the
+   *  whole document's, given or rule 1's (a TypeError without) */
   frame?: FrameRule | null
   /** the page stream's rules (RULES), today's each where not given: the maker reads `frame` and `edges` */
   rules?: Partial<PageStreamRules> | null
@@ -54,8 +55,8 @@ export interface LayoutStats {
    *  the LOST pieces outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) */
   ph: { marked: number; found: number; empty: number; lost: number; joined: number; outside: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number; heads: [found: number, empty: number] }
   /** the matcher's matches by kind (the same character, another Unicode at the place, loosely on the line, by a vote),
-   *  those it rejected off their run, its work, and the pieces past its bound */
-  match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number }
+   *  those it rejected off their run, its work, the pieces past its bound, and the most work a page cost (`most`) */
+  match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number; most: number }
   /** babel's names: the occurrences the marked original marks, those the file locates (and of them those leading a unit:
    *  RUN_IN), and why each other is not */
   names: { marked: number; located: number; runIn: number; why: Record<string, number> }
@@ -66,7 +67,7 @@ export interface LayoutStats {
   baselines: { first: number[]; last: number[] }
   /** pages past OPS_CAP, or past GLYPHS_PAGE glyphs */
   capped: number[]
-  /** pages whose operator list did not come within OPS_MS, or failed: no ink */
+  /** pages whose operator list did not come within OPS_MS, or failed, or was never asked (past GIVEN_UP_MAX): no ink */
   timedOut: number[]
   /** pages whose lines cost the carry more than its bound (carry.mjs `over`): no ink */
   over: number[]
@@ -100,7 +101,7 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     carrying(): 'carry' | null
     /** each marked page's lines [carried, total], once carried */
     pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
-    /** the maker a page at a time (after carrying(), the columns' edges given); with `marked` (markedPages' head, the marks
+    /** the maker a page at a time (after carrying(), the columns' edges and the whole document's frame rule given); with `marked` (markedPages' head, the marks
      *  marksOfHead's), the marked original's pages given a page at a time too (`markedPage`, `markedEnd`), carrying() not run */
     stream(o?: { marked?: MarkedHead | null }): MakerStream
     /** carrying() (or the marked original's pages beside arXiv's, `marked`: its head and the events after it), then stream()
@@ -142,5 +143,7 @@ export declare function rulesOf(rules?: Partial<PageStreamRules> | null): PageSt
 export declare const CARRY_MIN: number
 /** a page's operator list waited for at most, ms */
 export declare const OPS_MS: number
+/** a paper's pages given up on (timed out past OPS_MS, or capped) at most: every later page is dark unread, `timedOut` */
+export declare const GIVEN_UP_MAX: number
 /** a font's PostScript name as the file holds it: 1 to 128 printable ASCII characters */
 export declare function fontName(name: unknown): string

@@ -92,6 +92,16 @@ describe('leftOfPart: a part\'s left is the whole left\'s, its units placed from
     compare(doc, UNITS, {}, partTarget)
   })
 
+  it('a part\'s left needs the whole document\'s frame rule: none given is a TypeError, never pageFrame over the part\'s units', () => {
+    // (pageFrame reads the located units it is given: over a part's alone it is another frame, and the walks it bounds
+    // could take other tokens than the whole paper's)
+    const reach = leftReach(doc, UNITS, { bounds, floating })
+    expect(() => leftOfPart(doc, UNITS, { bounds, floating } as never, [1, 1], reach)).toThrow(TypeError)
+    let frame: ReturnType<typeof pageFrame> | null = null
+    anchorUnits(doc, UNITS, { bounds, floating, frame: (d, ms) => (frame = pageFrame(d, ms)) })
+    expect(leftOfPart(doc, UNITS, { bounds, floating, frame: () => frame as ReturnType<typeof pageFrame> }, [1, 1], reach).anchors.size).toBeGreaterThan(0)
+  })
+
   it('where each unit may reach, before any is matched: its bounds; its window between its marked neighbours; a float\'s match too', () => {
     const reach = leftReach(doc, UNITS, { bounds, floating, floatMatch: floatMatches(doc, UNITS, floating) })
     expect(reach[1]).toEqual([[at('alpha'), at('mu')]])

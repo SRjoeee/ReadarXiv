@@ -339,13 +339,22 @@ function sameWord(doc, byPage, c, start, ours) {
   return (a !== null && a === ours) || (b !== null && b === theirs) || (a !== null && a === b) ? doc[k].t : ours
 }
 
+/** the pages of a paper whose operator lists are given up on, at most: past OPS_MS, or capped (ink.mjs OPS_CAP, GLYPHS_PAGE).
+ *  Past it every later page is dark unread (stats.timedOut), so that a paper whose every page stalls costs GIVEN_UP_MAX
+ *  times OPS_MS, not its pages' (10,000 pages of 10 s each: 28 hours, and as many parses left running where PDF.js cannot
+ *  cancel one). A count, no clock of the paper's: which pages are dark hangs on the pages before them alone, as each page's
+ *  own verdict does. The corpus's 3,036 pages hold none over a cap, the heaviest 146,115 operations; no paper has more than
+ *  three pages of 50,000 operations or one of 100,000 (2608.12606, 2608.18626, 2608.27728, 2608.08880), each read in under
+ *  3 s on a laptop */
+export const GIVEN_UP_MAX = 8
+
 /** stats before anything is read */
 function blank(units) {
   return {
     lines: { carried: 0, total: 0, held: 0 },
     units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
     ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
-    match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
+    match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0, most: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
     capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
@@ -370,7 +379,8 @@ async function gzipSize(bytes) {
  * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
- * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's). `plans`:
+ * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's, where none is given; the page
+ * stream, which places a range's units alone, needs one given, the whole document's). `plans`:
  * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
  * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again (null where they
  * fail, `plansFailed` why: the add-on's loss, never the file's). A page whose ink
@@ -416,9 +426,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // (the pages whose ink is never read: dark by their text alone; and those whose ink was read, whether or not it is held still)
   const unread = new Set(dark), inked = new Uint8Array(pages + 1)
   const doc = read.tokens
-  // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of arXiv's text, made once
+  // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of arXiv's text, made once; today's
+  // (pageFrame) the whole paper's alone, none for the page stream (its ranges are placed from their own units)
   let tokensFrame = null
-  const frame = frameGiven ?? (rules.frame === 'tokens' ? () => (tokensFrame ??= frameOfTokens(doc)) : pageFrame)
+  const frame = frameGiven ?? (rules.frame === 'tokens' ? () => (tokensFrame ??= frameOfTokens(doc)) : null)
   const viewAt = p => views.slice(4 * (p - 1), 4 * p)
   stats.ms.text = now() - t
   // ---------------------------------------------------------------- arXiv's ink: glyphs and graphics, page by page
@@ -442,6 +453,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   async function inkOf(p) {
     if (unread.has(p)) return
+    // (past GIVEN_UP_MAX pages given up on, the page is dark unread: its operator list is never asked)
+    if (stats.timedOut.length + stats.capped.length >= GIVEN_UP_MAX) { stats.timedOut.push(p); dark.add(p); return }
     // (the page its text was read from: PDF.js keeps each page's proxy)
     let page = null
     try { page = await arxiv.getPage(p) } catch {}
@@ -593,7 +606,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
     linesTeX = new Map(marks.lines)
-    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame })
+    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame })
     stats.ms.anchor = now() - t
   }
 
@@ -1754,6 +1767,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    */
   function stream({ marked: mh = null } = {}) {
     if (!edges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`)')
+    // (its ranges are placed from their own units: pageFrame over them is not the whole paper's frame, so none is assumed)
+    if (!frame) throw new TypeError('the page stream needs the whole document\'s frame rule given (`frame`)')
+    // (its ranges are placed from their own units: pageFrame over them is not the whole paper's frame, so none is assumed)
+    if (!frame) throw new TypeError('the page stream needs the whole document\'s frame rule given (`frame`)')
     const floating = id => FLOATING.has(units[id]?.kind ?? '')
     const n = units.length
     // ---- the marked original: whole (carrying() done), or as its pages come, its names first (the head's)

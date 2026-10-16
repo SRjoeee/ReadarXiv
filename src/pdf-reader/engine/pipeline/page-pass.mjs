@@ -336,8 +336,12 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       if (part === null) return
       closed.push([part.from, part.to, X])
       await tell(ctx, state, cutter, part, layout, lines)
-      // (what the parts after it read of the units it told is K's alone; its pages' names and plans are done)
-      if (st) st.tell(K.slice(0, (part.to === N ? K.length - 1 : F[part.to]) + 1).map(e => e.id), part.to)
+      // (what the parts after it read of the units it told is K's alone; its pages' names and plans are done; the plans' totals
+      // are counted before they go)
+      if (st) {
+        for (const [pg, q] of st.plans ?? []) if (pg <= part.to) { planned.pages++; if (q.remove) planned.dirty++ }
+        st.tell(K.slice(0, (part.to === N ? K.length - 1 : F[part.to]) + 1).map(e => e.id), part.to)
+      }
     }
   }
   /** what part from `a` reads is final (the conditions above), its target as the cutter makes it */
@@ -373,6 +377,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   // the maker's calls alone caught: a throw of its own is the layout's, from then on (design §3): the parts not yet told cut
   // with none, the parts told standing; nothing is told twice
   let failed = null
+  const planned = { pages: 0, dirty: 0 }
   const making = async f => {
     if (failed || !st) return
     try { await f() } catch (e) {
@@ -403,7 +408,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   }
   if (!headTold) return { refused: 'anchors', why: 'the anchors located no unit on arXiv\'s PDF' }
   const layoutStats = failed ? { refused: 'failed', why: failed, ...(maker ? { stats: maker.stats } : {}) } : carry ? { refused: carry, stats: maker.stats } : st ? { stats: maker.stats, ...(st.plansFailed() ? { plansFailed: st.plansFailed() } : {}) } : ctx.made
-  return { through: N, count: cutter.parts.length, stats: { left: left.stats, layout: layoutStats, plans: st?.plans ? { pages: st.plans.size, dirty: [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, closed } }
+  return { through: N, count: cutter.parts.length, stats: { left: left.stats, layout: layoutStats, plans: st?.plans ? { pages: planned.pages + st.plans.size, dirty: planned.dirty + [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, closed } }
 }
 
 /** stage 1's oracle drive: arXiv's pages in order, each read and its stream told */

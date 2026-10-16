@@ -12,7 +12,7 @@ export interface ConvergeRecord { drafts: number; marked: number; settled: boole
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read
  * (readMarkProbe, readInkProbe, readInkTexts), then the layout-marked original compiled (originalFiles(paper, { lines:
  * true, layout: LAYOUT_CLASSES, switches, inkless })) and read once (readMarked over a document of its PDF and its last
- * pass's log, with the units and OPS): `marks` in memory, as the maker takes them (marksFile writes them as the lab's file),
+ * pass's log, with the units and OPS): `marks` in memory, as the maker takes them (marksFile writes them as the lab's file, or refuses where they pass the file's bounds),
  * and `unitMarks`, the unit marks the left is anchored by (null: by its text alone). `ms` times each stage. A stage that fails
  * gives { refused } naming it, with the times of the stages that ran: the probe where its compile gave no log, the
  * compile where the original's gave no PDF, the marks where `open` or the reading failed. `open` is called once, on the

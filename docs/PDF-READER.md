@@ -1335,15 +1335,20 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   `CARRY_MIN`, and its own reader taking it (`readPart` against the head, the chunks and the parts before); a part refused
   either way is its pages with no layout (C1.4: drawn from the left), never the paper's refusal. Every bound a part holds is the
   part's (`LINES_ALL`, `PAGE_TEXT_ALL`, `NAMES_MAX`, `FONTS_MAX`, the part's caps): an over-bound part is shortened, a first page
-  alone past them has no layout, nothing is truncated. A page whose operator list passes `OPS_CAP` operations or `GLYPHS_PAGE`
-  glyphs, or does not come within `OPS_MS`, is dark (its units stay the original's), that page alone.
+  alone past them has no layout, nothing is truncated. A page whose operator list passes `OPS_CAP` operations, `GLYPHS_PAGE`
+  glyphs or `BOXES_CAP` boxes (one operation's placements and glyphs set turned counted within it), or does not come within
+  `OPS_MS`, is dark (its units stay the original's), that page alone; past `GIVEN_UP_MAX` (8) such pages, every later page is
+  dark unread (its operator list never asked: a count, not a clock, so which pages are dark hangs on the pages before them).
 - **Today's rules.** The maker's frame, the columns' edges and the far-push columns read the whole document, so every part is
   cut once the whole is made, and the parts are `cutBundle`'s of the same whole, byte for byte. With the oracle (`oracle {
   frame, columnEdges }`, a whole run's, for tests and the lab) the maker is made a page at a time and each part cut as soon as
   everything it reads is final: the same parts, cut early (`stats.closed`).
 - **Memory, a part's ceiling.** What the pass holds of arXiv's ink is each page's glyphs, `GLYPHS_PAGE` (100,000) at most, and
-  its boxes, one an operation, `OPS_CAP` (150,000) at most, about 22 MiB at the very most a page (the corpus's densest page
-  holds 9,332 glyphs, about 1 MiB; its busiest 146,115 operations); a hostile page past either is dark
+  its boxes, one an operation, `OPS_CAP` (150,000) at most, about 22 MiB a page (the corpus's densest page holds 9,332 glyphs,
+  about 1 MiB; its busiest 146,115 operations; its most boxes 22,101); one operation may place more (an image repeat's or
+  group's placements, which PDF.js's list for `getOperatorList` never holds, and a run of glyphs set turned, a box each), and
+  `BOXES_CAP` (1,000,000, some 140 bytes a box in all) bounds them, the very most of a hostile page; a page past any of these
+  is dark
   (`tests/pdf-reader/layout-hostile.test.ts`, on the lite worker, which decodes no image's pixels). Today the ink of every page
   is held until the cut (2307.16209's 147 pages: 17 MiB of typed arrays). Made a page at a time, a page's ink is let go once
   its tasks have run and its plan is made, so the ink held is that of the pages decided and not yet done (on 2307.16209 up to
@@ -1356,6 +1361,9 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   parses to 800,804 operations in 0.44 s: in 10 s some 18 million, gigabytes, before the page is capped). The marked
   original's ink (its owned glyphs, `markedPages`) is read with no glyph cap and no `OPS_MS`, and the marked original is as
   hostile as its author's source. What is held is the pages' sum: the whole paper's today, up to the whole of it made a page
-  at a time while a float's match keeps the early pages undecided. And no bound of the engine's is the paper's time: a paper
-  may take its pages times `OPS_MS` and its pages times `MATCH_PAGE_WORK`; the host's job clock is the only paper-wide bound.
+  at a time while a float's match keeps the early pages undecided. And no bound of the engine's is the paper's time: what it
+  bounds across a paper are counts (`GIVEN_UP_MAX` pages given up on, so a paper whose every page stalls waits 8 times
+  `OPS_MS`; the carrier's 20 million steps, counted in page order), while a paper of pages that each answer within `OPS_MS`
+  may take their sum, and its matching its pages times `MATCH_PAGE_WORK` (a piece's search given up at its page's bound); the
+  host's job clock is the only paper-wide bound of time.
 

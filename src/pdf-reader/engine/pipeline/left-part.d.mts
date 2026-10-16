@@ -5,8 +5,9 @@ export interface LeftPartOptions { bounds?: Map<string, [number, number]>; float
 /** where each unit may reach, as token intervals [lo, hi] (at most two), by the units' order, before any is matched */
 export declare function leftReach(doc: readonly DocToken[], units: readonly UnitText[], o: Omit<LeftPartOptions, 'frame' | 'minCoverage'>): [number, number][][]
 /** the anchors of the units whose first rectangle stands on pages a to b, as anchorUnits over the whole paper places them under
- *  the frame given; `read` the units (indices) the place was made of */
-export declare function leftOfPart(doc: DocToken[], units: UnitText[], o: LeftPartOptions, pages: [number, number], reach?: [number, number][][]): { anchors: Map<number, Anchor>; read: number[]; before: number[] }
+ *  the frame given: required, the whole document's frame rule (pageFrame over the part's units is another frame; a TypeError
+ *  where none is given); `read` the units (indices) the place was made of */
+export declare function leftOfPart(doc: DocToken[], units: UnitText[], o: LeftPartOptions & { frame: FrameRule }, pages: [number, number], reach?: [number, number][][]): { anchors: Map<number, Anchor>; read: number[]; before: number[] }
 /** what the left of pages a to b reads: the units that may touch them (C), theirs (V1), and V1's (V2): unit indices, and
  *  their pages as a flag a page */
 export declare function partSets(doc: readonly DocToken[], units: readonly UnitText[], pages: [number, number], reach: [number, number][][]): Record<'C' | 'V1' | 'V2', { units: number[]; pages: Uint8Array }>
@@ -30,4 +31,4 @@ export interface RangedAnchors {
    *  settled without one; past the last page every unit left settled */
   run(onAnchor: (id: number, anchor: Anchor) => void, onSettle: (u: number) => void): void
 }
-export declare function rangedAnchors(doc: readonly DocToken[], units: readonly UnitText[], o?: Omit<LeftPartOptions, 'bounds' | 'minCoverage'> & { boundsKnown?: (() => boolean) | null }): RangedAnchors
+export declare function rangedAnchors(doc: readonly DocToken[], units: readonly UnitText[], o: Omit<LeftPartOptions, 'bounds' | 'minCoverage' | 'frame'> & { frame: FrameRule; boundsKnown?: (() => boolean) | null }): RangedAnchors

@@ -1,6 +1,7 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, MARKS_SCHEMA, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
+import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
+import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, MARKS_SCHEMA, marksFile, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layoutMarksOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 
@@ -177,6 +178,27 @@ describe('layoutMarksOfPaper', () => {
     const open = vi.fn(async (_pdf: Uint8Array): Promise<{ doc: unknown; close(): Promise<void> }> => { throw new Error('not a PDF') })
     expect(await layoutMarksOfPaper(paperOf(), { compile: c.compile, open, OPS })).toEqual({ refused: 'marks', ms: expect.any(Object) })
   })
+
+  it('writes the lab\'s file of the marks in memory as they are, or none: never a file of other marks than the maker is given', async () => {
+    // a page of 300,001 words, one past the file's WORDS_MAX (300,000): the marks in memory keep them (bounded a page, not by
+    // the file), and the file of them is refused, not written as a file its parser refuses or reads as other marks
+    const items = Array.from({ length: 300_001 }, (_, i) => ({ str: `w${i}`, transform: [1, 0, 0, 1, 72 + (i % 50) * 9, 700 - Math.floor(i / 50) * 0.1], width: 8, height: 1, hasEOL: true, fontName: 'f' }))
+    const { doc } = fakeDoc({ getPage: async () => ({ view: [0, 0, 612, 792], rotate: 0, commonObjs: { get: () => null }, getTextContent: async () => ({ items, styles: {} }), getOperatorList: async () => ({ fnArray: [], argsArray: [] }) }) })
+    const c = compiler([{ ok: true, log: PROBE_LOG }, original()])
+    const made = await layoutMarksOfPaper(paperOf(), { compile: c.compile, open: opener(doc).open, OPS })
+    if (!('marks' in made)) throw new Error(`refused: ${made.refused}`)
+    expect(made.marks.words.length).toBe(300_001)
+    expect(() => marksFile(made.marks)).toThrow(LayoutRefusal)
+    // past MARKS_VALUES by owned pieces within OWNED_ALL (13 of 19,000 glyphs beside 200,000 tokens): not their own ink cut
+    // from the last pieces (a layout of that file would leave pieces out that the maker matched), but no file
+    const small = await layoutMarksOfPaper(paperOf(), { compile: compiler([{ ok: true, log: PROBE_LOG }, original()]).compile, open: opener().open, OPS })
+    if (!('marks' in small)) throw new Error(`refused: ${small.refused}`)
+    const glyphs = (k: number) => [`p0.${10 + k}a`, 0, 19_000, ...Array.from({ length: 19_000 }, () => [1, 72, 700, 10, 0]).flat()]
+    const heavy = { ...small.marks, words: ['w'], chars: ['x'], tokens: Array.from({ length: 200_000 }, () => [1, 72, 700, 5, 5, 0]).flat(), owned: Array.from({ length: 13 }, (_, k) => glyphs(k)) } as typeof small.marks
+    expect(() => marksFile(heavy)).toThrow(LayoutRefusal)
+    // within every bound: the file, which parsed is the marks
+    expect(parseLayoutMarks(enc(marksFile(small.marks)))).toEqual(small.marks)
+  }, 60_000)
 
   it('does not lose the marks to a close that fails, and never throws', async () => {
     const c = compiler([{ ok: true, log: PROBE_LOG }, original()])
