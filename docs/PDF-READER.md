@@ -1351,4 +1351,11 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   rows are held until its part is written, a told unit's as the few numbers K reads of it, and the parts are the host's once
   told. Besides, per paper: both PDFs' tokens and the carrier, the PDF bytes, PDF.js's state of the document (its fonts and
   images), the remover's.
+- **What these do not bound.** The caps apply to what the pass keeps of a page, after PDF.js has parsed it: PDF.js's own
+  operator list for the page being read is bounded by `OPS_MS` alone (a page of `q 1 0 0 1 72 72 cm /Im1 Do Q` 200,000 times
+  parses to 800,804 operations in 0.44 s: in 10 s some 18 million, gigabytes, before the page is capped). The marked
+  original's ink (its owned glyphs, `markedPages`) is read with no glyph cap and no `OPS_MS`, and the marked original is as
+  hostile as its author's source. What is held is the pages' sum: the whole paper's today, up to the whole of it made a page
+  at a time while a float's match keeps the early pages undecided. And no bound of the engine's is the paper's time: a paper
+  may take its pages times `OPS_MS` and its pages times `MATCH_PAGE_WORK`; the host's job clock is the only paper-wide bound.
 

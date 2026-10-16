@@ -1432,3 +1432,33 @@ describe('makerOf: the passes as tasks, in any order the whole order allows', ()
     }
   })
 })
+
+describe('makerOf, a page at a time: no unit decided before its match is final (the stage-1 review\'s B1)', () => {
+  // a figure's text box is a paragraph by kind, in the text by floating(), and TeX sets it after the text that follows it in
+  // the source: the units' order is not their bounds' order, so a unit's window between its bounded neighbours may miss it
+  it('two figures\' text boxes set after the paragraphs that follow them: each anchored once its marks are carried', async () => {
+    // five pages of ten lines; unit i's text on page at[i] (units 1 and 2 the boxes, set past units 3 and 4)
+    const at = [1, 4, 5, 2, 3]
+    const lines = (page: number): Run[] => Array.from({ length: 10 }, (_, j) => ({ s: words(100 * page + 10 * j, 10), x: 72, y: 700 - 12 * j }))
+    const marks: Mark[] = []
+    at.forEach((p, i) => { const ls = lines(p); marks.push([`${i}s`, p, 72, 700], [`${i}e`, p, endOf(ls[9] as Run), 592]) })
+    const { file } = await made({ pages: [1, 2, 3, 4, 5].map(p => ({ runs: lines(p) })), marks, units: at.map(p => unit('para', [text(words(100 * p, 100))])) })
+    expect(file.units.map(u => u[0])).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('a text box at the head of a page inside a paragraph running past it: the paragraph\'s first page waits for its marks', async () => {
+    // four pages of twenty lines; unit 1 (the box) at page 3's head, inside unit 2, which runs from page 2's middle to page 4
+    const L = (p: number, j: number): Run => ({ s: words(1000 * p + 10 * j, 10), x: 72, y: 700 - 12 * j })
+    const span = (p: number, a: number, b: number) => Array.from({ length: b - a }, (_, k) => L(p, a + k))
+    const pieces: [number, number, number][][] = [[[1, 0, 20], [2, 0, 10]], [[3, 0, 12]], [[2, 10, 20], [3, 12, 20], [4, 0, 5]], [[4, 5, 20]]]
+    const marks: Mark[] = []
+    pieces.forEach((ps, i) => {
+      const [p0, a0] = ps[0] as [number, number, number], [p1, , b1] = ps.at(-1) as [number, number, number]
+      const last = L(p1, b1 - 1)
+      marks.push([`${i}s`, p0, 72, L(p0, a0).y], [`${i}e`, p1, endOf(last), last.y])
+    })
+    const units = pieces.map(ps => unit('para', [text(ps.flatMap(([p, a, b]) => span(p, a, b).map(r => r.s)).join(' '))]))
+    const { file } = await made({ pages: [1, 2, 3, 4].map(p => ({ runs: span(p, 0, 20) })), marks, units })
+    expect(file.units.map(u => u[0])).toEqual([0, 1, 2, 3])
+  })
+})

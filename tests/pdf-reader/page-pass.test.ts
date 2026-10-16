@@ -97,6 +97,47 @@ describe('layerOfPaper: the page pass', () => {
     })
   }
 
+  it('under the oracle, a part is cut before the last page is read (an early close, not one flush at the end)', async () => {
+    const w = worldOf()
+    const capture: Record<string, unknown> = {}
+    await passOf(w, { capture: capture as never })
+    const got = await passOf(w, { oracle: capture as never })
+    const closed = (got.r as { stats: { closed: [number, number, number][] } }).stats.closed
+    expect(closed[0]![2]).toBeLessThan(w.pages.length)
+  })
+
+  it('a sink that throws ends the pass in both modes: nothing told twice, the throw the host\'s (the stage-1 review\'s B2)', async () => {
+    const w = worldOf()
+    const capture: Record<string, unknown> = {}
+    await passOf(w, { capture: capture as never })
+    for (const o of [{}, { oracle: capture }]) {
+      const told: string[] = []
+      let parts = 0
+      const ran = await passOf(w, {
+        ...o,
+        onHead: () => { told.push('head') }, onLeft: (l: Written & { page: number }) => { told.push(`left ${l.page}`) },
+        onPart: (p: Written & { from: number }) => { told.push(`part ${p.from}`); if (++parts === 1) throw new Error('the host cancels') },
+      } as never).catch(e => e)
+      expect(ran).toBeInstanceOf(Error)
+      expect(String(ran)).toMatch(/cancels/)
+      expect(told).toEqual(['head', 'left 1', 'part 1'])
+    }
+  })
+
+  it('a throw of the maker\'s after a part is told: the parts told stand, the rest cut with no layout, nothing told twice', async () => {
+    const w = worldOf()
+    const capture: Record<string, unknown> = {}
+    const want = await passOf(w, { capture: capture as never })
+    // (arXiv's page 3, its ink asked for: the maker's own call throws)
+    const doc = arxivOf(w.pages)
+    const broken = { ...doc, getPage: async (n: number) => { const p = await doc.getPage(n); return n === 3 ? { ...p, get rotate(): number { throw new Error('a broken page') } } : p } }
+    const got = await passOf(w, { oracle: capture as never, arxiv: { doc: broken } as never })
+    expect(got.told).toEqual(['head', 'left 1', 'part 1', 'left 2', 'left 3', 'part 2'])
+    expect(got.notes).toEqual([{ pages: [1, 1], layout: 'kept', lines: [10, 10] }, { pages: [2, 3], layout: 'none', lines: [20, 20] }])
+    expect(shas(got.parts.slice(0, 1))).toEqual(shas(want.parts.slice(0, 1)))
+    expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'failed', why: 'a broken page' } } })
+  })
+
   it('a part whose marked pages carry less than CARRY_MIN of their lines has no layout; the others keep theirs, read in order', async () => {
     // three of page 1's ten lines set otherwise on arXiv's: 70 % of part 1's lines, 90 % of the paper's (the maker makes the file)
     const w = worldOf((p, j) => p === 1 && j >= 7)

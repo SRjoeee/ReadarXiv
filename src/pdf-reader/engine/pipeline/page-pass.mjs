@@ -110,14 +110,17 @@ export async function layerOfPaper({ paper, source, marks, arxiv, OPS, pdfjs, ba
 
   const ctx = { paper, N, base, image, remove, pdfjs, onHead, onLeft, onPart, verdicts, side, bundle, made }
   if (maker && oracle) {
+    // (the maker's throws are the layout's, its own calls' alone: a sink's, the reader's or the cutter's go on as themselves)
+    let st = null
     try {
       const refused = maker.carrying()
-      if (!refused) return await streamed(ctx, maker, marks.marks.marking.lineskip ?? null)
-      ctx.made = { refused, stats: maker.stats }
+      if (refused) ctx.made = { refused, stats: maker.stats }
+      else st = maker.stream()
     } catch (e) {
       if (isMemoryError(e)) throw e
       ctx.made = { refused: 'failed', why: why(e) }
     }
+    if (st) return streamed(ctx, maker, st, marks.marks.marking.lineskip ?? null)
     return cutWhole(ctx, null)
   }
   // (stage 1: the whole made first)
@@ -208,9 +211,8 @@ async function cutWhole(ctx, r) {
  * on those pages, and (3) every member of the table groups of those entries is settled. K, F and the need bounds are then
  * those of the whole paper on what the part reads (cutBundle's)
  */
-async function streamed(ctx, maker, lineskip) {
+async function streamed(ctx, maker, st, lineskip) {
   const { paper, N, base, image, remove, pdfjs, side, bundle } = ctx
-  const st = maker.stream()
   const lines = maker.pageLines()
   const units = await writeUnitChunks({ paper, units: bundle })
   const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip })
@@ -290,13 +292,34 @@ async function streamed(ctx, maker, lineskip) {
     for (const g of groups) for (const i of members.get(g) ?? []) if (!st.settled(i)) return false
     return true
   }
-  for (let p = 1; p <= N; p++) {
-    await maker.readPage(p)
-    X = p
-    st.pageRead(p)
-    await close(false)
+  // the maker's calls alone caught: a throw of its own is the layout's, from then on (design §3): the parts not yet told cut
+  // with none, the parts told standing; nothing is told twice
+  let failed = null
+  const making = async f => {
+    try { await f() } catch (e) {
+      if (isMemoryError(e)) throw e
+      failed = why(e)
+    }
   }
-  st.finish()
-  await close(true)
-  return { through: N, count: cutter.parts.length, stats: { left: side.stats, layout: { stats: maker.stats, ...(st.plansFailed() ? { plansFailed: st.plansFailed() } : {}) }, plans: st.plans ? { pages: st.plans.size, dirty: [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, closed } }
+  for (let p = 1; p <= N && !failed; p++) {
+    await making(async () => { await maker.readPage(p); X = p; st.pageRead(p) })
+    if (!failed) await close(false)
+  }
+  if (!failed) await making(() => st.finish())
+  if (!failed) await close(true)
+  else {
+    // (K as the settled units and the left give it: the prefix told stands, the rest is left entries and units settled)
+    const layout = st.layout()
+    const whole = { paper: { ...paper, pages: N }, units: bundle, left: { pages: side.pages, units: side.units }, layout }
+    const { K, F } = wholeFrontier(whole)
+    const known = { K, F, NB: needBound(K, N), layout: null }
+    for (;;) {
+      state.read = null
+      const part = await cutter.next(known)
+      if (part === null) break
+      closed.push([part.from, part.to, X])
+      await tell(ctx, state, cutter, part, null, lines)
+    }
+  }
+  return { through: N, count: cutter.parts.length, stats: { left: side.stats, layout: failed ? { refused: 'failed', why: failed, stats: maker.stats } : { stats: maker.stats, ...(st.plansFailed() ? { plansFailed: st.plansFailed() } : {}) }, plans: st.plans ? { pages: st.plans.size, dirty: [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, closed } }
 }

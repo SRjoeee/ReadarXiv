@@ -1697,16 +1697,19 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     }
     carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); anchors = new Map()
     const byPage = pageIndex(doc), withWords = markWords(ours, unitMarks)
-    const bounds = new Map(), marked = new Uint8Array(n), waits = Array.from({ length: pages + 1 }, () => [])
+    const bounds = new Map(), marked = new Uint8Array(n), waits = Array.from({ length: pages + 1 }, () => []), ownHigh = new Int32Array(n)
     let markedCount = 0
+    // (and the least of those pages: where a unit's bounds would begin, its marks carried)
+    const ownLow = new Int32Array(n)
     {
       const wait = new Int32Array(n)
       for (const [k] of withWords) {
         const i = Number(k.slice(0, -1)), name = nameOf.get(k), m = dropped.has(name) ? null : at.get(name)
         const c = m ? carriedPage(m.page, m.x, m.y) : null
-        if (c !== null) wait[i] = Math.max(wait[i], c)
+        if (c !== null) { wait[i] = Math.max(wait[i], c); ownLow[i] = ownLow[i] ? Math.min(ownLow[i], c) : c }
       }
       for (let i = 0; i < n; i++) waits[wait[i]].push(i)
+      for (let i = 0; i < n; i++) ownHigh[i] = wait[i]
     }
     const markUnit = i => {
       const ks = [`${i}s`, `${i}e`].filter(k => withWords.has(k)), raw = new Map()
@@ -1789,30 +1792,58 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const [x, f] of [[2, phOf], [4, heldOf], [5, outsideOf], [6, labelOf]]) insert({ key: [x, i], pages: pg, run: of(f) })
       insert({ key: [7, i], pages: pg, run: () => { of(one => { rowsOf(one); fileRowsOf(one); freeUnit(one) })(); settledU[i] = 1 } })
     }
-    /** whether unit u's match is the whole paper's (matchUnits'): its marks carried; where it has no bounds, every unit between
-     *  it and its nearest bounded neighbour in the text either side carried too (anchors.mjs neighbours) */
-    const matchFinal = u => {
-      if (!marked[u]) return false
-      if (bounds.has(String(u))) return true
-      const inText = j => bounds.has(String(j)) && !floating(j)
-      for (let j = u - 1; j >= 0 && !inText(j); j--) if (!marked[j]) return false
-      for (let j = u + 1; j < n && !inText(j); j++) if (!marked[j]) return false
-      return true
-    }
     const lastPage = doc.length ? doc[doc.length - 1].page : 0
+    // each page's first token and last (the tokens are in page order): a page's tokens, as a reach's interval
+    const firstTok = new Int32Array(lastPage + 2).fill(doc.length), lastTok = new Int32Array(lastPage + 2).fill(-1)
+    doc.forEach((t, k) => { if (k < firstTok[t.page]) firstTok[t.page] = k; lastTok[t.page] = k })
+    for (let p = lastPage; p >= 1; p--) if (firstTok[p] === doc.length) firstTok[p] = firstTok[p + 1] ?? doc.length
+    for (let p = 1; p <= lastPage; p++) if (lastTok[p] < 0) lastTok[p] = lastTok[p - 1] ?? -1
+    const inText = j => bounds.has(String(j)) && !floating(j)
+    /**
+     * Each unit's match final (matchUnits' is the whole paper's): its marks carried and, where it has no bounds, every unit
+     * between it and its nearest bounded neighbour in the text either side (anchors.mjs neighbours) carried too. And the
+     * reach of every unit whose match is not (design §1.2, conservative): its own marks' pages (where its bounds would be) and
+     * the window it would have unbounded between the neighbours it may yet have — from the earliest end any unit still to be
+     * carried between it and its last bounded neighbour may get to the latest start any on its other side may (a figure's text
+     * box, a paragraph by kind, is set after the text that follows it: the units' order is not their bounds' order) — with its
+     * MARGIN, and a float's match over the whole document (leftReach's). A unit whose match is final reaches what leftReach says
+     */
+    const finalOf = () => {
+      const fin = new Uint8Array(n), out = leftReach(doc, texts, { bounds, floating, floatMatch })
+      const N = doc.length, MARGIN = 100
+      const pendBefore = new Uint8Array(n), pendAfter = new Uint8Array(n), lo = new Int32Array(n), hi = new Int32Array(n)
+      for (let u = 0, pend = 0, low = -1; u < n; u++) {
+        pendBefore[u] = pend; lo[u] = low
+        if (inText(u)) { pend = 0; low = bounds.get(String(u))[1] } else if (!marked[u]) { pend = 1; if (!floating(u) && ownLow[u]) low = Math.min(low, firstTok[ownLow[u]]) }
+      }
+      for (let u = n - 1, pend = 0, high = N; u >= 0; u--) {
+        pendAfter[u] = pend; hi[u] = high
+        if (inText(u)) { pend = 0; high = bounds.get(String(u))[0] } else if (!marked[u]) { pend = 1; if (!floating(u) && ownHigh[u]) high = Math.max(high, lastTok[ownHigh[u]]) }
+      }
+      for (let u = 0; u < n; u++) {
+        fin[u] = marked[u] && (bounds.has(String(u)) || (!pendBefore[u] && !pendAfter[u])) ? 1 : 0
+        if (fin[u]) continue
+        const more = [[Math.max(0, lo[u] + 1 - MARGIN), Math.min(N - 1, hi[u] - 1 + MARGIN)]]
+        if (!marked[u] && ownLow[u]) more.push([firstTok[ownLow[u]], lastTok[ownHigh[u]]])
+        out[u] = [...out[u], ...more.filter(([a, b]) => a <= b)]
+      }
+      return { fin, reach: out }
+    }
     /** the ranges anchored from `am` on, a page each, while every unit a range reads has its match final (and the paper's
-     *  bounds are known to be some, matchUnits' switch): its units first framed on its page anchored, every unit that may
-     *  reach no later page decided */
+     *  bounds are known to be some, matchUnits' switch): its units first framed on its page anchored, every unit whose match
+     *  is final and which may reach no later page decided. A unit placed before the page anchored and not decided is a
+     *  defect of the readiness: thrown */
     const anchorRanges = () => {
       while (am <= lastPage) {
         if (!(bounds.size > 0 || markedCount === n)) return
-        const reach = leftReach(doc, texts, { bounds, floating, floatMatch })
-        if (!partSets(doc, texts, [am, am], reach).V2.units.every(matchFinal)) return
-        const got = leftOfPart(doc, texts, { bounds, floating, floatMatch, frame }, [am, am], reach).anchors
-        for (const [id, an] of got) anchors.set(id, an)
-        for (const id of got.keys()) decide(id)
+        const { fin, reach } = finalOf()
+        if (!partSets(doc, texts, [am, am], reach).V2.units.every(u => fin[u])) return
+        const got = leftOfPart(doc, texts, { bounds, floating, floatMatch, frame }, [am, am], reach)
+        for (const id of got.before) if (!decided[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
+        for (const [id, an] of got.anchors) anchors.set(id, an)
+        for (const id of got.anchors.keys()) decide(id)
         am++
-        reach.forEach((iv, u) => { if (!decided[u] && iv.every(([, hi]) => doc[hi].page < am)) decide(u) })
+        reach.forEach((iv, u) => { if (!decided[u] && fin[u] && iv.every(([, hi]) => doc[hi].page < am)) decide(u) })
       }
       for (let u = 0; u < n; u++) decide(u)
     }

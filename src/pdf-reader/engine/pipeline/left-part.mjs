@@ -56,20 +56,22 @@ export function leftReach(doc, units, { bounds, floating = () => false, floatMat
  * The left of the part of pages a to b: Map id → Anchor of the units whose first rectangle stands on a page from a to b,
  * each as anchorUnits over the whole paper places it, under the frame `frame` gives (the whole document's, until a frame
  * of arXiv's text alone is the rule). `reach` leftReach's (made once for every part). Also the units the place was made of
- * (`read`, indices into `units`), for the record
+ * (`read`, indices into `units`), for the record, and the ids of those placed with their first rectangle before page a
+ * (`before`: a part's that came before, or, cut a range at a time, a unit its ranges passed over)
  */
 export function leftOfPart(doc, units, { bounds, floating = () => false, floatMatch = null, frame = pageFrame, minCoverage = 0.6 }, [a, b], reach = leftReach(doc, units, { bounds, floating, floatMatch })) {
   const { C, V2 } = partSets(doc, units, [a, b], reach)
   const read = V2.units
   const found = matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(read) })
   const placed = placeUnits(doc, read.map(u => units[u]), read.map(u => found[u]), { frame })
-  const out = new Map()
+  const out = new Map(), before = []
   for (const u of C.units) {
     const { id } = units[u], anchor = placed.get(id)
     const first = anchor?.rects?.[0]?.page
     if (anchor && first >= a && first <= b) out.set(id, anchor)
+    else if (anchor && first < a) before.push(id)
   }
-  return { anchors: out, read }
+  return { anchors: out, read, before }
 }
 
 /**
