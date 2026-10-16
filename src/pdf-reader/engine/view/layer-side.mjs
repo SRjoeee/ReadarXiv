@@ -158,8 +158,9 @@ export function createLayerSide(view, o) {
     if (f.refused) return refuse(f.refused)
     if (!f.index) return
     if (!index) indexed(f.index)
-    // the original open before the first open: the extension's base check digests the bytes it holds (the web's is bound by
-    // its route). Once a door is open, a dropped original stops nothing: the door reads the composed document
+    // the original open before the first open: the places are its pages, and the extension's base check reads its bytes or
+    // its end (the web's is bound by its route). Once a door is open, a dropped original stops nothing: the door reads the
+    // composed document
     if (!V.left.doc() && !counts.opens) return
     if (bound === null) {
       state = 'opening'

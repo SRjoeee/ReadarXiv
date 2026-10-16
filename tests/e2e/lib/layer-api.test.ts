@@ -380,6 +380,24 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
     expect('body' in get(api, BUNDLE_PATH) && (get(api, BUNDLE_PATH) as { body: Uint8Array }).body).toEqual(sample.bundle)
   })
 
+  it('names the original the layer is bound to beside the catalog and each object, the tag the original answers with (the MD5 of its bytes); unbound, none', async () => {
+    const api = layerApi({ sample, layer4 })
+    const tag = `"${createHash('md5').update(sample.pdf).digest('hex')}"`
+    expect(api.etag).toBe(tag)
+    expect(get(api, PATH)).toMatchObject({ status: 200, headers: { 'x-axt-base-etag': tag } })
+    for (const sha of layer4.objects.keys()) expect(get(api, `${PATH}/o/${sha}`)).toMatchObject({ headers: { 'x-axt-base-etag': tag } })
+    const original = `/api/v1/original/${sample.segment}`
+    expect(get(api, original)).toMatchObject({ status: 200, headers: { etag: tag } })
+    expect(get(api, original, { range: 'bytes=0-9' })).toMatchObject({ status: 206, headers: { etag: tag } })
+    // the layer is made over the PDF the stand-in serves
+    const { readHead } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+    const headRef = layer4.refs.head as { sha256: string; bytes: number }
+    const head = await readHead(layer4.objects.get(headRef.sha256) as Uint8Array, { ref: { kind: 'head', ...headRef } as never })
+    expect([head.base.bytes, head.base.sha256]).toEqual([sample.pdf.length, createHash('sha256').update(sample.pdf).digest('hex')])
+    const unbound = layerApi({ sample, layer4, bound: false })
+    expect('x-axt-base-etag' in (get(unbound, PATH) as { headers: Record<string, string> }).headers).toBe(false)
+  })
+
   it('serves each object by its whole digest, immutable; a digest it does not hold, another paper or another tag 404 not-prepared', () => {
     const api = layerApi({ sample, layer4 })
     for (const [sha, bytes] of layer4.objects) {

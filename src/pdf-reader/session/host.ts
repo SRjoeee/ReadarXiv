@@ -20,7 +20,7 @@ import { createSurfaceConfig, type Landing } from '@/shared/surface-config'
 import { firstReadTime } from '@/ui/first-read'
 import { localeStale } from '@/ui/locale-stale'
 import { R } from '@/ui/strings'
-import { createReaderView, type DocumentTask, type ReaderHost, type ReaderView, type ViewPrefs } from '../engine/view.mjs'
+import { createReaderView, type DocumentTask, type ReaderView, type ViewPrefs } from '../engine/view.mjs'
 import { READER_API, readerAddresses } from '../addresses'
 import { fromView, type Session } from '../controller'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, pdfjsLib } from '../pdfjs'
@@ -165,6 +165,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
       api: addresses.api, ...(io.fetch ? { fetch: io.fetch } : {}), store,
       engine: () => (io.engine ?? openEngine)({ paper }),
       openPdf: (data, options) => pdfjsLib.getDocument({ ...options, data }) as unknown as DocumentTask,
+      pdfjs: pdfjsLib, originalUrl: addresses.pdf,
       readingPage: () => readingPage,
       mayPrepare: () => { if (prepareAsked) return false; prepareAsked = true; return true },
       emit(e) {

@@ -3,7 +3,8 @@
 // its translation from the service the settings name (Microsoft's, the default). For each paper:
 //   - the open: the original on screen, then the first page laid on the right; every unit with its row (the run's end);
 //   - whether the layer was ready at the edge (a catalog at the first look) or prepared on the way (202s, a prepare);
-//   - whether arXiv's bytes were the layer's base, or our copy was fetched and shown;
+//   - whether arXiv's bytes were the layer's base, or our copy was fetched and shown; what the composed document read (`basis`:
+//     the left's bytes, or our copy by ranges where the ends decided before arXiv's whole file was in);
 //   - the translation: rows a second, the time to the whole paper;
 //   - the main thread's long tasks while the layer worked, and the JS heap and the renderer's resident memory at rest after it.
 // A reading, not an assertion: it prints one JSON line a paper and a summary. Every request is the extension's own (the
@@ -61,7 +62,7 @@ try {
     })
     const prepared = m.phases.some(p => p[0] === 'preparing')
     const rowsPerSecond = m.run && done && firstLaid ? Math.round((m.run.rows / Math.max(1, (done - (opened ?? 0)) / 1000)) * 10) / 10 : null
-    const row = { paper, pages: m.pages, opened, firstLaid, done, prepared, ours: m.run?.ours ?? null, rows: m.run?.rows ?? null, total: m.run?.total ?? null, lost: m.run?.lost ?? null, rowsPerSecond, longest: Math.max(0, ...m.long), longTasks: m.long.length, heapMB: m.heapMB, rendererMB: rendererRss('layer-extension'), side: m.side, phases: m.phases, unavailable: m.unavailable }
+    const row = { paper, pages: m.pages, opened, firstLaid, done, prepared, ours: m.run?.ours ?? null, basis: m.run?.basis ?? null, rows: m.run?.rows ?? null, total: m.run?.total ?? null, lost: m.run?.lost ?? null, rowsPerSecond, longest: Math.max(0, ...m.long), longTasks: m.long.length, heapMB: m.heapMB, rendererMB: rendererRss('layer-extension'), side: m.side, phases: m.phases, unavailable: m.unavailable }
     rows.push(row)
     console.log(JSON.stringify(row))
     await page.close()

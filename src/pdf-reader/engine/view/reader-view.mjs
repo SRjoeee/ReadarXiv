@@ -789,6 +789,7 @@ export function createReaderView(host) {
     showOriginal,
     dropOriginal,
     originalData: () => (current?.doc ? current.doc.getData() : null),
+    originalLoaded: () => (current?.doc ? current.doc.getDownloadInfo().then(() => {}) : null),
     setDisplay,
     setSync,
     setNarrow,

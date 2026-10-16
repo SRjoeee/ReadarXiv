@@ -78,6 +78,9 @@ export interface ReaderView {
   dropOriginal(task: DocumentTask): boolean
   /** the original's bytes, read through its document (a ranged one reads the rest); null with none */
   originalData(): Promise<Uint8Array> | null
+  /** the original's bytes all in, as its document loads them of itself (nothing asked for them, unlike originalData, which
+   *  asks for every byte not yet in: one more read of what a stream is still bringing); null with none */
+  originalLoaded(): Promise<void> | null
   /** the display applied; never written to the host's preferences */
   setDisplay(d: Display): void
   setSync(on: boolean): void

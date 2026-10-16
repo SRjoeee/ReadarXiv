@@ -71,6 +71,18 @@ describe('B1: each answer within its bounds and of its status\'s shape', () => {
     await expect(lookLayer(API, PAPER, { fetch: recording(() => big).f })).rejects.toThrow(/past/)
   })
 
+  it('the catalog\'s and an object\'s answers name the original their layer is bound to: a strong entity-tag, else none', async () => {
+    const { bytes } = await catalogBytes()
+    const tag = '"5bf5251f12d575b58ced19bb84971986"'
+    const look = await lookLayer(API, PAPER, { fetch: recording(() => new Response(bytes as BodyInit, { headers: { 'x-axt-base-etag': tag } })).f })
+    expect(look.kind === 'catalog' && look.bound).toBe(tag)
+    for (const [header, want] of [[tag, tag], [`W/${tag}`, null], ['5bf5251f', null], [null, null]] as const) {
+      const got = await fetchObject(API, PAPER, { sha256: 'a'.repeat(64), bytes: 3 }, { fetch: recording(() => new Response(new Uint8Array(3), { headers: header ? { 'x-axt-base-etag': header } : {} })).f })
+      expect(got.bound, String(header)).toBe(want)
+      expect(got.bytes.length).toBe(3)
+    }
+  })
+
   it('a 202: its place, stage, progress, wait and the objects made so far, each rebuilt from its known fields; another shape is none of v1\'s', async () => {
     const layer = { units: [ref('units', 'a', { from: 0, to: 9, extra: 'x' })], head: ref('head', 'b'), parts: [ref('part', 'c', { from: 1, to: 2, prev: null })] }
     const a = await lookLayer(API, PAPER, { fetch: recording(() => json(202, { position: 4, stage: 'units', progress: 0.25, retryAfterMs: 2500, layer, more: true })).f })

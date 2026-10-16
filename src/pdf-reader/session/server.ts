@@ -6,10 +6,14 @@
 //   GET  /api/v1/layer/<id>v<n>/<CTAG4>             200 the catalog | 202 Preparing | 404 { why } | 429 { retryAfterMs }
 //   POST /api/v1/layer/<id>v<n>/<CTAG4>/prepare     (application/json, body {}) 202 Preparing | 200 { ready: true } | 404 | 429
 //   GET  /api/v1/layer/<id>v<n>/<CTAG4>/o/<sha256>  200 the object, immutable
-//   GET  /api/v1/original/<id>v<n>                  200 application/pdf
+//   GET  /api/v1/original/<id>v<n>                  200 application/pdf, or 206 for a range (ranges.ts)
+//
+// The catalog's and each object's answer name the original the layer was made over (BASE_ETAG_HEADER: our copy's entity-tag,
+// which the server binds to the head's base as it commits the layer, the web's worker/src/layer/base.ts), so that our copy
+// can be read by ranges, every answer held to that tag and the base's length, with no whole read hashed first (ranges.ts).
 //
 // Only the paper's id and version leave the machine, in the address: no query, no body but `{}` on the prepare, no header of
-// ours but that one's type, no cookie and no referrer (the reader's address holds more than the paper). Every answer is read
+// ours but that one's type (and a range's), no cookie and no referrer (the reader's address holds more than the paper). Every answer is read
 // within its bounds before anything parses it: the catalog by the engine's own reader (its cap, values and shape, the paper
 // the one asked), the others within a few kilobytes and by their shape here; an object within the bytes its ref names; our
 // copy within the base's bytes and checked against its digest. A 5xx or a network that fails is asked once more after a
@@ -31,13 +35,20 @@ export const SMALL_CAP = 4096
 export const OBJECT_MARGIN = 1024
 /** how long after a 5xx or a network failure an answer is asked once more */
 export const RETRY_MS = 1000
+/** the header of the catalog's and the objects' answers that names the original the layer is bound to: our copy's entity-tag */
+export const BASE_ETAG_HEADER = 'x-axt-base-etag'
+/** a strong entity-tag (RFC 9110 §8.8.3), as R2 tags an object: the only kind a range is held to */
+export const STRONG_ETAG = /^"[\x21\x23-\x7e]{1,200}"$/
+/** the original an answer names its layer bound to (BASE_ETAG_HEADER), a strong entity-tag; null for none, or another kind */
+export const boundOf = (r: Response): string | null => { const t = r.headers.get(BASE_ETAG_HEADER); return t !== null && STRONG_ETAG.test(t) ? t : null }
 
 export interface Paper { id: string; version: number }
 /** the prepare under way: its place in the queue, its stage, how far it has come (0 to 1), when to ask again, and the objects
  *  made so far (BUNDLE 4: the chunks, the head, the parts in page order) */
 export interface Preparing { position: number | null; stage: string | null; progress: number | null; retryAfterMs: number; layer: { units: TellRef[]; head: TellRef | null; parts: TellRef[] } | null }
 export type LayerLook =
-  | { kind: 'catalog'; catalog: ReadCatalog; bytes: Uint8Array }
+  /** `bound`: the original its route names the layer bound to (boundOf), null where it names none */
+  | { kind: 'catalog'; catalog: ReadCatalog; bytes: Uint8Array; bound: string | null }
   | { kind: 'preparing'; preparing: Preparing }
   | { kind: 'none'; why: LayerWhy }
   | { kind: 'refused'; retryAfterMs: number }
@@ -63,7 +74,7 @@ export const objectPath = (api: string, p: Paper, sha256: string) => `${layerPat
 export const originalPath = (api: string, p: Paper) => `${api}${API_ROOT}original/${paperSegment(p)}`
 
 /** every request's options: no credentials, no referrer, nothing of ours but what the request is */
-const REQUEST: RequestInit = { credentials: 'omit', referrerPolicy: 'no-referrer' }
+export const REQUEST: Readonly<RequestInit> = { credentials: 'omit', referrerPolicy: 'no-referrer' }
 const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
   if (signal?.aborted) return reject(signal.reason)
   const t = setTimeout(() => { signal?.removeEventListener('abort', stop); resolve() }, ms)
@@ -164,7 +175,7 @@ export async function lookLayer(api: string, p: Paper, o: { fetch?: typeof fetch
   const r = await fetched(o.fetch ?? fetch, layerPath(api, p), { signal: o.signal ?? null })
   if (r.status === 200) {
     const bytes = await bodyWithin(r, CATALOG_CAP)
-    try { return { kind: 'catalog', catalog: await readCatalog(bytes, { paper: { id: p.id, version: p.version } }), bytes } } catch (e) { throw new LayerUnreachable(`its catalog: ${messageOf(e)}`) }
+    try { return { kind: 'catalog', catalog: await readCatalog(bytes, { paper: { id: p.id, version: p.version } }), bytes, bound: boundOf(r) } } catch (e) { throw new LayerUnreachable(`its catalog: ${messageOf(e)}`) }
   }
   if (r.status === 202) return { kind: 'preparing', preparing: preparingOf(await jsonOf(r, PREPARING_CAP)) }
   if (r.status === 404 || r.status === 429) return missOf(r.status, await jsonOf(r, SMALL_CAP))
@@ -185,12 +196,13 @@ export async function askPrepare(api: string, p: Paper, o: { fetch?: typeof fetc
   throw new LayerUnreachable(`the prepare's route answered ${r.status}`)
 }
 /** an object of the layer by its ref, no more of it read than its ref's bytes and OBJECT_MARGIN (the side's readers check
- *  its digest, values and shape); a ref that is no ref refused before any request, any answer but a 200 refused */
-export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256' | 'bytes'>, o: { fetch?: typeof fetch; signal?: AbortSignal } = {}): Promise<Uint8Array> {
+ *  its digest, values and shape), and the original its answer names it bound to (boundOf); a ref that is no ref refused
+ *  before any request, any answer but a 200 refused */
+export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256' | 'bytes'>, o: { fetch?: typeof fetch; signal?: AbortSignal } = {}): Promise<{ bytes: Uint8Array; bound: string | null }> {
   if (typeof ref?.sha256 !== 'string' || !DIGEST.test(ref.sha256) || !Number.isSafeInteger(ref.bytes) || ref.bytes < 1) throw new TypeError(`the layer's object: not a ref (${String(ref?.sha256).slice(0, 80)})`)
   const r = await fetched(o.fetch ?? fetch, objectPath(api, p, ref.sha256), { signal: o.signal ?? null })
   if (r.status !== 200) { void r.body?.cancel().catch(() => {}); throw new Error(`the layer's object ${ref.sha256}: ${r.status}`) }
-  return bodyWithin(r, ref.bytes + OBJECT_MARGIN)
+  return { bytes: await bodyWithin(r, ref.bytes + OBJECT_MARGIN), bound: boundOf(r) }
 }
 /** our copy of arXiv's PDF of the version, exactly the base's bytes and digest; any other answer, or other bytes, refused */
 export async function fetchOriginal(api: string, p: Paper, base: { bytes: number; sha256: string }, o: { fetch?: typeof fetch; signal?: AbortSignal } = {}): Promise<Uint8Array> {

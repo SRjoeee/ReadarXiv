@@ -98,15 +98,22 @@ const arxiv = (route, url) => {
   if (m[1] === 'abs') return route.fulfill({ status: 200, contentType: 'text/html', body: ABSTRACT_PAGE })
   // (the sample has neither an HTML version nor a source: an answer arXiv gives for a paper it has none of)
   if (m[1] !== 'pdf') return route.fulfill({ status: 404, contentType: 'text/plain', body: 'none' })
+  // (a range is answered as arXiv answers it, a 206 of the bytes asked: the reader's base check reads the end of the file so)
+  const pdf = bytes => {
+    const r = /^bytes=(\d+)-(\d+)$/.exec(route.request().headers().range ?? '')
+    if (!r) return route.fulfill({ status: 200, contentType: 'application/pdf', body: Buffer.from(bytes) })
+    const begin = Number(r[1]), end = Math.min(Number(r[2]) + 1, bytes.length)
+    return route.fulfill({ status: 206, contentType: 'application/pdf', headers: { 'content-range': `bytes ${begin}-${end - 1}/${bytes.length}`, 'accept-ranges': 'bytes' }, body: Buffer.from(bytes.subarray(begin, end)) })
+  }
   switch (pdfAnswer) {
-    case 'ok': return route.fulfill({ status: 200, contentType: 'application/pdf', body: Buffer.from(sample.pdf) })
+    case 'ok': return pdf(sample.pdf)
     case 'not found': return route.fulfill({ status: 404, contentType: 'text/plain', body: 'not found' })
     case 'unavailable': return route.fulfill({ status: 503, contentType: 'text/plain', body: 'unavailable' })
     case 'not a PDF': return route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><p>This is no PDF</p>' })
     case 'cut short': return route.fulfill({ status: 200, contentType: 'application/pdf', body: Buffer.from(sample.pdf.subarray(0, 5000)) })
     case 'reset': return route.abort('connectionreset')
     // the PDF as arXiv may serve it rebuilt: other bytes than the layer's base (a comment after its end)
-    case 'other': return route.fulfill({ status: 200, contentType: 'application/pdf', body: Buffer.concat([Buffer.from(sample.pdf), Buffer.from('\n% rebuilt\n')]) })
+    case 'other': return pdf(Buffer.concat([Buffer.from(sample.pdf), Buffer.from('\n% rebuilt\n')]))
     default: throw new Error(`no such answer: ${pdfAnswer}`)
   }
 }
@@ -876,18 +883,22 @@ try {
     }
     api.set({ layer: mode.ready() })
     await api.release()
-    // arXiv's bytes that are not the layer's base: our copy fetched, checked and shown, and the layer laid over it
+    // arXiv's bytes that are not the layer's base: our copy read by ranges, each held to the tag the layer names, shown on
+    // the left, and the layer laid over it
     pdfAnswer = 'other'
+    const copyAt = `/api/v1/original/${sample.segment}`, before = api.requests.length
     const other = await openReader({ mode: 'bilingual' })
     const laidOver = await other.waitForFunction(() => /\[echo\]/.test(document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer svg')?.textContent ?? ''), null, { timeout: 60_000 }).then(() => true, () => false)
-    const ours = await other.evaluate(() => window.__reader.run?.probe().ours ?? null)
-    const copyAsked = api.requests.some(r => r.path === `/api/v1/original/${sample.segment}`)
-    check('arXiv\'s bytes not the base: our copy fetched and shown on the left, the layer laid over it', laidOver && ours === true && copyAsked, `laid ${laidOver}, our copy shown ${ours}, asked ${copyAsked}`)
+    const ran = await other.evaluate(() => window.__reader.run?.probe() ?? null)
+    const copies = api.requests.slice(before).filter(r => r.path === copyAt)
+    const byRanges = copies.length > 0 && copies.every(r => typeof r.headers.range === 'string' && r.answered === 206)
+    check('arXiv\'s bytes not the base: our copy read by ranges and shown on the left, the layer laid over it', laidOver && ran?.ours === true && ran?.basis === 'ranged' && byRanges, `laid ${laidOver}, ${JSON.stringify({ ours: ran?.ours, basis: ran?.basis, bound: ran?.bound })}, ${copies.length} reads of our copy, ${copies.filter(r => r.answered === 206).length} by range`)
     await other.close()
     pdfAnswer = 'ok'
     const same = await openReader({ mode: 'bilingual' })
     await same.waitForFunction(() => /\[echo\]/.test(document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer svg')?.textContent ?? ''), null, { timeout: 60_000 }).catch(() => undefined)
-    control('arXiv\'s bytes that are the base fetch no copy of ours (the same assertion, on the sample as arXiv serves it)', { ok: (await same.evaluate(() => window.__reader.run?.probe().ours ?? null)) === true, detail: 'our copy not shown' })
+    const sameRun = await same.evaluate(() => window.__reader.run?.probe() ?? null)
+    control('arXiv\'s bytes that are the base fetch no copy of ours (the same assertion, on the sample as arXiv serves it)', { ok: sameRun?.ours === true && sameRun?.basis === 'ranged', detail: `${JSON.stringify(sameRun && { ours: sameRun.ours, basis: sameRun.basis })}: our copy not shown, the left's bytes read` })
     await same.close()
   }
 

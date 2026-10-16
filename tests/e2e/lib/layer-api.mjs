@@ -19,6 +19,10 @@
 //   GET  /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>  200 an object of the layer, by its whole digest (immutable) | 404
 //                                               { why: 'not-prepared' } for a digest it does not hold
 //
+// BUNDLE 4's catalog and objects name the original the layer is bound to, `X-Axt-Base-Etag`, and the original answers with
+// that entity-tag (`ETag`, the MD5 of its bytes, as R2 tags an object written in one put), so that the reader may read it by
+// ranges held to it (the web's worker/src/layer/base.ts); `bound: false` names none, as an older server would.
+//
 // Every answer carries `Access-Control-Allow-Origin: *` (never credentials) and `X-Content-Type-Options: nosniff`; JSON
 // answers carry `Content-Security-Policy: sandbox`; a miss is JSON, never an HTML page. The <vtag> is the engine's own
 // (layer-proto/bundle.mjs VTAG, its order the engine's): a GET of another answers 404 unknown-versions. Where the
@@ -36,6 +40,7 @@
 // answer: its method, path and query string (a query is no reason to refuse a request: the answer does not depend on it, and
 // the record shows it), every header the request carried (a cookie too, where the router gives it), and its body (its length
 // and its text to BODY_TEXT_MAX characters), beside what it answered.
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { VTAG } from '../../../src/pdf-reader/engine/layer-proto/bundle.mjs'
@@ -125,8 +130,11 @@ function rangeOf(header, size) {
  * a preparing answer asks to wait before the next GET, `now` the clock. `layer4`: the sample's BUNDLE 4 objects
  * (layer-cut.mjs cutSample: `objects` by digest, `refs` as a job tells them, `catalog` its bytes), held under CTAG4
  */
-export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now, layer4 = null, faces = null } = {}) {
+export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now, layer4 = null, faces = null, bound = true } = {}) {
   let layer = checked('ready'), original = checked('ready')
+  /** the original's entity-tag, and the header that names it beside BUNDLE 4's answers */
+  const etag = `"${createHash('md5').update(sample.pdf).digest('hex')}"`
+  const baseTag = bound ? { 'x-axt-base-etag': etag } : {}
   /** when the preparation began, ms on `now`'s clock; null until it has */
   let since = null
   const requests = []
@@ -144,6 +152,8 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     /** every request answered, in order, each kept whole (the header comment): its method, path, query string, headers and
      *  body beside its answer (the status, or the fault) */
     requests,
+    /** the original's entity-tag */
+    etag,
   }
 
   /** the preparation's state at this moment: 'cold' (none begun), 'under way' with its progress, or 'done' */
@@ -183,18 +193,18 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     }
     if (prep.state === 'under way') return preparing(prep, four)
     if (prepare) return json(200, { ready: true }, NO_STORE)
-    return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE }, body: four ? layer4.catalog : sample.bundle }
+    return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...(four ? baseTag : {}) }, body: four ? layer4.catalog : sample.bundle }
   }
   function objectAnswer(segment, tag, sha) {
     const bytes = segment === sample.segment && tag === CTAG4 ? layer4?.objects.get(sha) : null
     if (!bytes) return missing('not-prepared')
-    return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE }, body: bytes }
+    return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...baseTag }, body: bytes }
   }
   function originalAnswer({ headers }, segment) {
     if (segment !== sample.segment || original.kind === 'none') return missing('no-pdf')
     const size = sample.pdf.length
     const range = rangeOf(headers.range, size)
-    const base = { ...COMMON, 'content-type': 'application/pdf', 'accept-ranges': 'bytes', 'access-control-expose-headers': 'Content-Length, Content-Range, Accept-Ranges' }
+    const base = { ...COMMON, 'content-type': 'application/pdf', 'accept-ranges': 'bytes', etag, 'access-control-expose-headers': 'Content-Length, Content-Range, Accept-Ranges, ETag' }
     if (range === 'unsatisfiable') return { status: 416, headers: { ...base, 'content-range': `bytes */${size}` }, body: new Uint8Array() }
     if (range === null) return { status: 200, headers: base, body: sample.pdf }
     return { status: 206, headers: { ...base, 'content-range': `bytes ${range[0]}-${range[1]}/${size}` }, body: sample.pdf.subarray(range[0], range[1] + 1) }

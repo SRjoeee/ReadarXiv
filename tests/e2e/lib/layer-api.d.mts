@@ -49,6 +49,8 @@ export interface LayerApi {
   listen(o?: { port?: number; host?: string }): Promise<{ origin: string; close(): Promise<void> }>
   sample: Sample
   vtag: string
+  /** the original's entity-tag, which BUNDLE 4's answers name (X-Axt-Base-Etag) where the stand-in is `bound` */
+  etag: string
 }
 /** BUNDLE 4's objects of the sample (layer-cut.mjs cutSample's) */
 export interface Layer4 { objects: Map<string, Uint8Array>; refs: { head: unknown; units: unknown[]; parts: unknown[]; end: unknown }; catalog: Uint8Array }
@@ -56,4 +58,4 @@ export interface Layer4 { objects: Map<string, Uint8Array>; refs: { head: unknow
 export interface StandInFaces { ids: readonly string[]; ranges: readonly number[]; bytes: Uint8Array }
 export declare const FACE_GROUP: string
 export declare const FACE_FILE: string
-export declare function layerApi(o?: { sample?: Sample; vtag?: string; pollMs?: number; now?: () => number; layer4?: Layer4 | null; faces?: StandInFaces | null }): LayerApi
+export declare function layerApi(o?: { sample?: Sample; vtag?: string; pollMs?: number; now?: () => number; layer4?: Layer4 | null; faces?: StandInFaces | null; bound?: boolean }): LayerApi

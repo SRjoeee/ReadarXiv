@@ -941,8 +941,17 @@ only how it meets the rest of the extension.
   made yet), no credentials, no referrer; nothing of a translation, a setting or a key. Each object is read within its
   bounds by the engine's own readers (cap, digest, values, shape, chain) in the reading view's layer side, which lays the
   pages as their parts and rows come. A 202's and a 429's waits are never shorter than our server asks. arXiv's PDF is the
-  layer's base only where its bytes are (length and SHA-256, digested whole): other bytes fetch our copy of them
-  (`/api/v1/original/`, checked against the base), shown on the left in their place; none to be had is no layer.
+  layer's base only where its bytes are, and the check does not wait for the whole file (`session/ranges.ts`): the first to
+  answer decides, of the left's bytes digested once its document has loaded them of itself (a proof) and the two ends
+  compared — arXiv's length and last cross-reference section against our copy's, one range each, where our server names the
+  original it bound the layer to (`X-Axt-Base-Etag`: the copy whose SHA-256 is the head's base, by its entity-tag), read
+  only where the left's bytes are not all in 100 ms after the check begins. Ends
+  alike first, the composed document is read over our copy by ranges, every answer held to the base's length and that tag,
+  so that it is the layer's document whatever arXiv's bytes are; the proof still comes, and other bytes then show our copy on
+  the left and lay the pages again. Other bytes, by either, show our copy on the left in their place (this machine's whole
+  copy, else by ranges, else read whole and checked against the base); none to be had is no layer. Why: on 2608.16117v1
+  (46 MB) the whole-file check laid the first page 9.5 s after the original was on screen, the rest of arXiv's file still
+  coming and asked twice (PDF.js's `getData` asks for every byte its stream is still bringing); eb-report, the bind.
 - **The translation** is the extension's own: the engine's `runRows` over the layer's units, through the background's
   chain (§8.0, `session/translate.mjs`), the units the page in view waits for first, each batch's rows taken by the layer
   as they come. A retry opens the layer's door again, takes the rows held at once and runs again, the background's

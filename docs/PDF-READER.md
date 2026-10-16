@@ -795,18 +795,25 @@ contract §4.3), started by the host once a translated display is shown in a vis
    machine, in the address: no query, `{}` the prepare's only body, no credentials, no referrer.
 3. **The objects** through this machine's store first (`cache/layer-store.ts`, by digest, checked there), then our server
    within each ref's bytes; the side's readers check every one.
-4. **The base**: arXiv's PDF the left shows, digested whole; bytes that are not the layer's base fetch our copy (the store
-   first, then `/api/v1/original/`), checked against the base, shown on the left in their place. None to be had is no
-   layer, the original staying.
-5. **The composed document**: the original's bytes followed by the tails told, opened by the extension's PDF.js with the
-   side's options.
+4. **The base** (`bind`), never waiting for arXiv's whole file: the first to answer of the left's bytes, digested once its
+   document has loaded them of itself (a proof), and the two ends compared (`session/ranges.ts` `endsAlike`: arXiv's length
+   and last cross-reference section against our copy's, one range each, where the catalog's or an object's answer names the
+   original the layer is bound to, `X-Axt-Base-Etag`; read only where the left's bytes are not all in 100 ms after the check
+   begins, so that a small paper asks nobody anything). Bytes that are not the base, by either, show our copy on the left in
+   their place: this machine's whole copy first, else our copy by ranges (read for as long as it is shown), else read whole
+   and checked against the base's digest. None to be had is no layer, the original staying. Ends alike, the proof still
+   comes: the same, later documents read the left's bytes; other, our copy on the left and the pages laid again.
+5. **The composed document**: the left's bytes followed by the tails told, opened by the extension's PDF.js with the side's
+   options; or, where the ends decided, our copy by ranges with the tails after its last byte (`openRanged`), every answer a
+   206 of exactly the bytes asked, of the base's length and the layer's tag, else the source refused (a page it cannot read
+   stays the original's, the side's stall). A read with nothing from our server for 10 s is asked once more.
 6. **The rows**: the engine's `runRows` over the side's index, the paper's title and abstract as an LLM's context, the units
    nearest the page in view first (that page's closure by the side's `rowsFor`, then ahead before behind), each batch's rows
    taken as they come, then the end. A retry is the side's `again()`, every row held taken at once, and the run again.
 
 The served faces are `session/faces.ts` (our site's static table, eb-report G1), the hyphenation `<api>/hyph/<lang>.json`.
 An id with no version is the latest version arXiv's abstract page lists (`session/paper.ts`). The run's rows are
-`tests/pdf-reader/run.test.ts`, `server.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
+`tests/pdf-reader/run.test.ts`, `server.test.ts`, `ranges.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
 reader on the sample served by the stand-in of the layer API, through the echo service.
 
 ## 12. Performance gates
