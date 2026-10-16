@@ -395,7 +395,7 @@ const R = {
   status: {
     loading: '正在加载', // S-R-12
     translating: '正在翻译',
-    again: '正在按当前设置重新翻译',
+    preparing: '正在准备 PDF 对照', // S-R-23 (draft, the owner's copy pending): said to screen readers while the paper's layer is prepared; the progress line shows it
     close: '关闭', // S-R-15: a notice's close button
     unsupported: (language: string) => `PDF 对照暂不支持${spacedAfterChinese(language)}`, // S-R-13: the language's own name, spaced from the Chinese unless it is Han, kana or hangul (§1 rule 9)
     chooseLanguage: '选择语言',
@@ -403,7 +403,7 @@ const R = {
     rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
     noPdf: '这篇论文暂不支持 PDF 翻译', // S-R-17: no source, or nothing typeset (the maintainer, 2026-09-26)
     useHtml: '改用 HTML 翻译', // S-R-18: the capsule's action, where the paper has an HTML version
-    partial: '这篇论文只能显示部分译文，其余为原文', // S-R-19: a preview on screen, the whole not set (the maintainer, 2026-10-04)
+    notNow: 'PDF 对照暂时无法加载', // S-R-24 (draft, the owner's copy pending): our server out of reach or at its limit; the original stays, with a retry and the HTML version
     noPaper: '找不到这篇论文', // S-R-20: an address that names no paper
     goToArxiv: '前往 arXiv', // S-R-20's action
     unreadable: '设置读取失败，当前使用默认设置', // S-R-21: the note while the settings cannot be read, as S-O-02 words it

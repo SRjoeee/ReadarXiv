@@ -1,0 +1,88 @@
+// The served faces as the engine asks for them (its `faceSources`, the layer-only plan §6): a face's slices, each a file on
+// our site and the code points it holds, read from the static faces' table our site serves (eb-report G1, the web's W-M2):
+//
+//   GET <api>/static-fonts/index.json     { schema: 1, faces: { <face id>: { group }, … }, … }
+//   GET <api>/static-fonts/<group>.json   { schema: 1, group, slices: [[start, end, …], …], faces: { <face id>: [{ path } | null, …] }, … }
+//
+// each slice's file at `<api>/<path>` (`static-fonts/<16 hex>.woff2`). Only those fields are read; what else a table holds is
+// another reader's. The index is read once a visit, a group's table the first time one of its faces is asked, each within its
+// bounds; one that fails is forgotten, so that a later ask reads it again. The engine decides what a face it cannot have means
+// (its units stay the original's): a face the index does not serve has no sources (null), and a table not to be had rejects.
+// Nothing here fetches a font or makes a face: the engine loads the slices its text needs.
+
+/** the index's bytes at most (the FONTS 4 table is 13 KB), a group's (the largest, a CJK group's, is 183 KB) */
+export const INDEX_CAP = 256 * 1024
+export const GROUP_CAP = 2 * 1024 * 1024
+/** how long a table may take before it is given up: the engine waits for a face's sources before it lays the units set in it */
+export const TABLE_MS = 20_000
+const GROUP = /^[a-z0-9-]{1,40}$/
+const FILE = /^static-fonts\/[0-9a-f]{16}\.woff2$/
+
+export type FaceSources = (id: string) => Promise<readonly { url: string; ranges: readonly number[] }[] | null>
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+async function tableOf(f: typeof fetch, url: string, cap: number): Promise<unknown> {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(new Error(`${url} did not come within ${TABLE_MS} ms`)), TABLE_MS)
+  try {
+    const r = await f(url, { signal: ac.signal, credentials: 'omit', referrerPolicy: 'no-referrer' })
+    if (!r.ok) { void r.body?.cancel().catch(() => {}); throw new Error(`the faces' table ${url} answered ${r.status}`) }
+    const length = Number(r.headers.get('content-length'))
+    if (length > cap) { void r.body?.cancel().catch(() => {}); throw new Error(`the faces' table ${url}: ${length} bytes, past ${cap}`) }
+    const text = await r.text()
+    if (text.length > cap) throw new Error(`the faces' table ${url}: past ${cap} bytes`)
+    return JSON.parse(text)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** the code points of a slice as the engine takes them, flat [start, end] pairs, or null */
+function rangesOf(v: unknown): number[] | null {
+  if (!Array.isArray(v) || !v.length || v.length % 2) return null
+  for (let i = 0; i < v.length; i += 2) {
+    const a = v[i], b = v[i + 1]
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < a || b > 0x10ffff) return null
+  }
+  return v as number[]
+}
+
+/** the engine's faceSources over the served table at `api` (an origin) */
+export function servedFaces(api: string, f: typeof fetch = (...a) => fetch(...a)): FaceSources {
+  let index: Promise<Record<string, unknown>> | null = null
+  const groups = new Map<string, Promise<{ slices: number[][]; faces: Record<string, unknown> }>>()
+  const once = <T>(p: Promise<T>, forget: () => void) => { p.catch(forget); return p }
+  const theIndex = () => (index ??= once((async () => {
+    const v = await tableOf(f, `${api}/static-fonts/index.json`, INDEX_CAP)
+    if (!isObject(v) || v.schema !== 1 || !isObject(v.faces)) throw new Error('the faces\' index is of another shape')
+    return v.faces
+  })(), () => { index = null }))
+  const theGroup = (name: string) => {
+    let g = groups.get(name)
+    if (!g) {
+      g = once((async () => {
+        const v = await tableOf(f, `${api}/static-fonts/${name}.json`, GROUP_CAP)
+        if (!isObject(v) || v.schema !== 1 || v.group !== name || !Array.isArray(v.slices) || !isObject(v.faces)) throw new Error(`the faces' table ${name} is of another shape`)
+        const slices = v.slices.map(rangesOf)
+        if (slices.some(s => s === null)) throw new Error(`the faces' table ${name}: a slice of another shape`)
+        return { slices: slices as number[][], faces: v.faces }
+      })(), () => { if (groups.get(name) === g) groups.delete(name) })
+      groups.set(name, g)
+    }
+    return g
+  }
+  return async id => {
+    const faces = await theIndex()
+    const entry = Object.hasOwn(faces, id) ? faces[id] : undefined
+    if (!isObject(entry) || typeof entry.group !== 'string' || !GROUP.test(entry.group)) return null
+    const g = await theGroup(entry.group)
+    const files = Object.hasOwn(g.faces, id) ? g.faces[id] : undefined
+    if (!Array.isArray(files)) throw new Error(`the faces' table ${entry.group} holds no files of ${id}`)
+    const out: { url: string; ranges: readonly number[] }[] = []
+    g.slices.forEach((ranges, i) => {
+      const file = files[i]
+      if (isObject(file) && typeof file.path === 'string' && FILE.test(file.path)) out.push({ url: `${api}/${file.path}`, ranges })
+    })
+    return out
+  }
+}

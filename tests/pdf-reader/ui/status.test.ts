@@ -7,7 +7,7 @@ import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
 import { O, R, S, setLocale } from '@/ui/strings'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, settings: DEFAULT_CONFIG, display: 'bilingual', ...over })
-const none = { partialClosed: false, noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
+const none = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
 
 // the interface's words as the maintainer reads them
 beforeAll(() => setLocale('zh-CN'))
@@ -15,12 +15,12 @@ beforeAll(() => setLocale('zh-CN'))
 describe('the states (the reader\'s design, §8)', () => {
   it('reading shows nothing', () => {
     expect(capsuleOf(at({ phase: 'ready' }), none)).toBeNull()
-    expect(cardOf(at({ phase: 'ready', failure: 'network', shown: 'copy' }))).toBeNull()
+    expect(cardOf(at({ phase: 'ready', failure: 'network', layer: { laid: 2, total: 4 } }))).toBeNull()
   })
 
-  it('loading and translating show no capsule: the line under the toolbar is enough, and the words are said to screen readers (the maintainer, 2026-09-25)', () => {
-    for (const phase of ['loading', 'translating', 'retranslating'] as const) expect(capsuleOf(at({ phase }), none)).toBeNull()
-    expect([spokenOf(at({ phase: 'loading' })), spokenOf(at({ phase: 'translating' })), spokenOf(at({ phase: 'retranslating' })), spokenOf(at({ phase: 'ready' }))]).toEqual(['正在加载', '正在翻译', '正在按当前设置重新翻译', ''])
+  it('loading, preparing and translating show no capsule: the line under the toolbar is enough, and the words are said to screen readers (the maintainer, 2026-09-25)', () => {
+    for (const phase of ['loading', 'preparing', 'translating'] as const) expect(capsuleOf(at({ phase }), none)).toBeNull()
+    expect([spokenOf(at({ phase: 'loading' })), spokenOf(at({ phase: 'preparing' })), spokenOf(at({ phase: 'translating' })), spokenOf(at({ phase: 'ready' }))]).toEqual(['正在加载', R.status.preparing, '正在翻译', ''])
   })
 
   it('keeps a notice of paragraphs that failed for the run\'s end, and says a narrow window while a translation runs', () => {
@@ -28,29 +28,20 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(capsuleOf(at({ phase: 'translating', narrow: true }), none)).toMatchObject({ kind: 'narrow' })
   })
 
-  it('the line: one over the whole process — the PDF\'s download, the paragraphs translated, the final — never starting again (the maintainer asked why it ran twice, 2026-10-02)', () => {
+  it('the line: one over the whole process — the PDF\'s download, the paper\'s prepare where there is one, the paragraphs translated (the maintainer asked why it ran twice, 2026-10-02)', () => {
     const v = (over: Partial<ReaderState>) => lineOf(at(over)).value
     // the download is the first stretch when a translation follows it, all of it when the original alone is shown
     expect(lineOf(at({ phase: 'loading', loaded: 0.3, progress: 0.9 })).on).toBe(true)
     expect(v({ phase: 'loading', loaded: 1 })).toBeCloseTo(v({ phase: 'translating', progress: 0 }))
     expect(v({ phase: 'loading', loaded: 1, display: 'original' })).toBe(1)
-    // the paragraphs translated after it, and the final last: all translated is not the end
-    const steps = [v({ phase: 'loading', loaded: 0.5 }), v({ phase: 'translating', progress: 0 }), v({ phase: 'translating', progress: 0.5 }), v({ phase: 'translating', progress: 1 }), v({ phase: 'translating', progress: 1, shown: 'final' })]
-    for (let k = 1; k < steps.length; k++) expect(steps[k]).toBeGreaterThan(steps[k - 1] as number)
-    expect(steps.at(-2)).toBeLessThan(1)
-    expect(steps.at(-1)).toBe(1)
-    expect(lineOf(at({ phase: 'retranslating', progress: 0.1 })).on).toBe(true)
+    // the prepare after it, as it comes along, half of the rest at most; the paragraphs translated to the end
+    const steps = [v({ phase: 'loading', loaded: 0.5 }), v({ phase: 'preparing', preparing: { position: 2, progress: null } }), v({ phase: 'preparing', preparing: { position: null, progress: 0.5 } }), v({ phase: 'preparing', preparing: { position: null, progress: 1 } }), v({ phase: 'translating', progress: 0.9 })]
+    for (let k = 2; k < steps.length; k++) expect(steps[k]).toBeGreaterThan(steps[k - 1] as number)
+    expect(steps[1]).toBeCloseTo(v({ phase: 'loading', loaded: 1 }))
+    expect(v({ phase: 'translating', progress: 1 })).toBe(1)
+    expect(lineOf(at({ phase: 'preparing' })).on).toBe(true)
     expect(lineOf(at({ phase: 'ready', progress: 1 })).on).toBe(false)
     expect(lineOf(at({ phase: 'failed' })).on).toBe(false)
-  })
-
-  it('the line moves with the typesetting the final waits for: each compile ended after the translation, the end only with the final (the F2 review\'s M1)', () => {
-    const v = (over: Partial<ReaderState>) => lineOf(at({ phase: 'translating', progress: 1, ...over })).value
-    const steps = [v({ progress: 0.9 }), v({ finishing: 0 }), v({ finishing: 1 }), v({ finishing: 2 }), v({ finishing: 3 }), v({ finishing: 3, shown: 'final' })]
-    for (let k = 1; k < steps.length; k++) expect(steps[k]).toBeGreaterThan(steps[k - 1] as number)
-    expect(steps.at(-2)).toBeLessThan(1)
-    // the translation's end is not near the line's: with a service that answers in seconds the compiles are most of it
-    expect(v({ finishing: 0 })).toBeLessThan(0.7)
   })
 
   it('counts the paragraphs that failed, with 重试, until closed — the retry where the run stopped for the service', () => {
@@ -74,7 +65,7 @@ describe('the states (the reader\'s design, §8)', () => {
   it('every kind\'s words say what its text said, and S-R-13\'s own name is a part with the target\'s BCP 47 tag as its lang (Devin on #313)', () => {
     const said = (over: Partial<ReaderState>, seen = none) => textOf(capsuleOf(at({ phase: 'ready', ...over }), seen)!.words)
     expect(said({ available: false, htmlVersion: null })).toBe(R.status.noPdf)
-    expect(said({ partial: true })).toBe(R.status.partial)
+    expect(said({ unavailable: { why: 'unreachable', retryAt: null } })).toBe(R.status.notNow)
     expect(said({ failedUnits: 12, failure: 'network' })).toBe(S.failed.text(12))
     expect(said({ narrow: true })).toBe(R.status.narrow)
     const unsupported = capsuleOf(at({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } }), none)!
@@ -108,25 +99,19 @@ describe('the states (the reader\'s design, §8)', () => {
   it('a paper that cannot be had as a bilingual PDF: said, with the HTML version offered where there is one; not closable, before any other capsule (the maintainer, 2026-09-26)', () => {
     expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv' }), none)).toEqual({ kind: 'unavailable', words: plain(R.status.noPdf), href: 'https://arxiv.org/html/1706.03762#readarxiv' })
     expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null }), none)).toEqual({ kind: 'unavailable', words: plain(R.status.noPdf) })
-    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }), { ...none, partialClosed: true, noticeClosed: true })).toMatchObject({ kind: 'unavailable' })
+    expect(capsuleOf(at({ phase: 'ready', available: false, htmlVersion: null, failedUnits: 3, narrow: true }), { ...none, noticeClosed: true })).toMatchObject({ kind: 'unavailable' })
     expect(capsuleOf(at({ phase: 'ready', available: false, languageSupported: false, htmlVersion: null }), none)).toMatchObject({ kind: 'unavailable' })
   })
 
-  it('a translation shown in part: said, the HTML version offered where there is one, closable, before the notice of passages that failed (S-R-19)', () => {
-    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none)).toEqual({ kind: 'partial', words: plain(R.status.partial), href: 'https://arxiv.org/html/x#readarxiv' })
-    expect(capsuleOf(at({ phase: 'ready', partial: true, htmlVersion: null, failedUnits: 2 }), none)).toEqual({ kind: 'partial', words: plain(R.status.partial) })
-    expect(capsuleOf(at({ phase: 'ready', partial: true }), { ...none, partialClosed: true })).toBeNull()
-    expect(capsuleOf(at({ phase: 'translating', partial: true }), none)).toBeNull()
-  })
-
-  it('the partial notice and the notice of failed passages are closed apart: closing one tells the other, which it had covered (#314)', () => {
-    const both = at({ phase: 'ready', partial: true, failedUnits: 2, failure: 'network' })
-    expect(capsuleOf(both, none)).toMatchObject({ kind: 'partial' })
-    // the partial notice closed: the count of passages that failed, which it stood before, is told now
-    expect(capsuleOf(both, { ...none, partialClosed: true })).toMatchObject({ kind: 'notice', words: { count: 2 }, action: 'retry' })
-    expect(capsuleOf(both, { ...none, partialClosed: true, noticeClosed: true })).toBeNull()
-    // the notice's close is the notice's alone: it was never shown while the partial one stood
-    expect(capsuleOf(both, { ...none, noticeClosed: true })).toMatchObject({ kind: 'partial' })
+  it('the bilingual version not to be had now (our server out of reach, or at its limit): said, with its retry and the HTML version where there is one; not closable, before the notice of passages (the layer-only plan\'s "Offline, drafted")', () => {
+    for (const why of ['unreachable', 'refused'] as const) {
+      expect(capsuleOf(at({ phase: 'ready', unavailable: { why, retryAt: null }, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none), why).toEqual({ kind: 'notNow', words: plain(R.status.notNow), href: 'https://arxiv.org/html/x#readarxiv' })
+      expect(capsuleOf(at({ phase: 'ready', unavailable: { why, retryAt: 9 }, htmlVersion: null, failedUnits: 2 }), none), why).toEqual({ kind: 'notNow', words: plain(R.status.notNow) })
+    }
+    // while a prepare or a translation is under way, the line says it
+    expect(capsuleOf(at({ phase: 'translating', unavailable: { why: 'unreachable', retryAt: null } }), none)).toBeNull()
+    // the words name no technical path: nothing of a server, a layer or how the PDF is made
+    for (const words of [R.status.notNow, R.status.preparing]) expect(words).not.toMatch(/server|layer|engine|TeX|compil|typeset|\u670d\u52a1\u5668|\u5f15\u64ce|\u6392\u7248|\u7f16\u8bd1/i)
   })
 
   it('settings that could not be read: a note that stays while it is so, over a load that waits for them too; a failure\'s card has none beside it (S-R-21)', () => {
@@ -167,7 +152,7 @@ describe('the states (the reader\'s design, §8)', () => {
     const missing = at({ phase: 'ready', noPaper: true, available: false })
     expect(cardOf(missing)).toEqual({ reason: R.status.noPaper, action: 'arxiv' })
     // nothing paper-specific is said of it: not a paper that cannot be had, a partial translation, failed passages, a narrow window, a language
-    expect(capsuleOf({ ...missing, partial: true, failedUnits: 2, narrow: true, languageSupported: false }, none)).toBeNull()
+    expect(capsuleOf({ ...missing, unavailable: { why: 'unreachable', retryAt: null }, failedUnits: 2, narrow: true, languageSupported: false }, none)).toBeNull()
     expect(capsuleOf(missing, none)).toBeNull()
     // …but what is true of the settings is: the note and a refused write stand beside the card (Devin on #329)
     expect(capsuleOf({ ...missing, settingsUnreadable: true }, none)).toMatchObject({ kind: 'unreadable' })

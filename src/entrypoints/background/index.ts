@@ -23,9 +23,6 @@ import { createDiagnostics } from './diagnostics'
 import { clearRejected, clearRejectedAmong, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
 import { createHealthKeeper } from './health-guard'
 import { createOffscreenDocument } from './offscreen'
-import { createWarmup, type WarmRecord } from './warmup'
-import { TEX_PAGE } from '@/pdf-reader/addresses.mjs'
-import { LOCK as TEX_LOCK } from '@/pdf-reader/session/tex-store.mjs'
 
 /**
  * The saved settings with the status of the chain in force they were read from: one read per press, for the decision
@@ -39,14 +36,13 @@ export default defineBackground(() => {
   // A new reader's target language follows the browser's languages, chosen once (config/first-target.ts). Registered
   // at the top, synchronously, as MV3 asks of an event that may be what wakes the worker; an update is not an
   // install, and an installation that already holds a configuration is left as it is (config/storage.ts)
-  // The TeX page's warm-up (./warmup.ts) follows, once the language is chosen: `warmup` is made further down, and an
-  // event is dispatched only after this function has run
+  // The PDF reader's store of compiled translations, the experiment's (`axt-pdf`), is deleted on an install or an update,
+  // once: the reader reads on the layer alone, and nothing reads that store (Stage 5 Task 10; its code is parked)
   browser.runtime.onInstalled.addListener(details => {
-    if (details.reason === 'update') void warmup.trigger('update')
+    if (details.reason === 'install' || details.reason === 'update') deleteDatabase(globalThis.indexedDB, 'axt-pdf')
     if (details.reason !== 'install') return
     void chooseFirstTarget(() => pickTargetLanguage(navigator.languages ?? [], browser.i18n.getUILanguage?.()))
       .catch(e => console.warn(`[axt] the first target language could not be saved (${e instanceof Error ? e.name : typeof e})`))
-      .finally(() => void warmup.trigger('install'))
   })
 
   const cache = cachePortOf(translationCache)
@@ -113,9 +109,6 @@ export default defineBackground(() => {
     // the page's own clean-up, for a page closed before it ran (./origin-keeper.ts)
     origins.configChanged(next, previous)
     void offers.offer()
-    // Another target language: its parts of the TeX page downloaded ahead (./warmup.ts). The first choice, at install,
-    // may come as a change too (from the defaults); the document lets the install's own trigger for it go
-    if (previous && next.targetLanguage !== previous.targetLanguage) void warmup.trigger('language')
   })
 
   /**
@@ -130,39 +123,13 @@ export default defineBackground(() => {
    * The recogniser of image translation (DESIGN §15.3): in an offscreen document, opened when the first bitmap needs
    * reading. Withdrawing a session withdraws its queued recognitions too (the router's onDrop)
    */
-  /** The one offscreen document (./offscreen.ts): the recogniser's, and the TeX page's warm-up's */
+  /** The one offscreen document (./offscreen.ts): the recogniser's */
   const offscreen = createOffscreenDocument(browser.offscreen as unknown as Parameters<typeof createOffscreenDocument>[0], browser.runtime.getURL('/ocr.html'))
   const recogniser = createRecogniserClient({
     offscreen,
     run: request => sendMessage({ type: 'axt:ocr-run', ...request }),
-    // a figure given up on ends the document's worker alone: a warm-up in the document goes on
+    // a figure given up on ends the document's worker alone
     reset: async () => (await sendMessage({ type: 'axt:ocr-reset' }))?.reset === true,
-  })
-  /**
-   * The TeX page's warm-up (DESIGN §16): the files a first visit in the target language fetches from the page,
-   * downloaded ahead into the extension's store by the offscreen document. The record of the last one in local storage;
-   * whether a reader that typesets is open, from the lock every one of them shares (pdf-reader/session/tex-store.mjs)
-   */
-  const WARM_KEY = 'axt-tex-warm'
-  const warmup = createWarmup({
-    site: TEX_PAGE,
-    target: async () => (await getConfig()).targetLanguage,
-    saveData: () => (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true,
-    readerOpen: async () => {
-      const state = await navigator.locks?.query().catch(() => null)
-      return !!state && [...(state.held ?? []), ...(state.pending ?? [])].some(lock => lock.name === TEX_LOCK && lock.mode === 'shared')
-    },
-    // sent once more when nobody answered: the document may still be loading its script, or have closed itself
-    start: async request => {
-      const ask = async () => { await offscreen.create(); return sendMessage({ type: 'axt:tex-warm', ...request }).catch(() => undefined) }
-      return ((await ask()) ?? (await ask()))?.started === true
-    },
-    // no document, no warm-up: nothing opened for it
-    stop: async lang => (await offscreen.has().catch(() => false)) && (await sendMessage({ type: 'axt:tex-warm-stop', lang }).catch(() => undefined))?.stopped === true,
-    load: async () => ((await browser.storage.local.get(WARM_KEY))[WARM_KEY] as WarmRecord | undefined) ?? null,
-    save: async record => { await browser.storage.local.set({ [WARM_KEY]: record }) },
-    now: () => Date.now(),
-    log: diag,
   })
   const ocr = createOcrService({ backend: recogniser, cache, cancelled, warn: diag })
   const router = createSessionRouter({
@@ -339,11 +306,14 @@ export default defineBackground(() => {
       platform: (await browser.runtime.getPlatformInfo().catch(() => ({ os: 'unknown' }))).os,
     }),
     health: { reject: markRejected, clear: clearRejected },
-    warmup,
     origins,
   })))
-
-  // A worker's start: the warm-up looked at again — a day on, another language, a failure a quarter of an hour ago
-  // (./warmup.ts); at once a no-op when the store is the current language's
-  void warmup.trigger('check')
 })
+
+/** a database deleted, its outcome let be: a failure leaves a store nothing reads */
+function deleteDatabase(idb: IDBFactory | undefined, name: string): void {
+  try {
+    const r = idb?.deleteDatabase(name)
+    if (r) r.onerror = () => console.warn(`[axt] the store ${name} could not be deleted`)
+  } catch { /* nothing reads it */ }
+}

@@ -2,8 +2,8 @@
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
-// words are said here. A notice has a close of its own, remembered for the visit (the partial notice's does not close the
-// count of failed passages it stood before), and its retry chip where the run stopped for a reason a retry mends
+// words are said here. A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
+// for a reason a retry mends
 // (status.ts capsuleOf); the sentence for a write storage refused (S-R-22) is one of them, an error that stays until it
 // is closed or a later write lands. The narrow window's words leave by themselves after 5 s of being read, waiting while
 // the pointer is over them or they hold the focus (the maintainer, 2026-10-01). Settings that cannot be read are said
@@ -22,12 +22,12 @@ import { type Capsule, capsuleOf, cardOf, spokenOf } from './status'
 import { useReader } from './use-reader'
 
 export function StatusCapsule({ controller, onChooseLanguage }: { controller: ReaderController; onChooseLanguage: () => void }) {
-  // each closable notice is closed apart (status.ts Seen)
-  const [closed, setClosed] = useState({ partial: false, notice: false })
+  // the notice of failed passages closed (status.ts Seen)
+  const [noticeClosed, setNoticeClosed] = useState(false)
   const [narrowShown, setNarrowShown] = useState(false)
   // the refused writes closed: a new refusal is told again
   const [refusalsSeen, setRefusalsSeen] = useState(0)
-  const now = useReader(controller, s => capsuleOf(s, { partialClosed: closed.partial, noticeClosed: closed.notice, narrowShown, refusalsSeen }))
+  const now = useReader(controller, s => capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }))
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, cardOf)
   // a load or a translation under way: said here, shown by the progress line alone
@@ -56,7 +56,7 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   // their actions
   const words = useId()
   const timed = capsule?.kind === 'narrow' && now !== null ? { tabIndex: 0, role: 'group', 'aria-labelledby': words } : {}
-  const link = capsule && (capsule.kind === 'unavailable' || capsule.kind === 'partial') && capsule.href
+  const link = capsule && (capsule.kind === 'unavailable' || capsule.kind === 'notNow') && capsule.href
   return (
     <div role="status" className="capsule-slot">
       {card && <span className="sr-only">{card.reason}</span>}
@@ -64,16 +64,16 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
       {capsule && (
         <Drawn key={capsule.kind} kind={capsule.kind} icon={Info} words={capsule.words} wordsId={words} alone={alone} out={now === null} {...timed} {...linger}
           // what follows the words, named by what it holds: another brings it in with the motion
-          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : ''}`}
+          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : capsule.kind === 'notNow' ? 'retry' : ''}`}
           after={
             capsule.kind === 'narrow' || (capsule.kind === 'unavailable' && !link) ? null : (
               <>
                 {capsule.kind === 'unreadable' && <a data-action className="chip" href={settingsUrl()} target="_blank" rel="noopener">{S.settings}</a>}
-                {capsule.kind === 'notice' && capsule.action === 'retry' && <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>}
+                {((capsule.kind === 'notice' && capsule.action === 'retry') || capsule.kind === 'notNow') && <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>}
                 {link && <a data-action className="chip" href={link} target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.useHtml}</a>}
                 {capsule.kind === 'unsupported' && <button type="button" data-action className="chip" onClick={onChooseLanguage}>{R.status.chooseLanguage}</button>}
-                {(capsule.kind === 'notice' || capsule.kind === 'partial' || capsule.kind === 'saveFailed') && (
-                  <TippedButton label={R.status.close} side="top" className="close" onClick={() => (capsule.kind === 'saveFailed' ? setRefusalsSeen(controller.getState().refusals) : setClosed(c => ({ ...c, [capsule.kind === 'partial' ? 'partial' : 'notice']: true })))}>
+                {(capsule.kind === 'notice' || capsule.kind === 'saveFailed') && (
+                  <TippedButton label={R.status.close} side="top" className="close" onClick={() => (capsule.kind === 'saveFailed' ? setRefusalsSeen(controller.getState().refusals) : setNoticeClosed(true))}>
                     <Icon node={X} size={13} />
                   </TippedButton>
                 )}

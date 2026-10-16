@@ -545,11 +545,12 @@ each piece. They stay in the source language, counted, and the failure is kept (
 
 - `src/entrypoints/pdf-reader/` (`index.html`, `main.tsx`, `App.tsx`), built by WXT with React and TypeScript.
   `pdf.content.ts` opens it in its frame with `?paper=<id>`; `web_accessible_resources` names it.
-- Its compile page stays where it is, on our static site, in an `iframe` (`?site=`), unchanged.
+- It frames nothing: the translation is the layer's, drawn in the page (§11.7–§11.9); the compile page it framed until
+  Stage 5 is parked (`parked/README.md`).
 - **The reader's address is not trusted.** The reader is a page that arXiv's pages may frame, so its URL is not its own to
-  trust: a page that frames it must not point its requests, or the paper's project, anywhere else. It fetches the paper
-  from arXiv and sends its typesetting to our site's TeX page, or to a server on this machine when a probe says so; the
-  build, never a paper, a service or a framing page, chooses which TeX page it uses (`src/pdf-reader/addresses.mjs`).
+  trust: a page that frames it must not point its requests anywhere else. It fetches the paper from arXiv and its layer
+  from our server, or either from a server on this machine when a probe says so; the build, never a paper, a service or a
+  framing page, chooses which server it reads the layer from (`src/pdf-reader/addresses.ts` `READER_API`).
 - The demo papers stay reachable by address for the probes and the e2e checks (`?paper=<id>` without `live=1`, the
   probes' form since the prototype), never from the interface.
 
@@ -1268,10 +1269,10 @@ src/pdf-reader/engine/
   view/         reader-view, places, layer-side, feed, contents, lighting, highlight, shapes, floats, figures, pointer, sync, overlay, outline, engine.css   the browser
 ```
 
-What the engine does not hold: the extension's session (`src/pdf-reader/session/`), its translation client
-(`session/translate.mjs`, with `paperContext`), the TeX page's store and hints, the languages the reader typesets
-(`session/verified.mjs`) and the addresses (`src/pdf-reader/addresses.mjs`); and, parked (`parked/README.md`), the first
-instant layer (`parked/engine/`).
+What the engine does not hold: the extension's session (`src/pdf-reader/session/`: its host of the view, its run on the
+layer, its client of our server, the served faces, its translation client `session/translate.mjs`) and the addresses
+(`src/pdf-reader/addresses.ts`); and, parked (`parked/README.md`), the first instant layer (`parked/engine/`) and the
+extension's compile client (`parked/extension-compile/`).
 
 ### 19.2 The five entries
 

@@ -13,7 +13,7 @@ src/pdf-reader/engine/rules/layout-rules.json 15  # 2026-10-08: the layout rule 
 tests/pdf-reader/rules/v1.json 15  # 2026-10-08: the frozen copy of the migrated rule set (version 1), the same product data, the test's expectation
 src/pdf-reader/engine/source/latex-front.mjs 5  # 2026-09-22: the pseudo-translation's zh, zh-Hant and ja sample text (+1, zh-Hant, #32); a control word glued to a CJK character, quoted; 2026-09-28: a title's forced break as the engine carried it into Chinese, quoted as evidence
 src/pdf-reader/engine/translate/mt.mjs 3  # 2026-09-22: engine outputs quoted as evidence
-src/pdf-reader/session/session.mjs 3  # 2026-09-22: engine outputs quoted as evidence
+parked/extension-compile/src/pdf-reader/session/session.mjs 3  # 2026-09-22: engine outputs quoted as evidence
 parked/lab/spikes/busytex.mjs 1  # 2026-09-22: a Chinese sentence to compile
 parked/lab/spikes/cache-faults.mjs 3  # 2026-09-24: the settings page's labels the probe picks Google and turns the fallback chain off and on by (the e2e locate controls by their Chinese labels)
 parked/lab/spikes/cache-revisit.mjs 1  # 2026-09-24: the settings page's label the check turns the fallback chain off by (the e2e locate controls by their Chinese labels)

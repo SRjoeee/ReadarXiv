@@ -64,29 +64,16 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     expect(container.querySelector('.capsule')).toBeNull()
   })
 
-  it('a translation shown in part: its words, S-R-18\'s link to the HTML version, and a close that keeps it closed (S-R-19)', async () => {
-    const fake = fakeController({ phase: 'ready', partial: true, htmlVersion: 'https://arxiv.org/html/x#readarxiv' })
+  it('the bilingual version not to be had now: its words, its retry and the link to the HTML version, and no close (the layer-only plan\'s "Offline, drafted")', async () => {
+    const fake = fakeController({ phase: 'ready', unavailable: { why: 'unreachable', retryAt: null }, htmlVersion: 'https://arxiv.org/html/x#readarxiv' })
     const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
-    const capsule = container.querySelector('.capsule[data-kind="partial"]')!
-    expect(capsule.textContent).toContain(R.status.partial)
+    const capsule = container.querySelector('.capsule[data-kind="notNow"]')!
+    expect(capsule.textContent).toContain(R.status.notNow)
     expect(capsule.querySelector('a[data-action]')?.getAttribute('href')).toBe('https://arxiv.org/html/x#readarxiv')
     expect(capsule.querySelector('a[data-action]')?.textContent).toBe(R.status.useHtml)
-    await act(async () => capsule.querySelector<HTMLElement>(`button[aria-label="${R.status.close}"]`)!.click())
-    await act(async () => { await new Promise(r => setTimeout(r, 220)) })
-    expect(container.querySelector('.capsule')).toBeNull()
-  })
-
-  it('closing the partial notice tells the count of failed passages it stood before, which has its own close (#314)', async () => {
-    const fake = fakeController({ phase: 'ready', partial: true, failedUnits: 2, failure: 'network' })
-    const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
-    const close = () => container.querySelector<HTMLElement>(`.capsule:not([data-out]) button[aria-label="${R.status.close}"]`)!
-    expect(container.querySelector('.capsule:not([data-out])')!.getAttribute('data-kind')).toBe('partial')
-    await act(async () => close().click())
-    expect(container.querySelector('.capsule:not([data-out])')!.getAttribute('data-kind')).toBe('notice')
-    expect(container.querySelector('.capsule:not([data-out]) .sr-only')!.textContent).toBe(S.failed.text(2))
-    await act(async () => close().click())
-    await act(async () => { await new Promise(r => setTimeout(r, 220)) })
-    expect(container.querySelector('.capsule')).toBeNull()
+    expect(capsule.querySelector(`button[aria-label="${R.status.close}"]`)).toBeNull()
+    await act(async () => capsule.querySelector<HTMLElement>('button[data-action]')!.click())
+    expect(fake.controller.retry).toHaveBeenCalledTimes(1)
   })
 
   describe('the narrow window\'s words: 5 s of being read, waiting while the pointer is over them or they hold the focus (the maintainer, 2026-10-01)', () => {

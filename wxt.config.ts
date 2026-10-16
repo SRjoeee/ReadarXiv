@@ -44,12 +44,25 @@ function pdfjsFiles(): { absoluteSrc: string; relativeDest: string }[] {
  */
 const DEV_PAGES = ['gallery', 'controls', 'capsule']
 /**
- * The reading view's development entry (`?layer=1` on the reader's address, docs/PDF-READER.md §11.7), built only where the
- * build is asked for it: `AXT_READER_VIEW=1 pnpm build`, the build pnpm e2e:reader runs on. A release build leaves the entry
- * and its chunk out (the condition is false at build time), and scripts/check-output.mjs checks it either way. It goes once
- * the extension's reader is the view
+ * Our server, the reader's layer API (src/pdf-reader/addresses.ts READER_API; Stage 5 Task 17): production's in a production
+ * build, staging's in a development build, and either where `AXT_READER_API` names it — the maintainer's test build is
+ * `AXT_READER_API=https://app-staging.readarxiv.org pnpm build`. No other host: the manifest grants the one it names
+ * (`readarxiv.com` always: the website's mark runs there), and a staging build grants staging and marks its pages too
  */
-const READER_VIEW = process.env.AXT_READER_VIEW === '1'
+const PRODUCTION_API = 'https://readarxiv.com'
+const STAGING_API = 'https://app-staging.readarxiv.org'
+function readerApi(mode: string): string {
+  const named = process.env.AXT_READER_API
+  if (named && named !== PRODUCTION_API && named !== STAGING_API) throw new Error(`AXT_READER_API names ${named}: production's (${PRODUCTION_API}) or staging's (${STAGING_API}) alone`)
+  const api = named || (mode === 'production' ? PRODUCTION_API : STAGING_API)
+  return api
+}
+let apiTold: string | undefined
+function apiOf(mode: string): string {
+  const api = readerApi(mode)
+  if (apiTold !== api) { apiTold = api; console.log(`[build] the reader's server: ${api}`) }
+  return api
+}
 
 // The WXT project configuration.
 export default defineConfig({
@@ -57,7 +70,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
   // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
-  vite: () => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_VIEW__: JSON.stringify(READER_VIEW) } }),
+  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)) } }),
   hooks: {
     'entrypoints:found': (wxt, infos) => {
       if (wxt.config.mode !== 'production') return
@@ -70,6 +83,14 @@ export default defineConfig({
     // is built, so the list of what was bundled is complete; the project's own licence goes in beside it
     'build:publicAssets': (_wxt, files) => {
       files.push(...licenceFiles(), ...pdfjsFiles())
+    },
+    // A build whose server is staging's grants it, and the website's mark runs on its pages as on production's: the one place
+    // a host enters the manifest by the build (src/shared/web-app.ts names production's; scripts/check-output.mjs checks both)
+    'build:manifestGenerated': (wxt, manifest) => {
+      const api = readerApi(wxt.config.mode)
+      if (api === PRODUCTION_API) return
+      manifest.host_permissions = [...(manifest.host_permissions ?? []), `${api}/*`]
+      for (const entry of manifest.content_scripts ?? []) if (entry.matches?.includes(`${PRODUCTION_API}/*`)) entry.matches = [...entry.matches, `${api}/*`]
     },
   },
   manifest: {
@@ -110,8 +131,10 @@ export default defineConfig({
     // Every network engine has to be here: an MV3 background fetch is still bound by CORS, and without a host permission it can only
     // hope for `Access-Control-Allow-Origin` from the other side. Microsoft does return `*` today (measured), but that is a dependency
     // beyond our control — the day it stops, the whole engine becomes a `network` failure (Codex on #115; the line was missed when the provider was added)
-    // arxiv.org, on this experiment branch: the PDF reader's page (entrypoints/pdf-reader) fetches a paper's source and PDF
-    host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*'],
+    // arxiv.org: the PDF reader's page (entrypoints/pdf-reader) fetches the paper's PDF and its abstract page (CORS is not a
+    // promise, DESIGN §8.0). readarxiv.com: our server, the reader's layer API (a paper's layer, its objects, our copy of
+    // arXiv's PDF, the faces and the hyphenation), and the website the mark runs on (§4.0d). Nothing of TeX
+    host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*', 'https://readarxiv.com/*'],
     // The floating button (DESIGN §4.0c) frames the popup as its control panel, and a page may only load an extension
     // file that is declared here. One file, and only to arXiv. What the popup loads for itself (its script, its
     // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that

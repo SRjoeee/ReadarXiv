@@ -4,13 +4,13 @@ import { chainConfigChanged } from '@/config/revision'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading, FallbackReason } from '@/config/storage'
 import type { Landing, SurfaceConfig } from '@/shared/surface-config'
-import type { EngineDisplay } from './session/session.mjs'
+import type { EngineDisplay } from './session/events'
 
 /**
  * The session's first configuration, which is never waited on for ever. The page has already read the settings once
  * before its first paint, bounded (`reading`, ui/first-read.ts), and the session starts on that reading at once — its
  * configuration, and its reason where it fell back — while the surface goes on reading behind it: the landing that comes
- * is followed as any change of the settings is (session.mjs `landed`). A second read that stalls or is refused, which
+ * is followed as any change of the settings is (session/host.ts `landed`). A second read that stalls or is refused, which
  * the surface answers with nothing at all, costs the PDF nothing, and says nothing against settings that were read.
  * Without a reading (`null`: the page's read did not answer in its time; `undefined`: a host that made none), the
  * surface's landing is waited for — not at all for `null`, whose time is spent, and for the clock `giveUp` otherwise —

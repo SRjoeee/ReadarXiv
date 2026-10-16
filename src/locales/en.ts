@@ -349,7 +349,7 @@ const R: Locale['R'] = {
   status: {
     loading: 'Loading',
     translating: 'Translating',
-    again: 'Translating again with the current settings',
+    preparing: 'Getting the bilingual PDF ready',
     close: 'Close',
     unsupported: (language: string) => `A bilingual PDF isn't available in ${language} yet`,
     chooseLanguage: 'Choose language',
@@ -357,7 +357,7 @@ const R: Locale['R'] = {
     rateLimited: 'Too many requests',
     noPdf: "This paper can't be read as a bilingual PDF yet",
     useHtml: 'Translate HTML instead',
-    partial: "Only part of this paper's translation can be shown; the rest is in the original",
+    notNow: "The bilingual PDF can't be loaded right now",
     noPaper: "The paper can't be found",
     goToArxiv: 'Go to arXiv',
     unreadable: 'The settings could not be read, so the defaults are in use',

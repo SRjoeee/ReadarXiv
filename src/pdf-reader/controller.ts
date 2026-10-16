@@ -1,8 +1,8 @@
 // The one boundary between the reader's engine and its interface (the reader's design, §11.3): the session's events
 // folded into a state the interface subscribes to, and the interface's commands passed on to the session. pdfslick's
-// per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back. Two sources of
-// them: the extension's own session (session.mjs), and the reading view the engine holds for both readers (§11.7), whose
-// events fromView turns into the same ones
+// per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back. The session is the
+// reading view the engine holds for both readers (§11.7) and the extension's run of a paper on its layer (session/host.ts,
+// session/run.ts), whose events fromView and the run turn into the ones below
 import { toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
@@ -10,30 +10,29 @@ import type { PackState } from '@/shared/pack'
 import type { OutlineEntry } from './engine/view/outline'
 import type { ViewEvent } from './engine/view.mjs'
 import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
-import type { EngineDisplay, SessionEvent, SessionHost } from './session/session.mjs'
-import type * as SessionModule from './session/session.mjs'
+import { type EngineDisplay, LASTING, type SessionEvent, type SessionHost, type SyncMode, type Unavailable } from './session/events'
 
 export type Display = EngineDisplay
 export type Side = 'left' | 'right'
-export type Phase = 'loading' | 'translating' | 'retranslating' | 'ready' | 'failed'
-/** what the translation's side shows: nothing yet, this machine's copy, a draft being typeset, or the final */
-export type Shown = 'none' | 'copy' | 'preview' | 'final'
+/** loading the original; the paper's layer being prepared; the translation under way; reading; or the reader cannot go on */
+export type Phase = 'loading' | 'preparing' | 'translating' | 'ready' | 'failed'
 
 export interface ReaderState {
   display: Display
-  /** false: the paper cannot be had as a bilingual PDF (the design, §8): the two translated displays greyed, the original shown */
+  /** false: the paper, or its language, cannot be had as a bilingual PDF (the design, §8): the two translated displays greyed,
+   *  the original shown */
   available: boolean
-  /** where the reader can read the paper translated instead, when it cannot be had as a bilingual PDF: its HTML version */
+  /** where the reader can read the paper translated instead, when the bilingual version cannot be had: its HTML version */
   htmlVersion: string | null
-  /** the run could show only part of its translation: a preview of it is on screen, and none of the ways could set the
-   *  whole (S-R-19); the displays stay as they are */
-  partial: boolean
   phase: Phase
+  /** the paper's layer being prepared: its place in the queue and how far it has come, each null while not known */
+  preparing: { position: number | null; progress: number | null } | null
+  /** the layer's pages laid, of the paper's */
+  layer: { laid: number; total: number }
+  /** no bilingual version for now (refused, unreachable: passing), or for this paper or language; null while there may be */
+  unavailable: { why: Unavailable; retryAt: number | null } | null
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
-  /** the compiles finished since the translation was over (every paragraph in, or the service stopped): the typesetting
-   *  the final waits for; −1 while paragraphs are still to come */
-  finishing: number
   /** 0–1, the share of the paper's PDF downloaded, in hundredths; 0 while its size is unknown */
   loaded: number
   /** the paragraphs the service failed on: the notice's {n} */
@@ -41,9 +40,8 @@ export interface ReaderState {
   /** why the last run could not translate, as the chain's error kind (the popup's REASON); null otherwise */
   failure: ProviderErrorKind | null
   languageSupported: boolean
-  shown: Shown
-  /** a final translation is on screen, this machine's copy or the run's: the translation's PDF can be downloaded */
-  finalReady: boolean
+  /** what can be downloaded: nothing yet, the original, or the translation (Task 20 fills it) */
+  download: 'none' | 'original' | 'translation'
   scale: number
   sides: Record<Side, { page: number; pages: number }>
   /** the extension's settings could not be read, or did not answer in the time the page gave them (first-read.ts), and
@@ -80,16 +78,16 @@ export const INITIAL: ReaderState = {
   display: 'original',
   available: true,
   htmlVersion: null,
-  partial: false,
   phase: 'loading',
+  preparing: null,
+  layer: { laid: 0, total: 0 },
+  unavailable: null,
   progress: 0,
-  finishing: -1,
   loaded: 0,
   failedUnits: 0,
   failure: null,
   languageSupported: true,
-  shown: 'none',
-  finalReady: false,
+  download: 'none',
   scale: 1,
   sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } },
   settingsUnreadable: false,
@@ -107,24 +105,32 @@ export const INITIAL: ReaderState = {
 }
 
 /** the session's commands the controller passes on */
-export type Session = Pick<typeof SessionModule, 'setDisplay' | 'setSyncMode' | 'setCompositor' | 'setFigures' | 'zoomBy' | 'zoomTo' | 'goToPage' | 'patchSettings' | 'pdfBytes' | 'goToUnit' | 'lead' | 'retry' | 'setNarrow' | 'pinch'>
+export interface Session {
+  setDisplay(mode: EngineDisplay): void
+  setSyncMode(mode: SyncMode): void
+  setFigures(on: boolean): void
+  zoomBy(factor: number): void
+  zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
+  goToPage(side: Side, page: number): void
+  patchSettings(change: (latest: Config) => Config): void
+  pdfBytes(which: 'translation' | 'original'): Promise<Uint8Array | null>
+  goToUnit(id: number): void
+  lead(which: Side): void
+  retry(): void
+  setNarrow(on: boolean): void
+  pinch(which: Side, factor: number, origin: [number, number]): void
+}
 
-/** the runs that end without a translation because of the paper, or of the language: not failures a reader can retry */
-const CANNOT_BE_HAD = new Set(['no source', 'cannot typeset'])
-const NOT_SUPPORTED = new Set(['not verified'])
-/** what each step of a run puts on the translation's side (session.mjs note) */
-const SHOWS: Record<string, Shown> = { 'shown cached': 'copy', 'cache unusable': 'none', 'shown preview': 'preview', 'shown final': 'final' }
-const making = (phase: Phase) => phase === 'translating' || phase === 'retranslating'
-/** a compile's end, as the session notes it: the font probe, a preview, the marked original, a measure, the final */
-const COMPILED: ReadonlySet<string> = new Set(['fonts', 'preview', 'original', 'measure', 'final'])
-/** the engine's error kinds are the chain's (engine.mjs); anything else, a crash included, is the popup's unknown */
+/** the engine's error kinds are the chain's (translate.mjs); anything else, a crash included, is the popup's unknown */
 const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
+/** the layer has drawn something: a failure then leaves the pages laid readable, its card not over them */
+const drawn = (state: ReaderState) => state.layer.laid > 0
 
 /**
- * One event folded into the state; the same object when nothing changed, so that no listener hears of it. The phase
- * moves at named steps only (the design, §8): loading until the cache is answered, reading once a translation is on
- * screen, translating from the session's decision to translate (`translating`, again when a copy is being replaced)
- * until the run ends. A failure over a translation on screen leaves it readable: reading, the failure kept
+ * One event folded into the state; the same object when nothing changed, so that no listener hears of it. The phase moves
+ * at named steps only (the design, §8): loading until the original is on screen, preparing while our server makes the paper's
+ * layer, translating from the run's first batch until its end, reading after. A failure over pages laid leaves them readable:
+ * reading, the failure kept; one with nothing laid is the card's
  */
 export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
   switch (event.type) {
@@ -166,41 +172,44 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     // proves it: the settings shown again (a language pack that came, a read, another tab's change) prove nothing
     case 'saved':
       return state.mended === state.refusals ? state : { ...state, mended: state.refusals }
-    case 'fail':
-      if (CANNOT_BE_HAD.has(event.event)) return { ...state, available: false, phase: 'ready' }
-      // the translation shown in part: said, the preview kept, the displays as they are; the run's end follows
-      if (event.event === 'shown in part') return { ...state, partial: true }
-      if (NOT_SUPPORTED.has(event.event)) return { ...state, languageSupported: false, phase: 'ready' }
-      return { ...state, phase: state.shown === 'none' ? 'failed' : 'ready', failure: kindOf(event.kind) }
-    case 'note': {
-      const shown = SHOWS[event.event] ?? state.shown
-      const next = shown === state.shown ? state : { ...state, shown, finalReady: shown === 'copy' || shown === 'final' }
-      switch (event.event) {
-        case 'opened':
-          return state.display === 'original' && state.phase === 'loading' ? { ...next, phase: 'ready' } : next
-        // the reading view's original open (fromView): its pages are on screen in every display, and a failure of the open
-        // before it is mended (a retry that opened)
-        case 'view opened':
-          return { ...next, phase: 'ready', failure: null }
-        case 'digest':
-          return shown === 'none' && state.phase === 'ready' ? { ...next, phase: 'loading' } : next
-        // the copy's passages its typesetting left in the original (session.mjs, cache.mjs passagesInSource), from the
-        // moment it is on screen: current, not checked against the settings, or until a run translates it again
-        case 'shown cached':
-          return { ...next, ...(state.phase === 'loading' ? { phase: 'ready' } : {}), failedUnits: event.lost }
-        case 'cache current':
-          return { ...next, phase: 'ready', progress: 1, failedUnits: event.lost }
-        case 'translating':
-          return { ...next, phase: event.again ? 'retranslating' : 'translating', failure: null, partial: false, progress: event.total ? event.got / event.total : 0, finishing: -1, failedUnits: event.lost }
-        case 'done':
-          return { ...next, phase: state.phase === 'failed' ? 'failed' : 'ready', failedUnits: event.lost, ...(shown === 'final' ? { progress: 1 } : {}) }
+    // the original on screen, in every display: readable, a failure of its open before it mended (a retry that opened)
+    case 'opened':
+      return { ...state, phase: state.phase === 'loading' || (state.phase === 'failed' && state.failure === 'network' && !drawn(state)) ? 'ready' : state.phase, failure: state.phase === 'failed' ? null : state.failure, download: state.download === 'none' ? 'original' : state.download }
+    case 'fail': {
+      const failure = kindOf(event.kind)
+      return { ...state, phase: drawn(state) ? 'ready' : 'failed', failure }
+    }
+    case 'preparing': {
+      const preparing = { position: event.position, progress: event.progress }
+      return { ...state, preparing, unavailable: null, phase: state.phase === 'failed' ? state.phase : 'preparing' }
+    }
+    case 'coming':
+      return state.unavailable === null && state.available ? state : { ...state, unavailable: null, available: true, languageSupported: true }
+    case 'layer': {
+      const layer = event.laid === state.layer.laid && event.total === state.layer.total ? state.layer : { laid: event.laid, total: event.total }
+      // the layer refused for the visit: no bilingual version now, the original stays
+      if (event.state === 'refused') return { ...state, layer, preparing: null, unavailable: { why: 'unreachable', retryAt: null }, phase: state.phase === 'failed' ? 'failed' : 'ready' }
+      return layer === state.layer ? state : { ...state, layer }
+    }
+    case 'translating': {
+      const progress = event.total ? Math.min(1, event.got / event.total) : 0
+      return { ...state, phase: 'translating', preparing: null, failure: null, progress, failedUnits: event.lost }
+    }
+    case 'translated': {
+      const progress = event.total ? Math.min(1, event.got / event.total) : 1
+      // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
+      if (event.stopped && !drawn(state)) return { ...state, phase: 'failed', failure: event.stopped, progress, failedUnits: event.lost }
+      return { ...state, phase: 'ready', preparing: null, progress, failedUnits: event.lost, failure: event.stopped }
+    }
+    case 'unavailable': {
+      const lasting = LASTING.has(event.why)
+      return {
+        ...state, preparing: null, unavailable: { why: event.why, retryAt: event.retryAt },
+        // the paper's own: its translated displays greyed; a language the layer does not set: the language's notice
+        available: lasting && event.why !== 'target' ? false : state.available,
+        languageSupported: event.why === 'target' ? false : state.languageSupported,
+        phase: state.phase === 'failed' ? 'failed' : 'ready',
       }
-      if (!making(state.phase)) return next
-      const progress = event.total ? Math.min(1, event.got / event.total) : state.progress
-      // the translation over — every paragraph translated or lost, or the service stopped —, each compile after it counted
-      const over = state.finishing >= 0 || event.event === 'stopped' || (event.total > 0 && event.got + event.lost >= event.total)
-      const finishing = !over ? -1 : state.finishing < 0 ? 0 : state.finishing + (COMPILED.has(event.event) ? 1 : 0)
-      return progress === state.progress && finishing === state.finishing && event.lost === state.failedUnits && next === state ? state : { ...next, progress, finishing, failedUnits: event.lost }
     }
     default:
       return state
@@ -208,12 +217,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
 }
 
 /** the reading view's event as the session's (the reader's design, §11.7): what the interface's state is folded from. The
- *  original opened is the note `view opened` (ready in every display), a PDF that could not be opened its fetch failure;
- *  the paper's id is the address's. None for what the interface does not hold (the original dropped, the layer's state until the layer side) */
+ *  original opened is `opened` (ready in every display), a PDF that could not be opened its fetch failure; the paper's id is
+ *  the address's. None for what the interface does not hold (the original dropped) */
 export function fromView(event: ViewEvent, paper: string): SessionEvent | null {
   switch (event.type) {
     case 'loading': return event
-    case 'opened': return { type: 'note', event: 'view opened', data: {}, got: 0, total: 0, lost: 0, again: false }
+    case 'opened': return { type: 'opened' }
     case 'failed': return { type: 'fail', event: 'fetch failed', text: `Could not fetch ${paper}'s PDF (${event.error})`, kind: 'network' }
     case 'paper': return { type: 'paper', id: paper, title: event.title }
     case 'page': return { type: 'page', side: event.side, page: event.page, pages: event.pages }
@@ -222,6 +231,7 @@ export function fromView(event: ViewEvent, paper: string): SessionEvent | null {
     case 'sync': return { type: 'sync', on: event.on }
     case 'outline': return event
     case 'heading': return event
+    case 'layer': return { type: 'layer', state: event.state, laid: event.laid, total: event.total }
     default: return null
   }
 }

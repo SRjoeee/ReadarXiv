@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { createController, fromView, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
-import type { SessionEvent, SessionHost } from '@/pdf-reader/session/session.mjs'
+import type { SessionEvent, SessionHost } from '@/pdf-reader/session/events'
 
-const note = (event: string, counts: Partial<{ got: number; total: number; lost: number; again: boolean }> = {}): SessionEvent => ({ type: 'note', event, data: {}, got: 0, total: 0, lost: 0, again: false, ...counts })
 const fold = (events: SessionEvent[], from = INITIAL) => events.reduce(reduce, from)
+const opened: SessionEvent = { type: 'opened' }
+const laid = (n: number): SessionEvent => ({ type: 'layer', state: 'open', laid: n, total: 4 })
 
 describe('reduce: the session events folded into the reader state', () => {
   it("follows the display, the scale and each side's page", () => {
@@ -22,45 +23,15 @@ describe('reduce: the session events folded into the reader state', () => {
     expect(fold([{ type: 'loading', loaded: 1200, total: 1000 }]).loaded).toBe(1)
   })
 
-  it('is ready once the original is open, when the original alone is shown', () => {
-    expect(fold([{ type: 'display', mode: 'original' }, note('opened')]).phase).toBe('ready')
-    expect(fold([{ type: 'display', mode: 'bilingual' }, note('opened')]).phase).toBe('loading')
+  it('is ready once the original is open, in every display: the original is readable while the layer comes; its download is the original', () => {
+    for (const mode of ['original', 'bilingual', 'translation'] as const) expect(fold([{ type: 'display', mode }, opened]).phase, mode).toBe('ready')
+    expect(fold([opened]).download).toBe('original')
+    expect(INITIAL.download).toBe('none')
   })
+})
 
-  it("a copy shown counts the passages it holds in the original from the moment it is on screen, whatever follows — current, not checked, or translated again (N-5)", () => {
-    // the service unreachable: the copy shown, and nothing after it
-    expect(fold([note('digest'), note('cache hit'), note('shown cached', { lost: 2 })])).toMatchObject({ phase: 'ready', shown: 'copy', failedUnits: 2 })
-    // translated again: the run's own count from its start
-    expect(fold([note('shown cached', { lost: 2 }), note('translating', { again: true })]).failedUnits).toBe(0)
-  })
-
-  it("a copy current on a visit again counts the passages it holds in the original, as the run that made it did (I-6 of 2026-10-04)", () => {
-    expect(fold([note('digest'), note('cache hit'), note('shown cached'), note('cache current', { lost: 2 })])).toMatchObject({ phase: 'ready', failedUnits: 2 })
-    expect(fold([note('digest'), note('cache hit'), note('shown cached'), note('cache current')]).failedUnits).toBe(0)
-  })
-
-  it("counts the translation's progress and the paragraphs the service failed on", () => {
-    const state = fold([note('digest'), note('engine'), note('translating'), note('source', { total: 40 }), note('translated', { got: 10, total: 40, lost: 2 })])
-    expect(state.phase).toBe('translating')
-    expect(state.progress).toBeCloseTo(0.25)
-    expect(state.failedUnits).toBe(2)
-  })
-
-  it('counts the compiles that end once the translation is over — every paragraph in or lost, or the service stopped — and from nothing at a run\'s start (the F2 review\'s M1)', () => {
-    const start = [note('translating', { total: 4 }), note('fonts', { total: 4 }), note('translated', { got: 2, total: 4 }), note('preview', { got: 2, total: 4 })]
-    expect(fold(start).finishing).toBe(-1)
-    const over = fold([...start, note('translated', { got: 4, total: 4 }), note('preview', { got: 4, total: 4 }), note('original', { got: 4, total: 4 }), note('typeset', { got: 4, total: 4 }), note('final', { got: 4, total: 4 })])
-    expect(over.finishing).toBe(3)
-    expect(fold([note('translating', { total: 4 })], over).finishing).toBe(-1)
-    expect(fold([...start, note('translated', { got: 3, total: 4, lost: 1 }), note('final', { got: 3, total: 4, lost: 1 })]).finishing).toBe(1)
-    expect(fold([...start, note('stopped', { got: 2, total: 4 }), note('final', { got: 2, total: 4 })]).finishing).toBe(1)
-  })
-
-  it("says translating again when this machine's copy is being made again", () => {
-    expect(fold([note('cache hit'), note('shown cached'), note('engine'), note('translating', { again: true }), note('translated', { got: 1, total: 4, again: true })]).phase).toBe('retranslating')
-  })
-
-  // the phases a run passes through, each once, in order: what the capsule would show (the design, §8)
+// The layer as the reader's only translated view (Stage 5 Task 12): every row of its fallback table, on the events alone
+describe('reduce: the layer\'s states (Task 12)', () => {
   const phases = (events: SessionEvent[]) => {
     const seen: string[] = []
     events.reduce((state, event) => {
@@ -70,69 +41,58 @@ describe('reduce: the session events folded into the reader state', () => {
     }, INITIAL)
     return seen
   }
-  const bilingual: SessionEvent = { type: 'display', mode: 'bilingual' }
-  const copyShown = [note('digest'), note('cache hit'), note('cached opened'), note('shown cached')]
-
-  it("goes from loading to reading on a revisit with a current copy, never through translating (final review)", () => {
-    expect(phases([bilingual, note('opened'), ...copyShown, note('engine'), note('cache current')])).toEqual(['loading', 'ready'])
+  it('a layer and a working service: loading, then translating as rows come, then reading; the pages laid counted', () => {
+    const events: SessionEvent[] = [opened, { type: 'coming' }, { type: 'translating', got: 0, total: 40, lost: 0 }, laid(1), { type: 'translating', got: 10, total: 40, lost: 2 }]
+    expect(fold(events)).toMatchObject({ phase: 'translating', progress: 0.25, failedUnits: 2, layer: { laid: 1, total: 4 } })
+    const done = fold([...events, { type: 'translated', got: 38, total: 40, lost: 2, stopped: null }])
+    expect(done).toMatchObject({ phase: 'ready', progress: 0.95, failedUnits: 2, failure: null })
+    expect(phases([...events, { type: 'translated', got: 40, total: 40, lost: 0, stopped: null }])).toEqual(['ready', 'translating', 'ready'])
   })
 
-  it("reads this machine's copy when no service can check it (final review)", () => {
-    expect(phases([bilingual, note('opened'), ...copyShown, note('done')])).toEqual(['loading', 'ready'])
+  it('a layer and a failing service: the card with its reason while nothing is laid; laid pages stay readable, the notice with its retry', () => {
+    expect(fold([opened, { type: 'fail', event: 'service', text: '', kind: 'no-key' }])).toMatchObject({ phase: 'failed', failure: 'no-key' })
+    const stopped = fold([opened, laid(2), { type: 'translated', got: 10, total: 40, lost: 30, stopped: 'network' }])
+    expect(stopped).toMatchObject({ phase: 'ready', failure: 'network', failedUnits: 30 })
+    expect(fold([opened, { type: 'translated', got: 0, total: 40, lost: 40, stopped: 'network' }])).toMatchObject({ phase: 'failed', failure: 'network' })
+    // a retry that translates mends it
+    expect(fold([{ type: 'translating', got: 10, total: 40, lost: 0 }], stopped)).toMatchObject({ phase: 'translating', failure: null })
   })
 
-  it("keeps reading this machine's copy when the network is down, the failure kept (final review)", () => {
-    const events: SessionEvent[] = [bilingual, note('opened'), ...copyShown, note('engine'), note('translating', { again: true }), { type: 'fail', event: 'fetch failed', text: '', kind: 'network' }]
-    expect(fold(events)).toMatchObject({ phase: 'ready', failure: 'network' })
-    expect(phases(events)).not.toContain('failed')
+  it('preparing: the original, the prepare\'s place and progress, then the layer as it comes', () => {
+    const p = fold([opened, { type: 'preparing', position: 3, progress: null }, { type: 'preparing', position: null, progress: 0.4 }])
+    expect(p).toMatchObject({ phase: 'preparing', preparing: { position: null, progress: 0.4 }, available: true })
+    expect(fold([{ type: 'coming' }, { type: 'translating', got: 0, total: 9, lost: 0 }], p)).toMatchObject({ phase: 'translating', preparing: null })
   })
 
-  it("translates again, never as a first translation, when this machine's copy is being replaced (final review)", () => {
-    const run = [note('source fetched', { again: true }), note('source', { total: 4, again: true }), note('anchored', { again: true }), note('translated', { got: 4, total: 4, again: true }), note('shown preview', { again: true }), note('shown final', { again: true }), note('done', { again: true })]
-    expect(phases([bilingual, note('opened'), ...copyShown, note('engine'), note('translating', { again: true }), ...run])).toEqual(['loading', 'ready', 'retranslating', 'ready'])
+  it('no source, no PDF, a prepare that cannot succeed: the translated displays greyed, the HTML version offered', () => {
+    for (const why of ['no-source', 'no-pdf', 'cannot-prepare', 'unknown-versions'] as const) {
+      expect(fold([opened, { type: 'preparing', position: 1, progress: 0 }, { type: 'unavailable', why, retryAt: null }]), why).toMatchObject({ available: false, phase: 'ready', preparing: null, languageSupported: true, unavailable: { why } })
+    }
+    expect(fold([{ type: 'html', url: 'https://arxiv.org/html/1706.03762#readarxiv' }])).toMatchObject({ htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv' })
   })
 
-  it('loads, then translates, when a translation is asked for after the original alone was read', () => {
-    expect(phases([note('opened'), bilingual, note('digest'), note('engine'), note('translating'), note('source', { total: 4 }), note('shown final'), note('done')])).toEqual(['ready', 'loading', 'translating', 'ready'])
+  it('refused, unreachable: the original, passing (the displays not greyed); the layer coming after a retry clears it', () => {
+    for (const why of ['refused', 'unreachable'] as const) {
+      const s = fold([opened, { type: 'unavailable', why, retryAt: why === 'refused' ? 1234 : null }])
+      expect(s, why).toMatchObject({ available: true, phase: 'ready', unavailable: { why, retryAt: why === 'refused' ? 1234 : null } })
+      expect(fold([{ type: 'coming' }], s).unavailable).toBeNull()
+    }
+    // the view's side refused (a part, the base, the composed document): no layer for the visit, the original stays
+    expect(fold([opened, { type: 'layer', state: 'refused', laid: 0, total: 4 }])).toMatchObject({ phase: 'ready', unavailable: { why: 'unreachable' } })
   })
 
-  it('has a final to download while a copy or the final is on screen, not while a draft replaces it (final review)', () => {
-    const copy = fold(copyShown)
-    expect(copy.finalReady).toBe(true)
-    const draft = fold([note('engine'), note('translating', { again: true }), note('shown preview', { again: true })], copy)
-    expect(draft.finalReady).toBe(false)
-    expect(fold([note('shown final', { again: true })], draft).finalReady).toBe(true)
-    expect(fold([note('digest'), note('cache hit'), note('cached opened'), note('cache unusable')]).finalReady).toBe(false)
+  it('a target the layer does not set: the language not supported (the menu offered), the paper not greyed', () => {
+    expect(fold([opened, { type: 'unavailable', why: 'target', retryAt: null }])).toMatchObject({ languageSupported: false, available: true, phase: 'ready' })
   })
 
   it("names a failure by the chain's error kinds alone, the popup's reasons (final review)", () => {
-    expect(fold([{ type: 'fail', event: 'failed', text: '', kind: 'auth' }]).failure).toBe('auth')
-    expect(fold([{ type: 'fail', event: 'no engine', text: '', kind: 'unavailable' }]).failure).toBe('unknown')
-  })
-
-  it('has the final ready once it is on screen, or once a current copy is', () => {
-    expect(fold([note('translated', { got: 4, total: 4 }), note('shown final'), note('done', { got: 4, total: 4 })])).toMatchObject({ phase: 'ready', finalReady: true, progress: 1 })
-    expect(fold([note('digest'), note('cache hit'), note('shown cached'), note('cache current')])).toMatchObject({ phase: 'ready', finalReady: true })
-  })
-
-  it('tells a paper that cannot be had from a language not supported from a failure', () => {
-    expect(fold([{ type: 'fail', event: 'no source', text: '' }])).toMatchObject({ available: false, phase: 'ready', failure: null })
-    // nothing typeset, every strategy tried: a paper that cannot be had as a bilingual PDF too, not a failure to retry
-    expect(fold([{ type: 'fail', event: 'cannot typeset', text: '' }])).toMatchObject({ available: false, phase: 'ready', failure: null })
-    // its HTML version, where the reader can go instead
-    expect(fold([{ type: 'html', url: 'https://arxiv.org/html/1706.03762#readarxiv' }])).toMatchObject({ htmlVersion: 'https://arxiv.org/html/1706.03762#readarxiv' })
-    expect(fold([{ type: 'fail', event: 'not verified', text: '' }])).toMatchObject({ languageSupported: false, phase: 'ready', failure: null })
-    expect(fold([{ type: 'fail', event: 'no engine', text: '', kind: 'no-key' }])).toMatchObject({ phase: 'failed', failure: 'no-key' })
+    expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'auth' }]).failure).toBe('auth')
+    expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'unavailable' as never }]).failure).toBe('unknown')
     expect(fold([{ type: 'fail', event: 'crashed', text: '' }])).toMatchObject({ phase: 'failed', failure: 'unknown' })
   })
+})
 
-  it('a run that could show only part of its translation: said, the preview kept, the translated displays not greyed; a run again starts without it (S-R-19)', () => {
-    const s = fold([note('shown preview', { got: 9, total: 103 }), { type: 'html', url: 'https://arxiv.org/html/x#readarxiv' }, { type: 'fail', event: 'shown in part', text: '' }, note('done', { got: 103, total: 103 })])
-    expect(s).toMatchObject({ partial: true, available: true, phase: 'ready', shown: 'preview', failure: null, htmlVersion: 'https://arxiv.org/html/x#readarxiv' })
-    expect(INITIAL.partial).toBe(false)
-    expect(fold([note('translating', { got: 0, total: 103 })], s).partial).toBe(false)
-  })
-
+describe('reduce: the settings and what the reader holds', () => {
   it("knows when the extension's settings could not be read", () => {
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }]).settingsUnreadable).toBe(true)
     expect(fold([{ type: 'notice', why: { kind: 'tooNew' } }, { type: 'notice', why: null }]).settingsUnreadable).toBe(false)
@@ -186,11 +146,12 @@ describe('reduce: the session events folded into the reader state', () => {
   })
 
   it('keeps the same state object for an event that changes nothing', () => {
-    expect(reduce(INITIAL, { type: 'status', text: 'opening…' })).toBe(INITIAL)
+    expect(reduce(INITIAL, { type: 'sync', on: true })).toBe(INITIAL)
+    expect(reduce(INITIAL, { type: 'layer', state: 'open', laid: 0, total: 0 })).toBe(INITIAL)
   })
 })
 
-const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setCompositor: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null), goToUnit: vi.fn(), lead: vi.fn(), retry: vi.fn(), setNarrow: vi.fn(), pinch: vi.fn() })
+const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null), goToUnit: vi.fn(), lead: vi.fn(), retry: vi.fn(), setNarrow: vi.fn(), pinch: vi.fn() })
 const panes = () => ({ left: document.createElement('div'), right: document.createElement('div') })
 
 describe('createController', () => {
@@ -405,16 +366,14 @@ describe('fromView: the reading view\'s events as the session\'s, the controller
     expect(open).toMatchObject({ display: 'bilingual', phase: 'ready' })
     const mended = fold([{ type: 'display', display: 'bilingual' }, { type: 'failed', error: '503' }, { type: 'opened', pages: 4 }].map(view))
     expect(mended).toMatchObject({ phase: 'ready', failure: null })
-    // the session's own note keeps its rule: a translated display waits for its translation
-    expect(fold([{ type: 'display', mode: 'bilingual' }, note('opened')]).phase).toBe('loading')
   })
 
-  it('says a PDF that could not be opened is the network\'s failure, and tells nothing of a dropped original or the layer', () => {
+  it('says a PDF that could not be opened is the network\'s failure, tells nothing of a dropped original, and the layer\'s state and pages laid', () => {
     const failed = fromView({ type: 'failed', error: '404' }, '2600.00001')
     expect(failed).toMatchObject({ type: 'fail', event: 'fetch failed', kind: 'network' })
     expect(fold([failed as SessionEvent])).toMatchObject({ phase: 'failed', failure: 'network' })
     expect(fromView({ type: 'dropped' }, 'x')).toBeNull()
-    expect(fromView({ type: 'layer', state: 'open', laid: 1, total: 4 }, 'x')).toBeNull()
+    expect(fromView({ type: 'layer', state: 'open', laid: 1, total: 4 }, 'x')).toEqual({ type: 'layer', state: 'open', laid: 1, total: 4 })
   })
 
   it('keeps the zoom the controller chose where the engine does not say (the session\'s scale), and takes it where it does', () => {
