@@ -590,6 +590,11 @@ describe('the links\' minimums, 3a-2: kept and true per output', () => {
     expect(row('low').linksLost).toEqual(['3:1', '5:2'])
     expect(row('low').linksFalse).toEqual(['3:0', '3:4'])
   })
+  it('lists each wrong link\'s page, rank and reasons', () => {
+    const rows = completenessRows({ fixtures: { w: output({ linksWrong: 2 }, [{ p: 2, where: { linksWrong: ['1:name', 'p1/0:twice'] } }]) } } as never, 'model')
+    expect(rows[0]!.fails).toEqual(['linksWrong'])
+    expect(rows[0]!.linksWrongAt).toEqual(['p2:1:name', 'p2:p1/0:twice'])
+  })
   it('shares true over the moved records that can be measured', () => {
     const page = pageEntry(1, { model: { units: { textOn: 0, textDrawn: 0, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: [], gaps: [], cropForeign: 0, wrongPageText: 0, droppedPh: 0, modelCells: 1000, linksTotal: 4, linksKeptN: 4, linksMoved: 4, linksTrueN: 2, linksUnverified: 2 }, check: { missing: [], twice: [], brackets: [], duplicated: [], clipped: 0, numbers: { total: 0, shown: 0 } }, where: {}, style: [0, 0], drawn: 0 } as never, null)
     const t = fixtureTotals([page.entry], [page.frames], 'model')

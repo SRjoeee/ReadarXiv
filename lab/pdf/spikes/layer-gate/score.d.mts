@@ -23,4 +23,4 @@ export declare function compare(prev: Record<string, { totals: Totals; pages: Pa
 export declare function droppedOutputs(record: { tiers?: Record<string, { fixtures?: Record<string, unknown> }> } | null, key: string, fixtures: string[]): string[]
 export interface CompletenessRow { name: string; pages: number; numbers: [number, number]; lostInk?: number; fails: string[]; [check: string]: unknown }
 /** the brief's completeness rows of a run: per output each check's count and the checks above 0 (`fails`) */
-export declare function completenessRows(run: { fixtures: Record<string, { totals: Totals; summary?: { recordErrors?: number; linksLost?: string[] }; pages?: { p: number; where?: { linksTrue?: string[] } }[] }> }, tier: Tier): CompletenessRow[]
+export declare function completenessRows(run: { fixtures: Record<string, { totals: Totals; summary?: { recordErrors?: number; linksLost?: string[] }; pages?: { p: number; where?: { linksTrue?: string[]; linksWrong?: string[] } }[] }> }, tier: Tier): CompletenessRow[]

@@ -1289,6 +1289,7 @@ const bad = completeness.filter(c => c.fails.length)
 console.log(`completeness (spec §5): ${bad.length ? `${bad.length} of ${completeness.length} outputs fail: ${bad.map(c => `${c.name} [${c.fails.join(', ')}]`).join('; ')}` : `every one of ${completeness.length} outputs passes`}${bad.length && arg('check') ? ' (under --check the merge rule decides: each check is a measure of it)' : ''}`)
 // (the links' minimums' misses, each output's: the annotations not kept, page:rank, and the moved records not true, page:rank)
 for (const c of completeness) {
+  if (c.linksWrongAt) console.log(`  ${c.name}: links wrong at ${c.linksWrongAt.slice(0, 40).join(' ')}${c.linksWrongAt.length > 40 ? ' ...' : ''}`)
   if (c.linksLost) console.log(`  ${c.name}: links kept ${pct(c.linksKept)} < ${pct(LINKS_MIN.kept)}, ${c.linksLost.length} not kept: ${c.linksLost.slice(0, 40).join(' ')}${c.linksLost.length > 40 ? ' ...' : ''}`)
   if (c.linksFalse) console.log(`  ${c.name}: moved links true ${pct(c.linksTrue)} < ${pct(LINKS_MIN.true)}, ${c.linksFalse.length} not true: ${c.linksFalse.slice(0, 40).join(' ')}${c.linksFalse.length > 40 ? ' ...' : ''}`)
 }

@@ -378,6 +378,8 @@ export function completenessRows(run, tier) {
       row[k] = t[k]
       if (t[k] < min - 1e-12) row.fails.push(k)
     }
+    // (and each wrong link's page, rank and reasons, links.mjs linksPage's `where`: names and numbers alone)
+    if (row.linksWrong > 0) row.linksWrongAt = (f.pages ?? []).flatMap(p => (p.where?.linksWrong ?? []).map(x => `p${p.p}:${x}`))
     if (row.fails.includes('linksKept')) row.linksLost = f.summary?.linksLost ?? []
     if (row.fails.includes('linksTrue')) row.linksFalse = (f.pages ?? []).flatMap(p => (p.where?.linksTrue ?? []).map(x => `${p.p}:${x}`))
     return row
