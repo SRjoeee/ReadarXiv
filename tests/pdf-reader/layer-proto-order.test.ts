@@ -80,9 +80,42 @@ describe('the run: a page asked in any order answers as the page asked in order'
       expect(P.doc.asked, as).toEqual(C.draw)
       // (the units laid are those on its pass pages, in their rank; every page its closure makes ready is)
       expect(run.order.every(id => unitsOn(P, C.pass).includes(id)), `${as}: laid ${run.order}`).toBe(true)
-      expect(run.order.length, as).toBeLessThanOrEqual(C.lay.length)
+      const lay = run.idsOf(C.lay)
+      expect(run.order.every(id => lay.includes(id)), `${as}: laid ${run.order} among ${lay}`).toBe(true)
       for (const q of C.ready) expect(run.ready(q) || run.failed(q), `${as}: page ${q} of its ready set`).toBe(true)
       expect(run.ready(p) || run.failed(p), as).toBe(true)
+    }
+  })
+
+  it('L1: a unit with a page that cannot be read grows on its other pages in every order: page 3 alike asked first, last or alone', async () => {
+    const paper = PAPERS.find(x => x.name === 'S-D footnote, page 4 unreadable')!
+    const { run: want, snaps: wanted } = await ask(build(paper), [1, 2, 3, 4], true)
+    // (unit 4 runs from page 3 on to page 4, which cannot be read: it is the original's, why page, and grows on page 3 alike)
+    expect(want.skipped.filter(s => s.why === 'page').map(s => s.id)).toEqual([4, 5])
+    for (const order of [[4, 3, 2, 1], [3], [4, 3], [2, 3]]) {
+      const { run, snaps } = await ask(build(paper), order, true)
+      expect(snaps.get(3), `${order}`).toEqual(wanted.get(3))
+      // (page 3's closure reads page 4: unit 4 left the original's in every order that lays page 3)
+      expect(run.skipped.filter(s => s.id === 4).map(s => s.why), `${order}`).toEqual(['page'])
+    }
+  })
+
+  it('L3: the paper\'s designs are page 1\'s alone, whatever page is asked first', async () => {
+    // (pages after the first set in Palatino, page 1 in Times: the designs are Times's, as page 1 says, though most of the
+    // paper's characters are another serif's)
+    const palatino = (P: Built) => {
+      const get = P.doc.getPage
+      P.doc.getPage = async (n: number) => {
+        const pg = (await get(n)) as Record<string, unknown> & { getTextContent(): Promise<{ items: unknown[]; styles: Record<string, unknown> }> }
+        return n === 1 ? pg : { ...pg, commonObjs: { get: () => ({ name: 'Palatino-Roman' }) } }
+      }
+      return P
+    }
+    const paper = PAPERS.find(x => x.name === 'S-A chain')!
+    for (const first of [1, 5, 3]) {
+      const run = await openRun(palatino(build(paper)))
+      await askPage(run, first)
+      expect(run.designs.serif, `page ${first} first`).toBe('times')
     }
   })
 

@@ -152,6 +152,8 @@ export interface ProtoRun {
   ready(page: number): boolean
   /** the ids of the units whose rows laying the page still waits for (its closure's over K so far), in id order */
   rowsFor(page: number): number[]
+  /** the unit ids of K's entries (a closure's `lay` or `rows`, K indices), in their order */
+  idsOf(entries: readonly number[]): number[]
   /** parts: the next part, read by readPart against the chain (its layout merged into the hybrid's index before: facade.mjs) */
   grow(part: ReadPart): void
   /** parts: no more parts; every page past the last covered fails as it is reached */

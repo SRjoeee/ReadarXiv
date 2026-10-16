@@ -81,7 +81,9 @@ export type LeftPage = ReadLeftPart
  *  layer terminal: every page not ready is told `failed`, once; every pending and later pageOf (of a page not ready) and
  *  leftPageOf rejects with that error; addPart and endParts are no-ops; a ready page still answers, until dispose */
 export interface Layer {
-  /** each row as v0's unit: the pages that no longer wait for rows (a row that is no unit is skipped and counted) */
+  /** each row as v0's unit (a row that is no unit is skipped and counted): `complete`, the pages newly complete, each told once:
+   *  laying it waits for no row and no part more (its closure's, Need(p)), so pages come out of the stream's order (page 137
+   *  before page 3, whose closure waits for a float translated later) */
   take(rows: readonly Row[]): { complete: number[] }
   /** no more rows: every page is complete with what it holds */
   end(): void
@@ -109,7 +111,8 @@ export interface Layer {
    * `failed`, on a page uncovered when endParts() ends the parts, on dispose, and on `signal` abort (an AbortError). An aborted
    * ask drops its page from the targets: a page still `waiting` is not laid when a part covers it unless asked again; a page
    * already `laying` is laid anyway (a state never goes back). The newest ask is laid first, by its closure alone; a page told
-   * `laying` is finished before the drive goes idle. Throws synchronously after dispose
+   * `laying` is finished before the drive goes idle, and a newer ask overtakes it once at most (no page told `laying` waits
+   * behind every later ask). Throws synchronously after dispose
    */
   pageOf(page: number, o: { lang: string; signal?: AbortSignal }): Promise<LaidPage>
   /**

@@ -222,6 +222,38 @@ describe("S4: a unit's lines on a page are dropped and grown by that page alone"
   })
 })
 
+describe('S4 with a first page all another\'s: the first line is the first placed page\'s, whatever page grew first (L4)', () => {
+  // q (unit 1) is laid by v0's geometry on pages 2 and 3, its line on page 2 another unit's rectangle covers (dropped there),
+  // its line on page 3 anchored mid-word; u (unit 3) runs from page 3 to 4 and v (unit 4) from 4 to 5. Page 5's closure lays u
+  // and v, and u's growth on page 3 grows q there before q's own page 2 is reached: the first line q's page-3 growth reads
+  // was its page-2 line (not yet dropped), where laid in order it was its page-3 line (the page-2 one dropped), and its edge
+  // snapped. The first line is the first placed page's, read on that page alone, so both orders draw page 3 alike
+  const rectOf = (l: Line, x0 = spanOf(l)[0]) => [l.page, x0, l.b - 2.15, spanOf(l)[1], l.b + 6.83]
+  const Q2 = line(2, 200, [20, 'Alpha beta']), Q3 = line(3, 200, [20, 'gamma delta'])
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], from: 'geometry', tr: [text(CJK(5))] },
+    { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [Q2, Q3], rects: [rectOf(Q2), rectOf(Q3, 30)], from: 'geometry', tr: [text(CJK(8, 0x4e20))] },
+    { id: 2, kind: 'para', src: 'Other words', lines: [line(2, 120, [20, 'Other words'])], rects: [rectOf(Q2)], from: 'geometry', tr: [text(CJK(4, 0x4e40))] },
+    { id: 3, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], from: 'geometry', tr: [text(CJK(8, 0x4e60))] },
+    { id: 4, kind: 'para', src: 'Pi rho sigma tau', lines: [line(4, 60, [20, 'Pi rho']), line(5, 270, [20, 'sigma tau'])], from: 'geometry', tr: [text(CJK(8, 0x4e80))] },
+  ]
+  PAPERS.push(['S4, a first page dropped', specs, 5, [null]])
+  const pageOf = (run: Run, q: number) => ({ markup: run.rows[q - 1]!.markup, ops: JSON.stringify(run.rows[q - 1]!.ops) })
+  it('draws every page alike laid in order, page 5 first, reversed, or each page alone', async () => {
+    const want = await open(paper(specs, 5))
+    await want.until(5)
+    // (q's page-2 line dropped as another's: its lines are its page 3's alone)
+    expect(placedOf(want, 1).rects.map(r => r[0])).toEqual([3])
+    for (const first of [[5], [5, 4, 3, 2, 1], [3], [4]]) {
+      const run = await open(paper(specs, 5))
+      for (const p of first) await run.layFor(p)
+      await run.until(5)
+      for (let q = 1; q <= 5; q++) expect(pageOf(run, q), `${first} first, page ${q}`).toEqual(pageOf(want, q))
+      expect(placedOf(run, 1).rects, `${first} first`).toEqual(placedOf(want, 1).rects)
+    }
+  })
+})
+
 describe("C1: a unit's fill leading is its fit's", () => {
   // a paragraph of page 2, and one from page 2 on to page 3: page 2's pass waits for the second, laid at page 3
   const specs: Spec[] = [

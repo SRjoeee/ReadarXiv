@@ -1243,6 +1243,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** a unit placed: its pages' growth to come (its lines' pages, the units on each) */
   const toGrow = p => {
     p.linePages = [...new Set(p.rects.map(r => r[0]))]
+    // (its first page as placed, before any of its lines is dropped: where its first line is read, L4)
+    p.firstPage = p.rects[0]?.[0]
     Object.assign(p, { local: [], dropped: 0, grown: 0, area: new Map(), grew: new Set() })
     for (const g of p.linePages) (onPage.get(g) ?? onPage.set(g, []).get(g)).push(p)
   }
@@ -1291,7 +1293,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const y0 = Math.min(...rs.map(r => r[2])) - 20, y1 = Math.max(...rs.map(r => r[4])) + 20
       bands[g - 1] = (chars2[g - 1] ?? []).filter(c => c.yb >= y0 && c.yb <= y1)
     }
-    const grown = L2.extendRects2(rs, p.local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands, p.rects[0])
+    // (the unit's first line, which grows to the left over math alone and before which its source's first words are looked for:
+    // the first of its lines on its first page as placed, read when that page grows; none on any other page, a first page
+    // whose lines were all another's included (L4). Its lines as they stand would make a page's growth read whether the
+    // unit's earlier page had grown yet, which a page laid by its closure need not have)
+    const first = p.rects[0]?.[0] === p.firstPage ? p.rects[0] : null
+    const grown = L2.extendRects2(rs, p.local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands, first)
     p.grown += grown
     // (and the unit's part of the page again where its lines grew past it: what they grew over is the unit's to read and
     // to account for, or its characters there were put back under the translation)
@@ -1300,8 +1307,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const gx0 = Math.min(x0, ...rs.map(r => r[1])), gx1 = Math.max(x1, ...rs.map(r => r[3]))
       if (gx0 < x0 || gx1 > x1) p.local[g - 1] = (chars2[g - 1] ?? []).filter(c => c.x1 >= gx0 && c.x0 <= gx1 && c.yb >= y0 && c.yb <= y1)
     }
-    // its first line's edge snapped back to its first word's start, on its first page
-    if (!fileLines && p.rects[0]?.[0] === g) p.inkBefore = L2.snapFirstRect2(p.rects, p.local)
+    // its first line's edge snapped back to its first word's start, on its first page as placed alone (L4)
+    if (!fileLines && g === p.firstPage && p.rects[0]?.[0] === g) p.inkBefore = L2.snapFirstRect2(p.rects, p.local)
     p.area.set(g, textArea(g))
   }
   /** p's growth on each of its pages, after that of every unit ranked before it there, the rank taken a unit at a time from
@@ -1323,6 +1330,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         const q = line[i++]
         if (q.grew.has(g)) continue
         q.grew.add(g)
+        // (a unit let go of, left the original's with its pages passed (`free`), holds no state to grow: none past them reads it)
+        if (q !== p && q.letGo) continue
         try { growOn(q, g) } catch (e) { if (q === p || isMemoryError(e)) { grownTo.set(g, i); throw e } q.stepError ??= e }
         if (q === p) break
       }
@@ -1848,7 +1857,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (ORDER_FREE) C = closureOf(K, N, p)
       else {
         const B = Math.min(N, need.bound[p]), upTo = (a, b) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i)
-        C = { pass: upTo(1, B), lay: upTo(0, need.complete[p]), draw: upTo(1, B), rows: upTo(0, need.complete[p]), ready: upTo(1, B).filter(q => need.bound[q] <= B), bound: B }
+        // (its bound also every page its units read, a placeholder's past B among them, drawn before each is laid (L2): so that a
+        // page told laying waits for no part)
+        let bound = B
+        for (let i = 0; i <= Math.min(need.complete[p], K.length - 1); i++) for (const q of [...K[i].reach, ...K[i].reads]) if (q <= N && q > bound) bound = q
+        C = { pass: upTo(1, B), lay: upTo(0, need.complete[p]), draw: upTo(1, B), rows: upTo(0, need.complete[p]), ready: upTo(1, B).filter(q => need.bound[q] <= B), bound }
       }
       closures.set(p, C)
     }
@@ -1966,7 +1979,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const i of closure(p).rows) {
       const c = K[i]
       if (!c || c.decided || settleable(c)) continue
-      if (pending.has(c.id)) out.add(c.id)
+      // (its own row; else it is a cell whose group waits: its group's cells' rows, every row where the open was given no group)
+      if (pending.has(c.id)) { out.add(c.id); continue }
       if (!tableGroups) { for (const id of pending) out.add(id); break }
       for (const id of membersOf.get(c.group) ?? []) if (pending.has(id)) out.add(id)
     }
@@ -1998,12 +2012,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return true
   }
   /** each page touched since the last look that is now ready or failed, told once (onStep), a ready one with the time the
-   *  closure in hand took so far (pageMs: less what it waited for) */
+   *  closure in hand took since the page before it was ready (`ms()`: the closure's work so far, less what it waited for): each
+   *  ms counted for one page, so that the pages' times add up to the closures' (pageMs) */
   const report = ms => {
     for (const q of touched) {
       if (q < 1 || q > N || toldStep[q] || !(failedPages.has(q) || readyOf(q))) continue
       toldStep[q] = 1
-      if (readyAt[q]) pageMs[q] = ms()
+      if (readyAt[q]) { const t = ms(); pageMs[q] = t - (ms.last ?? 0); ms.last = t }
       onStep?.(q)
     }
     touched.clear()
@@ -2239,6 +2254,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     ready: p => readyOf(p),
     /** the ids of the units whose rows laying page `p` still waits for (its closure's over K so far), in id order */
     rowsFor: p => rowsFor(p),
+    /** the unit ids of K's entries (a closure's `lay` or `rows`, K indices), in their order */
+    idsOf: entries => entries.map(i => K[i]?.id),
     /**
      * Parts (`parts`: the open given no view and no left unit): the next part, read by readPart against the chain, its layout
      * merged into the hybrid's index by the host before (facade.mjs). The views of the pages it tells first and their rows;

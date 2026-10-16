@@ -347,6 +347,18 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     expect(drawing(run)).toEqual(want)
   })
 
+  it('names the rows a page waits for (rowsFor): its own entries\', and every row only for a cell whose group is read from all', async () => {
+    // (no group given at the open: a table cell waits for every row, a paragraph for its own)
+    const P = paper()
+    const run = await open(P, 'parts')
+    run.take(rowsOf(P, [...P.rows.keys()].filter(id => id !== 13 && id !== 25)))
+    // (page 3's closure: its paragraphs, unit 25 among them; page 2's: its cells, which wait for every row, and unit 13)
+    expect(run.rowsFor(3)).toEqual([25])
+    expect(run.rowsFor(2)).toEqual([13, 25])
+    run.take(rowsOf(P, [13, 25]))
+    expect([1, 2, 3].map(q => run.rowsFor(q))).toEqual([[], [], []])
+  })
+
   it('lets no page go before it is drawn and its units laid', async () => {
     // (page 1 holds no unit, but is not drawn: it is not ready, and no release lets it go undrawn)
     const specs = SPECS.filter(s => s.lines[0]![0] !== 1)

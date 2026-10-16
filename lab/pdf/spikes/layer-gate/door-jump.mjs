@@ -6,8 +6,8 @@
 // ask cost before the page was ready: the pages of the paper PDF.js was asked for (the layer's, not this page's own),
 // the removed pages beyond them, the units laid and drawn, and with `perf` the time (the open, then the ask) and the longest
 // task the browser reports (50 ms or more) while the page was laid. J is held to the page's closure (Need(p), 1b-D1: the run's
-// `closure(page)`, need.mjs closureOf over its K): the pages PDF.js was asked for among its `draw`, the units laid no more than
-// its `lay` entries (`closure.within`); an engine that lays in order and exposes no closure gives null ('closure: n/a')
+// `closure(page)`, need.mjs closureOf over its K): the pages PDF.js was asked for among its `draw`, the units laid among its
+// `lay` entries' (`closure.within`); an engine that lays in order and exposes no closure gives null ('closure: n/a')
 import { answerOf, bytes, lastRun, openDoor, recsOf } from '/gate/door-common.mjs'
 
 window.doorJump = {
@@ -26,7 +26,8 @@ window.doorJump = {
     // (what the ask drew and laid, read at once: the harness asks PDF.js for nothing before this)
     const j = { drawn: [...d.drawn].sort((a, b) => a - b), extra: d.extra.size, units: d.layer.stats().drawn }
     const C = typeof lastRun().closure === 'function' ? lastRun().closure(page) : null
-    const closure = C && { draw: C.draw, lay: C.lay.length, ready: C.ready, bound: C.bound, laid: lastRun().order.length, within: j.drawn.every(q => C.draw.includes(q)) && lastRun().order.length <= C.lay.length }
+    const lay = C ? new Set(lastRun().idsOf(C.lay)) : null
+    const closure = C && { draw: C.draw, lay: C.lay.length, ready: C.ready, bound: C.bound, laid: lastRun().order.length, within: j.drawn.every(q => C.draw.includes(q)) && lastRun().order.every(id => lay.has(id)) }
     const answer = await answerOf(d.layer, page, got, await bytes(`/door/${name}/s${page}.png`))
     answer.recs = await recsOf(lastRun(), page)
     if (observer) { await new Promise(ok => setTimeout(ok, 0)); observer.takeRecords().forEach(e => longTasks.push(e.duration)); observer.disconnect() }

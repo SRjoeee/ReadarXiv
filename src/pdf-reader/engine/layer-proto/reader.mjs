@@ -38,6 +38,8 @@ const SCALE = 2.5
 const CAPTIONS = Object.freeze({ figure: 'target', table: 'target' })
 /** a page's states as the door tells them: waiting (none told), laying, ready, failed */
 const WAITING = 0, LAYING = 1, READY = 2, FAILED = 3
+/** how many newer asks a page told laying waits behind at most before it is laid first */
+const OVERTAKEN = 1
 const STATES = Object.freeze(['waiting', 'laying', 'ready', 'failed'])
 
 /** what a value is, for a refusal: its type, never its text */
@@ -209,33 +211,40 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
 
   // ---- readiness: one pass over the pages, after each event (the door design §3), and the drive: one target at a time, laid
   // by its closure alone (run.layFor; the 1b-D design §2.2)
-  /** each live ask's turn (the newest last), and the order the pages were told laying in (the oldest first) */
+  /** each live ask's turn (the newest last), and the pages told laying in the order they were (the oldest first), each with
+   *  how many asks taken after it it waits behind */
   let seq = 0
   const askedAt = new Map(), committed = new Map()
   /** what the drive lays next, and why: (1) the newest live ask whose closure has all it needs (its parts and rows in), (2) a
    *  page told laying and not ready yet, the oldest first (a state never goes back: a page told laying is laid before the
    *  drive is idle), (3) the newest live ask whose closure waits for a part or a row: the work it can do meanwhile (page 1,
-   *  its covered pages, its rows in), the run waiting inside. A newer ask overtakes at the next unit or page */
+   *  its covered pages, its rows in), the run waiting inside. A newer ask overtakes at the next unit or page, but a page told
+   *  laying waits behind one newer ask at most (OVERTAKEN): while one does, no newer ask is taken, so that a reader who keeps
+   *  scrolling never starves a page whose host's stall clock runs from `laying` */
   const pick = () => {
+    const held = [...committed].some(([q, c]) => told[q] === LAYING && c.behind >= OVERTAKEN)
     let newest = null, ready = null
     for (const [q, at] of askedAt) {
       if (told[q] >= READY) continue
       if (newest === null || at > askedAt.get(newest)) newest = q
-      if ((ready === null || at > askedAt.get(ready)) && run.inputs(q)) ready = q
+      // (a page not taken yet waits while a page told laying has waited enough)
+      if ((ready === null || at > askedAt.get(ready)) && (told[q] === LAYING || !held) && run.inputs(q)) ready = q
     }
-    if (ready !== null) return { page: ready, take: true }
+    if (ready !== null) return { page: ready, take: told[ready] === WAITING }
     for (const q of committed.keys()) if (told[q] === LAYING) return { page: q, take: false }
     return newest === null ? null : { page: newest, take: false }
   }
-  /** the page the drive lays (null: none); a page is taken (told laying, with every page its closure makes ready that has all
-   *  it needs too, in page order) when the drive turns to it with its inputs in: not at its ask, so that an ask a newer one
-   *  overtakes before the drive reaches it commits nothing (pageof-contract §7) */
+  /** the drive's page, and a page taken (told laying, with every page its closure makes ready that has all it needs too, in
+   *  page order) when the drive turns to it with its inputs in: not at its ask, so that an ask a newer one overtakes before the
+   *  drive reaches it commits nothing (pageof-contract §7); every page told laying before it now waits behind it */
   let current = null
   const take = p => {
+    if (told[p] !== WAITING) return
+    for (const [q, c] of committed) if (told[q] === LAYING) c.behind++
     for (const q of run.closure(p).ready) {
       if (told[q] !== WAITING || (q !== p && !run.inputs(q))) continue
       told[q] = LAYING
-      committed.set(q, seq++)
+      committed.set(q, { at: seq++, behind: 0 })
       for (const l of [...listeners]) { try { l(q, 'laying') } catch { /* a listener's own error */ } }
     }
   }

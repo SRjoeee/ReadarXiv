@@ -310,8 +310,12 @@ describe('the door: three opens, the same pages', () => {
   it('A2, A3: the newest ask overtakes at the next unit; a page told laying and aborted is laid anyway, resumed after it; both as asked in order', async () => {
     const want = await cascadeInOrder()
     const g = globalThis as { scheduler?: unknown }
+    // (a clock that runs 10 ms at every read: every unit's work a slice, so the run gives way, scheduler.yield, before each)
+    const was = performance.now.bind(performance)
+    let clock = 0
+    performance.now = () => (clock += 10)
     const { layer, told, run } = await cascadeDoor()
-    // (between two units the run gives way, scheduler.yield among it: the first time, page 5 is asked and page 3's ask aborted)
+    // (between two units the run gives way: the second time, page 5 is asked and page 3's ask aborted)
     const ctl = new AbortController()
     let five: Promise<string> | null = null, yields = 0
     g.scheduler = { yield: () => { if (++yields === 2 && !five) { five = layer.pageOf(5, { lang: 'zh' }).then(p => p.svg.outerHTML); ctl.abort() } return new Promise(ok => setTimeout(ok, 0)) } }
@@ -330,7 +334,122 @@ describe('the door: three opens, the same pages', () => {
       expect(strip(fifth)).toBe(strip(want[4]!))
       expect(strip((await layer.pageOf(3, { lang: 'zh' })).svg.outerHTML)).toBe(strip(want[2]!))
       expect(run.ready(4)).toBe(true)
-    } finally { delete g.scheduler; layer.dispose() }
+    } finally { delete g.scheduler; performance.now = was; layer.dispose() }
+  })
+
+  it('a page told laying waits behind one newer ask at most: a reader who keeps scrolling starves none', async () => {
+    const want = await cascadeInOrder()
+    const g = globalThis as { scheduler?: unknown }
+    const was = performance.now.bind(performance)
+    let clock = 0
+    performance.now = () => (clock += 10)
+    const { layer, told, run } = await cascadeDoor()
+    // (page 2 taken; at the run's first yield after a unit of it is laid page 4 is asked (it overtakes page 2), at the first one
+    // after a unit of page 4's closure page 6 (it waits: page 2 has waited behind page 4 already))
+    const asked: Promise<string>[] = []
+    g.scheduler = {
+      yield: () => {
+        if (asked.length === 0 && run.order.length >= 1) asked.push(layer.pageOf(4, { lang: 'zh' }).then(p => p.svg.outerHTML))
+        else if (asked.length === 1 && run.order.length >= 3) asked.push(layer.pageOf(6, { lang: 'zh' }).then(p => p.svg.outerHTML))
+        return new Promise(ok => setTimeout(ok, 0))
+      },
+    }
+    try {
+      const two = await layer.pageOf(2, { lang: 'zh' })
+      for (let i = 0; i < 400 && asked.length < 2; i++) await tick()
+      const [four, six] = await Promise.all(asked)
+      await settleDown(layer, CASCADE.pages)
+      const at = (e: string) => told.indexOf(e)
+      expect(at('laying:4')).toBeGreaterThan(at('laying:2'))
+      // (page 4 ready first, then page 2, and page 6 taken only then)
+      expect(at('ready:4')).toBeLessThan(at('ready:2'))
+      expect(at('ready:2')).toBeLessThan(at('laying:6'))
+      const strip = (svg: string) => svg.replace(' lang="zh"', '')
+      expect([strip(two.svg.outerHTML), strip(four!), strip(six!)]).toEqual([strip(want[1]!), strip(want[3]!), strip(want[5]!)])
+    } finally { delete g.scheduler; performance.now = was; layer.dispose() }
+  })
+
+  it('F2: a page asked that fails rejects its asks, and the next page asked is laid', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const c = await cutSpec(SPEC)
+    const doc = docsOf(SPEC, { fail: () => [2] })(0)
+    const layer = await openLayer({ index: c.index, doc: doc as never, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    try {
+      layer.take(rowsOfIndex(c.index))
+      layer.end()
+      const two = layer.pageOf(2, { lang: 'zh' }).then(() => 'value', (e: Error) => e.message)
+      const three = layer.pageOf(3, { lang: 'zh' }).then(p => p.svg.outerHTML, (e: Error) => e.message)
+      expect(await two).toMatch(/page 2 failed/)
+      expect(await three).toMatch(/^<svg/)
+      await settleDown(layer, SPEC.pages)
+      // (page 1, told laying with page 2, laid all the same: its paragraph running on to page 2 the original's, why page)
+      expect([1, 2, 3].map(p => layer.pageState(p))).toEqual(['ready', 'failed', 'ready'])
+      const run = seen.runs.at(-1) as Run
+      expect(run.skipped.filter(x => x.id === 1).map(x => x.why)).toEqual(['page'])
+      // (page 2's own units are not laid: the drive turned from it as it failed)
+      expect(run.order).not.toContain(8)
+    } finally { layer.dispose() }
+  })
+
+  it('F4: a page of a closure no part covers once the parts end fails, and the page asked is laid without it', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const M = await made()
+    const docFor = docsOf(textOf(M)) as unknown as (r: number) => LayerDocument
+    // (page 1's closure draws page 2, a paragraph running on to it: only the first part, page 1, is ever told)
+    const layer = await openLayer({ index: M.index, doc: docFor(1), parts: M.readParts.slice(0, 1), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    try {
+      layer.take(rowsOfIndex(M.index))
+      layer.end()
+      const one = layer.pageOf(1, { lang: 'zh' }).then(p => p.svg.outerHTML, (e: Error) => e.message)
+      await settleDown(layer, 4)
+      expect(layer.pageState(1)).toBe('waiting')
+      layer.endParts()
+      expect(await one).toMatch(/^<svg/)
+      expect([1, 2, 3, 4].map(p => layer.pageState(p))).toEqual(['ready', 'failed', 'failed', 'failed'])
+      const run = seen.runs.at(-1) as Run
+      expect(run.skipped.filter(x => x.id === 2).map(x => x.why)).toEqual(['page'])
+    } finally { layer.dispose() }
+  })
+
+  it('P2: a part told while a closure waits grows it; the page is laid by the grown closure, as opened warm, told laying only then', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const c = await cutSpec(CASCADE, [1, 2, 3, 4, 5])
+    const rows = rowsOfIndex(c.index)
+    const warm = await openLayer({ index: c.index, doc: docsOf(CASCADE)(0) as never, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    warm.take(rows)
+    const want = (await warm.pageOf(2, { lang: 'zh' })).svg.outerHTML
+    warm.dispose()
+    const doc = docsOf(CASCADE)(0)
+    const layer = await openLayer({ index: c.index, doc: doc as never, parts: c.parts.slice(0, 1), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    try {
+      layer.take(rows)
+      const log: string[] = []
+      layer.onPage((p, state) => log.push(`${state}:${p}`))
+      const run = seen.runs.at(-1) as Run
+      const two = layer.pageOf(2, { lang: 'zh' })
+      // (over the first part alone, page 2's closure is its paragraph from page 1: the part of page 2 tells its own paragraph
+      // and the one running on to page 3, which the closure then reads)
+      await settleDown(layer, CASCADE.pages)
+      expect(layer.pageState(2)).toBe('waiting')
+      const before = run.closure(2)
+      log.push('part:2')
+      layer.addPart(c.parts[1]!)
+      await settleDown(layer, CASCADE.pages)
+      const grown = run.closure(2)
+      expect(grown.lay.length).toBeGreaterThan(before.lay.length)
+      expect(grown.draw).toContain(3)
+      expect(layer.pageState(2)).toBe('waiting')
+      // (page 3's part tells its units, whose lines reach page 4: the closure's bound, page 4's part still to come)
+      layer.addPart(c.parts[2]!)
+      await settleDown(layer, CASCADE.pages)
+      expect([layer.pageState(2), run.closure(2).bound]).toEqual(['waiting', 4])
+      log.push('part:4')
+      layer.addPart(c.parts[3]!)
+      expect((await two).svg.outerHTML).toBe(want)
+      // (told laying only once the closure's parts were all in)
+      expect(log.indexOf('laying:2')).toBeGreaterThan(log.indexOf('part:4'))
+      expect(doc.reads.filter(n => n === 2).length).toBe(1)
+    } finally { layer.dispose() }
   })
 
   it('names the rows a page still waits for (rowsFor): its closure\'s, none once it is ready', async () => {

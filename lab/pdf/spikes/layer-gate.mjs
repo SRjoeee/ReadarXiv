@@ -152,7 +152,7 @@
 //                (a fixture's name, or its paper's, as 2307.16209:147 for 2307.16209v1-zh). Each compared with the reference
 //                (as --door-order) and J reported, what the ask drew and laid before the page was ready (pages PDF.js was asked
 //                for, units laid, held to the page's closure Need(p) where the engine exposes one: the pages drawn
-//                among its draw, the units laid no more than its entries; 'closure: n/a' where it exposes none). The tasks (a fixture's pages, 6 to a task) are shared among --workers; with --perf also the time to the
+//                among its draw, the units laid among its lay entries; 'closure: n/a' where it exposes none). The tasks (a fixture's pages, 6 to a task) are shared among --workers; with --perf also the time to the
 //                page (a fresh open, then the ask) and the longest task of 50 ms or more, on one worker. The run is written to
 //                out/layer-gate/door-jump-<commit>-<time>.json
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
@@ -794,7 +794,7 @@ async function doorOrderFixture(page, name, errors) {
  * --door-jump: a task of a fixture's pages (the key `<fixture>#<i>`), each asked first and alone in a fresh page load
  * (layer-gate/door-jump.mjs) and compared with the reference's page, with J: the pages PDF.js was asked for and the units laid
  * before the page was ready, and with --perf the time to it and the longest task, held to the page's closure Need(p) where
- * the engine exposes one (1b-D1: the pages drawn among its draw, the units laid no more than its lay entries), gated
+ * the engine exposes one (1b-D1: the pages drawn among its draw, the units laid among its lay entries), gated
  */
 async function doorJumpTask(page, key, errors) {
   const { name, pages } = JUMP_TASKS.get(key)
