@@ -53,6 +53,7 @@
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
 import { noStart } from './no-start.mjs'
 import { sourceRepeats, stutterCuts } from './stutter.mjs'
+import { SWAP_PAD } from '../layer/swap.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -2879,16 +2880,25 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
  * plane 'O' (or none) the original, 'R' its text-removed page, 'P' its placeholders alone. A crop is darkened in, never
  * pasted: its paper is white, and pasted it erased what it was laid over (a kept label). A swap puts the removed page's
  * pixels in its rectangles.
+ * `k`: the device pixels a PDF unit `ctx` is drawn at, where the caller knows it. A swap's and a paper fill's rectangles are a
+ * removed glyph's outline grown by SWAP_PAD for its antialiased edge, a device pixel and more at 2.5 device pixels a unit and
+ * up; where the pad is less than a device pixel (a reader at 85 % and a device pixel ratio of 1: 1.06 a unit), the glyph's
+ * edge pixel straddled the rectangle's edge, which the canvas antialiases too, and a faint row of the erased line's ink was
+ * left (the M1 survey of 2608.16117, Chinese page 10). There each rectangle is taken out to whole device pixels: every pixel
+ * the grown outline touches is wholly replaced, and no edge is blended. Where the pad is a device pixel or more, as drawn
  */
-export function drawOps(ctx, ops, z, sourceOf) {
+export function drawOps(ctx, ops, z, sourceOf, k = null) {
   const at = b => [b[0] * z, b[1] * z, b[2] * z, b[3] * z]
+  // (out to whole device pixels: a hair of rounding is no pixel)
+  const whole = b => { const x0 = Math.floor(b[0] * z + 1e-6), y0 = Math.floor(b[1] * z + 1e-6), x1 = Math.ceil((b[0] + b[2]) * z - 1e-6), y1 = Math.ceil((b[1] + b[3]) * z - 1e-6); return [x0, y0, x1 - x0, y1 - y0] }
+  const removed = k !== null && SWAP_PAD * k < 1 ? whole : at
   ctx.save()
   ctx.fillStyle = '#fff'
   for (const o of ops) {
     if (o.op === 'erase') ctx.fillRect(...at(o.box))
     else if (o.op === 'paper') {
       ctx.beginPath()
-      for (const e of o.rects) ctx.rect(...at(e))
+      for (const e of o.rects) ctx.rect(...removed(e))
       ctx.fill()
     }
     else if (o.op === 'restore') {
@@ -2905,7 +2915,7 @@ export function drawOps(ctx, ops, z, sourceOf) {
       if (!src || !o.rects.length) continue
       ctx.save()
       ctx.beginPath()
-      for (const e of o.rects) ctx.rect(...at(e))
+      for (const e of o.rects) ctx.rect(...removed(e))
       ctx.clip()
       ctx.drawImage(src, 0, 0)
       ctx.restore()
