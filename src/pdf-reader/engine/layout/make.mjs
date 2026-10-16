@@ -27,6 +27,8 @@ import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS } from './oplist.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
+import { drawDataOf } from '../pipeline/draw-data.mjs'
+import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { alignOf } from './remove.mjs'
 import { classOf, followsOf, headEnd, layoutMarking, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { matcherOf } from './match.mjs'
@@ -400,8 +402,11 @@ export async function makeLayout(o) {
  * over every unit. Each pass reads and writes the ink of its own pages alone. `columnEdges`: the columns' text edges (Map
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
  * flag read, given; else made of every placed unit's body lines once the lines are placed (today's rule: `columnEdgesOf`)
+ * `draw`: each page's draw geometry too (E-C: pipeline/draw-data.mjs), read right after the page's operator list, held as its encoded text
+ * until `drawOf(p)` takes it (once), at most `drawHeldMax` at a time; none for a page the read fails on, a font a host would read
+ * differently, or past the budget. It reads no ink and writes none: the layout file is the same bytes with it on or off
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null }) {
+export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
   const rules = rulesOf(rulesGiven)
   // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
   if (rules.floatSearch === 'forward' && !Array.isArray(inFloat)) throw new TypeError('inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
@@ -450,6 +455,36 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     await inkOf(p)
     stats.ms.ops += now() - t0
   }
+  /** page p's draw geometry (pipeline/draw-data.mjs), held as its encoded text for the left part that will carry it (`drawOf`); none for
+   *  a page past the held budget, one that cannot be read, or one whose font a host would read differently: the browser reads it */
+  const draws = new Map(), drawStats = { pages: 0, none: 0, why: {}, bytes: 0, ms: 0 }
+  let drawHeld = 0
+  async function gatherDraw(p, page) {
+    const t0 = now()
+    let r = null, timer
+    try {
+      r = await Promise.race([drawDataOf(page), new Promise(resolve => { timer = setTimeout(() => resolve({ draw: null, why: 'time' }), OPS_MS) })])
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      r = { draw: null, why: 'read' }
+    } finally { clearTimeout(timer) }
+    drawStats.ms += now() - t0
+    let why = r.why
+    if (r.draw !== null) {
+      const text = JSON.stringify(r.draw)
+      if (drawHeld + text.length > drawHeldMax) why = 'held'
+      else { draws.set(p, text); drawHeld += text.length; drawStats.pages++; drawStats.bytes += text.length }
+    }
+    if (why !== null) { drawStats.none++; drawStats.why[why] = (drawStats.why[why] ?? 0) + 1 }
+  }
+  /** page p's draw, once (the held text is let go with it): null for none */
+  const drawOf = p => {
+    const text = draws.get(p)
+    if (text === undefined) return null
+    draws.delete(p)
+    drawHeld -= text.length
+    return JSON.parse(text)
+  }
   async function inkOf(p) {
     if (unread.has(p)) return
     // (the page its text was read from: PDF.js keeps each page's proxy)
@@ -459,6 +494,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs)
     const ops = await listWithin(page, seen)
     if (!ops) { stats.timedOut.push(p); dark.add(p); return }
+    // the page's draw geometry (E-C), read once its fonts are loaded, within the same limit, before the page is let go
+    if (wantDraw) await gatherDraw(p, page)
     const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE })
     // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
     if (wantPlans && !got.capped && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
@@ -2341,7 +2378,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     stats.ms.rows = now() - t
     return st
   }
-  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map() }
+  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map(), drawOf, drawStats }
 }
 
 /**

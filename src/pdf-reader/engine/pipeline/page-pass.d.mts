@@ -49,12 +49,14 @@ export interface LayerOptions {
   /** tests and the lab: today's path, the whole made first, whatever the rules (under rules 1, 3 and 4 the pass is a page
    *  stream by itself, its parts cut early) */
   whole?: boolean
+  /** each page's draw geometry in its left part (E-C: layout/make.mjs `draw`, pipeline/draw-data.mjs), default on; off, every page ships none */
+  draw?: boolean
 }
 /** a whole run's rules (`capture`'s): the maker's frame predicate and columns' edges, and the left's frame predicate and its
  *  pages' columns (those two for the marked original read a page at a time) */
 export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<string, [number, number]>; leftFrame?: (t: unknown) => boolean; columns?: unknown }
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
-  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; closed?: [from: number, to: number, read: number][] } }
+  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }; closed?: [from: number, to: number, read: number][] } }
   | { refused: 'anchors'; why: string }
 >

@@ -37,6 +37,10 @@ export interface MakeInput {
   /** the file is cut into parts (layer-proto/cut.mjs partCutter), which hold the bounds a part holds and the carry's share per
    *  part: made whatever share is carried, checked without those bounds; `lines` in the result */
   parts?: boolean
+  /** each page's draw geometry as well (pipeline/draw-data.mjs), read with the page's operator list, held for `drawOf` */
+  draw?: boolean
+  /** the most encoded text of draws held at once (default DRAW_HELD_MAX; tests lower it): a page past it has none */
+  drawHeldMax?: number
 }
 export interface LayoutStats {
   lines: { carried: number; total: number; held: number }
@@ -104,6 +108,11 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     edges(): Map<string, [number, number]> | null
     /** the marks carried to arXiv's PDF (whole()'s first step): null, or 'carry' where no line is */
     carrying(): 'carry' | null
+    /** page p's draw geometry (the `draw` option), once: the held text is let go with it; null for none (not read, failed, a font a host
+     *  would read differently, past the held budget) */
+    drawOf(p: number): import('../layer-proto/draw.mjs').Draw | null
+    /** the draw reads: pages kept, pages with none and by why, the encoded bytes, the ms */
+    drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }
     /** each marked page's lines [carried, total], once carried */
     pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
     /** the maker a page at a time (after carrying(), the columns' edges and the whole document's frame rule given); with `marked` (markedPages' head, the marks

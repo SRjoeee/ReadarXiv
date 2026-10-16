@@ -2,7 +2,7 @@
 export declare const DRAW_ITEMS: number, DRAW_STRING: number, DRAW_STRINGS: number
 export declare const DRAW_FONTS: number, DRAW_NAME: number, DRAW_FALLBACK: number, DRAW_MAPPED: number, DRAW_MAPPED_CHAR: number
 export declare const DRAW_LINKS: number, DRAW_QUADS: number, DRAW_URL: number, DRAW_DEST: number, DRAW_ZOOM: number, DRAW_ARGS: number, DRAW_OVERLAID: number
-export declare const DRAW_VALUES: number, DRAW_BYTES: number, DRAW_COORD: number
+export declare const DRAW_VALUES: number, DRAW_BYTES: number, DRAW_COORD: number, DRAW_HELD_MAX: number
 /** [name, fallback, type3 (0 a font, 1 Type3, 2 no font object or an error font), mapped: null (no map), or the map's characters; [] = every char unmapped] */
 export type DrawFont = [name: string | null, fallback: string | null, type3: 0 | 1 | 2, mapped: string[] | null]
 /** [str, a, b, d, e, f (the transform's 0, 1, 3, 4, 5), width, height, font: an index into the page's fonts, or -1] */
