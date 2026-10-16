@@ -1566,7 +1566,8 @@ describe('makerOf, the marked original a page at a time (stage 2): its pages rea
 
 describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edges of the pages before a page and its own', () => {
   // page 1 holds a caption alone, centred on the column a paragraph on page 2 sets: today its edges are the pages like it, page
-  // 2's among them; under rule 3 those before it alone, none
+  // 2's among them; under rule 3 those before it and its own give none, and it takes those of the first later page that gives
+  // some (a cover page: it waits for page 2)
   const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
   para.push({ s: 'last line of it', x: 72, y: 652 })
   const cap = [{ s: 'Figure caption text', x: 172 - 47.5, y: 600 }, { s: 'its end', x: 172 - 17.5, y: 588 }]
@@ -1578,12 +1579,16 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
   }
   const input = async (rules: object | null) => ({ units: w.units, marks: await marksOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', rules: rules as never })
 
-  it('today\'s edges are every page\'s like it; rule 3\'s the pages\' before a page and its own: page 1\'s caption is no longer CENTRED', async () => {
+  it('today\'s edges are every page\'s like it; rule 3\'s those before a page and its own, a cover page the first later one\'s: page 1\'s caption CENTRED both ways', async () => {
     const today = await makeLayout({ ...(await input(null)), arxiv: arxivOf(w.pages) })
     const rule3 = await makeLayout({ ...(await input({ edges: 'earlier' })), arxiv: arxivOf(w.pages) })
     if (!('file' in today) || !('file' in rule3)) throw new Error('refused')
     expect((today.file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
-    expect((rule3.file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(0)
+    expect((rule3.file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
+    expect(encodeLayout(rule3.file)).toBe(encodeLayout(today.file))
+    // (page 1's column 0 takes page 2's: it waits for page 2; today's run borrows nothing ahead)
+    expect(rule3.stats.edgesAhead).toEqual([[1, 0, 2]])
+    expect(today.stats.edgesAhead).toEqual([])
     // (the default is today's: the same bytes as rules given today's values)
     const named = await makeLayout({ ...(await input({ frame: 'units', edges: 'all', columns: 'units' })), arxiv: arxivOf(w.pages) })
     if (!('file' in named)) throw new Error('refused')

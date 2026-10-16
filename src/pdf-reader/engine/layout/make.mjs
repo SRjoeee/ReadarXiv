@@ -361,6 +361,8 @@ function blank(units) {
     // (the page stream's, the marked original read a page at a time: rows found after their unit's own ink was taken, and points
     // read twice after their unit's placeholders were matched; none on a paper read whole)
     late: { rows: 0, vetoes: 0 },
+    // (rule 3: the pages and columns whose columns' edges are those of a later page, [page, column, that page])
+    edgesAhead: [],
   }
 }
 
@@ -652,7 +654,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   // each column's text edges, the most common start and end of the body's lines (its own page's, else those of the
   // pages like it: the same columns, the same side of a spread, then the same columns; under rule 3, of those pages the ones
-  // before it and its own alone, written under its own name: `<page><<key>`)
+  // before it and its own alone, written under its own name: `<page><<key>`; and where those give none, a page before any of
+  // its kind with a body line (a cover page), those of the pages up to the first later one that gives some: `<page>><column>`,
+  // the page waiting for that one, `stats.edgesAhead` [page, column, the page]))
   let edges = columnEdges
   /** the columns' text edges of the placed units' body lines (`columnEdges` where none is given) */
   function columnEdgesOf() {
@@ -665,15 +669,24 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (rules.edges === 'earlier') {
       const on = new Map()
       for (const { u, rows } of placed) if (EVEN.has(u.kind)) for (const r of rows) (on.get(r.page) ?? on.set(r.page, []).get(r.page)).push(r)
+      /** a page's pooled edges for column c as the pools stand: the same side of a spread's, else the same columns' */
+      const poolOf = (p, c) => { for (const k of pooled) { const e = seen.get(`${k(p)}|${c}`), v = e ? edgeOf(e) : null; if (v) return v } return null }
+      // (the pages and columns whose pools gave none yet: each takes the pools with the first later page that gives some)
+      let waiting = []
       for (let p = 1; p <= pages; p++) {
         for (const r of on.get(p) ?? []) {
           const c = columnOf(r.page, r.x0, r.x1)
           note(`${p}|${c}`, r.x0, r.x1)
           for (const k of pooled) note(`${k(p)}|${c}`, r.x0, r.x1)
         }
+        if (waiting.length && on.has(p)) waiting = waiting.filter(([q, c]) => { const v = poolOf(q, c); if (v) { edges.set(`${q}>${c}`, v); stats.edgesAhead.push([q, c, p]) } return !v })
         // (the pools as they stand with page p: page p's, each a page its pages before it and its own give)
         for (const c of [0, 1, 2]) for (const k of pooled) { const key = `${k(p)}|${c}`, e = seen.get(key), v = e ? edgeOf(e) : null; if (v) edges.set(`${p}<${key}`, v) }
-        for (const c of [0, 1, 2]) { const e = seen.get(`${p}|${c}`), v = e ? edgeOf(e) : null; if (v) edges.set(`${p}|${c}`, v) }
+        for (const c of [0, 1, 2]) {
+          const e = seen.get(`${p}|${c}`), v = e ? edgeOf(e) : null
+          if (v) edges.set(`${p}|${c}`, v)
+          else if (!poolOf(p, c)) waiting.push([p, c])
+        }
       }
       return
     }
@@ -687,7 +700,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     for (const [key, e] of seen) { const v = edgeOf(e); if (v) edges.set(key, v) }
   }
   const edgesBy = rules.edges === 'earlier'
-    ? (p, c) => edges.get(`${p}|${c}`) ?? edges.get(`${p}<${twoCols(p)}|${p % 2}|${c}`) ?? edges.get(`${p}<${twoCols(p)}|${c}`) ?? null
+    ? (p, c) => edges.get(`${p}|${c}`) ?? edges.get(`${p}<${twoCols(p)}|${p % 2}|${c}`) ?? edges.get(`${p}<${twoCols(p)}|${c}`) ?? edges.get(`${p}>${c}`) ?? null
     : (p, c) => edges.get(`${p}|${c}`) ?? edges.get(`${twoCols(p)}|${p % 2}|${c}`) ?? edges.get(`${twoCols(p)}|${c}`) ?? null
   /** a column's text edges; a line across two columns, the left one's start and the right one's end */
   const edgesOf = (p, c) => {

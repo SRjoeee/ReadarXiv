@@ -76,6 +76,9 @@ export interface LayoutStats {
   /** the marked original read a page at a time (the page stream): pieces found after their unit's own ink was taken (dropped),
    *  points read twice after their unit's placeholders were matched; none where it is read whole */
   late: { rows: number; vetoes: number }
+  /** rule 3 (rules.edges 'earlier'): the pages and columns whose columns' edges are a later page's (a page before any of its
+   *  kind with a body line takes the pools as they stand with the first that gives some): [page, column, that page] */
+  edgesAhead: [page: number, column: number, from: number][]
   /** why the file was refused, where it was ('bounds': the parser's refusal) */
   refusal?: { path: string; why: string }
 }
