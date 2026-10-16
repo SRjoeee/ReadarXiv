@@ -572,6 +572,40 @@ describe('the schedule extended over the need bound', () => {
     expect(fits(given.c).length).toBe(6)
   })
 
+  it('never makes a part wider than partPagesMax, extension or not: the cap clamps the schedule\'s target before anything else', async () => {
+    const bare: PaperSpec = { pages: 8, units: [] }
+    for (const extend of [true, false]) {
+      const c = await cutWith(bare, { partPagesMax: 3, extend })
+      // (the doubling's 1 and 2-3 are within the cap; 4-7 is clamped to 4-6)
+      expect(fits(c.c), `extend ${extend}`).toEqual([[1, 1], [2, 3], [4, 6], [7, 8]])
+    }
+    const ten = await cutWith({ pages: 10, units: [] }, { partPagesMax: 3 })
+    expect(fits(ten.c).every(([a, b]) => b! - a! + 1 <= 3)).toBe(true)
+    // a chain of units running on: the extension chases the paper's end, the cap holds it
+    const chain: PaperSpec = { pages: 10, units: Array.from({ length: 9 }, (_, i) => across(10 * i, i + 1)) }
+    for (const cap of [1, 2, 3, 4]) {
+      const c = await cutWith(chain, { partPagesMax: cap })
+      expect(fits(c.c).every(([a, b]) => b! - a! + 1 <= cap), `cap ${cap}: ${JSON.stringify(fits(c.c))}`).toBe(true)
+      await checkCut(`cap ${cap}`, c.whole, c.c, { anySplit: true })
+    }
+    // a custom target is clamped too
+    const given = await cutWith(bare, { partPagesMax: 3, target: () => 8 })
+    expect(fits(given.c)).toEqual([[1, 3], [4, 6], [7, 8]])
+    // with the default cap the doubling schedule never reaches it
+    expect(fits((await cutWith({ pages: 8, units: [] })).c)).toEqual([[1, 1], [2, 3], [4, 7], [8, 8]])
+  })
+
+  it('takes partPagesMax as a positive safe integer, and the extension ends for every valid one', async () => {
+    const whole = wholeOf(CROSS)
+    for (const bad of [Number.NaN, 0, -1, Infinity, 1.5, '3', null]) {
+      await expect(cutBundle(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, partPagesMax: bad as never }), String(bad)).rejects.toThrow(/partPagesMax/)
+    }
+    for (const cap of [1, 2, 3, 5, 6, 7, 5000, Number.MAX_SAFE_INTEGER]) {
+      const c = await cutWith(CROSS, { partPagesMax: cap })
+      expect(fits(c.c).at(-1)![1], `cap ${cap}`).toBe(6)
+    }
+  })
+
   it('keeps the structure: every part reads in order, the merge is the whole, K is told once, the groups are whole, and the bytes are the same twice', async () => {
     for (const spec of [SMALL, CROSS]) {
       const a = await cutWith(spec), b = await cutWith(spec)

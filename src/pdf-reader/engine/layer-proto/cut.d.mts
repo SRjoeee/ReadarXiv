@@ -41,7 +41,8 @@ export interface CutOptions {
    *  `partPagesMax`. A preference, never a requirement: a part that does not fit with it is shortened as ever, and a page whose
    *  closure then reaches past its part waits for the next one (the door gates it). Default true; the parts differ, their contents do not */
   extend?: boolean
-  /** the most pages the extension may make a part (default PART_PAGES_MAX, 5000) */
+  /** the most pages any part has (default PART_PAGES_MAX, 5000; a positive whole number, else a RangeError): the schedule's target is
+   *  clamped to it before the extension and the fit, so a part is never wider, extension or not */
   partPagesMax?: number
   /** F as an array indexed by page 0..N of indices into K (-1 for none); default `needFrontier` (the door's rule, need.mjs) */
   frontier?(K: readonly CutEntry[], N: number): readonly number[]

@@ -161,7 +161,8 @@ export async function cutBundle(whole, o) {
   const F = closedOver(given, K, grouped)
   // each page's need bound (need.mjs: the last page whose part laying it reads), over the whole K, once
   const extend = o.extend !== false && !o.target
-  const maxPages = o.partPagesMax ?? PART_PAGES_MAX
+  const maxPages = o.partPagesMax === undefined ? PART_PAGES_MAX : o.partPagesMax
+  if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new RangeError(`partPagesMax: ${String(maxPages)} is not a positive whole number of pages`)
   const NB = extend ? needBound(K, N) : null
 
   // the left parts, written as the parts reach their pages
@@ -187,14 +188,17 @@ export async function cutBundle(whole, o) {
   for (let a = 1; a <= N;) {
     let target = o.target ? o.target(a, N) : partTarget(a, N)
     if (!Number.isInteger(target) || target < a || target > N) throw new RangeError(`target: ${target} is not a last page from ${a} to ${N}`)
+    // (no part is wider than partPagesMax, the extension or not: the target is clamped first)
+    target = Math.min(target, a + maxPages - 1)
     // the schedule's target extended over the need bound (a preference, never a requirement: a part that does not fit is shortened
     // below as ever, and the door gates the page whose closure then reaches past it): the least b from the target on with b at least
     // the bound of every page a to b, within the paper and the cap on the pages of a part
     if (NB) {
-      const limit = Math.max(target, a + maxPages - 1)
-      for (let q = a, m = 0; ;) {
+      const limit = Math.min(N, a + maxPages - 1)
+      // (target only grows, within the limit, so the loop ends; the count is a guard)
+      for (let q = a, m = 0, turns = 0; turns <= N; turns++) {
         for (; q <= target; q++) m = Math.max(m, NB[q])
-        const next = Math.min(m, N, limit)
+        const next = Math.min(m, limit)
         if (next <= target) break
         target = next
       }
