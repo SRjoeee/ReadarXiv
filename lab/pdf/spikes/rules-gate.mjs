@@ -378,7 +378,7 @@ export function stampRun(file, out, packJson) {
 
 /** the output of the gate that is names and numbers: an output's `ok` line, the tier's line, the completeness line */
 const NAME = '[A-Za-z0-9._-]+v\\d+-[A-Za-z-]+'
-const CHECK = '(?:missing|twice|brackets|duplicated|clipped|groupsSplit|labelsSource|textInDisplay|recordErrors|lostInk|numbers)'
+const CHECK = '(?:missing|twice|brackets|duplicated|clipped|groupsSplit|labelsSource|textInDisplay|linksWrong|recordErrors|lostInk|numbers)'
 const OK_LINE = new RegExp(`^ok   ${NAME}: \\d+ pages, \\d+/\\d+ text units drawn(?:, in \\d+ parts)? \\(\\d+(?:\\.\\d+)? s\\)$`)
 const TIER_LINE = /^model tier: \d+ outputs, \d+ pages in \d+(?:\.\d+)? s on \d+ workers; the run in .+\.json$/
 const COMPLETE_LINE = new RegExp(`^completeness \\(spec §5\\): (?:every one of \\d+ outputs passes|\\d+ of \\d+ outputs fail: ${NAME} \\[${CHECK}(?:, ${CHECK})*\\](?:; ${NAME} \\[${CHECK}(?:, ${CHECK})*\\])*)$`)

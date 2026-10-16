@@ -86,13 +86,13 @@ async function askEvery(R, layer, { target, pages, N, sourceOf }) {
   const run = () => window.__gateRuns.at(-1)
   const out = []
   for (let p = 1; p <= Math.min(pages, N); p++) {
-    const { svg, w, h, words } = await layer.pageOf(p, { lang: target })
+    const { svg, w, h, words, links } = await layer.pageOf(p, { lang: target })
     const markup = svg.cloneNode(true)
     const lang = markup.getAttribute('lang')
     markup.removeAttribute('lang')
     const { png, source } = await sourceOf(p)
     const copy = await layer.copyOf(p, source, K)
-    out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), copy: await pixelsOf(copy), ...(png ? { png: base64(png) } : {}) })
+    out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), links: await textDigest(JSON.stringify(links ?? [])), copy: await pixelsOf(copy), ...(png ? { png: base64(png) } : {}) })
     for (const c of [source, copy]) { c.width = 0; c.height = 0 }
   }
   for (const e of out) e.recs = await recsOf(run(), e.p)

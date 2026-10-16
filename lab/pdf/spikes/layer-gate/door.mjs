@@ -26,6 +26,7 @@ const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Er
 const json = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json() }
 const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('')
 const digest = async data => hex(await crypto.subtle.digest('SHA-256', data))
+const textDigest = s => digest(new TextEncoder().encode(s))
 /** the bytes a page's word table keeps: its typed columns (the spans and the units left the original's, a few words, are not counted) */
 const wordsBytes = w => [w.tokens.l, w.tokens.r, w.tokens.y, w.tokens.h, w.tokens.top, w.tokens.bottom, w.word].reduce((n, a) => n + a.byteLength, 0)
 /** a page's word table (src/pdf-reader/engine/layer-proto/words.mjs) as one digest: its columns' bytes, its spans and the units left
@@ -156,7 +157,8 @@ window.door = {
       const done = run.doneAt(p)
       if (Number.isFinite(done) && done > p) await run.until(done)
       const final = run.wordsOf(p)
-      Object.assign(out.at(-1), { words: await wordsDigest(final), wordsBytes: wordsBytes(final), wordsTokens: final.tokens.n })
+      // (and its link records: the run's own, none before the engine's 3a, as the door's pageOf answers them)
+      Object.assign(out.at(-1), { words: await wordsDigest(final), wordsBytes: wordsBytes(final), wordsTokens: final.tokens.n, links: await textDigest(JSON.stringify(run.linksOf ? run.linksOf(p) : [])) })
       finals[p] = final
     }
     const summary = { N: run.N, laid: run.stats.length, skipped: run.skipped.length, reach: await reachOf(run, finals, record, Math.min(pages, run.N)) }
@@ -182,7 +184,7 @@ window.door = {
     })()
     const out = []
     for (let p = 1; p <= Math.min(pages, bundle.paper.pages); p++) {
-      const { svg, w, h, words } = await layer.pageOf(p, { lang: target })
+      const { svg, w, h, words, links } = await layer.pageOf(p, { lang: target })
       const markup = svg.cloneNode(true)
       const lang = markup.getAttribute('lang')
       markup.removeAttribute('lang')
@@ -197,7 +199,7 @@ window.door = {
       // the same pixels; the page this load's PDF.js draws compared with it apart
       const original = await canvasOfPng(`/door/${name}/o${p}.png`)
       const copy = await layer.copyOf(p, original, K)
-      out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), source: await pixelsOf(source), original: await pixelsOf(original), copy: await pixelsOf(copy) })
+      out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), links: await textDigest(JSON.stringify(links ?? [])), source: await pixelsOf(source), original: await pixelsOf(original), copy: await pixelsOf(copy) })
       for (const c of [source, original, copy]) { c.width = 0; c.height = 0 }
     }
     await fed

@@ -27,6 +27,8 @@ import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
 import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
+import { annotationsOf, drawnCharsOf, erasedOf, glyphPointsOf, glyphsOfLink, linksPage, pairsOf, referenceOf, textUnder } from '/gate/links.mjs'
+
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 /** device pixels a PDF unit: v0's canvases at 1.25 CSS px and dpr 2 (the floor's), and the lost-ink check's 2x floor */
 const K = 2.5, INK_SCALE = 2, INK_MIN = 4
@@ -42,9 +44,8 @@ const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Er
 const json = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json() }
 const charKey = c => `${c.page}|${c.item}|${c.k}`
 
-/** the page's text items, with whether each is set in a math font (the fonts loaded: the page is drawn) */
-async function itemsOf(page) {
-  const tc = await page.getTextContent()
+/** the page's text items, with whether each is set in a math font (the fonts loaded: the page is drawn); `tc`: its text content */
+function itemsOf(page, tc) {
   const items = []
   for (const it of tc.items) {
     if (!it.str || !/\S/.test(it.str) || !it.transform) continue
@@ -493,6 +494,65 @@ function againstFileOf(p, recs, units, drawnLines, items, refOf, boxPdf) {
   }
 }
 
+/** the boxes [x0, y0, x1, y1] of a flat list */
+const boxesOf = flat => Array.from({ length: flat.length / 4 }, (_, i) => flat.slice(4 * i, 4 * i + 4))
+
+/**
+ * The drawn characters of page p's SVG, as PDF points (links.mjs drawnCharsOf): the SVG laid out in an offscreen box once the
+ * fonts are in. Read only for a page that has a moved link record: the engine of 3a-0 has none
+ */
+async function drawnPointsOf(p, page) {
+  await document.fonts.ready
+  const svg = S.run.svgOf(p)
+  const host = document.createElement('div')
+  host.style.cssText = 'position:absolute;left:-99999px;top:0;pointer-events:none'
+  host.append(svg)
+  document.body.append(host)
+  try {
+    const view = page.view, s = K / devicePixelRatio
+    return drawnCharsOf(svg, (x, y) => ({ x: view[0] + x / s, y: view[3] - y / s }))
+  } finally { host.remove() }
+}
+
+/**
+ * The link measures of page p (links.mjs; 3a-0): the original's links from PDF.js's annotations of arXiv's file (the document
+ * the instrument opened), the glyph points of the page's text items, the area the drawing's operations left erased, and the
+ * records the engine answers (`run.linksOf`, with its attribution `run.linkSources`: an engine before 3a has neither, and then
+ * no record is kept, `linksKept` is 0 of the original's). Returns the model's values and their `where`
+ */
+async function linksOfPage(p, page, tc) {
+  const { run, doc } = S
+  const L = S.links
+  const parsedOf = async q => {
+    if (!L.parsed.has(q)) L.parsed.set(q, annotationsOf(await (q === p ? page : await doc.getPage(q)).getAnnotations()))
+    return L.parsed.get(q)
+  }
+  const own = await parsedOf(p)
+  const records = run.linksOf ? run.linksOf(p) : []
+  const sources = records.length && run.linkSources ? run.linkSources(p) : null
+  for (const src of sources ?? []) for (const [q] of src?.annots ?? []) await parsedOf(q)
+  const view = page.getViewport({ scale: K })
+  const glyphs = glyphPointsOf(tc.items)
+  const moved = records.some(r => r.moved)
+  const chars = moved ? await drawnPointsOf(p, page) : []
+  // (TeX's file, for the reference of a translated link: a placeholder's segment, the unit whose line the point is on, and the
+  // unit's translated pairs)
+  const fp = S.file?.get(p)
+  const within = (x, y, b) => x >= Math.min(b[0], b[2]) && x <= Math.max(b[0], b[2]) && y >= Math.min(b[1], b[3]) && y <= Math.max(b[1], b[3])
+  const ctx = {
+    all: own.links.filter(a => a.ok), points: a => glyphsOfLink(a, glyphs),
+    segment: (x, y) => !!fp && [...fp.units.values()].some(u => u.phs.some(ph => ph.segs.some(b => within(x, y, b)))),
+    owner: (x, y) => { if (fp) for (const [id, u] of fp.units) if (u.lines.some(l => within(x, y, l.box))) return id; return null },
+    pairsOf: id => pairsOf(S.byId.get(id)?.unit?.pieces),
+  }
+  const m = linksPage({
+    page: p, parsed: q => L.parsed.get(q), glyphs, erased: erasedOf(run.rows[p - 1]?.ops, (x, y) => view.convertToViewportPoint(x, y)), records, sources, claims: L.claims,
+    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), reference: (rec, annots) => referenceOf(annots, ctx),
+  })
+  const { where, ...values } = m
+  return { values, where: Object.fromEntries(Object.entries(where).filter(([, ids]) => ids.length)) }
+}
+
 window.gate = {
   /**
    * A fixture opened: v0, the made output's geometry, the units file asked for and arXiv's PDF. With `removal` (the
@@ -565,7 +625,7 @@ window.gate = {
     // version, whose segments are a glyph's font box, not its ink, and which holds no `held` lines; nor any layout file of
     // a maker before FILE_LAYOUT_MIN, the fixture's own included where the run is given those, --layouts=fixed or v0
     // alone, or a folder of them: then the measures against TeX's file are not taken)
-    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
+    S = { V, run, doc, geometry, layout, file: Number(texFile?.layout) >= FILE_LAYOUT_MIN ? fileIndexOf(texFile) : null, trPieces: new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), ref, name, target, texPieces: texIn?.pieces ?? null, audit: new Map(), audited: 0, translated: new Set(fixtureUnits.units.map(u => u.id)), skipped: new Map(run.skipped.map(s => [s.id, s.why])), byId: laidById(run), links: { parsed: new Map(), claims: new Map() }, checks: [], place: place ?? null, dump: dump ? [] : null, rm, inputs: { before, of: inputs }, perf, texIndex }
     S.consistency = consistencyOf(unitsFile, S, names)
     if (parts) {
       // one part a macrotask from the open on, beside the driver's pages (until), then end()
@@ -600,7 +660,8 @@ window.gate = {
     // the audit by unit and page, as the drawing adds to it
     for (; S.audited < run.audit.length; S.audited++) { const a = run.audit[S.audited], k = `${a.unit}|${a.page}`; if (!S.audit.has(k)) S.audit.set(k, []); S.audit.get(k).push(a) }
     const page = await doc.getPage(p)
-    const items = await itemsOf(page)
+    const tc = await page.getTextContent()
+    const items = itemsOf(page, tc)
     const view = page.view
     const toPdf = (x, y) => [view[0] + x / K, view[3] - y / K]
     const boxPdf = b => { const [ax, ay] = toPdf(b[0], b[3]), [bx, by] = toPdf(b[2], b[1]); return [ax, ay, bx, by] }
@@ -630,6 +691,9 @@ window.gate = {
     const kept = keptOf(S.layout, p, relabelledOf(recs))
     const against = S.file ? againstFileOf(p, recs, units, drawnLines, items, refOf, boxPdf) : null
     if (against) Object.assign(model, against.values)
+    // the links (3a-0): the original's, and what the layer does with them
+    const links = await linksOfPage(p, page, tc)
+    Object.assign(model, links.values)
     // the prototype's own checker on the page: what it finds there, by the unit it is in (none for --perf: v0 is opened
     // with no copy of its own, as a reader opens it, and the checker reads that copy)
     const ck = S.perf ? { a: { regions: 0 }, b: { list: { missing: [], duplicated: [], brackets: [] } }, c: { list: [] }, d: { found: 0, ok: 0 } } : run.checkPage(p)
@@ -666,6 +730,7 @@ window.gate = {
     for (const [key, ids] of Object.entries(model.cropWhere ?? {})) if (ids.length) where[key] = [...new Set(ids)]
     // (and of the content and line measures: a placeholder as unit:k:times shown)
     Object.assign(where, against?.where ?? {})
+    Object.assign(where, links.where)
     const clippedIds = recs.filter(r => r.pages[0] === p && r.lostChars).map(r => r.id)
     if (clippedIds.length) where.clipped = clippedIds
     // the style: each unit's base as drawn against the original's (styleMatch's base), on its first page
