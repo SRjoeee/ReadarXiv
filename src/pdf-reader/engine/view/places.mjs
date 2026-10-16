@@ -141,9 +141,28 @@ export function createPlaces(o) {
     counts.released++
   }
   function letGo(p) {
+    const focus = focusIn(p)
     releaseView(p)
     dropSkeleton(p)
     name(p)
+    keepFocus(p, focus)
+  }
+  /** where in place p the focus is, before its content goes: the layer's link by its rank, '' for anything else; null where
+   *  the focus is not inside it */
+  function focusIn(p) {
+    const at = document.activeElement
+    if (!at || at === document.body || !p.div.contains(at)) return null
+    return at.getAttribute?.('data-axt-link') ?? ''
+  }
+  /** the focus given back after place p's content changed under it: to the link of the same rank in what it shows now, else to
+   *  the place where it shows a page (so that Tab goes on from there), else nowhere (the focus has left with the element) */
+  function keepFocus(p, focus) {
+    if (focus === null || disposed) return
+    const to = focus !== '' ? p.holder.querySelector(`a[data-axt-link="${focus}"]`) : null
+    if (to) { to.focus({ preventScroll: true }); return }
+    if (p.div.getAttribute('aria-hidden') === 'true') return
+    p.div.tabIndex = -1
+    p.div.focus({ preventScroll: true })
   }
   function enqueue(p) {
     if (!queue.includes(p)) queue.push(p)
@@ -172,6 +191,8 @@ export function createPlaces(o) {
       p.div.setAttribute('aria-hidden', 'true')
       p.div.removeAttribute('role')
       p.div.removeAttribute('aria-label')
+      // (a place the focus was given to, by a link's jump or a content gone under it, is no stop once it shows nothing)
+      p.div.removeAttribute('tabindex')
     }
   }
   function remove() {
@@ -244,6 +265,7 @@ export function createPlaces(o) {
     swap(n, content, { blank = false } = {}) {
       const p = list[n - 1]
       if (!p || disposed) return false
+      const focus = focusIn(p)
       releaseView(p)
       dropSkeleton(p)
       p.side = content
@@ -251,17 +273,20 @@ export function createPlaces(o) {
       p.holder.replaceChildren(content)
       p.div.setAttribute('data-axt-layer', '')
       name(p)
+      keepFocus(p, focus)
       return true
     },
     /** place `n` back to its pre-layer content */
     restore(n) {
       const p = list[n - 1]
       if (!p?.side) return
+      const focus = focusIn(p)
       p.side.remove()
       p.side = null
       p.blank = false
       p.div.removeAttribute('data-axt-layer')
       if (p.near) show(p); else name(p)
+      keepFocus(p, focus)
     },
     /** the canvas of place n's own page view, where PDF.js has drawn it whole; null else (read before a swap releases it) */
     canvas(n) {

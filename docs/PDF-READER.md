@@ -751,6 +751,39 @@ The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `laye
 `feed.test.ts`, `contents.test.ts` and `shapes.test.ts` SH5; `pnpm e2e:reader` runs it on the sample cut into BUNDLE 4's
 objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API.
 
+### 11.9 The layer's links
+
+A laid page's links (`LaidPage.links`, the engine's records: boxes in the page's PDF units, a destination or an address of
+`http:`, `https:` or `mailto:`, a name, a reading order, a border) are committed with its copy and its SVG, in the same
+task: `engine/view/links.mjs` makes them into `div.axt-links > a.axt-link > span.axt-link-box` over the drawing and under
+the highlight's layer, outside the dark filter (the left's links keep their colours too).
+
+- **Real links in reading order.** One `<a href>` a record, in the record's `order`: a page's links are reached by Tab after
+  the pages before it, Enter follows one, and a screen reader names it by its record's `name`, the text drawn under it, set
+  as an attribute's text (a name is the PDF's text and may hold control or bidirectional characters: never markup). A link
+  with no glyph under it (an image, a symbol) is named by the host's `ViewWords.linkName`, else by a placeholder until the
+  owner's words (the draft: `.superpowers/sdd/2026-10-15-prepare-pipeline/links-copy-draft.md`). A record the view cannot
+  carry (no box of area, neither or both targets, an address off the allow-list) is left out.
+- **Placed by shares.** The anchor spans the union of its boxes and each box is a span of it, every size a share of the
+  page's box (or the link's) made once from the place's viewport (its rotation, its box's origin): the place's own size
+  scales them at any zoom, nothing is read from the layout and nothing runs on a frame. The anchor takes no pointer, its
+  boxes do: the space between two lines of one link is the page's.
+- **Followed.** A link inside the paper is resolved on the left's document (a name by `getDestination`, its page by
+  `getPageIndex`) and jumped to on the right, the pane clicked, by the view's own jump (its zoom too, as PDF.js takes one):
+  the left follows where the sync is on and stays where it is off. Followed by the keyboard, the focus goes to the place
+  jumped to, so that reading and Tab go on from there. A link out of the paper, by a click, Enter, a modified or a middle
+  click, goes through the host's `links.openExternal` alone (its policy, its new tab); the browser's own navigation never
+  runs. A click on a link, on either pane, levels nothing (the click's levelling skips a link).
+- **Looked at.** As PDF.js draws a link on the left: the PDF's border where it gives one (its width, colour and style:
+  solid, dashed, underline), a yellow wash under a hovering pointer; the focus ring is the reader's (2 px, `--focus`), the
+  system's in forced colours.
+- **Gone with the drawing.** A page let go far from the view takes its links; after a reopen the drawing kept keeps its own
+  until the new door's replaces it; dispose leaves none. A link holding the focus when its page is drawn again gives it to
+  the link of the same rank, else to the place; one let go far from the view lets it go.
+
+The rows are `tests/pdf-reader/links-view.test.ts` (LV1–LV4 on links.mjs, LS1–LS7 on the side over the fake door) and the
+real door's in `layer-side-door.test.ts`.
+
 ## 12. Performance gates
 
 Each before the stage's pull request, on the heaviest demo paper, in a real window:

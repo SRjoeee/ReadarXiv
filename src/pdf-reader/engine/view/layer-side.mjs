@@ -260,8 +260,8 @@ export function createLayerSide(view, o) {
 
   // ---------------------------------------------------------------- the pages (§2.3)
   /** each page's record, scalars and the elements of a near laid page only: its ask (and its clock), what its place shows of
-   *  the layer (`content`: its wrapper, SVG, copy and k, the door's generation it was drawn from; or `wrap` null for an empty
-   *  element, retired), whether it failed or stalled, a copy under way */
+   *  the layer (`content`: its wrapper — the copy, the SVG and the page's links —, SVG, copy and k, the door's generation it was
+   *  drawn from; or `wrap` null for an empty element, retired), whether it failed or stalled, a copy under way */
   const pages = new Map()
   const rec = n => { let P = pages.get(n); if (!P) { P = { ask: null, clock: 0, content: null, failed: false, stalled: false, copying: false, again: false }; pages.set(n, P) } return P }
   let ready = 0, failed = 0, stalls = 0
@@ -428,7 +428,9 @@ export function createLayerSide(view, o) {
     got.canvas.setAttribute('aria-hidden', 'true')
     const wrap = document.createElement('div')
     wrap.className = 'axt-layer'
-    wrap.append(got.canvas, laid.svg)
+    // its links over the drawing, in the place's coordinates: one element, sized by shares of the page, which no zoom moves
+    const links = V.links(n, laid.links)
+    wrap.append(got.canvas, laid.svg, ...(links ? [links] : []))
     const was = P.content
     if (!V.places.swap(n, wrap)) { release(got.canvas); return }
     release(was?.copy)

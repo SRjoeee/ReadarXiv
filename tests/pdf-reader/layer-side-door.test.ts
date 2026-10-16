@@ -343,3 +343,34 @@ describe('the real door: (e) documents, (f) one open layer a page', () => {
     expect(s.destroyed.sort()).toEqual(['destroy composed 0', 'destroy composed 1', 'destroy composed 2'])
   })
 })
+
+describe('the real door: the laid page\'s links (3b)', () => {
+  it('the engine\'s records over the place: one link each in the records\' reading order, named by them as text, a glyphless one by the placeholder; followed on the left\'s document', async () => {
+    const { LINK_NAME_PLACEHOLDER, linkRecords } = await import('@/pdf-reader/engine/view/links.mjs')
+    const m = await M()
+    const s = await real()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(rowsOfIndex(m.index))
+    s.side.end()
+    await still(s)
+    expect(content(s, 1)).toBe('layer')
+    const laid = await (s.layer() as NonNullable<ReturnType<Setup['layer']>>).pageOf(1, { lang: 'zh' })
+    const records = linkRecords(laid.links)
+    // the paper's page 1 carries a citation link a unit, moved over the drawing, and the margin's link in place with no glyph
+    expect(records.some(r => r.dest !== undefined)).toBe(true)
+    expect(records.some(r => r.url !== undefined && r.name === '')).toBe(true)
+    const a = [...(layerOf(s, 1)?.querySelectorAll<HTMLAnchorElement>('.axt-links > a.axt-link') ?? [])]
+    expect(a.length).toBe(records.length)
+    expect(a.map(x => x.getAttribute('aria-label'))).toEqual(records.map(r => r.name || (r.url !== undefined ? LINK_NAME_PLACEHOLDER.external : LINK_NAME_PLACEHOLDER.internal)))
+    expect(a.map(x => x.getAttribute('href'))).toEqual(records.map(r => r.url ?? `#${encodeURIComponent(r.dest as string)}`))
+    expect(a.every(x => x.querySelectorAll(':scope > span.axt-link-box').length >= 1 && x.textContent === '')).toBe(true)
+    // a citation followed: its name looked up on the left's document, never the layer's
+    const left = (await s.original?.promise) as unknown as { getDestination: (n: string) => Promise<unknown[] | null> }
+    const asked: string[] = []
+    left.getDestination = async n => { asked.push(n); return null }
+    a.find(x => x.getAttribute('href')?.startsWith('#'))?.click()
+    await macrotask()
+    expect(asked).toEqual([records.find(r => r.dest !== undefined)?.dest])
+  })
+})

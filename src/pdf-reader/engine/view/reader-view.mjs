@@ -18,6 +18,7 @@ import { keepOverlays } from './overlay.mjs'
 import { createFollower } from './sync.mjs'
 import { createPlaces } from './places.mjs'
 import { createLighting } from './lighting.mjs'
+import { linkLayer } from './links.mjs'
 
 const DISPLAYS = ['original', 'bilingual', 'translation']
 /** CSS px a PDF unit at scale 1 (PDF.js's PixelsPerInch.PDF_TO_CSS_UNITS) */
@@ -307,6 +308,8 @@ export function createReaderView(host) {
       const p = press
       press = null
       if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4 || e.timeStamp - p.t > 600 || !(globalThis.getSelection?.()?.isCollapsed ?? true)) return
+      // a link's click is the link's (its jump, its tab), never a levelling as well: on either pane, PDF.js's or the layer's
+      if (e.target?.closest?.('a[href]')) return
       alignClick(s, e)
     }, { signal })
   }
@@ -722,6 +725,26 @@ export function createReaderView(host) {
     }
     c.scrollTop = top + (typeof y === 'number' ? Math.max(0, vp.convertToViewportPoint(0, y)[1]) : 0)
   }
+  /** a link of the layer's inside the paper, followed: its destination resolved on the left's document (a name by
+   *  getDestination, its page by getPageIndex, or a page's index), then jumped to on the right, the pane it was on (the other
+   *  follows where the sync is on, and stays where it is off). Followed by the keyboard (Enter, or an assistive technology's
+   *  activation), the focus goes to the place jumped to, so that reading, and Tab, go on from there */
+  async function follow(dest, how = {}) {
+    const doc = current?.doc
+    if (disposed || !doc || !laid) return
+    try {
+      const explicit = typeof dest === 'string' ? await doc.getDestination(dest) : dest
+      if (!Array.isArray(explicit) || !explicit.length) return
+      const ref = explicit[0]
+      const n = ref && typeof ref === 'object' ? (await doc.getPageIndex(ref)) + 1 : Number.isInteger(ref) ? ref + 1 : null
+      if (disposed || current?.doc !== doc || !laid || !Number.isInteger(n) || n < 1 || n > places.count()) return
+      jump(R, { pageNumber: n, destArray: explicit })
+      if (how.keyboard) {
+        const div = places.page(n)
+        if (div && div.getAttribute('aria-hidden') !== 'true') { div.tabIndex = -1; div.focus({ preventScroll: true }) }
+      }
+    } catch (e) { warn('a link\'s destination', e) }
+  }
   function goToPage(which, n) {
     if (disposed) return
     if (!laid) { held.push(() => goToPage(which, n)); return }
@@ -868,6 +891,7 @@ export function createReaderView(host) {
       return () => { if (side === s) side = null }
     },
     emit,
+    links: (n, records) => linkLayer(records, { viewport: places.views().get(n)?.viewport ?? null, follow, open: url => host.links.openExternal(url), words: host.words }),
     light: (id, s = -1) => lighting.light(id == null ? null : { id, s }),
   })
   showMode()
