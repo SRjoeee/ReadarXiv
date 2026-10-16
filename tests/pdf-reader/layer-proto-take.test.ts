@@ -300,16 +300,48 @@ describe('v0 fed its units as they arrive (take, end)', () => {
     expect([1, 2].map(p => slow.complete(p))).toEqual([false, false])
   })
 
-  it("one unit a task: no task holds two units' lays", async () => {
-    // (scheduler.yield, which v0 yields by, spied on: each gives the event loop a turn)
+  it('slices its work: a yield once the units laid since the last one took SLICE_MS, none before', async () => {
+    const { slicer, SLICE_MS } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    // (a clock of the test's: units of 3 ms give way after every third, at 9 ms; one of 60 ms at once after it)
+    let t = 0, gives = 0
+    const s = slicer({ now: () => t, give: async () => { gives++ } })
+    expect(SLICE_MS).toBe(8)
+    const after: number[] = []
+    for (let unit = 1; unit <= 7; unit++) { t += 3; if (s.due()) { await s.give(); after.push(unit) } }
+    expect(after).toEqual([3, 6])
+    t += 60
+    expect(s.due()).toBe(true)
+    await s.give()
+    expect([gives, s.due()]).toEqual([3, false])
+    // (a budget of its own)
+    const tight = slicer({ now: () => t, budget: 1, give: async () => {} })
+    t += 1
+    expect(tight.due()).toBe(true)
+  })
+
+  it('gives way between two units once a slice\'s work is done, and lays them back to back within one; the same drawing', async () => {
+    // (scheduler.yield, which v0 yields by, spied on; the clock the run reads stood still, then running 10 ms at every read:
+    // no yield between units, then one before every unit)
     const at: number[] = []
     let run: Run | null = null
     g.scheduler = { yield: () => { at.push(run ? run.order.length : -1); return new Promise(ok => setTimeout(ok, 0)) } }
-    run = await open(paper(), 'whole')
-    await run.until(3)
-    // between the i-th unit's lay and the next one's, a yield
-    for (let i = 0; i < run.order.length; i++) expect(at, `before unit ${i + 1}`).toContain(i)
-    // and the drawing is the same with and without the yields (one that gives no other task a turn)
+    const was = performance.now.bind(performance)
+    let clock = 0
+    try {
+      performance.now = () => clock
+      run = await open(paper(), 'whole')
+      await run.until(3)
+      const still = at.filter(n => n > 0).length
+      expect(still).toBe(0)
+      const first = drawing(run)
+      at.length = 0
+      performance.now = () => (clock += 10)
+      run = await open(paper(), 'whole')
+      await run.until(3)
+      for (let i = 1; i < run.order.length; i++) expect(at, `before unit ${i + 1}`).toContain(i)
+      expect(drawing(run)).toEqual(first)
+    } finally { performance.now = was }
+    // and the drawing is the same with yields that give no other task a turn, on the real clock
     g.scheduler = { yield: () => Promise.resolve() }
     const { want } = await wholeDrawing()
     expect(drawing(run)).toEqual(want)

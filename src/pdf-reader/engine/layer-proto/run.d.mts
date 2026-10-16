@@ -69,6 +69,11 @@ export interface Rec {
   [more: string]: unknown
 }
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
+/** the most of its own work v0 runs in one task, ms: units are laid back to back under it, then it yields */
+export declare const SLICE_MS: number
+/** a slicer over a clock: `due()`, whether the work since its last yield has reached `budget` (SLICE_MS); `give()`, a yield
+ *  (scheduler.yield, else a macrotask), the clock started again after it */
+export declare function slicer(o?: { now?: () => number; budget?: number; give?: () => Promise<unknown> }): { due(): boolean; give(): Promise<void> }
 /** main.js's lay order, by the page whose drawing lays each unit: [page, ids] */
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
@@ -133,12 +138,12 @@ export interface ProtoRun {
   readonly sources: Sources
   /** `page` once it is ready, Infinity before (the lab's and the gate's) */
   doneAt(page: number): number
-  /** every page up to `page` ready or failed: each page's closure laid in turn from page 1 (the gate's in-order run), a unit a
-   *  task, once what it reads has come; `still`, read between pages and units and at each wait, false ends it there (a page
+  /** every page up to `page` ready or failed: each page's closure laid in turn from page 1 (the gate's in-order run), in slices
+   *  of SLICE_MS, once what it reads has come; `still`, read between pages and units and at each wait, false ends it there (a page
    *  under way is finished first) */
   until(page: number, still?: () => boolean): Promise<void>
   /** page `page`'s closure laid (Need(p), the 1b-D design §2.1): page 1 drawn first, then its pages, its rows decided, and once
-   *  its parts and rows are in its units in their rank, a frame between two; it ends once the page is ready or failed, or
+   *  its parts and rows are in its units in their rank, back to back in slices of SLICE_MS; it ends once the page is ready or failed, or
    *  `still` is false (what is done stays done). One closure at a time, as until's */
   layFor(page: number, still?: () => boolean): Promise<void>
   /** the page's closure over K so far (need.mjs closureOf; the prefix needsOf lays, where the rules lay in order) */

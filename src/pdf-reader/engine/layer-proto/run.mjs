@@ -30,8 +30,9 @@
 //   cut from that rendering; v0's own canvases at its own resolution are the analysis's (the ink maps) and the gate's
 //   (`copy`), never what a view shows.
 // - main.js was given every unit at once. Here the units may also arrive as a live run translates them (expect, take,
-//   end), and each page is laid exactly as one open over all of them lays it, once every unit it reads has come; a unit
-//   is laid a task at a time, a yield between two units' lays, so that no long task holds a page's units.
+//   end), and each page is laid exactly as one open over all of them lays it, once every unit it reads has come; units
+//   are laid back to back in slices of SLICE_MS, a yield between two slices, so that no long task holds a page's units
+//   and laying them spends no more turns of the event loop than that needs.
 // - The page's DOM (its rows, the banner, the status line), the timings and long tasks, the scorer's extras (score=1)
 //   and the compiled final drawn beside (compare) are the host's or the measurement's, and are left out. The checker's
 //   audit of every erase and crop (main.js check=1) is kept with `records`, the gate's and the lab's: it is what a gate
@@ -76,10 +77,18 @@ const r1 = x => Math.round(x * 100) / 100
 /** a run's `still` that never stops it */
 const ALWAYS = () => true
 const yieldNow = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise(ok => setTimeout(ok, 0)))
-/** what v0 gives way by between two units' lays: a frame rendered first where the document is shown (the lp brief's item 3: a
- *  yield alone continues before any render, and two to four of them made a frame of 50 to 94 ms), then a yield; a yield alone
- *  where nothing is shown (a hidden tab renders no frame, and a frame waited for there would hold the laying until it is shown) */
-const between = () => (typeof globalThis.requestAnimationFrame === 'function' && globalThis.document?.visibilityState === 'visible' ? new Promise(ok => globalThis.requestAnimationFrame(() => ok())).then(yieldNow) : yieldNow())
+/** the most of its own work v0 runs in one task, ms: units are laid back to back while their work since the last yield is
+ *  under it, then it gives way, so that no task of the engine's approaches a long task (50 ms, the web's budget) but by one
+ *  unit's own lay, and laying in turn spends no more turns than it needs (a frame waited for before every unit made the in-order
+ *  page steps 2.9 times as long, 123.8 s against 43.1 s over the 30 outputs, 2026-10-16; a yield before every unit chained
+ *  continuations into frames of 50 to 94 ms, the lp brief's item 3) */
+export const SLICE_MS = 8
+/** a slicer over a clock (`now`, ms): `due()`, whether the work since its last yield has reached `budget`; `give()`, a yield
+ *  (`give`: scheduler.yield, else a macrotask), its clock started again after it */
+export function slicer({ now = () => performance.now(), budget = SLICE_MS, give = yieldNow } = {}) {
+  let since = now()
+  return { due: () => now() - since >= budget, async give() { await give(); since = now() } }
+}
 
 /**
  * The order main.js lays its units in when every page after the first is drawn after its last batch is released: the
@@ -1968,6 +1977,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   if (!pending.size) settleAll()
   const order = [], pageMs = []
   let busy = Promise.resolve()
+  /** the run's slices of work between two yields (SLICE_MS) */
+  const slices = slicer()
   /** one closure laid at a time, each after the one before has ended (an until, a layFor) */
   const serial = f => { const r = busy.then(f, f); busy = r.then(() => {}, () => {}); return r }
   /** each page drawn (its drawing read, its names painted) and ready (readyOf, final), at most once */
@@ -2026,9 +2037,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return true
   }
   /**
-   * Page p's closure laid (the 1b-D design §2.1), a unit a task: page 1 drawn first; then, the closure taken again after every
-   * wait (a part may grow it), its pages drawn in order, its rows decided in the stream's order as each is in, and once the
-   * parts cover it and its rows are in, its units laid in their rank, a frame between two (each unit's pages, and its
+   * Page p's closure laid (the 1b-D design §2.1): page 1 drawn first; then, the closure taken again after every wait (a part
+   * may grow it), its pages drawn in order, its rows decided in the stream's order as each is in, and once the parts cover it
+   * and its rows are in, its units laid in their rank, back to back in slices (`slices`, SLICE_MS) (each unit's pages, and its
    * placeholders', drawn before it is: in order too, L2). A unit on a page that failed is left the original's, why `page`, and
    * the closure goes on, p's own failure too. Each page told as it is ready or failed (onStep). It ends once p is ready or failed, or `still` (read at every
    * wait, between pages and between units) is false: what is done stays done, each step having run on complete inputs, and
@@ -2082,9 +2093,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (disposed) return
         u.taken = true
         if (u.pages.some(q => failedPages.has(q))) { refuseUnit(u, 'page'); report(ms); continue }
-        // (let go during the frame before a unit, as a host's dispose usually is: that unit is not laid either)
-        await between()
-        if (disposed) return
+        // (the slice's work done: a yield; let go during it, as a host's dispose usually is, that unit is not laid either)
+        if (slices.due()) { await slices.give(); if (disposed) return }
         order.push(u.id)
         await arrive(u)
         if (disposed) return
