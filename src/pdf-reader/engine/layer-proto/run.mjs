@@ -486,7 +486,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
     const left = document.createElement('canvas'), right = copy ? document.createElement('canvas') : null
-    for (const c of [left, right]) if (c) { c.style.width = `${w}px`; c.style.height = `${h}px` }
+    // (no pixels until the page is drawn, drawPageOn sizes them: a page never drawn holds its row alone, not a canvas's default
+    // 300 x 150, which a jump past a paper's pages kept on every page it did not draw)
+    for (const c of [left, right]) if (c) { c.width = 0; c.height = 0; c.style.width = `${w}px`; c.style.height = `${h}px` }
     rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], markup: [], words: null, wordsOpen: null, links: null, fill: null }
   }
   if (!partsMode) for (let i = 1; i <= N; i++) makeRow(i)
