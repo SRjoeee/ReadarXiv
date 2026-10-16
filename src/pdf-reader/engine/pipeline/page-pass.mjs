@@ -5,7 +5,9 @@
 // part judged as it is cut: the carry's share of the lines of its marked pages (CARRY_MIN) and its own reader's reading of it
 // (readPart), a part refused either way the same pages with no layout. Under today's rules the frame, the column edges and the
 // far-push columns read the whole document, so every part is cut once the whole is known (stage 1: one flush at the end); the
-// parts are then cutBundle's of the same whole, byte for byte, wherever no verdict refuses one.
+// parts are then cutBundle's of the same whole, byte for byte, wherever no verdict refuses one. What a part holds at most, and
+// what the pass holds of arXiv's ink (GLYPHS_PAGE glyphs and OPS_CAP boxes a page, a page past either dark): docs/PDF-READER.md
+// §19.6.
 //
 // An original module (no port statement). It imports the engine's own modules alone, by relative path.
 import { BundleRefusal } from '../layer-proto/bundle.mjs'
