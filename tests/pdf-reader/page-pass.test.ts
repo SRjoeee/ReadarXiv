@@ -77,6 +77,26 @@ describe('layerOfPaper: the page pass', () => {
     })
   }
 
+  for (const verdicts of [false, true]) {
+    it(`under the oracle (a whole run's frame and edges), made a page at a time: the same layer, each part cut once what it reads is final (verdicts ${verdicts ? 'on' : 'off'})`, async () => {
+      const w = worldOf()
+      const capture: { frame?: unknown; columnEdges?: unknown } = {}
+      const want = await passOf(w, { verdicts, capture: capture as never })
+      expect(capture.frame).toBeTypeOf('function')
+      expect(capture.columnEdges).toBeInstanceOf(Map)
+      const got = await passOf(w, { verdicts, oracle: capture as never })
+      expect(shas(got.units)).toEqual(shas(want.units))
+      expect(got.head?.sha256).toBe(want.head?.sha256)
+      expect(shas(got.parts)).toEqual(shas(want.parts))
+      expect(got.told).toEqual(want.told)
+      expect(got.notes).toEqual(want.notes)
+      // (each part's pages, and the arXiv page read when it was cut)
+      const closed = (got.r as { stats: { closed: [number, number, number][] } }).stats.closed
+      expect(closed.map(c => c.slice(0, 2))).toEqual([[1, 1], [2, 3]])
+      for (const [, to, at] of closed) expect(at).toBeGreaterThanOrEqual(to)
+    })
+  }
+
   it('a part whose marked pages carry less than CARRY_MIN of their lines has no layout; the others keep theirs, read in order', async () => {
     // three of page 1's ten lines set otherwise on arXiv's: 70 % of part 1's lines, 90 % of the paper's (the maker makes the file)
     const w = worldOf((p, j) => p === 1 && j >= 7)

@@ -244,7 +244,7 @@ export function markWords(doc, marks) {
   for (const [name, mk] of marks) { const k = tokenAtMark(doc, byPage, mk, name.endsWith('s')); out.set(name, { ...mk, t: k == null ? null : doc[k].t }) }
   return out
 }
-const pageIndex = d => { const m = new Map(); d.forEach((t, k) => (m.get(t.page) ?? m.set(t.page, []).get(t.page)).push(k)); return m }
+export const pageIndex = d => { const m = new Map(); d.forEach((t, k) => (m.get(t.page) ?? m.set(t.page, []).get(t.page)).push(k)); return m }
 /** a carried word as `tokens` cuts it now: a copy on this machine keeps the words its marks were carried with, and one
  *  kept when a Latin run still took the CJK characters after it in is the start mark's first part or the end mark's
  *  last */
@@ -254,10 +254,11 @@ const cut = (t, start) => (t && t.length > 1 && CJK.test(t) ? ((start ? tokens(t
  * Marks → Map id → [first token, last token]. `marks` is Map `${id}s` / `${id}e` → { page, x, y, t? }. A mark that
  * carries the word it followed where it was recorded (`t`, from markWords) is kept only where `doc` has the same word
  * there: the marks of our own compile of the original then serve arXiv's PDF wherever the two are laid out alike,
- * and nowhere else.
+ * and nowhere else. `byPage`: the tokens of each page (made here where not given: a caller that bounds a unit at a time makes
+ * it once)
  */
-export function boundsFromMarks(doc, marks) {
-  const byPage = pageIndex(doc), out = new Map()
+export function boundsFromMarks(doc, marks, byPage = pageIndex(doc)) {
+  const out = new Map()
   for (const [name, s] of marks) {
     if (!name.endsWith('s')) continue
     const id = name.slice(0, -1), e = marks.get(`${id}e`)

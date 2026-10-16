@@ -87,8 +87,35 @@ type Made = Awaited<ReturnType<typeof makeLayout>>
  */
 export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
   | { refused: 'pages'; stats: LayoutStats }
-  | { refused?: undefined; pages: number; stats: LayoutStats; readPage(p: number): Promise<void>; whole(): Promise<Made>; byTasks(pick?: (ready: readonly MakerTask[]) => number): Promise<Made>; edges(): Map<string, [number, number]> | null }
+  | {
+    refused?: undefined; pages: number; stats: LayoutStats; readPage(p: number): Promise<void>; whole(): Promise<Made>; byTasks(pick?: (ready: readonly MakerTask[]) => number): Promise<Made>
+    edges(): Map<string, [number, number]> | null
+    /** the marks carried to arXiv's PDF (whole()'s first step): null, or 'carry' where no line is */
+    carrying(): 'carry' | null
+    /** each marked page's lines [carried, total], once carried */
+    pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
+    /** the maker a page at a time (after carrying(), the columns' edges given) */
+    stream(): MakerStream
+    /** carrying(), then stream() over every page read here, finished */
+    byStream(): Promise<MakerStream | { refused: 'carry'; stats: LayoutStats }>
+  }
 >
+/** the maker a page at a time: `pageRead(p)` after each page read in order, `finish()` after the last */
+export interface MakerStream {
+  pageRead(p: number): void
+  finish(): void
+  /** each page's plan, made as the page is let go (null without `plans`) */
+  plans: Map<number, PagePlan> | null
+  plansFailed(): string | null
+  /** the file's rows of the units settled (those of `ids`), as the whole file's parse holds them, and the names taken in */
+  layout(ids?: number[]): Pick<LayoutFile, 'fonts' | 'units' | 'lines' | 'frames' | 'erase' | 'ph' | 'labels' | 'headings' | 'pageText' | 'held' | 'names'> & LayoutFile
+  /** the pages from 1 let go */
+  released(): number
+  /** whether unit i's rows are made, or it has none */
+  settled(i: number): boolean
+  progress(): { read: number; anchored: number; decided: number; released: number }
+  trace?: { read: number; anchored: number; decided: number; released: number }[]
+}
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number
 /** a page's operator list waited for at most, ms */

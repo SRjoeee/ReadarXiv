@@ -1,7 +1,7 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { encodeLayout, indexLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
@@ -31,6 +31,25 @@ async function inOtherOrder(w: World, log: string) {
   const rand = seeded(seeds++)
   return m.byTasks(ready => Math.floor(rand() * ready.length))
 }
+/**
+ * The same world's rows made a page at a time (makerOf byStream: the page stream's maker, the units anchored by ranges, the
+ * passes as tasks as pages are read, each page let go once its tasks ran), the frame and the columns' edges the whole run's,
+ * merged as parts are (mergeLayout): the whole file's rows
+ */
+async function byPages(w: World, log: string) {
+  const input = { units: w.units, marks: await marksOf(w, log), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', plans: true }
+  let frameOf: ((t: unknown) => boolean) | null = null
+  const first = await makerOf({ ...input, arxiv: arxivOf(w.pages), frame: ((d: never, ms: never) => { frameOf = pageFrame(d, ms) as never; return frameOf }) as never })
+  if ('refused' in first) return null
+  for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+  const whole = await first.whole()
+  if (!('file' in whole)) return null
+  const m = await makerOf({ ...input, arxiv: arxivOf(w.pages), frame: () => frameOf as never, columnEdges: first.edges(), check: true })
+  if ('refused' in m) return null
+  const st = await m.byStream()
+  if ('refused' in st) throw new Error('the stream refused what the whole made')
+  return { whole, merged: mergeLayout([st.layout() as never]), plans: st.plans }
+}
 /** what a file's stats count, but its times and its gzip size */
 const counted = (s: LayoutStats) => { const { ms: _ms, bytes, ...rest } = s; return { ...rest, raw: bytes.raw } }
 /** a made file: it parses, and made again it is the same bytes, its passes in another order the whole order allows too */
@@ -41,6 +60,13 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
   expect(encodeLayout(two.file)).toBe(text)
   expect(encodeLayout(three.file)).toBe(text)
   expect(counted(three.stats)).toEqual(counted(one.stats))
+  // a page at a time: every unit's rows and every name's, as the whole file holds them, and every page's plan
+  const four = await byPages(w, log)
+  if (four) {
+    const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+    expect(rows(four.merged as never)).toEqual(rows(four.whole.file as never))
+    expect(four.plans).toEqual(four.whole.plans)
+  }
   expect(parseLayout(new TextEncoder().encode(text))).toEqual(one.file)
   for (const [, rows] of one.file.erase) expect(rows.length).toBeGreaterThan(0)
   return one

@@ -34,9 +34,15 @@ export interface LayerOptions {
   verdicts?: boolean
   frame?: FrameRule
   columns?: ColumnRule
+  /** tests and the lab: a whole run's maker frame predicate and columns' edges (`capture`'s); the maker made a page at a time
+   *  and each part cut as soon as what it reads is final (`stats.closed`) */
+  oracle?: LayerOracle | null
+  /** an object the whole run writes its maker frame predicate and columns' edges into: an oracle */
+  capture?: Partial<LayerOracle> | null
 }
+export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<string, [number, number]> }
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
-  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null } }
+  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; closed?: [from: number, to: number, read: number][] } }
   | { refused: 'anchors'; why: string }
 >

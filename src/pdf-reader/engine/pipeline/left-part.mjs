@@ -59,6 +59,25 @@ export function leftReach(doc, units, { bounds, floating = () => false, floatMat
  * (`read`, indices into `units`), for the record
  */
 export function leftOfPart(doc, units, { bounds, floating = () => false, floatMatch = null, frame = pageFrame, minCoverage = 0.6 }, [a, b], reach = leftReach(doc, units, { bounds, floating, floatMatch })) {
+  const { C, V2 } = partSets(doc, units, [a, b], reach)
+  const read = V2.units
+  const found = matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(read) })
+  const placed = placeUnits(doc, read.map(u => units[u]), read.map(u => found[u]), { frame })
+  const out = new Map()
+  for (const u of C.units) {
+    const { id } = units[u], anchor = placed.get(id)
+    const first = anchor?.rects?.[0]?.page
+    if (anchor && first >= a && first <= b) out.set(id, anchor)
+  }
+  return { anchors: out, read }
+}
+
+/**
+ * What the left of pages a to b reads (leftOfPart's): the units that may touch those pages (C), those that may touch theirs
+ * (V1), and those that may touch V1's (V2), each { units: indices into `units`, pages: a flag a page }, from `reach`
+ * (leftReach's, or any reach that holds each unit's)
+ */
+export function partSets(doc, units, [a, b], reach) {
   const pageOf = k => doc[k].page
   const N = doc.length ? doc[doc.length - 1].page : 0
   /** the pages a unit may reach, as page intervals */
@@ -78,15 +97,6 @@ export function leftOfPart(doc, units, { bounds, floating = () => false, floatMa
   }
   const part = new Uint8Array(N + 2)
   for (let p = Math.max(a, 1); p <= Math.min(b, N); p++) part[p] = 1
-  const C = meeting(part), V1 = meeting(C.pages), V2 = meeting(V1.pages)
-  const read = V2.units
-  const found = matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(read) })
-  const placed = placeUnits(doc, read.map(u => units[u]), read.map(u => found[u]), { frame })
-  const out = new Map()
-  for (const u of C.units) {
-    const { id } = units[u], anchor = placed.get(id)
-    const first = anchor?.rects?.[0]?.page
-    if (anchor && first >= a && first <= b) out.set(id, anchor)
-  }
-  return { anchors: out, read }
+  const C = meeting(part), V1 = meeting(C.pages)
+  return { C, V1, V2: meeting(V1.pages) }
 }
