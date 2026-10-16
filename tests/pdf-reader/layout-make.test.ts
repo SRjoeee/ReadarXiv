@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
-import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
+import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -554,14 +554,14 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT, UNIT_FLAG.FRONT, 0])
   })
 
-  it("a paper's operator lists are waited for OPS_PAPER_MS in all: the pages past it are not asked", async () => {
+  it("each page's operator list is waited for OPS_MS alone: no bound of the paper's makes a page dark for the pages before it", async () => {
     const pages = Array.from({ length: 8 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'never' }))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     const asked: number[] = []
     const out = make({ pages, marked: pages.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked)
-    await vi.advanceTimersByTimeAsync(OPS_PAPER_MS + 10 * OPS_MS)
+    await vi.advanceTimersByTimeAsync(9 * OPS_MS)
     const done = await out
-    expect(asked).toEqual([1, 2, 3, 4, 5, 6])
+    expect(asked).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
     expect(done.stats.timedOut).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
   })
 

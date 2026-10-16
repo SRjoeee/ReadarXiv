@@ -23,6 +23,9 @@ export interface MakeInput {
   floatMatch?: Map<number, number[] | null> | null
   /** the pages' frame's rule the maker's anchors are placed under (anchors.mjs pageFrame, today's) */
   frame?: FrameRule
+  /** the columns' text edges the names, the displays' numbers and the centred flag read (`page|column`,
+   *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of every placed unit's body lines (today's) */
+  columnEdges?: ReadonlyMap<string, [number, number]> | null
   /** the add-on's plans as well (`plans` in the result), of the ink the maker reads: each page's operator list read once */
   plans?: boolean
   /** the file is cut into parts (layer-proto/cut.mjs partCutter), which hold the bounds a part holds and the carry's share per
@@ -60,7 +63,7 @@ export interface LayoutStats {
   baselines: { first: number[]; last: number[] }
   /** pages past OPS_CAP, or past GLYPHS_PAGE glyphs */
   capped: number[]
-  /** pages whose operator list did not come within OPS_MS, or after the paper's OPS_PAPER_MS, or failed: no ink */
+  /** pages whose operator list did not come within OPS_MS, or failed: no ink */
   timedOut: number[]
   /** pages whose lines cost the carry more than its bound (carry.mjs `over`): no ink */
   over: number[]
@@ -73,8 +76,7 @@ export interface LayoutStats {
 export declare function makeLayout(o: MakeInput): Promise<{ file: LayoutFile; stats: LayoutStats; plans?: Map<number, PagePlan> | null; plansFailed?: string; lines?: ReadonlyMap<number, readonly [carried: number, total: number]> } | { refused: 'carry' | 'pages' | 'bounds'; stats: LayoutStats }>
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number
-/** a page's operator list waited for at most, ms; and a paper's in all */
+/** a page's operator list waited for at most, ms */
 export declare const OPS_MS: number
-export declare const OPS_PAPER_MS: number
 /** a font's PostScript name as the file holds it: 1 to 128 printable ASCII characters */
 export declare function fontName(name: unknown): string
