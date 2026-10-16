@@ -58,7 +58,7 @@ export function cell(id: number, page: number, b: number, c: Cell, group: string
 }
 const at = (table: number, row: number, col = 0, head = false): Cell => ({ table, row, col, span: 1, head })
 
-export interface Paper { name: string; specs: Spec[]; pages: number; /** a page whose reading throws */ fail?: number }
+export interface Paper { name: string; specs: Spec[]; pages: number; /** a page whose reading throws */ fail?: number; /** what the pages' annotations do: `throw` (a read that rejects), `absent` (a page object with no such call); the default reads */ annots?: 'throw' | 'absent' }
 /** S-A, the chain: a unit across every break, and one over 2 to 3 to 4 */
 const chain: Paper = {
   name: 'S-A chain', pages: 5,
@@ -122,6 +122,24 @@ const fill: Paper = {
 }
 export const PAPERS: Paper[] = [chain, tables, float, footnote, { ...footnote, name: 'S-D footnote, page 4 unreadable', fail: 4 }, fill]
 
+/** a character's advance centre at its place in an item of equal advance (PDF.js's rule, links.mjs pointsOf): the item's first character is at index 0 */
+const centreOf = (l: Line, k: number) => l.x0 + ((k + 0.5) / l.text.length) * (l.x1 - l.x0)
+/** the Link annotations of a page, PDF.js's shape: one over the first characters of each unit's first line there (its overlaid text those characters), and one in the margin with no glyph under it (a url) */
+export function annotationsOf(specs: readonly Spec[], n: number) {
+  const out: Record<string, unknown>[] = []
+  for (const s of specs) {
+    const l = s.lines.find(x => x.page === n)
+    if (!l) continue
+    const rect = [l.x0 + 1, l.b - 2, l.x0 + 14, l.b + 8]
+    const ov = [...l.text].filter((_, k) => centreOf(l, k) > rect[0]! && centreOf(l, k) < rect[2]!).join('')
+    out.push({ subtype: 'Link', rect, dest: `cite.${s.id}`, overlaidText: ov, borderStyle: { width: 1, style: 1 }, color: new Uint8ClampedArray([0, 255, 0]) })
+  }
+  out.push({ subtype: 'Link', rect: [270, 2, 290, 12], url: `https://example.org/p${n}`, overlaidText: '', borderStyle: { width: 0, style: 1 }, color: null })
+  // (an annotation of another kind is no link, and a link PDF.js reads an action out of is not one a reader carries)
+  out.push({ subtype: 'Widget', rect: [10, 2, 20, 12] }, { subtype: 'Link', rect: [100, 2, 120, 12], action: 'NextPage', overlaidText: '' })
+  return out
+}
+
 export interface Built {
   paper: Paper
   doc: { numPages: number; asked: number[]; getPage(n: number): Promise<unknown> }
@@ -140,7 +158,7 @@ export function build(paper: Paper): Built {
   const all = Array.from({ length: pages }, (_, i) => i + 1)
   const items = all.map(p => specs.flatMap(s => s.lines.filter(l => l.page === p).map(l => ({ str: l.text, transform: [10, 0, 0, 10, l.x0, l.b], width: l.x1 - l.x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))))
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
-  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} })
+  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(paper.annots === 'absent' ? {} : { getAnnotations: async () => { if (paper.annots === 'throw') throw new Error('the annotations cannot be read'); return annotationsOf(specs, n) } }) })
   const asked: number[] = []
   const doc = { numPages: pages, asked, getPage: async (n: number) => { asked.push(n); if (n === paper.fail) throw new Error(`page ${n} cannot be read`); return pageOf(n) } }
   const layout = {
@@ -166,13 +184,13 @@ export type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-pr
 /** v0 over the paper, every unit at once (the hybrid over the layout file, each cell's group given, or with `groups` false
  *  none: the groups read from the rows, as the gate's and the lab's whole opens do); `expect`: the rows to be taken after the
  *  open (take) rather than given; `free`: the run lets go of what it has laid, as the reader's does */
-export async function openRun(P: Built, { free = true, groups = true, expect = false } = {}) {
+export async function openRun(P: Built, { free = true, groups = true, expect = false, records = true } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const units: unknown[] = []
   const pieces = new Map<number, unknown[]>()
   for (const [id, r] of P.rows) { if (!expect) units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
-    doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}),
+    doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, records, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}),
     tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }
@@ -192,6 +210,7 @@ export function runSnap(run: Run, p: number) {
   return {
     markup: r.markup, ops: JSON.stringify(r.ops), fill: r.fill, svg: run.svgOf(p).innerHTML,
     words: JSON.stringify([t.n, w.spans, w.original, Array.from(t.l), Array.from(t.r), Array.from(t.y), Array.from(t.h), Array.from(t.top), Array.from(t.bottom), Array.from(w.word)]),
+    links: JSON.stringify(run.linksOf(p)),
     // (a table cell's record leaves with its group when the group is withheld, as soon as all its cells are laid: not a fact of the page)
     records: run.stats.filter(x => x.pages.includes(p) && x.kind !== 'cell').map(({ ms: _, ...x }) => x).sort((a, b) => a.id - b.id),
   }
@@ -216,8 +235,8 @@ export function rowsOf(bundle: ReadBundle, P: Built): Row[] {
   const results = new Map(toTranslate(bundle, 'zh').map(id => [id, { state: 'whole', by: 'test', pieces: [{ t: 'text', tr: true, s: tr.get(id)! }] }]))
   return layerRows(bundle, results, 'zh').rows
 }
-/** what the reader's door answers of a page: its SVG (lang aside), its word table, and what its run drew (operations, fill, markup) */
-export function layerSnap(run: Run, svg: SVGSVGElement, words: PageWords, p: number) {
+/** what the reader's door answers of a page: its SVG (lang aside), its word table and links, and what its run drew (operations, fill, markup) */
+export function layerSnap(run: Run, svg: SVGSVGElement, words: PageWords, p: number, links: unknown[]) {
   const copy = svg.cloneNode(true) as SVGSVGElement
   copy.removeAttribute('lang')
   const t = words.tokens
@@ -225,6 +244,7 @@ export function layerSnap(run: Run, svg: SVGSVGElement, words: PageWords, p: num
   return {
     svg: copy.outerHTML, ops: JSON.stringify(r.ops), fill: r.fill, markup: r.markup,
     words: JSON.stringify([t.n, words.spans, words.original, Array.from(t.l), Array.from(t.r), Array.from(t.y), Array.from(t.h), Array.from(t.top), Array.from(t.bottom), Array.from(words.word)]),
+    links: JSON.stringify(links),
   }
 }
 

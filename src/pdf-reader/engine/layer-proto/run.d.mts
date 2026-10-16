@@ -9,6 +9,7 @@ import type { FaceSources } from './fonts.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 import type { ReadPart } from './format.mjs'
 import type { OpenWords, PageWords } from './words.mjs'
+import type { LayerStats, LinkRecord } from './reader.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -53,7 +54,7 @@ export interface PageFill { own: number | null; anchor: number | null; target: n
  *  its crops and restores from, until the page is released (whether a crop is drawn at all is the page's own: it was read
  *  and did not fail) */
 export interface Row {
-  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: PageWords | null; wordsOpen: OpenWords | null; links: unknown[] | null; fill: PageFill | null
+  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: PageWords | null; wordsOpen: OpenWords | null; links: LinkRecord[] | null; linksOpen: { rec: LinkRecord; stream?: number; sources?: unknown }[] | null; fill: PageFill | null
   left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; base: boolean; released?: boolean
 }
 /** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the
@@ -126,7 +127,7 @@ export interface ProtoRun {
   /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
    *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
    *  copy and set as SVG */
-  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number }[]
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number; links: number }[]
   /** each page's characters (with `free` and `records`, the shelf's: every page's, let go or not) */
   chars: (Char[] | undefined)[]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]
@@ -193,6 +194,12 @@ export interface ProtoRun {
   svgOf(page: number): SVGSVGElement
   /** the page's word table, a new record on every ask (words.mjs; the 1b design §4), frozen at the first ask if the page is not already; a RangeError for a page that is not final (ready) */
   wordsOf(page: number): PageWords
+  /** the page's links, a new copy on every ask (links.mjs; the 3a design), frozen at the first ask if the page is not already; a RangeError for a page that is not final (ready) */
+  linksOf(page: number): LinkRecord[]
+  /** the counts of the links read and frozen so far (LayerStats.links), a copy */
+  readonly linkStats: LayerStats['links']
+  /** with `records` (the gate's): each record of the page's source annotations and the tier that made it, in the records' order; absent without */
+  linkSources?(page: number): { annots: [number, number][]; tier: string }[]
   /** what the run lets go (`free`), keeps of its units' records and audit (`records`), and keeps on the gate's shelf */
   held(): { free: boolean; records: boolean; shelf: boolean }
   /** what the run holds of a page */

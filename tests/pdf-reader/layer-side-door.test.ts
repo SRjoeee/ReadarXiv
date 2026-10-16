@@ -216,6 +216,65 @@ describe('the real door: (g) parts with no add-on', () => {
   })
 })
 
+describe('the real door: target-first laying (1b-D1, #380)', () => {
+  /** eight pages, a paragraph each, no unit over a break: a page's closure is page 1 drawn and the page itself */
+  const para = (text: string, page: number, b: number, stream: number) => ({ kind: 'para', text, lines: [[page, 20, 280, b]] as [number, number, number, number][], file: true, stream })
+  const SPEC: PaperSpec = { pages: 8, units: Array.from({ length: 8 }, (_, i) => para(`Paragraph of page ${i + 1}`, i + 1, 200, 20 * i)) }
+  async function eight() {
+    const { cut, index } = await cutSpec(SPEC, undefined, { addon: false })
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const s = await setup({ faceSources: served, paper: { objects: [...cut.units, cut.head, ...cut.parts, ...cut.left], pages: 8 }, real: { openLayer, docFor: docsOf(SPEC) as unknown as (r: number) => LayerDocument } })
+    const refs = { head: cut.head.ref, units: cut.units.map(u => u.ref), parts: cut.parts.map((p, i) => ({ ...p.ref, prev: i ? cut.parts[i - 1]!.sha256 : null })), end: cut.end }
+    return { s, index, refs }
+  }
+
+  it('a jump to a far page lays its closure, not the pages before it; the side names what it waits for (rowsFor)', async () => {
+    const { s, index, refs } = await eight()
+    await nearOn(s, [6])
+    s.side.tell(refs)
+    await still(s)
+    // no row yet: page 6's closure waits for its units' rows, which the side names
+    const waits = s.side.rowsFor(6)
+    expect(waits.length).toBeGreaterThan(0)
+    expect(waits).toEqual(s.layer()?.rowsFor(6))
+    expect(content(s, 6)).toBe('original')
+    s.side.take(rowsOfIndex(index))
+    s.side.end()
+    await still(s)
+    expect(content(s, 6)).toBe('layer')
+    expect(s.side.rowsFor(6)).toEqual([])
+    // (pages 2 to 5 were not laid on the way: target-first, not 1..6)
+    for (const p of [2, 3, 4, 5]) expect(s.layer()?.pageState(p), `page ${p}`).toBe('waiting')
+    expect(s.side.rowsFor(99)).toEqual([])
+  })
+
+  it('a fast scroll: asks made and let go leave no ask and no place in between, the page reached laid; an ask let go is dropped', async () => {
+    const { s, index, refs } = await eight()
+    s.side.tell(refs)
+    s.side.take(rowsOfIndex(index))
+    s.side.end()
+    await still(s)
+    // pages passed over in one burst, each near then far before the drive reaches it, the scroll ending at page 8
+    for (const p of [2, 3, 4, 5, 6, 7]) { await nearOn(s, [p]); await nearOn(s, [p], false) }
+    await nearOn(s, [8])
+    await still(s)
+    expect(content(s, 8)).toBe('layer')
+    expect(s.side.probe().asking).toBe(0)
+    const states = [2, 3, 4, 5, 6, 7].map(p => s.layer()?.pageState(p))
+    // every page passed over is either laid (taken before its ask went, so retired: nothing shown far away) or left waiting
+    for (const [i, st] of states.entries()) {
+      expect(['ready', 'waiting'], `page ${i + 2}`).toContain(st)
+      expect(content(s, i + 2), `page ${i + 2}`).toBe('none')
+    }
+    expect(states.filter(x => x === 'waiting').length).toBeGreaterThan(0)
+    // and one of them asked again: laid now
+    const left = [2, 3, 4, 5, 6, 7].find((_, i) => states[i] === 'waiting') as number
+    await nearOn(s, [left])
+    await still(s)
+    expect(content(s, left)).toBe('layer')
+  })
+})
+
 describe('the real door: a fork, and L8', () => {
   it('a fork on the real door: the door disposed before the new one opens over the new chain, its rows carried, its page laid; nothing left after dispose', async () => {
     const m = await M()

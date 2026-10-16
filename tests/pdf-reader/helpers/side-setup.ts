@@ -45,6 +45,8 @@ export const unitsOn = (m: Made, n: number) => [...new Set(m.readParts.flatMap(p
 export interface Setup {
   view: ReaderView; side: LayerSide; door: FakeDoor; clock: ManualClock; events: ViewEvent[]; panes: { left: HTMLElement; right: HTMLElement }
   fetched: string[]; refuse: Set<string>; objects: Map<string, Uint8Array>
+  /** digests whose fetch waits until its signal aborts; each fetch's signal, by digest (the last) */
+  hold: Set<string>; signals: Map<string, AbortSignal>
   composed: { tail: Uint8Array | null; options: Record<string, unknown>; task: FakeTask }[]
   destroyed: string[]; warned: () => string[]; opens: number; highlight(on: boolean): void
   /** each door opened: the door, the rows it took, its ends, the copies it drew (page, source, k) */
@@ -100,8 +102,11 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const objects = new Map<string, Uint8Array>()
   for (const w of o.paper?.objects ?? [...m.chunks, m.head, ...m.parts, ...Object.values(m.lefts), ...(o.extra ?? [])]) objects.set(w.sha256, w.bytes)
   const fetched: string[] = [], refuse = new Set<string>(), destroyed: string[] = []
-  const fetchObject = async (ref: Ref) => {
+  const hold = new Set<string>(), signals = new Map<string, AbortSignal>()
+  const fetchObject = async (ref: Ref, signal: AbortSignal) => {
     fetched.push(ref.sha256)
+    signals.set(ref.sha256, signal)
+    if (hold.has(ref.sha256)) await new Promise<void>((_, no) => signal.addEventListener('abort', () => no(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true }))
     await macrotask()
     if (refuse.has(ref.sha256)) throw new Error('refused by the test')
     const b = objects.get(ref.sha256)
@@ -151,7 +156,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
     }) as never,
   })
   return {
-    view, side, door, clock, events, panes, fetched, refuse, objects, composed, destroyed,
+    view, side, door, clock, events, panes, fetched, refuse, objects, composed, destroyed, hold, signals,
     warned: () => (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(c => String(c[0])),
     get opens() { return opens },
     doors,

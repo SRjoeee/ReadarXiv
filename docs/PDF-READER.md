@@ -696,8 +696,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   the last one and names its digest as `prev` (a catalog's part, which names none, by its pages). One beginning at or
   before the last told, under another digest, is a fork, and the chain is reset from its page, where it joins and is heard
   later than every part it lets go (a source that comes late, a 202 made before a job's fork, does not undo it) or those
-  are refused. A tell with the parts' end (the catalog) names the chain whole, and no later part forks it; one may extend
-  it. A part that does not follow yet waits; one refused stops the chain at the part before it, and is fetched and read
+  are refused. A tell with the parts' end whose parts reach it (the catalog; one of no part at an end of page 0) names the chain
+  whole: a part waiting from before it is let go (the same catalog told again keeps those heard since), and no later part
+  forks it; one may extend it. A part that does not follow yet waits; one refused stops the chain at the part before it, and is fetched and read
   again when it is told again (an abort of the host's transport is a refusal too). A second head is passed over with one
   warning.
 - **The order** (the reader view's contract §2.2): the index read; the base bound, once (false is no layer); the original
@@ -737,7 +738,10 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   `outline` is told at the index and after each change (once a frame), `heading` from the
   scroll of either pane: the last heading at or above the reading line of the pane read.
 - **What it tells**: `layer` events (`opening`, `open` with the pages laid, `refused` with its why), `coverage()` and a
-  bounded `probe()` (counts, states, a ring of the last 32 commits). The door's stats tell no late rows and no skipped
+  bounded `probe()` (counts, states, a ring of the last 32 commits), and `rowsFor(page)`, the units whose rows the door's
+  page still waits for (its closure's: the door lays a page asked by its closure alone, the newest ask first), which a host
+  translating as it shows translates first. The stall clock starts at the page's `laying`, which the door tells when its
+  drive takes the page, not at the ask. The door's stats tell no late rows and no skipped
   units yet: `coverage()` gives 0 and {} for them.
 
 The extension's development entry makes a side on the harness's word (`__reader.openSide`) over `layerTransport`

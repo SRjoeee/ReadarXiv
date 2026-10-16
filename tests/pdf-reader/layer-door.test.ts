@@ -133,21 +133,23 @@ const CASCADE: PaperSpec = {
   ]).flat(),
 }
 
-interface Seen { pages: string[]; ops: string[]; log: string[] }
+interface Seen { pages: string[]; links: string[]; ops: string[]; log: string[] }
 /** a door's pages asked one at a time, 1 to N, each awaited: their SVG markup, the run's operations, and the log of what the
  *  run waited for and what the door told */
 async function askEvery(layer: Layer, N: number, feed: (p: number) => Promise<void> = async () => {}): Promise<Seen> {
-  const pages: string[] = []
+  const pages: string[] = [], links: string[] = []
   layer.onPage((p, state: PageEvent) => seen.log.push(`${state}:${p}`))
   for (let p = 1; p <= N; p++) {
     let done = false
     const page = layer.pageOf(p, { lang: 'zh' }).finally(() => { done = true })
     await feed(p)
     while (!done) await tick()
-    pages.push((await page).svg.outerHTML)
+    const laid = await page
+    pages.push(laid.svg.outerHTML)
+    links.push(JSON.stringify(laid.links))
   }
   const run = seen.runs.at(-1) as Run
-  return { pages, ops: run.rows.map(r => JSON.stringify(r?.ops ?? null)), log: seen.log.slice() }
+  return { pages, links, ops: run.rows.map(r => JSON.stringify(r?.ops ?? null)), log: seen.log.slice() }
 }
 /** Q1 at the door: between a page's `laying` and its `ready` the run waited for no part */
 function q1Of(log: readonly string[]): string[] {
@@ -175,6 +177,8 @@ describe('the door: three opens, the same pages', () => {
       const whole = await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(c.parts.at(-1)!.chain.r), target: 'zh', faceSources, hyphUrl })
       whole.take(rows)
       const want = await askEvery(whole, N)
+      // (the pages carry links: each page's margin link at least, in place)
+      expect(want.links.every(l => JSON.parse(l).length > 0), `${ends}: links`).toBe(true)
       whole.dispose()
       // warm
       seen.log.length = 0
@@ -182,7 +186,7 @@ describe('the door: three opens, the same pages', () => {
       warm.take(rows)
       const hot = await askEvery(warm, N)
       warm.dispose()
-      expect({ pages: hot.pages, ops: hot.ops }, `${ends}: warm`).toEqual({ pages: want.pages, ops: want.ops })
+      expect({ pages: hot.pages, links: hot.links, ops: hot.ops }, `${ends}: warm`).toEqual({ pages: want.pages, links: want.links, ops: want.ops })
       // in parts: told when the run waits for one (each page asked first), so that every part comes late
       for (const feed of ['starved', 'eager'] as const) {
         seen.log.length = 0
@@ -194,7 +198,7 @@ describe('the door: three opens, the same pages', () => {
         const cold = await askEvery(door, N, async p => { if (feed === 'eager') while (next < c.parts.length && c.parts[next]!.pages[0] <= p + 1) add() })
         seen.starved = null
         door.dispose()
-        expect({ pages: cold.pages, ops: cold.ops }, `${ends}: ${feed}`).toEqual({ pages: want.pages, ops: want.ops })
+        expect({ pages: cold.pages, links: cold.links, ops: cold.ops }, `${ends}: ${feed}`).toEqual({ pages: want.pages, links: want.links, ops: want.ops })
         expect(q1Of(cold.log), `${ends}: ${feed}`).toEqual([])
         expect(cold.log.filter(e => e === 'wait:part').length > 0 || feed === 'eager').toBe(true)
       }
@@ -228,7 +232,7 @@ describe('the door: three opens, the same pages', () => {
       door.endParts()
       const left = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
       door.dispose()
-      expect({ pages: cold.pages, ops: cold.ops }, `${ends}`).toEqual({ pages: want.pages, ops: want.ops })
+      expect({ pages: cold.pages, links: cold.links, ops: cold.ops }, `${ends}`).toEqual({ pages: want.pages, links: want.links, ops: want.ops })
       expect(left, `${ends}`).toEqual(wantLeft)
       expect(q1Of(cold.log)).toEqual([])
     }
@@ -557,7 +561,7 @@ describe('the door: three opens, the same pages', () => {
       const got = await askEvery(door, spec.pages)
       const left = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
       door.dispose()
-      expect({ pages: got.pages, ops: got.ops }, `${ends}`).toEqual({ pages: want.pages, ops: want.ops })
+      expect({ pages: got.pages, links: got.links, ops: got.ops }, `${ends}`).toEqual({ pages: want.pages, links: want.links, ops: want.ops })
       expect(left, `${ends}`).toEqual(wantLeft)
     }
   })
