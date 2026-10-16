@@ -6,6 +6,8 @@ export declare const REPORTED: [key: string, label: string][]
 /** the link counts a page's model holds and a fixture's totals sum (the shares linksKept and linksTrue are made of them) */
 export declare const LINK_COUNTS: string[]
 export declare const TOLERANCE: { share: number; ratio: number; count: number; defect: number }
+/** the links' minimums per output (3a-2, the owner's ruling): kept and true */
+export declare const LINKS_MIN: { kept: number; true: number }
 /** a fixture's (or a page's) values: measures by key, and the defects' rates */
 export type Totals = Record<string, unknown> & { rates?: Record<string, number>; modelRates?: Record<string, number> }
 export interface PageEntry { p: number; [key: string]: unknown }
@@ -21,4 +23,4 @@ export declare function compare(prev: Record<string, { totals: Totals; pages: Pa
 export declare function droppedOutputs(record: { tiers?: Record<string, { fixtures?: Record<string, unknown> }> } | null, key: string, fixtures: string[]): string[]
 export interface CompletenessRow { name: string; pages: number; numbers: [number, number]; lostInk?: number; fails: string[]; [check: string]: unknown }
 /** the brief's completeness rows of a run: per output each check's count and the checks above 0 (`fails`) */
-export declare function completenessRows(run: { fixtures: Record<string, { totals: Totals; summary?: { recordErrors?: number } }> }, tier: Tier): CompletenessRow[]
+export declare function completenessRows(run: { fixtures: Record<string, { totals: Totals; summary?: { recordErrors?: number; linksLost?: string[] }; pages?: { p: number; where?: { linksTrue?: string[] } }[] }> }, tier: Tier): CompletenessRow[]

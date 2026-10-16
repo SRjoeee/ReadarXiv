@@ -79,7 +79,7 @@ export function annotationsOf(raw) {
 }
 
 /** the points of a page's text items: each non-space character's advance centre on its baseline, in the item's direction
- *  (PDF.js items: { str, width, transform }); [{ x, y, ch }] */
+ *  (PDF.js items: { str, width, transform }); [{ x, y, ch, size }], `size` the item's */
 export function glyphPointsOf(items) {
   const out = []
   for (const it of items ?? []) {
@@ -91,7 +91,7 @@ export function glyphPointsOf(items) {
     chars.forEach((ch, k) => {
       if (!/\S/u.test(ch)) return
       const along = ((k + 0.5) / chars.length) * it.width
-      out.push({ x: t[4] + ux * along, y: t[5] + uy * along, ch })
+      out.push({ x: t[4] + ux * along, y: t[5] + uy * along, ch, size: n })
     })
   }
   return out
@@ -214,37 +214,63 @@ export function hrefUrlOf(src) {
 
 /**
  * The reference for linksTrue (design section 2, answer to Q1): the overlaid text of the record's annotations, joined in
- * order, where every glyph of an annotation lies in a placeholder's segment of TeX's file or on no unit's line (the text there
+ * order, where every glyph of an annotation (its letters and digits, where it has any; each read at its middle, a third of its
+ * size over its baseline, within a third of its size across) lies in a placeholder's segment of TeX's file, on no unit's line,
+ * or on the line of a unit with no link pair (only a pair's text is a link's own translated text) (the text there
  * is the original's, and the drawing shows it so); otherwise the plain text of the translated pieces between the pair
  * (PDF.js's overlaid text is English where the translation is not): the `\href` whose URL is the annotation's, else the owner's
  * i-th `\hyperref` or `\hyperlink` (i the annotation's rank among the annotations of that unit with a destination whose glyphs
- * are not in a placeholder, as many as the unit's pairs). null where neither is found: the record then counts as not true and
- * is listed. `ctx`: { points(a) -> glyph points of the annotation, segment(x, y), owner(x, y) -> unit id or null, pairsOf(id),
- * all: the page's annotations of T in PDF order }
+ * are not in a placeholder, as many as the unit's pairs), or the owner's one pair of the kind for every such annotation of it
+ * (a link text TeX broke over two lines is an annotation a line, the translation's pair one). Two annotations of one record
+ * that are one pair's give its text once. null where neither is found: the record then counts as not true and is listed. `ctx`:
+ * { points(a) -> glyph points of the annotation, segment(x, y), owner(x, y) -> unit id or null, pairsOf(id), all: the page's
+ * annotations of T in PDF order }; a function of an annotation's page (`a.page`) to that page's ctx: each annotation read with
+ * its own page's (a record a unit drew over a page break may merge annotations of two pages)
  */
-export function referenceOf(annots, ctx) {
-  const ownerOf = a => { const p = ctx.points(a).find(q => !ctx.segment(q.x, q.y) && ctx.owner(q.x, q.y) !== null); return p ? ctx.owner(p.x, p.y) : null }
+export function referenceOf(annots, ctxIn) {
+  const ctxOf = typeof ctxIn === 'function' ? ctxIn : () => ctxIn
   const parts = []
+  let last = null
   for (const a of annots) {
+    const ctx = ctxOf(a.page)
+    if (!ctx) return null
+    // (the unit whose line a glyph of the link is on, and whose translated text it is: only a unit with a pair has link text of
+    // its own; any other unit's links are over its placeholders' ink, the original's. A glyph is read at its middle, a third of
+    // its size over its baseline, as the content measure reads a character against a segment (its baseline is the foot of a
+    // digit's ink, which a segment's box need not reach), within a third of its size across (its place is the equal-advance
+    // estimate's), and by its letters and digits where it has any (a full stop the rectangle's margin takes after a url is no
+    // text of the translation's))
+    const ownerOf = b => {
+      const pts = ctx.points(b), lettered = pts.filter(q => /[\p{L}\p{N}]/u.test(q.ch ?? ''))
+      const use = lettered.length ? lettered : pts
+      const mid = q => q.y + 0.3 * (q.size ?? 0), near = q => 0.3 * (q.size ?? 0)
+      const p = use.find(q => !ctx.segment(q.x, mid(q), near(q)) && ctx.owner(q.x, mid(q)) !== null)
+      const id = p ? ctx.owner(p.x, mid(p)) : null
+      return id !== null && (ctx.pairsOf(id) ?? []).length ? id : null
+    }
     const owner = ownerOf(a)
-    if (owner === null) { parts.push(a.ov); continue }
+    if (owner === null) { parts.push(a.ov); last = null; continue }
     const pairs = ctx.pairsOf(owner) ?? []
     let pair = null
     if (a.target?.url !== undefined) {
-      // (the pairs with this URL, in source order, against the owner's annotations with it, in PDF order: as many, the i-th to the i-th)
+      // (the pairs with this URL, in source order, against the owner's annotations with it, in PDF order: as many, the i-th to the
+      // i-th; one pair, every one of them)
       const href = new URL(a.target.url).href
       const same = pairs.filter(p => hrefUrlOf(p.src) === href)
       const mine = ctx.all.filter(b => b.target?.url !== undefined && new URL(b.target.url).href === href && ownerOf(b) === owner)
       const at = mine.findIndex(b => b.i === a.i)
-      if (at >= 0 && mine.length === same.length) pair = same[at]
+      if (at >= 0 && (mine.length === same.length || same.length === 1)) pair = same.length === 1 ? same[0] : same[at]
     } else {
       const mine = ctx.all.filter(b => b.target?.dest !== undefined && ownerOf(b) === owner)
       const internal = pairs.filter(p => /^\\(?:hyperref|hyperlink)\b/.test(p.src))
       const at = mine.findIndex(b => b.i === a.i)
-      if (at >= 0 && mine.length === internal.length) pair = internal[at]
+      // (one pair for annotations of one destination alone: one pair's text cannot be two links')
+      const one = internal.length === 1 && mine.every(b => JSON.stringify(b.target.dest) === JSON.stringify(mine[0].target.dest))
+      if (at >= 0 && (mine.length === internal.length || one)) pair = one ? internal[0] : internal[at]
     }
     if (!pair) return null
-    parts.push(pair.text)
+    if (pair !== last) parts.push(pair.text)
+    last = pair
   }
   return parts.join('')
 }
@@ -256,8 +282,9 @@ export function referenceOf(annots, ctx) {
  * the engine names as a source); `glyphs`: the page's glyph points; `erased(x, y)`: E(p); `records` and `sources` (R(p) and
  * the attribution, the records' order; `sources` null where the engine has none); `claims`: a Map shared by a fixture's pages, so
  * that an annotation two records of different pages claim is found; `drawn(record)`: the drawn text under the record's boxes
- * (asked only of a moved record whose boxes are well formed); `reference(record, annots)`: the reference text or null (asked only
- * of a moved record); `counted(q)`: whether page q is one the gate measures (an annotation of another page is no kept link: the
+ * (asked only of a moved record whose boxes are well formed); `reference(record, annots)`: the reference text, null where none is
+ * found, or undefined where none can be had (no TeX's file to read: the record is counted `linksUnverified`, neither true nor
+ * listed) (asked only of a moved record); `counted(q)`: whether page q is one the gate measures (an annotation of another page is no kept link: the
  * denominator is the measured pages' alone; default every page).
  *
  * Returns the counts of the page (an entry in the record): `linksTotal` and `linksUnsupported` (T and U of the page),
@@ -265,7 +292,7 @@ export function referenceOf(annots, ctx) {
  * (annotations of any page that records of this page keep: attributed to a record with its own target, moved or in place on
  * its rectangle, the record in no way wrong; a record on a later page that claims an annotation too makes the earlier record
  * wrong and takes its credit back, so this page's counts can hold -1 and +1: the fixture's sums are right), `linksMoved`, `linksInPlace`, `linksTrueN` (moved records whose drawn text is
- * the reference's), `linksWrong` (records with a defect: below), and `where`: { linksWrong: ['<order>:<reasons>'], linksTrue:
+ * the reference's), `linksUnverified` (moved records with no reference to be had), `linksWrong` (records with a defect: below), and `where`: { linksWrong: ['<order>:<reasons>'], linksTrue:
  * ['<order>'] }, the ranks of the records at fault.
  *
  * A record is wrong where, for any reason:
@@ -285,7 +312,7 @@ export function referenceOf(annots, ctx) {
 export function linksPage(o) {
   const own = o.parsed(o.page)
   const T = own.links.filter(a => a.ok)
-  const out = { linksTotal: own.total, linksUnsupported: own.unsupported, linksPlaceable: 0, linksKeptN: 0, linksMoved: 0, linksInPlace: 0, linksTrueN: 0, linksWrong: 0, where: { linksWrong: [], linksTrue: [] } }
+  const out = { linksTotal: own.total, linksUnsupported: own.unsupported, linksPlaceable: 0, linksKeptN: 0, linksMoved: 0, linksInPlace: 0, linksTrueN: 0, linksUnverified: 0, linksWrong: 0, where: { linksWrong: [], linksTrue: [] } }
   for (const a of T) if (!glyphsOfLink(a, o.glyphs).some(p => o.erased(p.x, p.y))) out.linksPlaceable++
   const records = o.records ?? [], sources = o.sources ?? null
   // (how many claims each annotation has among this page's records, a record that names it twice counting twice: the claim of the
@@ -344,8 +371,10 @@ export function linksPage(o) {
     if (rec.moved) {
       // (an annotation of another page, where a unit lies over a page break: its annotation carries `page`, and the caller reads that page's glyphs and TeX's file)
       const ref = good.length && good.length === claimed.length ? o.reference(rec, good.map(({ q, a }) => ({ ...a, page: q }))) : null
-      // (a record with no drawn character under it is unverifiable, not true: two empty texts are not a match)
-      if (ref !== null && /\S/u.test(drawnText) && sameText(drawnText, ref)) out.linksTrueN++
+      // (no reference to be had, a run with no TeX's file to read whose text a link's is: the record is not measured, `linksUnverified`;
+      // a record with no drawn character under it is unverifiable, not true: two empty texts are not a match)
+      if (ref === undefined) out.linksUnverified++
+      else if (ref !== null && /\S/u.test(drawnText) && sameText(drawnText, ref)) out.linksTrueN++
       else out.where.linksTrue.push(String(r))
     }
   }

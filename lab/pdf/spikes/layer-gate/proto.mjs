@@ -547,17 +547,29 @@ async function linksOfPage(p, page, tc) {
     const fp = S.file?.get(q), all = L.parsed.get(q).links.filter(a => a.ok)
     return {
       all, points: a => glyphsOfLink(a, glyphsOf.get(q) ?? []),
-      segment: (x, y) => !!fp && [...fp.units.values()].some(u => u.phs.some(ph => ph.segs.some(b => within(x, y, b)))),
+      segment: (x, y, d = 0) => !!fp && [...fp.units.values()].some(u => u.phs.some(ph => ph.segs.some(b => within(x, y, [b[0] - d, b[1], b[2] + d, b[3]])))),
       owner: (x, y) => { if (fp) for (const [id, u] of fp.units) if (u.lines.some(l => within(x, y, l.box))) return id; return null },
       pairsOf: id => pairsOf(S.byId.get(id)?.unit?.pieces),
     }
   }
   const m = linksPage({
     page: p, parsed: q => L.parsed.get(q), counted: q => q <= S.pages, glyphs, erased: erasedOf(run.rows[p - 1]?.ops, (x, y) => view.convertToViewportPoint(x, y)), records, sources, claims: L.claims,
-    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), reference: (rec, annots) => (annots.every(a => a.page === annots[0].page) ? referenceOf(annots, ctxOf(annots[0].page)) : null),
+    // (each annotation read with its own page's TeX's file and glyphs, a record a unit drew over a page break merging two pages'
+    // annotations; with no TeX's file to read, no reference can be had where a link's text is the translation's: unverified)
+    drawn: rec => textUnder(chars, boxesOf(rec.boxes)), reference: (rec, annots) => (!S.file ? undefined : referenceOf(annots, q => (Number.isInteger(q) && q >= 1 && q <= doc.numPages && L.parsed.has(q) ? ctxOf(q) : null))),
   })
   const { where, ...values } = m
   return { values, where: Object.fromEntries(Object.entries(where).filter(([, ids]) => ids.length)) }
+}
+
+/** the annotations of T on the pages the gate measures that no record kept (its own target, in no way wrong): page:rank */
+function linksLostOf() {
+  const L = S.links, out = []
+  for (const [q, parsed] of [...L.parsed].sort((a, b) => a[0] - b[0])) {
+    if (q > S.pages) continue
+    for (const a of parsed.links) if (a.ok && !L.claims.get(`${q}|${a.i}`)?.credited) out.push(`${q}:${a.i}`)
+  }
+  return out
 }
 
 window.gate = {
@@ -1035,6 +1047,9 @@ window.gate = {
       ...(parts ? { parts } : {}),
       // (the units whose record could not be made: drawn, and measured by nothing, so a failure of the gate's)
       ...(run.recordErrors?.length ? { recordErrors: run.recordErrors.length } : {}),
+      // (the original's links of the pages measured that no record kept, page:rank: the misses of linksKept, read once every page's
+      // records are in, a record of a later page may keep one of an earlier; and the engine's own counts)
+      linksLost: linksLostOf(), ...(run.linkStats ? { links: run.linkStats } : {}),
     }
   },
 }

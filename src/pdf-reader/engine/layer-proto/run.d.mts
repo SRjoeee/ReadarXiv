@@ -54,7 +54,7 @@ export interface PageFill { own: number | null; anchor: number | null; target: n
  *  its crops and restores from, until the page is released (whether a crop is drawn at all is the page's own: it was read
  *  and did not fail) */
 export interface Row {
-  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: PageWords | null; wordsOpen: OpenWords | null; links: LinkRecord[] | null; linksOpen: { rec: LinkRecord; stream?: number; sources?: unknown }[] | null; fill: PageFill | null
+  page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: PageWords | null; wordsOpen: OpenWords | null; links: LinkRecord[] | null; linksOpen: { rec: LinkRecord; stream?: number; id?: number; seq?: number; sources?: unknown }[] | null; fill: PageFill | null
   left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; base: boolean; released?: boolean
 }
 /** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the

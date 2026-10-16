@@ -174,7 +174,7 @@ describe('a page that is final', () => {
 
   it('LK7: leaves a link over text that stays where it stands: its rectangle (or quads) exact, not moved, named by the overlaid text, with its border', () => {
     const f = free([])
-    expect(f.dropped).toBe(0)
+    expect(f.dropped.unmatched).toBe(0)
     expect(f.inPlace).toBe(4)
     // (ranked by the owner unit's stream index, the one with no owner after every owned one: unit 1's two links, then unit 3's, then the margin's)
     expect(f.records.map(r => r.name)).toEqual(['Table', 'Also here', '12,', ''])
@@ -188,21 +188,21 @@ describe('a page that is final', () => {
 
   it('LK8: drops a link with a glyph point erased, counted, and keeps one whose glyphs the operations left', () => {
     const f = free([erase(100, 690, 260, 715), erase(95, 490, 195, 515)], { sources: true })
-    expect(f.dropped).toBe(2)
+    expect(f.dropped.unmatched).toBe(2)
     expect(f.records.map(r => r.name)).toEqual(['Table', ''])
     expect(f.sources).toEqual([{ annots: [[1, 1]], tier: 'place' }, { annots: [[1, 3]], tier: 'place' }])
     // (a link with some of its glyphs erased is dropped: its text is gone, and a link over what remains would be half-wrong)
-    expect(free([erase(100, 690, 135, 715)]).dropped).toBe(1)
+    expect(free([erase(100, 690, 135, 715)]).dropped.unmatched).toBe(1)
   })
 
   it('LK9: keeps a link over what a restore put back', () => {
     const f = free([erase(100, 690, 260, 715), { op: 'restore', page: 1, clip: [[...dev(100, 715), 320, 50]], boxes: [[...dev(100, 715), 320, 50]] }])
-    expect(f.dropped).toBe(0)
+    expect(f.dropped.unmatched).toBe(0)
     expect(f.records.map(r => r.name)).toEqual(['Table', 'Also here', '12,', ''])
   })
 
   it('leaves out an annotation a unit\'s match took, and ranks the moved records it made first within their unit', () => {
-    const moved = { rec: { boxes: [10, 10, 20, 20], dest: 'cite.a', name: '12', moved: true, order: 0 }, stream: 10, sources: { annots: [[1, 0]], tier: 'geometry' } }
+    const moved = { rec: { boxes: [10, 10, 20, 20], dest: 'cite.a', name: '12', moved: true, order: 0 }, stream: 10, id: 1, seq: 0, sources: { annots: [[1, 0]], tier: 'geometry' } }
     const f = free([], { consumed: new Set([0]), moved: [moved], sources: true })
     expect(f.records.map(r => [r.name, r.moved, r.order])).toEqual([['12', true, 0], ['Table', false, 1], ['Also here', false, 2], ['', false, 3]])
     expect(f.sources![0]).toEqual({ annots: [[1, 0]], tier: 'geometry' })
@@ -210,7 +210,7 @@ describe('a page that is final', () => {
   })
 
   it('answers no link for a page whose annotations could not be read', () => {
-    expect(freezeLinks({ list: null, q: 1, ops: [], devOf: dev, units })).toEqual({ records: [], sources: null, inPlace: 0, dropped: 0, unplaced: 0 })
+    expect(freezeLinks({ list: null, q: 1, ops: [], devOf: dev, units })).toEqual({ records: [], sources: null, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 } })
   })
 
   it('is a function of the page alone: the same list, operations and units give the same records, whatever the order of the units', () => {
@@ -257,11 +257,11 @@ describe('the two readings of a glyph\'s place', () => {
     expect(kept(list)[0]!.g.ch).toEqual([])
     expect(kept(list)[0]!.g2.ch).toEqual(['i'])
     const f = (ops: unknown[]) => freezeLinks({ list, q: 1, ops: ops as never, devOf: dev, units: [] })
-    expect(f([erase(99, 690, 110, 715)]).dropped).toBe(1)
+    expect(f([erase(99, 690, 110, 715)]).dropped.unmatched).toBe(1)
     // (the engine's point at 102 is erased and put back by a restore over 101.5 to 102.5: kept; over 101.5 to 102 it is not put back: dropped)
     const restore = (w: number) => ({ op: 'restore', page: 1, clip: [[...dev(101.5, 715), w, 50]], boxes: [[...dev(101.5, 715), w, 50]] })
-    expect(f([erase(99.9, 690, 102.5, 715), restore(2)]).dropped).toBe(0)
-    expect(f([erase(99.9, 690, 102.5, 715), restore(1)]).dropped).toBe(1)
+    expect(f([erase(99.9, 690, 102.5, 715), restore(2)]).dropped.unmatched).toBe(0)
+    expect(f([erase(99.9, 690, 102.5, 715), restore(1)]).dropped.unmatched).toBe(1)
   })
   it('drops it where the engine\'s point is erased and the estimate\'s lands on a restored neighbour', () => {
     // two links: the estimate's point of 'j' (115) and the engine's (112); a restore covers 114 to 116 only, the erase 104 to 120
@@ -270,10 +270,10 @@ describe('the two readings of a glyph\'s place', () => {
     expect(kept(l2)[0]!.g2.ch).toEqual(['j'])
     const ops = [erase(104, 690, 120, 715), { op: 'restore', page: 1, clip: [[...dev(114, 715), 2 * 2, 50]], boxes: [[...dev(114, 715), 2 * 2, 50]] }]
     // (the estimate at 115 is put back, the engine's centre at 112 is not: dropped)
-    expect(freezeLinks({ list: l2, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped).toBe(1)
+    expect(freezeLinks({ list: l2, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped.unmatched).toBe(1)
     // (and with the estimate alone it would have stayed)
     const alone = annotsOf([raw({ rect: [110, 695, 118, 710], overlaidText: 'j' })], est).list
-    expect(freezeLinks({ list: alone, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped).toBe(0)
+    expect(freezeLinks({ list: alone, q: 1, ops: ops as never, devOf: dev, units: [] }).dropped.unmatched).toBe(0)
   })
 })
 
@@ -305,8 +305,8 @@ describe('a page that is hostile', () => {
     // (many operations make each point test dear: the budget lasts for some of the links only)
     const ops = Array.from({ length: Math.ceil(WORK_MAX / 2000) }, () => ({ op: 'crop', page: 1, src: [0, 0, 1, 1], dst: [0, 0, 1, 1] }))
     const f = freezeLinks({ list, q: 1, ops: ops as never, devOf: dev, units: [] })
-    expect(f.unplaced).toBeGreaterThan(0)
-    expect(f.inPlace + f.dropped + f.unplaced).toBe(1000)
+    expect(f.dropped.unplaced).toBeGreaterThan(0)
+    expect(f.inPlace + f.dropped.unmatched + f.dropped.unplaced).toBe(1000)
     expect(f.records.length).toBe(f.inPlace)
   })
 })

@@ -65,8 +65,9 @@ export type PageState = 'ready' | 'laying' | 'waiting' | 'failed'
 /** a state `onPage` tells: `waiting` is the state before any is told */
 export type PageEvent = Exclude<PageState, 'waiting'>
 export type { PageWords } from './words.mjs'
-/** a link of a laid page, plain data (links.mjs, the engine's 3a: 3a-1 gives the links left over the original's ink, `moved: false`). The contract the gate measures (lab/pdf/README.md,
- *  "The links"):
+/** a link of a laid page, plain data (links.mjs, the engine's 3a: a link over text the layer redraws laid over what is drawn of
+ *  it, `moved: true`; one over the original's ink left where it stands, `moved: false`; one over erased text that matched
+ *  nothing dropped, never left). The contract the gate measures (lab/pdf/README.md, "The links"):
  *  - `boxes`: [x0, y0, x1, y1] x n (x0 < x1, y0 < y1) in the page's PDF user space, unrotated, y up; moved, one box a drawn line
  *  - `dest` or `url`, exactly one. `dest` as PDF.js gives it, never resolved by the engine; `url` PDF.js's validated url only,
  *    and then of http:, https: or mailto: alone

@@ -58,7 +58,7 @@ import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import * as LK from './links.mjs'
 import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
-import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, wordIndexer } from './words.mjs'
+import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf } from './need.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
@@ -492,7 +492,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  of a page), its drawing as data, every painted unit's operations in turn, kept when the page's canvases are let go; its
    *  words (the page's word table, built as each unit is painted in `wordsOpen` and frozen into `words` once the page is final:
    *  words.mjs) and links (links.mjs: frozen into `links` once the page is final, null before; `linksOpen` holds the moved
-   *  records a unit's match makes as they are made, 3a-2: none yet), its fill numbers (adaptiveFill's pass) */
+   *  records the units' matches make as they are made, each over the unit's drawing on this page: linkUnit), its fill numbers
+   *  (adaptiveFill's pass) */
   const makeRow = i => {
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
@@ -679,22 +680,99 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!r || r.links) return
     const t0 = performance.now()
     const done = LK.freezeLinks({
-      list: annots[q - 1] ?? null, q, ops: r.ops, devOf: pxOf(q), consumed: consumed[q],
+      list: annots[q - 1] ?? null, q, ops: r.ops, devOf: pxOf(q), consumed: consumed[q], why: whyOf[q],
       units: linkUnitsOn(q), moved: r.linksOpen ?? [], sources: records,
     })
     r.links = done.records
     r.linksOpen = null
     if (records) linkSrc[q - 1] = done.sources
     linkStats.inPlace += done.inPlace
-    linkStats.dropped.unmatched += done.dropped
-    linkStats.dropped.unplaced += done.unplaced
+    linkStats.moved += done.moved
+    for (const k of ['unmatched', 'ambiguous', 'unplaced']) linkStats.dropped[k] += done.dropped[k]
     timesOf(q).links += performance.now() - t0
+  }
+  /** why each annotation its owner's match did not take was left (links.mjs matchUnit, placeUnit: `ambiguous`, `unplaced`), by
+   *  page, which the freeze counts it dropped by where its ink is erased */
+  const whyOf = []
+  /** the modes of a rendering drawn as text in the page's face (tokensOf2), which a link is placed over by its characters */
+  const TEXT_MODES = new Set(['orig-text', 'source', 'cite-map', 'symbol'])
+  /**
+   * Unit p's links, matched and placed once, at its first paint (the 3a design §3.3, §3.4: links.mjs matchUnit, placeUnit): its
+   * layout is final on all its pages then, and what it was laid with alive (it lets go after its last paint). Its candidates are
+   * the annotations of its pages it owns (links.mjs ownedIn: the first unit of the page's growth rank whose rectangles hold more
+   * than half of the annotation's points; every unit before it there has grown, so that is final now), each annotation one
+   * owner's; its targets every placeholder, nested mark and link pair of its translation, with the page characters its
+   * rendering took, its segments in TeX's file, and how it is drawn. The records go to the pages their boxes are on (`linksOpen`), each annotation
+   * placed to `consumed` and each one left to `whyOf`: a page is frozen only once every unit on it is painted there, so every
+   * owner's match has run by then, whatever page was asked first. Reads the unit, its pages' annotations and the units ranked
+   * before it there alone; changes no drawing
+   */
+  const linkUnit = p => {
+    if (p.linked || !p.layout || !p.prep) return
+    p.linked = true
+    const t0 = performance.now()
+    const cands = [], budget = { left: LK.WORK_MAX }
+    for (const q of p.pages) {
+      const list = annots[q - 1]
+      if (!list) continue
+      // (the units placed with lines on q, in their growth rank there; those before p have grown, as p has)
+      const ranked = (onPage.get(q) ?? []).slice().sort((a, b) => (rankOf.get(a.id) ?? Infinity) - (rankOf.get(b.id) ?? Infinity))
+      const at = ranked.indexOf(p)
+      if (at < 0) continue
+      for (const a of LK.ownedIn(list, p, ranked.slice(0, at), q, budget)) cands.push({ q, a })
+    }
+    if (!cands.length) return
+    const L = p.layout
+    const drawnText = new Set(), drawnCrop = new Set(), drawnPair = new Set()
+    for (const line of L.lines) for (const it of line.items) {
+      const t = it.t
+      if (t.crop) { if (hasSource(t.crop.page)) drawnCrop.add(t.crop.k) }
+      else if (typeof t.s === 'string' && !t.space) {
+        if (t.k !== undefined && t.ph !== undefined) drawnText.add(t.k)
+        if (t.st?.link !== undefined) drawnPair.add(t.st.link)
+      }
+    }
+    const lu = p.tex?.lu ?? (filed(p.id) ? tex.index.unit(p.id) : null)
+    const kOf = p.tex?.kOf ?? (lu ? kOfPieces(p.unit, tex.pieces.get(p.id)) : null)
+    const targets = []
+    p.unit.pieces.forEach((piece, k) => {
+      const kind = LK.linkKindOf(piece)
+      if (piece.t === 'open') {
+        if (kind && L2.LINK_OPEN.test(piece.src) && piece.id !== undefined) targets.push({ ord: k, pair: piece.id, ...kind, gap: null, segs: null, draw: drawnPair.has(piece.id) ? 'pair' : null })
+        return
+      }
+      if (piece.t !== 'ph' && piece.t !== 'nested') return
+      const r = p.prep.get(k)
+      const gap = r?.gap ? new Set(r.gap.chars.filter(c => !c.sep && !c.space).map(L2.charKey)) : null
+      const row = lu && kOf && kOf[k] >= 0 ? lu.ph.get(kOf[k]) : null
+      const segs = []
+      for (let o = 0; row && o + 5 < row.segs.length; o += 6) segs.push([row.segs[o], row.segs[o + 1], row.segs[o + 2], row.segs[o + 3], row.segs[o + 4], row.segs[o + 5]])
+      if (!gap && !segs.length && !kind) return
+      const draw = r && TEXT_MODES.has(r.mode) && drawnText.has(k) ? 'text' : r?.mode === 'crop' && drawnCrop.has(k) ? 'crop' : null
+      targets.push({ ord: k, k, ...(kind ?? { kind: null }), gap, segs: segs.length ? segs : null, draw })
+    })
+    const m = LK.matchUnit({ cands, targets, budget })
+    const lines = L.lines.map(line => ({ line, runs: L2.lineRuns(line, L) }))
+    const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, L, line.baseline), scale: L.scale })
+    // (each page's records in the unit's drawing order there, after those of the units before it)
+    const byPage = new Map()
+    for (const r of placed.records) if (rows[r.page - 1]) (byPage.get(r.page) ?? byPage.set(r.page, []).get(r.page)).push(r)
+    for (const [pg, list] of byPage) {
+      list.sort((a, b) => a.li - b.li || a.x - b.x)
+      const row = rows[pg - 1]
+      list.forEach((r, seq) => {
+        ;(row.linksOpen ??= []).push({ rec: r.rec, stream: p.stream, id: p.id, seq, sources: r.sources })
+        for (const [q, i] of r.sources.annots) (consumed[q] ??= new Set()).add(i)
+      })
+    }
+    for (const t of [...m.tried, ...placed.tried]) (whyOf[t.q] ??= new Map()).set(t.i, t.why)
+    timesOf(p.pages[0]).links += performance.now() - t0
   }
   /** a page's analysis state let go (its canvases, a copy's, are the gate's: release) */
   const letGoPage = q => {
     freezeWordsOf(q)
     freezeLinksOf(q)
-    annots[q - 1] = consumed[q] = undefined
+    annots[q - 1] = consumed[q] = whyOf[q] = undefined
     unswept.delete(q)
     chars2[q - 1] = undefined
     inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
@@ -920,6 +998,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return plane === 'R' ? RM?.removed[j] ?? null : r.left
   }
   const paint = (p, pg) => {
+    // (its links matched and placed at its first paint, its layout final on every page: links.mjs; the drawing reads none of it)
+    if (!p.linked) linkUnit(p)
     const tOps = performance.now()
     const r = rows[pg - 1]
     // (what the unit accounts for is counted whichever way it is drawn: a unit drawn the old way after it puts back only

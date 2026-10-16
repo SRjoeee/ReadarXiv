@@ -19,7 +19,7 @@ import {
   textUnder,
   urlAllowed,
 } from '../../lab/pdf/spikes/layer-gate/links.mjs'
-import { compare, completenessRows, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
+import { compare, completenessRows, fixtureTotals, LINKS_MIN, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
 
 // The layer gate's link measures (3a-0, lab/pdf/spikes/layer-gate/links.mjs; the design is 3a-links-design.md section 2):
 // what the original's links are (T and U), which of them a record keeps, which records are wrong, which moved records are
@@ -128,7 +128,7 @@ const page1 = () => {
 const noErase = () => false
 const unused = () => ''
 const noRef = () => null
-type Run = { records?: LinkRec[]; sources?: (LinkSource | null)[] | null; erased?: (x: number, y: number) => boolean; parsed?: (q: number) => Annots | undefined; claims?: Map<string, { page: number; label: string; credited: boolean; flagged: boolean }>; page?: number; drawn?: (r: LinkRec) => string; reference?: (r: LinkRec, a: Annot[]) => string | null }
+type Run = { records?: LinkRec[]; sources?: (LinkSource | null)[] | null; erased?: (x: number, y: number) => boolean; parsed?: (q: number) => Annots | undefined; claims?: Map<string, { page: number; label: string; credited: boolean; flagged: boolean }>; page?: number; drawn?: (r: LinkRec) => string; reference?: (r: LinkRec, a: Annot[]) => string | null | undefined }
 const run = (o: Run = {}) => {
   const { annots, glyphs } = page1()
   return linksPage({ page: o.page ?? 1, parsed: o.parsed ?? (q => (q === 1 ? annots : undefined)), glyphs, erased: o.erased ?? noErase, records: o.records ?? [], sources: o.sources ?? null, claims: o.claims ?? new Map(), drawn: o.drawn ?? unused, reference: o.reference ?? noRef })
@@ -316,6 +316,10 @@ describe('true: the drawn text under a moved link against the reference', () => 
     expect(run({ records: [rec], sources: [a0], drawn: () => '\uFF21\uFF22', reference: () => 'ab' }).linksTrueN).toBe(0) // fullwidth AB: NFKC to AB, and case is not folded
     expect(run({ records: [rec], sources: [a0], drawn: () => '\uFF21\uFF42', reference: () => 'Ab' }).linksTrueN).toBe(1) // fullwidth Ab: NFKC
   })
+  it('measures no record whose reference cannot be had (no TeX\'s file to read): unverified, neither true nor listed', () => {
+    const m = run({ records: [rec], sources: [a0], drawn: () => '12', reference: () => undefined })
+    expect(m).toMatchObject({ linksTrueN: 0, linksUnverified: 1, linksMoved: 1, where: { linksTrue: [] } })
+  })
   it('lists a record whose drawn text differs, or whose reference is not found', () => {
     const wrong = run({ records: [rec], sources: [a0], drawn: () => '21', reference: () => '12' })
     expect(wrong.linksTrueN).toBe(0)
@@ -391,8 +395,35 @@ describe('the reference: overlaid text, or the translation\'s pair text where th
     const ctx = { ...base, all: both, points: (a: Annot) => [{ x: 1, y: a.i, ch: 'x' }], pairsOf: () => pairs }
     expect(referenceOf([both[0]!], ctx)).toBe('ici')
     expect(referenceOf([both[1]!], ctx)).toBe('la-bas')
-    // not as many pairs as annotations: not found
-    expect(referenceOf([both[1]!], { ...ctx, pairsOf: () => pairs.slice(0, 1) })).toBeNull()
+    // (one pair of the URL: every annotation of it its text, a link text TeX broke over two lines being an annotation a line;
+    // the record that merges them has it once)
+    expect(referenceOf([both[1]!], { ...ctx, pairsOf: () => pairs.slice(0, 1) })).toBe('ici')
+    expect(referenceOf([both[0]!, both[1]!], { ...ctx, pairsOf: () => pairs.slice(0, 1) })).toBe('ici')
+    // (more annotations of the URL than pairs, and more than one pair: not found)
+    const three = annotationsOf([0, 1, 2].map(k => raw({ rect: [100, 700 - 20 * k, 130, 712 - 20 * k], url: 'https://example.org/a', dest: undefined, overlaidText: 'x' }))).links.filter(a => a.ok)
+    expect(referenceOf([three[2]!], { ...ctx, all: three })).toBeNull()
+  })
+  it('is the overlaid text of a link of a unit with no pair: only a pair\'s text is a link\'s own translated text', () => {
+    // (a glyph off every segment on a unit's line: the unit has no pair, so the link is over its placeholders' ink)
+    expect(referenceOf([all[1]!], { ...base, segment: () => false, owner: () => 7, pairsOf: () => [] })).toBe('Section 3')
+  })
+  it('reads a glyph at its middle and within a third of its size across, by its letters and digits where it has any', () => {
+    const pairs = pairsOf([{ t: 'open', id: 1, src: '\\hyperref[a]{Section 3}' }, { t: 'text', s: 'section 3 (fr)' }, { t: 'close', id: 1 }])
+    const seg = [104, 700, 106, 708]
+    const asked: number[][] = []
+    const segment = (x: number, y: number, d = 0) => { asked.push([x, y, d]); return x >= seg[0]! - d && x <= seg[2]! + d && y >= seg[1]! && y <= seg[3]! }
+    // ('3' at 107 on its baseline at 700, size 10: read at 703, 3 across; the full stop after it is no letter, and not read)
+    const points = () => [{ x: 107, y: 700, ch: '3', size: 10 }, { x: 112, y: 700, ch: '.', size: 10 }]
+    expect(referenceOf([all[2]!], { ...base, points, segment, pairsOf: () => pairs })).toBe('21')
+    expect(asked).toEqual([[107, 703, 3]])
+  })
+  it('reads each annotation with its own page\'s TeX\'s file and glyphs', () => {
+    const p1 = { ...base, owner: () => null }, p2 = { ...base, segment: () => true }
+    const a = { ...all[2]!, page: 1 }, b = { ...all[1]!, page: 2 }
+    const pages: number[] = []
+    expect(referenceOf([a, b], (q?: number) => { pages.push(q!); return q === 1 ? p1 : p2 })).toBe('21Section 3')
+    expect(pages).toEqual([1, 2])
+    expect(referenceOf([a, b], () => null)).toBeNull()
   })
   it('reads an \\href\'s URL as a URL, TeX\'s escapes undone', () => {
     expect(hrefUrlOf('\\href{https://example.org/a_b\\_c?x=1\\&y=2}{t}')).toBe('https://example.org/a_b_c?x=1&y=2')
@@ -483,6 +514,31 @@ describe('the measures in the record and the merge rule', () => {
     const old = { 'x-zh': { totals: { ...entries([{}]), linksKept: undefined, linksTrue: undefined } as Totals, pages: [] } }
     const now = { 'x-zh': { totals: entries([{ linksTotal: 4, linksKeptN: 0 }]), pages: [] } }
     expect(compare(old, now, 'model').regressions).toEqual([])
+  })
+})
+
+describe('the links\' minimums, 3a-2: kept and true per output', () => {
+  const output = (t: Record<string, number | null>, pages: unknown[] = [], summary: Record<string, unknown> = {}) => ({ totals: { pages: 12, numbersShown: 3, numbersTotal: 3, linksWrong: 0, ...t } as unknown as Totals, pages, summary })
+  it('fails an output below a minimum, with its misses listed, and passes one at it or with nothing to share', () => {
+    expect(LINKS_MIN).toEqual({ kept: 0.95, true: 0.98 })
+    const rows = completenessRows({ fixtures: {
+      at: output({ linksKept: 0.95, linksTrue: 0.98 }),
+      none: output({ linksKept: null, linksTrue: null }),
+      low: output({ linksKept: 0.9, linksTrue: 0.5 }, [{ p: 3, where: { linksTrue: ['0', '4'] } }, { p: 4, where: {} }], { linksLost: ['3:1', '5:2'] }),
+    } } as never, 'model')
+    const row = (n: string) => rows.find(r => r.name === n)!
+    expect(row('at').fails).toEqual([])
+    expect(row('none').fails).toEqual([])
+    expect(row('none').linksKept).toBeUndefined()
+    expect(row('low').fails).toEqual(['linksKept', 'linksTrue'])
+    expect(row('low').linksLost).toEqual(['3:1', '5:2'])
+    expect(row('low').linksFalse).toEqual(['3:0', '3:4'])
+  })
+  it('shares true over the moved records that can be measured', () => {
+    const page = pageEntry(1, { model: { units: { textOn: 0, textDrawn: 0, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: [], gaps: [], cropForeign: 0, wrongPageText: 0, droppedPh: 0, modelCells: 1000, linksTotal: 4, linksKeptN: 4, linksMoved: 4, linksTrueN: 2, linksUnverified: 2 }, check: { missing: [], twice: [], brackets: [], duplicated: [], clipped: 0, numbers: { total: 0, shown: 0 } }, where: {}, style: [0, 0], drawn: 0 } as never, null)
+    const t = fixtureTotals([page.entry], [page.frames], 'model')
+    expect(t.linksTrue).toBe(1)
+    expect(t.linksUnverified).toBe(2)
   })
 })
 

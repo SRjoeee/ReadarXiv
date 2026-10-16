@@ -572,6 +572,7 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [textInDisplay]`)).toContain(`${NAME} [textInDisplay]`)
     // (a link that is wrong, gated at 0 from the first pull request of the links, 3a-0)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [linksWrong]`)).toContain(`${NAME} [linksWrong]`)
+    expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [linksKept, linksTrue]`)).toContain(`${NAME} [linksKept, linksTrue]`)
     // (a unit whose record the run could not make: drawn, measured by nothing)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [recordErrors]`)).toContain(`${NAME} [recordErrors]`)
     expect(publicLine('completeness (spec §5): every one of 29 outputs passes')).toContain('every one of 29')
