@@ -1396,8 +1396,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // rectangles there as they stand, unless every line of the unit is another's, which keeps them all (then nothing says
     // which are its own). That is decided once, by the rectangles as they were placed, before any unit grew one (the rows on
     // the unit's own pages alone, so no page's growth waits on another's), and is the whole unit's as before wherever the
-    // others' growth makes none of its lines another's that was not: growth stops at another unit's characters (extendRects'
-    // `foreign`), and where it would still leave a unit no line, the unit is the original's (layout2). Its pages stay as they
+    // others' growth makes none of its lines another's that was not. What growth does and does not stop at: a line grows
+    // sideways character by character and stops at one inside another unit's rectangle (`foreign`, extendRects and
+    // extendRects2's loops), but it is also taken to the end of a text item that ends less than 8 pt past it, or to the end of
+    // the word it ends in, whatever stands there (extendRects2 checks no `foreign` for that), and a block's far-in first line
+    // is moved to the block's edge unless another unit's line overlaps it by more than half its height (extendFirstLines).
+    // Where growth would still leave a unit no line, the unit is the original's (layout2). Its pages stay as they
     // were counted: a page it no longer holds lines on is painted with nothing
     if (!fileLines) {
       p.keepAll ??= p.rects.every(r => (placedByPage.get(r[0]) ?? []).some(([id, o]) => id !== p.id && covered(r, o)))
