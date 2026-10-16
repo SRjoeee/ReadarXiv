@@ -487,12 +487,82 @@ const HELD = 'held'
  * place of the units of some pages is exact only under the whole document's frame
  */
 export function pageFrame(doc, ms) {
+  const located = new Uint8Array(doc.length)
+  for (const m of ms) if (m) for (const k of m) located[k] = 1
+  return frameOf(doc, located)
+}
+
+/**
+ * The pages' frame from the document's tokens alone (the page stream's rule 1, made at step T while the marked original
+ * compiles, before any unit is located): pageFrame's arithmetic, its percentiles and its head and foot votes, over the
+ * document's body words (bodyWords) in place of the located units' words. A function of `doc` alone — of every page's
+ * tokens, so final once arXiv's text is read, and the same whatever the units, the marks or the anchors; a frame of some
+ * pages' tokens is not that of the whole. The verdict a token has, `(t) => boolean`, as pageFrame's; as placeUnits'
+ * `frame` it is `() => frameOfTokens(doc)` made once
+ */
+export function frameOfTokens(doc) {
+  return frameOf(doc, bodyWords(doc))
+}
+
+/** a letter, no digit: what a body word has (bodyWords) */
+const A_LETTER = /\p{L}/u
+/** a word set this many times the document's body size is no body word: arXiv's stamp at 20 pt beside a 10 pt body, a title */
+const BIG = 1.5
+
+/**
+ * The document's body words, a flag a token: what stands where the units' words stand, told from the text alone. A token
+ * with a letter (a page's number, a line's, a row of digits are none), set at most BIG times the body size (the size most
+ * of the document's tokens with text have, to a tenth), on a line that does not recur: a line (a run of the stream on one
+ * baseline, as placeUnits cuts them) whose words, digits dropped, stand at the same baseline (rounded) on another page is a
+ * running head or foot, which a unit never is
+ */
+function bodyWords(doc) {
+  const n = doc.length, body = new Uint8Array(n)
+  if (!n) return body
+  const sizes = new Map()
+  for (const t of doc) if (t.t) { const s = Math.round(t.h * 10); sizes.set(s, (sizes.get(s) ?? 0) + 1) }
+  let size = 0, most = 0
+  for (const [s, c] of sizes) if (c > most || (c === most && s < size)) { size = s; most = c }
+  const big = (BIG * size) / 10
+  // each line's words with a letter, digits dropped, its first such word's baseline and its page
+  const line = linesOf(doc), words = new Map()
+  for (let k = 0; k < n; k++) {
+    const t = doc[k].t
+    if (!t || !A_LETTER.test(t)) continue
+    const w = t.replace(/\p{N}+/gu, ''), e = words.get(line[k])
+    if (e) e.key += ` ${w}`
+    else words.set(line[k], { key: `${Math.round(doc[k].y)} ${w}`, page: doc[k].page })
+  }
+  const pagesOf = new Map()
+  for (const { key, page } of words.values()) (pagesOf.get(key) ?? pagesOf.set(key, new Set()).get(key)).add(page)
+  for (let k = 0; k < n; k++) {
+    const t = doc[k]
+    if (!t.t || !A_LETTER.test(t.t) || t.h > big) continue
+    if (pagesOf.get(words.get(line[k]).key).size >= 2) continue
+    body[k] = 1
+  }
+  return body
+}
+
+/** each token's line: a run of the stream on one baseline — a new page, a baseline more than half a line away, or a word
+ *  far back left of the one before begins another (placeUnits' lines) */
+function linesOf(doc) {
+  const line = new Int32Array(doc.length)
+  for (let k = 1, n = 0; k < doc.length; k++) {
+    const a = doc[k - 1], b = doc[k]
+    if (b.page !== a.page || Math.abs(b.y - a.y) > Math.min(a.h, b.h) * 0.5 || b.x + b.w < a.x - a.h * 30) n++
+    line[k] = n
+  }
+  return line
+}
+
+/** the frame's arithmetic over the words flagged in `located` (pageFrame's: the located units'; frameOfTokens': the body words) */
+function frameOf(doc, located) {
   // arrays by page number, the document's tokens being in page order
   const pages = doc.length ? doc[doc.length - 1].page + 1 : 1
   const x0 = new Float64Array(pages).fill(Infinity), x1 = new Float64Array(pages).fill(-Infinity), y0 = new Float64Array(pages).fill(Infinity), y1 = new Float64Array(pages).fill(-Infinity)
-  const located = new Uint8Array(doc.length)
-  for (const m of ms) if (m) for (const k of m) {
-    located[k] = 1
+  for (let k = 0; k < doc.length; k++) {
+    if (!located[k]) continue
     const t = doc[k], p = t.page
     if (t.x < x0[p]) x0[p] = t.x
     if (t.x + t.w > x1[p]) x1[p] = t.x + t.w

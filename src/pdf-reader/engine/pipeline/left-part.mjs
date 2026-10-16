@@ -11,8 +11,9 @@
 // known before it is matched: a bounded unit its bounds; one without marks the window it is searched in, between its marked
 // neighbours and MARGIN beyond (a float: that window, and its match over the whole document, floatMatches', made at step
 // T); with no marks at all, the whole document. Two things are the whole document's still, and given: the frame (`frame`,
-// pageFrame's rule reads every located unit) and, for a float, the marks of its neighbours (its search between them comes
-// first). A unit is told in the part of its first rectangle's page.
+// pageFrame's rule reads every located unit; anchors.mjs frameOfTokens', of arXiv's text alone, is final at step T and reads
+// none) and, for a float, the marks of its neighbours (its search between them comes first). A unit is told in the part of its
+// first rectangle's page.
 //
 // An original module (no port statement). Pure: no PDF.js, no `node:*` module.
 import { matchUnits, pageFrame, placeUnits } from './anchors.mjs'
@@ -54,8 +55,8 @@ export function leftReach(doc, units, { bounds, floating = () => false, floatMat
 
 /**
  * The left of the part of pages a to b: Map id → Anchor of the units whose first rectangle stands on a page from a to b,
- * each as anchorUnits over the whole paper places it, under the frame `frame` gives (the whole document's, until a frame
- * of arXiv's text alone is the rule). `reach` leftReach's (made once for every part). Also the units the place was made of
+ * each as anchorUnits over the whole paper places it, under the frame `frame` gives (today's rule: the whole document's; the
+ * rule of arXiv's text alone, anchors.mjs frameOfTokens, needs no unit placed). `reach` leftReach's (made once for every part). Also the units the place was made of
  * (`read`, indices into `units`), for the record
  */
 export function leftOfPart(doc, units, { bounds, floating = () => false, floatMatch = null, frame = pageFrame, minCoverage = 0.6 }, [a, b], reach = leftReach(doc, units, { bounds, floating, floatMatch })) {

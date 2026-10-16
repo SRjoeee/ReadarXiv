@@ -18,7 +18,7 @@
 // sentences on one row meeting halfway through the space between them — one outline per run, the hit test the same
 // shapes.
 
-import { inkEdges } from '../pipeline/anchors.mjs'
+import { frameOfTokens, inkEdges, lineRects } from '../pipeline/anchors.mjs'
 // floats.mjs imports this module's geometry; its shapes are read here only when a sentence is drawn (reachAt)
 import { floatShapes } from './floats.mjs'
 
@@ -55,8 +55,8 @@ function lowerBound(xs, v) {
  * anchorUnits' result; `kindOf(id)` a unit's kind. Nothing of `doc` is kept: its objects, with their words and items,
  * are ten times the copy (2608.02459: 9 and 11.6 MB a side). `o.edges`: the tokens' ink edges made already (inkEdges, as
  * layout/arxiv.mjs makes them a page at a time while the text items are there), copied, for tokens whose items are let
- * go; `o.columns`: the pages' columns' rule (pageColumns, today's: from every located unit's lines; null: today's, made
- * with the document part)
+ * go; `o.columns`: the rule of the pages' columns the far push reads (pageColumns, today's: from every located unit's
+ * lines; null: today's, the document part's; columnsOfTokens': arXiv's text alone), never the layout's own columns
  */
 export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges = null, columns = null } = {}) {
   const n = doc.length, pages = views.length
@@ -73,13 +73,14 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges 
   for (let p = pages; p >= 1; p--) if (pageStart[p] > pageStart[p + 1]) pageStart[p] = pageStart[p + 1]
   const units = []
   for (const [id, a] of anchors) if (a?.tokens?.length) units.push([id, a.rects])
-  const part = documentOf(views, units, kindOf), { unitsOn, pagesOf } = part
-  // (the columns by a rule given: a part's units alone under the whole left's columns, the page stream's test)
-  const page = columns ? columns(views, anchors, kindOf) : part.page
+  const part = documentOf(views, units, kindOf), { page, unitsOn, pagesOf } = part
   // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
-  // column's text edge: a proof's box set flush right
+  // column's text edge: a proof's box set flush right. The columns it is read by: the document part's, or a rule's given
+  // (the whole left's for a part's units alone, the page stream's test; arXiv's text's alone, columnsOfTokens), which
+  // reads the push alone: the layout's own columns are the document part's whatever the rule
+  const push = columns ? columns(views, anchors, kindOf) : page
   for (const k of far) {
-    const w = doc[k], P = page[w.page], e = P && (P.cols[colOf(P, w.x, w.x + w.w)] ?? P.cols.F)
+    const w = doc[k], P = push[w.page], e = P && (P.cols[colOf(P, w.x, w.x + w.w)] ?? P.cols.F)
     if (e && Math.abs(w.far - e.x1) < SNAP) r[k] = w.far
   }
   // each page's tokens as its geometry reads them (pageGeometry): views of the side's arrays, its tokens' ids from k0
@@ -190,6 +191,21 @@ export function pageColumns(views, anchors, kindOf = () => undefined) {
   const units = []
   for (const [id, a] of anchors) if (a?.tokens?.length) units.push([id, a.rects])
   return documentOf(views, units, kindOf).page
+}
+
+/**
+ * Each page's columns from the side's tokens alone (the page stream's rule 4, made at step T before any unit is located):
+ * pageColumns' arithmetic — the columns of each page, the text edges per page size, parity and column, the half leadings —
+ * over the text's lines in place of the located units' lines. The lines: the tokens inside the pages' frame (`inFrame`,
+ * frameOfTokens' by default: no running head or foot, no margin), cut as a unit's lines are (lineRects), told as the lines
+ * of one unit of no kind. A function of `doc` and `views` alone — of every page's tokens, so final once the text is read,
+ * whatever the units and their anchors; a rule of some pages' tokens is not that of the whole. Read by the far push alone
+ * (layoutOf's `columns`: `() => columnsOfTokens(doc, views)`, made once)
+ */
+export function columnsOfTokens(doc, views, inFrame = frameOfTokens(doc)) {
+  const inside = []
+  for (let k = 0; k < doc.length; k++) if (inFrame(doc[k])) inside.push(k)
+  return documentOf(views, [[-1, lineRects(doc, inside)]], () => undefined).page
 }
 
 /**
