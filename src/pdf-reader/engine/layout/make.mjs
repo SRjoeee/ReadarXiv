@@ -607,6 +607,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
 
   // ---------------------------------------------------------------- each located unit's lines
   const placed = [], placedById = new Map()
+  /** each unit placed, as it is (the page stream's rule 3 edges, which take its body lines a page at a time) */
+  let onPlaced = null
   /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none */
   function place(i) {
     const u = units[i], a = anchors.get(i)
@@ -643,44 +645,62 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     for (const row of rows) for (const g of row.gl) ink[row.page].owner[g] = i
     const one = { id: i, u, a, rows, S, E }
     placed.push(one)
+    onPlaced?.(one)
     placedById.set(i, one)
   }
   // each column's text edges, the most common start and end of the body's lines (its own page's, else those of the
   // pages like it: the same columns, the same side of a spread, then the same columns; under rule 3, of those pages the ones
-  // before it and its own alone, written under its own name: `<page><<key>`; and where those give none, a page before any of
-  // its kind with a body line (a cover page), those of the pages up to the first later one that gives some: `<page>><column>`,
-  // the page waiting for that one, `stats.edgesAhead` [page, column, the page]))
+  // before it and its own alone, written under its own name: `<page><<key>`; and a page to which those give none in any column
+  // (a cover page, before the body's lines) those of the pools as they stand with the first later page that gives it some:
+  // `<page>><column>`, the page waiting for that one, `stats.edgesAhead` [page, column, that page])
   let edges = columnEdges
+  const noteIn = seen => (key, x0, x1) => { const e = seen.get(key) ?? seen.set(key, { x0: new Map(), x1: new Map() }).get(key); const a = Math.round(x0), b = Math.round(x1); e.x0.set(a, (e.x0.get(a) ?? 0) + 1); e.x1.set(b, (e.x1.get(b) ?? 0) + 1) }
+  const modeOf = (m, low) => { let best = null, most = 1; for (const [x, n] of m) if (n > most || (n === most && best !== null && (low ? x < best : x > best))) { best = x; most = n } return best }
+  const edgeOf = e => { const x0 = modeOf(e.x0, true), x1 = modeOf(e.x1, false); return x0 !== null && x1 !== null && x0 < x1 ? [x0, x1] : null }
+  const pooled = [p => `${twoCols(p)}|${p % 2}`, p => `${twoCols(p)}`]
+  /**
+   * Rule 3's edges a page at a time, into `out`: `page(p, lines)` with page p's body lines ([column, x0, x1], the placed units'
+   * of EVEN kinds), pages in order: its own edges, its pools as they stand with it, and the cover pages': a page to which its
+   * own and its pools give no edges in any column waits for the first later page whose pools give it some, then takes the pools
+   * as they stand there in every column. `waiting()` the cover pages still to take theirs
+   */
+  function earlierEdges(out) {
+    const seen = new Map(), note = noteIn(seen)
+    const poolOf = (p, c) => { for (const k of pooled) { const e = seen.get(`${k(p)}|${c}`), v = e ? edgeOf(e) : null; if (v) return v } return null }
+    let cover = []
+    return {
+      page(p, lines) {
+        for (const [c, x0, x1] of lines) {
+          note(`${p}|${c}`, x0, x1)
+          for (const k of pooled) note(`${k(p)}|${c}`, x0, x1)
+        }
+        // (a cover page takes the pools as they stand with the first page that gives it some)
+        if (cover.length && lines.length) cover = cover.filter(q => {
+          const vs = [0, 1, 2].map(c => poolOf(q, c))
+          if (vs.every(v => !v)) return true
+          vs.forEach((v, c) => { if (v) { out.set(`${q}>${c}`, v); stats.edgesAhead.push([q, c, p]) } })
+          return false
+        })
+        // (the pools as they stand with page p: page p's, each a page its pages before it and its own give)
+        let any = false
+        for (const c of [0, 1, 2]) for (const k of pooled) { const key = `${k(p)}|${c}`, e = seen.get(key), v = e ? edgeOf(e) : null; if (v) { out.set(`${p}<${key}`, v); any = true } }
+        for (const c of [0, 1, 2]) { const e = seen.get(`${p}|${c}`), v = e ? edgeOf(e) : null; if (v) { out.set(`${p}|${c}`, v); any = true } }
+        if (!any) cover.push(p)
+      },
+      waiting: () => cover,
+    }
+  }
+  /** a placed unit's body lines as rule 3's edges read them: [column, x0, x1] by page */
+  const bodyLinesOf = one => EVEN.has(one.u.kind) ? one.rows.map(r => [r.page, columnOf(r.page, r.x0, r.x1), r.x0, r.x1]) : []
   /** the columns' text edges of the placed units' body lines (`columnEdges` where none is given) */
   function columnEdgesOf() {
     edges = new Map()
-    const seen = new Map()
-    const note = (key, x0, x1) => { const e = seen.get(key) ?? seen.set(key, { x0: new Map(), x1: new Map() }).get(key); const a = Math.round(x0), b = Math.round(x1); e.x0.set(a, (e.x0.get(a) ?? 0) + 1); e.x1.set(b, (e.x1.get(b) ?? 0) + 1) }
-    const modeOf = (m, low) => { let best = null, most = 1; for (const [x, n] of m) if (n > most || (n === most && best !== null && (low ? x < best : x > best))) { best = x; most = n } return best }
-    const edgeOf = e => { const x0 = modeOf(e.x0, true), x1 = modeOf(e.x1, false); return x0 !== null && x1 !== null && x0 < x1 ? [x0, x1] : null }
-    const pooled = [p => `${twoCols(p)}|${p % 2}`, p => `${twoCols(p)}`]
+    const seen = new Map(), note = noteIn(seen)
     if (rules.edges === 'earlier') {
       const on = new Map()
-      for (const { u, rows } of placed) if (EVEN.has(u.kind)) for (const r of rows) (on.get(r.page) ?? on.set(r.page, []).get(r.page)).push(r)
-      /** a page's pooled edges for column c as the pools stand: the same side of a spread's, else the same columns' */
-      const poolOf = (p, c) => { for (const k of pooled) { const e = seen.get(`${k(p)}|${c}`), v = e ? edgeOf(e) : null; if (v) return v } return null }
-      // (the pages and columns whose pools gave none yet: each takes the pools with the first later page that gives some)
-      let waiting = []
-      for (let p = 1; p <= pages; p++) {
-        for (const r of on.get(p) ?? []) {
-          const c = columnOf(r.page, r.x0, r.x1)
-          note(`${p}|${c}`, r.x0, r.x1)
-          for (const k of pooled) note(`${k(p)}|${c}`, r.x0, r.x1)
-        }
-        if (waiting.length && on.has(p)) waiting = waiting.filter(([q, c]) => { const v = poolOf(q, c); if (v) { edges.set(`${q}>${c}`, v); stats.edgesAhead.push([q, c, p]) } return !v })
-        // (the pools as they stand with page p: page p's, each a page its pages before it and its own give)
-        for (const c of [0, 1, 2]) for (const k of pooled) { const key = `${k(p)}|${c}`, e = seen.get(key), v = e ? edgeOf(e) : null; if (v) edges.set(`${p}<${key}`, v) }
-        for (const c of [0, 1, 2]) {
-          const e = seen.get(`${p}|${c}`), v = e ? edgeOf(e) : null
-          if (v) edges.set(`${p}|${c}`, v)
-          else if (!poolOf(p, c)) waiting.push([p, c])
-        }
-      }
+      for (const one of placed) for (const [p, ...line] of bodyLinesOf(one)) (on.get(p) ?? on.set(p, []).get(p)).push(line)
+      const E = earlierEdges(edges)
+      for (let p = 1; p <= pages; p++) E.page(p, on.get(p) ?? [])
       return
     }
     for (const { u, rows } of placed) {
@@ -1772,7 +1792,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * (`stats.late`, rows and vetoes: the whole run's file but there)
    */
   function stream({ marked: mh = null } = {}) {
-    if (!edges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`)')
+    // (the columns' edges given, a whole run's; or under rule 3 its own, a page at a time: a page's edges read only the pages
+    // before it and its own, the cover pages the first page with a body line)
+    const ownEdges = !edges && rules.edges === 'earlier'
+    if (!edges && !ownEdges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`), or rule 3\'s (rules.edges \'earlier\')')
+    let edgesTo = 0
+    const held = new Set(), bodyOn = new Map()
+    const E = ownEdges ? earlierEdges(edges = new Map()) : null
+    if (ownEdges) onPlaced = one => { for (const [p, ...line] of bodyLinesOf(one)) (bodyOn.get(p) ?? bodyOn.set(p, []).get(p)).push(line) }
     // (its ranges are placed from their own units: pageFrame over them is not the whole paper's frame, so none is assumed)
     if (!frame) throw new TypeError('the page stream needs the whole document\'s frame rule given (`frame`)')
     // (its ranges are placed from their own units: pageFrame over them is not the whole paper's frame, so none is assumed)
@@ -1983,11 +2010,26 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (decidedCount === n) return Math.min(lowAt - 1, pages)
       return Math.min(R.am - 1, lowAt - 1, pages)
     }
+    /** page q's rule-3 edges, after every unit placed on it and the pages before it (their pools first, in page order); a cover
+     *  page's passes after the place held until the first page with a body line gives its edges */
+    const edgesTask = q => ({
+      key: [0.5, q], pages: [q], edgesOf: q,
+      run: () => {
+        E.page(q, bodyOn.get(q) ?? [])
+        bodyOn.delete(q)
+        edgesTo = q
+        const waiting = E.waiting()
+        if (waiting.includes(q) && q < pages) held.add(q)
+        else if (held.size) { for (const p of held) work.push(p); held.clear() }
+        work.push(q + 1)
+      },
+    })
     const advance = () => {
       const to = decidable()
       for (let q = decidedTo + 1; q <= to; q++) {
         const ids = (touching.get(q) ?? []).slice().sort((x, y) => x - y)
         insert({ key: [3, q], pages: [q], run: () => barsOn(q, ids) })
+        if (ownEdges) insert(edgesTask(q))
       }
       for (let q = decidedTo + 1; q <= to; q++) work.push(q)
       decidedTo = Math.max(decidedTo, to)
@@ -2023,6 +2065,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         const t = Q?.list[Q.head]
         if (!t) { release(q); continue }
         if (!t.pages.every(p => open(p) && queue.get(p).list[queue.get(p).head] === t)) continue
+        // (rule 3's edges a page at a time in page order; a cover page's passes after them held)
+        if (t.edgesOf !== undefined && t.edgesOf !== edgesTo + 1) continue
+        if (held.size && t.key[0] >= 1 && t.pages.some(p => held.has(p))) continue
         allowed = new Set(t.pages)
         try { t.run() } finally { allowed = null }
         for (const p of t.pages) { queue.get(p).head++; work.push(p) }

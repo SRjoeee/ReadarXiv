@@ -56,7 +56,17 @@ async function byPages(w: World, log: string) {
   if ('refused' in both) throw new Error('the marked stream refused what the whole made')
   const sb = await both.byStream({ head, events } as never)
   if ('refused' in sb) throw new Error('the marked stream refused what the whole made')
-  return { whole, merged: mergeLayout([st.layout() as never]), plans: st.plans, marked: mergeLayout([sb.layout() as never]), markedPlans: sb.plans, late: both.stats.late }
+  // and under rule 3 with its own edges a page at a time (none given), against the whole run under rule 3
+  const r3 = { ...input, rules: { edges: 'earlier' } as never }
+  const w3 = await makerOf({ ...r3, arxiv: arxivOf(w.pages) })
+  if ('refused' in w3) return null
+  for (let p = 1; p <= w3.pages; p++) await w3.readPage(p)
+  const whole3 = await w3.whole()
+  const s3m = await makerOf({ ...r3, arxiv: arxivOf(w.pages), frame: () => frameOf as never, check: true })
+  if ('refused' in s3m || !('file' in whole3)) return null
+  const s3 = await s3m.byStream()
+  if ('refused' in s3) throw new Error('the rule-3 stream refused what the whole made')
+  return { whole, merged: mergeLayout([st.layout() as never]), plans: st.plans, marked: mergeLayout([sb.layout() as never]), markedPlans: sb.plans, late: both.stats.late, rule3: { whole: whole3.file, merged: mergeLayout([s3.layout() as never]) } }
 }
 /** what a file's stats count, but its times and its gzip size */
 const counted = (s: LayoutStats) => { const { ms: _ms, bytes, ...rest } = s; return { ...rest, raw: bytes.raw } }
@@ -77,6 +87,7 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
     expect(rows(four.marked as never)).toEqual(rows(four.whole.file as never))
     expect(four.markedPlans).toEqual(four.whole.plans)
     expect(four.late).toEqual({ rows: 0, vetoes: 0 })
+    if (four.rule3) expect(rows(four.rule3.merged as never)).toEqual(rows(four.rule3.whole as never))
   }
   expect(parseLayout(new TextEncoder().encode(text))).toEqual(one.file)
   for (const [, rows] of one.file.erase) expect(rows.length).toBeGreaterThan(0)
@@ -1609,6 +1620,14 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
       if ('refused' in st) throw new Error('refused')
       const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
       expect(rows(mergeLayout([st.layout() as never]) as never)).toEqual(rows(whole.file as never))
+      // (and its own rule-3 edges, a page at a time, none given: the whole run's, the cover page's caption waiting for page 2)
+      const own = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), check: true, ...given() })
+      if ('refused' in own) throw new Error('refused')
+      const so = await own.byStream()
+      if ('refused' in so) throw new Error('refused')
+      expect(rows(mergeLayout([so.layout() as never]) as never)).toEqual(rows(whole.file as never))
+      expect(own.edges()).toEqual(first.edges())
+      expect(own.stats.edgesAhead).toEqual(first.stats.edgesAhead)
       const t = await makerOf({ ...(await input(rules)), arxiv: arxivOf(w.pages), columnEdges: first.edges(), check: true, ...given() })
       if ('refused' in t) throw new Error('refused')
       for (let p = 1; p <= t.pages; p++) await t.readPage(p)
