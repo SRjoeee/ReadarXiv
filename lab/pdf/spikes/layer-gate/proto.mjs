@@ -25,7 +25,7 @@
 // fixture's layout file (its rows read by the instrument itself, fileIndexOf), whether or not the hybrid is given it.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
+import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, hangFromOf, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
 import { annotationsOf, cropsShown, drawnCharsOf, erasedOf, glyphPointsOf, glyphsOfLink, linksPage, pairsOf, referenceOf, textUnder } from '/gate/links.mjs'
 
@@ -702,7 +702,11 @@ window.gate = {
     const refOf = new Map(refHere.map(r => [r.id, r]))
     const recs = run.stats.filter(r => r.pages.includes(p))
     const units = recs.map(r => {
-      const lines = (r.lines ?? []).filter(l => l[0] === p).map(l => ({ baseline: l[1], size: r.f, x0: l[6], x1: l[7], block: l[8] })).filter(l => Number.isFinite(l.x0) && Number.isFinite(l.x1))
+      // (each line's end where the marks it ends with that may hang begin, read from the unit's laid line, the record's line
+      // of the same rank where the two agree on its extent: measure.mjs hangFromOf, which `overRight` sets apart)
+      const laid = S.byId.get(r.id)?.layout?.lines
+      const hangOf = (l, i) => { const q = laid?.length === r.lines.length ? laid[i] : null; return q && Math.abs(q.x0 - l[6]) < 0.1 && Math.abs(q.x0 + q.used - l[7]) < 0.1 ? hangFromOf(q.items) : null }
+      const lines = (r.lines ?? []).map((l, i) => [l, i]).filter(([l]) => l[0] === p).map(([l, i]) => ({ baseline: l[1], size: r.f, x0: l[6], x1: l[7], block: l[8], hangFrom: hangOf(l, i) })).filter(l => Number.isFinite(l.x0) && Number.isFinite(l.x1))
       const mine = S.audit.get(`${r.id}|${p}`) ?? []
       const erase = mine.filter(a => a.what === 'erase').map(a => boxPdf(a.box))
       const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst), plane: a.plane ?? 'O', srcPage: a.srcPage, devDst: a.dst, clip: a.clip ?? null, own: a.own ?? null }))

@@ -1505,7 +1505,7 @@ function fidelityMd(record) {
   for (const k of keys) { const r = record.tiers[k]; cols.push([`${k}, shared ten`, r.totals.shared], [`${k}, all ${r.totals.all?.outputs ?? ''}`, r.totals.all]) }
   L.push('## Against the original', '', `| measure | Original | ${cols.map(c => c[0]).join(' | ')} |`, `|---|---|${cols.map(() => '---|').join('')}`)
   for (const m of ms) L.push(`| ${m[4]} | ${originalOf(m)} | ${cols.map(c => shown(c[1], m)).join(' | ')} |`)
-  for (const [key, label] of REPORTED) L.push(`| ${label} (not gated) | ${key === 'pitch' ? '1' : key === 'onGrid' ? '100.0 %' : '0'} | ${cols.map(c => (key === 'onGrid' ? pct(c[1]?.[key]) : num(c[1]?.[key], 3))).join(' | ')} |`)
+  for (const [key, label] of REPORTED) L.push(`| ${label} (not gated) | ${key === 'pitch' ? '1' : key === 'onGrid' ? '100.0 %' : key === 'hanging' ? '0.0 %' : '0'} | ${cols.map(c => (key === 'onGrid' || key === 'hanging' ? pct(c[1]?.[key]) : num(c[1]?.[key], 3))).join(' | ')} |`)
   L.push('')
   const below = ms.filter(m => fl[m[0]] !== undefined && run.totals.shared && (() => { const w = closer(m, fl, run.totals.shared); return w !== null && w < 0 })())
   L.push(`**Below the prototype's floor on the shared ten** (${keys[0]}): ${below.length ? below.map(m => m[4]).join(', ') : 'none'}.`, '')
@@ -1570,8 +1570,8 @@ function closer(m, a, b) {
 function gateMd(run, rows) {
   const L = ['# The instant layer\'s completeness gate (spec §5)', '']
   L.push(`Written by \`spikes/layer-gate.mjs --tier=${run.tier} --record\` on ${run.made.slice(0, 10)}, the engine at \`${run.engine.commit?.slice(0, 8)}\`. Pages: ${run.inputs.pages}; a check fails on any count above 0 (lost ink: regions of more than ${run.inputs.inkMin} device pixels at ${run.inputs.inkScale}x).`, '')
-  L.push(`| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | lines over a display | links wrong | links kept (at least ${pct(LINKS_MIN.kept)}) | moved links true (at least ${pct(LINKS_MIN.true)}) | fails |`, '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
-  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.textInDisplay ?? 0} | ${r.linksWrong ?? 0} | ${r.linksKept === undefined ? '-' : pct(r.linksKept)} | ${r.linksTrue === undefined ? '-' : pct(r.linksTrue)} | ${r.fails.join(', ') || 'none'} |`)
+  L.push(`| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | lines over a display | lines opened by a barred mark | links wrong | links kept (at least ${pct(LINKS_MIN.kept)}) | moved links true (at least ${pct(LINKS_MIN.true)}) | fails |`, '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.textInDisplay ?? 0} | ${r.lineStartPunct ?? 0} | ${r.linksWrong ?? 0} | ${r.linksKept === undefined ? '-' : pct(r.linksKept)} | ${r.linksTrue === undefined ? '-' : pct(r.linksTrue)} | ${r.fails.join(', ') || 'none'} |`)
   // (TeX's file against the drawing: defects held to the run before as rates, until the pull request that removes a
   // cause gates its measure at 0, README)
   const fileMs = AGAINST_FILE.map(k => MEASURES.find(m => m[0] === k)).filter(m => run.tier === 'pixel' || m[1] === 'model')

@@ -570,6 +570,8 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     expect(publicLine(`completeness (spec §5): 1 of 29 outputs fail: ${NAME} [missing, twice]`)).toContain(`${NAME} [missing, twice]`)
     // (a measure of TeX's file gated at 0 by the pull request that removed its cause: a drawn line over a display)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [textInDisplay]`)).toContain(`${NAME} [textInDisplay]`)
+    // (and a drawn line opened by a mark UAX 14 keeps from a line's start, since the breaker keeps them with the text before)
+    expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [lineStartPunct]`)).toContain(`${NAME} [lineStartPunct]`)
     // (a link that is wrong, gated at 0 from the first pull request of the links, 3a-0)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [linksWrong]`)).toContain(`${NAME} [linksWrong]`)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [linksKept, linksTrue]`)).toContain(`${NAME} [linksKept, linksTrue]`)

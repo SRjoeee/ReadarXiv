@@ -160,10 +160,13 @@ export function modelPage({ units, ref, items, translated, cut = [], placement =
       // display's room or its stacked lines move little; not its closest, which a fraction's two baselines set)
       const seg = mine.slice(1).map((l, i) => (l.block !== undefined && l.block === mine[i].block ? mine[i].baseline - l.baseline : null)).filter(g => g !== null && g > 0.1).sort((a, b) => a - b)
       // rounded as the parity harness rounded them (its floor was taken so): a frame 0.996 lines short is one line short
+      // (`dBody`: as `dRight`, each line's end taken where the marks it ends with that hang begin, hangFromOf: a frame past
+      // the right edge by its hanging marks alone, by at most their own width, hangs; past it by more, it runs over)
       geo.push({
         id: u.id, kind: u.kind, n: fr.n,
         dTop: rd(dTop - oTop, 2), blank: rd((dBottom - oBottom) / fr.pitch, 2),
         dRight: rd(Math.max(...mine.map(l => l.x1)) - fr.x1, 2),
+        dBody: rd(Math.max(...mine.map(l => (Number.isFinite(l.hangFrom) ? Math.min(l.x1, l.hangFrom) : l.x1))) - fr.x1, 2),
         pitch: dPitch && fr.n > 1 ? rd(dPitch / fr.pitch, 3) : null,
         rhythm: seg.length && fr.n > 1 ? rd(seg[seg.length >> 1] / fr.pitch, 3) : null,
         onGrid: rd(mine.filter(l => fr.lines.some(o => Math.abs(o.baseline - l.baseline) < 0.5)).length / mine.length, 2),
@@ -540,6 +543,27 @@ export { noStart }
 export function lineStartsOf(lines) {
   const where = lines.filter(l => noStart(l.first) && !noStart(l.orig)).map(l => l.unit)
   return { lineStartPunct: where.length, where }
+}
+
+/** a closing mark that may hang past a line's end: one UAX 14 keeps from a line's start (noStart, the table lineStartPunct
+ *  reads: a closing bracket, a comma, an ideographic full stop), or a final quotation mark (Unicode's Pf: the closing
+ *  quotes the breaker hangs as CJK's closing marks, layer2.mjs PUNCT_CLOSE) */
+const hangs = ch => noStart(ch) || /^\p{Pf}$/u.test(ch)
+
+/**
+ * Where a drawn line's hanging marks begin: the advance of the first of the tokens that end it holding nothing but
+ * closing marks (`hangs`), which may stand past the right edge by their own width (a CJK closing mark whose blank half
+ * the breaker hangs, layer2.mjs breakLines; standard CJK hanging punctuation); null where the line ends with none.
+ * `items`: the line's laid items in order ({ t: { s, space, crop }, x, shift }, layer2.mjs placeItems), PDF units
+ */
+export function hangFromOf(items) {
+  let k = items?.length ?? 0
+  while (k > 0) {
+    const t = items[k - 1]?.t
+    if (!t || t.space || t.crop || typeof t.s !== 'string' || t.s === '' || ![...t.s].every(hangs)) break
+    k--
+  }
+  return items && k < items.length && Number.isFinite(items[k].x) ? items[k].x - (items[k].shift ?? 0) : null
 }
 
 /**

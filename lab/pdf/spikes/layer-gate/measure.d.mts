@@ -1,6 +1,7 @@
 // measure.mjs's types, for its tests
 export interface OrigLine { x0: number; x1: number; baseline: number; top: number; bottom: number; size: number }
-export interface DrawnLine { baseline: number; size: number; x0: number; x1: number; block?: number }
+/** a drawn line; `hangFrom`, where the marks it ends with that may hang begin (hangFromOf), where it ends with any */
+export interface DrawnLine { baseline: number; size: number; x0: number; x1: number; block?: number; hangFrom?: number | null }
 export interface UnitIn {
   id: number; kind: string; drawn: boolean; why: string | null; orig: OrigLine[]; lines: DrawnLine[]
   erase: number[][]; crops: { k: number; src: number[]; dst: number[] }[]; pageText?: { w: number; segW: number }[]; phs?: { kind: string | null; status: string }[]
@@ -23,7 +24,7 @@ export declare function cropPlacementOf(o: Placement): PlacementCounts
 export declare function modelPage(o: { units: UnitIn[]; ref: RefUnit[]; items: Item[]; translated: Set<number>; cut?: CutCrop[]; placement?: Placement | null }): {
   units: { textOn: number; textDrawn: number; cellsOn: number; cellsDrawn: number; left: Record<string, number> }
   fills: { kind: string; n: number; fill: number }[]
-  geo: { id: number; kind: string; n: number; dTop: number; blank: number; dRight: number; pitch: number | null; rhythm: number | null; onGrid: number; scale: number }[]
+  geo: { id: number; kind: string; n: number; dTop: number; blank: number; dRight: number; dBody?: number; pitch: number | null; rhythm: number | null; onGrid: number; scale: number }[]
   gaps: ParaGap[]
   wrongPageText: number; droppedPh: number; cropForeign: number; modelCells: number
 } & Partial<PlacementCounts>
@@ -61,6 +62,8 @@ export declare function slotsSkippedOf(units: { id: number; orig: OrigLine[]; li
 /** a character UAX 14 does not let a line start with (CL, CP, IS, EX, NS) */
 export declare function noStart(ch: string | null | undefined): boolean
 export declare function lineStartsOf(lines: { unit: number; first: string | null; orig: string | null }[]): { lineStartPunct: number; where: number[] }
+/** where a drawn line's hanging marks begin: the advance of the first of the tokens ending it that hold only closing marks (noStart's, or a final quotation mark); null where it ends with none */
+export declare function hangFromOf(items: readonly { t: { s?: string; space?: boolean; crop?: unknown }; x?: number; shift?: number }[] | null | undefined): number | null
 export declare function glyphAccounted(g: { cat: string | undefined; inSeg: boolean; fromSource?: boolean; onLine: boolean; inGap: boolean; used: string | null; drawn: boolean }): boolean
 /** each translated piece's source index of a unit, read by the instrument as layer-proto/tex.mjs kOfPieces reads it */
 export declare function kOfPiecesOf(pieces: { t: string }[] | undefined, tr: unknown): number[] | null

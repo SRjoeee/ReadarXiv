@@ -83,7 +83,7 @@ what the maker writes moves these measures' ground truth with it, in its own pac
 | `contentUnknown` | model | The placeholders of drawn units the content measure cannot place: LOST in the file (no segment, no ground truth for their ink), or of a unit the file does not hold on the page. Gated as the others, so that a maker that loses more ink cannot lower the content measures by it. |
 | `textInDisplay` | model | A drawn line whose text's ink meets a display's segment or a display's row (a held line no text line of its unit shares a band with). Gated at 0 (below). |
 | `slotsSkipped` | model | Room between two drawn lines of a unit in one frame, beyond their own pitch, that the original does not leave there itself, in slots: TeX's own room (between two of the unit's text lines of the file in that column beyond its pitch: a blank line between paragraphs, a tall line's opening) and a text line the drawing keeps as the original's are set aside. Two lines with a held line between them are no pair: the room before a display is the frame's blank lines' (`blankLines`, `fill`). A forced break of TeX's leaves its own room: the file's lines whose ink ends short of their column's measure, the next line a text line of the unit, where the unit's source sets exactly as many `\\` or `\newline` breaks as the engine counts them (one whose next line opens another page among them), a visible piece that is no display before and after each, a placeholder visible where the file holds a row of ink for it (`measure.mjs forcedBreaksIn`, `forcedBreakRoom`); its room is its gap beyond the pitch, or beyond the opening TeX's \lineskip rule set for a tall line after it (the file's boxes and `lineskip`), in pitches (the empty line of `\\ \\`, none for a lone `\\`), credited once in its frame wherever the drawing sets the break, to the pair whose room is nearest it, never by its place: a drawing that holds the text after a break on TeX's own line, under the room the text before it did not use, skips those slots (the correction of 2026-10-16). On `next` it was 0 (2026-10-15); it does not see the survey's cause 5 itself (a forced break drawn as a space, the original's blank landing mid-sentence: the page the same shape as a right drawing). |
-| `lineStartPunct` | model | A drawn line that opens with a character UAX 14 keeps from a line's start (CL, CP, IS, EX, NS; LineBreak-17.0.0), unless the original's line on that baseline opens with one. |
+| `lineStartPunct` | model | A drawn line that opens with a character UAX 14 keeps from a line's start (CL, CP, IS, EX, NS; LineBreak-17.0.0), unless the original's line on that baseline opens with one. Gated at 0 (below). |
 | `glyphsLost` | pixel | Lost ink by the strict account (`measure.mjs glyphAccounted`): an erased glyph in a placeholder's segment counts only where that placeholder is drawn from it or from its source; one on the unit's own line in no segment is TeX's text, replaced; a leftover of a gap off the file's lines is never accounted. `lostInk` stays as it was. |
 | `linesLeft` | pixel | A drawn unit's own text line of the file (not held; its kept label and the placeholders kept in place aside) left intact on the copy, as `stray` reads an item intact. |
 
@@ -97,7 +97,28 @@ fails. `textInDisplay` is gated so since the displays a held run covers are read
 outputs since the LOST round, and its cause in the hybrid, `layer-proto/tex.mjs displayCover` grouping the displays by the
 translation's pieces (the p59 finding: Microsoft dropped the "with" between two displays, the groups paired nothing, and v0
 laid the text over the display), removed: the groups and their runs are the file's (JOINED, the found displays' segments,
-OUTSIDE) in the source's order.
+OUTSIDE) in the source's order. `lineStartPunct` is gated so since the breaker keeps every such mark with the text before
+it (2026-10-17, below): 0 on the 30 outputs, 8 on `next` before it (de 1, es 3, ja 2, ru 1, zh 1).
+
+**No line opens with a barred mark, and a mark that hangs is no overflow (2026-10-17).** The breaker (`layer2.mjs
+breakLines`) never breaks before a mark UAX 14 keeps from a line's start (`layer-proto/no-start.mjs`, the table
+`lineStartPunct` reads) nor before one the target's rules name (`noStart`: CJK's small kana and prolonged sound mark, the
+closing quotes, the per cent sign), for every script: the mark joins the group before it across the spaces between them
+too (a translation's space before its comma or bracket, a formula drawn as the page's characters with its spaces, a brace
+after a crop that no rule glued), so the word or the character before it goes down with it (kinsoku's push-out). Where
+that group is longer than a line by itself, the line takes the break the glue alone allows, as before; a token cut by its
+characters never leaves such a mark at the head of its tail. A layout no barred start touched is the one it was
+(`tests/pdf-reader/layer-proto-no-start.test.ts`, a digest of 240 seeded paragraphs in five targets). On the 30 outputs
+the drawing moved in 17 units on 16 pages of 11 outputs: the 8 whose lines the measure counted, and 9 whose barred start it
+did not (the original's line opening with such a mark too, a `.5:.05:.95` or a `.95]`, or a closing quote the rules name
+that a translation set as an opening one); no other measure worse (1810.04805v2-ja's blank lines 0.112 to 0.102 and
+paragraph gap 1.024 to 1.014). Stricter than UAX 14 in one place, so that the measure and the rule are one table: a full
+stop before a digit after a space (LB15c) is kept from a line's start too. `overRight` counts a body frame past its right edge by more
+than a point only where its lines are past it before the marks that end them (the geometry's `dBody`, `measure.mjs
+hangFromOf`: the tokens ending a line that hold only closing marks, `noStart`'s or a final quotation mark); a frame past
+it by those marks alone, by at most their own width, is `hanging` (reported, not gated: CJK's hanging punctuation, a
+closing mark's blank half the breaker hangs). On `next` the old count, 432 of 3,342 frames (12.9 %), is 137 past the edge
+(4.1 %) and 295 hanging (8.8 %): ja 77 to 9 and 68, zh 298 to 77 and 221.
 
 **The links** (3a-0, the first of the links' pull requests: the instrument before the engine's anchors; `layer-gate/links.mjs`, `tests/pdf-reader/layer-gate-links.test.ts`). The owner's ruling: links kept / total at least 0.95, the text drawn under each moved link equal to PDF.js's overlaid text at least 0.98, links over erased text 0. The original's links are the Link annotations PDF.js reports on arXiv's file (`getAnnotations()`) that the reader can carry (T: a rectangle with an area and a non-empty destination, or a url of http:, https: or mailto:); the rest are reported (U: a named action, JavaScript with no url, an attachment, `unsafeUrl` alone, another scheme). The engine's answer is `run.linksOf(p)` (records, plain data) and `run.linkSources(p)` (gate-only: each record's source annotations `[page, i]`, `i` the rank among the page's Link annotations, and its tier); an engine with neither has no record, and the measures read it so (kept 0). The attribution is the engine's own claim, checked and not trusted: by target, by the in-place rectangle, by uniqueness and, for a moved record, by the drawn text. What no check can tell is a right link from a wrong one that has the same target and the same rectangle; the gate accepts that.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cropPlacementOf, modelPage, type OrigLine, pixelPage, type UnitIn } from '../../lab/pdf/spikes/layer-gate/measure.mjs'
-import { compare, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
+import { compare, completenessRows, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
 
 // The layer gate's arithmetic (lab/pdf/spikes/layer-gate.mjs, Plan 8b Task 12): a page's model measures
 // against the original, a fixture's totals, and the merge rule against a recorded run — shares within 0.2 points, ratios
@@ -30,6 +30,44 @@ describe('the model measures of a page', () => {
     expect(m.geo[0]!.blank).toBeCloseTo(2, 5)
     expect(m.geo[0]!.scale).toBe(1)
     expect(m.fills[0]!.fill).toBeLessThan(0.65)
+  })
+})
+
+describe('a frame past its right edge: by what it holds (overRight), or by the marks that end its lines alone (hanging)', () => {
+  it('reads where the marks no line starts with that end a line begin: their advance, the tokens of marks alone', async () => {
+    const { hangFromOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const it = (s: string, x: number, o: object = {}) => ({ t: { s }, x, ...o })
+    // an ideographic full stop after two characters; a closing parenthesis and a comma after a word; one shifted by its blank
+    expect(hangFromOf([it('\u6c49', 0), it('\u5b57', 10), it('\u3002', 20)])).toBe(20)
+    expect(hangFromOf([it('word', 0), it(')', 20), it(',', 23)])).toBe(20)
+    expect(hangFromOf([it('\u6c49', 0), it('\uff09', 12, { shift: 2 })])).toBe(10)
+    // a closing quote, which the breaker hangs as CJK's closing marks
+    expect(hangFromOf([it('\u6c49', 0), it('\u201d', 10)])).toBe(10)
+    // a mark inside a word's token is no mark of its own; a crop, an opening quote, no mark: none
+    expect(hangFromOf([it('word,', 0)])).toBe(null)
+    expect(hangFromOf([it('a', 0), { t: { crop: {} }, x: 5 }])).toBe(null)
+    expect(hangFromOf([it('a', 0), it('\u201c', 5)])).toBe(null)
+    expect(hangFromOf([it('a', 0), it('b', 5)])).toBe(null)
+    expect(hangFromOf([])).toBe(null)
+    expect(hangFromOf(null)).toBe(null)
+  })
+
+  it('a frame past the edge by its hanging marks alone hangs; past it by more, or with nothing to tell, it runs over', () => {
+    // four units' frames, 72 to 472: one whose last mark hangs 5 past the edge from the edge itself; one whose body ends
+    // 3 past it before its mark; one past it with no mark; one within it
+    const at = (top: number) => lines(5, top)
+    const drawn = (id: number, top: number, x1: number, hangFrom?: number) => unit({ id, orig: at(top), lines: at(top).map((l, i) => ({ baseline: l.baseline, size: 10, x0: 72, x1: i === 1 ? x1 : 470, ...(i === 1 && hangFrom !== undefined ? { hangFrom } : {}) })) })
+    const units = [drawn(1, 700, 477, 472), drawn(2, 600, 480, 475), drawn(3, 500, 478), drawn(4, 400, 471)]
+    const m = modelPage({ units, ref: units.map(u => ({ id: u.id, kind: 'para', orig: u.orig })), items: [], translated: new Set([1, 2, 3, 4]) })
+    expect(m.geo.map(g => [g.dRight, g.dBody])).toEqual([[5, 0], [8, 3], [6, 6], [-1, -1]])
+    const page = pageEntry(1, { model: m, check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 4 } as never, null)
+    expect(page.entry).toMatchObject({ frames: 4, overRight: 2, hanging: 1 })
+    const t = fixtureTotals([page.entry], [page.frames], 'model')
+    expect(t).toMatchObject({ overRight: 0.5, hanging: 0.25 })
+    expect(pooled([t, t], 'model')).toMatchObject({ overRight: 0.5, hanging: 0.25 })
+    // (a frame measured before the distinction, no dBody: past the edge, it runs over)
+    const old = pageEntry(1, { model: { ...m, geo: m.geo.map(({ dBody, ...g }) => g) }, check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 4 } as never, null)
+    expect(old.entry).toMatchObject({ overRight: 3, hanging: 0 })
   })
 })
 
@@ -757,6 +795,12 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(t).toMatchObject({ contentLost: 3, slotsSkipped: 4, contentUnknown: 6 })
     expect(t.modelRates).toMatchObject({ contentLost: 1.5, textInDisplay: 0 })
     expect(worse(measure('contentLost'), t, { ...t, modelRates: { ...t.modelRates, contentLost: 2 } }, 'model')?.worse).toBe(true)
+  })
+
+  it("gates a line opened by a barred mark at 0 since the breaker keeps every such mark with the text before it", () => {
+    const output = (n: number | undefined) => ({ totals: { pages: 12, numbersShown: 3, numbersTotal: 3, lineStartPunct: n } as unknown as Totals })
+    const rows = completenessRows({ fixtures: { a: output(0), b: output(1), c: output(undefined) } }, 'model')
+    expect(rows.map(r => [r.name, r.lineStartPunct, r.fails])).toEqual([['a', 0, []], ['b', 1, ['lineStartPunct']], ['c', 0, []]])
   })
 })
 

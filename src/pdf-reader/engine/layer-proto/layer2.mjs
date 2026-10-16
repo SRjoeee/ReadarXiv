@@ -2285,6 +2285,10 @@ const tokW = (t, f, st, scale) => {
 /**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
+ * No line the breaker opens starts with a mark UAX 14 or the target's rules keep from a line's start (`barred`): such a
+ * mark stays with the group before it, across a space too, unless that group with it is longer than a line by itself
+ * (the break the glue alone allows), or a token cut by its characters would leave one at the head of its tail (the cut
+ * moves back before it). A line TeX's own break opens (`newline`, `blockTo`) is tokensOf2's: its `dropped`.
  */
 function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
@@ -2295,6 +2299,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   const lines = []
   let li = 0, i = 0
   const half = 0.5 * f
+  // (the marks no line opens with: a character UAX 14 keeps from a line's start, no-start.mjs, the one table the layer
+  // gate's lineStartPunct reads too, or one the target's rules do, P.noStart: CJK's small kana and prolonged sound mark,
+  // its closing quotes, the per cent sign; `barred`, a token that opens with one)
+  const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
+  const barredChar = ch => noStart(ch) || kinsoku.starts(ch)
+  const barred = t => !t.space && typeof t.s === 'string' && t.s !== '' && barredChar(t.s)
   let line = null
   const open = () => {
     line = { ...slots[li], items: [], x: 0, spaces: 0, from: i }
@@ -2370,6 +2380,48 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     }
     open()
   }
+  // a group's widths, tokens `from` to `end` on the line in hand, with its punctuation compressed: at the line's start an
+  // opening mark loses its blank half, two marks together lose the blank between them, and with compressMax 2 every mark
+  // loses its blank half (a space the group holds before its barred mark, `sp`, as wide as the line's spaces and
+  // shrinking as they do)
+  const groupOf = (from, end) => {
+    const items = []
+    let w = 0, sp = 0
+    let prev = line.items.at(-1)?.t ?? null
+    for (let q = from; q < end; q++) {
+      const t = tokens[q]
+      if (t.space) { const tw = tokW(t, f, st, scale); items.push({ t, w: tw }); w += tw; sp += tw; prev = t; continue }
+      let tw = tokW(t, f, st, scale), shift = 0
+      if (t.punct && st.compress >= 2) {
+        tw -= half
+        if (t.punct === 'open') shift = -half
+      } else if (t.punct && st.compress === 1) {
+        if (prev?.punct === 'close') {
+          // two marks together: the first loses its trailing blank half (the second keeps its own)
+          const last = items.length ? items.at(-1) : line.items.at(-1)
+          if (last && !last.cut) {
+            last.w -= half
+            last.cut = true
+            if (items.length) w -= half
+            else line.x -= half
+          }
+        } else if (t.punct === 'open' && (!prev || prev.punct)) {
+          // an opening mark at the line's start, or after another mark: its leading blank half
+          tw -= half
+          shift = -half
+        }
+      }
+      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f : 0
+      items.push({ t, w: tw, shift, asp })
+      w += tw + asp
+      prev = t
+    }
+    // a closing mark at the line's end hangs its blank half
+    const hang = items.at(-1).t.punct === 'close' && st.compress < 2 ? half : 0
+    return { items, w, sp, hang }
+  }
+  /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
+  const fits = (g, cap) => line.x - line.spaces * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
   // (a line's trailing spaces dropped)
   const trim = l => { while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w } }
   if (slots.length) open()
@@ -2433,6 +2485,19 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     // footnote marks iteration 1 lost were skipped here with the space before them)
     let j = i + 1
     if (!tokens[i].space) while (j < tokens.length && tokens[j].glue && !tokens[j].space) j++
+    // (and a mark no line opens with, `barred`, joins the group before it, past the spaces between them too: a translation's
+    // space before its comma or its bracket, a formula drawn as the page's characters with its spaces, a mark after a crop
+    // that no rule glues. The line breaks before the group, never before the mark: kinsoku's push-out, the word or the
+    // character before the mark going down with it. `own`: the group as its glue alone makes it, which a line it opens
+    // takes where the joined group is longer than the line: the break the breaker always made there, nothing else fitting)
+    const own = j
+    if (!tokens[i].space) for (;;) {
+      let q = j
+      while (q < tokens.length && tokens[q].space) q++
+      if (q >= tokens.length || !barred(tokens[q])) break
+      j = q + 1
+      while (j < tokens.length && tokens[j].glue && !tokens[j].space) j++
+    }
     const t0 = tokens[i]
     if (t0.space) {
       if (line.items.length) {
@@ -2444,43 +2509,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       i = j
       continue
     }
-    // the group's widths, with its punctuation compressed: at the line's start an opening mark loses its blank half,
-    // two marks together lose the blank between them, and with compressMax 2 every mark loses its blank half
-    const items = []
-    let w = 0
-    let prev = line.items.at(-1)?.t ?? null
-    for (let q = i; q < j; q++) {
-      const t = tokens[q]
-      let tw = tokW(t, f, st, scale), shift = 0
-      if (t.punct && st.compress >= 2) {
-        tw -= half
-        if (t.punct === 'open') shift = -half
-      } else if (t.punct && st.compress === 1) {
-        if (prev?.punct === 'close') {
-          // two marks together: the first loses its trailing blank half (the second keeps its own)
-          const last = items.length ? items.at(-1) : line.items.at(-1)
-          if (last && !last.cut) {
-            last.w -= half
-            last.cut = true
-            if (items.length) w -= half
-            else line.x -= half
-          }
-        } else if (t.punct === 'open' && (!prev || prev.punct)) {
-          // an opening mark at the line's start, or after another mark: its leading blank half
-          tw -= half
-          shift = -half
-        }
-      }
-      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f : 0
-      items.push({ t, w: tw, shift, asp })
-      w += tw + asp
-      prev = t
-    }
-    // a closing mark at the line's end hangs its blank half
-    const hang = items.at(-1).t.punct === 'close' && st.compress < 2 ? half : 0
     const shrink = line.spaces * (1 - P.spaceMin)
-    if (line.x - shrink + w - hang <= cap + 0.01) {
-      for (const it of items) line.items.push(it)
+    let g = groupOf(i, j)
+    if (j > own && !line.items.length && !fits(g, cap)) { j = own; g = groupOf(i, j) }
+    const { items, w } = g
+    if (fits(g, cap)) {
+      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
       line.x += w
       i = j
       continue
@@ -2493,6 +2527,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
         const per = chars.map(c => (w100(c, t0.face) * f) / 100)
         while (k < chars.length && used + per[k] <= cap) used += per[k++]
         k = Math.max(1, k)
+        // (the part left never opens with a mark no line starts with: the cut moves back before it)
+        while (k > 1 && k < chars.length && barredChar(chars[k])) k--
         line.items.push({ t: { ...t0, s: chars.slice(0, k).join('') }, w: per.slice(0, k).reduce((a, b) => a + b, 0), shift: 0, asp: 0 })
         const tail = chars.slice(k).join('')
         tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face), glue: false, asp: false }, ...tokens.slice(i + 1)]
