@@ -33,8 +33,16 @@ export interface CutEntry extends NeedEntry {
 export interface CutOptions {
   /** the page's left part input, called once for each page in page order (null: a page with no tokens) */
   leftPages(page: number): LeftPageInput | null | Promise<LeftPageInput | null>
-  /** the last page of the part that begins at page `a` of `N` (a to N); default `partTarget` (the doubling schedule). A harness cuts at any split with it */
+  /** the last page of the part that begins at page `a` of `N` (a to N); default `partTarget` (the doubling schedule), extended over
+   *  the need bound (`extend`). A harness cuts at any split with it; a target given is taken as given, never extended */
   target?(a: number, N: number): number
+  /** whether the schedule's target of each part is extended over the need bound (need.mjs needBound: the last page whose part laying
+   *  a page reads): the least b from the target on with b at least the bound of every page of the part, within the paper and
+   *  `partPagesMax`. A preference, never a requirement: a part that does not fit with it is shortened as ever, and a page whose
+   *  closure then reaches past its part waits for the next one (the door gates it). Default true; the parts differ, their contents do not */
+  extend?: boolean
+  /** the most pages the extension may make a part (default PART_PAGES_MAX, 5000) */
+  partPagesMax?: number
   /** F as an array indexed by page 0..N of indices into K (-1 for none); default `needFrontier` (the door's rule, need.mjs) */
   frontier?(K: readonly CutEntry[], N: number): readonly number[]
   /** the add-on for a candidate page range of part `index` (its layout part), or null (the part's pages are refused, drawn by
@@ -60,6 +68,8 @@ export interface Cut {
   /** what the catalog's `end` is (the Worker writes it) */
   end: { through: number }
 }
+/** the most pages a part is extended over: the web's bound on a part's pages (M21) */
+export declare const PART_PAGES_MAX: 5000
 /** a removed page's reason when the whole add-on's manifest is carried without its tail */
 export declare const TAIL_NOT_CARRIED: 'tail not carried'
 /** the frontier by the door's rule: needsOf(K, N, false, layout-only).lay */

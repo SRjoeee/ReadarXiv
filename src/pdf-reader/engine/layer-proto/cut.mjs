@@ -7,10 +7,12 @@ import { NAME_FLAG } from '../layout/file.mjs'
 import { REMOVAL } from '../layout/addon-manifest.mjs'
 import { BundleRefusal } from './bundle.mjs'
 import { groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
-import { needsOf } from './need.mjs'
+import { needBound, needsOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
 const SIZE_BOUNDS = ['bytes', 'values', 'content', 'tail', 'rows']
+/** the most pages a part is extended over (the need bound), and so the most a part holds: the web's bound on a part's pages (M21) */
+export const PART_PAGES_MAX = 5000
 /** a removed page's reason when the whole add-on's manifest is carried without its tail (one incremental update, not cuttable by
  *  bytes): its units are drawn the old way, erased and put back */
 export const TAIL_NOT_CARRIED = 'tail not carried'
@@ -38,16 +40,16 @@ function pagesAt(rows, at, stride, into) {
  * `after + 0.5`, ordered by (slot, id). `after` is today's `before` (run.mjs): the largest stream of a left unit with a smaller
  * id over the whole paper, -1 for none. An entry is what needsOf reads (`lists`, `reach`, `rects`) and what the part is cut from
  */
-function entriesOf(whole, N) {
+function entriesOf(whole, N, grouped) {
   const left = new Map(whole.left.units.map(w => [w[0], w]))
   const layout = whole.layout ?? null
   const luOf = new Map(layout ? layout.units.map(u => [u[0], u]) : [])
   // the pages each unit's rows name, by table (a unit's lines are the pages it is framed on; the rest only widen the part's reach)
-  const linePages = new Map(), allPages = new Map()
+  const linePages = new Map(), allPages = new Map(), segPages = new Map()
   const pagesOf = (map, id) => map.get(id) ?? map.set(id, []).get(id)
   if (layout) {
     for (const [id, rows] of layout.lines) { pagesAt(rows, 0, 8, pagesOf(linePages, id)); pagesAt(rows, 0, 8, pagesOf(allPages, id)) }
-    for (const r of layout.ph) pagesAt(r, 4, 6, pagesOf(allPages, r[0]))
+    for (const r of layout.ph) { pagesAt(r, 4, 6, pagesOf(allPages, r[0])); pagesAt(r, 4, 6, pagesOf(segPages, r[0])) }
     for (const r of layout.labels) pagesOf(allPages, r[0]).push(r[2])
   }
   const ids = [...new Set([...left.keys(), ...luOf.keys()])].sort((a, b) => a - b)
@@ -63,6 +65,8 @@ function entriesOf(whole, N) {
     const e = {
       id, slot: w ? w[1] : before + 0.5, after: w ? null : before, rects: w ? w[2] : null, left: w, lu,
       lists, reach: new Set([...rectPages, ...lines]),
+      // (and what Need reads of it besides, as the door's K has it (run.mjs addUnits): its placeholders' segments' pages and its table group)
+      reads: lu ? [...new Set((segPages.get(id) ?? []).filter(q => q >= 1 && q <= N))] : [], group: grouped.of[id] >= 0 ? grouped.of[id] : null,
       // the least page of its rects and its lines: where the reader says a part may no longer tell it
       first: Math.min(...rectPages, ...lines),
       // the last page its left rects reach, and the last page any of its rows does (what the part's views must reach)
@@ -148,13 +152,17 @@ export async function cutBundle(whole, o) {
   const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip })
 
   // K and its frontier
-  const K = entriesOf(whole, N)
+  const grouped = groupsOfUnits(whole.units)
+  const K = entriesOf(whole, N, grouped)
   const given = frontier(K, N)
   if (!Array.isArray(given) || given.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)
   for (let b = 0; b <= N; b++) if (!Number.isInteger(given[b]) || given[b] < -1 || given[b] >= K.length || (b > 0 && given[b] < given[b - 1])) throw new RangeError(`frontier: page ${b} is not an index of K, rising`)
   if (given[0] !== -1) throw new RangeError('frontier: page 0 is not -1')
-  const grouped = groupsOfUnits(whole.units)
   const F = closedOver(given, K, grouped)
+  // each page's need bound (need.mjs: the last page whose part laying it reads), over the whole K, once
+  const extend = o.extend !== false && !o.target
+  const maxPages = o.partPagesMax ?? PART_PAGES_MAX
+  const NB = extend ? needBound(K, N) : null
 
   // the left parts, written as the parts reach their pages
   const lefts = []
@@ -177,8 +185,20 @@ export async function cutBundle(whole, o) {
   const parts = []
   let prev = null, taken = -1
   for (let a = 1; a <= N;) {
-    const target = o.target ? o.target(a, N) : partTarget(a, N)
+    let target = o.target ? o.target(a, N) : partTarget(a, N)
     if (!Number.isInteger(target) || target < a || target > N) throw new RangeError(`target: ${target} is not a last page from ${a} to ${N}`)
+    // the schedule's target extended over the need bound (a preference, never a requirement: a part that does not fit is shortened
+    // below as ever, and the door gates the page whose closure then reaches past it): the least b from the target on with b at least
+    // the bound of every page a to b, within the paper and the cap on the pages of a part
+    if (NB) {
+      const limit = Math.max(target, a + maxPages - 1)
+      for (let q = a, m = 0; ;) {
+        for (; q <= target; q++) m = Math.max(m, NB[q])
+        const next = Math.min(m, N, limit)
+        if (next <= target) break
+        target = next
+      }
+    }
     // the part for pages a..b: K's entries after the last of the parts before, up to the frontier of b (the last part also
     // takes any entry past the frontier of N: no page needs it)
     const upTo = b => (b === N ? K.length - 1 : F[b])
