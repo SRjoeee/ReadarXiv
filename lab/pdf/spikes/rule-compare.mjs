@@ -9,13 +9,16 @@
 // Rule 1 moves the layout file (the maker's anchors), the left (anchorUnits over arXiv's tokens under the unit marks) and so the
 // left side; rule 4 moves the left side alone (its tokens' far push): the maker reads no columns.
 //   pnpm exec tsx lab/pdf/spikes/rule-compare.mjs [--papers=<id>v<n>,…] [--rules=off,frame,columns,both] [--out=<dir>]
-//       [--of=<fixtures folder>] [--engine=<worktree>]
+//       [--of=<fixtures folder>] [--engine=<worktree>] [--corpus=<dir>]
 // --papers: the papers (default: every folder of <data>/layout that holds source.gz and arxiv.pdf). --rules: the rule sets
 // (default all four; off is always made, the baseline). --of: a fixtures folder (the gate pack's fixtures/, or a layer-fixtures
 // folder: <id>v<n>-<target>/ holding layout.json and its other files): each of its outputs of a paper made here is written
 // again under each rule set, its layout.json this run's and its other files linked, so that the layer gate runs on it
 // (layer-gate.mjs --fixtures=<out>/<rule>/fixtures, its model and pixel tiers; the gate's baseline is this run's off, made from
 // the same compiles). --engine: another worktree's engine (its src/pdf-reader/engine), which must have both rules.
+// --corpus: the papers of a corpus folder (<dir>/<id>/source.gz and arxiv.pdf, the lab's 124: lab/pdf/data/corpus) by their text
+// alone, as the left is anchored where no marks come (no compile, no maker: the left and the left side only; a source that is a
+// PDF is passed over); a paper's files are written only where a rule moves something, its diff and the summary always.
 // Inputs (outside git, read only; no TeX and no network): <AXT_DATA, else lab/pdf/data>/layout/<id>v<n>/source.gz and
 // arxiv.pdf; the compiles kept by what they compile, as layer-fixtures.mjs keeps them (<COMPILES>/<id>v<n>/<key>.pdf and .log,
 // else <data>/layout/<id>v<n>/compiles/): the mark probe's and the marked original's, which the engine's own layoutMarksOfPaper
@@ -60,14 +63,16 @@ const DATA = resolve(process.env.AXT_DATA ?? join(root, 'data'))
 const COMPILES = process.env.COMPILES ? resolve(process.env.COMPILES) : null
 const OUT = resolve(argOf('out') ?? join(root, 'out/rule-compare'))
 const OF = argOf('of') ? resolve(argOf('of')) : null
+const CORPUS = argOf('corpus') ? resolve(argOf('corpus')) : null
 const RULES = { off: { frame: false, columns: false }, frame: { frame: true, columns: false }, columns: { frame: false, columns: true }, both: { frame: true, columns: true } }
 const asked = (argOf('rules') ?? Object.keys(RULES).join(',')).split(',').filter(Boolean)
 for (const r of asked) if (!RULES[r]) throw new Error(`--rules: ${r} is none of ${Object.keys(RULES).join(', ')}`)
 const rules = ['off', ...asked.filter(r => r !== 'off')]
 const papers = (argOf('papers') ?? '').split(',').filter(Boolean)
 const layoutDir = join(DATA, 'layout')
-if (!papers.length && existsSync(layoutDir)) for (const d of readdirSync(layoutDir).sort()) if (/v\d+$/.test(d) && existsSync(join(layoutDir, d, 'source.gz')) && existsSync(join(layoutDir, d, 'arxiv.pdf'))) papers.push(d)
-if (!papers.length) throw new Error(`no paper: give --papers, or put <id>v<n>/source.gz and arxiv.pdf in ${layoutDir}`)
+const papersDir = CORPUS ?? layoutDir
+if (!papers.length && existsSync(papersDir)) for (const d of readdirSync(papersDir).sort()) if ((CORPUS || /v\d+$/.test(d)) && existsSync(join(papersDir, d, 'source.gz')) && existsSync(join(papersDir, d, 'arxiv.pdf'))) papers.push(d)
+if (!papers.length) throw new Error(`no paper: give --papers, or put <id>v<n>/source.gz and arxiv.pdf in ${papersDir}`)
 /** the units kinds TeX sets away from their source: no neighbour to be searched between (the maker's and the web's) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 const NM = new URL('../../../node_modules/pdfjs-dist/', import.meta.url).pathname
@@ -126,17 +131,24 @@ const inkOf = part => { if (!part) return []; const d = part.tokens.r, out = new
 
 const table = []
 let failed = 0
+const passed = []
 for (const id of papers) {
   const t0 = performance.now()
   try {
-    const dir = join(layoutDir, id)
+    const dir = join(papersDir, id)
     const unpacked = await unpackSource(new Uint8Array(readFileSync(join(dir, 'source.gz'))))
-    if (!('files' in unpacked)) throw new Error('the source is a PDF')
+    if (!('files' in unpacked)) {
+      if (!CORPUS) throw new Error('the source is a PDF')
+      passed.push([id, 'the source is a PDF'])
+      console.log(`${id}: passed over (the source is a PDF)`)
+      continue
+    }
     const paper = openPaper(unpacked.files)
-    const made = await marksOf(id, paper, unpacked.files)
+    // (by the text alone: no marks)
+    const made = CORPUS ? null : await marksOf(id, paper, unpacked.files)
     const texts = paper.units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
     const floating = i => FLOATING.has(paper.units[i]?.kind ?? '')
-    const m = /^(.+)v(\d+)$/.exec(id)
+    const m = /^(.+)v(\d+)$/.exec(id) ?? [id, id, '1']
     const task = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))))
     const runs = new Map()
     try {
@@ -144,41 +156,31 @@ for (const id of papers) {
       // step T, once: arXiv's text, the floats' matches, and the two rules' tables
       const text = await readArxivText(arxiv)
       const doc = text.tokens
-      const floatMatch = floatMatches(doc, texts, floating)
+      // (a float's match is read only between marks)
+      const floatMatch = made ? floatMatches(doc, texts, floating) : null
       const F = frameOfTokens(doc)
       const tokenColumns = views => columnsOfTokens(doc, views)
-      const bounds = made.unitMarks ? boundsFromMarks(doc, made.unitMarks) : undefined
+      const bounds = made?.unitMarks ? boundsFromMarks(doc, made.unitMarks) : undefined
       const byFrame = new Map()
       for (const rule of rules) {
         const { frame, columns } = RULES[rule]
         // the maker and the left read the frame alone: made once a frame
         if (!byFrame.has(frame)) {
           const rule1 = frame ? () => F : pageFrame
-          const out = await makeLayout({ units: paper.units, marks: made.marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1 })
+          const out = made ? await makeLayout({ units: paper.units, marks: made.marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1 }) : null
           const left = anchorUnits(doc, texts, { bounds, floating, floatMatch, frame: rule1 })
-          byFrame.set(frame, { layout: 'file' in out ? encodeLayout(out.file) : null, refused: 'file' in out ? null : out.refused, stats: out.stats, left })
+          byFrame.set(frame, { layout: out && 'file' in out ? encodeLayout(out.file) : null, refused: !out ? 'text only' : 'file' in out ? null : out.refused, stats: out?.stats ?? null, left })
         }
         const f = byFrame.get(frame)
         const side = leftSideOf({ doc, views: text.views, anchors: f.left, edges: text.edges, ...(columns ? { columns: tokenColumns } : {}) })
         const pages = []
         for (let p = 1; p <= text.pages; p++) pages.push(side.leftPages(p))
-        const at = join(OUT, rule, id)
-        if (f.layout) write(join(at, 'layout.json'), f.layout)
-        else write(join(at, 'refusal.json'), JSON.stringify({ refused: f.refused }))
-        write(join(at, 'stats.json'), JSON.stringify(f.stats))
-        write(join(at, 'left.json'), plain([...f.left]))
-        write(join(at, 'side.json'), plain({ units: side.units, pages }))
-        runs.set(rule, { ...f, pages, units: byUnit(f.layout) })
-        if (OF && existsSync(OF) && f.layout) for (const fx of readdirSync(OF).filter(fx => fx.startsWith(`${id}-`)).sort()) {
-          const to = join(OUT, rule, 'fixtures', fx)
-          mkdirSync(to, { recursive: true })
-          writeFileSync(join(to, 'layout.json'), f.layout)
-          for (const file of readdirSync(join(OF, fx))) if (file !== 'layout.json' && !existsSync(join(to, file))) symlinkSync(join(OF, fx, file), join(to, file))
-        }
+        runs.set(rule, { ...f, pages, side: side.units, units: byUnit(f.layout) })
       }
     } finally { await task.destroy() }
     // against off, unit by unit
     const base = runs.get('off')
+    const rows = []
     const packSame = OF && base.layout ? readdirSync(OF).filter(fx => fx.startsWith(`${id}-`)).map(fx => readFileSync(join(OF, fx, 'layout.json'), 'utf8') === base.layout) : []
     for (const rule of rules) {
       const r = runs.get(rule)
@@ -213,14 +215,31 @@ for (const id of papers) {
         paper: id, rule,
         layout: r.layout ? 'file' : `refused ${r.refused}`, ...(rule === 'off' && OF ? { pack: packSame.length ? (packSame.every(Boolean) ? 'same' : 'differs') : 'none' } : {}),
         left: { units: leftMoved.length, pages: leftPages.size, of: [...r.left.values()].filter(Boolean).length },
-        maker: { units: makerMoved.length, pages: makerPages.size, located: moved(s.units.located, s0.units.located) },
-        ph: { found: moved(s.ph.found, s0.ph.found), lost: moved(s.ph.lost, s0.ph.lost), unitsFound: phFound.length, unitsLost: phLost.length },
-        carried: moved(s.lines.carried, s0.lines.carried),
+        maker: s ? { units: makerMoved.length, pages: makerPages.size, located: moved(s.units.located, s0.units.located) } : null,
+        ph: s ? { found: moved(s.ph.found, s0.ph.found), lost: moved(s.ph.lost, s0.ph.lost), unitsFound: phFound.length, unitsLost: phLost.length } : null,
+        carried: s ? moved(s.lines.carried, s0.lines.carried) : null,
         side: { pages: sidePages.length, pushed: pushed.length, of: r.pages.length },
       }
       table.push(row)
+      rows.push(row)
       write(join(OUT, 'diff', `${id}-${rule}.json`), JSON.stringify({ ...row, leftMoved, leftPages: [...leftPages].sort((x, y) => x - y), makerMoved, makerPages: [...makerPages].sort((x, y) => x - y), phFound, phLost, sidePages, pushed }))
-      console.log(`${id} ${rule.padEnd(7)} left ${row.left.units}u/${row.left.pages}p  maker ${row.maker.units}u/${row.maker.pages}p located ${row.maker.located}  ph found ${row.ph.found} (${phFound.length}u) LOST ${row.ph.lost} (${phLost.length}u)  carried ${row.carried}  side ${row.side.pages}p/${row.side.pushed} pushed${row.pack ? `  pack ${row.pack}` : ''}`)
+      const maker = row.maker ? `  maker ${row.maker.units}u/${row.maker.pages}p located ${row.maker.located}  ph found ${row.ph.found} (${phFound.length}u) LOST ${row.ph.lost} (${phLost.length}u)  carried ${row.carried}` : ''
+      console.log(`${id} ${rule.padEnd(7)} left ${row.left.units}u/${row.left.pages}p${maker}  side ${row.side.pages}p/${row.side.pushed} pushed${row.pack ? `  pack ${row.pack}` : ''}`)
+    }
+    // each rule set's files (by the text alone, only where a rule moves something)
+    if (!CORPUS || rows.some(r => r.left.units || r.side.pages)) for (const rule of rules) {
+      const r = runs.get(rule), at = join(OUT, rule, id)
+      if (r.layout) write(join(at, 'layout.json'), r.layout)
+      else write(join(at, 'refusal.json'), JSON.stringify({ refused: r.refused }))
+      if (r.stats) write(join(at, 'stats.json'), JSON.stringify(r.stats))
+      write(join(at, 'left.json'), plain([...r.left]))
+      write(join(at, 'side.json'), plain({ units: r.side, pages: r.pages }))
+      if (OF && existsSync(OF) && r.layout) for (const fx of readdirSync(OF).filter(fx => fx.startsWith(`${id}-`)).sort()) {
+        const to = join(OUT, rule, 'fixtures', fx)
+        mkdirSync(to, { recursive: true })
+        writeFileSync(join(to, 'layout.json'), r.layout)
+        for (const file of readdirSync(join(OF, fx))) if (file !== 'layout.json' && !existsSync(join(to, file))) symlinkSync(join(OF, fx, file), join(to, file))
+      }
     }
     console.log(`${id}: ${((performance.now() - t0) / 1000).toFixed(1)} s`)
   } catch (e) {
@@ -228,6 +247,6 @@ for (const id of papers) {
     console.log(`FAIL ${id}: ${e?.stack ?? e}`)
   }
 }
-write(join(OUT, 'summary.json'), JSON.stringify({ engine: ENGINE, rules, rows: table }, null, 1))
+write(join(OUT, 'summary.json'), JSON.stringify({ engine: ENGINE, rules, ...(CORPUS ? { corpus: CORPUS, passed } : {}), rows: table }, null, 1))
 console.log(`written: ${OUT}`)
 process.exit(failed ? 1 : 0)
