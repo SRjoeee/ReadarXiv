@@ -64,7 +64,7 @@ export interface LayoutStats {
   baselines: { first: number[]; last: number[] }
   /** pages past OPS_CAP, or past GLYPHS_PAGE glyphs */
   capped: number[]
-  /** pages whose operator list did not come within OPS_MS, or failed, or was never asked (past GIVEN_UP_MAX): no ink */
+  /** pages whose operator list did not come within OPS_MS, or failed: no ink, each page alone */
   timedOut: number[]
   /** pages whose lines cost the carry more than its bound (carry.mjs `over`): no ink */
   over: number[]
@@ -121,7 +121,5 @@ export interface MakerStream {
 export declare const CARRY_MIN: number
 /** a page's operator list waited for at most, ms */
 export declare const OPS_MS: number
-/** a paper's pages given up on (timed out past OPS_MS, or capped) at most: every later page is dark unread, `timedOut` */
-export declare const GIVEN_UP_MAX: number
 /** a font's PostScript name as the file holds it: 1 to 128 printable ASCII characters */
 export declare function fontName(name: unknown): string

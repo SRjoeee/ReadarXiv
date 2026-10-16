@@ -42,8 +42,9 @@ export interface PagePlan { dirty: number[]; rules: number[]; unfit: string | nu
 /** a page's plan from the layout file and its ink (pageInk with `indices`): null where nothing is planned; `facts` (or a
  *  function giving them) the page's alignment facts, read only for a page with kept ink the manifest can hold. Pure */
 export declare function pagePlanOf(index: LayoutIndex, p: number, ink: ReturnType<typeof pageInk>, facts: AlignFacts | (() => AlignFacts)): PagePlan | null
-/** every planned page's plan over PDF.js's document of arXiv's PDF, and the time its operator lists, inks and plans took */
-export declare function pagePlansOf(o: { doc: AddonDocument; OPS: Record<string, number>; index: LayoutIndex }): Promise<{ plans: Map<number, PagePlan>; ms: { ops: number; ink: number; plan: number } }>
+/** every planned page's plan over PDF.js's document of arXiv's PDF, and the time its operator lists, inks and plans took; a page
+ *  whose operator list does not come within OPS_MS, or fails, is given up on and has no plan (`timedOut`), that page alone */
+export declare function pagePlansOf(o: { doc: AddonDocument; OPS: Record<string, number>; index: LayoutIndex }): Promise<{ plans: Map<number, PagePlan>; ms: { ops: number; ink: number; plan: number }; timedOut: number[] }>
 /** a manifest entry as the plans make it, before the remover: null for a page the remover is asked about */
 export type PlannedEntry = RemovalManifest['page'][number] | null
 /** pages `from` to `to` before the remover, the boxes' share spent in page order from `spent`: their entries, the pages the

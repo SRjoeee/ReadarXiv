@@ -42,6 +42,7 @@
 import { pageDirty, pagePlan, pageRules } from '../layer-proto/removal.mjs'
 import { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, checkBoxes, parseAddonManifest, REFUSED_MAX } from './addon-manifest.mjs'
 import { pageInk } from './ink.mjs'
+import { listWithin } from './oplist.mjs'
 import { alignOf, makeAddon, openRemover, removalEntry, SETS } from './remove.mjs'
 
 /** the share of the manifest's byte and value caps that the paper's `dirty` and `rules` boxes may take, in page order: the
@@ -107,17 +108,19 @@ export function pagePlanOf(index, p, ink, facts) {
 
 /**
  * Every page's plan (pagePlanOf) of PDF.js's document `doc` of arXiv's PDF, `OPS` PDF.js's operator codes, `index` the layout
- * file's: { plans, a Map from each planned page to its plan, ms { ops, ink, plan } }. Reads each page's operator list once
- * and keeps none: each page is cleaned up (page.cleanup) once its plan is made, so a caller that reads the page's operator list
- * again pays the parse again. The document is the caller's to destroy
+ * file's: { plans, a Map from each planned page to its plan, ms { ops, ink, plan }, timedOut }. Reads each page's operator list
+ * once and keeps none: each page is cleaned up (page.cleanup) once its plan is made, so a caller that reads the page's operator
+ * list again pays the parse again. A page's list is waited for OPS_MS at most, as the layout maker waits (oplist.mjs): past it,
+ * or failing, the page is given up on and has no plan (`timedOut`), that page alone. The document is the caller's to destroy
  */
 export async function pagePlansOf({ doc, OPS, index }) {
-  const plans = new Map(), ms = { ops: 0, ink: 0, plan: 0 }
+  const plans = new Map(), ms = { ops: 0, ink: 0, plan: 0 }, timedOut = [], seen = { warned: false, who: 'add-on plans' }
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p)
     let t = performance.now()
-    const list = await page.getOperatorList()
+    const list = await listWithin(page, seen)
     ms.ops += performance.now() - t
+    if (!list) { timedOut.push(p); continue }
     t = performance.now()
     const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true })
     ms.ink += performance.now() - t
@@ -129,7 +132,7 @@ export async function pagePlansOf({ doc, OPS, index }) {
     page.cleanup?.()
     ms.plan += performance.now() - t
   }
-  return { plans, ms }
+  return { plans, ms, timedOut }
 }
 
 /**
