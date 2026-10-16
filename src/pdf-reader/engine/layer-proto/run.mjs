@@ -193,7 +193,9 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   const filled = []
   for (const p of units) {
     if (p.fillLead === null) continue
-    let st = { ...p.layout.state, lead: Math.min(p.fillLead, r3(target + band)) }
+    // (laid as line boxes, each of its edges its half-leading kept: layer2.mjs lineBoxes; its tracking and the page's size
+    // with them, so that neither takes back the room its leading gave)
+    let st = { ...p.layout.state, box: true, lead: Math.min(p.fillLead, r3(target + band)) }
     let l = at(p, st)
     if (!l) continue
     // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
@@ -241,8 +243,10 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
 /**
  * A unit's fill leading (fillPage's) and its top, read from its fit alone: `fillTop`, the loosest leading P.fillLead allows
  * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null); `fillLead`, the
- * loosest leading from its fitted one up to the top at which its fitted state still sets it whole (null where that state
- * does not set it again). Set on the unit as it is laid (afterLay), so that the fill leading a page's pass reads of a unit
+ * loosest leading from its fitted one up to the top at which its fitted state still sets it whole with its lines as line
+ * boxes (layer2.mjs lineBoxes: k lines in a frame of n where k L <= n, so its last box's foot, not its last baseline, on its
+ * frame's); where its fitted one leaves its edges no room for their half-leading, the loosest closer one, down to the
+ * original's pitch (null where that state does not set it again). Set on the unit as it is laid (afterLay), so that the fill leading a page's pass reads of a unit
  * running on to it from a page before no longer depends on whether that page's pass has run (the 1b design, §2.1 C1). Not
  * yet the rest of the pass's reads: its line count, read live (after its first page's fill), and the targets the page is
  * held to (`held`, through every page passed before) are S3's, 1b-C's
@@ -263,10 +267,23 @@ function fillLeadsOf(p, P) {
   p.fitLines = p.layout.lines.length
   const st = p.layout.state
   if (!at(p, st)) { p.fillLead = null; return }
-  const lo = st.lead, hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
-  let ok = 0, no = Math.round((hi - lo) / 0.01) + 1
-  while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...st, lead: L(k) })) ok = k; else no = k }
-  p.fillLead = ok ? L(ok) : lo
+  // (its lines as line boxes, each edge its half-leading kept: layer2.mjs lineBoxes, the page fill's states)
+  const lo = st.lead, bx = { ...st, box: true }
+  if (at(p, bx)) {
+    const hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
+    let ok = 0, no = Math.round((hi - lo) / 0.01) + 1
+    while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...bx, lead: L(k) })) ok = k; else no = k }
+    p.fillLead = ok ? L(ok) : lo
+    return
+  }
+  // (its fitted leading leaves its edges no room for their half-leading, the fit having set its lines to its frame's foot:
+  // the loosest closer one that does, down to the original's pitch, where a line's box is the original line's. Where even
+  // that does not set it, its fitted one)
+  const floor = Math.max(1, P.leadFloor ?? 1), K = Math.ceil((lo - floor) / 0.01 - 1e-9), L = k => (k >= K ? floor : r3(lo - k * 0.01))
+  if (!(K > 0) || !at(p, { ...bx, lead: L(K) })) { p.fillLead = lo; return }
+  let no = 0, ok = K
+  while (ok - no > 1) { const k = (ok + no) >> 1; if (at(p, { ...bx, lead: L(k) })) ok = k; else no = k }
+  p.fillLead = L(ok)
 }
 
 /**
@@ -1192,6 +1209,22 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (half > (r[3] - r[1]) / 2) { b.x0 = mid - half; b.x1 = mid + half }
     } else if (right > b.x1) b.x1 = right
   }
+  /** whether the unit's first and last lines take their half-leading (layer2.mjs lineBoxes, P.halfLead): not one that shares
+   *  its baseline with ink that stays where it is, a label kept as the original's or a character of the page beside the
+   *  line's own in its column (a run-in heading, another unit that ends or begins on it, a mark set before it), which would
+   *  stand off the line moved; nor a table cell's lines, which keep their own rules (cellBands). Read from the page's
+   *  characters on the line's baseline within the span of its frame's own lines (not columnOf's, which is the page's text
+   *  area where v0's geometry holds no paragraph there, and took the other column's line on the same baseline for one beside
+   *  it: 1512.03385 page 12) */
+  const edgesOf = (p, prep) => {
+    if (p.unit.kind === 'cell' || !p.blocks.length) return null
+    const alone = (b, r, yb, size) => {
+      const cx0 = Math.min(...b.rects.map(q => q[1])), cx1 = Math.max(...b.rects.map(q => q[3]))
+      return !(chars2[b.page - 1] ?? []).some(c => /\S/.test(c.ch) && Math.abs(c.yb - yb) < 0.4 * size && c.x1 > cx0 && c.x0 < cx1 && (c.x1 < r[1] - 0.5 || c.x0 > r[3] + 0.5))
+    }
+    const b0 = p.blocks[0], bl = p.blocks.at(-1)
+    return { head: !(prep.label && !prep.label.drawn) && alone(b0, b0.rects[0], b0.B[0], b0.sizes[0]), foot: alone(bl, bl.rects.at(-1), bl.B.at(-1), bl.sizes.at(-1)) }
+  }
   /** a CJK table cell's bands between the rules near its lines (layer2.mjs cellBands: the manifest's rules), or null; a
    *  script no taller than Latin is not held, nor a paragraph, whose lines stand by a rule only by chance */
   const clearanceOf = (p, s) => (P.cjk && p.unit.kind === 'cell' ? L2.cellBands(p.blocks, pg => RM?.manifest?.page?.[pg]?.rules, s, P) : null)
@@ -1570,7 +1603,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     p.tokens = tokens
     p.prep = prep
     p.s = s
-    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: filed(p.id) ? LINESKIP : null }
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: filed(p.id) ? LINESKIP : null, halfLead: edgesOf(p, prep) }
     // (no larger than its lines' room between the rules over and under them leaves its script's em box: clearanceOf)
     p.clear = clearanceOf(p, s)
     if (p.clear && p.clear.cap < 1) p.P.capScale = p.clear.cap

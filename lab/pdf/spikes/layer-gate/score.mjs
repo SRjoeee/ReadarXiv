@@ -30,6 +30,10 @@ export const MEASURES = [
   // gaps a pitch or more wider than the original's (a frame drawn short leaves its blank in the gap below it)
   ['paraGap', 'model', 'ratio', 'one', 'paragraph gap / the original\'s (median)'],
   ['paraGapWide', 'model', 'share', 'down', 'paragraph gaps a pitch or more wider'],
+  // (and those narrower than the lines beside them, the half-leading round, 2026-10-17: the drawn gap less the drawn leading
+  // short of the original's room past its pitch, measure.mjs paraGapsOf `tight`; a defect compared as a rate, as the
+  // measures of TeX's file entered)
+  ['paraGapTight', 'model', 'defect', 'down', 'paragraph gaps tighter than the lines beside them'],
   ['overlap', 'pixel', 'defect', 'down', 'overlap regions'],
   ['stray', 'pixel', 'defect', 'down', 'stray text'],
   ['residue', 'pixel', 'defect', 'down', 'residue regions'],
@@ -160,7 +164,7 @@ export function pageEntry(page, model, pixel) {
     clipped: model.check.clipped, markerResidue: model.check.markerResidue ?? 0, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
     groupsSplit: model.consistency?.groupsSplit ?? 0, labelsSource: model.consistency?.labelsSource ?? 0,
-    paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length,
+    paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length, paraGapTight: gaps.filter(g => g.tight === true).length,
     generated: model.generated ?? {}, generatedLeft: Object.values(model.generated ?? {}).reduce((a, n) => a + n, 0),
   }
   if (model.removal) Object.assign(e, { rmRefused: model.removal.refused, rmMismatched: model.removal.mismatched, rmUnits: model.removal.units, rmSwapped: model.removal.swapped })

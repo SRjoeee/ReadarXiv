@@ -137,7 +137,7 @@ describe('the run: a page asked in any order answers as the page asked in order'
     const paper = PAPERS.find(x => x.name === 'S3 fill')!
     const { run: want } = await ask(build(paper), [1, 2, 3, 4], true)
     // (the local tests' S3 paper: the targets of a title page and three fuller pages)
-    expect(want.rows.map(r => r.fill?.target)).toEqual([1, 1.25, 1.667, 1.5])
+    expect(want.rows.map(r => r.fill?.target)).toEqual([1, 1.2, 1.667, 1.33])
     for (const order of [[4, 3, 2, 1], [3, 1, 4, 2], [2]]) {
       const { run } = await ask(build(paper), order, true)
       for (const p of order) expect(run.rows[p - 1]!.fill, `${order} page ${p}`).toEqual(want.rows[p - 1]!.fill)

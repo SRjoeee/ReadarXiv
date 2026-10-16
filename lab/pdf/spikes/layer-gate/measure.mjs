@@ -566,10 +566,20 @@ export const glyphAccounted = ({ cat, inSeg, fromSource, onLine, inGap, used, dr
  * baseline less 0.22 of its size, a top its first plus 0.75 (geo's own). Nothing between: no other frame of the page's
  * reference, no text item (a display), and no more than three of the upper's pitches of the original's (a graphic's room).
  * Each gap's `ratio`, drawn ÷ original, and its `extra`, the drawn gap's excess in the upper frame's original pitches.
- * A frame drawn short of its original's last line adds its blank to the gap below it, which no frame measure sees
+ * A frame drawn short of its original's last line adds its blank to the gap below it, which no frame measure sees.
+ * And whether it is `tight` (paraGapTight, the half-leading round, 2026-10-17): narrower than the lines beside it, which the
+ * ratio cannot see, as it holds the drawn gap to the original's whatever the drawn leading (a paragraph spread at 1.4
+ * pitches from its frame's first baseline to its last stood a pitch from the next: ratio 1). By baselines: the drawn gap
+ * (the upper's last drawn baseline to the lower's first) less the drawn leading (the mean of the two frames' own, each its
+ * consecutive drawn lines' lower median gap within a flow segment) short of the original's room past its pitch (its gap
+ * less the pitch, the lower median of the two frames' own gaps: a \parskip; capped at a pitch, so that a line borrowed
+ * into a wider room is no tight gap) by more than TIGHT of a pitch.
+ * Null where neither frame draws two lines (no leading to hold it to), and between two frames of one unit
  */
+const TIGHT = 0.05
 export function paraGapsOf(drawn, ref, items) {
   const span = (a, b) => [Math.max(a.x0, b.x0), Math.min(a.x1, b.x1)]
+  const mean = xs => xs.reduce((s, x) => s + x, 0) / xs.length
   const all = []
   for (const r of ref) frameGroups(r.orig).forEach((f, i) => all.push({ key: `${r.id}|${i}`, x0: f.x0, x1: f.x1, top: f.first + 0.75 * f.size, foot: f.last - 0.22 * f.size }))
   const body = []
@@ -579,7 +589,12 @@ export function paraGapsOf(drawn, ref, items) {
     frames.forEach((fr, i) => {
       const mine = framed[i].sort((a, b) => b.baseline - a.baseline)
       if (!mine.length) return
-      body.push({ key: `${u.id}|${i}`, x0: fr.x0, x1: fr.x1, pitch: fr.pitch, top: fr.first + 0.75 * fr.size, foot: fr.last - 0.22 * fr.size, dTop: mine[0].baseline + 0.75 * mine[0].size, dFoot: mine.at(-1).baseline - 0.22 * mine.at(-1).size })
+      // (the drawn leading: the lower median gap of its consecutive lines within one flow segment, never across a display it
+      // holds, as geo's rhythm reads it: 2307.16209 page 52, two lines 76 apart about a display; and the original's gaps, which
+      // a display's rows among its lines widen, pooled with the other frame's for the pitch)
+      const gaps = mine.slice(1).map((l, j) => (l.block === mine[j].block ? mine[j].baseline - l.baseline : null)).filter(g => g !== null && g > 0.1).sort((a, b) => a - b)
+      const og = fr.lines.slice(1).map((l, j) => fr.lines[j].baseline - l.baseline).filter(g => g > 0.1)
+      body.push({ key: `${u.id}|${i}`, id: u.id, x0: fr.x0, x1: fr.x1, pitch: fr.pitch, og, first: fr.first, last: fr.last, top: fr.first + 0.75 * fr.size, foot: fr.last - 0.22 * fr.size, dFirst: mine[0].baseline, dLast: mine.at(-1).baseline, lead: gaps.length ? gaps[(gaps.length - 1) >> 1] : null, dTop: mine[0].baseline + 0.75 * mine[0].size, dFoot: mine.at(-1).baseline - 0.22 * mine.at(-1).size })
     })
   }
   const out = []
@@ -600,7 +615,13 @@ export function paraGapsOf(drawn, ref, items) {
       || items.some(it => { const cy = (it.y0 + it.y1) / 2; return Math.min(x1, it.x1) - Math.max(x0, it.x0) > 1 && cy < a.foot && cy > b.top })
     if (between) continue
     const g = a.dFoot - b.dTop
-    out.push({ ratio: rd(g / g0, 3), extra: rd((g - g0) / a.pitch, 3) })
+    let tight = null
+    const leads = [a.lead, b.lead].filter(x => x > 0)
+    if (a.id !== b.id && leads.length) {
+      const og = [...a.og, ...b.og].sort((x, y) => x - y), p = og.length ? og[(og.length - 1) >> 1] : a.pitch
+      tight = a.dLast - b.dFirst - mean(leads) < Math.min(a.last - b.first - p, p) - TIGHT * p
+    }
+    out.push({ ratio: rd(g / g0, 3), extra: rd((g - g0) / a.pitch, 3), tight })
   }
   return out
 }
