@@ -5,7 +5,7 @@
 // document from arXiv's bytes and the bundle's tail), the rows the driver made of the record taken at once and ended, the
 // run reached through the driver's stand-in of run.mjs (which keeps each run it opens and gives its units' records,
 // layer-gate.mjs RUN_STAND_IN). Each page's answer is the same few numbers wherever it was asked: its SVG's markup (lang
-// aside), its word table's digest (words.mjs), copyOf's pixels over the PNG of the page as PDF.js drew it in the reference
+// aside), its word table's digest (words.mjs), the digest of its link records (3a-0), copyOf's pixels over the PNG of the page as PDF.js drew it in the reference
 // run (so that every run's copy starts from the same pixels: PDF.js's first drawing of a page in a document is not always
 // another load's, door.mjs head) and the digest of the records of the units on the page
 import * as pdfjs from 'pdfjs-dist'
@@ -123,13 +123,13 @@ export async function openDoor({ name, target, rules }) {
  *  and copyOf's pixels over `sourcePng`, the page as PDF.js drew it (the records' digest is taken once the run is done: a
  *  unit's record is made when the unit is laid) */
 export async function answerOf(layer, p, got, sourcePng) {
-  const { svg, w, h, words } = got
+  const { svg, w, h, words, links } = got
   const markup = svg.cloneNode(true)
   const lang = markup.getAttribute('lang')
   markup.removeAttribute('lang')
   const source = await canvasOfPng(sourcePng)
   const copy = await layer.copyOf(p, source, K)
-  const out = { p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), copy: await pixelsOf(copy) }
+  const out = { p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), links: await textDigest(JSON.stringify(links ?? [])), copy: await pixelsOf(copy) }
   for (const c of [source, copy]) { c.width = 0; c.height = 0 }
   return out
 }

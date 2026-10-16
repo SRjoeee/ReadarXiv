@@ -60,7 +60,7 @@ window.doorOrder = {
       }
       // (a page answered again answers as it did: all of what an answer is, its copy's pixels too)
       const first = await answers.get(p), again = await answerOf(d.layer, p, got, await bytes(`/door/${name}/s${p}.png`))
-      if (['svg', 'lang', 'w', 'h', 'words'].some(k => again[k] !== first[k]) || again.copy.sha !== first.copy.sha) repeats.push(p)
+      if (['svg', 'lang', 'w', 'h', 'words', 'links'].some(k => again[k] !== first[k]) || again.copy.sha !== first.copy.sha) repeats.push(p)
     }
     const ask = async (p, o = {}) => {
       stat.asks++

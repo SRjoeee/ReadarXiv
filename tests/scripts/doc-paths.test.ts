@@ -108,7 +108,7 @@ describe('the old experiment directory', () => {
   /** the files whose bytes the layer gate hashes into every run it records (`measures`, layer-gate.mjs): one changed byte
    *  makes the record "not comparable", so these lines, and no others, still name the directory they were made in:
    *  the first line of each, and the fifth of page.mjs (the layer lab's path) */
-  const HASHED = ['measure.mjs', 'score.mjs', 'page.mjs', 'proto.mjs'].map(file => `lab/pdf/spikes/layer-gate/${file}`)
+  const HASHED = ['measure.mjs', 'score.mjs', 'links.mjs', 'page.mjs', 'proto.mjs'].map(file => `lab/pdf/spikes/layer-gate/${file}`)
   const EXEMPT = [...HASHED.map(file => `${file}:1:`), 'lab/pdf/spikes/layer-gate/page.mjs:5:']
 
   it('is named by no tracked file but as an archive pointer (parked/ keeps the spelling it ran under, parked/README.md, Roots)', () => {
@@ -122,7 +122,7 @@ describe('the old experiment directory', () => {
 
   it('leaves the old spelling only on the lines of the files the layer gate hashes, which it names itself', () => {
     // (and the engine's UAX 14 table the measure imports, this repository's: layer-gate.mjs NO_START_FILE)
-    expect(readFileSync(join(ROOT, 'lab/pdf/spikes/layer-gate.mjs'), 'utf8')).toContain("[...['measure.mjs', 'score.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => join(GATE, f)), NO_START_FILE].map(f => readFileSync(f))")
+    expect(readFileSync(join(ROOT, 'lab/pdf/spikes/layer-gate.mjs'), 'utf8')).toContain("[...['measure.mjs', 'score.mjs', 'links.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => join(GATE, f)), NO_START_FILE].map(f => readFileSync(f))")
     for (const file of HASHED) expect([file, FILES.has(file)]).toEqual([file, true])
   })
 })
