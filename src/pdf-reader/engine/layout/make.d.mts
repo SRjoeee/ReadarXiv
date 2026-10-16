@@ -52,8 +52,8 @@ export interface LayoutStats {
    *  the LOST pieces outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) */
   ph: { marked: number; found: number; empty: number; lost: number; joined: number; outside: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number; heads: [found: number, empty: number] }
   /** the matcher's matches by kind (the same character, another Unicode at the place, loosely on the line, by a vote),
-   *  those it rejected off their run, its work, and the pieces past its bound */
-  match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number }
+   *  those it rejected off their run, its work, the pieces past its bound, and the most work a page cost (`most`) */
+  match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number; most: number }
   /** babel's names: the occurrences the marked original marks, those the file locates (and of them those leading a unit:
    *  RUN_IN), and why each other is not */
   names: { marked: number; located: number; runIn: number; why: Record<string, number> }

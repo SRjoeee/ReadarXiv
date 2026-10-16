@@ -54,4 +54,18 @@ describe('matcherOf: the work bound, a page\'s', () => {
     expect(m.stats.over).toBe(12 - lost)
     expect(m.match([{ page: 2, x0: 100, y: 700, size: 10, u: 'b' }], [], null, null)).toEqual({ glyphs: [[2, 0]], boxes: [] })
   })
+
+  it('a piece whose search passes its page\'s work is LOST there and then: no page costs more than its bound and one visit', () => {
+    // page 1: 2,000 glyphs on one baseline, a piece's first scan visits them all; the bound 1,000: the very first piece
+    // passes it inside its own search
+    const dense = page(Array.from({ length: 2000 }, (_, k) => ({ u: 'a', x: 72 + k * 0.25, y: 700 })))
+    const m = matcherOf({ ink: [null, dense], carry: (p: number, x: number, y: number) => ({ page: p, x, y }), pageWork: 1_000 })
+    expect(m.match([{ page: 1, x0: 72, y: 700, size: 10, u: 'a' }], [], null, null)).toEqual({ why: "past the matcher's work bound" })
+    expect(m.stats.over).toBe(1)
+    expect(m.stats.most).toBe(1_001)
+    // nothing of it taken; the next piece there is LOST at once, its work none
+    expect(dense.taken.every(t => t === 0)).toBe(true)
+    expect(m.match([{ page: 1, x0: 80, y: 700, size: 10, u: 'a' }], [], null, null)).toEqual({ why: "past the matcher's work bound" })
+    expect(m.stats.work).toBe(1_001)
+  })
 })

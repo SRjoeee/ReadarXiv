@@ -25,9 +25,12 @@ const RULE_TOL = 1.2
 /** a glyph with no line of its own (a raised big operator) carried at a mark's line it stands within this of */
 const SCRIPT = size => 0.6 * Math.max(size, 5) + 1.5
 /** the glyph and box visits a page's matching may cost (charged to the page visited): a piece whose pages are past it is
- *  LOST. The real papers' heaviest costs a few million in all (2307.16209's 2.3 M). A page's alone, so that the bound
- *  holds whatever order the units are matched in (the page stream's passes run in any order the whole order allows) */
+ *  LOST, and so is the piece whose search passes it, there and then (its search is given up). The real papers' heaviest
+ *  costs a few million in all (2307.16209's 2.3 M). A page's alone, so that the bound holds whatever order the units are
+ *  matched in (the page stream's passes run in any order the whole order allows) */
 export const MATCH_PAGE_WORK = 5_000_000
+/** a search given up: thrown by a visit past a page's work, caught by match (the piece LOST) */
+const OVER = new Error("past the matcher's work bound")
 
 /** a glyph's character as two PDFs are compared by it: NFKC, no white space, no variation selector (TeX Live 2026's cmex
  *  sets one after a big operator or delimiter: ∑ U+FE01, which arXiv's older TeX gives plain) */
@@ -39,13 +42,20 @@ const NF = s => s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '')
  * `match(items, rules, A, B)` matches a piece's own glyphs ({ page, x0, y, size, u } of the marked compile, in stream
  * order) and rules ({ page, x0, y0, x1, y1 }), A and B its opening and closing marks ({ page, x, y } or null): every one
  * matched, { glyphs, boxes } ([page, index] on arXiv's PDF, in the items' order), or { why }. What it matched is taken,
- * whole or not. `stats`: the matches by kind, those rejected, and the work. `pageWork` a page's work at most (MATCH_PAGE_WORK)
+ * whole or not. `stats`: the matches by kind, those rejected, the work, the pieces past the work bound (`over`) and the most
+ * work a page cost (`most`). `pageWork` a page's work at most (MATCH_PAGE_WORK): a visit past it gives the piece's search up
  */
 export function matcherOf({ ink, carry, pageWork = MATCH_PAGE_WORK }) {
-  const stats = { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 }
+  const stats = { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0, most: 0 }
   /** each page's work so far */
   const work = new Map()
-  const spend = page => { work.set(page, (work.get(page) ?? 0) + 1); stats.work++ }
+  /** a visit on a page, charged to it: past its work, the search is given up (OVER) */
+  const spend = page => {
+    const w = (work.get(page) ?? 0) + 1
+    work.set(page, w); stats.work++
+    if (w > stats.most) stats.most = w
+    if (w > pageWork) throw OVER
+  }
   const lowest = (P, y) => { let lo = 0, hi = P.n; while (lo < hi) { const m = (lo + hi) >> 1; if (P.y[m] < y) lo = m + 1; else hi = m } return lo }
 
   /** one glyph's match on arXiv's page near (X, Y), none taken nor in `local`: the same character within tx and ty;
@@ -197,7 +207,16 @@ export function matcherOf({ ink, carry, pageWork = MATCH_PAGE_WORK }) {
     return boxes
   }
 
+  /** a piece matched, or why not; a search past a page's work given up there (the piece LOST, what it matched before that
+   *  taken as ever: whole or not) */
   function match(items, list, A, B) {
+    try { return matchPiece(items, list, A, B) } catch (e) {
+      if (e !== OVER) throw e
+      stats.over++
+      return { why: "past the matcher's work bound" }
+    }
+  }
+  function matchPiece(items, list, A, B) {
     const cs = predict(items, A, B)
     const ca = A ? carry(A.page, A.x, A.y) : null, cb = B ? carry(B.page, B.x, B.y) : null
     // (the pages it starts on: past their work, LOST)
