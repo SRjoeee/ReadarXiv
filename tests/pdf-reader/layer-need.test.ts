@@ -104,11 +104,11 @@ describe('needsOf', () => {
 
   it('is the one run.mjs uses: imported from need.mjs, defined nowhere else', () => {
     const run = readFileSync('src/pdf-reader/engine/layer-proto/run.mjs', 'utf8')
-    expect(run).toMatch(/import \{ [^}]*\bneedsOf\b[^}]*\} from '\.\/need\.mjs'/)
     expect(run).toMatch(/import \{ [^}]*\bclosureOf\b[^}]*\} from '\.\/need\.mjs'/)
     expect(run).not.toMatch(/function (needsOf|closureOf)/)
-    // (over K, or under parts K and the entry standing for the parts not told yet: the door design §0.3)
-    expect(run).toMatch(/needsOf\(partsEnded \|\| through >= N \? K : \[\.\.\.K, [^\n]*\], N, PASSES,/)
+    // (laid in order, over K, or under parts K and the entry standing for the parts not told yet: the door design §0.3)
+    expect(run).toMatch(/partsEnded \|\| through >= N \? K : \[\.\.\.K, \{ lists: \[\[through \+ 1\]\], reach: \[through \+ 1\], rects: true \}\]/)
+    expect(run).toMatch(/closureOf\(KS, N, p, \{ orderFree: false, passes: PASSES \}\)/)
   })
 })
 
@@ -193,16 +193,22 @@ describe('closureOf: Need(p), the 1b-D design §1.2', () => {
     }
   })
 
-  it('is the prefix needsOf lays where the rules lay in order (orderFree false)', () => {
+  it('is the prefix needsOf lays where the rules lay in order (orderFree false), with every page its entries read', () => {
+    // (a page-1 unit whose placeholder lies on page 3: its closure draws page 3 and is bound by it, as the order-free one)
+    const K1: Entry[] = [{ lists: [[1]], reach: new Set([1]), rects: [], reads: [3], group: null }, { lists: [[2]], reach: new Set([2]), rects: [], reads: [], group: null }]
+    expect(closureOf(K1, 3, 1, { orderFree: false })).toMatchObject({ draw: [1, 3], bound: 3, lay: [0] })
     for (let seed = 1; seed <= 200; seed++) {
       const { K, N } = randomK(seed)
       for (const passes of [false, true]) {
         const need = needsOf(K, N, passes, c => !c.rects)
         for (let p = 1; p <= N; p++) {
           const B = need.bound[p]!, upTo = (a: number, b: number) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i)
+          // (its pages, and every page its entries read: their lines' and their placeholders')
+          const rows = upTo(0, need.complete[p]!)
+          const draw = [...new Set([...upTo(1, B), ...rows.flatMap(i => [...K[i]!.reach, ...(K[i]!.reads ?? [])]).filter(q => q >= 1 && q <= N)])].sort((a, b) => a - b)
           expect(closureOf(K, N, p, { orderFree: false, passes }), `seed ${seed}, page ${p}`).toEqual({
-            pass: upTo(1, B), lay: upTo(0, need.complete[p]!), draw: upTo(1, B), rows: upTo(0, need.complete[p]!),
-            ready: upTo(1, B).filter(q => need.bound[q]! <= B), bound: B,
+            pass: upTo(1, B), lay: rows, draw, rows,
+            ready: upTo(1, B).filter(q => need.bound[q]! <= B), bound: Math.max(B, ...draw),
           })
         }
       }

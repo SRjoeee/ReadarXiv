@@ -414,12 +414,13 @@ describe('the rules that lay in order (the even pass; no page pass): a page aske
     return r
   }
   it('bounds a closure by every page its units read, a placeholder\'s past the prefix\'s last page among them', async () => {
-    // (the L2 paper: page 1's paragraph reads page 2 for its formula; laid in order, page 1's closure draws page 1 alone, and
-    // the part covering page 2 must be in before page 1 is told laying, since the paragraph draws page 2 before it is laid)
+    // (the L2 paper: page 1's paragraph reads page 2 for its formula; laid in order, page 1's closure is page 1 alone, and
+    // draws page 2 too and is bound by it, so that the part covering page 2 is in before page 1 is told laying)
     const L2specs = PAPERS.find(([name]) => name === 'L2')![1]
     for (const how of ['even', 'no pass'] as const) {
       const run = await open(paper(L2specs, 2), { rules: rulesOf(how) })
-      expect(run.closure(1).draw, how).toEqual([1])
+      expect(run.closure(1).pass, how).toEqual([1])
+      expect(run.closure(1).draw, how).toEqual([1, 2])
       expect(run.closure(1).bound, how).toBe(2)
     }
   })
@@ -428,9 +429,9 @@ describe('the rules that lay in order (the even pass; no page pass): a page aske
     const want = await open(paper(specs, 4), { rules })
     await want.until(4)
     const run = await open(paper(specs, 4), { rules })
-    // (its closure is the prefix needsOf reads: pages 1 to the last page 3 may be done after)
-    expect(run.closure(3).draw).toEqual(run.closure(3).pass)
-    expect(run.closure(3).draw.slice(0, 3)).toEqual([1, 2, 3])
+    // (its closure is the prefix needsOf reads: pages 1 to the last page 3 may be done after, and every page those units read)
+    expect(run.closure(3).pass.slice(0, 3)).toEqual([1, 2, 3])
+    expect(run.closure(3).draw).toEqual(expect.arrayContaining(run.closure(3).pass))
     await run.layFor(3)
     // (page 3 ready, and every page done by it: page 1's paragraph that runs on to page 4 is laid with page 4)
     expect(run.ready(3)).toBe(true)

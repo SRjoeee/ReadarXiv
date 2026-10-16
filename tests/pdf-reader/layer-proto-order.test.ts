@@ -100,6 +100,19 @@ describe('the run: a page asked in any order answers as the page asked in order'
     }
   })
 
+  it('lays a table group across pages from the rows\' groups where the open is given none (the gate\'s and the lab\'s whole opens)', async () => {
+    // (S-B's column on pages 2, 3 and 4: its cells' groups only in their rows; each page asked first and alone, and in order,
+    // draws as the open given each unit's group)
+    const paper = PAPERS.find(x => x.name === 'S-B tables')!
+    const { snaps: wanted } = await ask(build(paper), [1, 2, 3, 4], true)
+    for (const order of [[1, 2, 3, 4], [3], [2], [4, 3, 2, 1]]) for (const rows of ['at the open', 'taken after'] as const) {
+      const P = build(paper)
+      const run = await openRun(P, { groups: false, expect: rows === 'taken after' })
+      if (rows === 'taken after') run.take(new Map([...P.rows].map(([id, r]) => [id, r as never])))
+      for (const p of order) { await askPage(run, p); expect(runSnap(run, p), `no groups given, rows ${rows}, ${order}: page ${p}`).toEqual(wanted.get(p)) }
+    }
+  })
+
   it('pins the contract: page 1 is drawn first, whatever page is asked, and the paper\'s designs are its own', async () => {
     // (pages after the first set in Palatino, page 1 in Times: the designs are Times's, as page 1 says, though most of the
     // paper's characters are another serif's. This pins the contract, R11 and L3; it cannot catch a designs rule that read

@@ -58,7 +58,7 @@ import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import { kOfPieces, locatedWhole, proofOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, wordIndexer } from './words.mjs'
-import { closureOf, needsOf } from './need.mjs'
+import { closureOf } from './need.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -1845,33 +1845,22 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (the geometry's units and the file's alone, in the stream's order: v0's sort is stable, so equal streams keep the
   // order the hybrid reports its sources in)
   addUnits(cands.slice().sort((a, b) => a.stream - b.stream))
-  /** what laying the pages in order reads of K as it stands (needsOf: the rules that lay in order, ORDER_FREE false). Under
-   *  parts, until they end, an entry past K stands for every part not told: framed on the page after the last covered, so
-   *  that each lay, done and complete index of K's length or more names a page that waits for a part, and each one below it
-   *  is the whole paper's (the door design §0.3) */
-  const needNow = () => needsOf(partsEnded || through >= N ? K : [...K, { lists: [[through + 1]], reach: [through + 1], rects: true }], N, PASSES, c => !c.rects)
-  let need = needNow()
+  /** K as laying the pages in order reads it (closureOf's prefix: the rules that lay in order, ORDER_FREE false). Under parts,
+   *  until they end, an entry past K stands for every part not told: framed on the page after the last covered, so that each
+   *  lay, done and complete index of K's length or more names a page that waits for a part, and each one below it is the
+   *  whole paper's (the door design §0.3) */
+  const inOrderK = () => (partsEnded || through >= N ? K : [...K, { lists: [[through + 1]], reach: [through + 1], rects: true }])
+  let KS = inOrderK()
   /** each page's closure over K so far (closureOf), until a part adds to K or the parts end; where the rules lay in order,
-   *  closureOf's prefix over needsOf's: pages 1 to the latest page p may be done after drawn, K up to what they read decided */
+   *  closureOf's prefix */
   let closures = new Map()
   const closure = p => {
     let C = closures.get(p)
-    if (!C) {
-      if (ORDER_FREE) C = closureOf(K, N, p)
-      else {
-        const B = Math.min(N, need.bound[p]), upTo = (a, b) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i)
-        // (its bound also every page its units read, a placeholder's past B among them, drawn before each is laid (L2): so that a
-        // page told laying waits for no part)
-        let bound = B
-        for (let i = 0; i <= Math.min(need.complete[p], K.length - 1); i++) for (const q of [...K[i].reach, ...K[i].reads]) if (q <= N && q > bound) bound = q
-        C = { pass: upTo(1, B), lay: upTo(0, need.complete[p]), draw: upTo(1, B), rows: upTo(0, need.complete[p]), ready: upTo(1, B).filter(q => need.bound[q] <= B), bound }
-      }
-      closures.set(p, C)
-    }
+    if (!C) closures.set(p, (C = ORDER_FREE ? closureOf(K, N, p) : closureOf(KS, N, p, { orderFree: false, passes: PASSES })))
     return C
   }
   /** K grew, or the parts ended: every closure taken again */
-  const regrown = () => { need = needNow(); closures = new Map() }
+  const regrown = () => { KS = inOrderK(); closures = new Map() }
   /** the units placed, in the stream's order, as layGroups reads them (`placed` is the same less each table group withheld
    *  as its cells are laid), and by id */
   const laidOut = [], byId = new Map()
@@ -1927,6 +1916,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   let planned = true
   const plan = () => {
     planned = true
+    doneCache = null
     const groups = layGroups(laidOut, batch).map(([pg, ids]) => [pg, rank ? ids.slice().sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity)) : ids])
     // (each unit's place in the lay order, the pages' growth steps' rank: a unit placed later takes its place among them,
     // and the order of those placed before stays)
@@ -1935,9 +1925,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const [pg, ids] of groups) for (const id of ids) groupPage.set(id, pg)
   }
   /** laid in order (ORDER_FREE false), the page after whose units each page is done: the last whose drawing lays a unit with
-   *  lines on it, and with a page pass, the last that finishes the first page of each unit on it, whose pass sets that unit */
+   *  lines on it, and with a page pass, the last that finishes the first page of each unit on it, whose pass sets that unit
+   *  (once a plan: it changes only as more units are placed) */
+  let doneCache = null
   const doneAtAll = () => {
-    const d = Array.from({ length: N + 1 }, (_, pg) => pg)
+    if (doneCache) return doneCache
+    const d = (doneCache = Array.from({ length: N + 1 }, (_, pg) => pg))
     for (const p of laidOut) for (const pg of p.pages) d[pg] = Math.max(d[pg], groupPage.get(p.id) ?? pg)
     if (PASSES) for (let pg = 1; pg <= N; pg++) for (const p of laidOut) if (p.pages.includes(pg)) d[pg] = Math.max(d[pg], d[p.pages[0]])
     return d
@@ -2078,6 +2071,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // its pages, in order; a part told meanwhile may grow the closure: taken again
       let again = false
       for (const q of C.draw) {
+        // (a page not drawn yet waits while a newer target overtakes: a page's drawing is no unit, but no shorter)
+        if (!drawnPages[q] && !failedPages.has(q) && !still()) return
         if (!(await drawOne(q, still, wait))) return
         report(ms)
         if (closures.get(p) !== C) { again = true; break }
@@ -2107,12 +2102,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (const u of units) {
         if (disposed || !still()) return
         if (!planned) plan()
-        for (const q of candOf.get(u.id).holds ?? []) if (!(await drawOne(q, still, wait))) return
+        for (const q of candOf.get(u.id).holds ?? []) {
+          if (!drawnPages[q] && !failedPages.has(q) && !still()) return
+          if (!(await drawOne(q, still, wait))) return
+        }
         if (disposed) return
+        if (u.pages.some(q => failedPages.has(q))) { u.taken = true; refuseUnit(u, 'page'); report(ms); continue }
+        // (the slice's work done: a yield; let go during it, as a host's dispose usually is, or overtaken by a newer target, that
+        // unit is not laid: it stays for its page's closure to lay)
+        if (slices.due()) { await slices.give(); if (disposed || !still()) return }
         u.taken = true
-        if (u.pages.some(q => failedPages.has(q))) { refuseUnit(u, 'page'); report(ms); continue }
-        // (the slice's work done: a yield; let go during it, as a host's dispose usually is, that unit is not laid either)
-        if (slices.due()) { await slices.give(); if (disposed) return }
         order.push(u.id)
         await arrive(u)
         if (disposed) return

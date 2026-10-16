@@ -102,14 +102,23 @@ function passOf(K, X, q) {
  *   rule's entries are a prefix of the stream told with the page they are framed by, and a table group is told whole (M18).
  * `o.orderFree` false (rules whose page pass reads a unit running on to it laid, `even` > 0 or the leftover packed, or that
  * paint as each unit is laid, no pass at all): the prefix needsOf lays in order, `o.passes` its page passes: pages 1 to B
- * (B: needsOf's `bound[p]`, the latest page p may be done after) drawn and passed, K up to `complete[p]` decided and laid, the
- * pages that are done by B ready.
+ * (B: needsOf's `bound[p]`, the latest page p may be done after) passed, K up to `complete[p]` decided and laid, those pages
+ * and every page those entries read drawn (its bound the last of them), the pages that are done by B ready.
  */
 export function closureOf(K, N, p, { fileOnly = DEFAULT_FILE_ONLY, orderFree = true, passes = true } = {}) {
   if (!orderFree) {
     const need = needsOf(K, N, passes, fileOnly), B = need.bound[p], upTo = (a, b) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i)
     const rows = upTo(0, need.complete[p])
-    return { pass: upTo(1, B), lay: rows, draw: upTo(1, B), rows: rows.slice(), ready: upTo(1, B).filter(q => need.bound[q] <= B), bound: B }
+    // (and every page its entries read, as the order-free closure's draw is: a unit of the prefix may cut a crop from a page
+    // past B, or have the lines of its other source there)
+    const draw = new Set(upTo(1, B))
+    for (const i of rows) {
+      const c = K[i]
+      if (!c) continue
+      for (const q of [...c.reach, ...(c.reads ?? [])]) if (q >= 1 && q <= N) draw.add(q)
+    }
+    const pages = ascending(draw)
+    return { pass: upTo(1, B), lay: rows, draw: pages, rows: rows.slice(), ready: upTo(1, B).filter(q => need.bound[q] <= B), bound: Math.max(B, pages.at(-1) ?? B) }
   }
   const X = indexOf(K, N, fileOnly)
   const pass = passOf(K, X, p)

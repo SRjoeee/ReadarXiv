@@ -265,13 +265,17 @@ describe('the door: three opens, the same pages', () => {
     }
   })
 
-  /** the six-page paper's door, every part told and every row taken (`end`: and ended), its document reads counted */
-  async function cascadeDoor({ end = true } = {}) {
+  /** the six-page paper's rows (the cut's, the same on every cut of it) */
+  let cascadeRows: ReturnType<typeof rowsOfIndex> = []
+  /** the six-page paper's door, every part told and every row taken (`rows` false: none; `end`: and ended), its document reads
+   *  counted */
+  async function cascadeDoor({ end = true, rows = true } = {}) {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const c = await cutSpec(CASCADE, [1, 2, 3, 4, 5])
+    cascadeRows = rowsOfIndex(c.index)
     const doc = docsOf(CASCADE)(0)
     const layer = await openLayer({ index: c.index, doc: doc as never, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
-    layer.take(rowsOfIndex(c.index))
+    if (rows) layer.take(cascadeRows)
     if (end) layer.end()
     const told: string[] = []
     layer.onPage((p, state) => told.push(`${state}:${p}`))
@@ -315,10 +319,11 @@ describe('the door: three opens, the same pages', () => {
     let clock = 0
     performance.now = () => (clock += 10)
     const { layer, told, run } = await cascadeDoor()
-    // (between two units the run gives way: the second time, page 5 is asked and page 3's ask aborted)
+    // (between two units the run gives way: the first time after a unit of page 3's closure is laid, page 5 is asked and page
+    // 3's ask aborted; the next unit laid is page 5's closure's, none more of page 3's)
     const ctl = new AbortController()
-    let five: Promise<string> | null = null, yields = 0
-    g.scheduler = { yield: () => { if (++yields === 2 && !five) { five = layer.pageOf(5, { lang: 'zh' }).then(p => p.svg.outerHTML); ctl.abort() } return new Promise(ok => setTimeout(ok, 0)) } }
+    let five: Promise<string> | null = null, asked = -1
+    g.scheduler = { yield: () => { if (!five && run.order.length >= 1) { asked = run.order.length; five = layer.pageOf(5, { lang: 'zh' }).then(p => p.svg.outerHTML); ctl.abort() } return new Promise(ok => setTimeout(ok, 0)) } }
     try {
       const three = layer.pageOf(3, { lang: 'zh', signal: ctl.signal }).then(() => 'value', (e: Error) => e.name)
       expect(await three).toBe('AbortError')
@@ -329,12 +334,54 @@ describe('the door: three opens, the same pages', () => {
       // its ask was aborted, a state never going back)
       expect(told.indexOf('laying:3')).toBeLessThan(told.indexOf('laying:5'))
       expect(told.indexOf('ready:5')).toBeLessThan(told.indexOf('ready:3'))
+      expect(run.idsOf(run.closure(5).lay)).toContain(run.order[asked])
+      expect(run.idsOf(run.closure(3).lay).filter(id => !run.idsOf(run.closure(5).lay).includes(id))).not.toContain(run.order[asked])
       expect(layer.pageState(3)).toBe('ready')
       const strip = (svg: string) => svg.replace(' lang="zh"', '')
       expect(strip(fifth)).toBe(strip(want[4]!))
       expect(strip((await layer.pageOf(3, { lang: 'zh' })).svg.outerHTML)).toBe(strip(want[2]!))
       expect(run.ready(4)).toBe(true)
     } finally { delete g.scheduler; performance.now = was; layer.dispose() }
+  })
+
+  it('a newer ask overtakes before the next page of a closure is drawn, not after all of them', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const c = await cutSpec(CASCADE, [1, 2, 3, 4, 5])
+    let release = () => {}, holding = true
+    const held = new Promise<void>(ok => { release = ok })
+    let layer: Awaited<ReturnType<typeof openLayer>> | null = null
+    let six: Promise<unknown> | null = null
+    // (page 3's closure draws pages 1 to 4; while page 2 is read, page 6 is asked)
+    const doc = docsOf(CASCADE, { hold: n => { if (n === 2 && holding) { holding = false; six = layer!.pageOf(6, { lang: 'zh' }); return held } return null } })(0)
+    layer = await openLayer({ index: c.index, doc: doc as never, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    try {
+      layer.take(rowsOfIndex(c.index))
+      layer.end()
+      const three = layer.pageOf(3, { lang: 'zh' })
+      for (let i = 0; i < 200 && !six; i++) await tick()
+      release()
+      await six
+      await three
+      // (page 6's closure, pages 5 and 6, read before page 3's own pages 3 and 4)
+      expect(doc.reads.indexOf(6)).toBeLessThan(doc.reads.indexOf(3))
+      expect(doc.reads.slice(0, 2)).toEqual([1, 2])
+    } finally { layer.dispose() }
+  })
+
+  it('takes a page by its newest surviving ask: an aborted newer ask of a page gives it back its older turn', async () => {
+    const { layer, told } = await cascadeDoor({ end: false, rows: false })
+    try {
+      // (asks of pages 2, 4, then 2 again, which is aborted: page 4 is the newest ask, and laid first once the rows come)
+      const two = layer.pageOf(2, { lang: 'zh' })
+      const four = layer.pageOf(4, { lang: 'zh' })
+      const ctl = new AbortController()
+      const again = layer.pageOf(2, { lang: 'zh', signal: ctl.signal }).then(() => 'value', (e: Error) => e.name)
+      ctl.abort()
+      expect(await again).toBe('AbortError')
+      layer.take(cascadeRows)
+      await Promise.all([two, four])
+      expect(told.indexOf('laying:4')).toBeLessThan(told.indexOf('laying:2'))
+    } finally { layer.dispose() }
   })
 
   it('a page told laying waits behind one newer ask at most: a reader who keeps scrolling starves none', async () => {

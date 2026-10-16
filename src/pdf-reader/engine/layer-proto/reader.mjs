@@ -424,13 +424,14 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       // (answered in a microtask: a dispose or an abort in between rejects it, as they reject every pending ask)
       if (told[page] === READY) return Promise.resolve().then(() => { live(); if (signal?.aborted) throw abortError(); return fresh(page, lang) })
       return new Promise((resolve, reject) => {
-        const a = { resolve, reject, lang, signal, onAbort: null }
+        const a = { resolve, reject, lang, signal, onAbort: null, at: seq++ }
         if (signal) {
           a.onAbort = () => {
             const list = asks.get(page)
             if (!list?.delete(a)) return
-            // (no asker left: the page leaves the targets, unless it was told laying already)
-            if (!list.size) { asks.delete(page); askedAt.delete(page) }
+            // (no asker left: the page leaves the targets, unless it was told laying already; else its turn is its newest
+            // surviving ask's)
+            if (!list.size) { asks.delete(page); askedAt.delete(page) } else askedAt.set(page, Math.max(...[...list].map(x => x.at)))
             reject(abortError())
             evaluate()
             run.poke()
@@ -439,7 +440,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
         }
         ;(asks.get(page) ?? asks.set(page, new Set()).get(page)).add(a)
         // (the page's turn: its newest ask's)
-        askedAt.set(page, seq++)
+        askedAt.set(page, a.at)
         evaluate()
       })
     },
