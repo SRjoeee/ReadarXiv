@@ -18,7 +18,7 @@ import { textless } from '../rules/arg-roles.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
-import { packGlyphs, pageInk } from './ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
@@ -1113,8 +1113,13 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     let ink = null
     if (stream) {
       // the columns of its glyphs ownedOf reads (ink.mjs packGlyphs, in stream order), not a Glyph object each, and each
-      // glyph's boxes before it as 32-bit integers: held until every piece that may read the page is found
-      const { glyphs, boxes, points, boxAt } = pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
+      // glyph's boxes before it as 32-bit integers: held until every piece that may read the page is found. Bounded as the
+      // layout maker's read of arXiv's PDF is (the compile is the paper's source, as untrusted): a page past a bound of
+      // pageInk's own (`capped`, `timedOut`), or read with its boxes past BOXES_PAGE merged (`degraded`: a piece's rule
+      // there would be left out of its own ink, unseen), is unread: no ink, so that no piece on it is owned (each LOST to
+      // the maker)
+      const got = pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
+      const { glyphs, boxes, points, boxAt } = got.capped || got.timedOut || got.degraded ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
       ink = { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) }
     }
     // its operator list let go once its ink is read, so that PDF.js holds one page's, not every page's to the end; nothing

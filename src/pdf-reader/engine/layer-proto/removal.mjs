@@ -21,7 +21,7 @@
 // An original module (no port statement), importing only relative modules.
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
-import { pageInk } from '../layout/ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
 
 /** a glyph on a line, scripts included: its baseline within this of the line's (the layout maker's SCRIPT) */
 const SCRIPT = size => 0.6 * Math.max(size, 5) + 1.5
@@ -31,10 +31,11 @@ const norm = s => String(s ?? '').normalize('NFKC').replace(/\s+/g, '')
 
 /** a page's ink as the remover names its glyphs and rules (pageInk with `indices`; every painted glyph, a blank one too),
  *  each glyph's box its outline's: this reading's where PDF.js gives it (Node), else the paper's outline table's (the
- *  browser: `outlines`, layout/ink.mjs readOutlines of the add-on's manifest), so that both readings own alike */
+ *  browser: `outlines`, layout/ink.mjs readOutlines of the add-on's manifest), so that both readings own alike; its boxes
+ *  and glyphs within the add-on's bounds (BOXES_PAGE, GLYPHS_PAGE: layout/addon.mjs pagePlansOf), so that both read alike */
 export async function inkOfPage(OPS, page, outlines = null, collect = null) {
   const ops = await page.getOperatorList()
-  return pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, outlines, collect })
+  return pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, outlines, collect, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
 }
 
 /**

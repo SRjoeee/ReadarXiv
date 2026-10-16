@@ -13,17 +13,20 @@
 // citation's or a reference's own text with it, for the layer to set in the page's face. What
 // cannot be placed is left out, and the layer leaves that unit as the original's: a line of the marked original not
 // carried (a reflow of the layout compile costs only its own lines), a unit on a page whose ink is not whole (its
-// operator list too long, too slow, or its carry over its bound), a placeholder whose own ink is not all found. The file
-// is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
-// it: a file the parser refuses is never returned.
-// Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
+// operator list too long, too slow, its walk too deep or too long, or its carry over its bound), a placeholder whose own
+// ink is not all found. The file is refused where too few lines are carried, where arXiv's page count is out of bounds,
+// and where its own parser refuses it: a file the parser refuses is never returned.
+// Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes, but for a page that passes a
+// clock, its operator list not given within OPS_MS (`stats.timedOut`) or its ink's walk past its backstop (ink.mjs INK_MS,
+// `stats.inkTimedOut`). No real page comes near either (the walk's own bound is counted, STEPS_MAX), and a page past one is
+// dark, its units the original's: a slower machine may show a hostile page untranslated where a faster one reads it.
 import { anchorUnits, boundsFromMarks, markWords, pageFrame, pageIndex, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
 import { leftOfPart, leftReach, partSets } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf } from './remove.mjs'
@@ -147,7 +150,9 @@ function viewOf(v) {
 
 /** a page's glyphs by baseline, rising, packed (ink.mjs packGlyphs: x0, x1, y, top, bottom, size, font, u; ix0 and ix1
  *  their ink across with their advance; top and bottom their own ink up and down), each glyph's owner and whether it is
- *  taken, and its boxes */
+ *  taken, and its boxes, each whether it is taken: a degraded page's merged boxes (from ink.mjs pageInk's `mergedAt`) are
+ *  taken from the start, no rule's own box, so that no placeholder and no line takes one as its rule (its placeholder is
+ *  LOST, its line's rule kept as the page's), while the room below a frame meets them as any ink */
 function glyphsOf(got, fontIds) {
   const order = got.glyphs.map((_, i) => i).sort((a, b) => {
     const p = got.glyphs[a], q = got.glyphs[b]
@@ -155,6 +160,7 @@ function glyphsOf(got, fontIds) {
   })
   const P = { ...packGlyphs(got.glyphs, { order, fontIds }), owner: new Int32Array(order.length).fill(-1), taken: new Uint8Array(order.length), boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2) }
   for (let i = 0; i + 3 < got.boxes.length; i += 4) P.boxes.push([got.boxes[i], got.boxes[i + 1], got.boxes[i + 2], got.boxes[i + 3]])
+  if (Number.isInteger(got.mergedAt)) P.boxTaken.fill(1, got.mergedAt)
   // (read with the remover's indices: what the add-on's plan reads of the page besides, kept beside the maker's columns, so
   // that the page's one operator list gives both: each glyph's place in the stream, its showing operation and its place
   // there, whether it is blank, its own ink across as read; each box's path)
@@ -344,7 +350,8 @@ function sameWord(doc, byPage, c, start, ours) {
   return (a !== null && a === ours) || (b !== null && b === theirs) || (a !== null && a === b) ? doc[k].t : ours
 }
 
-/** the pages of a paper whose operator lists are given up on, at most: past OPS_MS, or capped (ink.mjs OPS_CAP, GLYPHS_PAGE).
+/** the pages of a paper whose operator lists are given up on, at most: past OPS_MS, capped (ink.mjs's caps) or past the
+ *  walk's backstop (INK_MS).
  *  Past it every later page is dark unread (stats.timedOut), so that a paper whose every page stalls costs GIVEN_UP_MAX
  *  times OPS_MS, not its pages' (10,000 pages of 10 s each: 28 hours, and as many parses left running where PDF.js cannot
  *  cancel one). A count, no clock of the paper's: which pages are dark hangs on the pages before them alone, as each page's
@@ -362,7 +369,7 @@ function blank(units) {
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0, most: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
-    capped: [], timedOut: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
+    capped: [], timedOut: [], inkTimedOut: [], degraded: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
   }
 }
 
@@ -451,7 +458,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   async function inkOf(p) {
     if (unread.has(p)) return
     // (past GIVEN_UP_MAX pages given up on, the page is dark unread: its operator list is never asked)
-    if (stats.timedOut.length + stats.capped.length >= GIVEN_UP_MAX) { stats.timedOut.push(p); dark.add(p); return }
+    if (stats.timedOut.length + stats.capped.length + stats.inkTimedOut.length >= GIVEN_UP_MAX) { stats.timedOut.push(p); dark.add(p); return }
     // (the page its text was read from: PDF.js keeps each page's proxy)
     let page = null
     try { page = await arxiv.getPage(p) } catch {}
@@ -461,17 +468,21 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // a page given up on let go as well: a list that failed has no stream left to cancel, and giveUp's cancellation of
     // it cleans up nothing (PDF.js's _abortOperatorList returns early); after a cancellation, cleaning up is a no-op
     if (!ops) { giveUp(page, seen); page.cleanup?.(); stats.timedOut.push(p); dark.add(p); return }
-    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE })
+    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
-    if (wantPlans && !got.capped && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
+    if (wantPlans && !got.capped && !got.timedOut && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
     // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
     // not every page's to the document's end (48 MiB on 2303.18223's 144 pages; an image a late decode brings is dropped
     // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the
     // add-on's plans are made of what was read here where `plans` asks, else of a document of its own: addon.mjs)
     page.cleanup?.()
+    // (each page once, by what befell it: past a cap, past the walk's backstop (apart from a list that never came), or
+    // read with its boxes past BOXES_PAGE merged by cell, its ink kept: its text is whole, ink.mjs pageInk)
     if (got.capped) stats.capped.push(p)
+    else if (got.timedOut) stats.inkTimedOut.push(p)
+    else if (got.degraded) stats.degraded.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part
-    if (got.capped || got.rotated) { dark.add(p); return }
+    if (got.capped || got.timedOut || got.rotated) { dark.add(p); return }
     ink[p] = glyphsOf(got, fontIds)
     inked[p] = 1
   }

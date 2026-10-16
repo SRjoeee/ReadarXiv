@@ -8,6 +8,7 @@ import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 import { arxivOf, endOf, FONTS, type Mark, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
+import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
 
 // The layout maker over the fake world of helpers/make-world.ts
 
@@ -325,6 +326,75 @@ describe('makeLayout', () => {
     expect(done.file.units.map(u => u[0])).toEqual([0])
     expect(done.stats.timedOut).toEqual([2, 3])
     expect(done.stats.capped).toEqual([4])
+  })
+
+  it('a page whose walk goes too deep has no ink (capped); one past the box budget keeps it, its file the same (degraded)', async () => {
+    const page = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }] })
+    const pages = [page('alpha beta gamma'), page('delta epsilon zeta'), page('eta theta iota')]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700], ['2s', 3, 72, 700], ['2e', 3, 142, 700]]
+    const units = ['alpha beta gamma', 'delta epsilon zeta', 'eta theta iota'].map(s => unit('para', [text(s)]))
+    const of = (w: World) => make(w).then(d => { if (!('file' in d)) throw new Error('refused'); return d })
+    // (a clock that stands: five hundred thousand paths are walked against the counted bounds alone, never the backstop)
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => 0)
+    const dense = await of({ pages: [pages[0] as Page, { ...pages[1] as Page, ops: 'deep' }, { ...pages[2] as Page, ops: 'dense' }], marked: pages, marks, units }).finally(() => clock.mockRestore())
+    const plain = await of({ pages: [pages[0] as Page, { ...pages[1] as Page, ops: 'deep' }, pages[2] as Page], marked: pages, marks, units })
+    expect(dense.stats.capped).toEqual([2])
+    expect(dense.stats.timedOut).toEqual([])
+    expect(dense.stats.degraded).toEqual([3])
+    expect(plain.stats.degraded).toEqual([])
+    // page 2's unit stays the original's; page 3's is located as on the page without the paths, byte for byte
+    expect(dense.file.units.map(u => u[0])).toEqual([0, 2])
+    expect(encodeLayout(dense.file)).toBe(encodeLayout(plain.file))
+  })
+
+  it("a placeholder whose rule lies past the box budget is LOST, its rule never taken from a merged box (alone in its cell)", async () => {
+    const runs: Run[] = [{ s: 'scaled by', x: 72, y: 700 }, { s: '\u221a', x: 122, y: 707.7 }, { s: 'dk', x: 127, y: 700 }, { s: 'here and there', x: 142, y: 700 }]
+    const page: Page = { runs, boxes: [[127, 707.2, 137, 707.6, 2]], points: { 'p0.1a': [1, 0] } }
+    const w: World = { pages: [page], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[3] as Run), 700], ['p0.1a', 1, 117, 700], ['p0.1b', 1, 137, 700]], units: [unit('para', [text('scaled by '), ph('$\\sqrt{d_k}$'), text(' here and there')])] }
+    const plain = await made(w)
+    expect(phOf(plain.file, 0, 1).slice(4, 10)).toEqual([1, 122, 700, 137, 707.7 + 7.5, 697.5])
+    // arXiv's page with its bar past the budget: merged alone in its cell, its box the bar's exactly, and taken from the start
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => 0)
+    const dense = await made({ ...w, marked: [page], pages: [{ ...page, ops: 'dense' }] }).finally(() => clock.mockRestore())
+    expect(dense.stats.degraded).toEqual([1])
+    expect(phOf(dense.file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+    // its unit located all the same, its text the page's
+    expect(dense.file.units.map(u => u[0])).toEqual([0])
+  })
+
+  it("a marked page past a bound of the ink's walk is unread: no piece on it is owned, each LOST", async () => {
+    const runs: Run[] = [{ s: 'alpha beta', x: 72, y: 700 }, { s: 'x', x: 127, y: 700 }, { s: 'gamma delta', x: 140, y: 700 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[2] as Run), 700], ['p0.1a', 1, 122, 700], ['p0.1b', 1, 132, 700]],
+      units: [unit('para', [text('alpha beta '), ph('$x$'), text(' gamma delta')])],
+    }
+    expect((await made(w)).stats.ph).toMatchObject({ marked: 1, found: 1, lost: 0 })
+    // the marked compile's page past STACK_MAX (after its points): capped, unread; arXiv's page as before
+    const deep = await made({ ...w, marked: [{ runs, markedOps: 'deep' }] })
+    expect(deep.stats.ph).toMatchObject({ marked: 1, found: 0, lost: 1 })
+    expect(phOf(deep.file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+  })
+
+  it('a page whose walk passes INK_MS has no ink (timedOut), the others theirs', async () => {
+    const page = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }] })
+    const pages = [page('alpha beta gamma'), page('delta epsilon zeta')]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700]]
+    const units = ['alpha beta gamma', 'delta epsilon zeta'].map(s => unit('para', [text(s)]))
+    const marksFile = await marksOf({ pages, marks, units })
+    // (a clock that moves INK_MS on at each reading: a page read in fewer steps than come between two readings never sees it)
+    const real = performance.now.bind(performance)
+    let skew = 0
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => { skew += INK_MS; return real() + skew })
+    try {
+      const done = await makeLayout({ units, marks: marksFile, arxiv: arxivOf([pages[0] as Page, { ...pages[1] as Page, ops: 'slow' }]), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+      if (!('file' in done)) throw new Error('refused')
+      // (the walk's backstop, apart from a list that never came)
+      expect(done.stats.inkTimedOut).toEqual([2])
+      expect(done.stats.timedOut).toEqual([])
+      expect(done.stats.capped).toEqual([])
+      expect(done.file.units.map(u => u[0])).toEqual([0])
+    } finally { clock.mockRestore() }
   })
 
   it('each page let go once read, one cleanup a page after its list, or once given up on; the file the same', async () => {

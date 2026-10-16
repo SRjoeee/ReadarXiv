@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_PAGE, OPS_CAP, STACK_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // The layout maker's fake world (layout-make.test.ts, page-pass.test.ts): a fake PDF.js document of arXiv's PDF and a
@@ -15,7 +15,7 @@ export const CH = 0.5
 /** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32); `one`: the whole
  *  string one glyph's Unicode (a character and its variation selector) */
 export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
-export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
+export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 export type Mark = [name: string, page: number, x: number, y: number]
 export type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
 
@@ -73,7 +73,19 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
   }
   at(p.runs.length, 0)
   for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
-  if (p.ops === 'capped') while (ops.length <= OPS_CAP) ops.push([OPS.save, []])
+  // (past OPS_CAP: operations the walk reads and does nothing with, after the page's own, as one typed array)
+  if (p.ops === 'capped') { const fn = new Uint16Array(OPS_CAP + 1).fill(OPS.setFillRGBColor); fn.set(ops.map(o => o[0])); return { fnArray: fn, argsArray: ops.map(o => o[1]) } }
+  // (after the page's own: saves past STACK_MAX, or two thousand operations the walk does nothing with, more steps than
+  // come between two readings of its clock; before it, one painted path more than BOXES_PAGE, off the page's columns, one
+  // operand each, so that the page is degraded and every box of its own past the budget)
+  if (p.ops === 'deep') for (let i = 0; i <= STACK_MAX; i++) ops.push([OPS.save, []])
+  if (p.ops === 'dense' || p.ops === 'slow') {
+    const dense = p.ops === 'dense', extra = dense ? BOXES_PAGE + 1 : 2000, own = ops.length
+    const fn = new Uint16Array(own + extra).fill(dense ? OPS.constructPath : OPS.setFillRGBColor)
+    fn.set(ops.map(o => o[0]), dense ? extra : 0)
+    const path = [OPS.fill, [Float32Array.from([0])], Float32Array.from([-100, 0, -90, 10])], filler = new Array(extra).fill(dense ? path : [])
+    return { fnArray: fn, argsArray: dense ? [...filler, ...ops.map(o => o[1])] : [...ops.map(o => o[1]), ...filler] }
+  }
   return { fnArray: ops.map(o => o[0]), argsArray: ops.map(o => o[1]) }
 }
 /** PDF.js's glyph outlines (where it draws glyphs as paths, as in Node), by `<loadedName>_path_<fontChar>`: DrawOPS in em */
@@ -100,7 +112,7 @@ export function markedOf(pages: Page[], marks: Mark[]) {
     numPages: pages.length,
     getPage: async (n: number) => {
       const p = pages[n - 1] as Page
-      return { view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }), getOperatorList: async () => opsOf({ ...p, ops: undefined }, pointsOf(p, n, marks)) }
+      return { view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }), getOperatorList: async () => opsOf({ ...p, ops: p.markedOps }, pointsOf(p, n, marks)) }
     },
     getDestinations: async () => new Map(marks.map(([name, page, x, y]) => [`axt-${name}`, [{ num: 100 + page, gen: 0 }, { name: 'FitR' }, x, y, null]])),
     getPageIndex: async (ref: { num: number }) => ref.num - 101,

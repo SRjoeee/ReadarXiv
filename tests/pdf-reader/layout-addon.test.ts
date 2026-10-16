@@ -8,7 +8,7 @@ import { constants as zlibConstants, deflateRawSync, deflateSync, inflateRawSync
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { BOXES_BYTES, type PagePlan, pagePlansOf, paperAddon, rangeEntries } from '@/pdf-reader/engine/layout/addon.mjs'
+import { BOXES_BYTES, type PagePlan, pagePlanOf, pagePlansOf, paperAddon, rangeEntries } from '@/pdf-reader/engine/layout/addon.mjs'
 import { ADDON_CAP, parseAddonManifest, REFUSED_MAX, REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, type LayoutIndex } from '@/pdf-reader/engine/layout/file.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
@@ -370,6 +370,19 @@ describe('the plans (pagePlansOf) and the range assembly (rangeEntries): the add
     expect([...cleaned.plans.keys()]).toEqual([...base.plans.keys()])
     expect(cleaned.plans.has(3)).toBe(false)
     expect(JSON.stringify([...cleaned.plans])).toBe(JSON.stringify([...base.plans]))
+    // every page's ink read whole, none degraded: what the gate reports of the add-on's reading
+    expect(base.ink).toEqual({ capped: [], timedOut: [], degraded: [] })
+  })
+
+  it('plans no page whose ink is not whole: rotated, capped or timed out (the layout maker gives such a page no ink)', async () => {
+    const index = layoutOf(UNITS, 4)
+    const doc = await open(PAPER)
+    const page = await doc.getPage(1)
+    const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: 0, indices: true })
+    expect(pagePlanOf(index, 1, ink, null as never)).not.toBeNull()
+    for (const k of ['rotated', 'capped', 'timedOut'] as const) expect(pagePlanOf(index, 1, { ...ink, [k]: true }, null as never), k).toBeNull()
+    // a degraded page is planned: its text is whole (ink.mjs pageInk)
+    expect(pagePlanOf(index, 1, { ...ink, degraded: true }, null as never)).not.toBeNull()
   })
 
   it('plan each page alone, and any split of the paper assembles as the whole, the boxes\' share spent in page order', async () => {

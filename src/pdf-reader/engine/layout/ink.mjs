@@ -9,24 +9,69 @@
 // size, character and word spacing, horizontal scale, rise, leading, render mode), the text matrix and its line moves.
 // In PDF.js 6 the evaluator gives every text-showing operator as showText (TJ's numbers inside its array), a text
 // matrix as one argument, and a path as one constructPath ([painting op, data, minMax], minMax its box in the path's
-// own space). arXiv's PDF is untrusted: no more than OPS_CAP operations are read, a matrix or a number that is not one
-// places nothing, and nothing here throws on a malformed list.
+// own space). arXiv's PDF is untrusted: no more than OPS_CAP operations and STEPS_MAX steps are read, the graphics
+// state's stack is no deeper than STACK_MAX, a reader that asks keeps no more than GLYPHS_PAGE glyphs and BOXES_PAGE boxes
+// one by one (the boxes past it merged, below), INK_MS is the walk's backstop, a matrix or a number that is not one places
+// nothing, and nothing here throws on a malformed list. Each bound is an abuse guard, twenty times or more above the
+// corpus's heaviest page (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus, read by the pinned
+// PDF.js on the lite worker), and every one of those pages is read under them exactly as under none: no real page meets one.
 // Imports nothing: the maker runs it in a Worker or in Node alike.
 
-/** the operations read on a page at most: a heavy vector page (a plot of every point of a dataset) holds hundreds of
- *  thousands, and the text that is laid over lies before or among the first of them */
-export const OPS_CAP = 150_000
+/** the operations read on a page at most; past it the page is capped (its reader gives it no ink). The corpus's busiest
+ *  page holds 146,115 (2608.12606 page 5: 17,903 paths, each with its save, transform, colour, width and restore; the next
+ *  102,052, and 6 pages of 2,793 more than 50,000); this is 20.5 times that. It bounds the walk, not the page: the walk
+ *  sees a list PDF.js has built whole, and the list is the dearer. A painted path is some 580 bytes of it (`re f`; a
+ *  plot's mix 150 an operation), so a page of paths fills the server's 768 MiB at some 1,300,000 of them, long before
+ *  this (still 58 times the corpus's most, 22,381 paths a page), and 25,000 saves left open cost PDF.js's parse 19 s (it grows
+ *  with their square: 100,000, 299 s). A true bound a page is the list given up in flight (make.mjs giveUp, past OPS_MS),
+ *  which the walk cannot be */
+export const OPS_CAP = 3_000_000
 /** the glyphs a page's ink holds at most, where its reader asks (`glyphsMax`): one text-showing operation may show any
  *  number of glyphs, so OPS_CAP alone does not bound a page's ink. A page past it is capped as one past OPS_CAP is: no ink,
  *  that page alone. The densest page of the corpus's arXiv PDFs holds a few thousand */
 export const GLYPHS_PAGE = 100_000
+/** the steps a page's walk takes at most (`stepsMax`): an operation, each element of a shown array (a glyph, a number), each
+ *  box placed (a path's, an image's or each of its placements, a shading's, a glyph set turned), each entry of a graphics
+ *  state, each cell a merged box meets. Past it reading stops and the page is capped: the walk's own bound, counted, so that
+ *  a page is read alike on every machine (OPS_CAP alone does not bound it: one operation may carry any number of glyphs,
+ *  numbers or placements). The corpus's busiest page takes 173,861 (2608.12606 page 5; the gate's 30 outputs 22,639 at
+ *  most); this is 28.8 times that. On a laptop the dearest kinds reach it in 0.3 to 0.6 s (a painted path merged, an
+ *  image's placements); a page of the corpus walks at 310 ns a step at worst */
+export const STEPS_MAX = 5_000_000
+/** the boxes a page's ink keeps one by one at most where its reader asks (`boxesMax`), every box it holds counted: past it
+ *  each further box, of whatever kind (a path's, an image's or one of its placements, a shading's, a glyph set turned), is
+ *  merged into the cells of a grid it meets (TILE), and the page is `degraded`. What the maker holds of a page's boxes is
+ *  so bounded whatever the page: some 140 bytes a box in all (the walk's 4 numbers and kind, the maker's own array of
+ *  them), 65 MB at the budget and its 4,096 cells. The corpus's most: 22,101 boxes (2608.27728 page 15); this is 22.6
+ *  times that */
+export const BOXES_PAGE = 500_000
 /** the boxes a page's ink holds at most, whatever its reader: one operation may place any number of them (a repeat or a group
  *  of images, which PDF.js's own list for getOperatorList never holds, its queue optimiser being off for it, but a list from
  *  elsewhere may; a text-showing operation's glyphs set turned, a box each), so OPS_CAP alone does not bound them. A page past
- *  it is capped as one past OPS_CAP is: no ink, that page alone. It stays above the boxes a dense vector page keeps one by one
- *  before its paths' boxes are merged by cell, the page degraded, never darkened (that budget is 500,000); the corpus's most
- *  is 22,101 boxes (2608.27728 page 15) */
+ *  it is capped as one past OPS_CAP is: no ink, that page alone. A reader that asks for BOXES_PAGE never meets it (its boxes
+ *  past the budget are merged, 4,096 at most); the corpus's most is 22,101 boxes (2608.27728 page 15) */
 export const BOXES_CAP = 1_000_000
+/** the walk's backstop (`msMax`), in milliseconds: past it reading stops and the page is `timedOut` (its reader gives it no
+ *  ink, and says so apart from a list that never came). STEPS_MAX is the walk's bound; this is for a machine far slower
+ *  than the one it was measured on, and only there does it act: a page timed out on one machine and read on another, the
+ *  one bound that depends on the machine, and safe (dark: its units the original's). The corpus's slowest page walks in
+ *  15 to 18 ms on a laptop, the dearest list to STEPS_MAX in 0.6 s; this is 100 times the one and 3 times the other. The
+ *  clock is read once every CLOCK_EVERY steps */
+export const INK_MS = 2_000
+/** the graphics state's stack at most this deep (a save, a form, a group, an annotation each push one): past it the page
+ *  is capped. Each level holds a copy of the state; 3,000,000 saves unrestored held 530 MB. The corpus's deepest: 27 */
+export const STACK_MAX = 1_000
+/** a degraded page's grid: cells of TILE points from the page's origin, TILES across and up (1,536 points), the
+ *  outermost reaching on past the grid (a box beyond it lands there). A merged box is the union of the parts of the boxes
+ *  past the budget that lie in its cell: every one of their points is in a merged box, none is more than a cell from one of
+ *  them, and the cells are 4,096 at most. A page larger than the grid (a poster), or set far from the origin, has its
+ *  outer cells' boxes coarser: they cover more than the ink, which is safe (kept ink where there is none) */
+const TILE = 24, TILES = 64
+/** a merged box's kind in `paths` (beside -1 to -4): no path of the page's own, so that nothing removes or owns it */
+export const MERGED = -5
+/** the walk's steps (STEPS_MAX's) between two readings of the clock */
+const CLOCK_EVERY = 1024
+const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 
 /** where a font gives no ascent or descent (an old Type 3 font gives none worth reading), as anchors.mjs reads them */
 const ASCENT = 0.75, DESCENT = -0.22
@@ -126,8 +171,8 @@ export function readOutlines(table) {
 const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
 
 /**
- * A page's ink: { glyphs, boxes, points, boxAt, capped, rotated }. `glyphs`: each glyph shown with a Unicode string,
- * upright and painted (render mode not 3 or 7), as a Glyph, whatever its Unicode: a symbolic font's glyph that PDF.js
+ * A page's ink: { glyphs, boxes, points, boxAt, capped, timedOut, degraded, mergedAt, rotated }. `glyphs`: each glyph
+ * shown with a Unicode string, upright and painted (render mode not 3 or 7), as a Glyph, whatever its Unicode: a symbolic font's glyph that PDF.js
  * gives a blank one (txexs's big left parenthesis is its code 32) is ink to erase and to draw; a vertical font's glyphs
  * are passed over, a glyph set rotated or mirrored is a box of its em instead (it has no baseline across the page). A
  * glyph's `top` and `bottom`, and its ink across (`ix0`, `ix1`), are its own outline's (outlineBox) where PDF.js gives it:
@@ -138,9 +183,20 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * form's box, a clipping path), and one wholly outside it left out. Glyphs and boxes in the order the content stream
  * shows them; `points`: each point of the marked compile (POINT), { name, glyph, box }, the glyphs and the boxes shown
  * before it; `boxAt`: for each glyph, the boxes shown before it. On arXiv's PDF the points are nobody's. `capped`: the
- * list held more than OPS_CAP operations, and those past it were not read, or (`glyphsMax`) it showed more glyphs than
- * that, or it placed more than BOXES_CAP boxes, and reading stopped there, within the operation. `rotated`: the page's /Rotate is not 0, and
- * nothing is read (the layer lays over no rotated page).
+ * list held more than OPS_CAP operations, the walk took more than `stepsMax` steps (STEPS_MAX), the stack went deeper
+ * than STACK_MAX, (`glyphsMax`) the page showed more glyphs than that, or it kept more than BOXES_CAP boxes, and reading
+ * stopped there, within the operation. `timedOut`: the walk
+ * passed `msMax` (INK_MS, the backstop), and reading stopped there. A reader gives a page capped or timed out no ink.
+ * `rotated`: the page's /Rotate is not 0, and nothing is read (the layer lays over no rotated page).
+ * `boxesMax` (BOXES_PAGE where a reader asks; none by default): the boxes past it, of every kind, are not kept one by one
+ * but merged by the grid's cells (TILE), after the others and in the cells' order (from `mergedAt`, the first merged box's
+ * index; null on a page not degraded), each of kind MERGED in `paths` (no path's index), and the page is `degraded`. The
+ * glyphs are read in full whatever the boxes, the boxes before the budget and every path's index stay what they are, and
+ * a merged box covers all the ink it stands for: so a degraded page's text is placed and removed as ever, and the ink past
+ * the budget is kept (never owned, never removed: kept ink where a unit's rectangle meets it) and met where it lies, to a
+ * cell. A merged box is no box of any one rule, and its reader must take it as none (the layout maker marks them taken,
+ * make.mjs glyphsOf): so a placeholder whose rule lies past the budget is LOST, a line's rule there is not the line's, a
+ * cell's rule there is not among its rules
  * `indices` (the text remover's, layout/remove.mjs): each glyph also carries where the content stream shows it: `n`, its
  * text-showing operation's place among the page's own (an annotation's appearance not counted: -1 there), and `k`, its
  * place among that operation's glyphs, and `blank: true` where its Unicode is blank; and `paths` gives, for each box,
@@ -152,12 +208,43 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * browser draws a font as a font face, and gives no outline): its box is then the server's, exactly. `collect`: a Map
  * this reading's outline boxes are added to, by outlineKey
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), capped: false, rotated: true }
+  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
   const glyphs = [], boxes = [], points = [], boxAt = [], paths = []
+  // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` past STACK_MAX, `many` past stepsMax, the
+  // three caps; `late` past msMax, the backstop. The clock is read once every CLOCK_EVERY steps)
+  let stop = false, over = false, deep = false, many = false, late = false, steps = 0, check = CLOCK_EVERY
+  const t0 = clock()
+  const step = k => {
+    steps += k
+    if (steps > stepsMax) { many = true; stop = true; return }
+    if (steps < check) return
+    check = steps + CLOCK_EVERY
+    if (clock() - t0 > msMax) { late = true; stop = true }
+  }
+  // (the boxes past `boxesMax`: each cell's union, x0 y0 x1 y1, NaN until a part lands there; made at the first)
+  const keep = typeof boxesMax === 'number' && boxesMax >= 0 ? Math.floor(boxesMax) : Infinity
+  let tiles = null
+  const cellOf = v => Math.min(TILES - 1, Math.max(0, Math.floor(v / TILE)))
+  /** a box past the budget, its part in each cell it meets merged into that cell's union */
+  const merge = (x0, y0, x1, y1) => {
+    tiles ??= new Float64Array(4 * TILES * TILES).fill(Number.NaN)
+    const cx0 = cellOf(x0), cx1 = cellOf(x1), cy0 = cellOf(y0), cy1 = cellOf(y1)
+    for (let cy = cy0; cy <= cy1 && !stop; cy++) {
+      // (a part's edge where the box goes on into the next cell; the outermost cells reach on past the grid)
+      const py0 = cy === cy0 ? y0 : cy * TILE, py1 = cy === cy1 ? y1 : (cy + 1) * TILE
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const px0 = cx === cx0 ? x0 : cx * TILE, px1 = cx === cx1 ? x1 : (cx + 1) * TILE
+        const o = 4 * (cy * TILES + cx)
+        if (Number.isNaN(tiles[o])) { tiles[o] = px0; tiles[o + 1] = py0; tiles[o + 2] = px1; tiles[o + 3] = py1 }
+        else { if (px0 < tiles[o]) tiles[o] = px0; if (py0 < tiles[o + 1]) tiles[o + 1] = py0; if (px1 > tiles[o + 2]) tiles[o + 2] = px1; if (py1 > tiles[o + 3]) tiles[o + 3] = py1 }
+      }
+      step(cx1 - cx0 + 1)
+    }
+  }
   // (indices: the showing operation's place and the glyph's within it; the painted path's place; inside an annotation, -1)
   let showAt = -1, pathAt = -1, inAnnotation = 0, curShow = -1, glyphAt = -1
   const fonts = new Map()
@@ -185,7 +272,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
   let s = fresh()
   const stack = []
-  const push = () => stack.push({ ...s })
+  const push = () => { if (stack.length >= STACK_MAX) { deep = true; stop = true; return } stack.push({ ...s }) }
   const pop = () => { const t = stack.pop(); if (t) s = t }
 
   /** a rectangle of space `m` as its box on the page, cut to `clip` (null: wholly outside it) */
@@ -202,8 +289,17 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (clip) { bx0 = Math.max(bx0, clip[0]); by0 = Math.max(by0, clip[1]); bx1 = Math.min(bx1, clip[2]); by1 = Math.min(by1, clip[3]) }
     return bx0 <= bx1 && by0 <= by1 ? [bx0, by0, bx1, by1] : null
   }
-  // (past BOXES_CAP boxes, reading stops: the page is capped)
-  const addBox = (m, x0, y0, x1, y1, path = -1) => { const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) { if (boxes.length >= 4 * BOXES_CAP) { over = true; return } boxes.push(b[0], b[1], b[2], b[3]); if (indices) paths.push(path) } }
+  /** a box painted, a step: kept one by one within the budget, else merged by cell (whatever its kind); past BOXES_CAP
+   *  boxes kept (a reader that asks for no budget), reading stops, the page capped */
+  const put = (x0, y0, x1, y1, path) => {
+    step(1)
+    if (stop) return
+    if (boxes.length >= 4 * keep) { merge(x0, y0, x1, y1); return }
+    if (boxes.length >= 4 * BOXES_CAP) { over = true; stop = true; return }
+    boxes.push(x0, y0, x1, y1)
+    if (indices) paths.push(path)
+  }
+  const addBox = (m, x0, y0, x1, y1, path = -1) => { const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path); else step(1) }
   /** the clip in force cut to a rectangle of space `m`; nothing left of it is a clip of no area */
   const clipTo = (m, x0, y0, x1, y1) => {
     const b = boxOf(m, x0, y0, x1, y1, s.clip)
@@ -252,7 +348,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     } else if (box) { glyph.top = glyph.bottom = oy; glyph.ix0 = glyph.ix1 = ox }
     if (indices) { glyph.n = curShow; glyph.k = glyphAt; if (!/\S/.test(u)) glyph.blank = true }
     if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) {
-      if (glyphs.length >= glyphsMax) { over = true; return }
+      if (glyphs.length >= glyphsMax) { over = true; stop = true; return }
       glyphs.push(glyph); boxAt.push(boxes.length / 4)
     }
   }
@@ -269,7 +365,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       // the canvas neither paints nor advances a Type 3 font's invisible text or one of size 0
       if (s.tr === 3 || size === 0) return
       for (const g of arr) {
-        if (over) break
+        step(1)
+        if (stop) return
         if (typeof g === 'number') { s.x += (((vertical ? 1 : -1) * g * size) / 1000) * hs; continue }
         if (!g || typeof g !== 'object') continue
         glyphAt++
@@ -287,7 +384,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       // drawn as one string from the line's place: each glyph by the widths before it, no spacing (as the canvas)
       let w = 0
       for (const g of arr) {
-        if (over) break
+        step(1)
+        if (stop) return
         if (!g || typeof g !== 'object') continue
         glyphAt++
         const gw = num(g.width) * adv
@@ -299,8 +397,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     }
     let x = 0
     for (const g of arr) {
-      // (past glyphsMax or BOXES_CAP, the rest of the operation is not walked either)
-      if (over) break
+      step(1)
+      if (stop) return
       if (typeof g === 'number') { x += ((vertical ? 1 : -1) * g * size) / 1000; continue }
       if (!g || typeof g !== 'object') continue
       glyphAt++
@@ -319,9 +417,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     else s.x += x * hs
   }
 
-  // (past glyphsMax, reading stops: the page is capped)
-  let over = false
-  for (let j = 0; j < n && !over; j++) {
+  for (let j = 0; j < n && !stop; j++) {
+    step(1)
     const fn = fnArray[j], a = argsArray[j] ?? []
     switch (fn) {
       case SAVE: push(); break
@@ -330,6 +427,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case LINE_WIDTH: s.lw = num(a[0]); break
       case GSTATE:
         for (const e of Array.isArray(a[0]) ? a[0] : []) {
+          step(1)
+          if (stop) break
           if (!Array.isArray(e)) continue
           if (e[0] === 'LW') s.lw = num(e[1])
           else if (e[0] === 'Font' && Array.isArray(e[1])) setFont(e[1][0], e[1][1])
@@ -387,7 +486,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       }
       case SHADING:
         // painted over the clip in force; with none, the page's background, left out
-        if (s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) { if (boxes.length >= 4 * BOXES_CAP) over = true; else { boxes.push(s.clip[0], s.clip[1], s.clip[2], s.clip[3]); if (indices) paths.push(-2) } }
+        if (s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) put(s.clip[0], s.clip[1], s.clip[2], s.clip[3], -2)
         break
       case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: addBox(s.ctm, 0, 0, 1, 1, -3); break
       case IMAGE_REPEAT: case MASK_REPEAT: {
@@ -396,11 +495,14 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         const [sa, sb, sc, sd] = mask ? [a[1], a[2], a[3], a[4]] : [a[1], 0, 0, a[2]]
         const at = a[mask ? 5 : 3]
         if (!at || !(at.length >= 0)) break
-        for (let i = 0; i + 1 < at.length && !over; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3)
+        for (let i = 0; i + 1 < at.length && !stop; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3)
         break
       }
-      case MASK_GROUP: for (const img of Array.isArray(a[0]) ? a[0] : []) { if (over) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3) } break
-      case INLINE_GROUP: for (const e of Array.isArray(a[1]) ? a[1] : []) { if (over) break; addBox(mul(s.ctm, matrixOf(e?.transform)), 0, 0, 1, 1, -3) } break
+      case MASK_GROUP: case INLINE_GROUP: {
+        const group = fn === MASK_GROUP ? a[0] : a[1]
+        for (const img of Array.isArray(group) ? group : []) { if (stop) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3) }
+        break
+      }
       case INTENT: {
         const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
         const m = typeof name === 'string' ? POINT.exec(name) : null
@@ -410,7 +512,16 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       default:
     }
   }
-  return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP || over, rotated: false }
+  // (the merged boxes after the others, from `mergedAt` on, in the cells' order: rising, then across)
+  const mergedAt = tiles ? boxes.length / 4 : null
+  if (tiles) {
+    for (let o = 0; o < tiles.length; o += 4) {
+      if (Number.isNaN(tiles[o])) continue
+      boxes.push(tiles[o], tiles[o + 1], tiles[o + 2], tiles[o + 3])
+      if (indices) paths.push(MERGED)
+    }
+  }
+  return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
 /** every column packGlyphs may keep */

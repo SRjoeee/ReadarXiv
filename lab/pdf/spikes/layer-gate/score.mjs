@@ -358,6 +358,24 @@ export function compare(prev, cur, tier) {
 
 /** the brief's completeness rows: per output, each check's count over its pages, and the checks that fail (any count above 0;
  *  the pixel tier's lost ink too). Moved here from layer-gate.mjs (3a-0) so that its arithmetic is tested: `run.fixtures[name].totals` */
+/** an add-on's ink read (layout/addon.mjs pagePlansOf's `ink`) as the row reports it: its pages, by what befell them, or null */
+export function inkOf(ink) {
+  if (!ink || typeof ink !== 'object') return null
+  const pages = k => (Array.isArray(ink[k]) ? ink[k].filter(Number.isInteger) : [])
+  return { capped: pages('capped'), timedOut: pages('timedOut'), degraded: pages('degraded') }
+}
+
+/** the ink line (the gate's, after the completeness line; names and numbers): every output's ink whole, or those whose is
+ *  not, each with its counts; or that no output's add-on told */
+export function inkLine(rows) {
+  const told = rows.filter(r => r.ink)
+  if (!told.length) return 'ink (the add-on\'s reading of arXiv\'s pages): not told by any output'
+  const not = told.filter(r => r.ink.capped.length || r.ink.timedOut.length || r.ink.degraded.length)
+  const untold = rows.length - told.length
+  const head = `ink (the add-on's reading of arXiv's pages): ${not.length ? `${not.length} of ${told.length} outputs not whole: ${not.map(r => `${r.name} [capped ${r.ink.capped.length}, timed out ${r.ink.timedOut.length}, degraded ${r.ink.degraded.length}]`).join('; ')}` : `whole on every one of ${told.length} outputs`}`
+  return untold ? `${head}; ${untold} not told` : head
+}
+
 export function completenessRows(run, tier) {
   return Object.entries(run.fixtures).map(([name, f]) => {
     const t = f.totals
@@ -386,6 +404,10 @@ export function completenessRows(run, tier) {
     if (row.linksWrong > 0) row.linksWrongAt = (f.pages ?? []).flatMap(p => (p.where?.linksWrong ?? []).map(x => `p${p.p}:${x}`))
     if (row.fails.includes('linksKept')) row.linksLost = f.summary?.linksLost ?? []
     if (row.fails.includes('linksTrue')) row.linksFalse = (f.pages ?? []).flatMap(p => (p.where?.linksTrue ?? []).map(x => `${p.p}:${x}`))
+    // (and the pages of arXiv's PDF whose ink the add-on's walk did not read whole, capped or timed out (no unit drawn on
+    // them), or read degraded (its boxes past ink.mjs BOXES_PAGE merged): reported, not gated; null where the run made no
+    // add-on or its engine tells none)
+    row.ink = inkOf(f.summary?.removal?.ink)
     return row
   })
 }

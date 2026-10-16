@@ -227,7 +227,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   console.log(JSON.stringify({
     id, engine: paper.meta.compiler, compileMs, marksMs: marksMs === null ? null : Math.round(marksMs), marksBytes: readFileSync(marksFile).length, owned: marks.owned.length, ownedGlyphs: marks.owned.reduce((n, e) => n + (e.length > 2 ? e[2] : 0), 0), marking: marks.marking, pages: out.file.paper.pages,
     lines: S.lines, units: S.units, translatedCells: [cells.filter(([, i]) => placedIds.has(i)).length, cells.length],
-    ph: S.ph, match: S.match, labels: S.labels, frames: S.frames, capped: S.capped, timedOut: S.timedOut, over: S.over,
+    ph: S.ph, match: S.match, labels: S.labels, frames: S.frames, capped: S.capped, timedOut: S.timedOut, inkTimedOut: S.inkTimedOut, degraded: S.degraded, over: S.over,
     lastBaselines: `${S.baselines.last.filter(d => d <= BASELINE + 1e-9).length}/${S.baselines.last.length} within ${BASELINE}`,
     bytes: { ...S.bytes, gzip9: gzipSync(text, { level: 9 }).length }, ms: Object.fromEntries(Object.entries(S.ms).map(([k, v]) => [k, Math.round(v)])), wallMs: Math.round(wall),
     fonts: out.file.fonts.length,
