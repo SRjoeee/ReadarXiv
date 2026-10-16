@@ -298,7 +298,7 @@ async function streamed(ctx, maker, st, lineskip) {
   const making = async f => {
     try { await f() } catch (e) {
       if (isMemoryError(e)) throw e
-      failed = why(e)
+      failed = why(e) || 'failed' // (a throw with no message is a failure all the same)
     }
   }
   for (let p = 1; p <= N && !failed; p++) {

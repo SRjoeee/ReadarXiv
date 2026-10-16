@@ -138,6 +138,17 @@ describe('layerOfPaper: the page pass', () => {
     expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'failed', why: 'a broken page' } } })
   })
 
+  it('a throw of the maker\'s with no message is a failure all the same: the rest cut with no layout', async () => {
+    const w = worldOf()
+    const capture: Record<string, unknown> = {}
+    await passOf(w, { capture: capture as never })
+    const doc = arxivOf(w.pages)
+    const broken = { ...doc, getPage: async (n: number) => { const p = await doc.getPage(n); return n === 3 ? { ...p, get rotate(): number { throw new Error('') } } : p } }
+    const got = await passOf(w, { oracle: capture as never, arxiv: { doc: broken } as never })
+    expect(got.notes[1]).toMatchObject({ pages: [2, 3], layout: 'none' })
+    expect(got.r).toMatchObject({ stats: { layout: { refused: 'failed' } } })
+  })
+
   it('a part whose marked pages carry less than CARRY_MIN of their lines has no layout; the others keep theirs, read in order', async () => {
     // three of page 1's ten lines set otherwise on arXiv's: 70 % of part 1's lines, 90 % of the paper's (the maker makes the file)
     const w = worldOf((p, j) => p === 1 && j >= 7)
