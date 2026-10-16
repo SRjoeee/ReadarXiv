@@ -6,7 +6,9 @@
 //
 //   pnpm fixtures:fetch                  # download what is missing, verify everything
 //
-// A missing fixture is looked for in this order: the file on disk (kept if it is the pinned one), the private bucket
+// A missing fixture is looked for in this order: the file on disk (kept if it is the pinned one), the machine's own cache
+// of pinned copies (`defaultCacheDir`: one file per digest, so every checkout and worktree of this machine shares it, and
+// a run with no network finds what an earlier run fetched; every fetched or verified copy is put there), the private bucket
 // `readarxiv-ci` under `fixtures/<sha256>` (only where READARXIV_CI_TOKEN and CF_ACCOUNT_ID are both set: CI, never a fork's
 // pull request or a contributor's machine), and arXiv. arXiv's pages carry its own chrome, which it redeploys independently
 // of the paper, so the pinned bytes are kept where they cannot move; what the bucket serves is checked against the pin like
@@ -17,6 +19,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getObject, keyUrl, s3Credentials } from './r2-read.mjs'
@@ -37,6 +40,39 @@ const STALE_PARTIAL_MS = 10 * 60_000
 /** Where a fixture may be written: the fixture directory, nowhere else */
 const FIXTURE_DIR = 'tests/fixtures'
 const ARXIV = 'https://arxiv.org/'
+
+/**
+ * The machine's cache of pinned copies, or null when there is none: READARXIV_FIXTURE_CACHE names it (empty: no cache),
+ * else `~/.cache/readarxiv/fixtures`; none in CI, which has the Actions cache and the bucket. A cache is a convenience:
+ * every copy read from it is checked against the pin like any other, and one that fails is ignored
+ */
+export function defaultCacheDir(env = process.env) {
+  if (env.READARXIV_FIXTURE_CACHE !== undefined) return env.READARXIV_FIXTURE_CACHE || null
+  if (env.CI) return null
+  return join(homedir(), '.cache', 'readarxiv', 'fixtures')
+}
+
+/** The pinned bytes the cache holds for this entry, or null (absent, or not the pinned bytes: then it is left alone and ignored) */
+async function cached(cacheDir, entry) {
+  if (!cacheDir) return null
+  const bytes = await existing(join(cacheDir, entry.sha256)).catch(() => null)
+  return bytes && bytes.length === entry.bytes && sha256(bytes) === entry.sha256 ? bytes : null
+}
+
+/** Put verified pinned bytes into the cache, whole or not at all; a cache that cannot be written is no failure */
+async function remember(cacheDir, entry, bytes) {
+  if (!cacheDir) return
+  const file = join(cacheDir, entry.sha256)
+  if (await stat(file).then(() => true, () => false)) return
+  const partial = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.partial`
+  try {
+    await mkdir(cacheDir, { recursive: true })
+    await writeFile(partial, bytes, { flag: 'wx' })
+    await rename(partial, file)
+  } catch {
+    await rm(partial, { force: true }).catch(() => undefined)
+  }
+}
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -217,10 +253,10 @@ function bucketSource({ env, fetchImpl, retryMs, now, log }) {
 /**
  * Make the remote fixtures present and verified.
  *
- * @param {{ root?: string; fetchImpl?: typeof fetch; log?: (line: string) => void; gapMs?: number; env?: Record<string, string | undefined>; retryMs?: number; now?: () => Date }} [options]
+ * @param {{ root?: string; cacheDir?: string | null; fetchImpl?: typeof fetch; log?: (line: string) => void; gapMs?: number; env?: Record<string, string | undefined>; retryMs?: number; now?: () => Date }} [options]
  * @returns {Promise<{ verified: string[]; downloaded: string[] }>}
  */
-export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () => undefined, gapMs = GAP_MS, env = process.env, retryMs = 1000, now = () => new Date() } = {}) {
+export async function ensureFixtures({ root = ROOT, cacheDir = null, fetchImpl = fetch, log = () => undefined, gapMs = GAP_MS, env = process.env, retryMs = 1000, now = () => new Date() } = {}) {
   const verified = []
   const downloaded = []
   const fromBucket = bucketSource({ env, fetchImpl, retryMs, now, log })
@@ -238,11 +274,13 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
       if (digest !== entry.sha256) {
         throw new Error(`${entry.path} is not the pinned fixture (SHA-256 ${digest.slice(0, 12)}…, the manifest records ${entry.sha256.slice(0, 12)}…). Delete it to download the pinned copy, or see tests/fixtures/README.md for moving the pin.`)
       }
+      await remember(cacheDir, entry, present)
       verified.push(entry.path)
       continue
     }
-    let got = await fromBucket?.(entry)
-    let source = `the bucket (fixtures/${entry.sha256})`
+    const kept = await cached(cacheDir, entry)
+    let got = kept ? { bytes: kept, status: 'cache' } : await fromBucket?.(entry)
+    let source = kept ? `the machine's cache (${join(cacheDir ?? '', entry.sha256)})` : `the bucket (fixtures/${entry.sha256})`
     if (!got) {
       // The gap is arXiv's: between two requests to it, not before the first
       if (askedArxiv) await sleep(gapMs)
@@ -283,7 +321,8 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
       await rm(partial, { force: true })
       throw e
     }
-    log(`fetched ${entry.path} (${bytes.length} bytes) from ${source}: HTTP ${status}`)
+    if (!kept) await remember(cacheDir, entry, bytes)
+    log(`fetched ${entry.path} (${bytes.length} bytes) from ${source}${status === 'cache' ? '' : `: HTTP ${status}`}`)
     downloaded.push(entry.path)
   }
   return { verified, downloaded }
@@ -306,7 +345,7 @@ if (invoked()) {
     process.exit(2)
   }
   try {
-    const { verified, downloaded } = await ensureFixtures({ log: line => console.log(process.env.GITHUB_ACTIONS === 'true' && line.startsWith('bucket') ? `::warning::${line}` : line) })
+    const { verified, downloaded } = await ensureFixtures({ cacheDir: defaultCacheDir(), log: line => console.log(process.env.GITHUB_ACTIONS === 'true' && line.startsWith('bucket') ? `::warning::${line}` : line) })
     console.log(`remote fixtures: ${downloaded.length} downloaded, ${verified.length} already there, all verified`)
   } catch (e) {
     console.error(e instanceof Error ? e.message : e)
