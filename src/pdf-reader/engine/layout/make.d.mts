@@ -44,12 +44,13 @@ export interface LayoutStats {
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }
   /** |baseline − TeX's start or end mark|, pt */
   baselines: { first: number[]; last: number[] }
-  /** pages past OPS_CAP or STACK_MAX (ink.mjs): no ink */
+  /** pages past OPS_CAP, STEPS_MAX, STACK_MAX or GLYPHS_PAGE (ink.mjs): no ink */
   capped: number[]
-  /** pages whose operator list did not come within OPS_MS, or after the paper's OPS_PAPER_MS, or failed, or whose ink's
-   *  walk passed INK_MS (ink.mjs): no ink */
+  /** pages whose operator list did not come within OPS_MS, or after the paper's OPS_PAPER_MS, or failed: no ink */
   timedOut: number[]
-  /** pages past BOXES_PAGE boxes (ink.mjs): their ink kept, the boxes past it merged by cell */
+  /** pages whose ink's walk passed its backstop, INK_MS (ink.mjs): no ink; the one count that depends on the machine */
+  inkTimedOut: number[]
+  /** pages past BOXES_PAGE boxes (ink.mjs), and in no list above: their ink kept, the boxes past it merged by cell */
   degraded: number[]
   /** pages whose lines cost the carry more than its bound (carry.mjs `over`): no ink */
   over: number[]

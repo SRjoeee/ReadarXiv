@@ -1065,13 +1065,13 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
   if (!check) return { doc, shipped, ms, ink }
 
   const { openRemover, makeAddon, SETS, CHECK_SETS } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
-  const { pageInk, outlineTable, BOXES_PAGE } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const { pageInk, outlineTable, BOXES_PAGE, GLYPHS_PAGE } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
   const { pagePlan } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
   const ops = [], inks = [], collected = new Map()
   // (the pages' operator lists and ink again, every glyph its outline's box and the boxes collected into the outline table)
   let t = performance.now()
   for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); ops[p] = await pg.getOperatorList() }
-  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected, boxesMax: BOXES_PAGE }) }
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE }) }
   // the plan: every unit the layout file holds, page by page
   const plan = { pages: {} }
   for (let p = 1; p <= doc.numPages; p++) {

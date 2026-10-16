@@ -41,7 +41,7 @@
 // restore every unit, which loses none.
 import { pageDirty, pagePlan, pageRules } from '../layer-proto/removal.mjs'
 import { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, checkBoxes, parseAddonManifest, REFUSED_MAX } from './addon-manifest.mjs'
-import { BOXES_PAGE, pageInk } from './ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
 import { alignOf, makeAddon, openRemover, removalEntry, SETS } from './remove.mjs'
 
 /** the share of the manifest's byte and value caps that the paper's `dirty` and `rules` boxes may take, in page order: the
@@ -109,8 +109,9 @@ export function pagePlanOf(index, p, ink, facts) {
 /**
  * Every page's plan (pagePlanOf) of PDF.js's document `doc` of arXiv's PDF, `OPS` PDF.js's operator codes, `index` the layout
  * file's: { plans, a Map from each planned page to its plan, ms { ops, ink, plan }, ink { capped, timedOut, degraded }, the
- * pages whose ink the walk did not read whole (no plan) or read with its boxes past BOXES_PAGE merged, as the layout maker
- * reads it (layout/make.mjs: the same budgets) }. Reads each page's operator list once
+ * pages whose ink the walk did not read whole (no plan: past a cap, past the walk's backstop) or read with its boxes past
+ * BOXES_PAGE merged, each page in one list, as the layout maker reads it (layout/make.mjs: the same bounds) }. Reads each
+ * page's operator list once
  * and keeps none: each page is cleaned up (page.cleanup) once its plan is made, so a caller that reads the page's operator list
  * again pays the parse again. The document is the caller's to destroy
  */
@@ -122,9 +123,11 @@ export async function pagePlansOf({ doc, OPS, index }) {
     const list = await page.getOperatorList()
     ms.ops += performance.now() - t
     t = performance.now()
-    const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true, boxesMax: BOXES_PAGE })
+    const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     ms.ink += performance.now() - t
-    for (const k of ['capped', 'timedOut', 'degraded']) if (ink[k]) read[k].push(p)
+    // (each page once, by what befell it first)
+    const k = ink.capped ? 'capped' : ink.timedOut ? 'timedOut' : ink.degraded ? 'degraded' : null
+    if (k) read[k].push(p)
     t = performance.now()
     const plan = pagePlanOf(index, p, ink, () => alignOf(OPS, list))
     if (plan) plans.set(p, plan)

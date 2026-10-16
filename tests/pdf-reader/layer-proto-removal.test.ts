@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { Glyph } from '@/pdf-reader/engine/layout/ink.mjs'
+import { type Glyph, MERGED } from '@/pdf-reader/engine/layout/ink.mjs'
 import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, pageDirty, pagePlan, pageRules, planOf, protection, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 import { swapRects } from '@/pdf-reader/engine/layer/swap.mjs'
 
@@ -43,6 +43,20 @@ describe("the layout file's ownership", () => {
     expect([...own.owner]).toEqual([1, 1, 1, 3, -1])
     expect([...own.ph]).toEqual([-1, 2, -1, -1, -1])
     expect([...own.paths]).toEqual([[0, { id: 1, k: 2 }]])
+  })
+  it('a merged box (a degraded page\'s, ink.mjs MERGED) is no rule: never owned nor removed, and kept ink where it meets a unit', () => {
+    // the placeholder's rule of the case above, merged by cell past the box budget: the same box, no path's index
+    const merged = inkOf(ink.glyphs, [[[30, 104, 40, 104.4], MERGED], [[0, 0, 300, 1], 1]])
+    const own = fileOwnership(index, 5, merged)
+    expect([...own.paths]).toEqual([])
+    expect([...own.linePaths]).toEqual([])
+    // the glyphs owned as ever
+    expect([...own.owner]).toEqual([1, 1, 1, 3, -1])
+    const plan = pagePlan(index, 5, merged, own)
+    expect(plan.units.flatMap(u => u.paths)).toEqual([])
+    expect(plan.crops.flatMap(c => c.paths)).toEqual([1])
+    // where a unit's rectangle meets it, the reader swaps the removed page in, which keeps it
+    expect(pageDirty(index, 5, merged, plan)).toEqual([30, 104, 40, 104.4])
   })
   it("a unit replaces its own glyphs and its placeholders' rules, less what its reading keeps; a crop's glyphs are the crop's", () => {
     const own = fileOwnership(index, 5, ink)

@@ -13,15 +13,18 @@
 // citation's or a reference's own text with it, for the layer to set in the page's face. What
 // cannot be placed is left out, and the layer leaves that unit as the original's: a line of the marked original not
 // carried (a reflow of the layout compile costs only its own lines), a unit on a page whose ink is not whole (its
-// operator list too long, too slow, its walk too deep or too long, or its carry over its bound), a placeholder whose own ink is not all found. The file
-// is refused where too few lines are carried, where arXiv's page count is out of bounds, and where its own parser refuses
-// it: a file the parser refuses is never returned.
-// Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes.
+// operator list too long, too slow, its walk too deep or too long, or its carry over its bound), a placeholder whose own
+// ink is not all found. The file is refused where too few lines are carried, where arXiv's page count is out of bounds,
+// and where its own parser refuses it: a file the parser refuses is never returned.
+// Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes, but for a page that passes a
+// clock, its operator list not given within OPS_MS (`stats.timedOut`) or its ink's walk past its backstop (ink.mjs INK_MS,
+// `stats.inkTimedOut`). No real page comes near either (the walk's own bound is counted, STEPS_MAX), and a page past one is
+// dark, its units the original's: a slower machine may show a hostile page untranslated where a faster one reads it.
 import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokenizeDocument, tokens } from '../pipeline/anchors.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, NAMES_MAX, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { BOXES_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
@@ -141,7 +144,9 @@ function viewOf(v) {
 
 /** a page's glyphs by baseline, rising, packed (ink.mjs packGlyphs: x0, x1, y, top, bottom, size, font, u; ix0 and ix1
  *  their ink across with their advance; top and bottom their own ink up and down), each glyph's owner and whether it is
- *  taken, and its boxes */
+ *  taken, and its boxes, each whether it is taken: a degraded page's merged boxes (from ink.mjs pageInk's `mergedAt`) are
+ *  taken from the start, no rule's own box, so that no placeholder and no line takes one as its rule (its placeholder is
+ *  LOST, its line's rule kept as the page's), while the room below a frame meets them as any ink */
 function glyphsOf(got, fontIds) {
   const order = got.glyphs.map((_, i) => i).sort((a, b) => {
     const p = got.glyphs[a], q = got.glyphs[b]
@@ -149,6 +154,7 @@ function glyphsOf(got, fontIds) {
   })
   const P = { ...packGlyphs(got.glyphs, { order, fontIds }), owner: new Int32Array(order.length).fill(-1), taken: new Uint8Array(order.length), boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2) }
   for (let i = 0; i + 3 < got.boxes.length; i += 4) P.boxes.push([got.boxes[i], got.boxes[i + 1], got.boxes[i + 2], got.boxes[i + 3]])
+  if (Number.isInteger(got.mergedAt)) P.boxTaken.fill(1, got.mergedAt)
   return P
 }
 /** the first index whose baseline is at least y */
@@ -306,7 +312,7 @@ function blank(units) {
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
-    capped: [], timedOut: [], degraded: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
+    capped: [], timedOut: [], inkTimedOut: [], degraded: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
   }
 }
 
@@ -367,16 +373,17 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs 
     // a page given up on let go as well: a list that failed has no stream left to cancel, and giveUp's cancellation of
     // it cleans up nothing (PDF.js's _abortOperatorList returns early); after a cancellation, cleaning up is a no-op
     if (!ops) { giveUp(page, seen); page.cleanup?.(); stats.timedOut.push(p); dark.add(p); continue }
-    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, boxesMax: BOXES_PAGE })
+    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
     // not every page's to the document's end (48 MiB on 2303.18223's 144 pages; an image a late decode brings is dropped
     // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the
     // add-on, which reads lists again, is made from a document of its own: addon.mjs)
     page.cleanup?.()
+    // (each page once, by what befell it: past a cap, past the walk's backstop (apart from a list that never came), or
+    // read with its boxes past BOXES_PAGE merged by cell, its ink kept: its text is whole, ink.mjs pageInk)
     if (got.capped) stats.capped.push(p)
-    if (got.timedOut) stats.timedOut.push(p)
-    // (a page past BOXES_PAGE boxes keeps its ink, the boxes past it merged by cell: its text is whole, ink.mjs pageInk)
-    if (got.degraded) stats.degraded.push(p)
+    else if (got.timedOut) stats.inkTimedOut.push(p)
+    else if (got.degraded) stats.degraded.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part
     if (got.capped || got.timedOut || got.rotated) { dark.add(p); continue }
     ink[p] = glyphsOf(got, fontIds)

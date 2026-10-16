@@ -833,22 +833,23 @@ describe('reading the marked original', () => {
   }, 60_000)
   it('layoutMarksOf: past OWNED_ALL a paper\'s pieces are not owned, and past MARKS_CAP its last owned pieces are cut, never the file refused', async () => {
     // 14 pieces, in name order (p0.1a, p0.11a, …) 12 of 20,000 glyphs and one of 9,999: 249,999 owned; the last, 20,000
-    // more, past OWNED_ALL
-    const n = 14, per = 20_000, past = OWNED_HOW.indexOf('past the glyphs a paper may own')
+    // more, past OWNED_ALL. Four pieces a page, each page within GLYPHS_PAGE (a page past it has no ink)
+    const n = 14, per = 20_000, past = OWNED_HOW.indexOf('past the glyphs a paper may own'), on = (q: number) => 1 + Math.floor(q / 4)
     const units = [unit('para', Array.from({ length: n }, (_, k) => [text(k ? ' and ' : 'see '), ph('$x$')]).flat())]
     const run = async (big: boolean) => {
-      const shown: Shown[] = [{ at: '0s' }], dests: [string, number, number, number][] = [['0s', 1, big ? 10_000 : 72, big ? 13_000 : 700]]
+      const shown: Shown[][] = Array.from({ length: on(n - 1) }, () => []), dests: [string, number, number, number][] = [['0s', 1, big ? 10_000 : 72, big ? 13_000 : 700]]
+      shown[0]!.push({ at: '0s' })
       for (let q = 0; q < n; q++) {
         const k = 2 * q + 1, y = big ? 13_000.11 - 300 * q : 700 - 12 * q, count = q === n - 2 ? 9_999 : per
         // at coordinates of five digits on a page of 14,000 pt, each glyph a character of its own kind (an index of five
         // digits into `chars`): some 8.6 MB, past MARKS_CAP; else 4 MB of one character, within it
         const glyphs = Array.from({ length: count }, (_, i) => { if (!big) return 'x'; const c = 10_000 + ((q * per + i) % 55_000); return String.fromCharCode(0x4e00 + (c % 20000)) + String.fromCharCode(0x4e00 + Math.floor(c / 20000)) })
-        shown.push({ at: `p0.${k}a` }, { glyphs, x: big ? 10_000.11 : 72, y, size: big ? 199.99 : 10, step: big ? 1 : 0.01 }, { at: `p0.${k}b` })
-        dests.push([`p0.${k}a`, 1, big ? 10_000 : 72, y], [`p0.${k}b`, 1, big ? 13_000 : 80, y])
+        shown[on(q) - 1]!.push({ at: `p0.${k}a` }, { glyphs, x: big ? 10_000.11 : 72, y, size: big ? 199.99 : 10, step: big ? 1 : 0.01 }, { at: `p0.${k}b` })
+        dests.push([`p0.${k}a`, on(q), big ? 10_000 : 72, y], [`p0.${k}b`, on(q), big ? 13_000 : 80, y])
       }
-      shown.push({ at: '0e' }); dests.push(['0e', 1, big ? 13_000 : 80, big ? 9_000 : 500])
+      shown[on(n - 1) - 1]!.push({ at: '0e' }); dests.push(['0e', on(n - 1), big ? 13_000 : 80, big ? 9_000 : 500])
       const view = big ? [0, 0, 14_000, 14_000] : [0, 0, 612, 792]
-      const doc = streamDocument([{ view, items: [item('see', dests[0]![2], dests[0]![3])], shown }], dests.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
+      const doc = streamDocument(shown.map((sh, i) => ({ view, items: i ? [] : [item('see', dests[0]![2], dests[0]![3])], shown: sh })), dests.map(([nm, ...r]) => [`axt-${nm}`, ...r]))
       const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', units, OPS })
       const written = encodeLayoutMarks(m)
       expect(new TextEncoder().encode(written).length).toBeLessThanOrEqual(MARKS_CAP)

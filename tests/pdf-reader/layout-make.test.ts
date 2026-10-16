@@ -18,7 +18,7 @@ const CH = 0.5
 /** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32); `one`: the whole
  *  string one glyph's Unicode (a character and its variation selector) */
 type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
-type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; points?: Record<string, [run: number, char: number]>; order?: number[] }
+type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[] }
 type Mark = [name: string, page: number, x: number, y: number]
 type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
 
@@ -78,15 +78,16 @@ function opsOf(p: Page, points: [string, number, number][] = []) {
   for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
   // (past OPS_CAP: operations the walk reads and does nothing with, after the page's own, as one typed array)
   if (p.ops === 'capped') { const fn = new Uint16Array(OPS_CAP + 1).fill(OPS.setFillRGBColor); fn.set(ops.map(o => o[0])); return { fnArray: fn, argsArray: ops.map(o => o[1]) } }
-  // (after the page's own: saves past STACK_MAX; one painted path more than BOXES_PAGE, off the page's columns, one operand
-  // each; or two thousand operations the walk does nothing with, more steps than come between two readings of its clock)
+  // (after the page's own: saves past STACK_MAX, or two thousand operations the walk does nothing with, more steps than
+  // come between two readings of its clock; before it, one painted path more than BOXES_PAGE, off the page's columns, one
+  // operand each, so that the page is degraded and every box of its own past the budget)
   if (p.ops === 'deep') for (let i = 0; i <= STACK_MAX; i++) ops.push([OPS.save, []])
   if (p.ops === 'dense' || p.ops === 'slow') {
-    const extra = p.ops === 'dense' ? BOXES_PAGE + 1 : 2000, own = ops.length
-    const fn = new Uint16Array(own + extra).fill(p.ops === 'dense' ? OPS.constructPath : OPS.setFillRGBColor)
-    fn.set(ops.map(o => o[0]))
-    const path = [OPS.fill, [Float32Array.from([0])], Float32Array.from([-100, 0, -90, 10])]
-    return { fnArray: fn, argsArray: [...ops.map(o => o[1]), ...new Array(extra).fill(p.ops === 'dense' ? path : [])] }
+    const dense = p.ops === 'dense', extra = dense ? BOXES_PAGE + 1 : 2000, own = ops.length
+    const fn = new Uint16Array(own + extra).fill(dense ? OPS.constructPath : OPS.setFillRGBColor)
+    fn.set(ops.map(o => o[0]), dense ? extra : 0)
+    const path = [OPS.fill, [Float32Array.from([0])], Float32Array.from([-100, 0, -90, 10])], filler = new Array(extra).fill(dense ? path : [])
+    return { fnArray: fn, argsArray: dense ? [...filler, ...ops.map(o => o[1])] : [...ops.map(o => o[1]), ...filler] }
   }
   return { fnArray: ops.map(o => o[0]), argsArray: ops.map(o => o[1]) }
 }
@@ -114,7 +115,7 @@ function markedOf(pages: Page[], marks: Mark[]) {
     numPages: pages.length,
     getPage: async (n: number) => {
       const p = pages[n - 1] as Page
-      return { view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }), getOperatorList: async () => opsOf({ ...p, ops: undefined }, pointsOf(p, n, marks)) }
+      return { view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }), getOperatorList: async () => opsOf({ ...p, ops: p.markedOps }, pointsOf(p, n, marks)) }
     },
     getDestinations: async () => new Map(marks.map(([name, page, x, y]) => [`axt-${name}`, [{ num: 100 + page, gen: 0 }, { name: 'FitR' }, x, y, null]])),
     getPageIndex: async (ref: { num: number }) => ref.num - 101,
@@ -394,7 +395,9 @@ describe('makeLayout', () => {
     const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700], ['2s', 3, 72, 700], ['2e', 3, 142, 700]]
     const units = ['alpha beta gamma', 'delta epsilon zeta', 'eta theta iota'].map(s => unit('para', [text(s)]))
     const of = (w: World) => make(w).then(d => { if (!('file' in d)) throw new Error('refused'); return d })
-    const dense = await of({ pages: [pages[0] as Page, { ...pages[1] as Page, ops: 'deep' }, { ...pages[2] as Page, ops: 'dense' }], marked: pages, marks, units })
+    // (a clock that stands: five hundred thousand paths are walked against the counted bounds alone, never the backstop)
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => 0)
+    const dense = await of({ pages: [pages[0] as Page, { ...pages[1] as Page, ops: 'deep' }, { ...pages[2] as Page, ops: 'dense' }], marked: pages, marks, units }).finally(() => clock.mockRestore())
     const plain = await of({ pages: [pages[0] as Page, { ...pages[1] as Page, ops: 'deep' }, pages[2] as Page], marked: pages, marks, units })
     expect(dense.stats.capped).toEqual([2])
     expect(dense.stats.timedOut).toEqual([])
@@ -403,6 +406,35 @@ describe('makeLayout', () => {
     // page 2's unit stays the original's; page 3's is located as on the page without the paths, byte for byte
     expect(dense.file.units.map(u => u[0])).toEqual([0, 2])
     expect(encodeLayout(dense.file)).toBe(encodeLayout(plain.file))
+  })
+
+  it("a placeholder whose rule lies past the box budget is LOST, its rule never taken from a merged box (alone in its cell)", async () => {
+    const runs: Run[] = [{ s: 'scaled by', x: 72, y: 700 }, { s: '\u221a', x: 122, y: 707.7 }, { s: 'dk', x: 127, y: 700 }, { s: 'here and there', x: 142, y: 700 }]
+    const page: Page = { runs, boxes: [[127, 707.2, 137, 707.6, 2]], points: { 'p0.1a': [1, 0] } }
+    const w: World = { pages: [page], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[3] as Run), 700], ['p0.1a', 1, 117, 700], ['p0.1b', 1, 137, 700]], units: [unit('para', [text('scaled by '), ph('$\\sqrt{d_k}$'), text(' here and there')])] }
+    const plain = await made(w)
+    expect(phOf(plain.file, 0, 1).slice(4, 10)).toEqual([1, 122, 700, 137, 707.7 + 7.5, 697.5])
+    // arXiv's page with its bar past the budget: merged alone in its cell, its box the bar's exactly, and taken from the start
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => 0)
+    const dense = await made({ ...w, marked: [page], pages: [{ ...page, ops: 'dense' }] }).finally(() => clock.mockRestore())
+    expect(dense.stats.degraded).toEqual([1])
+    expect(phOf(dense.file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
+    // its unit located all the same, its text the page's
+    expect(dense.file.units.map(u => u[0])).toEqual([0])
+  })
+
+  it("a marked page past a bound of the ink's walk is unread: no piece on it is owned, each LOST", async () => {
+    const runs: Run[] = [{ s: 'alpha beta', x: 72, y: 700 }, { s: 'x', x: 127, y: 700 }, { s: 'gamma delta', x: 140, y: 700 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[2] as Run), 700], ['p0.1a', 1, 122, 700], ['p0.1b', 1, 132, 700]],
+      units: [unit('para', [text('alpha beta '), ph('$x$'), text(' gamma delta')])],
+    }
+    expect((await made(w)).stats.ph).toMatchObject({ marked: 1, found: 1, lost: 0 })
+    // the marked compile's page past STACK_MAX (after its points): capped, unread; arXiv's page as before
+    const deep = await made({ ...w, marked: [{ runs, markedOps: 'deep' }] })
+    expect(deep.stats.ph).toMatchObject({ marked: 1, found: 0, lost: 1 })
+    expect(phOf(deep.file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
   })
 
   it('a page whose walk passes INK_MS has no ink (timedOut), the others theirs', async () => {
@@ -418,7 +450,9 @@ describe('makeLayout', () => {
     try {
       const done = await makeLayout({ units, marks: marksFile, arxiv: arxivOf([pages[0] as Page, { ...pages[1] as Page, ops: 'slow' }]), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
       if (!('file' in done)) throw new Error('refused')
-      expect(done.stats.timedOut).toEqual([2])
+      // (the walk's backstop, apart from a list that never came)
+      expect(done.stats.inkTimedOut).toEqual([2])
+      expect(done.stats.timedOut).toEqual([])
       expect(done.stats.capped).toEqual([])
       expect(done.file.units.map(u => u[0])).toEqual([0])
     } finally { clock.mockRestore() }
