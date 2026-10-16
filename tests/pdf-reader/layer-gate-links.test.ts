@@ -345,6 +345,14 @@ describe('true: the drawn text under a moved link against the reference', () => 
     expect(sameText('§', '¶')).toBe(false)
     expect(sameText('', '2')).toBe(false)
   })
+  it("folds the letters' accents away: the drawing's accented letter is PDF.js's letter and spacing accent of TeX's \\accent", () => {
+    // (2608.16117's citations: the drawing joins each accent to its letter, layer2.mjs joinAccents; PDF.js's overlaid text keeps them apart)
+    expect(sameText('Münster et al., 2013', 'M¨unster et al., 2013')).toBe(true)
+    expect(sameText('Duričković et al.', 'Duriˇckovi´c et al.')).toBe(true)
+    expect(sameText('Loïc', 'Lo¨ıc')).toBe(true)
+    expect(sameText('Münster', 'Munster')).toBe(true)
+    expect(sameText('Münster', 'Monster')).toBe(false)
+  })
   it('reads the drawn text as the characters whose centre lies inside a box, in DOM order', () => {
     const chars: Point[] = [{ x: 105, y: 700, ch: '2' }, { x: 100.5, y: 700, ch: '1' }, { x: 300, y: 700, ch: 'x' }]
     expect(textUnder(chars, [[100, 698, 130, 712]])).toBe('21')

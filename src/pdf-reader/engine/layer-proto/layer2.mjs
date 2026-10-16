@@ -152,7 +152,61 @@ export function pageChars2(textContent, fontOf, mapOf = null) {
       cx += w
     })
   }
-  return out
+  return joinAccents(out, textContent.items)
+}
+
+/** each spacing accent's combining mark: grave, acute, circumflex, tilde, diaeresis, macron, breve, dot, ring, caron,
+ *  cedilla, ogonek, double acute (Hungarian), as the fonts' ToUnicode maps write them (ASCII's three among them) */
+const COMBINING = new Map([['`', '̀'], ['ˋ', '̀'], ['´', '́'], ['ˊ', '́'], ['^', '̂'], ['ˆ', '̂'], ['~', '̃'], ['˜', '̃'], ['¯', '̄'], ['ˉ', '̄'], ['˘', '̆'], ['˙', '̇'], ['¨', '̈'], ['˚', '̊'], ['˝', '̋'], ['ˇ', '̌'], ['¸', '̧'], ['˛', '̨']])
+/** the marks set under a letter, which keep a dotless i dotless */
+const BELOW = new Set(['̧', '̨'])
+/**
+ * A spacing accent TeX set as a glyph of its own joined to its letter (the M1 survey of 2608.16117: "Munster et al.,¨ 2013"
+ * for Münster, seven citations; before, every such accent went to its line's end, charsOfUnit2). TeX's \accent sets the
+ * accent, then moves back over it to set the letter (OT1's: the accent before its letter), or sets the letter first and the
+ * accent over it (an accent-after-letter font); PDF.js starts a new item at such a move back, so the accent ends its item and
+ * its letter begins the next (or the accent begins its item and its letter ended the one before), the two items overlapping
+ * across. Joined where that is what the page shows: the two items in one font on one baseline, and the letter's span holding
+ * the accent glyph's centre (its own width in its design back from its item's end, or on from its item's start), which only
+ * the move back over the accent gives; the letter becomes its accented letter (NFC, one code point: ü, ć, č;
+ * a dotless ı or ȷ under an accent above it the dotted letter's: Loïc) and the accent is no character of its own. An accent
+ * alone in its item (a formula's \hat or \bar over a letter in another font, a capital's raised accent) keeps its own glyph
+ * and box, and a mark written after its letter in one item joins that letter where they compose. Every other character
+ * stays as it is.
+ */
+function joinAccents(chars, items) {
+  // (each item's characters: their first and last index in `chars`, which holds them in item order)
+  const runs = []
+  chars.forEach((c, i) => { const r = runs.at(-1); if (r?.item === c.item) r.last = i; else runs.push({ item: c.item, first: i, last: i }) })
+  const gone = new Set()
+  const join = (letter, mark) => {
+    const base = BELOW.has(mark) ? letter.ch : letter.ch === 'ı' ? 'i' : letter.ch === 'ȷ' ? 'j' : letter.ch
+    const ch = (base + mark).normalize('NFC')
+    if ([...ch].length !== 1 || ch === base + mark) return false
+    letter.ch = ch
+    return true
+  }
+  const isLetter = c => !!c && /^\p{L}$/u.test(c.ch) && !COMBINING.has(c.ch)
+  runs.forEach((r, n) => {
+    const it = items[r.item], end = it.transform[4] + it.width
+    for (let i = r.first; i <= r.last; i++) {
+      const c = chars[i]
+      // (a combining mark written after its letter in the item)
+      if (/^\p{M}$/u.test(c.ch)) { if (i > r.first && isLetter(chars[i - 1]) && !gone.has(i - 1) && join(chars[i - 1], c.ch)) gone.add(i); continue }
+      const mark = COMBINING.get(c.ch)
+      if (!mark || c.nu || r.first === r.last || (i !== r.first && i !== r.last)) continue
+      const w = (wDesign(c.ch, c.st) * c.size) / 100, tol = 0.05 * c.size
+      // the accent ends its item, its letter beginning the next; or begins it, its letter ending the one before
+      const o = i === r.last ? runs[n + 1] : runs[n - 1]
+      if (!o) continue
+      const L = chars[i === r.last ? o.first : o.last]
+      if (!isLetter(L) || L.nu || L.st !== c.st || Math.abs(L.yb - c.yb) > tol) continue
+      // (the accent glyph's centre on the letter: only the move back over it puts it there)
+      const mid = i === r.last ? end - w / 2 : it.transform[4] + w / 2
+      if (mid >= L.x0 - tol && mid <= L.x1 + tol && join(L, mark)) gone.add(i)
+    }
+  })
+  return gone.size ? chars.filter((_, i) => !gone.has(i)) : chars
 }
 
 // ---- the original: each line's baseline and size, the unit's style

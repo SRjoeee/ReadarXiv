@@ -136,9 +136,14 @@ export function sameTarget(rec, target) {
   return rec.url === undefined && JSON.stringify(rec.dest) === JSON.stringify(target.dest)
 }
 
-const lettersOf = s => s.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '')
+/** (letters and digits with their accents folded away: the drawing sets "Münster" where PDF.js's overlaid text of TeX's \accent
+ *  reads "M¨unster", the accent a glyph of its own, layer2.mjs joinAccents; the M1 survey of 2608.16117. NFKD splits an
+ *  accented letter and makes a spacing accent a space and a combining mark; the spacing accents Unicode writes as modifier
+ *  letters, which have no decomposition, go; a dotless i or j, which TeX sets under an accent above, is the letter) */
+const lettersOf = s => s.normalize('NFKD').replace(/[\u02C6\u02C7\u02C9-\u02CB]/gu, '').replace(/\u0131/gu, 'i').replace(/\u0237/gu, 'j').replace(/[^\p{L}\p{N}]/gu, '')
 const nonSpaceOf = s => s.normalize('NFKC').replace(/\s/gu, '')
-/** two texts are equal after NFKC, on letters and digits; where both have none, on all their non-space characters */
+/** two texts are equal after NFKD, on letters and digits (a combining mark is neither); where both have none, on all their
+ *  non-space characters after NFKC */
 export function sameText(a, b) {
   const la = lettersOf(a), lb = lettersOf(b)
   return la || lb ? la === lb : nonSpaceOf(a) === nonSpaceOf(b)
