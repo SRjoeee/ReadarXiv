@@ -21,8 +21,10 @@ import { anchorUnits, boundsFromMarks, markWords, tokenAtMark, tokens } from '..
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrierOf, tokensOfMarks } from './carry.mjs'
-import { encodeLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, NAMES_MAX, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { packGlyphs, pageInk } from './ink.mjs'
+import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, LayoutRefusal, NAME_FLAG, NAME_KEYS, NAMES_MAX, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
+import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { pagePlanOf } from './addon.mjs'
+import { alignOf } from './remove.mjs'
 import { classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
@@ -150,7 +152,48 @@ function glyphsOf(got, fontIds) {
   })
   const P = { ...packGlyphs(got.glyphs, { order, fontIds }), owner: new Int32Array(order.length).fill(-1), taken: new Uint8Array(order.length), boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2) }
   for (let i = 0; i + 3 < got.boxes.length; i += 4) P.boxes.push([got.boxes[i], got.boxes[i + 1], got.boxes[i + 2], got.boxes[i + 3]])
+  // (read with the remover's indices: what the add-on's plan reads of the page besides, kept beside the maker's columns, so
+  // that the page's one operator list gives both: each glyph's place in the stream, its showing operation and its place
+  // there, whether it is blank, its own ink across as read; each box's path)
+  if (got.paths) {
+    const n = order.length, stream = new Int32Array(n), on = new Int32Array(n), at = new Int32Array(n), blank = new Uint8Array(n), rix0 = new Float64Array(n), rix1 = new Float64Array(n)
+    for (let i = 0; i < n; i++) {
+      const g = got.glyphs[order[i]]
+      stream[i] = order[i]; on[i] = g.n; at[i] = g.k; blank[i] = g.blank ? 1 : 0; rix0[i] = g.ix0; rix1[i] = g.ix1
+    }
+    P.plan = { stream, on, at, blank, rix0, rix1, paths: Int32Array.from(got.paths), shows: got.shows }
+  }
   return P
+}
+
+/** a page's ink as the add-on's plan reads it (pageInk with `indices`), made again of the maker's columns and the plan's
+ *  (glyphsOf): its glyphs in stream order, each with what the plan reads of it, its boxes, paths and showing operations */
+function planInkOf(P) {
+  const { stream, on, at, blank, rix0, rix1, paths, shows } = P.plan, glyphs = new Array(P.n)
+  for (let i = 0; i < P.n; i++) {
+    const g = { u: P.u[i], x0: P.x0[i], x1: P.x1[i], y: P.y[i], top: P.top[i], bottom: P.bottom[i], size: P.size[i], ix0: rix0[i], ix1: rix1[i], n: on[i], k: at[i] }
+    if (blank[i]) g.blank = true
+    glyphs[stream[i]] = g
+  }
+  const boxes = []
+  for (const b of P.boxes) boxes.push(b[0], b[1], b[2], b[3])
+  return { glyphs, boxes, points: [], boxAt: [], paths: Array.from(paths), shows, capped: false, rotated: false }
+}
+/** a page's alignment facts (remove.mjs alignOf) packed: each showing operation's codes in one column (null as NaN), where
+ *  each begins, and the paths' count; and back */
+function packFacts({ codes, paths }) {
+  let n = 0
+  for (const row of codes) n += row.length
+  const all = new Float64Array(n), from = new Int32Array(codes.length + 1)
+  let i = 0
+  codes.forEach((row, r) => { from[r] = i; for (const c of row) all[i++] = c === null ? Number.NaN : c })
+  from[codes.length] = i
+  return { all, from, paths }
+}
+function unpackFacts({ all, from, paths }) {
+  const codes = []
+  for (let r = 0; r + 1 < from.length; r++) { const row = []; for (let i = from[r]; i < from[r + 1]; i++) row.push(Number.isNaN(all[i]) ? null : all[i]); codes.push(row) }
+  return { codes, paths }
 }
 /** the first index whose baseline is at least y */
 function lowest(P, y) {
@@ -325,9 +368,12 @@ async function gzipSize(bytes) {
  * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
  * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
- * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here
+ * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here. `plans`:
+ * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
+ * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again. A page whose ink
+ * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone
  */
-export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null }) {
+export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, plans: wantPlans = false }) {
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
@@ -349,7 +395,7 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
   stats.ms.text = now() - t
   // ---------------------------------------------------------------- arXiv's ink: glyphs and graphics, page by page
   t = now()
-  const ink = new Array(pages + 1).fill(null), names = [], nameId = new Map()
+  const ink = new Array(pages + 1).fill(null), facts = new Array(pages + 1).fill(null), names = [], nameId = new Map()
   const fontIds = raw => { const n = fontName(raw); if (!nameId.has(n)) { nameId.set(n, names.length); names.push(n) } return nameId.get(n) }
   let waited = 0
   const seen = { warned: false }
@@ -367,11 +413,13 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
     // a page given up on let go as well: a list that failed has no stream left to cancel, and giveUp's cancellation of
     // it cleans up nothing (PDF.js's _abortOperatorList returns early); after a cancellation, cleaning up is a no-op
     if (!ops) { giveUp(page, seen); page.cleanup?.(); stats.timedOut.push(p); dark.add(p); continue }
-    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0 })
+    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE })
+    // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
+    if (wantPlans && !got.capped && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
     // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
     // not every page's to the document's end (48 MiB on 2303.18223's 144 pages; an image a late decode brings is dropped
     // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the
-    // add-on, which reads lists again, is made from a document of its own: addon.mjs)
+    // add-on's plans are made of what was read here where `plans` asks, else of a document of its own: addon.mjs)
     page.cleanup?.()
     if (got.capped) stats.capped.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part
@@ -1405,5 +1453,14 @@ export async function makeLayout({ units, marks, arxiv, OPS, paper, left, pdfjs,
     return { refused: 'bounds', stats }
   }
   stats.bytes.gzip = await gzipSize(bytes)
-  return { file: parsed, stats }
+  if (!wantPlans) return { file: parsed, stats }
+  // ---------------------------------------------------------------- the add-on's plans, of the ink read above
+  // (each page's as addon.mjs pagePlansOf makes it of the page's operator list read again: the same ink, the same facts)
+  const index = indexLayout(parsed), plans = new Map()
+  for (let p = 1; p <= pages; p++) {
+    if (!ink[p]?.plan) continue
+    const plan = pagePlanOf(index, p, planInkOf(ink[p]), () => unpackFacts(facts[p]))
+    if (plan) plans.set(p, plan)
+  }
+  return { file: parsed, stats, plans }
 }

@@ -16,6 +16,10 @@
 /** the operations read on a page at most: a heavy vector page (a plot of every point of a dataset) holds hundreds of
  *  thousands, and the text that is laid over lies before or among the first of them */
 export const OPS_CAP = 150_000
+/** the glyphs a page's ink holds at most, where its reader asks (`glyphsMax`): one text-showing operation may show any
+ *  number of glyphs, so OPS_CAP alone does not bound a page's ink. A page past it is capped as one past OPS_CAP is: no ink,
+ *  that page alone. The densest page of the corpus's arXiv PDFs holds a few thousand */
+export const GLYPHS_PAGE = 100_000
 
 /** where a font gives no ascent or descent (an old Type 3 font gives none worth reading), as anchors.mjs reads them */
 const ASCENT = 0.75, DESCENT = -0.22
@@ -127,7 +131,8 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * form's box, a clipping path), and one wholly outside it left out. Glyphs and boxes in the order the content stream
  * shows them; `points`: each point of the marked compile (POINT), { name, glyph, box }, the glyphs and the boxes shown
  * before it; `boxAt`: for each glyph, the boxes shown before it. On arXiv's PDF the points are nobody's. `capped`: the
- * list held more than OPS_CAP operations, and those past it were not read. `rotated`: the page's /Rotate is not 0, and
+ * list held more than OPS_CAP operations, and those past it were not read, or (`glyphsMax`) it showed more glyphs than
+ * that, and reading stopped there. `rotated`: the page's /Rotate is not 0, and
  * nothing is read (the layer lays over no rotated page).
  * `indices` (the text remover's, layout/remove.mjs): each glyph also carries where the content stream shows it: `n`, its
  * text-showing operation's place among the page's own (an annotation's appearance not counted: -1 there), and `k`, its
@@ -140,7 +145,7 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * browser draws a font as a font face, and gives no outline): its box is then the server's, exactly. `collect`: a Map
  * this reading's outline boxes are added to, by outlineKey
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), capped: false, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
@@ -238,7 +243,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       glyph.ix0 = Math.min(a, b); glyph.ix1 = Math.max(a, b); glyph.top = oy + box[3] * sz; glyph.bottom = oy + box[1] * sz
     } else if (box) { glyph.top = glyph.bottom = oy; glyph.ix0 = glyph.ix1 = ox }
     if (indices) { glyph.n = curShow; glyph.k = glyphAt; if (!/\S/.test(u)) glyph.blank = true }
-    if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) { glyphs.push(glyph); boxAt.push(boxes.length / 4) }
+    if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) {
+      if (glyphs.length >= glyphsMax) { over = true; return }
+      glyphs.push(glyph); boxAt.push(boxes.length / 4)
+    }
   }
 
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
@@ -299,7 +307,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     else s.x += x * hs
   }
 
-  for (let j = 0; j < n; j++) {
+  // (past glyphsMax, reading stops: the page is capped)
+  let over = false
+  for (let j = 0; j < n && !over; j++) {
     const fn = fnArray[j], a = argsArray[j] ?? []
     switch (fn) {
       case SAVE: push(); break
@@ -388,7 +398,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       default:
     }
   }
-  return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP, rotated: false }
+  return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP || over, rotated: false }
 }
 
 /** every column packGlyphs may keep */

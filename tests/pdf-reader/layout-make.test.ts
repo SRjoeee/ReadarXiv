@@ -1,7 +1,8 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { encodeLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { encodeLayout, indexLayout, type LayoutFile, NAME_FLAG, NAME_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
 import { OPS_CAP } from '@/pdf-reader/engine/layout/ink.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, OPS_MS, OPS_PAPER_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
@@ -1387,5 +1388,34 @@ describe('makeLayout over arXiv\'s text read once (the prepare\'s step T, layout
     const marks = await marksOf(DISPLAY)
     const text = await readArxivText(arxivOf([...DISPLAY.pages, ...DISPLAY.pages]))
     await expect(makeLayout({ units: DISPLAY.units, marks, arxiv: arxivOf(DISPLAY.pages), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', text })).rejects.toThrow(TypeError)
+  })
+})
+
+describe('makeLayout with the add-on\'s plans (`plans`): each page\'s operator list read once for both', () => {
+  // a paragraph over a stray glyph of another baseline under its rectangle (kept ink: the page is dirty, its removal
+  // planned), a page of a display, a page of no unit's, and a page past the ink reader's cap
+  const para: Run[] = [{ s: words(0, 10), x: 72, y: 700 }, { s: words(10, 10), x: 72, y: 688 }, { s: 'K', x: 100, y: 676, size: 14 }]
+  const shown: Run[] = DISPLAY.pages[0]?.runs ?? []
+  const w: World = {
+    pages: [{ runs: para, boxes: [[150, 699, 160, 701]] }, { runs: shown }, { runs: [{ s: 'nobody', x: 72, y: 700 }] }, { runs: [{ s: words(40, 3), x: 72, y: 700 }], ops: 'capped' }],
+    marked: [{ runs: [para[0] as Run, para[1] as Run] }, { runs: shown }, { runs: [{ s: 'nobody', x: 72, y: 700 }] }, { runs: [{ s: words(40, 3), x: 72, y: 700 }] }],
+    marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[1] as Run), 688], ['1s', 2, 72, 700], ['1e', 2, 267, 648], ['p1.1a', 2, 217, 700], ['2s', 4, 72, 700], ['2e', 4, endOf({ s: words(40, 3), x: 72, y: 700 }), 700]],
+    units: [unit('para', [text(words(0, 20))]), { ...(DISPLAY.units[0] as SourceUnit) }, unit('para', [text(words(40, 3))])],
+  }
+  it('the plans are pagePlansOf\'s of the same document, a dirty page\'s removal and alignment facts among them, and the file is the same bytes', async () => {
+    const marks = await marksOf(w)
+    const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const asked: number[] = []
+    const got = await makeLayout({ ...base, arxiv: arxivOf(w.pages, asked), plans: true })
+    const want = await makeLayout({ ...base, arxiv: arxivOf(w.pages) })
+    if (!('file' in got) || !('file' in want)) throw new Error('refused')
+    expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
+    expect(asked).toEqual([1, 2, 3, 4])
+    const { plans } = await pagePlansOf({ doc: arxivOf(w.pages) as never, OPS, index: indexLayout(got.file) })
+    expect(got.plans).toEqual(plans)
+    expect(plans.get(1)?.remove?.align.codes.length).toBeGreaterThan(0)
+    expect(plans.has(4)).toBe(false)
+    // without `plans`, none
+    expect('plans' in want).toBe(false)
   })
 })

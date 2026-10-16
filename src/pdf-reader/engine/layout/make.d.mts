@@ -3,6 +3,7 @@ import type { SourceUnit } from '../source/latex-front.mjs'
 import type { LayoutFile } from './file.mjs'
 import type { ArxivText } from './arxiv.mjs'
 import type { LayoutMarks } from './marks.mjs'
+import type { PagePlan } from './addon.mjs'
 
 export interface MakeInput {
   /** the paper's (openPaper(files).units), ids their indices */
@@ -19,6 +20,8 @@ export interface MakeInput {
   text?: ArxivText | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
+  /** the add-on's plans as well (`plans` in the result), of the ink the maker reads: each page's operator list read once */
+  plans?: boolean
 }
 export interface LayoutStats {
   lines: { carried: number; total: number; held: number }
@@ -49,7 +52,7 @@ export interface LayoutStats {
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }
   /** |baseline − TeX's start or end mark|, pt */
   baselines: { first: number[]; last: number[] }
-  /** pages past OPS_CAP */
+  /** pages past OPS_CAP, or past GLYPHS_PAGE glyphs */
   capped: number[]
   /** pages whose operator list did not come within OPS_MS, or after the paper's OPS_PAPER_MS, or failed: no ink */
   timedOut: number[]
@@ -61,7 +64,7 @@ export interface LayoutStats {
   refusal?: { path: string; why: string }
 }
 /** a paper's layout file, or why none is made */
-export declare function makeLayout(o: MakeInput): Promise<{ file: LayoutFile; stats: LayoutStats } | { refused: 'carry' | 'pages' | 'bounds'; stats: LayoutStats }>
+export declare function makeLayout(o: MakeInput): Promise<{ file: LayoutFile; stats: LayoutStats; plans?: Map<number, PagePlan> } | { refused: 'carry' | 'pages' | 'bounds'; stats: LayoutStats }>
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number
 /** a page's operator list waited for at most, ms; and a paper's in all */
