@@ -52,6 +52,7 @@
 // - Erasing: what a unit's erasing covers that no painted unit accounts for is put back from the original (kept lines
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
 import { noStart } from './no-start.mjs'
+import { sourceRepeats, stutterCuts } from './stutter.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -1855,6 +1856,23 @@ export function ink100(s, face) {
 }
 
 /**
+ * `text` with the ranges `cuts` ([from, to), rising: stutter.mjs stutterCuts) left out, and its transformMap (`map`, or null)
+ * less the same characters, so that each character left keeps the place in the piece it had; null where there is nothing to cut
+ */
+export function cutOut(text, cuts, map) {
+  if (!cuts.length) return null
+  let out = '', at = 0
+  const from = map ? [] : null, span = map ? [] : null
+  const keep = (a, z) => {
+    out += text.slice(a, z)
+    if (map) for (let i = a; i < z; i++) { from.push(map.from[i]); span.push(map.span[i]) }
+  }
+  for (const [a, z] of cuts) { if (a > at) keep(at, a); at = Math.max(at, z) }
+  keep(at, text.length)
+  return { text: out, map: map && { from, span } }
+}
+
+/**
  * A unit's pieces as tokens: { s, st, face, cls ('cjk'|'latin'), w100, glue (no break before), punct ('open'|'close'),
  * asp (CJK–Latin autospace before it), hyph (a language to hyphenate it in) }, { space }, { crop }, { sup }. `base`: the
  * unit's style ({ fam, bold, italic, caps, design }); `designs`: the paper's serif, sans and mono designs. `lead`: what
@@ -1975,6 +1993,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     return t
   }
+  // (a translator's stutter, a word written twice in a row the source has once, drawn once: stutter.mjs, the M1 survey; not
+  // where the unit's source repeats a word itself)
+  const tidy = !sourceRepeats(unit.src)
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
       let s = p.s
@@ -1987,7 +2008,10 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // be drawn as it is shown)
       const sm = at ? (p.tr ? escapeMap(p.s, sh) : sh === p.s ? true : null) : null
       const map = sm ? transformMap(s, text) : null
-      pushText(text, style(), {}, map && { at, sh, base: p.s.length - s.length, map, sm: sm === true ? null : sm })
+      // (a stutter's second word left out of a translated piece, each character left keeping its place: the word table's offsets
+      // stay the translation's own)
+      const cut = tidy && p.tr ? cutOut(text, stutterCuts(text), map) : null
+      pushText(cut?.text ?? text, style(), {}, (cut ? cut.map : map) && { at, sh, base: p.s.length - s.length, map: cut ? cut.map : map, sm: sm === true ? null : sm })
       return
     }
     plain?.gap()
