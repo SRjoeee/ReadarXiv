@@ -259,7 +259,9 @@ async function streamed(ctx, maker, st, lineskip) {
       if (part === null) return
       closed.push([part.from, part.to, X])
       await tell(ctx, state, cutter, part, layout, lines)
-      // (what the parts after it read of the units it told is K's alone; its pages' names and plans are done)
+      // (what the parts after it read of the units it told is K's alone; its pages' names and plans are done; the plans' totals
+      // are counted before they go)
+      for (const [pg, q] of st.plans ?? []) if (pg <= part.to) { planned.pages++; if (q.remove) planned.dirty++ }
       st.tell(K.slice(0, (part.to === N ? K.length - 1 : F[part.to]) + 1).map(e => e.id), part.to)
     }
   }
@@ -295,6 +297,7 @@ async function streamed(ctx, maker, st, lineskip) {
   // the maker's calls alone caught: a throw of its own is the layout's, from then on (design §3): the parts not yet told cut
   // with none, the parts told standing; nothing is told twice
   let failed = null
+  const planned = { pages: 0, dirty: 0 }
   const making = async f => {
     try { await f() } catch (e) {
       if (isMemoryError(e)) throw e
@@ -321,5 +324,5 @@ async function streamed(ctx, maker, st, lineskip) {
       await tell(ctx, state, cutter, part, null, lines)
     }
   }
-  return { through: N, count: cutter.parts.length, stats: { left: side.stats, layout: failed ? { refused: 'failed', why: failed, stats: maker.stats } : { stats: maker.stats, ...(st.plansFailed() ? { plansFailed: st.plansFailed() } : {}) }, plans: st.plans ? { pages: st.plans.size, dirty: [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, closed } }
+  return { through: N, count: cutter.parts.length, stats: { left: side.stats, layout: failed ? { refused: 'failed', why: failed, stats: maker.stats } : { stats: maker.stats, ...(st.plansFailed() ? { plansFailed: st.plansFailed() } : {}) }, plans: st.plans ? { pages: planned.pages + st.plans.size, dirty: planned.dirty + [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, closed } }
 }

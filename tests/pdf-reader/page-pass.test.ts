@@ -138,6 +138,16 @@ describe('layerOfPaper: the page pass', () => {
     expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'failed', why: 'a broken page' } } })
   })
 
+  it('the oracle\'s plan totals are the whole run\'s, counted before the told parts drop their plans', async () => {
+    const w = worldOf()
+    const capture: Record<string, unknown> = {}
+    const want = await passOf(w, { capture: capture as never })
+    const got = await passOf(w, { oracle: capture as never })
+    const plans = (r: unknown) => (r as { stats: { plans: unknown } }).stats.plans
+    expect(plans(want.r)).toMatchObject({ pages: 3 })
+    expect(plans(got.r)).toEqual(plans(want.r))
+  })
+
   it('a throw of the maker\'s with no message is a failure all the same: the rest cut with no layout', async () => {
     const w = worldOf()
     const capture: Record<string, unknown> = {}
