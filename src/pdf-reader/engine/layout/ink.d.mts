@@ -14,16 +14,6 @@ export declare function outlineBox(commonObjs: unknown, font: unknown, fontChar:
 export declare const OPS_CAP: number
 /** the glyphs a page's ink holds at most where its reader asks (`glyphsMax`): past it the page is capped */
 export declare const GLYPHS_PAGE: number
-/** a page's operator list waited for at most, in milliseconds (the layout maker's read of arXiv's PDF, the marked original's) */
-export declare const OPS_MS: number
-/** a paper's pages given up on (past OPS_MS) or capped, at most: past it every later page is dark unread (both readers) */
-export declare const GIVEN_UP_MAX: number
-/** a reader's count of its pages given up on: `over()` every later page dark unread, `spend()` one more */
-export declare function givenUpBudget(): { over(): boolean; spend(): void }
-/** a promise's value, or null where it does not come within `ms` or fails */
-export declare function within<T>(promise: Promise<T> | T, ms: number): Promise<T | null>
-/** a page's operator list given up on (PDF.js's own cancellation); where the PDF.js has none, a warning once (`seen`) */
-export declare function giveUp(page: unknown, seen: { warned: boolean; who?: string }): void
 /** the boxes a page's ink holds at most, whatever its reader (an operation's many: a repeat's or a group's placements, a run of
  *  glyphs set turned): past it the page is capped; above any budget a dense page's boxes are merged under (500,000) */
 export declare const BOXES_CAP: number

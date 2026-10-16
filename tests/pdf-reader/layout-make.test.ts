@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
-import { CARRY_MIN, fontName, GIVEN_UP_MAX, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
+import { CARRY_MIN, fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -614,27 +614,24 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT, UNIT_FLAG.FRONT, 0])
   })
 
-  it("each page's operator list is waited for OPS_MS alone, and a paper's pages given up on are GIVEN_UP_MAX at most: every page after is dark, unread", async () => {
-    expect(GIVEN_UP_MAX).toBe(8)
-    // twelve pages whose lists never come: the first eight each waited for OPS_MS and given up, the four after never asked
-    // (a count, no clock of the paper's: a paper of 10,000 such pages costs 8 times OPS_MS)
+  it("each page's operator list is waited for OPS_MS alone: no count of pages given up on makes a later page dark", async () => {
+    // twelve pages whose lists never come: each asked, waited for OPS_MS and given up, that page alone (what a page given up
+    // on leaves is that page's: oplist.mjs)
     const pages = Array.from({ length: 12 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'never' }))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     const asked: number[] = []
     const out = make({ pages, marked: pages.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked)
     await vi.advanceTimersByTimeAsync(13 * OPS_MS)
     const done = await out
-    expect(asked).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(asked).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     expect(done.stats.timedOut).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
-    // a capped page is given up on too: seven pages past OPS_CAP and a slow one, then the rest unread
-    const mixed = pages.map((p, j): Page => ({ ...p, ops: j < 7 ? 'capped' : 'never' }))
+    // eleven pages past OPS_CAP, then one whose list comes: it is read, its ink whole
+    const mixed = pages.map((p, j): Page => ({ ...p, ops: j < 11 ? 'capped' : undefined }))
     const asked2: number[] = []
-    const out2 = make({ pages: mixed, marked: mixed.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked2)
-    await vi.advanceTimersByTimeAsync(6 * OPS_MS)
-    const done2 = await out2
-    expect(asked2).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
-    expect(done2.stats.capped).toEqual([1, 2, 3, 4, 5, 6, 7])
-    expect(done2.stats.timedOut).toEqual([8, 9, 10, 11, 12])
+    const done2 = await make({ pages: mixed, marked: mixed.map(p => ({ runs: p.runs })), marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked2)
+    expect(asked2).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    expect(done2.stats.capped).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    expect(done2.stats.timedOut).toEqual([])
   })
 
   it('the pinned PDF.js has the cancel the maker gives a page up with; without it the maker warns once and goes on', async () => {

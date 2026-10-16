@@ -23,7 +23,8 @@ import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { carrier as carrierFor, carrierOf, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { GIVEN_UP_MAX, giveUp, GLYPHS_PAGE, OPS_MS, packGlyphs, pageInk, within } from './ink.mjs'
+import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { listWithin, OPS_MS } from './oplist.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf } from './remove.mjs'
@@ -36,7 +37,7 @@ const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
 
 /** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
 export const CARRY_MIN = 0.9
-/** a page's operator list waited for at most (ink.mjs OPS_MS, the marked original's read's too) */
+/** a page's operator list waited for at most (oplist.mjs OPS_MS: past it the page has no ink, that page alone) */
 export { OPS_MS }
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
 /** units TeX sets away from where the source has them (anchors.mjs `floating`) */
@@ -341,9 +342,6 @@ function sameWord(doc, byPage, c, start, ours) {
   return (a !== null && a === ours) || (b !== null && b === theirs) || (a !== null && a === b) ? doc[k].t : ours
 }
 
-/** a paper's pages given up on, at most (ink.mjs GIVEN_UP_MAX: arXiv's PDF's read and the marked original's) */
-export { GIVEN_UP_MAX }
-
 /** stats before anything is read */
 function blank(units) {
   return {
@@ -454,17 +452,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   async function inkOf(p) {
     if (unread.has(p)) return
-    // (past GIVEN_UP_MAX pages given up on, the page is dark unread: its operator list is never asked)
-    if (stats.timedOut.length + stats.capped.length >= GIVEN_UP_MAX) { stats.timedOut.push(p); dark.add(p); return }
     // (the page its text was read from: PDF.js keeps each page's proxy)
     let page = null
     try { page = await arxiv.getPage(p) } catch {}
     if (!page) { dark.add(p); return }
-    let ops = null
-    try { ops = await within(page.getOperatorList(), OPS_MS) } catch {}
-    // a page given up on let go as well: a list that failed has no stream left to cancel, and giveUp's cancellation of
-    // it cleans up nothing (PDF.js's _abortOperatorList returns early); after a cancellation, cleaning up is a no-op
-    if (!ops) { giveUp(page, seen); page.cleanup?.(); stats.timedOut.push(p); dark.add(p); return }
+    // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs)
+    const ops = await listWithin(page, seen)
+    if (!ops) { stats.timedOut.push(p); dark.add(p); return }
     const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE })
     // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
     if (wantPlans && !got.capped && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))

@@ -18,7 +18,8 @@ import { textless } from '../rules/arg-roles.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
-import { givenUpBudget, giveUp, GLYPHS_PAGE, OPS_MS, packGlyphs, pageInk, within } from './ink.mjs'
+import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { listWithin } from './oplist.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
@@ -1085,8 +1086,6 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   const stream = units && OPS ? ownedPages({ follows, dropped, closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
   let all = 0, found = []
   const seen = { warned: false, who: 'marked read' }
-  // (the pages whose ink was given up on or capped: past ink.mjs GIVEN_UP_MAX, every later page is dark unread, as arXiv's are)
-  const givenUp = givenUpBudget()
   const take = (name, e, W) => {
     if (e.how >= OWNED) { found.push([name, [name, e.how]]); return }
     const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); found.push([name, [name, k]]) }
@@ -1127,18 +1126,14 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
       // glyph's boxes before it as 32-bit integers: held until every piece that may read the page is found. Bounded as the
       // layout maker's read of arXiv's PDF is (the compile is the paper's source, set by a TeX the reader does not hold):
       // its operator list waited for OPS_MS at most and given up past it, its glyphs GLYPHS_PAGE at most; a page past
-      // either has no ink, so no piece on it is owned (`dark`, that page alone); past GIVEN_UP_MAX such pages, every later
-      // page's list is never asked (dark)
-      let ops = null, got = null
-      if (givenUp.over()) dark = 'timedOut'
-      else {
-        try { ops = await within(page.getOperatorList(), OPS_MS) } catch {}
-        got = ops ? pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE }) : null
-        // (a page past a guard of pageInk's own, by name: `capped` past its caps, `timedOut` past its time a page)
-        if (!ops) { giveUp(page, seen); dark = 'timedOut' } else if (got.capped) dark = 'capped'
-        else if (got.timedOut) dark = 'timedOut'
-        if (dark) givenUp.spend()
-      }
+      // either has no ink, so no piece on it is owned (`dark`, that page alone)
+      // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs; a page past a guard of pageInk's own, by
+      // name: `capped` past its caps, `timedOut` past its time a page)
+      const ops = await listWithin(page, seen)
+      const got = ops ? pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE }) : null
+      if (!ops) dark = 'timedOut'
+      else if (got.capped) dark = 'capped'
+      else if (got.timedOut) dark = 'timedOut'
       const { glyphs, boxes, points, boxAt } = dark ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
       ink = { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) }
     }
