@@ -97,7 +97,7 @@ const bundleOf = (o?: Parameters<typeof partsOf>[0]): ReadBundle => readBundle(w
 function docOf(ready: Promise<unknown> | null = null) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const items = [1, 2].map(p => SPECS.flatMap(s => s.lines.filter(l => l[0] === p).map(([, x0, x1, b]) => ({ str: s.text, transform: [10, 0, 0, 10, x0, b], width: x1 - x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))))
-  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} })
+  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, getAnnotations: async () => [{ subtype: 'Link', rect: [270, 2, 290, 12], url: `https://example.org/p${n}`, overlaidText: '', borderStyle: { width: 0, style: 1 }, color: null }] })
   return { numPages: 2, getPage: async (n: number) => { await ready; return pageOf(n) } }
 }
 /** every face served whole, one slice over every code point; the faces asked, in turn */
@@ -283,7 +283,11 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(again.words.tokens.n).toBe(again.words.word.length)
     expect(again.words).toEqual(pages[0]!.words)
     expect(again.words.word).not.toBe(pages[0]!.words.word)
-    expect(again.links).toEqual([])
+    // (the links: a copy of the page's kept records, new objects on every ask; the margin's link with no glyph under it stays in place)
+    expect(again.links).toEqual([{ boxes: [270, 2, 290, 12], url: 'https://example.org/p1', name: '', moved: false, order: 0 }])
+    expect(again.links).toEqual(pages[0]!.links)
+    expect(again.links[0]).not.toBe(pages[0]!.links[0])
+    expect(layer.stats().links).toMatchObject({ total: 2, inPlace: 2, moved: 0, unsupported: 0, unread: 0 })
     const source = document.createElement('canvas')
     source.width = 1500
     source.height = 1500

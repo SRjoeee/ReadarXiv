@@ -199,13 +199,14 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const pageIn = page => { if (!Number.isSafeInteger(page) || page < 1 || page > N) throw new RangeError(`page: 1 to ${N}, not ${typeof page === 'number' ? page : kindOf(page)}`) }
   /** a ready page as a host keeps it: a new element made of the page's kept markup (run.svgOf: no layout, face, ink or PDF.js
    *  call), its lang set; its word table, a copy of the page's kept record (run.wordsOf: no array is the run's, the host may
-   *  transfer or free them; an empty table for a page with none painted); links new empty data until the engine's 3a (their
-   *  shape is fixed now). The run holds no element of a page: a host drops a far page's and asks again */
+   *  transfer or free them; an empty table for a page with none painted); its links likewise (run.linksOf: a new copy of the
+   *  page's kept records, plain data, [] where its annotations could not be read). The run holds no element of a page: a host
+   *  drops a far page's and asks again */
   const fresh = (page, lang) => {
     const r = run.rows[page - 1]
     const svg = run.svgOf(page)
     svg.setAttribute('lang', lang)
-    return { svg, w: r.w, h: r.h, words: run.wordsOf(page), links: [] }
+    return { svg, w: r.w, h: r.h, words: run.wordsOf(page), links: run.linksOf(page) }
   }
   const off = a => { if (a.signal && a.onAbort) a.signal.removeEventListener('abort', a.onAbort) }
 
@@ -509,7 +510,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       }
       let slowestTaskMs = 0
       for (const ms of run.ms.values()) if (ms > slowestTaskMs) slowestTaskMs = ms
-      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size } }
+      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size } }
     },
     dispose() {
       if (disposed) return

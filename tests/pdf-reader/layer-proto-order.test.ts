@@ -179,8 +179,8 @@ describe('the reader\'s door: pageOf in any order, bursts, aborts and asks made 
   /** a page asked for: its answer as it is ready, or that it failed */
   async function answer(layer: Layer, run: Run, p: number, o: { signal?: AbortSignal } = {}): Promise<Snap> {
     try {
-      const { svg, words } = await layer.pageOf(p, { lang, ...o })
-      return layerSnap(run, svg, words, p)
+      const { svg, words, links } = await layer.pageOf(p, { lang, ...o })
+      return layerSnap(run, svg, words, p, links)
     } catch (e) {
       if ((e as Error).name === 'AbortError') throw e
       return { failed: true }
