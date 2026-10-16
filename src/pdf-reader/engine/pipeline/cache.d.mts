@@ -38,7 +38,24 @@ export declare function allTranslatedBy(results: Map<number, { pieces?: unknown;
 export declare function labelOf(how: 'full' | 'provenance' | null, options: { pipeline: string; typesetting: string; passing: boolean; cached?: { pipeline: string; typesetting?: string } | null }): { pipeline: string; typesetting: string | undefined } | null
 /** the marked original's readings as a run gives them (live.mjs readingsOf) */
 export interface Readings { log: string; cites: string; labels: string; bbl: string | null; marks: import('./typeset/places.mjs').Marks }
+/** a marked original's readings as a store keeps them (the parked compile path's record, parked/extension-compile/) */
+export interface OriginalReadings {
+  pipeline: string
+  typesetting: string
+  /** the TeX page's versions it was compiled under */
+  page: string
+  log: string
+  /** its aux's \bibcite and \newlabel lines, and the bibliography its BibTeX or biber made (null where the paper ships its
+   *  own or has none) */
+  cites: string
+  labels: string
+  bbl: string | null
+  /** typeset/places.mjs Marks, its Map as entries */
+  marks: { pages: number; width: number; height: number; columns: number[]; marks: [string, unknown][] }
+  /** the left side's mark words: the entries of the Map marksOfPdf gives */
+  left: [string, unknown][]
+}
 /** the readings as the store keeps them, one per paper, with the left side's marks and the versions that made them */
-export declare function originalRow(readings: Readings, left: [string, unknown][], made: { pipeline: string; typesetting: string; page: string }): import('./record').OriginalReadings
+export declare function originalRow(readings: Readings, left: [string, unknown][], made: { pipeline: string; typesetting: string; page: string }): OriginalReadings
 /** a stored original's readings and left marks under these versions, or null */
-export declare function knownOriginal(row: import('./record').OriginalReadings | undefined, now: { pipeline: string; typesetting: string; page: string }): { readings: Readings; left: [string, unknown][] } | null
+export declare function knownOriginal(row: OriginalReadings | undefined, now: { pipeline: string; typesetting: string; page: string }): { readings: Readings; left: [string, unknown][] } | null
