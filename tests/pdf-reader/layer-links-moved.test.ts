@@ -81,9 +81,10 @@ describe('LK1: one annotation a number of a citation drawn as the page wrote it'
       expect(letters(drawnBetween(L, 2, r.rec.boxes))).toBe(r.rec.name)
     }
     // ("[21," starts after the CJK character's em, 110, and ends at 130, "41]" starts after the space, at 135: the box of "21" is
-    // carried over its marks and on to where "41]" starts, that of "41" from its token's start; the box is the line's band)
+    // from its "2", 115 (never the "[", where the run before drifts to), carried over its "," and on to where "41]" starts; that
+    // of "41" from its "4", 135; the line's band)
     const [x0, y0, x1, y1] = records[0]!.rec.boxes
-    expect([x0, x1]).toEqual([110, 135])
+    expect([x0, x1]).toEqual([115, 135])
     expect(records[1]!.rec.boxes[0]).toBe(135)
     expect([y0!, y1!].map(v => Math.round(v * 100) / 100)).toEqual([497.8, 507.5])
   })
@@ -272,7 +273,7 @@ describe('a translation that sets the pieces in another order: the right link, o
 })
 
 describe('a link\'s box where the browser lays its run a little wider or narrower than measured', () => {
-  it('keeps every letter of the link and no letter of another: its ends carried over its marks and into the gaps beside it', () => {
+  it('keeps every letter of the link and no letter of another: its right end carried over its marks and on to the next run', () => {
     const L = lay([text('\u5982'), ph('\\citet{taylor}'), text('\u6240\u793a')], { 1: { mode: 'orig-text', text: '(Taylor, 1953)' } })
     const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.taylor' }, 'Taylor')), cand(ann(1, { dest: 'cite.taylor' }, '1953'))], targets: [target(1, { kind: 'cite', keys: ['taylor'], gap: null })] })
     const { records } = placeUnit({ groups: m.groups, ...placing(L) })
@@ -285,8 +286,8 @@ describe('a link\'s box where the browser lays its run a little wider or narrowe
     const L = lay([text('\u5982 Sicherheitsbewertungen '), ph('\\cite{a}'), text('\u6240')], { 1: { mode: 'orig-text', text: '[32]' } })
     const m = matchUnit({ cands: [cand(ann(0, { dest: 'cite.a' }, '32'))], targets: [target(1, { kind: 'cite', keys: ['a'] })] })
     const { records } = placeUnit({ groups: m.groups, ...placing(L) })
-    // (a word of 22 glyphs 4 % wide gathers 4.4 pt, under the space and half its last glyph: drawn over the next word past that)
-    for (const drift of [1, 1.04]) expect(letters(drawnBetween(L, 2, records[0]!.rec.boxes, drift)), `drift ${drift}`).toBe('32')
+    // (a word of 22 glyphs 8 % wide gathers 8.8 pt: its last glyph's middle past the space and the "[", short of the "3")
+    for (const drift of [1, 1.04, 1.08]) expect(letters(drawnBetween(L, 2, records[0]!.rec.boxes, drift)), `drift ${drift}`).toBe('32')
   })
 })
 

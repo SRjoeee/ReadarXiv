@@ -449,20 +449,19 @@ const recordOf = (a, boxes, name) => {
 const sound4 = b => b[0] < b[2] && b[1] < b[3]
 
 /**
- * A drawn range's extent across on one line: from the edge before its first character to the edge after its last, each end
- * carried on where nothing of its word stands beside it: over its token's marks that are no letter or digit ("(" and "," of
- * "(Taylor,"), and at its right end on to where the next item starts, where that item begins a run of its own (its glyphs at
- * their own place), or a quarter em past a line's end. A browser lays a run's glyphs by its own advances, which the layout's
- * measure is near but not exactly (Chromium on Linux, wider): the glyphs drift right along a run from its start. So a box ends no
- * nearer than the next run's start, which drift never crosses, and starts at its own token's start, never into the gap before
- * it, which the run before drifts into
+ * A drawn range's extent across on one line: from the edge before its first character to the edge after its last, the right end
+ * carried on where nothing of its word stands after it: over its token's marks that are no letter or digit ("," of "(Taylor,"),
+ * and on to where the next item starts, where that item begins a run of its own (its glyphs at their own place), or a quarter em
+ * past a line's end. A browser lays a run's glyphs by its own advances, which the layout's measure is near but not exactly
+ * (Chromium on Linux, wider): the glyphs drift right along a run from its start, so a box ends no nearer than the next run's
+ * start, which drift never crosses. Its left end is its first character's: drift carries that character into the box, and what
+ * stands before it, a mark or the gap, is where the run before drifts to (the long word before "[32]" drawn over its "[")
  */
 function spanOf(line, e0, e1, edge, pad) {
   const startOf = (run, n) => run.items.find(([m]) => m === n)?.[1] ?? 0
   const items = line.items
-  let x0 = edge(line, e0.run, e0.at), x1 = edge(line, e1.run, e1.end)
-  const t0 = items[e0.n].t, s0 = startOf(e0.run, e0.n)
-  if (!LETTER.test(t0.s.slice(0, e0.at - s0))) x0 = edge(line, e0.run, s0)
+  const x0 = edge(line, e0.run, e0.at)
+  let x1 = edge(line, e1.run, e1.end)
   const t1 = items[e1.n].t, s1 = startOf(e1.run, e1.n)
   if (!LETTER.test(t1.s.slice(e1.end - s1))) {
     const end = edge(line, e1.run, s1 + t1.s.length)
