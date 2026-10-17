@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import type { Glyph } from '@/pdf-reader/engine/layout/ink.mjs'
-import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, pageDirty, pagePlan, pageRules, planOf, protection, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { type Glyph, MERGED } from '@/pdf-reader/engine/layout/ink.mjs'
+import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, inkOfPage, pageDirty, pagePlan, pageRules, planOf, protection, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 import { swapRects } from '@/pdf-reader/engine/layer/swap.mjs'
 
 // The layer's side of the text-removed PDF (layer-proto/removal.mjs): the text layer's characters carried to glyphs, the
@@ -28,6 +29,32 @@ describe("the text layer's characters carried to glyphs", () => {
   })
 })
 
+describe('inkOfPage: a page not read whole is refused, never a prefix of its ink', () => {
+  const font = { name: 'F1', loadedName: 'F1', ascent: 0.75, descent: -0.25, fontMatrix: [0.001, 0, 0, 0.001, 0, 0] }
+  /** a page of one text object showing `n` glyphs, each its own operation, as PDF.js's list for a page */
+  const pageOf = (n: number, rotate = 0) => {
+    const fnArray = [OPS.beginText, OPS.setFont, OPS.setTextMatrix], argsArray: unknown[] = [[], ['F1', 10], [[1, 0, 0, 1, 72, 700]]]
+    for (let i = 0; i < n; i++) { fnArray.push(OPS.showText); argsArray.push([[{ unicode: 'x', width: 500, isSpace: false, fontChar: 'x', vmetric: null }]]) }
+    return { rotate, commonObjs: { get: (id: string) => (id === 'F1' ? font : null), has: () => false }, getOperatorList: async () => ({ fnArray, argsArray }) }
+  }
+  it('gives the ink of a page read whole, and for one capped, timed out or rotated its reason alone', async () => {
+    const whole = await inkOfPage(OPS, pageOf(3000))
+    expect(whole.unread).toBeFalsy()
+    if (!whole.unread) expect(whole.glyphs).toHaveLength(3000)
+    // past a cap (pageInk's step bound, lowered), past the backstop (a clock past at its first reading), turned
+    expect(await inkOfPage(OPS, pageOf(3000), null, null, { stepsMax: 1000 })).toEqual({ unread: true, reason: 'capped' })
+    expect(await inkOfPage(OPS, pageOf(3000), null, null, { glyphsMax: 10 })).toEqual({ unread: true, reason: 'capped' })
+    expect(await inkOfPage(OPS, pageOf(3000), null, null, { msMax: -1 })).toEqual({ unread: true, reason: 'timedOut' })
+    expect(await inkOfPage(OPS, pageOf(3, 90))).toEqual({ unread: true, reason: 'rotated' })
+    // the refusal is a type of its own: its glyphs cannot be read before it is told apart from ink
+    const refused = await inkOfPage(OPS, pageOf(3000), null, null, { stepsMax: 1000 })
+    // @ts-expect-error a page refused holds no glyphs
+    expect(refused.glyphs).toBeUndefined()
+    if (refused.unread) expect(refused.reason).toBe('capped')
+    else expect.unreachable()
+  })
+})
+
 describe("the layout file's ownership", () => {
   // a unit (1) with one line at baseline 100 from x 10 to 60, its erase rectangle; an inline placeholder (k 2) over x
   // 30-40 with a rule; a label of unit 2 kept; another unit's line (3) below
@@ -43,6 +70,20 @@ describe("the layout file's ownership", () => {
     expect([...own.owner]).toEqual([1, 1, 1, 3, -1])
     expect([...own.ph]).toEqual([-1, 2, -1, -1, -1])
     expect([...own.paths]).toEqual([[0, { id: 1, k: 2 }]])
+  })
+  it('a merged box (a degraded page\'s, ink.mjs MERGED) is no rule: never owned nor removed, and kept ink where it meets a unit', () => {
+    // the placeholder's rule of the case above, merged by cell past the box budget: the same box, no path's index
+    const merged = inkOf(ink.glyphs, [[[30, 104, 40, 104.4], MERGED], [[0, 0, 300, 1], 1]])
+    const own = fileOwnership(index, 5, merged)
+    expect([...own.paths]).toEqual([])
+    expect([...own.linePaths]).toEqual([])
+    // the glyphs owned as ever
+    expect([...own.owner]).toEqual([1, 1, 1, 3, -1])
+    const plan = pagePlan(index, 5, merged, own)
+    expect(plan.units.flatMap(u => u.paths)).toEqual([])
+    expect(plan.crops.flatMap(c => c.paths)).toEqual([1])
+    // where a unit's rectangle meets it, the reader swaps the removed page in, which keeps it
+    expect(pageDirty(index, 5, merged, plan)).toEqual([30, 104, 40, 104.4])
   })
   it("a unit replaces its own glyphs and its placeholders' rules, less what its reading keeps; a crop's glyphs are the crop's", () => {
     const own = fileOwnership(index, 5, ink)

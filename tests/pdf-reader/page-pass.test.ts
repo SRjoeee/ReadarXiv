@@ -4,7 +4,7 @@ import { cutBundle } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import type { Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
-import { makeLayout } from '@/pdf-reader/engine/layout/make.mjs'
+import { DEFAULT_RULES, makeLayout, WHOLE_RULES } from '@/pdf-reader/engine/layout/make.mjs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { anchorUnits, boundsFromMarks, floatMatches } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { leftSideOf } from '@/pdf-reader/engine/pipeline/left-side.mjs'
@@ -326,9 +326,12 @@ describe('layerOfPaper: the production stream (rules 1, 3 and 4 give every predi
     })
   }
 
-  it('without the three rules, or with `whole`, the whole made first (no part cut early)', async () => {
+  it('by default the page stream (rules 1, 3 and 4, DEFAULT_RULES); a rule of the whole run\'s, or `whole`, the whole made first (no part cut early)', async () => {
     const w = worldOf()
-    for (const o of [{}, { rules: { frame: 'tokens', edges: 'earlier' } }, { rules, whole: true }]) {
+    expect(DEFAULT_RULES).toEqual({ ...rules, floatSearch: 'whole' })
+    const streamed = await passOf(w, {} as never)
+    expect((streamed.r as { stats: { closed?: unknown } }).stats.closed).toBeDefined()
+    for (const o of [{ rules: WHOLE_RULES }, { rules: { columns: 'units' } }, { rules: { edges: 'all' } }, { rules: { frame: 'units' } }, { whole: true }, { rules, whole: true }]) {
       const got = await passOf(w, o as never)
       expect((got.r as { stats: { closed?: unknown } }).stats.closed).toBeUndefined()
     }

@@ -18,8 +18,9 @@ import { textless } from '../rules/arg-roles.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
-import { GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
-import { listWithin } from './oplist.mjs'
+import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { listWithin, OPS_MS, within } from './oplist.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
@@ -847,10 +848,18 @@ export const MARKS_DEPTH = 3
  *  n<occurrence>.<key>) and whether each name's own text holds a lowercase letter (`marking.names`); 5 the paper's
  *  \lineskip and \lineskiplimit (`marking.lineskip`, PDF units, readSkipProbe: one pair, at the body's start); 6 an inline
  *  formula's opening mark set on the empty list after a display (\axtpmm), and `owned` by stream.mjs's OWNED_HOW of a
- *  piece past its column's end and of a display group (a later display of one 'in the display before it') */
-export const MARKS_SCHEMA = 6
+ *  piece past its column's end and of a display group (a later display of one 'in the display before it'); 7 the marked compile's Link annotations that name a destination (`links`:
+ *  rectangle, the glyphs under it, their text), which a reference the matcher misses is placed by */
+export const MARKS_SCHEMA = 7
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
-const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned']
+const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned', 'links']
+/** the marked compile's links (`links`, the link-anchor locator's: make.mjs phOf) at most: a paper's, past which it has none;
+ *  a destination's name's code units; a link's text's, past which it is kept with no glyph (n 0: counted for the order, never
+ *  an anchor) */
+export const LINKS_MAX = 20_000
+const DEST_MAX = 128, LINK_TEXT_MAX = 64
+/** a link entry: [dest, page, x0, y0, x1, y1, a, b, n, text] */
+const LINK_ROW = 10
 const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts', 'names', 'lineskip']
 /** a piece's own ink at most: its glyphs, its rules; and a paper's in all (each 5 values) */
 export const GLYPHS_PIECE = 20_000, RULES_PIECE = 2_000, OWNED_ALL = 250_000
@@ -1002,6 +1011,63 @@ export async function layoutMarksOf(marked, log, o) {
 
 /** a number to a hundredth, as the file writes it (-0 written 0) */
 const r2z = v => Math.round(v * 100) / 100 + 0
+
+/** a placeholder whose source names a link (a citation's key, a reference's label: layer-proto/links.mjs linkKindOf) and whose
+ *  class may hold it: the pieces whose links the link-anchor locator pairs (make.mjs), and whose pages' links the marks read */
+export const linkablePiece = piece => ['cite', 'ref', 'eqref', 'macro'].includes(classOf(piece)) && ['cite', 'internal'].includes(linkKindOf(piece)?.kind)
+/** a destination's name as the file holds it: 1 to DEST_MAX code units, no control character */
+const isDest = d => {
+  if (typeof d !== 'string' || d.length < 1 || d.length > DEST_MAX) return false
+  for (let i = 0; i < d.length; i++) { const c = d.charCodeAt(i); if (c < 0x20 || (c >= 0x7f && c <= 0x9f)) return false }
+  return true
+}
+/**
+ * A Link annotation as both PDFs' links are ranked by (the link-anchor locator, make.mjs: our compile's here, arXiv's there):
+ * its rectangle's corners in order and to a hundredth, [x0, y0, x1, y1], where it names a destination the marks file can hold
+ * (isDest) and its rectangle is four numbers within ±COORD_MAX with an area at a hundredth; else null, and it is no link of
+ * either side's order. One rule for both, so that a link one side leaves out the other leaves out too: a rank of a
+ * destination is then read over the same links in each (a zero-width link kept on one side alone paired every later link of
+ * its destination with the one before it)
+ */
+export function destRect(a) {
+  const r = a?.rect
+  if (!isDest(a?.dest) || !Array.isArray(r) || r.length !== 4 || !r.every(v => isNumber(v) && Math.abs(v) <= COORD_MAX)) return null
+  const [x0, y0, x1, y1] = [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3])].map(r2z)
+  return x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : null
+}
+/**
+ * Page p's Link annotations that name a destination (a string `dest`: no URL, no explicit array; destRect's), in PDF.js's
+ * order, as the marks file's `links` hold them: [dest, page, x0, y0, x1, y1, a, b, n, text], the rectangle's corners to a hundredth, and
+ * the glyphs under it by PDF.js's rule (links.mjs annotsOf: a glyph's advance centre on its baseline strictly inside the
+ * rectangle or a quad) over the page's own glyphs (pageInk's, `glyphs`): their least and greatest origin, their count and
+ * their characters in stream order. One with none, with more than MAX_GLYPHS, or with a text past LINK_TEXT_MAX is kept with
+ * n 0 (counted for the order, never an anchor). Null where the page's annotations could not be read (`raw` null) or it
+ * holds more than MAX_LINKS Link annotations: then the paper has no links (a rank past it is not known)
+ */
+function linksOfPage(raw, glyphs, p) {
+  if (raw === null) return null
+  const ls = raw.filter(a => a?.subtype === 'Link')
+  if (ls.length > MAX_LINKS) return null
+  if (!ls.some(a => isDest(a.dest))) return []
+  // (the glyphs a link may hold: those whose baseline lies inside one's rectangle, its height; no other is a point of any)
+  const bands = ls.flatMap(a => (destRect(a) ? [[Math.min(a.rect[1], a.rect[3]), Math.max(a.rect[1], a.rect[3])]] : []))
+  const pts = { x: [], y: [], ch: [], key: [] }
+  glyphs.forEach((g, k) => { if (!g.blank && /\S/u.test(g.u) && bands.some(([lo, hi]) => g.y > lo && g.y < hi)) { pts.x.push((g.x0 + g.x1) / 2); pts.y.push(g.y); pts.ch.push(g.u); pts.key.push(k) } })
+  const { list } = annotsOf(ls, pts)
+  const out = []
+  ls.forEach((a, i) => {
+    const rect = destRect(a)
+    if (!rect) return
+    const [x0, y0, x1, y1] = rect
+    const e = list[i], keys = e && !e.unsupported ? e.g.key : []
+    const text = keys.map(k => glyphs[k].u).join('')
+    if (!keys.length || keys.length > MAX_GLYPHS || text.length > LINK_TEXT_MAX) { out.push([a.dest, p, x0, y0, x1, y1, 0, 0, 0, '']); return }
+    let lo = Infinity, hi = -Infinity
+    for (const k of keys) { lo = Math.min(lo, glyphs[k].x0); hi = Math.max(hi, glyphs[k].x0) }
+    out.push([a.dest, p, x0, y0, x1, y1, r2z(lo), r2z(hi), keys.length, text])
+  })
+  return out
+}
 /** a unit's start or end mark, MARK_DEF's (the web's pdfMarks: what the left is anchored by) */
 const UNIT_MARK = /^\d+[se]$/
 
@@ -1016,10 +1082,13 @@ const UNIT_MARK = /^\d+[se]$/
  * - then for each page p `{ page }`: { p, view (its four numbers to a hundredth, checked as the marks' views are), tokens
  *   (the marks' tokens of p, stride 6: page, x, y, w, h, word), words (the words first seen on p, appended to the table in
  *   order), owned (the pieces found once p was read: [name, row], each row [name, how] or [name, how, n, glyphs (page, x0,
- *   y, size, its character itself), rules (page, x0, y0, x1, y1)]), dark (null, or why the page's ink was not read:
- *   'timedOut', its operator list not given within OPS_MS and given up; 'capped', past OPS_CAP or GLYPHS_PAGE. It has no
- *   ink then: no piece on it is owned), found (every piece whose opening point stands on a page before it has been given:
- *   stream.mjs ownedPages `found()`), repeats (the point names read a second time on p: `twice` a page at a time) }. Each page's view, text and, with `units` and `OPS`,
+ *   y, size, its character itself), rules (page, x0, y0, x1, y1)]), links (with `units` and `OPS`, its Link annotations that
+ *   name a destination, linksOfPage's rows, where a placeholder that names a link has a point on it; [] without or elsewhere;
+ *   null where they could not be read), dark (null, or why the page's ink was not read: 'timedOut', its operator list not
+ *   given within OPS_MS and given up, or its ink's walk past its backstop; 'capped', past OPS_CAP, GLYPHS_PAGE or a guard of
+ *   pageInk's own; 'degraded', its boxes past BOXES_PAGE merged. It has no ink then: no piece on it is owned), found (every
+ *   piece whose opening point stands on a page before it has been given: stream.mjs ownedPages `found()`), repeats (the point
+ *   names read a second time on p: `twice` a page at a time) }. Each page's view, text and, with `units` and `OPS`,
  *   its operator list are read once and the page cleaned up after (page.cleanup); its tokens (tokenizeDocument, which begins
  *   again on every page) are let go once read; its packed ink (packGlyphs, STREAM_COLUMNS) is held only until every piece
  *   that may read it is found (stream.mjs ownedPages);
@@ -1076,7 +1145,34 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   }
   // (the log's line counts, read before any page: a maker reading the pages as they come takes them with the head)
   const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
-  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines } }
+  // the pages whose links are read: those a placeholder that names a link (linkablePiece) has a point on, the pages between its
+  // two points too. Any other page's links are no piece's, and the link-anchor locator never pairs them (make.mjs): PDF.js reads
+  // a page's annotations at a cost of its own
+  const linkPages = new Set()
+  if (units && OPS) units.forEach((u, i) => u.pieces.forEach((piece, k) => {
+    if (!linkablePiece(piece)) return
+    const a = destPage.get(`p${i}.${k}a`) ?? destPage.get(`p${i}.${k}b`), b = destPage.get(`p${i}.${k}b`) ?? a
+    if (a !== undefined) for (let q = Math.min(a, b); q <= Math.max(a, b); q++) linkPages.add(q)
+  }))
+  // their annotations read first, each page's within OPS_MS (a page not answered within it could not be read), and kept until
+  // its page is read: what the paper's links are is a function of them alone, so it is told with the head (`links`: their count
+  // and their destinations' names, or null where the paper has none: a page's could not be read, held more than MAX_LINKS, or
+  // all were past LINKS_MAX), for a reader that takes the pages as they come (the page stream's maker) to know it before any page
+  const annotsAt = new Map()
+  let linkCount = 0, noLinks = false
+  const linkDests = new Set()
+  for (const q of [...linkPages].sort((a, b) => a - b)) {
+    let page = null
+    try { page = await pdf.getPage(q) } catch {}
+    const raw = page ? await within(readAnnots(page), OPS_MS) : null
+    annotsAt.set(q, raw)
+    const ls = Array.isArray(raw) ? raw.filter(a => a?.subtype === 'Link') : null
+    if (ls === null || ls.length > MAX_LINKS) { noLinks = true; continue }
+    for (const a of ls) if (destRect(a)) { linkCount++; linkDests.add(a.dest) }
+  }
+  if (linkCount > LINKS_MAX) noLinks = true
+  const links = noLinks ? null : { count: linkCount, dests: [...linkDests].sort() }
+  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, links } }
   // ---- each page, once
   const views = [], wordOf = new Map()
   let words = 0
@@ -1119,23 +1215,29 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     }
     views.push(...view)
     const content = await page.getTextContent()
-    let ink = null
+    let ink = null, links = []
     let dark = null
     if (stream) {
       // the columns of its glyphs ownedOf reads (ink.mjs packGlyphs, in stream order), not a Glyph object each, and each
       // glyph's boxes before it as 32-bit integers: held until every piece that may read the page is found. Bounded as the
-      // layout maker's read of arXiv's PDF is (the compile is the paper's source, set by a TeX the reader does not hold):
-      // its operator list waited for OPS_MS at most and given up past it, its glyphs GLYPHS_PAGE at most; a page past
-      // either has no ink, so no piece on it is owned (`dark`, that page alone)
-      // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs; a page past a guard of pageInk's own, by
-      // name: `capped` past its caps, `timedOut` past its time a page)
+      // layout maker's read of arXiv's PDF is (the compile is the paper's source, as untrusted): its operator list waited for
+      // OPS_MS at most and given up past it (oplist.mjs: that page alone); a page past a bound of pageInk's own (`capped`,
+      // `timedOut`), or read with its boxes past BOXES_PAGE merged (`degraded`: a piece's rule there would be left out of its
+      // own ink, unseen), is unread: no ink, so that no piece on it is owned (each LOST to the maker, `dark` says why), and no
+      // glyph under its links
+      // (its annotations as the head read them, let go here)
+      const raw = linkPages.has(p) ? annotsAt.get(p) ?? null : []
+      annotsAt.delete(p)
       const ops = await listWithin(page, seen)
-      const got = ops ? pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE }) : null
+      const got = ops ? pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE }) : null
       if (!ops) dark = 'timedOut'
       else if (got.capped) dark = 'capped'
       else if (got.timedOut) dark = 'timedOut'
+      else if (got.degraded) dark = 'degraded'
       const { glyphs, boxes, points, boxAt } = dark ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
       ink = { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) }
+      // its links, by the glyphs under them (linksOfPage): read where the operator list is
+      links = linksOfPage(raw, glyphs, p)
     }
     // its operator list let go once its ink is read, so that PDF.js holds one page's, not every page's to the end; nothing
     // reads it again, and the caller destroys the document after (paper.mjs)
@@ -1165,7 +1267,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     if (stream) stream.add(p, ink, take)
     const owned = found
     found = []
-    yield { page: { p, view, tokens, words: fresh, owned, dark, found: stream ? stream.found() : p + 1, repeats: stream ? stream.repeats() : [] } }
+    yield { page: { p, view, tokens, words: fresh, owned, links, dark, found: stream ? stream.found() : p + 1, repeats: stream ? stream.repeats() : [] } }
   }
   if (stream) stream.end(take)
   yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines } }
@@ -1186,7 +1288,9 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
  */
 export async function readMarked(marked, log, o) {
   let head = null, end = null
-  const views = [], words = [], tokens = [], rows = new Map(), dark = { timedOut: [], capped: [] }
+  const views = [], words = [], tokens = [], rows = new Map(), dark = { timedOut: [], capped: [], degraded: [] }
+  // (the links, the pages' in order; none at all where a page's could not be read or past LINKS_MAX)
+  let links = []
   for await (const x of markedPages(marked, log, o)) {
     if (x.head) head = x.head
     else if (x.page) {
@@ -1195,6 +1299,8 @@ export async function readMarked(marked, log, o) {
       for (const w of x.page.words) words.push(w)
       for (const v of x.page.tokens) tokens.push(v)
       for (const [name, row] of x.page.owned) rows.set(name, row)
+      if (links !== null && (x.page.links === null || links.length + x.page.links.length > LINKS_MAX)) links = null
+      else if (links !== null) for (const e of x.page.links) links.push(e)
     } else if (x.end) {
       end = x.end
       for (const [name, row] of x.end.owned) rows.set(name, row)
@@ -1230,7 +1336,7 @@ export async function readMarked(marked, log, o) {
       owned.push(row)
     }
   }
-  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned }, unitMarks, dark }
+  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned, links: links ?? [] }, unitMarks, dark }
 }
 
 /** whether a destination the head names is a mark of the marks file: on a page of the paper, at numbers within its view
@@ -1248,11 +1354,14 @@ export function columnsOf(head) {
 }
 /**
  * The marks of a marked original whose pages are still to be read (the page stream's maker, layout/make.mjs stream with
- * `marked`): what its head tells — its marking, its pages' columns, the names the log dropped, its line counts — and
- * nothing of its pages: no mark, token, word or owned piece yet, which the maker takes as each page comes
+ * `marked`): what its head tells — its marking, its pages' columns, the names the log dropped, its line counts, how many links
+ * the paper holds and their destinations (`linkCount`, `linkDests`: no field of the file's) — and nothing of its pages: no
+ * mark, token, word, owned piece or link yet, which the maker takes as each page comes
  */
 export function marksOfHead(head, engine) {
-  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, words: [], tokens: [], chars: [], owned: [] }
+  // (its links none yet, each page's added as it is read; how many the paper holds and their destinations' names the head's,
+  // for the maker's link-anchor locator: none where the paper has no links)
+  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, words: [], tokens: [], chars: [], owned: [], links: [], linkCount: head.links?.count ?? 0, linkDests: head.links?.dests ?? [] }
 }
 
 /** a point read twice on pages apart (markedPages' `twice`): its piece 'a mark set twice', owning nothing, nor the displays
@@ -1287,9 +1396,16 @@ export function marksFile(m) {
  * whole layer (the 6b review's Minor 1). The writer writes nothing the parser refuses
  */
 function fitted(m) {
-  const text = encodeLayoutMarks(m)
+  let text = encodeLayoutMarks(m)
   let bytes = new TextEncoder().encode(text).length, values = countValues(text)
   if (bytes <= MARKS_CAP && values <= MARKS_VALUES) return m
+  // (its links first: a paper past the bounds loses the link-anchor locator, before any piece's own ink)
+  if (m.links.length) {
+    m = { ...m, links: [] }
+    text = encodeLayoutMarks(m)
+    bytes = new TextEncoder().encode(text).length; values = countValues(text)
+    if (bytes <= MARKS_CAP && values <= MARKS_VALUES) return m
+  }
   const past = OWNED_HOW.indexOf('past the glyphs a paper may own'), owned = [...m.owned]
   for (let q = owned.length - 1; q >= 0 && (bytes > MARKS_CAP || values > MARKS_VALUES); q--) {
     const e = owned[q]
@@ -1304,11 +1420,12 @@ function fitted(m) {
 
 /** the marks file as written: the schema's keys in order, numbers to a hundredth */
 export function encodeLayoutMarks(m) {
-  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned } = m
+  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned, links } = m
   return JSON.stringify({
     schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
     owned: owned.map(ownedRow),
+    links: (links ?? []).map(e => e.map((v, j) => (j >= 2 && j <= 7 ? r2(v) : v))),
   })
 }
 /** an owned row as written: a glyph's page and character, a rule's page, as they are; its coordinates to a hundredth */
@@ -1404,5 +1521,26 @@ export function parseLayoutMarks(bytes) {
       }
     }
   }
+  checkLinks(m.links, pages)
   return m
+}
+
+/** the marked compile's links as the maker takes them (linksOfPage's rows): at most LINKS_MAX, pages rising, each
+ *  [dest, page, x0, y0, x1, y1, a, b, n, text] within its bounds; else a refusal at `links[i]…` */
+function checkLinks(v, pages) {
+  if (!Array.isArray(v) || v.length > LINKS_MAX) throw new LayoutRefusal('links', `not an array of at most ${LINKS_MAX}`)
+  let last = 1
+  for (let i = 0; i < v.length; i++) {
+    const e = v[i], at = `links[${i}]`
+    if (!Array.isArray(e) || e.length !== LINK_ROW) throw new LayoutRefusal(at, 'not [dest, page, x0, y0, x1, y1, a, b, n, text]')
+    if (!isDest(e[0])) throw new LayoutRefusal(`${at}[0]`, `not a destination's name of 1 to ${DEST_MAX} code units`)
+    if (!isInteger(e[1], last, pages)) throw new LayoutRefusal(`${at}[1]`, `not a page from ${last} to ${pages}`)
+    last = e[1]
+    for (let j = 2; j <= 7; j++) if (!isNumber(e[j]) || Math.abs(e[j]) > COORD_MAX) throw new LayoutRefusal(`${at}[${j}]`, `not a number within ±${COORD_MAX}`)
+    if (!(e[2] < e[4])) throw new LayoutRefusal(`${at}[4]`, 'not right of its other edge')
+    if (!(e[3] < e[5])) throw new LayoutRefusal(`${at}[5]`, 'not above its other edge')
+    if (!isInteger(e[8], 0, MAX_GLYPHS)) throw new LayoutRefusal(`${at}[8]`, `not a glyph count 0 to ${MAX_GLYPHS}`)
+    if (!(e[6] <= e[7])) throw new LayoutRefusal(`${at}[7]`, 'not at or right of its first glyph')
+    if (typeof e[9] !== 'string' || e[9].length > LINK_TEXT_MAX || (e[8] === 0) !== (e[9] === '')) throw new LayoutRefusal(`${at}[9]`, `not a text of at most ${LINK_TEXT_MAX} code units, empty with no glyph alone`)
+  }
 }

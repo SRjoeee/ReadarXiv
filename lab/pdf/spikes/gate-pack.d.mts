@@ -23,7 +23,7 @@ export declare function makePack(o: { entries: { path: string; from: string }[];
 export declare const COMPILE_IMAGE_FILE: string
 export declare function compileImageOf(file?: string): CompileImage
 export declare function localImageDigests(ref: string, run?: (cmd: string, args: string[], o: object) => string): string[]
-export declare function checkCompileImage(pinned: CompileImage, digests: readonly string[]): void
+export declare function checkCompileImage(pinned: CompileImage, digests: readonly string[], env?: Record<string, string | undefined>): void
 export declare function packJsonOf(manifest: Manifest, bucket?: string): PackJson
 export declare function summaryOf(files: PackFile[]): { files: number; bytes: number; objects: number; objectBytes: number; kinds: { kind: string; files: number; bytes: number }[] }
 export declare function objectUrl(account: string, url: string, bucket?: string): string

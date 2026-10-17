@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ensureFixtures, readManifest } from '../../scripts/fetch-fixtures.mjs'
+import { defaultCacheDir, ensureFixtures, readManifest } from '../../scripts/fetch-fixtures.mjs'
 
 // The fixtures that are not in the repository (tests/fixtures/remote.json): present and verified, or a failure that
 // says what to do — never a silently different file, never a half-written one
@@ -39,6 +39,41 @@ describe('ensureFixtures', () => {
     expect(url).toBe(ENTRY.url)
     expect(new Headers(init.headers).get('user-agent')).toMatch(/ReadarXiv/)
     expect(readdirSync(join(root, 'tests/fixtures/arxiv'))).toEqual(['0000.00000.html'])
+  })
+
+  it("the machine's cache: a copy fetched once is found by the next run with no network, and only the pinned bytes are taken from it", async () => {
+    const cacheDir = join(root, 'cache')
+    await ensureFixtures({ root, cacheDir, fetchImpl: serving(BODY), gapMs: 0 })
+    expect(readFileSync(join(cacheDir, ENTRY.sha256))).toEqual(BODY)
+    // a fresh checkout of the same machine, arXiv unreachable (or serving other bytes)
+    rmSync(file())
+    const offline = vi.fn(async () => { throw new TypeError('fetch failed') }) as unknown as typeof fetch
+    const log = vi.fn()
+    expect(await ensureFixtures({ root, cacheDir, fetchImpl: offline, log, gapMs: 0 })).toEqual({ verified: [], downloaded: [ENTRY.path] })
+    expect(readFileSync(file())).toEqual(BODY)
+    expect(offline).not.toHaveBeenCalled()
+    expect(log.mock.calls[0]![0]).toMatch(/from the machine's cache/)
+    // a cached file that is not the pinned bytes is ignored, never copied, and arXiv is asked
+    rmSync(file())
+    writeFileSync(join(cacheDir, ENTRY.sha256), 'something else')
+    const fetchImpl = serving(BODY)
+    await ensureFixtures({ root, cacheDir, fetchImpl, gapMs: 0 })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(readFileSync(file())).toEqual(BODY)
+    // a verified copy on disk seeds an empty cache
+    const seeded = join(root, 'seeded')
+    await ensureFixtures({ root, cacheDir: seeded, fetchImpl: offline, gapMs: 0 })
+    expect(readFileSync(join(seeded, ENTRY.sha256))).toEqual(BODY)
+  })
+
+  it('a cache that cannot be written is no failure; by default there is none, and CI has none', async () => {
+    const blocked = join(root, 'blocked')
+    writeFileSync(blocked, 'a file where the cache directory should be')
+    expect(await ensureFixtures({ root, cacheDir: join(blocked, 'sub'), fetchImpl: serving(BODY), gapMs: 0 })).toEqual({ verified: [], downloaded: [ENTRY.path] })
+    expect(defaultCacheDir({ READARXIV_FIXTURE_CACHE: '/x/y' })).toBe('/x/y')
+    expect(defaultCacheDir({ READARXIV_FIXTURE_CACHE: '' })).toBeNull()
+    expect(defaultCacheDir({ CI: 'true' })).toBeNull()
+    expect(defaultCacheDir({})).toMatch(/\.cache\/readarxiv\/fixtures$/)
   })
 
   it('a fixture already there and intact asks the network nothing', async () => {

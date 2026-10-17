@@ -24,12 +24,17 @@ import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, marksFile
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
+import { checkCompileImage, compileIdentity, imageFromArg, PLATFORM } from './compile-image.mjs'
+
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const FRESH = process.argv.includes('--fresh')
-const IMAGE = argOf('image') ?? 'texlive/texlive:latest'
+// (--image names an image by digest only: a tag is no identity, and a cache keyed by it would answer for the next image it points to)
+const IMAGE = imageFromArg(argOf('image'))
+const IDENTITY = compileIdentity(process.env, IMAGE, PLATFORM)
+await checkCompileImage(IMAGE)
 const TIMEOUT = Number(argOf('timeout') ?? 600)
 const DATA = process.env.AXT_DATA ?? join(root, 'data')
 const OUT = resolve(argOf('out') ?? join(root, 'out/layer-gate/e5-proof'))
@@ -42,7 +47,7 @@ const tag = IMAGE.replace(/[^A-Za-z0-9.-]+/g, '_')
 
 /** a compile's files by what it compiles, as layer-fixtures.mjs keys them (the paper's source files and the marked ones, sorted by path) */
 const keyOf = (source, marked) => {
-  const hash = createHash('sha256')
+  const hash = createHash('sha256').update(IDENTITY)
   for (const [p, b] of [...source, ...marked].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)
   return hash.digest('hex').slice(0, 16)
 }
@@ -62,7 +67,7 @@ async function dockerCompile(dir, name, files, paper, { once, bibtex }) {
     // (containers other than this one running at the start: what else the machine is compiling, which the seconds depend on)
     const others = (await run('docker', ['ps', '-q']).catch(() => ({ stdout: '' }))).stdout.split('\n').filter(Boolean).length
     const t0 = Date.now()
-    await run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', IMAGE, 'timeout', String(TIMEOUT), 'latexmk', flag, ...(once ? ['-e', '$max_repeat=1'] : []), ...(bibtex ? [] : ['-bibtex-']), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
+    await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', IMAGE, 'timeout', String(TIMEOUT), 'latexmk', flag, ...(once ? ['-e', '$max_repeat=1'] : []), ...(bibtex ? [] : ['-bibtex-']), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
     const seconds = (Date.now() - t0) / 1000
     const pdf = join(build, `${stem}.pdf`), log = join(build, `${stem}.log`)
     return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1'), seconds, others } : null

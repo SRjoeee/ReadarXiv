@@ -3,11 +3,11 @@
 // page and by the stream's prefix) with a left part for every page. The prepare pipeline's temporary producer calls it after
 // today's whole-document stages; the page stream replaces it. Pure but for the writers' hashing: the same input gives the same
 // bytes and keys. Imports the format's writers, the door's need rule (need.mjs) and nothing that loads a canvas.
-import { NAME_FLAG } from '../layout/file.mjs'
+import { indexLayout, NAME_FLAG } from '../layout/file.mjs'
 import { REMOVAL } from '../layout/addon-manifest.mjs'
 import { BundleRefusal } from './bundle.mjs'
 import { groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
-import { needBound, needsOf } from './need.mjs'
+import { needBound, needsOf, rowLeadOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
 const SIZE_BOUNDS = ['bytes', 'values', 'content', 'tail', 'rows']
@@ -44,6 +44,8 @@ function entriesOf(whole, N, grouped) {
   const left = new Map(whole.left.units.map(w => [w[0], w]))
   const layout = whole.layout ?? null
   const luOf = new Map(layout ? layout.units.map(u => [u[0], u]) : [])
+  // (the file's index, for the unit each one's first row continues on a shared line: need.mjs rowLeadOf)
+  const index = layout ? indexLayout(layout) : null
   // the pages each unit's rows name, by table (a unit's lines are the pages it is framed on; the rest only widen the part's reach)
   const linePages = new Map(), allPages = new Map(), segPages = new Map()
   const pagesOf = (map, id) => map.get(id) ?? map.set(id, []).get(id)
@@ -67,6 +69,8 @@ function entriesOf(whole, N, grouped) {
       lists, reach: new Set([...rectPages, ...lines]),
       // (and what Need reads of it besides, as the door's K has it (run.mjs addUnits): its placeholders' segments' pages and its table group)
       reads: lu ? [...new Set((segPages.get(id) ?? []).filter(q => q >= 1 && q <= N))] : [], group: grouped.of[id] >= 0 ? grouped.of[id] : null,
+      // (set once K is in order, below)
+      follows: null,
       // the least page of its rects and its lines: where the reader says a part may no longer tell it
       first: Math.min(...rectPages, ...lines),
       // the last page its left rects reach, and the last page any of its rows does (what the part's views must reach)
@@ -75,7 +79,11 @@ function entriesOf(whole, N, grouped) {
     entries.push(e)
     if (w && w[1] > before) before = w[1]
   }
-  return entries.sort((a, b) => a.slot - b.slot || a.id - b.id)
+  entries.sort((a, b) => a.slot - b.slot || a.id - b.id)
+  // (a unit follows one before it in K alone, chosen among those, as the door's K holds it: run.mjs addUnits)
+  const at = new Map(entries.map((e, i) => [e.id, i]))
+  for (const e of entries) if (e.lu) e.follows = rowLeadOf(index, e.id, aid => at.get(aid) < at.get(e.id))?.id ?? null
+  return entries
 }
 
 /** the frontier of the whole paper by the door's rule: F[b] is the index in K of the last entry page b's drawing may need */
@@ -177,11 +185,11 @@ export async function wholeCutter(whole, o) {
 /**
  * K over the whole paper and its frontier closed over the table groups (what partCutter cuts a paper made whole on): `whole`
  * cutBundle's, `frontier(K, N)` F as an array of pages 0 to N (needFrontier's by default), checked: a TypeError or a
- * RangeError for one that is not an index of K for each page, rising from -1
+ * RangeError for one that is not an index of K for each page, rising from -1. `grouped` groupsOfUnits(whole.units), made by a
+ * caller that asks for K more than once (the page stream: a function of the units alone)
  */
-export function wholeFrontier(whole, frontier = needFrontier) {
+export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOfUnits(whole.units)) {
   const N = whole.paper.pages
-  const grouped = groupsOfUnits(whole.units)
   const K = entriesOf(whole, N, grouped)
   const given = frontier(K, N)
   if (!Array.isArray(given) || given.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)
@@ -222,7 +230,7 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
       const got = await leftPages(page)
       const first = got ? got.first : tokens
       const t = got ? got.tokens : empty
-      const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [], draw: got?.draw ?? null })
+      const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [], draw: got?.draw ?? null, drawText: got?.drawText ?? null })
       lefts.push(w)
       tokens = first + t.perPage[0]
     }

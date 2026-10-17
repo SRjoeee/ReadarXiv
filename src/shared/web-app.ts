@@ -4,8 +4,9 @@
 // <html>. This is the whole of what the extension does there. Nothing is read from the page, nothing else is written to
 // it, and no message is sent — in either direction.
 
-/** The website's hosts, each matched over https and nothing else. Staging now; production joins when the website is live there */
-export const WEB_APP_HOSTS: readonly ['app-staging.readarxiv.org'] = ['app-staging.readarxiv.org']
+/** The website's hosts, each matched over https and nothing else: production's. A build whose server is staging's marks
+ *  staging's pages too, the build adding them (wxt.config.ts `build:manifestGenerated`; scripts/check-output.mjs checks both) */
+export const WEB_APP_HOSTS: readonly ['readarxiv.com'] = ['readarxiv.com']
 
 /** The match patterns of the content script: `https://<host>/*` for each of the website's hosts */
 export const WEB_APP_MATCHES: string[] = WEB_APP_HOSTS.map(host => `https://${host}/*`)

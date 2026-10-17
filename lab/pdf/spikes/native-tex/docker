@@ -3,7 +3,8 @@
 # A stand-in for the one `docker run` lab/pdf/spikes/layer-fixtures.mjs and scripts/make-sample-bundle.mjs make (latexmk
 # in texlive/texlive:latest, no network; the sample's with its date pinned by -e), for a machine whose Docker cannot run
 # it: the same latexmk command, run natively in the build folder with a local TeX Live, each -e set in its environment.
-# Put this folder first on PATH for that one run (lab/pdf/README.md, 2608.16117v1-zh). It handles that command alone and
+# Put this folder first on PATH for that one run, with NATIVE_TEX=1 set (lab/pdf/spikes/compile-image.mjs: no image is checked and
+# the compile cache keys carry `native`) (lab/pdf/README.md, 2608.16117v1-zh). It handles that command alone and
 # refuses any other; it never calls Docker. A compile made so is not the Docker image's package versions
 # byte for byte, and the next make in Docker replaces what it made.
 #   NATIVE_TEX_BIN       the TeX Live binaries (default: TinyTeX's, ~/Library/TinyTeX/bin/universal-darwin)
@@ -20,7 +21,8 @@ while [ $# -gt 0 ]; do
     --rm|--init) shift ;;
     --network|--cpus|--memory|-w|--pull) shift 2 ;;
     -e) case "$2" in FORCE_SOURCE_DATE=*|SOURCE_DATE_EPOCH=*) envs+=("$2") ;; *) echo "native-tex/docker: unexpected -e $2" >&2; exit 1 ;; esac; shift 2 ;;
-    texlive/texlive:latest) shift; cmd=("$@"); break ;;
+    --platform) shift 2 ;;
+    texlive/texlive*) shift; cmd=("$@"); break ;;
     *) echo "native-tex/docker: unexpected argument $1" >&2; exit 1 ;;
   esac
 done

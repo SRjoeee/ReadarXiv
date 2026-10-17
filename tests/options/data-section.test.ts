@@ -19,11 +19,11 @@ vi.mock('@/shared/messages', async importOriginal => ({
   },
 }))
 vi.mock('@/shared/download', () => ({ downloadTextFile: (name: string, text: string, type: string) => { wire.downloads.push({ name, text, type }) } }))
-// The PDF reader's store, on the settings page's own origin (the reader's design, §9.3): stood in for, since what it
-// keeps is tests/cache/pdf-store.test.ts's business
+// The PDF reader's store of papers' layers, on the settings page's own origin (the reader's design, §9.3): stood in for,
+// since what it keeps is tests/cache/layer-store.test.ts's business
 const pdfStore = vi.hoisted(() => ({ count: 0, bytes: 0, failing: false }))
-vi.mock('@/cache/pdf-store', () => ({
-  createPdfStore: () => ({
+vi.mock('@/cache/layer-store', () => ({
+  createLayerStore: () => ({
     usage: async () => {
       if (pdfStore.failing) throw new Error('the store cannot be read')
       return { count: pdfStore.count, bytes: pdfStore.bytes }

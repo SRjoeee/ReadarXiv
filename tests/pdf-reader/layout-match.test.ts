@@ -31,8 +31,24 @@ describe('matcherOf: the guards', () => {
     const P = page([{ u: 'x', x: 100, y: 700 }, { u: 'z', x: 110, y: 700 }, { u: 'y', x: 130, y: 650 }])
     const carry = (_p: number, x: number, y: number) => (x === 105 ? { page: 1, x: 130, y: 650 } : { page: 1, x, y })
     const m = matcherOf({ ink: [null, P], carry })
-    expect(m.match([item('x', 100), item('y', 105), item('z', 110)], [], null, null)).toEqual({ why: "its glyphs not all matched on arXiv's page" })
+    const got = m.match([item('x', 100), item('y', 105), item('z', 110)], [], null, null)
+    expect(got).toMatchObject({ why: "its glyphs not all matched on arXiv's page" })
+    // (the glyphs it took all the same, named, which the link-anchor locator sets aside for the piece's own search: those taken)
+    const took = 'took' in got ? got.took : null
+    expect(took?.map(([, g]) => g).sort()).toEqual([...P.taken].flatMap((t, g) => (t ? [g] : [])))
     expect(m.stats.rejected).toBeGreaterThan(0)
+  })
+})
+
+describe('matcherOf: a piece not matched', () => {
+  it('names the glyphs it took all the same (`took`), taken as ever: the link-anchor locator sets them aside for the piece', () => {
+    // its x and z on arXiv's line, its q nowhere
+    const P = page([{ u: 'x', x: 100, y: 700 }, { u: 'z', x: 110, y: 700 }])
+    const m = matcherOf({ ink: [null, P], carry: (_p: number, x: number, y: number) => ({ page: 1, x, y }) })
+    const got = m.match([item('x', 100), item('q', 105), item('z', 110)], [], null, null)
+    expect(got).toMatchObject({ why: "its glyphs not all matched on arXiv's page" })
+    expect('took' in got && got.took?.map(([p, g]) => [p, P.u[g]])).toEqual([[1, 'x'], [1, 'z']])
+    expect([...P.taken]).toEqual([1, 1])
   })
 })
 

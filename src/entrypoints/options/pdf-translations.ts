@@ -1,11 +1,11 @@
-// The PDF translations the reader keeps on this machine, for the settings page's Data section (the reader's design,
-// §9.3). The page is on the extension's origin, where the reader's store lives, so it reads and clears the store
-// itself; no message goes to the background.
+// The papers the PDF reader keeps on this machine (their layers, cache/layer-store.ts), for the settings page's Data section
+// (the reader's design, §9.3). The page is on the extension's origin, where the reader's store lives, so it reads and clears
+// the store itself; no message goes to the background.
 import { useCallback, useEffect, useState } from 'react'
-import { createPdfStore, type PdfStore } from '@/cache/pdf-store'
+import { createLayerStore, type LayerStore } from '@/cache/layer-store'
 
 export interface PdfTranslations {
-  /** How many papers and how many bytes; null until read, and when the store cannot be read */
+  /** How many paper versions and how many bytes; null until read, and when the store cannot be read */
   usage: { count: number; bytes: number } | null
   /** The store could not be read or cleared: said as such, never shown as an empty store (Codex on #52) */
   failed: boolean
@@ -14,8 +14,8 @@ export interface PdfTranslations {
   cleared: boolean
 }
 
-let shared: PdfStore | null = null
-const store = () => (shared ??= createPdfStore())
+let shared: LayerStore | null = null
+const store = () => (shared ??= createLayerStore())
 
 export function usePdfTranslations(): PdfTranslations {
   const [usage, setUsage] = useState<PdfTranslations['usage']>(null)

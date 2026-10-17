@@ -3,12 +3,15 @@
 // no-op (the stock reading, to compare). A spike that renders keeps stock PDF.js and does not import this.
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { liteWorkerSource, NO_IMAGE_PIXELS } from '../../../src/pdf-reader/engine/layout/pdf-lite.mjs'
+import { LINK_TEXT_PIXELS, liteWorkerSource, NO_IMAGE_PIXELS } from '../../../src/pdf-reader/engine/layout/pdf-lite.mjs'
 
 const require = createRequire(import.meta.url)
 const stock = process.env.AXT_STOCK_PDFJS === '1'
 /** getDocument's option for a document read without its images' pixels (empty when the stock reading is asked for) */
 export const LITE = stock ? {} : { maxImageSize: NO_IMAGE_PIXELS }
+/** getDocument's options for arXiv's PDF read for the page pass's draw geometry as well (pipeline/draw-data.mjs): its links' overlaid text
+ *  kept (LINK_TEXT_PIXELS) and its fonts' maps exported (fontExtraProperties) */
+export const LITE_DRAW = stock ? { fontExtraProperties: true } : { maxImageSize: LINK_TEXT_PIXELS, fontExtraProperties: true }
 /** getDocument's option for the lite reading whatever AXT_STOCK_PDFJS says (the comparison's own side) */
 export const LITE_ALWAYS = { maxImageSize: NO_IMAGE_PIXELS }
 

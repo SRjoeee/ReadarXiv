@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { rowLeadOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import { askPage, build, type Built, bundleOf, installStubs, layerSnap, openRun, PAPERS, type Run, rowsOf, runSnap, shuffled, unitsOn } from './helpers/order-paper'
 
 // The order of the asks (the 1b-D design §5, X1 and X2; PR 1b-D0): a page's answer is the same whichever page was asked before it
@@ -25,6 +26,7 @@ const SHAPE: Record<string, { laid: number; left: string[] }> = {
   'S-D footnote': { laid: 6, left: [] },
   'S-D footnote, page 4 unreadable': { laid: 4, left: ['4:page', '5:page'] },
   'S3 fill': { laid: 6, left: [] },
+  'S-E shared line': { laid: 6, left: [] },
 }
 const pagesOf = (P: Built) => Array.from({ length: P.paper.pages }, (_, i) => i + 1)
 /** the orders a paper's pages are asked in, besides 1 to N */
@@ -78,8 +80,11 @@ describe('the run: a page asked in any order answers as the page asked in order'
       const as = `${paper.name} page ${p}`
       // (page 1 drawn first, then the closure's pages in order, each once: its draw, the failed one among them read too)
       expect(P.doc.asked, as).toEqual(C.draw)
-      // (the units laid are those on its pass pages, in their rank; every page its closure makes ready is)
-      expect(run.order.every(id => unitsOn(P, C.pass).includes(id)), `${as}: laid ${run.order}`).toBe(true)
+      // (the units laid are those on its pass pages and those they follow on a shared line (need.mjs rowLeadOf), in their
+      // rank; every page its closure makes ready is)
+      const led = new Set(unitsOn(P, C.pass))
+      for (const id of [...led]) for (let l = rowLeadOf(P.index, id); l && !led.has(l.id); l = rowLeadOf(P.index, l.id)) led.add(l.id)
+      expect(run.order.every(id => led.has(id)), `${as}: laid ${run.order}`).toBe(true)
       const lay = run.idsOf(C.lay)
       expect(run.order.every(id => lay.includes(id)), `${as}: laid ${run.order} among ${lay}`).toBe(true)
       for (const q of C.ready) expect(run.ready(q) || run.failed(q), `${as}: page ${q} of its ready set`).toBe(true)

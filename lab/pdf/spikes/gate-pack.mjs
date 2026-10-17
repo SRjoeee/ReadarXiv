@@ -201,17 +201,17 @@ export function layoutVersionOf(fixtures, names, expected) {
   return { schema: expected.schema, version: expected.version }
 }
 
-const IMAGE_REF = /^[a-z0-9][a-z0-9./_-]*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$/
+const IMAGE_REF = /^[a-z0-9][a-z0-9./_-]*(?::[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$/
 /**
  * The compile image's pin (lab/pdf/compile-image.json): { texlive, base, node, aptSnapshot, texFormat }, the three images as
- * `name:tag@sha256:<64 hex>`, `aptSnapshot` a dated snapshot or null (not pinned yet), `texFormat` the TeX Live release and the
+ * `name[:tag]@sha256:<64 hex>`, `aptSnapshot` the dated apt snapshot the web container installs from, or null where none is pinned, `texFormat` the TeX Live release and the
  * format's tool versions. Throws on a file that is not that
  */
 export function compileImageOf(file = COMPILE_IMAGE_FILE) {
   const j = readJson(file)
   const keys = ['texlive', 'base', 'node', 'aptSnapshot', 'texFormat']
   if (j === null || typeof j !== 'object' || Object.keys(j).join() !== keys.join()) throw new Error(`${file}: the keys must be ${keys.join(', ')}`)
-  for (const k of ['texlive', 'base', 'node']) if (typeof j[k] !== 'string' || !IMAGE_REF.test(j[k])) throw new Error(`${file}: ${k} must be name:tag@sha256:<digest>`)
+  for (const k of ['texlive', 'base', 'node']) if (typeof j[k] !== 'string' || !IMAGE_REF.test(j[k])) throw new Error(`${file}: ${k} must be name[:tag]@sha256:<digest>`)
   if (j.aptSnapshot !== null && (typeof j.aptSnapshot !== 'string' || !/^\d{8}T\d{6}Z$/.test(j.aptSnapshot))) throw new Error(`${file}: aptSnapshot must be null or a snapshot timestamp (YYYYMMDDTHHMMSSZ)`)
   if (j.texFormat === null || typeof j.texFormat !== 'object' || Array.isArray(j.texFormat)) throw new Error(`${file}: texFormat must be an object`)
   return j
@@ -228,7 +228,8 @@ export function localImageDigests(ref, run = execFileSync) {
 }
 
 /** throws unless the local image of the pinned texlive reference has the pinned digest */
-export function checkCompileImage(pinned, digests) {
+export function checkCompileImage(pinned, digests, env = process.env) {
+  if (env.COMPILE_IMAGE && env.COMPILE_IMAGE !== pinned.texlive) throw new Error(`COMPILE_IMAGE is not the pin (lab/pdf/compile-image.json): a pack is made on the pinned image alone`)
   const want = pinned.texlive.slice(pinned.texlive.indexOf('@') + 1)
   if (!digests.includes(want)) throw new Error(`the local ${pinned.texlive.slice(0, pinned.texlive.indexOf('@'))} is ${digests.length ? digests.join(', ') : 'not there'}, not the pinned ${want} (lab/pdf/compile-image.json): pull the pinned image, or change the pin for the web container too`)
 }
@@ -394,7 +395,7 @@ async function main(argv) {
   if (command === 'make') {
     // (the layouts are made on the pinned compile image: refused before anything is read where the local one is another)
     const compileImage = compileImageOf()
-    checkCompileImage(compileImage, localImageDigests(compileImage.texlive.slice(0, compileImage.texlive.indexOf('@'))))
+    checkCompileImage(compileImage, localImageDigests(compileImage.texlive))
     const engine = resolve(typeof arg('engine', argv) === 'string' ? arg('engine', argv) : REPO)
     const E = f => import(pathToFileURL(join(engine, ENGINE, f)).href)
     const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])

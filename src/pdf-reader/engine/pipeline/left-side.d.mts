@@ -34,6 +34,8 @@ export interface LeftSideStream {
   none(id: number): void
   /** the units given that are located, ids rising */
   units(): UnitWire[]
+  /** the first page of a located unit's rectangles, or null */
+  firstPage(id: number): number | null
   leftPages(page: number): LeftPageInput | null
   stats: LeftSide['stats']
   /** how many units were given, located or not */

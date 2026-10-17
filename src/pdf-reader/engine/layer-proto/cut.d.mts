@@ -2,7 +2,7 @@
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
 import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { Box, UnitWire } from './bundle.mjs'
-import type { TokenWire, Written } from './format.mjs'
+import type { TableGroups, TokenWire, Written } from './format.mjs'
 import type { NeedEntry } from './need.mjs'
 import type { BundleUnit } from './units.mjs'
 
@@ -24,6 +24,8 @@ export interface LeftPageInput {
   first: number; tokens: TokenWire
   /** the page's draw geometry (draw.mjs), null or absent for none */
   draw?: import('./draw.mjs').DrawSource | import('./draw.mjs').Draw | null
+  /** or as its JSON, as wireText made it (checked; format.mjs writeLeftPart `drawText`), null or absent for none */
+  drawText?: string | null
   spans: readonly (readonly [number, readonly number[]])[]; pairs?: readonly (readonly [number, readonly number[]])[]
 }
 /** a K entry: what needsOf reads, and the unit it stands for */
@@ -89,7 +91,7 @@ export interface PartCutter {
   readonly from: number
 }
 /** K over the whole paper and its frontier closed over the table groups: what partCutter cuts a paper made whole on */
-export declare function wholeFrontier(whole: WholePaper, frontier?: CutOptions['frontier']): { K: CutKnown['K']; F: number[] }
+export declare function wholeFrontier(whole: WholePaper, frontier?: CutOptions['frontier'], grouped?: TableGroups): { K: CutKnown['K']; F: number[] }
 export declare function partCutter(o: {
   paper: { id: string; version: number }; N: number; head: Written; views: readonly Box[]
   leftPages: CutOptions['leftPages']; addon?: { manifest: RemovalManifest } | null

@@ -2,14 +2,10 @@
 // page share. What the module needs from a page painted by React — which locale it was painted in, how to reload it —
 // is given here; what differs between the two (what holds a reload back, what follows a landing) comes from the caller.
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import type { Config } from '@/config/schema'
-import { pickLocale } from '@/locales'
 import { type SurfaceConfig, type SurfaceConfigDeps, type SurfaceConfigState, createSurfaceConfig } from '@/shared/surface-config'
-import { browserLanguages } from './apply-locale'
-import { localeInUse } from './strings'
+import { localeStale } from './locale-stale'
 
-/** The stored interface language resolves to another pack than the one in use (chosen once, before the first paint) */
-export const localeStale = (config: Config) => pickLocale(config.uiLanguage, browserLanguages()) !== localeInUse()
+export { localeStale } from './locale-stale'
 
 /** `deps` are read once, at the first render: what they call may change, the functions themselves must not need to */
 export function useSurfaceConfig(deps: Pick<SurfaceConfigDeps, 'holds' | 'onLanded'> = {}): { surface: SurfaceConfig; state: SurfaceConfigState } {

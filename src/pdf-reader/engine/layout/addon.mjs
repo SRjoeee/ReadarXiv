@@ -19,8 +19,8 @@
 //   - a planned page whose kept ink or rules the manifest cannot hold (a box past the page's view, an empty one, more
 //     boxes than the manifest's caps leave it): the same, `{ ok: false, refused }`, and it is left out of R, so that the
 //     tail never holds a page the manifest does not name. One such page costs that page, not the paper;
-//   - a page no unit is planned on, or one that is rotated or past the ink reader's cap: `{ ok: false, refused: 'not
-//     planned' }`;
+//   - a page no unit is planned on, or one that is rotated or past the ink reader's cap or clock: `{ ok: false, refused:
+//     'not planned' }`;
 //   - on a planned page the entry's `rules` too (pageRules): the rules near a table cell's lines, which the reader keeps a
 //     taller script's text clear of; they are the PDF's own geometry, so the remover's refusal of the page leaves them.
 // The manifest is the shipped form (addon-manifest.mjs): no set past R, no outline table, no crop colours. Every reason
@@ -41,7 +41,7 @@
 // restore every unit, which loses none.
 import { pageDirty, pagePlan, pageRules } from '../layer-proto/removal.mjs'
 import { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, checkBoxes, parseAddonManifest, REFUSED_MAX } from './addon-manifest.mjs'
-import { pageInk } from './ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
 import { listWithin } from './oplist.mjs'
 import { alignOf, makeAddon, openRemover, removalEntry, SETS } from './remove.mjs'
 
@@ -59,8 +59,9 @@ const reasonOf = e => { try { return String(e?.message ?? e) } catch { return 'a
  * The paper's shipped add-on: `bytes` arXiv's PDF; `index` its layout file (file.mjs indexLayout); `doc` PDF.js's document
  * of `bytes`, read page by page for its operator lists (the ink's outline boxes are PDF.js's where it gives them: Node);
  * `OPS` PDF.js's operator codes; `PL` the object layer's exports; `deflate` bytes -> zlib bytes; `inflate` (bytes, limit ->
- * bytes, no more than limit + 1 of them or a throw). Returns { ok: true, tail, manifest, ms } (`ms`: the time of the
- * remover's parse, the operator lists, the ink, the plan and the add-on), or { ok: false, refused } for any error, a
+ * bytes, no more than limit + 1 of them or a throw). Returns { ok: true, tail, manifest, ms, ink } (`ms`: the time of the
+ * remover's parse, the operator lists, the ink, the plan and the add-on; `ink`: pagePlansOf's, the pages whose ink was not
+ * read whole or was degraded, which the manifest does not carry), or { ok: false, refused } for any error, a
  * disagreement of the PDF, PDF.js and the layout file on the pages, an add-on past ADDON_CAP or a manifest the reader's
  * bounds refuse. Never throws
  */
@@ -75,7 +76,7 @@ export async function paperAddon(o) {
 /**
  * A page's plan for the add-on, from the layout file (`index`, file.mjs indexLayout: every unit framed on the page, an
  * earlier part's too) and the page's ink (`ink`, layout/ink.mjs pageInk with `indices`) alone: null where nothing is planned
- * (a page rotated or past the ink reader's cap, or no unit and no babel name of the file on it), else { dirty, the kept ink
+ * (a page rotated, past the ink reader's cap or its clock, or no unit and no babel name of the file on it), else { dirty, the kept ink
  * under the page's units (pageDirty), rules, the rules near its cells' lines (pageRules), unfit, why the manifest cannot hold
  * them (a box past the page's view by the reader's slack, or empty: addon-manifest.mjs checkBoxes, the reader's own; null
  * where it can), cost { bytes, values }, what they take of the manifest's boxes' share, and, on a page with kept ink the
@@ -85,7 +86,7 @@ export async function paperAddon(o) {
  * them, called only for such a page). Page-local and pure: no budget is spent here
  */
 export function pagePlanOf(index, p, ink, facts) {
-  if (ink.rotated || ink.capped) return null
+  if (ink.rotated || ink.capped || ink.timedOut) return null
   const { own: _own, ...pp } = pagePlan(index, p, ink)
   if (!pp.units.length && !pp.names.length) return null
   const dirty = pageDirty(index, p, ink, pp), rules = pageRules(index, p, ink)
@@ -108,22 +109,27 @@ export function pagePlanOf(index, p, ink, facts) {
 
 /**
  * Every page's plan (pagePlanOf) of PDF.js's document `doc` of arXiv's PDF, `OPS` PDF.js's operator codes, `index` the layout
- * file's: { plans, a Map from each planned page to its plan, ms { ops, ink, plan }, timedOut }. Reads each page's operator list
- * once and keeps none: each page is cleaned up (page.cleanup) once its plan is made, so a caller that reads the page's operator
- * list again pays the parse again. A page's list is waited for OPS_MS at most, as the layout maker waits (oplist.mjs): past it,
- * or failing, the page is given up on and has no plan (`timedOut`), that page alone. The document is the caller's to destroy
+ * file's: { plans, a Map from each planned page to its plan, ms { ops, ink, plan }, ink { capped, timedOut, degraded }, the
+ * pages whose ink the walk did not read whole (no plan: its list not given within OPS_MS, as the layout maker waits
+ * (oplist.mjs), and given up on; past a cap; past the walk's backstop) or read with its boxes past BOXES_PAGE merged, each page
+ * in one list, as the layout maker reads it (layout/make.mjs: the same bounds), that page alone }. Reads each page's operator
+ * list once and keeps none: each page is cleaned up (page.cleanup) once its plan is made, so a caller that reads the page's
+ * operator list again pays the parse again. The document is the caller's to destroy
  */
 export async function pagePlansOf({ doc, OPS, index }) {
-  const plans = new Map(), ms = { ops: 0, ink: 0, plan: 0 }, timedOut = [], seen = { warned: false, who: 'add-on plans' }
+  const plans = new Map(), ms = { ops: 0, ink: 0, plan: 0 }, read = { capped: [], timedOut: [], degraded: [] }, seen = { warned: false, who: 'add-on plans' }
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p)
     let t = performance.now()
     const list = await listWithin(page, seen)
     ms.ops += performance.now() - t
-    if (!list) { timedOut.push(p); continue }
+    if (!list) { read.timedOut.push(p); continue }
     t = performance.now()
-    const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true })
+    const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     ms.ink += performance.now() - t
+    // (each page once, by what befell it first)
+    const k = ink.capped ? 'capped' : ink.timedOut ? 'timedOut' : ink.degraded ? 'degraded' : null
+    if (k) read[k].push(p)
     t = performance.now()
     const plan = pagePlanOf(index, p, ink, () => alignOf(OPS, list))
     if (plan) plans.set(p, plan)
@@ -132,7 +138,7 @@ export async function pagePlansOf({ doc, OPS, index }) {
     page.cleanup?.()
     ms.plan += performance.now() - t
   }
-  return { plans, ms, timedOut }
+  return { plans, ms, ink: read }
 }
 
 /**
@@ -202,5 +208,5 @@ async function shipped({ bytes, index, doc, OPS, PL, deflate, inflate }) {
 
   // the backstop: the manifest as the reader reads it, byte and value caps and all
   try { parseAddonManifest(new TextEncoder().encode(JSON.stringify(manifest)), { pages: N, views: index.file.views, shipped: true }) } catch (e) { return refusal(`the manifest is outside the reader's bounds: ${reasonOf(e)}`) }
-  return { ok: true, tail, manifest, ms }
+  return { ok: true, tail, manifest, ms, ink: read.ink }
 }

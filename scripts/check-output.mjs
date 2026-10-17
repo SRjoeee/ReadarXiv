@@ -38,7 +38,16 @@ let failed = false
 // unseen (tests/shared/web-app.test.ts pins the list itself)
 const manifest = JSON.parse(readFileSync(join(OUT, 'manifest.json'), 'utf8'))
 const siteHosts = [...(/WEB_APP_HOSTS[^=]*=\s*\[([^\]]*)\]/.exec(readFileSync('src/shared/web-app.ts', 'utf8'))?.[1] ?? '').matchAll(/'([^']+)'/g)].map(m => m[1])
-const siteMatches = siteHosts.map(host => `https://${host}/*`)
+// The reader's server (Stage 5 Task 17, wxt.config.ts READER_API): production's always, staging's too in a build whose server
+// it is, which marks staging's pages as well. The hosts the manifest may name, exactly
+const STAGING = 'app-staging.readarxiv.org'
+const staging = (manifest.host_permissions ?? []).includes(`https://${STAGING}/*`)
+// The build asked for: a release (`pnpm build`) unless the staging build is (`pnpm build:staging`, AXT_BUILD=staging), so that
+// a staging package never passes as a release (an AXT_READER_API left in the environment at a release's cut); a staging
+// package names itself where Chrome shows the version (version_name), a release never does
+const asked = process.env.AXT_BUILD === 'staging' ? 'staging' : 'release'
+const HOSTS = ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*', 'https://readarxiv.com/*', ...(staging ? [`https://${STAGING}/*`] : [])]
+const siteMatches = [...siteHosts, ...(staging ? [STAGING] : [])].map(host => `https://${host}/*`)
 const SITE_SCRIPT = 'content-scripts/web-app.js'
 const siteEntries = (manifest.content_scripts ?? []).filter(entry => entry.js?.includes(SITE_SCRIPT))
 const siteEntry = siteEntries[0]
@@ -69,17 +78,23 @@ const COMPILER_PATH = /busytex|texlyre/i
 const COMPILER_FILES = /texlyre|busytex[\w.-]*\.(?:js|wasm|data)|busytex_pipeline/i
 const loopbackNamed = []
 const compilerNamed = []
-// The reading view's development entry (?layer=1, docs/PDF-READER.md §11.7) is built only where AXT_READER_VIEW=1 asks for
-// it (wxt.config.ts READER_VIEW): its places' code names their holder's class in a script (every build's style sheet holds
-// the rule)
-const READER_VIEW = process.env.AXT_READER_VIEW === '1'
-const viewNamed = []
+// The reading view is the reader (Stage 5 Task 9): its places' code names their holder's class in a script (every build's
+// style sheet holds the rule). And no compile (the plan's Global Constraints): no TeX page's address, no client of it, and
+// nothing of the paper's LaTeX front end (its font probe, a TeX string only the compile path writes). A production build
+// names no staging host
+const TEX_HOST = /tex\.readarxiv\.org/
+const LATEX_FRONT = /AXT-FONTS rm=/
+const viewNamed = [], texNamed = [], frontNamed = [], stagingNamed = []
 for (const path of filesUnder(OUT)) {
   const content = readFileSync(path).toString('latin1')
   if (COMPILER_PATH.test(relative(OUT, path)) || COMPILER_FILES.test(content)) compilerNamed.push(path)
   if (LOOPBACK_TEX.test(content)) loopbackNamed.push(path)
   if (path.endsWith('.js') && content.includes('axt-place-view')) viewNamed.push(path)
+  if (TEX_HOST.test(content)) texNamed.push(path)
+  if (LATEX_FRONT.test(content)) frontNamed.push(path)
+  if (!staging && content.includes(STAGING)) stagingNamed.push(path)
 }
+const war = manifest.web_accessible_resources ?? []
 for (const [what, ok] of [
   [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
   [`one content script runs on the website's pages, and it matches ${siteMatches.join(', ')} exactly`, siteEntries.length === 1 && sameList(siteEntry.matches, siteMatches) && siteEntry.js.length === 1],
@@ -98,7 +113,14 @@ for (const [what, ok] of [
   [`${OUT} holds no dev page`, ['gallery.html', 'controls.html', 'capsule.html'].every(page => !existsSync(join(OUT, page)))],
   [`${OUT} names no loopback TeX page${loopbackNamed.length > 0 ? ` (${loopbackNamed.join(', ')})` : ''}`, loopbackNamed.length === 0],
   [`${OUT} holds no BusyTeX or texlyre file${compilerNamed.length > 0 ? ` (${compilerNamed.join(', ')})` : ''}`, compilerNamed.length === 0],
-  [`${OUT} holds the reading view's development entry only where AXT_READER_VIEW=1 asks for it (${READER_VIEW ? 'asked' : 'not asked'}${viewNamed.length > 0 ? `: ${viewNamed.join(', ')}` : ''})`, READER_VIEW ? viewNamed.length > 0 : viewNamed.length === 0],
+  [`${OUT} holds the reading view, the reader${viewNamed.length > 0 ? ` (${viewNamed.join(', ')})` : ''}`, viewNamed.length > 0],
+  [`the host permissions are exactly ${HOSTS.join(', ')} (${staging ? 'a staging build' : 'production'})`, sameList(manifest.host_permissions ?? [], HOSTS)],
+  [`${OUT} names no TeX page${texNamed.length > 0 ? ` (${texNamed.join(', ')})` : ''}, and holds nothing of the LaTeX front end${frontNamed.length > 0 ? ` (${frontNamed.join(', ')})` : ''}`, texNamed.length === 0 && frontNamed.length === 0],
+  [`a production build names no staging host${stagingNamed.length > 0 ? ` (${stagingNamed.join(', ')})` : ''}`, stagingNamed.length === 0],
+  [`the web-accessible resources are popup.html and pdf-reader.html, to https://arxiv.org/* alone`, war.length === 2 && war.every(entry => entry.resources.length === 1 && sameList(entry.matches, ['https://arxiv.org/*'])) && sameList(war.map(entry => entry.resources[0]), ['popup.html', 'pdf-reader.html'])],
+  [`the offscreen document stays, for the figure recogniser alone`, (manifest.permissions ?? []).includes('offscreen')],
+  [`the build is the one asked for: ${asked === 'staging' ? "staging's (pnpm build:staging), its version named so" : "a release, production's server alone, no version name"}${staging !== (asked === 'staging') ? ` (the package is ${staging ? "staging's" : "production's"})` : ''}`, staging === (asked === 'staging') && (staging ? / staging$/.test(manifest.version_name ?? '') : manifest.version_name === undefined)],
+  [`the extension's pages frame nothing (frame-src 'none')`, /(?:^|;)\s*frame-src\s+'none'\s*(?:;|$)/.test(manifest.content_security_policy?.extension_pages ?? '')],
 ]) {
   if (ok) console.log(`✓ ${what}`)
   else {

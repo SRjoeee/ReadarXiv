@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   checkDraw, DRAW_ARGS, DRAW_BYTES, DRAW_DEST, DRAW_FONTS, DRAW_ITEMS, DRAW_LINKS, DRAW_MAPPED, DRAW_MAPPED_CHAR, DRAW_NAME, DRAW_QUADS, DRAW_STRING, DRAW_STRINGS, DRAW_URL, DRAW_ZOOM,
-  type Draw, DrawRefusal, drawFontKey, drawInputsOf, type DrawSource, wireOf,
+  type Draw, DrawRefusal, drawFontKey, drawInputsOf, type DrawSource, wireOf, wireText,
 } from '@/pdf-reader/engine/layer-proto/draw.mjs'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { readLeftPart, TOKENS_PAGE, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
@@ -198,6 +198,32 @@ describe('draw in a left part', () => {
       expect(r.draw!.fonts[0]).toEqual(['n', null, 0, ['a', 'b']])
       expect(r.draw!.links[0]).toEqual([[1, 2, 3, 4], [0, 0, 0, 0, 0, 0, 0, 0], null, [0, 1, 0, 'Fit'], null, null, null, [9, 9, 9]])
     })
+  })
+
+  it('a draw given as wireText\'s JSON is written as the same bytes as the draw itself: kept, shed for size, emptied with its tokens', async () => {
+    const same = async (draw: unknown, o: { n?: number; spans?: [number, number[]][]; pairs?: [number, number[]][] } = {}) => {
+      const input = { paper: PAPER, page: 1, first: 0, tokens: tokenWire(o.n ?? 3), spans: o.spans ?? [], pairs: o.pairs ?? [] }
+      const w = wireText(draw as never)
+      if (!w) throw new Error('no wire')
+      expect(w.text).toBe(JSON.stringify(w.draw))
+      expect(JSON.stringify(JSON.parse(w.text))).toBe(w.text)
+      const a = await writeLeftPart({ ...input, draw: draw as never }), b = await writeLeftPart({ ...input, drawText: w.text })
+      expect(b.sha256).toBe(a.sha256)
+      expect([...b.bytes]).toEqual([...a.bytes])
+      expect([b.emptied, b.drawShed, b.values]).toEqual([a.emptied, a.drawShed, a.values])
+      return a
+    }
+    // (kept, of PDF.js's shapes too: typed arrays, -0, an explicit dest, a string to escape)
+    expect((await same(DRAW)).drawShed).toBe(false)
+    await same({ fonts: [['n', undefined, 0, new Set(['a', '"\\'])]], items: [['t\u2028"', -0, 0, 1, 2.5e-7, 3, 4, 5, 0]], links: [[new Float32Array([1, 2, 3, 4]), new Float32Array(8), undefined, [{ num: 1, gen: 0 }, { name: 'XYZ' }, 1, null, 0], 'x\ud800', undefined, undefined, new Uint8ClampedArray([9, 9, 9])]] })
+    // (shed for the part's size, its tokens kept; emptied with its tokens)
+    const spans = Array.from({ length: 30_000 }, (_, i) => [i, [0, 1]] as [number, number[]])
+    const pairs = spans.slice(0, 5000).map(([id]) => [id, [0, 0, 1]] as [number, number[]])
+    const big: Draw = { fonts: [font()], items: Array.from({ length: 5200 }, () => item('w', 0)), links: [] }
+    const shed = await same(big, { n: TOKENS_PAGE, spans, pairs })
+    expect([shed.drawShed, shed.emptied]).toEqual([true, false])
+    const emptied = await same(DRAW, { n: TOKENS_PAGE + 1 })
+    expect([emptied.emptied, emptied.drawShed]).toEqual([true, true])
   })
 
   it('moves a left part\'s digest when only the draw moves, and ships no draw as the bytes of a part with `draw: null`', async () => {

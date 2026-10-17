@@ -11,7 +11,7 @@ export declare const LINKS_MIN: { kept: number; true: number }
 /** a fixture's (or a page's) values: measures by key, and the defects' rates */
 export type Totals = Record<string, unknown> & { rates?: Record<string, number>; modelRates?: Record<string, number> }
 export interface PageEntry { p: number; [key: string]: unknown }
-export interface Frames { body: unknown[]; fills: number[]; pitches: number[]; scales: number[]; gaps: { ratio: number; extra: number }[] }
+export interface Frames { body: unknown[]; fills: number[]; pitches: number[]; scales: number[]; gaps: { ratio: number; extra: number; tight?: boolean | null }[] }
 export declare function pageEntry(page: number, model: unknown, pixel: unknown): { entry: PageEntry; frames: Frames }
 export declare function fixtureTotals(pages: PageEntry[], frames: Frames[], tier: Tier): Totals
 export declare function ratesOf(t: Totals, tier: Tier): Record<string, number>
@@ -21,6 +21,12 @@ export interface Moved { fixture: string; measure: string; label: string; from: 
 export declare function compare(prev: Record<string, { totals: Totals; pages: PageEntry[] }>, cur: Record<string, { totals: Totals; pages: PageEntry[] }>, tier: Tier): { regressions: Moved[]; improvements: Moved[]; pages: { fixture: string; page: number; worse: string[]; better: string[] }[]; unmatched: string[] }
 /** the outputs a record's run of `key` (for a model key, else its pixel run) holds that `fixtures` lacks */
 export declare function droppedOutputs(record: { tiers?: Record<string, { fixtures?: Record<string, unknown> }> } | null, key: string, fixtures: string[]): string[]
-export interface CompletenessRow { name: string; pages: number; numbers: [number, number]; lostInk?: number; fails: string[]; [check: string]: unknown }
+/** an add-on's ink read as a row reports it: the pages whose ink was capped, timed out or degraded */
+export interface InkRow { capped: number[]; timedOut: number[]; degraded: number[] }
+export interface CompletenessRow { name: string; pages: number; numbers: [number, number]; lostInk?: number; fails: string[]; ink: InkRow | null; [check: string]: unknown }
+/** an add-on's ink read (layout/addon.mjs pagePlansOf's `ink`) as a row reports it, or null */
+export declare function inkOf(ink: unknown): InkRow | null
+/** the gate's ink line over the completeness rows: names and counts alone */
+export declare function inkLine(rows: readonly CompletenessRow[]): string
 /** the brief's completeness rows of a run: per output each check's count and the checks above 0 (`fails`) */
-export declare function completenessRows(run: { fixtures: Record<string, { totals: Totals; summary?: { recordErrors?: number; linksLost?: string[] }; pages?: { p: number; where?: { linksTrue?: string[]; linksWrong?: string[] } }[] }> }, tier: Tier): CompletenessRow[]
+export declare function completenessRows(run: { fixtures: Record<string, { totals: Totals; summary?: { recordErrors?: number; linksLost?: string[]; removal?: { ink?: unknown } }; pages?: { p: number; where?: { linksTrue?: string[]; linksWrong?: string[] } }[] }> }, tier: Tier): CompletenessRow[]

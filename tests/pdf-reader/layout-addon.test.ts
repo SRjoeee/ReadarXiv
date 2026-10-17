@@ -8,7 +8,7 @@ import { constants as zlibConstants, deflateRawSync, deflateSync, inflateRawSync
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { BOXES_BYTES, type PagePlan, pagePlansOf, paperAddon, rangeEntries } from '@/pdf-reader/engine/layout/addon.mjs'
+import { BOXES_BYTES, type PagePlan, pagePlanOf, pagePlansOf, paperAddon, rangeEntries } from '@/pdf-reader/engine/layout/addon.mjs'
 import { ADDON_CAP, parseAddonManifest, REFUSED_MAX, REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, type LayoutIndex } from '@/pdf-reader/engine/layout/file.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
@@ -371,12 +371,25 @@ describe('the plans (pagePlansOf) and the range assembly (rangeEntries): the add
     expect([...cleaned.plans.keys()]).toEqual([...base.plans.keys()])
     expect(cleaned.plans.has(3)).toBe(false)
     expect(JSON.stringify([...cleaned.plans])).toBe(JSON.stringify([...base.plans]))
+    // every page's ink read whole, none degraded: what the gate reports of the add-on's reading
+    expect(base.ink).toEqual({ capped: [], timedOut: [], degraded: [] })
+  })
+
+  it('plans no page whose ink is not whole: rotated, capped or timed out (the layout maker gives such a page no ink)', async () => {
+    const index = layoutOf(UNITS, 4)
+    const doc = await open(PAPER)
+    const page = await doc.getPage(1)
+    const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: 0, indices: true })
+    expect(pagePlanOf(index, 1, ink, null as never)).not.toBeNull()
+    for (const k of ['rotated', 'capped', 'timedOut'] as const) expect(pagePlanOf(index, 1, { ...ink, [k]: true }, null as never), k).toBeNull()
+    // a degraded page is planned: its text is whole (ink.mjs pageInk)
+    expect(pagePlanOf(index, 1, { ...ink, degraded: true }, null as never)).not.toBeNull()
   })
 
   it('waits for a page\'s operator list OPS_MS at most: a list that never comes, or fails, is given up on, that page alone', async () => {
     const index = layoutOf(UNITS, 4)
     const base = await pagePlansOf({ doc: await open(PAPER), OPS, index })
-    expect(base.timedOut).toEqual([])
+    expect(base.ink.timedOut).toEqual([])
     // page 1's list never comes (an unclosed-save page's parse, or a wait that does not end), page 4's fails: each given up
     // (PDF.js's cancel asked of the page, then its cleanup), the plans of pages 2 and 3 as ever
     const real = await open(PAPER)
@@ -402,7 +415,7 @@ describe('the plans (pagePlansOf) and the range assembly (rangeEntries): the add
       const run = pagePlansOf({ doc: doc as never, OPS, index })
       await vi.advanceTimersByTimeAsync(OPS_MS + 1000)
       const got = await run
-      expect(got.timedOut).toEqual([1, 4])
+      expect(got.ink.timedOut).toEqual([1, 4])
       expect(events).toContain('cleanup 1')
       expect(events).toContain('cleanup 4')
       expect([...got.plans.keys()]).toEqual([...base.plans.keys()].filter(p => p !== 1 && p !== 4))

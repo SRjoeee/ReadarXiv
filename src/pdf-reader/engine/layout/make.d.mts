@@ -22,22 +22,23 @@ export interface MakeInput {
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
   /** the pages' frame's rule the maker's anchors are placed under, given (a whole run's); else the rule set's: frameOfTokens
-   *  (rule 1), or pageFrame (today's) for the whole paper alone: the page stream (makerOf's stream, byStream) needs one, the
+   *  (rule 1), or pageFrame (rules.frame 'units', the whole run's) for the whole paper alone: the page stream (makerOf's stream, byStream) needs one, the
    *  whole document's, given or rule 1's (a TypeError without) */
   frame?: FrameRule | null
-  /** the page stream's rules (RULES), today's each where not given: the maker reads `frame`, `edges` and `floatSearch` */
+  /** the page stream's rules (RULES), DEFAULT_RULES' each where not given: the maker reads `frame`, `edges` and `floatSearch` */
   rules?: Partial<PageStreamRules> | null
   /** the indices of the units written inside a float (the source parse's), for rules.floatSearch 'forward' */
   inFloat?: readonly number[] | null
   /** the columns' text edges the names, the displays' numbers and the centred flag read (`page|column`,
-   *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of every placed unit's body lines (today's) */
+   *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of the placed units' body lines (rules.edges') */
   columnEdges?: ReadonlyMap<string, [number, number]> | null
   /** the add-on's plans as well (`plans` in the result), of the ink the maker reads: each page's operator list read once */
   plans?: boolean
   /** the file is cut into parts (layer-proto/cut.mjs partCutter), which hold the bounds a part holds and the carry's share per
    *  part: made whatever share is carried, checked without those bounds; `lines` in the result */
   parts?: boolean
-  /** each page's draw geometry as well (pipeline/draw-data.mjs), read with the page's operator list, held for `drawOf` */
+  /** each page's draw geometry as well (pipeline/draw-data.mjs), read with the page's operator list (its text `text.draw`'s, step T's,
+   *  where read with it), held for `drawJsonOf` / `drawOf` */
   draw?: boolean
   /** the most encoded text of draws held at once (default DRAW_HELD_MAX; tests lower it): a page past it has none */
   drawHeldMax?: number
@@ -66,15 +67,22 @@ export interface LayoutStats {
   /** babel's names: the occurrences the marked original marks, those the file locates (and of them those leading a unit:
    *  RUN_IN), and why each other is not */
   names: { marked: number; located: number; runIn: number; why: Record<string, number> }
+  /** the link-anchor locator: the references and citations the matcher did not find that it tried, those it placed by
+   *  their links ([unit, k], rising), and why each other stays LOST (its step) */
+  links: { tried: number; placed: [unit: number, k: number][]; why: Record<string, number> }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */
   labels: Record<string, [found: number, units: number]>
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }
   /** |baseline − TeX's start or end mark|, pt */
   baselines: { first: number[]; last: number[] }
-  /** pages past OPS_CAP, or past GLYPHS_PAGE glyphs */
+  /** pages past OPS_CAP, STEPS_MAX, GLYPHS_PAGE or BOXES_CAP, or drawing in a state lost past STACK_MAX (ink.mjs): no ink */
   capped: number[]
   /** pages whose operator list did not come within OPS_MS, or failed: no ink, each page alone */
   timedOut: number[]
+  /** pages whose ink's walk passed its backstop, INK_MS (ink.mjs): no ink; the one count that depends on the machine */
+  inkTimedOut: number[]
+  /** pages past BOXES_PAGE boxes (ink.mjs), and in no list above: their ink kept, the boxes past it merged by cell */
+  degraded: number[]
   /** pages whose lines cost the carry more than its bound (carry.mjs `over`): no ink */
   over: number[]
   bytes: { raw: number; gzip: number }
@@ -108,11 +116,13 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     edges(): Map<string, [number, number]> | null
     /** the marks carried to arXiv's PDF (whole()'s first step): null, or 'carry' where no line is */
     carrying(): 'carry' | null
-    /** page p's draw geometry (the `draw` option), once: the held text is let go with it; null for none (not read, failed, a font a host
-     *  would read differently, past the held budget) */
     /** whether the draws are read (the `draw` option): the head of the layer made says so */
     draw: boolean
+    /** page p's draw geometry (the `draw` option), once: the held text is let go with it; null for none (not read, failed, a font a host
+     *  would read differently, past the held budget) */
     drawOf(p: number): import('../layer-proto/draw.mjs').Draw | null
+    /** drawOf's draw as its JSON (wireText's: what the left part holds, format.mjs writeLeftPart `drawText`), once */
+    drawJsonOf(p: number): string | null
     /** the draw reads: pages kept, pages with none and by why, the encoded bytes, the ms */
     drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }
     /** each marked page's lines [carried, total], once carried */
@@ -135,6 +145,9 @@ export interface MakerStream {
   carryKnown(): boolean
   /** the carry's refusal, once the marked original's end is given */
   carryRefusal(): 'carry' | null
+  /** the link-anchor locator's wanted pages' links read, up to arXiv's page read last: where no page of arXiv's is read after a
+   *  marked page, and before finish() */
+  readLinks(): Promise<void>
   finish(): void
   /** each page's plan, made as the page is let go (null without `plans`) */
   plans: Map<number, PagePlan> | null
@@ -148,12 +161,16 @@ export interface MakerStream {
   progress(): { read: number; marked?: number; anchored: number; decided: number; released: number; held: number; glyphs: number }
   trace?: { read: number; marked?: number; anchored: number; decided: number; released: number; held: number; glyphs: number }[]
 }
-/** the page stream's rules, each rule's values today's first: the pages' frame ('units' | 'tokens', rule 1), the columns'
+/** the page stream's rules, each rule's values the whole run's first: the pages' frame ('units' | 'tokens', rule 1), the columns'
  *  text edges a page without its own takes ('all' | 'earlier', rule 3), the left side's far-push columns ('units' | 'tokens',
  *  rule 4: the page pass's), a float's whole-document search ('whole' | 'forward': from its last body neighbour's page, rule 5) */
 export interface PageStreamRules { frame: 'units' | 'tokens'; edges: 'all' | 'earlier'; columns: 'units' | 'tokens'; floatSearch: 'whole' | 'forward' }
 export declare const RULES: { readonly [K in keyof PageStreamRules]: readonly PageStreamRules[K][] }
-/** a rule set checked, each rule today's where it is not given; a TypeError for a rule or a value that is none */
+/** the rules where none is given: rules 1, 3 and 4 (frame 'tokens', edges 'earlier', columns 'tokens'), rule 5 off */
+export declare const DEFAULT_RULES: Readonly<PageStreamRules>
+/** the whole run's rules, each reading the whole document (next's before the page stream): the lab's comparisons with it */
+export declare const WHOLE_RULES: Readonly<PageStreamRules>
+/** a rule set checked, each rule DEFAULT_RULES' where it is not given; a TypeError for a rule or a value that is none */
 export declare function rulesOf(rules?: Partial<PageStreamRules> | null): PageStreamRules
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number

@@ -21,8 +21,9 @@ export { LayoutRefusal } from './json.mjs'
  *  \lineskiplimit (`lineskip`, the file's schema 3); 6: a display that ends its column's body found past it, an inline
  *  formula first after a display found by its own opening mark (marks.mjs \axtpmm), a display group's later displays
  *  JOINED to its first, a LOST piece outside the unit's lines OUTSIDE (the file's schema 4), and an inline piece whose
- *  two marks stand on one line of the unit wholly on it */
-export const LAYOUT = '6'
+ *  two marks stand on one line of the unit wholly on it; 7: a piece TeX broke over lines gives its unit the line it wraps onto, and a
+ *  reference the matcher misses is placed by its link annotation (the file's schema is 4 still) */
+export const LAYOUT = '7'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE */
 export const LAYOUT_SCHEMA = 4
 export const LAYOUT_CAP = 4 * 2 ** 20

@@ -39,13 +39,21 @@ export function sourceKindOf(contentType: string | null): 'source' | 'pdf-only' 
   return type.includes('gzip') ? 'source' : type === 'application/pdf' ? 'pdf-only' : 'unknown'
 }
 
+/** the address's hash that asks for the browser's own viewer: the reader is not laid over the page, whatever the setting
+ *  (the reader's original download opens arXiv's PDF so, for the browser to stream and save) */
+export const VIEWER_HASH = '#axt-viewer'
+/** a PDF's address with the browser's own viewer asked for (its hash replaced) */
+export const viewerUrlOf = (url: string): string => `${url.split('#')[0]}${VIEWER_HASH}`
+
 /**
  * Whether the PDF page opens the reader (the reader's design, §2): the setting on, or the address asking for it with
- * `#readarxiv` — an explicit request, which also asks for a translation. The hash is read as the HTML page reads it
- * (`startsTranslation`): any capitalisation, and 0.4.0's `#axt-translate` too — no PDF address carried it, and taking
- * it costs nothing and keeps the one rule
+ * `#readarxiv` — an explicit request, which also asks for a translation; never where the address asks for the browser's
+ * own viewer (`#axt-viewer`, any capitalisation). The hash is read as the HTML page reads it (`startsTranslation`): any
+ * capitalisation, and 0.4.0's `#axt-translate` too — no PDF address carried it, and taking it costs nothing and keeps the
+ * one rule
  */
 export function readerWanted({ enabled, hash }: { enabled: boolean; hash: string }): { open: boolean; translate: boolean } {
+  if (hash.toLowerCase() === VIEWER_HASH) return { open: false, translate: false }
   const asked = startsTranslation(hash)
   return { open: enabled || asked, translate: asked }
 }

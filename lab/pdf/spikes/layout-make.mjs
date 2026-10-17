@@ -22,10 +22,14 @@ import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { keptFor, openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, inkSamples, layoutMarksOf, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { encodeLayout, PH_FLAG } from '../../../src/pdf-reader/engine/layout/file.mjs'
-import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
+import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+
+// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
+await checkCompileImage()
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
@@ -82,9 +86,9 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   const paper = openPaper(files)
   const main = paper.project.main, stem = main.split('/').pop().replace(/\.[^.]+$/, '')
   // the paper's own switch, as the run sets it: the mark probe in the font probe's compile, one pass, cached by its files
-  const docker = (dir, cmd) => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
+  const docker = (dir, cmd) => run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
   const keyOf = over => {
-    const hash = createHash('sha256').update(String(EPOCH))
+    const hash = createHash('sha256').update(String(EPOCH)).update(COMPILE_IDENTITY)
     const all = new Map(files)
     for (const [p, b] of over) all.set(p, b)
     for (const [p, b] of [...all].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)
@@ -185,7 +189,8 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   const pt = { texts: texts.size, ink: 0, inkSpaces: 0, layer: 0, layerChars: 0, layerRun: 0, misses: [] }
   if (texts.size) {
     const t2 = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf')))), doc2 = await t2.promise, inks = new Map(), layers = new Map()
-    const inkOf = async p => { if (!inks.has(p)) { const pg = await doc2.getPage(p); inks.set(p, pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate }).glyphs); layers.set(p, (await pg.getTextContent()).items) } return inks.get(p) }
+    // (a page not read whole: no glyphs, never a prefix of them, so that its page texts are counted not spelt)
+    const inkOf = async p => { if (!inks.has(p)) { const pg = await doc2.getPage(p), got = pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate }); inks.set(p, unreadOf(got) ? [] : got.glyphs); layers.set(p, (await pg.getTextContent()).items) } return inks.get(p) }
     const norm = x => x.replace(/\s+/g, ' ').trim(), bare = x => x.replace(/\s+/g, '')
     for (const r of out.file.ph) {
       const t = texts.get(`${r[0]}.${r[1]}`)
@@ -227,7 +232,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   console.log(JSON.stringify({
     id, engine: paper.meta.compiler, compileMs, marksMs: marksMs === null ? null : Math.round(marksMs), marksBytes: readFileSync(marksFile).length, owned: marks.owned.length, ownedGlyphs: marks.owned.reduce((n, e) => n + (e.length > 2 ? e[2] : 0), 0), marking: marks.marking, pages: out.file.paper.pages,
     lines: S.lines, units: S.units, translatedCells: [cells.filter(([, i]) => placedIds.has(i)).length, cells.length],
-    ph: S.ph, match: S.match, labels: S.labels, frames: S.frames, capped: S.capped, timedOut: S.timedOut, over: S.over,
+    ph: S.ph, match: S.match, labels: S.labels, frames: S.frames, capped: S.capped, timedOut: S.timedOut, inkTimedOut: S.inkTimedOut, degraded: S.degraded, over: S.over,
     lastBaselines: `${S.baselines.last.filter(d => d <= BASELINE + 1e-9).length}/${S.baselines.last.length} within ${BASELINE}`,
     bytes: { ...S.bytes, gzip9: gzipSync(text, { level: 9 }).length }, ms: Object.fromEntries(Object.entries(S.ms).map(([k, v]) => [k, Math.round(v)])), wallMs: Math.round(wall),
     fonts: out.file.fonts.length,

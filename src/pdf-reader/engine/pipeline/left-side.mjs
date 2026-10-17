@@ -49,7 +49,7 @@ export function leftSideStream({ doc, views, edges = null, columns }) {
   if (typeof columns !== 'function') throw new TypeError('columns: the pages\' columns\' rule, given: the tokens\' layout is made before any unit is')
   const pages = views.map(v => v.map(onGrid))
   const side = sideOf(doc, pages, () => layoutOf(doc, pages, new Map(), undefined, { edges, columns }).tok, [])
-  return { pages, add: side.add, none: side.none, units: side.units, leftPages: side.leftPages, stats: side.stats, done: side.done }
+  return { pages, add: side.add, none: side.none, units: side.units, firstPage: side.firstPage, leftPages: side.leftPages, stats: side.stats, done: side.done }
 }
 
 /** the side of `doc` on the grid `pages`, its tokens' layout `tokOf(shipped)` (of the units `first` give, the rest added after) */
@@ -144,6 +144,8 @@ function sideOf(doc, pages, tokOf, first) {
     add(id, a) { const u = located(id, a); if (u) take(u); done++ },
     none() { done++ },
     units: () => [...placed.values()].sort((x, y) => x.id - y.id).map(u => [u.id, u.tokens[0], u.rects]),
+    /** the first page of unit `id`'s rectangles, or null where it is not located */
+    firstPage: id => { const u = placed.get(id); if (!u) return null; let f = Infinity; for (const r of u.rects) if (r[0] < f) f = r[0]; return f },
     done: () => done,
   }
 }

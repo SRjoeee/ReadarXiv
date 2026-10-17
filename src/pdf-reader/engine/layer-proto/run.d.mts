@@ -113,7 +113,7 @@ export declare function slicer(o?: { now?: () => number; budget?: number; give?:
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
 /** a unit's layout made final: a CJK cell's lines moved into their bands between the rules at the size it is drawn at */
-export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
+export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }, layout?: { lines?: { block: number; baseline: number }[]; scale?: number }): void
 /** a page's fill target (pageTarget's answer, fillPage's too): see PageFill */
 export type Filled = PageFill
 /** a page's fill target as a pure function of its page: the units that begin on it and those running on to it (each with its fit's `fillLead` and `fitLines`), and the band. Null where nothing tells a fill leading */
@@ -162,6 +162,9 @@ export interface ProtoRun {
    *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
    *  copy and set as SVG */
   pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number; links: number }[]
+  /** the deterministic work counters of each page (work.mjs): integer counts, the same for the same input */
+  pageWork: (import('./work.mjs').Work | undefined)[]
+  workTotal(): import('./work.mjs').Work
   /** each page's characters (with `free` and `records`, the shelf's: every page's, let go or not) */
   chars: (Char[] | undefined)[]
   views: { convertToViewportPoint(x: number, y: number): number[]; convertToPdfPoint(x: number, y: number): number[] }[]

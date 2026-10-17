@@ -949,17 +949,17 @@ describe('reading the marked original', () => {
     vi.useRealTimers()
     // (a row's character by its index into its marks' `chars`, which the rows before it fill)
     const rowOf = (m: typeof want, name: string) => { const e = m.marks.owned.find(r => r[0] === name); return e && [...e.slice(0, 7), m.marks.chars[e[7] as number], ...e.slice(8)] }
-    expect(late.dark).toEqual({ timedOut: [1], capped: [] })
+    expect(late.dark).toEqual({ timedOut: [1], capped: [], degraded: [] })
     expect(rowOf(late, 'p1.1a')).toEqual(rowOf(want, 'p1.1a'))
     expect(late.marks.owned.find(e => e[0] === 'p0.1a')).toBeUndefined()
     // page 1 showing past GLYPHS_PAGE glyphs: capped, its ink none
     const many = { ...first, shown: [...first.shown, { glyphs: Array.from({ length: GLYPHS_PAGE + 1 }, () => 'z'), x: 72, y: 600, step: 1 }] as Shown[] }
     const capped = await readMarked(streamDocument([many, second], dests), '', { engine: 'pdflatex', units, OPS } as never)
-    expect(capped.dark).toEqual({ timedOut: [], capped: [1] })
+    expect(capped.dark).toEqual({ timedOut: [], capped: [1], degraded: [] })
     expect(capped.marks.owned.find(e => e[0] === 'p0.1a')).toBeUndefined()
     expect(rowOf(capped, 'p1.1a')).toEqual(rowOf(want, 'p1.1a'))
     // and nothing of the kind on the pages as they are
-    expect(want.dark).toEqual({ timedOut: [], capped: [] })
+    expect(want.dark).toEqual({ timedOut: [], capped: [], degraded: [] })
   }, 60_000)
 
   it('each page of the marked read given up on is that page alone: every page asked, each dark past OPS_MS, no count of them', async () => {
@@ -1006,7 +1006,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: 6, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0] }, pages: 2,
+  schema: 7, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -1017,6 +1017,8 @@ const valid = (): LayoutMarks => ({
   chars: ['x', '2', '\u2211', ''],
   // p0.3: x and its raised 2, and a rule; n0.5: one glyph of a blank Unicode; p2.1: out of order
   owned: [['n0.5a', 1, 1, 1, 200, 680, 7, 3], ['p0.3a', 0, 2, 1, 100, 700, 10, 0, 1, 105, 703.5, 7, 1, 1, 100, 702, 110, 702.4], ['p2.1a', OWNED_HOW.indexOf('marks out of order')]],
+  // a link over one glyph; one over none (counted for the order alone)
+  links: [['appendix.C', 1, 196, 697, 203, 709, 197, 197, 1, 'C'], ['cite.k', 2, 100, 690, 120.5, 702, 0, 0, 0, '']],
 })
 const bytes = (v: unknown) => new TextEncoder().encode(typeof v === 'string' ? v : JSON.stringify(v))
 const refusal = (b: Uint8Array) => { try { parseLayoutMarks(b); return null } catch (e) { if (!(e instanceof LayoutRefusal)) throw e; return e.path } }
@@ -1039,7 +1041,7 @@ describe('the marks file', () => {
   it('encodeLayoutMarks and parseLayoutMarks round-trip', () => {
     const m = valid()
     expect(parseLayoutMarks(bytes(encodeLayoutMarks(m)))).toEqual(m)
-    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned'])
+    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned', 'links'])
   })
   it('parseLayoutMarks refuses past its bounds', () => {
     const big = new Uint8Array(MARKS_CAP + 1).fill(0x20)
@@ -1050,11 +1052,12 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 6 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 6 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 6 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 6 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 6 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 7 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 7 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 7 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 7 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 7 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 7 }, 'schema'],
       ['a lineskip of one number', m => { (m.marking as Record<string, unknown>).lineskip = [1] }, 'marking.lineskip'],
       ['a lineskip past \\maxdimen', m => { (m.marking as Record<string, unknown>).lineskip = [1, 1e6] }, 'marking.lineskip[1]'],
       ['a lineskip a hundredth past \\maxdimen as written', m => { (m.marking as Record<string, unknown>).lineskip = [1, 16322.8] }, 'marking.lineskip[1]'],
@@ -1133,6 +1136,25 @@ describe('the marks file', () => {
       ['a word index of -2', m => { m.tokens[11] = -2 }, 'tokens[11]'],
       ['a string where a number goes', m => { (m.marks[0] as unknown[])[2] = '72' }, 'marks[0][2]'],
       ['an array where a number goes, a level deeper than the file has', m => { (m.marks[0] as unknown[])[2] = [72] }, ''],
+      // the links (the link-anchor locator's)
+      ['no links key, a file before them', m => { delete (m as Partial<LayoutMarks>).links }, 'links'],
+      ['links not an array', m => { (m as Record<string, unknown>).links = {} }, 'links'],
+      ['a link of nine fields', m => { (m.links[0] as unknown[]).pop() }, 'links[0]'],
+      ['a link of no name', m => { nth(m.links, 0)[0] = '' }, 'links[0][0]'],
+      ['a link named with a line break', m => { nth(m.links, 0)[0] = 'appendix.\nC' }, 'links[0][0]'],
+      ['a link name of 129 code units', m => { nth(m.links, 0)[0] = 'x'.repeat(129) }, 'links[0][0]'],
+      ['a link on page 3', m => { nth(m.links, 1)[1] = 3 }, 'links[1][1]'],
+      ['links not in page order', m => { nth(m.links, 0)[1] = 2; nth(m.links, 1)[1] = 1 }, 'links[1][1]'],
+      ['a link of no width', m => { nth(m.links, 0)[4] = 196 }, 'links[0][4]'],
+      ['a link of no height', m => { nth(m.links, 0)[5] = 697 }, 'links[0][5]'],
+      ['a link a coordinate 14,401', m => { nth(m.links, 0)[2] = -14401 }, 'links[0][2]'],
+      ['a link whose last glyph is left of its first', m => { nth(m.links, 0)[7] = 196 }, 'links[0][7]'],
+      ['a link of 201 glyphs', m => { nth(m.links, 0)[8] = 201 }, 'links[0][8]'],
+      ['a link of a fractional count', m => { nth(m.links, 0)[8] = 1.5 }, 'links[0][8]'],
+      ['a text with no glyph', m => { nth(m.links, 1)[9] = 'k' }, 'links[1][9]'],
+      ['no text with a glyph', m => { nth(m.links, 0)[9] = '' }, 'links[0][9]'],
+      ['a text of 65 code units', m => { nth(m.links, 0)[9] = 'C'.repeat(65) }, 'links[0][9]'],
+      ['20,001 links', m => { m.links = Array.from({ length: 20_001 }, (): LayoutMarks['links'][number] => ['cite.k', 1, 100, 690, 120, 702, 0, 0, 0, '']) }, 'links'],
     ]
     for (const [name, change, path] of rows) {
       const m = valid() as LayoutMarks & Record<string, unknown>
@@ -1296,3 +1318,73 @@ describe('markedPages: the marked original a page at a time (the page stream, E2
     expect(file.owned.filter(e => e.length === 2).map(e => e[0])).toEqual(['p0.27a'])
   }, 120_000)
 })
+
+describe("the marked compile's links (the link-anchor locator's)", () => {
+  /** streamDocument's, each page with its Link annotations (getAnnotations: a list, a failure, or none at all) */
+  /** each page's getAnnotations asked, by page */
+  const asked: number[] = []
+  const linked = (pages: { view: number[]; shown: Shown[]; annots?: unknown[] | 'fails' }[], dests: [string, number, number | null, number | null][]) => {
+    const doc = streamDocument(pages, [['axt-0s', 1, 72, 700], ...dests])
+    return {
+      ...doc,
+      getPage: async (n: number) => {
+        const p = nth(pages, n - 1), page = await doc.getPage(n)
+        return p.annots === undefined ? page : { ...page, getAnnotations: async () => { asked.push(n); if (p.annots === 'fails') throw new Error('no annotations'); return p.annots } }
+      },
+    }
+  }
+  const view = [0, 0, 612, 792]
+  // "see Appendix C for" at 72: each character 5 pt, the C at 137
+  const line: Shown = ['see Appendix C for', 72, 700]
+  // (a reference's placeholder, whose two points stand on page 1, or from page 1 to page `to`: the pages whose links are read)
+  const refUnits = [unit('para', [text('see '), ph('\\cref{app:c}'), text(' for')])]
+  const pointsOn = (to = 1): [string, number, number, number][] => [['axt-p0.1a', 1, 92, 700], ['axt-p0.1b', to, 142, 700]]
+  const read = (pages: Parameters<typeof linked>[0], withOps = true, to = 1) => layoutMarksOf(linked(pages, pointsOn(to)), '', { engine: 'pdflatex', ...(withOps ? { units: refUnits, OPS } : {}) })
+
+  it('each Link annotation that names a destination, its glyphs by PDF.js\'s rule: their origins, count and text; none under it, n 0', async () => {
+    const annots = [
+      { subtype: 'Link', rect: [136, 697, 143, 709], dest: 'appendix.C' },
+      { subtype: 'Link', rect: [72, 697, 90, 709], url: 'https://arxiv.org' },
+      { subtype: 'Link', rect: [72, 697, 90, 709], dest: [{ num: 1, gen: 0 }, { name: 'XYZ' }] },
+      { subtype: 'Text', rect: [72, 697, 90, 709] },
+      { subtype: 'Link', rect: [300, 697, 310, 709], dest: 'figure.1' },
+      // its rectangle given the other way about, over "see"
+      { subtype: 'Link', rect: [88, 709, 71, 697], dest: 'cite.k' },
+    ]
+    const m = await read([{ view, shown: [line], annots }])
+    expect(m.links).toEqual([['appendix.C', 1, 136, 697, 143, 709, 137, 137, 1, 'C'], ['figure.1', 1, 300, 697, 310, 709, 0, 0, 0, ''], ['cite.k', 1, 71, 697, 88, 709, 72, 82, 3, 'see']])
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(m)))).toEqual(m)
+  })
+
+  it('a link of a text past its bound is kept with no glyph; a paper with a page whose annotations fail, or read without its operator lists, has none', async () => {
+    const long: Shown = { glyphs: Array.from({ length: 70 }, () => 'x'), x: 72, y: 650 }
+    const m = await read([{ view, shown: [line, long], annots: [{ subtype: 'Link', rect: [70, 647, 430, 660], dest: 'cite.long' }] }])
+    expect(m.links).toEqual([['cite.long', 1, 70, 647, 430, 660, 0, 0, 0, '']])
+    const fails = await read([{ view, shown: [line], annots: [{ subtype: 'Link', rect: [136, 697, 143, 709], dest: 'appendix.C' }] }, { view, shown: [line], annots: 'fails' }], true, 2)
+    expect(fails.links).toEqual([])
+    const noOps = await read([{ view, shown: [line], annots: [{ subtype: 'Link', rect: [136, 697, 143, 709], dest: 'appendix.C' }] }], false)
+    expect(noOps.links).toEqual([])
+    // and a page of no getAnnotations at all (a PDF.js of none: the tests' fakes) is one whose annotations are not known
+    expect((await read([{ view, shown: [line] }])).links).toEqual([])
+  })
+
+  it('reads the links of the pages a placeholder that names a link has a point on, and no other page\'s', async () => {
+    const annots = [{ subtype: 'Link', rect: [136, 697, 143, 709], dest: 'appendix.C' }]
+    asked.length = 0
+    const m = await read([{ view, shown: [line], annots }, { view, shown: [line], annots }, { view, shown: [line], annots }])
+    // (page 1 holds the reference's points; pages 2 and 3 none: never asked)
+    expect(asked).toEqual([1])
+    expect(m.links).toEqual([['appendix.C', 1, 136, 697, 143, 709, 137, 137, 1, 'C']])
+    // a piece across pages 1 and 2: both read, and the page beyond neither point is not
+    asked.length = 0
+    const across = await read([{ view, shown: [line], annots }, { view, shown: [line], annots }, { view, shown: [line], annots }], true, 2)
+    expect(asked).toEqual([1, 2])
+    expect(across.links.map(l => l[1])).toEqual([1, 2])
+    // no placeholder names a link (a formula's): no page asked, no link
+    asked.length = 0
+    const none = await layoutMarksOf(linked([{ view, shown: [line], annots }], pointsOn()), '', { engine: 'pdflatex', units: [unit('para', [text('see '), ph('$x$'), text(' for')])], OPS })
+    expect(asked).toEqual([])
+    expect(none.links).toEqual([])
+  })
+})
+

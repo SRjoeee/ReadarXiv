@@ -28,6 +28,8 @@ export interface RangedAnchors {
   own(u: number, low: number, high: number): void
   /** unit u's bounds final: [first token, last token], or null for none */
   mark(u: number, bounds: [number, number] | null): void
+  /** a bound of a pair of marks no unit's (bounds.size, matchUnits' switch) */
+  bound(key: string, bounds: [number, number]): void
   isMarked(u: number): boolean
   isSettled(u: number): boolean
   /** the ranges anchored while ready: each unit first framed on the page to onAnchor, each final one reaching no later page

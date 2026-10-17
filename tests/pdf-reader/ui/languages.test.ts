@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { LANG_CODES, toBcp47 } from '@/config/languages'
-import { verified } from '@/pdf-reader/session/verified.mjs'
+import { TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
 import { languageItems, READER_LANGUAGES } from '@/pdf-reader/ui/languages'
 
-describe('the languages the reader typesets (the reader\'s design, §6.7)', () => {
-  it('are the nine the typesetting gate verified, and every one of them', () => {
+describe('the languages the reader offers (the reader\'s design, §6.7)', () => {
+  it('are the nine the layer sets (the engine\'s TARGETS), and every one of them', () => {
     expect(READER_LANGUAGES).toHaveLength(9)
-    expect([...READER_LANGUAGES].sort()).toEqual(LANG_CODES.filter(c => verified(toBcp47(c))).sort())
+    expect([...READER_LANGUAGES].sort()).toEqual(LANG_CODES.filter(c => (TARGETS as readonly string[]).includes(toBcp47(c))).sort())
   })
 
   it('are named each in its own language, in the design\'s order, the current one selected', () => {

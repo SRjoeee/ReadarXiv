@@ -52,6 +52,9 @@
 // - Erasing: what a unit's erasing covers that no painted unit accounts for is put back from the original (kept lines
 //   whole, the ink no accounted character stands on); crops grown over the ink they touch and darkened in.
 import { noStart } from './no-start.mjs'
+import { work } from './work.mjs'
+import { sourceRepeats, stutterCuts } from './stutter.mjs'
+import { SWAP_PAD } from '../layer/swap.mjs'
 import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -151,7 +154,61 @@ export function pageChars2(textContent, fontOf, mapOf = null) {
       cx += w
     })
   }
-  return out
+  return joinAccents(out, textContent.items)
+}
+
+/** each spacing accent's combining mark: grave, acute, circumflex, tilde, diaeresis, macron, breve, dot, ring, caron,
+ *  cedilla, ogonek, double acute (Hungarian), as the fonts' ToUnicode maps write them (ASCII's three among them) */
+const COMBINING = new Map([['`', '̀'], ['ˋ', '̀'], ['´', '́'], ['ˊ', '́'], ['^', '̂'], ['ˆ', '̂'], ['~', '̃'], ['˜', '̃'], ['¯', '̄'], ['ˉ', '̄'], ['˘', '̆'], ['˙', '̇'], ['¨', '̈'], ['˚', '̊'], ['˝', '̋'], ['ˇ', '̌'], ['¸', '̧'], ['˛', '̨']])
+/** the marks set under a letter, which keep a dotless i dotless */
+const BELOW = new Set(['̧', '̨'])
+/**
+ * A spacing accent TeX set as a glyph of its own joined to its letter (the M1 survey of 2608.16117: "Munster et al.,¨ 2013"
+ * for Münster, seven citations; before, every such accent went to its line's end, charsOfUnit2). TeX's \accent sets the
+ * accent, then moves back over it to set the letter (OT1's: the accent before its letter), or sets the letter first and the
+ * accent over it (an accent-after-letter font); PDF.js starts a new item at such a move back, so the accent ends its item and
+ * its letter begins the next (or the accent begins its item and its letter ended the one before), the two items overlapping
+ * across. Joined where that is what the page shows: the two items in one font on one baseline, and the letter's span holding
+ * the accent glyph's centre (its own width in its design back from its item's end, or on from its item's start), which only
+ * the move back over the accent gives; the letter becomes its accented letter (NFC, one code point: ü, ć, č;
+ * a dotless ı or ȷ under an accent above it the dotted letter's: Loïc) and the accent is no character of its own. An accent
+ * alone in its item (a formula's \hat or \bar over a letter in another font, a capital's raised accent) keeps its own glyph
+ * and box, and a mark written after its letter in one item joins that letter where they compose. Every other character
+ * stays as it is.
+ */
+function joinAccents(chars, items) {
+  // (each item's characters: their first and last index in `chars`, which holds them in item order)
+  const runs = []
+  chars.forEach((c, i) => { const r = runs.at(-1); if (r?.item === c.item) r.last = i; else runs.push({ item: c.item, first: i, last: i }) })
+  const gone = new Set()
+  const join = (letter, mark) => {
+    const base = BELOW.has(mark) ? letter.ch : letter.ch === 'ı' ? 'i' : letter.ch === 'ȷ' ? 'j' : letter.ch
+    const ch = (base + mark).normalize('NFC')
+    if ([...ch].length !== 1 || ch === base + mark) return false
+    letter.ch = ch
+    return true
+  }
+  const isLetter = c => !!c && /^\p{L}$/u.test(c.ch) && !COMBINING.has(c.ch)
+  runs.forEach((r, n) => {
+    const it = items[r.item], end = it.transform[4] + it.width
+    for (let i = r.first; i <= r.last; i++) {
+      const c = chars[i]
+      // (a combining mark written after its letter in the item)
+      if (/^\p{M}$/u.test(c.ch)) { if (i > r.first && isLetter(chars[i - 1]) && !gone.has(i - 1) && join(chars[i - 1], c.ch)) gone.add(i); continue }
+      const mark = COMBINING.get(c.ch)
+      if (!mark || c.nu || r.first === r.last || (i !== r.first && i !== r.last)) continue
+      const w = (wDesign(c.ch, c.st) * c.size) / 100, tol = 0.05 * c.size
+      // the accent ends its item, its letter beginning the next; or begins it, its letter ending the one before
+      const o = i === r.last ? runs[n + 1] : runs[n - 1]
+      if (!o) continue
+      const L = chars[i === r.last ? o.first : o.last]
+      if (!isLetter(L) || L.nu || L.st !== c.st || Math.abs(L.yb - c.yb) > tol) continue
+      // (the accent glyph's centre on the letter: only the move back over it puts it there)
+      const mid = i === r.last ? end - w / 2 : it.transform[4] + w / 2
+      if (mid >= L.x0 - tol && mid <= L.x1 + tol && join(L, mark)) gone.add(i)
+    }
+  })
+  return gone.size ? chars.filter((_, i) => !gone.has(i)) : chars
 }
 
 // ---- the original: each line's baseline and size, the unit's style
@@ -478,6 +535,64 @@ export function extendFirstLines(rects, pageViews, others) {
   }
 }
 
+/** a change of a paragraph's measure: a line's edge this many em off the line's before it */
+const STEP_EM = 2
+/** lines set to one measure: their edges within this many em of it (a justified line's ink ends a point or two short of
+ *  its measure, or past it by a protruded hyphen) */
+const MEASURE_TOL = 0.5
+/**
+ * A block's lines by the measure TeX set each to, where it changed within the paragraph (a wrapfigure beside its first
+ * lines, \parshape, \hangindent, a cutout): 2609.26457 page 8, unit 43, whose lines 1 to 7 end at x 283 beside the figure
+ * and its caption, lines 8 to 20 at 533; v0's block took its widest line's edge for every slot and laid the translation
+ * over the caption. A step is an edge (either side) more than STEP_EM em off the line's before it that stays: the two lines
+ * before it hold the old edge and the line after it the new, each within MEASURE_TOL em. The first line's start may lie
+ * further in (its indent), and where the measure widens on the right the paragraph's last line may end short of it; an
+ * isolated short line (a ragged or broken line, a paragraph's last) is no step. The block's kept lines (a display's rows)
+ * are no line of a measure. Returns a Map of each line's key (rectKey) to its measure's [x0, x1], the extent of its run of
+ * lines between two steps, or null where the block is one measure (every slot its block's edges, as before).
+ */
+export function measuresOf(rects, keep = null) {
+  const lines = rects.filter(r => !keep?.has(rectKey(r)))
+  const n = lines.length
+  if (n < 4) return null
+  const em = median(lines.map(r => (r[4] - r[2]) / 0.894))
+  const step = STEP_EM * em, tol = MEASURE_TOL * em
+  const cuts = new Set()
+  for (const side of [1, 3]) {
+    const e = lines.map(r => r[side])
+    for (let i = 2; i + 1 < n; i++) {
+      if (!(Math.abs(e[i] - e[i - 1]) > step)) continue
+      const widens = side === 3 ? e[i] > e[i - 1] : e[i] < e[i - 1]
+      const before = Math.abs(e[i - 2] - e[i - 1]) <= tol || (side === 1 && i - 2 === 0 && e[0] > e[1])
+      const after = Math.abs(e[i + 1] - e[i]) <= tol || (side === 3 && widens && i + 1 === n - 1 && e[i + 1] < e[i])
+      if (before && after) cuts.add(i)
+    }
+  }
+  if (!cuts.size) return null
+  const out = new Map()
+  let from = 0
+  for (const to of [...[...cuts].sort((a, b) => a - b), n]) {
+    const run = lines.slice(from, to)
+    const m = [Math.min(...run.map(r => r[1])), Math.max(...run.map(r => r[3]))]
+    for (const r of run) out.set(rectKey(r), m)
+    from = to
+  }
+  return out
+}
+/** a block's measure at slot `k` of its lines (on its grid) or at baseline `y`: its line's (measuresOf); between two lines
+ *  of two measures the narrower of both, so that no slot runs over what stands beside either; [x0, x1] */
+function measureAt(b, y, k) {
+  const at = i => b.measures.get(rectKey(b.rects[i])) ?? [b.x0, b.x1]
+  if (k >= 0 && k < b.rects.length) return at(k)
+  const Y = b.G ?? b.B
+  if (y >= Y[0] - 0.05) return at(0)
+  for (let i = 0; i + 1 < Y.length; i++) {
+    if (Math.abs(y - Y[i + 1]) <= 0.05) return at(i + 1)
+    if (y < Y[i] && y > Y[i + 1]) { const a = at(i), c = at(i + 1); return [Math.max(a[0], c[0]), Math.min(a[1], c[1])] }
+  }
+  return at(Y.length - 1)
+}
+
 /**
  * blocksOf (layer.js) with its kept lines (a displayed formula) never moved: blocksOf started a far-in first line at its
  * block's edge before it split the block around the kept lines, so a formula that began a block (the unit's text went
@@ -522,6 +637,9 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
     const pageCentre = view ? (view[0] + view[2]) / 2 : 306
     const widthsVary = Math.max(...rs.map(r => r[3] - r[1])) - Math.min(...rs.map(r => r[3] - r[1])) > 6
     b.centred = rs.length > 1 ? Math.max(...centres) - Math.min(...centres) < 3 && widthsVary : Math.abs(centres[0] - pageCentre) < 3 && b.x1 - b.x0 < 0.8 * (view ? view[2] - view[0] : 612)
+    // (the measures its lines are set to, where TeX changed it within the paragraph: measuresOf; a centred block's lines
+    // are no measure's)
+    b.measures = b.centred ? null : measuresOf(rs, keep)
   }
   if (!keep?.size && !breakAt?.size) { for (const b of blocks) b.after = 0; return blocks }
   let after = 0
@@ -701,7 +819,7 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // alone the unit's characters are v0's rectangles', and a leftover may be a rendering the segments do not reach)
   out.inkKnown = !!(parts?.renderings && parts.lines)
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
-  if (parts?.proof) { const k = parts.proof(out); if (k >= 0) out.unproven = k }
+  if (parts?.proof) { const k = parts.proof(out, unit); if (k >= 0) out.unproven = k }
   // (a source that knows where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it)
   out.breaks = parts?.breaks?.(unit) ?? null
   finishUnit(out, unit, rects, charsByPage)
@@ -1264,8 +1382,9 @@ function finishUnit(out, unit, rects, charsByPage) {
   }
   // the original's own character a held line shows right after a kept placeholder's ink (1512.03385's footnote 1: a URL's
   // line kept, its full stop with it), `heldAfter`, and how many marks no line may start with it shows there in a row
-  // (`heldMarks`): tokensOf2 drops as many of the translation's there, which would show them twice, and no more (a
-  // closing corner bracket U+300D after the translation's ideographic full stop is its own)
+  // (`heldMarks`, the characters): tokensOf2 drops the translation's marks there that stand for one the line shows, which
+  // would show them twice, and no other (a closing corner bracket U+300D after the translation's ideographic full stop is
+  // its own; so is a ")" before it where the line shows only a full stop)
   for (const r of out.values()) {
     if (r?.mode !== 'kept' || r.cls === 'display' || r.region === undefined || !r.gap) continue
     const own = new Set(r.gap.chars.filter(real).map(charKey))
@@ -1276,7 +1395,7 @@ function finishUnit(out, unit, rects, charsByPage) {
     r.heldAfter = after[0] && inRegion(after[0]) ? after[0].ch : null
     let n = 0
     while (n < after.length && inRegion(after[n]) && noStart(after[n].ch)) n++
-    r.heldMarks = n
+    r.heldMarks = after.slice(0, n).map(c => c.ch)
   }
   // the translation's own text, letters only: a name it keeps as the page writes it ("Niño", whose ñ the source wrote
   // as a command) is drawn, not shown twice
@@ -1342,8 +1461,30 @@ export function cropBaselineOf(real, lineInfo, main) {
   return info?.exact && Math.abs(info.baseline - own) <= 0.6 * big ? info.baseline : own
 }
 
+/** a script's characters: under this share of the rendering's largest size (the layout maker's SCRIPT_SIZE) */
+const SCRIPT_SHARE = 0.85
+/** a character over its rendering's main baseline by this share of the largest size or more: raised (TeX raises a
+ *  superscript 0.29 em at the least, sup3; the text layer gives one line's items one baseline) */
+const OFF_BASELINE = 0.1
+/**
+ * Whether a rendering's own characters hold one raised off the baseline of its main glyphs (those within SCRIPT_SHARE of
+ * its largest size): a superscript ("AIDE" and its "2" 4.3 pt up, 2609.26457's \aidesq{}, AIDE^2), a raised letter
+ * (\LaTeX's A). Set on the baseline as page text, a raised script reads as another token, "AIDE 2" (a version) for AIDE
+ * squared. A lowered one reads as the same words ("AIDE human" for 2609.26457's AIDE_human, "BERT BASE" for 1810.04805's
+ * BERT_BASE) and stays page text, which breaks across lines where a crop cannot. Read from the page's characters, which
+ * a layout file's segment holds as its own ink (renderingOf) and v0's alignment as its gap's, never from the macro's name.
+ */
+export function scriptedOf(chars) {
+  const ink = chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
+  if (ink.length < 2) return false
+  const big = Math.max(...ink.map(c => c.size))
+  const y = median(ink.filter(c => c.size >= SCRIPT_SHARE * big).map(c => c.ybEff ?? c.yb))
+  return ink.some(c => (c.ybEff ?? c.yb) - y >= OFF_BASELINE * big)
+}
+
 /** a placeholder drawn from its rendering on the page: as the page's text (a citation, a reference, a macro, a formula
- *  over lines) or as a crop of the page (a formula); `lineInfo`, the unit's lines' (Prepared's) */
+ *  over lines) or as a crop of the page (a formula, and a text macro that sets a raised script: scriptedOf, whose page
+ *  text on one baseline read "AIDE 2" for AIDE^2); `lineInfo`, the unit's lines' (Prepared's) */
 function drawnAs(p, g, cls, sup, lineInfo = null) {
   const real = g.chars.filter(c => !c.sep && !c.space)
   const lines = new Set(real.map(c => c.rect.join()))
@@ -1359,16 +1500,38 @@ function drawnAs(p, g, cls, sup, lineInfo = null) {
   // (a rendering whose source knows where its ink is, a layout file's segments, g.box: its lines are its segments)
   const box = g.box
   const broken = box ? box.lines > 1 : lines.size > 1 && !oneLine
-  if (cls !== 'other' || broken || p.cls === 'macro' || p.cls === 'umacro') return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
+  const textMacro = p.cls === 'macro' || p.cls === 'umacro'
+  const scripted = textMacro && !broken && oneLine && scriptedOf(real)
+  if (cls !== 'other' || broken || (textMacro && !scripted)) return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
+  // (a text macro's crop reads as its page text where its source has none: copied and found as the page shows it)
+  const text = texToText2(p.src) || (scripted ? g.text : '')
   // (with a box, a layout file's segment: the piece's own ink, on the baseline of the line TeX set it on)
-  if (box?.top !== undefined) return { mode: 'crop', page: real[0].page, ...cropOfBox(box), text: texToText2(p.src) }
+  if (box?.top !== undefined) return { mode: 'crop', page: real[0].page, ...cropOfBox(box), text }
   const main = real.filter(c => c.size >= lineSize * 0.85)
   const baseline = cropBaselineOf(real, lineInfo, main.length ? main : real)
   // (a hanging glyph, a radical, from an em below its baseline to just above it: by its baseline, its box reached into
   // the line above, "√dk" taking "nd v." from "…dimension d_v.")
   const y0 = Math.min(...real.map(c => (c.ybEff !== undefined ? c.yb - c.size : c.yb - c.size * 0.26))), y1 = Math.max(...real.map(c => (c.ybEff !== undefined ? c.yb + c.size * 0.15 : c.yb + c.size * 0.8)))
   const x0 = Math.min(...real.map(c => c.x0)), x1 = Math.max(...real.map(c => c.x1))
-  return { mode: 'crop', page: real[0].page, crop: [x0 - 0.4, y0, x1 + 0.4, y1], baseline, text: texToText2(p.src) }
+  return { mode: 'crop', page: real[0].page, crop: [x0 - 0.4, y0, x1 + 0.4, y1], baseline, text }
+}
+
+/**
+ * A placeholder's resolution read again from a rendering another source proves where v0's reading found none (tex.mjs
+ * proofOf: the layout file's segments of its row, renderingOf's, `g`): as resolvePlaceholders reads a rendering, its own
+ * brackets left out where the translation sets its own, and drawn as its page text or a crop (drawnAs). `r`: the
+ * resolution it replaces (its k, src, cls and sup kept); `unit`, its unit; `lineInfo`, its lines' (Prepared's).
+ */
+export function resolutionFrom(r, g, unit, lineInfo = null) {
+  const p = { k: r.k, src: r.src, cls: r.cls }
+  const cls = renderingClass(p.cls)
+  let gg = g
+  if ((cls === 'num' || cls === 'other' || (cls === 'cite' && /^\(/.test(g.text))) && /^[([]/.test(g.text) && /[)\]]$/.test(g.text) && bracketed(unit.pieces, p.k)) {
+    const real = g.chars.filter(c => !c.sep && !c.space && /\S/.test(c.ch))
+    const inner = g.chars.slice(g.chars.indexOf(real[0]) + 1, g.chars.indexOf(real.at(-1)))
+    if (inner.some(c => /[\p{L}\p{N}]/u.test(c.ch))) gg = unbracketed(g, real, inner)
+  }
+  return { ...drawnAs(p, gg, cls, !!r.sup, lineInfo), k: p.k, src: p.src, cls: p.cls, gap: gg }
 }
 
 /**
@@ -1831,6 +1994,7 @@ const mcache = new Map(), icache = new Map()
 const inkOfMetrics = m => ({ a: Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : 0, d: Number.isFinite(m.actualBoundingBoxDescent) ? m.actualBoundingBoxDescent : 0 })
 /** a run's width at 100 px in its face (canvas measureText, cached; its ink beside it, ink100) */
 function w100(s, face) {
+  work.measures++
   const font = fontString(face, 100)
   const key = `${font}|${s}`
   let w = mcache.get(key)
@@ -1854,6 +2018,57 @@ export function ink100(s, face) {
     icache.set(key, v)
   }
   return v
+}
+
+/**
+ * The kind a mark no line may start with is, across scripts: the translation's ideographic full stop stands for the
+ * original's ".", its closing corner bracket or full-width parenthesis for ")". A mark with no such partner is its own kind.
+ */
+export function markKind(ch) {
+  if (/^[.\u3002\uFF0E\uFF61]$/u.test(ch)) return 'stop'
+  if (/^[,\u3001\uFF0C\uFF64]$/u.test(ch)) return 'comma'
+  if (/^[;\uFF1B]$/u.test(ch)) return 'semi'
+  if (/^[:\uFF1A]$/u.test(ch)) return 'colon'
+  if (/^[!\uFF01]$/u.test(ch)) return 'excl'
+  if (/^[?\uFF1F]$/u.test(ch)) return 'quest'
+  if (/^[)\]}\uFF09\uFF3D\uFF5D\u3009\u300B\u300D\u300F\u3011\u3015\u3017\u3019\u301B\u2019\u201D]$/u.test(ch)) return 'close'
+  return ch
+}
+
+/**
+ * The text after a placeholder kept on its held line, without the leading marks that stand for one the line itself shows
+ * after the placeholder (`held`, the original's characters in order): each such mark is matched with one of those, not
+ * counted against them, so that a translation's ")" before its full stop is drawn where the line shows only a full stop.
+ */
+export function droppedHeld(s, held) {
+  const left = held.map(markKind)
+  let t = s, kept = ''
+  while (left.length) {
+    const lead = /^\s*/.exec(t)[0], ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
+    if (lead.length >= t.length || !noStart(ch)) break
+    const at = left.indexOf(markKind(ch))
+    if (at >= 0) left.splice(at, 1)
+    else kept += lead + ch
+    t = t.slice(lead.length + ch.length)
+  }
+  return kept + t
+}
+
+/**
+ * `text` with the ranges `cuts` ([from, to), rising: stutter.mjs stutterCuts) left out, and its transformMap (`map`, or null)
+ * less the same characters, so that each character left keeps the place in the piece it had; null where there is nothing to cut
+ */
+export function cutOut(text, cuts, map) {
+  if (!cuts.length) return null
+  let out = '', at = 0
+  const from = map ? [] : null, span = map ? [] : null
+  const keep = (a, z) => {
+    out += text.slice(a, z)
+    if (map) for (let i = a; i < z; i++) { from.push(map.from[i]); span.push(map.span[i]) }
+  }
+  for (const [a, z] of cuts) { if (a > at) keep(at, a); at = Math.max(at, z) }
+  keep(at, text.length)
+  return { text: out, map: map && { from, span } }
 }
 
 /**
@@ -1966,17 +2181,20 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // `origAfter`): the maintainer's fix 4 of 2026-10-15, for every script. So is such a mark after a placeholder kept on
   // its held line where that line shows the original's own mark after it (`heldAfter`). The rows and the cache keep the translation
   let after = null
-  // (after a display, every such mark: the original's line there opens with none; after a held line's mark, as many as it
-  // shows, `most`)
+  // (after a display, every such mark: the original's line there opens with none; after a held line's mark, those that
+  // stand for one the line shows, `held`)
   const dropped = s => {
+    if (after.held) return droppedHeld(s, after.held)
     let t = s
-    for (let n = 0; n < (after.most ?? Infinity); n++) {
+    for (;;) {
       const lead = /^\s*/.exec(t)[0], ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
       if (lead.length >= t.length || !noStart(ch) || noStart(after.origAfter)) return t
       t = t.slice(lead.length + ch.length)
     }
-    return t
   }
+  // (a translator's stutter, a word written twice in a row the source has once, drawn once: stutter.mjs, the M1 survey; not
+  // where the unit's source repeats a word itself)
+  const tidy = !sourceRepeats(unit.src)
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
       let s = p.s
@@ -1989,7 +2207,10 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // be drawn as it is shown)
       const sm = at ? (p.tr ? escapeMap(p.s, sh) : sh === p.s ? true : null) : null
       const map = sm ? transformMap(s, text) : null
-      pushText(text, style(), {}, map && { at, sh, base: p.s.length - s.length, map, sm: sm === true ? null : sm })
+      // (a stutter's second word left out of a translated piece, each character left keeping its place: the word table's offsets
+      // stay the translation's own)
+      const cut = tidy && p.tr ? cutOut(text, stutterCuts(text), map) : null
+      pushText(cut?.text ?? text, style(), {}, (cut ? cut.map : map) && { at, sh, base: p.s.length - s.length, map: cut ? cut.map : map, sm: sm === true ? null : sm })
       return
     }
     plain?.gap()
@@ -2037,7 +2258,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (r.cls === 'display') after = r
       // (a held line's own mark after the placeholder stands with it, the original's: the translation's is not drawn
       // again, finishUnit's `heldAfter`)
-      else if (noStart(r.heldAfter)) after = { origAfter: null, most: r.heldMarks ?? 1 }
+      else if (noStart(r.heldAfter)) after = { origAfter: null, held: r.heldMarks?.length ? r.heldMarks : [r.heldAfter] }
       return
     }
     // (a display before the unit's lines, drawn as nothing: the text after it opens the unit's first line)
@@ -2212,6 +2433,41 @@ export function freeBelow(map, toDev, k, x0, x1, yStart, yLimit) {
 const hyphenData = new Map()
 export const setHyphenData = (lang, data) => hyphenData.set(lang, data)
 
+/** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows */
+const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 ?? 1.2 * s))
+/**
+ * The gap under a paragraph never tighter than its lines (the half-leading round, 2026-10-17, its second form): the lowest
+ * baseline a unit's last line may take at a state, where the next line of its column in the original keeps its own baseline
+ * (P.halfLead.below: the original's room from the unit's last baseline down to that line; run.mjs edgesOf). A paragraph's
+ * first line stays on the original's first baseline, as TeX set it, whatever is over it (a heading, a figure, a skip, the
+ * page's head): a first line moved under it by half the leading drifted from the original by (L - 1) / 2 of a pitch on 56 %
+ * of the paragraph starts in CJK, 70 % of them with a leading's room over them already (the maintainer's question). So the
+ * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than a leading, L p0, of
+ * either paragraph (its own, `lead`, or the next one's, `next`, the page fill's: run.mjs fillPage) and the original's own
+ * skip there past its pitch, it ends higher by the deficit, its last baseline no lower than that line's plus L p0 of the
+ * larger and the skip, its fill spread over a shorter height
+ * (the page fill's states, `box`: slotsAt stops its last frame's slots there, so that the lines a frame holds still fall with
+ * the leading and the fill's search is monotone). Where the original leaves that much or more (a heading's room, nothing under
+ * it in its column) nothing changes. Null where nothing is asked: at the original's pitch or
+ * closer (the alphabets: nothing moves), a last line it shares with ink that stays (`foot` false: a unit begins on it), a
+ * last frame of one line (no room to give), no line under it
+ */
+function footFloorAt(blocks, st, P, s) {
+  const e = P.halfLead, L = Math.max(st.lead, st.next ?? 0)
+  if (!e?.foot || !(L > 1 + 1e-9) || !blocks.length || !Number.isFinite(e.below)) return null
+  const bl = blocks.at(-1), low = lowOf(bl, st, s)
+  if (!(bl.B[0] - low > 0.05)) return null
+  // (and the original's own skip at that boundary, its room past its pitch, capped at a pitch as the gate's measure caps
+  // it, measure.mjs paraGapsOf: a NeurIPS \parskip of 5.5 pt under 11 is kept over the leading, where without it a gap of a
+  // pitch and a skip equalled a leading of 1.5 and the paragraphs ran together)
+  const p0 = bl.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, e.below - p0), p0)
+  const floor = bl.B.at(-1) - e.below + L * p0 + skip
+  return floor > low + 1e-9 ? floor : null
+}
+
+/** footFloorAt for the page fill's guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
+export const footFloorOf = (blocks, st, P, s) => footFloorAt(blocks, st, P, s)
+
 /** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
  *  the original's times the leading, whatever the size (D6's F6a, 2026-10-08: a Latin line shrunk with its size sat on none
  *  of the original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it; every
@@ -2220,8 +2476,11 @@ function slotsAt(blocks, st, P, s) {
   const out = []
   // (each block's foot, the lowest a line of it is laid at: its last baseline less what it borrows; a line TeX's rule moves
   // down may go on past it into the next block of its flow where blocks2 found nothing kept between them, `through`, to
-  // the foot of the last block it so runs into, `foot`)
-  const lows = blocks.map(b => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 ?? 1.2 * s)))
+  // the foot of the last block it so runs into, `foot`; the page fill's states (`box`) the unit's last frame's no lower than
+  // a leading over the next line of its column, footFloorAt)
+  const lows = blocks.map(b => lowOf(b, st, s))
+  const floor = st.box ? footFloorAt(blocks, st, P, s) : null
+  if (floor !== null) lows[lows.length - 1] = floor
   const feet = lows.slice()
   for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi].through) feet[bi] = feet[bi + 1]
   for (const [bi, b] of blocks.entries()) {
@@ -2232,15 +2491,22 @@ function slotsAt(blocks, st, P, s) {
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own)
     const G = b.G ?? b.B
     for (let k = 0; k < 400; k++) {
-      let y = onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
+      // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
+      // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
+      const shared = bi === 0 && k === 0 && b.startY !== undefined
+      let y = shared ? b.startY : onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
-      if (y < low - 0.05) break
+      if (y < low - 0.05 && !shared) break
       const target = k === 0 || (onGrid && k < b.B.length) ? k : null
-      const x0 = b.x0 + (bi === 0 && k === 0 && !b.centred ? b.indent : 0)
+      // (each slot the measure of the line it is laid at, where the paragraph's changed: measuresOf; the block's grid, its
+      // pitch and its flow its own across the change, one paragraph's)
+      const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && k < G.length ? k : -1) : [b.x0, b.x1]
+      // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
+      const x0 = bi === 0 && k === 0 && b.start !== undefined ? b.start : bi === 0 && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
-      if (b.x1 - x0 < 1.5 * s * st.scale) continue
-      out.push({ block: bi, page: b.page, x0, x1: b.x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
+      if (mx1 - x0 < 1.5 * s * st.scale) continue
+      out.push({ block: bi, page: b.page, x0, x1: mx1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
     }
   }
   return out
@@ -2287,8 +2553,13 @@ const tokW = (t, f, st, scale) => {
 /**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
+ * No line the breaker opens starts with a mark UAX 14 or the target's rules keep from a line's start (`barred`): such a
+ * mark stays with the group before it, across a space too, unless that group with it is longer than a line by itself
+ * (the break the glue alone allows), or a token cut by its characters would leave one at the head of its tail (the cut
+ * moves back before it). A line TeX's own break opens (`newline`, `blockTo`) is tokensOf2's: its `dropped`.
  */
 function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
+  work.breaks++
   // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
   // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
   const flow = strict === 'flow'
@@ -2297,6 +2568,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   const lines = []
   let li = 0, i = 0
   const half = 0.5 * f
+  // (the marks no line opens with: a character UAX 14 keeps from a line's start, no-start.mjs, the one table the layer
+  // gate's lineStartPunct reads too, or one the target's rules do, P.noStart: CJK's small kana and prolonged sound mark,
+  // its closing quotes, the per cent sign; `barred`, a token that opens with one)
+  const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
+  const barredChar = ch => noStart(ch) || kinsoku.starts(ch)
+  const barred = t => !t.space && typeof t.s === 'string' && t.s !== '' && barredChar(t.s)
   let line = null
   const open = () => {
     line = { ...slots[li], items: [], x: 0, spaces: 0, from: i }
@@ -2372,6 +2649,48 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     }
     open()
   }
+  // a group's widths, tokens `from` to `end` on the line in hand, with its punctuation compressed: at the line's start an
+  // opening mark loses its blank half, two marks together lose the blank between them, and with compressMax 2 every mark
+  // loses its blank half (a space the group holds before its barred mark, `sp`, as wide as the line's spaces and
+  // shrinking as they do)
+  const groupOf = (from, end) => {
+    const items = []
+    let w = 0, sp = 0
+    let prev = line.items.at(-1)?.t ?? null
+    for (let q = from; q < end; q++) {
+      const t = tokens[q]
+      if (t.space) { const tw = tokW(t, f, st, scale); items.push({ t, w: tw }); w += tw; sp += tw; prev = t; continue }
+      let tw = tokW(t, f, st, scale), shift = 0
+      if (t.punct && st.compress >= 2) {
+        tw -= half
+        if (t.punct === 'open') shift = -half
+      } else if (t.punct && st.compress === 1) {
+        if (prev?.punct === 'close') {
+          // two marks together: the first loses its trailing blank half (the second keeps its own)
+          const last = items.length ? items.at(-1) : line.items.at(-1)
+          if (last && !last.cut) {
+            last.w -= half
+            last.cut = true
+            if (items.length) w -= half
+            else line.x -= half
+          }
+        } else if (t.punct === 'open' && (!prev || prev.punct)) {
+          // an opening mark at the line's start, or after another mark: its leading blank half
+          tw -= half
+          shift = -half
+        }
+      }
+      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f : 0
+      items.push({ t, w: tw, shift, asp })
+      w += tw + asp
+      prev = t
+    }
+    // a closing mark at the line's end hangs its blank half
+    const hang = items.at(-1).t.punct === 'close' && st.compress < 2 ? half : 0
+    return { items, w, sp, hang }
+  }
+  /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
+  const fits = (g, cap) => line.x - line.spaces * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
   // (a line's trailing spaces dropped)
   const trim = l => { while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w } }
   if (slots.length) open()
@@ -2435,6 +2754,19 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     // footnote marks iteration 1 lost were skipped here with the space before them)
     let j = i + 1
     if (!tokens[i].space) while (j < tokens.length && tokens[j].glue && !tokens[j].space) j++
+    // (and a mark no line opens with, `barred`, joins the group before it, past the spaces between them too: a translation's
+    // space before its comma or its bracket, a formula drawn as the page's characters with its spaces, a mark after a crop
+    // that no rule glues. The line breaks before the group, never before the mark: kinsoku's push-out, the word or the
+    // character before the mark going down with it. `own`: the group as its glue alone makes it, which a line it opens
+    // takes where the joined group is longer than the line: the break the breaker always made there, nothing else fitting)
+    const own = j
+    if (!tokens[i].space) for (;;) {
+      let q = j
+      while (q < tokens.length && tokens[q].space) q++
+      if (q >= tokens.length || !barred(tokens[q])) break
+      j = q + 1
+      while (j < tokens.length && tokens[j].glue && !tokens[j].space) j++
+    }
     const t0 = tokens[i]
     if (t0.space) {
       if (line.items.length) {
@@ -2446,43 +2778,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       i = j
       continue
     }
-    // the group's widths, with its punctuation compressed: at the line's start an opening mark loses its blank half,
-    // two marks together lose the blank between them, and with compressMax 2 every mark loses its blank half
-    const items = []
-    let w = 0
-    let prev = line.items.at(-1)?.t ?? null
-    for (let q = i; q < j; q++) {
-      const t = tokens[q]
-      let tw = tokW(t, f, st, scale), shift = 0
-      if (t.punct && st.compress >= 2) {
-        tw -= half
-        if (t.punct === 'open') shift = -half
-      } else if (t.punct && st.compress === 1) {
-        if (prev?.punct === 'close') {
-          // two marks together: the first loses its trailing blank half (the second keeps its own)
-          const last = items.length ? items.at(-1) : line.items.at(-1)
-          if (last && !last.cut) {
-            last.w -= half
-            last.cut = true
-            if (items.length) w -= half
-            else line.x -= half
-          }
-        } else if (t.punct === 'open' && (!prev || prev.punct)) {
-          // an opening mark at the line's start, or after another mark: its leading blank half
-          tw -= half
-          shift = -half
-        }
-      }
-      const asp = t.asp && (line.items.length || items.length) ? P.autospace * f : 0
-      items.push({ t, w: tw, shift, asp })
-      w += tw + asp
-      prev = t
-    }
-    // a closing mark at the line's end hangs its blank half
-    const hang = items.at(-1).t.punct === 'close' && st.compress < 2 ? half : 0
     const shrink = line.spaces * (1 - P.spaceMin)
-    if (line.x - shrink + w - hang <= cap + 0.01) {
-      for (const it of items) line.items.push(it)
+    let g = groupOf(i, j)
+    if (j > own && !line.items.length && !fits(g, cap)) { j = own; g = groupOf(i, j) }
+    const { items, w } = g
+    if (fits(g, cap)) {
+      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
       line.x += w
       i = j
       continue
@@ -2495,6 +2796,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
         const per = chars.map(c => (w100(c, t0.face) * f) / 100)
         while (k < chars.length && used + per[k] <= cap) used += per[k++]
         k = Math.max(1, k)
+        // (the part left never opens with a mark no line starts with: the cut moves back before it)
+        while (k > 1 && k < chars.length && barredChar(chars[k])) k--
         line.items.push({ t: { ...t0, s: chars.slice(0, k).join('') }, w: per.slice(0, k).reduce((a, b) => a + b, 0), shift: 0, asp: 0 })
         const tail = chars.slice(k).join('')
         tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face), glue: false, asp: false }, ...tokens.slice(i + 1)]
@@ -2631,20 +2934,33 @@ export function layoutUnit2(tokens, blocks, s, P) {
   let last = null, tried = 0
   for (const st of statesOf(P, blocks, s)) {
     tried++
+    work.fit++
     const f = s * st.scale
     const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
     last = { r, st, f }
     if (r.rest >= r.total) break
   }
-  // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order)
+  // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order), at the
+  // most natural state at which it then fits. The walk down to the last state bought nothing the run past keeps: laid at the
+  // last, a paragraph that runs on past a display was drawn at the floor's size though it fit far larger (the M1 survey of
+  // 2608.16117, German page 10: units 28 and 35 at 0.8 and 0.85 of the original's size). Where it fits at none, the last
+  // state's, as far as it goes
   if (last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
-    const r = breakLines(tokens, slotsAt(blocks, last.st, P, s), last.f, last.st, P, last.st.scale, false)
-    if (r.rest > last.r.rest) last = { ...last, r }
+    let past = null
+    for (const st of statesOf(P, blocks, s)) {
+      tried++
+      const f = s * st.scale
+      past = { r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, false), st, f }
+      if (past.r.rest >= past.r.total) break
+    }
+    if (past.r.rest >= past.r.total) last = past
+    else if (past.r.rest > last.r.rest) last = { ...last, r: past.r }
   }
   // (step 3, P.flowPast: and else through every slot, a kept region only breaking the line, from the most natural state)
   if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
     for (const st of statesOf(P, blocks, s)) {
       tried++
+      work.fit++
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow')
       if (r.rest >= r.total) { last = { r, st, f }; break }
@@ -2655,6 +2971,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
   // filled by its text's size, not by lines looser than the original's own)
   if (P.growTo > 1 && tried === 1 && last.r.rest >= last.r.total) {
     for (let k = Math.round((Math.min(P.growTo, P.capScale ?? Infinity) - 1) / P.step); k >= 1; k--) {
+      work.fit++
       const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
@@ -2688,8 +3005,46 @@ function laidOut({ r, st, f }, s, P, tried) {
  * leading, tracking or size): layoutUnit2's answer, clipped where the state does not set every token in the text's order
  */
 export function layoutAt(tokens, blocks, s, P, st) {
+  work.fit++
   const f = s * st.scale
   return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1)
+}
+
+// ---- a shared line (need.mjs rowLeadOf): a unit's last row on which TeX set another unit's first, which is laid from where
+// this one's translation ends there (run.mjs layout2's `start`)
+
+/** whether a laid line stands on a shared row (shareOf): on its page, within an em of its baseline, across the block it is in */
+const onShare = (share, l) => l.page === share.page && Math.abs(l.baseline - share.y) < share.band && Math.min(l.x0 + l.used, share.x1) > Math.max(l.x0, share.x0)
+/**
+ * The shared row as a unit's layout leaves it: `row` (the unit's last row in the layout file: page, baseline, size) in the
+ * unit's block that holds it (its x0 and x1, so that a line of another column on that baseline is no line of the row),
+ * `end`, the furthest end of the unit's text laid within an em of the row (its lines there, which the next unit's first line
+ * would meet), and `at`, the baseline of the line that ends there: the row's own where the unit's line stands on TeX's, else
+ * where its leading set it (a paragraph's two lines spread over its three rows, 2608.16117's unit 115 on page 39, 7.2 pt
+ * over the row), which the next unit's first line stands on, so that the row reads as one line. Both null where it set
+ * none there (its translation ended higher: the row is free). Null where no block of the unit holds the row (a row kept as
+ * the original's, or dropped as another unit's): the row stays the original's.
+ */
+export function shareOf(layout, blocks, row) {
+  const b = blocks.find(q => q.page === row.page && q.B.some(y => Math.abs(y - row.baseline) < 0.05))
+  if (!b) return null
+  const share = { page: row.page, y: row.baseline, band: row.size, x0: b.x0, x1: b.x1, end: null, at: null }
+  for (const l of layout.lines) if (onShare(share, l) && (share.end === null || l.x0 + l.used > share.end)) { share.end = l.x0 + l.used; share.at = l.baseline }
+  return share
+}
+/** whether a layout of a unit keeps its shared row as the unit's fit left it (shareOf): its text there ending no further
+ *  right, none there where the fit set none, and the line that ends furthest there on the baseline the fit set it at (`at`),
+ *  so that the next unit on the row, laid from the fit's end and on its baseline, stays clear of it and on its line
+ *  (run.mjs fillPage). True with no share */
+export function keepsShare(share, lines) {
+  if (!share) return true
+  let far = null
+  for (const l of lines) {
+    if (!onShare(share, l)) continue
+    if (share.end === null || l.x0 + l.used > share.end + 0.01) return false
+    if (!far || l.x0 + l.used > far.x0 + far.used) far = l
+  }
+  return far === null || share.at === null || Math.abs(far.baseline - share.at) < 0.01
 }
 
 // ---- drawing: the layer as data (erasing, restoring, crops), drawn on a copy of the page at any resolution; the SVG text
@@ -2717,8 +3072,10 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
       for (const [ei, e] of boxes.entries()) {
         const [x0, y0, , y1] = e
         // a line that is not its block's last is justified to the column's edge: erased to it (a closing symbol the
-        // anchors' line rectangle left out stayed, 1512.03385 page 2's "&")
-        const x1 = ri < b.rects.length - 1 && ei === boxes.length - 1 ? Math.max(e[2], b.x1) : e[2]
+        // anchors' line rectangle left out stayed, 1512.03385 page 2's "&"); to its own measure's where the paragraph's
+        // changed (measuresOf: a line beside a wrapped figure, never erased over it)
+        const edge = b.measures && !b.centred ? b.measures.get(rectKey(r))?.[1] ?? b.x1 : b.x1
+        const x1 = ri < b.rects.length - 1 && ei === boxes.length - 1 ? Math.max(e[2], edge) : e[2]
         const [ax, ay] = px(x0 - (bi === 0 && ri === 0 && ei === 0 ? 0.3 : 1.8), y1 + 1.2), [bx, by] = px(x1 + 1.8, y0 - 1.2)
         ops.push({ op: 'erase', box: [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] })
         erased.push([Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)])
@@ -2792,16 +3149,25 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
  * plane 'O' (or none) the original, 'R' its text-removed page, 'P' its placeholders alone. A crop is darkened in, never
  * pasted: its paper is white, and pasted it erased what it was laid over (a kept label). A swap puts the removed page's
  * pixels in its rectangles.
+ * `k`: the device pixels a PDF unit `ctx` is drawn at, where the caller knows it. A swap's and a paper fill's rectangles are a
+ * removed glyph's outline grown by SWAP_PAD for its antialiased edge, a device pixel and more at 2.5 device pixels a unit and
+ * up; where the pad is less than a device pixel (a reader at 85 % and a device pixel ratio of 1: 1.06 a unit), the glyph's
+ * edge pixel straddled the rectangle's edge, which the canvas antialiases too, and a faint row of the erased line's ink was
+ * left (the M1 survey of 2608.16117, Chinese page 10). There each rectangle is taken out to whole device pixels: every pixel
+ * the grown outline touches is wholly replaced, and no edge is blended. Where the pad is a device pixel or more, as drawn
  */
-export function drawOps(ctx, ops, z, sourceOf) {
+export function drawOps(ctx, ops, z, sourceOf, k = null) {
   const at = b => [b[0] * z, b[1] * z, b[2] * z, b[3] * z]
+  // (out to whole device pixels: a hair of rounding is no pixel)
+  const whole = b => { const x0 = Math.floor(b[0] * z + 1e-6), y0 = Math.floor(b[1] * z + 1e-6), x1 = Math.ceil((b[0] + b[2]) * z - 1e-6), y1 = Math.ceil((b[1] + b[3]) * z - 1e-6); return [x0, y0, x1 - x0, y1 - y0] }
+  const removed = k !== null && SWAP_PAD * k < 1 ? whole : at
   ctx.save()
   ctx.fillStyle = '#fff'
   for (const o of ops) {
     if (o.op === 'erase') ctx.fillRect(...at(o.box))
     else if (o.op === 'paper') {
       ctx.beginPath()
-      for (const e of o.rects) ctx.rect(...at(e))
+      for (const e of o.rects) ctx.rect(...removed(e))
       ctx.fill()
     }
     else if (o.op === 'restore') {
@@ -2818,7 +3184,7 @@ export function drawOps(ctx, ops, z, sourceOf) {
       if (!src || !o.rects.length) continue
       ctx.save()
       ctx.beginPath()
-      for (const e of o.rects) ctx.rect(...at(e))
+      for (const e of o.rects) ctx.rect(...removed(e))
       ctx.clip()
       ctx.drawImage(src, 0, 0)
       ctx.restore()

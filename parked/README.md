@@ -50,8 +50,8 @@ Change the list and the files together, or not at all.
   `node tex-page/build.mjs` (about half an hour the first time; `REHASH=1` and `FRAMERS=<origins>` for a build to
   publish) and `node spikes/serve-live.mjs` for the page on this machine;
 - the engine of the reader under `src/pdf-reader/engine/` as it stood at the commit above: `tex-page/jobs.mjs`,
-  `measure.mjs` and `speed.mjs` import it, and the extension still frames the production page by a constant address
-  (`src/pdf-reader/addresses.mjs`) until its own compile client is parked.
+  `measure.mjs` and `speed.mjs` import it; the extension framed the production page by a constant address until its own
+  compile client was parked (`parked/extension-compile/`, below).
 
 ## parked/lab/ — the typesetting gates and the compile-path checks
 
@@ -103,8 +103,28 @@ roles, the layout file's parser, the pieces) by relative paths, and `scriptOf`, 
 that has no `layer/layer.mjs`, and the layer lab's v1 view loads the entry and reports that it is not there. The gate measures
 v0 (`--engine-kind=proto`, `--door`).
 
-## Still to come
+## parked/extension-compile/ — the extension's compile client
 
-The extension's own compile client — the final compile in the reader's session and the store of compiled PDFs under
-`src/` — is parked by a later change. It last ran at the freeze, the tag `exp-freeze-2026-10-07`, named above. It gets a section
-here, with its tag or commit, when it moves.
+The reader's session that compiled the translation in the browser, its files under `src/` and `tests/` here keeping the
+layout they had: the session itself (`parked/extension-compile/src/pdf-reader/session/session.mjs`: the two viewers, the TeX page framed for its
+compiles, previews and the final swapped in) with its helpers (`tex-store.mjs`, the store of the TeX tree's files the
+warm-up filled; `hints.mjs`, the engines and scripts a page is told to fetch ahead; `verified.mjs`, the languages the
+typesetting gate verified; `host.mjs`, the page's handover of its panes), the background's warm-up of the TeX page
+(`parked/extension-compile/src/entrypoints/background/warmup.ts`, `parked/extension-compile/src/entrypoints/ocr/tex-warm.ts`, `parked/extension-compile/src/shared/tex-warm.ts`) and the store of
+compiled PDFs (`parked/extension-compile/src/cache/pdf-store.ts`) with the rules its copies were judged by (`parked/extension-compile/src/pdf-reader/engine/pipeline/record.ts`),
+each with its tests. Stage 5 Task 9 replaced them with the reader on the layer (the live tree's session host and run); Task
+10 replaced the store with the layer's, and the background deletes the old one's database (`axt-pdf`) on an install or an
+update.
+
+Last ran: at the freeze, the tag `exp-freeze-2026-10-07`, which names commit `a2267b287b2c7cb87dfdb70481a3832d140b8eb8`, and on
+`next` up to commit `10cffede5f88` (pull request #386), the last before the reader moved to the layer.
+
+Its design as it stood — the store of compiled copies and what voids one, the typesetting by the Flow rule, the TeX page's
+warm-up, a paper that cannot be typeset, a translation shown in part, the three versions — is DESIGN §16 at that commit:
+`git show 10cffede5f88:docs/DESIGN.md`.
+
+**Reviving it needs** that commit's tree around it: the files keep the layout of `src/` and `tests/` they came from, import
+the live tree by the `@/` alias and by relative paths that no longer resolve from here, and the TeX page above
+(`parked/tex-page/`), which the session framed at `tex.readarxiv.org` (in development at `127.0.0.1:8071`, the address the
+reader's addresses module gave it then).
+

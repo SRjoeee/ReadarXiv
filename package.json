@@ -10,6 +10,8 @@
     "dev": "wxt",
     "build": "wxt build && node scripts/check-output.mjs",
     "zip": "wxt zip",
+    "build:staging": "AXT_READER_API=https://app-staging.readarxiv.org wxt build && AXT_BUILD=staging node scripts/check-output.mjs",
+    "zip:staging": "AXT_READER_API=https://app-staging.readarxiv.org wxt zip",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

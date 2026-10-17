@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-17",
+  "by": "the maintainer",
+  "on": "a shared line (fix/shared-line): a unit whose first row TeX set on the line another unit's last row ends (a run-in heading and its text, a paragraph's part after the float that split it) starts that row where the translation before it ends, the original's separation after it",
+  "quote": "\u884c\u5185\u5c0f\u6807\u9898\u540c\u610f",
+  "english": "approved the run-in headings change (shared-line), 2026-10-17, relayed by the coordinator",
+  "measures": [
+    "paragraph gaps a pitch or more wider",
+    "frames past the right edge",
+    "pitch spread",
+    "frames with a blank line",
+    "paragraph gap / the original's (median)"
+  ],
+  "targets": [
+    "de",
+    "es",
+    "ru",
+    "ja",
+    "ko",
+    "zh"
+  ],
+  "scope": "137 shared pairs on the 30 outputs; the gated measures worse on four targets, one pair or frame each. de, es and ru: paragraph gaps a pitch or more wider 0 to 1 of 209 (de), 1 to 2 (es), 1 to 2 (ru), the same pair on 1810.04805 p12, where the heading's translation runs 5.5 pt past the English and its text's first word goes whole to the next row. ja: frames past the right edge 0.211 to 0.214 (77 to 78 of 365), 1706.03762 p10, the acknowledgements' text (unit 171) starting at 138 pt where the heading's translation ends instead of 202 pt, its first line ending 5 pt past the column's edge. Measured on fix/shared-line's own model run against next, before the breaker (fix/breaker-nostart) changed overRight to leave out hanging marks. The file covers each of the two measures on each of the four targets, a cross product made on purpose so that one ruling holds the change; only the pairs named here moved worse (paragraph gaps on de, es and ru, frames past the right edge on ja), and ja's paragraph gaps and the right edge on de, es and ru were no worse. Also recorded under the same approval, per output and not gating (ko and zh pooled no worse): 1706.03762 ko pitch spread 0.121 to 0.221, the median of 12 pages' spreads moved by p3 alone (0.05 to 0.25): the Decoder text (unit 27) starts at 150 pt where the heading's translation ends instead of 156 pt, sets in 6 lines instead of 7 and fills its 7-row frame at leading 1.2 while the neighbouring paragraph, which fills its frame, stays at 1.0. 1706.03762 zh frames with a blank line 8 to 9 of 72 (0.1111 to 0.125), p10, the acknowledgements' text (unit 171) set in one line from 138 pt instead of two squeezed lines from 202 pt (leading 1.0, compression 2, tracking -0.03, eleven tries) after a 64 pt hole, its frame's second row left blank. 2608.16117 zh p38-p39: frames with a blank line 0.1971 to 0.2, paragraph gap against the original 1.021 to 1.042, paragraph gaps a pitch or more wider 0.0714 to 0.0741, frames 137 to 135 (unit 119's line, set on the lead's baseline in the same row, lies outside both of its original frames, so the gate stops counting them: a change of denominator, not of layout); unit 115 keeps its fit's leading 1.3 instead of the fill's 1.5 (page 38 pitch spread 1.174 to 1.397, the output's stays 0.451; zh blank lines per frame 0.437 to 0.441)",
+  "why": "the run-in heading's text no longer starts where the English words ended: a Chinese heading left a gap of 60 pt before its text where the original sets a 10.9 pt quad (a run-in heading on 1810.04805 p12 and one on 1706.03762 p10). On 1810.04805 p12 the base drew the text's first word cut across the row without a hyphen (An|genommen); the word moved whole to the next row is the better line, and the wider gap is that row. The ja frame is one line of a run-in text set from the heading's end. The ko and zh moves are the same rule: the run-in text starts where the heading's translation ends, so the page's lines are fewer or looser by one line; the baseline step in the shared row on 2608.16117 p39 (7.2 pt) is gone because the follower stands on the lead's drawn baseline (fix/shared-line-baseline), at the cost of the lead keeping its fit's leading"
+}

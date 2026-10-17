@@ -6,7 +6,7 @@ import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { indexLayout, LAYOUT, type LayoutFile, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 
-// Synthetic papers for the order of the asks (1b-D design §5: S-A to S-D, and the fill paper): the same page of a PDF.js
+// Synthetic papers for the order of the asks (1b-D design §5: S-A to S-D, the fill paper, and S-E's shared lines): the same page of a PDF.js
 // document's shape as the take and local tests' (its text layer, its views; nothing drawn), a layout file and v0's geometry
 // built from one list of specs, so that a paper is opened by the run (`openRun`: openProto over every unit at once) or by
 // the reader's door (`bundleOf`, `rowsOf`: a bundle written and read back by the engine, its rows made by the engine's own
@@ -120,7 +120,21 @@ const fill: Paper = {
     para(5, [[4, 200, 4]], 16),
   ],
 }
-export const PAPERS: Paper[] = [chain, tables, float, footnote, { ...footnote, name: 'S-D footnote, page 4 unreadable', fail: 4 }, fill]
+/** S-E, shared lines (need.mjs rowLeadOf): a paragraph from page 1 to page 2 whose last row its part after a float continues
+ *  (unit 1 ranks before unit 0 on page 2: unit 0 waited on page 1), and a run-in head at page 2's foot whose text runs on to
+ *  page 3, which page 4's closure lays through a paragraph from page 3 on to page 4 (the head on no page of that closure's passes) */
+const shared: Paper = {
+  name: 'S-E shared line', pages: 4,
+  specs: [
+    { id: 0, kind: 'para', lines: [line(1, 270, 'Alpha beta gamma'), line(1, 258, 'delta epsilon zeta'), line(1, 246, 'eta theta iota'), line(2, 270, 'kappa lambda mu'), line(2, 258, 'nu xi. The', 20, 150)], chars: 110, at: 0x4e00 },
+    { id: 1, kind: 'para', lines: [line(2, 258, 'omicron pi', 160, 280), line(2, 246, 'rho sigma tau'), line(2, 234, 'upsilon phi chi')], chars: 30, at: 0x5200 },
+    { id: 2, kind: 'heading', lines: [line(2, 60, 'Encoder', 20, 80)], chars: 3, at: 0x5600 },
+    { id: 3, kind: 'para', lines: [line(2, 60, 'The encoder is', 90, 280), line(2, 48, 'composed of a stack'), line(3, 270, 'of identical layers'), line(3, 258, 'each with two')], chars: 40, at: 0x5800 },
+    para(4, [[3, 150, 2], [4, 270, 2]], 40),
+    para(5, [[4, 150, 2]], 20),
+  ],
+}
+export const PAPERS: Paper[] = [chain, tables, float, footnote, { ...footnote, name: 'S-D footnote, page 4 unreadable', fail: 4 }, fill, shared]
 
 /** a character's advance centre at its place in an item of equal advance (PDF.js's rule, links.mjs pointsOf): the item's first character is at index 0 */
 const centreOf = (l: Line, k: number) => l.x0 + ((k + 0.5) / l.text.length) * (l.x1 - l.x0)
@@ -183,14 +197,15 @@ export function build(paper: Paper): Built {
 export type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run.mjs').openProto>>
 /** v0 over the paper, every unit at once (the hybrid over the layout file, each cell's group given, or with `groups` false
  *  none: the groups read from the rows, as the gate's and the lab's whole opens do); `expect`: the rows to be taken after the
- *  open (take) rather than given; `free`: the run lets go of what it has laid, as the reader's does */
-export async function openRun(P: Built, { free = true, groups = true, expect = false, records = true } = {}) {
+ *  open (take) rather than given; `free`: the run lets go of what it has laid, as the reader's does; `rules`: a layout rule set
+ *  (rules/layout.mjs) in place of the built-in one */
+export async function openRun(P: Built, { free = true, groups = true, expect = false, records = true, rules = null as unknown } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const units: unknown[] = []
   const pieces = new Map<number, unknown[]>()
   for (const [id, r] of P.rows) { if (!expect) units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
-    doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, records, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}),
+    doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, records, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}), ...(rules ? { rules } : {}),
     tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }

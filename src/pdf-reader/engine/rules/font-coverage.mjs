@@ -1070,4 +1070,4 @@ export const METRICS = Object.freeze({
   'pt-mono-regular': Object.freeze({ unitsPerEm: 1000, ascent: 885, descent: 235, smcp: false, sha256: 'b03da17b8efcb19d9de42c26dfed6773b0262f7dd83a6ee17dc2bd89324ed47e' }),
   'pt-mono-bold': Object.freeze({ unitsPerEm: 1000, ascent: 885, descent: 235, smcp: false, sha256: '018cf08447fd1a7d3bb02d693f54ef592ab05ff9498c6fcd06c4cfbb9f29cfbd' }),
 })
-export const COVERAGE_SOURCE = Object.freeze({ release: Object.freeze({ 'source-han-serif': '2.003R', 'texlive': 'texlive/texlive@sha256:16c556aeb4095b47245fcd05db47061529e5df8fc8c04d97fb0f049055244526', 'urw-base35-fonts': '20200910' }) })
+export const COVERAGE_SOURCE = Object.freeze({ release: Object.freeze({ 'source-han-serif': '2.003R', 'texlive': 'texlive/texlive@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f', 'urw-base35-fonts': '20200910' }) })

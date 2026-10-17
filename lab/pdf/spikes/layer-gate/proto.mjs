@@ -25,7 +25,7 @@
 // fixture's layout file (its rows read by the instrument itself, fileIndexOf), whether or not the hybrid is given it.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
+import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, hangFromOf, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
 import { annotationsOf, cropsShown, drawnCharsOf, erasedOf, glyphPointsOf, glyphsOfLink, linksPage, pairsOf, referenceOf, textUnder } from '/gate/links.mjs'
 
@@ -225,7 +225,8 @@ async function gpuPlane(doc, n, W, H) {
  * layout file's ownership): `items`, every glyph and rule the add-on removed, device pixels, and whether a unit drawn
  * by the add-on replaces it; `erase`, what such a unit replaces that the add-on kept (paper white in the truth); and the
  * areas of the units drawn the old way (v0's own readings), which the truth leaves out (their erase is the gate's own
- * measures')
+ * measures'). A page whose ink this reading does not read whole (removal.mjs inkOfPage's refusal) is `{ unread }`: the truth
+ * is then the original page, nothing of it removed or erased, and the page says so (never owned from a prefix of its ink)
  */
 async function truthOf(p, page) {
   const R = await import('/engine/layer-proto/removal.mjs'), I = await import('/engine/layout/ink.mjs')
@@ -233,6 +234,7 @@ async function truthOf(p, page) {
   if (!index) return null
   S.outlines ??= I.readOutlines(S.rm.manifest.outlines)
   const ink = await R.inkOfPage(pdfjs.OPS, page, S.outlines)
+  if (ink.unread) return { unread: ink.reason }
   const own = R.fileOwnership(index, p, ink), plan = R.pagePlan(index, p, ink, own)
   const charMap = R.glyphsOfChars(run.chars[p - 1] ?? [], ink, p), unmapped = R.unmappedOf(ink, charMap)
   const at = new Map(), byPath = new Map()
@@ -267,7 +269,7 @@ async function removalMeasures(cur, T) {
   const { cdoc, rdoc, manifest, plan, mode } = S.rm
   const set = s => manifest.sets[s]
   const ok = !!manifest.page[p]?.ok
-  let Rm = O
+  let Rm = O, unread = null
   if (ok) {
     const own = mode === 'draw' ? S.run.removedCanvas(p) : null
     const R = own ? own.getContext('2d').getImageData(0, 0, W, H).data : await gpuPlane(rdoc, set('R') + p, W, H)
@@ -276,10 +278,14 @@ async function removalMeasures(cur, T) {
     // footprint pixel its glyph's, replacedFoot), and leaves the rest the original's (a line a reading keeps, a unit not
     // drawn); what a unit replaces that the add-on kept is erased, paper white
     const truth = mode === 'draw' ? await truthOf(p, await S.doc.getPage(p)) : null
-    const take = truth ? replacedFoot(foot, W, H, truth.items) : foot
-    Rm = new Uint8ClampedArray(O)
-    for (let i = 0, q = 0; i < W * H; i++, q += 4) if (take[i]) { Rm[q] = R[q]; Rm[q + 1] = R[q + 1]; Rm[q + 2] = R[q + 2] }
-    for (const e of truth?.erase ?? []) for (let y = Math.max(0, Math.floor(e[1])); y < Math.min(H, Math.ceil(e[3])); y++) for (let x = Math.max(0, Math.floor(e[0])); x < Math.min(W, Math.ceil(e[2])); x++) { const q = 4 * (y * W + x); Rm[q] = Rm[q + 1] = Rm[q + 2] = 255 }
+    // (a page this reading cannot read whole: its truth the original's, nothing taken or erased, and said: `unread`)
+    if (truth?.unread) unread = truth.unread
+    else {
+      const take = truth ? replacedFoot(foot, W, H, truth.items) : foot
+      Rm = new Uint8ClampedArray(O)
+      for (let i = 0, q = 0; i < W * H; i++, q += 4) if (take[i]) { Rm[q] = R[q]; Rm[q + 1] = R[q + 1]; Rm[q + 2] = R[q + 2] }
+      for (const e of truth?.erase ?? []) for (let y = Math.max(0, Math.floor(e[1])); y < Math.min(H, Math.ceil(e[3])); y++) for (let x = Math.max(0, Math.floor(e[0])); x < Math.min(W, Math.ceil(e[2])); x++) { const q = 4 * (y * W + x); Rm[q] = Rm[q + 1] = Rm[q + 2] = 255 }
+    }
   }
   const drawn = units.filter(u => u.drawn)
   // (the units drawn the old way, v0's own readings: their erase is the gate's erase measures', not the truth's)
@@ -305,6 +311,8 @@ async function removalMeasures(cur, T) {
     const toPx = (x, y) => [(x - qv[0]) * K, (qv[3] - y) * K]
     const dev = b => { const [ax, ay] = toPx(b[0], b[3]), [bx, by] = toPx(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
     const ink = await plane(`ink${q}`, async () => R.inkOfPage(pdfjs.OPS, await cdoc.getPage(q)))
+    // (a source page this reading cannot read whole: the crop is not measured from a prefix of its ink, and is said)
+    if (ink.unread) { ;((out.at ??= {}).cropsUnread ??= []).push([u.id, c.k, q, ink.reason]); continue }
     const at = ci >= 0 ? R.indicesOf(ink, plan.pages[q].crops[ci]) : null
     const rules = (at?.paths ?? []).map(b => dev(ink.boxes.slice(4 * b, 4 * b + 4)))
     // (a crop drawn through its own ink's boxes carries nothing outside them: v0's device pixels, at the gate's)
@@ -318,7 +326,7 @@ async function removalMeasures(cur, T) {
       ;((out.at ??= {}).crops ??= []).push([u.id, c.k, S.byId.get(u.id)?.tex ? 'tex' : 'v0', c.clip ? 'clip' : 'box', n])
     }
   }
-  return { ...out, ok, crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
+  return { ...out, ok, ...(unread ? { unread } : {}), crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
 }
 
 /** each translated piece's source index (the layout file's k) of a unit drawn: the hybrid's own where the file locates
@@ -702,7 +710,11 @@ window.gate = {
     const refOf = new Map(refHere.map(r => [r.id, r]))
     const recs = run.stats.filter(r => r.pages.includes(p))
     const units = recs.map(r => {
-      const lines = (r.lines ?? []).filter(l => l[0] === p).map(l => ({ baseline: l[1], size: r.f, x0: l[6], x1: l[7], block: l[8] })).filter(l => Number.isFinite(l.x0) && Number.isFinite(l.x1))
+      // (each line's end where the marks it ends with that may hang begin, read from the unit's laid line, the record's line
+      // of the same rank where the two agree on its extent: measure.mjs hangFromOf, which `overRight` sets apart)
+      const laid = S.byId.get(r.id)?.layout?.lines
+      const hangOf = (l, i) => { const q = laid?.length === r.lines.length ? laid[i] : null; return q && Math.abs(q.x0 - l[6]) < 0.1 && Math.abs(q.x0 + q.used - l[7]) < 0.1 ? hangFromOf(q.items) : null }
+      const lines = (r.lines ?? []).map((l, i) => [l, i]).filter(([l]) => l[0] === p).map(([l, i]) => ({ baseline: l[1], size: r.f, x0: l[6], x1: l[7], block: l[8], hangFrom: hangOf(l, i) })).filter(l => Number.isFinite(l.x0) && Number.isFinite(l.x1))
       const mine = S.audit.get(`${r.id}|${p}`) ?? []
       const erase = mine.filter(a => a.what === 'erase').map(a => boxPdf(a.box))
       const crops = mine.filter(a => a.what === 'crop').map(a => ({ k: a.k, src: a.src, dst: boxPdf(a.dst), plane: a.plane ?? 'O', srcPage: a.srcPage, devDst: a.dst, clip: a.clip ?? null, own: a.own ?? null }))
@@ -985,7 +997,7 @@ window.gate = {
   /** the fixture's laid units, counted: v0 lays every unit it places (past its floor it clips), by its fit's knob */
   /**
    * A done page's costs (--perf): its first drawing (v0's page step, `pageMs`: its original drawn, its units laid and
-   * painted, and over the text-removed PDF its ink read; `times`, the engine's own split where it gives one; then its
+   * painted, and over the text-removed PDF its ink read; `times`, the engine's own split where it gives one; `work`, its deterministic work counters (layer-proto/work.mjs); then its
    * drawing at the gate's resolution, drawCopy, which draws the removed page there itself: `copy`), its drawing again at a zoom (`zoomK`, twice the gate's device pixels a unit: the original drawn there
    * by PDF.js, then the page's drawing at that resolution, drawCopy, which draws the removed and placeholders' pages there
    * itself), and the canvases its drawing holds (bytes: v0's own at the gate's resolution, its copy, the removed pages)
@@ -1020,7 +1032,8 @@ window.gate = {
     for (let q = 1; q <= run.rows.length; q++) add(run.removedCanvas?.(q))
     const r1 = v => Math.round(v * 10) / 10
     const times = run.pageTimes?.[p] ? Object.fromEntries(Object.entries(run.pageTimes[p]).map(([k, v]) => [k, r1(v)])) : null
-    return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, zoomRender: r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
+    const work = run.pageWork?.[p] ? { ...run.pageWork[p] } : null
+    return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, work, zoomRender: r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
   },
 
   async summary() {
