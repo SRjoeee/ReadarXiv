@@ -880,7 +880,7 @@ function drawsOf(name) {
   return DRAWS.get(paper)
 }
 /** --door-draw=pages and jump: a fixture's bundle as --door makes it, cut as --door-parts cuts it (the doubling, the chained add-on),
- *  every left part with no tokens and its page's draw (drawsOf), served for door-draw.mjs to read as a host does: the units' chunks,
+ *  its head saying the parts carry draws, every left part with no tokens and its page's draw (drawsOf), served for door-draw.mjs to read as a host does: the units' chunks,
  *  the head, the parts, the left parts (l<page>.json, and each one's gzip size, which the link is charged), arXiv's PDF through each
  *  part's tail, the rows. Once a fixture; what the cut shed is counted */
 const DRAW_CUTS = new Map()
@@ -898,7 +898,8 @@ function drawCutOf(name) {
       const base = { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }
       const hooks = await chainedHooksOf(arxiv, read3, base)
       const EMPTY = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
-      const cut = await cutBundle(read3, { leftPages: p => ({ first: 0, tokens: EMPTY, spans: [], pairs: [], draw: D.pages[p - 1].draw }), base, chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon })
+      // (the head says the parts carry draws, as the prepare's does: the door's drawsComing)
+      const cut = await cutBundle(read3, { leftPages: p => ({ first: 0, tokens: EMPTY, spans: [], pairs: [], draw: D.pages[p - 1].draw }), base, draw: true, chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon })
       const at = `/door/${name}`
       cut.units.forEach((u, i) => DOOR_FILES.set(`${at}/u${i}.json`, Buffer.from(u.bytes)))
       DOOR_FILES.set(`${at}/head.json`, Buffer.from(cut.head.bytes))

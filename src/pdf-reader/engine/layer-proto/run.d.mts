@@ -338,4 +338,7 @@ export declare function openProto(o: {
    *  of PDF.js's, its pixels where a step reads its ink), one with none (null, a throw, a draw refused or later than DRAW_WAIT_MS)
    *  live. Every page is drawn as without it. Used with `copy` false, a page pass and no leftover packed; else ignored */
   drawOf?: ((page: number) => Promise<Draw | null>) | null
+  /** the paper's parts may carry draws (the door's Layer.drawsComing, the head's `draw: 1`): the page asked is read for its pixels at
+   *  its ask (once a part covers it), before its draw or page 1's is in; default false, once its draw is in */
+  drawsComing?: boolean
 }): Promise<ProtoRun>

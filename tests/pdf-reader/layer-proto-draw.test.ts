@@ -119,7 +119,7 @@ const drawing = (run: Run) => ({
 
 /** the run over the paper, every part told at the open, its rows taken and ended, the pages asked for in `order` (each laid by
  *  its closure, layFor): with `drawOf`, each page's draw handed over once a page */
-async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, order: number[], drawOf?: (page: number) => Promise<Draw | null>, o: { copy?: boolean } = {}) {
+async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, order: number[], drawOf?: (page: number) => Promise<Draw | null>, o: { copy?: boolean; drawsComing?: boolean } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const facade = layoutFacade(P.index.head)
   const N = SPEC.pages
@@ -128,7 +128,7 @@ async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, 
     parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: N, scale: 1, dpr: 1, copy: o.copy ?? false, free: true, records: true, labels: LABELS as never,
     tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page: {} } as never },
-    ...(drawOf ? { drawOf: (p: number) => { asked.push(p); return drawOf(p) } } : {}),
+    ...(drawOf ? { drawOf: (p: number) => { asked.push(p); return drawOf(p) } } : {}), ...(o.drawsComing ? { drawsComing: true } : {}),
   } as never)
   for (const part of P.parts) { facade.add(part); run.grow(part) }
   run.endParts()
@@ -239,6 +239,81 @@ describe('a page drawn from its draw geometry', () => {
     expect(kept.drawStats).toBeNull()
     expect(asked).toEqual([])
     expect(copied.counts.text.slice(1)).toEqual([1, 1, 1])
+  })
+})
+
+describe('the read order where the paper\'s parts carry draws (drawsComing, the head\'s draw 1)', () => {
+  /** draws held until `release`, each ask recorded */
+  const held = (D: (Draw | null)[]) => {
+    let release = () => {}
+    const gate = new Promise<void>(ok => { release = ok })
+    return { release: () => release(), drawOf: async (p: number) => { await gate; return D[p - 1]! } }
+  }
+  const ticks = async (n = 20) => { for (let i = 0; i < n; i++) await new Promise(ok => setTimeout(ok, 0)) }
+
+  it('reads the asked page\'s pixels at its ask, before its draw or page 1\'s is in; asks the closure\'s draws together; draws as live', async () => {
+    const P = await paper()
+    const live = docsOf(SPEC)
+    const want = drawing((await runOf(P, live.doc, [2])).run)
+    const data = docsOf(SPEC)
+    const H = held(await docsOf(SPEC).draws())
+    const { run, asked } = await runOf(P, data.doc, [], H.drawOf, { drawsComing: true })
+    const asking = run.layFor(2)
+    await ticks()
+    // (page 2 asked: its pixels read while no draw is in; page 1 not drawn; every draw of its closure asked, none answered)
+    expect(data.counts.render.slice(1)).toEqual([0, 1, 0])
+    expect(run.drawStats!.data).toEqual([])
+    expect(asked.slice().sort()).toEqual([1, 2, 3])
+    H.release()
+    await asking
+    expect(run.ready(2)).toBe(true)
+    expect(drawing(run).pages[1]).toEqual(want.pages[1])
+    expect(drawing(run).stats).toEqual(want.stats)
+    expect(data.counts.text.slice(1)).toEqual([0, 0, 0])
+    expect(run.drawStats!.pixels).toEqual({ 1: 'freeFor', 2: 'asked' })
+  })
+
+  it('without it, the asked page\'s pixels wait for its draw (a paper whose parts carry none reads in the closure\'s order)', async () => {
+    const P = await paper()
+    const data = docsOf(SPEC)
+    const H = held(await docsOf(SPEC).draws())
+    const { run } = await runOf(P, data.doc, [], H.drawOf)
+    const asking = run.layFor(2)
+    await ticks()
+    expect(data.counts.render.slice(1)).toEqual([0, 0, 0])
+    H.release()
+    await asking
+    expect(run.ready(2)).toBe(true)
+    expect(data.counts.render.slice(1)).toEqual([1, 1, 0])
+  })
+
+  it('the door gives its run drawsComing from the head: draw 1, the asked page read for its pixels at once', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const { cutBundle } = await import('@/pdf-reader/engine/layer-proto/cut.mjs')
+    const { leftPagesOfSpec, readCut, wholeOfSpec } = await import('./helpers/parts-paper')
+    const D = await docsOf(SPEC).draws()
+    for (const draw of [true, false]) {
+      const cut = await cutBundle(wholeOfSpec(SPEC), { leftPages: (p: number) => ({ ...leftPagesOfSpec(SPEC)(p), draw: D[p - 1] }), draw } as never)
+      const { index, parts } = await readCut(cut)
+      expect(index.head.draw).toBe(draw ? 1 : 0)
+      const data = docsOf(SPEC)
+      let release = () => {}
+      const gate = new Promise<void>(ok => { release = ok })
+      const leftPart = async (page: number) => { await gate; return cut.left[page - 1]!.bytes }
+      const layer = await openLayer({ index, doc: data.doc as never, parts, target: 'zh', faceSources: async (id: string) => [{ url: `/f/${id}.otf`, ranges: [0, 0x10ffff] }], hyphUrl: (lang: string) => `/hyph/${lang}.json`, leftPart, onRetired: () => {} } as never)
+      try {
+        expect(layer.drawsComing).toBe(draw)
+        layer.take(rowsOf(index))
+        layer.end()
+        const two = layer.pageOf(2, { lang: 'zh' })
+        await ticks()
+        expect(data.counts.render[2], `draw ${draw}`).toBe(draw ? 1 : 0)
+        release()
+        await two
+        expect(data.counts.text.slice(1), `draw ${draw}`).toEqual([0, 0, 0])
+        expect(data.counts.render[2]).toBe(1)
+      } finally { layer.dispose() }
+    }
   })
 })
 

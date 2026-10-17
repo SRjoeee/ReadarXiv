@@ -528,9 +528,11 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * are in, NeedPixels), a crop's growth, a name put back; and a paint, which waits for the page's own closure (a unit running on to
  * a page beside the one asked is painted there once that page is laid, in its own order). Every page is drawn as without drawOf.
  * Used where every ink read can wait so: no copy kept (`copy` false), a page pass, no leftover packed; else ignored (`drawStats`
- * null). Absent: every page read live, today's path.
+ * null). Absent: every page read live, today's path. `drawsComing` (the door's, its head's `draw: 1`: the parts may carry
+ * draws): the page asked is read for its pixels at its ask, once a part covers it, before its draw (or page 1's) is in, whether it
+ * is then read from its draw or live; without it, once its draw is in, a page with none read in the closure's order, page 1 first.
  */
-export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, proof = false, copy = true, removal = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null }) {
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, proof = false, copy = true, removal = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
@@ -2408,13 +2410,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return true
   }
   /** where pages are read from their draws: a closure's draws asked at once, every page of its `draw` not drawn yet (their left
-   *  parts come in parallel, not one round trip a page), and the page asked read for its pixels as soon as its draw is in, beside
-   *  the other pages' readings (its units are laid and painted over them). Not before: a page whose draw is none is read live, in
-   *  the closure's order, page 1 first (a page read live whose pixels were read already takes its ink from them, drawPageOn) */
+   *  parts come in parallel, not one round trip a page), and the page asked read for its pixels beside the other pages' readings
+   *  (its units are laid and painted over them): at once where the paper's parts carry draws (`drawsComing`), once a part covers it;
+   *  else as soon as its draw is in, a page whose draw is none read live in the closure's order, page 1 first. A page read live
+   *  whose pixels were read already takes its ink from them (drawPageOn) */
   const prefetch = (p, C) => {
     for (const q of [p, 1, ...C.draw]) if (!drawnPages[q] && !failedPages.has(q)) drawAsk(q)
     if (pixelTasks.has(p)) return
-    if (fromData[p]) { pixelsOf(p, 'asked'); return }
+    if (fromData[p] || (drawsComing && p <= through && !failedPages.has(p) && !drawnPages[p])) { pixelsOf(p, 'asked'); return }
     // (a page drawn live by then, its draw refused, has its ink already)
     if (!drawnPages[p]) drawAsks.get(p)?.then(d => { if (d && !disposed && !pixelTasks.has(p) && (!drawnPages[p] || fromData[p])) pixelsOf(p, 'asked') })
   }
