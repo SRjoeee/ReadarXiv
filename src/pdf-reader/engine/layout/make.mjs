@@ -32,7 +32,7 @@ import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf } from './remove.mjs'
-import { asSet, classOf, destRect, headEnd, layoutMarking, symbolText } from './marks.mjs'
+import { asSet, classOf, destRect, headEnd, layoutMarking, linkablePiece, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { annotsOf, linkKindOf, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
@@ -100,6 +100,9 @@ const TEXT_SPACE = 0.102
  *  reference word, "proposition", is 5.8 em: both PDFs of the 25 papers of the drift study, 2026-10-17) and at most GAP_EM
  *  from it; the characters after its last link at most SUFFIX_MAX */
 const LINKS_PIECE = 8, PREFIX_EM = 6, GAP_EM = 1.2, SUFFIX_MAX = 8
+/** a piece's glyph the matcher would find: a glyph of its character on arXiv's page within NEAR_X across and NEAR_Y up or
+ *  down of where it is carried (the matcher's first glyph is looked for within 8 pt, the next at its neighbour's offset) */
+const NEAR_X = 12, NEAR_Y = 3
 /** the words a reference's name prints before its number (cleveref's default names, hyperref's \autoref's, the theorem
  *  names papers give them, and their abbreviations), case folded: the word arXiv's PDF sets where ours sets another
  *  ("Section C" for our "Appendix C") is one of them, or the piece stays LOST */
@@ -470,35 +473,21 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   const fontIds = raw => { const n = fontName(raw); if (!nameId.has(n)) { nameId.set(n, names.length); names.push(n) } return nameId.get(n) }
   const seen = { warned: false }
   // ---------------------------------------------------------------- the links, the link-anchor locator's (phOf)
-  // Our compile's (the marks file's `links`, document order) by page, each one's rank among ours of its destination and of
-  // its family (its name before the first '.'), and arXiv's as each page is read (inkOf: undefined unread, null not known,
-  // else its Link annotations that name a destination, in PDF.js's order), only where ours has any
+  // Our compile's (the marks file's `links`: the pages a placeholder that names a link has a point on, document order) by page,
+  // and arXiv's, read only on the pages the locator may pair a link on (`wanted`, made once the marks are carried: prepareWanted, judge)
+  // and only where ours has any (theirLinks: undefined not asked, null not known, else its Link annotations that name a
+  // destination, in PDF.js's order). Each link is paired by its order within its unit, both sides' (phOf's `linked`), so a
+  // page's links are read for that page's units alone: PDF.js reads a page's annotations at a cost of its own
   const ourLinks = marks.links ?? [], linking = ourLinks.length > 0
   const familyOf = d => { const at = d.indexOf('.'); return at > 0 ? d.slice(0, at) : d }
-  const ourOnPage = new Map(), ourRank = new Int32Array(ourLinks.length), ourFamRank = new Int32Array(ourLinks.length), ourDests = new Set()
-  {
-    const byDest = new Map(), byFam = new Map()
-    ourLinks.forEach((L, j) => {
-      ourRank[j] = byDest.get(L[0]) ?? 0; byDest.set(L[0], ourRank[j] + 1)
-      const f = familyOf(L[0]); ourFamRank[j] = byFam.get(f) ?? 0; byFam.set(f, ourFamRank[j] + 1)
-      ourDests.add(L[0])
-      ;(ourOnPage.get(L[1]) ?? ourOnPage.set(L[1], []).get(L[1])).push(j)
-    })
-  }
+  const ourOnPage = new Map(), ourDests = new Set()
+  ourLinks.forEach((L, j) => { ourDests.add(L[0]); (ourOnPage.get(L[1]) ?? ourOnPage.set(L[1], []).get(L[1])).push(j) })
   const theirLinks = new Array(pages + 1)
-  /** arXiv's links by destination and by family over its pages from 1, as far as each is known (`pages`): a rank is read on
-   *  those pages alone, the same in every order of the passes (each reads pages up to its own, read in order) */
-  const theirIndex = { pages: 0, byDest: new Map(), byFam: new Map() }
-  const indexTheirs = () => {
-    for (let q = theirIndex.pages + 1; q <= pages && Array.isArray(theirLinks[q]); q++) {
-      for (const a of theirLinks[q]) {
-        for (const [m, key] of [[theirIndex.byDest, a.dest], [theirIndex.byFam, familyOf(a.dest)]]) (m.get(key) ?? m.set(key, []).get(key)).push(a)
-      }
-      theirIndex.pages = q
-    }
-  }
+  let wanted = null
+  /** the pages whose ink readPage has read, so far */
+  const readSoFar = new Set()
   /** a page's Link annotations that name a destination, as the locator reads them: null where not read, or past MAX_LINKS;
-   *  each one ours would hold (marks.mjs destRect, the one rule of both sides' order), so that a rank is read over the same
+   *  each one ours would hold (marks.mjs destRect, the one rule of both sides' order), so that an order is read over the same
    *  links in both PDFs */
   const theirsOf = (raw, p) => {
     if (!Array.isArray(raw)) return null
@@ -506,15 +495,29 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (ls.length > MAX_LINKS) return null
     return ls.filter(a => destRect(a) !== null).map(a => ({ page: p, dest: a.dest, raw: { subtype: 'Link', rect: [...a.rect], dest: a.dest, ...(a.quadPoints ? { quadPoints: Array.from(a.quadPoints) } : {}) } }))
   }
+  /** page p's links read, once (readAnnots never rejects; one not answered within OPS_MS is not known, nor a page not had) */
+  async function readTheirs(p) {
+    if (!linking || theirLinks[p] !== undefined) return
+    theirLinks[p] = null
+    if (unread.has(p)) return
+    let page = null
+    try { page = await arxiv.getPage(p) } catch {}
+    if (page) theirLinks[p] = theirsOf(await within(readAnnots(page), OPS_MS), p)
+  }
   /** page p's ink, read once, its time spent on the paper's `ms.ops` */
   async function readPage(p) {
     const t0 = now()
     await inkOf(p)
+    readSoFar.add(p)
+    // (the pieces whose pages are read judged, and the links of the pages wanted so far read: here once the marks are carried
+    // first, the page stream's order; else by the passes' start, whole() and byTasks(), the same pages)
+    if (pending) {
+      judge(p)
+      for (const q of [...wanted].sort((a, b) => a - b)) if (q <= p) await readTheirs(q)
+    }
     stats.ms.ops += now() - t0
   }
   async function inkOf(p) {
-    // (its links not known unless read below: no rank of arXiv's is read past it)
-    if (linking) theirLinks[p] = null
     if (unread.has(p)) return
     // (past GIVEN_UP_MAX pages given up on, the page is dark unread: its operator list is never asked)
     if (stats.timedOut.length + stats.capped.length + stats.inkTimedOut.length >= GIVEN_UP_MAX) { stats.timedOut.push(p); dark.add(p); return }
@@ -522,8 +525,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     let page = null
     try { page = await arxiv.getPage(p) } catch {}
     if (!page) { dark.add(p); return }
-    // its links, where ours has any (readAnnots never rejects; one not answered within OPS_MS is not known)
-    if (linking) theirLinks[p] = theirsOf(await within(readAnnots(page), OPS_MS), p)
     let ops = null
     try { ops = await within(page.getOperatorList(), OPS_MS) } catch {}
     // a page given up on let go as well: a list that failed has no stream left to cancel, and giveUp's cancellation of
@@ -609,6 +610,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: carried.page, x, y, whole: true } : null
     }
     matcher = matcherOf({ ink, carry })
+    prepareWanted()
     return null
   }
 
@@ -807,6 +809,105 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   const ph = [], kept = new Map() // kept: page → the rectangles erasing leaves out (displays' segments, labels)
   const keep = (p, r) => (kept.get(p) ?? kept.set(p, []).get(p)).push(r)
   const ownInk = new Map(marks.owned.map(e => [e[0], e]))
+  /** a piece's own glyphs, its marks file's row (owned, OWNED: a glyph's character an index into the marks' table, or the
+   *  character itself, as the page stream hands a row on) */
+  const itemsOfInk = e => {
+    const items = []
+    for (let j = 3; j < 3 + 5 * e[2]; j += 5) items.push({ page: e[j], x0: e[j + 1], y: e[j + 2], size: e[j + 3], u: typeof e[j + 4] === 'string' ? e[j + 4] : marks.chars[e[j + 4]] ?? '' })
+    return items
+  }
+  /** a piece's links in our compile (the link-anchor locator's): those whose glyphs (page, baseline inside the rectangle,
+   *  origin within the first and last glyph's) are all among its own glyphs, each one's consecutive, none sharing a glyph, of
+   *  the piece's kind (a citation's `cite.<key>` of its keys, a reference's no `cite.`), in the piece's order: { mine: [{ j,
+   *  from, to }] }, or { why } */
+  const oursIn = (items, kind) => {
+    const mine = [], inLink = new Int8Array(items.length)
+    for (const p of new Set(items.map(it => it.page))) {
+      for (const j of ourOnPage.get(p) ?? []) {
+        const L = ourLinks[j], under = []
+        items.forEach((it, q) => { if (it.page === p && it.y > L[3] && it.y < L[5] && it.x0 >= L[6] - 0.01 && it.x0 <= L[7] + 0.01) under.push(q) })
+        if (!under.length) continue
+        if (under.length !== L[8] || under.at(-1) - under[0] + 1 !== under.length || under.some(q => inLink[q])) return { why: 'ours: a link not wholly the piece\'s' }
+        const cite = L[0].startsWith('cite.')
+        if (kind?.kind === 'cite' ? !cite || !kind.keys.includes(L[0].slice(5)) : cite || /^Hfootnote\./.test(L[0])) return { why: 'ours: a link of another kind' }
+        for (const q of under) inLink[q] = 1
+        mine.push({ j, from: under[0], to: under.at(-1) })
+      }
+    }
+    return { mine: mine.sort((a, b) => a.from - b.from) }
+  }
+  /** the glyphs of page ink P under a Link annotation (PDF.js's rule, layer-proto/links.mjs annotsOf: a glyph's advance centre on
+   *  its baseline strictly inside its rectangle or a quad), across; null for none, or past MAX_GLYPHS */
+  const glyphsUnder = (P, raw) => {
+    const near = band(P, raw.rect[1] - 1, raw.rect[3] + 1).filter(g => /\S/u.test(P.u[g]))
+    const { list } = annotsOf([raw], { x: near.map(g => mid(P, g)), y: near.map(g => P.y[g]), ch: near.map(g => P.u[g]), key: near })
+    const e = list[0]
+    return e && !e.unsupported && e.g.key.length ? [...e.g.key].sort((a, b) => P.x0[a] - P.x0[b] || a - b) : null
+  }
+  /**
+   * The pages of arXiv's PDF whose links the locator may read (`wanted`): made of the marks, their carrier and arXiv's ink alone
+   * (never of a pass's state: who owns or took a glyph), so that the same pages are wanted however the passes are run. A unit's
+   * pages are wanted where it has a piece that names a link (marks.mjs linkablePiece) with one of our links wholly among its
+   * own glyphs (oursIn) that the matcher would not find: one of its glyphs carried nowhere, or with no glyph of its character
+   * on arXiv's page within NEAR_X across and NEAR_Y up or down of where it is carried (our compile set other words there).
+   * Its pages: those its own marks and those pieces' points and glyphs are carried to. carrying() starts it (`pending`: each
+   * piece to be judged once the pages its glyphs are carried to are read); readPage judges as pages come (the page stream),
+   * readWanted() at the passes' start once all are (whole(), byTasks()). None where ours has no link: a paper whose references
+   * and citations stand on arXiv's page as our compile set them asks for no page's links
+   */
+  let pending = null
+  const needed = new Set()
+  function prepareWanted() {
+    wanted = new Set(); pending = []; needed.clear()
+    if (!linking) return
+    units.forEach((u, i) => u.pieces.forEach((piece, k) => {
+      if (!linkablePiece(piece)) return
+      const e = ownInk.get(`p${i}.${k}a`)
+      if (!e || e[1] >= OWNED || e[1] === IN_GROUP || !(e[2] > 0)) return
+      const items = itemsOfInk(e)
+      if (!oursIn(items, linkKindOf(piece)).mine?.length) return
+      const cs = items.map(it => carrier.carry(it.page, it.x0, it.y))
+      if (cs.some(c => !c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages)) { need(i); return }
+      pending.push({ i, k, items, cs, upTo: Math.max(...cs.map(c => c.page)) })
+    }))
+  }
+  /** unit i's pages wanted: its own marks' carried pages, and those of its pieces that name a link, their points and glyphs */
+  function need(i) {
+    if (needed.has(i)) return
+    needed.add(i)
+    const add = (pg, x, y) => { const c = carriedPage(pg, x, y); if (c !== null) wanted.add(c) }
+    for (const end of ['s', 'e']) for (const pre of ['', 't', 'h']) { const nm = `${pre}${i}${end}`, m = dropped.has(nm) ? null : at.get(nm); if (m) add(m.page, m.x, m.y) }
+    units[i].pieces.forEach((piece, k) => {
+      if (!linkablePiece(piece)) return
+      for (const nm of [`p${i}.${k}a`, `p${i}.${k}b`]) { const m = dropped.has(nm) ? null : at.get(nm); if (m) add(m.page, m.x, m.y) }
+      const e = ownInk.get(`p${i}.${k}a`)
+      if (e && e[1] < OWNED && e[1] !== IN_GROUP) for (const it of itemsOfInk(e)) add(it.page, it.x0, it.y)
+    })
+  }
+  /** the pieces pending whose glyphs' pages are all read by page `upTo`, judged: a glyph with no glyph of its character near
+   *  where it is carried on arXiv's page (whose ink is read; a dark page's piece is never placed, and wants nothing) */
+  function judge(upTo) {
+    if (!pending) return
+    const nf = s => s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '')
+    pending = pending.filter(x => {
+      if (x.upTo > upTo) return true
+      if (needed.has(x.i)) return false
+      const missing = x.items.some((it, j) => {
+        const c = x.cs[j], P = pagesInk[c.page], u = nf(it.u)
+        if (!P || !u) return false
+        for (let g = lowest(P, c.y - NEAR_Y); g < P.n && P.y[g] <= c.y + NEAR_Y; g++) if (Math.abs(P.x0[g] - c.x) <= NEAR_X && (P.u[g] === it.u || nf(P.u[g]) === u)) return false
+        return true
+      })
+      if (missing && x.cs.every(c => pagesInk[c.page])) need(x.i)
+      return false
+    })
+  }
+  /** every piece judged and the wanted pages' links read (whole() and byTasks(), after carrying(), every page read; the page
+   *  stream judges and reads as its pages are read) */
+  async function readWanted() {
+    judge(Infinity)
+    for (const p of [...(wanted ?? [])].sort((a, b) => a - b)) await readTheirs(p)
+  }
   /** a found piece's matched glyphs, by its key: the twice bar's */
   const matchedBy = new Map()
   /** unit i's placeholders, each found on arXiv's page (matched), LOST, EMPTY or JOINED, its rows' ink taken in */
@@ -916,48 +1017,86 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
      * (taken by phOf once the piece is found on its line), or null (LOST, as before; `stats.links.why`): no glyph's state
      * changed
      */
+    /** the unit's links in our compile, in the source's order: those wholly among the own glyphs of its pieces that name a link
+     *  (oursIn), indices of ourLinks; made once, at the locator's first call on the unit */
+    let unitOurs = null
+    const oursOfUnit = () => {
+      if (unitOurs) return unitOurs
+      unitOurs = []
+      u.pieces.forEach((p, k) => {
+        if (!linkablePiece(p)) return
+        const e = ownInk.get(`p${i}.${k}a`)
+        if (e && e[1] < OWNED && e[1] !== IN_GROUP && e[2] > 0) for (const m of oursIn(itemsOfInk(e), linkKindOf(p)).mine ?? []) unitOurs.push(m.j)
+      })
+      return unitOurs
+    }
+    /** the unit's links on arXiv's page: each Link annotation of the pages of its lines whose glyphs (PDF.js's rule) stand on one
+     *  line of the unit, by line then across, with its glyphs; null where a page of its lines has no links read */
+    const theirsOfUnit = () => {
+      const out = []
+      for (const q of new Set(rows.map(r => r.page))) {
+        const P = ink[q]
+        if (!P || !Array.isArray(theirLinks[q])) return null
+        for (const a of theirLinks[q]) {
+          const gl = glyphsUnder(P, a.raw)
+          if (!gl) continue
+          let gx0 = Infinity, gx1 = -Infinity
+          for (const g of gl) { gx0 = Math.min(gx0, P.x0[g]); gx1 = Math.max(gx1, P.x1[g]) }
+          const col = columnOf(q, gx0, gx1)
+          const on = rows.flatMap((r, j) => (r.page === q && gl.every(g => Math.abs(P.y[g] - r.base) <= PART_ON * r.size) && (columnOf(q, r.x0, r.x1) === col || columnOf(q, r.x0, r.x1) === 2) ? [j] : []))
+          if (on.length === 1) out.push({ a, q, row: on[0], x: P.x0[gl[0]], gl })
+        }
+      }
+      return out.sort((x, y) => x.row - y.row || x.x - y.x)
+    }
+    /**
+     * The link-anchor locator: a reference's or a citation's own glyphs the matcher did not all find on arXiv's page (our
+     * compile set other words: cleveref's "Appendix C" where arXiv's set "Section C"), placed by its links. Its links in our
+     * compile are those whose glyphs are all among its own (oursIn); each is paired with arXiv's by its order within the unit:
+     * the r-th link of its destination among the unit's in our compile (oursOfUnit) with the r-th of that name among the
+     * links on the unit's lines on arXiv's page (theirsOfUnit), else, where those hold none of that name (hyperref named an
+     * equation otherwise), the r-th of its family's (its name before the first '.'), the partner's name none of ours. The
+     * partners' glyphs are the anchor: all on one line of the unit, left to right, their text ours (or ours after one reference
+     * word each), exactly our characters between them and after the last; before the first, from the last exactly matched
+     * glyph on the line's baseline (a letter or digit of a word the anchor paired, a found piece's) or the line's start: the
+     * last characters of our text before the piece (the anchor need not have paired them), then the reference's word, ours or
+     * one word of VOCAB where ours is one (never a word of our text), at most PREFIX_EM of its size wide and GAP_EM from the
+     * link, then exactly our characters. Every glyph of the run on that line's baseline and none off it inside the run, the
+     * unit's or no unit's, taken by no piece (the matcher's own partial take of this piece, `took`, set aside), no letter or
+     * digit of a paired word. Its glyphs in x order (taken by phOf once the piece is found on its line), or null (LOST, as
+     * before; `stats.links.why`): no glyph's state changed. The links of the unit's pages are read before its passes run where
+     * the locator may want them (prepareWanted, judge); a page of its lines whose links were not read is no partner's
+     */
     const linked = (k, piece, items, took) => {
       stats.links.tried++
       const no = why => { stats.links.why[why] = (stats.links.why[why] ?? 0) + 1; return null }
-      const kind = linkKindOf(piece)
       const norm = s => s.normalize('NFKC').replace(/\s/gu, '')
       // ---- 1. ours: the links whose glyphs are all the piece's own, consecutive, none shared
-      const mine = [], inLink = new Int8Array(items.length)
-      for (const p of new Set(items.map(it => it.page))) {
-        for (const j of ourOnPage.get(p) ?? []) {
-          const L = ourLinks[j], under = []
-          items.forEach((it, q) => { if (it.page === p && it.y > L[3] && it.y < L[5] && it.x0 >= L[6] - 0.01 && it.x0 <= L[7] + 0.01) under.push(q) })
-          if (!under.length) continue
-          if (under.length !== L[8] || under.at(-1) - under[0] + 1 !== under.length || under.some(q => inLink[q])) return no('ours: a link not wholly the piece\'s')
-          const cite = L[0].startsWith('cite.')
-          if (kind.kind === 'cite' ? !cite || !kind.keys.includes(L[0].slice(5)) : cite || /^Hfootnote\./.test(L[0])) return no('ours: a link of another kind')
-          for (const q of under) inLink[q] = 1
-          mine.push({ j, from: under[0], to: under.at(-1) })
-        }
-      }
+      const own = oursIn(items, linkKindOf(piece))
+      if (own.why) return no(own.why)
+      const mine = own.mine
       if (!mine.length) return no('ours: no link')
       if (mine.length > LINKS_PIECE) return no('ours: too many links')
-      mine.sort((a, b) => a.from - b.from)
       const charsOfItems = (a, b) => norm(items.slice(a, b).map(it => it.u).join(''))
       const prefix = charsOfItems(0, mine[0].from), suffix = charsOfItems(mine.at(-1).to + 1, items.length)
       if (suffix.length > SUFFIX_MAX) return no('suffix: too long')
-      // ---- 2. each one's partner on arXiv's pages, by name and rank, else by family and rank
-      const lastPage = Math.max(...rows.map(r => r.page))
-      indexTheirs()
-      const upTo = Math.min(lastPage, theirIndex.pages)
+      // ---- 2. each one's partner on the unit's lines on arXiv's page, by its order within the unit: of its name, else its family
+      const theirs = theirsOfUnit()
+      if (!theirs) return no('pair: a page of the unit not read')
+      const ours = oursOfUnit()
       const partnerOf = j => {
-        const D = ourLinks[j][0], named = theirIndex.byDest.get(D) ?? []
-        if (named.length && named[0].page <= upTo) { const c = named[ourRank[j]]; return c && c.page <= upTo ? c : null }
-        if (theirIndex.pages < lastPage || D.startsWith('cite.')) return null
-        const c = (theirIndex.byFam.get(familyOf(D)) ?? [])[ourFamRank[j]]
-        return c && c.page <= lastPage && !ourDests.has(c.dest) ? c : null
+        const D = ourLinks[j][0], before = ours.slice(0, ours.indexOf(j))
+        const named = theirs.filter(t => t.a.dest === D)
+        if (named.length) return named[before.filter(x => ourLinks[x][0] === D).length] ?? null
+        if (D.startsWith('cite.')) return null
+        const F = familyOf(D), c = theirs.filter(t => familyOf(t.a.dest) === F)[before.filter(x => familyOf(ourLinks[x][0]) === F).length]
+        return c && !ourDests.has(c.a.dest) ? c : null
       }
-      const partners = mine.map(m => partnerOf(m.j))
+      const partners = mine.map(m => (ours.includes(m.j) ? partnerOf(m.j) : null))
       if (partners.some(c => !c)) return no('pair: no partner')
-      const q = partners[0].page
-      if (partners.some(c => c.page !== q) || !rows.some(r => r.page === q)) return no('pair: not on a line of the unit')
+      const q = partners[0].q
+      if (partners.some(c => c.row !== partners[0].row)) return no('link: not on one line of the unit')
       const P = ink[q]
-      if (!P) return no('pair: no ink')
       /** a letter or a digit of a word of the unit's text, as the anchor paired the word (inWord's, digits too) */
       const ofWord = g => {
         const m = mid(P, g), c = charsOf(P.u[g])
@@ -969,21 +1108,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       try {
         const free = g => (P.owner[g] === -1 || P.owner[g] === i) && !P.taken[g] && !ofWord(g)
         // ---- 3. the partners' glyphs, on one line of the unit
-        const glyphsOf = c => {
-          const near = band(P, c.raw.rect[1] - 1, c.raw.rect[3] + 1).filter(g => /\S/u.test(P.u[g]))
-          const { list } = annotsOf([c.raw], { x: near.map(g => mid(P, g)), y: near.map(g => P.y[g]), ch: near.map(g => P.u[g]), key: near })
-          const e = list[0]
-          return e && !e.unsupported && e.g.key.length ? [...e.g.key].sort((a, b) => P.x0[a] - P.x0[b] || a - b) : null
-        }
-        const runs = partners.map(glyphsOf)
-        if (runs.some(r => !r)) return no('link: no glyph under it')
+        const runs = partners.map(c => c.gl)
         const all = runs.flat()
-        let gx0 = Infinity, gx1 = -Infinity
-        for (const g of all) { gx0 = Math.min(gx0, P.x0[g]); gx1 = Math.max(gx1, P.x1[g]) }
-        const col = columnOf(q, gx0, gx1)
-        const lines = rows.filter(r => r.page === q && all.every(g => Math.abs(P.y[g] - r.base) <= PART_ON * r.size) && (columnOf(q, r.x0, r.x1) === col || columnOf(q, r.x0, r.x1) === 2))
-        if (lines.length !== 1) return no('link: not on one line of the unit')
-        const r = lines[0]
+        const r = rows[partners[0].row]
         if (!all.every(free)) return no('link: a glyph not free')
         const reWord = s => { for (let n = Math.min(s.length, 16); n >= 2; n--) if (VOCAB.has(s.slice(0, n).toLowerCase())) return s.slice(n); return null }
         const sameText = (ours, theirs) => ours === theirs || (reWord(ours) !== null && reWord(ours) !== '' && reWord(ours) === reWord(theirs))
@@ -1113,9 +1240,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (e[1] >= OWNED) { lost(OWNED_HOW[e[1]] ?? 'no own ink known'); continue }
       const before = u.pieces[k - 1], after = u.pieces[k + 1]
       let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
-      const n = e[2], items = [], rules = []
-      // (a glyph's character: an index into the marks' table, or the character itself, as the page stream hands a row on)
-      for (let j = 3; j < 3 + 5 * n; j += 5) items.push({ page: e[j], x0: e[j + 1], y: e[j + 2], size: e[j + 3], u: typeof e[j + 4] === 'string' ? e[j + 4] : marks.chars[e[j + 4]] ?? '' })
+      const n = e[2], items = itemsOfInk(e), rules = []
       for (let j = 3 + 5 * n; j < e.length; j += 5) rules.push({ page: e[j], x0: e[j + 1], y0: e[j + 2], x1: e[j + 3], y1: e[j + 4] })
       // EMPTY only where its points hold nothing between them: the piece draws nothing
       if (!items.length && !rules.length) { ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
@@ -1123,7 +1248,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       let got = matcher.match(items, rules, at.get(name) ?? null, at.get(`${prefix}${i}.${k}b`) ?? null)
       // (a reference or a citation not found by its own glyphs: by its links, the link-anchor locator, where ours has any)
       let byLinks = false
-      if (got.why && got.took && linking && !rules.length && ['cite', 'ref', 'eqref', 'macro'].includes(cls) && ['cite', 'internal'].includes(linkKindOf(piece)?.kind)) {
+      if (got.why && got.took && linking && !rules.length && linkablePiece(piece)) {
         const run = linked(k, piece, items, got.took)
         if (run) { got = { glyphs: run, boxes: [] }; byLinks = true }
       }
@@ -1881,6 +2006,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   async function whole() {
     const refused = carrying()
     if (refused) return { refused, stats }
+    await readWanted()
     anchoring()
     const t = now()
     for (let i = 0; i < units.length; i++) place(i)
@@ -1967,6 +2093,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   async function byTasks(pick) {
     const refused = carrying()
     if (refused) return { refused, stats }
+    await readWanted()
     anchoring()
     const t = now()
     runInOrder(tasks().map(x => ({ ...x, run: confined(x) })), pick)
@@ -1992,6 +2119,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (!edges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`)')
     // (its ranges are placed from their own units: pageFrame over them is not the whole paper's frame, so none is assumed)
     if (!frame) throw new TypeError('the page stream needs the whole document\'s frame rule given (`frame`)')
+    // (the links the locator may want are read as their pages are, after carrying(): none of those pages read before)
+    for (const p of wanted ?? []) if (readSoFar.has(p) && theirLinks[p] === undefined) throw new TypeError('the page stream reads arXiv\'s pages after carrying(): a wanted page was read before')
     const floating = id => FLOATING.has(units[id]?.kind ?? '')
     const n = units.length
     // ---- each unit's own marks, carried once the pages they are carried to are read (anchoring()'s, a unit at a time)

@@ -17,6 +17,9 @@
 // opt-in is per document: Number.MAX_SAFE_INTEGER is "no image is larger than this" to a stock worker, and the patched worker
 // applies the guard to a document that passes it and to no other, so a document opened without it in the same process decodes as
 // ever. Masks and small inline images are decoded and awaited inside the operator list's own stream; they are not touched.
+// The same document's Link annotations (getAnnotations) come without their overlaid text: PDF.js makes it by extracting the page's
+// whole text a second time for every page that holds a link, which the server's readers never read (they find the glyphs under a
+// link themselves: layer-proto/links.mjs annotsOf); a second guard skips that extraction for a document that opts in.
 //
 // HOW A HOST USES IT (Node: PDF.js runs its worker on the main thread, taking `globalThis.pdfjsWorker` when one is set):
 //   const source = readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8')
@@ -28,7 +31,7 @@
 // BUMPING PDFJS (layout versions.mjs): the anchor is one line of the worker. Install the new version, run
 // tests/pdf-reader/pdf-lite.test.ts: it counts the anchor in the installed worker and compares an operator list's digest with and
 // without the guard. If the line moved, read buildPaintImageXObject again (is the decode still unawaited, and is `this.options` still
-// the evaluator's?), change ANCHOR and GUARD together, and set LITE_PDFJS. Nothing else in the engine knows of the patch.
+// the evaluator's?), change ANCHOR and GUARD (TEXT_ANCHOR and TEXT_GUARD: read Page.getAnnotationsData again) together, and set LITE_PDFJS. Nothing else in the engine knows of the patch.
 //
 // An original module (no port statement). PDF.js is Apache-2.0 (Mozilla); the host patches a copy of it in memory at run time and
 // ships none.
@@ -41,15 +44,23 @@ export const NO_IMAGE_PIXELS = Number.MAX_SAFE_INTEGER
 /** the one line of buildPaintImageXObject that decodes an image's pixels, in the callback of the unawaited buildImage */
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
 const GUARD = `if (this.options.maxImageSize === ${NO_IMAGE_PIXELS}) throw new Error("image pixels not decoded");\n      `
+/** the one condition of Page.getAnnotationsData under which a Link annotation's overlaid text is made: the page's whole text
+ *  extracted again, through an Intersector, for every page that holds a link. The server's readers (the marks read, the
+ *  layout maker) take an annotation's rectangle and destination and find the glyphs under it themselves: for a document that
+ *  opts in, the condition is false and no text is extracted (`overlaidText` stays unset); the annotations are the same */
+const TEXT_ANCHOR = '} else if (annotation.overlaysTextContent && isVisible) {'
+const TEXT_GUARD = `} else if (annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS}) {`
 
 /**
- * The worker module's text with the guard before its image decode. `version`, where given, is the PDF.js the text is of (the
- * host's package.json) and must be LITE_PDFJS. Throws unless the anchor stands exactly once.
+ * The worker module's text with the guard before its image decode and the one on a link's overlaid text. `version`, where given,
+ * is the PDF.js the text is of (the host's package.json) and must be LITE_PDFJS. Throws unless each anchor stands exactly once.
  */
 export function liteWorkerSource(source, { version } = {}) {
   if (typeof source !== 'string') throw new TypeError('source: the text of pdf.worker.mjs')
   if (version !== undefined && version !== LITE_PDFJS) throw new RangeError(`the image guard was made for PDF.js ${LITE_PDFJS}, not ${version}: check buildPaintImageXObject again (pdf-lite.mjs)`)
   const parts = source.split(ANCHOR)
   if (parts.length !== 2) throw new RangeError(`the worker holds the image decode ${parts.length - 1} times, not once: PDF.js changed, check buildPaintImageXObject again (pdf-lite.mjs)`)
-  return `${parts[0]}${GUARD}${ANCHOR}${parts[1]}`
+  const text = `${parts[0]}${GUARD}${ANCHOR}${parts[1]}`.split(TEXT_ANCHOR)
+  if (text.length !== 2) throw new RangeError(`the worker holds the overlaid text's condition ${text.length - 1} times, not once: PDF.js changed, check Page.getAnnotationsData again (pdf-lite.mjs)`)
+  return `${text[0]}${TEXT_GUARD}${text[1]}`
 }

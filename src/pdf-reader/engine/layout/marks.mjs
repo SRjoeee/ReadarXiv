@@ -18,7 +18,7 @@ import { textless } from '../rules/arg-roles.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
-import { annotsOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
+import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
@@ -1011,6 +1011,9 @@ export async function layoutMarksOf(marked, log, o) {
 /** a number to a hundredth, as the file writes it (-0 written 0) */
 const r2z = v => Math.round(v * 100) / 100 + 0
 
+/** a placeholder whose source names a link (a citation's key, a reference's label: layer-proto/links.mjs linkKindOf) and whose
+ *  class may hold it: the pieces whose links the link-anchor locator pairs (make.mjs), and whose pages' links the marks read */
+export const linkablePiece = piece => ['cite', 'ref', 'eqref', 'macro'].includes(classOf(piece)) && ['cite', 'internal'].includes(linkKindOf(piece)?.kind)
 /** a destination's name as the file holds it: 1 to DEST_MAX code units, no control character */
 const isDest = d => {
   if (typeof d !== 'string' || d.length < 1 || d.length > DEST_MAX) return false
@@ -1045,8 +1048,10 @@ function linksOfPage(raw, glyphs, p) {
   const ls = raw.filter(a => a?.subtype === 'Link')
   if (ls.length > MAX_LINKS) return null
   if (!ls.some(a => isDest(a.dest))) return []
+  // (the glyphs a link may hold: those whose baseline lies inside one's rectangle, its height; no other is a point of any)
+  const bands = ls.flatMap(a => (destRect(a) ? [[Math.min(a.rect[1], a.rect[3]), Math.max(a.rect[1], a.rect[3])]] : []))
   const pts = { x: [], y: [], ch: [], key: [] }
-  glyphs.forEach((g, k) => { if (!g.blank && /\S/u.test(g.u)) { pts.x.push((g.x0 + g.x1) / 2); pts.y.push(g.y); pts.ch.push(g.u); pts.key.push(k) } })
+  glyphs.forEach((g, k) => { if (!g.blank && /\S/u.test(g.u) && bands.some(([lo, hi]) => g.y > lo && g.y < hi)) { pts.x.push((g.x0 + g.x1) / 2); pts.y.push(g.y); pts.ch.push(g.u); pts.key.push(k) } })
   const { list } = annotsOf(ls, pts)
   const out = []
   ls.forEach((a, i) => {
@@ -1076,7 +1081,8 @@ const UNIT_MARK = /^\d+[se]$/
  *   (the marks' tokens of p, stride 6: page, x, y, w, h, word), words (the words first seen on p, appended to the table in
  *   order), owned (the pieces found once p was read: [name, row], each row [name, how] or [name, how, n, glyphs (page, x0,
  *   y, size, its character itself), rules (page, x0, y0, x1, y1)]), links (with `units` and `OPS`, its Link annotations that
- *   name a destination, linksOfPage's rows; [] without; null where they could not be read) }. Each page's view, text and, with `units` and `OPS`,
+ *   name a destination, linksOfPage's rows, where a placeholder that names a link has a point on it; [] without or elsewhere;
+ *   null where they could not be read) }. Each page's view, text and, with `units` and `OPS`,
  *   its operator list are read once and the page cleaned up after (page.cleanup); its tokens (tokenizeDocument, which begins
  *   again on every page) are let go once read; its packed ink (packGlyphs, STREAM_COLUMNS) is held only until every piece
  *   that may read it is found (stream.mjs ownedPages);
@@ -1131,6 +1137,15 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     named.push([name, page, x, y])
   }
   yield { head: { pages, marking, dropped, set, named, destPage, unitMarks } }
+  // the pages whose links are read: those a placeholder that names a link (linkablePiece) has a point on, the pages between its
+  // two points too. Any other page's links are no piece's, and the link-anchor locator never pairs them (make.mjs): PDF.js reads
+  // a page's annotations at a cost of its own
+  const linkPages = new Set()
+  units?.forEach((u, i) => u.pieces.forEach((piece, k) => {
+    if (!linkablePiece(piece)) return
+    const a = destPage.get(`p${i}.${k}a`) ?? destPage.get(`p${i}.${k}b`), b = destPage.get(`p${i}.${k}b`) ?? a
+    if (a !== undefined) for (let q = Math.min(a, b); q <= Math.max(a, b); q++) linkPages.add(q)
+  }))
   // ---- each page, once
   const views = [], wordOf = new Map()
   let words = 0
@@ -1180,7 +1195,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
       // pageInk's own (`capped`, `timedOut`), or read with its boxes past BOXES_PAGE merged (`degraded`: a piece's rule
       // there would be left out of its own ink, unseen), is unread: no ink, so that no piece on it is owned (each LOST to
       // the maker), and no glyph under its links
-      const raw = await readAnnots(page)
+      const raw = linkPages.has(p) ? await readAnnots(page) : []
       const got = pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
       const { glyphs, boxes, points, boxAt } = got.capped || got.timedOut || got.degraded ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
       ink = { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) }
