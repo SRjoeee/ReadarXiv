@@ -73,11 +73,24 @@ export function leftReach(doc, units, { bounds, floating = () => false, floatMat
 export function leftOfPart(doc, units, { bounds, floating = () => false, floatMatch = null, frame, minCoverage = 0.6, forward = null, wholeIndex = null }, [a, b], reach = leftReach(doc, units, { bounds, floating, floatMatch, forward })) {
   if (typeof frame !== 'function') throw new TypeError('leftOfPart: `frame`, the whole document\'s frame rule (pageFrame over a part\'s units is not the whole paper\'s)')
   const { C, V2 } = partSets(doc, units, [a, b], reach)
-  const read = V2.units
-  const found = matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(read), forward, wholeIndex })
-  const placed = placeUnits(doc, read.map(u => units[u]), read.map(u => found[u]), { frame })
+  return leftOfSets(doc, units, { bounds, floating, floatMatch, frame, minCoverage, forward, wholeIndex }, [a, b], C.units, V2.units)
+}
+
+/**
+ * leftOfPart's place, its sets made (C's units and V2's, rising: partSets'), C's units alone placed. `matched` (a Map unit →
+ * matchUnits' match, a caller's across its parts): the matches made already, each made once — a unit's match is a function of
+ * its own bounds, its neighbours', its text and the document's tokens in its window, all final once its match is (a range's
+ * units' are: rangedAnchors)
+ */
+function leftOfSets(doc, units, { bounds, floating, floatMatch, frame, minCoverage = 0.6, forward, wholeIndex }, [a, b], cUnits, read, matched = null) {
+  const todo = matched ? read.filter(u => !matched.has(u)) : read
+  const fresh = todo.length ? matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(todo), forward, wholeIndex }) : null
+  if (matched) for (const u of todo) matched.set(u, fresh[u])
+  const found = matched ? read.map(u => matched.get(u)) : read.map(u => fresh[u])
+  const at = new Map(read.map((u, j) => [u, j]))
+  const placed = placeUnits(doc, read.map(u => units[u]), found, { frame, only: new Set(cUnits.map(u => at.get(u))) })
   const out = new Map(), before = []
-  for (const u of C.units) {
+  for (const u of cUnits) {
     const { id } = units[u], anchor = placed.get(id)
     const first = anchor?.rects?.[0]?.page
     if (anchor && first >= a && first <= b) out.set(id, anchor)
@@ -147,8 +160,24 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   doc.forEach((t, k) => { if (k < firstTok[t.page]) firstTok[t.page] = k; lastTok[t.page] = k })
   for (let p = lastPage; p >= 1; p--) if (firstTok[p] === N) firstTok[p] = firstTok[p + 1] ?? N
   for (let p = 1; p <= lastPage; p++) if (lastTok[p] < 0) lastTok[p] = lastTok[p - 1] ?? -1
-  const key = u => String(units[u].id)
-  const inText = u => bounds.has(key(u)) && !floating(units[u].id)
+  // (what a run reads of each unit, as arrays a run reads without a lookup: its bounds once final, whether it floats and where
+  // its match over the whole document lies (`floating` and floatMatch are the units' own, read once), each token's page)
+  const unitOf = new Map(units.map((t, u) => [String(t.id), u]))
+  const hasB = new Uint8Array(n), bS = new Int32Array(n), bE = new Int32Array(n)
+  const isFloat = new Uint8Array(n), fA = new Int32Array(n).fill(-1), fB = new Int32Array(n).fill(-1), searched = new Uint8Array(n)
+  for (let u = 0; u < n; u++) {
+    const id = units[u].id
+    if (!floating(id)) continue
+    isFloat[u] = 1
+    searched[u] = !floatMatch || floatMatch.has(id) ? 1 : 0
+    if (!floatMatch) { fA[u] = 0; fB[u] = N - 1 } else {
+      const m = floatMatch.get(id)
+      if (m?.length) { let a = Infinity, b = -Infinity; for (const k of m) { if (k < a) a = k; if (k > b) b = k } fA[u] = a; fB[u] = b }
+    }
+  }
+  const tokPage = new Int32Array(N)
+  for (let k = 0; k < N; k++) tokPage[k] = doc[k].page
+  const setBounds = (k, b) => { bounds.set(k, b); const u = unitOf.get(k); if (u !== undefined) { hasB[u] = 1; bS[u] = b[0]; bE[u] = b[1] } }
   // (rule 5: a float's whole-document search from the page of its last body neighbour, a unit not written inside a float, on;
   // the whole document's index its searches read, made once)
   const start = forward ? pageStarts(doc) : null, wholeIndex = forward ? { index: null } : null
@@ -157,58 +186,122 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   let spans = null
   const forwardSpan = (id, from) => (spans ??= forwardSpans(doc, units, floating, (wholeIndex.index ??= buildIndexOf(doc))))(id, from)
   const pageAfter = k => { let q = k; while (q < N && doc[q].page === doc[k].page) q++; return q }
-  const finalOf = () => {
-    const fin = new Uint8Array(n), out = leftReach(doc, units, { bounds, floating, floatMatch, forward, forwardSpan: forward ? forwardSpan : null })
-    const pendBefore = new Uint8Array(n), pendAfter = new Uint8Array(n), lo = new Int32Array(n), hi = new Int32Array(n)
-    // (rule 5: whether a unit still to be marked between a float and its last body neighbour may become a nearer one, and the
-    // earliest end its body neighbour may get to: its start's lower bound)
-    const pendBody = forward ? new Uint8Array(n) : null, bodyLow = forward ? new Int32Array(n) : null, bodyHigh = forward ? new Int32Array(n) : null
-    for (let u = 0, pend = 0, low = -1, pb = 0, lb = -1, hb = -1; u < n; u++) {
-      pendBefore[u] = pend; lo[u] = low
+  // ---- the matches' finality and the reaches of the marks known now (a run's), each unit's reach as page intervals, flat:
+  // unit u's are ivA[j], ivB[j] for j from ivOff[u] to ivOff[u + 1]; maxB[u] the last page any of them reaches (-1: none)
+  const fin = new Uint8Array(n), maxB = new Int32Array(n), ivOff = new Int32Array(n + 1)
+  let ivA = new Int32Array(4 * n + 16), ivB = new Int32Array(4 * n + 16), m = 0, finCount = 0
+  const before = new Int32Array(n), after = new Int32Array(n), bodyEnd = new Int32Array(n)
+  const pendBefore = new Uint8Array(n), pendAfter = new Uint8Array(n), lo = new Int32Array(n), hi = new Int32Array(n)
+  const pendBody = forward ? new Uint8Array(n) : null, bodyLow = forward ? new Int32Array(n) : null, bodyHigh = forward ? new Int32Array(n) : null
+  const push = (a, b) => {
+    if (m === ivA.length) { const A = new Int32Array(2 * m), B = new Int32Array(2 * m); A.set(ivA); B.set(ivB); ivA = A; ivB = B }
+    ivA[m] = tokPage[a]; ivB[m] = tokPage[b]; m++
+  }
+  const reachNow = () => {
+    // leftReach's neighbours: the end of the last bounded unit in the text before each unit (and of its last body one, rule 5);
+    // whether a unit still to be marked lies between it and that neighbour, the earliest end it may get to (and under rule 5 the
+    // same of its body neighbours)
+    for (let u = 0, e = -1, b = -1, pend = 0, low = -1, pb = 0, lb = -1, hb = -1; u < n; u++) {
+      before[u] = e; bodyEnd[u] = b; pendBefore[u] = pend; lo[u] = low
       if (forward) { pendBody[u] = pb; bodyLow[u] = lb; bodyHigh[u] = hb }
-      if (inText(u)) { pend = 0; low = bounds.get(key(u))[1] } else if (!marked[u]) { pend = 1; if (!floating(units[u].id) && ownLow[u]) low = Math.min(low, firstTok[ownLow[u]]) }
+      const text = hasB[u] === 1 && isFloat[u] === 0
+      if (text) { e = low = bE[u]; pend = 0; if (forward && !forward.has(u)) b = bE[u] } else if (!marked[u]) { pend = 1; if (!isFloat[u] && ownLow[u]) low = Math.min(low, firstTok[ownLow[u]]) }
       if (forward && body(u)) {
-        if (inText(u)) { pb = 0; lb = hb = bounds.get(key(u))[1] } else if (!marked[u] && !floating(units[u].id) && ownLow[u]) { pb = 1; lb = Math.min(lb, firstTok[ownLow[u]]); hb = Math.max(hb, lastTok[ownHigh[u]]) } else if (!marked[u] && !floating(units[u].id)) pb = 1
+        if (text) { pb = 0; lb = hb = bE[u] } else if (!marked[u] && !isFloat[u] && ownLow[u]) { pb = 1; lb = Math.min(lb, firstTok[ownLow[u]]); hb = Math.max(hb, lastTok[ownHigh[u]]) } else if (!marked[u] && !isFloat[u]) pb = 1
       }
     }
-    for (let u = n - 1, pend = 0, high = N; u >= 0; u--) {
-      pendAfter[u] = pend; hi[u] = high
-      if (inText(u)) { pend = 0; high = bounds.get(key(u))[0] } else if (!marked[u]) { pend = 1; if (!floating(units[u].id) && ownHigh[u]) high = Math.max(high, lastTok[ownHigh[u]]) }
+    // the start of the first bounded unit after it; the same on that side, the latest start
+    for (let u = n - 1, a = N, pend = 0, high = N; u >= 0; u--) {
+      after[u] = a; pendAfter[u] = pend; hi[u] = high
+      if (hasB[u] === 1 && isFloat[u] === 0) { a = high = bS[u]; pend = 0 } else if (!marked[u]) { pend = 1; if (!isFloat[u] && ownHigh[u]) high = Math.max(high, lastTok[ownHigh[u]]) }
     }
+    m = 0; finCount = 0
+    const any = bounds.size > 0
     for (let u = 0; u < n; u++) {
-      const float = floating(units[u].id)
-      fin[u] = marked[u] && (bounds.has(key(u)) || (!pendBefore[u] && !pendAfter[u] && !(forward && float && pendBody[u]))) ? 1 : 0
-      if (fin[u]) continue
-      const more = [[Math.max(0, lo[u] + 1 - MARGIN), Math.min(N - 1, hi[u] - 1 + MARGIN)]]
-      if (!marked[u] && ownLow[u]) more.push([firstTok[ownLow[u]], lastTok[ownHigh[u]]])
-      // (rule 5: a float's search of the whole document from each page its last body neighbour may end on: the stretches those
-      // searches take, the search from a page taking the same stretch while the page starts at or before its first hit)
-      if (forward && float && N && (!floatMatch || floatMatch.has(units[u].id))) {
-        const top = start(bodyHigh[u])
-        for (let from = start(bodyLow[u]); from <= top;) {
-          const sp = forwardSpan(units[u].id, from)
-          if (!sp) break
-          more.push([sp.lo, sp.hi])
-          from = pageAfter(sp.first)
+      const at = m
+      ivOff[u] = at
+      const float = isFloat[u] === 1
+      // its reach were its match final (leftReach's): its bounds; with none, the window between its bounded neighbours and a
+      // float's search over the whole document (rule 5: from its last body neighbour's page on); with no bounds at all, the
+      // whole document
+      if (hasB[u]) push(bS[u], bE[u])
+      else if (N && !any) push(0, N - 1)
+      else if (N) {
+        const a = Math.max(0, before[u] + 1 - MARGIN), b = Math.min(N - 1, after[u] - 1 + MARGIN)
+        if (a <= b) push(a, b)
+        if (float && forward) { if (searched[u]) { const sp = forwardSpan(units[u].id, start(bodyEnd[u])); if (sp) push(sp.lo, sp.hi) } } else if (float && fA[u] >= 0) push(fA[u], fB[u])
+      }
+      fin[u] = marked[u] && (hasB[u] || (!pendBefore[u] && !pendAfter[u] && !(forward && float && pendBody[u]))) ? 1 : 0
+      if (fin[u]) finCount++
+      else {
+        // (not final: the window it may yet have, its own marks' pages, and under rule 5 a float's search from each page its last
+        // body neighbour may end on: the search from a page taking the same stretch while the page starts at or before its first
+        // hit)
+        const a = Math.max(0, lo[u] + 1 - MARGIN), b = Math.min(N - 1, hi[u] - 1 + MARGIN)
+        if (a <= b) push(a, b)
+        if (!marked[u] && ownLow[u] && firstTok[ownLow[u]] <= lastTok[ownHigh[u]]) push(firstTok[ownLow[u]], lastTok[ownHigh[u]])
+        if (forward && float && N && searched[u]) {
+          const top = start(bodyHigh[u])
+          for (let from = start(bodyLow[u]); from <= top;) {
+            const sp = forwardSpan(units[u].id, from)
+            if (!sp) break
+            if (sp.lo <= sp.hi) push(sp.lo, sp.hi)
+            from = pageAfter(sp.first)
+          }
         }
       }
-      out[u] = [...out[u], ...more.filter(([a, b]) => a <= b)]
+      let mx = -1
+      for (let j = at; j < m; j++) if (ivB[j] > mx) mx = ivB[j]
+      maxB[u] = mx
     }
-    return { fin, reach: out }
+    ivOff[n] = m
   }
+  // ---- partSets over the flat reach, its arrays made once: the units meeting the pages flagged (`list`, rising, where given)
+  // and the pages their reach makes (`next`)
+  const P = lastPage
+  const sum = new Int32Array(P + 2), diff = new Int32Array(P + 2), F0 = new Uint8Array(P + 2), F1 = new Uint8Array(P + 2), F2 = new Uint8Array(P + 2)
+  const prefix = pages => { for (let p = 1; p <= P; p++) sum[p] = sum[p - 1] + pages[p] }
+  const meets = u => { for (let j = ivOff[u]; j < ivOff[u + 1]; j++) if (sum[Math.min(ivB[j], P)] - sum[Math.max(ivA[j], 1) - 1] > 0) return true; return false }
+  const meet = (pages, next, list) => {
+    prefix(pages)
+    diff.fill(0)
+    for (let u = 0; u < n; u++) {
+      if (!meets(u)) continue
+      if (list) list.push(u)
+      for (let j = ivOff[u]; j < ivOff[u + 1]; j++) { const x = Math.max(ivA[j], 1), y = Math.min(ivB[j], P); if (x <= y) { diff[x]++; diff[y + 1]-- } }
+    }
+    next.fill(0)
+    for (let p = 1, run = 0; p <= P; p++) { run += diff[p]; if (run > 0) next[p] = 1 }
+  }
+  const part = (a, b) => { F0.fill(0); for (let p = Math.max(a, 1); p <= Math.min(b, P); p++) F0[p] = 1 }
+  /** whether every unit the left of pages a to b reads (V2) has its match final */
+  const ready = (a, b) => {
+    part(a, b); meet(F0, F1, null); meet(F1, F2, null); prefix(F2)
+    for (let u = 0; u < n; u++) if (!fin[u] && meets(u)) return false
+    return true
+  }
+  /** the left of pages a to b's C and V2 (units, rising) */
+  const setsOf = (a, b) => { const C = [], V2 = []; part(a, b); meet(F0, F1, C); meet(F1, F2, null); meet(F2, F0, V2); return [C, V2] }
   const settle = (u, f) => { if (settled[u]) return; settled[u] = 1; f(u) }
+  // (whether a mark, a bound or a unit's own pages changed since a run found nothing more ready: what a run reads is that alone)
+  let dirty = true
+  // (each unit's match once made: a range reads only units whose matches are final)
+  const matched = new Map()
   return {
     bounds, firstTok, lastTok, lastPage,
+    /** a bound set outside `mark` (a pair of marks no unit's: bounds.size, matchUnits' switch) */
+    bound(key, b) { setBounds(key, b); dirty = true },
     /** the first page not anchored yet */
     get am() { return am },
     /** unit u's own marks' pages while its bounds are not final: the least and the last (0: it has none) */
-    own(u, low, high) { ownLow[u] = low; ownHigh[u] = high },
+    own(u, low, high) { if (ownLow[u] !== low || ownHigh[u] !== high) dirty = true; ownLow[u] = low; ownHigh[u] = high },
     /** unit u's bounds final: [first token, last token], or null for none */
     mark(u, b) {
       if (marked[u]) return
-      if (b) bounds.set(key(u), b)
+      if (b) setBounds(String(units[u].id), b)
       marked[u] = 1
       markedCount++
+      dirty = true
     },
     isMarked: u => marked[u] === 1,
     isSettled: u => settled[u] === 1,
@@ -217,22 +310,23 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
         if (am > lastPage) for (let u = 0; u < n; u++) settle(u, onSettle)
         return
       }
+      if (!dirty) return
+      dirty = false
       // (the matches' finality and the reaches are those of the marks known now, whatever page the ranges reach)
-      const { fin, reach } = finalOf()
-      const ivs = pageReach(doc, reach)
-      const ready = (a, b) => partSets(doc, units, [a, b], reach, ivs).V2.units.every(u => fin[u])
+      reachNow()
       while (am <= lastPage) {
         // the pages from `am` anchored in one range as far as every unit the range reads has its match final (a range's
         // anchors are the whole paper's, as a page at a time would make them: leftOfPart)
         if (!ready(am, am)) return
         let to = am
-        if (fin.every(Boolean)) to = lastPage
+        if (finCount === n) to = lastPage
         else while (to < lastPage && ready(am, to + 1)) to++
-        const got = leftOfPart(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex }, [am, to], reach)
+        const [C, V2] = setsOf(am, to)
+        const got = leftOfSets(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex }, [am, to], C, V2, matched)
         for (const id of got.before) if (!settled[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
         for (const [id, an] of got.anchors) settle(id, u => onAnchor(u, an))
         am = to + 1
-        reach.forEach((iv, u) => { if (!settled[u] && fin[u] && iv.every(([, hi]) => doc[hi].page < am)) settle(u, onSettle) })
+        for (let u = 0; u < n; u++) if (!settled[u] && fin[u] && maxB[u] < am) settle(u, onSettle)
       }
       for (let u = 0; u < n; u++) settle(u, onSettle)
     },

@@ -1697,12 +1697,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   const carriedPage = (page, x, y) => { const c = carrier.carry(page, x, y); return c && Number.isInteger(c.page) && c.page >= 1 && c.page <= pages ? c.page : null }
   /**
    * The pages unit i's passes read and write, rising: its anchor's, its own marks' carried pages, and every page its pieces'
-   * own glyphs, rules and marks are carried to (the matcher's every start: carriedPage's, a superset of where it looks)
+   * own glyphs, rules and marks are carried to (the matcher's every start: carriedPage's, a superset of where it looks);
+   * `carried` carriedPagesOf(i), where a caller made it already
    */
-  function unitPages(i) {
+  function unitPages(i, carried = null) {
     const a = anchors.get(i)
     if (!a) return []
-    const set = new Set(carriedPagesOf(i))
+    const set = new Set(carried ?? carriedPagesOf(i))
     for (const k of a.tokens) set.add(doc[k].page)
     for (const end of ['s', 'e']) { const m = carriedUnit.get(`${i}${end}`); if (m) set.add(m.page) }
     return [...set].sort((x, y) => x - y)
@@ -1868,11 +1869,15 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (v < lowAt) lowAt = v
     }
     const decided = new Uint8Array(n)
+    // (each known unit's carried pages, as becomeKnown made them: what they read is final once it is known — its marks' and
+    // pieces' pages read and carried, a late row dropped — but where a point read twice takes a piece's ink (veto))
+    const carriedKnown = new Map()
     const becomeKnown = i => {
       if (known[i]) return
       known[i] = 1
       if (decided[i]) return
       const pg = carriedPagesOf(i)
+      carriedKnown.set(i, pg)
       countLow(i, Math.min(pg.length ? pg[0] : pages + 1, wantDecide[i] ? lowOf[i] : Infinity))
       if (wantDecide[i]) decide(i)
     }
@@ -1994,7 +1999,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       decidedCount++
       if (counted[i]) { lowCount[lowOf[i]]--; counted[i] = 0 }
       if (!a) { settledU[i] = 1; return }
-      const pg = unitPages(i)
+      const pg = unitPages(i, carriedKnown.get(i))
+      carriedKnown.delete(i)
       for (const q of pg) (touching.get(q) ?? touching.set(q, []).get(q)).push(i)
       const of = f => () => { const one = placedById.get(i); if (one) f(one) }
       insert({ key: [0, i], pages: pg, run: () => place(i) })
@@ -2199,6 +2205,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         twiceSeen.add(r)
         const o = /^[pn]\d+\.\d+b$/.test(r) ? `${r.slice(0, -1)}a` : r, m = OPENING_ROW.exec(o), i = m ? Number(m[1]) : -1
         if (i >= 0 && i < n && phRan[i]) stats.late.vetoes++
+        // (the carried pages of its unit and of its group's displays' made again: their ink taken)
+        if (i >= 0) carriedKnown.delete(i)
+        for (const g of follows(o)?.group ?? []) { const x = OPENING_ROW.exec(g); if (x) carriedKnown.delete(Number(x[1])) }
       }
       vetoTwice(ownInk, twiceSeen, follows)
     }

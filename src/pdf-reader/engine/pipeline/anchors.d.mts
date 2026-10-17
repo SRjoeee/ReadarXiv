@@ -51,7 +51,7 @@ export declare function buildIndexOf(doc: readonly DocToken[]): unknown
  *  and its first hit: the search from any token up to it takes the same), or null where it finds none */
 export declare function forwardSpans(doc: readonly DocToken[], units: readonly UnitText[], floating?: (id: number) => boolean, index?: unknown): (id: number, from: number) => { lo: number; hi: number; first: number } | null
 /** anchorUnits' second half, over these units and their matches */
-export declare function placeUnits(doc: DocToken[], units: UnitText[], found: readonly (UnitMatch | null)[], options?: { frame?: FrameRule }): Map<number, Anchor | null>
+export declare function placeUnits(doc: DocToken[], units: UnitText[], found: readonly (UnitMatch | null)[], options?: { frame?: FrameRule; only?: ReadonlySet<number> | null }): Map<number, Anchor | null>
 /** where each of a unit's sentences after the first begins on the page: the page token of its first word found, rising */
 export declare function sentenceStarts(anchor: Anchor | null | undefined, text: string, offsets: number[] | undefined): Int32Array | null
 /** the pairs sentenceStarts reads as runs [word, token, count, …] (global tokens, word rising, maximal): only for a unit it admits, and

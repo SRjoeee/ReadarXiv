@@ -671,15 +671,18 @@ function inOrder(doc, words, dir) {
  * them — a display's limits, scripts and fractions' parts. Further, or smaller and apart, is a float, a footnote, the
  * page's foot. What is taken becomes the unit's, so that no other unit takes it
  */
-function walker(doc, ms, owner, line, inFrame) {
-  // which unit each line holds words of: -1 none, -2 several
-  const lineOwner = new Int32Array((line[doc.length - 1] ?? 0) + 1).fill(-1)
-  const own = (k, u) => { const l = line[k]; lineOwner[l] = lineOwner[l] === -1 || lineOwner[l] === u ? u : -2 }
-  for (let k = 0; k < doc.length; k++) {
-    const u = owner[k]
-    if (u === -1) continue
-    const l = line[k], o = lineOwner[l]
-    if (o !== u) lineOwner[l] = o === -1 ? u : -2
+function walker(doc, ms, owner, line, inFrame, lineOwner, owned, wrote) {
+  // which unit each line holds words of: -1 none, -2 several (of the owned tokens, `owned`: disjoint [a, b] rising; `wrote`
+  // keeps each token and line written, which the caller sets back)
+  const own = (k, u) => { const l = line[k]; if (lineOwner[l] === -1) wrote.lines.push(l); lineOwner[l] = lineOwner[l] === -1 || lineOwner[l] === u ? u : -2 }
+  for (const [a, b] of owned) {
+    for (let k = a; k <= b; k++) {
+      const u = owner[k]
+      if (u === -1) continue
+      const l = line[k], o = lineOwner[l]
+      if (o === -1) wrote.lines.push(l)
+      if (o !== u) lineOwner[l] = o === -1 ? u : -2
+    }
   }
   const body = new Float64Array(ms.length)
   const bodyOf = u => { if (!body[u]) { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); body[u] = hs[hs.length >> 1] } return body[u] }
@@ -716,7 +719,7 @@ function walker(doc, ms, owner, line, inFrame) {
   }
   return {
     take,
-    claim(u, k0, dir, first, fits) { const ks = take(u, k0, dir, first, fits); for (const k of ks) { owner[k] = u; own(k, u) } return ks },
+    claim(u, k0, dir, first, fits) { const ks = take(u, k0, dir, first, fits); for (const k of ks) { owner[k] = u; wrote.tokens.push(k); own(k, u) } return ks },
   }
 }
 
@@ -898,12 +901,6 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
   return found
 }
 
-/**
- * The units' places from their matches (anchorUnits' second half): Map id → Anchor | null. `found` is matchUnits' for
- * these units, by their order; `units` may be any of the paper's units in their order, with their matches: a unit's place
- * reads the matches of the units whose tokens share its pages, and of those that share theirs (their walks), and the
- * frame (`frame(doc, ms)`, its rule: pageFrame, which reads every located unit)
- */
 /** placeUnits' lines of the document (runs of the stream on one baseline) and each line's tokens, made once a document: a
  *  function of the tokens alone, which the page stream places a range at a time */
 const linesMade = new WeakMap()
@@ -918,21 +915,55 @@ function placeLines(doc) {
   }
   const counts = new Int32Array(doc.length ? line[doc.length - 1] + 1 : 0)
   for (let k = 0; k < doc.length; k++) counts[line[k]]++
-  made = { line, lineSize: { get: l => counts[l] } }
+  made = { line, lineSize: { get: l => counts[l] }, lines: counts.length }
   linesMade.set(doc, made)
   return made
 }
-export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
+/** placeUnits' owners of a document's tokens and of its lines (-1: none), kept a document and -1 throughout between calls
+ *  (each call sets back what it wrote): a call reads and writes the tokens its units own, not the whole document's */
+const ownersMade = new WeakMap()
+function ownersOf(doc, lines) {
+  let o = ownersMade.get(doc)
+  if (!o) ownersMade.set(doc, o = { token: new Int32Array(doc.length).fill(-1), line: new Int32Array(Math.max(1, lines)).fill(-1) })
+  return o
+}
+/**
+ * The units' places from their matches (anchorUnits' second half): Map id → Anchor | null. `found` is matchUnits' for
+ * these units, by their order; `units` may be any of the paper's units in their order, with their matches: a unit's place
+ * reads the matches of the units whose tokens share its pages, and of those that share theirs (their walks), and the
+ * frame (`frame(doc, ms)`, its rule: pageFrame, which reads every located unit). `only`: a Set of indices into `units`, the
+ * units whose places the map holds (the page stream's range: the others are read, not placed); null, every unit's
+ */
+export function placeUnits(doc, units, found, { frame = pageFrame, only = null } = {}) {
+  const { line, lineSize, lines } = placeLines(doc)
+  const { token: owner, line: lineOwner } = ownersOf(doc, lines)
+  const wrote = { tokens: [], lines: [] }, ranges = []
+  try {
+    return placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOwner, wrote, ranges)
+  } finally {
+    for (const [a, b] of ranges) owner.fill(-1, a, b + 1)
+    for (const k of wrote.tokens) owner[k] = -1
+    for (const l of wrote.lines) lineOwner[l] = -1
+  }
+}
+/** placeUnits' work (`only`: a Set of indices into `units`, the units whose places are made; every unit's words are owned
+ *  and its displays taken all the same), its owners' arrays given, -1 throughout, and what it writes kept for the caller to set
+ *  back: the ranges filled (`ranges`), the tokens and lines written one at a time (`wrote`) */
+function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOwner, wrote, ranges) {
   // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
   // is the footnote's); an unmarked unit its matched words
-  const owner = new Int32Array(doc.length).fill(-1)
   const ranged = found.map((f, u) => [f?.bounded, u]).filter(([b]) => b).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
-  for (const [[a, b], u] of ranged) owner.fill(u, a, b + 1)
-  found.forEach((f, u) => { if (f && !f.bounded) for (const k of f.m) if (owner[k] === -1) owner[k] = u })
+  for (const [[a, b], u] of ranged) { owner.fill(u, a, b + 1); ranges.push([a, b]) }
+  found.forEach((f, u) => { if (f && !f.bounded) for (const k of f.m) if (owner[k] === -1) { owner[k] = u; wrote.tokens.push(k) } })
+  // (the tokens owned, as disjoint intervals rising: the line owners are made of them alone)
+  const owned = []
+  for (const [a, b] of [...ranges, ...wrote.tokens.map(k => [k, k])].sort((x, y) => x[0] - y[0])) {
+    const last = owned.at(-1)
+    if (last && a <= last[1] + 1) { if (b > last[1]) last[1] = b } else owned.push([a, b])
+  }
   // a unit's words on a line where they are few count only next to a line where they are most: its first line after a
   // theorem's label or its last line of formula stay, three words it shares with a table row it passes by go (lines
   // are runs of the stream on one baseline, so two columns never share one)
-  const { line, lineSize } = placeLines(doc)
   // each located unit's words
   const ms = units.map((_, u) => {
     const f = found[u]
@@ -961,7 +992,7 @@ export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
   // line a lead walk takes stands up to 19.6 pt above the unit's first line at a 10 pt body — 5 of 62 over 16 pt, each
   // a row of the display before it. So a table at a page's head, headed by single letters over rows of digits (which
   // no letters refuse), is still taken where the display closed the page before (the re-review of A1, n1: open)
-  const walk = walker(doc, ms, owner, line, frame(doc, ms))
+  const walk = walker(doc, ms, owner, line, frame(doc, ms), lineOwner, owned, wrote)
   const beyond = []
   for (const edge of ['lead', 'trail']) {
     units.forEach((unit, u) => {
@@ -979,6 +1010,7 @@ export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
   }
   const out = new Map()
   units.forEach(({ id }, u) => {
+    if (only && !only.has(u)) return
     const f = found[u], m = ms[u]
     if (!m) { out.set(id, null); return }
     const idx = []

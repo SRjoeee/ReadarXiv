@@ -259,7 +259,7 @@ async function cutWhole(ctx, r) {
 }
 
 /** the left anchored whole before the maker (the marks given): every unit's anchor final */
-const wholeLeft = side => ({ pages: side.pages, leftPages: side.leftPages, units: () => side.units, stats: side.stats, done: () => true, all: () => true, frontier: () => Infinity, firstTok: () => Infinity })
+const wholeLeft = side => ({ pages: side.pages, leftPages: side.leftPages, units: () => side.units, stats: side.stats, done: () => true, all: () => true, frontier: () => Infinity, firstTok: () => Infinity, version: () => 0 })
 
 /**
  * The page stream's pass: the maker made a page at a time (`st`, its stream; null: no layout, the left alone), the left whole
@@ -307,7 +307,11 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   const kIds = () => { const out = []; for (let i = 0; i < n; i++) if (inK(i)) out.push(i); return out }
   /** where the left stands: each located unit's stream and first left page, the least slot in K each unit may get, and the
    *  smallest unit whose left anchor is not final */
+  let nowAt = -1, nowLeft = null
   const leftNow = () => {
+    // (a function of the left alone: made again once the left has changed)
+    if (left.version() === nowAt) return nowLeft
+    nowAt = left.version()
     const stream = new Map(), first = new Map()
     for (const w of left.units()) { stream.set(w[0], w[1]); let f = N + 1; for (const r of w[2]) f = Math.min(f, r[0]); first.set(w[0], f) }
     const slotLow = new Float64Array(n), low = left.firstTok(left.frontier())
@@ -317,7 +321,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       if (!left.done(i)) { if (uMin === n) uMin = i; slotLow[i] = Math.min(low, before + 0.5) } else slotLow[i] = s === undefined ? before + 0.5 : s
       if (s !== undefined && s > before) before = s
     }
-    return { first, slotLow, uMin }
+    return (nowLeft = { first, slotLow, uMin })
   }
   /** the least page unit i's rows name (its lines', its placeholders' segments', its labels') */
   const rowLeast = i => {
@@ -349,7 +353,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       if (!final && Math.min(partTarget(a, N), a + PART_PAGES_MAX - 1) > H) return
       const layout = st ? st.layout(kIds()) : null
       const whole = { paper: { ...paper, pages: N }, units: bundle, left: { pages: left.pages, units: left.units() }, layout }
-      const { K, F } = wholeFrontier(whole)
+      const { K, F } = wholeFrontier(whole, undefined, grouped)
       const NB = needBound(K, N)
       if (!final && !closable(K, F, NB, a, H, now)) return
       state.read = null
@@ -417,7 +421,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
     if (!(await tellHead())) return { refused: 'anchors', why: 'the anchors located no unit on arXiv\'s PDF' }
     const layout = st && failed ? st.layout(kIds()) : null
     const whole = { paper: { ...paper, pages: N }, units: bundle, left: { pages: left.pages, units: left.units() }, layout }
-    const { K, F } = wholeFrontier(whole)
+    const { K, F } = wholeFrontier(whole, undefined, grouped)
     const known = { K, F, NB: needBound(K, N), layout: null }
     for (;;) {
       state.read = null
@@ -472,7 +476,7 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, 
       pending--
       const b = boundsFromMarks(doc, new Map([[`${id}s`, s], [`${id}e`, e]]), byPage).get(id) ?? null
       if (isUnit(id)) R.mark(Number(id), b)
-      else if (b) R.bounds.set(id, b)
+      else if (b) R.bound(id, b)
     }
   }
   const settle = u => { if (!done[u]) { done[u] = 1; doneCount++ } }
@@ -481,6 +485,8 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, 
   return {
     pages: side.pages, leftPages: side.leftPages, units: side.units, stats: side.stats,
     done: i => done[i] === 1, all: () => doneCount === n, frontier: () => R.am, firstTok: p => (p <= lastPage ? R.firstTok[p] : doc.length),
+    /** a number that changes whenever the units done or the frontier do (both only grow) */
+    version: () => doneCount * (lastPage + 2) + R.am,
     page(p) { resolve(pairs.get(p) ?? []); pairs.delete(p); run() },
     end() { for (const list of pairs.values()) resolve(list); pairs.clear(); run() },
   }
