@@ -177,7 +177,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   /** a document over our copy by ranges: the composed one (a range that fails twice leaves its page the original's, the
    *  side's stall), or the left's (`left`: read for as long as it is shown) */
   const ranged = (bound: Bound, tail: Uint8Array | null, o: Readonly<Record<string, unknown>>, left = false) =>
-    openRanged(host.pdfjs as RangedPdfJs, ourUrl(), { bound, tail, options: o, fetch: f, signal: begun.signal, keepReading: left, refused: e => console.warn('[reader]', e.message) })
+    // (the left's lives as long as the run, through its retries: its document stays shown, and the view lets it go; a
+    // composed one, the beginning's)
+    openRanged(host.pdfjs as RangedPdfJs, ourUrl(), { bound, tail, options: o, fetch: f, signal: left ? ac.signal : begun.signal, keepReading: left, refused: e => console.warn('[reader]', e.message) })
   /** the left's bytes, once they are all in as its document loads them of itself (originalData's own read would ask arXiv
    *  for every byte its stream is still bringing: the rest of the file twice), the base or not */
   const proof = async (base: { bytes: number; sha256: string }): Promise<'same' | 'other'> => {
@@ -318,7 +320,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
         // our server out of reach: a catalog this machine holds of the paper opens it on the layer (decision 7)
         const kept = await host.store?.catalog(seg)
         const catalog = kept ? await readCatalog(kept, { paper }).catch(() => null) : null
-        if (catalog && !gone()) { state = 'open'; emit({ type: 'layer' }); emit({ type: 'prepared' }); tellCatalog(catalog); return }
+        if (catalog && !gone()) { void host.store?.opened(seg); state = 'open'; emit({ type: 'layer' }); emit({ type: 'prepared' }); tellCatalog(catalog); return }
         console.warn('[reader] the layer is not to be had now:', (e as Error)?.message ?? e)
         return unavailable('unreachable')
       }
@@ -433,6 +435,42 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   }
 
   // ---------------------------------------------------------------- the run
+  /** the translation again on the side there is: the door opened again over the latest document, every row held taken */
+  function again() {
+    if (!side) return
+    side.again()
+    if (rows.size) side.take([...rows.values()])
+    void translate()
+  }
+  /** a new engine for the beginning `my`, the one before closed; the translation again with it. A target that changed
+   *  (the side is the target's) begins the run again */
+  let renewing = 0
+  async function renewed(my: number) {
+    const mine = ++renewing
+    const was = engine
+    engine = null
+    rowsState = 'idle'
+    void was?.close?.()
+    let e: RunEngine
+    try {
+      e = await host.engine()
+    } catch (err) {
+      if (disposed || my !== gen || mine !== renewing) return
+      rowsState = 'failed'
+      return emit({ type: 'fail', kind: kindOf(err) })
+    }
+    if (disposed || my !== gen || mine !== renewing) { void e.close?.(); return }
+    if (e.lang !== target) {
+      void e.close?.()
+      rows.clear()
+      side?.dispose()
+      side = null
+      void begin().catch(() => {})
+      return
+    }
+    engine = e
+    again()
+  }
   async function begin() {
     const my = ++gen
     begun.abort()
@@ -441,14 +479,20 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     ac.signal.addEventListener('abort', () => begun.abort(), { once: true })
     state = 'engine'
     preparedFor = 0
+    // the original each beginning's layer is bound to, heard anew (a retry may find the layer made again over another)
+    tag = null
+    let opened: RunEngine
     try {
-      engine = await host.engine()
+      opened = await host.engine()
     } catch (e) {
       if (disposed || my !== gen) return
       state = 'failed'
       return emit({ type: 'fail', kind: kindOf(e) })
     }
-    if (disposed || my !== gen) return
+    // an engine that comes after its beginning was let go (a retry, the page's close) is closed, never kept: its scope
+    // would stay bound to the background for the page's life
+    if (disposed || my !== gen) { void opened.close?.(); return }
+    engine = opened
     target = engine.lang
     if (!(TARGETS as readonly string[]).includes(target)) return unavailable('target')
     const make = host.createSide ?? createLayerSide
@@ -466,8 +510,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       if (disposed) return
       // a limit's wait under way: the look asks again once it has passed, never sooner
       if (state === 'unavailable' && refusedUntil > Date.now()) return
-      // a run that found no layer, or no service: begun again
-      if (!side || !engine || state === 'unavailable') {
+      // a run that found no layer, or no service, or whose side refused its layer (its base, an object: a refused side
+      // takes no again()): begun again, a new side with its own look and bind
+      if (!side || !engine || state === 'unavailable' || (side.probe() as { state?: string }).state === 'refused') {
         void engine?.close?.()
         side?.dispose()
         side = null
@@ -475,10 +520,11 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
         void begin().catch(() => {})
         return
       }
+      // the service stopped short (a key refused, the network): opened again, so that its scope binds the chain the
+      // settings make now (the settings' landing retries so: a key set, a service changed), the old one closed
+      if (rowsState === 'failed') { void renewed(gen); return }
       // the translation again: the door opened again over the latest document, every row held taken at once
-      side.again()
-      if (rows.size) side.take([...rows.values()])
-      void translate()
+      again()
     },
     dispose() {
       if (disposed) return

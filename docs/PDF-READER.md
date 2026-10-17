@@ -802,8 +802,11 @@ contract §4.3), started by the host once a translated display is shown in a vis
    its objects so far told, asked again once its wait has passed (never sooner, at least a second; every 5 s at most once
    it has been polled for 2 minutes; given up after 10, S-R-24 with its retry; none while the tab is hidden, that time not
    counted); a 404 `not-prepared` asks the prepare, once a visit; any other 404 is why there is none (S-R-17); a 429 waits
-   its time (S-R-24 meanwhile, whose retry waits it out too); our server out of reach (a 5xx or the
-   network, twice) opens a paper whose catalog this machine holds, else S-R-24. Only the paper's id and version leave the
+   its time (S-R-24 meanwhile, whose retry waits it out too); our server out of reach (a 5xx, the network, or nothing within
+   30 s, its answer and body together, `REQUEST_MS`: twice) opens a paper whose catalog this machine holds (its place in the
+   store renewed), else S-R-24. A retry begins the run again where the side refused its layer (a new side, its look, its bind,
+   the base's tag heard anew), and opens the service again where it stopped short (its scope bound to the chain the settings
+   make now); an engine that comes after its beginning was let go is closed. Only the paper's id and version leave the
    machine, in the address: no query, `{}` the prepare's only body, no credentials, no referrer.
 3. **The objects** through this machine's store first (`cache/layer-store.ts`, by digest, checked there), then our server
    within each ref's bytes; the side's readers check every one.

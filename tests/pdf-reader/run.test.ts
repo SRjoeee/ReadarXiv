@@ -78,7 +78,7 @@ function pdfjs() {
   const getDocument = vi.fn((p: Record<string, unknown>) => { docs.push(p); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } })
   return { lib: { getDocument, PDFDataRangeTransport } as never, docs }
 }
-function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
+function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
   const s = server(o.looks, o), side = fakeSide(), v = o.view ?? view(), events: RunEvent[] = []
   const engine = o.engine ?? echo()
   const opened: Uint8Array[] = []
@@ -92,7 +92,20 @@ function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | 
     readingPage: () => 1, mayPrepare: o.may ?? (() => true), emit: e => events.push(e), faces: async () => null, createSide: side.make as never,
   }
   const r = startRun(v as never, PAPER, host)
-  return { r, s, side, v, events, engine: engine as ReturnType<typeof echo>, opened, docs: lib.docs }
+  return { r, s, side, v, events, engine: engine as ReturnType<typeof echo>, opened, docs: lib.docs, host }
+}
+/** engines handed out in turn, each recorded; `hold`: the next one's promise waits for its release */
+function engines() {
+  const made: ReturnType<typeof echo>[] = []
+  let held: ((e: ReturnType<typeof echo>) => void) | null = null, holdNext = false
+  const next = vi.fn(() => {
+    const e = echo()
+    made.push(e)
+    if (!holdNext) return Promise.resolve(e)
+    holdNext = false
+    return new Promise<ReturnType<typeof echo>>(r => { held = () => r(e) })
+  })
+  return { next, made, hold: () => { holdNext = true }, release: () => { held?.(made.at(-1) as never); held = null } }
 }
 const settle = async (n = 30) => { for (let i = 0; i < n; i++) await new Promise(res => setTimeout(res, 0)) }
 const kinds = (events: RunEvent[]) => events.map(e => e.type)
@@ -348,6 +361,25 @@ describe('the bind: arXiv\'s whole file not waited for (DESIGN §16)', () => {
     expect([left.range.length, left.disableAutoFetch]).toEqual([300, true])
   })
 
+  it('our copy shown on the left by ranges outlives a retry: its pages still read after the run begins again (Codex on #390)', async () => {
+    const longer = new Uint8Array(ours.length + 9)
+    longer.set(ours)
+    const a = run({ looks: [tagged], view: view(longer, never), original: ours, tag: TAG, arxiv: longer, ranged: true })
+    await settle()
+    expect(await a.side.options().bind(await base())).toBe(true)
+    await settle()
+    const left = a.docs[0] as { range: { requestDataRange(b: number, e: number): void } }
+    // a retry that begins the run again (its side refused): the left's document, still shown, reads on
+    a.side.side.probe.mockReturnValue({ state: 'refused' } as never)
+    a.r.retry()
+    await settle()
+    const asked = rangesAsked(a, `${API}/api/v1/original/${SEG}`).length
+    left.range.requestDataRange(100, 200)
+    await settle()
+    expect(rangesAsked(a, `${API}/api/v1/original/${SEG}`)).toHaveLength(asked + 1)
+    expect(rangesAsked(a, `${API}/api/v1/original/${SEG}`).at(-1)).toBe('bytes=100-199')
+  })
+
   it('an end that cannot be read (arXiv answers no range): the proof decides, as before; a catalog that names no tag, or a left whose bytes are in: the proof alone, no range asked', async () => {
     const slow = new Promise<void>(r => setTimeout(r, ENDS_AFTER_MS * 3))
     const a = run({ looks: [tagged], view: view(ours, slow), original: ours, tag: TAG, arxiv: 'whole', ranged: true })
@@ -427,6 +459,80 @@ describe('B6, R2-R4: the translation into rows', () => {
     a.r.dispose()
     expect(a.engine.close).toHaveBeenCalled()
     expect(a.side.side.dispose).toHaveBeenCalled()
+  })
+
+  it('a retry over a side that refused its layer (its base, an object) begins the run again: a new side, its look and its bind; a refused side takes no again() (Devin on #390)', async () => {
+    const a = run({ looks: [() => new Response(catalog)] })
+    await settle(60)
+    a.side.side.probe.mockReturnValue({ state: 'refused', why: 'base' } as never)
+    a.r.retry()
+    await settle(60)
+    expect(a.side.agains()).toBe(0)
+    expect(a.side.make).toHaveBeenCalledTimes(2)
+    expect(a.s.layerLooks()).toBe(2)
+  })
+
+  it('a retry after the service stopped short opens the service again, its scope bound to the chain the settings make now; the old one closed (Codex on #390, P1)', async () => {
+    // the first engine stops short (a refused key): the run keeps its side and its engine
+    const e0 = echo(), e1 = echo()
+    e0.translate.mockImplementation(async () => { throw Object.assign(new Error('auth'), { kind: 'auth' }) })
+    let opens = 0
+    const next = vi.fn(async () => (opens++ ? e1 : e0))
+    const a = run({ looks: [() => new Response(catalog)], engine: next })
+    await settle(60)
+    expect(a.r.probe().rowsState).toBe('failed')
+    expect(e0.close).not.toHaveBeenCalled()
+    // the key set in the settings: the landing's retry
+    a.r.retry()
+    await settle(60)
+    expect(next).toHaveBeenCalledTimes(2)
+    expect(e0.close).toHaveBeenCalled()
+    expect(e1.translate).toHaveBeenCalled()
+    expect(a.r.probe().rowsState).toBe('translated')
+    // the side kept (its layer is the paper's whatever the service), its door opened again with the rows held
+    expect(a.side.make).toHaveBeenCalledTimes(1)
+    expect(a.side.agains()).toBe(1)
+  })
+
+  it('an engine that comes after its beginning was let go is closed, never kept: a retry while the service opens (Devin, Codex on #390)', async () => {
+    const pool = engines()
+    pool.hold()
+    const a = run({ looks: [() => new Response(catalog)], engine: pool.next })
+    await settle(1)
+    // the first beginning waits on its service; a retry begins again meanwhile
+    a.r.retry()
+    await settle(60)
+    pool.release()
+    await settle(60)
+    expect(pool.made).toHaveLength(2)
+    expect(pool.made[0]?.close).toHaveBeenCalled()
+    expect(pool.made[1]?.close).not.toHaveBeenCalled()
+    a.r.dispose()
+    expect(pool.made[1]?.close).toHaveBeenCalled()
+  })
+
+  it('each beginning hears its own base tag: a retry that finds the layer bound to another original reads its objects (Devin on #390)', async () => {
+    const part = new Uint8Array(10).fill(3)
+    const a = run({ looks: [() => new Response(catalog, { headers: { 'x-axt-base-etag': '"A"' } }), () => new Response('', { status: 503 }), () => new Response(catalog, { headers: { 'x-axt-base-etag': '"B"' } })], objects: new Map([['c'.repeat(64), part]]), tag: '"B"' })
+    await settle(60)
+    expect(a.r.probe().bound).toBe(true)
+    // the next beginning (a side that refused, asked again): its look a 503 twice, then the catalog bound to B
+    a.side.side.probe.mockReturnValue({ state: 'refused' } as never)
+    a.r.retry()
+    // (its look: a 503, asked again a second later, the catalog bound to B)
+    await new Promise(r => setTimeout(r, 1200))
+    await settle(60)
+    expect(a.s.layerLooks()).toBe(3)
+    await expect(a.side.options().fetchObject({ kind: 'part', sha256: 'c'.repeat(64), bytes: 10 }, new AbortController().signal)).resolves.toEqual(part)
+  })
+
+  it('a paper opened on the catalog this machine holds (our server out of reach) is the last its store lets go (Codex on #390)', async () => {
+    vi.useFakeTimers()
+    const store = { catalog: vi.fn(async () => catalog), putCatalog: vi.fn(), object: vi.fn(async () => undefined), putObject: vi.fn(), opened: vi.fn(async () => {}), usage: vi.fn(), clear: vi.fn() }
+    const b = run({ looks: [() => { throw new TypeError('Failed to fetch') }], store })
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.waitFor(() => expect(b.side.told.length).toBe(1))
+    expect(store.opened).toHaveBeenCalledWith(SEG)
   })
 
   it('a retry of a run that found no layer begins it again: the look, and the prepare where the visit has not asked it', async () => {
