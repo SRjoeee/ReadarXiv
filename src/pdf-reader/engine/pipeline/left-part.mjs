@@ -223,11 +223,19 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
     if (m === ivA.length) { const A = new Int32Array(2 * m), B = new Int32Array(2 * m); A.set(ivA); B.set(ivB); ivA = A; ivB = B }
     ivA[m] = tokPage[a]; ivB[m] = tokPage[b]; m++
   }
+  // (the units before u0 are final, their reaches kept as the flat arrays' first part: a final unit's reach never changes, so a
+  // run makes the reaches from u0 on, the first unit not final at the last one)
+  let u0 = 0
   const reachNow = () => {
+    // the scans' state at u0: every unit before it is marked, so none is pending; the end of the last bounded unit in the text
+    // before it (and of its last body one, rule 5)
+    const e0 = prevText(u0), E0 = e0 >= 0 ? bE[e0] : -1
+    let B0 = -1
+    if (forward) for (let v = u0 - 1; v >= 0; v--) if (hasB[v] && !isFloat[v] && !forward.has(v)) { B0 = bE[v]; break }
     // leftReach's neighbours: the end of the last bounded unit in the text before each unit (and of its last body one, rule 5);
     // whether a unit still to be marked lies between it and that neighbour, the earliest end it may get to (and under rule 5 the
     // same of its body neighbours)
-    for (let u = 0, e = -1, b = -1, pend = 0, low = -1, pb = 0, lb = -1, hb = -1; u < n; u++) {
+    for (let u = u0, e = E0, b = B0, pend = 0, low = E0, pb = 0, lb = B0, hb = B0; u < n; u++) {
       before[u] = e; bodyEnd[u] = b; pendBefore[u] = pend; lo[u] = low
       if (forward) { pendBody[u] = pb; bodyLow[u] = lb; bodyHigh[u] = hb }
       const text = hasB[u] === 1 && isFloat[u] === 0
@@ -237,13 +245,13 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
       }
     }
     // the start of the first bounded unit after it; the same on that side, the latest start
-    for (let u = n - 1, a = N, pend = 0, high = N; u >= 0; u--) {
+    for (let u = n - 1, a = N, pend = 0, high = N; u >= u0; u--) {
       after[u] = a; pendAfter[u] = pend; hi[u] = high
       if (hasB[u] === 1 && isFloat[u] === 0) { a = high = bS[u]; pend = 0 } else if (!marked[u]) { pend = 1; if (!isFloat[u] && ownHigh[u]) high = Math.max(high, lastTok[ownHigh[u]]) }
     }
-    m = 0; finCount = 0
+    m = ivOff[u0]; finCount = u0
     const any = bounds.size > 0
-    for (let u = 0; u < n; u++) {
+    for (let u = u0; u < n; u++) {
       const at = m
       ivOff[u] = at
       const float = isFloat[u] === 1
@@ -281,6 +289,7 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
       maxB[u] = mx
     }
     ivOff[n] = m
+    while (u0 < n && fin[u0]) u0++
   }
   // ---- partSets over the flat reach, its arrays made once: the units meeting the pages flagged (`list`, rising, where given)
   // and the pages their reach makes (`next`)
