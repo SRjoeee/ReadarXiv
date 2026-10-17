@@ -61,6 +61,7 @@ import { trPiecesOf } from '../layer/pieces.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
+import { drawInputsOf } from './draw.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -70,6 +71,86 @@ import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
  *  opened without it is refused as the run reads a page's fonts (layer2.mjs fontMappedOf), never read as one whose fonts
  *  have no map */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true, fontExtraProperties: true }
+
+/** what an ink read of a page drawn from its draw geometry (openProto `drawOf`) throws while the page's pixels are not read:
+ *  `page`, and `why`, the step that reads them. Its catcher reads them and does its step again; no step reads such a page as one
+ *  with no ink */
+export class NeedPixels extends Error {
+  constructor(page, why) { super(`page ${page}'s pixels are not read yet (${why})`); this.name = 'NeedPixels'; this.page = page; this.why = why }
+}
+
+/**
+ * A page's fonts as the run reads them, over caches as long-lived as the readers (a run's: its whole life): each font's class
+ * (fonts.mjs classifyFont of its name and PDF.js's fallback family) and the characters its own map gives its glyphs (layer2.mjs
+ * fontMappedOf's set; null: none to read), each kept by its key the first time it is read. `live(page, styles)`: the page's fonts
+ * as PDF.js's commonObjs holds them, by loaded name, with its text content's styles; a font the document exported with no map
+ * refuses the document (fontMappedOf's throw, `refusesDocument`). `draw(draw)`: a draw's (draw.mjs, checked), its text content
+ * and Link annotations in PDF.js's shapes (drawInputsOf: `tc`, `raw`), its fonts by their content keys, a namespace of their own
+ * (never a loaded name); a key read before with another row refuses the draw (a RangeError, nothing of it kept: the caller reads
+ * the page live). Each gives `fontOf(name)` and `mapOf(name)`, pageChars2's readers
+ */
+export function fontReaders() {
+  const fontClass = new Map(), fontMapped = new Map(), rowOfKey = new Map()
+  const fontObj = (page, name) => { try { return page.commonObjs.get(name) } catch { return null } }
+  return {
+    live(page, styles) {
+      return {
+        fontOf: name => {
+          let c = fontClass.get(name)
+          if (!c) {
+            c = classifyFont(fontObj(page, name)?.name ?? '', styles?.[name]?.fontFamily)
+            fontClass.set(name, c)
+          }
+          return c
+        },
+        // (the characters each font's own map gives its glyphs, layer2.mjs mappedOf: null where it has none to read; a font
+        // exported with no map, the document not opened with PDF_OPTIONS, throws: fontMappedOf)
+        mapOf: name => {
+          if (!fontMapped.has(name)) {
+            // (the document's own fault, not the page's: every page of it would fail alike, so the run ends, as a host's bug must show)
+            try { fontMapped.set(name, L2.fontMappedOf(fontObj(page, name))) } catch (e) { throw Object.assign(e, { refusesDocument: true }) }
+          }
+          return fontMapped.get(name)
+        },
+      }
+    },
+    draw(draw) {
+      const x = drawInputsOf(draw)
+      // (each key an item reads, with its row's text: a key seen before with another row is no font of the caches')
+      const used = new Map()
+      draw.items.forEach((it, k) => { const key = x.items[k].fontName; if (key !== null && !used.has(key)) used.set(key, JSON.stringify(draw.fonts[it[8]])) })
+      for (const [key, text] of used) if (rowOfKey.has(key) && rowOfKey.get(key) !== text) throw new RangeError(`draw: the font key ${key} names another font than before`)
+      for (const [key, text] of used) rowOfKey.set(key, text)
+      return {
+        tc: { items: x.items, styles: x.styles }, raw: x.annots,
+        fontOf: key => {
+          let c = fontClass.get(key)
+          if (!c) {
+            c = classifyFont(x.fonts.get(key)?.name ?? '', x.styles[key]?.fontFamily)
+            fontClass.set(key, c)
+          }
+          return c
+        },
+        mapOf: key => {
+          if (!fontMapped.has(key)) fontMapped.set(key, x.fonts.get(key)?.mapped ?? null)
+          return fontMapped.get(key)
+        },
+      }
+    },
+  }
+}
+
+/** a page's characters (layer2.mjs pageChars2) and its Link annotations with the glyph points inside each (links.mjs annotsOf;
+ *  null where they could not be read), from its text content, its fonts' readers (fontReaders') and its annotations: the two calls
+ *  the run makes of a page's reading, live or from its draw (drawPageOn), for a gate that compares the two */
+export function pageReadOf(tc, fontOf, mapOf, raw) {
+  const chars = L2.pageChars2(tc, fontOf, mapOf)
+  return { chars, read: raw === null ? null : LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars)) }
+}
+/** the longest a page's drawing waits for its draw (openProto `drawOf`) once the page is covered and its drawing begins, ms: a
+ *  draw that has not come by then (a left part's fetch that does not settle; one that fails is null at once) is no draw, the page
+ *  read live. It decides what the reading costs, never what is drawn: a page reads alike either way */
+export const DRAW_WAIT_MS = 2000
 /** a page's characters by baseline, for its units' edges (openProto edgesOf): its non-blank characters sorted by baseline,
  *  their baselines, and its largest size, so that a read of the characters within a band of baselines halves to it and
  *  visits that band alone, where a scan of the page for every unit made the edges cost units x characters (the speed check
@@ -549,9 +630,22 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * drawing's audit (`audit`), the gate's measures, which nothing that draws reads; without them only their count (`drawn`).
  * With both, what the run lets go is kept on the gate's shelf (`full`, `chars`, the checker): the run draws as one that
  * frees, and the gate measures it whole.
+ * `drawOf(page)` (E-C, the door's for BUNDLE 5's parts): a promise of the page's draw geometry (layer-proto/draw.mjs, checked:
+ * its text items, fonts and Link annotations, as the server read them of arXiv's PDF), or null; asked once a page, for every page of
+ * a closure as it is taken. A page with a draw is read from it: its viewport alone of PDF.js's (getPage), no text content,
+ * annotation or pixel read; one with none (null, an ask that threw, a draw whose font key names another font than before) is read
+ * live, as without drawOf. Its pixels (its ink map) are read where a step reads them, and only there: the page asked, at once; a
+ * unit's lay that reads a page's ink (borrowing below its lines, widening over the paper beside them: laid again once the pixels
+ * are in, NeedPixels), a crop's growth, a name put back; and a paint, which waits for the page's own closure (a unit running on to
+ * a page beside the one asked is painted there once that page is laid, in its own order). Every page is drawn as without drawOf.
+ * Used where every ink read can wait so: no copy kept (`copy` false), a page pass, no leftover packed; else ignored (`drawStats`
+ * null). Absent: every page read live, today's path. `drawsComing` (the door's, its head's `draw: 1`: the parts may carry
+ * draws): the page asked is read for its pixels at its ask, once a part covers it, before its draw (or page 1's) is in, whether it
+ * is then read from its draw or live; without it, once its draw is in, a page with none read in the closure's order, page 1 first.
  */
-export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, proof = false, copy = true, removal = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true }) {
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', restoring = true, order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex = null, proof = false, copy = true, removal = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
+  if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
   if (faceSources !== null && typeof faceSources !== 'function') throw new TypeError(`faceSources: a function or null, not ${kindOf(faceSources)}`)
   if (partsMode && (!tableGroups || !tex || removal?.mode !== 'draw' || !proof)) throw new TypeError('parts: the open is given each unit\'s table group, the hybrid, the text removal and the proof (the door\'s choices)')
@@ -573,6 +667,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  before (1b-design C1), nor where no pass runs and each unit is painted as it is laid (no adaptive fill): those lay in
    *  the stream's order, the prefix needsOf reads. No built-in rule set is so */
   const ORDER_FREE = PASSES && !P.even && P.leftover !== 'pack'
+  /** whether pages are read from their draws (drawOf): where every ink read can wait for a page's pixels, no copy kept (the
+   *  checker's, which reads every page's), a page pass (each unit painted as it is laid reads its pages' ink at once) and no
+   *  leftover packed (the pass reads its page's ink as it moves units) */
+  const DATA = drawOf !== null && !copy && PASSES && P.leftover !== 'pack'
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all(R.patterns.map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at
@@ -618,28 +716,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const sheet = document.head.appendChild(document.createElement('style'))
   for (const rule of SVG_RULES) sheet.sheet.insertRule(rule, sheet.sheet.cssRules.length)
 
-  const fontClass = new Map(), fontMapped = new Map()
-  const fontObj = (page, name) => { try { return page.commonObjs.get(name) } catch { return null } }
-  const fontOfPage = (page, styles) => name => {
-    let c = fontClass.get(name)
-    if (!c) {
-      c = classifyFont(fontObj(page, name)?.name ?? '', styles?.[name]?.fontFamily)
-      fontClass.set(name, c)
-    }
-    return c
-  }
-  // (the characters each font's own map gives its glyphs, layer2.mjs mappedOf: null where it has none to read; a font
-  // exported with no map, the document not opened with PDF_OPTIONS, throws: fontMappedOf)
-  const mappedOfPage = page => name => {
-    if (!fontMapped.has(name)) {
-      // (the document's own fault, not the page's: every page of it would fail alike, so the run ends, as a host's bug must show)
-      try { fontMapped.set(name, L2.fontMappedOf(fontObj(page, name))) } catch (e) { throw Object.assign(e, { refusesDocument: true }) }
-    }
-    return fontMapped.get(name)
-  }
+  // (each font's class and map, run-long, by its loaded name or its draw's content key)
+  const FR = fontReaders()
   const chars2 = [], inks = [], views = [], pageBottom = []
   /** each page's characters by baseline (rowsOf), made as its characters are read and let go with them */
   const rowsByPage = []
+  // ---- the pages read from their draws (DATA): each page's draw asked once (`drawAsks`, held until the page is drawn), the pages
+  // read from data (`fromData`), each page's pixels read once (`pixelTasks`, `pixelsIn`), the pages whose paint waits for theirs
+  const drawAsks = new Map(), askedDraw = new Uint8Array(N + 1), fromData = new Uint8Array(N + 1), pixelsIn = new Uint8Array(N + 1)
+  const pixelTasks = new Map(), paintLater = new Set()
+  /** the pages read from data and live, the draws refused and those that came too late (DRAW_WAIT_MS), each page's pixels by the
+   *  step that asked first, the times a step needed a page's pixels it had not (by step), the lays done again, and the draws'
+   *  reading, ms */
+  const drawStats = { data: [], live: [], refused: [], late: [], pixels: {}, need: {}, retries: 0, ms: 0 }
+  const needed = why => { drawStats.need[why] = (drawStats.need[why] ?? 0) + 1 }
 
   // the geometry's units with v0's own copy of their line rectangles: v0 grows and moves a unit's lines as it lays it,
   // and every other unit reads them as grown (its others), so the copy is shared by all of v0's reading; the geometry
@@ -1054,12 +1144,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return (x, y) => vw.convertToViewportPoint(x, y)
   }
   // each page's ink map, read once as the page is drawn (drawPage) and kept for the run: it is all the engine takes from the
-  // original's pixels, so that with no copy the canvas is let go right after (a lazy read would need it for as long)
-  const inkOf = pg => inks[pg]
+  // original's pixels, so that with no copy the canvas is let go right after (a lazy read would need it for as long). A page read
+  // from its draw has none until its pixels are read (pixelsOf): an ink read of it throws NeedPixels (`why`, the step), never the
+  // undefined of a page with no ink
+  const inkOf = (pg, why = 'ink') => {
+    if (fromData[pg] && !pixelsIn[pg]) throw new NeedPixels(pg, why)
+    return inks[pg]
+  }
   // each page's characters that a painted unit accounts for (its text, its placeholders drawn elsewhere), and its items
   const accounted = [], keptOf = [], pageItems = []
   const restoreOf = (p, pg) => {
     if (!restoring || !p.prep?.cat) return null
+    // (the page's ink, read before anything of the page's is counted: a page read from its draw is painted once its pixels are in, paintOn)
+    inkOf(pg, 'paint')
     if (!accounted[pg]) accounted[pg] = new Set()
     const acc = accounted[pg]
     // what any unit keeps stays, whatever another unit says of it (a formula's glyph two units' lines both hold)
@@ -1078,7 +1175,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!lines.has(k)) lines.set(k, [])
       lines.get(k).push(c)
     }
-    inkOf(pg)
     for (const cs of lines.values()) {
       // grown over its ink as a crop is (a big bracket's or a radical's hanging part)
       const hull = { crop: [Math.min(...cs.map(c => c.x0)) - 0.5, Math.min(...cs.map(c => (c.ybEff ?? c.yb) - 0.35 * c.size)), Math.max(...cs.map(c => c.x1)) + 0.5, Math.max(...cs.map(c => c.yb + 0.9 * c.size))], gap: { chars: cs } }
@@ -1267,7 +1363,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         audit?.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [ax, ay, ax + aw, ay + ah] })
         if (restoring) {
           if (!keptOf[pg]) keptOf[pg] = { keys: new Set(), hulls: [] }
-          inkOf(pg)
+          // (a page read from its draw: its pixels read now, what it puts back is read of them)
+          if (fromData[pg] && !pixelsIn[pg]) {
+            needed('names')
+            await pixelsOf(pg, 'names')
+            if (disposed) return
+          }
+          inkOf(pg, 'names')
           pageItems[pg] ??= L2.pageItemsOf(chars2[pg - 1] ?? [], pg, px, inks[pg])
           const back = L2.restoreUnaccounted([[ax, ay, ax + aw, ay + ah]], px, { items: pageItems[pg].items, cover: pageItems[pg].cover, ink: inks[pg], accounted: accounted[pg], kept: keptOf[pg] }, audit, -1, pg)
           if (back) ops.push(back)
@@ -1375,7 +1477,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const clearanceOf = (p, s) => (P.cjk && p.unit.kind === 'cell' ? L2.cellBands(p.blocks, pg => RM?.manifest?.page?.[pg]?.rules, s, P) : null)
   // the free space below a block, down to the first ink in its column or the page's lowest unit line
   const freeFor = (b, s) => {
-    const map = inkOf(b.page)
+    const map = inkOf(b.page, 'freeFor')
     if (!map || pageBottom[b.page] === undefined) return 0
     const last = b.B.at(-1)
     const yStart = last - 0.3 * s, yLimit = pageBottom[b.page] - 0.3 * s
@@ -1397,7 +1499,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    * it. Returns the edge.
    */
   const paperTo = (b, dir, from, limit, own) => {
-    const map = inkOf(b.page)
+    const map = inkOf(b.page, 'paperTo')
     if (!map) return from
     const px = pxOf(b.page), f = map.factor, z = b.sizes[0], B = b.B[0]
     const top = B + 0.8 * z, bottom = B - 0.25 * z
@@ -1654,7 +1756,37 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       grownTo.set(g, i)
     }
   }
-  const layout2 = async p => {
+  const layout2 = p => (DATA ? layData(p) : layOnce(p))
+  /**
+   * A unit laid where pages are read from their draws: its growth first (layOnce's own is then a no-op), the pixels of its pages
+   * that are on their way awaited (the page asked reads its own at its ask: a unit on it reads them), then laid. A lay that reads
+   * the ink of a page whose pixels are not read (NeedPixels: freeFor, paperTo, deep in the fit) is laid again once they are, from
+   * its rectangles as its growth left them; whatever else a lay writes it writes before it reads, or alike each time (its lead's
+   * record), so the second lay is the one a unit with every page's pixels would have had
+   */
+  const layData = async p => {
+    growTo(p)
+    const rects = p.rects.slice()
+    for (const q of p.pages) {
+      if (!pixelTasks.has(q) || pixelsIn[q]) continue
+      await pixelTasks.get(q)
+      if (disposed) return
+    }
+    for (;;) {
+      try { return await layOnce(p) } catch (e) {
+        if (!(e instanceof NeedPixels)) throw e
+        needed(e.why)
+        drawStats.retries++
+        // (the work of the lay given up, charged to its page as its lay's is: arrive)
+        const mark = workMarks.get(p)
+        if (mark) { workMarks.delete(p); chargeWork(p.pages[0], mark) }
+        p.rects = rects.slice()
+        await pixelsOf(e.page, e.why)
+        if (disposed) return
+      }
+    }
+  }
+  const layOnce = async p => {
     const t0 = lap()
     // the unit's lines dropped where they are another unit's, grown over words the anchors left out beside them, and its
     // first line's edge snapped back to its first word's start: its pages' growth steps (growOn)
@@ -1712,7 +1844,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // iteration 3: each crop over the ink it touches (its page's ink map)
     for (const r of prep.values()) {
       if (r?.mode !== 'crop') continue
-      L2.growCrop(r, inkOf(r.page), pxOf(r.page), scale * dpr, local[r.page - 1] ?? chars2[r.page - 1])
+      // (cut from a page read from its draw, and grown over its ink: its pixels read now; a crop of a layout file's segment is not)
+      if (fromData[r.page] && !pixelsIn[r.page] && L2.cropGrows(r)) {
+        needed('crop')
+        await pixelsOf(r.page, 'crop')
+        if (disposed) return
+      }
+      L2.growCrop(r, L2.cropGrows(r) ? inkOf(r.page, 'crop') : inks[r.page], pxOf(r.page), scale * dpr, local[r.page - 1] ?? chars2[r.page - 1])
     }
     const t1 = lap()
     const orig = prep.orig
@@ -1881,7 +2019,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the leftover packed (packPage) over a page's units laid, each moved unit's record updated
   const packPass = pg => {
     // (the ink that stays, by the page's ink map: no move is made on a page whose map is not read)
-    const map = inkOf(pg), dev = pxOf(pg), vw = views[pg - 1]
+    const map = inkOf(pg, 'pack'), dev = pxOf(pg), vw = views[pg - 1]
     const accounted = []
     // (a table's cell may be withheld with its group after this pass: its glyphs are not taken as gone)
     for (const p of laid[pg]) {
@@ -1951,6 +2089,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** page q's parts painted, in their order, as far as their passes have run */
   const paintOn = q => {
     touched.add(q)
+    // (a page read from its draw whose pixels are not read yet is painted once they are, by its own closure (layIn), which reads
+    // them: a page's paint reads that page alone, in its own order whenever it runs, so a page beside the one asked is not read
+    // for its pixels to paint a unit running on to it)
+    if (fromData[q] && !pixelsIn[q]) { paintLater.add(q); return }
     const done = (paintedOn[q] ??= new Set())
     for (const f of partsOf(q)) {
       if (done.has(f)) continue
@@ -2123,27 +2265,109 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
   const drawPage = i => { const d = D, rd = RD; return using([d, rd], () => drawPageOn(i, d, rd)) }
+  /** page q's draw asked of the host, once (drawOf): its answer kept until the page is drawn; null where it has none or the ask
+   *  threw (the page is read live) */
+  const drawAsk = q => {
+    if (askedDraw[q]) return drawAsks.get(q) ?? null
+    askedDraw[q] = 1
+    let a
+    try { a = Promise.resolve(drawOf(q)).then(d => d ?? null, () => null) } catch { a = Promise.resolve(null) }
+    drawAsks.set(q, a)
+    return a
+  }
+  /** a page's draw read into its inputs (fontReaders' draw), timed; null where it is refused (a font key read before with another
+   *  row), the page then read live */
+  const readDraw = (q, draw) => {
+    const t0 = performance.now()
+    try { return FR.draw(draw) } catch (e) {
+      if (isMemoryError(e)) throw e
+      drawStats.refused.push(q)
+      return null
+    } finally { drawStats.ms += performance.now() - t0 }
+  }
+  /** page q's pixels, once (a page read from its draw): PDF.js's drawing of it from the newest document on a canvas of the size its
+   *  live reading draws it at, its ink map read and the canvas let go; `why` the step that asked first (drawStats). A drawing that
+   *  throws fails the page, as its live reading's would, and every wait for it rejects */
+  const pixelsOf = (q, why) => {
+    let t = pixelTasks.get(q)
+    if (t) return t
+    drawStats.pixels[q] = why
+    const d = D
+    t = using([d], async () => {
+      const t0 = performance.now()
+      const page = await d.getPage(q)
+      const viewport = page.getViewport({ scale })
+      const c = document.createElement('canvas')
+      c.width = Math.floor(viewport.width * dpr)
+      c.height = Math.floor(viewport.height * dpr)
+      try { await page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise } finally { page.cleanup() }
+      if (!disposed) {
+        inks[q] = L2.inkMapOf(c)
+        workOf(q).inkSteps += inks[q].w * inks[q].h
+      }
+      c.width = 0
+      c.height = 0
+      pixelsIn[q] = 1
+      timesOf(q).render += performance.now() - t0
+    })
+    t.catch(e => {
+      if (isMemoryError(e)) return
+      failedPages.add(q)
+      if (rows[q - 1]) rows[q - 1].base = false
+      touched.add(q)
+    })
+    pixelTasks.set(q, t)
+    return t
+  }
   const drawPageOn = async (i, d, rd) => {
     const tPage = performance.now()
+    // (its draw, where pages are read from theirs: asked at its closure's taking, or now)
+    const asked = DATA ? drawAsk(i) : null
     const page = await d.getPage(i)
     const r = rows[i - 1]
+    let x = null
     try {
+      if (asked) {
+        let timer, late = false
+        const draw = await Promise.race([asked, new Promise(ok => { timer = setTimeout(() => { late = true; ok(null) }, DRAW_WAIT_MS) })])
+        clearTimeout(timer)
+        drawAsks.delete(i)
+        if (late) drawStats.late.push(i)
+        if (draw) x = readDraw(i, draw)
+      }
       const viewport = page.getViewport({ scale })
       views[i - 1] = viewport
-      r.left.width = Math.floor(viewport.width * dpr)
-      r.left.height = Math.floor(viewport.height * dpr)
-      if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
+      if (!x) {
+        r.left.width = Math.floor(viewport.width * dpr)
+        r.left.height = Math.floor(viewport.height * dpr)
+        if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
+      }
       r.view = page.view
-      const textP = page.getTextContent()
-      await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
-      const tRendered = performance.now()
-      // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
-      // read before the page is cleaned up)
-      const annP = LK.readAnnots(page)
-      timesOf(i).render += tRendered - tPage
-      const tc = await textP
+      let tc, annP, fonts, tRendered
+      if (x) {
+        // (from its draw: no text content, annotation or pixel read of PDF.js's; its pixels are read where a step reads its ink)
+        fromData[i] = 1
+        drawStats.data.push(i)
+        tc = x.tc
+        annP = x.raw
+        fonts = x
+        tRendered = performance.now()
+      } else {
+        if (DATA) drawStats.live.push(i)
+        const textP = page.getTextContent()
+        // (read for its pixels already, its draw then refused or late: its ink is that reading's, the same pixels at the same size)
+        if (pixelTasks.has(i)) await pixelTasks.get(i)
+        else await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
+        tRendered = performance.now()
+        // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
+        // read before the page is cleaned up)
+        annP = LK.readAnnots(page)
+        timesOf(i).render += tRendered - tPage
+        tc = await textP
+        fonts = FR.live(page, tc.styles)
+      }
       if (i === 1 && lmP) await lmP
-      const fontOf = fontOfPage(page, tc.styles)
+      const fontOf = fonts.fontOf
       // the slices of the role table's faces that hold the page's characters, before they are measured in them (layer2.mjs
       // wDesign measures a character in its font's design, as upright or slanted as the font is)
       if (FS) {
@@ -2157,7 +2381,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         }
         await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
       }
-      chars2[i - 1] = L2.pageChars2(tc, fontOf, mappedOfPage(page))
+      chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf)
       // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)
       rowsByPage[i] = rowsOf(chars2[i - 1])
       workOf(i).edges += chars2[i - 1].length
@@ -2203,9 +2427,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // shares are a newer layer's to set)
     if (disposed) return
     // the page's ink, read now whatever the rules are: units that borrow below, widen over paper and grow a crop read it, on
-    // their own page and, for a crop, on the page it is cut from
-    inks[i] = L2.inkMapOf(r.left)
-    workOf(i).inkSteps += inks[i].w * inks[i].h
+    // their own page and, for a crop, on the page it is cut from (a page read from its draw: once a step reads it, pixelsOf)
+    if (!x && !pixelsIn[i]) {
+      inks[i] = L2.inkMapOf(r.left)
+      workOf(i).inkSteps += inks[i].w * inks[i].h
+    }
     // with no copy, nothing else reads the original's canvas: the drawing is made as data (ops), a view draws it over the
     // page it renders itself (drawCopy), and the checker, which reads this canvas, needs a copy. So it goes now, not when the
     // host is done with the page: a host that jumps to page p holds the canvases of all p pages until then, 12.5 MB each.
@@ -2454,6 +2680,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     unswept.add(q)
     return true
   }
+  /** where pages are read from their draws: a closure's draws asked at once, every page of its `draw` not drawn yet (their left
+   *  parts come in parallel, not one round trip a page), and the page asked read for its pixels beside the other pages' readings
+   *  (its units are laid and painted over them): at once where the paper's parts carry draws (`drawsComing`), once a part covers it;
+   *  else as soon as its draw is in, a page whose draw is none read live in the closure's order, page 1 first. A page read live
+   *  whose pixels were read already takes its ink from them (drawPageOn) */
+  const prefetch = (p, C) => {
+    for (const q of [p, 1, ...C.draw]) if (!drawnPages[q] && !failedPages.has(q)) drawAsk(q)
+    if (pixelTasks.has(p)) return
+    if (fromData[p] || (drawsComing && p <= through && !failedPages.has(p) && !drawnPages[p])) { pixelsOf(p, 'asked'); return }
+    // (a page drawn live by then, its draw refused, has its ink already)
+    if (!drawnPages[p]) drawAsks.get(p)?.then(d => { if (d && !disposed && !pixelTasks.has(p) && (!drawnPages[p] || fromData[p])) pixelsOf(p, 'asked') })
+  }
   /**
    * Page p's closure laid (the 1b-D design §2.1): page 1 drawn first; then, the closure taken again after every wait (a part
    * may grow it), its pages drawn in order, its rows decided in the stream's order as each is in, and once the parts cover it
@@ -2472,9 +2710,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (partsEnded && p > through) { failedPages.add(p); touched.add(p); report(ms); return }
     for (;;) {
       if (disposed || !still()) return
+      // (the closure's draws asked before page 1 is drawn: its own draw among them, one round trip for all)
+      if (DATA) prefetch(p, closure(p))
       if (!(await drawOne(1, still, wait))) return
       report(ms)
       const C = closure(p)
+      if (DATA) prefetch(p, C)
       // its pages, in order; a part told meanwhile may grow the closure: taken again
       let again = false
       for (const q of C.draw) {
@@ -2531,6 +2772,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         await arrive(u)
         if (disposed) return
         report(ms)
+      }
+      // (its paint, where it waited for its pixels (a page read from its draw: paintOn): read, then painted in its own order)
+      if (paintLater.has(p) && !failedPages.has(p)) {
+        needed('paint')
+        try { await pixelsOf(p, 'paint') } catch (e) { if (isMemoryError(e)) throw e }
+        if (disposed) return
+        paintLater.delete(p)
+        if (!failedPages.has(p)) paintOn(p)
       }
       sweep()
       report(ms)
@@ -2849,6 +3098,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       letGo()
       changed()
       busy.then(letGo, letGo)
+      // (the draws asked and not drawn yet, let go: I6)
+      drawAsks.clear()
+      paintLater.clear()
       // (the documents it reads, told to the host once no read holds them)
       retire(D)
       retire(RD)
@@ -2862,6 +3114,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** how the removal went: pages removed and refused, units drawn by it (tex) and the old way (v0), the rectangles filled
      *  and swapped, the pages a swap draws the removed page for */
     removalStats: () => RM?.stats ?? null,
+    /** where pages are read from their draws (drawOf): the pages read from data and live, the draws refused, each page whose pixels
+     *  were read and the step that asked first, the times a step needed a page's pixels it had not (by step), the lays done again
+     *  and the draws' reading in ms; a copy. Null where no page is (no drawOf, or rules that read every page's ink at once) */
+    get drawStats() { return DATA ? { ...drawStats, data: drawStats.data.slice(), live: drawStats.live.slice(), refused: drawStats.refused.slice(), late: drawStats.late.slice(), pixels: { ...drawStats.pixels }, need: { ...drawStats.need } } : null },
     /** a done page's removed page at v0's own resolution (draw mode, until released), for a check */
     removedCanvas: pg => RM?.removed[pg] ?? null,
     /** the prototype's completeness checker on one done page (main.js check=1's, its pixels of that page alone, its

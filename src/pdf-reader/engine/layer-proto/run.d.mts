@@ -10,6 +10,7 @@ import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 import type { ReadPart } from './format.mjs'
 import type { OpenWords, PageWords } from './words.mjs'
 import type { LayerStats, LinkRecord } from './reader.mjs'
+import type { Draw } from './draw.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -70,6 +71,39 @@ export interface Rec {
   [more: string]: unknown
 }
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
+/** the longest a page's drawing waits for its draw (openProto `drawOf`) once it begins, ms; then the page is read live */
+export declare const DRAW_WAIT_MS: number
+/** what an ink read of a page read from its draw throws while its pixels are not read: the page, and the step that reads them */
+export declare class NeedPixels extends Error {
+  constructor(page: number, why: string)
+  readonly page: number
+  readonly why: string
+}
+/** a font's readers for pageChars2: its class and the characters its own map gives its glyphs (null: none) */
+export interface FontReading { fontOf(name: string | null): FontClass; mapOf(name: string | null): Set<string> | null }
+type FontClass = ReturnType<typeof import('./fonts.mjs').classifyFont>
+/** a page's text content and Link annotations as PDF.js gives them (getTextContent's items and styles, getAnnotations') */
+export interface TextContentLike { items: readonly { str: string; transform: readonly number[]; width: number; height: number; fontName: string | null }[]; styles: Record<string, { fontFamily?: string | null }> }
+/** a page's fonts as the run reads them, over caches as long-lived as the readers: live (PDF.js's commonObjs, by loaded name) or
+ *  from a draw (its rows, by content key; a key read before with another row throws a RangeError) */
+export declare function fontReaders(): {
+  live(page: { commonObjs: { get(name: string): unknown } }, styles: TextContentLike['styles'] | undefined): FontReading
+  draw(draw: Draw): FontReading & { tc: TextContentLike; raw: ReturnType<typeof import('./draw.mjs').drawInputsOf>['annots'] }
+}
+/** a page's characters and Link annotations (null where they could not be read), the two calls the run makes of a page's reading */
+export declare function pageReadOf(tc: TextContentLike, fontOf: FontReading['fontOf'], mapOf: FontReading['mapOf'], raw: readonly unknown[] | null): {
+  chars: Char[]
+  read: ReturnType<typeof import('./links.mjs').annotsOf> | null
+}
+/** where pages are read from their draws (openProto `drawOf`): the pages read from data and live, the draws refused and those that
+ *  came too late, each page whose pixels were read and the step that asked first, the times a step needed a page's pixels it had
+ *  not (by step), the lays done again, the draws' reading in ms */
+export interface DrawStats {
+  data: number[]; live: number[]; refused: number[]; late: number[]
+  pixels: Record<number, 'asked' | 'freeFor' | 'paperTo' | 'crop' | 'names' | 'paint'>
+  need: Partial<Record<'freeFor' | 'paperTo' | 'crop' | 'names' | 'paint', number>>
+  retries: number; ms: number
+}
 /** the most of its own work v0 runs in one task, ms: units are laid back to back under it, then it yields */
 export declare const SLICE_MS: number
 /** a slicer over a clock: `due()`, whether the work since its last yield has reached `budget` (SLICE_MS); `give()`, a yield
@@ -215,6 +249,9 @@ export interface ProtoRun {
   check(): CheckResult
   /** how the removal went */
   removalStats(): RemovalStats | null
+  /** where pages are read from their draws (`drawOf`), a copy; null where none is (no drawOf, a copy kept, no page pass, the
+   *  leftover packed) */
+  readonly drawStats: DrawStats | null
   /** a done page's removed page at v0's own resolution (mode 'draw', with v0's copy), until it is released */
   removedCanvas(page: number): HTMLCanvasElement | null
   /** the run let go: its sheet removed, every page's canvases released (a page under way, once it ends), nothing drawn
@@ -300,4 +337,11 @@ export declare function openProto(o: {
   free?: boolean
   /** each laid unit's record (`stats`) and the drawing's audit kept, the gate's (default true); without, their count alone */
   records?: boolean
+  /** E-C (the door's, BUNDLE 5): each page's draw geometry, asked once a page; a page with one is read from it (its viewport alone
+   *  of PDF.js's, its pixels where a step reads its ink), one with none (null, a throw, a draw refused or later than DRAW_WAIT_MS)
+   *  live. Every page is drawn as without it. Used with `copy` false, a page pass and no leftover packed; else ignored */
+  drawOf?: ((page: number) => Promise<Draw | null>) | null
+  /** the paper's parts may carry draws (the door's Layer.drawsComing, the head's `draw: 1`): the page asked is read for its pixels at
+   *  its ask (once a part covers it), before its draw or page 1's is in; default false, once its draw is in */
+  drawsComing?: boolean
 }): Promise<ProtoRun>

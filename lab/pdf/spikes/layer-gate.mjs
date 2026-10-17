@@ -31,6 +31,7 @@
 //       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
 //       [--door-memory[=<pages>]] [--door-parts[=doubling|splits:<n>|seed:<s>]] [--door-parts-addon=chained|carried|none]
 //       [--door-order=reverse|seed:<s>|burst:<s>] [--door-jump[=all|<fixture>:<page>,…]]
+//       [--door-draw[=inputs|pages|jump:all|jump:<fixture>:<page>,…]] [--link=<rtt ms>:<bytes/s>]
 //   --engine     the engine measured: <worktree>/src/pdf-reader/engine served as /engine/ (the checker, layer/check.mjs, is
 //                always this repository's: the instrument is the same for every branch); default this repository
 //   --layouts    made (the default): the layout files the engine's own maker makes from the fixtures' papers (spikes/
@@ -155,6 +156,24 @@
 //                among its draw, the units laid among its lay entries; 'closure: n/a' where it exposes none). The tasks (a fixture's pages, 6 to a task) are shared among --workers; with --perf also the time to the
 //                page (a fresh open, then the ask) and the longest task of 50 ms or more, on one worker. The run is written to
 //                out/layer-gate/door-jump-<commit>-<time>.json
+//   --door-draw  a page drawn from its draw geometry (E-C: run.mjs openProto `drawOf`, the door's hand-off of the draw each left
+//                part of BUNDLE 5 carries; never recorded; the door's choices as --door has them). Each paper's draws read in Node
+//                as the prepare's container reads them (layer-gate/draws.mjs: the engine's lite worker, NO_IMAGE_PIXELS,
+//                useSystemFonts false, fontExtraProperties, cMaps, each page after its operator list; cached in out/layer-gate/
+//                draws/), each fixture's bundle as --door makes it cut as --door-parts cuts it (doubling, chained tails), every
+//                left part carrying its page's draw (layer-gate/door-draw.mjs). inputs: every page of each paper read in Chromium as
+//                the run reads a page live against its draw, the characters field by field and the Link annotations as the run
+//                keeps them (run.mjs fontReaders, pageReadOf), every page with no draw named with why. pages (the default): the
+//                door over the cut, its parts told as its run waits for one, its pages asked in order, with drawOf against the
+//                same door whose run is given none (the stand-in takes it away: every page read live): each page's SVG markup,
+//                word table, link records, copyOf's pixels over the reference's PNG and records equal, the units left, the states
+//                and the units drawn; no getTextContent or getAnnotations on a page read from its draw, and a page drawn by PDF.js
+//                while one is asked only where the run read its pixels (drawStats), once. jump: each page asked first and alone in
+//                a fresh load, every part told at the open (as --door-jump), against the pages reference, with J (the pages read
+//                from data and live, the pages whose pixels were read and why); --link=<rtt>:<bytes/s> reads the document and
+//                the left parts over a modelled link (the E-C handoff's sim2: FIFO, RTT after the ask, a left part its gzip size),
+//                --perf the time to the page on one worker, --draw-off the same jump with no drawOf (every page read live), to time
+//                against. The run is written to out/layer-gate/door-draw-<commit>-<time>.json
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, the layout rules' labels'
@@ -252,12 +271,25 @@ if (arg('door-order') !== null && (DOOR_ORDER === null || !/^(?:reverse|seed:\d+
  *  in order, and what the ask cost (a proof: never recorded) */
 const DOOR_JUMP = arg('door-jump') === true ? 'all' : typeof arg('door-jump') === 'string' ? arg('door-jump') : null
 if (DOOR_JUMP !== null && DOOR_JUMP !== 'all' && !/^[A-Za-z0-9._-]+:[1-9]\d*(?:,[A-Za-z0-9._-]+:[1-9]\d*)*$/.test(DOOR_JUMP)) throw new Error(`--door-jump=${DOOR_JUMP}: all, or <fixture>:<page>,…`)
-if ([MEMORY, DOOR_PARTS, DOOR_ORDER, DOOR_JUMP].filter(x => x !== null).length > 1) throw new Error('--door-memory, --door-parts, --door-order and --door-jump are proofs of their own: one at a time')
+/** --door-draw[=inputs|pages|jump:all|jump:<fixture>:<page>,…]: pages drawn from their draw geometry against the same door reading
+ *  every page live (a proof: never recorded) */
+const DOOR_DRAW = arg('door-draw') === true ? 'pages' : typeof arg('door-draw') === 'string' ? arg('door-draw') : null
+if (DOOR_DRAW !== null && !/^(?:inputs|pages|jump:(?:all|[A-Za-z0-9._-]+:[1-9]\d*(?:,[A-Za-z0-9._-]+:[1-9]\d*)*))$/.test(DOOR_DRAW)) throw new Error(`--door-draw=${DOOR_DRAW}: inputs, pages, jump:all or jump:<fixture>:<page>,…`)
+const DRAW_MODE = DOOR_DRAW === null ? null : DOOR_DRAW.startsWith('jump:') ? 'jump' : DOOR_DRAW
+/** --link=<rtt ms>:<bytes/s>: --door-draw=jump's modelled link */
+const LINK = typeof arg('link') === 'string' ? arg('link').split(':').map(Number) : null
+if (arg('link') !== null && (DRAW_MODE !== 'jump' || !LINK || LINK.length !== 2 || !LINK.every(v => Number.isFinite(v) && v >= 0) || !(LINK[1] > 0))) throw new Error(`--link=${arg('link')}: <rtt ms>:<bytes/s>, with --door-draw=jump:…`)
+/** --draw-off: --door-draw=jump's run with no drawOf (the stand-in takes it away: every page read live, as without E-C), to time against */
+const DRAW_OFF = !!arg('draw-off')
+if (DRAW_OFF && DRAW_MODE !== 'jump') throw new Error('--draw-off: with --door-draw=jump:…')
+/** the pages a jump asks (--door-jump's, or --door-draw=jump's) */
+const JUMP_SPEC = DOOR_JUMP ?? (DRAW_MODE === 'jump' ? DOOR_DRAW.slice(5) : null)
+if ([MEMORY, DOOR_PARTS, DOOR_ORDER, DOOR_JUMP, DOOR_DRAW].filter(x => x !== null).length > 1) throw new Error('--door-memory, --door-parts, --door-order, --door-jump and --door-draw are proofs of their own: one at a time')
 /** --door[=<n>]: the reader's door against the gate's own page, its rows taken n a part (a proof: never recorded) */
-const DOOR = arg('door') === true || ((MEMORY !== null || DOOR_PARTS !== null || DOOR_ORDER !== null || DOOR_JUMP !== null) && arg('door') === null) ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
+const DOOR = arg('door') === true || ((MEMORY !== null || DOOR_PARTS !== null || DOOR_ORDER !== null || DOOR_JUMP !== null || DOOR_DRAW !== null) && arg('door') === null) ? 16 : typeof arg('door') === 'string' ? Number(arg('door')) : null
 if (DOOR !== null && !(Number.isInteger(DOOR) && DOOR > 0)) throw new Error(`--door=${arg('door')}: a count of rows a part`)
 if (DOOR !== null && (KIND !== 'proto' || TEX?.use !== 'lines' || !TEX.texOnly || TEX.symbols !== 'text' || TEX.extents !== 'v0' || REMOVAL !== 'draw')) throw new Error("--door: the door's choices, --engine-kind=proto --proto-tex=lines --removal=draw")
-if (DOOR !== null && (arg('record') || PARTS || SLICES || (PERF && DOOR_JUMP === null) || DUMP || TIER !== 'model')) throw new Error('--door: a proof of its own, the model tier, never a record, nor with --parts, --slices, --perf (but --door-jump\'s) or --dump')
+if (DOOR !== null && (arg('record') || PARTS || SLICES || (PERF && DOOR_JUMP === null && DRAW_MODE !== 'jump') || DUMP || TIER !== 'model')) throw new Error('--door: a proof of its own, the model tier, never a record, nor with --parts, --slices, --perf (but --door-jump\'s and --door-draw=jump\'s) or --dump')
 /** a TypeScript transform for the repository's own modules the door's closure names by the @/ alias (--door): esbuild, as
  *  tsx (this script's runner) has it; the repository's TypeScript 7 has no API to call */
 const ESBUILD = DOOR !== null ? createRequire(realpathSync(join(REPO, 'node_modules/tsx/package.json')))('esbuild') : null
@@ -366,10 +398,12 @@ if (FREEZE) {
   process.exit(0)
 }
 /** --door-jump=<fixture>:<page>,…: the pages asked for, by fixture (a fixture is named whole, or by its paper's id alone) */
-const JUMP_LIST = DOOR_JUMP !== null && DOOR_JUMP !== 'all' ? jumpListOf(DOOR_JUMP, fixtures) : null
+const JUMP_LIST = JUMP_SPEC !== null && JUMP_SPEC !== 'all' ? jumpListOf(JUMP_SPEC, fixtures) : null
 if (JUMP_LIST && ONLY && ONLY.some(n => !JUMP_LIST.has(n))) throw new Error(`--only: ${ONLY.filter(n => !JUMP_LIST.has(n)).join(', ')} not among --door-jump's fixtures`)
-const asked = JUMP_LIST ? fixtures.filter(n => JUMP_LIST.has(n) && (!ONLY || ONLY.includes(n))) : ONLY ? fixtures.filter(n => ONLY.includes(n)) : fixtures
-if (ONLY && !JUMP_LIST && asked.length !== ONLY.length) throw new Error(`--only: no fixture ${ONLY.filter(n => !fixtures.includes(n)).join(', ')} in ${FIXTURES}`)
+const asked0 = JUMP_LIST ? fixtures.filter(n => JUMP_LIST.has(n) && (!ONLY || ONLY.includes(n))) : ONLY ? fixtures.filter(n => ONLY.includes(n)) : fixtures
+/** --door-draw=inputs reads a paper's pages, not an output's: one fixture a paper */
+const asked = DRAW_MODE === 'inputs' ? asked0.filter((n, i) => asked0.findIndex(m => nameOf(m).paper === nameOf(n).paper) === i) : asked0
+if (ONLY && !JUMP_LIST && DRAW_MODE !== 'inputs' && asked.length !== ONLY.length) throw new Error(`--only: no fixture ${ONLY.filter(n => !fixtures.includes(n)).join(', ')} in ${FIXTURES}`)
 for (const name of asked) if (!existsSync(join(REFS, name, 'ref.json'))) throw new Error(`${name}: no frozen reference (${join(REFS, name, 'ref.json')}): run --freeze once`)
 
 // ---------------------------------------------------------------- the server: every file the page asks for, from disk
@@ -387,7 +421,7 @@ if (PROTO) {
   for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), 'latin1'))))
 }
 function fileFor(path) {
-  if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs', 'links.mjs', ...(DOOR !== null ? ['door.mjs'] : []), ...(DOOR_PARTS !== null ? ['door-parts.mjs'] : []), ...(DOOR_ORDER !== null || DOOR_JUMP !== null ? ['door-common.mjs', 'door-order.mjs'] : []), ...(DOOR_JUMP !== null ? ['door-jump.mjs'] : [])].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
+  if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs', 'links.mjs', ...(DOOR !== null ? ['door.mjs'] : []), ...(DOOR_PARTS !== null ? ['door-parts.mjs'] : []), ...(DOOR_ORDER !== null || DOOR_JUMP !== null ? ['door-common.mjs', 'door-order.mjs'] : []), ...(DOOR_JUMP !== null ? ['door-jump.mjs'] : []), ...(DOOR_DRAW !== null ? ['door-common.mjs', 'door-draw.mjs'] : [])].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null
   if (path.startsWith('/proto-fonts/')) return /^\/proto-fonts\/lm(?:roman|sans|mono)10-[a-z]+\.otf$/.test(path) ? join(TEXMF, 'fonts/opentype/public/lm', path.slice(13)) : null
   if (path === '/engine/layer/check.mjs') return CHECKER
   if (path === NO_START_PATH) return NO_START_FILE
@@ -428,12 +462,13 @@ const DOOR_FILES = new Map()
  *  of it; and the pages of a task */
 const DOOR_MADE = new Map(), DOOR_REFS = new Map(), DOOR_LEFT = new Map(), JUMP_PAGES = new Map()
 const JUMP_CHUNK = 6
-/** --door-parts, --door-order and --door-jump: run.mjs's stand-in, the instrument of door-parts.mjs, door-order.mjs and door-jump.mjs
- *  (each run kept in __gateRuns, each wait told to __gateWait), each run keeping its units' records (`records`, which the reader's
- *  does not) for the comparison of the pages' records */
+/** --door-parts, --door-order, --door-jump and --door-draw: run.mjs's stand-in, the instrument of door-parts.mjs, door-order.mjs,
+ *  door-jump.mjs and door-draw.mjs (each run kept in __gateRuns, each wait told to __gateWait), each run keeping its units' records
+ *  (`records`, which the reader's does not) for the comparison of the pages' records, and given no drawOf where __gateNoDraw is set
+ *  (--door-draw's reference: every page read live) */
 const RUN_STAND_IN = `export * from '/engine/layer-proto/run.mjs?real'
 import { openProto as real } from '/engine/layer-proto/run.mjs?real'
-export async function openProto(o) { const run = await real({ ...o, records: true, onWait: what => globalThis.__gateWait?.(what) }); (globalThis.__gateRuns ??= []).push(run); return run }
+export async function openProto(o) { const run = await real({ ...o, records: true, onWait: what => globalThis.__gateWait?.(what), ...(globalThis.__gateNoDraw ? { drawOf: null } : {}) }); (globalThis.__gateRuns ??= []).push(run); return run }
 `
 const server = createServer((req, res) => {
   let path
@@ -466,7 +501,7 @@ const server = createServer((req, res) => {
   if (MOVED_MODULES[path] && !existsSync(join(ENGINE, 'src/pdf-reader/engine', path.slice(8)))) { res.writeHead(302, { location: `/engine/${MOVED_MODULES[path]}` }); return res.end() }
   // (--door-parts: run.mjs as the reader imports it is a stand-in that keeps each run it opens and tells the page what it waits
   // for; the module itself is served at ?real)
-  if ((DOOR_PARTS !== null || DOOR_ORDER !== null || DOOR_JUMP !== null) && path === '/engine/layer-proto/run.mjs' && !new URL(req.url, 'http://127.0.0.1').searchParams.has('real')) {
+  if ((DOOR_PARTS !== null || DOOR_ORDER !== null || DOOR_JUMP !== null || DOOR_DRAW !== null) && path === '/engine/layer-proto/run.mjs' && !new URL(req.url, 'http://127.0.0.1').searchParams.has('real')) {
     res.writeHead(200, { 'content-type': TYPES['.mjs'], 'cache-control': 'no-store' })
     return res.end(RUN_STAND_IN)
   }
@@ -504,7 +539,7 @@ const failures = []
 const queue = asked.slice().sort((a, b) => (ALL_PAGES.has(nameOf(b).paper) ? 1 : 0) - (ALL_PAGES.has(nameOf(a).paper) ? 1 : 0) || a.localeCompare(b))
 /** --door-jump: the queue is tasks, a fixture's pages a few to a task (round by round, the long papers first), `JUMP_TASKS` by key */
 const JUMP_TASKS = new Map()
-if (DOOR_JUMP !== null) {
+if (JUMP_SPEC !== null) {
   const per = new Map(queue.map(name => [name, jumpPagesOf(name)]))
   const rounds = []
   for (const [name, pages] of per) for (let i = 0; i * JUMP_CHUNK < pages.length; i++) (rounds[i] ??= []).push([`${name}#${i}`, { name, pages: pages.slice(i * JUMP_CHUNK, (i + 1) * JUMP_CHUNK) }])
@@ -542,6 +577,7 @@ async function runFixture(page, name, errors) {
   if (DOOR_PARTS !== null) return doorPartsFixture(page, name, errors)
   if (DOOR_ORDER !== null) return doorOrderFixture(page, name, errors)
   if (DOOR_JUMP !== null) return doorJumpTask(page, name, errors)
+  if (DOOR_DRAW !== null) return DRAW_MODE === 'inputs' ? doorDrawInputs(page, name, errors) : DRAW_MODE === 'jump' ? doorDrawJump(page, name, errors) : doorDrawPages(page, name, errors)
   if (DOOR !== null) return doorFixture(page, name, errors)
   const { paper, target } = nameOf(name)
   const refFile = join(REFS, name, 'ref.json')
@@ -744,6 +780,7 @@ function doneWith(name) {
   for (const f of [...DOOR_FILES.keys()]) if (f.startsWith(`/door/${name}/`)) DOOR_FILES.delete(f)
   DOOR_REFS.delete(name)
   DOOR_MADE.delete(name)
+  DRAW_CUTS.delete(name)
 }
 const openDoorPage = async (page, kind) => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&${kind}=1`); await page.waitForFunction(() => window.gateReady === true) }
 /** a fixture's reference, once (the task that needs it first makes it, the others wait for it): the pages 1 to `upTo` asked in order in
@@ -821,6 +858,165 @@ async function doorJumpTask(page, key, errors) {
     const mean = f => (out.reduce((a, e) => a + f(e), 0) / out.length).toFixed(1)
     const detail = JUMP_LIST || PERF ? out.map(e => `p${e.p}${e.ms ? ` ${secondsOf(e.ms.open + e.ms.ask)} s (open ${secondsOf(e.ms.open)} + ask ${secondsOf(e.ms.ask)}), longest task ${e.longest} ms,` : ''} ${e.j.drawn.length} pages drawn ${e.j.drawn.length > 8 ? `(${e.j.drawn[0]}..${e.j.drawn.at(-1)})` : `(${e.j.drawn.join(' ')})`}, ${e.j.units} units laid`).join('; ') : ''
     const line = `${out.length} pages asked first and alone (${pages[0]}..${pages.at(-1)}): SVG ${n('svg')}/${out.length} equal, words ${n('words')}, links ${n('links')}, copy ${n('copy')}, records ${n('recs')}, completions ${n('completes')}; J: ${mean(e => e.j.drawn.length)} pages drawn and ${mean(e => e.j.units)} units laid a page; closure: ${out.some(e => e.closure) ? `J within Need(p) on ${out.filter(e => e.closure?.within).length}/${out.length}` : 'n/a'}${detail ? `; ${detail}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    return { name, key, door: true, ok, ready: true, line, pages: out }
+  } finally { doneWith(name) }
+}
+
+/** --door-draw: a paper's draws as the prepare's container reads them (layer-gate/draws.mjs, a Node child of its own: PDF.js takes a
+ *  process's worker at its first document, and this one keeps the stock worker), cached in out/layer-gate/draws/ by arXiv's bytes,
+ *  the engine's reading and PDF.js; once a run a paper. { file, pdfjs, pages: [{ draw, why }] } */
+const DRAWS = new Map()
+function drawsOf(name) {
+  const { paper } = nameOf(name)
+  if (!DRAWS.has(paper)) {
+    DRAWS.set(paper, (async () => {
+      const pdf = join(FIXTURES, name, 'arxiv.pdf'), script = join(GATE, 'draws.mjs')
+      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).filter(f => existsSync(f))
+      const key = sha256([fileSha(pdf), ...reading.map(fileSha), fileSha(script), readJson(join(PDFJS, 'package.json')).version].join('|')).slice(0, 24)
+      const dir = join(ROOT, 'out/layer-gate/draws'), file = join(dir, `${key}.json`)
+      if (!existsSync(file)) {
+        mkdirSync(dir, { recursive: true })
+        await new Promise((ok, no) => execFile(process.execPath, [script, ENGINE, pdf, file], { maxBuffer: 1 << 24 }, e => (e ? no(e) : ok())))
+      }
+      return { file, ...readJson(file) }
+    })())
+  }
+  return DRAWS.get(paper)
+}
+/** --door-draw=pages and jump: a fixture's bundle as --door makes it, cut as --door-parts cuts it (the doubling, the chained add-on),
+ *  its head saying the parts carry draws, every left part with no tokens and its page's draw (drawsOf), served for door-draw.mjs to read as a host does: the units' chunks,
+ *  the head, the parts, the left parts (l<page>.json, and each one's gzip size, which the link is charged), arXiv's PDF through each
+ *  part's tail, the rows. Once a fixture; what the cut shed is counted */
+const DRAW_CUTS = new Map()
+function drawCutOf(name) {
+  if (!DRAW_CUTS.has(name)) {
+    DRAW_CUTS.set(name, (async () => {
+      const removal = await addonOf(name)
+      const made = await doorBundleOf(name, removal)
+      const D = await drawsOf(name)
+      const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+      const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
+      const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf')))
+      const read3 = readBundle(new Uint8Array(made.bytes))
+      if (D.pages.length !== read3.paper.pages) throw new Error(`${name}: ${D.pages.length} pages of draws, the paper's ${read3.paper.pages}`)
+      const base = { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }
+      const hooks = await chainedHooksOf(arxiv, read3, base)
+      const EMPTY = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
+      // (the head says the parts carry draws, as the prepare's does: the door's drawsComing)
+      const cut = await cutBundle(read3, { leftPages: p => ({ first: 0, tokens: EMPTY, spans: [], pairs: [], draw: D.pages[p - 1].draw }), base, draw: true, chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon })
+      const at = `/door/${name}`
+      cut.units.forEach((u, i) => DOOR_FILES.set(`${at}/u${i}.json`, Buffer.from(u.bytes)))
+      DOOR_FILES.set(`${at}/head.json`, Buffer.from(cut.head.bytes))
+      cut.parts.forEach((p, i) => DOOR_FILES.set(`${at}/p${i}.json`, Buffer.from(p.bytes)))
+      for (const l of cut.left) DOOR_FILES.set(`${at}/l${l.page}.json`, Buffer.from(l.bytes))
+      const docs = {}, tails = []
+      let composed = null
+      cut.parts.forEach((p, i) => {
+        const tail = JSON.parse(Buffer.from(p.bytes).toString('utf8')).addon?.tail
+        if (!tail) return
+        tails.push(Buffer.from(tail, 'base64'))
+        composed = `${at}/c${i}.pdf`
+        docs[i] = composed
+        DOOR_FILES.set(composed, Buffer.concat([Buffer.from(arxiv), ...tails]))
+      })
+      const gz = cut.left.map(l => gzipSync(l.bytes).length)
+      DOOR_FILES.set(`${at}/cut.json`, JSON.stringify({ units: cut.units.map((u, i) => ({ path: `${at}/u${i}.json`, ref: u.ref })), head: { path: `${at}/head.json`, ref: cut.head.ref }, parts: cut.parts.map((p, i) => ({ path: `${at}/p${i}.json`, ref: p.ref })), docs, composed, gz }))
+      DOOR_FILES.set(`${at}/rows.json`, JSON.stringify(made.rows))
+      const none = D.pages.flatMap((x, i) => (x.draw ? [] : [`${i + 1}:${x.why}`]))
+      return { parts: cut.parts.map(p => p.pages), none, shed: cut.left.filter(l => l.drawShed).map(l => l.page), gz: gz.reduce((a, b) => a + b, 0), raw: cut.left.reduce((a, l) => a + l.bytes.length, 0) }
+    })())
+  }
+  return DRAW_CUTS.get(name)
+}
+/** --door-draw: a fixture's reference, once (the door over the cut with no drawOf, its pages asked in order: layer-gate/door-draw.mjs
+ *  ref), each page's PDF.js drawing served at /door/<name>/s<p>.png for the copies */
+function drawRefOf(page, name, upTo) {
+  if (!DOOR_REFS.has(name)) {
+    DOOR_REFS.set(name, (async () => {
+      await drawCutOf(name)
+      await openDoorPage(page, 'doordraw')
+      const ref = await page.evaluate(x => window.doorDraw.ref(x), { name, target: nameOf(name).target, rules: '/rules/layout-rules.json', pages: upTo })
+      for (const e of ref.pages) { DOOR_FILES.set(`/door/${name}/s${e.p}.png`, Buffer.from(e.png, 'base64')); delete e.png }
+      return ref
+    })())
+  }
+  return DOOR_REFS.get(name)
+}
+/** the reads a page's drawing made of PDF.js, held to the run's own account (run.mjs drawStats): no getTextContent or getAnnotations on a
+ *  page read from its draw, one of each on a page read live, and a page drawn by PDF.js while one was asked only where the run read
+ *  its pixels, once. Null where they hold, else why not */
+function readsOf(stats, counts) {
+  if (!stats) return 'the run kept no account of its draws (drawStats null)'
+  const n = (m, q) => m[q] ?? 0
+  for (const q of stats.data) if (n(counts.text, q) || n(counts.annots, q)) return `page ${q}, read from its draw, read by PDF.js too (text ${n(counts.text, q)}, annotations ${n(counts.annots, q)})`
+  for (const q of stats.live) if (n(counts.text, q) !== 1 || n(counts.annots, q) !== 1) return `page ${q}, read live, read ${n(counts.text, q)} and ${n(counts.annots, q)} times`
+  const data = new Set(stats.data)
+  for (const [q, k] of Object.entries(counts.render)) if (data.has(Number(q)) && (k > 1 || !(q in stats.pixels))) return `page ${q} drawn by PDF.js ${k} times while asked, its pixels ${q in stats.pixels ? `read for ${stats.pixels[q]}` : 'never read'}`
+  return null
+}
+/** --door-draw=inputs: a paper's pages, read live in Chromium against their draws (layer-gate/door-draw.mjs inputs) */
+async function doorDrawInputs(page, name, errors) {
+  const { paper } = nameOf(name)
+  const D = await drawsOf(name)
+  DOOR_FILES.set(`/door/${paper}/draws.json`, readFileSync(D.file))
+  try {
+    await openDoorPage(page, 'doordraw')
+    const r = await page.evaluate(x => window.doorDraw.inputs(x), { name, paper })
+    const ok = r.compared + r.none.length === r.pages && r.equal === r.compared && !r.differ.length && !errors.length
+    if (!ok) failures.push(name)
+    // (PDF.js's overlaid text of each link against the text of the layer's own glyph points inside it: a measure, never gated)
+    const ov = r.overlaid.reduce((a, o) => { for (const k of ['n', 'empty', 'same', 'space', 'other']) a[k] += o[k]; return a }, { n: 0, empty: 0, same: 0, space: 0, other: 0 })
+    r.overlaidTotals = ov
+    const line = `${r.overlaidLost ? `the draws' links carry no overlaid text where the live read has it (${r.overlaidLost} links: the draw read on pdf-lite's worker with TEXT_GUARD on); ` : ''}${paper}: ${r.pages} pages, ${r.compared} read from their draws and live: equal on ${r.equal} (${r.chars} characters, ${r.nu} of them no reading of their glyph, ${r.links} Link annotations; their overlaid text the layer's glyphs' on ${ov.same}, but for white space on ${ov.space}, other on ${ov.other}, none on ${ov.empty})${r.zeroSign ? ` (${r.zeroSign} numbers equal but the sign of zero)` : ''}; ${r.none.length ? `no draw on ${r.none.length} (${r.none.slice(0, 8).join(' ')})` : 'a draw on every page'}${r.differ.length ? `; differ: ${r.differ.slice(0, 3).join(' | ')}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    return { name, door: true, ok, ready: true, line, inputs: r }
+  } finally { DOOR_FILES.delete(`/door/${paper}/draws.json`) }
+}
+/** --door-draw=pages: a fixture's pages asked in order, drawn from their draws, against the same door reading every page live */
+async function doorDrawPages(page, name, errors) {
+  const { paper, target } = nameOf(name)
+  DOOR_LEFT.set(name, 1)
+  try {
+    const cut = await drawCutOf(name)
+    const pages = PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF)
+    const ref = await drawRefOf(page, name, pages)
+    await openDoorPage(page, 'doordraw')
+    const run = await page.evaluate(x => window.doorDraw.data(x), { name, target, rules: '/rules/layout-rules.json', pages })
+    const rows = run.pages.map((d, i) => ({ p: d.p, ...sameAs(d, ref.pages[i], target) }))
+    for (const [i, e] of rows.entries()) if (!e.svg) writeDiff(name, e.p, { live: ref.pages[i]?.svg ?? '', data: run.pages[i].svg })
+    const n = key => rows.filter(e => e[key]).length
+    const left = { skipped: run.skipped.join('\n') === ref.skipped.join('\n'), states: run.states === ref.states, drawn: run.drawn === ref.drawn }
+    const reads = readsOf(run.drawStats, run.counts)
+    const st = run.drawStats
+    const ok = rows.length === ref.pages.length && rows.length > 0 && KEYS.every(k => n(k) === rows.length) && left.skipped && left.states && left.drawn && ref.drawStats === null && reads === null && !errors.length
+    if (!ok) failures.push(name)
+    const px = st ? Object.values(st.pixels) : []
+    const why = k => px.filter(v => v === k).length
+    const line = `${rows.length} pages asked in order: SVG ${n('svg')}/${rows.length} equal, words ${n('words')}, links ${n('links')}, copy ${n('copy')}, records ${n('recs')}; units left ${left.skipped ? 'equal' : 'NOT equal'}, states ${left.states ? 'equal' : 'NOT equal'}, units drawn ${run.drawn}${left.drawn ? '' : ` NOT the reference's ${ref.drawn}`}; read from their draws ${st?.data.length ?? 0}, live ${st?.live.length ?? 0}${st?.refused.length ? ` (refused ${st.refused.join(' ')})` : ''}${st?.late.length ? ` (late ${st.late.join(' ')})` : ''}, pixels read ${px.length} (asked ${why('asked')}, freeFor ${why('freeFor')}, paperTo ${why('paperTo')}, crop ${why('crop')}, names ${why('names')}, paint ${why('paint')}), lays again ${st?.retries ?? 0}, draws read in ${Math.round(st?.ms ?? 0)} ms; PDF.js's reads ${reads ?? 'as the run tells them'}; no draw on ${cut.none.length}${cut.none.length ? ` (${cut.none.slice(0, 6).join(' ')})` : ''}, shed ${cut.shed.length}, left parts ${(cut.raw / 1024).toFixed(0)} KiB (${(cut.gz / 1024).toFixed(0)} KiB gzip)${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
+    return { name, door: true, ok, ready: true, line, pages: rows, left, stats: st, reads, cut }
+  } finally { doneWith(name) }
+}
+/** --door-draw=jump: a task of a fixture's pages, each asked first and alone in a fresh load (every part told at the open) with drawOf,
+ *  against the pages reference; J; with --link over the modelled link, with --perf the time */
+async function doorDrawJump(page, key, errors) {
+  const { name, pages } = JUMP_TASKS.get(key)
+  const { target } = nameOf(name)
+  try {
+    await drawCutOf(name)
+    const ref = await drawRefOf(page, name, jumpPagesOf(name).at(-1))
+    const out = []
+    for (const p of pages) {
+      await openDoorPage(page, 'doordraw')
+      const r = await page.evaluate(x => window.doorDraw.jump(x), { name, target, rules: '/rules/layout-rules.json', page: p, perf: PERF, link: LINK, draw: !DRAW_OFF })
+      out.push({ p, ...sameAs(r, ref.pages[p - 1], target), j: r.j, closure: r.closure, reads: readsOf(r.j.drawStats, r.j.counts), ...(r.ms ? { ms: r.ms, longest: r.longest } : {}) })
+    }
+    const n = k => out.filter(e => e[k]).length
+    const ok = out.length === pages.length && KEYS.every(k => n(k) === out.length) && out.every(e => e.closure.within && (DRAW_OFF || e.reads === null)) && !errors.length
+    if (!ok) failures.push(key)
+    const detail = out.map(e => {
+      const st = e.j.drawStats ?? { data: [], live: [], pixels: {}, retries: 0 }
+      return `p${e.p}${e.ms ? ` ask ${secondsOf(e.ms.ask)} s (open ${secondsOf(e.ms.open)} s), longest task ${e.longest} ms,` : ''} read ${st.data.length} from data (${st.data.join(' ')}) and ${st.live.length} live, pixels ${Object.entries(st.pixels).map(([q, w]) => `${q}:${w}`).join(' ') || 'none'}, lays again ${st.retries}, ${e.j.units} units laid${e.j.link ? `, the link ${(e.j.link.bytes / 1e6).toFixed(2)} MB in ${e.j.link.asked} asks` : ''}${e.reads ? `; ${e.reads}` : ''}`
+    }).join('; ')
+    const line = `${out.length} pages asked first and alone${LINK ? ` over ${LINK[0]} ms and ${(LINK[1] / 1e6).toFixed(1)} MB/s` : ''}: SVG ${n('svg')}/${out.length} equal, words ${n('words')}, links ${n('links')}, copy ${n('copy')}, records ${n('recs')}; ${detail}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
     return { name, key, door: true, ok, ready: true, line, pages: out }
   } finally { doneWith(name) }
 }
@@ -1262,6 +1458,26 @@ if (DOOR_JUMP !== null) {
   const stats = xs => `${(xs.reduce((a, x) => a + x, 0) / Math.max(1, xs.length)).toFixed(1)} on average, ${Math.max(0, ...xs)} at most`
   const longest = all.filter(e => e.longest !== undefined).map(e => e.longest)
   console.log(`\ndoor-jump (${DOOR_JUMP}): ${new Set(ran.map(r => r.name)).size} outputs, ${all.length} pages each asked first and alone in a fresh load: SVG markup equal to the page asked in order on ${count('svg')}, the word tables on ${count('words')}, the link records on ${count('links')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; J: pages drawn ${stats(drawn)}, units laid ${stats(units)}; closure: ${all.some(e => e.closure) ? `J within Need(p) on ${all.filter(e => e.closure?.within).length}/${all.length} (Need drew ${stats(all.filter(e => e.closure).map(e => e.closure.draw.length))} pages)` : 'n/a'}${longest.length ? `; the longest task of 50 ms or more a page: ${Math.max(0, ...longest)} ms at most` : ''}; ${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`)
+  process.exit(failures.length || new Set(ran.map(r => r.name)).size !== asked.length ? 1 : 0)
+}
+if (DOOR_DRAW !== null) {
+  const ran = [...results.values()].sort((a, b) => (a.key ?? a.name).localeCompare(b.key ?? b.name))
+  const all = ran.flatMap(r => r.pages ?? [])
+  const count = key => all.filter(e => e[key]).length
+  const made = new Date().toISOString()
+  const file = join(ROOT, 'out/layer-gate', `door-draw-${(engineInfo.commit ?? 'none').slice(0, 8)}${engineInfo.dirty ? '+' : ''}-${made.replace(/[:.]/g, '-')}.json`)
+  writeFileSync(file, JSON.stringify({ schema: 1, made, seconds, engine: engineInfo, inputs: { ...inputs, doorDraw: DOOR_DRAW, link: LINK }, fixtures: Object.fromEntries(ran.map(r => [r.key ?? r.name, r])) }))
+  const done = `${failures.length ? `${failures.length} failed (${failures.join(' ')})` : 'none failed'}, in ${seconds} s; the run in ${file}`
+  if (DRAW_MODE === 'inputs') {
+    const sum = k => ran.reduce((n, r) => n + (Array.isArray(r.inputs?.[k]) ? r.inputs[k].length : (r.inputs?.[k] ?? 0)), 0)
+    console.log(`\ndoor-draw (inputs): ${ran.length} papers, ${sum('pages')} pages, ${sum('compared')} read from their draws and live in Chromium: the characters and Link annotations equal on ${sum('equal')} (${sum('chars')} characters, ${sum('nu')} no reading of their glyph, ${sum('links')} Link annotations)${sum('zeroSign') ? ` (${sum('zeroSign')} numbers equal but the sign of zero)` : ''}, differing on ${sum('differ')}${sum('overlaidLost') ? ` (${sum('overlaidLost')} links with no overlaid text in the draws: read on pdf-lite's worker with TEXT_GUARD on, FAIL)` : ''}; no draw on ${sum('none')} (${ran.flatMap(r => r.inputs?.none.map(x => `${nameOf(r.name).paper}:${x}`) ?? []).slice(0, 12).join(' ') || 'none'}); ${done}`)
+  } else if (DRAW_MODE === 'pages') {
+    const st = k => ran.reduce((n, r) => n + (r.stats?.[k]?.length ?? 0), 0)
+    console.log(`\ndoor-draw (pages): ${ran.length} outputs, ${all.length} pages asked in order, drawn from their draws against the same door reading every page live: SVG markup equal on ${count('svg')}, the word tables on ${count('words')}, the link records on ${count('links')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left, states and units drawn equal on ${ran.filter(r => r.left?.skipped && r.left.states && r.left.drawn).length} outputs; pages read from data ${st('data')}, live ${st('live')}, refused ${st('refused')}, late ${st('late')}; PDF.js's reads as the run tells them on ${ran.filter(r => r.reads === null).length} outputs; ${done}`)
+  } else {
+    const ask = all.filter(e => e.ms).map(e => e.ms.ask)
+    console.log(`\ndoor-draw (${DOOR_DRAW}${LINK ? `, link ${LINK[0]} ms ${(LINK[1] / 1e6).toFixed(1)} MB/s` : ''}): ${new Set(ran.map(r => r.name)).size} outputs, ${all.length} pages each asked first and alone: SVG markup equal to the page asked in order on ${count('svg')}, the word tables on ${count('words')}, the link records on ${count('links')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; pages read from data ${all.reduce((n, e) => n + (e.j.drawStats?.data.length ?? 0), 0)}, live ${all.reduce((n, e) => n + (e.j.drawStats?.live.length ?? 0), 0)}, pixels read ${all.reduce((n, e) => n + Object.keys(e.j.drawStats?.pixels ?? {}).length, 0)}; closure held on ${all.filter(e => e.closure?.within).length}/${all.length}; PDF.js's reads as the run tells them on ${all.filter(e => e.reads === null).length}/${all.length}${ask.length ? `; the ask ${(ask.reduce((a, b) => a + b, 0) / ask.length / 1000).toFixed(2)} s on average, ${(Math.max(...ask) / 1000).toFixed(2)} s at most` : ''}; ${done}`)
+  }
   process.exit(failures.length || new Set(ran.map(r => r.name)).size !== asked.length ? 1 : 0)
 }
 if (DOOR !== null) {

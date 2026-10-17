@@ -226,6 +226,8 @@ export declare function learnCite(p: Placeholder, g: Gap, citeMap: CiteMap | nul
 export declare function displayTouched(res: Prepared, uc: readonly Char[]): Set<string>
 /** a crop grown over the ink it touches */
 export declare function growCrop(r: { crop: number[]; [more: string]: unknown }, ink: InkMap | undefined, toDev: ToDev, k: number, pageChars?: readonly Char[]): void
+/** whether growCrop grows a crop, and so reads its page's ink: a crop with a box, not one cut from a layout file's segment */
+export declare const cropGrows: (r: { crop?: number[] | null; gap?: { box?: unknown } | null } | null | undefined) => boolean
 export declare function nearIn(letters: string, hay: string, src?: string): boolean
 /** a page character's key: page|item|k */
 export declare const charKey: (c: { page?: number; item: number; k: number }) => string

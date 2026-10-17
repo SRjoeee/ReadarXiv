@@ -12,7 +12,7 @@ import * as pdfjs from 'pdfjs-dist'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 export { pdfjs }
-const PDF_ASSETS = { cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
+export const PDF_ASSETS = { cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
 /** device pixels a PDF unit: the gate's, v0's canvases at scale 2.5 and dpr 1 */
 export const K = 2.5
 export const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return new Uint8Array(await r.arrayBuffer()) }
@@ -46,12 +46,12 @@ export async function canvasOfPng(b) {
 }
 export const pixelsOf = async c => ({ W: c.width, H: c.height, sha: await digest(c.getContext('2d').getImageData(0, 0, c.width, c.height).data) })
 /** one slice a face: its whole file over its coverage (the host's faceSources, the simplest plan) */
-async function faceSourcesOf() {
+export async function faceSourcesOf() {
   const [{ FACES }, { COVERAGE }] = await Promise.all([import('/engine/rules/font-roles.mjs'), import('/engine/rules/font-coverage.mjs')])
   return async id => (FACES[id] && COVERAGE[id] ? [{ url: `/fonts/${encodeURIComponent(FACES[id].file)}`, ranges: COVERAGE[id] }] : null)
 }
-const hyphUrl = lang => `/hyph/${lang}.json`
-async function ruleSetOf(url) {
+export const hyphUrl = lang => `/hyph/${lang}.json`
+export async function ruleSetOf(url) {
   return url ? (await (await import('/engine/rules/layout.mjs')).readRules(await bytes(url))).set : null
 }
 /** the reader's document: arXiv's bytes, their fingerprint the bundle's, followed by the bundle's add-on */
