@@ -1,6 +1,6 @@
 // reader-view.mjs's types: the one reading view both readers run (docs/PDF-READER.md §11.7). Browser; no extension module
 // and no pdfjs-dist: PDF.js is the host's kit, so every PDF.js type here is structural
-import type { LayerDocument } from '../layer-proto/reader.mjs'
+import type { LayerDocument, LinkRecord } from '../layer-proto/reader.mjs'
 import type { OutlineEntry } from './outline'
 
 export type Side = 'left' | 'right'
@@ -39,8 +39,14 @@ export interface PdfJsKit {
 /** the look the view reads: the highlight on or off. The rest is the host's sheet (the panes swapped, dimmed pages, the
  *  theme, the highlight's colour), held here so that one object carries the reader's look */
 export interface ViewPrefs { swapped: boolean; dimPages: boolean; theme: 'light' | 'dark'; highlight: boolean }
-/** the names the view gives to assistive technology, in the interface's language, read again on <html lang> */
-export interface ViewWords { pageName(side: Side, page: number): string; sideName(side: Side): string }
+/** the names the view gives to assistive technology, in the interface's language, read again on <html lang>. `linkName`: a
+ *  link of the layer with no glyph under it (an image, a symbol), by where it goes; absent, or '' for one, the view's
+ *  placeholder (links.mjs LINK_NAME_PLACEHOLDER) */
+export interface ViewWords {
+  pageName(side: Side, page: number): string
+  sideName(side: Side): string
+  linkName?(to: { url: string } | { internal: true }): string
+}
 export interface ViewClock {
   now(): number
   frame(cb: () => void): number
@@ -72,6 +78,9 @@ export interface ReaderView {
   dropOriginal(task: DocumentTask): boolean
   /** the original's bytes, read through its document (a ranged one reads the rest); null with none */
   originalData(): Promise<Uint8Array> | null
+  /** the original's bytes all in, as its document loads them of itself (nothing asked for them, unlike originalData, which
+   *  asks for every byte not yet in: one more read of what a stream is still bringing); null with none */
+  originalLoaded(): Promise<void> | null
   /** the display applied; never written to the host's preferences */
   setDisplay(d: Display): void
   setSync(on: boolean): void
@@ -161,6 +170,8 @@ export interface Internals {
   readonly assets: Readonly<Record<string, unknown>>
   /** the page at the reading line of the pane read and the line's height on it (PDF units, y up); null with none */
   reading(): { page: number; y: number | null } | null
+  /** the right's page at the middle of its view (0 with no places, or the pane out of the display) */
+  centre(): number
   words: ViewWords
   dpr(): number
   clock: ViewClock
@@ -182,6 +193,9 @@ export interface Internals {
   /** the view's one layer side, disposed first by the view's own dispose; a second while one lives throws */
   attach(side: { dispose(): void }): () => void
   emit(event: ViewEvent): void
+  /** the links of the layer's page `n` over its place (links.mjs linkLayer, over the place's viewport): followed inside the
+   *  paper on the right pane, out of it through the host; null where none can be carried */
+  links(n: number, records: readonly LinkRecord[] | null | undefined): HTMLDivElement | null
   /** a unit, or one of its sentences, lit as the pointer would light it (-1 for the whole); null for nothing */
   light(id: number | null, s?: number): void
 }

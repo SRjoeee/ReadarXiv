@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { whenVisible } from '@/pdf-reader/visible'
+import { shownAgain, whenVisible } from '@/pdf-reader/visible'
 
 const state = (v: 'visible' | 'hidden') => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v })
 afterEach(() => state('visible'))
@@ -38,5 +38,26 @@ describe("whenVisible: nothing unseen takes resources (Part 2's final review)", 
     document.dispatchEvent(new Event('visibilitychange'))
     document.dispatchEvent(new Event('visibilitychange'))
     expect(run).toHaveBeenCalledOnce()
+  })
+})
+
+describe('shownAgain: the run\'s polls wait for a hidden tab', () => {
+  it('at once where shown; else once shown again; rejected by the abort, its listener gone', async () => {
+    await expect(shownAgain(document, new AbortController().signal)).resolves.toBeUndefined()
+    state('hidden')
+    let done = false
+    const p = shownAgain(document, new AbortController().signal).then(() => { done = true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await Promise.resolve()
+    expect(done).toBe(false)
+    state('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await p
+    expect(done).toBe(true)
+    state('hidden')
+    const ac = new AbortController()
+    const q = shownAgain(document, ac.signal)
+    ac.abort()
+    await expect(q).rejects.toMatchObject({ name: 'AbortError' })
   })
 })

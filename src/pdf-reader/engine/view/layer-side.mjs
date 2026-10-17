@@ -158,8 +158,9 @@ export function createLayerSide(view, o) {
     if (f.refused) return refuse(f.refused)
     if (!f.index) return
     if (!index) indexed(f.index)
-    // the original open before the first open: the extension's base check digests the bytes it holds (the web's is bound by
-    // its route). Once a door is open, a dropped original stops nothing: the door reads the composed document
+    // the original open before the first open: the places are its pages, and the extension's base check reads its bytes or
+    // its end (the web's is bound by its route). Once a door is open, a dropped original stops nothing: the door reads the
+    // composed document
     if (!V.left.doc() && !counts.opens) return
     if (bound === null) {
       state = 'opening'
@@ -249,7 +250,7 @@ export function createLayerSide(view, o) {
     emitLayer()
     for (const p of wantsBefore) want(p)
     wantsBefore.clear()
-    for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) ask(n)
+    for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) askSoon(n)
   }
 
   // ---------------------------------------------------------------- the rows
@@ -260,8 +261,8 @@ export function createLayerSide(view, o) {
 
   // ---------------------------------------------------------------- the pages (§2.3)
   /** each page's record, scalars and the elements of a near laid page only: its ask (and its clock), what its place shows of
-   *  the layer (`content`: its wrapper, SVG, copy and k, the door's generation it was drawn from; or `wrap` null for an empty
-   *  element, retired), whether it failed or stalled, a copy under way */
+   *  the layer (`content`: its wrapper — the copy, the SVG and the page's links —, SVG, copy and k, the door's generation it was
+   *  drawn from; or `wrap` null for an empty element, retired), whether it failed or stalled, a copy under way */
   const pages = new Map()
   const rec = n => { let P = pages.get(n); if (!P) { P = { ask: null, clock: 0, content: null, failed: false, stalled: false, copying: false, again: false }; pages.set(n, P) } return P }
   let ready = 0, failed = 0, stalls = 0
@@ -320,15 +321,73 @@ export function createLayerSide(view, o) {
     P.content = null
     V.places.restore(n)
   }
-  /** a laid page far from the view: its SVG and copy let go, an empty element in its place (no page view made of it) */
+  /** the laid pages far from the view kept for the focus inside them (a link, or the place a jump gave it to): retiring one
+   *  would take the focused element out of the document, and the focus with it to the document's body. Each is retired once
+   *  the focus has left it, if it is far still */
+  const keptForFocus = new Set()
+  const holdsFocus = n => { const div = V.places.page(n), at = document.activeElement; return !!div && !!at && at !== document.body && div.contains(at) }
+  /** a page far from the view let go as the near handler lets it go: retired where this door laid it, else back to its own
+   *  content; held instead while it holds the focus */
+  function farGone(n) {
+    const c = pages.get(n)?.content
+    if (!c?.wrap) return
+    if (holdsFocus(n)) { keptForFocus.add(n); return }
+    if (c.gen === gen) retire(n); else unlay(n)
+  }
+  // The focus's move read a task later, never in a microtask: on a native Tab Chromium clears the focus, tells focusout and
+  // runs its microtasks before the focus arrives at the next element, so a microtask's look sees <body> and would let go
+  // the very page the focus is moving to. A focusout whose related target is inside a held page asks nothing
+  let focusCheck = 0
+  const focusMoved = () => {
+    if (focusCheck || disposed) return
+    focusCheck = clock.later(() => {
+      focusCheck = 0
+      if (disposed) return
+      for (const n of [...keptForFocus]) {
+        if (holdsFocus(n)) continue
+        keptForFocus.delete(n)
+        if (!V.places.near(n)) farGone(n)
+      }
+    }, 0)
+  }
+  document.addEventListener('focusin', () => { if (keptForFocus.size) focusMoved() }, { capture: true, signal: ac.signal })
+  document.addEventListener('focusout', e => {
+    if (!keptForFocus.size) return
+    const to = e.relatedTarget
+    if (to instanceof Node && [...keptForFocus].some(n => V.places.page(n)?.contains(to))) return
+    focusMoved()
+  }, { capture: true, signal: ac.signal })
+  /** a laid page far from the view: its SVG and copy let go, an empty element in its place (no page view made of it); one
+   *  that holds the focus is kept until the focus leaves it (keptForFocus) */
   function retire(n) {
     const P = rec(n)
     if (P.content && !P.content.wrap) return
+    if (holdsFocus(n)) { keptForFocus.add(n); return }
+    keptForFocus.delete(n)
     const was = P.content
     P.content = { wrap: null, svg: null, copy: null, k: 0, gen }
     if (V.places.swap(n, empty(), { blank: true })) counts.retired++
     else P.content = null
     release(was?.copy)
+  }
+  /** the near pages to ask, asked together once the places told have all been heard: the farthest from the page in the
+   *  middle of the view first and that page last, the door laying the newest ask first (D1), so that the page the reader is
+   *  looking at is laid first; the door takes the others in the order asked, so at an equal distance the page ahead is
+   *  asked first, and laid next. Asked in page order, a jump to page 20 laid 21, then 19, then 20 */
+  const toAsk = new Set()
+  let askQueued = false
+  function askSoon(n) {
+    toAsk.add(n)
+    if (askQueued) return
+    askQueued = true
+    queueMicrotask(() => {
+      askQueued = false
+      if (disposed) { toAsk.clear(); return }
+      const c = V.centre(), far = n => (c ? Math.abs(n - c) : -n)
+      const order = [...toAsk].sort((a, b) => far(b) - far(a) || b - a)
+      toAsk.clear()
+      for (const p of order) ask(p)
+    })
   }
   /** a near page asked of the door (once a door), unless it shows this door's layer */
   function ask(n) {
@@ -428,7 +487,9 @@ export function createLayerSide(view, o) {
     got.canvas.setAttribute('aria-hidden', 'true')
     const wrap = document.createElement('div')
     wrap.className = 'axt-layer'
-    wrap.append(got.canvas, laid.svg)
+    // its links over the drawing, in the place's coordinates: one element, sized by shares of the page, which no zoom moves
+    const links = V.links(n, laid.links)
+    wrap.append(got.canvas, laid.svg, ...(links ? [links] : []))
     const was = P.content
     if (!V.places.swap(n, wrap)) { release(got.canvas); return }
     release(was?.copy)
@@ -475,13 +536,14 @@ export function createLayerSide(view, o) {
       if (on) {
         // a page whose layer failed or was let go asked again on coming near
         rec(n).failed = false
-        ask(n)
+        askSoon(n)
       } else {
+        toAsk.delete(n)
         abortAsk(n)
         rearm.delete(n)
-        // a page this door laid is retired; a drawing kept from an earlier door goes, the place back to its own content
-        const c = pages.get(n)?.content
-        if (c?.wrap) { if (c.gen === gen) retire(n); else unlay(n) }
+        // a page this door laid is retired; a drawing kept from an earlier door goes, the place back to its own content; either
+        // held while it holds the focus (farGone)
+        farGone(n)
       }
       windowed()
     }),
@@ -506,7 +568,7 @@ export function createLayerSide(view, o) {
     V.onScrolled(() => {
       if (disposed) return
       // the pages given up at PAGE_MS asked again, where they are near
-      if (rearm.size) { const again = [...rearm]; rearm.clear(); for (const n of again) { abortAsk(n); ask(n) } }
+      if (rearm.size) { const again = [...rearm]; rearm.clear(); for (const n of again) { abortAsk(n); askSoon(n) } }
       headingSoon()
     }),
     V.onOriginal(s => {

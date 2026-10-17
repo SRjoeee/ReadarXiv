@@ -101,9 +101,10 @@ export function ServiceMenu({ controller }: { controller: ReaderController }) {
 /** `wide`: the bar's, which leaves it in a narrow window for the reading options' own (reader.css data-wide) */
 export function DownloadMenu({ controller, wide = false }: { controller: ReaderController; wide?: boolean }) {
   // the original only once its document is open: loading, or after a fetch that failed, there are no bytes to give
-  const state = useReader(controller, s => ({ finalReady: s.finalReady, original: s.sides.left.pages > 0 }))
+  // the translation once there is one to give (the layer exported, Task 20); until then the original alone
+  const state = useReader(controller, s => ({ translation: s.download === 'translation', original: s.sides.left.pages > 0 }))
   const pop = usePopover('menu')
-  const items = [{ id: 'translation', name: R.download.translation, disabled: !state.finalReady }, { id: 'original', name: R.download.original, disabled: !state.original }]
+  const items = [{ id: 'translation', name: R.download.translation, disabled: !state.translation }, { id: 'original', name: R.download.original, disabled: !state.original }]
   return (
     <>
       <ToolbarButton label={R.download.name} anchor={pop.anchor} {...pop.trigger} data-wide={wide || undefined}>

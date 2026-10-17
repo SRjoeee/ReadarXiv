@@ -248,6 +248,24 @@ describe('the real door: target-first laying (1b-D1, #380)', () => {
     expect(s.side.rowsFor(99)).toEqual([])
   })
 
+  it('a jump: the page in the middle of the view is laid first, then the one after it, then the one before (its near pages asked farthest first, it last)', async () => {
+    const { s, index, refs } = await eight()
+    s.side.tell(refs)
+    s.side.take(rowsOfIndex(index))
+    s.side.end()
+    await still(s)
+    // the right pane put with page 6 in the middle of its view, as a jump there leaves it
+    const page = (n: number) => s.panes.right.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')[n - 1] as HTMLElement
+    s.panes.right.scrollTop = page(6).offsetTop + page(6).offsetHeight / 2 - s.panes.right.clientHeight / 2
+    await macrotask()
+    const laid: number[] = []
+    s.layer()?.onPage((p, st) => { if (st === 'ready') laid.push(p) })
+    await nearOn(s, [5, 6, 7])
+    await still(s)
+    expect(laid.slice(0, 3)).toEqual([6, 7, 5])
+    for (const n of [5, 6, 7]) expect(content(s, n), `page ${n}`).toBe('layer')
+  })
+
   it('a fast scroll: asks made and let go leave no ask and no place in between, the page reached laid; an ask let go is dropped', async () => {
     const { s, index, refs } = await eight()
     s.side.tell(refs)
@@ -341,5 +359,36 @@ describe('the real door: (e) documents, (f) one open layer a page', () => {
     await macrotask()
     await macrotask()
     expect(s.destroyed.sort()).toEqual(['destroy composed 0', 'destroy composed 1', 'destroy composed 2'])
+  })
+})
+
+describe('the real door: the laid page\'s links (3b)', () => {
+  it('the engine\'s records over the place: one link each in the records\' reading order, named by them as text, a glyphless one by the placeholder; followed on the left\'s document', async () => {
+    const { LINK_NAME_PLACEHOLDER, linkRecords } = await import('@/pdf-reader/engine/view/links.mjs')
+    const m = await M()
+    const s = await real()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(rowsOfIndex(m.index))
+    s.side.end()
+    await still(s)
+    expect(content(s, 1)).toBe('layer')
+    const laid = await (s.layer() as NonNullable<ReturnType<Setup['layer']>>).pageOf(1, { lang: 'zh' })
+    const records = linkRecords(laid.links)
+    // the paper's page 1 carries a citation link a unit, moved over the drawing, and the margin's link in place with no glyph
+    expect(records.some(r => r.dest !== undefined)).toBe(true)
+    expect(records.some(r => r.url !== undefined && r.name === '')).toBe(true)
+    const a = [...(layerOf(s, 1)?.querySelectorAll<HTMLAnchorElement>('.axt-links > a.axt-link') ?? [])]
+    expect(a.length).toBe(records.length)
+    expect(a.map(x => x.getAttribute('aria-label'))).toEqual(records.map(r => r.name || (r.url !== undefined ? LINK_NAME_PLACEHOLDER.external : LINK_NAME_PLACEHOLDER.internal)))
+    expect(a.map(x => x.getAttribute('href'))).toEqual(records.map(r => r.url ?? `#${encodeURIComponent(r.dest as string)}`))
+    expect(a.every(x => x.querySelectorAll(':scope > span.axt-link-box').length >= 1 && x.textContent === '')).toBe(true)
+    // a citation followed: its name looked up on the left's document, never the layer's
+    const left = (await s.original?.promise) as unknown as { getDestination: (n: string) => Promise<unknown[] | null> }
+    const asked: string[] = []
+    left.getDestination = async n => { asked.push(n); return null }
+    a.find(x => x.getAttribute('href')?.startsWith('#'))?.click()
+    await macrotask()
+    expect(asked).toEqual([records.find(r => r.dest !== undefined)?.dest])
   })
 })

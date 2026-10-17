@@ -6,7 +6,11 @@ import { ENGLISH_FAMILIES, FACES, rolesFor } from '@/pdf-reader/engine/rules/fon
 import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 import { BUILTIN_RULES, type FrozenRuleSet, parseRules, RULES_CAP, RULES_FIELDS, RULES_SCHEMA, RULES_VALUES, RulesRefusal, readRules, resolveRules, SCRIPTS, TARGETS, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 import { babelTags } from '@/pdf-reader/engine/pipeline/scripts.mjs'
-import { VERIFIED } from '@/pdf-reader/session/verified.mjs'
+import { toBcp47 } from '@/config/languages'
+import { READER_LANGUAGES } from '@/pdf-reader/ui/languages'
+
+/** the languages the extension's reader offers, as tags (its menu, ui/languages.ts) */
+const VERIFIED = READER_LANGUAGES.map(toBcp47)
 
 // The layout rule set (rules/layout.mjs, the rules-as-data plan §2): its built-in copy, its resolution to the fields v0 reads,
 // and the refusals of a set read as data. Every value the migration moved out of the engine's code is held here against the
@@ -108,9 +112,8 @@ describe('the built-in set', () => {
     expect(text(BUILTIN_FILE).length).toBeLessThan(RULES_CAP / 4)
   })
 
-  it('requires every target either reader offers: every language the extension\'s reader typesets (VERIFIED) is one of TARGETS', () => {
-    // (compared by language and script, as scripts.mjs verified does: VERIFIED says zh-Hant where the extension's tag, and the
-    // set's, is zh-TW)
+  it('requires every target either reader offers: every language the extension\'s reader offers is one of TARGETS', () => {
+    // (compared by language and script, a tag as another spelling of it may come: zh-Hant for zh-TW)
     const key = (tag: string) => { const l = new Intl.Locale(tag).maximize(); return `${l.language}-${l.script}` }
     const required = new Set(TARGETS.map(key))
     for (const v of VERIFIED) expect(required.has(key(v)), `${v} is verified but a set may omit it`).toBe(true)
@@ -282,7 +285,7 @@ describe('the labels: babel 26.12\'s [captions], the floats\' and the generated 
 
   it('every target the reader typesets has the names babel gives it, found by the tags the final\'s babel tries', () => {
     // (the TeX path's own tag for Traditional Chinese, zh-Hant, is the reader's target zh-TW: the set keeps its names there)
-    for (const lang of [...VERIFIED, 'zh-TW']) {
+    for (const lang of [...VERIFIED, 'zh-Hant']) {
       const labels = resolveRules(BUILTIN_RULES, lang === 'zh-Hant' ? 'zh-TW' : lang).labels
       expect(labels, lang).not.toBeNull()
       const tag = babelTags(lang).find(t => Object.hasOwn(BABEL, t))

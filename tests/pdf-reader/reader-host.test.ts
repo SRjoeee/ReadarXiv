@@ -1,14 +1,55 @@
-// The extension's host of the reading view (session/host.ts; docs/PDF-READER.md §11.7): the look it reads of the
-// settings, and the display a reader opens in. PDF.js is not loaded here: the host's kit is checked in a real browser by
-// pnpm e2e:reader's development entry
-import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_CONFIG } from '@/config/schema'
+// The extension's PDF reader, its session (session/host.ts openReader; docs/PDF-READER.md §11.7, Stage 5 Tasks 9 and 12): the
+// look it reads of the settings, the display a reader opens in, the settings written through the surface and followed as they
+// land, the paper's version and title from its abstract page, and the run started once a translated display is shown. PDF.js
+// and the view are stand-ins here: the view is its own file's to test (reader-view.test.ts), the run run.test.ts's, and the
+// real page e2e:reader's
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import type { SessionEvent } from '@/pdf-reader/session/events'
 
-vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, pdfjsLib: {} }))
-// the view itself is its own file's to test (reader-view.test.ts): here, what the host asks of it
-const view = vi.hoisted(() => ({ setDisplay: vi.fn(), setSync: vi.fn(), showOriginal: vi.fn(async () => 'opened'), dispose: vi.fn(), probe: vi.fn(() => ({})), originalData: vi.fn(() => null) }))
-vi.mock('@/pdf-reader/engine/view.mjs', () => ({ createReaderView: () => view }))
-const { displayFrom, layerTransport, openView, outward, prefsOf, readerHost } = await import('@/pdf-reader/session/host.ts')
+vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, pdfjsLib: { getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {} }) } }))
+const { displayFrom, openReader, outward, prefsOf } = await import('@/pdf-reader/session/host')
+const { abstractOf, ownVersion } = await import('@/pdf-reader/session/paper')
+
+/** the view as the host drives it: its commands recorded, its events the host's to hear */
+function fakeView() {
+  let host: { emit(e: unknown): void; prefs: { subscribe(l: (p: unknown) => void): () => void } } | null = null
+  const v = {
+    setDisplay: vi.fn((d: string) => host?.emit({ type: 'display', display: d })), setSync: vi.fn(), showOriginal: vi.fn(async () => 'opened'), dispose: vi.fn(),
+    probe: vi.fn(() => ({ sync: true })), originalData: vi.fn(() => null), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), goToUnit: vi.fn(), lead: vi.fn(), pinch: vi.fn(), setNarrow: vi.fn(),
+  }
+  return { v, make: (h: never) => { host = h; return v as never }, host: () => host }
+}
+/** the settings' surface as the host takes it: what it holds, the landings a test makes, the writes the host asked */
+function fakeSurface(stored: Config | null = DEFAULT_CONFIG, o: { refuse?: boolean } = {}) {
+  let config = stored, onLanded: ((c: Config, from: 'first' | 'own' | 'elsewhere' | 'refused') => void) | null = null
+  const writes: Config[] = []
+  const surface = {
+    start: () => () => {}, subscribe: () => () => {},
+    state: () => ({ config, revision: null, fallbackReason: null, resetFailed: false, pack: null }),
+    patch: async (change: (c: Config) => Config) => {
+      if (o.refuse) throw new Error('storage refused')
+      const next = change(config ?? DEFAULT_CONFIG)
+      writes.push(next)
+      config = next
+      onLanded?.(next, 'own')
+      return next
+    },
+  }
+  return { writes, make: (deps: { onLanded?: typeof onLanded }) => { onLanded = deps.onLanded ?? null; return surface as never }, land: (next: Config, from: 'elsewhere' | 'first' = 'elsewhere') => { config = next; onLanded?.(next, from) } }
+}
+const flush = async (n = 8) => { for (let i = 0; i < n; i++) await Promise.resolve() }
+async function opened(query = 'paper=2600.00001v1', o: { config?: Config; refuse?: boolean; fetch?: typeof fetch } = {}) {
+  const view = fakeView(), surface = fakeSurface(o.config ?? DEFAULT_CONFIG, o)
+  const events: SessionEvent[] = []
+  const run = vi.fn(() => ({ retry: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
+  const session = await openReader(
+    { left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams(query), emit: e => events.push(e), reading: { config: o.config ?? DEFAULT_CONFIG, fallbackReason: null } },
+    { view: view.make as never, surface: surface.make as never, store: null, run: run as never, fetch: o.fetch ?? (vi.fn(async () => new Response('', { status: 404 })) as never) },
+  )
+  return { session, view: view.v, surface, events, run }
+}
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('the host of the reading view', () => {
   it('reads the look of the settings: the panes swapped, the pages dimmed, the theme (the system\'s where asked), the highlight', () => {
@@ -18,178 +59,183 @@ describe('the host of the reading view', () => {
     expect(prefsOf(config, false).theme).toBe('light')
   })
 
-  it('opens in the display the address names, else the settings\'', () => {
+  it('opens in the display the address names, else, asked to translate, the translated display the settings name, else the settings\'', () => {
     const config = { ...DEFAULT_CONFIG, mode: 'only' as const, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false } }
     expect(displayFrom(new URLSearchParams('mode=original'), config)).toBe('original')
     expect(displayFrom(new URLSearchParams(''), config)).toBe('translation')
     expect(displayFrom(new URLSearchParams('mode=nonsense'), { ...config, pdfReader: { ...config.pdfReader, original: true } })).toBe('original')
+    expect(displayFrom(new URLSearchParams('ask=translate'), { ...config, mode: 'side', pdfReader: { ...config.pdfReader, original: true } })).toBe('bilingual')
   })
-})
 
-describe('a link out of the paper', () => {
-  it('opens only a web page or a mail address: no script, no data, no page of the browser\'s or the extension\'s', () => {
+  it('opens a link out of the paper only for a web page or a mail address: no script, no data, no page of the browser\'s or the extension\'s', () => {
     for (const ok of ['https://example.org/a?b#c', 'http://example.org', 'mailto:someone@example.org']) expect(outward(ok), ok).toBe(true)
     for (const no of ['javascript:alert(1)', 'data:text/html,<b>x</b>', 'chrome-extension://abc/options.html', 'chrome://settings', 'file:///etc/passwd', 'blob:https://x/1', 'not a url', '']) expect(outward(no), no).toBe(false)
   })
 })
 
-describe('the settings as they change elsewhere', () => {
-  it('reach the controller (the page\'s look is drawn from its state) and the view\'s preferences', () => {
-    let changed: (c: typeof DEFAULT_CONFIG) => void = () => {}
-    const emit = vi.fn()
-    const host = readerHost({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams(''), emit }, DEFAULT_CONFIG, '2600.00001', cb => { changed = cb; return () => {} })
-    const heard: unknown[] = []
-    host.prefs.subscribe(p => heard.push(p))
-    const next = { ...DEFAULT_CONFIG, theme: 'dark' as const, pdfReader: { ...DEFAULT_CONFIG.pdfReader, swapped: true } }
-    changed(next)
-    expect(emit).toHaveBeenCalledWith({ type: 'settings', config: next, pack: null })
-    expect(heard).toEqual([prefsOf(next, false)])
-    host.stop()
+describe('the run, once a translated display is shown (what is not seen takes no resources)', () => {
+  it('starts in a translated display, over the paper\'s version; not in the original until the reader chooses a translated one', async () => {
+    const a = await opened('paper=2600.00001v3')
+    await flush()
+    expect(a.run).toHaveBeenCalledTimes(1)
+    expect((a.run.mock.calls[0] as unknown[])[1]).toEqual({ id: '2600.00001', version: 3 })
+    const b = await opened('paper=2600.00001v3&mode=original')
+    await flush()
+    expect(b.run).not.toHaveBeenCalled()
+    b.session.setDisplay('bilingual')
+    await flush()
+    expect(b.run).toHaveBeenCalledTimes(1)
   })
 
-  const panes = () => ({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams('') })
-  it('a first read the page gave up on (no answer in its time) is read again, and the late answer followed', async () => {
-    const emit = vi.fn()
-    const stored = { ...DEFAULT_CONFIG, theme: 'dark' as const }
-    let answer: (r: { config: typeof DEFAULT_CONFIG; fallbackReason: null }) => void = () => {}
-    const read = vi.fn(() => new Promise<{ config: typeof DEFAULT_CONFIG; fallbackReason: null }>(r => { answer = r }))
-    const host = readerHost({ ...panes(), emit, reading: null }, DEFAULT_CONFIG, '2600.00001', () => () => {}, read)
-    const heard: unknown[] = []
-    host.prefs.subscribe(p => heard.push(p))
-    expect(read).toHaveBeenCalledTimes(1)
-    answer({ config: stored, fallbackReason: null })
-    await Promise.resolve(); await Promise.resolve()
-    expect(emit).toHaveBeenCalledWith({ type: 'settings', config: stored, pack: null })
-    // and the settings are no longer said to be unreadable
-    expect(emit).toHaveBeenCalledWith({ type: 'notice', why: null })
-    expect(heard).toEqual([prefsOf(stored, false)])
-    // a page whose first read answered reads nothing again
-    const again = vi.fn()
-    readerHost({ ...panes(), emit: vi.fn(), reading: { config: stored, fallbackReason: null } }, stored, 'x', () => () => {}, again).stop()
-    expect(again).not.toHaveBeenCalled()
-    host.stop()
+  it('an id with no version: the latest its abstract page lists, one request for it and the title', async () => {
+    const html = '<!doctype html><meta name="citation_title" content=" A Title "><div class="submission-history"><b>[v1]</b> Mon <a href="/abs/2600.00001v2">[v2]</a> Tue <strong>[v3]</strong></div>'
+    const fetch = vi.fn(async () => new Response(html, { status: 200 }))
+    const a = await opened('paper=2600.00001', { fetch: fetch as never })
+    await flush(20)
+    expect((a.run.mock.calls[0] as unknown[])[1]).toEqual({ id: '2600.00001', version: 3 })
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(fetch).toHaveBeenCalledWith('https://arxiv.org/abs/2600.00001', { credentials: 'omit', referrerPolicy: 'no-referrer' })
+    expect(abstractOf(html)).toEqual({ title: 'A Title', version: 3 })
+    expect(ownVersion('hep-th/9711200v2')).toEqual({ id: 'hep-th/9711200', version: 2 })
+    expect(ownVersion('2600.00001')).toBeNull()
   })
 
-  it('valid settings coming in clear the notice of unreadable ones', () => {
-    let changed: (c: typeof DEFAULT_CONFIG) => void = () => {}
-    const emit = vi.fn()
-    const host = readerHost({ ...panes(), emit, reading: { config: DEFAULT_CONFIG, fallbackReason: { kind: 'unknown' } } }, DEFAULT_CONFIG, 'x', cb => { changed = cb; return () => {} }, vi.fn())
-    changed({ ...DEFAULT_CONFIG, theme: 'light' })
-    expect(emit).toHaveBeenCalledWith({ type: 'notice', why: null })
-    host.stop()
+  it('no version to be had (arXiv\'s page not read): the bilingual version cannot be had now, the original stays', async () => {
+    const a = await opened('paper=2600.00001')
+    await flush(20)
+    expect(a.run).not.toHaveBeenCalled()
+    expect(a.events).toContainEqual({ type: 'unavailable', why: 'unreachable', retryAt: null })
+  })
+
+  it('an id with no version whose abstract page could not be read: a retry reads it again, and the run starts once arXiv answers (Devin on #390)', async () => {
+    let up = false
+    const html = '<!doctype html><meta name="citation_title" content="T"><div class="submission-history"><b>[v1]</b> <strong>[v2]</strong></div>'
+    const fetch = vi.fn(async (url: string) => {
+      if (String(url).includes('/abs/')) { if (!up) throw new TypeError('Failed to fetch'); return new Response(html, { status: 200 }) }
+      return new Response('', { status: 404 })
+    })
+    const a = await opened('paper=2600.00001', { fetch: fetch as never })
+    await flush(20)
+    expect(a.run).not.toHaveBeenCalled()
+    expect(a.events).toContainEqual({ type: 'unavailable', why: 'unreachable', retryAt: null })
+    up = true
+    a.session.retry()
+    await flush(30)
+    expect(a.run).toHaveBeenCalledOnce()
+    expect((a.run.mock.calls[0] as unknown[])[1]).toEqual({ id: '2600.00001', version: 2 })
+  })
+
+  it('a paper the layer cannot be had for: the original shown for the visit, the translated displays not chosen again; the HTML version said', async () => {
+    const a = await opened()
+    await flush()
+    const emit = ((a.run.mock.calls[0] as unknown[])[2] as { emit(e: unknown): void }).emit
+    emit({ type: 'unavailable', why: 'no-source', retryAt: null })
+    await flush()
+    expect(a.view.setDisplay).toHaveBeenLastCalledWith('original')
+    expect(a.events).toContainEqual({ type: 'html', url: null })
+    a.view.setDisplay.mockClear()
+    a.session.setDisplay('bilingual')
+    expect(a.view.setDisplay).not.toHaveBeenCalled()
+    // passing ones leave the display alone
+    const b = await opened()
+    await flush()
+    ;((b.run.mock.calls[0] as unknown[])[2] as { emit(e: unknown): void }).emit({ type: 'unavailable', why: 'unreachable', retryAt: null })
+    expect(b.view.setDisplay).not.toHaveBeenCalledWith('original')
+  })
+
+  it('asks arXiv for the paper\'s HTML version once a visit, however often the bilingual version cannot be had', async () => {
+    const fetch = vi.fn(async () => new Response('', { status: 404 }))
+    const a = await opened('paper=2600.00001v1', { fetch: fetch as never })
+    await flush()
+    const emit = ((a.run.mock.calls[0] as unknown[])[2] as { emit(e: unknown): void }).emit
+    for (let i = 0; i < 4; i++) emit({ type: 'unavailable', why: 'refused', retryAt: Date.now() + 1000 })
+    await flush(20)
+    const html = (fetch.mock.calls as unknown as [string][]).filter(([url]) => String(url).includes('/html/'))
+    expect(html).toHaveLength(1)
+    expect(a.events.filter(e => e.type === 'html')).toHaveLength(4)
+  })
+
+  it('the original\'s download opens arXiv\'s PDF in a tab of its own, with no opener: the browser streams and saves it, the reader reads none of it', async () => {
+    const opened_ = vi.fn(() => null)
+    vi.stubGlobal('open', opened_)
+    const a = await opened('paper=2600.00001v1')
+    a.session.openOriginal()
+    // the browser's viewer asked by the address, so that no reader is laid over the new tab; no opener, no referrer
+    expect(opened_).toHaveBeenCalledWith('https://arxiv.org/pdf/2600.00001v1#axt-viewer', '_blank', 'noopener,noreferrer')
+    expect(a.view.originalData).not.toHaveBeenCalled()
+    expect(await a.session.pdfBytes('translation')).toBeNull()
+  })
+
+  it('asks the prepare once a visit, whatever the runs', async () => {
+    const a = await opened()
+    await flush()
+    const may = ((a.run.mock.calls[0] as unknown[])[2] as { mayPrepare(): boolean }).mayPrepare
+    expect([may(), may(), may()]).toEqual([true, false, false])
   })
 })
 
-describe('the view opened on a first read given up on', () => {
-  const late = { ...DEFAULT_CONFIG, mode: 'only' as const, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false, sync: false } }
-  const open = (read: () => Promise<{ config: typeof DEFAULT_CONFIG; fallbackReason: null }>) => openView({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams('paper=2600.00001'), emit: vi.fn(), reading: null }, { watch: () => () => {}, read })
-  it('takes the display and the sync of the late answer, where the reader has not chosen them meanwhile', async () => {
-    view.setDisplay.mockClear(); view.setSync.mockClear()
-    open(async () => ({ config: late, fallbackReason: null }))
-    expect(view.setDisplay.mock.calls).toEqual([['bilingual']])
-    expect(view.setSync.mock.calls).toEqual([[true]])
-    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
-    expect(view.setDisplay.mock.calls.at(-1)).toEqual(['translation'])
-    expect(view.setSync.mock.calls.at(-1)).toEqual([false])
+describe('the settings, written and followed', () => {
+  it('a display or a sync chosen here is written through the surface; a write that goes through is said, one refused told', async () => {
+    const a = await opened()
+    a.session.setDisplay('translation')
+    a.session.setSyncMode('off')
+    await flush(20)
+    expect(a.surface.writes.map(c => [c.mode, c.pdfReader.original, c.pdfReader.sync])).toEqual([['only', false, true], ['only', false, false]])
+    expect(a.events.filter(e => e.type === 'saved').length).toBe(2)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const b = await opened('paper=2600.00001v1', { refuse: true })
+    b.session.patchSettings(c => ({ ...c, theme: 'dark' }))
+    await flush(20)
+    expect(b.events).toContainEqual({ type: 'refused' })
   })
 
-  it('keeps what the reader chose before the late answer came', async () => {
-    view.setDisplay.mockClear(); view.setSync.mockClear()
-    let answer: (r: { config: typeof DEFAULT_CONFIG; fallbackReason: null }) => void = () => {}
-    const session = open(() => new Promise(r => { answer = r }))
+  it('settings that land from elsewhere reach the controller and the view\'s look, and move the display and the sync by settings.ts\'s rule', async () => {
+    const a = await opened()
+    const changed = { ...DEFAULT_CONFIG, theme: 'dark' as const, mode: 'only' as const, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false, sync: false } }
+    a.surface.land(changed)
+    expect(a.events).toContainEqual({ type: 'settings', config: changed, pack: null })
+    expect(a.view.setDisplay).toHaveBeenLastCalledWith('translation')
+    expect(a.view.setSync).toHaveBeenLastCalledWith(false)
+    // a display chosen here is written, and a later change made elsewhere is followed as any is (the shipped reader's rule)
+    a.session.setDisplay('bilingual')
+    await flush(20)
+    a.surface.land({ ...changed, mode: 'side', pdfReader: { ...changed.pdfReader, original: true, sync: false } })
+    expect(a.view.setDisplay).toHaveBeenLastCalledWith('original')
+  })
+
+  it('a first read given up on: the display and sync the reader chose meanwhile stand over the late answer', async () => {
+    const view = fakeView(), surface = fakeSurface(null)
+    const run = vi.fn(() => ({ retry: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
+    const session = await openReader({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams('paper=2600.00001v1'), emit: () => {}, reading: { config: DEFAULT_CONFIG, fallbackReason: { kind: 'unknown' } } }, { view: view.make as never, surface: surface.make as never, store: null, run: run as never, fetch: vi.fn(async () => new Response('', { status: 404 })) as never })
     session.setDisplay('original')
-    session.setSyncMode('same')
-    answer({ config: late, fallbackReason: null })
-    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
-    expect(view.setDisplay.mock.calls.at(-1)).toEqual(['original'])
-    expect(view.setSync.mock.calls.at(-1)).toEqual([true])
-  })
-})
-
-describe('the settings changed elsewhere while the view is open', () => {
-  const changed = { ...DEFAULT_CONFIG, mode: 'only' as const, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false, sync: false } }
-  const open = (watch: (cb: (c: typeof DEFAULT_CONFIG) => void) => () => void, query = 'paper=2600.00001') => openView({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams(query), emit: vi.fn(), reading: { config: DEFAULT_CONFIG, fallbackReason: null } }, { watch, read: vi.fn() })
-  it('move the view\'s display and sync as a late read does: unless the address names the display or the reader chose', () => {
-    let tell: (c: typeof DEFAULT_CONFIG) => void = () => {}
-    view.setDisplay.mockClear(); view.setSync.mockClear()
-    const session = open(cb => { tell = cb; return () => {} })
-    tell(changed)
-    expect(view.setDisplay.mock.calls.at(-1)).toEqual(['translation'])
-    expect(view.setSync.mock.calls.at(-1)).toEqual([false])
-    session.setDisplay('original')
-    session.setSyncMode('same')
-    tell({ ...changed, pdfReader: { ...changed.pdfReader, original: false, sync: false } })
-    expect(view.setDisplay.mock.calls.at(-1)).toEqual(['original'])
-    expect(view.setSync.mock.calls.at(-1)).toEqual([true])
-    // an address that names the display holds it
-    view.setDisplay.mockClear()
-    open(cb => { tell = cb; return () => {} }, 'paper=2600.00001&mode=bilingual')
-    tell(changed)
-    expect(view.setDisplay.mock.calls).toEqual([['bilingual']])
-  })
-})
-
-describe('the paper\'s title where its PDF has none', () => {
-  const panes = () => ({ left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams(''), emit: vi.fn() })
-  it('is the abstract page\'s citation_title, one request to arXiv made only then; nothing where it cannot be had', async () => {
-    const fetch = vi.fn(async (url: string) => new Response('<!doctype html><meta name="citation_title" content="  Counting Lattice Paths  ">', { status: 200 }))
-    vi.stubGlobal('fetch', fetch)
-    const host = readerHost({ ...panes(), reading: { config: DEFAULT_CONFIG, fallbackReason: null } }, DEFAULT_CONFIG, '2600.00001', () => () => {}, vi.fn())
-    expect(await host.titleFallback?.()).toBe('Counting Lattice Paths')
-    expect(fetch).toHaveBeenCalledWith('https://arxiv.org/abs/2600.00001', { credentials: 'omit' })
-    fetch.mockImplementationOnce(async () => new Response('gone', { status: 404 }))
-    expect(await host.titleFallback?.()).toBe('')
-    fetch.mockImplementationOnce(async () => { throw new TypeError('offline') })
-    expect(await host.titleFallback?.()).toBe('')
-    host.stop()
-    vi.unstubAllGlobals()
-  })
-})
-
-
-describe('the layer\'s transport (layerTransport)', () => {
-  const sha256 = async (b: Uint8Array) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', b as Uint8Array<ArrayBuffer>))].map(x => x.toString(16).padStart(2, '0')).join('')
-  const original = new Uint8Array([37, 80, 68, 70, 45, 49])
-  const viewOf = (data: Uint8Array | null) => ({ originalData: () => (data ? Promise.resolve(data) : null) }) as never
-
-  it('fetches an object by its whole digest under the reader\'s ctag, with no credentials; an answer that is not ok refuses it', async () => {
-    const { CTAG4 } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
-    const calls: [string, RequestInit][] = []
-    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => { calls.push([url, init]); return url.endsWith('b'.repeat(64)) ? new Response('nope', { status: 404 }) : new Response(new Uint8Array([1, 2, 3])) })
-    const t = layerTransport(viewOf(original), 'https://readarxiv.com', { id: 'math/0601001', version: 2 })
-    const signal = new AbortController().signal
-    expect([...(await t.fetchObject({ kind: 'part', sha256: 'a'.repeat(64), bytes: 3 }, signal))]).toEqual([1, 2, 3])
-    expect(calls[0]?.[0]).toBe(`https://readarxiv.com/api/v1/layer/math_0601001v2/${CTAG4}/o/${'a'.repeat(64)}`)
-    expect(calls[0]?.[1]).toMatchObject({ credentials: 'omit', signal })
-    await expect(t.fetchObject({ kind: 'part', sha256: 'b'.repeat(64), bytes: 3 }, signal)).rejects.toThrow(/404/)
-    vi.unstubAllGlobals()
+    session.setSyncMode('off')
+    await flush(20)
+    view.v.setDisplay.mockClear(); view.v.setSync.mockClear()
+    surface.land({ ...DEFAULT_CONFIG, mode: 'only', pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false, sync: true } }, 'first')
+    expect(view.v.setDisplay).not.toHaveBeenCalled()
+    expect(view.v.setSync).not.toHaveBeenCalled()
   })
 
-  it('refuses a ref whose digest is no digest without a request; an answer past the ref\'s bytes, by its length or as it comes, without keeping the rest', async () => {
-    const asked: string[] = []
-    let cancelled = 0
-    const big = (n: number, length: boolean) => {
-      let sent = 0
-      const body = new ReadableStream<Uint8Array>({ pull(c) { if (sent >= n) { c.close(); return } sent += 4096; c.enqueue(new Uint8Array(4096)) }, cancel() { cancelled++ } })
-      return new Response(body, { headers: length ? { 'content-length': String(n) } : {} })
-    }
-    vi.stubGlobal('fetch', async (url: string) => { asked.push(url); return url.includes('/o/1') ? big(1 << 20, true) : big(1 << 20, false) })
-    const t = layerTransport(viewOf(original), 'https://readarxiv.com', { id: '2600.00001', version: 1 })
-    const signal = new AbortController().signal
-    for (const sha256 of ['../../evil', 'A'.repeat(64), 'a'.repeat(63)]) await expect(t.fetchObject({ kind: 'part', sha256, bytes: 3 }, signal), sha256).rejects.toThrow()
-    expect(asked).toEqual([])
-    await expect(t.fetchObject({ kind: 'part', sha256: '1'.repeat(64), bytes: 1000 }, signal)).rejects.toThrow(/bytes/)
-    await expect(t.fetchObject({ kind: 'part', sha256: '2'.repeat(64), bytes: 1000 }, signal)).rejects.toThrow(/bytes/)
-    expect(asked.length).toBe(2)
-    expect(cancelled).toBe(2)
-    vi.unstubAllGlobals()
+  it('asked to translate (#readarxiv): an original left on is let go', async () => {
+    const a = await opened('paper=2600.00001v1&ask=translate', { config: { ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } } })
+    await flush(20)
+    expect(a.surface.writes.at(-1)?.pdfReader.original).toBe(false)
   })
 
-  it('binds the base where the original\'s bytes are its length and its digest, and nowhere else', async () => {
-    const base = { bytes: original.length, sha256: await sha256(original), xref: 0 }
-    expect(await layerTransport(viewOf(original), 'https://x', { id: '2600.00001', version: 1 }).bind(base)).toBe(true)
-    expect(await layerTransport(viewOf(original), 'https://x', { id: '2600.00001', version: 1 }).bind({ ...base, sha256: 'c'.repeat(64) })).toBe(false)
-    expect(await layerTransport(viewOf(original), 'https://x', { id: '2600.00001', version: 1 }).bind({ ...base, bytes: 7 })).toBe(false)
-    expect(await layerTransport(viewOf(null), 'https://x', { id: '2600.00001', version: 1 }).bind(base)).toBe(false)
+  it('an address that names the display holds it', async () => {
+    const a = await opened('paper=2600.00001v1&mode=bilingual')
+    a.view.setDisplay.mockClear()
+    a.surface.land({ ...DEFAULT_CONFIG, mode: 'only', pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: false } })
+    expect(a.view.setDisplay).not.toHaveBeenCalled()
+  })
+
+  it('a new target language once a translation has started loads the page again, once this page\'s writes are in', async () => {
+    const reload = vi.fn()
+    vi.stubGlobal('location', { ...location, reload, search: '' })
+    const a = await opened()
+    await flush()
+    a.surface.land({ ...DEFAULT_CONFIG, targetLanguage: 'jpn' })
+    await flush(20)
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 })

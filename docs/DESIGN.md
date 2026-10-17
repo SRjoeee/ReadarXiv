@@ -181,7 +181,7 @@ The website (readarxiv.org) offers the extension to a visitor who has none and s
 
 **The contract with the website.** On the website's pages the extension sets one attribute on `<html>`, `data-readarxiv-extension="<version>"`, where `<version>` is the extension's manifest version (`0.4.1`). It is set at `document_start`, so it is there before the page's first script runs: the website reads `document.documentElement.getAttribute('data-readarxiv-extension')` synchronously, and `null` means the extension is not there. The attribute is written when the document is created, so a visitor who installs the extension while the page is open sees it after the next load, not before. The mark is a hint for offering the install, not a proof: any script on the page can write the attribute, and the website must trust it for nothing else.
 
-**What lands where.** `src/shared/web-app.ts` holds the contract: `WEB_APP_HOSTS` (staging now, `app-staging.readarxiv.org`; production joins when the website is live there), `WEB_APP_MATCHES` (`https://<host>/*` for each) and `EXTENSION_MARK`. `src/entrypoints/web-app.content.ts` is the content script, `markWebAppPage` writes the attribute. The attribute is not `data-axt-*`: that prefix marks the extension's own work on the pages it translates, and this is a word between two products, which neither side may rename alone.
+**What lands where.** `src/shared/web-app.ts` holds the contract: `WEB_APP_HOSTS` (production's, `readarxiv.com`; a staging build, `pnpm build:staging`, adds `app-staging.readarxiv.org` through `wxt.config.ts`, and names itself in its `version_name`), `WEB_APP_MATCHES` (`https://<host>/*` for each) and `EXTENSION_MARK`. `src/entrypoints/web-app.content.ts` is the content script, `markWebAppPage` writes the attribute. The attribute is not `data-axt-*`: that prefix marks the extension's own work on the pages it translates, and this is a word between two products, which neither side may rename alone.
 
 **Invariants** (`tests/shared/web-app.test.ts`, `tests/e2e/probes/web-app-mark.mjs`, and `scripts/check-output.mjs` over the built manifest and script, first among its checks):
 
@@ -882,12 +882,14 @@ A figure the column shows too small to read is opened large in a dialog, zoomed 
 ## 16. The PDF reader
 
 A bilingual reader for arXiv's PDFs (issue #290): an extension page (`pdf-reader.html`; `src/entrypoints/pdf-reader`,
-`src/pdf-reader`) that translates the paper's TeX source, typesets it again, and shows it beside arXiv's own PDF,
-paragraph matched to paragraph. Its interface design is `docs/PDF-READER.md`, and the gates that hold its engine are
-`lab/pdf/README.md`; the experiment it grew in (its running record and its plans) is read from the freeze's tag:
-`git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`, and
-`git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/<file>`. Here is only how it meets the rest of the
-extension.
+`src/pdf-reader`) that shows arXiv's own PDF on the left and, page by page, its translation laid over the same pages on
+the right: the instant layer, drawn by the engine from the paper's layer our server prepares once (Stage 5, the
+maintainer's decision of 2026-10-08) and filled by the extension's own translation. Its interface design is
+`docs/PDF-READER.md` (§11.7–§11.9 the reading view, its layer side and its links), and the gates that hold its engine are
+`lab/pdf/README.md`; the experiment it grew in is read from the freeze's tag:
+`git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`. The compiled translation it showed until then (the
+TeX page, BusyTeX, the warm-up, the store of compiled PDFs) is parked, with the design it had: `parked/README.md`. Here is
+only how it meets the rest of the extension.
 
 - **How it is reached** (§4.0b). `pdf.content.ts` lays the reader over arXiv's PDF page in a full-window frame when
   `pdfReader.enabled` is on, or when the address carries `#readarxiv`, which also asks for a translation. The address
@@ -921,151 +923,6 @@ extension.
   back as the run's own pieces in their order (`mt.mjs` `formulaRuns`, TRANSLATE_VERSION 2): sent apart, Microsoft's
   Chinese moved the set's first part away from the others (2307.16209, page 31). The unit keeps its parts, so each is
   drawn as its own crop, as TeX may break the line between them (11 of the corpus's 16 runs take two lines).
-- **Its store**: the compiled translations (with each unit's sentences, where its engine gave them), one record per paper version and target language, encrypted, in an
-  IndexedDB of their own (`src/cache/pdf-store.ts`), capped at 500 MB with the least recently opened going first. A
-  copy's units always describe its own PDF: a run that typesets nothing writes only who made and tried each unit, and
-  only where every unit's text is the one the stored PDF sets; a run again after a run whose final never reached the
-  screen (the TeX page down) compiles its own final rather than write that run's translation over the old PDF. **A new
-  pipeline voids only what its change reaches**, §5.5's rule taken unit by unit: a copy is matched to the units by their
-  source, and its translations are taken as they are where it was made by this pipeline, or by an earlier one that
-  carries over into it (`live.mjs` `PIPELINE_CARRIES`, `cache.mjs` `copyReuse`) — in the same wire format and for the
-  same paper's context, each translation by that pipeline's test, given the unit it is of: what it made of the answer,
-  and whether the unit is one whose wire the pipeline changed (pipeline 12: a unit that holds a run of split formulas,
-  sent grouped). A unit whose source pieces are unchanged is sent the same wire and cuts as before but for such a
-  change, and one a pipeline cuts anew has a new hash and is sent as the new text it is, the background's cache keyed by
-  that text (§9; the key holds no version of the reader's);
-  the left side's marks, the original's readings and the compile stay the pipeline's own. Pipeline 8 over a copy of 7
-  of 2610.02069: 4 of its 103 units sent again — the two cut anew, the two whose translation held 7's stray `#` —
-  where every one had been. The settings page counts them and clears them (UI.md S-O-73).
-- **Typesetting** runs in a TeX page outside the extension (BusyTeX): our site's, `https://tex.readarxiv.org`, in a
-  production build, and one on this machine in development (`addresses.mjs` `TEX_PAGE`, a build setting). No
-  reader-facing word names it (UI.md §3.5). The translation is set by the Flow rule (`src/pdf-reader/engine/pipeline/typeset/`;
-  `parked/lab/records/typesetting.md`): each unit's leading, the paper's type and the floats' pages
-  planned from our marked original's line probes and marks. The original is compiled in full in a TeX frame of its
-  own from the run's start, beside the probe and the first preview, which never waits for it, and the frame goes once
-  it is in (150–450 MB more meanwhile); what the rule reads of it is kept for the visit and, with the left side's
-  marks, per paper version in the store, so that a run again, a revisit or another language compiles no original. With
-  it are kept the original's labels and the bibliography its BibTeX or biber made, which a draft with none of its own
-  is given: a typesetting change compiles no preview, every paragraph taken as it is, and without them its measure set
-  no bibliography (2608.08872 two pages long where its first visit set one). The original's biber bibliography sets the
-  translation's citations as the final's own does, so the first preview runs no BibTeX or biber — its citations are
-  undefined either way —, and every compile after it reads the original's. A draft's one pass also sets its contents
-  lists from the files a pass writes them to at its end, so each draft is given the lists of the aux it is given: given
-  the aux alone, every list was empty and every paragraph after it measured early by its height (2608.02459, its
-  contents before nearly all of it: 0.94 of a page's start drift, 0.10 with them). A draft that set a list from nothing
-  is no measure, and a typesetting change's, which has no draft before it, is measured once more with its own lists;
-  the original's are no stand-in, as tall as the translation's only where its entries are (a thesis's long figure
-  captions set its re-set three pages short). The final's passes write their own, as the original's do. A measure that
-  could not set a letter is no measure either, as a preview that cannot is not shown: the strategy chain moves on before
-  the final, and the next strategy is measured, so that the final is always set from a plan measured under the
-  strategy it is compiled with (2608.02459's re-set measured under xeCJK, which has no σ there; its final, failed, fell
-  to CJKutf8 set from a plan uncorrected and was stored as current). The
-  last preview of the whole translation measures where its text stood, and the final corrects it: a whole
-  translation after the first preview waits for the original's readings, and once every unit is sent a preview of
-  part of it waits a preview's time for the last batch, so that the whole one is next. Where a plan cannot be made
-  the translation is set as before it; where that was for a passing reason (a PDF's marks unread, a compile timed
-  out) the record carries no typesetting and the next visit sets it again. Nothing the reader writes into a paper's
-  lines follows the `\begin` or `\end` of an environment TeX reads line by line — verbatim's kind, listings',
-  comment.sty's, the paper's own found in its files (`latex-front.mjs` `LINE_ENVS`) —, and no table holding one is
-  fitted: comment.sty ends its environment only at a line that is its `\end` and nothing more, and a line probe written
-  after 2608.16117's kept its comment open to the end of the file, the paper after it lost. A compile whose last
-  pass did not reach the document's end is no translation, whatever PDF it left and whatever the compiler said of it:
-  every compile carries a line that pass logs once the last page is out (`typeset/tex.mjs` `END_TEX`, a message alone,
-  which changes nothing typeset), and a pass without it failed — one stopped by a fatal error, after which XeTeX ships
-  the pages it set and a compiler that gives what it made took them as set, or one halted at a TeX error that the
-  compiler reported as a success (a TeX page of 2026-09-22, its BusyTeX before the TeX pass's own exit status was read,
-  gave 2610.02069's final as the 18 pages of 22 before the halt, its bibliography empty and every citation "(?, ?)").
-  The deployed TeX page halts on a TeX error and gives no PDF, so no compile that set the paper changes. A
-  compile of the translation that TeX fails is tried again before the chain moves on, one remedy a compile, the least
-  lost first, wherever it fails (a preview, the measure, the final): without the typesetting rule's TeX, without
-  EVEN_SPACES' microtype, without the references the run gives a draft or the final (not for an error TeX raised before
-  it read them, or looked for an aux and found none); the measure tries leaving the rule out with its own draft, not
-  with the final, and goes on with the other remedies in drafts; then, as a safety net, with the units the log places
-  a TeX error in set in the source — the error's `l.<n>` line and the text around its place, found in a unit of the
-  files the compile was given, the innermost, a footnote rather than its paragraph where the context stands in the
-  footnote or ends at its closing brace (TeX logs an error in an argument where the argument ends); the paper's own
-  errors, its original's in the same unit, left out, read only once the original is in and never waited for. A letter a font lacks counts against a translation only
-  if the paper's own compile set it (the original lacks the others too, and a translation that loses no more of a letter
-  than the original does is no worse), which only the original's full compile tells: the font probe has no body, so the
-  original is asked for ahead of its turn, and only when a translation leaves a letter out at all (`live.mjs`
-  `unsettable`). Letters a strategy's fonts lack are the strategy's: the chain moves on
-  from them first, and only once no strategy is left that sets them are the units holding them set in the source,
-  under the first strategy that lost them, the run going back to it once (a letter lost with no error to place it made
-  one by a pass with `\tracinglostchars=3`, made where the units holding the letters by their own text are few). A
-  remedy after which the same failure comes again is taken back, and tried again once another remedy, units in the
-  source among them, uncovers another failure; one kept stays off. Units set in the source stay so until the chain
-  moves on, at most three rounds and max(3, 2 %) of the units a strategy, each with every unit nested in it and each
-  such passage counted, those still to be translated reserved, eight remedy compiles a run (the rule's not among them,
-  ruling 6's from before the budget). An error whose context holds no ASCII within TeX's window (`tex-errors.mjs` `skeleton`) places nothing: the
-  log and the file agree on ASCII alone, and placing nothing is the safe failure — that compile is not rescued. The
-  passages set in the source count among those the failure note names (UI.md S-P-60), on the visit that set them and,
-  from the record's marks, on every visit to that copy, from the moment it is shown — current, translated again, or not
-  checked with the service out of reach. The author block is left out of the count: CJKutf8 sets it in the source on
-  purpose, and the record cannot tell that from the safety net's under xeCJK without a field of its own (`unset:
-  'tex'`, if it ever matters); the note has no retry for them, since the same translation fails the same way, and they are tried again
-  only with a new version of the reader, another service or another version of the paper (2610.02069: apacite's
-  citations broke under babel given the original's `\bibcite` lines alone — a draft is given every citation line of the
-  original's aux, for any key it cites, in its order (`citationLines`: apacite's `\APACbibcite`, harvard's, backref's)
-  —, and one citation's key went out as prose, apacite's `\cite<>[…]{modified_code}`, whose prenote in angle brackets
-  the walker did not read: a citation is one placeholder with every argument it takes, the prenote among them
-  (`latex-front.mjs` `citationArgs`); `exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md`). The
-  reader speaks the TeX page's protocol 2 and still serves a page of protocol 1: it names the engines and the CJK
-  faces the visit will use, so that the page fetches them ahead;
-  a compile whose files did not all arrive, or that the page itself failed (no log: an engine it could not bring up), is
-  asked once more, and a second failure stops the compiles with no compiler — no strategy changed, nothing written or
-  marked, the retry offered — while the translation goes on to its end for the retry to reuse. A compile BusyTeX gave
-  up on (its 180 s: the machine slow) changes nothing either, but is not the page down: a preview, a measure or the
-  marked original is not asked again and the run goes on to its final, which is asked once more and, timed out
-  again, leaves what is shown.
-- **The TeX page's warm-up** (2026-10-02; `background/warmup.ts`, `entrypoints/ocr/tex-warm.ts`,
-  `session/tex-store.mjs`): nothing of the engine ships in the package (35 MB of engine and preloads, 39 MB of CJK faces,
-  downloaded again with every update); instead, **as early as possible** — once the extension is installed or updated
-  and the target language is known, again when that language changes, and at a worker's start when the last warm-up is
-  not the current language's of the last day, or a reader has since seen the page under other versions (how a new
-  version of the page is noticed: its files are versioned, and only what is missing is downloaded) — the offscreen
-  document frames the TeX page and has it download what a first
-  visit in that language fetches ahead: BusyTeX, the hinted engines' preloads and bundles, the index, the script's CJK
-  faces (the hints of `session/hints.mjs`, a module that imports nothing, kept equal to `strategiesFor` by a test).
-  **They are kept in the extension's own Cache Storage, not the page's**: with storage partitioning on (Playwright
-  turns it off by default; `tests/e2e/probes/tex-partition.mjs`), the page framed by the reader over arXiv's PDF page
-  has a Cache Storage and an HTTP cache of its own, apart from the page framed by any extension page — the offscreen
-  document, or the reader open as a tab — while the extension's own storage and Web Locks are one in every context
-  (Chrome 154, Chromium 153 and 145; a host permission for the page's site changes nothing over arXiv). So the page,
-  told `store: true` (protocol 2's `want` / `have` / `keep`), asks the extension for the files its own cache lacks and
-  **keeps a file it is handed only when its SHA-256 is the one build.json gives** (another extension with access to
-  arXiv's pages can frame the page in the same partition and hand it anything, which every reader's page there would
-  then run: the warm-up review's I1; the page's own downloads stay held to their length, the transport being the
-  site's). **One Web Lock** keeps the two apart: every reader that typesets shares it while open, and a warm-up takes it
-  alone only when it is free — no warm-up competes with a reading session for the link. A reader opened during one
-  asks for it through the background, with its language: a warm-up for that language its pace says will be done within
-  four minutes is waited for, since on one link a stop saves no byte — the files in flight are lost and fetched again
-  (stopped 11 s into a 24.5 s Chinese warm-up, the reader's first preview came at 31.5 s; waited for, 20.3 s) —; one
-  for another language (its faces are not the reader's), or one that would outlast that, close to the five minutes the
-  reader's page waits for the store before it downloads alongside, is stopped, and the reader takes what the store
-  holds. Never under Save-Data, never for a language the reader does not set yet, never twice at once;
-  a failure is tried again at the next trigger, a worker's start no sooner than a quarter of an hour on, doubled with
-  each failure in a row up to a day (a store that cannot keep a file, a full disk, stops the warm-up at once); a page
-  that takes no warm-up (one from before it) is asked again a day on; one for a language no longer wanted gives way to
-  the new one (a reader opened then would wait for files it does not need: German's TeX page took 22.9 s behind a
-  Chinese warm-up, 9.9 s with nothing warmed). No new permission, and nothing a reader sees: the diagnostics log says
-  what happened, a state that lasts once. Measured (2026-10-02, Chromium 153, partitioning on, the page served on
-  this machine over a link like this machine's to tex.readarxiv.org — 13 Mbit/s, 30 ms —, the gate's translations,
-  `parked/lab/spikes/reader-typeset.mjs`), first on the page before the hashes and zlib level 6: the warm-up downloads 39.3 MB in
-  24.5 s for Chinese (45 requests) and 15.0 MB in 9.5 s for German (11); a first visit over arXiv's PDF page then
-  starts its TeX page in 0.89 s instead of 25.0 s and shows its first preview in 6.4 s instead of 30.5 s (Chinese,
-  2608.02163), in 0.63 s and 3.6 s instead of 9.9 s and 12.9 s (German, 2608.02785), as the reader open as a tab does;
-  handing the files over costs 0.4–0.6 s of that (the next paper's page starts in 0.2–0.3 s). A reader opened during
-  the warm-up downloads nothing twice and waits for it (Chinese 17.1 s and 23.0 s, German 8.2 s and 11.5 s); a
-  language changed meanwhile stops it, at most what was in flight lost. Then, Chinese alone, on the page as deployed
-  (c/24335c65c173, e/fc440737bc52: handed files checked by their SHA-256, xdvipdfmx at zlib level 6) with the machine
-  loaded by other work: the TeX page's start, the first preview and the final at 24.9, 30.7 and 88.9 s cold, 0.93,
-  12.3 and 69.4 s warmed (the hashes cost nothing measurable — 0.92 s before them —; the first preview came late for
-  the load: the reader reached its compiler at 15.4 s, against 6.9 s in an earlier warmed run), and 16.9, 23.2 and
-  81.0 s for a reader opened during the warm-up, nothing downloaded twice but `tex.html`; the next paper's page starts
-  in 0.25 s (0.33 s cold). Level 6 writes the same decoded PDF, about 2 % larger, and halves a final heavy with images
-  (in Node, on the built engine, the machine loaded: 2608.16117's Chinese final 93.2 → 47.4 s, 2608.09815's 20.0 →
-  8.5 s, 2608.02163's 11.5 → 8.3 s). The finals are the same, page by page. The store holds the language's files
-  decoded (Chinese 113 MB, German 57 MB), as the page's own cache over arXiv does once it has them.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
@@ -1077,28 +934,45 @@ extension.
   record keeps each unit's sentences beside its translation, additively; an older copy lights by paragraph until
   translated again. The geometry, the pointer's path, the costs and the known limits:
   `docs/PDF-READER.md` §17.
-- **A paper that cannot be had** — no source, or none of the ways of setting it worked (every one tried, none for want
-  of time: a slow machine says nothing of the paper) — shows the original with the side-by-side and translation
-  displays greyed and a capsule that says so, without why, offering the HTML version where arXiv has one (UI.md
-  S-R-17/18). The failure to set it is kept in the store beside the records, by paper version, language,
-  `PIPELINE_VERSION`, `TYPESETTING_VERSION`, the TeX page's versions and the identity whose translation it was (the one a copy is judged by), when the paper's own
-  source set on this machine — otherwise the compiler or its files may have been down, and the next visit tries again
-  — and when that one identity made every paragraph it translated: a run a hand-over mixed (a key refused midway, the
-  free service finishing) is not kept, since the service that would answer next never translated the whole paper, as a
-  copy is current only when every paragraph is. A visit again, once the extension has said which service would
-  translate, asks that service and the TeX page for nothing if it is the same one; another service, model or prompt, a
-  new pipeline, typesetting or TeX page, or a mark kept before the identity was (2026-09-30) tries once more — the failure is the
-  translated text's, which they may not repeat (Codex on #306) —, and the settings page's clear forgets it.
-- **A translation shown in part** — a preview of it on screen that lacks some of it, and none of the ways able to set
-  the whole — keeps the preview and the displays as they are, and a capsule says so, without why, offering the HTML
-  version where arXiv has one (UI.md S-R-19; `cache.mjs` `endOf`); a whole preview on screen is not said to be part. Before it, the progress line ended as for a whole translation and the reader
-  said nothing (2610.02069: its first preview, page 1 alone, stood for the paper).
-- **Three versions**: `PIPELINE_VERSION` (`versions.mjs`) for what a unit is, `TRANSLATE_VERSION`
-  (`translate/version.mjs`) for what is sent for it and how the reply is read back, `TYPESETTING_VERSION` (`live.mjs`)
-  for how a compile sets it (PDF-READER §18). Until the rows cache replaces these copies a copy is judged by
-  `PIPELINE_VERSION` alone, so a change of the wire that must void copies raises both. A copy of another typesetting
-  is compiled again from its own translation: a unit whole, made by the identity that would answer now, of the wire sent now (the same pipeline and wire format) is never sent
-  again (`cache.mjs reusable`); the evaluation of 2026-10-01 measured a third of a paper's characters sent again when
-  the two were one version.
+- **The layer** (`session/run.ts`, `session/server.ts`): a paper version's layer is asked of our server's layer API
+  (`READER_API`, a build setting: `https://readarxiv.com`, staging's in a test build, `pnpm build:staging`, whose package the
+  release's output check refuses; `addresses.ts`), by the reader's
+  CTAG: its catalog, or the prepare under way with the objects made so far, or why there is none. Only the paper's id and
+  version leave the machine, in the address: no query, no body but `{}` on the prepare (asked once a visit, where none is
+  made yet), no credentials, no referrer; nothing of a translation, a setting or a key. Each object is read within its
+  bounds by the engine's own readers (cap, digest, values, shape, chain) in the reading view's layer side, which lays the
+  pages as their parts and rows come. A 202's and a 429's waits are never shorter than our server asks (a retry waits a
+  429's out); a prepare is asked of every 5 s at most after 2 minutes, given up after 10, and not polled while the tab is
+  hidden. arXiv's PDF is the
+  layer's base only where its bytes are, and the check does not wait for the whole file (`session/ranges.ts`): the first to
+  answer decides, of the left's bytes digested once its document has loaded them of itself (a proof) and the two ends
+  compared — arXiv's length and last cross-reference section against our copy's, one range each, where our server names the
+  original it bound the layer to (`X-Axt-Base-Etag`: the copy whose SHA-256 is the head's base, by its entity-tag), read
+  only where the left's bytes are not all in 100 ms after the check begins. Ends
+  alike first, the composed document is read over our copy by ranges, every answer held to the base's length and that tag,
+  so that it is the layer's document whatever arXiv's bytes are; the proof still comes, and other bytes then show our copy on
+  the left and lay the pages again. Other bytes, by either, show our copy on the left in their place (this machine's whole
+  copy, else by ranges, else read whole and checked against the base); none to be had is no layer. Why: on 2608.16117v1
+  (46 MB) the whole-file check laid the first page 9.5 s after the original was on screen, the rest of arXiv's file still
+  coming and asked twice (PDF.js's `getData` asks for every byte its stream is still bringing); measured in
+  `lab/pdf/records/layer-extension.md`.
+- **The translation** is the extension's own: the engine's `runRows` over the layer's units, through the background's
+  chain (§8.0, `session/translate.mjs`), the units the page in view waits for first, each batch's rows taken by the layer
+  as they come. A retry opens the layer's door again, takes the rows held at once and runs again, the background's
+  segment cache answering what was translated.
+- **Its store** (`src/cache/layer-store.ts`): the layer's objects by digest, the last catalog of each paper version and
+  our copies of arXiv's PDF, in an IndexedDB of their own (`axt-layer`), each object checked against its digest before it
+  is kept and each time it is read (a mismatch is a miss, dropped), capped at 200 MB with the papers opened least recently
+  going first (an object held by two papers, one digest, goes only with the last of them); a slow read is a miss. A paper whose catalog is held opens on the layer with our server out of reach. The
+  experiment's store of compiled PDFs (`axt-pdf`) is deleted on an install or an update. The settings page counts paper
+  versions and clears them (UI.md S-O-73).
+- **When there is no layer** — none for this paper (no source, no PDF, a prepare that cannot succeed, a CTAG our server
+  makes none of), the reader shows the original with the translated displays greyed and a capsule that says so, offering
+  the HTML version where arXiv has one (UI.md S-R-17/18); a language the layer does not set is said with the language menu
+  (S-R-13); our server out of reach or at its limit, the original stays readable and a capsule says the bilingual version
+  cannot be had now, with a retry and the HTML version (S-R-24, draft): passing, not remembered, never a v0-only fallback
+  (the layer-only plan's "Offline, drafted"; decision 7).
+- **Versions**: `PIPELINE_VERSION` (`versions.mjs`) for what a unit is and `TRANSLATE_VERSION` (`translate/version.mjs`)
+  for what is sent for it and how the reply is read back (PDF-READER §18); the layer's own are in its CTAG and VTAG.
 - **Browsers**: PDF.js's modern build needs built-ins newer than the extension's floor. Where they are missing
   (`src/pdf-reader/support.ts`) the reader is not offered, and the browser's viewer keeps the PDF.

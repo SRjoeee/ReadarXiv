@@ -40,8 +40,8 @@ describe('markWebAppPage', () => {
 })
 
 describe('the website\'s hosts', () => {
-  it('are the website\'s alone, over https: staging now', () => {
-    expect([...WEB_APP_HOSTS]).toEqual(['app-staging.readarxiv.org'])
-    expect(WEB_APP_MATCHES).toEqual(['https://app-staging.readarxiv.org/*'])
+  it('are the website\'s alone, over https: production\'s (a staging build adds staging\'s, wxt.config.ts)', () => {
+    expect([...WEB_APP_HOSTS]).toEqual(['readarxiv.com'])
+    expect(WEB_APP_MATCHES).toEqual(['https://readarxiv.com/*'])
   })
 })

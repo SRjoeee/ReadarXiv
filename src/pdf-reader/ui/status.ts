@@ -13,8 +13,9 @@ export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
    *  closable */
   | { kind: 'unavailable'; words: CapsuleWords; href?: string }
-  /** the translation shown in part (S-R-19): said, with the HTML version offered where there is one; closable */
-  | { kind: 'partial'; words: CapsuleWords; href?: string }
+  /** the bilingual version cannot be had right now (our server out of reach, or at its limit): said, with its retry and
+   *  the HTML version offered where there is one; passing, not remembered; not closable */
+  | { kind: 'notNow'; words: CapsuleWords; href?: string }
   /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
    *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
    *  of 2026-10-04) */
@@ -33,15 +34,11 @@ export interface Card { reason: string; action: 'retry' | 'settings' | 'arxiv' }
 /** the reasons a key settles: the settings are where it is fixed (the popup's rule) */
 const KEYS: ReadonlySet<ProviderErrorKind> = new Set(['no-key', 'auth'])
 
-/** a translation under way: the progress line shows it, and no capsule does (the maintainer, 2026-09-25) */
-const running = (state: ReaderState) => state.phase === 'translating' || state.phase === 'retranslating'
+/** a translation or a prepare under way: the progress line shows it, and no capsule does (the maintainer, 2026-09-25) */
+const running = (state: ReaderState) => state.phase === 'translating' || state.phase === 'preparing'
 
-/**
- * What the reader has done with the notices this visit (StatusCapsule keeps it). The two closable notices are closed
- * apart: one stood before the other, so a close of the partial one that also closed the count of failed passages kept
- * the count from ever being told. `refusalsSeen`: the refused writes closed
- */
-export interface Seen { partialClosed: boolean; noticeClosed: boolean; narrowShown: boolean; refusalsSeen: number }
+/** What the reader has done with the notices this visit (StatusCapsule keeps it). `refusalsSeen`: the refused writes closed */
+export interface Seen { noticeClosed: boolean; narrowShown: boolean; refusalsSeen: number }
 
 export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
   // what the reader just did or cannot do, over a load too (its controls are in reach then), but not beside a failure's
@@ -61,8 +58,10 @@ export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
     const code = state.settings.targetLanguage, name = ownName(code)
     return { kind: 'unsupported', words: withPart(R.status.unsupported(name), { text: name, lang: toBcp47(code) }), action: 'language' }
   }
-  // before the notice of passages that failed: the passages left in the original are more than those
-  if (!running(state) && state.partial && !seen.partialClosed) return state.htmlVersion ? { kind: 'partial', words: plain(R.status.partial), href: state.htmlVersion } : { kind: 'partial', words: plain(R.status.partial) }
+  // the bilingual version not to be had now: the original stays readable, and a retry is offered with the HTML version
+  // (the layer-only plan's "Offline, drafted")
+  const why = state.unavailable?.why
+  if (!running(state) && (why === 'refused' || why === 'unreachable')) return state.htmlVersion ? { kind: 'notNow', words: plain(R.status.notNow), href: state.htmlVersion } : { kind: 'notNow', words: plain(R.status.notNow) }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
   if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed) return { kind: 'notice', words: withCount(S.failed.text(state.failedUnits), state.failedUnits), action: state.failure ? 'retry' : null }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', words: plain(R.status.narrow) }
@@ -71,27 +70,23 @@ export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
 
 /** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it */
 export function spokenOf(state: ReaderState): string {
-  return state.phase === 'loading' ? R.status.loading : state.phase === 'translating' ? R.status.translating : state.phase === 'retranslating' ? R.status.again : ''
+  return state.phase === 'loading' ? R.status.loading : state.phase === 'preparing' ? R.status.preparing : state.phase === 'translating' ? R.status.translating : ''
 }
 
 /**
  * The progress line under the toolbar, all that shows a load or a translation under way (the maintainer, 2026-09-25):
- * one line over the whole process, which never starts again (the maintainer asked why it ran twice, 2026-10-02) — the
- * PDF's download its first stretch when a translation follows it (all of it when the original alone is shown), then
- * the paragraphs translated, then the typesetting the final waits for, which moves with each compile that ends — half
- * the rest at each, since how many are left is not known (the marked original, a measure, a strategy failed), the end
- * only with the final on screen. That last stretch is half the run's: with a service that answers in seconds, the
- * compiles are most of the wait, and the line stood at 0.87 for 60–90 % of the process while they ran (the F2
- * review's M1)
+ * one line over the whole process, which never starts again (the maintainer asked why it ran twice, 2026-10-02;
+ * ProgressLine holds the longest it reached) — the PDF's download its first stretch when a translation follows it (all of
+ * it when the original alone is shown), then, where the paper's layer is being prepared, half the rest as its prepare
+ * comes along, then the paragraphs translated to the end
  */
 export interface Line { on: boolean; value: number }
-/** the line's share for the download where a translation follows it, and the typesetting's of the run's */
-const DOWNLOAD = 0.15, FINAL = 0.5
+/** the line's share for the download where a translation follows it, and the prepare's of the rest */
+const DOWNLOAD = 0.15, PREPARE = 0.5
 export function lineOf(state: ReaderState): Line {
   if (state.phase === 'loading') return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
-  const typeset = state.finishing < 0 ? 0 : 1 - 2 ** -state.finishing
-  const run = state.shown === 'final' ? 1 : (1 - FINAL) * state.progress + FINAL * typeset
-  return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * run }
+  if (state.phase === 'preparing') return { on: true, value: DOWNLOAD + (1 - DOWNLOAD) * PREPARE * (state.preparing?.progress ?? 0) }
+  return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
 }
 
 export function cardOf(state: ReaderState): Card | null {

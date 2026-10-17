@@ -4,8 +4,8 @@ import '@/pdf-reader/engine/view/engine.css'
 import './reader.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createController, type Session } from '@/pdf-reader/controller'
-import { setHost } from '@/pdf-reader/session/host.mjs'
+import { createController } from '@/pdf-reader/controller'
+import type { SessionHost } from '@/pdf-reader/session/events'
 import { trackModality } from '@/ui/controls/modality'
 import { readConfig } from '@/config/storage'
 import { applyPageLocale } from '@/ui/apply-locale'
@@ -14,20 +14,12 @@ import { App } from './App'
 
 // The settings once, before the first paint, for the language and for the chrome (ui/first-read.ts): the page gives the
 // read 1,500 ms and paints the defaults, said to be unreadable, if it has not answered (S-R-21). The session, a heavy
-// module, reads them again as it loads
+// module (the reading view, the engine's layer, PDF.js), starts on that reading and follows the settings from there
 const reading = (await answeredBy(readConfig(), firstReadTime())) ?? null
 applyPageLocale(reading?.config.uiLanguage)
 const params = new URLSearchParams(location.search)
-// the session runs once, at load: it is loaded only when the panes are there and the host is set (host.mjs). The
-// development entry `?layer=1` runs the engine's reading view instead (session/host.ts; PDF-READER §11.7), until the
-// extension's reader is the view; only in a build asked for it (wxt.config.ts READER_VIEW): a release has neither the entry
-// nor its chunk
-declare const __AXT_READER_VIEW__: boolean
-const open = async (host: Parameters<typeof setHost>[0]): Promise<Session> => {
-  if (__AXT_READER_VIEW__ && params.get('layer') === '1') return (await import('@/pdf-reader/session/host.ts')).openView(host)
-  setHost(host)
-  return import('@/pdf-reader/session/session.mjs')
-}
+// the session opens once the panes are there (App.tsx attach): the reading view over arXiv's PDF and the paper's layer
+const open = async (host: SessionHost) => (await import('@/pdf-reader/session/host')).openReader(host)
 const controller = createController({ open, params, reading })
 // the focus rings are the keyboard's (modality.ts)
 trackModality()

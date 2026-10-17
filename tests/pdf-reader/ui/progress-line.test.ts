@@ -13,7 +13,7 @@ describe('the progress line under the toolbar (the reader\'s design, §6.6)', ()
     const { container } = await mountElement(createElement(ProgressLine, { controller: fake.controller }))
     const line = container.querySelector<HTMLElement>('.progress-line')!
     expect([line.hasAttribute('data-on'), Number(line.style.getPropertyValue('--p')), line.getAttribute('aria-hidden')]).toEqual([true, lineOf({ ...fake.controller.getState() }).value, 'true'])
-    await act(async () => fake.set({ progress: 1, shown: 'final' }))
+    await act(async () => fake.set({ progress: 1 }))
     await act(async () => fake.set({ phase: 'ready' }))
     const after = container.querySelector<HTMLElement>('.progress-line')!
     expect([after.hasAttribute('data-on'), after.style.getPropertyValue('--p')]).toEqual([false, '1'])

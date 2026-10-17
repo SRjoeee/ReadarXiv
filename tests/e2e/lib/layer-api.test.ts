@@ -163,12 +163,12 @@ describe('a preparation under way', () => {
     const api = layerApi({ sample, now: c.now, pollMs: 400 }).set({ layer: mode.preparing(3000) })
     const first = get(api, BUNDLE_PATH)
     expect(first).toMatchObject({ status: 202, headers: { 'cache-control': 'no-store' } })
-    expect(jsonOf(first)).toEqual({ position: 0, stage: 'marks', progress: 0, retryAfterMs: 400 })
+    expect(jsonOf(first)).toEqual({ position: null, stage: 'marks', progress: 0, retryAfterMs: 400 })
     c.advance(1500)
-    expect(jsonOf(get(api, BUNDLE_PATH))).toEqual({ position: 0, stage: 'layout', progress: 0.5, retryAfterMs: 400 })
+    expect(jsonOf(get(api, BUNDLE_PATH))).toEqual({ position: null, stage: 'layout', progress: 0.5, retryAfterMs: 400 })
     c.advance(1400)
     // (the last 100 ms: it asks to be asked again then)
-    expect(jsonOf(get(api, BUNDLE_PATH))).toEqual({ position: 0, stage: 'add-on', progress: 0.96, retryAfterMs: 100 })
+    expect(jsonOf(get(api, BUNDLE_PATH))).toEqual({ position: null, stage: 'add-on', progress: 0.96, retryAfterMs: 100 })
     c.advance(100)
     expect(get(api, BUNDLE_PATH)).toMatchObject({ status: 200 })
     expect(jsonOf(prepare(api))).toEqual({ ready: true })
@@ -380,6 +380,24 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
     expect('body' in get(api, BUNDLE_PATH) && (get(api, BUNDLE_PATH) as { body: Uint8Array }).body).toEqual(sample.bundle)
   })
 
+  it('names the original the layer is bound to beside the catalog and each object, the tag the original answers with (the MD5 of its bytes); unbound, none', async () => {
+    const api = layerApi({ sample, layer4 })
+    const tag = `"${createHash('md5').update(sample.pdf).digest('hex')}"`
+    expect(api.etag).toBe(tag)
+    expect(get(api, PATH)).toMatchObject({ status: 200, headers: { 'x-axt-base-etag': tag } })
+    for (const sha of layer4.objects.keys()) expect(get(api, `${PATH}/o/${sha}`)).toMatchObject({ headers: { 'x-axt-base-etag': tag } })
+    const original = `/api/v1/original/${sample.segment}`
+    expect(get(api, original)).toMatchObject({ status: 200, headers: { etag: tag } })
+    expect(get(api, original, { range: 'bytes=0-9' })).toMatchObject({ status: 206, headers: { etag: tag } })
+    // the layer is made over the PDF the stand-in serves
+    const { readHead } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+    const headRef = layer4.refs.head as { sha256: string; bytes: number }
+    const head = await readHead(layer4.objects.get(headRef.sha256) as Uint8Array, { ref: { kind: 'head', ...headRef } as never })
+    expect([head.base.bytes, head.base.sha256]).toEqual([sample.pdf.length, createHash('sha256').update(sample.pdf).digest('hex')])
+    const unbound = layerApi({ sample, layer4, bound: false })
+    expect('x-axt-base-etag' in (get(unbound, PATH) as { headers: Record<string, string> }).headers).toBe(false)
+  })
+
   it('serves each object by its whole digest, immutable; a digest it does not hold, another paper or another tag 404 not-prepared', () => {
     const api = layerApi({ sample, layer4 })
     for (const [sha, bytes] of layer4.objects) {
@@ -398,5 +416,21 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
     expect(api.handle({ method: 'POST', path: `${PATH}/o/${'a'.repeat(64)}` }).status).toBe(405)
     // (without the objects, the CTAG is a version the stand-in does not hold)
     expect(jsonOf(get(layerApi({ sample }), PATH))).toEqual({ why: 'unknown-versions' })
+  })
+
+  it('serves the faces\' table it is given: every face in one group of one slice, its file, and no hyphenation; without faces, none of it', async () => {
+    const { FACE_FILE, FACE_GROUP } = await import('./layer-api.mjs')
+    const font = new Uint8Array([0, 1, 0, 0, 9])
+    const api = layerApi({ sample, faces: { ids: ['lm-roman-regular', 'nimbus-sans-bold'], ranges: [32, 126], bytes: font } })
+    const index = jsonOf(get(api, '/static-fonts/index.json')) as { schema: number; faces: Record<string, { group: string }> }
+    expect(index.schema).toBe(1)
+    expect(Object.keys(index.faces)).toEqual(['lm-roman-regular', 'nimbus-sans-bold'])
+    const group = jsonOf(get(api, `/static-fonts/${FACE_GROUP}.json`)) as { group: string; slices: number[][]; faces: Record<string, { path: string }[]> }
+    expect(group.slices).toEqual([[32, 126]])
+    expect(group.faces['lm-roman-regular']?.[0]?.path).toBe(`static-fonts/${FACE_FILE}.woff2`)
+    expect((get(api, `/static-fonts/${FACE_FILE}.woff2`) as { body: Uint8Array }).body).toEqual(font)
+    expect(get(api, '/hyph/en.json').status).toBe(404)
+    expect(serves('/static-fonts/index.json') && serves('/hyph/de.json') && serves(`/static-fonts/${FACE_FILE}.woff2`)).toBe(true)
+    expect(get(layerApi({ sample }), '/static-fonts/index.json').status).toBe(404)
   })
 })

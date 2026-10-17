@@ -4,7 +4,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import type { Ref } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import type { Layer, LayerDocument, OpenLayerOptions } from '@/pdf-reader/engine/layer-proto/reader.mjs'
+import type { Layer, LayerDocument, LinkRecord, OpenLayerOptions } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { createLayerSide, type LayerSide, type LayerSideOptions, type TellRef } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
@@ -56,6 +56,8 @@ export interface Setup {
   real: boolean
   /** the original's loading task, as the view was given it (null with none) */
   original: FakeTask | null
+  /** the addresses the host was asked to open (its links.openExternal) */
+  opened: string[]
 }
 export interface Options {
   door?: FakeDoorOptions
@@ -75,6 +77,8 @@ export interface Options {
   composedFailAt?: readonly number[]
   /** the door refuses to open, as openLayer refuses a document of another page count */
   openFails?: boolean
+  /** the fake door's links of a laid page (the door's own gives none); `n` the page, `door` its index (0 the first opened) */
+  links?: (n: number, door: number) => LinkRecord[]
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
@@ -84,10 +88,11 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const clock = manualClock()
   let look: ViewPrefs = { swapped: false, dimPages: false, theme: 'light', highlight: true }
   const lookers = new Set<(p: ViewPrefs) => void>()
+  const opened: string[] = []
   const host: ReaderHost = {
     panes, pdfjs: { ...fakeKit(), lib: { AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2 }, OPS: {} } }, clock, scrollEnd: 'native',
     words: { pageName: (s, n) => `${s} ${n}`, sideName: s => s },
-    prefs: { get: () => look, subscribe: l => { lookers.add(l); return () => { lookers.delete(l) } } }, links: { openExternal: () => {} }, emit: e => events.push(e),
+    prefs: { get: () => look, subscribe: l => { lookers.add(l); return () => { lookers.delete(l) } } }, links: { openExternal: u => { opened.push(u) } }, emit: e => events.push(e),
   }
   const view = createReaderView(host)
   views.push(view)
@@ -150,7 +155,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
       // the fake lays no unit: every unit with lines on a page is shown there as the original's, as the real door's words say
       if (!o.real) {
         const pageOf = layer.pageOf.bind(layer)
-        layer.pageOf = (n, oo2) => pageOf(n, oo2).then(laid => ({ ...laid, words: { ...laid.words, original: unitsOn(m, n) } }))
+        layer.pageOf = (n, oo2) => pageOf(n, oo2).then(laid => ({ ...laid, words: { ...laid.words, original: unitsOn(m, n) }, ...(o.links ? { links: o.links(n, which) } : {}) }))
       }
       return layer
     }) as never,
@@ -163,6 +168,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
     layer: () => live,
     real: !!o.real,
     original,
+    opened,
     highlight(on) { look = { ...look, highlight: on }; for (const l of lookers) l(look) },
   }
 }
