@@ -133,9 +133,9 @@ const EVEN = new Set(['para', 'abstract', 'theorem'])
  *  'forward': from the page of its last body neighbour on, a unit not written inside a float, rule 5: `inFloat` given) */
 export const RULES = Object.freeze({ frame: Object.freeze(['units', 'tokens']), edges: Object.freeze(['all', 'earlier']), columns: Object.freeze(['units', 'tokens']), floatSearch: Object.freeze(['whole', 'forward']) })
 /** the rules where none is given (P2, the coordinator's ruling of 2026-10-17): rules 1, 3 and 4, the page stream's, for every
- *  paper; rule 5 off (no accuracy rule: E2b's rule-5 note). The first part is told about three times sooner (3.4 s at arXiv's
- *  page 12 against 11.3 s on 2106.10165, 4.3 s at page 5 against 13.6 s on 2310.20360) for a whole job 0.6 s and 1.5 s longer
- *  on those books (docs/PDF-READER.md §19.6) */
+ *  paper; rule 5 off (no accuracy rule: E2b's rule-5 note). The first part is told about three times sooner (3.3 s at arXiv's
+ *  page 12 against 10.9 s on 2106.10165, 4.2 s at page 5 against 13.2 s on 2310.20360) for a whole job longer on those books:
+ *  +2.1 % and +7.6 % with the draw off, +15.8 % and +23.9 % with it, the page pass's default (docs/PDF-READER.md §19.6) */
 export const DEFAULT_RULES = Object.freeze({ frame: 'tokens', edges: 'earlier', columns: 'tokens', floatSearch: 'whole' })
 /** the whole run's rules, each reading the whole document: next's before the page stream (c77550a1), which the lab's comparisons
  *  with it take */

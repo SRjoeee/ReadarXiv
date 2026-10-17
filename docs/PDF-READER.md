@@ -1436,13 +1436,23 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   arrive, and each part cut as soon as everything it reads is final: the same parts as the whole path's under the same rules,
   byte for byte (the six gate papers, verdicts on; the books' digests), told early (`stats.closed`). Against the whole run's
   rules the rules move none of the gate's 30 outputs and 10 far pushes of the 124-paper corpus (each judged right). The
-  maintainer's reason is the reader's wait: the first part comes about three times sooner — 3.4 s at arXiv's page 12 against
-  11.3 s on 2106.10165 (471 pages), 4.3 s at page 5 against 13.6 s on 2310.20360 (737 pages), 1.8 s against 4.2 s on
-  2307.16209 — and the parts stream from there, for a whole prepare 0.6 s and 1.5 s longer on those two books (+4.9 % and
-  +9.8 % on the quiet runs, peak RSS within next's spread; the six gate papers within next's spread but 2608.16117, +5.6 % on its quiet runs),
-  inside a job whose compile takes about 100 s (2026-10-17, against next c77550a1, five runs a side, sides interleaved: the
-  books at 88037aa8, the six papers at 4b938a01). Rule 5 (a float searched from the page
-  of its last body neighbour on) stays off: it is no accuracy rule.
+  maintainer's reason is the reader's wait: the first part comes about three times sooner — 3.3 s at arXiv's page 12 against
+  10.9 s on 2106.10165 (471 pages), 4.2 s at page 5 against 13.2 s on 2310.20360 (737 pages), 1.8 s against 4.5 s on
+  2307.16209 — and the parts stream from there. The whole prepare, against next 3805c05d (2026-10-18, 196bbedb, the lite
+  worker, five runs a paper and three a book, sides interleaved, quiet runs): with the draw off 0.24 s and 1.1 s longer on
+  those two books (+2.1 % and +7.6 %), the six gate papers within next's spread; with the draw, the pass's default (below),
+  1.8 s and 3.5 s longer (+15.8 % and +23.9 %; the six papers +3.4 % to +10 %, 1706.03762 within), the draw alone 1.6 s and
+  2.4 s of it, which a later cut (a font's map made once a document) lowers by about 0.3 s on 2310.20360; peak RSS within
+  next's spread but 2310.20360's with the draw (1709 MiB against 1578 to 1653), inside a job whose compile takes about 100 s.
+  The draw moves no first part by more than 0.2 s. Rule 5 (a float searched from the page of its last body neighbour on)
+  stays off: it is no accuracy rule.
+- **The draw geometry (E-C), on by default (`draw`).** Each left part carries its page's draw (`layer-proto/draw.mjs`: the text
+  items, the fonts, the Link annotations), read with the page's operator list (`pipeline/draw-data.mjs`): its text step T's
+  own read (`readArxivText(doc, { draw: true })`, taken once a page), its annotations the page's one read, shared with the
+  link-anchor locator. Its precondition is the host's: arXiv's PDF opened with `fontExtraProperties` (the fonts' maps) and
+  pdf-lite's `LINK_TEXT_PIXELS` (no image's pixels, and the links' overlaid text PDF.js makes, the live reading's own); the
+  marked original keeps `NO_IMAGE_PIXELS`. Most of its cost is PDF.js's own second extraction of a linked page's text for
+  that overlaid text (1.5 s of 2310.20360's 2.4 s).
 - **The whole run's rules** (`WHOLE_RULES`, next's, or `whole: true` under any rules). The maker's frame, the columns' edges and
   the far-push columns read the whole document, so every part is cut once the whole is made, and the parts are `cutBundle`'s of
   the same whole, byte for byte. With the oracle (`oracle { frame, columnEdges }`, a whole run's, for tests and the lab) the
@@ -1473,8 +1483,8 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   the carrier's work was 8.6 million steps on 2310.20360 (737 pages) and 7.1 million on 2106.10165 (471), 43 % and 36 % of the
   20 million the carrier once bounded a paper by, against 9.1 % and 5.8 % of `PAGE_WORK` on their heaviest pages. Nor does a
   page given up on leave anything that grows with the pages given up before it (`layout/oplist.mjs`): PDF.js's cancel drops
-  the page's list and its parse ends on its own (twelve pages of 1.6 million operations given up mid-parse: 5 MiB held after,
-  as for one), so no count of them is kept. What is left is time, which the host's deadline bounds (the prepare run's 1,200 s):
+  the page's list and its parse ends on its own (pages of 1.6 million operations given up mid-parse: 2 MiB held after for one,
+  3 for four, 5 for twelve, the document's fonts), so no count of them is kept. What is left is time, which the host's deadline bounds (the prepare run's 1,200 s):
   a paper may take its pages times `OPS_MS` where every page waits and stalls, a parse's own time where it does not (no engine
   bound), and its matching its pages times `MATCH_PAGE_WORK`.
 
