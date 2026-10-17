@@ -127,7 +127,8 @@ export function wireOf(draw) {
 }
 
 const encoder = new TextEncoder()
-/** wireOf's draw and its JSON (`text`, what a left part holds of it: format.mjs writeLeftPart `drawText`), or null. `plainItems`:
+/** wireOf's draw, its JSON (`text`, what a left part holds of it: format.mjs writeLeftPart `drawText`) and that JSON's UTF-8 bytes
+ *  (`bytes`), or null. `plainItems`:
  *  the items are rows as the data holds them already (plain arrays, -0 written 0: pipeline/draw-data.mjs drawTextOf's), checked
  *  but not copied */
 export function wireText(draw, { plainItems = false } = {}) {
@@ -142,9 +143,9 @@ export function wireText(draw, { plainItems = false } = {}) {
       }),
     }
     checkDraw(out)
-    const text = JSON.stringify(out)
-    if (encoder.encode(text).length > DRAW_BYTES) return null
-    return { draw: out, text }
+    const text = JSON.stringify(out), bytes = encoder.encode(text).length
+    if (bytes > DRAW_BYTES) return null
+    return { draw: out, text, bytes }
   } catch (e) {
     if (e instanceof DrawRefusal || e instanceof TypeError || e instanceof RangeError) return null
     throw e

@@ -115,7 +115,7 @@ export async function drawDataOf(page, annots = null, text = null) {
       links.push([a.rect, a.quadPoints ?? null, a.url ?? null, a.dest ?? null, a.overlaidText ?? null, a.borderStyle?.width ?? null, a.borderStyle?.style ?? null, a.color ?? null])
     }
     const w = wireText({ fonts: table, items: rows, links }, { plainItems: true })
-    return w === null ? { draw: null, why: 'shed' } : { draw: w.draw, text: w.text, why: null }
+    return w === null ? { draw: null, why: 'shed' } : { draw: w.draw, text: w.text, bytes: w.bytes, why: null }
   } catch (e) {
     if (isMemoryError(e)) throw e
     return { draw: null, why: 'read' }

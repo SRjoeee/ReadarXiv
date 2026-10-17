@@ -208,6 +208,24 @@ describe('makerOf: the draw option', () => {
     expect(text.draw?.map(x => x !== null)).toEqual([false, true, true])
   })
 
+  it('counts a held draw in its encoded bytes, for the budget and the stats: a page of CJK text', async () => {
+    const w = worldOf()
+    w.pages[0] = { runs: Array.from({ length: 10 }, (_, j): Run => ({ s: '\u6f22\u5b57\u306e\u6587\u3002'.repeat(8), x: 72, y: 700 - 12 * j })) }
+    w.marked = w.pages
+    const m = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+    if ('refused' in m) throw new Error('refused')
+    await m.readPage(1)
+    const bytes = m.drawStats.bytes, text = m.drawJsonOf(1) as string
+    expect(bytes).toBe(new TextEncoder().encode(text).length)
+    expect(bytes).toBeGreaterThan(text.length + 500)
+    // (a budget past the text's code units and short of its bytes holds none)
+    const tight = await makerOf({ ...(await input(w, { draw: true, drawHeldMax: text.length + 100 })), arxiv: drawable(arxivOf(w.pages)) as never })
+    if ('refused' in tight) throw new Error('refused')
+    await tight.readPage(1)
+    expect(tight.drawOf(1)).toBeNull()
+    expect(tight.drawStats).toMatchObject({ pages: 0, none: 1, why: { held: 1 }, bytes: 0 })
+  })
+
   it('past the held budget a page has none, and a page taken frees room for the next', async () => {
     const w = worldOf()
     const probe = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })

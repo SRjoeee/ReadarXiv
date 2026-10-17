@@ -567,20 +567,21 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     drawStats.ms += now() - t0
     let why = r.why
     if (r.draw !== null) {
-      const text = r.text
-      if (drawHeld + text.length > drawHeldMax) why = 'held'
-      else { draws.set(p, text); drawHeld += text.length; drawStats.pages++; drawStats.bytes += text.length }
+      // (in its encoded bytes, as the left part holds it)
+      const text = r.text, bytes = r.bytes
+      if (drawHeld + bytes > drawHeldMax) why = 'held'
+      else { draws.set(p, { text, bytes }); drawHeld += bytes; drawStats.pages++; drawStats.bytes += bytes }
     }
     if (why !== null) { drawStats.none++; drawStats.why[why] = (drawStats.why[why] ?? 0) + 1 }
   }
   /** page p's draw as its JSON, once (wireText's, checked: what the left part holds, format.mjs writeLeftPart `drawText`; the held
    *  text is let go with it): null for none */
   const drawJsonOf = p => {
-    const text = draws.get(p)
-    if (text === undefined) return null
+    const e = draws.get(p)
+    if (e === undefined) return null
     draws.delete(p)
-    drawHeld -= text.length
-    return text
+    drawHeld -= e.bytes
+    return e.text
   }
   /** page p's draw, once: null for none */
   const drawOf = p => { const text = drawJsonOf(p); return text === null ? null : JSON.parse(text) }
