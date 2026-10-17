@@ -1022,10 +1022,11 @@ function walk(s, from, to, b, ctx) {
       const [a, f] = args.map(x => s.slice(x.start + 1, x.end - 1).trim())
       // import.sty: \import{dir}{file} reads dir/file and puts dir first on the path an \input in it is looked for on,
       // \subimport the same from the directory imported last; subfiles loads \subfile{dir/file} by \subimport{dir}{file}
-      const imported = (dir, file) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs])
+      // (the file read inside a float is the float's: its units in `inFloat`, as TeX sets them there)
+      const imported = (dir, file) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs], b.inFloat)
       if (IMPORTS.has(name)) { if (f !== undefined) imported(IMPORTS.get(name) ? `${ctx.dirs[0] ?? ''}/${a}` : a, f) }
       else if (name === 'subfile') { if (a) imported(`${ctx.dirs[0] ?? ''}/${a.slice(0, a.lastIndexOf('/') + 1)}`, a.slice(a.lastIndexOf('/') + 1)) }
-      else if (a) ctx.visit(a, ctx.dirs)
+      else if (a) ctx.visit(a, ctx.dirs, b.inFloat)
       i = e; continue
     }
     if (HEADINGS.has(name) || OWN_UNIT_ARG.has(name)) {
@@ -1477,14 +1478,16 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
-  /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
-  function visit(rel, dirs = []) {
+  /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
+   *  `inFloat`: whether the file is read inside a float (the walk's builder there) */
+  function visit(rel, dirs = [], inFloat = false) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
     const b = new Builder(f.rel, units, f.text, ctx.bodies, ctx.floats), outer = ctx.dirs
+    if (inFloat) b.inFloat = true
     ctx.dirs = dirs
     // the file as TeX reads it: up to the line of an \endinput it acts on; its \end{document}s, where the walk stops,
     // those it surely reaches (documentEnds)

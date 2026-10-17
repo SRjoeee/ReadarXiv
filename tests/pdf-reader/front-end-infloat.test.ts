@@ -29,6 +29,22 @@ const read = (tex: string) => {
 }
 
 describe('inFloat: the indices of the units written inside a float', () => {
+  it('a file a float reads (\\input, \\include, \\subfile, \\import) is inside it, and the text after the float is not', () => {
+    const files = (body: string): Record<string, string> => ({ 'main.tex': doc(body, '\\usepackage{import}\\usepackage{subfiles}'), 'fig/body.tex': 'Produced by the author from the survey data.\n', 'fig/sub.tex': '\\documentclass[main.tex]{subfiles}\n\\begin{document}\nA note set in the figure by its own file.\n\\end{document}\n' })
+    const readFiles = (f: Record<string, string>) => {
+      const p = loadProject(inMemory(new Map(Object.entries(f).map(([k, v]) => [k, enc(v)]))), 'main.tex', { tables: true }), floats = new Set(p.inFloat)
+      return (p.units as unknown as Unit[]).map((u, i) => [textOf(u), floats.has(i)] as const)
+    }
+    for (const call of ['\\input{fig/body}', '\\include{fig/body}', '\\import{fig/}{body}', '\\subfile{fig/sub}']) {
+      const units = readFiles(files(['The text before the figure goes on here.', `\\begin{figure}${call}\\caption{A figure of the results.}\\end{figure}`, 'The text after the figure goes on here.'].join('\n\n')))
+      const inside = call.includes('sub}') ? 'A note set in the figure by its own file.' : 'Produced by the author from the survey data.'
+      expect(units, call).toEqual([['The text before the figure goes on here.', false], [inside, true], ['A figure of the results.', true], ['The text after the figure goes on here.', false]])
+    }
+    // (and read outside a float, a file's units are not in one)
+    const outside = readFiles(files(['The text before the file goes on here.', '\\input{fig/body}', 'The text after the file goes on here.'].join('\n\n')))
+    expect(outside.map(([, f]) => f)).toEqual([false, false, false])
+  })
+
   it('a figure\'s caption and the paragraph of its own beside it, a table\'s cells and caption; the text around them is not', () => {
     const units = read(doc([
       'The text before the figure goes on here.',
