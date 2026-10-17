@@ -15,7 +15,7 @@
 // restore counts as accounted for, are the same keys whichever source a unit took.
 import { PH_FLAG } from '../layout/file.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven, resolutionFrom, scriptedOf } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, resolutionFrom, scriptedOf, SHORT_SKIP } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -381,6 +381,31 @@ const segmentsOf = segs => {
   const S = []
   for (let s = 0; s + 5 < segs.length; s += 6) S.push({ page: segs[s], x0: segs[s + 1], base: segs[s + 2], x1: segs[s + 3], top: segs[s + 4], bottom: segs[s + 5] })
   return S
+}
+/**
+ * The unit's displayed formulas TeX set under a line of its own with its short skip: each segment of a display row the file
+ * found (neither LOST nor EMPTY; a later display of a group, JOINED, has none of its own), as segmentsOf gives it, whose top
+ * stands under the baseline of a line of the unit's (none it holds: a display's row) nearer than SHORT_SKIP of its size, a
+ * line that ends PREDISPLAY em or more before the segment starts, with that line (`line`, its index in the file: once for
+ * each such line). TeX's own test: \abovedisplayshortskip, nothing but stretch, under a line that ends 2 em before the
+ * display (\predisplaysize), \abovedisplayskip under any other; a display as near under a line that runs on over it is set
+ * so for another reason, and the original's line stands over it as it is. The segment is the block's of that line alone
+ * (layer2.mjs shortSkipsTo: another column's line beside the display is none of its), and slotsAt holds the line laid
+ * there to TeX's test too
+ */
+export function shortSkipsOf(lu) {
+  const out = [], L = lu.lines, held = new Set(lu.held ?? [])
+  for (const row of lu.ph.values()) {
+    if (row.kind !== 'display' || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY)) continue
+    for (const s of segmentsOf(row.segs)) {
+      for (let j = 0; j < L.length / 8; j++) {
+        const base = L[8 * j + 3], size = L[8 * j + 6]
+        if (held.has(j) || L[8 * j] !== s.page || !(s.top < base && s.top > base - SHORT_SKIP * size) || L[8 * j + 2] + PREDISPLAY * size > s.x0) continue
+        out.push({ ...s, line: j })
+      }
+    }
+  }
+  return out
 }
 /** whether a page character of the unit stands in one of the segments: within its ink's extent across, a half point either
  *  side; an inline one's on its line, within a script's window of its baseline; a display's anywhere in its rows */
