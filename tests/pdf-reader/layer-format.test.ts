@@ -1003,6 +1003,31 @@ describe('the head', () => {
     expect((await headWith(h => { h.lineskip = null })).lineskip).toBeNull()
   })
 
+  it('says whether the parts may carry draws: `draw` 1 last in the head, omitted when none (so a head without them keeps its bytes), part of the chain', async () => {
+    const w = (draw?: boolean) => writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: M.chunks, lineskip: [1, 0], ...(draw === undefined ? {} : { draw }) })
+    const none = await w(), off = await w(false), on = await w(true)
+    expect(Object.keys(parsed(none))).toEqual(['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip'])
+    expect(off.sha256).toBe(none.sha256)
+    expect(none.sha256).toBe(M.head.sha256)
+    expect(Object.keys(parsed(on)).at(-1)).toBe('draw')
+    expect(parsed(on).draw).toBe(1)
+    expect(on.sha256).not.toBe(none.sha256)
+    expect(M.readHead.draw).toBe(0)
+    expect((await readHead(on.bytes, { ref: on.ref })).draw).toBe(1)
+    expect(indexOf(await readHead(on.bytes, { ref: on.ref }), M.readChunks).head.draw).toBe(1)
+    // (an explicit 0 is read too, never written)
+    expect((await headWith(h => { h.draw = 0 })).draw).toBe(0)
+    // (a part of the other head is refused by the chain as ever: the draw changes the head's digest)
+    const other = await readHead(on.bytes, { ref: on.ref })
+    await expect(readPart(M.parts[0]!.bytes, { ref: M.parts[0]!.ref, index: indexOf(other, M.readChunks), chain: null })).rejects.toBeInstanceOf(BundleRefusal)
+  })
+
+  it('refuses a draw that is not 0 or 1', async () => {
+    for (const v of [2, -1, 0.5, true, false, '1', null, [], {}]) await bad((h: never) => { (h as { draw: unknown }).draw = v }, 'draw')
+    // (and any other key besides it)
+    await bad((h: never) => { (h as { draw: unknown; drawn: unknown }).draw = 1; (h as { drawn: unknown }).drawn = 1 }, 'drawn')
+  })
+
   it('has no `cites` (amendment M23): a head with the key is refused as no key of the schema, and the reading holds none', async () => {
     await bad((h: never) => { (h as { cites: unknown }).cites = null }, 'cites')
     await bad((h: never) => { (h as { cites: unknown }).cites = [['k', 'l']] }, 'cites')

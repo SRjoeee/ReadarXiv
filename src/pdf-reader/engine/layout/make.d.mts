@@ -110,6 +110,8 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     carrying(): 'carry' | null
     /** page p's draw geometry (the `draw` option), once: the held text is let go with it; null for none (not read, failed, a font a host
      *  would read differently, past the held budget) */
+    /** whether the draws are read (the `draw` option): the head of the layer made says so */
+    draw: boolean
     drawOf(p: number): import('../layer-proto/draw.mjs').Draw | null
     /** the draw reads: pages kept, pages with none and by why, the encoded bytes, the ms */
     drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }
