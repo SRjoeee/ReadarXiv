@@ -94,7 +94,7 @@ const LAYER_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+?)(\/prepare)?$/
 const ORIGINAL_ROUTE = /^\/api\/v1\/original\/([^/]+)$/
 /** an object of BUNDLE 4's layer by its digest (the capture groups: the segment, the ctag, the digest) */
 const OBJECT_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+)\/o\/([0-9a-f]{64})$/
-/** the served faces' table and its files (eb-report G1: `/static-fonts/index.json`, `/static-fonts/<group>.json`, a slice's
+/** the served faces' table and its files (`/static-fonts/index.json`, `/static-fonts/<group>.json`, a slice's
  *  file `/static-fonts/<16 hex>.woff2`), and the hyphenation patterns (`/hyph/<lang>.json`) */
 const FACES_ROUTE = /^\/static-fonts\/(index|[a-z0-9-]+)\.json$/
 const FACE_FILE_ROUTE = /^\/static-fonts\/([0-9a-f]{16})\.woff2$/

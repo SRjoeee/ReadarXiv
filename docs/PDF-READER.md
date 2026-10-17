@@ -758,7 +758,7 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   the pages before it, Enter follows one, and a screen reader names it by its record's `name`, the text drawn under it, set
   as an attribute's text (a name is the PDF's text and may hold control or bidirectional characters: never markup). A link
   with no glyph under it (an image, a symbol) is named by the host's `ViewWords.linkName`, else by a placeholder until the
-  owner's words (the draft: `.superpowers/sdd/2026-10-15-prepare-pipeline/links-copy-draft.md`). A record the view cannot
+  owner's words (drafted for the owner, not yet in the repository). A record the view cannot
   carry (no box of area, neither or both targets, an address off the allow-list) is left out.
 - **Placed by shares.** The anchor spans the union of its boxes and each box is a span of it, every size a share of the
   page's box (or the link's) made once from the place's viewport (its rotation, its box's origin): the place's own size
@@ -811,7 +811,8 @@ contract §4.3), started by the host once a translated display is shown in a vis
    nearest the page in view first (that page's closure by the side's `rowsFor`, then ahead before behind), each batch's rows
    taken as they come, then the end. A retry is the side's `again()`, every row held taken at once, and the run again.
 
-The served faces are `session/faces.ts` (our site's static table, eb-report G1), the hyphenation `<api>/hyph/<lang>.json`.
+The served faces are `session/faces.ts` (our site's static table: `/static-fonts/index.json` and `/static-fonts/<group>.json`),
+the hyphenation `<api>/hyph/<lang>.json`.
 An id with no version is the latest version arXiv's abstract page lists (`session/paper.ts`). The run's rows are
 `tests/pdf-reader/run.test.ts`, `server.test.ts`, `ranges.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
 reader on the sample served by the stand-in of the layer API, through the echo service.

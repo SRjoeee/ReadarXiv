@@ -6,7 +6,7 @@ Microsoft's web translator; target Chinese), 2026-10-17 01:08–01:10 JST, the m
 Load average (1 minute) 9.9 → 7.1 at the start and 4.2 at the end: the first paper's numbers are the most likely to be
 contaminated. Staging answered no 5xx; one prepare was asked (2608.04322v1, the reader's own rule, once a visit).
 
-Staging's faces' table was not served yet (eb-report G1, the web lane's W-M2): every unit was left the original's
+Staging's faces' table was not served yet (`/static-fonts/index.json` answered 404): every unit was left the original's
 (`served`), so these are the timings of the open, the prepare, the rows and the layer's own laying, not of drawing translated
 text, whose fonts are fetched on top.
 
@@ -66,7 +66,7 @@ end). ms from the reader's address loaded:
 
 - The large paper's first page now follows its original by 2.9–3.5 s, against 15.7–21.7 s (9.5 s in the reading above, at
   another load: the old check's wait was the rest of arXiv's download, asked twice, and so varied with the link). The
-  original's own 21 s is unchanged: arXiv's file through PDF.js's stream and ranges (eb-report, debt).
+  original's own 21 s is unchanged: arXiv's file through PDF.js's stream and ranges, to be measured on its own.
 - A small paper is as before: its bytes are in within the 100 ms the proof is given, nothing is asked of anyone.
 - The heap is 10 MB lower on the large paper: the composed document no longer holds a whole copy of the original.
 - No long task over 51 ms in any run; the renderers' resident memory 0.91–0.98 GB in both builds.

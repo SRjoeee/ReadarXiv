@@ -1,4 +1,4 @@
-// Our copy of arXiv's PDF read by ranges (session/ranges.ts; the bind, eb-report): every answer held to the base's length and
+// Our copy of arXiv's PDF read by ranges (session/ranges.ts; the base's check, DESIGN §16): every answer held to the base's length and
 // the entity-tag our server bound the layer to, a range across the seam split there, no read waiting for ever, PDF.js given the
 // bytes through its range transport; and the base check's two ends, arXiv's and ours
 import { afterEach, describe, expect, it, vi } from 'vitest'

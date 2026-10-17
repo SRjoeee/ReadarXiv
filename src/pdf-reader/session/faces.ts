@@ -1,5 +1,5 @@
 // The served faces as the engine asks for them (its `faceSources`, the layer-only plan §6): a face's slices, each a file on
-// our site and the code points it holds, read from the static faces' table our site serves (eb-report G1, the web's W-M2):
+// our site and the code points it holds, read from the static faces' table our site serves (`/static-fonts/index.json` and `/static-fonts/<group>.json`, the web's build's own tables):
 //
 //   GET <api>/static-fonts/index.json     { schema: 1, faces: { <face id>: { group }, … }, … }
 //   GET <api>/static-fonts/<group>.json   { schema: 1, group, slices: [[start, end, …], …], faces: { <face id>: [{ path } | null, …] }, … }

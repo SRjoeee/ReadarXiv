@@ -3,7 +3,7 @@
 //
 // The layer's composed document was arXiv's PDF read whole (PDF.js's getData waits for every byte of it), hashed, copied and
 // parsed again: on 2608.16117v1 (46 MB) the first page was laid 9.5 s after the original was on screen, the rest of arXiv's
-// file still coming (eb-report, the bind). Read by ranges instead, the document asks our copy for what its pages need and
+// file still coming (lab/pdf/records/layer-extension.md). Read by ranges instead, the document asks our copy for what its pages need and
 // nothing more, and the bytes after the original's last are the layer's tails. What the hash held, our server holds: it
 // commits a layer only over the copy whose length and SHA-256 are the head's base, and names that copy's entity-tag beside
 // the catalog and every object (server.ts BASE_ETAG_HEADER). Every answer here is held to it: a 206 of exactly the bytes

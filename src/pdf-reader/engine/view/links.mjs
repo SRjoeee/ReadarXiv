@@ -18,8 +18,7 @@
 import { urlAllowed } from '../layer-proto/links.mjs'
 
 /** the words a link with no glyph under it is named by (an image, a symbol: the engine's '' name), until a host gives its
- *  own (ViewWords.linkName): a placeholder, the owner's copy pending (.superpowers/sdd/2026-10-15-prepare-pipeline/
- *  links-copy-draft.md) */
+ *  own (ViewWords.linkName): a placeholder, the owner's words pending (PDF-READER §11.9) */
 export const LINK_NAME_PLACEHOLDER = Object.freeze({ internal: 'Link', external: 'Link' })
 /** the boxes a record may hold, the characters of its name and of a named destination at most (more is no link a page has) */
 export const BOXES_MAX = 64

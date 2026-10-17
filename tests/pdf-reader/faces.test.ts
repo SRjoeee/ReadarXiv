@@ -1,4 +1,4 @@
-// The served faces as the engine asks for them (session/faces.ts; eb-report G1): a face's slices from our site's static table,
+// The served faces as the engine asks for them (session/faces.ts): a face's slices from our site's static table,
 // read once a visit, a group's table the first time one of its faces is asked, each within its bounds; a face the index does
 // not serve has none; a table not to be had rejects, and is asked again later
 import { describe, expect, it, vi } from 'vitest'

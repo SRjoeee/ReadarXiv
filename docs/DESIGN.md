@@ -181,7 +181,7 @@ The website (readarxiv.org) offers the extension to a visitor who has none and s
 
 **The contract with the website.** On the website's pages the extension sets one attribute on `<html>`, `data-readarxiv-extension="<version>"`, where `<version>` is the extension's manifest version (`0.4.1`). It is set at `document_start`, so it is there before the page's first script runs: the website reads `document.documentElement.getAttribute('data-readarxiv-extension')` synchronously, and `null` means the extension is not there. The attribute is written when the document is created, so a visitor who installs the extension while the page is open sees it after the next load, not before. The mark is a hint for offering the install, not a proof: any script on the page can write the attribute, and the website must trust it for nothing else.
 
-**What lands where.** `src/shared/web-app.ts` holds the contract: `WEB_APP_HOSTS` (staging now, `app-staging.readarxiv.org`; production joins when the website is live there), `WEB_APP_MATCHES` (`https://<host>/*` for each) and `EXTENSION_MARK`. `src/entrypoints/web-app.content.ts` is the content script, `markWebAppPage` writes the attribute. The attribute is not `data-axt-*`: that prefix marks the extension's own work on the pages it translates, and this is a word between two products, which neither side may rename alone.
+**What lands where.** `src/shared/web-app.ts` holds the contract: `WEB_APP_HOSTS` (production's, `readarxiv.com`; a staging build, `pnpm build:staging`, adds `app-staging.readarxiv.org` through `wxt.config.ts`, and names itself in its `version_name`), `WEB_APP_MATCHES` (`https://<host>/*` for each) and `EXTENSION_MARK`. `src/entrypoints/web-app.content.ts` is the content script, `markWebAppPage` writes the attribute. The attribute is not `data-axt-*`: that prefix marks the extension's own work on the pages it translates, and this is a word between two products, which neither side may rename alone.
 
 **Invariants** (`tests/shared/web-app.test.ts`, `tests/e2e/probes/web-app-mark.mjs`, and `scripts/check-output.mjs` over the built manifest and script, first among its checks):
 
@@ -935,7 +935,8 @@ only how it meets the rest of the extension.
   translated again. The geometry, the pointer's path, the costs and the known limits:
   `docs/PDF-READER.md` §17.
 - **The layer** (`session/run.ts`, `session/server.ts`): a paper version's layer is asked of our server's layer API
-  (`READER_API`, a build setting: `https://readarxiv.com`, staging's in a test build; `addresses.ts`), by the reader's
+  (`READER_API`, a build setting: `https://readarxiv.com`, staging's in a test build, `pnpm build:staging`, whose package the
+  release's output check refuses; `addresses.ts`), by the reader's
   CTAG: its catalog, or the prepare under way with the objects made so far, or why there is none. Only the paper's id and
   version leave the machine, in the address: no query, no body but `{}` on the prepare (asked once a visit, where none is
   made yet), no credentials, no referrer; nothing of a translation, a setting or a key. Each object is read within its
@@ -951,7 +952,8 @@ only how it meets the rest of the extension.
   the left and lay the pages again. Other bytes, by either, show our copy on the left in their place (this machine's whole
   copy, else by ranges, else read whole and checked against the base); none to be had is no layer. Why: on 2608.16117v1
   (46 MB) the whole-file check laid the first page 9.5 s after the original was on screen, the rest of arXiv's file still
-  coming and asked twice (PDF.js's `getData` asks for every byte its stream is still bringing); eb-report, the bind.
+  coming and asked twice (PDF.js's `getData` asks for every byte its stream is still bringing); measured in
+  `lab/pdf/records/layer-extension.md`.
 - **The translation** is the extension's own: the engine's `runRows` over the layer's units, through the background's
   chain (§8.0, `session/translate.mjs`), the units the page in view waits for first, each batch's rows taken by the layer
   as they come. A retry opens the layer's door again, takes the rows held at once and runs again, the background's
