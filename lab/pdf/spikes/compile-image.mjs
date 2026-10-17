@@ -54,6 +54,13 @@ export const COMPILE_IMAGE = compileImageRef()
 export const PLATFORM = platformArgs()
 export const COMPILE_IDENTITY = compileIdentity(process.env, COMPILE_IMAGE, PLATFORM)
 
+/** the image's content id for a cache key: `native` under NATIVE_TEX=1 (no image to inspect), else the id docker gives the image
+ *  `ref` on `platform` */
+export async function imageIdOf(ref = COMPILE_IMAGE, platform = PLATFORM, ask = args => run('docker', args), env = process.env) {
+  if (env.NATIVE_TEX === '1') return 'native'
+  return (await ask(['image', 'inspect', ...platform, ref, '--format', '{{.Id}}'])).stdout.trim()
+}
+
 /** throws unless the local image of `ref` is its digest (and `platform`'s architecture); `ask` is docker's inspect, replaceable */
 export async function checkCompileImage(ref = COMPILE_IMAGE, platform = PLATFORM, ask = args => run('docker', args), env = process.env) {
   // (a native compile has no image to check)

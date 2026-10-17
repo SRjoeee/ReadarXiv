@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { COVERAGE_SOURCE } from '../../src/pdf-reader/engine/rules/font-coverage.mjs'
-import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, compileIdentity, compileImageRef, identityOf, imageFromArg, platformArgs } from '../../lab/pdf/spikes/compile-image.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, compileIdentity, compileImageRef, identityOf, imageFromArg, imageIdOf, platformArgs } from '../../lab/pdf/spikes/compile-image.mjs'
 
 // The compile image's identity (lab/pdf/spikes/compile-image.mjs): one reference for every Docker compile of the lab, the same
 // digest in every compile cache key, so that a cache of another TeX Live misses
@@ -106,10 +106,20 @@ describe('a native compile, the platform in the inspection and the key, and --im
   it('has the platform in the key of every cache, the marks gate\'s too', () => {
     const dir = join(import.meta.dirname, '../../lab/pdf/spikes')
     expect(readFileSync(join(dir, 'layout-marks-gate.mjs'), 'utf8')).toMatch(/JSON\.stringify\(\[FORMAT, READ_HASH, image, COMPILE_IDENTITY,/)
-    expect(readFileSync(join(dir, 'layout-marks-gate.mjs'), 'utf8')).toContain("['image', 'inspect', ...PLATFORM, COMPILE_IMAGE")
+    expect(readFileSync(join(dir, 'layout-marks-gate.mjs'), 'utf8')).toContain('await imageIdOf()')
     expect(readFileSync(join(dir, 'layout-paper-check.mjs'), 'utf8')).toContain('compileIdentity(process.env, IMAGE, PLATFORM)')
     // (one identity helper for the lot: the platform is part of it)
     expect(identityOf(A, ['--platform', 'linux/arm64'])).not.toBe(identityOf(A, ['--platform', 'linux/amd64']))
+  })
+
+  it('reads the image id of the platform it compiles on, and none under NATIVE_TEX=1 (the marks gate\'s key)', async () => {
+    asked.length = 0
+    const ask = async (args: string[]) => { asked.push(args); return { stdout: 'sha256:abc\n' } }
+    expect(await imageIdOf(B, ['--platform', 'linux/amd64'], ask, {})).toBe('sha256:abc')
+    expect(asked[0]).toEqual(['image', 'inspect', '--platform', 'linux/amd64', B, '--format', '{{.Id}}'])
+    asked.length = 0
+    expect(await imageIdOf(B, [], async () => { throw new Error('docker must not be asked') }, { NATIVE_TEX: '1' })).toBe('native')
+    expect(asked).toEqual([])
   })
 
   it('takes --image by digest alone: a tag is no identity', () => {

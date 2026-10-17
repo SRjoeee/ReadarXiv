@@ -55,7 +55,7 @@ import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/p
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { attribute, boxDiff, causesOf, classOfMark, compareReadings, fileStates, joinRuns, lineAt, linesOf, lostLines, pageBoxes, regressions, strictMoves, switchOffOf, traced, verdictOf, withFitr } from './layout-marks-compare.mjs'
-import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, imageIdOf, PLATFORM } from './compile-image.mjs'
 
 const run = promisify(execFile)
 const here = new URL('..', import.meta.url).pathname
@@ -77,7 +77,7 @@ const meta = JSON.parse(readFileSync(join(CORPUS_ROOT, 'out/corpus-meta.json'), 
 const ids = arg('papers')?.split(',').filter(Boolean) ?? meta.map(m => m.id)
 for (const id of ids) if (!existsSync(join(CORPUS_ROOT, 'data/corpus', id, 'source.gz'))) throw new Error(`no source for ${id}`)
 await checkCompileImage()
-const image = (await run('docker', ['image', 'inspect', ...PLATFORM, COMPILE_IMAGE, '--format', '{{.Id}}'])).stdout.trim()
+const image = await imageIdOf()
 /** what a compile keeps of itself: raised when what is kept changes, so that a kept compile is read again */
 const FORMAT = 4
 /** the code that reads a compile (its text items, readings, marks and marks file), hashed into every compile's key: a
