@@ -344,6 +344,7 @@
     "CTAG",
     "CTAG5",
     "DEPTH_NONE",
+    "DRAWS_HELD",
     "DROPPED_MAX",
     "DrawRefusal",
     "END_WHYS",
