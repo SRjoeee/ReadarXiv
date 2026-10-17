@@ -12,7 +12,7 @@
 // short run again once the services change. What is not seen takes no resources (DESIGN §10): the run starts once a translated
 // display is shown in a visible tab.
 import { appearanceRule } from '@/core/renderer/style-preset'
-import { htmlVersionOf } from '@/core/pdf/entry'
+import { htmlVersionOf, viewerUrlOf } from '@/core/pdf/entry'
 import { lookOf } from '@/config/appearance'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { createLayerStore, type LayerStore } from '@/cache/layer-store'
@@ -116,7 +116,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
     pdfjs: { lib: pdfjsLib, viewer: { EventBus, PDFViewer, PDFPageView, PDFLinkService, LinkTarget }, assets: ASSETS },
     words: { pageName: (side, n) => R.pageName(side === 'left' ? 'original' : 'translation', n), sideName: side => R.display[side === 'left' ? 'original' : 'translation'] },
     prefs: { get: () => prefsOf(config, !!dark?.matches), subscribe: l => { lookers.add(l); return () => { lookers.delete(l) } } },
-    links: { openExternal: url => { if (outward(url)) globalThis.open(url, '_blank', 'noopener') } },
+    links: { openExternal: url => { if (outward(url)) globalThis.open(url, '_blank', 'noopener,noreferrer') } },
     titleFallback: async () => (await abstract()).title,
     emit: e => {
       if (e.type === 'display') mode = e.display
@@ -251,6 +251,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
     },
     // (the translation's file is Task 20's)
     pdfBytes: async () => null,
-    openOriginal: () => { if (paper) globalThis.open(addresses.pdf, '_blank', 'noopener') },
+    // (the browser's own viewer asked by the address: the PDF page lays no reader over the new tab)
+    openOriginal: () => { if (paper) globalThis.open(viewerUrlOf(addresses.pdf), '_blank', 'noopener,noreferrer') },
   }
 }

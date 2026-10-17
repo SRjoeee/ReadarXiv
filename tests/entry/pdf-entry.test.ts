@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
-import { bilingualPdfOf, htmlUrlOf, htmlVersionOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
+import { bilingualPdfOf, htmlUrlOf, htmlVersionOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf, VIEWER_HASH, viewerUrlOf } from '@/core/pdf/entry'
 
 // The bilingual entry on arXiv's PDF page (issue #169): where it leads. The floating button itself: floating-button.test.ts
 
@@ -56,6 +56,16 @@ describe('readerWanted: the PDF page and its reader (the reader\'s design, §2)'
   it('opens the reader when the setting is on, translating only when asked', () => {
     expect(readerWanted({ enabled: true, hash: '' })).toEqual({ open: true, translate: false })
     expect(readerWanted({ enabled: true, hash: '#readarxiv' })).toEqual({ open: true, translate: true })
+  })
+
+  it('the browser\'s own viewer asked (#axt-viewer, the reader\'s original download): no reader, whatever the setting', () => {
+    expect(VIEWER_HASH).toBe('#axt-viewer')
+    for (const enabled of [true, false]) expect(readerWanted({ enabled, hash: '#axt-viewer' })).toEqual({ open: false, translate: false })
+    expect(readerWanted({ enabled: true, hash: '#AXT-Viewer' })).toEqual({ open: false, translate: false })
+    // another hash is not it
+    expect(readerWanted({ enabled: true, hash: '#axt-viewer-not' })).toEqual({ open: true, translate: false })
+    expect(viewerUrlOf('https://arxiv.org/pdf/2600.00001v1')).toBe('https://arxiv.org/pdf/2600.00001v1#axt-viewer')
+    expect(viewerUrlOf('https://arxiv.org/pdf/2600.00001v1#readarxiv')).toBe('https://arxiv.org/pdf/2600.00001v1#axt-viewer')
   })
 
   it('opens it off the setting only for #readarxiv, an explicit request', () => {

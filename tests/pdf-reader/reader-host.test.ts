@@ -142,7 +142,8 @@ describe('the run, once a translated display is shown (what is not seen takes no
     vi.stubGlobal('open', opened_)
     const a = await opened('paper=2600.00001v1')
     a.session.openOriginal()
-    expect(opened_).toHaveBeenCalledWith('https://arxiv.org/pdf/2600.00001v1', '_blank', 'noopener')
+    // the browser's viewer asked by the address, so that no reader is laid over the new tab; no opener, no referrer
+    expect(opened_).toHaveBeenCalledWith('https://arxiv.org/pdf/2600.00001v1#axt-viewer', '_blank', 'noopener,noreferrer')
     expect(a.view.originalData).not.toHaveBeenCalled()
     expect(await a.session.pdfBytes('translation')).toBeNull()
   })
