@@ -13,7 +13,7 @@ const ENGINE = 'src/pdf-reader/engine'
 const E = f => import(pathToFileURL(join(engineRoot, ENGINE, f)).href)
 const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }, { nameOf }, { PIPELINE_VERSION }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs'), import(pathToFileURL(join(repo, 'lab/pdf/spikes/layer-gate/ref.mjs')).href), E('pipeline/versions.mjs')])
 const compileImage = G.compileImageOf()
-G.checkCompileImage(compileImage, G.localImageDigests(compileImage.texlive.slice(0, compileImage.texlive.indexOf('@'))))
+G.checkCompileImage(compileImage, G.localImageDigests(compileImage.texlive))
 const fixtures = join(P, 'fixtures'), records = fixtures, refs = join(P, 'refs'), geometry = join(P, 'geometry')
 const names = G.outputsOf(refs)
 const layout = G.layoutVersionOf(fixtures, names, await G.layoutOfEngine(engineRoot))

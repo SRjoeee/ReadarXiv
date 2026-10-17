@@ -402,13 +402,13 @@ describe('the compile image is pinned by digest, one value for the pack and the 
 
   it('is three images by digest, a snapshot that is null or dated, and the TeX format', () => {
     const c = compileImageOf()
-    for (const k of ['texlive', 'base', 'node'] as const) expect(c[k]).toMatch(/^[a-z0-9./_-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$/)
+    for (const k of ['texlive', 'base', 'node'] as const) expect(c[k]).toMatch(/^[a-z0-9./_-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$/)
     expect(c.aptSnapshot === null || /^\d{8}T\d{6}Z$/.test(c.aptSnapshot)).toBe(true)
-    expect(c.texFormat).toMatchObject({ texlive: 2026, pdftex: '1.40.29' })
+    expect(c.texFormat).toMatchObject({ texlive: 2025, pdftex: '1.40.28' })
   })
 
   it('refuses a file that is not that: a tag with no digest, a short digest, another key, a bad snapshot', () => {
-    expect(() => compileImageOf(withPin(j => { j.node = 'node:22-trixie-slim' }))).toThrow(/node must be name:tag@sha256/)
+    expect(() => compileImageOf(withPin(j => { j.node = 'node:22-trixie-slim' }))).toThrow(/node must be name\[:tag\]@sha256/)
     expect(() => compileImageOf(withPin(j => { j.base = 'debian:trixie-slim@sha256:7792b1f7' }))).toThrow(/base must be/)
     expect(() => compileImageOf(withPin(j => { j.extra = 1 }))).toThrow(/the keys must be/)
     expect(() => compileImageOf(withPin(j => { j.aptSnapshot = 'yesterday' }))).toThrow(/aptSnapshot/)
@@ -418,8 +418,14 @@ describe('the compile image is pinned by digest, one value for the pack and the 
   it('checks the local image\'s repo digests against the pin, and says what it found', () => {
     const c = compileImageOf(), want = c.texlive.slice(c.texlive.indexOf('@') + 1)
     expect(() => checkCompileImage(c, ['sha256:' + '0'.repeat(64), want])).not.toThrow()
-    expect(() => checkCompileImage(c, ['sha256:' + '0'.repeat(64)])).toThrow(/not the pinned sha256:16c556/)
+    expect(() => checkCompileImage(c, ['sha256:' + '0'.repeat(64)])).toThrow(/not the pinned sha256:7056390e/)
     expect(() => checkCompileImage(c, [])).toThrow(/not there/)
+  })
+
+  it('refuses a make when COMPILE_IMAGE names another image than the pin', () => {
+    const c = compileImageOf(), want = c.texlive.slice(c.texlive.indexOf('@') + 1)
+    expect(() => checkCompileImage(c, [want], { COMPILE_IMAGE: `texlive/texlive@sha256:${'e'.repeat(64)}` })).toThrow(/not the pin/)
+    expect(() => checkCompileImage(c, [want], { COMPILE_IMAGE: c.texlive })).not.toThrow()
   })
 
   it('asks docker for the repo digests of the reference, and refuses where docker cannot answer', () => {
