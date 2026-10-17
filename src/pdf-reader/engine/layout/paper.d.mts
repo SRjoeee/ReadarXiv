@@ -1,12 +1,40 @@
 // paper.mjs's types: a paper's layout marks in one call, for the server's prepare child, the extension's reader and the layer gate's maker
 import type { Compiled, CompileRequest, Paper } from '../pipeline/live.mjs'
-import type { LayoutMarks, UnitMarks } from './marks.mjs'
+import type { LayoutMarks, MarkedOptions, UnitMarks } from './marks.mjs'
 
 /** CM's record (converge then mark): the unmarked original's draft passes, the marked original's passes, whether the
  *  last marked pass wrote the files it was given (else the bound of five TeX passes was reached and its PDF kept), and
  *  why today's compile was asked instead, where it was: a host that returned no files, a draft that did not run
  *  through, a bibliography job beside the main one's (aux-jobs), a .bib the project lacks (bib-missing), or files to carry past the host's bound (files-bound, treated like an absent `files`). Pass counts enter no key and no file */
 export interface ConvergeRecord { drafts: number; marked: number; settled: boolean; fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' | 'files-bound' }
+
+/** markedOfPaper's and layoutMarksOfPaper's compile options: the host's compile and CM's bounds */
+export interface MarkedCompileOptions {
+  compile(req: CompileRequest): Promise<Compiled>
+  converge?: boolean
+  /** with `converge`: the host's compile budget for the paper, in ms of its wall (each answer's `ms`, else the time the
+   *  compile took) across the probe and the passes; a bet (the second draft, a marked pass after the first) is not
+   *  started with less left than 1.2 times the longest pass so far. Absent: unlimited */
+  compileBudgetMs?: number | null
+  /** with `converge`: the host's bound on the files of one compile, { count, bytes } (the web's 256 and 8 MiB). The files CM carries
+   *  back accumulate across passes: before each pass that would carry them (carried + the previous pass's returned, the pass's
+   *  own overrides aside) they are held to it, and past it today's compile is asked (`files-bound`). Absent: unlimited */
+  filesBound?: { count: number; bytes: number } | null
+  /** not read here (readMarked's, the host's): taken so that layoutMarksOfPaper's options may be passed as they are */
+  OPS?: Record<string, number>
+}
+
+/**
+ * a paper's marked original: layoutMarksOfPaper's probe and marked compile without the reading (stages 1 and 2), for a host
+ * that reads it elsewhere (layerOfPaper's `marked: { doc, log, options }`, a page at a time): the marked compile's PDF, its
+ * last pass's log (lastTexLog), and readMarked's options but the units and the operator codes. `ms` times the probe and the
+ * compile; a stage that fails gives { refused } naming it ('probe', 'compile'), as layoutMarksOfPaper's, with `cm` where
+ * CM ran. Never throws
+ */
+export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Promise<
+  | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number }; cm?: ConvergeRecord }
+  | { refused: 'probe' | 'compile'; ms: Record<string, number>; cm?: ConvergeRecord }
+>
 
 /**
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read
@@ -25,17 +53,7 @@ export interface ConvergeRecord { drafts: number; marked: number; settled: boole
  * their record. A pass that returns no `files`, a draft that did not run through (a timeout too), a bibliography job beside the
  * main one's or a missing .bib gets today's compile; a marked pass that did not run through, or a compile that throws, is the compile's refusal
  */
-export declare function layoutMarksOfPaper(paper: Paper, o: {
-  compile(req: CompileRequest): Promise<Compiled>
+export declare function layoutMarksOfPaper(paper: Paper, o: MarkedCompileOptions & {
   open(pdf: Uint8Array): Promise<{ doc: unknown; close(): Promise<void> }>
   OPS: Record<string, number>
-  converge?: boolean
-  /** with `converge`: the host's compile budget for the paper, in ms of its wall (each answer's `ms`, else the time the
-   *  compile took) across the probe and the passes; a bet (the second draft, a marked pass after the first) is not
-   *  started with less left than 1.2 times the longest pass so far. Absent: unlimited */
-  compileBudgetMs?: number | null
-  /** with `converge`: the host's bound on the files of one compile, { count, bytes } (the web's 256 and 8 MiB). The files CM carries
-   *  back accumulate across passes: before each pass that would carry them (carried + the previous pass's returned, the pass's
-   *  own overrides aside) they are held to it, and past it today's compile is asked (`files-bound`). Absent: unlimited */
-  filesBound?: { count: number; bytes: number } | null
 }): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number }; cm?: ConvergeRecord } | { refused: 'probe' | 'compile' | 'marks'; ms: Record<string, number>; cm?: ConvergeRecord }>

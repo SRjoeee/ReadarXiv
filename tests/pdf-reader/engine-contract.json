@@ -202,6 +202,7 @@
     "markProbeTex",
     "markUnits",
     "markWords",
+    "markedOfPaper",
     "marksFile",
     "matchUnits",
     "needFrontier",
