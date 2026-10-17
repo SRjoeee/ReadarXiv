@@ -14,7 +14,7 @@ function served(over: Record<string, unknown> = {}) {
   const tables: Record<string, unknown> = { 'index.json': INDEX, 'lm-roman.json': LM, 'shs-sc.json': SC, ...over }
   const f = vi.fn(async (url: string) => {
     calls.push(url)
-    const name = url.slice(`${API}/static-fonts/`.length)
+    const name = url.slice(`${API}/static-fonts/`.length).replace(/\?fonts=4$/, '')
     const t = tables[name]
     if (t instanceof Error) throw t
     return t === undefined ? new Response('', { status: 404 }) : new Response(typeof t === 'string' ? t : JSON.stringify(t))
@@ -29,8 +29,9 @@ describe('the served faces', () => {
     expect(await faces('lm-roman-regular')).toEqual([{ url: `${API}/static-fonts/aaaaaaaaaaaaaaaa.woff2`, ranges: [32, 126] }])
     expect(await faces('shs-sc-regular')).toEqual([{ url: `${API}/static-fonts/bbbbbbbbbbbbbbbb.woff2`, ranges: [0x4e00, 0x4fff] }, { url: `${API}/static-fonts/cccccccccccccccc.woff2`, ranges: [0x5000, 0x5fff] }])
     expect(await faces('lm-roman-regular')).toHaveLength(1)
-    // the index once, each group's table once
-    expect(s.calls).toEqual([`${API}/static-fonts/index.json`, `${API}/static-fonts/lm-roman.json`, `${API}/static-fonts/shs-sc.json`])
+    // the index once, each group's table once, asked with the tables' FONTS (the index's own): a browser holding a table of
+    // another FONTS, immutable for a year, asks again
+    expect(s.calls).toEqual([`${API}/static-fonts/index.json`, `${API}/static-fonts/lm-roman.json?fonts=4`, `${API}/static-fonts/shs-sc.json?fonts=4`])
   })
 
   it('a face the index does not serve has none, with no table read for it', async () => {
