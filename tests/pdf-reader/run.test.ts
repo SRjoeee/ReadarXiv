@@ -7,7 +7,7 @@ import type { LayerStore } from '@/cache/layer-store'
 import { writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { ENDS_AFTER_MS, type RunEvent, type RunHost, startRun, WAIT_MIN } from '@/pdf-reader/session/run'
+import { ENDS_AFTER_MS, POLL_SLOW_AFTER_MS, POLL_SLOW_MS, PREPARE_DEADLINE_MS, type RunEvent, type RunHost, startRun, WAIT_MIN } from '@/pdf-reader/session/run'
 import { sha256Of } from '@/pdf-reader/session/server'
 import { made, type Made, N, PAPER } from './helpers/format-paper'
 
@@ -78,7 +78,7 @@ function pdfjs() {
   const getDocument = vi.fn((p: Record<string, unknown>) => { docs.push(p); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } })
   return { lib: { getDocument, PDFDataRangeTransport } as never, docs }
 }
-function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean }) {
+function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
   const s = server(o.looks, o), side = fakeSide(), v = o.view ?? view(), events: RunEvent[] = []
   const engine = o.engine ?? echo()
   const opened: Uint8Array[] = []
@@ -88,6 +88,7 @@ function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | 
     engine: typeof engine === 'function' ? engine : async () => engine,
     openPdf: (data: Uint8Array) => { opened.push(data); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } as never },
     ...(o.ranged ? { pdfjs: lib.lib, originalUrl: ARXIV } : {}),
+    ...(o.hidden ? { hidden: o.hidden } : {}),
     readingPage: () => 1, mayPrepare: o.may ?? (() => true), emit: e => events.push(e), faces: async () => null, createSide: side.make as never,
   }
   const r = startRun(v as never, PAPER, host)
@@ -130,6 +131,61 @@ describe('Review Focus 1: our server\'s every answer', () => {
     expect(kinds(a.events).filter(k => k === 'prepared')).toHaveLength(1)
     expect(kinds(a.events).indexOf('prepared')).toBeGreaterThan(kinds(a.events).lastIndexOf('preparing'))
     // the reader's close lets the look go
+    a.r.dispose()
+  })
+
+  it('a prepare that does not end: polled no sooner than our server asks, every few seconds once it has gone on a while, and given up at its deadline as not to be had now', async () => {
+    vi.useFakeTimers()
+    const a = run({ looks: [() => json(202, { position: null, stage: 'units', progress: 0.1, retryAfterMs: 0 })] })
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(POLL_SLOW_AFTER_MS)
+    const early = a.s.layerLooks()
+    expect(early).toBeGreaterThanOrEqual(POLL_SLOW_AFTER_MS / WAIT_MIN - 2)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(a.s.layerLooks() - early).toBeLessThanOrEqual(60_000 / POLL_SLOW_MS + 1)
+    await vi.advanceTimersByTimeAsync(PREPARE_DEADLINE_MS)
+    expect(a.events.at(-1)).toEqual({ type: 'unavailable', why: 'unreachable', retryAt: null })
+    const done = a.s.layerLooks()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(a.s.layerLooks()).toBe(done)
+    // asked again by the reader, it begins afresh
+    a.r.retry()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(a.s.layerLooks()).toBe(done + 1)
+    a.r.dispose()
+  })
+
+  it('a hidden tab polls nothing until it is shown again, and its hidden time is no part of the deadline', async () => {
+    vi.useFakeTimers()
+    let hidden = true, show = () => {}
+    const a = run({
+      looks: [() => json(202, { position: null, stage: 'units', progress: 0.1, retryAfterMs: 0 })],
+      hidden: { now: () => hidden, shown: () => new Promise<void>(r => { show = r }) },
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(PREPARE_DEADLINE_MS * 2)
+    // the first look, then nothing while hidden
+    expect(a.s.layerLooks()).toBe(1)
+    expect(a.events.some(e => e.type === 'unavailable')).toBe(false)
+    hidden = false
+    show()
+    await vi.advanceTimersByTimeAsync(WAIT_MIN * 3)
+    expect(a.s.layerLooks()).toBeGreaterThanOrEqual(3)
+    a.r.dispose()
+  })
+
+  it('a retry during a limit\'s wait asks nothing sooner: the look comes once the wait has passed', async () => {
+    vi.useFakeTimers()
+    const a = run({ looks: [() => json(429, { retryAfterMs: 30_000 }), () => new Response(catalog)] })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(a.events.at(-1)).toMatchObject({ type: 'unavailable', why: 'refused' })
+    a.r.retry()
+    await vi.advanceTimersByTimeAsync(10_000)
+    a.r.retry()
+    await vi.advanceTimersByTimeAsync(19_000)
+    expect(a.s.layerLooks()).toBe(1)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(a.s.layerLooks()).toBe(2)
     a.r.dispose()
   })
 

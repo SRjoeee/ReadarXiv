@@ -83,6 +83,9 @@ export interface RunHost {
   emit(e: RunEvent): void
   /** the faces' sources (servedFaces over `api` by default) */
   faces?: LayerSideOptions['faceSources']
+  /** whether the reader's tab is hidden now, and its showing again: a hidden tab polls our server for nothing (the
+   *  extension's loading rule, DESIGN §10); none: always shown */
+  hidden?: { now(): boolean; shown(signal: AbortSignal): Promise<void> }
   createSide?: typeof createLayerSide
 }
 export interface Run {
@@ -98,6 +101,11 @@ export interface Run {
 export const ENDS_AFTER_MS = 100
 /** a 202's or a 429's wait, never sooner than our server asks: at least a second, at most ten minutes */
 export const WAIT_MIN = 1000, WAIT_MAX = 600_000
+/** a prepare polled for this long (the tab shown) is asked of every POLL_SLOW_MS at most, whatever its 202s say: staging's
+ *  prepares took about 45 s (lab/pdf/records/layer-extension.md), so a first page is never later for it */
+export const POLL_SLOW_AFTER_MS = 120_000, POLL_SLOW_MS = 5000
+/** a prepare polled for this long (the tab shown) is given up: the bilingual version not to be had now, a retry asks again */
+export const PREPARE_DEADLINE_MS = 600_000
 const waitOf = (ms: number) => Math.min(WAIT_MAX, Math.max(WAIT_MIN, Number.isFinite(ms) ? ms : WAIT_MIN))
 const isAbort = (e: unknown) => (e as Error)?.name === 'AbortError'
 const kindOf = (e: unknown): ProviderErrorKind => ((e as { kind?: ProviderErrorKind })?.kind ?? 'unknown')
@@ -128,6 +136,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   /** the rows of the visit, latest per unit; the attempt's abort; how far the translation is */
   const rows = new Map<number, Row>()
   let attempt: AbortController | null = null, total = 0, lost = 0, looks = 0, prepares = 0, ours = false
+  /** how long the prepare has been polled for, the tab shown (its deadline's); until when a limit's wait runs (a retry waits
+   *  it out) */
+  let preparedFor = 0, refusedUntil = 0
   /** where the run is: its service and its look at the layer (`state`), and its translation of the layer's units (`rowsState`) */
   let state: 'engine' | 'looking' | 'open' | 'unavailable' | 'failed' = 'engine'
   let rowsState: 'idle' | 'translating' | 'translated' | 'failed' = 'idle'
@@ -139,7 +150,21 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   })
   const unavailable = (why: Unavailable, retryAt: number | null = null) => {
     state = 'unavailable'
+    refusedUntil = why === 'refused' && retryAt !== null ? retryAt : 0
     emit({ type: 'unavailable', why, retryAt })
+  }
+  /** the wait before the next look at a prepare under way: our server's, never sooner, and POLL_SLOW_MS at least once it has
+   *  gone on a while; then, where the tab is hidden, until it is shown (that time no part of the deadline) */
+  async function paced(asked: number, signal: AbortSignal) {
+    const wait = Math.max(waitOf(asked), preparedFor >= POLL_SLOW_AFTER_MS ? POLL_SLOW_MS : 0)
+    await sleep(wait, signal)
+    preparedFor += wait
+    if (host.hidden?.now()) await host.hidden.shown(signal)
+  }
+  /** a limit's wait, then the tab shown */
+  async function waited(asked: number, signal: AbortSignal) {
+    await sleep(waitOf(asked), signal)
+    if (host.hidden?.now()) await host.hidden.shown(signal)
   }
 
   // ---------------------------------------------------------------- the side's transport
@@ -309,13 +334,15 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
           tellCatalog(a.catalog)
           return
         case 'preparing':
+          // a prepare past its deadline: given up for now, said so (a retry asks again)
+          if (preparedFor >= PREPARE_DEADLINE_MS) { console.warn('[reader] the prepare did not end in time'); return unavailable('unreachable') }
           emit({ type: 'preparing', position: a.preparing.position, progress: a.preparing.progress })
           if (a.preparing.layer) { emit({ type: 'layer' }); side?.tell(a.preparing.layer) }
-          try { await sleep(waitOf(a.preparing.retryAfterMs), signal) } catch { return }
+          try { await paced(a.preparing.retryAfterMs, signal) } catch { return }
           continue
         case 'refused':
-          unavailable('refused', Date.now() + a.retryAfterMs)
-          try { await sleep(waitOf(a.retryAfterMs), signal) } catch { return }
+          unavailable('refused', Date.now() + waitOf(a.retryAfterMs))
+          try { await waited(a.retryAfterMs, signal) } catch { return }
           state = 'looking'
           continue
         case 'none':
@@ -327,8 +354,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
             const p = await askPrepare(host.api, paper, { fetch: f, signal })
             if (gone()) return
             if (p.kind === 'none') return unavailable(p.why === 'not-prepared' ? 'cannot-prepare' : p.why)
-            if (p.kind === 'refused') { unavailable('refused', Date.now() + p.retryAfterMs); await sleep(waitOf(p.retryAfterMs), signal); state = 'looking'; continue }
-            if (p.kind === 'preparing') { emit({ type: 'preparing', position: p.preparing.position, progress: p.preparing.progress }); await sleep(waitOf(p.preparing.retryAfterMs), signal) }
+            if (p.kind === 'refused') { unavailable('refused', Date.now() + waitOf(p.retryAfterMs)); await waited(p.retryAfterMs, signal); state = 'looking'; continue }
+            if (p.kind === 'preparing') { emit({ type: 'preparing', position: p.preparing.position, progress: p.preparing.progress }); await paced(p.preparing.retryAfterMs, signal) }
           } catch (e) {
             if (gone() || isAbort(e)) return
             if (e instanceof LayerUnreachable) return unavailable('unreachable')
@@ -413,6 +440,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     const signal = begun.signal
     ac.signal.addEventListener('abort', () => begun.abort(), { once: true })
     state = 'engine'
+    preparedFor = 0
     try {
       engine = await host.engine()
     } catch (e) {
@@ -436,6 +464,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     get side() { return side },
     retry() {
       if (disposed) return
+      // a limit's wait under way: the look asks again once it has passed, never sooner
+      if (state === 'unavailable' && refusedUntil > Date.now()) return
       // a run that found no layer, or no service: begun again
       if (!side || !engine || state === 'unavailable') {
         void engine?.close?.()

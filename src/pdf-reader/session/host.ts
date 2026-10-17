@@ -25,7 +25,7 @@ import { READER_API, readerAddresses } from '../addresses'
 import { fromView, type Session } from '../controller'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, pdfjsLib } from '../pdfjs'
 import { displayOf, firstConfig, followOf, withDisplay } from '../settings'
-import { whenVisible } from '../visible'
+import { shownAgain, whenVisible } from '../visible'
 import type { EngineDisplay, SessionHost, SyncMode } from './events'
 import { abstractPage, ownVersion } from './paper'
 import { type Run, startRun } from './run'
@@ -148,6 +148,9 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
   // the harness's hooks (the browser checks, the lab's probes): the view, the run and its side, bounded probes alone
   const reader = { ready: false, view, store, get run() { return run }, probe: () => view.probe(), side: () => run?.side ?? null }
   ;(window as unknown as { __reader: object }).__reader = reader
+  /** the paper's HTML version on arXiv (one request a visit, however often the bilingual version cannot be had), or null */
+  let htmlAsked: Promise<string | null> | null = null
+  const htmlVersion = () => (htmlAsked ??= htmlVersionOf(paper, io.fetch ?? fetch).catch(() => null))
   /** the paper version: its own, else the latest the abstract page lists; null where it cannot be had */
   const version = async () => ownVersion(paper) ?? (async () => { const v = (await abstract()).version; return v ? { id: paper, version: v } : null })()
   async function begin() {
@@ -157,7 +160,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
     if (run) return
     if (!p) {
       // no version to ask our server for: arXiv's page could not be read, so the bilingual version cannot be had now
-      host.emit({ type: 'html', url: await htmlVersionOf(paper, io.fetch ?? fetch).catch(() => null) })
+      host.emit({ type: 'html', url: await htmlVersion() })
       host.emit({ type: 'unavailable', why: 'unreachable', retryAt: null })
       return
     }
@@ -166,13 +169,14 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
       engine: () => (io.engine ?? openEngine)({ paper }),
       openPdf: (data, options) => pdfjsLib.getDocument({ ...options, data }) as unknown as DocumentTask,
       pdfjs: pdfjsLib, originalUrl: addresses.pdf,
+      hidden: { now: () => document.visibilityState === 'hidden', shown: signal => shownAgain(document, signal) },
       readingPage: () => readingPage,
       mayPrepare: () => { if (prepareAsked) return false; prepareAsked = true; return true },
       emit(e) {
         if (e.type === 'unavailable') {
           // the paper's own, or its language's: the translated displays greyed, the original shown for this visit
           if (e.why !== 'refused' && e.why !== 'unreachable') { held = true; view.setDisplay('original') }
-          void htmlVersionOf(paper, io.fetch ?? fetch).catch(() => null).then(url => host.emit({ type: 'html', url }))
+          void htmlVersion().then(url => host.emit({ type: 'html', url }))
         }
         if (e.type === 'fail') { host.emit({ type: 'fail', event: 'service', text: `Cannot translate ${paper} (${e.kind})`, kind: e.kind }); return }
         if (e.type === 'layer') { host.emit({ type: 'coming' }); return }

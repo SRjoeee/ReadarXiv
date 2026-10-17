@@ -125,6 +125,18 @@ describe('the run, once a translated display is shown (what is not seen takes no
     expect(b.view.setDisplay).not.toHaveBeenCalledWith('original')
   })
 
+  it('asks arXiv for the paper\'s HTML version once a visit, however often the bilingual version cannot be had', async () => {
+    const fetch = vi.fn(async () => new Response('', { status: 404 }))
+    const a = await opened('paper=2600.00001v1', { fetch: fetch as never })
+    await flush()
+    const emit = ((a.run.mock.calls[0] as unknown[])[2] as { emit(e: unknown): void }).emit
+    for (let i = 0; i < 4; i++) emit({ type: 'unavailable', why: 'refused', retryAt: Date.now() + 1000 })
+    await flush(20)
+    const html = (fetch.mock.calls as unknown as [string][]).filter(([url]) => String(url).includes('/html/'))
+    expect(html).toHaveLength(1)
+    expect(a.events.filter(e => e.type === 'html')).toHaveLength(4)
+  })
+
   it('asks the prepare once a visit, whatever the runs', async () => {
     const a = await opened()
     await flush()

@@ -941,7 +941,9 @@ only how it meets the rest of the extension.
   version leave the machine, in the address: no query, no body but `{}` on the prepare (asked once a visit, where none is
   made yet), no credentials, no referrer; nothing of a translation, a setting or a key. Each object is read within its
   bounds by the engine's own readers (cap, digest, values, shape, chain) in the reading view's layer side, which lays the
-  pages as their parts and rows come. A 202's and a 429's waits are never shorter than our server asks. arXiv's PDF is the
+  pages as their parts and rows come. A 202's and a 429's waits are never shorter than our server asks (a retry waits a
+  429's out); a prepare is asked of every 5 s at most after 2 minutes, given up after 10, and not polled while the tab is
+  hidden. arXiv's PDF is the
   layer's base only where its bytes are, and the check does not wait for the whole file (`session/ranges.ts`): the first to
   answer decides, of the left's bytes digested once its document has loaded them of itself (a proof) and the two ends
   compared — arXiv's length and last cross-reference section against our copy's, one range each, where our server names the

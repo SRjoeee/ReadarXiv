@@ -788,9 +788,12 @@ contract §4.3), started by the host once a translated display is shown in a vis
 1. **The service first** (`session/translate.mjs` `openEngine`, the background's chain): its target is the layer's (one of
    the engine's `TARGETS`, else S-R-13 and nothing asked of our server); a service that cannot run is the card's reason.
 2. **The layer's look** (`session/server.ts`, the layer API v1 by the reader's CTAG): a catalog is told to the side whole,
-   with its end, and kept on this machine; each 202 is the prepare under way, said (S-R-23), its objects so far told, asked
-   again once its wait has passed (never sooner, at least a second); a 404 `not-prepared` asks the prepare, once a visit; any
-   other 404 is why there is none (S-R-17); a 429 waits its time (S-R-24 meanwhile); our server out of reach (a 5xx or the
+   with its end, and kept on this machine, and ends the prepare (`prepared`: the prepare is a state of its own beside the
+   phase, so that a poll after the translation has begun moves no phase); each 202 is the prepare under way, said (S-R-23),
+   its objects so far told, asked again once its wait has passed (never sooner, at least a second; every 5 s at most once
+   it has been polled for 2 minutes; given up after 10, S-R-24 with its retry; none while the tab is hidden, that time not
+   counted); a 404 `not-prepared` asks the prepare, once a visit; any other 404 is why there is none (S-R-17); a 429 waits
+   its time (S-R-24 meanwhile, whose retry waits it out too); our server out of reach (a 5xx or the
    network, twice) opens a paper whose catalog this machine holds, else S-R-24. Only the paper's id and version leave the
    machine, in the address: no query, `{}` the prepare's only body, no credentials, no referrer.
 3. **The objects** through this machine's store first (`cache/layer-store.ts`, by digest, checked there), then our server
