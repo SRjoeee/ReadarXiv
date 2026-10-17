@@ -204,7 +204,7 @@ export function layoutVersionOf(fixtures, names, expected) {
 const IMAGE_REF = /^[a-z0-9][a-z0-9./_-]*(?::[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$/
 /**
  * The compile image's pin (lab/pdf/compile-image.json): { texlive, base, node, aptSnapshot, texFormat }, the three images as
- * `name[:tag]@sha256:<64 hex>`, `aptSnapshot` a dated snapshot or null (not pinned yet), `texFormat` the TeX Live release and the
+ * `name[:tag]@sha256:<64 hex>`, `aptSnapshot` the dated apt snapshot the web container installs from, or null where none is pinned, `texFormat` the TeX Live release and the
  * format's tool versions. Throws on a file that is not that
  */
 export function compileImageOf(file = COMPILE_IMAGE_FILE) {
