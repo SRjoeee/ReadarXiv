@@ -2378,7 +2378,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     stats.ms.rows = now() - t
     return st
   }
-  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map(), drawOf, drawStats }
+  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map(), drawOf, drawStats, draw: wantDraw }
 }
 
 /**

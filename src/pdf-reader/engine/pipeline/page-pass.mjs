@@ -246,7 +246,7 @@ async function cutWhole(ctx, r) {
   const hooks = layout && remove ? chainedAddon({ N, views: side.pages, base: { bytes: base.bytes, xref: base.xref }, planOf: p => plans?.get(p) ?? null, pdfjs, remove }) : null
   const state = { index: null, chain: null, read: null }
   const whole = { paper: { ...paper, pages: N }, base, versions: { image }, units: bundle, left: { pages: side.pages, units: side.units }, layout }
-  const { units: chunks, head, cutter, known } = await wholeCutter(whole, { leftPages: drawn(side.leftPages, ctx.maker), base, image, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null })
+  const { units: chunks, head, cutter, known } = await wholeCutter(whole, { draw: ctx.maker?.draw === true, leftPages: drawn(side.leftPages, ctx.maker), base, image, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null })
   if (ctx.verdicts) state.index = await indexOfHead(head, chunks)
   if (ctx.onHead) await ctx.onHead(head, chunks)
   for (;;) {
@@ -289,7 +289,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   const { paper, N, base, image, remove, pdfjs, bundle } = ctx
   const lines = maker ? maker.pageLines() : new Map()
   const units = await writeUnitChunks({ paper, units: bundle })
-  const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip })
+  const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip, draw: maker?.draw === true })
   const hooks = remove && st ? chainedAddon({ N, views: left.pages, base: { bytes: base.bytes, xref: base.xref }, planOf: p => st.plans?.get(p) ?? null, pdfjs, remove }) : null
   const state = { index: ctx.verdicts ? await indexOfHead(head, units) : null, chain: null, read: null }
   const cutter = partCutter({ paper, N, head, views: left.pages, leftPages: drawn(left.leftPages, maker), addon: null, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null, retain: false })

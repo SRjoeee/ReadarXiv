@@ -45,14 +45,15 @@ function drawable(doc: ReturnType<typeof arxivOf>, modes: Record<number, Mode> =
 
 async function passOf(w: World, modes: Record<number, Mode> = {}, o: Partial<Parameters<typeof layerOfPaper>[0]> = {}) {
   const lefts = new Map<number, Draw | null>(), told: string[] = []
+  const heads: Written[] = []
   const r = await layerOfPaper({
     paper: PAPER, source: source(w), marks: await readOf(w), arxiv: { doc: drawable(arxivOf(w.pages), modes), text: await readArxivText(arxivOf(w.pages)) }, OPS, pdfjs: '6.3.289', base: BASE, image: '1',
-    onHead: () => { told.push('head') },
+    onHead: h => { told.push('head'); heads.push(h) },
     onLeft: l => { lefts.set((l as Written & { page: number }).page, (JSON.parse(new TextDecoder().decode(l.bytes)) as { draw: Draw | null }).draw) },
     onPart: p => { told.push(`part ${(p as Written & { from: number }).from}`) },
     ...o,
   })
-  return { r, lefts, told }
+  return { r, lefts, told, heads }
 }
 
 afterEach(() => { vi.useRealTimers() })
@@ -98,6 +99,19 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
     expect(got.lefts.get(1)).not.toBeNull()
     expect(got.lefts.get(3)).not.toBeNull()
     expect(got.r).toMatchObject({ stats: { draw: { pages: 2, none: 1, why: { time: 1 } } } })
+  })
+
+  it('the head says draw 1 where the draws are read, and says nothing where they are not', async () => {
+    const on = await passOf(worldOf())
+    const off = await passOf(worldOf(), {}, { draw: false })
+    const headOf = (w: Written) => JSON.parse(new TextDecoder().decode(w.bytes)) as Record<string, unknown>
+    expect(headOf(on.heads[0] as Written).draw).toBe(1)
+    expect(headOf(off.heads[0] as Written)).not.toHaveProperty('draw')
+    // (the whole path, the stream's and the oracle's alike)
+    const capture: { frame?: unknown; columnEdges?: unknown } = {}
+    await passOf(worldOf(), {}, { capture: capture as never })
+    const streamed = await passOf(worldOf(), {}, { oracle: capture as never })
+    expect(headOf(streamed.heads[0] as Written).draw).toBe(1)
   })
 
   it('`draw: false` reads no page\'s draw: every page tells none', async () => {
