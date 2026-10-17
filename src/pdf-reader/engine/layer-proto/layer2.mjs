@@ -1519,6 +1519,8 @@ function splitCites(g) {
   return [g]
 }
 
+/** whether growCrop grows a crop, and so reads its page's ink: a crop with a box, not one cut from a layout file's segment */
+export const cropGrows = r => !!r?.crop && !r.gap?.box
 /**
  * A crop's box grown over the ink it touches on the original page: a radical's tail, a fraction's bar, a big operator's
  * limits reach past its glyphs' boxes (0.26 em below their baseline to 0.8 above), and a radical often has no character
@@ -1530,7 +1532,7 @@ function splitCites(g) {
  * piece, and the map's ink beyond it is another's (a neighbour's glyph or rule, which a crop grown there carried)
  */
 export function growCrop(r, ink, toDev, k, pageChars = []) {
-  if (!ink || !r?.crop || r.gap?.box) return
+  if (!ink || !cropGrows(r)) return
   const f = ink.factor
   const cellPt = f / k
   const own = new Set((r.gap?.chars ?? []).map(c => `${c.item}|${c.k}`))
