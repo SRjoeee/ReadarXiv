@@ -871,11 +871,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       pending.push({ i, k, items, cs, upTo: Math.max(...cs.map(c => c.page)) })
     }))
   }
-  /** unit i's pages wanted: its own marks' carried pages, and those of its pieces that name a link, their points and glyphs */
+  /** unit i's pages wanted: every page from the first to the last its own marks, and its pieces that name a link (their points
+   *  and glyphs), are carried to, so that a page of its lines between them (a unit over three pages or more, its marks on its
+   *  first and last) has its links read too: the order within the unit reads every one of its lines' pages */
   function need(i) {
     if (needed.has(i)) return
     needed.add(i)
-    const add = (pg, x, y) => { const c = carriedPage(pg, x, y); if (c !== null) wanted.add(c) }
+    let lo = Infinity, hi = -Infinity
+    const add = (pg, x, y) => { const c = carriedPage(pg, x, y); if (c !== null) { lo = Math.min(lo, c); hi = Math.max(hi, c) } }
     for (const end of ['s', 'e']) for (const pre of ['', 't', 'h']) { const nm = `${pre}${i}${end}`, m = dropped.has(nm) ? null : at.get(nm); if (m) add(m.page, m.x, m.y) }
     units[i].pieces.forEach((piece, k) => {
       if (!linkablePiece(piece)) return
@@ -883,6 +886,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const e = ownInk.get(`p${i}.${k}a`)
       if (e && e[1] < OWNED && e[1] !== IN_GROUP) for (const it of itemsOfInk(e)) add(it.page, it.x0, it.y)
     })
+    for (let q = lo; q <= hi; q++) wanted.add(q)
   }
   /** the pieces pending whose glyphs' pages are all read by page `upTo`, judged: a glyph with no glyph of its character near
    *  where it is carried on arXiv's page (whose ink is read; a dark page's piece is never placed, and wants nothing) */

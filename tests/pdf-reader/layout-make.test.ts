@@ -1689,6 +1689,33 @@ describe('makeLayout, the link-anchor locator: a reference or a citation placed 
     expect('file' in other.out && other.out.stats.links.placed).toEqual([[0, 1]])
   })
 
+  it('a unit across three pages: the links of each page of its lines are read, the page between its marks too', async () => {
+    // (unit 0 from page 1's foot over page 2 to page 3, its reference on page 3: no mark of it on page 2)
+    const fill = (page: number, n: number, y = 700): Run[] => Array.from({ length: n }, (_, j) => ({ s: words(1000 * page + 10 * j, 10), x: 72, y: y - 12 * j }))
+    const A: Run = { s: words(0, 10), x: 72, y: 640 }, B: Run = { s: words(10, 10), x: 72, y: 700 }
+    const O: Run = { s: 'w20 w21 w22 w23 see Appendix C for w24 w25 w26', x: 72, y: 700 }, T: Run = { s: 'w20 w21 w22 w23 see Section C for w24 w25 w26', x: 72, y: 700 }
+    const p1 = [...fill(1, 3), A], p3 = (r: Run) => [r, ...fill(3, 3, 676)]
+    const link = (r: Run) => [over(r, C(r), C(r) + 1, 'appendix.C')]
+    const w: World = {
+      marked: [{ runs: p1 }, { runs: [B] }, { runs: p3(O), annots: link(O) }],
+      pages: [{ runs: p1, annots: [] }, { runs: [B], annots: [] }, { runs: p3(T), annots: link(T) }],
+      marks: [
+        ['1s', 1, 72, 700], ['1e', 1, endOf(p1[2] as Run), 676], ['0s', 1, 72, 640], ['0e', 3, endOf(O), 700],
+        ['p0.1a', 3, xAt(O, O.s.indexOf('Appendix')), 700], ['p0.1b', 3, xAt(O, O.s.indexOf(' for')), 700],
+        ['2s', 3, 72, 676], ['2e', 3, endOf(p3(O)[3] as Run), 652],
+      ],
+      units: [
+        unit('para', [text(`${A.s} ${B.s} w20 w21 w22 w23 see `), ph('\\cref{app:c}'), text(' for w24 w25 w26')]),
+        unit('para', [text(fill(1, 3).map(r => r.s).join(' '))]),
+        unit('para', [text(fill(3, 3, 676).map(r => r.s).join(' '))]),
+      ],
+    }
+    const { file, stats } = await made(w)
+    expect(new Set(rowsOf(file, 0, 'lines').filter((_, j) => j % 8 === 0))).toEqual(new Set([1, 2, 3]))
+    expect(phOf(file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('ref'), 0, 3, xAt(T, T.s.indexOf('Section')), 700, xAt(T, C(T) + 1), 707.5, 697.5])
+    expect(stats.links).toMatchObject({ placed: [[0, 1]], why: {} })
+  })
+
   it('found today, it is the same row, links or none, and the locator never tries it', async () => {
     const same = (mine?: Annot[], arxiv?: Annot[]) => made(drift(THEIRS, THEIRS, { ...(mine ? { mine } : {}), ...(arxiv ? { arxiv } : {}) }))
     const plain = await same(), linkedToo = await same([over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')], [over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')])
