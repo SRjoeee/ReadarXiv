@@ -160,10 +160,13 @@ export function modelPage({ units, ref, items, translated, cut = [], placement =
       // display's room or its stacked lines move little; not its closest, which a fraction's two baselines set)
       const seg = mine.slice(1).map((l, i) => (l.block !== undefined && l.block === mine[i].block ? mine[i].baseline - l.baseline : null)).filter(g => g !== null && g > 0.1).sort((a, b) => a - b)
       // rounded as the parity harness rounded them (its floor was taken so): a frame 0.996 lines short is one line short
+      // (`dBody`: as `dRight`, each line's end taken where the marks it ends with that hang begin, hangFromOf: a frame past
+      // the right edge by its hanging marks alone, by at most their own width, hangs; past it by more, it runs over)
       geo.push({
         id: u.id, kind: u.kind, n: fr.n,
         dTop: rd(dTop - oTop, 2), blank: rd((dBottom - oBottom) / fr.pitch, 2),
         dRight: rd(Math.max(...mine.map(l => l.x1)) - fr.x1, 2),
+        dBody: rd(Math.max(...mine.map(l => (Number.isFinite(l.hangFrom) ? Math.min(l.x1, l.hangFrom) : l.x1))) - fr.x1, 2),
         pitch: dPitch && fr.n > 1 ? rd(dPitch / fr.pitch, 3) : null,
         rhythm: seg.length && fr.n > 1 ? rd(seg[seg.length >> 1] / fr.pitch, 3) : null,
         onGrid: rd(mine.filter(l => fr.lines.some(o => Math.abs(o.baseline - l.baseline) < 0.5)).length / mine.length, 2),
@@ -542,6 +545,27 @@ export function lineStartsOf(lines) {
   return { lineStartPunct: where.length, where }
 }
 
+/** a closing mark that may hang past a line's end: one UAX 14 keeps from a line's start (noStart, the table lineStartPunct
+ *  reads: a closing bracket, a comma, an ideographic full stop), or a final quotation mark (Unicode's Pf: the closing
+ *  quotes the breaker hangs as CJK's closing marks, layer2.mjs PUNCT_CLOSE) */
+const hangs = ch => noStart(ch) || /^\p{Pf}$/u.test(ch)
+
+/**
+ * Where a drawn line's hanging marks begin: the advance of the first of the tokens that end it holding nothing but
+ * closing marks (`hangs`), which may stand past the right edge by their own width (a CJK closing mark whose blank half
+ * the breaker hangs, layer2.mjs breakLines; standard CJK hanging punctuation); null where the line ends with none.
+ * `items`: the line's laid items in order ({ t: { s, space, crop }, x, shift }, layer2.mjs placeItems), PDF units
+ */
+export function hangFromOf(items) {
+  let k = items?.length ?? 0
+  while (k > 0) {
+    const t = items[k - 1]?.t
+    if (!t || t.space || t.crop || typeof t.s !== 'string' || t.s === '' || ![...t.s].every(hangs)) break
+    k--
+  }
+  return items && k < items.length && Number.isFinite(items[k].x) ? items[k].x - (items[k].shift ?? 0) : null
+}
+
 /**
  * Whether an erased glyph of a drawn unit is accounted for by the strict rule of glyphsLost (the 2608.16117 survey),
  * by TeX's file first: a glyph in one of the unit's placeholders' segments (`inSeg`) is that placeholder's ink, accounted
@@ -566,10 +590,20 @@ export const glyphAccounted = ({ cat, inSeg, fromSource, onLine, inGap, used, dr
  * baseline less 0.22 of its size, a top its first plus 0.75 (geo's own). Nothing between: no other frame of the page's
  * reference, no text item (a display), and no more than three of the upper's pitches of the original's (a graphic's room).
  * Each gap's `ratio`, drawn ÷ original, and its `extra`, the drawn gap's excess in the upper frame's original pitches.
- * A frame drawn short of its original's last line adds its blank to the gap below it, which no frame measure sees
+ * A frame drawn short of its original's last line adds its blank to the gap below it, which no frame measure sees.
+ * And whether it is `tight` (paraGapTight, the half-leading round, 2026-10-17): narrower than the lines beside it, which the
+ * ratio cannot see, as it holds the drawn gap to the original's whatever the drawn leading (a paragraph spread at 1.4
+ * pitches from its frame's first baseline to its last stood a pitch from the next: ratio 1). By baselines: the drawn gap
+ * (the upper's last drawn baseline to the lower's first) less the drawn leading (the mean of the two frames' own, each its
+ * consecutive drawn lines' lower median gap within a flow segment) short of the original's room past its pitch (its gap
+ * less the pitch, the lower median of the two frames' own gaps: a \parskip; capped at a pitch, so that a line borrowed
+ * into a wider room is no tight gap) by more than TIGHT of a pitch.
+ * Null where neither frame draws two lines (no leading to hold it to), and between two frames of one unit
  */
+const TIGHT = 0.05
 export function paraGapsOf(drawn, ref, items) {
   const span = (a, b) => [Math.max(a.x0, b.x0), Math.min(a.x1, b.x1)]
+  const mean = xs => xs.reduce((s, x) => s + x, 0) / xs.length
   const all = []
   for (const r of ref) frameGroups(r.orig).forEach((f, i) => all.push({ key: `${r.id}|${i}`, x0: f.x0, x1: f.x1, top: f.first + 0.75 * f.size, foot: f.last - 0.22 * f.size }))
   const body = []
@@ -579,7 +613,12 @@ export function paraGapsOf(drawn, ref, items) {
     frames.forEach((fr, i) => {
       const mine = framed[i].sort((a, b) => b.baseline - a.baseline)
       if (!mine.length) return
-      body.push({ key: `${u.id}|${i}`, x0: fr.x0, x1: fr.x1, pitch: fr.pitch, top: fr.first + 0.75 * fr.size, foot: fr.last - 0.22 * fr.size, dTop: mine[0].baseline + 0.75 * mine[0].size, dFoot: mine.at(-1).baseline - 0.22 * mine.at(-1).size })
+      // (the drawn leading: the lower median gap of its consecutive lines within one flow segment, never across a display it
+      // holds, as geo's rhythm reads it: 2307.16209 page 52, two lines 76 apart about a display; and the original's gaps, which
+      // a display's rows among its lines widen, pooled with the other frame's for the pitch)
+      const gaps = mine.slice(1).map((l, j) => (l.block === mine[j].block ? mine[j].baseline - l.baseline : null)).filter(g => g !== null && g > 0.1).sort((a, b) => a - b)
+      const og = fr.lines.slice(1).map((l, j) => fr.lines[j].baseline - l.baseline).filter(g => g > 0.1)
+      body.push({ key: `${u.id}|${i}`, id: u.id, x0: fr.x0, x1: fr.x1, pitch: fr.pitch, og, first: fr.first, last: fr.last, top: fr.first + 0.75 * fr.size, foot: fr.last - 0.22 * fr.size, dFirst: mine[0].baseline, dLast: mine.at(-1).baseline, lead: gaps.length ? gaps[(gaps.length - 1) >> 1] : null, dTop: mine[0].baseline + 0.75 * mine[0].size, dFoot: mine.at(-1).baseline - 0.22 * mine.at(-1).size })
     })
   }
   const out = []
@@ -600,7 +639,13 @@ export function paraGapsOf(drawn, ref, items) {
       || items.some(it => { const cy = (it.y0 + it.y1) / 2; return Math.min(x1, it.x1) - Math.max(x0, it.x0) > 1 && cy < a.foot && cy > b.top })
     if (between) continue
     const g = a.dFoot - b.dTop
-    out.push({ ratio: rd(g / g0, 3), extra: rd((g - g0) / a.pitch, 3) })
+    let tight = null
+    const leads = [a.lead, b.lead].filter(x => x > 0)
+    if (a.id !== b.id && leads.length) {
+      const og = [...a.og, ...b.og].sort((x, y) => x - y), p = og.length ? og[(og.length - 1) >> 1] : a.pitch
+      tight = a.dLast - b.dFirst - mean(leads) < Math.min(a.last - b.first - p, p) - TIGHT * p
+    }
+    out.push({ ratio: rd(g / g0, 3), extra: rd((g - g0) / a.pitch, 3), tight })
   }
   return out
 }

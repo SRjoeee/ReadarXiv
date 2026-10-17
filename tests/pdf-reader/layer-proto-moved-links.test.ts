@@ -47,7 +47,7 @@ function paper({ annots = true } = {}) {
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(annots ? { getAnnotations: async () => annotationsOf(n) } : {}) })
   const doc = { numPages: PAGES, getPage: async (n: number) => pageOf(n) }
   const layout = {
-    schema: 4, lineskip: null, layout: '6', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: PAGES }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
+    schema: 4, lineskip: null, layout: '7', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: PAGES }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
     units: specs.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, s.pieces ?? 1]),
     lines: specs.map(s => [s.id, s.lines.flatMap(l => { const [x0, x1] = spanOf(l); return [l.page, x0, x1, l.b, l.b + 7, l.b - 2, 10, 0] })]),
     frames: specs.map(s => [s.id, s.lines.flatMap((l, j) => [l.page, 0, j, 1, j ? 0 : -1, 0])]),
@@ -120,5 +120,54 @@ describe('links moved over a run', () => {
       expect(without.linksOf(p)).toEqual([])
     }
     expect(without.linkStats.unread).toBe(PAGES)
+  })
+})
+
+// openProto reads each font's map through fontMappedOf (layer2.mjs): a document opened without PDF_OPTIONS (a non-Type3
+// font with no `toUnicode` key) is refused when a page's fonts are read, never drawn as one whose fonts have no map. The
+// test holds the call in run.mjs: take it out and the first case resolves
+describe('openProto and the font maps', () => {
+  const fontsAre = (font: object) => {
+    const P = paper()
+    const getPage = P.doc.getPage
+    P.doc.getPage = async (n: number) => ({ ...(await getPage(n)), commonObjs: { get: () => font } }) as never
+    return P
+  }
+  it('a document opened without PDF_OPTIONS throws the PDF_OPTIONS error as page 1 is laid', async () => {
+    const run = await open(fontsAre({ name: 'Times-Roman', isType3Font: false }))
+    await expect(run.layFor(1)).rejects.toThrow(/PDF_OPTIONS/)
+  })
+  it('the same document opened with them (the font carries its map, here none to read) is laid', async () => {
+    const run = await open(fontsAre({ name: 'Times-Roman', isType3Font: false, toUnicode: undefined }))
+    await run.layFor(1)
+    expect(run.rows[0]!.markup.length).toBeGreaterThan(0)
+  })
+})
+
+// A document the run swapped away from is told to the host once no read holds it, and the run keeps nothing of it after: the
+// host destroys it, and a set of retired documents kept for the run's length held every one of them (and its pages) alive
+describe('openProto and the documents it retires', () => {
+  const collect = async () => { for (let i = 0; i < 3; i++) { await new Promise<void>(resolve => setTimeout(resolve, 10)); (globalThis as { gc?: () => void }).gc!() } }
+  /** a run read from a fresh document, the document itself held by nothing here but a weak reference */
+  async function openFresh(told: unknown[]) {
+    const P = paper()
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const run = await openProto({ doc: P.doc, target: 'zh', pages: PAGES, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units: [], onRetired: (d: unknown) => told.push(new WeakRef(d as object)) } as never) as Run
+    return { run, weak: new WeakRef(P.doc as object) }
+  }
+  it('lets go of a retired document once it is told: swapped away from, it is told once and then collected; the newest is told at dispose', async () => {
+    const told: WeakRef<object>[] = []
+    const { run, weak } = await openFresh(told)
+    expect((globalThis as { gc?: () => void }).gc, 'the test run must expose gc').toBeTypeOf('function')
+    await run.layFor(1)
+    run.swap(paper().doc as never)
+    expect(told.map(t => t.deref())).toEqual([weak.deref()])
+    expect(told.length).toBe(1)
+    await collect()
+    expect(weak.deref(), 'the retired document is still held by the run').toBeUndefined()
+    run.dispose()
+    expect(told.length).toBe(2)
+    run.dispose()
+    expect(told.length).toBe(2)
   })
 })

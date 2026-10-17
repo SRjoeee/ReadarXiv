@@ -172,7 +172,7 @@ import { chromium } from 'playwright'
 import { engineKindOf } from './layer-gate/kind.mjs'
 import { encodePng } from './layer-gate/png.mjs'
 import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath, withNames } from './layer-gate/ref.mjs'
-import { compare, completenessRows, droppedOutputs, fixtureTotals, LINKS_MIN, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
+import { compare, completenessRows, droppedOutputs, fixtureTotals, inkLine, LINKS_MIN, MEASURES, pageEntry, pooled, REPORTED } from './layer-gate/score.mjs'
 import { composedDiff } from './layer-gate/links.mjs'
 
 const here = new URL('.', import.meta.url).pathname
@@ -1059,20 +1059,23 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
   whole.set(made.tail, bytes.length)
   const shipped = { bytes: whole, appended: made.tail.length, manifest: made.manifest }
   const ms = { ...made.ms }
-  if (!check) return { doc, shipped, ms }
+  // (the pages whose ink the add-on's walk did not read whole, or read degraded: layout/addon.mjs pagePlansOf; an engine
+  // before 2026-10-16 tells none)
+  const ink = made.ink ?? null
+  if (!check) return { doc, shipped, ms, ink }
 
   const { openRemover, makeAddon, SETS, CHECK_SETS } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
-  const { pageInk, outlineTable } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const { pageInk, outlineTable, BOXES_PAGE, GLYPHS_PAGE } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
   const { pagePlan } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/removal.mjs'))
   const ops = [], inks = [], collected = new Map()
   // (the pages' operator lists and ink again, every glyph its outline's box and the boxes collected into the outline table)
   let t = performance.now()
   for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); ops[p] = await pg.getOperatorList() }
-  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected }) }
+  for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); inks[p] = pageInk(OPS, ops[p], pg.commonObjs, { rotate: pg.rotate, indices: true, collect: collected, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE }) }
   // the plan: every unit the layout file holds, page by page
   const plan = { pages: {} }
   for (let p = 1; p <= doc.numPages; p++) {
-    if (inks[p].rotated || inks[p].capped) continue
+    if (inks[p].rotated || inks[p].capped || inks[p].timedOut) continue
     const { own: _own, ...pp } = pagePlan(index, p, inks[p])
     if (pp.units.length || pp.names?.length) plan.pages[p] = pp
   }
@@ -1087,7 +1090,7 @@ async function buildAddon(bytes, layoutFile, { check = true } = {}) {
     if (e.dirty && out.manifest.page[p]?.ok) out.manifest.page[p].dirty = e.dirty
     if (e.rules && out.manifest.page[p]) out.manifest.page[p].rules = e.rules
   }
-  return { doc, inks, plan, shipped, out, collected, ms }
+  return { doc, inks, plan, shipped, out, collected, ms, ink }
 }
 // (no more than limit + 1 bytes out, or a throw: the remover's contract, its page refused either way)
 const inflateTolerant = (b, limit = Infinity) => {
@@ -1124,15 +1127,25 @@ async function makeAddonOf(key, bytes, layoutFile) {
   if (!existsSync(join(dir, 'done.json')) || !existsSync(shippedFile)) {
     mkdirSync(dir, { recursive: true })
     const { checkPage } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
-    const { pageInk } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+    const I = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs')), { pageInk } = I
+    // (a reading not whole: an engine before ink.mjs unreadOf reads its flags so)
+    const unreadOf = I.unreadOf ?? (k => (k?.rotated ? 'rotated' : k?.capped ? 'capped' : k?.timedOut ? 'timedOut' : null))
     const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-    const { doc, inks, plan, shipped, out, collected, ms } = await buildAddon(bytes, layoutFile)
+    const { doc, inks, plan, shipped, out, collected, ms, ink } = await buildAddon(bytes, layoutFile)
     // the check: each removed page against the original, by PDF.js's reading of the new file
     const t = performance.now()
     const comb = await openNode(out.bytes)
     const check = {}, N = doc.numPages
     const inkAt = async q => { const pg = await comb.getPage(q); return pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate, indices: true }) }
-    for (let p = 1; p <= N; p++) if (out.manifest.page[p]?.ok) check[p] = checkPage({ orig: inks[p], removed: await inkAt(out.manifest.sets.R + p), kept: await inkAt(out.manifest.sets.P + p), entry: plan.pages[p] })
+    // (a page one of the three readings does not read whole is checked from no prefix of its ink: left unchecked, and said)
+    const checkUnread = []
+    for (let p = 1; p <= N; p++) {
+      if (!out.manifest.page[p]?.ok) continue
+      const removed = await inkAt(out.manifest.sets.R + p), kept = await inkAt(out.manifest.sets.P + p)
+      const why = unreadOf(inks[p]) ?? unreadOf(removed) ?? unreadOf(kept)
+      if (why) checkUnread.push([p, why])
+      else check[p] = checkPage({ orig: inks[p], removed, kept, entry: plan.pages[p] })
+    }
     ms.check = performance.now() - t
     for (const d of [doc, comb]) { try { await d.loadingTask.destroy() } catch {} }
     writeFileSync(file, out.bytes)
@@ -1146,6 +1159,10 @@ async function makeAddonOf(key, bytes, layoutFile) {
       // (the planned pages whose word the shipped manifest and the check's differ in: the maker never reads a clean page and makes R alone, the check makes every set; none on the five papers)
       shippedApart: Object.keys(plan.pages).filter(p => !!shipped.manifest.page[p]?.ok !== !!out.manifest.page[p]?.ok).map(Number),
       stats: shipped.manifest.stats, ms: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])),
+      // (the pages of arXiv's PDF the add-on's walk did not read whole, capped or timed out, which no unit is drawn on, and
+      // those it read degraded, ink.mjs BOXES_PAGE: the gate's ink line)
+      ink,
+      ...(checkUnread.length ? { checkUnread } : {}),
     }
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(out.manifest))
     writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan))
@@ -1291,6 +1308,8 @@ console.log(`\n${TIER} tier: ${ran.length} outputs, ${ran.reduce((a, r) => a + r
 let exit = failures.length ? 1 : 0
 const bad = completeness.filter(c => c.fails.length)
 console.log(`completeness (spec §5): ${bad.length ? `${bad.length} of ${completeness.length} outputs fail: ${bad.map(c => `${c.name} [${c.fails.join(', ')}]`).join('; ')}` : `every one of ${completeness.length} outputs passes`}${bad.length && arg('check') ? ' (under --check the merge rule decides: each check is a measure of it)' : ''}`)
+// (the pages whose ink the add-on's walk did not read whole, or read degraded: reported, never silent)
+if (REMOVAL) console.log(inkLine(completeness))
 // (the links' minimums' misses, each output's: the annotations not kept, page:rank, and the moved records not true, page:rank)
 for (const c of completeness) {
   if (c.linksWrongAt) console.log(`  ${c.name}: links wrong at ${c.linksWrongAt.slice(0, 40).join(' ')}${c.linksWrongAt.length > 40 ? ' ...' : ''}`)
@@ -1505,7 +1524,7 @@ function fidelityMd(record) {
   for (const k of keys) { const r = record.tiers[k]; cols.push([`${k}, shared ten`, r.totals.shared], [`${k}, all ${r.totals.all?.outputs ?? ''}`, r.totals.all]) }
   L.push('## Against the original', '', `| measure | Original | ${cols.map(c => c[0]).join(' | ')} |`, `|---|---|${cols.map(() => '---|').join('')}`)
   for (const m of ms) L.push(`| ${m[4]} | ${originalOf(m)} | ${cols.map(c => shown(c[1], m)).join(' | ')} |`)
-  for (const [key, label] of REPORTED) L.push(`| ${label} (not gated) | ${key === 'pitch' ? '1' : key === 'onGrid' ? '100.0 %' : '0'} | ${cols.map(c => (key === 'onGrid' ? pct(c[1]?.[key]) : num(c[1]?.[key], 3))).join(' | ')} |`)
+  for (const [key, label] of REPORTED) L.push(`| ${label} (not gated) | ${key === 'pitch' || key === 'paraGap' ? '1' : key === 'onGrid' ? '100.0 %' : key === 'hanging' ? '0.0 %' : '0'} | ${cols.map(c => (key === 'onGrid' || key === 'hanging' ? pct(c[1]?.[key]) : num(c[1]?.[key], 3))).join(' | ')} |`)
   L.push('')
   const below = ms.filter(m => fl[m[0]] !== undefined && run.totals.shared && (() => { const w = closer(m, fl, run.totals.shared); return w !== null && w < 0 })())
   L.push(`**Below the prototype's floor on the shared ten** (${keys[0]}): ${below.length ? below.map(m => m[4]).join(', ') : 'none'}.`, '')
@@ -1570,8 +1589,8 @@ function closer(m, a, b) {
 function gateMd(run, rows) {
   const L = ['# The instant layer\'s completeness gate (spec §5)', '']
   L.push(`Written by \`spikes/layer-gate.mjs --tier=${run.tier} --record\` on ${run.made.slice(0, 10)}, the engine at \`${run.engine.commit?.slice(0, 8)}\`. Pages: ${run.inputs.pages}; a check fails on any count above 0 (lost ink: regions of more than ${run.inputs.inkMin} device pixels at ${run.inputs.inkScale}x).`, '')
-  L.push(`| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | lines over a display | links wrong | links kept (at least ${pct(LINKS_MIN.kept)}) | moved links true (at least ${pct(LINKS_MIN.true)}) | fails |`, '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
-  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.textInDisplay ?? 0} | ${r.linksWrong ?? 0} | ${r.linksKept === undefined ? '-' : pct(r.linksKept)} | ${r.linksTrue === undefined ? '-' : pct(r.linksTrue)} | ${r.fails.join(', ') || 'none'} |`)
+  L.push(`| output | pages | lost ink | missing | twice | doubled brackets | duplications | equation numbers shown | clipped | groups drawn partly | labels left in the source | lines over a display | lines opened by a barred mark | links wrong | links kept (at least ${pct(LINKS_MIN.kept)}) | moved links true (at least ${pct(LINKS_MIN.true)}) | ink not whole (capped / timed out / degraded pages) | fails |`, '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+  for (const r of rows) L.push(`| ${r.name} | ${r.pages} | ${r.lostInk ?? '-'} | ${r.missing} | ${r.twice} | ${r.brackets} | ${r.duplicated} | ${r.numbers[0]} / ${r.numbers[1]} | ${r.clipped} | ${r.groupsSplit ?? 0} | ${r.labelsSource ?? 0} | ${r.textInDisplay ?? 0} | ${r.lineStartPunct ?? 0} | ${r.linksWrong ?? 0} | ${r.linksKept === undefined ? '-' : pct(r.linksKept)} | ${r.linksTrue === undefined ? '-' : pct(r.linksTrue)} | ${r.ink ? `${r.ink.capped.length} / ${r.ink.timedOut.length} / ${r.ink.degraded.length}` : '-'} | ${r.fails.join(', ') || 'none'} |`)
   // (TeX's file against the drawing: defects held to the run before as rates, until the pull request that removes a
   // cause gates its measure at 0, README)
   const fileMs = AGAINST_FILE.map(k => MEASURES.find(m => m[0] === k)).filter(m => run.tier === 'pixel' || m[1] === 'model')

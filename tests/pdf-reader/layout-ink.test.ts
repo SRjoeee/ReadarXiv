@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { GLYPHS_PAGE, type Glyph, OPS_CAP, outlineBox, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, INK_MS, MERGED, OPS_CAP, outlineBox, pageInk, STACK_MAX, STEPS_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
 // operator codes, in the shapes PDF.js 6.3.289 gives them (a text matrix as one argument, a path as [op, data, minMax])
@@ -197,26 +197,31 @@ describe('pageInk', () => {
 
   it('a rotated page has no glyphs', () => {
     const page = text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))
-    for (const rotate of [90, 180, 270, -90, 450]) expect(ink(page, rotate)).toEqual({ glyphs: [], boxes: [], points: [], boxAt: [], capped: false, rotated: true })
+    for (const rotate of [90, 180, 270, -90, 450]) expect(ink(page, rotate)).toEqual({ glyphs: [], boxes: [], points: [], boxAt: [], capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true })
     expect(ink(page, 360).rotated).toBe(false)
     expect(ink(page, Number.NaN).rotated).toBe(true)
   })
 
   it('a page past OPS_CAP is capped', () => {
-    expect(OPS_CAP).toBe(150_000)
     const head = text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))
     // the tail ends on its showText, so that the cap falls on it
     const tail = text('f1', 10, [1, 0, 0, 1, 72, 600], show(g('Z'))).slice(0, -1)
-    const filler = (n: number): Op[] => Array.from({ length: n }, (_, i) => (i % 2 ? [OPS.restore, []] : [OPS.save, []]))
-    // the last glyph shown by the 150,001st operation: not read
-    const over = [...head, ...filler(OPS_CAP + 1 - head.length - tail.length), ...tail]
-    expect(over).toHaveLength(OPS_CAP + 1)
-    const a = ink(over)
+    // (n operations: the head, saves and restores in turn, the tail; one typed array of codes, the filler's operands none)
+    const filled = (n: number) => {
+      const fnArray = new Uint16Array(n), argsArray: unknown[] = new Array(n)
+      for (let i = head.length; i < n - tail.length; i++) fnArray[i] = (i - head.length) % 2 ? OPS.restore : OPS.save
+      head.forEach(([f, a], i) => { fnArray[i] = f; argsArray[i] = a })
+      tail.forEach(([f, a], i) => { fnArray[n - tail.length + i] = f; argsArray[n - tail.length + i] = a })
+      return { fnArray, argsArray }
+    }
+    // the last glyph shown by the operation past OPS_CAP: not read
+    // (no clock: the cap is what this holds)
+    const a = pageInk(OPS, filled(OPS_CAP + 1), commonObjs, { rotate: 0, msMax: Infinity })
     expect(a.capped).toBe(true)
+    expect(a.timedOut).toBe(false)
     expect(a.glyphs.map(q => q.u)).toEqual(['A'])
     // exactly OPS_CAP operations: all read
-    const at = [...head, ...filler(OPS_CAP - head.length - tail.length), ...tail]
-    const b = ink(at)
+    const b = pageInk(OPS, filled(OPS_CAP), commonObjs, { rotate: 0, msMax: Infinity })
     expect(b.capped).toBe(false)
     expect(b.glyphs.map(q => q.u)).toEqual(['A', 'Z'])
   })
@@ -314,5 +319,157 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     // no outline given: the declared box, as before
     const declared = only(pageInk(OPS, list(text('cmsy', 10, [1, 0, 0, 1, 72, 700], show(g('F', 600)))), commonObjs, { rotate: 0 }).glyphs, 'F')
     expect(declared.bottom).toBeCloseTo(700 - 9.6, 6)
+  })
+})
+
+// The walk's guards (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus): each an abuse guard twenty
+// times or more above the corpus's heaviest page, so that no real page meets one; a page past the box budget degrades, its
+// text whole, and a page past the cap, the stack or the clock has no ink
+describe('pageInk\'s guards', () => {
+  const fill = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([x0, y0, x1, y1])]]
+  /** the boxes of a reading as [x0, y0, x1, y1] each, with their kinds */
+  const boxesOf = (r: { boxes: number[]; paths?: number[] }) => Array.from({ length: r.boxes.length / 4 }, (_, b) => ({ box: r.boxes.slice(4 * b, 4 * b + 4), kind: r.paths?.[b] }))
+
+  it('are set from the census: twenty times its busiest page, its steps, its most boxes and glyphs, its deepest stack', () => {
+    // (2608.12606 page 5: 146,115 operations and 173,861 steps; 2608.27728 page 15: 22,101 boxes; 9,332 glyphs; 2608.04183
+    // page 15: 27 levels; and the backstop a hundred times the slowest walk, 18 ms)
+    expect(OPS_CAP).toBeGreaterThanOrEqual(20 * 146_115)
+    expect(STEPS_MAX).toBeGreaterThanOrEqual(20 * 173_861)
+    expect(STEPS_MAX).toBeGreaterThanOrEqual(OPS_CAP)
+    expect(BOXES_PAGE).toBeGreaterThanOrEqual(20 * 22_101)
+    expect(GLYPHS_PAGE).toBeGreaterThanOrEqual(10 * 9_332)
+    expect(STACK_MAX).toBeGreaterThanOrEqual(20 * 27)
+    expect(INK_MS).toBeGreaterThanOrEqual(100 * 18)
+  })
+
+  it('a page past the box budget keeps its glyphs and its first boxes as they are, every box after merged by cell, covering them', () => {
+    const skipped = [[300, 300, 302, 302], [301, 305, 303, 306], [10, 10, 100, 12], [500, 40, 510, 90]]
+    const page: Op[] = [
+      fill(100, 100, 105, 101), fill(200, 200, 260, 201),
+      ...skipped.map(b => fill(b[0] as number, b[1] as number, b[2] as number, b[3] as number)),
+      ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A'), g('B'))),
+      // and past the budget each other kind of box: an image, an image repeated, a mask repeated, a group of masks, of inline
+      // images, a shading into a clip, a glyph set turned
+      [OPS.save, []], [OPS.transform, [50, 0, 0, 50, 400, 400]], [OPS.paintImageXObject, ['img1', 1, 1]], [OPS.restore, []],
+      [OPS.paintImageXObjectRepeat, ['img1', 10, 20, Float32Array.from([600, 600, 620, 640])]],
+      [OPS.paintImageMaskXObjectRepeat, [{}, 5, 0, 0, 5, Float32Array.from([700, 100])]],
+      [OPS.paintImageMaskXObjectGroup, [[{ transform: [5, 0, 0, 5, 150, 500] }]]],
+      [OPS.paintInlineImageXObjectGroup, [{}, [{ transform: [4, 0, 0, 4, 160, 520] }]]],
+      [OPS.save, []], [OPS.constructPath, [OPS.endPath, [Float32Array.from([0])], Float32Array.from([30, 600, 40, 610])]], [OPS.clip, []],
+      [OPS.constructPath, [OPS.endPath, [Float32Array.from([0])], Float32Array.from([30, 600, 40, 610])]], [OPS.shadingFill, ['sh1']], [OPS.restore, []],
+      ...text('f1', 10, [0, 1, -1, 0, 250, 250], show(g('R'))),
+      fill(120, 130, 121, 131),
+    ]
+    const whole = pageInk(OPS, list(page), commonObjs, { rotate: 0, indices: true })
+    const cut = pageInk(OPS, list(page), commonObjs, { rotate: 0, indices: true, boxesMax: 2 })
+    expect(whole.degraded).toBe(false)
+    expect(whole.mergedAt).toBeNull()
+    expect(cut.degraded).toBe(true)
+    expect(cut.capped).toBe(false)
+    // the glyphs read in full, alike: their places, their indices, the boxes shown before them as many as were kept
+    expect(cut.glyphs).toEqual(whole.glyphs)
+    expect(cut.shows).toBe(whole.shows)
+    expect(cut.boxAt).toEqual([2, 2])
+    // the first two boxes, and their paths' places, as they were; then from `mergedAt` the merged ones alone
+    const kept = boxesOf(cut), all = boxesOf(whole)
+    expect(kept.slice(0, 2)).toEqual(all.slice(0, 2))
+    expect(cut.mergedAt).toBe(2)
+    // (every kind is among the boxes past the budget: paths (the clip's two, 6 and 7, paint nothing), images, the shading and the glyph set)
+    expect(new Set(all.slice(2).map(b => b.kind))).toEqual(new Set([2, 3, 4, 5, -3, -2, -4, 8]))
+    const merged = kept.slice(2)
+    expect(merged.every(m => m.kind === MERGED)).toBe(true)
+    // each in one cell of 24 points, and every point of every box past the budget in one of them
+    for (const { box } of merged) {
+      expect(Math.floor((box[0] as number) / 24)).toBe(Math.min(63, Math.ceil((box[2] as number) / 24) - 1))
+      expect(Math.floor((box[1] as number) / 24)).toBe(Math.min(63, Math.ceil((box[3] as number) / 24) - 1))
+    }
+    const covered = (x: number, y: number) => merged.some(({ box }) => x >= (box[0] as number) && x <= (box[2] as number) && y >= (box[1] as number) && y <= (box[3] as number))
+    for (const { box, kind } of all.slice(2)) {
+      for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) {
+        const x = (box[0] as number) + (i / 8) * ((box[2] as number) - (box[0] as number)), y = (box[1] as number) + (j / 8) * ((box[3] as number) - (box[1] as number))
+        expect(covered(x, y), `${kind}: ${x} ${y}`).toBe(true)
+      }
+    }
+    // two boxes in one cell are one merged box, their union; a box across cells is a part in each
+    expect(merged.filter(({ box }) => box[0] === 300 && box[1] === 300)).toEqual([{ box: [300, 300, 303, 306], kind: MERGED }])
+    expect(merged.filter(({ box }) => box[1] === 10 && box[3] === 12).map(m => m.box)).toEqual([[10, 10, 24, 12], [24, 10, 48, 12], [48, 10, 72, 12], [72, 10, 96, 12], [96, 10, 100, 12]])
+    // without indices, the same boxes
+    expect(pageInk(OPS, list(page), commonObjs, { rotate: 0, boxesMax: 2 }).boxes).toEqual(cut.boxes)
+  })
+
+  it('a box beyond the grid lands in its outermost cells, whole', () => {
+    const r = pageInk(OPS, list([fill(0, 0, 1, 1), fill(-500, 2000, -400, 2100), fill(1600, -90, 1700, -80)]), commonObjs, { rotate: 0, indices: true, boxesMax: 1 })
+    expect(boxesOf(r)).toEqual([{ box: [0, 0, 1, 1], kind: 0 }, { box: [1600, -90, 1700, -80], kind: MERGED }, { box: [-500, 2000, -400, 2100], kind: MERGED }])
+  })
+
+  it('a stack deeper than STACK_MAX is read exactly or not at all: saves left open read on, ink in a state a restore lost caps the page', () => {
+    const open = (n: number): Op[] => Array.from({ length: n }, (): Op => [OPS.save, []])
+    const restores = (n: number): Op[] => Array.from({ length: n }, (): Op => [OPS.restore, []])
+    const A = text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))
+    // (saves left open, as a stream that opens one for each thing it draws: every glyph after the cap where the canvas places
+    // it, under the transform the deepest level set; and the restores PDF.js closes the list with, after the last ink)
+    const left = ink([...open(STACK_MAX + 10), [OPS.transform, [2, 0, 0, 2, 0, 0]], ...A, ...restores(STACK_MAX + 10)])
+    expect(left.capped).toBe(false)
+    expect(left.glyphs.map(q => [q.u, q.x0, q.y])).toEqual([['A', 144, 1400]])
+    // (a level past it restored: the state of its save, which no copy holds, is lost; ink placed then caps the page, a glyph
+    // or a box alike, whatever the state says of it, here a glyph its scale would have put at 144)
+    const lostAt = (...drawn: Op[]) => ink([...open(STACK_MAX + 1), [OPS.save, []], [OPS.transform, [2, 0, 0, 2, 0, 0]], [OPS.restore, []], ...drawn])
+    for (const drawn of [A, [[OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([10, 10, 20, 20])]] as Op], [[OPS.paintImageXObject, ['img1', 1, 1]] as Op]]) {
+      const r = lostAt(...drawn)
+      expect(r.capped).toBe(true)
+      expect([r.glyphs, r.boxes]).toEqual([[], []])
+    }
+    // (a restore down to a level that holds a copy gives the state back exactly, and ink after it is read; drawing nothing
+    // while it is lost caps nothing)
+    const back = ink([...open(STACK_MAX), [OPS.save, []], [OPS.transform, [2, 0, 0, 2, 0, 0]], [OPS.restore, []], [OPS.transform, [3, 0, 0, 3, 0, 0]], [OPS.restore, []], ...A])
+    expect(back.capped).toBe(false)
+    expect(back.glyphs.map(q => [q.u, q.x0])).toEqual([['A', 72]])
+    // (an annotation sets a state of its own, known; its end gives back the lost one)
+    const annotated = ink([...open(STACK_MAX), [OPS.save, []], [OPS.restore, []], [OPS.beginAnnotation, ['a1', [0, 0, 600, 800], [1, 0, 0, 1, 0, 0], [1, 0, 0, 1, 0, 0]]], ...A, [OPS.endAnnotation, []]])
+    expect(annotated.capped).toBe(false)
+    expect(annotated.glyphs.map(q => q.u)).toEqual(['A'])
+    expect(ink([...open(STACK_MAX), [OPS.save, []], [OPS.restore, []], [OPS.beginAnnotation, ['a1', [0, 0, 600, 800], [1, 0, 0, 1, 0, 0], [1, 0, 0, 1, 0, 0]]], [OPS.endAnnotation, []], ...A]).capped).toBe(true)
+  })
+
+  it('a walk past stepsMax stops and the page is capped, alike on every machine: each operation, element shown, placement a step', () => {
+    const many: Op[] = [...Array.from({ length: 3000 }, (_, i): Op => (i % 2 ? [OPS.restore, []] : [OPS.save, []])), ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))]
+    const cut = pageInk(OPS, list(many), commonObjs, { rotate: 0, stepsMax: 2000, msMax: Infinity })
+    expect(cut.capped).toBe(true)
+    expect(cut.timedOut).toBe(false)
+    expect(cut.glyphs).toEqual([])
+    expect(pageInk(OPS, list(many), commonObjs, { rotate: 0, stepsMax: 3010, msMax: Infinity }).capped).toBe(false)
+    // inside one operation: a shown array's glyphs, invisible ones and numbers too, and an image's placements
+    const shown = (...xs: unknown[]) => list(text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.setTextRenderingMode, [3]], show(...xs)))
+    expect(pageInk(OPS, shown(...Array.from({ length: 5000 }, () => g('x'))), commonObjs, { rotate: 0, stepsMax: 1000 }).capped).toBe(true)
+    expect(pageInk(OPS, shown(...new Array(5000).fill(-10)), commonObjs, { rotate: 0, stepsMax: 1000 }).capped).toBe(true)
+    expect(pageInk(OPS, shown(...new Array(500).fill(-10)), commonObjs, { rotate: 0, stepsMax: 1000 }).capped).toBe(false)
+    const placed = (n: number) => list([[OPS.paintImageXObjectRepeat, ['img1', 1, 1, Float32Array.from({ length: 2 * n }, (_, i) => i)]]])
+    const repeated = pageInk(OPS, placed(5000), commonObjs, { rotate: 0, stepsMax: 1000 })
+    expect(repeated.capped).toBe(true)
+    expect(repeated.boxes.length / 4).toBeLessThan(1000)
+    expect(pageInk(OPS, placed(500), commonObjs, { rotate: 0, stepsMax: 1000 }).capped).toBe(false)
+  })
+
+  it('a page past glyphsMax stops there and is capped', () => {
+    const page = list(text('f1', 10, [1, 0, 0, 1, 72, 700], show(...Array.from({ length: 50 }, () => g('x')))))
+    const cut = pageInk(OPS, page, commonObjs, { rotate: 0, glyphsMax: 20 })
+    expect(cut.capped).toBe(true)
+    expect(cut.glyphs).toHaveLength(20)
+    expect(pageInk(OPS, page, commonObjs, { rotate: 0, glyphsMax: 50 }).capped).toBe(false)
+  })
+
+  it('a walk past msMax stops and the page is timed out', () => {
+    // (the backstop, the one bound that depends on the machine: more steps than come between two readings of the clock,
+    // three thousand operations)
+    const many: Op[] = [...Array.from({ length: 3000 }, (_, i): Op => (i % 2 ? [OPS.restore, []] : [OPS.save, []])), ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))]
+    const late = pageInk(OPS, list(many), commonObjs, { rotate: 0, msMax: -1 })
+    expect(late.timedOut).toBe(true)
+    expect(late.capped).toBe(false)
+    expect(late.glyphs).toEqual([])
+    const inTime = pageInk(OPS, list(many), commonObjs, { rotate: 0, msMax: Infinity })
+    expect(inTime.timedOut).toBe(false)
+    expect(inTime.glyphs.map(q => q.u)).toEqual(['A'])
+    // a short page never reads the clock past its start
+    expect(pageInk(OPS, list(text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))), commonObjs, { rotate: 0, msMax: -1 }).timedOut).toBe(false)
   })
 })

@@ -8,7 +8,7 @@ import {
   CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, type ReadUnitsChunk, type ReadUnitsChunkLight, readHead, readLeftPart, readPart, readUnitsChunk, writePart,
   type Ref,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { needBound, needsOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
+import { needBound, needsOf, rowLeadOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import { NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
@@ -34,7 +34,7 @@ async function texRectsOf(): Promise<(lu: unknown) => { rects: number[][] }> {
   try { return (await import('@/pdf-reader/engine/layer-proto/tex.mjs')).texRects as never } finally { g.OffscreenCanvas = had }
 }
 
-interface OracleEntry { id: number; stream: number; rects: number[][] | null; lists: number[][]; reach: Set<number>; reads?: number[] }
+interface OracleEntry { id: number; stream: number; rects: number[][] | null; lists: number[][]; reach: Set<number>; reads?: number[]; follows?: number | null }
 /** run.mjs's K (openProto, `cands` to `reach`) over the whole's left and layout file, with the file's own texRects */
 async function oracleK(whole: Whole): Promise<OracleEntry[]> {
   const texRects = await texRectsOf()
@@ -62,6 +62,9 @@ async function oracleK(whole: Whole): Promise<OracleEntry[]> {
     for (const row of lu ? (lu as unknown as { ph: Map<number, { segs: Float64Array }> }).ph.values() : []) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o]! >= 1 && row.segs[o]! <= N) out.add(row.segs[o]!)
     c.reads = [...out]
   }
+  // (and the unit before it in K whose last row its first row continues on a shared line, chosen among those before it in K,
+  // as run.mjs addUnits reads it)
+  K.forEach((c, i) => { const before = new Set(K.slice(0, i).map(x => x.id)); c.follows = (index ? rowLeadOf(index, c.id, id => before.has(id)) : null)?.id ?? null })
   return K
 }
 
@@ -880,6 +883,7 @@ describe.skipIf(!LAB_ON)('the real papers cut', () => {
       expect(seen.map(e => [e.id, e.slot, e.lists, [...e.reach].sort((x, y) => x - y), e.rects === null])).toEqual(K.map(e => [e.id, e.stream, e.lists, [...e.reach].sort((x, y) => x - y), e.rects === null]))
       // what Need reads besides: the placeholders' pages, and the table groups (the same partition)
       expect(seen.map(e => [...(e as unknown as { reads: number[] }).reads].sort((x, y) => x - y))).toEqual(K.map(e => [...(e.reads ?? [])].sort((x, y) => x - y)))
+      expect(seen.map(e => e.follows ?? null)).toEqual(K.map(e => e.follows ?? null))
       const partition = (gs: (unknown)[]) => gs.map(g => (g === null ? -1 : gs.indexOf(g)))
       expect(partition(seen.map(e => (e as unknown as { group: unknown }).group))).toEqual(partition(K.map(e => (groupOf({ cell: whole.units[e.id]?.[3] } as never)))))
       // and the need bound of the two Ks is the same

@@ -1190,6 +1190,7 @@ The edge cases, decided:
 - **The font roles** (which CJK family, Kai and weights a script takes) are layout. The face catalog (files, licences, size corrections, coverage) and the Latin design table are facts about files and stay code. In a CJK target **weight wins over slant**: emphasis is the Kai, but every bold italic run, a heading's (IEEEtran's bold italic "Abstract") or the text's, is the bold serif (`rules/font-roles.mjs` `faceFor`). That is what a compile of the translation sets: ctex's fontsets give a bold face and an italic one but no bold italic (fandol, adobe, founder, hanyi, mac, macold, ubuntu and windows alike; macnew alone has one), and NFSS substitutes `b/n` for the missing `b/it`; the Kai, which has no bold, would set the run lighter than the text's own bold.
 - **`textless`** is extraction, but v0 also applies it at draw time to a unit's source (only the alignment fallback reads it). A reader applying an extraction rule to a bundle's content is a defect class; it is listed for the debt pass.
 - **Cell membership** (`groupOf`, from `tableGrid`) is extraction: the bundle carries each cell's place.
+- **A translator's stutter** (a word of five letters or more written twice in a row where the unit's source sets no word twice: Microsoft's "konformen konformen" in 2608.16117's German abstract, the M1 survey) is layout: `layer-proto/stutter.mjs`, applied where a unit's text becomes tokens (`layer2.mjs tokensOf2`), so every host's rows and every cached translation are drawn with the word once, and the rows, the cache and the plain text the sentence offsets count in keep the translation as it came (the word table keeps each drawn word's place in it). It bumps nothing (§18.3); making it a translation rule would raise `TRANSLATE_VERSION` and translate every unit again for a defect of three units in the 31 outputs measured. Only alphabetic scripts that set words apart by spaces: a CJK or Thai repeat is not this rule's.
 
 ### 18.2 The identities
 
@@ -1417,20 +1418,22 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   `CARRY_MIN`, and its own reader taking it (`readPart` against the head, the chunks and the parts before); a part refused
   either way is its pages with no layout (C1.4: drawn from the left), never the paper's refusal. Every bound a part holds is the
   part's (`LINES_ALL`, `PAGE_TEXT_ALL`, `NAMES_MAX`, `FONTS_MAX`, the part's caps): an over-bound part is shortened, a first page
-  alone past them has no layout, nothing is truncated. A page whose operator list passes `OPS_CAP` operations, `GLYPHS_PAGE`
-  glyphs or `BOXES_CAP` boxes (one operation's placements and glyphs set turned counted within it), or does not come within
-  `OPS_MS`, is dark (its units stay the original's), that page alone; past `GIVEN_UP_MAX` (8) such pages, every later page is
-  dark unread (its operator list never asked: a count, not a clock, so which pages are dark hangs on the pages before them).
+  alone past them has no layout, nothing is truncated. A page whose operator list passes `OPS_CAP` operations, whose walk
+  passes `STEPS_MAX` steps, `STACK_MAX` levels or `GLYPHS_PAGE` glyphs (one operation's glyphs and placements counted within
+  it), or whose list does not come within `OPS_MS` or walk within its backstop `INK_MS`, is dark (its units stay the
+  original's), that page alone; past `GIVEN_UP_MAX` (8) such pages, every later page is dark unread (its operator list never
+  asked: a count, not a clock, so which pages are dark hangs on the pages before them). A page past `BOXES_PAGE` boxes is not
+  dark: its boxes past the budget are merged by cell (`degraded`, its text whole). Each bound is an abuse guard twenty times or
+  more above the corpus's heaviest page (`layout/ink.mjs`, the census of 2026-10-16).
 - **Today's rules.** The maker's frame, the columns' edges and the far-push columns read the whole document, so every part is
   cut once the whole is made, and the parts are `cutBundle`'s of the same whole, byte for byte. With the oracle (`oracle {
   frame, columnEdges }`, a whole run's, for tests and the lab) the maker is made a page at a time and each part cut as soon as
   everything it reads is final: the same parts, cut early (`stats.closed`).
 - **Memory, a part's ceiling.** What the pass holds of arXiv's ink is each page's glyphs, `GLYPHS_PAGE` (100,000) at most, and
-  its boxes, one an operation, `OPS_CAP` (150,000) at most, about 22 MiB a page (the corpus's densest page holds 9,332 glyphs,
-  about 1 MiB; its busiest 146,115 operations; its most boxes 22,101); one operation may place more (an image repeat's or
-  group's placements, which PDF.js's list for `getOperatorList` never holds, and a run of glyphs set turned, a box each), and
-  `BOXES_CAP` (1,000,000, some 140 bytes a box in all) bounds them, the very most of a hostile page; a page past any of these
-  is dark
+  its boxes, `BOXES_PAGE` (500,000) kept one by one and the rest merged into at most 4,096 cells, some 140 bytes a box in all:
+  about 95 MiB a page at the very most of a hostile page (the corpus's densest page holds 9,332 glyphs, about 1 MiB; its
+  busiest 146,115 operations; its most boxes 22,101). `BOXES_CAP` (1,000,000) bounds the boxes of a reader that asks for no
+  budget; a page past a cap is dark
   (`tests/pdf-reader/layout-hostile.test.ts`, on the lite worker, which decodes no image's pixels). Today the ink of every page
   is held until the cut (2307.16209's 147 pages: 17 MiB of typed arrays). Made a page at a time, a page's ink is let go once
   its tasks have run and its plan is made, so the ink held is that of the pages decided and not yet done (on 2307.16209 up to
@@ -1441,8 +1444,8 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
 - **What these do not bound.** The caps apply to what the pass keeps of a page, after PDF.js has parsed it: PDF.js's own
   operator list for the page being read is bounded by `OPS_MS` alone (a page of `q 1 0 0 1 72 72 cm /Im1 Do Q` 200,000 times
   parses to 800,804 operations in 0.44 s: in 10 s some 18 million, gigabytes, before the page is capped). The marked
-  original's ink (its owned glyphs, `markedPages`) is read with no glyph cap and no `OPS_MS`, and the marked original is as
-  hostile as its author's source. What is held is the pages' sum: the whole paper's today, up to the whole of it made a page
+  original's ink (its owned glyphs, `markedPages`) is read with no `OPS_MS` (a page past one of the walk's bounds, or
+  degraded, is unread: no piece on it owned), and the marked original is as hostile as its author's source. What is held is the pages' sum: the whole paper's today, up to the whole of it made a page
   at a time while a float's match keeps the early pages undecided. And no bound of the engine's is the paper's time: what it
   bounds across a paper are counts (`GIVEN_UP_MAX` pages given up on, so a paper whose every page stalls waits 8 times
   `OPS_MS`; the carrier's 20 million steps, counted in page order), while a paper of pages that each answer within `OPS_MS`

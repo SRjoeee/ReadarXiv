@@ -15,7 +15,7 @@
 // restore counts as accounted for, are the same keys whichever source a unit took.
 import { PH_FLAG } from '../layout/file.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven, resolutionFrom, scriptedOf } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -435,10 +435,15 @@ function heldRendering(run, lines, uc) {
  * outside the unit's lines drawn as nothing, a macro TeX said sets no ink: `proof`), or of v0's reading:
  * - a crop, cut from its placeholder's own ink, the file's segment of its row on the crop's page that its rectangle meets
  *   (stream ownership, layout/stream.mjs), on that segment's baseline (layer2.mjs cropOfBox): its rendering the same;
- * - its page text, or its ink kept where it stands, where every character of it stands in its row's segments.
+ * - its page text, or its ink kept where it stands, where every character of it stands in its row's segments;
+ * - and where v0's reading found no rendering at all (its source's plain text, a citation as the page wrote it before)
+ *   and its row is found, its segments on the pages shown: the rendering read from those segments as the file's own
+ *   reading reads one (renderingOf; layer2.mjs resolutionFrom: a crop cut at its segment, page text standing in them),
+ *   given the unit (`unit`) whose pieces say whether the translation sets its brackets.
  * Where none does (its row LOST, EMPTY, JOINED or missing, the unit not in the file, `lu` null, or its pieces not the
- * file's, `kOf` null), or the rendering is no page ink (its source's plain text, a citation as the page wrote it before,
- * a display drawn as nothing), nothing proves which ink is the placeholder's — a crop of the page's rectangle carries
+ * file's, `kOf` null, or its segments holding none of the unit's characters), or the rendering is no page ink with no
+ * found row to read it from (its source's plain text, a citation as the page wrote it before, a display drawn as nothing),
+ * nothing proves which ink is the placeholder's — a crop of the page's rectangle carries
  * whatever stands in it (2307.16209 page 38's "ıe", from the line above), v0's alignment hands a rendering to the next
  * placeholder along (2608.16117's unit 28) — and the answer is that placeholder's k: its unit stays the original's (the
  * run's `unproven`). Else -1. Mutates the crops it cuts. A placeholder whose row is found and whose segments all lie on
@@ -458,7 +463,7 @@ function heldRendering(run, lines, uc) {
  * reads it as 'other' (phClassProven), and it is proven as any formula is.
  */
 export function proofOf(lu, kOf, shown = Infinity) {
-  return res => {
+  return (res, unit = null) => {
     for (const r of res.values()) {
       if (!r) continue
       // (whatever proves where its ink is: page text is drawn as its characters read, and one no Unicode of the file's
@@ -467,11 +472,34 @@ export function proofOf(lu, kOf, shown = Infinity) {
       if (r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
       const row = lu && kOf ? lu.ph.get(kOf[r.k]) : null
       const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED)) ? row.segs : []
-      let past = S.length > 0
-      for (let s = 0; s + 5 < S.length; s += 6) if (S[s] <= shown) past = false
+      let past = S.length > 0, anyPast = false
+      for (let s = 0; s + 5 < S.length; s += 6) if (S[s] <= shown) past = false; else anyPast = true
       if (past) {
         Object.assign(r, { mode: row.text ? 'source' : 'none', text: row.text ?? '', proof: true })
         continue
+      }
+      // v0's reading found no rendering (drawn from its source, or a citation as the page wrote it before) where the file
+      // holds the piece's own ink, its segments all on pages shown: read from them as the file's own reading reads a found
+      // row (renderingOf, the unit's characters inside them; layer2.mjs resolutionFrom: a formula on one line cropped at its
+      // segment, page text standing in them), which is TeX's ground truth and as proven as any rendering the file gives.
+      // A row LOST, EMPTY or JOINED has no segment and is never read: its unit stays the original's (2609.26457's unit 24:
+      // $a^{\mathrm{out}}$, which v0's alignment found nowhere, is cut at its segment; its \texttt{gemini 3 flash} is LOST).
+      // A rendering v0 took that the segments do not hold stays no proof (the rule against a rendering handed along)
+      if (S.length && !anyPast && unit && !r.gap && (r.mode === 'source' || r.mode === 'cite-map') && r.cls !== 'display') {
+        const g = renderingOf(S, res.uc ?? [], false)
+        if (!g || g.chars.some(c => c.nu)) return r.k
+        res.set(r.k, { ...resolutionFrom(r, { ...g, proof: true }, unit, res.lineInfo), ...(r.second ? { second: true } : {}) })
+        continue
+      }
+      // a text macro v0 reads as page text whose own ink, its segment on one line, sets a raised script (layer2.mjs scriptedOf):
+      // v0's alignment may leave the script's atom to no rendering ("AIDE" without the superscript 2 of 2609.26457's
+      // \aidesq{}), and page text on one baseline loses it. Read from the segment, as the file's own reading is: a crop
+      if ((r.cls === 'macro' || r.cls === 'umacro') && r.mode === 'orig-text' && S.length === 6 && !anyPast && unit) {
+        const g = renderingOf(S, res.uc ?? [], false)
+        if (g && scriptedOf(g.chars)) {
+          res.set(r.k, { ...resolutionFrom(r, { ...g, proof: true }, unit, res.lineInfo), ...(r.second ? { second: true } : {}) })
+          continue
+        }
       }
       if (r.mode === 'crop') {
         if (r.gap?.box) continue

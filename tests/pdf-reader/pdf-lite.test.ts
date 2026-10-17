@@ -12,22 +12,29 @@ import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
 const require = createRequire(import.meta.url)
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
+const TEXT_ANCHOR = '} else if (annotation.overlaysTextContent && isVisible) {'
 
 describe('liteWorkerSource', () => {
-  it('adds the guard before the one image decode, and nothing else', () => {
-    const out = liteWorkerSource(`a\n${ANCHOR}\nb`)
+  it('adds the guard before the one image decode and the one on a link\'s overlaid text, and nothing else', () => {
+    const src = `a\n${ANCHOR}\nb\n${TEXT_ANCHOR}\nc`
+    const out = liteWorkerSource(src)
     expect(out.startsWith('a\n')).toBe(true)
-    expect(out.endsWith(`${ANCHOR}\nb`)).toBe(true)
+    expect(out.endsWith('\nc')).toBe(true)
     expect(out).toContain(`this.options.maxImageSize === ${NO_IMAGE_PIXELS}`)
-    expect(out.length).toBeLessThan(`a\n${ANCHOR}\nb`.length + 200)
+    expect(out).toContain(`annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS}) {`)
+    expect(out).not.toContain(TEXT_ANCHOR)
+    expect(out.length).toBeLessThan(src.length + 300)
   })
 
   it('refuses a worker without the decode, with it twice, a source that is no string, and a PDF.js it was not made for', () => {
     expect(() => liteWorkerSource('nothing')).toThrow(/0 times/)
-    expect(() => liteWorkerSource(`${ANCHOR}\n${ANCHOR}`)).toThrow(/2 times/)
+    expect(() => liteWorkerSource(`${ANCHOR}\n${ANCHOR}\n${TEXT_ANCHOR}`)).toThrow(/2 times/)
+    // (the overlaid text's condition: none, or twice)
+    expect(() => liteWorkerSource(ANCHOR)).toThrow(/overlaid text's condition 0 times/)
+    expect(() => liteWorkerSource(`${ANCHOR}\n${TEXT_ANCHOR}\n${TEXT_ANCHOR}`)).toThrow(/overlaid text's condition 2 times/)
     expect(() => liteWorkerSource(1 as never)).toThrow(TypeError)
-    expect(() => liteWorkerSource(ANCHOR, { version: '9.9.9' })).toThrow(/made for PDF\.js/)
-    expect(() => liteWorkerSource(ANCHOR, { version: LITE_PDFJS })).not.toThrow()
+    expect(() => liteWorkerSource(`${ANCHOR}${TEXT_ANCHOR}`, { version: '9.9.9' })).toThrow(/made for PDF\.js/)
+    expect(() => liteWorkerSource(`${ANCHOR}${TEXT_ANCHOR}`, { version: LITE_PDFJS })).not.toThrow()
   })
 
   it('is pinned: the installed worker is the version the patch was made for, holds the decode once, and the engine\'s PDFJS is it', () => {
@@ -36,6 +43,7 @@ describe('liteWorkerSource', () => {
     expect(PDFJS).toBe(LITE_PDFJS)
     const worker = readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8')
     expect(worker.split(ANCHOR).length - 1).toBe(1)
+    expect(worker.split(TEXT_ANCHOR).length - 1).toBe(1)
     expect(liteWorkerSource(worker, { version })).toContain('image pixels not decoded')
   })
 })
@@ -108,5 +116,37 @@ describe('a document read without its images\' pixels', () => {
     // and a stock reading after a lite one in the same process still decodes
     const again = await read(IMAGES, false)
     expect(again.out.flatMap(p => p.decoded)).toEqual([true, true, true])
+  })
+})
+
+// a page of text with a Link annotation over its last word, naming a destination
+const LINKED = pdfOf([
+  '<< /Type /Catalog /Pages 2 0 R >>',
+  '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+  '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R /Annots [6 0 R] >>',
+  ['', 'BT /F1 12 Tf 72 700 Td (see Section C) Tj ET'],
+  '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  '<< /Type /Annot /Subtype /Link /Rect [70 695 200 712] /Border [0 0 0] /Dest (appendix.C) >>',
+])
+async function linksOf(lite: boolean) {
+  const task = getDocument({ data: LINKED.slice(), verbosity: 0, ...(lite ? LITE : {}) })
+  const doc = await task.promise
+  const page = await doc.getPage(1)
+  const list = await page.getOperatorList()
+  const annots = (await page.getAnnotations()).filter(a => a.subtype === 'Link').map(a => ({ dest: a.dest, rect: Array.from(a.rect as number[]), overlaidText: a.overlaidText }))
+  await task.destroy()
+  return { fn: Array.from(list.fnArray), annots }
+}
+
+describe("a document read without its images' pixels: its links", () => {
+  beforeAll(async () => { await installLiteWorker() })
+
+  it('come with their rectangle and destination, without the overlaid text PDF.js extracts the page\'s text again for', async () => {
+    const stock = await linksOf(false), lite = await linksOf(true)
+    expect(stock.annots).toHaveLength(1)
+    expect(stock.annots[0]?.overlaidText).toBeTruthy()
+    expect(lite.annots).toEqual(stock.annots.map(a => ({ ...a, overlaidText: undefined })))
+    // (and the page's operator list is the same)
+    expect(lite.fn).toEqual(stock.fn)
   })
 })

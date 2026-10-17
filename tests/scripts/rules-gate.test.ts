@@ -570,6 +570,8 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     expect(publicLine(`completeness (spec §5): 1 of 29 outputs fail: ${NAME} [missing, twice]`)).toContain(`${NAME} [missing, twice]`)
     // (a measure of TeX's file gated at 0 by the pull request that removed its cause: a drawn line over a display)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [textInDisplay]`)).toContain(`${NAME} [textInDisplay]`)
+    // (and a drawn line opened by a mark UAX 14 keeps from a line's start, since the breaker keeps them with the text before)
+    expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [lineStartPunct]`)).toContain(`${NAME} [lineStartPunct]`)
     // (a link that is wrong, gated at 0 from the first pull request of the links, 3a-0)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [linksWrong]`)).toContain(`${NAME} [linksWrong]`)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [linksKept, linksTrue]`)).toContain(`${NAME} [linksKept, linksTrue]`)
@@ -579,6 +581,10 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     // (a unit whose record the run could not make: drawn, measured by nothing)
     expect(publicLine(`completeness (spec §5): 1 of 30 outputs fail: ${NAME} [recordErrors]`)).toContain(`${NAME} [recordErrors]`)
     expect(publicLine('completeness (spec §5): every one of 29 outputs passes')).toContain('every one of 29')
+    // (the pages whose ink the add-on's walk did not read whole, or read degraded: counts by output, never silent)
+    for (const l of ["ink (the add-on's reading of arXiv's pages): whole on every one of 30 outputs", `ink (the add-on's reading of arXiv's pages): 1 of 30 outputs not whole: ${NAME} [capped 1, timed out 0, degraded 2]`,
+      `ink (the add-on's reading of arXiv's pages): 2 of 29 outputs not whole: ${NAME} [capped 0, timed out 1, degraded 0]; 1706.03762v7-de [capped 0, timed out 0, degraded 1]; 1 not told`, "ink (the add-on's reading of arXiv's pages): not told by any output"]) expect(publicLine(l)).toBe(l)
+    expect(publicLine(`ink (the add-on's reading of arXiv's pages): 1 of 30 outputs not whole: ${NAME} [${TEXT}]`)).toBeNull()
   })
   it('holds back everything else: a stack, a reason, a table, a line of a debug print, an ok line that carries more than numbers', () => {
     for (const line of [

@@ -1,0 +1,18 @@
+{
+ "texlive": "texlive/texlive@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f",
+ "base": "debian:testing-20260918-slim@sha256:ef76a72934d568a8ef1198090dfc3d91f34d9d2af0e3ab6a0e22030c84eb3e79",
+ "node": "node:22-trixie-slim@sha256:6f851b42f05219411b716d43be5525cad33f872ee4d7808fbcb57616f00b6d57",
+ "aptSnapshot": "20261001T000000Z",
+ "texFormat": {
+  "texlive": 2025,
+  "banner": "TeX Live 2025",
+  "pdftex": "1.40.28",
+  "pdflatexFormat": "2026.3.16",
+  "lualatexFormat": "2026.3.16",
+  "xelatexFormat": "2026.3.16",
+  "latex2e": "2025-11-01",
+  "amsmath": "2025/07/09 v2.17z",
+  "tlmgr": 76773,
+  "fmtutil": "r77314"
+ }
+}

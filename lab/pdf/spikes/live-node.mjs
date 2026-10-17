@@ -16,6 +16,10 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { openPaper, runLive } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { translateTexts } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
+import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+
+// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
+await checkCompileImage()
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
 const [id, lang = 'zh'] = process.argv.slice(2)
@@ -32,7 +36,7 @@ async function compile({ main, engine, rerun, bibtex, overrides }) {
   for (const [p, b] of overrides) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
   // TeX writes its output where it runs, the project's root, whatever directory the main file is in
   const stem = main.split('/').pop().replace(/\.[^./]+$/, ''), start = Date.now()
-  const docker = cmd => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...faithfulDockerArgs(root), '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
+  const docker = cmd => run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...faithfulDockerArgs(root), '-v', `${dir}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '300', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
   if (rerun) await docker(['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...(bibtex === false ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main])
   else { await docker([engine, '-interaction=nonstopmode', main]); if (bibtex) await docker(['bibtex', stem]) }
   const read = (ext, enc) => { const f = join(dir, `${stem}.${ext}`); return existsSync(f) ? readFileSync(f, enc) : null }

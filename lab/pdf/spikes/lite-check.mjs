@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { pagePlansOf } from '../../../src/pdf-reader/engine/layout/addon.mjs'
 import { indexLayout, parseLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
-import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
+import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { LITE_ALWAYS } from './lite-pdfjs.mjs'
 
 const root = new URL('..', import.meta.url).pathname
@@ -42,7 +42,9 @@ async function pass(bytes, lite) {
     const list = await page.getOperatorList()
     ops.push(digest(plain(JSON.stringify([Array.from(list.fnArray), list.argsArray]))))
     const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true })
-    inks.push(digest(JSON.stringify(ink, (_, v) => (ArrayBuffer.isView(v) ? Array.from(v) : v))))
+    // (a page not read whole is digested as its reason alone, never a prefix of its ink: ink.mjs unreadOf)
+    const why = unreadOf(ink)
+    inks.push(why ? `unread:${why}` : digest(JSON.stringify(ink, (_, v) => (ArrayBuffer.isView(v) ? Array.from(v) : v))))
     page.cleanup()
   }
   await task.destroy()

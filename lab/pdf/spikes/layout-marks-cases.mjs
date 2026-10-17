@@ -28,12 +28,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { lastTexLog, latin1, latin1Bytes } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
+import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { NAME_KEYS } from '../../../src/pdf-reader/engine/layout/names.mjs'
 import { classOf, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe, readNameProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.mjs'
 import { boxDiff, pageBoxes } from './layout-marks-compare.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+
+// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
+await checkCompileImage()
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -159,7 +163,7 @@ function compileAll(jobs) {
     try { execFileSync('sh', [join(dir, 'run.sh')], { cwd: dir, env, stdio: 'ignore', timeout: 1_800_000 }) } catch {}
     return
   }
-  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 }) } catch {}
+  try { execFileSync('docker', ['run', ...PLATFORM, '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', COMPILE_IMAGE, 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 }) } catch {}
 }
 const jobs = [], queued = []
 /** the source as v0 and v1 of a job, queued: written once the mark probes have answered (prepare) */
@@ -830,6 +834,8 @@ async function inkOf(name) {
  *  edge, how many past 0.001 pt; or why they cannot be compared */
 function inkDiff(a, b) {
   if (a.pages.length !== b.pages.length) return { why: `${a.pages.length} pages, ${b.pages.length}` }
+  // (a page not read whole is compared from no prefix of its ink: ink.mjs unreadOf)
+  for (const [c, at] of [[a, 'the first'], [b, 'the second']]) { const p = c.pages.findIndex(x => unreadOf(x)); if (p >= 0) return { why: `page ${p + 1} of ${at} not read whole (${unreadOf(c.pages[p])})` } }
   let worst = 0, over = 0, glyphs = 0
   for (let p = 0; p < a.pages.length; p++) {
     const A = a.pages[p], B = b.pages[p]

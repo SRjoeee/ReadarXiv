@@ -25,11 +25,17 @@ export const MEASURES = [
   ['scale', 'model', 'ratio', 'one', 'size (median)'],
   ['fullSize', 'model', 'share', 'up', 'full size'],
   ['scaleSpread', 'model', 'ratio', 'down', 'size spread'],
+  // (a frame past it by its hanging marks alone, by at most their own width, is no frame past it: it hangs, `hanging`
+  // below, measure.mjs hangFromOf)
   ['overRight', 'model', 'share', 'down', 'frames past the right edge'],
-  // the gaps between paragraphs (D6, 2026-10-08; measure.mjs paraGapsOf): drawn ÷ original, median, and the share of
-  // gaps a pitch or more wider than the original's (a frame drawn short leaves its blank in the gap below it)
-  ['paraGap', 'model', 'ratio', 'one', 'paragraph gap / the original\'s (median)'],
+  // the gaps between paragraphs (D6, 2026-10-08; measure.mjs paraGapsOf): the share of gaps a pitch or more wider than the
+  // original's (a frame drawn short leaves its blank in the gap below it), and those narrower than the lines beside them (the
+  // half-leading round, 2026-10-17: the drawn gap less the drawn leading short of the original's room past its pitch, capped
+  // at a pitch, measure.mjs paraGapsOf `tight`; a defect compared as a rate, as the measures of TeX's file entered). The
+  // drawn gap against the original's (paraGap, its median ratio) is reported, no longer gated (the maintainer, 2026-10-17):
+  // it held a translation spread past the original's pitch to the original's gap, a pitch, which is tighter than its lines
   ['paraGapWide', 'model', 'share', 'down', 'paragraph gaps a pitch or more wider'],
+  ['paraGapTight', 'model', 'defect', 'down', 'paragraph gaps tighter than the lines beside them'],
   ['overlap', 'pixel', 'defect', 'down', 'overlap regions'],
   ['stray', 'pixel', 'defect', 'down', 'stray text'],
   ['residue', 'pixel', 'defect', 'down', 'residue regions'],
@@ -106,9 +112,18 @@ export const MEASURES = [
  *  most a page's drawn rhythm (its body frames' median line gap within a flow segment against the original's, measure.mjs
  *  rhythm) moves from the last page before it that has one (D6: the rhythm a reader sees, page to page) */
 export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"],
+  // (the drawn gap between two paragraphs against the original's, the median ratio: gated until 2026-10-17, paraGapTight above)
+  ['paraGap', "paragraph gap / the original's (median)"],
   // the crops with no TeX baseline to hold them to, the units v0 draws alone (the layout file not locating them whole: D4),
   // and the lines TeX's rule opened, or would have where the paper has no values for it (layer2.mjs breakLines)
-  ['cropNoTex', 'crops with no TeX baseline'], ['aloneUnits', 'units v0 draws alone'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"]]
+  ['cropNoTex', 'crops with no TeX baseline'], ['aloneUnits', 'units v0 draws alone'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"],
+  // (and the frames whose lines stand past the right edge by the marks no line starts with that end them alone, by at most
+  // their own width: CJK's hanging punctuation, a closing mark's blank half the breaker hangs; a share of the body frames)
+  ['hanging', 'frames past the right edge by hanging marks alone']]
+/** a body frame past its right edge by more than a point: by what it holds before the marks it ends with (`over`), or by
+ *  those marks alone (`hangs`; a frame measured before the distinction, with no `dBody`, by its lines as they end) */
+const over = g => g.dRight > 1 && (g.dBody ?? g.dRight) > 1
+const hangs = g => g.dRight > 1 && (g.dBody ?? g.dRight) <= 1
 /** the reported counts a run's totals sum over its fixtures */
 const REPORTED_COUNTS = ['cropNoTex', 'aloneUnits', 'linesOpened', 'linesUnopened']
 /** the content and line measures a page's model holds (measure.mjs) */
@@ -151,7 +166,7 @@ export function pageEntry(page, model, pixel) {
     frames: body.length, fills: fills.length, fill: r(median(fills), 3), blankLines: r(blanks.length ? sum(blanks, x => x) / blanks.length : null, 3),
     framesBlank1: blanks.filter(b => b >= 1).length, pitch: r(median(pitches), 3), rhythm: r(median(rhythms), 3), pitchSpread: pitches.length >= 2 ? r(Math.max(...pitches) - Math.min(...pitches), 3) : null,
     scale: r(median(scales), 3), fullSize: scales.filter(s => s >= 0.999).length, scaleSpread: scales.length >= 2 ? r(Math.max(...scales) - Math.min(...scales), 3) : null,
-    dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: body.filter(g => g.dRight > 1).length, onGrid: r(median(body.map(g => g.onGrid)), 3),
+    dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: body.filter(over).length, hanging: body.filter(hangs).length, onGrid: r(median(body.map(g => g.onGrid)), 3),
     cropForeign: m.cropForeign, wrongPageText: m.wrongPageText, droppedPh: m.droppedPh, modelCells: m.modelCells,
     ...Object.fromEntries(PLACEMENT.filter(k => m[k] !== undefined).map(k => [k, m[k]])),
     ...Object.fromEntries(FILE_MEASURES.filter(k => m[k] !== undefined).map(k => [k, m[k]])),
@@ -160,7 +175,7 @@ export function pageEntry(page, model, pixel) {
     clipped: model.check.clipped, markerResidue: model.check.markerResidue ?? 0, numbersTotal: model.check.numbers.total, numbersShown: model.check.numbers.shown, numbersLost: model.check.numbers.total - model.check.numbers.shown,
     where: model.where, style: model.style, drawn: model.drawn,
     groupsSplit: model.consistency?.groupsSplit ?? 0, labelsSource: model.consistency?.labelsSource ?? 0,
-    paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length,
+    paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length, paraGapTight: gaps.filter(g => g.tight === true).length,
     generated: model.generated ?? {}, generatedLeft: Object.values(model.generated ?? {}).reduce((a, n) => a + n, 0),
   }
   if (model.removal) Object.assign(e, { rmRefused: model.removal.refused, rmMismatched: model.removal.mismatched, rmUnits: model.removal.units, rmSwapped: model.removal.swapped })
@@ -198,7 +213,7 @@ export function fixtureTotals(pages, frames, tier) {
     pitchSpread: r(median(frames.map(f => (f.pitches.length >= 2 ? Math.max(...f.pitches) - Math.min(...f.pitches) : null))), 3),
     scale: r(median(body.map(g => g.scale)), 3), fullSize: r(share(body.filter(g => g.scale >= 0.999).length, body.length)),
     scaleSpread: r(median(frames.map(f => (f.scales.length >= 2 ? Math.max(...f.scales) - Math.min(...f.scales) : null))), 3),
-    dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: r(share(body.filter(g => g.dRight > 1).length, body.length)), onGrid: r(median(body.map(g => g.onGrid)), 3),
+    dTop: r(median(body.map(g => Math.abs(g.dTop))), 2), overRight: r(share(body.filter(over).length, body.length)), hanging: r(share(body.filter(hangs).length, body.length)), onGrid: r(median(body.map(g => g.onGrid)), 3),
     modelCells: sum(pages, p => p.modelCells), numbersTotal: sum(pages, p => p.numbersTotal), numbersShown: sum(pages, p => p.numbersShown),
     groupsSplit: sum(pages, p => p.groupsSplit), labelsSource: sum(pages, p => p.labelsSource),
     style: [sum(pages, p => p.style?.[0]), sum(pages, p => p.style?.[1])],
@@ -264,7 +279,7 @@ export function pooled(list, tier) {
     outputs: list.length, pages: sum(list, t => t.pages), textOn: sum(list, t => t.textOn), textDrawn: sum(list, t => t.textDrawn), unitsLeft: sum(list, t => t.unitsLeft), left,
     cellsOn: sum(list, t => t.cellsOn), cellsDrawn: sum(list, t => t.cellsDrawn), cellsLeft: sum(list, t => t.cellsLeft), frames: sum(list, t => t.frames),
     fill: w('fill', 'fillN'), blankLines: w('blankLines'), framesBlank1: w('framesBlank1'), pitch: w('pitch'), pitchSpread: w('pitchSpread'),
-    scale: w('scale'), fullSize: w('fullSize'), scaleSpread: w('scaleSpread'), dTop: w('dTop'), overRight: w('overRight'), onGrid: w('onGrid'),
+    scale: w('scale'), fullSize: w('fullSize'), scaleSpread: w('scaleSpread'), dTop: w('dTop'), overRight: w('overRight'), hanging: w('hanging'), onGrid: w('onGrid'),
     modelCells: sum(list, t => t.modelCells), numbersTotal: sum(list, t => t.numbersTotal), numbersShown: sum(list, t => t.numbersShown),
     groupsSplit: sum(list, t => t.groupsSplit), labelsSource: sum(list, t => t.labelsSource),
     style: [sum(list, t => t.style[0]), sum(list, t => t.style[1])],
@@ -358,17 +373,37 @@ export function compare(prev, cur, tier) {
 
 /** the brief's completeness rows: per output, each check's count over its pages, and the checks that fail (any count above 0;
  *  the pixel tier's lost ink too). Moved here from layer-gate.mjs (3a-0) so that its arithmetic is tested: `run.fixtures[name].totals` */
+/** an add-on's ink read (layout/addon.mjs pagePlansOf's `ink`) as the row reports it: its pages, by what befell them, or null */
+export function inkOf(ink) {
+  if (!ink || typeof ink !== 'object') return null
+  const pages = k => (Array.isArray(ink[k]) ? ink[k].filter(Number.isInteger) : [])
+  return { capped: pages('capped'), timedOut: pages('timedOut'), degraded: pages('degraded') }
+}
+
+/** the ink line (the gate's, after the completeness line; names and numbers): every output's ink whole, or those whose is
+ *  not, each with its counts; or that no output's add-on told */
+export function inkLine(rows) {
+  const told = rows.filter(r => r.ink)
+  if (!told.length) return 'ink (the add-on\'s reading of arXiv\'s pages): not told by any output'
+  const not = told.filter(r => r.ink.capped.length || r.ink.timedOut.length || r.ink.degraded.length)
+  const untold = rows.length - told.length
+  const head = `ink (the add-on's reading of arXiv's pages): ${not.length ? `${not.length} of ${told.length} outputs not whole: ${not.map(r => `${r.name} [capped ${r.ink.capped.length}, timed out ${r.ink.timedOut.length}, degraded ${r.ink.degraded.length}]`).join('; ')}` : `whole on every one of ${told.length} outputs`}`
+  return untold ? `${head}; ${untold} not told` : head
+}
+
 export function completenessRows(run, tier) {
   return Object.entries(run.fixtures).map(([name, f]) => {
     const t = f.totals
     // (the consistency checks, the table-groups brief: a table group drawn partly, a label the final names left in the
     // source language; each must be 0. And the measures of TeX's file whose cause a pull request removed, gated at 0 in
-    // it, README: a drawn line over a display, since the display grouping read from the file, 2026-10-15; and a link that is
-    // wrong, gated at 0 from the first pull request of the links, 3a-0: links.mjs linksPage)
+    // it, README: a drawn line over a display, since the display grouping read from the file, 2026-10-15; a drawn line
+    // opened by a mark UAX 14 keeps from a line's start, since the breaker keeps every such mark with the text before it,
+    // 2026-10-17 (layer2.mjs breakLines); and a link that is wrong, gated at 0 from the first pull request of the links,
+    // 3a-0: links.mjs linksPage)
     // (and a unit whose record the run could not make: drawn and measured by nothing, run.mjs recordErrors)
-    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0, textInDisplay: t.textInDisplay ?? 0, linksWrong: t.linksWrong ?? 0, recordErrors: f.summary?.recordErrors ?? 0 }
+    const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0, textInDisplay: t.textInDisplay ?? 0, lineStartPunct: t.lineStartPunct ?? 0, linksWrong: t.linksWrong ?? 0, recordErrors: f.summary?.recordErrors ?? 0 }
     if (tier === 'pixel') row.lostInk = t.lostInk ?? 0
-    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay', 'linksWrong', 'recordErrors'].filter(k => row[k] > 0)
+    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay', 'lineStartPunct', 'linksWrong', 'recordErrors'].filter(k => row[k] > 0)
     if (t.numbersShown < t.numbersTotal) row.fails.push('numbers')
     // (and the links' two shares held to their minimums, 3a-2, the owner's ruling: none where there is nothing to share, no
     // link or no moved record; the misses listed, the annotations not kept (`linksLost`, page:rank) and the moved records whose
@@ -386,6 +421,10 @@ export function completenessRows(run, tier) {
     if (row.linksWrong > 0) row.linksWrongAt = (f.pages ?? []).flatMap(p => (p.where?.linksWrong ?? []).map(x => `p${p.p}:${x}`))
     if (row.fails.includes('linksKept')) row.linksLost = f.summary?.linksLost ?? []
     if (row.fails.includes('linksTrue')) row.linksFalse = (f.pages ?? []).flatMap(p => (p.where?.linksTrue ?? []).map(x => `${p.p}:${x}`))
+    // (and the pages of arXiv's PDF whose ink the add-on's walk did not read whole, capped or timed out (no unit drawn on
+    // them), or read degraded (its boxes past ink.mjs BOXES_PAGE merged): reported, not gated; null where the run made no
+    // add-on or its engine tells none)
+    row.ink = inkOf(f.summary?.removal?.ink)
     return row
   })
 }

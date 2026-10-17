@@ -3,11 +3,11 @@
 // page and by the stream's prefix) with a left part for every page. The prepare pipeline's temporary producer calls it after
 // today's whole-document stages; the page stream replaces it. Pure but for the writers' hashing: the same input gives the same
 // bytes and keys. Imports the format's writers, the door's need rule (need.mjs) and nothing that loads a canvas.
-import { NAME_FLAG } from '../layout/file.mjs'
+import { indexLayout, NAME_FLAG } from '../layout/file.mjs'
 import { REMOVAL } from '../layout/addon-manifest.mjs'
 import { BundleRefusal } from './bundle.mjs'
 import { groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
-import { needBound, needsOf } from './need.mjs'
+import { needBound, needsOf, rowLeadOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
 const SIZE_BOUNDS = ['bytes', 'values', 'content', 'tail', 'rows']
@@ -44,6 +44,8 @@ function entriesOf(whole, N, grouped) {
   const left = new Map(whole.left.units.map(w => [w[0], w]))
   const layout = whole.layout ?? null
   const luOf = new Map(layout ? layout.units.map(u => [u[0], u]) : [])
+  // (the file's index, for the unit each one's first row continues on a shared line: need.mjs rowLeadOf)
+  const index = layout ? indexLayout(layout) : null
   // the pages each unit's rows name, by table (a unit's lines are the pages it is framed on; the rest only widen the part's reach)
   const linePages = new Map(), allPages = new Map(), segPages = new Map()
   const pagesOf = (map, id) => map.get(id) ?? map.set(id, []).get(id)
@@ -67,6 +69,8 @@ function entriesOf(whole, N, grouped) {
       lists, reach: new Set([...rectPages, ...lines]),
       // (and what Need reads of it besides, as the door's K has it (run.mjs addUnits): its placeholders' segments' pages and its table group)
       reads: lu ? [...new Set((segPages.get(id) ?? []).filter(q => q >= 1 && q <= N))] : [], group: grouped.of[id] >= 0 ? grouped.of[id] : null,
+      // (set once K is in order, below)
+      follows: null,
       // the least page of its rects and its lines: where the reader says a part may no longer tell it
       first: Math.min(...rectPages, ...lines),
       // the last page its left rects reach, and the last page any of its rows does (what the part's views must reach)
@@ -75,7 +79,11 @@ function entriesOf(whole, N, grouped) {
     entries.push(e)
     if (w && w[1] > before) before = w[1]
   }
-  return entries.sort((a, b) => a.slot - b.slot || a.id - b.id)
+  entries.sort((a, b) => a.slot - b.slot || a.id - b.id)
+  // (a unit follows one before it in K alone, chosen among those, as the door's K holds it: run.mjs addUnits)
+  const at = new Map(entries.map((e, i) => [e.id, i]))
+  for (const e of entries) if (e.lu) e.follows = rowLeadOf(index, e.id, aid => at.get(aid) < at.get(e.id))?.id ?? null
+  return entries
 }
 
 /** the frontier of the whole paper by the door's rule: F[b] is the index in K of the last entry page b's drawing may need */

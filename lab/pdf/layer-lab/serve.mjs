@@ -4,8 +4,7 @@
 // engine draws it: layer-lab/proto.mjs) and Final (a compiled translation already made beside the fixture, which the lab
 // only reads: nothing here compiles) side by side, pages in step (an old link's `layer` still opens the retired early
 // engine, layer-lab/layer.mjs); set the quick view's choices, and edit, save and load the layout rule set; keep notes. A
-// static server on 127.0.0.1 with the rules routes (rules-api.mjs) and nothing else: the page (index.html, lab.mjs, lab.css,
-// strings.mjs, rules-model.mjs, rules-panel.mjs, layer.mjs, proto.mjs) and the
+// static server on 127.0.0.1 with the rules routes (rules-api.mjs) and nothing else: the page (page-files.mjs lists its files) and the
 // extension's tokens and controls it is drawn with (/styles/…, src/styles), the engine's modules as they are
 // (/src/pdf-reader/engine/… and /proto-engine/…, every import relative), PDF.js's pinned modern build from the
 // repository's node_modules (/pdfjs/…, by the page's import map), the role table's faces from the local font folder
@@ -42,9 +41,15 @@ import { pathToFileURL } from 'node:url'
 import { deflateSync, inflateRawSync, inflateSync, constants as Z } from 'node:zlib'
 import { geometryFile, PROTO_GEOMETRY } from '../spikes/layer-gate/ref.mjs'
 import { isOwnHost } from './own-host.mjs'
+import { PAGE_FILES, unservedImports } from './page-files.mjs'
 import { createRulesApi, RULES_PATH } from './rules-api.mjs'
 
 const here = new URL('.', import.meta.url).pathname
+// (a module the page imports that is not served leaves the lab without its script: refused here, not found by opening it)
+{
+  const missing = unservedImports(here)
+  if (missing.length) throw new Error(`layer lab: not served at /lab/ (page-files.mjs): ${missing.join(', ')}`)
+}
 const root = resolve(here, '..')
 const REPO = resolve(root, '../..')
 const DATA = process.env.AXT_DATA ?? join(root, 'data')
@@ -59,7 +64,6 @@ const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
 const ZOD = resolve(REPO, 'node_modules/zod')
 const ENTRY = process.env.LAYER_ENTRY ? resolve(process.env.LAYER_ENTRY) : null
 const PORT = Number(process.argv.find(a => a.startsWith('--port='))?.slice(7) ?? 8093)
-const PAGE_FILES = new Set(['index.html', 'lab.mjs', 'lab.css', 'strings.mjs', 'rules-model.mjs', 'rules-panel.mjs', 'layer.mjs', 'proto.mjs'])
 /** the extension's style sheets the page is drawn with: its tokens (both themes) and its shared controls */
 const STYLES = resolve(REPO, 'src/styles')
 const STYLE_FILES = new Set(['tokens.css', 'controls.css'])

@@ -57,15 +57,22 @@ export interface LayoutStats {
   /** babel's names: the occurrences the marked original marks, those the file locates (and of them those leading a unit:
    *  RUN_IN), and why each other is not */
   names: { marked: number; located: number; runIn: number; why: Record<string, number> }
+  /** the link-anchor locator: the references and citations the matcher did not find that it tried, those it placed by
+   *  their links ([unit, k], rising), and why each other stays LOST (its step) */
+  links: { tried: number; placed: [unit: number, k: number][]; why: Record<string, number> }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */
   labels: Record<string, [found: number, units: number]>
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }
   /** |baseline − TeX's start or end mark|, pt */
   baselines: { first: number[]; last: number[] }
-  /** pages past OPS_CAP, or past GLYPHS_PAGE glyphs */
+  /** pages past OPS_CAP, STEPS_MAX, GLYPHS_PAGE or BOXES_CAP, or drawing in a state lost past STACK_MAX (ink.mjs): no ink */
   capped: number[]
   /** pages whose operator list did not come within OPS_MS, or failed, or was never asked (past GIVEN_UP_MAX): no ink */
   timedOut: number[]
+  /** pages whose ink's walk passed its backstop, INK_MS (ink.mjs): no ink; the one count that depends on the machine */
+  inkTimedOut: number[]
+  /** pages past BOXES_PAGE boxes (ink.mjs), and in no list above: their ink kept, the boxes past it merged by cell */
+  degraded: number[]
   /** pages whose lines cost the carry more than its bound (carry.mjs `over`): no ink */
   over: number[]
   bytes: { raw: number; gzip: number }

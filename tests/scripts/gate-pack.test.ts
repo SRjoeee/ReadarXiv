@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LAYOUT, LAYOUT_SCHEMA } from '../../src/pdf-reader/engine/layout/file.mjs'
 import { signV4 } from '../../scripts/r2-read.mjs'
-import { entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { checkCompileImage, COMPILE_IMAGE_FILE, compileImageOf, localImageDigests, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -382,6 +382,70 @@ describe('the pack names its layout files\' version, and the engine\'s own holds
     expect(pack.schema, 'the pack\'s schema').toBe(PACK_SCHEMA)
     expect(pack.layout?.schema, remake).toBe(LAYOUT_SCHEMA)
     expect(pack.layout?.version, remake).toBe(LAYOUT)
+  })
+})
+
+describe('the compile image is pinned by digest, one value for the pack and the web container', () => {
+  const pin = () => JSON.parse(readFileSync(COMPILE_IMAGE_FILE, 'utf8'))
+  const withPin = (mutate: (j: Record<string, unknown>) => void) => {
+    const dir = mkdtempSync(join(tmpdir(), 'compile-image-'))
+    const j = pin()
+    mutate(j)
+    writeFileSync(join(dir, 'compile-image.json'), JSON.stringify(j))
+    return join(dir, 'compile-image.json')
+  }
+
+  it('holds the committed gate-pack.json\'s compileImage to lab/pdf/compile-image.json', () => {
+    const pack = JSON.parse(readFileSync(join(import.meta.dirname, '../../lab/pdf/gate-pack.json'), 'utf8'))
+    expect(pack.compileImage, 'the pack was made on another compile image than the pinned one: re-make the pack (gate-pack.mjs make)').toEqual(compileImageOf())
+  })
+
+  it('is three images by digest, a snapshot that is null or dated, and the TeX format', () => {
+    const c = compileImageOf()
+    for (const k of ['texlive', 'base', 'node'] as const) expect(c[k]).toMatch(/^[a-z0-9./_-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$/)
+    expect(c.aptSnapshot === null || /^\d{8}T\d{6}Z$/.test(c.aptSnapshot)).toBe(true)
+    expect(c.texFormat).toMatchObject({ texlive: 2025, pdftex: '1.40.28' })
+  })
+
+  it('refuses a file that is not that: a tag with no digest, a short digest, another key, a bad snapshot', () => {
+    expect(() => compileImageOf(withPin(j => { j.node = 'node:22-trixie-slim' }))).toThrow(/node must be name\[:tag\]@sha256/)
+    expect(() => compileImageOf(withPin(j => { j.base = 'debian:trixie-slim@sha256:7792b1f7' }))).toThrow(/base must be/)
+    expect(() => compileImageOf(withPin(j => { j.extra = 1 }))).toThrow(/the keys must be/)
+    expect(() => compileImageOf(withPin(j => { j.aptSnapshot = 'yesterday' }))).toThrow(/aptSnapshot/)
+    expect(() => compileImageOf(withPin(j => { j.texFormat = 3 }))).toThrow(/texFormat/)
+  })
+
+  it('checks the local image\'s repo digests against the pin, and says what it found', () => {
+    const c = compileImageOf(), want = c.texlive.slice(c.texlive.indexOf('@') + 1)
+    expect(() => checkCompileImage(c, ['sha256:' + '0'.repeat(64), want])).not.toThrow()
+    expect(() => checkCompileImage(c, ['sha256:' + '0'.repeat(64)])).toThrow(/not the pinned sha256:7056390e/)
+    expect(() => checkCompileImage(c, [])).toThrow(/not there/)
+  })
+
+  it('refuses a make when COMPILE_IMAGE names another image than the pin', () => {
+    const c = compileImageOf(), want = c.texlive.slice(c.texlive.indexOf('@') + 1)
+    expect(() => checkCompileImage(c, [want], { COMPILE_IMAGE: `texlive/texlive@sha256:${'e'.repeat(64)}` })).toThrow(/not the pin/)
+    expect(() => checkCompileImage(c, [want], { COMPILE_IMAGE: c.texlive })).not.toThrow()
+  })
+
+  it('asks docker for the repo digests of the reference, and refuses where docker cannot answer', () => {
+    const asked: string[][] = []
+    const run = ((cmd: string, args: string[]) => { asked.push([cmd, ...args]); return JSON.stringify(['texlive/texlive@sha256:' + 'a'.repeat(64)]) }) as never
+    expect(localImageDigests('texlive/texlive:latest', run)).toEqual(['sha256:' + 'a'.repeat(64)])
+    expect(asked[0]).toEqual(['docker', 'image', 'inspect', '--format', '{{json .RepoDigests}}', 'texlive/texlive:latest'])
+    expect(localImageDigests('x:y', (() => 'null') as never)).toEqual([])
+    expect(() => localImageDigests('x:y', (() => { throw Object.assign(new Error('boom'), { stderr: 'Error: No such image: x:y\n' }) }) as never)).toThrow(/cannot ask docker for x:y \(Error: No such image: x:y\)/)
+  })
+
+  it('writes the pin into the manifest and its committed copy, and leaves the listing digest as it was', () => {
+    const i = inputs()
+    const c = compileImageOf()
+    const plain = makePack({ entries: entriesOf(i), out: join(i.root, 'plain'), pipeline: '10', layout: LAYOUT_V, made: '2026-10-08T01:00:00.000Z' })
+    const pinned = makePack({ entries: entriesOf(i), out: join(i.root, 'pinned'), pipeline: '10', layout: LAYOUT_V, compileImage: c, made: '2026-10-08T01:00:00.000Z' })
+    expect(plain.compileImage).toBeUndefined()
+    expect(pinned.compileImage).toEqual(c)
+    expect(packJsonOf(pinned).compileImage).toEqual(c)
+    expect(pinned.digest).toBe(plain.digest)
   })
 })
 

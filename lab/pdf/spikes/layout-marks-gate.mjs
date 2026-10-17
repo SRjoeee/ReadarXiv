@@ -55,6 +55,7 @@ import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/p
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { attribute, boxDiff, causesOf, classOfMark, compareReadings, fileStates, joinRuns, lineAt, linesOf, lostLines, pageBoxes, regressions, strictMoves, switchOffOf, traced, verdictOf, withFitr } from './layout-marks-compare.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, imageIdOf, PLATFORM } from './compile-image.mjs'
 
 const run = promisify(execFile)
 const here = new URL('..', import.meta.url).pathname
@@ -75,7 +76,8 @@ if (WRITE && VARIANT) throw new Error('--write: a variant is never the record')
 const meta = JSON.parse(readFileSync(join(CORPUS_ROOT, 'out/corpus-meta.json'), 'utf8'))
 const ids = arg('papers')?.split(',').filter(Boolean) ?? meta.map(m => m.id)
 for (const id of ids) if (!existsSync(join(CORPUS_ROOT, 'data/corpus', id, 'source.gz'))) throw new Error(`no source for ${id}`)
-const image = (await run('docker', ['image', 'inspect', 'texlive/texlive:latest', '--format', '{{.Id}}'])).stdout.trim()
+await checkCompileImage()
+const image = await imageIdOf()
 /** what a compile keeps of itself: raised when what is kept changes, so that a kept compile is read again */
 const FORMAT = 4
 /** the code that reads a compile (its text items, readings, marks and marks file), hashed into every compile's key: a
@@ -111,7 +113,7 @@ async function compile(id, files, { main, engine, bbl, kind, marking = {} }) {
   // bibliography (2608.30640's trace was 30 pages, its compile 34)
   const pdftex = kind === 'trace' ? [`-pdflatex=env max_print_line=1000000 ${engine} %O %S`] : []
   const cmd = kind === 'probe' ? [engine, '-interaction=nonstopmode', main] : ['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...pdftex, ...(bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
-  const hash = createHash('sha256').update(JSON.stringify([FORMAT, READ_HASH, image, id, main, engine, !!bbl, kind, cmd, EPOCH]))
+  const hash = createHash('sha256').update(JSON.stringify([FORMAT, READ_HASH, image, COMPILE_IDENTITY, id, main, engine, !!bbl, kind, cmd, EPOCH]))
   for (const [p, b] of [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) hash.update(p).update(b)
   const key = join(CACHE, hash.digest('hex').slice(0, 32))
   if (existsSync(`${key}.json.gz`)) return unpack(`${key}.json.gz`)
@@ -121,7 +123,7 @@ async function compile(id, files, { main, engine, bbl, kind, marking = {} }) {
     rmSync(dir, { recursive: true, force: true })
     for (const [p, b] of files) { const f = join(dir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
     const t0 = Date.now()
-    await run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', ...cmd], { maxBuffer: 1 << 28 }).catch(() => null)
+    await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '300', ...cmd], { maxBuffer: 1 << 28 }).catch(() => null)
     const ms = Date.now() - t0
     const stem = main.split('/').pop().replace(/\.[^./]+$/, ''), at = ext => join(dir, `${stem}.${ext}`)
     const text = ext => (existsSync(at(ext)) ? readFileSync(at(ext), 'latin1') : null)

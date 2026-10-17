@@ -104,7 +104,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 6
+  schema: 7
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -136,11 +136,26 @@ export interface LayoutMarks {
    *  rising: [name, how] where it is not owned (how ≥ OWNED, OWNED_HOW), else [name, how, n, …n glyphs (page, x0,
    *  baseline, size, a character of chars), …its rules (page, x0, y0, x1, y1)] */
   owned: (string | number)[][]
+  /** the marked compile's Link annotations that name a destination (a string `dest`), on the pages a placeholder that names a
+   *  link (linkablePiece) has a point on, pages rising, then PDF.js's order: the rectangle, the least and greatest origin of the
+   *  glyphs under it (PDF.js's rule: a glyph's advance centre on its baseline strictly inside), their count and characters; n 0
+   *  where none, too many or a text too long (counted for the order, never an anchor: make.mjs's link-anchor locator). []
+   *  where a page's could not be read, past LINKS_MAX, or not read (no `units` and `OPS`) */
+  links: LinkRow[]
 }
+/** a link of the marked compile: [dest, page, x0, y0, x1, y1, a, b, n, text] */
+export type LinkRow = [dest: string, page: number, x0: number, y0: number, x1: number, y1: number, a: number, b: number, n: number, text: string]
+/** a placeholder whose source names a link and whose class may hold it: the pieces the link-anchor locator pairs */
+export declare const linkablePiece: (piece: unknown) => boolean
+/** the links a marks file holds at most: a paper past it has none */
+export declare const LINKS_MAX: number
+/** a Link annotation as both PDFs' links are ranked by (ours in the marks file, arXiv's in the maker): its rectangle's corners
+ *  in order, to a hundredth, where it names a destination the file can hold and its rectangle has an area there; else null */
+export declare function destRect(a: unknown): [x0: number, y0: number, x1: number, y1: number] | null
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 6
+export declare const MARKS_SCHEMA: 7
 /** a piece's own ink at most, its glyphs and its rules; and a paper's in all */
 export declare const GLYPHS_PIECE: number
 export declare const RULES_PIECE: number
@@ -158,7 +173,7 @@ export type MarkedOptions = Parameters<typeof layoutMarksOf>[2] & { paper?: bool
 /** what the marked original gives a page at a time (markedPages): its head, each page, its end */
 export type MarkedEvent =
   | { head: { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; unitMarks: UnitMarks | null } }
-  | { page: { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][] } }
+  | { page: { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][]; links: LinkRow[] | null } }
   | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][] } }
 /** the marked original read a page at a time, an async generator: its head, each page in order, its end */
 export declare function markedPages(marked: unknown, log: string, o: MarkedOptions): AsyncGenerator<MarkedEvent>

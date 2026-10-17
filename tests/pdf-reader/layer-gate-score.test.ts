@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cropPlacementOf, modelPage, type OrigLine, pixelPage, type UnitIn } from '../../lab/pdf/spikes/layer-gate/measure.mjs'
-import { compare, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
+import { compare, completenessRows, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, REPORTED, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
 
 // The layer gate's arithmetic (lab/pdf/spikes/layer-gate.mjs, Plan 8b Task 12): a page's model measures
 // against the original, a fixture's totals, and the merge rule against a recorded run — shares within 0.2 points, ratios
@@ -30,6 +30,44 @@ describe('the model measures of a page', () => {
     expect(m.geo[0]!.blank).toBeCloseTo(2, 5)
     expect(m.geo[0]!.scale).toBe(1)
     expect(m.fills[0]!.fill).toBeLessThan(0.65)
+  })
+})
+
+describe('a frame past its right edge: by what it holds (overRight), or by the marks that end its lines alone (hanging)', () => {
+  it('reads where the marks no line starts with that end a line begin: their advance, the tokens of marks alone', async () => {
+    const { hangFromOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const it = (s: string, x: number, o: object = {}) => ({ t: { s }, x, ...o })
+    // an ideographic full stop after two characters; a closing parenthesis and a comma after a word; one shifted by its blank
+    expect(hangFromOf([it('\u6c49', 0), it('\u5b57', 10), it('\u3002', 20)])).toBe(20)
+    expect(hangFromOf([it('word', 0), it(')', 20), it(',', 23)])).toBe(20)
+    expect(hangFromOf([it('\u6c49', 0), it('\uff09', 12, { shift: 2 })])).toBe(10)
+    // a closing quote, which the breaker hangs as CJK's closing marks
+    expect(hangFromOf([it('\u6c49', 0), it('\u201d', 10)])).toBe(10)
+    // a mark inside a word's token is no mark of its own; a crop, an opening quote, no mark: none
+    expect(hangFromOf([it('word,', 0)])).toBe(null)
+    expect(hangFromOf([it('a', 0), { t: { crop: {} }, x: 5 }])).toBe(null)
+    expect(hangFromOf([it('a', 0), it('\u201c', 5)])).toBe(null)
+    expect(hangFromOf([it('a', 0), it('b', 5)])).toBe(null)
+    expect(hangFromOf([])).toBe(null)
+    expect(hangFromOf(null)).toBe(null)
+  })
+
+  it('a frame past the edge by its hanging marks alone hangs; past it by more, or with nothing to tell, it runs over', () => {
+    // four units' frames, 72 to 472: one whose last mark hangs 5 past the edge from the edge itself; one whose body ends
+    // 3 past it before its mark; one past it with no mark; one within it
+    const at = (top: number) => lines(5, top)
+    const drawn = (id: number, top: number, x1: number, hangFrom?: number) => unit({ id, orig: at(top), lines: at(top).map((l, i) => ({ baseline: l.baseline, size: 10, x0: 72, x1: i === 1 ? x1 : 470, ...(i === 1 && hangFrom !== undefined ? { hangFrom } : {}) })) })
+    const units = [drawn(1, 700, 477, 472), drawn(2, 600, 480, 475), drawn(3, 500, 478), drawn(4, 400, 471)]
+    const m = modelPage({ units, ref: units.map(u => ({ id: u.id, kind: 'para', orig: u.orig })), items: [], translated: new Set([1, 2, 3, 4]) })
+    expect(m.geo.map(g => [g.dRight, g.dBody])).toEqual([[5, 0], [8, 3], [6, 6], [-1, -1]])
+    const page = pageEntry(1, { model: m, check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 4 } as never, null)
+    expect(page.entry).toMatchObject({ frames: 4, overRight: 2, hanging: 1 })
+    const t = fixtureTotals([page.entry], [page.frames], 'model')
+    expect(t).toMatchObject({ overRight: 0.5, hanging: 0.25 })
+    expect(pooled([t, t], 'model')).toMatchObject({ overRight: 0.5, hanging: 0.25 })
+    // (a frame measured before the distinction, no dBody: past the edge, it runs over)
+    const old = pageEntry(1, { model: { ...m, geo: m.geo.map(({ dBody, ...g }) => g) }, check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 4 } as never, null)
+    expect(old.entry).toMatchObject({ overRight: 3, hanging: 0 })
   })
 })
 
@@ -131,6 +169,45 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
     expect(m2.geo[0]!.rhythm).toBeCloseTo(15 / 12, 6)
   })
 
+  it("reads a gap tighter than the lines beside it (paraGapTight): the drawn baselines' gap less the drawn leading against the original's room past its pitch", () => {
+    // (k lines `pitch` apart from the frame's first baseline less `shift`)
+    const at = (orig: OrigLine[], k: number, pitch: number, shift: number) => Array.from({ length: k }, (_, i) => ({ baseline: orig[0]!.baseline - shift - pitch * i, size: 10, x0: 72, x1: 472 }))
+    const pair = (la: { baseline: number; size: number; x0: number; x1: number }[], lb: typeof la, lower = B) => modelPage({
+      units: [unit({ id: 1, orig: A, lines: la }), unit({ id: 2, orig: lower, lines: lb })],
+      ref: [{ id: 1, kind: 'para', orig: A }, { id: 2, kind: 'para', orig: lower }], items: [], translated: new Set([1, 2]),
+    }).gaps
+    // (spread from the frame's first baseline to its last: A's four lines 16 apart from 700 to 652, B's three from 640; the gap a
+    // pitch, 12, under the lines' 16: tight)
+    expect(pair(at(A, 4, 16, 0), at(B, 3, 16, 0))[0]!.tight).toBe(true)
+    // (in line boxes at 1.25 of the pitch: 1.5 under each frame's first baseline, A's last box's foot on its frame's, the gap
+    // between their baselines 15, the lines' own)
+    expect(pair(at(A, 4, 15, 1.5), at(B, 3, 15, 1.5))[0]!.tight).toBe(false)
+    // (and a skip of 6 the original sets between them, past its pitch: kept, it is no tighter; lost, it is)
+    const B6 = lines(4, 634)
+    expect(pair(at(A, 4, 15, 1.5), at(B6, 3, 15, 1.5), B6)[0]!.tight).toBe(false)
+    expect(pair(at(A, 4, 15, 1.5), at(B6, 3, 15, -4.5), B6)[0]!.tight).toBe(true)
+    // (a frame whose third drawn line is past a display it holds, another flow segment: its leading the lines' own, 15, never
+    // the display's room)
+    const across = (shift: number) => at(B, 3, 15, shift).map((l, i) => ({ ...l, block: i === 2 ? 1 : 0, baseline: l.baseline - (i === 2 ? 35 : 0) }))
+    expect(pair(at(A, 4, 15, 1.5), across(1.5))[0]!.tight).toBe(false)
+    expect(pair(at(A, 4, 15, 1.5), across(0))[0]!.tight).toBe(true)
+    // (nothing to compare where neither frame draws two lines; on the original's own lines no tighter)
+    expect(pair(at(A, 1, 15, 0), at(B, 1, 15, 0))[0]!.tight).toBeNull()
+    expect(gapsOf()[0]!.tight).toBe(false)
+    // (none between two frames of one unit: a display's room inside a paragraph is its own)
+    const C = lines(4, 608)
+    const two = modelPage({ units: [unit({ id: 1, orig: [...A, ...C], lines: [...at(A, 4, 16, 0), ...at(C, 3, 16, 0)] })], ref: [{ id: 1, kind: 'para', orig: [...A, ...C] }], items: [], translated: new Set([1]) }).gaps
+    expect(two).toHaveLength(1)
+    expect(two[0]!.tight).toBeNull()
+    // (counted a page, a defect of the model tier: fewer is better)
+    const entry = pageEntry(1, {
+      model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: [], gaps: [{ ratio: 1, extra: 0, tight: true }, { ratio: 1, extra: 0, tight: false }, { ratio: 1, extra: 0, tight: null }], wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 100 },
+      check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1,
+    }, null).entry
+    expect(entry.paraGapTight).toBe(1)
+    expect(measure('paraGapTight').slice(1, 4)).toEqual(['model', 'defect', 'down'])
+  })
+
   it('pairs frames of one column only', () => {
     const right = B.map(l => ({ ...l, x0: 320, x1: 540 }))
     const left = A.map(l => ({ ...l, x1: 300 }))
@@ -155,9 +232,11 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
     expect(p.paraGapN).toBe(6)
     expect(p.paraGap).toBeCloseTo((1.55 * 4 + 2 * 2) / 6, 3)
     expect(p.pageDrift).toBeCloseTo(0.07, 6)
-    // gated: closer to 1 is better, and fewer wide gaps
-    expect(worse(measure('paraGap'), { paraGap: 2 }, { paraGap: 1.2 })?.better).toBe(true)
+    // gated: fewer wide gaps, and fewer tight ones; the ratio to the original's gap reported, no longer gated (2026-10-17)
     expect(worse(measure('paraGapWide'), { paraGapWide: 0.1 }, { paraGapWide: 0.2 })?.worse).toBe(true)
+    expect(MEASURES.some(m => m[0] === 'paraGap')).toBe(false)
+    expect(REPORTED.map(r => r[0])).toContain('paraGap')
+    expect(measure('paraGapTight').slice(1, 4)).toEqual(['model', 'defect', 'down'])
   })
 })
 
@@ -757,6 +836,12 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(t).toMatchObject({ contentLost: 3, slotsSkipped: 4, contentUnknown: 6 })
     expect(t.modelRates).toMatchObject({ contentLost: 1.5, textInDisplay: 0 })
     expect(worse(measure('contentLost'), t, { ...t, modelRates: { ...t.modelRates, contentLost: 2 } }, 'model')?.worse).toBe(true)
+  })
+
+  it("gates a line opened by a barred mark at 0 since the breaker keeps every such mark with the text before it", () => {
+    const output = (n: number | undefined) => ({ totals: { pages: 12, numbersShown: 3, numbersTotal: 3, lineStartPunct: n } as unknown as Totals })
+    const rows = completenessRows({ fixtures: { a: output(0), b: output(1), c: output(undefined) } }, 'model')
+    expect(rows.map(r => [r.name, r.lineStartPunct, r.fails])).toEqual([['a', 0, []], ['b', 1, ['lineStartPunct']], ['c', 0, []]])
   })
 })
 

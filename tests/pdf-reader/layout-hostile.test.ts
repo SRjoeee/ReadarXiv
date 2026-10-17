@@ -44,10 +44,10 @@ function hostile(pages: string[]): Uint8Array {
 }
 
 describe('a hostile page\'s ink is bounded (the per-part memory ceiling)', () => {
-  it('an image painted 100,000 times: one box an operation, within OPS_CAP, no pixel decoded; 150,001 operations: capped', async () => {
+  it('an image painted 100,000 times: one box an operation, within OPS_CAP, no pixel decoded; past OPS_CAP operations: capped', async () => {
     await installLiteWorker()
     const paints = (n: number) => `q 1 0 0 1 72 72 cm ${'/Im1 Do '.repeat(n)}Q`
-    const data = hostile([paints(100_000), paints(OPS_CAP)])
+    const data = hostile([paints(100_000)])
     const before = process.memoryUsage().arrayBuffers
     const task = getDocument({ data, verbosity: 0, ...LITE }), doc = await task.promise
     const inks = []
@@ -59,6 +59,13 @@ describe('a hostile page\'s ink is bounded (the per-part memory ceiling)', () =>
       peak = Math.max(peak, process.memoryUsage().arrayBuffers - before)
       page.cleanup()
     }
+    // (and the same page's list run on past OPS_CAP, its operations the walk does nothing with, as one typed array: PDF.js's
+    // own list of OPS_CAP operations is hundreds of megabytes and seconds of its parse, ink.mjs OPS_CAP)
+    const page = await doc.getPage(1), own = await page.getOperatorList()
+    const fnArray = new Uint16Array(OPS_CAP + 1).fill(OPS.setFillRGBColor)
+    fnArray.set(own.fnArray)
+    inks.push({ ops: fnArray.length, ...pageInk(OPS, { fnArray, argsArray: own.argsArray }, page.commonObjs, { rotate: 0, glyphsMax: GLYPHS_PAGE }) })
+    page.cleanup()
     await task.destroy()
     // (the 192 MB of the image's pixels never decoded: the lite worker)
     expect(peak).toBeLessThan(64 * 2 ** 20)
