@@ -1,7 +1,50 @@
 // What laying a paper's pages reads of its units' rows: the rule the door's `waiting` state follows and the cutter's frontier
 // (cut.mjs) closes a part by. A leaf with no imports, so that the server's entry may hold it (run.mjs, the door, cannot load in
 // node); moved out of run.mjs unchanged. Two rules: needsOf, what laying the pages in order reads (a prefix of the stream), and
-// closureOf, what laying one page alone reads (Need(p), the 1b-D design §1), which the door lays a page asked by.
+// closureOf, what laying one page alone reads (Need(p), the 1b-D design §1), which the door lays a page asked by. And one read
+// of a unit's lay by another's that both hold their K by: a shared line (rowLeadOf, `follows`).
+
+// ---- a shared line: a unit whose first row TeX set on the line another unit's last row ends (a run-in heading and its text,
+// a paragraph's two parts a float split, a head set apart from its text), laid from where that unit's translation ends on the
+// line (run.mjs layout2): its lay reads that unit's, which Need lays with it (`follows`)
+
+/** a shared line's separation at most, in em of the row's size: a run-in head's \quad, a float split's word space */
+export const SHARED_SEP = 3
+/** the kinds whose rows share a baseline by their own placing, never as one line of text: a table's cells (each at its
+ *  column's place in its alignment) and a figure's text */
+const OWN_PLACE = new Set(['cell', 'figure'])
+/** the column (the frame's) of a unit's row j in the layout file, -1 for none */
+function columnOf(u, j) {
+  const F = u.frames
+  for (let f = 0; f + 5 < F.length; f += 6) if (j >= F[f + 2] && j < F[f + 2] + F[f + 3]) return F[f + 1]
+  return -1
+}
+/**
+ * The unit a unit's first row continues on one of TeX's lines, by the layout file (`index`: layout/file.mjs indexLayout's, or
+ * the door's facade over it): of the units framed on that row's page before it in the paper (a smaller id), the one whose last
+ * row is on the row's baseline in its column (the frames'), ends at or before its start and no more than SHARED_SEP em of its
+ * size from it, the nearest. Neither unit a table's cell or a figure's text (OWN_PLACE), and neither row held (its ink stays
+ * the original's: a translation set over it would cover it). Returns the lead's last row { id, page, baseline, x0, x1, size },
+ * or null. 1810.04805's "Model Architecture" and its text, 10.9 pt apart on one row (a \quad of 10.91 pt type)
+ */
+export function rowLeadOf(index, id) {
+  const b = index?.unit(id)
+  if (!b?.lines.length || OWN_PLACE.has(b.kind) || b.held.includes(0)) return null
+  const L = b.lines, page = L[0], x0 = L[1], base = L[3], size = L[6], col = columnOf(b, 0)
+  let best = null
+  for (const aid of index.onPage(page)) {
+    if (!(aid < id)) continue
+    const a = index.unit(aid)
+    if (!a?.lines.length || OWN_PLACE.has(a.kind)) continue
+    const j = a.lines.length / 8 - 1, o = 8 * j, A = a.lines
+    // (one of TeX's lines: one baseline, as the file writes it to a hundredth)
+    if (A[o] !== page || Math.abs(A[o + 3] - base) > 0.005 || a.held.includes(j) || columnOf(a, j) !== col) continue
+    const x1 = A[o + 2]
+    if (x1 > x0 + 0.5 || x0 - x1 > SHARED_SEP * size) continue
+    if (!best || x1 > best.x1) best = { id: aid, page, baseline: A[o + 3], x0: A[o + 1], x1, size: A[o + 6] }
+  }
+  return best
+}
 
 /**
  * What laying a paper's pages reads of its units' rows, by page: the index into the units v0 may place, in the stream's
@@ -56,8 +99,9 @@ const indexes = new WeakMap()
 function indexOf(K, N, fileOnly) {
   const was = indexes.get(K)
   if (was && was.n === K.length && was.N === N && was.fileOnly === fileOnly) return was
-  const U = Array.from({ length: N + 1 }, () => []), Ur = new Map(), members = new Map(), lp = new Int32Array(N + 1).fill(-1)
+  const U = Array.from({ length: N + 1 }, () => []), Ur = new Map(), members = new Map(), lp = new Int32Array(N + 1).fill(-1), at = new Map()
   K.forEach((c, i) => {
+    if (c.id !== undefined) at.set(c.id, i)
     const pages = new Set()
     for (const l of c.lists) for (const q of l) if (q >= 1 && q <= N) pages.add(q)
     for (const q of pages) U[q].push(i)
@@ -66,7 +110,9 @@ function indexOf(K, N, fileOnly) {
     if (c.lists.length) { const m = Math.min(...c.lists.flat()); if (m >= 1 && m <= N) lp[m] = i }
   })
   for (let g = 1; g <= N; g++) lp[g] = Math.max(lp[g], lp[g - 1])
-  const index = { n: K.length, N, fileOnly, U, Ur, members, lp }
+  // (each entry's `follows` as an index of K: the unit whose lay its own reads, which comes before it in K)
+  const follows = K.map(c => (c.follows === undefined || c.follows === null ? -1 : at.get(c.follows) ?? -1))
+  const index = { n: K.length, N, fileOnly, U, Ur, members, lp, follows }
   indexes.set(K, index)
   return index
 }
@@ -81,11 +127,13 @@ function passOf(K, X, q) {
 }
 
 /**
- * Need(p) over K (each entry `lists`, `reach`, `rects`, and the two the door and the cutter both hold: `reads`, the pages of its
- * placeholders' segments, and `group`, its table group), for a paper of N pages. The pages and entries laying page p reads,
+ * Need(p) over K (each entry `lists`, `reach`, `rects`, and those the door and the cutter both hold: `reads`, the pages of its
+ * placeholders' segments, `group`, its table group, and `id` and `follows`, the id of the entry before it whose last row its
+ * first continues on a shared line), for a paper of N pages. The pages and entries laying page p reads,
  * whatever was laid before it:
  * - `pass`: p and the first page of every unit on p, the passes whose units p draws;
- * - `lay`: every entry on a pass page (K indices): of them the placed units are laid, the rest only decided;
+ * - `lay`: every entry on a pass page (K indices), and the entry each one `follows` (its first row continues that one's last on
+ *   a shared line: its lay reads that one's, rowLeadOf), and so on: of them the placed units are laid, the rest only decided;
  * - `draw`: page 1 (its setup: the designs, the family, the faces), p, and every page a `lay` entry reads, its lines' (`reach`)
  *   and its placeholders' segments' (`reads`), in page order;
  * - `rows`: the entries decided (K indices): `lay`; every entry whose lines reach a page a `lay` entry grows on (its rank
@@ -124,6 +172,8 @@ export function closureOf(K, N, p, { fileOnly = DEFAULT_FILE_ONLY, orderFree = t
   const pass = passOf(K, X, p)
   const lay = new Set()
   for (const f of pass) for (const i of X.U[f] ?? []) lay.add(i)
+  // (and the unit each one's first row continues on a shared line, and so on along the line: its lay reads theirs)
+  for (const i of [...lay]) for (let j = X.follows[i]; j >= 0 && !lay.has(j); j = X.follows[j]) lay.add(j)
   const draw = new Set([1, p]), grows = new Set()
   for (const i of lay) {
     const c = K[i]
