@@ -530,11 +530,15 @@ function rangeRecord(entries, lines, edge, band) {
   let name = ''
   mine.forEach((e, j) => {
     const p = mine[j - 1]
-    if (p && (p.li !== e.li || (p.run === e.run ? /\s/.test(e.run.text.slice(p.end, e.at)) : lines[e.li].line.items.slice(p.n + 1, e.n).some(it => it.t.space)))) name += ' '
+    if (p && spacedApart(p, e, lines)) name += ' '
     name += e.ch
   })
   return { page, li: lineOf[0], x: boxes[0][0], boxes: boxes.flat(), name: collapse(name) }
 }
+
+/** whether the drawing sets a space between two of its characters (drawn entries, `p` before `e`): a line's end between them, a
+ *  space in their run between them, or a space among the items between them */
+const spacedApart = (p, e, lines) => p.li !== e.li || (p.run === e.run ? /\s/.test(e.run.text.slice(p.end, e.at)) : lines[e.li].line.items.slice(p.n + 1, e.n).some(it => it.t.space))
 
 function placeText(to, annots, lines, edge, band, records, tried, budget) {
   // the piece's drawn characters, in drawing order
@@ -564,8 +568,10 @@ function placeText(to, annots, lines, edge, band, records, tried, budget) {
   // (its own text, ownOf: PDF.js's overlaid text, read from the glyphs' own places; the engine's characters under it where that
   // is empty, whose places are its widths' estimate and may take a neighbour for one of its own)
   const formOf = own => { const A = normed(own, LETTER); return A.s ? { mode: 'letters', A } : { mode: 'ink', A: normed(own, INK) } }
-  // (a word or a number found whole: no letter or digit of the drawing just before or after it, unless the annotation before it,
-  // of its target, ended there, or the one after it, of its target, starts there: "Rad-" and "ford et al." drawn "Radford")
+  // (a word or a number found whole: no letter or digit of the drawing just before or after it in its word, the drawing's space
+  // or a line's end ending a word (spacedApart: cleveref's "Figure 1", whose link is the number's alone), unless the annotation
+  // before it, of its target, ended there, or the one after it, of its target, starts there: "Rad-" and "ford et al." drawn
+  // "Radford")
   const isLetter = j => j >= 0 && j < D.length && LETTER.test(D[j].ch)
   sorted.forEach((c, n) => {
     const own = ownOf(c), { mode, A } = formOf(own)
@@ -578,8 +584,8 @@ function placeText(to, annots, lines, edge, band, records, tried, budget) {
       if (u < 0) u = F.s.length
       for (let at = F.s.indexOf(A.s, u); at >= 0; at = F.s.indexOf(A.s, at + 1)) {
         const ds = F.at[at], de = F.at[at + A.s.length - 1]
-        const leftOk = mode !== 'letters' || !isLetter(ds - 1) || (prev && prev.de === ds - 1 && sameTarget(prev.c.a, c.a))
-        const rightOk = mode !== 'letters' || !isLetter(de + 1) || (nextS?.mode === 'letters' && F.s.startsWith(nextS.A.s, at + A.s.length))
+        const leftOk = mode !== 'letters' || !isLetter(ds - 1) || spacedApart(D[ds - 1], D[ds], lines) || (prev && prev.de === ds - 1 && sameTarget(prev.c.a, c.a))
+        const rightOk = mode !== 'letters' || !isLetter(de + 1) || spacedApart(D[de], D[de + 1], lines) || (nextS?.mode === 'letters' && F.s.startsWith(nextS.A.s, at + A.s.length))
         if (leftOk && rightOk) { s0 = at; break }
       }
     }
