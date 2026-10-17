@@ -50,6 +50,24 @@ describe('reduce: the layer\'s states (Task 12)', () => {
     expect(phases([...events, { type: 'translated', got: 40, total: 40, lost: 0, stopped: null }])).toEqual(['ready', 'translating', 'ready'])
   })
 
+  it('laying: a translation done before a page of the layer is laid where the translation shows holds its end, the line on and the translation said, until one is; the original display waits on nothing', () => {
+    const bilingual: SessionEvent = { type: 'display', mode: 'bilingual' }
+    const start: SessionEvent = { type: 'translating', got: 0, total: 9, lost: 0 }, end: SessionEvent = { type: 'translated', got: 9, total: 9, lost: 0, stopped: null }
+    const done = fold([bilingual, opened, { type: 'coming' }, start, end])
+    expect(done).toMatchObject({ phase: 'translating', progress: 1 })
+    expect(lineOf(done).on).toBe(true)
+    expect(spokenOf(done)).toBe(spokenOf(fold([bilingual, opened, start])))
+    expect(fold([laid(1)], done)).toMatchObject({ phase: 'ready', progress: 1 })
+    // a page laid before the end: ready at once
+    expect(fold([bilingual, opened, laid(1), start, end]).phase).toBe('ready')
+    // the original shown: nothing waits on a page; the translation chosen afterwards waits on nothing either
+    const original = fold([opened, start, end])
+    expect(original.phase).toBe('ready')
+    expect(fold([bilingual], original).phase).toBe('ready')
+    // the layer refused meanwhile: reading, the original stays
+    expect(fold([{ type: 'layer', state: 'refused', laid: 0, total: 4 }], done).phase).toBe('ready')
+  })
+
   it('a layer and a failing service: the card with its reason while nothing is laid; laid pages stay readable, the notice with its retry', () => {
     expect(fold([opened, { type: 'fail', event: 'service', text: '', kind: 'no-key' }])).toMatchObject({ phase: 'failed', failure: 'no-key' })
     const stopped = fold([opened, laid(2), { type: 'translated', got: 10, total: 40, lost: 30, stopped: 'network' }])

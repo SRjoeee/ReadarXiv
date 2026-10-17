@@ -31,6 +31,10 @@ export interface ReaderState {
   /** the translation has begun this visit: a prepare still under way after it is no longer the phase (its polls would
    *  take the phase back from the translation, and the line and the status region with it) */
   begun: boolean
+  /** the translation done before a page of the layer is laid where the translation shows (the web's `laying`, swaps.ts): the
+   *  right pane is the original's yet, so its end is held (the phase translating, the line on) until a page is laid, the layer
+   *  is refused, or the original alone is shown */
+  laying: boolean
   /** the layer's pages laid, of the paper's */
   layer: { laid: number; total: number }
   /** no bilingual version for now (refused, unreachable: passing), or for this paper or language; null while there may be */
@@ -85,6 +89,7 @@ export const INITIAL: ReaderState = {
   phase: 'loading',
   preparing: null,
   begun: false,
+  laying: false,
   layer: { laid: 0, total: 0 },
   unavailable: null,
   progress: 0,
@@ -145,7 +150,10 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'display':
       // an address with no paper has no translated display to be had: the original stays selected, whatever the saved
       // settings ask for (the radio of a display out of reach was left selected, and its pane hidden)
-      return state.noPaper || event.mode === state.display ? state : { ...state, display: event.mode }
+      if (state.noPaper || event.mode === state.display) return state
+      // the original alone shown: nothing waits on a page of the layer
+      if (state.laying && event.mode === 'original') return { ...state, display: event.mode, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
+      return { ...state, display: event.mode }
     case 'scale': {
       // the zoom the engine applied, where it says (the reading view: a fit, a scale, or none after a step or a pinch)
       const zoom = event.zoom === undefined ? state.zoom : event.zoom
@@ -200,7 +208,9 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'layer': {
       const layer = event.laid === state.layer.laid && event.total === state.layer.total ? state.layer : { laid: event.laid, total: event.total }
       // the layer refused for the visit: no bilingual version now, the original stays
-      if (event.state === 'refused') return { ...state, layer, preparing: null, unavailable: { why: 'unreachable', retryAt: null }, phase: state.phase === 'failed' ? 'failed' : 'ready' }
+      if (event.state === 'refused') return { ...state, layer, preparing: null, laying: false, unavailable: { why: 'unreachable', retryAt: null }, phase: state.phase === 'failed' ? 'failed' : 'ready' }
+      // a page laid where the translation shows: the end held is told
+      if (state.laying && layer.laid > 0) return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
       return layer === state.layer ? state : { ...state, layer }
     }
     case 'translating':
@@ -223,13 +233,15 @@ function reduceRunFree(state: ReaderState, event: Extract<SessionEvent, { type: 
   switch (event.type) {
     case 'translating': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 0
-      return { ...state, phase: 'translating', begun: true, failure: null, progress, failedUnits: event.lost }
+      return { ...state, phase: 'translating', begun: true, laying: false, failure: null, progress, failedUnits: event.lost }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
       if (event.stopped && !drawn(state)) return { ...state, phase: 'failed', begun: true, failure: event.stopped, progress, failedUnits: event.lost }
-      return { ...state, phase: 'ready', begun: true, progress, failedUnits: event.lost, failure: event.stopped }
+      // done with nothing laid where the translation shows: the end held until a page is (laying)
+      if (!event.stopped && !drawn(state) && state.display !== 'original') return { ...state, phase: 'translating', begun: true, laying: true, progress, failedUnits: event.lost, failure: null }
+      return { ...state, phase: 'ready', begun: true, laying: false, progress, failedUnits: event.lost, failure: event.stopped }
     }
     case 'unavailable': {
       const lasting = LASTING.has(event.why)
