@@ -6,20 +6,22 @@
   "version": "7"
  },
  "compileImage": {
-  "texlive": "texlive/texlive:latest@sha256:16c556aeb4095b47245fcd05db47061529e5df8fc8c04d97fb0f049055244526",
+  "texlive": "texlive/texlive@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f",
   "base": "debian:trixie-slim@sha256:7792b1f7702a86946cd518db72b6a407302c3e9bc1635634368b878189e8221c",
   "node": "node:22-trixie-slim@sha256:6f851b42f05219411b716d43be5525cad33f872ee4d7808fbcb57616f00b6d57",
   "aptSnapshot": null,
   "texFormat": {
-   "texlive": 2026,
-   "pdftex": "1.40.29",
-   "latex2e": "2026-06-01",
-   "tlmgr": 79639,
-   "fmtutil": "r78589"
+   "texlive": 2025,
+   "pdftex": "1.40.28",
+   "latex2e": "2025-11-01",
+   "amsmath": "2025/07/09 v2.17z",
+   "format": "2026.3.16",
+   "tlmgr": 76773,
+   "fmtutil": "r77314"
   }
  },
- "made": "2026-10-17T08:49:12.890Z",
- "digest": "11980418d21d4d469e0832d133f96e8d75b28aed441f43373ce0b8d8878e8384",
+ "made": "2026-10-17T16:15:49.375Z",
+ "digest": "a105d60379bf1bc82d7bb40582fa1a6e59e397c8ab8edc01b6d75e3888d0c2df",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -1026,9 +1028,9 @@
   },
   {
    "path": "fixtures/2307.16209v1-zh/layout.json",
-   "sha256": "472c7e08c9dcd2fc18f36c2de1bcea4ff33b5a8bf2aa874ae5667d63b485b21e",
-   "bytes": 496858,
-   "url": "r2://readarxiv-ci/gate-pack/472c7e08c9dcd2fc18f36c2de1bcea4ff33b5a8bf2aa874ae5667d63b485b21e"
+   "sha256": "4eb33c472cdb3e8cd9b336bb51c3b96342ec36cfd5977cd86bd16afae82f67e5",
+   "bytes": 497492,
+   "url": "r2://readarxiv-ci/gate-pack/4eb33c472cdb3e8cd9b336bb51c3b96342ec36cfd5977cd86bd16afae82f67e5"
   },
   {
    "path": "fixtures/2307.16209v1-zh/record.json",

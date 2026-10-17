@@ -53,6 +53,10 @@ import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { getDocument, OPS, version as PDFJS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { LITE } from './lite-pdfjs.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+
+// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
+await checkCompileImage()
 
 setDefaultResultOrder('ipv4first')
 const run = promisify(execFile)
@@ -284,7 +288,7 @@ async function compiledNow(dir, name, files, paper, { passes = null } = {}) {
     for (const [p, b] of files) { const f = join(build, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
     const flag = { xelatex: '-xelatex', lualatex: '-lualatex' }[paper.meta.compiler] ?? '-pdf'
     const once = passes === 1 ? ['-e', '$max_repeat=1'] : []
-    await run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '600', 'latexmk', flag, ...once, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
+    await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', 'latexmk', flag, ...once, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
     const pdf = join(build, `${stem}.pdf`), log = join(build, `${stem}.log`)
     return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') } : null
   } finally { rmSync(build, { recursive: true, force: true }) }
@@ -294,7 +298,7 @@ async function compiledNow(dir, name, files, paper, { passes = null } = {}) {
 async function layoutOf(id, paper, dir) {
   const { files: source } = await unpackSource(new Uint8Array(readFileSync(join(dir, 'source.gz'))))
   const keyOf = marked => {
-    const hash = createHash('sha256')
+    const hash = createHash('sha256').update(COMPILE_IDENTITY)
     for (const [p, b] of [...source, ...marked].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)
     return hash.digest('hex').slice(0, 16)
   }
