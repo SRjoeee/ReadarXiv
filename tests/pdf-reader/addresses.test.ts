@@ -18,6 +18,14 @@ describe('readerAddresses', () => {
     expect(of({ pdf: 'http://[::1]:5555/pdf/2608.02163', api: 'http://127.0.0.1:8787/anything' })).toEqual({ pdf: 'http://[::1]:5555/pdf/2608.02163', api: 'http://127.0.0.1:8787' })
   })
 
+  it('a release build takes no server on this machine: the probes\' seam is a development build\'s, never one any arXiv page may frame', () => {
+    const local = new URLSearchParams({ pdf: 'http://[::1]:5555/pdf/2608.02163', api: 'http://127.0.0.1:8787/anything' })
+    expect(readerAddresses(local, '1706.03762', READER_API, { loopback: false })).toEqual(DEFAULTS)
+    expect(readerAddresses(local, '1706.03762', READER_API, { loopback: true }).api).toBe('http://127.0.0.1:8787')
+    // arXiv for the paper stays, in either
+    expect(readerAddresses(new URLSearchParams({ pdf: 'https://arxiv.org/pdf/1706.03762v7' }), '1706.03762', READER_API, { loopback: false }).pdf).toBe('https://arxiv.org/pdf/1706.03762v7')
+  })
+
   it('takes arXiv for the paper itself, and not for our server', () => {
     expect(of({ pdf: 'https://arxiv.org/pdf/1706.03762v7', api: 'https://arxiv.org' })).toEqual({ ...DEFAULTS, pdf: 'https://arxiv.org/pdf/1706.03762v7' })
   })
