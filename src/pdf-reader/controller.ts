@@ -193,8 +193,11 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'saved':
       return state.mended === state.refusals ? state : { ...state, mended: state.refusals }
     // the original on screen, in every display: readable, a failure of its open before it mended (a retry that opened)
-    case 'opened':
-      return { ...state, phase: state.phase === 'loading' || (state.phase === 'failed' && state.failure === 'network' && !drawn(state)) ? 'ready' : state.phase, failure: state.phase === 'failed' ? null : state.failure, download: state.download === 'none' ? 'original' : state.download }
+    // (a failure the open mends is the original's own fetch failure alone: a service's, a key missing, stays with its card)
+    case 'opened': {
+      const mends = state.phase === 'failed' && state.failure === 'network' && !drawn(state)
+      return { ...state, phase: state.phase === 'loading' || mends ? 'ready' : state.phase, failure: mends ? null : state.failure, download: state.download === 'none' ? 'original' : state.download }
+    }
     case 'fail': {
       const failure = kindOf(event.kind)
       return { ...state, phase: drawn(state) ? 'ready' : 'failed', failure }

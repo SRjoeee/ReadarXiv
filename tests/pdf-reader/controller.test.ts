@@ -133,6 +133,14 @@ describe('reduce: the layer\'s states (Task 12)', () => {
     expect(fold([opened, { type: 'unavailable', why: 'target', retryAt: null }])).toMatchObject({ languageSupported: false, available: true, phase: 'ready' })
   })
 
+  it('the original opening after a service failed keeps the service\'s reason: the card stays the one that says what to do (no key: the settings) (Codex on #390)', () => {
+    const noKey = fold([{ type: 'fail', event: 'service', text: '', kind: 'no-key' }, opened])
+    expect(noKey).toMatchObject({ phase: 'failed', failure: 'no-key' })
+    // the original's own fetch failure, mended by its open: cleared, reading
+    const fetchFailed = fold([{ type: 'fail', event: 'fetch failed', text: '', kind: 'network' }, opened])
+    expect(fetchFailed).toMatchObject({ phase: 'ready', failure: null })
+  })
+
   it("names a failure by the chain's error kinds alone, the popup's reasons (final review)", () => {
     expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'auth' }]).failure).toBe('auth')
     expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'unavailable' as never }]).failure).toBe('unknown')
