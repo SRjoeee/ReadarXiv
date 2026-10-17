@@ -166,6 +166,24 @@ describe('B4: a 5xx or a network that fails is asked once more after a second, t
     }
   })
 
+  it('an answer read to its end lets go of its bound at once: no timer left, the caller\'s signal let go (Devin on #390)', async () => {
+    vi.useFakeTimers()
+    try {
+      const { bytes } = await catalogBytes()
+      const ac = new AbortController()
+      const removed = vi.spyOn(ac.signal, 'removeEventListener')
+      const look = await lookLayer(API, PAPER, { fetch: recording(() => new Response(bytes as BodyInit)).f, signal: ac.signal })
+      expect(look.kind).toBe('catalog')
+      expect(vi.getTimerCount()).toBe(0)
+      expect(removed).toHaveBeenCalledWith('abort', expect.any(Function))
+      // a body let go unread (a 404's JSON read whole too, an object's answer cancelled): the same
+      await expect(fetchObject(API, PAPER, { sha256: 'a'.repeat(64), bytes: 10 }, { fetch: recording(() => new Response('', { status: 404 })).f })).rejects.toThrow(/404/)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('a prepare\'s answers: ready, preparing, none, a wait', async () => {
     expect(await askPrepare(API, PAPER, { fetch: recording(() => json(200, { ready: true })).f })).toEqual({ kind: 'ready' })
     expect(await askPrepare(API, PAPER, { fetch: recording(() => json(404, { why: 'no-pdf' })).f })).toEqual({ kind: 'none', why: 'no-pdf' })
