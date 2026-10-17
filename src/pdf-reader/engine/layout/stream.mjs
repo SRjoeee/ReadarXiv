@@ -257,6 +257,95 @@ export function ownedOf(pages, { follows, dropped = [] }) {
   return out
 }
 
+/** a piece's closing point: a placeholder's (p) or a footnote call's (n) */
+const CLOSING = /^[pn]\d+\.\d+b$/
+/** a page of nothing, in a window's place for a page the window does not hold */
+const EMPTY = Object.freeze({ glyphs: Object.freeze({ n: 0 }), boxes: Object.freeze([]), points: Object.freeze([]), boxAt: new Int32Array(0), view: Object.freeze([0, 0, 0, 0]) })
+
+/**
+ * ownedOf a page at a time (the page stream, E2a): the pages added in order, each piece found once every page it may read
+ * is in, over a window of the pages held, and each page let go once no piece left to find may read it. A piece is found by
+ * its opening point's page, in the pages' order and, on a page, as ownedOf meets them; it may read its own page, the page
+ * of its closing point (its destination's, `closing(name)`: the two are one place in TeX's list, \axt@dest), and where it
+ * has none, from its point on to the next point in its region (ownedOf's pastColumn; the document's end where there is
+ * none); a closing point read on an earlier page than its opening one is put in the window as that one point (marks out
+ * of order). What it finds is ownedOf's over the whole document, but that a piece's work is bounded per window (WORK) and
+ * that a point read twice on pages apart is told by `twice()` (the caller's to apply: 'a mark set twice').
+ * `follows`, `dropped`: ownedOf's. `add(p, page, take)`: page p (1, 2, … in order), as ownedOf reads a page; `take(name,
+ * e, pages)` is called for each piece found, `e` ownedOf's entry, `pages` the window (pages[p - 1] page p) while it is
+ * held. `end(take)`: no page after; every piece left is found
+ */
+export function ownedPages({ follows, dropped = [], closing = () => null }) {
+  const held = new Map(), regions = new Map(), counts = new Map(), opened = new Set(), early = new Map()
+  /** pages added, in order; their pieces, each { name, q, close, needPage, stop } */
+  const queue = []
+  let last = 0
+  const seqPoint = name => !BRACKET.test(name) && !NAME_POINT.test(name)
+  /** whether page pa's pieces can be found: every page each may read is in */
+  const ready = (entry, ended) => {
+    if (ended) return true
+    for (const x of entry.pieces) {
+      if (x.needPage !== null && last < x.needPage && !counts.has(x.close)) return false
+      if (x.stop === false) return false
+    }
+    return true
+  }
+  /** the first point after (p, q) in region r on the pages held from p to the last: found where one is */
+  const stopFrom = (p, q, r) => {
+    for (let s = p; s <= last; s++) {
+      const P = held.get(s), at = regions.get(s).at
+      for (let k = s === p ? q + 1 : 0; k < P.points.length; k++) if (seqPoint(P.points[k].name) && at[k] === r) return true
+    }
+    return false
+  }
+  const find = (entry, take) => {
+    const pa = entry.p, W = new Array(last).fill(EMPTY)
+    for (let p = pa; p <= last; p++) W[p - 1] = held.get(p)
+    const mine = new Set(entry.pieces.map(x => x.name))
+    for (const x of entry.pieces) {
+      const e = early.get(x.close)
+      if (e && e[0] < pa && W[e[0] - 1] === EMPTY) W[e[0] - 1] = { ...EMPTY, points: [{ name: x.close, glyph: 0, box: 0 }] }
+    }
+    const out = ownedOf(W, { follows: name => (mine.has(name) ? follows(name) : null), dropped })
+    for (const [name, e] of out) take(name, e, W)
+  }
+  const drain = (take, ended = false) => {
+    while (queue.length && ready(queue[0], ended)) find(queue.shift(), take)
+    // the pages no piece left may read
+    const low = queue.length ? queue[0].p : last + 1
+    for (const p of [...held.keys()]) if (p < low) { held.delete(p); regions.delete(p) }
+  }
+  return {
+    add(p, page, take) {
+      if (p !== last + 1) throw new RangeError(`page ${p} added after page ${last}`)
+      last = p
+      held.set(p, page)
+      const R = regionsOf(page)
+      regions.set(p, R)
+      const pieces = []
+      page.points.forEach((pt, q) => {
+        const name = pt.name
+        counts.set(name, (counts.get(name) ?? 0) + 1)
+        if (CLOSING.test(name) && !opened.has(`${name.slice(0, -1)}a`) && !early.has(name)) early.set(name, [p, q])
+        if (!OPENING.test(name) || opened.has(name)) return
+        opened.add(name)
+        const f = follows(name)
+        if (!f) return
+        const close = `${name.slice(0, -1)}b`, at = closing(name)
+        // a closing point to wait for (its destination's page; with none known, the document's end), or a stop where it has none
+        pieces.push({ name, q, close, needPage: f.closing ? (Number.isInteger(at) ? at : Infinity) : null, stop: f.closing || R.at[q] % 2 !== 1, r: R.at[q] })
+      })
+      // the stops looked for again with each page: the pieces' pages' and this one's
+      for (const entry of [...queue, { p, pieces }]) for (const x of entry.pieces) if (x.stop === false && stopFrom(entry.p, x.q, x.r)) x.stop = true
+      queue.push({ p, pieces })
+      drain(take)
+    },
+    end(take) { drain(take, true) },
+    /** the point names read more than once, on every page added */
+    twice() { return new Set([...counts].filter(([, n]) => n > 1).map(([name]) => name)) },
+  }
+}
+
 /** where the text `want` begins among the glyphs (indices into `glyphs`, [page, index] of `pages`): the first glyph from
  *  which their characters spell it (a hyphen the text has not passed over, white space never compared, the last glyph's
  *  characters past its end: a ligature), or from which they spell the start of it up to the last glyph (the text runs

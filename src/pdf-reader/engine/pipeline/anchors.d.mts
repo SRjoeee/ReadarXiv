@@ -16,12 +16,26 @@ export interface UnitText { id: number; text: string; gaps?: number[]; lead?: st
 export declare function tokens(s: string): { t: string; at: number; len: number }[]
 export declare function tokenizeDocument(pages: TextPage[]): DocToken[]
 /** marks (`${id}s` / `${id}e` → where, and the word carried with it) → id → [first token, last token] */
-export declare function boundsFromMarks(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number; t?: string | null }>): Map<string, [number, number]>
+export declare function boundsFromMarks(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number; t?: string | null }>, byPage?: Map<number, number[]>): Map<string, [number, number]>
+/** each page's tokens, by index */
+export declare function pageIndex(doc: readonly DocToken[]): Map<number, number[]>
 /** each mark with the word it stands by in `doc`, the document the marks were recorded in */
 /** the token a mark sits right after on its baseline (its index in `doc`), or null: `byPage` each page's token indices */
 export declare function tokenAtMark(doc: readonly DocToken[], byPage: Map<number, number[]>, mk: { page: number; x: number; y: number }, start: boolean): number | null
 export declare function markWords(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number }>): Map<string, { page: number; x: number; y: number; t: string | null }>
-export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean }): Map<number, Anchor | null>
+/** the pages' frame's rule: (doc, every unit's located tokens) → whether a token is inside the frame (pageFrame, today's) */
+export type FrameRule = (doc: DocToken[], ms: readonly (number[] | null)[]) => (t: DocToken) => boolean
+export declare const pageFrame: FrameRule
+/** a unit's match (matchUnits): its matched tokens, coverage, bounds where it has marks, and the word → token map */
+export interface UnitMatch { m: number[]; coverage: number; bounded: [number, number] | null; ws?: string[]; pairs?: Map<number, number> | null; textPairs?: Map<number, number> | null }
+export interface MatchOptions { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null }
+export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { frame?: FrameRule }): Map<number, Anchor | null>
+/** every floating unit's match over the whole document (id → its tokens, or null), from the document and the words alone */
+export declare function floatMatches(doc: DocToken[], units: UnitText[], floating?: (id: number) => boolean): Map<number, number[] | null>
+/** anchorUnits' first half: each unit's match by the units' order (null: not found, or not in `only`) */
+export declare function matchUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { only?: ReadonlySet<number> | null }): (UnitMatch | null)[]
+/** anchorUnits' second half, over these units and their matches */
+export declare function placeUnits(doc: DocToken[], units: UnitText[], found: readonly (UnitMatch | null)[], options?: { frame?: FrameRule }): Map<number, Anchor | null>
 /** where each of a unit's sentences after the first begins on the page: the page token of its first word found, rising */
 export declare function sentenceStarts(anchor: Anchor | null | undefined, text: string, offsets: number[] | undefined): Int32Array | null
 /** the pairs sentenceStarts reads as runs [word, token, count, …] (global tokens, word rising, maximal): only for a unit it admits, and

@@ -12,7 +12,10 @@ export interface Layout { readonly pagesOf: Map<number, number[]> }
 
 /** whether a kind of unit may light by sentence: running text */
 export declare function bySentence(kind: string | undefined): boolean
-export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined): Layout
+/** each page's columns by a rule (pageColumns, today's: from the located units' lines), [null, page 1, …] */
+export type ColumnRule = (views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined) => unknown[]
+export declare const pageColumns: ColumnRule
+export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined, o?: { edges?: { l: ArrayLike<number>; r: ArrayLike<number> } | null; columns?: ColumnRule | null }): Layout
 /** a page's tokens as a layout keeps them (format.mjs ReadLeftPart's table): ink across, baseline, size, the glyphs' top and foot */
 export interface PageTable { n: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array }
 /** what the document part reads of a part (format.mjs ReadPart): its pages, the views of pages from its first (stride 4)

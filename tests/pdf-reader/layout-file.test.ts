@@ -698,6 +698,24 @@ describe('a layout part', () => {
     expect(refused({ ...partOf(f), fonts: Array.from({ length: 512 }, (_, i) => `F${i}`) })).toBeNull()
   })
 
+  it('a whole file cut into parts (`sized` false) is read past the bounds a part holds, every other bound held', () => {
+    // NAMES_MAX + 1 names, occurrence rising, each the abstract's on page 1
+    const over = structuredClone(made())
+    const name = over.names[0] as number[]
+    over.names = Array.from({ length: 10_001 }, (_, i) => [i + 1, ...name.slice(1)])
+    const bytes = utf8(encodeLayout(over))
+    expect(refusal(bytes)).toMatchObject({ path: 'names', bound: 'rows' })
+    expect(parseLayout(bytes, { sized: false }).names).toHaveLength(10_001)
+    // the fonts past FONTS_MAX, a whole file's lines past LINES_ALL alike; a bound of a row's own (its page) still refuses
+    const fonts = structuredClone(made())
+    fonts.fonts = Array.from({ length: 513 }, (_, i) => `F${i}`)
+    expect(refusal(utf8(encodeLayout(fonts)))?.path).toBe('fonts')
+    expect(parseLayout(utf8(encodeLayout(fonts)), { sized: false }).fonts).toHaveLength(513)
+    const bad = structuredClone(over)
+    ;(bad.names[5] as number[])[2] = 4
+    expect(() => parseLayout(utf8(encodeLayout(bad)), { sized: false })).toThrow(expect.objectContaining({ path: 'names[5][2]' }))
+  })
+
   it('refuses a call that is not pages lo to hi of the paper with their views', () => {
     const part = partOf(whole)
     expect(() => checkLayoutPart(part, { pages: 3, views: whole.views, lo: 0, hi: 3 })).toThrow(RangeError)

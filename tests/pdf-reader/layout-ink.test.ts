@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { type Glyph, OPS_CAP, outlineBox, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { GLYPHS_PAGE, type Glyph, OPS_CAP, outlineBox, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
 // operator codes, in the shapes PDF.js 6.3.289 gives them (a text matrix as one argument, a path as [op, data, minMax])
@@ -219,6 +219,22 @@ describe('pageInk', () => {
     const b = ink(at)
     expect(b.capped).toBe(false)
     expect(b.glyphs.map(q => q.u)).toEqual(['A', 'Z'])
+  })
+
+  it('a page past `glyphsMax` glyphs is capped, one operation showing them all (a hostile page): what it read stops there', () => {
+    expect(GLYPHS_PAGE).toBe(100_000)
+    // one showText of a million glyphs, within OPS_CAP by far: three operations and a text object's
+    const run = Array.from({ length: 1_000_000 }, () => g('x', 1))
+    const page = [...text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.showText, [run]]), ...text('f1', 10, [1, 0, 0, 1, 72, 600], show(g('Z')))]
+    const capped = pageInk(OPS, list(page), commonObjs, { rotate: 0, glyphsMax: GLYPHS_PAGE })
+    expect(capped.capped).toBe(true)
+    expect(capped.glyphs).toHaveLength(GLYPHS_PAGE)
+    expect(capped.glyphs.some(q => q.u === 'Z')).toBe(false)
+    // at the bound exactly: all read; and with none asked, every glyph (the bound is the caller's)
+    const at = pageInk(OPS, list(text('f1', 10, [1, 0, 0, 1, 72, 700], [OPS.showText, [run.slice(0, 1000)]])), commonObjs, { rotate: 0, glyphsMax: 1000 })
+    expect([at.capped, at.glyphs.length]).toEqual([false, 1000])
+    const free = pageInk(OPS, list(page), commonObjs, { rotate: 0 })
+    expect([free.capped, free.glyphs.length]).toEqual([false, 1_000_001])
   })
 
   it('a painted glyph is ink whatever its Unicode: a symbolic font\'s code 32 (2307.16209\'s big left parenthesis) is a glyph', () => {

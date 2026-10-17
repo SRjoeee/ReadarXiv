@@ -3,12 +3,13 @@ import { LAB_ON, LAB_PAPERS, labFiles } from './helpers/lab-data'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { type Cut, type CutEntry, cutBundle, type CutOptions, needFrontier, TAIL_NOT_CARRIED } from '@/pdf-reader/engine/layer-proto/cut.mjs'
+import { type Cut, type CutEntry, cutBundle, type CutOptions, needFrontier, partCutter, TAIL_NOT_CARRIED, wholeFrontier } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import {
   CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, type ReadUnitsChunk, type ReadUnitsChunkLight, readHead, readLeftPart, readPart, readUnitsChunk, writePart,
   type Ref,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { needBound, needsOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
+import { NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, indexLayout } from '@/pdf-reader/engine/layout/file.mjs'
@@ -385,6 +386,103 @@ describe('the cut of a small paper', () => {
   })
 })
 
+// ---------------------------------------------------------------- the cut a part at a time (E2b)
+describe('partCutter: the cut a part at a time', () => {
+  /** a cutter of `whole` as cutBundle makes one, its units and head written as cutBundle writes them */
+  async function cutterOf(whole: Whole, o: Partial<Parameters<typeof partCutter>[0]> = {}) {
+    const ref = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })
+    const cutter = partCutter({ paper: whole.paper, N: whole.paper.pages, head: ref.head, views: whole.left.pages, leftPages: leftPagesOf(whole), ...o })
+    return { ref, cutter, ...wholeFrontier(whole) }
+  }
+  const keys = (parts: readonly { key: string; sha256: string }[]) => parts.map(w => `${w.key}:${w.sha256}`)
+
+  it('fed each part with no row of a unit an earlier part told, nor a name of its pages, cuts the parts cutBundle cuts', async () => {
+    const whole = wholeOf(SMALL)
+    const { ref, cutter, K, F } = await cutterOf(whole)
+    const layout = whole.layout!
+    const told = new Set<number>()
+    for (;;) {
+      const a = cutter.from
+      const left = <T extends unknown[]>(rows: T[]) => rows.filter(r => !told.has(r[0] as number))
+      const rest = {
+        ...layout, units: left(layout.units), lines: left(layout.lines), frames: left(layout.frames), erase: left(layout.erase), ph: left(layout.ph), labels: left(layout.labels),
+        headings: left(layout.headings), pageText: left(layout.pageText), held: left(layout.held),
+        names: layout.names.filter(r => ((r[10] as number) & NAME_FLAG.RUN_IN ? !told.has(r[11] as number) : (r[2] as number) >= a)),
+      }
+      const part = await cutter.next({ K, F, NB: null, layout: rest })
+      if (part === null) break
+      // (what the part told: its rows are let go)
+      const wire = JSON.parse(new TextDecoder().decode(part.bytes)) as { left: [number][]; fileOnly: [number][] }
+      for (const w of [...wire.left, ...wire.fileOnly]) told.add(w[0])
+    }
+    expect(keys(cutter.parts)).toEqual(keys(ref.parts))
+    expect(keys(cutter.left)).toEqual(keys(ref.left))
+    expect(cutter.verdicts).toEqual(ref.parts.map(() => null))
+  })
+
+  it('a part the verdict refuses is the same pages with no layout, its add-on not accepted; the parts after it read on', async () => {
+    const whole = wholeOf(SMALL)
+    const accepted: number[] = [], seen: [number, number][] = []
+    const verdict: NonNullable<CutOptions['verdict']> = ({ pages, input, written }) => {
+      seen.push(pages)
+      expect(input.part).not.toBeNull()
+      expect(written.bytes.length).toBeGreaterThan(0)
+      return pages[0] <= 2 && pages[1] >= 2 ? { refused: 'carry', lines: [1, 10] } : null
+    }
+    const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: () => null, acceptAddon: i => { accepted.push(i) }, verdict })
+    expect(fits(c)).toEqual([[1, 1], [2, 3], [4, 7], [8, 8]])
+    expect(seen).toEqual(fits(c))
+    expect(accepted).toEqual([0, 2, 3])
+    const back = await readBack(c)
+    expect(back.parts.map(p => p.layout === null)).toEqual([false, true, false, false])
+    expect(back.parts[1]!.addon).toBeNull()
+    // the refused part tells its left units alone (unit 2, layout-only, is not told); the others as without a verdict
+    expect(back.parts[1]!.fileOnly).toEqual([])
+    const plain = await readBack(await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF }))
+    expect(back.parts[1]!.left).toEqual(plain.parts[1]!.left)
+    // and the cutter's record of it, beside cutBundle's
+    const { cutter, K, F } = await cutterOf(whole, { verdict, chainAddon: () => null })
+    for (;;) if ((await cutter.next({ K, F, layout: whole.layout })) === null) break
+    expect(cutter.verdicts).toEqual([null, { refused: 'carry', lines: [1, 10] }, null, null])
+    expect(keys(cutter.parts)).toEqual(keys(c.parts))
+  })
+
+  it('under a verdict, a part whose writer refuses its layout (a row past its page\'s view) is its pages with none; without one, a throw', async () => {
+    const whole = wholeOf(SMALL)
+    // unit 3's line on page 2 (part [2, 3]) set past the page's right edge
+    const bad = structuredClone(whole)
+    const row = bad.layout!.lines.find(([id]) => id === 3)![1]
+    row[2] = 5000
+    await expect(cutPlain(bad, { leftPages: leftPagesOf(bad), base: BASE_OF })).rejects.toBeInstanceOf(BundleRefusal)
+    // (the head and K of the paper as it was: the row's place alone changed)
+    const { cutter, K, F } = await cutterOf(whole, { verdict: () => null })
+    for (;;) if ((await cutter.next({ K, F, layout: bad.layout })) === null) break
+    expect(cutter.parts.map(p => [p.from, p.to])).toEqual([[1, 1], [2, 3], [4, 7], [8, 8]])
+    expect(cutter.verdicts.map(v => v?.refused ?? null)).toEqual([null, 'part', null, null])
+    expect(cutter.verdicts[1]?.why).toMatch(/lines/)
+    const read = (p: { bytes: Uint8Array }) => JSON.parse(new TextDecoder().decode(p.bytes)) as { layout: unknown }
+    expect(cutter.parts.map(p => read(p).layout === null)).toEqual([false, true, false, false])
+  })
+
+  it('keeps no part nor left part once given where told so (retain false): the same parts, nulls behind', async () => {
+    const whole = wholeOf(SMALL)
+    const { ref, cutter, K, F } = await cutterOf(whole, { retain: false })
+    const given: { key: string; sha256: string }[] = []
+    for (;;) { const part = await cutter.next({ K, F, layout: whole.layout }); if (part === null) break; given.push(part) }
+    expect(keys(given)).toEqual(keys(ref.parts))
+    expect(cutter.parts.every(p => p === null)).toBe(true)
+    expect(cutter.left.every(l => l === null)).toBe(true)
+  })
+
+  it('records a first page that alone passes a part\'s bounds with its layout as refused: part', async () => {
+    const whole = wholeOf({ pages: 2, units: [{ stream: 1, rects: [1], lines: [1] }, ...Array.from({ length: 80 }, () => ({ stream: null, lines: [1], perPage: 1900 }))] })
+    const { cutter, K, F } = await cutterOf(whole, { leftPages: () => null })
+    for (;;) if ((await cutter.next({ K, F, layout: whole.layout })) === null) break
+    expect(cutter.parts.map(p => [p.from, p.to])).toEqual([[1, 1], [2, 2]])
+    expect(cutter.verdicts).toEqual([{ refused: 'part' }, null])
+  }, 120_000)
+})
+
 // ---------------------------------------------------------------- table groups (M18, B2)
 describe('table groups', () => {
   const cell = (row: number, col = 0, table = 0) => ({ table, row, col })
@@ -443,17 +541,17 @@ describe('table groups', () => {
     }
   })
 
-  it('refuses, loudly, a group that cannot be told whole: its layout-only cells dropped by the no-layout fallback', async () => {
+  it('a group whose part holds no layout is drawn from the left: its left cells told, its layout-only cells not, no refusal', async () => {
     // one left cell on page 1 and 80 layout-only cells of its column on page 2 (152,000 lines): the closure puts them all in the
-    // first part, whose layout is past the bounds, and without its layout the part would tell the one cell and drop the rest
+    // first part, whose layout is past the bounds; without its layout the part tells the one left cell, and the reader draws
+    // the part from the left (C1.4, the door's layoutless path) as it draws any part with none
     const units: PaperSpec['units'] = [{ stream: 1, rects: [1], lines: [1], cell: cell(0) }]
     for (let k = 1; k <= 80; k++) units.push({ stream: null, lines: [2], perPage: 1900, cell: cell(k) })
     const whole = wholeOf({ pages: 2, units })
-    const refused = await cutPlain(whole, { leftPages: () => null, base: BASE_OF }).catch(e => e)
-    expect(refused).toBeInstanceOf(BundleRefusal)
-    expect(refused.kind).toBe('part')
-    expect(refused.data).toMatchObject({ bound: 'part', page: 1 })
-    expect(refused.message).toMatch(/table group/)
+    const c = await cutPlain(whole, { leftPages: () => null, base: BASE_OF })
+    const back = await readBack(c)
+    expect(back.parts.map(p => [p.pages, p.layout === null])).toEqual([[[1, 1], true], [[2, 2], false]])
+    expect(told(back.parts)).toEqual([[0], []])
   }, 120_000)
 
   it('has readPart refuse a part that tells a member of a group an earlier part told', async () => {
