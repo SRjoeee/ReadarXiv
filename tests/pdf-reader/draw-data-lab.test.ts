@@ -45,7 +45,7 @@ describe.skipIf(!LAB)('the map a font ships is the one the live reading takes', 
           const key = x.items[k]?.fontName
           let live: Set<string> | null = null
           try { live = fontMappedOf(page.commonObjs.get(it.fontName)) } catch { live = null }
-          const shipped = x.fonts.get(key)?.mapped ?? null
+          const shipped = (key ? x.fonts.get(key)?.mapped : null) ?? null
           const f = page.commonObjs.get(it.fontName)
           fonts++
           if (f?.isType3Font) type3++
