@@ -12,6 +12,7 @@
 // bounds; one that fails is forgotten, so that a later ask reads it again. The engine decides what a face it cannot have means
 // (its units stay the original's): a face the index does not serve has no sources (null), and a table not to be had rejects.
 // Nothing here fetches a font or makes a face: the engine loads the slices its text needs.
+import { bodyWithin } from './server'
 
 /** the index's bytes at most (the FONTS 4 table is 13 KB), a group's (the largest, a CJK group's, is 183 KB) */
 export const INDEX_CAP = 256 * 1024
@@ -32,11 +33,9 @@ async function tableOf(f: typeof fetch, url: string, cap: number): Promise<unkno
   try {
     const r = await f(url, { signal: ac.signal, credentials: 'omit', referrerPolicy: 'no-referrer' })
     if (!r.ok) { void r.body?.cancel().catch(() => {}); throw new Error(`the faces' table ${url} answered ${r.status}`) }
-    const length = Number(r.headers.get('content-length'))
-    if (length > cap) { void r.body?.cancel().catch(() => {}); throw new Error(`the faces' table ${url}: ${length} bytes, past ${cap}`) }
-    const text = await r.text()
-    if (text.length > cap) throw new Error(`the faces' table ${url}: past ${cap} bytes`)
-    return JSON.parse(text)
+    // (read as it comes, in bytes, and let go at the cap: a body with no length, or another than it says, is never read whole)
+    const bytes = await bodyWithin(r, cap).catch((e: Error) => { throw new Error(`the faces' table ${url}: ${e.message}`) })
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
   } finally {
     clearTimeout(timer)
   }

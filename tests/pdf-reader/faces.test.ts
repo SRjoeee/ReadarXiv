@@ -2,7 +2,7 @@
 // read once a visit, a group's table the first time one of its faces is asked, each within its bounds; a face the index does
 // not serve has none; a table not to be had rejects, and is asked again later
 import { describe, expect, it, vi } from 'vitest'
-import { servedFaces } from '@/pdf-reader/session/faces'
+import { INDEX_CAP, servedFaces } from '@/pdf-reader/session/faces'
 
 const API = 'https://readarxiv.com'
 const INDEX = { schema: 1, fonts: '4', groups: ['lm-roman', 'shs-sc'], faces: { 'lm-roman-regular': { group: 'lm-roman', sha256: 'x' }, 'shs-sc-regular': { group: 'shs-sc', sha256: 'y' } }, sources: {} }
@@ -50,6 +50,17 @@ describe('the served faces', () => {
       const t = served({ 'lm-roman.json': bad })
       await expect(servedFaces(API, t.f)('lm-roman-regular'), JSON.stringify(bad)).rejects.toThrow()
     }
+  })
+
+  it('a table read within its cap as it streams: a body past it with no length said is let go unread past the cap, and rejects (Codex on #390)', async () => {
+    let pulled = 0
+    const cancel = vi.fn()
+    // an endless body, no Content-Length: 64 KiB a pull
+    const endless = () => new Response(new ReadableStream({ pull(c) { pulled++; c.enqueue(new Uint8Array(65_536).fill(32)) }, cancel }))
+    const f = vi.fn(async () => endless()) as unknown as typeof fetch
+    await expect(servedFaces(API, f)('lm-roman-regular')).rejects.toThrow(/past/)
+    expect(cancel).toHaveBeenCalled()
+    expect(pulled).toBeLessThanOrEqual(INDEX_CAP / 65_536 + 2)
   })
 
   it('a file whose path is not one of the static fonts\' is no source: the site\'s files alone', async () => {
