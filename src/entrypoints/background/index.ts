@@ -23,6 +23,7 @@ import { createDiagnostics } from './diagnostics'
 import { clearRejected, clearRejectedAmong, markRejected, rejectedServices, watchRejected } from '@/shared/service-health'
 import { createHealthKeeper } from './health-guard'
 import { createOffscreenDocument } from './offscreen'
+import { forgetRetired } from './retired-stores'
 
 /**
  * The saved settings with the status of the chain in force they were read from: one read per press, for the decision
@@ -36,10 +37,11 @@ export default defineBackground(() => {
   // A new reader's target language follows the browser's languages, chosen once (config/first-target.ts). Registered
   // at the top, synchronously, as MV3 asks of an event that may be what wakes the worker; an update is not an
   // install, and an installation that already holds a configuration is left as it is (config/storage.ts)
-  // The PDF reader's store of compiled translations, the experiment's (`axt-pdf`), is deleted on an install or an update,
-  // once: the reader reads on the layer alone, and nothing reads that store (Stage 5 Task 10; its code is parked)
+  // What the parked compile path kept (its store of compiled translations, the TeX page's files and the warm-up's mark) is
+  // deleted on an install or an update, once: the reader reads on the layer alone, and nothing reads them
+  // (./retired-stores.ts; Stage 5 Tasks 10 and 17)
   browser.runtime.onInstalled.addListener(details => {
-    if (details.reason === 'install' || details.reason === 'update') deleteDatabase(globalThis.indexedDB, 'axt-pdf')
+    if (details.reason === 'install' || details.reason === 'update') void forgetRetired({ indexedDB: globalThis.indexedDB, caches: globalThis.caches, storage: browser.storage.local })
     if (details.reason !== 'install') return
     void chooseFirstTarget(() => pickTargetLanguage(navigator.languages ?? [], browser.i18n.getUILanguage?.()))
       .catch(e => console.warn(`[axt] the first target language could not be saved (${e instanceof Error ? e.name : typeof e})`))
@@ -310,10 +312,3 @@ export default defineBackground(() => {
   })))
 })
 
-/** a database deleted, its outcome let be: a failure leaves a store nothing reads */
-function deleteDatabase(idb: IDBFactory | undefined, name: string): void {
-  try {
-    const r = idb?.deleteDatabase(name)
-    if (r) r.onerror = () => console.warn(`[axt] the store ${name} could not be deleted`)
-  } catch { /* nothing reads it */ }
-}
