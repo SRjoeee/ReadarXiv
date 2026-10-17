@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-17",
+  "by": "the maintainer",
+  "on": "a shared line (fix/shared-line): a unit whose first row TeX set on the line another unit's last row ends (a run-in heading and its text, a paragraph's part after the float that split it) starts that row where the translation before it ends, the original's separation after it",
+  "quote": "\u884c\u5185\u5c0f\u6807\u9898\u540c\u610f",
+  "english": "approved the run-in headings change (shared-line), 2026-10-17, relayed by the coordinator",
+  "measures": [
+    "paragraph gaps a pitch or more wider",
+    "frames past the right edge"
+  ],
+  "targets": [
+    "de",
+    "es",
+    "ru",
+    "ja"
+  ],
+  "scope": "137 shared pairs on the 30 outputs; the gated measures worse on four targets, one pair or frame each. de, es and ru: paragraph gaps a pitch or more wider 0 to 1 of 209 (de), 1 to 2 (es), 1 to 2 (ru), the same pair on 1810.04805 p12, where the heading's translation runs 5.5 pt past the English and its text's first word goes whole to the next row. ja: frames past the right edge 0.211 to 0.214 (77 to 78 of 365), 1706.03762 p10, the acknowledgements' text (unit 171) starting at 138 pt where the heading's translation ends instead of 202 pt, its first line ending 5 pt past the column's edge. Measured on fix/shared-line's own model run against next, before the breaker (fix/breaker-nostart) changed overRight to leave out hanging marks",
+  "why": "the run-in heading's text no longer starts where the English words ended: a Chinese heading left a gap of 60 pt before its text where the original sets a 10.9 pt quad (1810.04805's Model Architecture, 1706.03762's Acknowledgements). On 1810.04805 p12 the base drew the text's first word cut across the row without a hyphen (An|genommen); the word moved whole to the next row is the better line, and the wider gap is that row. The ja frame is one line of a run-in text set from the heading's end"
+}
