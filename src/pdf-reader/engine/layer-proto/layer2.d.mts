@@ -168,7 +168,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it (run.mjs layout2)
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2)
 type ToDev = (x: number, y: number) => [number, number]
 
 /** a spacing accent TeX sets as a glyph of its own */
@@ -279,11 +279,13 @@ export declare function ink100(s: string, face: Face): { a: number; d: number }
 export declare function lineExtent(line: Pick<Line, 'items'>, f: number, scale: number): { a: number; d: number; text: { a: number; d: number } }
 /** a unit laid at one state of the fit, with no search (the page fill's): clipped where the state does not set it whole */
 export declare function layoutAt(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, st: Layout['state']): Layout
-/** a unit's shared row as its layout leaves it (need.mjs rowLeadOf's row): its page, baseline and band (an em), the block's span, and
- *  where its text there ends (null: none there); null where no block of the unit holds the row */
-export interface Share { page: number; y: number; band: number; x0: number; x1: number; end: number | null }
+/** a unit's shared row as its layout leaves it (need.mjs rowLeadOf's row): its page, baseline and band (an em), the block's span,
+ *  where its text there ends and the baseline of the line that ends there (both null: none there); null where no block of the unit
+ *  holds the row */
+export interface Share { page: number; y: number; band: number; x0: number; x1: number; end: number | null; at: number | null }
 export declare function shareOf(layout: Pick<Layout, 'lines'>, blocks: readonly Block2[], row: { page: number; baseline: number; size: number }): Share | null
-/** whether a layout's lines keep a shared row as the fit left it (no text there further right; none where the fit set none) */
+/** whether a layout's lines keep a shared row as the fit left it (no text there further right; none where the fit set none; its
+ *  line there on the fit's baseline) */
 export declare function keepsShare(share: Share | null | undefined, lines: readonly Line[]): boolean
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]
