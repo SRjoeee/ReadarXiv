@@ -22,6 +22,8 @@ export interface WholePaper {
 /** one page's left part input: the tokens (the web's TokenWire), the spans [id, ranges] and, optionally, the pairs */
 export interface LeftPageInput {
   first: number; tokens: TokenWire
+  /** the page's draw geometry (draw.mjs), null or absent for none */
+  draw?: import('./draw.mjs').DrawSource | import('./draw.mjs').Draw | null
   spans: readonly (readonly [number, readonly number[]])[]; pairs?: readonly (readonly [number, readonly number[]])[]
 }
 /** a K entry: what needsOf reads, and the unit it stands for */

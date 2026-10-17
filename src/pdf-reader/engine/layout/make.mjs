@@ -32,8 +32,10 @@ import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
+import { drawDataOf } from '../pipeline/draw-data.mjs'
+import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { alignOf } from './remove.mjs'
-import { asSet, classOf, destRect, followsOf, headEnd, layoutMarking, linkablePiece, markAt, symbolText, vetoTwice } from './marks.mjs'
+import { asSet, classOf, destRect, followsOf, headEnd, layoutMarking, LINKS_MAX, linkablePiece, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { annotsOf, linkKindOf, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
@@ -438,8 +440,11 @@ export async function makeLayout(o) {
  * over every unit. Each pass reads and writes the ink of its own pages alone. `columnEdges`: the columns' text edges (Map
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
  * flag read, given; else made of the placed units' body lines once the lines are placed (`columnEdgesOf`, by rules.edges)
+ * `draw`: each page's draw geometry too (E-C: pipeline/draw-data.mjs), read right after the page's operator list, held as its encoded text
+ * until `drawOf(p)` takes it (once), at most `drawHeldMax` at a time; none for a page the read fails on, a font a host would read
+ * differently, or past the budget. It reads no ink and writes none: the layout file is the same bytes with it on or off
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null }) {
+export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
   const rules = rulesOf(rulesGiven)
   // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
   if (rules.floatSearch === 'forward' && !Array.isArray(inFloat)) throw new TypeError('inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
@@ -509,11 +514,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (ls.length > MAX_LINKS) return null
     return ls.filter(a => destRect(a) !== null).map(a => ({ page: p, dest: a.dest, raw: { subtype: 'Link', rect: [...a.rect], dest: a.dest, ...(a.quadPoints ? { quadPoints: Array.from(a.quadPoints) } : {}) } }))
   }
-  /** page p's links read, once (readAnnots never rejects; one not answered within OPS_MS is not known, nor a page not had) */
+  /** page p's links read, once (readAnnots never rejects; one not answered within OPS_MS is not known, nor a page not had): those
+   *  its draw's read held (heldTheirs), else read here */
   async function readTheirs(p) {
     if (!linking || theirLinks[p] !== undefined) return
     theirLinks[p] = null
     if (unread.has(p)) return
+    if (heldTheirs.has(p)) { theirLinks[p] = heldTheirs.get(p); dropHeld(p); return }
     let page = null
     try { page = await arxiv.getPage(p) } catch {}
     if (page) theirLinks[p] = theirsOf(await within(readAnnots(page), OPS_MS), p)
@@ -531,6 +538,45 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     }
     stats.ms.ops += now() - t0
   }
+  // A page's annotations are read once (PDF.js reads them anew at each ask, at a cost of their own): where its draw is read
+  // (gatherDraw) with the draw, and what the locator takes of them (theirsOf) held for readTheirs until it reads that page's
+  // links or no unit may want them (dropUnwanted, the passes' start), at most LINKS_MAX links (past it a page's are asked
+  // again where wanted: a paper of that many is refused by our side's own bound)
+  const annotsAsked = new Map(), heldTheirs = new Map()
+  let heldLinks = 0
+  const annotsOnce = (p, page) => { let a = annotsAsked.get(p); if (!a) { a = within(readAnnots(page), OPS_MS); annotsAsked.set(p, a) } return a }
+  const holdTheirs = (p, rows) => { const k = rows ? rows.length : 0; if (heldLinks + k > LINKS_MAX) return; heldTheirs.set(p, rows); heldLinks += k }
+  const dropHeld = p => { if (!heldTheirs.has(p)) return; const rows = heldTheirs.get(p); heldTheirs.delete(p); heldLinks -= rows ? rows.length : 0 }
+  /** page p's draw geometry (pipeline/draw-data.mjs), held as its encoded text for the left part that will carry it (`drawOf`); none for
+   *  a page past the held budget, one that cannot be read, or one whose font a host would read differently: the browser reads it */
+  const draws = new Map(), drawStats = { pages: 0, none: 0, why: {}, bytes: 0, ms: 0 }
+  let drawHeld = 0
+  async function gatherDraw(p, page) {
+    const t0 = now()
+    let r = null, timer
+    try {
+      r = await Promise.race([drawDataOf(page, () => annotsOnce(p, page)), new Promise(resolve => { timer = setTimeout(() => resolve({ draw: null, why: 'time' }), OPS_MS) })])
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      r = { draw: null, why: 'read' }
+    } finally { clearTimeout(timer) }
+    drawStats.ms += now() - t0
+    let why = r.why
+    if (r.draw !== null) {
+      const text = JSON.stringify(r.draw)
+      if (drawHeld + text.length > drawHeldMax) why = 'held'
+      else { draws.set(p, text); drawHeld += text.length; drawStats.pages++; drawStats.bytes += text.length }
+    }
+    if (why !== null) { drawStats.none++; drawStats.why[why] = (drawStats.why[why] ?? 0) + 1 }
+  }
+  /** page p's draw, once (the held text is let go with it): null for none */
+  const drawOf = p => {
+    const text = draws.get(p)
+    if (text === undefined) return null
+    draws.delete(p)
+    drawHeld -= text.length
+    return JSON.parse(text)
+  }
   async function inkOf(p) {
     if (unread.has(p)) return
     // (the page its text was read from: PDF.js keeps each page's proxy)
@@ -540,6 +586,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs)
     const ops = await listWithin(page, seen)
     if (!ops) { stats.timedOut.push(p); dark.add(p); return }
+    // the page's draw geometry (E-C), read once its fonts are loaded, within the same limit, before the page is let go
+    if (wantDraw) {
+      await gatherDraw(p, page)
+      const asked = annotsAsked.get(p)
+      annotsAsked.delete(p)
+      if (asked && linking && theirLinks[p] === undefined) holdTheirs(p, theirsOf(await asked, p))
+    }
     const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
     if (wantPlans && !got.capped && !got.timedOut && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
@@ -1017,6 +1070,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   async function readWanted() {
     judge(Infinity)
     for (const p of [...(wanted ?? [])].sort((a, b) => a - b)) await readTheirs(p)
+    for (const p of [...heldTheirs.keys()]) dropHeld(p)
   }
   /** unit i's pieces phOf reads the own ink and marks of (a class marked, its macro not one that sets no ink, its opening
    *  mark in the marking's design): [k, its opening mark's name, its closing one's] */
@@ -2687,6 +2741,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       advance()
       for (let q = Math.max(1, releasedTo + 1); q <= Math.min(readyTo(), decidedTo); q++) work.push(q)
       pump()
+      dropUnwanted()
+    }
+    /** the held links of the pages no unit may want now (each before the link frontier, and not wanted) let go */
+    const dropUnwanted = () => {
+      if (!heldTheirs.size) return
+      const w = linking ? linkFinal() : Infinity
+      for (const q of [...heldTheirs.keys()]) if (q < w && !wanted?.has(q)) dropHeld(q)
     }
     /** arXiv's page p read (after readPage(p), pages in order) */
     function pageRead(p) {
@@ -2775,6 +2836,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       advance()
       for (let q = 1; q <= pages; q++) work.push(q)
       pump()
+      for (const q of [...heldTheirs.keys()]) dropHeld(q)
       for (const [q, Q] of queue) if (Q.head < Q.list.length) throw new Error(`page ${q}'s tasks did not all run`)
       for (let q = 1; q <= pages; q++) if (!released[q]) throw new Error(`page ${q} was not let go`)
       stats.ph.unmatched = stats.ph.owned - stats.ph.matched
@@ -2860,7 +2922,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     stats.ms.rows = now() - t
     return st
   }
-  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map() }
+  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map(), drawOf, drawStats }
 }
 
 /**

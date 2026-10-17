@@ -25,7 +25,9 @@
 //   const source = readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8')
 //   globalThis.pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(source, { version })).toString('base64')}`)
 //   const doc = await getDocument({ data, maxImageSize: NO_IMAGE_PIXELS, ... }).promise
-// once, before the first getDocument. Server-side only: the browser layer (the extension, removal.mjs's rendering, copyOf) keeps stock
+// once, before the first getDocument. A document whose pages' draw geometry is read (pipeline/draw-data.mjs) is opened with
+// `fontExtraProperties: true` too: without it a font carries no ToUnicode map and every page tells its draw as none (`why: 'props'`).
+// Server-side only: the browser layer (the extension, removal.mjs's rendering, copyOf) keeps stock
 // PDF.js, which has to decode the images it draws.
 //
 // BUMPING PDFJS (layout versions.mjs): the anchor is one line of the worker. Install the new version, run

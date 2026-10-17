@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url'
 import AxeBuilder from '@axe-core/playwright'
 import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
 import { readBundle, VTAG } from '../../src/pdf-reader/engine/layer-proto/bundle.mjs'
-import { CTAG4 } from '../../src/pdf-reader/engine/layer-proto/format.mjs'
+import { CTAG5 } from '../../src/pdf-reader/engine/layer-proto/format.mjs'
 import { cutSample, sampleFiles } from './lib/layer-cut.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
@@ -48,7 +48,7 @@ const EXT = `${HERE}.ext-reader`
 const SHOTS = `${HERE}.shots`
 
 // ---- the paper, and the stand-in of the layer API over it
-/** the sample as BUNDLE 4's objects, which the stand-in serves under CTAG4 beside BUNDLE 3's bundle */
+/** the sample as BUNDLE 4's objects, which the stand-in serves under CTAG5 beside BUNDLE 3's bundle */
 const sampleCut = await cutSample(sampleFiles())
 /** a face for the layer's Latin text, of the PDF.js package this tree holds: the stand-in's faces' table serves every face of
  *  the role table as one slice of it (the reader's target German, whose text it holds) */
@@ -685,7 +685,7 @@ try {
     const laid = await page.waitForFunction(() => { const l = document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer'); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 && /\[echo\]/.test(l.querySelector('svg')?.textContent ?? '') }, null, { timeout: 60_000 }).then(() => true, () => false)
     // (the first page may be laid before the catalog: its part came with a 202)
     await page.waitForFunction(() => window.__reader.side()?.probe().ended === true, null, { timeout: 30_000 }).catch(() => undefined)
-    const layerAsked = api.requests.slice(asked0).filter(r => r.path.startsWith(`/api/v1/layer/${sample.segment}/${CTAG4}`) && !/\/o\//.test(r.path)).map(r => `${r.method} ${r.answered}`)
+    const layerAsked = api.requests.slice(asked0).filter(r => r.path.startsWith(`/api/v1/layer/${sample.segment}/${CTAG5}`) && !/\/o\//.test(r.path)).map(r => `${r.method} ${r.answered}`)
     const phases = await page.evaluate(() => window.__phases)
     check('the run asks the layer, then its prepare once, follows the 202s to the catalog, and the reader says it is preparing meanwhile', layerAsked[0] === 'GET 404' && layerAsked.filter(a => a.startsWith('POST')).length === 1 && layerAsked.some(a => a === 'GET 202') && layerAsked.at(-1) === 'GET 200' && phases.includes('preparing'), `${layerAsked.join(', ')}; phases ${phases.join(' > ')}`)
     const s2 = await shown()

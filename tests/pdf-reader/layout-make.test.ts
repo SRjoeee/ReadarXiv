@@ -1963,6 +1963,48 @@ describe('the link-anchor locator in the page stream: the whole run\'s pieces pl
     expect(other.stats.links.placed).toContainEqual([0, 1])
   })
 
+  it('with the pages\' draw read too, each page\'s annotations are asked once, whole and a page at a time, the file the same bytes', async () => {
+    /** arXiv's document, each page's getAnnotations counted */
+    const counted = (w: World) => {
+      const calls: number[] = [], doc = arxivOf(w.pages)
+      return { calls, doc: { ...doc, getPage: async (n: number) => { const p = (await doc.getPage(n)) as Record<string, unknown>; const get = p.getAnnotations as (() => Promise<unknown>) | undefined; return get ? { ...p, getAnnotations: async () => { calls.push(n); return get() } } : p } } }
+    }
+    const input = async (w: World) => ({ units: w.units, marks: await marksOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+    for (const w of [world(['C', 'D', 'E']), world(['C', 'D', 'E'], { ourWord: 'Section' })]) {
+      // the whole run without the draw: the links of the pages wanted alone
+      const off = counted(w), a = await makerOf({ ...(await input(w)), arxiv: off.doc })
+      if ('refused' in a) throw new Error('refused')
+      for (let p = 1; p <= a.pages; p++) await a.readPage(p)
+      const whole = await a.whole()
+      if (!('file' in whole)) throw new Error('refused')
+      // with it: every page once, the draw's read the locator's
+      const on = counted(w), b = await makerOf({ ...(await input(w)), arxiv: on.doc, draw: true })
+      if ('refused' in b) throw new Error('refused')
+      for (let p = 1; p <= b.pages; p++) await b.readPage(p)
+      const drawn = await b.whole()
+      if (!('file' in drawn)) throw new Error('refused')
+      expect(encodeLayout(drawn.file)).toBe(encodeLayout(whole.file))
+      expect(drawn.stats.links).toEqual(whole.stats.links)
+      expect(on.calls).toEqual([1, 2, 3])
+      expect(off.calls.every(p => on.calls.includes(p))).toBe(true)
+      // a page at a time, the marks given and the marked original read beside arXiv's
+      const given = counted(w), c = await makerOf({ ...(await input(w)), arxiv: given.doc, draw: true, columnEdges: a.edges() })
+      if ('refused' in c) throw new Error('refused')
+      const st = await c.byStream()
+      if ('refused' in st) throw new Error('refused')
+      expect(given.calls).toEqual([1, 2, 3])
+      const events = markedPages(markedOf(w.marked ?? w.pages, w.marks), '', { engine: 'pdflatex', units: w.units, OPS } as never)
+      const head = ((await events.next()).value as { head: Parameters<typeof marksOfHead>[0] }).head
+      const read = counted(w), m = await makerOf({ ...(await input(w)), marks: marksOfHead(head, 'pdflatex'), arxiv: read.doc, draw: true, columnEdges: a.edges() })
+      if ('refused' in m) throw new Error('refused')
+      const sm = await m.byStream({ head, events } as never)
+      if ('refused' in sm) throw new Error('refused')
+      expect(read.calls).toEqual([1, 2, 3])
+      const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+      for (const s of [st, sm]) expect(rows(mergeLayout([s.layout() as never]) as never)).toEqual(rows(whole.file as never))
+    }
+  })
+
   it('the head tells the paper\'s links as the whole read holds them: their count and destinations, or none past LINKS_MAX', async () => {
     const w = world(['C', 'D', 'E'])
     const head = async (x: World) => ((await markedPages(markedOf(x.marked ?? x.pages, x.marks), '', { engine: 'pdflatex', units: x.units, OPS } as never).next()).value as { head: { links: unknown } }).head.links

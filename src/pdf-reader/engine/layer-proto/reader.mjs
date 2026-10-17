@@ -168,6 +168,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   // the chain told
   const asks = new Map(), listeners = new Set(), shapes = new Map()
   const streamOf = new Map(), leftRefs = new Map(), leftCache = new Map(), leftWaiters = new Map()
+  // (the draws of the left parts fetched, each held from its fetch until the run takes it: the pages the view reads hold none)
+  const draws = new Map()
   const chain = { through: 0, last: null, r: 0 }, toldParts = new Set()
   let goneNow = () => {}
   const gone = new Promise((_, no) => { goneNow = no })
@@ -180,7 +182,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, proof: true, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, onStep: () => evaluate() }
   run = await openProto(four
     ? {
-        ...common, parts: true, doc, pages: index.head.paper.pages, onRetired,
+        ...common, parts: true, doc, pages: index.head.paper.pages, onRetired, drawOf: page => drawOfPage(page),
         geometry: { schema: 1, kinds: index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } },
         tex: { ...HYBRID, index: facade.index, pieces: new Map() },
         removal: { mode: 'draw', doc, manifest: { schema: 1, removal: index.head.versions.removal, pages: index.head.paper.pages, sets: {}, page: {} } },
@@ -338,11 +340,39 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     p = (async () => {
       const bytes = await Promise.race([leftPart(page, ref), gone])
       if (disposed) throw letGoError()
-      return readLeftPart(bytes, { ref, streamOf: id => streamOf.get(id) })
+      const lp = await readLeftPart(bytes, { ref, streamOf: id => streamOf.get(id) })
+      // (the draw goes to the run's hand-off alone: the view's page, and the cache that keeps it, hold none)
+      if (lp.draw) draws.set(page, lp.draw)
+      return { ...lp, draw: null }
     })()
     leftCache.set(page, p)
     p.catch(() => { if (leftCache.get(page) === p) leftCache.delete(page) })
     return p
+  }
+  /** the page's left part, once a part covers it: fetched at once where one does, else when the covering part comes (nothing is fetched
+   *  once no asker is left); rejects where the parts end without covering it, and at dispose */
+  const awaitLeft = (page, signal) => {
+    if (page <= chain.through) return withSignal(fetchLeft(page), signal)
+    if (run.partsEnded) return Promise.reject(new Error(`page ${page} is covered by no part`))
+    return new Promise((resolve, reject) => {
+      const w = {
+        go: () => { off(w); withSignal(fetchLeft(page), signal).then(resolve, reject) },
+        no: e => { off(w); reject(e) },
+        signal, onAbort: null,
+      }
+      if (signal) {
+        w.onAbort = () => {
+          const list = leftWaiters.get(page)
+          const at = list ? list.indexOf(w) : -1
+          if (at < 0) return
+          list.splice(at, 1)
+          if (!list.length) leftWaiters.delete(page)
+          reject(abortError())
+        }
+        signal.addEventListener('abort', w.onAbort, { once: true })
+      }
+      ;(leftWaiters.get(page) ?? leftWaiters.set(page, []).get(page)).push(w)
+    })
   }
   /** an ask of a promise that its signal may end (the promise itself goes on for the others) */
   const withSignal = (p, signal) => (!signal ? p : new Promise((resolve, reject) => {
@@ -350,6 +380,19 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     signal.addEventListener('abort', onAbort, { once: true })
     p.then(v => { signal.removeEventListener('abort', onAbort); resolve(v) }, e => { signal.removeEventListener('abort', onAbort); reject(e) })
   }))
+
+  /** the page's draw, for the run (run.mjs openProto's `drawOf`): once a part covers the page, the draw of its left part, handed over
+   *  once (the door keeps none after it); null where there is none to hand over and the run reads the page itself: a draw the page
+   *  has none of (BUNDLE 4's parts, a part written without one), a left part that fails to arrive or is refused (a draw that
+   *  checkDraw refuses refuses the whole part), parts that end without covering the page, a page asked again, a layer let go. It
+   *  never resolves null because the page is not covered yet: it waits, as leftPageOf does */
+  const drawOfPage = async page => {
+    if (disposed || !Number.isSafeInteger(page) || page < 1 || page > run.N) return null
+    try { await awaitLeft(page, null) } catch { return null }
+    const draw = draws.get(page) ?? null
+    draws.delete(page)
+    return draw
+  }
 
   // ---- the parts
   const tell = part => {
@@ -451,28 +494,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       if (signal?.aborted) return Promise.reject(abortError())
       if (dead) return Promise.reject(dead)
       if (!four) return Promise.reject(new Error('leftPageOf: a bundle 3 layer has no left parts'))
-      if (page <= chain.through) return withSignal(fetchLeft(page), signal)
-      if (run.partsEnded) return Promise.reject(new Error(`page ${page} is covered by no part`))
-      // (wait for the part that covers it; once no asker is left, nothing is fetched)
-      return new Promise((resolve, reject) => {
-        const w = {
-          go: () => { off(w); withSignal(fetchLeft(page), signal).then(resolve, reject) },
-          no: e => { off(w); reject(e) },
-          signal, onAbort: null,
-        }
-        if (signal) {
-          w.onAbort = () => {
-            const list = leftWaiters.get(page)
-            const at = list ? list.indexOf(w) : -1
-            if (at < 0) return
-            list.splice(at, 1)
-            if (!list.length) leftWaiters.delete(page)
-            reject(abortError())
-          }
-          signal.addEventListener('abort', w.onAbort, { once: true })
-        }
-        ;(leftWaiters.get(page) ?? leftWaiters.set(page, []).get(page)).push(w)
-      })
+      return awaitLeft(page, signal)
     },
     copyOf(page, source, k) {
       live()
@@ -522,6 +544,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       committed.clear()
       for (const [, list] of leftWaiters) for (const w of list) w.no(e)
       leftWaiters.clear()
+      draws.clear()
       goneNow(e)
       listeners.clear()
       run.dispose()

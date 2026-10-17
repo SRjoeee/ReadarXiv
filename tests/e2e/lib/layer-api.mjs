@@ -44,7 +44,7 @@ import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { VTAG } from '../../../src/pdf-reader/engine/layer-proto/bundle.mjs'
-import { CTAG4 } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
+import { CTAG5 } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
 
 const SAMPLE_DIR = new URL('../../fixtures/pdf/sample-1/', import.meta.url)
 
@@ -128,7 +128,7 @@ function rangeOf(header, size) {
 /**
  * The stand-in over a sample (`loadSample`). `vtag` is the one version tag it holds the bundle under, `pollMs` the longest
  * a preparing answer asks to wait before the next GET, `now` the clock. `layer4`: the sample's BUNDLE 4 objects
- * (layer-cut.mjs cutSample: `objects` by digest, `refs` as a job tells them, `catalog` its bytes), held under CTAG4
+ * (layer-cut.mjs cutSample: `objects` by digest, `refs` as a job tells them, `catalog` its bytes), held under CTAG5
  */
 export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now, layer4 = null, faces = null, bound = true } = {}) {
   let layer = checked('ready'), original = checked('ready')
@@ -172,7 +172,7 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
   }
 
   function layerAnswer({ headers, body }, segment, tag, prepare) {
-    const four = !!layer4 && tag === CTAG4
+    const four = !!layer4 && tag === CTAG5
     if (tag !== vtag && !four) return missing('unknown-versions')
     if (prepare) {
       // (the media type alone: `application/json; charset=utf-8` is JSON; any other type is 415, and JSON that is not {} is 400)
@@ -196,7 +196,7 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...(four ? baseTag : {}) }, body: four ? layer4.catalog : sample.bundle }
   }
   function objectAnswer(segment, tag, sha) {
-    const bytes = segment === sample.segment && tag === CTAG4 ? layer4?.objects.get(sha) : null
+    const bytes = segment === sample.segment && tag === CTAG5 ? layer4?.objects.get(sha) : null
     if (!bytes) return missing('not-prepared')
     return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...baseTag }, body: bytes }
   }
