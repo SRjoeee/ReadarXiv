@@ -7,6 +7,7 @@ import { encodeLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { makerOf, OPS_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
+import { settleWithClock } from './helpers/clock'
 import { arxivOf, endOf, markedOf, marksOf, type Run, text, unit, words, type World } from './helpers/make-world'
 
 // The page pass tells each page's draw geometry in its left part (E-C): read with the page's operator list by the maker, taken once as
@@ -92,11 +93,8 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
 
   it('a read that never comes is given up at OPS_MS, that page alone', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    let done = false
-    const run = passOf(worldOf(), { 2: 'never' }).finally(() => { done = true })
-    // (the clock moved on a window at a time until the pass ends: a page's read may begin after one window's microtasks)
-    for (let k = 0; k < 8 && !done; k++) await vi.advanceTimersByTimeAsync(OPS_MS)
-    const got = await run
+    // (the clock moved on only while the pass waits on page 2's read alone: its parts' digests are real work)
+    const got = await settleWithClock(passOf(worldOf(), { 2: 'never' }), OPS_MS)
     expect(got.lefts.get(2)).toBeNull()
     expect(got.lefts.get(1)).not.toBeNull()
     expect(got.lefts.get(3)).not.toBeNull()
