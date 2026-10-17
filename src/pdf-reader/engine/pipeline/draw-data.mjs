@@ -21,27 +21,38 @@ export function mappedChars(toUnicode) {
   return out
 }
 
+/** a font object's mapped characters as a draw ships them (mappedChars, as a list), once a document: a font is one object of the
+ *  document's `commonObjs` whatever page uses it, its map exported with it once */
+const mappedFonts = new WeakMap()
+function mappedOfFont(f) {
+  if (mappedFonts.has(f)) return mappedFonts.get(f)
+  const set = mappedChars(f.toUnicode), mapped = set === null ? null : [...set]
+  mappedFonts.set(f, mapped)
+  return mapped
+}
+
 /** whether a font object of `commonObjs` is one a host reads as another host would not: not embedded and not Type3 (PDF.js's
  *  fallbackToSystemFont rewrites the map of a non-embedded CIDFontType2 by the system fonts the host has, E1) */
 const hostDependent = f => f !== null && typeof f === 'object' && typeof f.isType3Font === 'boolean' && !f.isType3Font && f.missingFile === true
 
 /**
  * A page's text content (PDF.js's getTextContent, its defaults) as its draw reads it: `rows` each item whose string is a string,
- * [str, a, b, d, e, f, width, height, fontName or null], in order; `families` each font name's fallback family (its style's
+ * [str, a, b, d, e, f, width, height, fontName or null], its numbers as the data holds them (-0 written 0: draw.mjs wireText's),
+ * in order, taken once by drawDataOf (which writes each row's font index in its last place); `families` each font name's fallback family (its style's
  * fontFamily, or null) as first met; `bad` where an item could not be read (its transform): the rows end before it, and the draw is
  * none ('read') once the fonts of the rows before it are told. Step T keeps it a page (layout/arxiv.mjs readArxivText `draw`), so
  * that the draw reads no page's text a second time
  */
 export function drawTextOf(tc) {
   const items = Array.isArray(tc?.items) ? tc.items : [], styles = tc?.styles ?? {}
-  const rows = [], families = new Map()
+  const rows = [], families = new Map(), c = v => (v === 0 ? 0 : v)
   try {
     for (const it of items) {
       if (typeof it?.str !== 'string') continue
       const name = typeof it.fontName === 'string' ? it.fontName : null
       if (name !== null && !families.has(name)) families.set(name, typeof styles[name]?.fontFamily === 'string' ? styles[name].fontFamily : null)
       const t = it.transform
-      rows.push([it.str, t[0], t[1], t[3], t[4], t[5], it.width, it.height, name])
+      rows.push([it.str, c(t[0]), c(t[1]), c(t[3]), c(t[4]), c(t[5]), c(it.width), c(it.height), name])
     }
   } catch (e) {
     if (isMemoryError(e)) throw e
@@ -87,15 +98,15 @@ export async function drawDataOf(page, annots = null, text = null) {
             //  Type3 font is no exception to the map but to the refusal: the live reading (layer2.mjs fontMappedOf) takes the map PDF.js
             //  exports for it under fontExtraProperties and throws for no Type3 font without one, so a Type3 font with none ships null)
             if (type3 === 0 && !('toUnicode' in f)) return { draw: null, why: 'props' }
-            const set = mappedChars(f.toUnicode)
-            mapped = set === null ? null : [...set]
+            mapped = mappedOfFont(f)
           }
           at.set(name, table.length)
           table.push([typeof f?.name === 'string' ? f.name : null, fallback, type3, mapped])
         }
         font = at.get(name)
       }
-      rows.push([r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], font])
+      r[8] = font
+      rows.push(r)
     }
     if (tx.bad) return { draw: null, why: 'read' }
     const links = []
@@ -103,7 +114,7 @@ export async function drawDataOf(page, annots = null, text = null) {
       if (a?.subtype !== 'Link') continue
       links.push([a.rect, a.quadPoints ?? null, a.url ?? null, a.dest ?? null, a.overlaidText ?? null, a.borderStyle?.width ?? null, a.borderStyle?.style ?? null, a.color ?? null])
     }
-    const w = wireText({ fonts: table, items: rows, links })
+    const w = wireText({ fonts: table, items: rows, links }, { plainItems: true })
     return w === null ? { draw: null, why: 'shed' } : { draw: w.draw, text: w.text, why: null }
   } catch (e) {
     if (isMemoryError(e)) throw e
