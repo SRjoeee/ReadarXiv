@@ -4,7 +4,7 @@ import { cutBundle } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import type { Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
-import { makeLayout } from '@/pdf-reader/engine/layout/make.mjs'
+import { DEFAULT_RULES, makeLayout, WHOLE_RULES } from '@/pdf-reader/engine/layout/make.mjs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { anchorUnits, boundsFromMarks, floatMatches } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { leftSideOf } from '@/pdf-reader/engine/pipeline/left-side.mjs'
@@ -30,7 +30,7 @@ function worldOf(changed: (page: number, j: number) => boolean = () => false): W
   for (const p of [1, 2, 3]) { const ls = linesOf(p); marks.push([`${p - 1}s`, p, 72, 700], [`${p - 1}e`, p, endOf(ls[9] as Run), 592]) }
   return { pages, marked, marks, units: [1, 2, 3].map(p => unit('para', [text(words(100 * p, 100))])) }
 }
-const source = (w: World) => ({ units: w.units, kept: new Set() }) as never
+const source = (w: World) => ({ units: w.units, kept: new Set(), inFloat: [] }) as never
 const readOf = (w: World) => readMarked(markedOf(w.marked ?? w.pages, w.marks), '', { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, units: w.units, OPS } as never)
 
 /** the layer as the page pass tells it: the head and chunks, the left parts and parts in the order told, the notes */
@@ -191,5 +191,149 @@ describe('layerOfPaper: the page pass', () => {
     const got = await passOf(w, { marks: { refused: 'probe' } as never })
     expect(got.r).toMatchObject({ refused: 'anchors' })
     expect(got.told).toEqual([])
+  })
+})
+
+/** the marked original to be read by the pass itself (layerOfPaper `marked`) */
+const markedIn = (w: World) => ({ doc: markedOf(w.marked ?? w.pages, w.marks), log: '', options: { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null } })
+/** five pages of ten lines, a paragraph a page; units 1 and 2 two figures' text boxes set past the two paragraphs after them
+ *  (the stage-1 re-review's m2: the units' order is not their pages') */
+function deferredWorld(): World {
+  const at = [1, 4, 5, 2, 3]
+  const pages = [1, 2, 3, 4, 5].map(p => ({ runs: linesOf(p) }))
+  const marks: World['marks'] = []
+  at.forEach((p, i) => { const ls = linesOf(p); marks.push([`${i}s`, p, 72, 700], [`${i}e`, p, endOf(ls[9] as Run), 592]) })
+  return { pages, marks, units: at.map(p => unit('para', [text(words(100 * p, 100))])) }
+}
+
+describe('layerOfPaper: the marked original read by the pass (stage 2)', () => {
+  for (const verdicts of [false, true]) {
+    it(`read whole first it is the marks given; under the oracle, a page at a time beside arXiv's: the same layer, parts cut early (verdicts ${verdicts ? 'on' : 'off'})`, async () => {
+      const w = worldOf()
+      const want = await passOf(w, { verdicts })
+      const capture: Record<string, unknown> = {}
+      const whole = await passOf(w, { verdicts, marks: null, marked: markedIn(w) as never, capture: capture as never })
+      expect(whole.told).toEqual(want.told)
+      expect(shas(whole.parts)).toEqual(shas(want.parts))
+      expect(whole.notes).toEqual(want.notes)
+      expect(capture.leftFrame).toBeTypeOf('function')
+      expect(Array.isArray(capture.columns)).toBe(true)
+      const got = await passOf(w, { verdicts, marks: null, marked: markedIn(w) as never, oracle: capture as never })
+      expect(shas(got.units)).toEqual(shas(want.units))
+      expect(got.head?.sha256).toBe(want.head?.sha256)
+      expect(shas(got.parts)).toEqual(shas(want.parts))
+      expect(got.told).toEqual(want.told)
+      expect(got.notes).toEqual(want.notes)
+      const closed = (got.r as { stats: { closed: [number, number, number][] } }).stats.closed
+      expect(closed.map(c => c.slice(0, 2))).toEqual([[1, 1], [2, 3]])
+      expect(closed[0]![2]).toBeLessThan(w.pages.length)
+    })
+  }
+
+  it('two figures\' text boxes set past the paragraphs after them (the re-review\'s m2): each oracle tells the whole run\'s layer', async () => {
+    const w = deferredWorld()
+    const capture: Record<string, unknown> = {}
+    const want = await passOf(w, { capture: capture as never })
+    const early = await passOf(w, { oracle: capture as never })
+    const marked = await passOf(w, { marks: null, marked: markedIn(w) as never, oracle: capture as never })
+    for (const got of [early, marked]) {
+      expect(got.told).toEqual(want.told)
+      expect(shas(got.parts)).toEqual(shas(want.parts))
+      expect(got.notes).toEqual(want.notes)
+    }
+    expect(want.notes.every(n => (n as { layout: unknown }).layout === 'kept')).toBe(true)
+  })
+
+  it('no line of the marked original carried: the carry refused at its end, every part cut with no layout, as read whole', async () => {
+    const w = { ...worldOf(), marked: [1, 2, 3].map(() => ({ runs: [] })) }
+    const capture: Record<string, unknown> = {}
+    const want = await passOf(w, { marks: null, marked: markedIn(w) as never, capture: capture as never })
+    expect(want.r).toMatchObject({ stats: { layout: { refused: 'carry' } } })
+    // (the left's rules this run's; the maker's, which a run refused never makes, a run with a layout's: what they give is let go)
+    const rules: Record<string, unknown> = {}
+    await passOf(worldOf(), { capture: rules as never })
+    const got = await passOf(w, { marks: null, marked: markedIn(w) as never, oracle: { ...capture, frame: rules.frame, columnEdges: rules.columnEdges } as never })
+    expect(got.told).toEqual(want.told)
+    expect(shas(got.parts)).toEqual(shas(want.parts))
+    expect(got.notes).toEqual(want.notes)
+    expect(got.r).toMatchObject({ stats: { layout: { refused: 'carry' } } })
+  })
+
+  it('a marked page that cannot be read: the layout fails from there, the left goes on with the unit marks read', async () => {
+    const w = worldOf()
+    const capture: Record<string, unknown> = {}
+    await passOf(w, { marks: null, marked: markedIn(w) as never, capture: capture as never })
+    const doc = markedIn(w).doc
+    const broken = { ...doc, getPage: async (n: number) => { const p = await doc.getPage(n); return n === 3 ? { ...p, getTextContent: async () => { throw new Error('a broken marked page') } } : p } }
+    const got = await passOf(w, { marks: null, marked: { ...markedIn(w), doc: broken } as never, oracle: capture as never })
+    expect(got.told).toEqual(['head', 'left 1', 'part 1', 'left 2', 'left 3', 'part 2'])
+    expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'failed', why: 'a broken marked page' } } })
+    expect((got.notes[1] as { layout: unknown }).layout).toBe('none')
+  })
+
+  it('refuses a paper whose left locates no unit, telling nothing, under the oracle too', async () => {
+    // (no unit mark either: the unit is looked for by its text alone)
+    const w = { ...worldOf(), marks: [], units: [unit('para', [text('nothing on any page of this paper says these words at all')])] }
+    const capture: Record<string, unknown> = {}
+    await passOf(worldOf(), { capture: capture as never })
+    expect((await passOf(w, { marks: null, marked: markedIn(w) as never })).r).toMatchObject({ refused: 'anchors' })
+    const got = await passOf(w, { marks: null, marked: markedIn(w) as never, oracle: capture as never })
+    expect(got.r).toMatchObject({ refused: 'anchors' })
+    expect(got.told).toEqual([])
+  })
+})
+
+describe('layerOfPaper: the page stream\'s rules (`rules`: rules 1, 3, 4 and 5)', () => {
+  it('today\'s by default; under the four rules each oracle tells the whole run\'s layer', async () => {
+    const w = deferredWorld()
+    const today = await passOf(w)
+    const named = await passOf(w, { rules: { frame: 'units', edges: 'all', columns: 'units', floatSearch: 'whole' } })
+    expect(shas(named.parts)).toEqual(shas(today.parts))
+    const rules = { frame: 'tokens', edges: 'earlier', columns: 'tokens', floatSearch: 'forward' } as const
+    const capture: Record<string, unknown> = {}
+    const want = await passOf(w, { rules, marks: null, marked: markedIn(w) as never, capture: capture as never })
+    for (const o of [{ oracle: capture }, { oracle: capture, marks: null, marked: markedIn(w) }]) {
+      const got = await passOf(w, { rules, ...o } as never)
+      expect(got.told).toEqual(want.told)
+      expect(shas(got.parts)).toEqual(shas(want.parts))
+      expect(got.notes).toEqual(want.notes)
+    }
+  })
+
+  it('a rule that is none is refused; rule 5 needs the units written inside a float', async () => {
+    await expect(passOf(worldOf(), { rules: { columns: 'lines' } as never })).rejects.toThrow(TypeError)
+    await expect(passOf(worldOf(), { rules: { floatSearch: 'forward' }, source: { units: worldOf().units, kept: new Set() } as never })).rejects.toThrow(/inFloat/)
+  })
+})
+
+describe('layerOfPaper: the production stream (rules 1, 3 and 4 give every predicate; no whole run before it)', () => {
+  const rules = { frame: 'tokens', edges: 'earlier', columns: 'tokens' } as const
+  for (const verdicts of [false, true]) {
+    it(`the marks given or the marked original read here: the whole path's layer under the same rules, its first part cut before the last page (verdicts ${verdicts ? 'on' : 'off'})`, async () => {
+      for (const w of [worldOf(), deferredWorld()]) {
+        for (const input of [{}, { marks: null, marked: markedIn(w) }]) {
+          const want = await passOf(w, { verdicts, rules, whole: true, ...input } as never)
+          const got = await passOf(w, { verdicts, rules, ...input } as never)
+          expect(got.told).toEqual(want.told)
+          expect(shas(got.units)).toEqual(shas(want.units))
+          expect(got.head?.sha256).toBe(want.head?.sha256)
+          expect(shas(got.parts)).toEqual(shas(want.parts))
+          expect(got.notes).toEqual(want.notes)
+          const closed = (got.r as { stats: { closed?: [number, number, number][] } }).stats.closed
+          expect(closed?.[0]?.[2]).toBeLessThan(w.pages.length)
+        }
+      }
+    })
+  }
+
+  it('by default the page stream (rules 1, 3 and 4, DEFAULT_RULES); a rule of the whole run\'s, or `whole`, the whole made first (no part cut early)', async () => {
+    const w = worldOf()
+    expect(DEFAULT_RULES).toEqual({ ...rules, floatSearch: 'whole' })
+    const streamed = await passOf(w, {} as never)
+    expect((streamed.r as { stats: { closed?: unknown } }).stats.closed).toBeDefined()
+    for (const o of [{ rules: WHOLE_RULES }, { rules: { columns: 'units' } }, { rules: { edges: 'all' } }, { rules: { frame: 'units' } }, { whole: true }, { rules, whole: true }]) {
+      const got = await passOf(w, o as never)
+      expect((got.r as { stats: { closed?: unknown } }).stats.closed).toBeUndefined()
+    }
   })
 })

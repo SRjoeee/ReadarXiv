@@ -185,11 +185,11 @@ export async function wholeCutter(whole, o) {
 /**
  * K over the whole paper and its frontier closed over the table groups (what partCutter cuts a paper made whole on): `whole`
  * cutBundle's, `frontier(K, N)` F as an array of pages 0 to N (needFrontier's by default), checked: a TypeError or a
- * RangeError for one that is not an index of K for each page, rising from -1
+ * RangeError for one that is not an index of K for each page, rising from -1. `grouped` groupsOfUnits(whole.units), made by a
+ * caller that asks for K more than once (the page stream: a function of the units alone)
  */
-export function wholeFrontier(whole, frontier = needFrontier) {
+export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOfUnits(whole.units)) {
   const N = whole.paper.pages
-  const grouped = groupsOfUnits(whole.units)
   const K = entriesOf(whole, N, grouped)
   const given = frontier(K, N)
   if (!Array.isArray(given) || given.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)

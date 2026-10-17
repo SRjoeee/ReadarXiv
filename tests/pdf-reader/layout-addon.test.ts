@@ -12,6 +12,7 @@ import { BOXES_BYTES, type PagePlan, pagePlanOf, pagePlansOf, paperAddon, rangeE
 import { ADDON_CAP, parseAddonManifest, REFUSED_MAX, REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, type LayoutIndex } from '@/pdf-reader/engine/layout/file.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { OPS_MS } from '@/pdf-reader/engine/layout/oplist.mjs'
 import { layoutOf, type UnitDef } from './helpers/layout-of'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
@@ -383,6 +384,43 @@ describe('the plans (pagePlansOf) and the range assembly (rangeEntries): the add
     for (const k of ['rotated', 'capped', 'timedOut'] as const) expect(pagePlanOf(index, 1, { ...ink, [k]: true }, null as never), k).toBeNull()
     // a degraded page is planned: its text is whole (ink.mjs pageInk)
     expect(pagePlanOf(index, 1, { ...ink, degraded: true }, null as never)).not.toBeNull()
+  })
+
+  it('waits for a page\'s operator list OPS_MS at most: a list that never comes, or fails, is given up on, that page alone', async () => {
+    const index = layoutOf(UNITS, 4)
+    const base = await pagePlansOf({ doc: await open(PAPER), OPS, index })
+    expect(base.ink.timedOut).toEqual([])
+    // page 1's list never comes (an unclosed-save page's parse, or a wait that does not end), page 4's fails: each given up
+    // (PDF.js's cancel asked of the page, then its cleanup), the plans of pages 2 and 3 as ever
+    const real = await open(PAPER)
+    const events: string[] = []
+    const doc = {
+      numPages: real.numPages,
+      getPage: async (n: number) => {
+        const page = await real.getPage(n)
+        return new Proxy(page, {
+          get(target, key) {
+            if (key === 'getOperatorList' && n === 1) return () => new Promise(() => {})
+            if (key === 'getOperatorList' && n === 4) return () => Promise.reject(new Error('broken page'))
+            if (key === 'cleanup') return () => { events.push(`cleanup ${n}`); target.cleanup() }
+            if (key === '_abortOperatorList') return (o: unknown) => { events.push(`abort ${n}`); return (target as unknown as { _abortOperatorList(o: unknown): void })._abortOperatorList(o) }
+            const v = Reflect.get(target, key)
+            return typeof v === 'function' ? v.bind(target) : v
+          },
+        })
+      },
+    }
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const run = pagePlansOf({ doc: doc as never, OPS, index })
+      await vi.advanceTimersByTimeAsync(OPS_MS + 1000)
+      const got = await run
+      expect(got.ink.timedOut).toEqual([1, 4])
+      expect(events).toContain('cleanup 1')
+      expect(events).toContain('cleanup 4')
+      expect([...got.plans.keys()]).toEqual([...base.plans.keys()].filter(p => p !== 1 && p !== 4))
+      expect(JSON.stringify(got.plans.get(2))).toBe(JSON.stringify(base.plans.get(2)))
+    } finally { vi.useRealTimers() }
   })
 
   it('plan each page alone, and any split of the paper assembles as the whole, the boxes\' share spent in page order', async () => {

@@ -170,17 +170,38 @@ export type UnitMarks = Map<string, { page: number; x: number; y: number; t: str
 export type OwnedRow = (string | number)[]
 /** the options of the marked original's reading: layoutMarksOf's, and `paper` (the marks file's paper-wide bounds too) */
 export type MarkedOptions = Parameters<typeof layoutMarksOf>[2] & { paper?: boolean }
+/** why a page of the marked original has no ink (null: it has): its operator list not given within OPS_MS, or its ink's walk
+ *  past its backstop ('timedOut'); past OPS_CAP's operations, GLYPHS_PAGE's glyphs or a guard of pageInk's own ('capped');
+ *  its boxes past BOXES_PAGE merged ('degraded'); no piece on it is owned */
+export type MarkedDark = 'timedOut' | 'capped' | 'degraded' | null
+/** the marked original's head (markedPages' first event): the names read, each page looked up once */
+/** the head's verdict on the paper's links (read before any page): how many its link pages hold and their destinations' names,
+ *  or null where it has none (a page's not read within OPS_MS or past MAX_LINKS, or all past LINKS_MAX) */
+export interface MarkedLinks { count: number; dests: string[] }
+export interface MarkedHead { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; pageOf: Map<string, number>; lines: [number, number][]; unitMarks: UnitMarks | null; links: MarkedLinks | null }
+/** one page of the marked original as it is read: its tokens, the words first seen on it, the pieces found once it was read,
+ *  why it has no ink (null: it has), the page before which every opening point's piece is found, the points read again on it */
+export interface MarkedPage { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][]; links: LinkRow[] | null; dark: MarkedDark; found: number; repeats: string[] }
 /** what the marked original gives a page at a time (markedPages): its head, each page, its end */
 export type MarkedEvent =
-  | { head: { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; unitMarks: UnitMarks | null } }
-  | { page: { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][]; links: LinkRow[] | null } }
+  | { head: MarkedHead }
+  | { page: MarkedPage }
   | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][] } }
 /** the marked original read a page at a time, an async generator: its head, each page in order, its end */
 export declare function markedPages(marked: unknown, log: string, o: MarkedOptions): AsyncGenerator<MarkedEvent>
 /** the marked original read once, a page at a time (markedPages, drained): the marks in memory (as parseLayoutMarks reads their
  *  file; never trimmed to the file's bounds; the paper-wide bounds with `paper` alone) and the unit marks (null: a unit mark's
- *  page could not be looked up) */
-export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null }>
+ *  page could not be looked up), and the pages with no ink, by why */
+export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; dark: { timedOut: number[]; capped: number[]; degraded: number[] } }>
+/** each opening point's piece as the page stream finds it (layout/stream.mjs Follow): of the units and the destinations' names */
+export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>): (name: string) => import('./stream.mjs').Follow | null
+/** whether a destination the head names is a mark of the marks file: on a page of the paper, within its page's view (`views`
+ *  the pages' read so far, stride 4) */
+export declare function markAt(views: readonly number[], pages: number, page: number | null, x: number, y: number): boolean
+/** each page's columns as the marks file has them, of the head's names alone */
+export declare function columnsOf(head: MarkedHead): number[]
+/** the marks of a marked original whose pages are still to be read: its head's marking, columns, dropped names and line counts */
+export declare function marksOfHead(head: MarkedHead, engine: string): LayoutMarks & { linkCount: number; linkDests: string[] }
 /** a point read twice on pages apart: its piece 'a mark set twice', nor the displays of its group, on `rows` in place */
 export declare function vetoTwice(rows: Map<string, OwnedRow>, twice: ReadonlySet<string>, follows: (name: string) => { group?: string[] } | null): void
 /** the marks file as the lab writes it of the marks in memory: encodeLayoutMarks of them as they are, which its parser reads back

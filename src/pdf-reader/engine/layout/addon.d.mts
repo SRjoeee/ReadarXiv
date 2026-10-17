@@ -43,7 +43,8 @@ export interface PagePlan { dirty: number[]; rules: number[]; unfit: string | nu
  *  function giving them) the page's alignment facts, read only for a page with kept ink the manifest can hold. Pure */
 export declare function pagePlanOf(index: LayoutIndex, p: number, ink: ReturnType<typeof pageInk>, facts: AlignFacts | (() => AlignFacts)): PagePlan | null
 /** every planned page's plan over PDF.js's document of arXiv's PDF, and the time its operator lists, inks and plans took */
-/** the pages whose ink the walk did not read whole (capped, timed out: no plan) or read with its boxes past BOXES_PAGE merged */
+/** the pages whose ink the walk did not read whole (no plan: its operator list not given within OPS_MS, or failing, and given up
+ *  on; capped; timed out) or read with its boxes past BOXES_PAGE merged, each that page alone */
 export interface InkRead { capped: number[]; timedOut: number[]; degraded: number[] }
 export declare function pagePlansOf(o: { doc: AddonDocument; OPS: Record<string, number>; index: LayoutIndex }): Promise<{ plans: Map<number, PagePlan>; ms: { ops: number; ink: number; plan: number }; ink: InkRead }>
 /** a manifest entry as the plans make it, before the remover: null for a page the remover is asked about */

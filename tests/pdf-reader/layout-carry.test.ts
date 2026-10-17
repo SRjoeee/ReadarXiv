@@ -307,28 +307,25 @@ describe('carrierOf, the review of 2026-10-06', () => {
     // a search a line took 11.3 s on a laptop, the neighbours found once 0.2 s: the bound is the test's time
   }, 3000)
 
-  it("a paper's work is bounded too, counted in page order: past 20 million every later page carries nothing, whether added at once or page by page", () => {
-    // 1,400 one-word lines alike on each page: about 2 million each, under the page's bound; twelve of them pass the paper's
-    // 20 million on page 11, which carries none of its lines, nor does page 12 (a paper of 10,000 such pages costs 20
-    // million, not 10,000 pages' bounds)
+  it("a page's work is bounded on its own: no bound of the paper's makes a later page carry nothing, at once or page by page", () => {
+    // 1,400 one-word lines alike on each page: about 2 million each, under the page's bound; twelve of them, 23.5 million in
+    // all, every one carried (a long book's real work grows with its pages: 8.6 million on 2310.20360's 737 pages)
     const page = (p: number) => Array.from({ length: 1400 }, (_, i) => tok(`x${p}`, p, 72, 790 - i * 0.5, 3, 0.4))
     expect(carrierOf(page(1), page(1)).over).toEqual([])
     const all = Array.from({ length: 12 }, (_, p) => page(p + 1)).flat()
     const whole = carrierOf(all, all)
-    expect(whole.over).toEqual([11, 12])
-    expect(whole.carry(10, 73, 790)).toMatchObject({ page: 10, y: 790 })
-    expect(whole.carry(11, 73, 790)).toBeNull()
-    expect(whole.pageLines.get(11)).toEqual([0, 1400])
-    // page by page, in page order: the same pages over (what a page carries hangs on the pages before it alone)
+    expect(whole.over).toEqual([])
+    expect(whole.carry(12, 73, 790)).toMatchObject({ page: 12, y: 790 })
+    expect(whole.pageLines.get(12)).toEqual([1400, 1400])
     const paged = carrier(all, all)
     for (const [a, b] of pageRanges(all)) paged.add(a, b)
-    expect(paged.over).toEqual([11, 12])
+    expect(paged.over).toEqual([])
     expect(paged.lines).toEqual(whole.lines)
     // a page past its own bound alone: 3,000 such lines on page 5
     const heavy = Array.from({ length: 3000 }, (_, i) => tok('x5', 5, 72, 790 - i * 0.25, 3, 0.2))
     const mixed = [...page(4), ...heavy, ...page(6)]
     expect(carrierOf(mixed, mixed).over).toEqual([5])
-    // about 50 million steps by design: seconds alone, longer in the full suite on a loaded machine; the row holds the
+    // about 70 million steps by design: seconds alone, longer in the full suite on a loaded machine; the row holds the
     // bound's effect, not its speed
   }, 120_000)
 
