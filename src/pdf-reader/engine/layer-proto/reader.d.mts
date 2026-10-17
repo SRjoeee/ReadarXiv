@@ -100,6 +100,9 @@ export type LeftPage = ReadLeftPart
  *  layer terminal: every page not ready is told `failed`, once; every pending and later pageOf (of a page not ready) and
  *  leftPageOf rejects with that error; addPart and endParts are no-ops; a ready page still answers, until dispose */
 export interface Layer {
+  /** whether this paper's parts may carry the draw of their pages (the head says so, `draw: 1`: a page can still have none), known at open;
+   *  false for a BUNDLE 3 layer and for a paper made without them */
+  readonly drawsComing: boolean
   /** each row as v0's unit (a row that is no unit is skipped and counted): `complete`, the pages newly complete, each told once:
    *  laying it waits for no row and no part more (its closure's, Need(p)), so pages come out of the stream's order (page 137
    *  before page 3, whose closure waits for a float translated later) */

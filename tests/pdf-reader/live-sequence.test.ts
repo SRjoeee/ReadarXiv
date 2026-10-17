@@ -312,7 +312,7 @@ describe('a copy made under pipeline 7, reopened under 8', () => {
 // (mt.mjs formulaRuns, TRANSLATE_VERSION 2), the units and their hashes as they were. Given the units, the carry test
 // asks whether the unit holds a run: such a unit's translation was made of its parts sent apart, and it is sent again;
 // every other unit's translation is taken as the copy has it
-describe('a copy made under pipeline 10 or 11, reopened under 12', () => {
+describe('a copy made under pipeline 10 or 11, reopened under 12 (and 13); one of 12 under 13', () => {
   const PLAIN = Array.from({ length: 4 }, (_, k) => `Paragraph ${k} of the paper, with words that run on for a line or two of prose and an end.`)
   const SET = 'This gives a system of equations for the three components $\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$ of the field.'
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
@@ -339,7 +339,14 @@ describe('a copy made under pipeline 10 or 11, reopened under 12', () => {
       expect(sent).toEqual([expect.stringContaining('the three components @a# of the field.')])
       expect(r.settled).toBe(true)
     })
-  }
+  }  // (a copy of 12 under 13: 13 changes what a unit is, not the wire, so every unit whose source is the copy's is carried; 12's
+  // wire sent the run as one marker, so a copy of 12 holds no translation of its parts apart)
+  it('takes every unit as a copy of 12 has it: nothing is sent again', async () => {
+    const { r, sent, seeded } = await reopen('12')
+    expect(seeded).toBe(5)
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
 })
 
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",

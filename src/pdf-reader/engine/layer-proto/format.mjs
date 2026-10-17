@@ -27,21 +27,22 @@ import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
 import { groupOf } from '../translate/groups.mjs'
 import { plainSource } from '../translate/mt.mjs'
 import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
+import { checkDraw, DrawRefusal, wireOf } from './draw.mjs'
 import { sourceUnitsOf } from './rows.mjs'
 import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG */
-export const BUNDLE4 = '4'
+export const BUNDLE5 = '5'
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
-/** the reader's contract, `b4-j<PDFJS>`: what a reader asks by. Until the pin moves (next's extension asks for BUNDLE 3's) it
- *  is named with the 4 */
-export const CTAG4 = `b${BUNDLE4}-j${PDFJS}`
+/** the reader's contract, `b5-j<PDFJS>`: what a reader asks by. Until the pin moves (next's extension asks for BUNDLE 3's) it
+ *  is named with the 5 */
+export const CTAG5 = `b${BUNDLE5}-j${PDFJS}`
 /** the content's: the contract, then the pipeline, the layout maker and the remover the server made it with; a key's
  *  directory (and the catalog's name). A reader reads objects of a newer maker: those three are named, never compared */
-export const VTAG4 = `${CTAG4}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`
+export const VTAG5 = `${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`
 
 /** a units chunk's bytes at most, its values, and its nesting: the object, `units`, a unit, its pieces, a piece */
 export const UNITS_CAP = 2 * 2 ** 20, UNITS_VALUES = 400_000
@@ -60,8 +61,8 @@ const HEAD_DEPTH = 3
 export const PART_CAP = 6 * 2 ** 20, PART_VALUES = 1_000_000
 const PART_DEPTH = 7
 /** a left part's: the object, `spans` or `pairs`, an entry, its ranges or runs */
-export const LEFT_CAP = 1024 * 1024, LEFT_VALUES = 200_000
-const LEFT_DEPTH = 4
+export const LEFT_CAP = 2 * 1024 * 1024, LEFT_VALUES = 320_000
+const LEFT_DEPTH = 5
 /** the catalog's: the object, a list, a ref */
 export const CATALOG_CAP = 2 * 2 ** 20, CATALOG_VALUES = 200_000
 const CATALOG_DEPTH = 3
@@ -120,13 +121,13 @@ function exactKeys(kind, v, keys, path) {
 }
 
 /** the object's first two keys: the format (`bundle`, a units chunk's own `format`) and the kind it is; refused for what it is
- *  before its other keys are looked at */
-function envelope(kind, v, keys) {
-  const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? UNITS_FORMAT : BUNDLE4
+ *  before its other keys are looked at; `optional`: keys that may be there besides `keys` */
+function envelope(kind, v, keys, optional = []) {
+  const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? UNITS_FORMAT : BUNDLE5
   if (!isObject(v)) throw refuse(kind, '', `not an object (${kindOf(v)})`)
   if (v[tag] !== want) throw refuse(kind, tag, `not this reader's '${want}' (${typeof v[tag] === 'string' ? told(v[tag]) : kindOf(v[tag])})`)
   if (v.kind !== kind) throw refuse(kind, 'kind', `not a ${kind} (${typeof v.kind === 'string' ? told(v.kind) : kindOf(v.kind)})`)
-  exactKeys(kind, v, keys, '')
+  exactKeys(kind, v, optional.length ? [...keys, ...optional.filter(k => Object.hasOwn(v, k))] : keys, '')
 }
 
 function digestField(kind, v, path) {
@@ -229,25 +230,25 @@ const encoder = new TextEncoder()
 /** a text already built, counted as the reader will (bytes, values, nesting), digested and keyed; `pos` ({ from, to } or
  *  { page }) is the object's place, on its ref and on the result. `contentOf` gives, of the bytes, the content where the kind
  *  bounds that too (a part: less its tail's base64) */
-async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null) {
-  const bytes = encoder.encode(text)
+async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null, pre = null) {
+  const bytes = pre?.bytes ?? encoder.encode(text)
   // (`data.bound` tells which bound a writer's output passed, for the cut, which closes a part before it does)
   const past = (why, bound, size, max) => new BundleRefusal(why, { kind, path: '', data: { bound, size, max } })
   if (bytes.length > def.cap) throw past(`${bytes.length} bytes, past ${def.cap}`, 'bytes', bytes.length, def.cap)
-  const n = inside(kind, '', () => countValues(text, def.values, def.depth))
+  const n = pre?.values ?? inside(kind, '', () => countValues(text, def.values, def.depth))
   if (n > def.values) throw past(`more than ${def.values} values`, 'values', n, def.values)
   if (contentOf !== null) {
     const content = contentOf(bytes.length)
     if (content > CONTENT_MAX) throw past(`${content} bytes of content, past ${CONTENT_MAX}`, 'content', content, CONTENT_MAX)
   }
   const sha256 = await digestOf(bytes)
-  const key = kind === 'catalog' ? catalogKey(paper.id, paper.version, vtag) : keyOf(paper.id, paper.version, CTAG4, sha256)
+  const key = kind === 'catalog' ? catalogKey(paper.id, paper.version, vtag) : keyOf(paper.id, paper.version, CTAG5, sha256)
   return { kind, bytes, sha256, key, ref: { kind, ...pos, sha256, bytes: bytes.length }, ...pos, values: n }
 }
 const written = (kind, obj, def, paper, pos, contentOf = null, vtag = null) => finish(kind, JSON.stringify(obj), def, paper, pos, contentOf, vtag)
 
 /** the VTAG the versions of a head or a catalog make: what names the catalog, for its writer and for its reader */
-const vtagOf = v => `b${BUNDLE4}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}`
+const vtagOf = v => `b${BUNDLE5}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}`
 
 // ---------------------------------------------------------------- keys
 const CTAG_FORM = /^b[0-9]+-j[0-9A-Za-z.]+$/
@@ -612,6 +613,9 @@ export function droppedOf(chunks) {
 
 // ---------------------------------------------------------------- the head
 const HEAD_KEYS = ['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip']
+/** the head's optional key (BUNDLE 5): `draw` 1 says the parts MAY carry the draw of their pages' left parts (a page can still have none); absent
+ *  (0 is read too, never written) for a paper made without them */
+const HEAD_OPTIONAL = ['draw']
 const HEAD_DEF = { cap: HEAD_CAP, values: HEAD_VALUES, depth: HEAD_DEPTH }
 
 /** the head's fields, checked: what a reader and a writer share */
@@ -628,7 +632,8 @@ function headShape(v) {
   for (const r of v.units) total += r.bytes
   if (total > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, total)
   inside(K, '', () => checkLineskip(v.lineskip, 'lineskip'))
-  return { paper, base, versions, units: v.units, lineskip: v.lineskip }
+  if ('draw' in v && v.draw !== 0 && v.draw !== 1) throw refuse(K, 'draw', `not 0 or 1, but ${kindOf(v.draw)}`)
+  return { paper, base, versions, units: v.units, lineskip: v.lineskip, draw: v.draw === 1 ? 1 : 0 }
 }
 
 /**
@@ -640,21 +645,22 @@ function headShape(v) {
  */
 export async function readHead(bytes, { ref, caps }) {
   const { value: v, sha256 } = await opened('head', bytes, ref, HEAD_DEF, caps)
-  envelope('head', v, HEAD_KEYS)
+  envelope('head', v, HEAD_KEYS, HEAD_OPTIONAL)
   const h = headShape(v)
-  return { kind: 'head', sha256, bytes: bytes.length, paper: h.paper, base: h.base, versions: h.versions, units: h.units, lineskip: h.lineskip }
+  return { kind: 'head', sha256, bytes: bytes.length, paper: h.paper, base: h.base, versions: h.versions, units: h.units, lineskip: h.lineskip, draw: h.draw }
 }
 
 /** the head written: the paper, the original, the versions this engine writes (with the compiler image's name) and the
  *  chunks `writeUnitChunks` gave, in order */
-export async function writeHead({ paper, base, image, units, lineskip }) {
+export async function writeHead({ paper, base, image, units, lineskip, draw = false }) {
   const obj = {
-    bundle: BUNDLE4, kind: 'head',
+    bundle: BUNDLE5, kind: 'head',
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
     base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref },
     versions: { pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image },
     units: units.map(u => ({ kind: 'units', from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes.length })),
     lineskip: lineskip === null ? null : lineskip.map(r2),
+    ...(draw ? { draw: 1 } : {}),
   }
   headShape(obj)
   return written('head', obj, HEAD_DEF, paper, {})
@@ -947,7 +953,7 @@ export async function writePart({ paper, head, prev, pages, views, left, fileOnl
   // (a tail past TAIL_CAP is the cut's to answer with a shorter part: E3's writer keeps one page's tail within it)
   if (addon !== null && addon.tail !== null && addon.tail.length > TAIL_CAP) throw new BundleRefusal(`more than ${TAIL_CAP} bytes (${addon.tail.length})`, { kind: K, path: 'addon.tail', data: { bound: 'tail', size: addon.tail.length, max: TAIL_CAP } })
   const obj = {
-    bundle: BUNDLE4, kind: 'part', head, prev, pages: [pages[0], pages[1]],
+    bundle: BUNDLE5, kind: 'part', head, prev, pages: [pages[0], pages[1]],
     views: views.map(r3),
     left: left.map(([id, stream, rects]) => [id, stream, rects.map(([p, x0, y0, x1, y1]) => [p, r3(x0), r3(y0), r3(x1), r3(y1)])]),
     fileOnly: fileOnly.map(([id, after]) => [id, after]),
@@ -964,7 +970,7 @@ export async function writePart({ paper, head, prev, pages, views, left, fileOnl
 }
 
 // ---------------------------------------------------------------- the left parts
-const LEFT_KEYS = ['bundle', 'kind', 'page', 'first', 'tokens', 'spans', 'pairs']
+const LEFT_KEYS = ['bundle', 'kind', 'page', 'first', 'tokens', 'spans', 'pairs', 'draw']
 const TOKEN_KEYS = ['perPage', 'l', 'r', 'y', 'h', 'top', 'bottom']
 /** the six coded fields of a left part's tokens, in the wire's order */
 export const TOKEN_FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
@@ -1036,7 +1042,15 @@ function leftShape(v) {
       nextWord = r[j] + r[j + 2]
     }
   }
-  return { page: v.page, first: v.first, table, spans, pairs }
+  // the page's draw geometry (E-C): null, or checked by draw.mjs
+  let draw = null
+  if (v.draw !== null) {
+    try { draw = checkDraw(v.draw) } catch (e) {
+      if (e instanceof DrawRefusal) throw refuse(K, e.path, e.why)
+      throw e
+    }
+  }
+  return { page: v.page, first: v.first, table, spans, pairs, draw }
 }
 
 /**
@@ -1057,13 +1071,13 @@ export async function readLeftPart(bytes, { ref, streamOf, caps }) {
     const rel = stream - s.first
     if (rel >= 0 && rel < s.table.n && ranges[0] !== rel) throw refuse(K, `spans[${i}][1][0]`, `not the unit's stream, ${rel} on this page`)
   }
-  return { kind: 'left', sha256, bytes: bytes.length, page: s.page, first: s.first, table: s.table, spans: s.spans, pairs: s.pairs }
+  return { kind: 'left', sha256, bytes: bytes.length, page: s.page, first: s.first, table: s.table, spans: s.spans, pairs: s.pairs, draw: s.draw }
 }
 
 /** the left part of a page with no tokens (n = 0, no spans, no pairs): what a page whose part would pass its caps ships */
 const emptyLeft = (page, first) => ({
-  bundle: BUNDLE4, kind: 'left', page, first,
-  tokens: { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }, spans: [], pairs: [],
+  bundle: BUNDLE5, kind: 'left', page, first,
+  tokens: { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }, spans: [], pairs: [], draw: null,
 })
 
 /**
@@ -1072,13 +1086,19 @@ const emptyLeft = (page, first) => ({
  * page without its tokens loses its highlight and nothing else), and the result says so (`emptied`); it never throws for
  * size. It throws BundleRefusal for what its reader would refuse of it for another reason
  */
-export async function writeLeftPart({ paper, page, first, tokens, spans, pairs }) {
+export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, draw = null, drawText = null }) {
+  // (a draw given as wireText's JSON is checked already: it stands in the part's text as it is, neither parsed, wired nor checked
+  // again; one given as an object is wired here)
+  const spliced = drawText !== null
   const obj = {
-    bundle: BUNDLE4, kind: 'left', page, first,
+    bundle: BUNDLE5, kind: 'left', page, first,
     tokens: { perPage: [...tokens.perPage], l: [...tokens.l], r: [...tokens.r], y: [...tokens.y], h: [...tokens.h], top: [...tokens.top], bottom: [...tokens.bottom] },
     spans: spans.map(([id, ranges]) => [id, [...ranges]]),
     pairs: pairs.map(([id, runs]) => [id, [...runs]]),
+    // (the draw geometry: shed to null for any reason its reader would refuse it, never thrown)
+    draw: spliced ? null : wireOf(draw),
   }
+  let drawShed = !spliced && draw != null && obj.draw === null, withText = spliced
   // (what the reader refuses of a page for its size, the writer empties; what it refuses for anything else, the writer throws)
   let emptied = obj.tokens.perPage[0] > TOKENS_PAGE
   if (!emptied) {
@@ -1087,14 +1107,30 @@ export async function writeLeftPart({ paper, page, first, tokens, spans, pairs }
       emptied = true
     }
   }
-  if (!emptied) {
-    const text = JSON.stringify(obj)
-    emptied = encoder.encode(text).length > LEFT_CAP || inside('left', '', () => countValues(text, LEFT_VALUES, LEFT_DEPTH)) > LEFT_VALUES
+  // the part's text, a spliced draw's JSON in its place (`draw` the object's last key), and its bytes and values, made once: what
+  // the size check reads is what is written
+  const textOf = o => {
+    const t = JSON.stringify(o)
+    if (!withText || o !== obj) return t
+    if (!t.endsWith('"draw":null}')) throw new Error('a left part whose last key is not its draw')
+    return `${t.slice(0, -5)}${drawText}}`
   }
-  const out = emptied ? emptyLeft(page, first) : obj
-  if (emptied) leftShape(out)
-  const w = await written('left', out, LEFT_DEF, paper, { page })
-  return { ...w, emptied }
+  const sized = text => {
+    const bytes = encoder.encode(text)
+    if (bytes.length > LEFT_CAP) return { text, pre: null }
+    const values = inside('left', '', () => countValues(text, LEFT_VALUES, LEFT_DEPTH))
+    return { text, pre: values > LEFT_VALUES ? null : { bytes, values } }
+  }
+  let got = emptied ? null : sized(textOf(obj))
+  if (got && got.pre === null) {
+    // (the geometry goes before the tokens: a page without its draw is read by the browser, without its tokens loses its highlight)
+    if (obj.draw !== null || withText) { obj.draw = null; withText = false; drawShed = true }
+    got = sized(textOf(obj))
+    if (got.pre === null) emptied = true
+  }
+  if (emptied) { const out = emptyLeft(page, first); leftShape(out); got = { text: JSON.stringify(out), pre: null } }
+  const w = await finish('left', got.text, LEFT_DEF, paper, { page }, null, null, got.pre)
+  return { ...w, emptied, drawShed: drawShed || (emptied && (draw != null || spliced)) }
 }
 
 // ---------------------------------------------------------------- the catalog
@@ -1154,7 +1190,7 @@ export async function writeCatalog({ head, units, parts, end }) {
   const refs = (list, kind) => list.map(u => ({ kind, from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes }))
   const through = parts.length ? parts[parts.length - 1].to : 0
   const obj = {
-    bundle: BUNDLE4, kind: 'catalog',
+    bundle: BUNDLE5, kind: 'catalog',
     paper: { id: head.paper.id, version: head.paper.version, pages: head.paper.pages },
     versions: Object.fromEntries(VERSION_KEYS.map(k => [k, head.versions[k]])),
     head: { kind: 'head', sha256: head.sha256, bytes: head.bytes },
@@ -1229,7 +1265,7 @@ export function mergeParts(index, parts) {
     schema: 1,
     paper: { id: head.paper.id, version: head.paper.version, pages: N },
     base: { bytes: head.base.bytes, sha256: head.base.sha256, url: originalUrl(head.paper.id, head.paper.version) },
-    versions: { bundle: BUNDLE4, ...head.versions },
+    versions: { bundle: BUNDLE5, ...head.versions },
     units: [...index.units],
     left: { kinds: index.kinds.map(k => k ?? ''), pages: boxes, units },
     layout, addon, dropped: [...index.dropped],

@@ -8,6 +8,7 @@
 // tokenizeDocument over every page gives them; the edges are those inkEdges over the whole document gives.
 // Imports the engine's own pure modules: no PDF.js, no `node:*` one.
 import { inkEdges, tokenizeDocument } from '../pipeline/anchors.mjs'
+import { drawTextOf } from '../pipeline/draw-data.mjs'
 
 /**
  * arXiv's text, every page read once: { pages, views, ok, tokens, edges: { l, r }, spans: { x0, x1 } }.
@@ -16,12 +17,15 @@ import { inkEdges, tokenizeDocument } from '../pipeline/anchors.mjs'
  * - `tokens`: tokenizeDocument's of every page, in page order, each with its text item let go (`item` null);
  * - `edges`: each token's ink across (inkEdges), made while the items were there;
  * - `spans`: each token's item's start and end across (its transform's x, and that plus its width; NaN with none), which the
- *   wire's check of a token reads.
+ *   wire's check of a token reads;
+ * - `draw` (with `draw` asked): each page's text as its draw geometry reads it (pipeline/draw-data.mjs drawTextOf; null where the
+ *   page's text was not read), which the layout maker takes a page at a time as it reads the page's draw (and lets go): no page's
+ *   text is read twice. Else null.
  * `doc` a PDF.js document, which the caller opens and destroys
  */
-export async function readArxivText(doc) {
+export async function readArxivText(doc, { draw = false } = {}) {
   const pages = doc.numPages
-  const views = [], ok = [], tokens = [], ls = [], rs = [], x0s = [], x1s = []
+  const views = [], ok = [], tokens = [], ls = [], rs = [], x0s = [], x1s = [], drawn = draw ? [] : null
   for (let p = 1; p <= pages; p++) {
     let view = null, items = [], styles = {}, read = false
     try {
@@ -31,7 +35,9 @@ export async function readArxivText(doc) {
       items = Array.isArray(tc?.items) ? tc.items : []
       styles = tc?.styles ?? {}
       read = true
+      drawn?.push(drawTextOf(tc))
     } catch {}
+    if (drawn && drawn.length < p) drawn.push(null)
     views.push(view ?? null)
     ok.push(read)
     const own = tokenizeDocument([{ page: p, items, styles }])
@@ -49,7 +55,7 @@ export async function readArxivText(doc) {
     })
     x0s.push(x0); x1s.push(x1)
   }
-  return { pages, views, ok, tokens, edges: { l: joined(ls, Float32Array), r: joined(rs, Float32Array) }, spans: { x0: joined(x0s, Float64Array), x1: joined(x1s, Float64Array) } }
+  return { pages, views, ok, tokens, edges: { l: joined(ls, Float32Array), r: joined(rs, Float32Array) }, spans: { x0: joined(x0s, Float64Array), x1: joined(x1s, Float64Array) }, draw: drawn }
 }
 
 /** typed arrays joined into one of their kind */

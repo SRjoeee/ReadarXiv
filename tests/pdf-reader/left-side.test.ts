@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { cutBundle } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import { indexOf, readHead, readLeftPart, readPart, type ReadUnitsChunk, readUnitsChunk, type Ref, TOKEN_FIELDS } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { type Anchor, anchorUnits, type DocToken, sentenceStarts, startsAnchor, type TextPage, tokenizeDocument, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
-import { leftSideOf } from '@/pdf-reader/engine/pipeline/left-side.mjs'
-import { layoutOf } from '@/pdf-reader/engine/view/highlight.mjs'
+import { leftSideOf, leftSideStream } from '@/pdf-reader/engine/pipeline/left-side.mjs'
+import { layoutOf, pageColumns } from '@/pdf-reader/engine/view/highlight.mjs'
 import { BASE_OF } from './helpers/cut-paper'
 
 // The left side a page at a time (left-pages-design §1 to §5): a synthetic paper of four pages through anchorUnits, the side the
@@ -206,5 +206,29 @@ describe('a page past TOKENS_PAGE', () => {
     expect(lefts[1]!.first).toBe(n)
     expect(lefts[1]!.spans).toEqual([[0, [0, 3]]])
     expect(lefts[1]!.pairs).toEqual([[0, [0, 0, 3]]])
+  })
+})
+
+describe('leftSideStream: the side a unit at a time (the page stream, stage 2)', () => {
+  it('the units given in any order, a page asked once every unit on it is: leftSideOf\'s, byte for byte', () => {
+    const { doc, anchors } = make()
+    const want = leftSideOf({ doc, views: VIEWS, anchors })
+    const grid = VIEWS.map(v => v.map(x => Math.round(x * 1000) / 1000))
+    for (const order of [[4, 3, 2, 1, 0], [2, 0, 4, 1, 3]]) {
+      // the columns a whole run gave (pageColumns of every located unit's lines: the far push's rule)
+      const columns = () => pageColumns(grid, new Map([...anchors].map(([id, a]) => [id, a ? { ...a, rects: a.rects.map(r => ({ ...r })) } : a])))
+      const side = leftSideStream({ doc, views: VIEWS, columns: columns as never })
+      for (const id of order) { const a = anchors.get(id) ?? null; if (a) side.add(id, a); else side.none(id) }
+      expect(side.done()).toBe(UNITS.length)
+      expect(side.units()).toEqual(want.units)
+      expect(side.pages).toEqual(want.pages)
+      expect(side.stats).toEqual(want.stats)
+      for (let p = 1; p <= VIEWS.length; p++) expect(side.leftPages(p)).toEqual(want.leftPages(p))
+    }
+  })
+
+  it('wants the pages\' columns given: the tokens\' layout is made before any unit is', () => {
+    const { doc } = make()
+    expect(() => leftSideStream({ doc, views: VIEWS } as never)).toThrow(TypeError)
   })
 })

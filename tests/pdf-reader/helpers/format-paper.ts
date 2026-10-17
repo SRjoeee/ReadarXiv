@@ -128,15 +128,16 @@ export interface Made {
 }
 
 /** the paper written, then read back by the readers in the order the service reads it */
-export async function made(): Promise<Made> {
+/** `draws`: the draw geometry each page's left part carries (by page), none by default; `draw`: the head says the parts may carry them */
+export async function made(o: { draws?: Record<number, unknown>; draw?: boolean } = {}): Promise<Made> {
   const chunks = await writeUnitChunks({ paper: PAPER, units: UNITS })
-  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: [1, 0] })
+  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: [1, 0], ...(o.draw ? { draw: true } : {}) })
   const rh = await readHead(head.bytes, { ref: head.ref })
   const readChunks: ReadUnitsChunk[] = []
   for (const c of chunks) readChunks.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: readChunks.at(-1) ?? null }))
   const index = indexOf(rh, readChunks)
   const lefts: Record<number, Written & { page: number }> = {}
-  for (let p = 1; p <= N; p++) lefts[p] = await writeLeftPart({ paper: PAPER, page: p, first: TOKENS_ON_PAGE * (p - 1), tokens: tokenWire(TOKENS_ON_PAGE, p), ...(LEFT_OF[p] as (typeof LEFT_OF)[number]) })
+  for (let p = 1; p <= N; p++) lefts[p] = await writeLeftPart({ paper: PAPER, page: p, first: TOKENS_ON_PAGE * (p - 1), tokens: tokenWire(TOKENS_ON_PAGE, p), ...(LEFT_OF[p] as (typeof LEFT_OF)[number]), ...(o.draws?.[p] ? { draw: o.draws[p] as never } : {}) })
   const parts: (Written & { from: number; to: number })[] = []
   const readParts: ReadPart[] = []
   let chain: PartChain | null = null

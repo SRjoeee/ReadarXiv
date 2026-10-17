@@ -36,13 +36,14 @@ const FUZZY_WORDS = 1000
  *  its neighbours put it, PDF units: of 3,540 such carries on the four researched papers, none that the lines around it
  *  in reading order contradict lies within 12 of that place, and a limit of 40 instead takes 2 more they confirm */
 const NEAR = 5
-/** the work a marked page may cost, and a paper: the words compared with a partner's, the lines looked at and the cells
- *  of the runs between two lines. On the four researched papers the heaviest page costs 88,874 and the heaviest paper
- *  666,069 (2307.16209, 147 pages); a page past PAGE_WORK, or once the paper is past PAPER_WORK, carries none of its lines
- *  (8,000 lines of one word alike on a page cost 64 million). The paper's is counted over the pages in page order as they
- *  are added, so that a page is still carried as soon as its tokens are read (the page stream, E2a): what a page carries
- *  hangs on the pages before it alone, and a paper of 10,000 pages costs 20 million at most, not 10,000 pages' bounds */
-const PAGE_WORK = 2_000_000, PAPER_WORK = 20_000_000
+/** the work a marked page may cost: the words compared with a partner's, the lines looked at and the cells of the runs
+ *  between two lines. A page past PAGE_WORK carries none of its lines, that page alone (8,000 lines of one word alike on a page
+ *  cost 64 million). The heaviest pages measured (2026-10-17, against their marked compiles): 182,407 (2310.20360, 737 pages,
+ *  page 685), 116,994 (2106.10165, 471 pages), 110,461 (2608.16117) and 88,909 (2307.16209). No bound of the paper's: a
+ *  paper's work grows with its pages (8.6 million for 2310.20360, 7.1 million for 2106.10165), so a paper-wide one would bind
+ *  on a long book first, and the work is time alone, the host's deadline's; what a page carries hangs on its own lines and
+ *  arXiv's on its page and the two beside it alone (a page is carried as soon as its tokens are read: the page stream) */
+const PAGE_WORK = 2_000_000
 /** the lines near a position looked at, at most */
 const SCAN = 64
 /** a position past a line's last word that is the line's still, of its height: a formula ends a line with no word */
@@ -118,8 +119,8 @@ function commonRun(a, b, A, B) {
  * away; 2608.08350's line of five words an identical one 575 pt away). Else to the nearest arXiv line (by page, then by
  * distance less the words matched) within WINDOW of its baseline on its page, or anywhere on the next or the previous
  * page, whose longest common run of words holds FUZZY of the longer line's and at least FUZZY_PAIRS. The work a marked
- * page and a paper cost is bounded (PAGE_WORK, PAPER_WORK): a page past it carries none of its lines and is listed in
- * `over`, which the maker takes as a page with no ink. `lines`: every marked line (`total`), and those carried, each counted once: at the same place
+ * page costs is bounded (PAGE_WORK): a page past it carries none of its lines and is listed in `over`, which the maker takes
+ * as a page with no ink. `lines`: every marked line (`total`), and those carried, each counted once: at the same place
  * (`same`), moved whole (`moved`), the same words at other spaces (`respaced`), matched by most of their words (`fuzzy`)
  */
 export function carrierOf(marked, arxiv) {
@@ -146,9 +147,8 @@ export function carrier(marked, arxiv) {
   const X = (ts, l, j) => ts[l.tokens[j]].x
   const match = new Map(), over = [], added = new Set()
   const lines = { total: 0, same: 0, moved: 0, respaced: 0, fuzzy: 0 }
-  // (each marked page's lines: [carried, total]; the work spent on the pages added so far, the paper's)
+  // (each marked page's lines: [carried, total])
   const pageLines = new Map()
-  let spent = 0
   // each page's lines by baseline, for the lines near a position; each token's line; the rests of words given in parts
   const nearby = new Map(), lineOf = new Map(), restsOn = new Map()
 
@@ -165,10 +165,9 @@ export function carrier(marked, arxiv) {
     lines.total += ours.length
     for (const page of [...oursOn.keys()].sort((a, b) => a - b)) {
       let work = 0
-      /** whether the page, or the paper, is past its work with n more */
-      const spend = n => (work += n) > PAGE_WORK || spent + work > PAPER_WORK
-      const found = spent > PAPER_WORK ? null : matchPage(oursOn.get(page), spend)
-      spent += work
+      /** whether the page is past its work with n more */
+      const spend = n => (work += n) > PAGE_WORK
+      const found = matchPage(oursOn.get(page), spend)
       pageLines.set(page, [found === null ? 0 : found.size, oursOn.get(page).length])
       if (found === null) { over.push(page); continue }
       for (const [l, best] of found) {
@@ -199,7 +198,7 @@ export function carrier(marked, arxiv) {
     }
   }
 
-  /** one marked page's lines → their partners, or null where the page, or the paper, cost more than its bound */
+  /** one marked page's lines → their partners, or null where the page cost more than its bound */
   function matchPage(ls, spend) {
     const options = new Map(), unique = new Map()
     // the same words: every partner on the line's page and the two beside it, unique or not
