@@ -200,11 +200,9 @@ const drawingOf = async (run: Awaited<ReturnType<typeof open>>) => {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('')
 }
 /** SWITCH_PAGE's drawing by the engine before the leftover switch (0be9390d, D6's F6b, built in a scratch directory from
- *  `git archive 0be9390d src`), opened with its built-in set but Chinese's fill top at 2 em as the set is now, was
- *  8bbac5fa00176badb835aa6e10bb614e4d00860ad954641f8ae0cec5d8d7a4b6; this is that drawing with each unit's lines in their
- *  line boxes (the half-leading rule, 2026-10-17: layer2.mjs lineBoxes, each paragraph's lines a third of a pitch lower
- *  on their own pitch as before, the caption's one line on its baseline), what 'foot' must still draw */
-const BEFORE_THE_SWITCH = '959edaba8e2616e2e3d46d77ed3a014c1fffaa1860ee4504c886f756b0efd899'
+ *  `git archive 0be9390d src`), opened with its built-in set but Chinese's fill top at 2 em as the set is now: what 'foot'
+ *  must still draw */
+const BEFORE_THE_SWITCH = '8bbac5fa00176badb835aa6e10bb614e4d00860ad954641f8ae0cec5d8d7a4b6'
 
 describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' moves the paragraphs up under a short one and paints them last, from the top; 'foot' draws as before the switch", () => {
   const packed = () => { const set = editable(); set.scripts.Hans!.leftover = 'pack'; return set }
@@ -218,8 +216,7 @@ describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' mov
     const run = await open({ rules: packed() }, SWITCH_PAGE())
     await run.until(1)
     const [a0, a1] = linesOf(run, 0)
-    // (its two lines at the fill's top, 1.667, in their line boxes: a third of a pitch under its frame's first baseline)
-    expect([a0, a1!]).toEqual([expect.closeTo(196, 1), expect.closeTo(176, 1)])
+    expect([a0, a1!]).toEqual([200, expect.closeTo(180, 2)])
     // (B keeps the original's distance under A's last drawn line: it rises what A's last line stands over A's original last)
     const [b0] = linesOf(run, 1), [c0] = linesOf(run, 2)
     expect(b0! - 128).toBeCloseTo(a1! - 140, 6)
@@ -239,8 +236,7 @@ describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' mov
     expect(set.scripts.Hans!.leftover).toBe('foot')
     const foot = await open({ rules: set }, SWITCH_PAGE()), built = await open({}, SWITCH_PAGE()), pack = await open({ rules: packed() }, SWITCH_PAGE())
     await Promise.all([foot.until(1), built.until(1), pack.until(1)])
-    // (each a line in a frame of two, in its line box: a third of a pitch under its first baseline)
-    expect([linesOf(foot, 1), linesOf(foot, 2)].map(ls => ls.map(y => Math.round(y * 100) / 100))).toEqual([[124], [100]])
+    expect([linesOf(foot, 1), linesOf(foot, 2)]).toEqual([[128], [104]])
     expect(foot.stats.some(r => 'pack' in r)).toBe(false)
     expect(painted(foot)).toEqual([0, 1, 2, 3])
     expect(await drawingOf(foot)).toBe(BEFORE_THE_SWITCH)

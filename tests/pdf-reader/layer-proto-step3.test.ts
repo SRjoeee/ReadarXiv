@@ -480,13 +480,14 @@ describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every o
   })
 })
 
-describe('line boxes with half-leading (2026-10-17): a paragraph gap never tighter than the lines beside it', () => {
-  // frames of n lines 12 pt apart from `top`, 100 pt wide, at size 10; CJK characters 10 pt wide at size 10, ten a line. A
-  // frame of n lines is n line boxes of the original's pitch: 12 n pt from 6 over its first baseline to 6 under its last
+describe("a paragraph gap never tighter than its lines, its first line on the original's (2026-10-17, footFloorAt)", () => {
+  // frames of n lines 12 pt apart from `top`, 100 pt wide, at size 10; CJK characters 10 pt wide at size 10, ten a line;
+  // `below`: the original's room from the unit's last baseline down to the next line of its column (a pitch: the next
+  // paragraph's first line; Infinity: nothing under it)
   const block = (n = 6, top = 500) => { const B = Array.from({ length: n }, (_, k) => top - 12 * k); return { page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
   const chars = (n: number) => Array.from({ length: n }, () => ({ s: '\u6c49', cls: 'cjk', w100: 100, st: {} }))
-  const both = { head: true, foot: true }
-  const P = (o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, fillLead: 3, halfLead: both, adaptiveFill: { band: 0.05, track: 0, size: 1 }, ...o })
+  const edges = (below: number, o: object = {}) => ({ head: true, foot: true, below, ...o })
+  const P = (below = 12, o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, fillLead: 3, halfLead: edges(below), adaptiveFill: { band: 0.05, track: 0, size: 1 }, ...o })
   /** n characters laid at a leading, as the page fill lays them (`box`) or as a fit leaves them */
   const at = (n: number, lead: number, { box = true, blocks = [block()] as unknown[], PP = P() } = {}) => L2.layoutAt(chars(n) as never, blocks as never, 10, PP as never, { lead, track: 0, trackLatin: 0, compress: 1, borrow: 0, scale: 1, knob: 'none', box } as never)
   const baselines = (l: { lines: { baseline: number }[] }) => l.lines.map(x => Math.round(x.baseline * 1000) / 1000)
@@ -498,121 +499,102 @@ describe('line boxes with half-leading (2026-10-17): a paragraph gap never tight
   }
   const fill = async (units: Unit[], PP: Record<string, unknown> = P()) => (await import('@/pdf-reader/engine/layer-proto/run.mjs')).fillPage(units as never, PP as never)
 
-  it("sets each line at a leading L in a box of L pitches, half its leading over it and half under: (L - 1) / 2 of a pitch below the frame's first baseline", () => {
-    // (two lines at 1.5: their boxes 18 pt each, from 506 down; baselines 9 under each box's top)
-    expect(baselines(at(20, 1.5))).toEqual([497, 479])
-    // (k boxes fit a frame of n lines where k L <= n: four at 1.5 fill six exactly, the last box's foot on the frame's; at
-    // 1.55 three do, and four are clipped)
-    const four = at(40, 1.5)
-    expect([baselines(four), four.clipped]).toEqual([[497, 479, 461, 443], false])
+  it("keeps every first line on the original's first baseline at any leading, as the fill lays it and as a fit does", () => {
+    for (const box of [true, false]) {
+      expect(baselines(at(20, 1.5, { box })), `${box}`).toEqual([500, 482])
+      expect(baselines(at(40, 1.55, { box, PP: P(Infinity) }))[0], `${box}`).toBe(500)
+    }
+    // (a fit's own layout is as it was: no slot moved, none dropped)
+    expect(baselines(at(40, 1.55, { box: false }))).toEqual(baselines(at(40, 1.55, { box: false, PP: P(12, { halfLead: undefined }) })))
+  })
+
+  it("ends a paragraph no lower than a leading over the next line of its column where the original sets that line nearer", () => {
+    // (the next paragraph's first line a pitch under its last, at 428: at 1.5 its last line may stand at 446, and four lines
+    // fit six; at 1.55 the floor is 446.6, three do, four are clipped; with nothing under it four fit at 1.66)
+    expect([baselines(at(40, 1.5)), at(40, 1.5).clipped]).toEqual([[500, 482, 464, 446], false])
     expect(at(40, 1.55).clipped).toBe(true)
-    expect(at(30, 1.55).clipped).toBe(false)
+    expect(at(40, 1.55, { PP: P(Infinity) }).clipped).toBe(false)
+    expect(at(40, 1.66, { PP: P(Infinity) }).clipped).toBe(false)
+    // (a room of a leading or more asks nothing: a heading's room under it, 40)
+    expect(at(40, 1.66, { PP: P(40) }).clipped).toBe(false)
   })
 
-  it("lays a line at the original's pitch exactly where it stood: at L = 1 the boxes are the original's lines", () => {
-    for (const n of [10, 20, 40, 60]) {
-      for (const box of [true, false]) expect(baselines(at(n, 1, { box })), `${n} ${box}`).toEqual(block().B.slice(0, Math.ceil(n / 10)))
-      expect(baselines(at(n, 1))).toEqual(baselines(at(n, 1, { PP: P({ halfLead: undefined }) })))
-    }
-  })
-
-  it("centres a fit's own layout whose boxes do not fit its frame, the shortfall shared by its two edges: its slots kept", () => {
-    // (four lines at 1.55: 60 - 3 x 18.6 = 4.2 pt of room under the last baseline, 6.6 asked: 2.1 each side)
-    expect(baselines(at(40, 1.55, { box: false }))).toEqual([497.9, 479.3, 460.7, 442.1])
-    // (with room, its whole half-leading; and with no half-leading asked, from the frame's first baseline as before)
-    expect(baselines(at(20, 1.5, { box: false }))).toEqual([497, 479])
-    expect(baselines(at(40, 1.55, { box: false, PP: P({ halfLead: undefined }) }))).toEqual([500, 481.4, 462.8, 444.2])
-  })
-
-  it('gives two paragraphs one above the other a gap of exactly L where the original has none past its pitch, and L plus its skip where it has one', async () => {
-    // (A: six lines from 500; B: six lines one pitch under A's last, from 428; then from 422, a skip of 6 between them)
-    for (const skip of [0, 6]) {
-      const a = laid(1, 40, [block(6, 500)]), b = laid(2, 40, [block(6, 428 - skip)])
-      const told = await fill([a, b])
-      expect(told!.target).toBe(1.5)
+  it("gives two paragraphs a gap of at least the leading of each, the lower one's first line where TeX set it; a skip counts toward it", async () => {
+    for (const skip of [0, 6, 28]) {
+      // (A: six lines from 500; B: six lines one pitch and `skip` under A's last)
+      const a = laid(1, 40, [block(6, 500)], P(12 + skip)), b = laid(2, 40, [block(6, 428 - skip)], P(Infinity))
+      await fill([a, b])
       const gap = a.layout.lines.at(-1)!.baseline - b.layout.lines[0]!.baseline
-      expect(gap).toBeCloseTo(1.5 * 12 + skip, 6)
-      // (the leading inside each: 18)
-      expect(a.layout.lines[0]!.baseline - a.layout.lines[1]!.baseline).toBeCloseTo(18, 6)
+      expect(b.layout.lines[0]!.baseline, `${skip}`).toBe(428 - skip)
+      expect(gap, `${skip}`).toBeGreaterThanOrEqual(Math.max(a.layout.state.lead, b.layout.state.lead) * 12 - 0.05)
+      // (A's own fill leading: filled to the floor its own leading asks, 1.5; a skip of 6 lets it spread to 1.62; a heading's
+      // room under it asks nothing, 1.66. Laid under B, which spreads to 1.66: a leading of 1.66 over B's first line, 1.44
+      // and 1.61; with the heading's room, its own)
+      expect([a.fillLead, a.layout.state.lead, b.layout.state.lead], `${skip}`).toEqual([[1.5, 1.44, 1.66], [1.62, 1.61, 1.66], [1.66, 1.66, 1.66]][[0, 6, 28].indexOf(skip)])
     }
   })
 
-  it("fills a frame to its foot by its boxes: the fill leading is n / k, the last box's foot on the frame's (the D6 foot rule, as boxes)", async () => {
-    // (four lines in six: 1.5, where without the boxes 1.66 set the last baseline on the frame's last one, the gap below a pitch)
-    const a = laid(1, 40, [block()])
-    await fill([a])
-    expect(a.fillLead).toBe(1.5)
-    expect(baselines(a.layout)).toEqual([497, 479, 461, 443])
-    const before = laid(1, 40, [block()], P({ halfLead: undefined }))
-    await fill([before], P({ halfLead: undefined }))
-    expect(before.fillLead).toBe(1.66)
-    expect(baselines(before.layout).at(-1)).toBeCloseTo(440.24, 6)
+  it("ends a paragraph a leading of the next one over its first line where the next one spreads further: the upper one pays", async () => {
+    // (B, two lines in six, spreads to the fill's top, 2.5: A, filled at 1.5 alone, is laid at 1.16 so that its last line
+    // stands 2.5 pitches over B's first)
+    const a = laid(1, 40, [block(6, 500)], P(12)), b = laid(2, 20, [block(6, 428)], P(Infinity))
+    await fill([a, b])
+    expect([a.fillLead, a.layout.state.lead, b.layout.state.lead]).toEqual([1.5, 1.16, 2.5])
+    expect(a.layout.lines.at(-1)!.baseline - b.layout.lines[0]!.baseline).toBeGreaterThanOrEqual(2.5 * 12 - 0.05)
+    expect(b.layout.lines[0]!.baseline).toBe(428)
   })
 
-  it("takes a leading closer than its fit's where its boxes need it: five lines in six at 1.2, where the fit set them at 1.25", async () => {
+  it("takes a leading closer than its fit's where the gap under it needs it, its first line still on its baseline", async () => {
+    // (50 characters, five lines: the fit's 1.25 sets the last at 440, which the next line at 428 leaves 12 under it; at 1.2
+    // the last is at 442.4, 14.4 over that line)
     const a = laid(1, 50, [block()])
     expect(a.layout.state.lead).toBe(1.25)
     await fill([a])
     expect(a.fillLead).toBe(1.2)
-    expect(baselines(a.layout)).toEqual([498.8, 484.4, 470, 455.6, 441.2])
+    expect(baselines(a.layout)).toEqual([500, 485.6, 471.2, 456.8, 442.4])
   })
 
-  it("finds the loosest leading that sets a unit whole as its boxes, whatever frames it runs over: the halving is the linear search's", async () => {
-    // (a unit from a frame of five lines at a column's foot on to one of six at the next column's head: the room the first
-    // frame's lowest line leaves rises and falls with the leading, which a test of the lines laid could not halve on)
+  it('finds the loosest leading that sets a unit whole with its floor, whatever frames it runs over: the halving is the linear search\'s', async () => {
     const second = { ...block(6, 500), x0: 120, x1: 220, rects: block(6, 500).rects.map(r => [1, 120, r[2], 220, r[4]]) }
     for (const n of [41, 55, 63, 72, 80, 86, 93]) {
       const a = laid(1, n, [block(5, 500), second])
       await fill([a])
-      // (the reference: every hundredth from the fill's top down to the fit's own leading, the first that sets it whole)
       let want = a.layout.state.lead
-      const top = 2.5
-      for (let L = top; L >= 1 - 1e-9; L = Math.round((L - 0.01) * 1000) / 1000) {
+      for (let L = 2.5; L >= 1 - 1e-9; L = Math.round((L - 0.01) * 1000) / 1000) {
         if (!L2.layoutAt(chars(n) as never, [block(5, 500), second] as never, 10, a.P as never, { ...a.layout.state, track: 0, lead: L, box: true } as never).clipped) { want = L; break }
       }
       expect(a.fillLead, `${n} characters`).toBe(want)
     }
   })
 
-  it("keeps the first line on its baseline where it is shared (a kept label, a run-in heading): the boxes start there, the foot still given", async () => {
-    const PP = P({ halfLead: { head: false, foot: true } })
-    expect(baselines(at(20, 1.5, { PP }))).toEqual([500, 482])
-    // (filled: its first line on the original's first baseline, its last box's foot on the frame's)
-    const a = laid(1, 40, [block()], PP)
-    await fill([a], PP)
-    expect(baselines(a.layout)[0]).toBe(500)
-    expect(a.layout.lines.at(-1)!.baseline - (a.layout.state.lead - 1) * 6).toBeGreaterThanOrEqual(440 - 0.05)
+  it('asks nothing of a last line it shares with ink that stays, nor of a last frame of one line', () => {
+    expect(at(40, 1.66, { PP: P(12, { halfLead: edges(12, { foot: false }) }) }).clipped).toBe(false)
+    const one = at(8, 1.5, { blocks: [block(1)] })
+    expect([baselines(one), one.clipped]).toEqual([[500], false])
   })
 
-  it('asks nothing of a frame of one line, which has no room to give: its line on its baseline at any leading', () => {
-    for (const box of [true, false]) {
-      const one = at(8, 1.5, { box, blocks: [block(1)] })
-      expect([baselines(one), one.clipped]).toEqual([[500], false])
-    }
-  })
-
-  it("gives the edges of a unit alone: a frame it runs on into keeps its first line at the frame's top, its last frame its foot", () => {
-    // (six lines at a column's foot, then six at the next column's top: 80 characters, four and four at 1.5)
+  it("asks it of a unit's last frame alone: a frame it runs on into keeps its lines from its own top to its foot", () => {
+    // (six lines at a column's foot, then six at the next column's top, the next paragraph a pitch under the second: 80
+    // characters, four and four at 1.5; at 1.55 the second frame holds three)
     const blocks = [block(6, 500), { ...block(6, 500), x0: 120, x1: 220, rects: block(6, 500).rects.map(r => [1, 120, r[2], 220, r[4]]) }]
-    for (const box of [true, false]) {
-      const l = at(80, 1.5, { box, blocks })
-      const firstOf = (bi: number) => l.lines.find(x => (x as unknown as { block: number }).block === bi)!.baseline
-      expect([firstOf(0), firstOf(1), Math.round(l.lines.at(-1)!.baseline * 1000) / 1000, l.clipped], `${box}`).toEqual([497, 500, 446, false])
-    }
+    const l = at(80, 1.5, { blocks })
+    const firstOf = (bi: number) => l.lines.find(x => (x as unknown as { block: number }).block === bi)!.baseline
+    expect([firstOf(0), firstOf(1), l.clipped]).toEqual([500, 500, false])
+    expect(at(80, 1.55, { blocks }).clipped).toBe(true)
   })
 
-  it("leaves the alphabets as they were: a leading of 1 or less gives no half-leading, whatever the edges (20 seeds)", () => {
+  it("leaves the alphabets as they were: a leading of 1 or less asks nothing, whatever the room under it (20 seeds)", () => {
     let seed = 777
     const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648 }
     const words = (n: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: 'xxx', cls: 'latin', w100: 150, st: {} }]).flat()
     for (let k = 0; k < 20; k++) {
-      const n = 10 + Math.floor(rnd() * 30), rows = 3 + Math.floor(rnd() * 8), lead = Math.round((0.95 + 0.05 * rnd()) * 100) / 100
+      const n = 10 + Math.floor(rnd() * 30), rows = 3 + Math.floor(rnd() * 8), lead = Math.round((0.95 + 0.05 * rnd()) * 100) / 100, below = 6 + 30 * rnd()
       const de = { ...params('de'), borrow: 0 }
       const lay = (o: object) => { const l = L2.layoutUnit2(words(n) as never, [block(rows)] as never, 10, { ...de, leadBase: lead, ...o } as never); return JSON.stringify([l.lines.map(x => x.baseline), l.scale, l.state]) }
-      expect(lay({ halfLead: both }), `seed ${k}`).toBe(lay({}))
+      expect(lay({ halfLead: edges(below) }), `seed ${k}`).toBe(lay({}))
       const st = { lead, track: 0, trackLatin: 0, compress: 0, borrow: 0, scale: 1, knob: 'none' }
       const boxed = (o: object, box: boolean) => JSON.stringify(L2.layoutAt(words(n) as never, [block(rows)] as never, 10, { ...de, ...o } as never, { ...st, box } as never).lines.map(x => x.baseline))
-      expect(boxed({ halfLead: both }, true), `seed ${k}`).toBe(boxed({}, false))
+      expect(boxed({ halfLead: edges(below) }, true), `seed ${k}`).toBe(boxed({}, false))
     }
   })
 })

@@ -2212,16 +2212,29 @@ export const setHyphenData = (lang, data) => hyphenData.set(lang, data)
 
 /** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows */
 const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 ?? 1.2 * s))
-/** the half-leading each of a unit's two edges asks at a state (lineBoxes): (L - 1) p0 / 2 of its block's pitch, at a leading
- *  past the original's pitch, where P.halfLead names the edge and its block holds room past one line (a frame of one line has
- *  none to give); 0 else */
-function edgesAt(blocks, st, P, s) {
-  const e = P.halfLead
-  if (!e || !(st.lead > 1 + 1e-9) || !blocks.length) return { head: 0, foot: 0 }
-  const half = b => ((st.lead - 1) * (b.pitch0 ?? 1.2 * s)) / 2
-  const room = b => b.B[0] - lowOf(b, st, s) > 0.05
-  const b0 = blocks[0], bl = blocks.at(-1)
-  return { head: e.head && room(b0) ? half(b0) : 0, foot: e.foot && room(bl) ? half(bl) : 0 }
+/**
+ * The gap under a paragraph never tighter than its lines (the half-leading round, 2026-10-17, its second form): the lowest
+ * baseline a unit's last line may take at a state, where the next line of its column in the original keeps its own baseline
+ * (P.halfLead.below: the original's room from the unit's last baseline down to that line; run.mjs edgesOf). A paragraph's
+ * first line stays on the original's first baseline, as TeX set it, whatever is over it (a heading, a figure, a skip, the
+ * page's head): a first line moved under it by half the leading drifted from the original by (L - 1) / 2 of a pitch on 56 %
+ * of the paragraph starts in CJK, 70 % of them with a leading's room over them already (the maintainer's question). So the
+ * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than a leading, L p0, of
+ * either paragraph (its own, `lead`, or the next one's, `next`, the page fill's: run.mjs fillPage), it ends higher by the
+ * deficit, its last baseline no lower than that line's plus L p0 of the larger, its fill spread over a shorter height
+ * (the page fill's states, `box`: slotsAt stops its last frame's slots there, so that the lines a frame holds still fall with
+ * the leading and the fill's search is monotone). Where the original leaves a leading or more (a \parskip of (L - 1) p0, a
+ * heading's room, nothing under it in its column) nothing changes. Null where nothing is asked: at the original's pitch or
+ * closer (the alphabets: nothing moves), a last line it shares with ink that stays (`foot` false: a unit begins on it), a
+ * last frame of one line (no room to give), no line under it
+ */
+function footFloorAt(blocks, st, P, s) {
+  const e = P.halfLead, L = Math.max(st.lead, st.next ?? 0)
+  if (!e?.foot || !(L > 1 + 1e-9) || !blocks.length || !Number.isFinite(e.below)) return null
+  const bl = blocks.at(-1), low = lowOf(bl, st, s)
+  if (!(bl.B[0] - low > 0.05)) return null
+  const floor = bl.B.at(-1) - e.below + L * (bl.pitch0 ?? 1.2 * s)
+  return floor > low + 1e-9 ? floor : null
 }
 
 /** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
@@ -2230,15 +2243,13 @@ function edgesAt(blocks, st, P, s) {
  *  script's lines now stay on the original's baselines while the size shrinks, as CJK's did) */
 function slotsAt(blocks, st, P, s) {
   const out = []
-  // (a state laid as line boxes, the page fill's (`box`): the unit's first slot its half-leading under its frame's first
-  // baseline, its last frame's foot its half-leading over the original's, so that what the edges keep is never laid over and
-  // the lines a frame holds fall with the leading, as without them: lineBoxes)
-  const edge = st.box ? edgesAt(blocks, st, P, s) : null
   // (each block's foot, the lowest a line of it is laid at: its last baseline less what it borrows; a line TeX's rule moves
   // down may go on past it into the next block of its flow where blocks2 found nothing kept between them, `through`, to
-  // the foot of the last block it so runs into, `foot`)
+  // the foot of the last block it so runs into, `foot`; the page fill's states (`box`) the unit's last frame's no lower than
+  // a leading over the next line of its column, footFloorAt)
   const lows = blocks.map(b => lowOf(b, st, s))
-  if (edge?.foot) lows[lows.length - 1] += edge.foot
+  const floor = st.box ? footFloorAt(blocks, st, P, s) : null
+  if (floor !== null) lows[lows.length - 1] = floor
   const feet = lows.slice()
   for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi].through) feet[bi] = feet[bi + 1]
   for (const [bi, b] of blocks.entries()) {
@@ -2249,7 +2260,7 @@ function slotsAt(blocks, st, P, s) {
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own)
     const G = b.G ?? b.B
     for (let k = 0; k < 400; k++) {
-      let y = onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - (bi === 0 ? edge?.head ?? 0 : 0) - k * pitch
+      let y = onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
       if (y < low - 0.05) break
@@ -2678,52 +2689,15 @@ export function layoutUnit2(tokens, blocks, s, P) {
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }
-  return laidOut(last, blocks, s, P, tried)
-}
-
-/**
- * The unit's lines as line boxes (the half-leading rule, 2026-10-17): a line set at a leading L of its frame's pitch p0 takes
- * L p0 of room, half of its leading, (L - 1) p0 / 2, over the original's line and half under it (CSS's half-leading, the
- * content box the original line's own). A frame of n lines is n boxes of p0, so k lines fit it with their leading where
- * k L <= n, and the boxes of two paragraphs one above the other meet: their baselines L p0 apart, plus whatever room the
- * original sets between them past its pitch (a \parskip). Laid from the frame's first baseline to its foot instead, a
- * paragraph spread at 1.4 pitches stood a pitch from the next: the gap between paragraphs narrower than the lines inside
- * them (1512.03385 page 12 in Chinese, the maintainer's report). At L = 1 a box is the original's line, and so below it (a
- * leading closer than the original's, the alphabets' floor): nothing moves.
- * Only a unit's two edges take it, its first line (its first block's first baseline) and its last (its last block's foot):
- * where it runs on into another frame (a column's or a page's foot and head, a display inside it) nothing meets another
- * paragraph, and its lines stay on the frame's own top and foot, as TeX keeps a page's first baseline whatever its
- * leading. An edge a line shares with ink that stays where it is (a label kept as the original's, a run-in heading,
- * another unit's line: P.halfLead's `head` or `foot` false, run.mjs edgesOf) keeps its baseline, and a frame of one line
- * holds no room to give (edgesAt).
- * The page fill lays its states as boxes (`box`, slotsAt: what the edges keep is no slot, so that a frame holds fewer lines
- * as the leading grows, the fill's search monotone as before). A fit's own layout keeps its slots, which the boxes would
- * cost a line where its text fills them, and its lines are moved here: the first block's down by the head's half-leading
- * where the room under its lowest line holds it, that room shared with the foot's where the two edges are one block's;
- * else as far as the room goes, the two halves in proportion (a unit spread over its frame by its fit alone stands centred
- * in it). Mutates the lines
- */
-function lineBoxes(lines, blocks, st, P, s) {
-  if (st.box || !lines.length) return
-  const { head, foot } = edgesAt(blocks, st, P, s)
-  const first = lines[0], last = lines.at(-1)
-  if (!(head > 0) || first.block !== 0 || Math.abs(first.baseline - blocks[0].B[0]) >= 0.05) return
-  // (the room under the first block's lowest line; the foot's half too where the unit's last line is in its last block)
-  let low = Infinity
-  for (const l of lines) if (l.block === 0) low = Math.min(low, l.baseline)
-  const room = low - lowOf(blocks[0], st, s), need = head + (last.block === 0 && blocks.length === 1 ? foot : 0)
-  const o = room >= need - 0.05 ? head : Math.max(0, room) * (head / need)
-  if (o > 0) for (const l of lines) if (l.block === 0) l.baseline -= o
+  return laidOut(last, s, P, tried)
 }
 
 /** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted; the lines TeX's rule
  *  opened (`opened`), and with no values for it (P.lineskip none) the lines that come nearer the one before them in their
- *  block than nothing, its foot over their top, and stay so (`unopened`: what the rule would have opened); a fit's lines
- *  moved into their line boxes (lineBoxes) */
-function laidOut({ r, st, f }, blocks, s, P, tried) {
+ *  block than nothing, its foot over their top, and stay so (`unopened`: what the rule would have opened) */
+function laidOut({ r, st, f }, s, P, tried) {
   const clipped = r.rest < r.total
   P._compress = st.compress
-  lineBoxes(r.lines, blocks, st, P, s)
   placeItems(r.lines, f, P)
   const count = t => (t.s ? [...t.s].length : t.crop ? 1 : 0)
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)
@@ -2743,7 +2717,7 @@ function laidOut({ r, st, f }, blocks, s, P, tried) {
  */
 export function layoutAt(tokens, blocks, s, P, st) {
   const f = s * st.scale
-  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, blocks, s, P, 1)
+  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1)
 }
 
 // ---- drawing: the layer as data (erasing, restoring, crops), drawn on a copy of the page at any resolution; the SVG text

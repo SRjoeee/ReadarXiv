@@ -190,17 +190,51 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   const told = pageTarget(units, continuing, band)
   if (!told || told.target === null) return told
   const { target } = told
+  // (each unit's leading as the pass lays it, its fill leading under the band over the target; and the next paragraph's: the
+  // unit begun on the page whose first line is the next line of its column, P.halfLead's `below` under its last baseline. The
+  // gap between two paragraphs is held to the leading of both, the lower one's first line kept on its baseline, so the upper
+  // one ends a leading of the larger over it (layer2.mjs footFloorAt, `next`). Read from the units begun on the page alone,
+  // whose leadings are fixed before any is laid: no laying order is read)
+  const leadOf = p => Math.min(p.fillLead, r3(target + band))
+  const spanOf = b => [Math.min(...b.rects.map(r => r[1])), Math.max(...b.rects.map(r => r[3]))]
+  const nextOf = p => {
+    const e = p.P?.halfLead, bl = p.blocks?.at(-1)
+    if (!e?.foot || !Number.isFinite(e.below) || !bl) return null
+    const y = bl.B.at(-1) - e.below, [x0, x1] = spanOf(bl)
+    let best = null, most = 0
+    for (const q of units) {
+      const b0 = q.blocks?.[0]
+      if (q === p || typeof q.fillLead !== 'number' || !b0 || b0.page !== bl.page || Math.abs(b0.B[0] - y) > 0.3 * (b0.sizes[0] ?? p.s)) continue
+      const [a0, a1] = spanOf(b0), over = Math.min(x1, a1) - Math.max(x0, a0)
+      if (over > most && over > 0.5 * Math.min(x1 - x0, a1 - a0)) { most = over; best = q }
+    }
+    return best ? leadOf(best) : null
+  }
   const filled = []
   for (const p of units) {
     if (p.fillLead === null) continue
-    // (laid as line boxes, each of its edges its half-leading kept: layer2.mjs lineBoxes; its tracking and the page's size
-    // with them, so that neither takes back the room its leading gave)
-    let st = { ...p.layout.state, box: true, lead: Math.min(p.fillLead, r3(target + band)) }
-    let l = at(p, st)
+    // (laid with its last line no lower than a leading over the next line of its column, its own or the next paragraph's,
+    // the larger, layer2.mjs footFloorAt; its tracking and the page's size with it, so that neither takes back the room its
+    // leading gave)
+    const lead = leadOf(p), next = nextOf(p)
+    let st = { ...p.layout.state, box: true, lead, ...(next > lead + 1e-9 ? { next } : {}) }
+    let l = at(p, st), closer = false
+    if (!l && st.next) {
+      // (its leading leaves the gap under it tighter than the next paragraph's lines: the loosest closer one that sets it,
+      // by halving, down to the original's pitch)
+      const K = Math.ceil((lead - 1) / 0.01 - 1e-9), L = k => (k >= K ? 1 : r3(lead - k * 0.01))
+      if (K > 0 && at(p, { ...st, lead: L(K) })) {
+        let no = 0, ok = K
+        while (ok - no > 1) { const k = (ok + no) >> 1; if (at(p, { ...st, lead: L(k) })) ok = k; else no = k }
+        st = { ...st, lead: L(ok) }
+        l = at(p, st)
+        closer = true
+      }
+    }
     if (!l) continue
     // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
-    // page's size
-    const short = p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillTop - 1e-9
+    // page's size (not one the next paragraph's gap set closer: it is spread to its floor)
+    const short = !closer && (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillTop - 1e-9)
     let full = !short
     if (short && P.cjk) {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
@@ -243,10 +277,10 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
 /**
  * A unit's fill leading (fillPage's) and its top, read from its fit alone: `fillTop`, the loosest leading P.fillLead allows
  * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null); `fillLead`, the
- * loosest leading from its fitted one up to the top at which its fitted state still sets it whole with its lines as line
- * boxes (layer2.mjs lineBoxes: k lines in a frame of n where k L <= n, so its last box's foot, not its last baseline, on its
- * frame's); where its fitted one leaves its edges no room for their half-leading, the loosest closer one, down to the
- * original's pitch (null where that state does not set it again). Set on the unit as it is laid (afterLay), so that the fill leading a page's pass reads of a unit
+ * loosest leading from its fitted one up to the top at which its fitted state still sets it whole as the page fill lays it
+ * (its last line no lower than a leading over the next line of its column, layer2.mjs footFloorAt: its last baseline on its
+ * frame's last but where that would leave the gap under it tighter than its lines); where its fitted one does not, the
+ * loosest closer one, down to the original's pitch (null where that state does not set it again). Set on the unit as it is laid (afterLay), so that the fill leading a page's pass reads of a unit
  * running on to it from a page before no longer depends on whether that page's pass has run (the 1b design, §2.1 C1). Not
  * yet the rest of the pass's reads: its line count, read live (after its first page's fill), and the targets the page is
  * held to (`held`, through every page passed before) are S3's, 1b-C's
@@ -267,7 +301,7 @@ function fillLeadsOf(p, P) {
   p.fitLines = p.layout.lines.length
   const st = p.layout.state
   if (!at(p, st)) { p.fillLead = null; return }
-  // (its lines as line boxes, each edge its half-leading kept: layer2.mjs lineBoxes, the page fill's states)
+  // (as the page fill lays it, its last line no lower than a leading over the next line of its column: layer2.mjs footFloorAt)
   const lo = st.lead, bx = { ...st, box: true }
   if (at(p, bx)) {
     const hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
@@ -276,9 +310,9 @@ function fillLeadsOf(p, P) {
     p.fillLead = ok ? L(ok) : lo
     return
   }
-  // (its fitted leading leaves its edges no room for their half-leading, the fit having set its lines to its frame's foot:
-  // the loosest closer one that does, down to the original's pitch, where a line's box is the original line's. Where even
-  // that does not set it, its fitted one)
+  // (its fitted leading leaves the gap under it tighter than its lines, the fit having set its last line to its frame's foot:
+  // the loosest closer one that does not, down to the original's pitch, which asks nothing. Where even that does not set it,
+  // its fitted one)
   const floor = Math.max(1, P.leadFloor ?? 1), K = Math.ceil((lo - floor) / 0.01 - 1e-9), L = k => (k >= K ? floor : r3(lo - k * 0.01))
   if (!(K > 0) || !at(p, { ...bx, lead: L(K) })) { p.fillLead = lo; return }
   let no = 0, ok = K
@@ -1209,21 +1243,34 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (half > (r[3] - r[1]) / 2) { b.x0 = mid - half; b.x1 = mid + half }
     } else if (right > b.x1) b.x1 = right
   }
-  /** whether the unit's first and last lines take their half-leading (layer2.mjs lineBoxes, P.halfLead): not one that shares
-   *  its baseline with ink that stays where it is, a label kept as the original's or a character of the page beside the
-   *  line's own in its column (a run-in heading, another unit that ends or begins on it, a mark set before it), which would
-   *  stand off the line moved; nor a table cell's lines, which keep their own rules (cellBands). Read from the page's
-   *  characters on the line's baseline within the span of its frame's own lines (not columnOf's, which is the page's text
-   *  area where v0's geometry holds no paragraph there, and took the other column's line on the same baseline for one beside
-   *  it: 1512.03385 page 12) */
+  /** the unit's edges (P.halfLead; layer2.mjs footFloorAt): whether its first and last lines share their baseline with ink
+   *  that stays where it is, a label kept as the original's or a character of the page beside the line's own in its column (a
+   *  run-in heading, another unit that ends or begins on it, a mark set before it: `head`, `foot` false), which would stand
+   *  off the line moved (the page fill moves no first line; a last line it may raise, footFloorAt); and the original's room
+   *  from its last baseline down to the next line of its column (`below`: the median baseline of the highest characters
+   *  under it, a superscript's aside; Infinity where none is), which the page fill keeps its last line a leading over. None
+   *  for a table cell, whose lines keep their own rules (cellBands). Read from the page's characters, within the span of its
+   *  frame's own lines (not columnOf's, which is the page's text area where v0's geometry holds no paragraph there, and took
+   *  the other column's line on the same baseline for one beside it: 1512.03385 page 12) */
   const edgesOf = (p, prep) => {
     if (p.unit.kind === 'cell' || !p.blocks.length) return null
+    const spanOf = b => [Math.min(...b.rects.map(q => q[1])), Math.max(...b.rects.map(q => q[3]))]
     const alone = (b, r, yb, size) => {
-      const cx0 = Math.min(...b.rects.map(q => q[1])), cx1 = Math.max(...b.rects.map(q => q[3]))
+      const [cx0, cx1] = spanOf(b)
       return !(chars2[b.page - 1] ?? []).some(c => /\S/.test(c.ch) && Math.abs(c.yb - yb) < 0.4 * size && c.x1 > cx0 && c.x0 < cx1 && (c.x1 < r[1] - 0.5 || c.x0 > r[3] + 0.5))
     }
+    // (the next line under its last: its column's characters under it by more than three quarters of its pitch, the line's own
+    // scripts and stacked formulas aside; of the highest of them, those within half an em, their median baseline)
+    const below = b => {
+      const [cx0, cx1] = spanOf(b), yb = b.B.at(-1), p0 = b.pitch0 ?? 1.2 * (b.sizes.at(-1) ?? 10)
+      const under = (chars2[b.page - 1] ?? []).filter(c => /\S/.test(c.ch) && c.yb < yb - 0.75 * p0 && c.x1 > cx0 && c.x0 < cx1)
+      if (!under.length) return Infinity
+      const top = Math.max(...under.map(c => c.yb))
+      const line = under.filter(c => c.yb > top - 0.5 * c.size).map(c => c.yb).sort((x, y) => x - y)
+      return yb - line[(line.length - 1) >> 1]
+    }
     const b0 = p.blocks[0], bl = p.blocks.at(-1)
-    return { head: !(prep.label && !prep.label.drawn) && alone(b0, b0.rects[0], b0.B[0], b0.sizes[0]), foot: alone(bl, bl.rects.at(-1), bl.B.at(-1), bl.sizes.at(-1)) }
+    return { head: !(prep.label && !prep.label.drawn) && alone(b0, b0.rects[0], b0.B[0], b0.sizes[0]), foot: alone(bl, bl.rects.at(-1), bl.B.at(-1), bl.sizes.at(-1)), below: below(bl) }
   }
   /** a CJK table cell's bands between the rules near its lines (layer2.mjs cellBands: the manifest's rules), or null; a
    *  script no taller than Latin is not held, nor a paragraph, whose lines stand by a rule only by chance */
