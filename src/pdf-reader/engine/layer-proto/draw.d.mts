@@ -24,7 +24,7 @@ export declare function checkDraw(v: unknown, path?: string): Draw
 /** a draw built from PDF.js's shapes, checked; null for any reason the reader would refuse it and for text past DRAW_BYTES (the writer sheds) */
 export declare function wireOf(draw: DrawSource | Draw | null | undefined): Draw | null
 /** wireOf's draw and its JSON (what a left part holds of it: format.mjs writeLeftPart `drawText`), or null */
-export declare function wireText(draw: DrawSource | Draw | null | undefined): { draw: Draw; text: string } | null
+export declare function wireText(draw: DrawSource | Draw | null | undefined, o?: { plainItems?: boolean }): { draw: Draw; text: string } | null
 /** a font row's key by its content, in a namespace of its own */
 export declare function drawFontKey(row: DrawFont): string
 /** the layer's inputs back from a checked draw */

@@ -127,13 +127,15 @@ export function wireOf(draw) {
 }
 
 const encoder = new TextEncoder()
-/** wireOf's draw and its JSON (`text`, what a left part holds of it: format.mjs writeLeftPart `drawText`), or null */
-export function wireText(draw) {
+/** wireOf's draw and its JSON (`text`, what a left part holds of it: format.mjs writeLeftPart `drawText`), or null. `plainItems`:
+ *  the items are rows as the data holds them already (plain arrays, -0 written 0: pipeline/draw-data.mjs drawTextOf's), checked
+ *  but not copied */
+export function wireText(draw, { plainItems = false } = {}) {
   try {
     if (draw === null || draw === undefined) return null
     const out = {
       fonts: draw.fonts.map(f => [f[0] ?? null, f[1] ?? null, f[2], f[3] == null ? null : Array.from(f[3])]),
-      items: draw.items.map(it => [it[0], clean(it[1]), clean(it[2]), clean(it[3]), clean(it[4]), clean(it[5]), clean(it[6]), clean(it[7]), it[8]]),
+      items: plainItems ? draw.items : draw.items.map(it => [it[0], clean(it[1]), clean(it[2]), clean(it[3]), clean(it[4]), clean(it[5]), clean(it[6]), clean(it[7]), it[8]]),
       links: draw.links.map(l => {
         const quads = list(l[1])
         return [list(l[0]).map(clean), quads && quads.length > 0 && quads.length % 8 === 0 ? quads.map(clean) : null, l[2] ?? null, destOf(l[3]), l[4] ?? null, l[5] == null ? null : clean(l[5]), l[6] ?? null, list(l[7])]
