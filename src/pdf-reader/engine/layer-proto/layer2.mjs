@@ -2466,6 +2466,13 @@ function footFloorAt(blocks, st, P, s) {
 /** footFloorAt for the page fill's guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
 export const footFloorOf = (blocks, st, P, s) => footFloorAt(blocks, st, P, s)
 
+/** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent (TeX's
+ *  \abovedisplayshortskip, nothing but stretch, sets one that near; its \abovedisplayskip does not) */
+export const SHORT_SKIP = 0.3
+/** of a line's size: how far before a display TeX's short skip asks the line over it to end (\predisplaysize, the line's
+ *  width and 2 em) */
+export const PREDISPLAY = 2
+
 /** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
  *  the original's times the leading, whatever the size (D6's F6a, 2026-10-08: a Latin line shrunk with its size sat on none
  *  of the original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it; every
@@ -2502,9 +2509,16 @@ function slotsAt(blocks, st, P, s) {
       const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && k < G.length ? k : -1) : [b.x0, b.x1]
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
       const x0 = bi === 0 && k === 0 && b.start !== undefined ? b.start : bi === 0 && k === 0 && !b.centred ? b.x0 + b.indent : mx0
+      // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
+      // that ends 2 em before it), whose top stands under its baseline in reach of its descent: it ends 2 em before the display,
+      // as TeX's own test asks of the line before a display set so, and what no longer fits is the fit's. 2608.16117 page 23,
+      // unit 76: German's last line ran on over the matrix TeX set 1.1 pt under its short line)
+      const em = s * st.scale
+      let x1 = mx1
+      for (const d of b.shortSkips ?? []) if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0)) x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
-      if (mx1 - x0 < 1.5 * s * st.scale) continue
-      out.push({ block: bi, page: b.page, x0, x1: mx1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
+      if (x1 - x0 < 1.5 * s * st.scale) continue
+      out.push({ block: bi, page: b.page, x0, x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
     }
   }
   return out
