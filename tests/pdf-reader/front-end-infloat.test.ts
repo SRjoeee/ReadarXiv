@@ -130,7 +130,7 @@ describe('inFloat: the indices of the units written inside a float', () => {
 
 // ---------------------------------------------------------------- the thesis (AXT_LAB): the units rule 5's bound tripped on
 describe.skipIf(!LAB)('inFloat on 2307.16209 (the thesis): a figure\'s note is in its float, the text after it is not', () => {
-  it('units 165 and 167, 176 and 177', async ({ skip }) => {
+  it('units 166 and 168, 177 and 178', async ({ skip }) => {
     const file = join(LAB as string, 'data/layout/2307.16209v1/source.gz')
     if (!existsSync(file)) skip()
     const source = await unpackSource(new Uint8Array(readFileSync(file)))
@@ -139,10 +139,11 @@ describe.skipIf(!LAB)('inFloat on 2307.16209 (the thesis): a figure\'s note is i
     const units = paper.units as unknown as Unit[]
     const at = (i: number) => [textOf(units[i] as Unit).slice(0, 40), floats.has(i)]
     // a figure's notes, each a paragraph of its own after its caption, and the text after them: TeX set the float with its note
-    // on p52, after the text that follows it in the source (u167, on p51)
-    expect(at(165)).toEqual([expect.stringMatching(/^Produced by the author/), true])
-    expect(at(167)).toEqual([expect.stringMatching(/^Now we want to investigate/), false])
-    expect(at(176)).toEqual([expect.stringMatching(/^Adapted from/), true])
-    expect(at(177)).toEqual([expect.stringMatching(/^Now, let us focus/), false])
+    // on p52, after the text that follows it in the source (u168, on p51; one more each since \texorpdfstring's headings are
+    // units, PIPELINE_VERSION 13)
+    expect(at(166)).toEqual([expect.stringMatching(/^Produced by the author/), true])
+    expect(at(168)).toEqual([expect.stringMatching(/^Now we want to investigate/), false])
+    expect(at(177)).toEqual([expect.stringMatching(/^Adapted from/), true])
+    expect(at(178)).toEqual([expect.stringMatching(/^Now, let us focus/), false])
   })
 })
