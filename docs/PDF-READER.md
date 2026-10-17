@@ -391,9 +391,9 @@ No state that tells the reader nothing is shown (no "done").
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
 | Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
-| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 PDF 对照 said to screen readers (S-R-23, draft) |
+| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 PDF 对照 said to screen readers (S-R-23) |
 | Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
-| Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24, draft); passing, not remembered; a paper whose files this machine keeps opens without it |
+| Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
 | Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
@@ -766,9 +766,9 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
 - **Real links in reading order.** One `<a href>` a record, in the record's `order`: a page's links are reached by Tab after
   the pages before it, Enter follows one, and a screen reader names it by its record's `name`, the text drawn under it, set
   as an attribute's text (a name is the PDF's text and may hold control or bidirectional characters: never markup). A link
-  with no glyph under it (an image, a symbol) is named by the host's `ViewWords.linkName`, else by a placeholder until the
-  owner's words (drafted for the owner, not yet in the repository). A record the view cannot
-  carry (no box of area, neither or both targets, an address off the allow-list) is left out.
+  with no glyph under it (an image, a symbol) is named by the host's `ViewWords.linkName`, else by the view's placeholder:
+  the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/ui/link-names.ts`). A record the view
+  cannot carry (no box of area, neither or both targets, an address off the allow-list) is left out.
 - **Placed by shares.** The anchor spans the union of its boxes and each box is a span of it, every size a share of the
   page's box (or the link's) made once from the place's viewport (its rotation, its box's origin): the place's own size
   scales them at any zoom, nothing is read from the layout and nothing runs on a frame. The anchor takes no pointer, its

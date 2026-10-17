@@ -17,8 +17,8 @@
 // followed by the view (`follow`: resolved on the left's document and jumped to on the pane clicked).
 import { urlAllowed } from '../layer-proto/links.mjs'
 
-/** the words a link with no glyph under it is named by (an image, a symbol: the engine's '' name), until a host gives its
- *  own (ViewWords.linkName): a placeholder, the owner's words pending (PDF-READER §11.9) */
+/** the words a link with no glyph under it is named by (an image, a symbol: the engine's '' name) where its host gives none
+ *  of its own (ViewWords.linkName: the extension's are its packs', UI.md S-R-25) */
 export const LINK_NAME_PLACEHOLDER = Object.freeze({ internal: 'Link', external: 'Link' })
 /** the boxes a record may hold, the characters of its name and of a named destination at most (more is no link a page has) */
 export const BOXES_MAX = 64

@@ -25,6 +25,7 @@ import { READER_API, readerAddresses } from '../addresses'
 import { fromView, type Session } from '../controller'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, pdfjsLib } from '../pdfjs'
 import { displayOf, firstConfig, followOf, withDisplay } from '../settings'
+import { linkNameOf } from '../ui/link-names'
 import { shownAgain, whenVisible } from '../visible'
 import type { EngineDisplay, SessionHost, SyncMode } from './events'
 import { abstractPage, ownVersion } from './paper'
@@ -114,7 +115,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
   const view: ReaderView = (io.view ?? createReaderView)({
     panes: { left: host.left, right: host.right },
     pdfjs: { lib: pdfjsLib, viewer: { EventBus, PDFViewer, PDFPageView, PDFLinkService, LinkTarget }, assets: ASSETS },
-    words: { pageName: (side, n) => R.pageName(side === 'left' ? 'original' : 'translation', n), sideName: side => R.display[side === 'left' ? 'original' : 'translation'] },
+    words: { pageName: (side, n) => R.pageName(side === 'left' ? 'original' : 'translation', n), sideName: side => R.display[side === 'left' ? 'original' : 'translation'], linkName: linkNameOf },
     prefs: { get: () => prefsOf(config, !!dark?.matches), subscribe: l => { lookers.add(l); return () => { lookers.delete(l) } } },
     links: { openExternal: url => { if (outward(url)) globalThis.open(url, '_blank', 'noopener,noreferrer') } },
     titleFallback: async () => (await abstract()).title,

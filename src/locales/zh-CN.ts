@@ -391,11 +391,14 @@ const R = {
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
   fold: { expand: '展开', collapse: '收起' }, // S-R-02a: the contents' folds, in their tooltips
+  // S-R-25 (the owner's words, 2026-10-17): a layer's link with no text under it, named by where it goes and said to screen
+  // readers; `site` is the address's host, `address` the mail address
+  linkName: { internal: '本文中的其他位置', site: (site: string) => `打开 ${site}`, email: (address: string) => `发邮件给 ${address}`, fallback: '链接' },
   pageName: (side: 'original' | 'translation', n: number): string => `${R.display[side]} · 第 ${n} 页`, // S-R-11a: a page's name, said to screen readers; the number is a parameter, which a language places as it does its own numbers
   status: {
     loading: '正在加载', // S-R-12
     translating: '正在翻译',
-    preparing: '正在准备 PDF 对照', // S-R-23 (draft, the owner's copy pending): said to screen readers while the paper's layer is prepared; the progress line shows it
+    preparing: '正在准备 PDF 对照', // S-R-23 (the owner's words, 2026-10-17): said to screen readers while the paper's layer is prepared; the progress line shows it
     close: '关闭', // S-R-15: a notice's close button
     unsupported: (language: string) => `PDF 对照暂不支持${spacedAfterChinese(language)}`, // S-R-13: the language's own name, spaced from the Chinese unless it is Han, kana or hangul (§1 rule 9)
     chooseLanguage: '选择语言',
@@ -403,7 +406,7 @@ const R = {
     rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
     noPdf: '这篇论文暂不支持 PDF 翻译', // S-R-17: no source, or nothing typeset (the maintainer, 2026-09-26)
     useHtml: '改用 HTML 翻译', // S-R-18: the capsule's action, where the paper has an HTML version
-    notNow: 'PDF 对照暂时无法加载', // S-R-24 (draft, the owner's copy pending): our server out of reach or at its limit; the original stays, with a retry and the HTML version
+    notNow: 'PDF 对照暂时无法加载', // S-R-24 (the owner's words, 2026-10-17): our server out of reach or at its limit; the original stays, with a retry and the HTML version
     noPaper: '找不到这篇论文', // S-R-20: an address that names no paper
     goToArxiv: '前往 arXiv', // S-R-20's action
     unreadable: '设置读取失败，当前使用默认设置', // S-R-21: the note while the settings cannot be read, as S-O-02 words it
