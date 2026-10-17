@@ -249,6 +249,8 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
         else wantTranslation()
       })
     },
-    pdfBytes: async which => (which === 'original' ? ((await view.originalData()) ?? null) : null),
+    // (the translation's file is Task 20's)
+    pdfBytes: async () => null,
+    openOriginal: () => { if (paper) globalThis.open(addresses.pdf, '_blank', 'noopener') },
   }
 }

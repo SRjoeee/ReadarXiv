@@ -204,8 +204,11 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
    深色时调暗页面 (switch). All are settings (§9.1), the same values the popup and the settings page change; a change
    applies at once.
 5. 下载 (`download`), a menu of two items, text only: 译文 PDF, 原文 PDF (the maintainer: 「只要译文 PDF / 原文 PDF」).
-   Files are named `<id>.pdf` and `<id>.<target>.pdf`. Free. 译文 PDF is the final translation: while the translation is
-   still coming in (previews), the item is greyed.
+   The translation's file is named `<id>.<target>.pdf`. Free. 译文 PDF is the final translation: while the translation is
+   still coming in (previews), the item is greyed. 原文 PDF opens arXiv's own PDF in a tab of its own, with no opener: the
+   browser streams it and its viewer saves it (`<id>.pdf` as arXiv names it). The reader never reads the whole original to
+   save it: that is 46 MB through the page for every reader, in case one asks (ruled 2026-10-17, for the web too); a
+   true download from the reader would need the `downloads` permission, a store-listing item not taken.
 6. 设置 (`settings`): opens the settings page at its PDF reader section.
 7. 在默认查看器中打开 (`log-out`): leaves the reader for the browser's own viewer (the maintainer's wording, 2026-09-25).
 

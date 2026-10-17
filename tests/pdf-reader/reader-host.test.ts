@@ -137,6 +137,16 @@ describe('the run, once a translated display is shown (what is not seen takes no
     expect(a.events.filter(e => e.type === 'html')).toHaveLength(4)
   })
 
+  it('the original\'s download opens arXiv\'s PDF in a tab of its own, with no opener: the browser streams and saves it, the reader reads none of it', async () => {
+    const opened_ = vi.fn(() => null)
+    vi.stubGlobal('open', opened_)
+    const a = await opened('paper=2600.00001v1')
+    a.session.openOriginal()
+    expect(opened_).toHaveBeenCalledWith('https://arxiv.org/pdf/2600.00001v1', '_blank', 'noopener')
+    expect(a.view.originalData).not.toHaveBeenCalled()
+    expect(await a.session.pdfBytes('translation')).toBeNull()
+  })
+
   it('asks the prepare once a visit, whatever the runs', async () => {
     const a = await opened()
     await flush()

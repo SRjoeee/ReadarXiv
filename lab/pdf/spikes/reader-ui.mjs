@@ -219,8 +219,10 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   check('the language menu searches as it is typed', (await page.getByRole('option').count()) === 1)
   await page.keyboard.press('Escape')
   check('Escape closes it, the focus back on its button', await page.evaluate(() => !!(a => a && (a.getAttribute('aria-labelledby')?.split(' ').map(i => document.getElementById(i)?.textContent).join(' ') ?? a.getAttribute('aria-label')))(document.activeElement)?.includes('目标语言')))
-  const [download] = await Promise.all([page.waitForEvent('download'), (async () => { await page.getByRole('button', { name: '下载' }).click(); await page.getByRole('menuitem', { name: '原文 PDF' }).click() })()])
-  check('the original downloads, named by the paper', download.suggestedFilename() === `${paper}.pdf`, download.suggestedFilename())
+  // the original is arXiv's own PDF, opened by the browser in a tab of its own (its viewer saves it): nothing read here
+  const [tab] = await Promise.all([context.waitForEvent('page', { timeout: 10_000 }).catch(() => null), (async () => { await page.getByRole('button', { name: '下载' }).click(); await page.getByRole('menuitem', { name: '原文 PDF' }).click() })()])
+  check('the original opens as arXiv\'s own PDF in a tab of its own, with no opener', !!tab && /^https:\/\/arxiv\.org\/pdf\//.test(tab.url()) && (await tab.evaluate(() => window.opener === null).catch(() => null)) === true, tab?.url() ?? 'no tab')
+  await tab?.close()
   await page.getByRole('button', { name: '翻译服务' }).click()
   await page.waitForTimeout(300) // past the popover's 150 ms entrance
   await shot(page, '19-service-menu')

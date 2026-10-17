@@ -199,10 +199,19 @@ describe('reduce: the settings and what the reader holds', () => {
   })
 })
 
-const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null), goToUnit: vi.fn(), lead: vi.fn(), retry: vi.fn(), setNarrow: vi.fn(), pinch: vi.fn() })
+const fakeSession = (): Session => ({ setDisplay: vi.fn(), setSyncMode: vi.fn(), setFigures: vi.fn(), zoomBy: vi.fn(), zoomTo: vi.fn(), goToPage: vi.fn(), patchSettings: vi.fn(), pdfBytes: vi.fn(async () => null), openOriginal: vi.fn(), goToUnit: vi.fn(), lead: vi.fn(), retry: vi.fn(), setNarrow: vi.fn(), pinch: vi.fn() })
 const panes = () => ({ left: document.createElement('div'), right: document.createElement('div') })
 
 describe('createController', () => {
+  it('the original\'s download is arXiv\'s own PDF opened by the browser: no byte of it read through the reader', async () => {
+    const session = fakeSession()
+    const controller = createController({ open: async () => session, params: new URLSearchParams('paper=2600.00001v1') })
+    await controller.attach(panes())
+    await controller.download('original')
+    expect(session.openOriginal).toHaveBeenCalledOnce()
+    expect(session.pdfBytes).not.toHaveBeenCalled()
+  })
+
   it('a session that could not open: the failure card, and its retry loads the page again rather than doing nothing (Codex on #301)', async () => {
     const reload = vi.spyOn(location, 'reload').mockImplementation(() => undefined)
     const controller = createController({ open: async () => { throw new Error('the session module did not load') }, params: new URLSearchParams() })

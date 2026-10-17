@@ -123,7 +123,11 @@ export interface Session {
   zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
   goToPage(side: Side, page: number): void
   patchSettings(change: (latest: Config) => Config): void
-  pdfBytes(which: 'translation' | 'original'): Promise<Uint8Array | null>
+  /** the translation's bytes, to save (Task 20 fills it); null while there are none */
+  pdfBytes(which: 'translation'): Promise<Uint8Array | null>
+  /** arXiv's own PDF of the paper opened by the browser, in a tab of its own: the browser streams it and saves it. Never read
+   *  through the reader (the whole file, for every reader, in case one asks to save it) */
+  openOriginal(): void
   goToUnit(id: number): void
   lead(which: Side): void
   retry(): void
@@ -384,6 +388,8 @@ export function createController({ open, params, reading }: { open: (host: Sessi
     },
     async download(which) {
       const s = await session
+      // the original: arXiv's, the browser's own download, nothing of it read here
+      if (which === 'original') { s?.openOriginal(); return }
       const bytes = await s?.pdfBytes(which)
       if (!bytes) return
       const lang = state.settings ? toBcp47(state.settings.targetLanguage) : ''
