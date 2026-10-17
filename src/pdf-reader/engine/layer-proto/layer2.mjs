@@ -2431,6 +2431,38 @@ export function freeBelow(map, toDev, k, x0, x1, yStart, yLimit) {
 const hyphenData = new Map()
 export const setHyphenData = (lang, data) => hyphenData.set(lang, data)
 
+/** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows */
+const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 ?? 1.2 * s))
+/**
+ * The gap under a paragraph never tighter than its lines (the half-leading round, 2026-10-17, its second form): the lowest
+ * baseline a unit's last line may take at a state, where the next line of its column in the original keeps its own baseline
+ * (P.halfLead.below: the original's room from the unit's last baseline down to that line; run.mjs edgesOf). A paragraph's
+ * first line stays on the original's first baseline, as TeX set it, whatever is over it (a heading, a figure, a skip, the
+ * page's head): a first line moved under it by half the leading drifted from the original by (L - 1) / 2 of a pitch on 56 %
+ * of the paragraph starts in CJK, 70 % of them with a leading's room over them already (the maintainer's question). So the
+ * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than a leading, L p0, of
+ * either paragraph (its own, `lead`, or the next one's, `next`, the page fill's: run.mjs fillPage) and the original's own
+ * skip there past its pitch, it ends higher by the deficit, its last baseline no lower than that line's plus L p0 of the
+ * larger and the skip, its fill spread over a shorter height
+ * (the page fill's states, `box`: slotsAt stops its last frame's slots there, so that the lines a frame holds still fall with
+ * the leading and the fill's search is monotone). Where the original leaves that much or more (a heading's room, nothing under
+ * it in its column) nothing changes. Null where nothing is asked: at the original's pitch or
+ * closer (the alphabets: nothing moves), a last line it shares with ink that stays (`foot` false: a unit begins on it), a
+ * last frame of one line (no room to give), no line under it
+ */
+function footFloorAt(blocks, st, P, s) {
+  const e = P.halfLead, L = Math.max(st.lead, st.next ?? 0)
+  if (!e?.foot || !(L > 1 + 1e-9) || !blocks.length || !Number.isFinite(e.below)) return null
+  const bl = blocks.at(-1), low = lowOf(bl, st, s)
+  if (!(bl.B[0] - low > 0.05)) return null
+  // (and the original's own skip at that boundary, its room past its pitch, capped at a pitch as the gate's measure caps
+  // it, measure.mjs paraGapsOf: a NeurIPS \parskip of 5.5 pt under 11 is kept over the leading, where without it a gap of a
+  // pitch and a skip equalled a leading of 1.5 and the paragraphs ran together)
+  const p0 = bl.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, e.below - p0), p0)
+  const floor = bl.B.at(-1) - e.below + L * p0 + skip
+  return floor > low + 1e-9 ? floor : null
+}
+
 /** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
  *  the original's times the leading, whatever the size (D6's F6a, 2026-10-08: a Latin line shrunk with its size sat on none
  *  of the original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it; every
@@ -2439,8 +2471,11 @@ function slotsAt(blocks, st, P, s) {
   const out = []
   // (each block's foot, the lowest a line of it is laid at: its last baseline less what it borrows; a line TeX's rule moves
   // down may go on past it into the next block of its flow where blocks2 found nothing kept between them, `through`, to
-  // the foot of the last block it so runs into, `foot`)
-  const lows = blocks.map(b => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 ?? 1.2 * s)))
+  // the foot of the last block it so runs into, `foot`; the page fill's states (`box`) the unit's last frame's no lower than
+  // a leading over the next line of its column, footFloorAt)
+  const lows = blocks.map(b => lowOf(b, st, s))
+  const floor = st.box ? footFloorAt(blocks, st, P, s) : null
+  if (floor !== null) lows[lows.length - 1] = floor
   const feet = lows.slice()
   for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi].through) feet[bi] = feet[bi + 1]
   for (const [bi, b] of blocks.entries()) {
