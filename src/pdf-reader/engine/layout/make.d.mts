@@ -37,7 +37,8 @@ export interface MakeInput {
   /** the file is cut into parts (layer-proto/cut.mjs partCutter), which hold the bounds a part holds and the carry's share per
    *  part: made whatever share is carried, checked without those bounds; `lines` in the result */
   parts?: boolean
-  /** each page's draw geometry as well (pipeline/draw-data.mjs), read with the page's operator list, held for `drawOf` */
+  /** each page's draw geometry as well (pipeline/draw-data.mjs), read with the page's operator list (its text `text.draw`'s, step T's,
+   *  where read with it), held for `drawJsonOf` / `drawOf` */
   draw?: boolean
   /** the most encoded text of draws held at once (default DRAW_HELD_MAX; tests lower it): a page past it has none */
   drawHeldMax?: number
@@ -118,6 +119,8 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     /** page p's draw geometry (the `draw` option), once: the held text is let go with it; null for none (not read, failed, a font a host
      *  would read differently, past the held budget) */
     drawOf(p: number): import('../layer-proto/draw.mjs').Draw | null
+    /** drawOf's draw as its JSON (wireText's: what the left part holds, format.mjs writeLeftPart `drawText`), once */
+    drawJsonOf(p: number): string | null
     /** the draw reads: pages kept, pages with none and by why, the encoded bytes, the ms */
     drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }
     /** each marked page's lines [carried, total], once carried */

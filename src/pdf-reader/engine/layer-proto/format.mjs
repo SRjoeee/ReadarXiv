@@ -230,12 +230,12 @@ const encoder = new TextEncoder()
 /** a text already built, counted as the reader will (bytes, values, nesting), digested and keyed; `pos` ({ from, to } or
  *  { page }) is the object's place, on its ref and on the result. `contentOf` gives, of the bytes, the content where the kind
  *  bounds that too (a part: less its tail's base64) */
-async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null) {
-  const bytes = encoder.encode(text)
+async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null, pre = null) {
+  const bytes = pre?.bytes ?? encoder.encode(text)
   // (`data.bound` tells which bound a writer's output passed, for the cut, which closes a part before it does)
   const past = (why, bound, size, max) => new BundleRefusal(why, { kind, path: '', data: { bound, size, max } })
   if (bytes.length > def.cap) throw past(`${bytes.length} bytes, past ${def.cap}`, 'bytes', bytes.length, def.cap)
-  const n = inside(kind, '', () => countValues(text, def.values, def.depth))
+  const n = pre?.values ?? inside(kind, '', () => countValues(text, def.values, def.depth))
   if (n > def.values) throw past(`more than ${def.values} values`, 'values', n, def.values)
   if (contentOf !== null) {
     const content = contentOf(bytes.length)
@@ -1081,16 +1081,19 @@ const emptyLeft = (page, first) => ({
  * page without its tokens loses its highlight and nothing else), and the result says so (`emptied`); it never throws for
  * size. It throws BundleRefusal for what its reader would refuse of it for another reason
  */
-export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, draw = null }) {
+export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, draw = null, drawText = null }) {
+  // (a draw given as wireText's JSON is checked already: it stands in the part's text as it is, neither parsed, wired nor checked
+  // again; one given as an object is wired here)
+  const spliced = drawText !== null
   const obj = {
     bundle: BUNDLE5, kind: 'left', page, first,
     tokens: { perPage: [...tokens.perPage], l: [...tokens.l], r: [...tokens.r], y: [...tokens.y], h: [...tokens.h], top: [...tokens.top], bottom: [...tokens.bottom] },
     spans: spans.map(([id, ranges]) => [id, [...ranges]]),
     pairs: pairs.map(([id, runs]) => [id, [...runs]]),
     // (the draw geometry: shed to null for any reason its reader would refuse it, never thrown)
-    draw: wireOf(draw),
+    draw: spliced ? null : wireOf(draw),
   }
-  let drawShed = draw != null && obj.draw === null
+  let drawShed = !spliced && draw != null && obj.draw === null, withText = spliced
   // (what the reader refuses of a page for its size, the writer empties; what it refuses for anything else, the writer throws)
   let emptied = obj.tokens.perPage[0] > TOKENS_PAGE
   if (!emptied) {
@@ -1099,16 +1102,30 @@ export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, 
       emptied = true
     }
   }
-  const tooBig = o => { const text = JSON.stringify(o); return encoder.encode(text).length > LEFT_CAP || inside('left', '', () => countValues(text, LEFT_VALUES, LEFT_DEPTH)) > LEFT_VALUES }
-  if (!emptied && tooBig(obj)) {
-    // (the geometry goes before the tokens: a page without its draw is read by the browser, without its tokens loses its highlight)
-    if (obj.draw !== null) { obj.draw = null; drawShed = true }
-    emptied = tooBig(obj)
+  // the part's text, a spliced draw's JSON in its place (`draw` the object's last key), and its bytes and values, made once: what
+  // the size check reads is what is written
+  const textOf = o => {
+    const t = JSON.stringify(o)
+    if (!withText || o !== obj) return t
+    if (!t.endsWith('"draw":null}')) throw new Error('a left part whose last key is not its draw')
+    return `${t.slice(0, -5)}${drawText}}`
   }
-  const out = emptied ? emptyLeft(page, first) : obj
-  if (emptied) leftShape(out)
-  const w = await written('left', out, LEFT_DEF, paper, { page })
-  return { ...w, emptied, drawShed: drawShed || (emptied && draw != null) }
+  const sized = text => {
+    const bytes = encoder.encode(text)
+    if (bytes.length > LEFT_CAP) return { text, pre: null }
+    const values = inside('left', '', () => countValues(text, LEFT_VALUES, LEFT_DEPTH))
+    return { text, pre: values > LEFT_VALUES ? null : { bytes, values } }
+  }
+  let got = emptied ? null : sized(textOf(obj))
+  if (got && got.pre === null) {
+    // (the geometry goes before the tokens: a page without its draw is read by the browser, without its tokens loses its highlight)
+    if (obj.draw !== null || withText) { obj.draw = null; withText = false; drawShed = true }
+    got = sized(textOf(obj))
+    if (got.pre === null) emptied = true
+  }
+  if (emptied) { const out = emptyLeft(page, first); leftShape(out); got = { text: JSON.stringify(out), pre: null } }
+  const w = await finish('left', got.text, LEFT_DEF, paper, { page }, null, null, got.pre)
+  return { ...w, emptied, drawShed: drawShed || (emptied && (draw != null || spliced)) }
 }
 
 // ---------------------------------------------------------------- the catalog

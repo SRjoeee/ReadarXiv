@@ -246,6 +246,8 @@ export declare function writeLeftPart(o: {
   spans: readonly (readonly [number, readonly number[]])[]; pairs: readonly (readonly [number, readonly number[]])[]
   /** the page's draw geometry in PDF.js's shapes (draw.mjs wireOf): shed to null, never thrown, for any reason the reader would refuse it */
   draw?: DrawSource | Draw | null
+  /** or as its JSON, as draw.mjs wireText made it (checked): it stands in the part's text as it is, neither parsed nor checked again */
+  drawText?: string | null
 }): Promise<Written & { page: number; emptied: boolean; drawShed: boolean }>
 export declare function writePart(o: {
   paper: { id: string; version: number }; head: string; prev: string | null; pages: readonly [number, number]; views: readonly number[]

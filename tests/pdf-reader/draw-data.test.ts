@@ -2,11 +2,16 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { checkDraw, drawInputsOf } from '@/pdf-reader/engine/layer-proto/draw.mjs'
-import { drawDataOf, mappedChars } from '@/pdf-reader/engine/pipeline/draw-data.mjs'
+import { drawDataOf, drawTextOf, mappedChars } from '@/pdf-reader/engine/pipeline/draw-data.mjs'
+import { LINK_TEXT_PIXELS, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
+import { installLiteWorker } from './helpers/lite-pdfjs'
 
 // A page's draw geometry from PDF.js's page proxy (pipeline/draw-data.mjs): the calls it makes, the fonts it tells, the pages it sheds
+
+// (the lite worker, as the server runs it, before this file's first document: one opened without its options reads as stock)
+beforeAll(async () => { await installLiteWorker() })
 
 const font = (o: Record<string, unknown> = {}) => ({ name: 'CMR10', isType3Font: false, missingFile: false, toUnicode: { _map: ['a', 'b', 'ﬁ'] }, ...o })
 const item = (str: string, fontName: string | null, o: Record<string, unknown> = {}) => ({ str, dir: 'ltr', transform: [10, 0, 0, 10, 72, 700], width: 20, height: 10, fontName, hasEOL: false, ...o })
@@ -114,9 +119,9 @@ describe('drawDataOf', () => {
 describe('drawDataOf over a real PDF (the sample paper), opened as the prepare opens it', () => {
   const dir = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
   const bytes = new Uint8Array(readFileSync(new URL('../fixtures/pdf/sample-1/sample-1.pdf', import.meta.url)))
-  const open = async (extra: boolean) => {
+  const open = async (extra: boolean, maxImageSize: number | null = null) => {
     const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-    return getDocument({ data: bytes.slice(), verbosity: 0, cMapUrl: join(dir, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(dir, 'standard_fonts/'), ...(extra ? { fontExtraProperties: true } : {}) }).promise
+    return getDocument({ data: bytes.slice(), verbosity: 0, cMapUrl: join(dir, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(dir, 'standard_fonts/'), ...(extra ? { fontExtraProperties: true } : {}), ...(maxImageSize === null ? {} : { maxImageSize }) }).promise
   }
 
   it('tells every page: its items as getTextContent has them, its embedded fonts with their maps, its Link annotations', async () => {
@@ -130,6 +135,38 @@ describe('drawDataOf over a real PDF (the sample paper), opened as the prepare o
       expect(draw!.fonts.length).toBeGreaterThan(0)
       expect(draw!.fonts.every(f => f[2] === 0 && Array.isArray(f[3]) && (f[3] as string[]).length > 0)).toBe(true)
       expect(() => checkDraw(JSON.parse(JSON.stringify(draw)))).not.toThrow()
+    }
+    await doc.loadingTask.destroy()
+  })
+
+  it('ships each link\'s overlaid text as the stock worker makes it, on the lite worker opened for the draw (LINK_TEXT_PIXELS); none under NO_IMAGE_PIXELS', async () => {
+    const [stock, links, lite] = [await open(true), await open(true, LINK_TEXT_PIXELS), await open(true, NO_IMAGE_PIXELS)]
+    let texts = 0
+    for (let p = 1; p <= stock.numPages; p++) {
+      const want = (await (await stock.getPage(p)).getAnnotations()).filter(a => a.subtype === 'Link').map(a => a.overlaidText ?? null)
+      const drawOf = async (doc: typeof stock) => { const page = await doc.getPage(p); await page.getOperatorList(); return (await drawDataOf(page)).draw! }
+      const got = await drawOf(links), bare = await drawOf(lite)
+      expect(got.links.map(l => l[4]), `page ${p}`).toEqual(want)
+      expect(drawInputsOf(got).annots.map(a => a.overlaidText)).toEqual(want)
+      expect(bare.links.map(l => l[4])).toEqual(want.map(() => null))
+      // (the rest of the draw the same)
+      expect(JSON.stringify({ ...got, links: got.links.map(l => l.toSpliced(4, 1)) })).toBe(JSON.stringify({ ...bare, links: bare.links.map(l => l.toSpliced(4, 1)) }))
+      texts += want.filter(t => typeof t === 'string' && t.length > 0).length
+    }
+    expect(texts, 'links with text under them on the sample').toBeGreaterThan(0)
+    for (const d of [stock, links, lite]) await d.loadingTask.destroy()
+  })
+
+  it('takes the text step T read (drawTextOf of the same getTextContent): the same draw as one that reads the page\'s text itself', async () => {
+    const doc = await open(true)
+    const first = []
+    for (let p = 1; p <= doc.numPages; p++) first.push(drawTextOf(await (await doc.getPage(p)).getTextContent()))
+    for (let p = 1; p <= doc.numPages; p++) {
+      const page = await doc.getPage(p)
+      await page.getOperatorList()
+      const own = await drawDataOf(page), given = await drawDataOf(page, null, first[p - 1])
+      expect(given.text).toBe(own.text)
+      expect(given.draw).toEqual(own.draw)
     }
     await doc.loadingTask.destroy()
   })

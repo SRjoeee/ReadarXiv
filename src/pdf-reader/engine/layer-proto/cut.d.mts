@@ -24,6 +24,8 @@ export interface LeftPageInput {
   first: number; tokens: TokenWire
   /** the page's draw geometry (draw.mjs), null or absent for none */
   draw?: import('./draw.mjs').DrawSource | import('./draw.mjs').Draw | null
+  /** or as its JSON, as wireText made it (checked; format.mjs writeLeftPart `drawText`), null or absent for none */
+  drawText?: string | null
   spans: readonly (readonly [number, readonly number[]])[]; pairs?: readonly (readonly [number, readonly number[]])[]
 }
 /** a K entry: what needsOf reads, and the unit it stands for */

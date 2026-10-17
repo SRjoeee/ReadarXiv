@@ -123,6 +123,12 @@ const list = v => (v == null ? null : Array.from(v))
  * refuse it, and for text past DRAW_BYTES: the writer sheds, never throws
  */
 export function wireOf(draw) {
+  return wireText(draw)?.draw ?? null
+}
+
+const encoder = new TextEncoder()
+/** wireOf's draw and its JSON (`text`, what a left part holds of it: format.mjs writeLeftPart `drawText`), or null */
+export function wireText(draw) {
   try {
     if (draw === null || draw === undefined) return null
     const out = {
@@ -134,8 +140,9 @@ export function wireOf(draw) {
       }),
     }
     checkDraw(out)
-    if (new TextEncoder().encode(JSON.stringify(out)).length > DRAW_BYTES) return null
-    return out
+    const text = JSON.stringify(out)
+    if (encoder.encode(text).length > DRAW_BYTES) return null
+    return { draw: out, text }
   } catch (e) {
     if (e instanceof DrawRefusal || e instanceof TypeError || e instanceof RangeError) return null
     throw e

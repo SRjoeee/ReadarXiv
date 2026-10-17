@@ -440,8 +440,9 @@ export async function makeLayout(o) {
  * over every unit. Each pass reads and writes the ink of its own pages alone. `columnEdges`: the columns' text edges (Map
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
  * flag read, given; else made of the placed units' body lines once the lines are placed (`columnEdgesOf`, by rules.edges)
- * `draw`: each page's draw geometry too (E-C: pipeline/draw-data.mjs), read right after the page's operator list, held as its encoded text
- * until `drawOf(p)` takes it (once), at most `drawHeldMax` at a time; none for a page the read fails on, a font a host would read
+ * `draw`: each page's draw geometry too (E-C: pipeline/draw-data.mjs), read right after the page's operator list (its text step T's,
+ * `text.draw`, its annotations the page's one read), held as its encoded text until `drawJsonOf(p)` or `drawOf(p)` takes it (once),
+ * at most `drawHeldMax` at a time; none for a page the read fails on, a font a host would read
  * differently, or past the budget. It reads no ink and writes none: the layout file is the same bytes with it on or off
  */
 export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
@@ -455,7 +456,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   if (!Number.isInteger(pages) || pages < 1 || pages > PAGES_MAX) return { refused: 'pages', stats }
   // ---------------------------------------------------------------- arXiv's text, page by page
   const t = now()
-  const read = text ?? await readArxivText(arxiv)
+  const read = text ?? await readArxivText(arxiv, { draw: wantDraw })
+  // (each page's text as its draw reads it, step T's: taken as the page's draw is read, and let go; none where the text was read
+  // without it, the draw then reading the page's text itself)
+  const drawTexts = wantDraw ? read.draw ?? null : null
   if (read.pages !== pages) throw new TypeError(`arXiv's text is of ${read.pages} pages, its document of ${pages}`)
   const views = [], dark = new Set()
   for (let p = 1; p <= pages; p++) {
@@ -551,11 +555,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    *  a page past the held budget, one that cannot be read, or one whose font a host would read differently: the browser reads it */
   const draws = new Map(), drawStats = { pages: 0, none: 0, why: {}, bytes: 0, ms: 0 }
   let drawHeld = 0
-  async function gatherDraw(p, page) {
+  async function gatherDraw(p, page, tx) {
     const t0 = now()
     let r = null, timer
     try {
-      r = await Promise.race([drawDataOf(page, () => annotsOnce(p, page)), new Promise(resolve => { timer = setTimeout(() => resolve({ draw: null, why: 'time' }), OPS_MS) })])
+      r = await Promise.race([drawDataOf(page, () => annotsOnce(p, page), tx), new Promise(resolve => { timer = setTimeout(() => resolve({ draw: null, why: 'time' }), OPS_MS) })])
     } catch (e) {
       if (isMemoryError(e)) throw e
       r = { draw: null, why: 'read' }
@@ -563,21 +567,26 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     drawStats.ms += now() - t0
     let why = r.why
     if (r.draw !== null) {
-      const text = JSON.stringify(r.draw)
+      const text = r.text
       if (drawHeld + text.length > drawHeldMax) why = 'held'
       else { draws.set(p, text); drawHeld += text.length; drawStats.pages++; drawStats.bytes += text.length }
     }
     if (why !== null) { drawStats.none++; drawStats.why[why] = (drawStats.why[why] ?? 0) + 1 }
   }
-  /** page p's draw, once (the held text is let go with it): null for none */
-  const drawOf = p => {
+  /** page p's draw as its JSON, once (wireText's, checked: what the left part holds, format.mjs writeLeftPart `drawText`; the held
+   *  text is let go with it): null for none */
+  const drawJsonOf = p => {
     const text = draws.get(p)
     if (text === undefined) return null
     draws.delete(p)
     drawHeld -= text.length
-    return JSON.parse(text)
+    return text
   }
+  /** page p's draw, once: null for none */
+  const drawOf = p => { const text = drawJsonOf(p); return text === null ? null : JSON.parse(text) }
   async function inkOf(p) {
+    const tx = drawTexts ? drawTexts[p - 1] ?? null : null
+    if (drawTexts) drawTexts[p - 1] = null
     if (unread.has(p)) return
     // (the page its text was read from: PDF.js keeps each page's proxy)
     let page = null
@@ -588,7 +597,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (!ops) { stats.timedOut.push(p); dark.add(p); return }
     // the page's draw geometry (E-C), read once its fonts are loaded, within the same limit, before the page is let go
     if (wantDraw) {
-      await gatherDraw(p, page)
+      await gatherDraw(p, page, tx)
       const asked = annotsAsked.get(p)
       annotsAsked.delete(p)
       if (asked && linking && theirLinks[p] === undefined) holdTheirs(p, theirsOf(await asked, p))
@@ -2922,7 +2931,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     stats.ms.rows = now() - t
     return st
   }
-  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map(), drawOf, drawStats }
+  return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => carrier?.pageLines ?? new Map(), drawOf, drawJsonOf, drawStats }
 }
 
 /**

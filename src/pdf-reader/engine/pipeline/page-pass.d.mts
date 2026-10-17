@@ -22,7 +22,9 @@ export interface LayerOptions {
    *  and readMarked's options but the units and the operator codes, this pass's): read whole first (readMarked), or, under the
    *  oracle, a page at a time beside arXiv's; its refusal is the marks' ('marks') */
   marked?: { doc: unknown; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'> } | null
-  /** a PDF.js document of arXiv's PDF (the caller opens and destroys it), and its text as readArxivText read it (step T) */
+  /** a PDF.js document of arXiv's PDF (the caller opens and destroys it: for the draw, with pdf-lite's LINK_TEXT_PIXELS and
+   *  fontExtraProperties), and its text as readArxivText read it (step T, with `{ draw }` as this pass's: else the draw reads each
+   *  page's text again) */
   arxiv: { doc: unknown; text?: ArxivText | null }
   OPS: Record<string, number>
   pdfjs: string
@@ -49,7 +51,8 @@ export interface LayerOptions {
   /** tests and the lab: the whole path, the whole made first, whatever the rules (under rules 1, 3 and 4, the default, the pass
    *  is a page stream by itself, its parts cut early) */
   whole?: boolean
-  /** each page's draw geometry in its left part (E-C: layout/make.mjs `draw`, pipeline/draw-data.mjs), default on; off, every page ships none */
+  /** each page's draw geometry in its left part (E-C: layout/make.mjs `draw`, pipeline/draw-data.mjs), default on; off, every page ships
+   *  none. Its links' overlaid text is the document's: opened with pdf-lite's LINK_TEXT_PIXELS, PDF.js's own; with NO_IMAGE_PIXELS, none */
   draw?: boolean
 }
 /** a whole run's rules (`capture`'s): the maker's frame predicate and columns' edges, and the left's frame predicate and its

@@ -57,7 +57,8 @@ function fitted(text) {
  * A paper's layer made and told part by part. `paper` { id, version }; `source` openPaper's paper (its units, ids their
  * indices); `marks` layout/paper.mjs layoutMarksOfPaper's result ({ marks, unitMarks }, or { refused }: no layout, the left by
  * the units' text alone); `arxiv` { doc, text? }: a PDF.js document of arXiv's PDF (the caller's to open and destroy) and its
- * text as readArxivText read it (step T), else read here; `OPS` PDF.js's operator codes; `pdfjs` its version; `base` { bytes,
+ * text as readArxivText read it (step T: with `{ draw }` as this pass's, so that the draw reads no page's text again), else read
+ * here; `OPS` PDF.js's operator codes; `pdfjs` its version; `base` { bytes,
  * sha256, xref } of arXiv's PDF (the head's); `image` the compiler image's name; `remove({ from, to, plans })` the remover's
  * transport (chain.mjs), null for none (no part has an add-on, M20). `frame`: the frame's rule both anchorings are placed
  * under (anchors.mjs pageFrame by default, read under rules.frame 'units'); `columns`: the left's far-push columns' rule
@@ -108,7 +109,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   if (!Number.isInteger(base?.bytes) || typeof base?.sha256 !== 'string' || !Number.isInteger(base?.xref)) throw new TypeError('base: arXiv\'s PDF\'s bytes, digest and startxref')
   const { doc } = arxiv
   const N = doc.numPages
-  const text = arxiv.text ?? await readArxivText(doc)
+  const text = arxiv.text ?? await readArxivText(doc, { draw })
   if (text.pages !== N) throw new TypeError(`arXiv's text is of ${text.pages} pages, its document of ${N}`)
   const units = source.units
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
@@ -264,8 +265,8 @@ async function cutWhole(ctx, r) {
 /** the left's page input with the maker's draw geometry for the page (E-C), taken once as the left part is written; a page with no tokens
  *  has no left part input, so ships none (the browser reads it) */
 const drawn = (leftPages, maker) => (maker ? async p => {
-  const l = await leftPages(p), d = maker.drawOf(p)
-  return l && d ? { ...l, draw: d } : l
+  const l = await leftPages(p), d = maker.drawJsonOf(p)
+  return l && d !== null ? { ...l, drawText: d } : l
 } : leftPages)
 
 /** the left anchored whole before the maker (the marks given): every unit's anchor final */

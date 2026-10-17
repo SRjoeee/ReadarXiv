@@ -5,7 +5,7 @@
 // each style from `page.commonObjs`; the document is opened with fontExtraProperties (its fonts' `toUnicode`) and the engine's cMaps.
 // The result is the draw of layer-proto/draw.mjs, or null (the browser reads the page itself): a page that is not read, a font
 // that cannot be told the same by every host, or a page past a cap. Imports the engine's pure modules alone.
-import { wireOf } from '../layer-proto/draw.mjs'
+import { wireText } from '../layer-proto/draw.mjs'
 import { isMemoryError } from './memory.mjs'
 
 /**
@@ -26,16 +26,43 @@ export function mappedChars(toUnicode) {
 const hostDependent = f => f !== null && typeof f === 'object' && typeof f.isType3Font === 'boolean' && !f.isType3Font && f.missingFile === true
 
 /**
- * Page `page`'s draw, from a PDF.js page proxy whose operator list has been read: { draw, why }, `draw` the draw in PDF.js's shapes
- * (layer-proto/draw.mjs wireOf makes it the data and sheds what the reader would refuse) or null, `why` null or the reason for none:
- * 'read' (text or annotations could not be read), 'props' (the document was opened without fontExtraProperties), 'font' (a font a host would read differently), 'shed' (a cap). A memory-class
- * error is thrown. `annots`: the page's annotations as its reader reads them once for every reader of the page (a function giving
- * the array, or null where they could not be read: the layout maker's, whose link-anchor locator reads the same), else read here
+ * A page's text content (PDF.js's getTextContent, its defaults) as its draw reads it: `rows` each item whose string is a string,
+ * [str, a, b, d, e, f, width, height, fontName or null], in order; `families` each font name's fallback family (its style's
+ * fontFamily, or null) as first met; `bad` where an item could not be read (its transform): the rows end before it, and the draw is
+ * none ('read') once the fonts of the rows before it are told. Step T keeps it a page (layout/arxiv.mjs readArxivText `draw`), so
+ * that the draw reads no page's text a second time
  */
-export async function drawDataOf(page, annots = null) {
-  let tc, ann
+export function drawTextOf(tc) {
+  const items = Array.isArray(tc?.items) ? tc.items : [], styles = tc?.styles ?? {}
+  const rows = [], families = new Map()
   try {
-    tc = await page.getTextContent()
+    for (const it of items) {
+      if (typeof it?.str !== 'string') continue
+      const name = typeof it.fontName === 'string' ? it.fontName : null
+      if (name !== null && !families.has(name)) families.set(name, typeof styles[name]?.fontFamily === 'string' ? styles[name].fontFamily : null)
+      const t = it.transform
+      rows.push([it.str, t[0], t[1], t[3], t[4], t[5], it.width, it.height, name])
+    }
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    return { rows, families, bad: true }
+  }
+  return { rows, families, bad: false }
+}
+
+/**
+ * Page `page`'s draw, from a PDF.js page proxy whose operator list has been read: { draw, text, why }, `draw` the draw as the data
+ * holds it (layer-proto/draw.mjs wireText: checked, or shed for what the reader would refuse) and `text` its JSON, or null (no text), `why`
+ * null or the reason for none: 'read' (text or annotations could not be read), 'props' (the document was opened without
+ * fontExtraProperties), 'font' (a font a host would read differently), 'shed' (a cap). A memory-class error is thrown. `annots`: the
+ * page's annotations as its reader reads them once for every reader of the page (a function giving the array, or null where they
+ * could not be read: the layout maker's, whose link-anchor locator reads the same), else read here. `text`: the page's text as
+ * drawTextOf made it of step T's read (the same request, its defaults), else read here
+ */
+export async function drawDataOf(page, annots = null, text = null) {
+  let tx = text, ann
+  try {
+    tx ??= drawTextOf(await page.getTextContent())
     ann = annots ? await annots() : await page.getAnnotations()
   } catch (e) {
     if (isMemoryError(e)) throw e
@@ -43,18 +70,16 @@ export async function drawDataOf(page, annots = null) {
   }
   if (annots && !Array.isArray(ann)) return { draw: null, why: 'read' }
   try {
-    const items = Array.isArray(tc?.items) ? tc.items : [], styles = tc?.styles ?? {}
     const table = [], at = new Map(), rows = []
-    for (const it of items) {
-      if (typeof it?.str !== 'string') continue
+    for (const r of tx.rows) {
       let font = -1
-      const name = it.fontName
-      if (typeof name === 'string') {
+      const name = r[8]
+      if (name !== null) {
         if (!at.has(name)) {
           let f = null
           try { f = page.commonObjs.get(name) } catch {}
           if (hostDependent(f)) return { draw: null, why: 'font' }
-          const fallback = typeof styles[name]?.fontFamily === 'string' ? styles[name].fontFamily : null
+          const fallback = tx.families.get(name) ?? null
           const type3 = f !== null && typeof f === 'object' && typeof f.isType3Font === 'boolean' ? (f.isType3Font ? 1 : 0) : 2
           let mapped = null
           if (type3 !== 2) {
@@ -70,16 +95,16 @@ export async function drawDataOf(page, annots = null) {
         }
         font = at.get(name)
       }
-      const t = it.transform
-      rows.push([it.str, t[0], t[1], t[3], t[4], t[5], it.width, it.height, font])
+      rows.push([r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], font])
     }
+    if (tx.bad) return { draw: null, why: 'read' }
     const links = []
     for (const a of ann ?? []) {
       if (a?.subtype !== 'Link') continue
       links.push([a.rect, a.quadPoints ?? null, a.url ?? null, a.dest ?? null, a.overlaidText ?? null, a.borderStyle?.width ?? null, a.borderStyle?.style ?? null, a.color ?? null])
     }
-    const draw = wireOf({ fonts: table, items: rows, links })
-    return draw === null ? { draw: null, why: 'shed' } : { draw, why: null }
+    const w = wireText({ fonts: table, items: rows, links })
+    return w === null ? { draw: null, why: 'shed' } : { draw: w.draw, text: w.text, why: null }
   } catch (e) {
     if (isMemoryError(e)) throw e
     return { draw: null, why: 'read' }

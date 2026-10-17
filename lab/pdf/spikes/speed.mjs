@@ -43,7 +43,7 @@ async function child() {
   const t0 = performance.now(), at = () => Math.round(performance.now() - t0)
   const ROOT = resolve(argOf('root')), side = argOf('side'), dir = resolve(argOf('paper')), MEM = has('mem')
   const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const { LITE } = await import('./lite-pdfjs.mjs')
+  const { LITE, LITE_DRAW } = await import('./lite-pdfjs.mjs')
   const PL = await import(join(REPO, 'node_modules/@cantoo/pdf-lib/cjs/index.js')).then(m => m.default ?? m)
   const { createHash } = await import('node:crypto')
   const { constants: Z, deflateSync, inflateRawSync, inflateSync } = await import('node:zlib')
@@ -52,7 +52,7 @@ async function child() {
   const arx = await im('layout/arxiv.mjs'), pass = await im('pipeline/page-pass.mjs'), remove = await im('layout/remove.mjs'), tail = await im('layout/tail.mjs'), versions = await im('pipeline/versions.mjs')
   const NM = join(REPO, 'node_modules/pdfjs-dist/')
   const tasks = []
-  const open = bytes => { const task = getDocument({ data: bytes.slice(), ...LITE, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }); tasks.push(task); return task.promise }
+  const open = (bytes, o = LITE) => { const task = getDocument({ data: bytes.slice(), ...o, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }); tasks.push(task); return task.promise }
   const MiB = 2 ** 20, r1 = v => Math.round(v * 10) / 10
   const liveSet = () => { globalThis.gc?.(); globalThis.gc?.(); const m = process.memoryUsage(); return r1((m.heapUsed + m.arrayBuffers) / MiB) }
   const deflate = b => new Uint8Array(deflateSync(b))
@@ -73,8 +73,11 @@ async function child() {
   ms.source = at() - t
   // step T: arXiv's text, read once for the left and the maker
   t = at()
-  const arxiv = await open(arxivBytes)
-  const text = await arx.readArxivText(arxiv)
+  // (this engine's sides read arXiv's PDF as production does, its draw geometry with it: its links' overlaid text kept, its fonts'
+  // maps, step T's text kept for the draw; base's engine has no draw)
+  const drawn = side !== 'base'
+  const arxiv = await open(arxivBytes, drawn ? LITE_DRAW : LITE)
+  const text = await arx.readArxivText(arxiv, { draw: drawn })
   ms.text = at() - t
   // the marked original: read whole first (base, off), or by the pass a page at a time (on)
   const mdoc = await open(markedBytes)
@@ -97,7 +100,7 @@ async function child() {
   const firstPage = r.stats?.closed?.[0]?.[2] ?? arxiv.numPages
   const out = {
     side, id: meta.id, pages: arxiv.numPages, parts, refused: r.refused ?? r.stats?.layout?.refused ?? null,
-    ms: { ...ms, ops: Math.round(maker.ops ?? 0), carry: Math.round(maker.carry ?? 0), anchor: Math.round(maker.anchor ?? 0), rows: Math.round(maker.rows ?? 0), rest: Math.round(ms.pass - makerMs), total },
+    ms: { ...ms, ops: Math.round(maker.ops ?? 0), carry: Math.round(maker.carry ?? 0), anchor: Math.round(maker.anchor ?? 0), rows: Math.round(maker.rows ?? 0), rest: Math.round(ms.pass - makerMs), draw: Math.round(r.stats?.draw?.ms ?? 0), total },
     first: { ms: first?.ms ?? null, page: firstPage, ...(MEM ? { live: first?.live ?? null } : {}) },
     maxRssMiB: r1(process.resourceUsage().maxRSS / 1024), ...(MEM ? { liveEnd: liveSet() } : {}),
   }

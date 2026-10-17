@@ -29,7 +29,7 @@ export { CARRY_MIN, DEFAULT_RULES, OPS_MS, WHOLE_RULES, fontName, makeLayout } f
 export { GLYPHS_PAGE, OPS_CAP } from './layout/ink.mjs'
 export { readArxivText } from './layout/arxiv.mjs'
 export { layoutMarksOfPaper } from './layout/paper.mjs'
-export { LITE_PDFJS, NO_IMAGE_PIXELS, liteWorkerSource } from './layout/pdf-lite.mjs'
+export { LINK_TEXT_PIXELS, LITE_PDFJS, NO_IMAGE_PIXELS, liteWorkerSource } from './layout/pdf-lite.mjs'
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, REFUSED_MAX, REMOVAL, checkAddonManifest, checkBoxes, parseAddonManifest } from './layout/addon-manifest.mjs'
 export { pagePlanOf, pagePlansOf, paperAddon } from './layout/addon.mjs'
 export { BYTES_MAX, CHECK_SETS, COST, DecodeLimit, HELD_MAX, LexLimit, SETS, WALK_MAX, alignOf, checkPage, lex, makeAddon, openRemover, removePaper, removerOf } from './layout/remove.mjs'

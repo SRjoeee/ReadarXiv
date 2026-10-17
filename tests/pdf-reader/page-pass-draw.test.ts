@@ -135,6 +135,37 @@ describe('makerOf: the draw option', () => {
     expect(on.drawStats.pages).toBe(3)
   })
 
+  it('takes each page\'s text as step T read it: no page\'s text asked twice, the draws the same JSON as those read again', async () => {
+    const w = worldOf()
+    /** the drawable document, each getTextContent counted */
+    const counted = () => {
+      const calls: number[] = [], doc = drawable(arxivOf(w.pages))
+      return { calls, doc: { ...doc, getPage: async (n: number) => { const p = (await doc.getPage(n)) as Record<string, any>; return { ...p, getTextContent: async () => { calls.push(n); return p.getTextContent() } } } } }
+    }
+    const json = async (doc: unknown, text: unknown) => {
+      const m = await makerOf({ ...(await input(w, { draw: true, ...(text ? { text } : {}) })), arxiv: doc as never })
+      if ('refused' in m) throw new Error('refused')
+      for (let p = 1; p <= m.pages; p++) await m.readPage(p)
+      return [1, 2, 3].map(p => m.drawJsonOf(p))
+    }
+    // step T's rows kept (the maker's own read with the draw asked, or a host's), against a text read without them
+    const own = counted(), mine = await json(own.doc, null)
+    const host = counted(), given = await json(host.doc, await readArxivText(host.doc as never, { draw: true }))
+    const bare = counted(), again = await json(bare.doc, await readArxivText(bare.doc as never))
+    expect(own.calls).toEqual([1, 2, 3])
+    expect(host.calls).toEqual([1, 2, 3])
+    expect(bare.calls).toEqual([1, 2, 3, 1, 2, 3])
+    expect(mine.every(t => typeof t === 'string')).toBe(true)
+    expect(given).toEqual(mine)
+    expect(again).toEqual(mine)
+    // (and the rows are let go as each page's draw is read)
+    const text = await readArxivText(counted().doc as never, { draw: true })
+    const m = await makerOf({ ...(await input(w, { draw: true, text })), arxiv: counted().doc as never })
+    if ('refused' in m) throw new Error('refused')
+    await m.readPage(1)
+    expect(text.draw?.map(x => x !== null)).toEqual([false, true, true])
+  })
+
   it('past the held budget a page has none, and a page taken frees room for the next', async () => {
     const w = worldOf()
     const probe = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
