@@ -31,6 +31,10 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+
+// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
+await checkCompileImage()
 
 const root = new URL('..', import.meta.url).pathname
 const REPO = resolve(root, '../..')
@@ -202,7 +206,7 @@ if (process.argv.includes('--captions')) {
     for (const [p, b] of [...f.paper.fsys.list().map(p => [p, f.paper.fsys.read(p)]), ...files]) { const file = join(dir, p); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, b) }
     const main = f.paper.project.main
     // (Docker's file sharing takes the folder by its real path: out/ may be a link to another tree's)
-    execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${realpathSync(dir)}:/work`, '-w', '/work', 'texlive/texlive:latest', 'sh', '-c', `timeout 300 ${strategy.engine} -interaction=nonstopmode ${main} >/dev/null 2>&1; true`])
+    execFileSync('docker', ['run', ...PLATFORM, '--rm', '--network', 'none', '-v', `${realpathSync(dir)}:/work`, '-w', '/work', COMPILE_IMAGE, 'sh', '-c', `timeout 300 ${strategy.engine} -interaction=nonstopmode ${main} >/dev/null 2>&1; true`])
     const logFile = join(dir, main.replace(/\.tex$/, '.log').split('/').pop())
     const said = existsSync(logFile) ? captionsOf(readFileSync(logFile, 'latin1')) : null
     rmSync(dir, { recursive: true, force: true })
