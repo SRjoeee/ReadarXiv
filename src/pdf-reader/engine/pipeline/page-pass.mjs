@@ -259,7 +259,10 @@ async function cutWhole(ctx, r) {
 }
 
 /** the left anchored whole before the maker (the marks given): every unit's anchor final */
-const wholeLeft = side => ({ pages: side.pages, leftPages: side.leftPages, units: () => side.units, stats: side.stats, done: () => true, all: () => true, frontier: () => Infinity, firstTok: () => Infinity, version: () => 0 })
+const wholeLeft = side => {
+  const first = new Map(side.units.map(w => { let f = Infinity; for (const r of w[2]) f = Math.min(f, r[0]); return [w[0], f] }))
+  return { pages: side.pages, leftPages: side.leftPages, units: () => side.units, firstPage: id => first.get(id) ?? null, stats: side.stats, done: () => true, all: () => true, frontier: () => Infinity, firstTok: () => Infinity, version: () => 0 }
+}
 
 /**
  * The page stream's pass: the maker made a page at a time (`st`, its stream; null: no layout, the left alone), the left whole
@@ -305,15 +308,14 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   /** whether unit i is in K for good: its left anchor final and its rows made (or none) */
   const inK = i => left.done(i) && settled(i)
   const kIds = () => { const out = []; for (let i = 0; i < n; i++) if (inK(i)) out.push(i); return out }
-  /** where the left stands: each located unit's stream and first left page, the least slot in K each unit may get, and the
-   *  smallest unit whose left anchor is not final */
+  /** where the left stands: the least slot in K each unit may get, and the smallest unit whose left anchor is not final */
   let nowAt = -1, nowLeft = null
   const leftNow = () => {
     // (a function of the left alone: made again once the left has changed)
     if (left.version() === nowAt) return nowLeft
     nowAt = left.version()
-    const stream = new Map(), first = new Map()
-    for (const w of left.units()) { stream.set(w[0], w[1]); let f = N + 1; for (const r of w[2]) f = Math.min(f, r[0]); first.set(w[0], f) }
+    const stream = new Map()
+    for (const w of left.units()) stream.set(w[0], w[1])
     const slotLow = new Float64Array(n), low = left.firstTok(left.frontier())
     let uMin = n
     for (let i = 0, before = -1; i < n; i++) {
@@ -321,24 +323,28 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       if (!left.done(i)) { if (uMin === n) uMin = i; slotLow[i] = Math.min(low, before + 0.5) } else slotLow[i] = s === undefined ? before + 0.5 : s
       if (s !== undefined && s > before) before = s
     }
-    return (nowLeft = { first, slotLow, uMin })
+    return (nowLeft = { slotLow, uMin })
   }
-  /** the least page unit i's rows name (its lines', its placeholders' segments', its labels') */
+  /** the least page unit i's rows name (its lines', its placeholders' segments', its labels'): its rows', made once (a unit's
+   *  rows are final once settled; the stub a told unit's rows become keeps their pages) */
+  const leastOf = new Map()
   const rowLeast = i => {
+    if (leastOf.has(i)) return leastOf.get(i)
     const L = st.layout([i])
     let m = N + 1
     for (const [, v] of L.lines) for (let j = 0; j < v.length; j += 8) m = Math.min(m, v[j])
     for (const r of L.ph) for (let j = 4; j < r.length; j += 6) m = Math.min(m, r[j])
     for (const r of L.labels) m = Math.min(m, r[2])
+    leastOf.set(i, m)
     return m
   }
   /** the pages done: let go by the maker and anchored by the left, before every unit's first left rectangle whose rows are
    *  still to be made, and before every row of a unit whose left anchor is not final */
-  const frontier = now => {
+  const frontier = () => {
     let H = st ? st.released() : N
     if (!left.all()) H = Math.min(H, left.frontier() - 1)
     for (let i = 0; i < n; i++) {
-      if (left.done(i) && !settled(i)) { const f = now.first.get(i) ?? N + 1; if (f - 1 < H) H = f - 1 } else if (!left.done(i) && st && settled(i)) H = Math.min(H, rowLeast(i) - 1)
+      if (left.done(i) && !settled(i)) { const f = left.firstPage(i) ?? N + 1; if (f - 1 < H) H = f - 1 } else if (!left.done(i) && st && settled(i)) H = Math.min(H, rowLeast(i) - 1)
     }
     return H
   }
@@ -348,9 +354,9 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       if (a > N) return
       if (!(await tellHead())) return
       if (!final && st && (!st.carryKnown() || st.carryRefusal())) return
-      const now = leftNow()
-      const H = final ? N : frontier(now)
+      const H = final ? N : frontier()
       if (!final && Math.min(partTarget(a, N), a + PART_PAGES_MAX - 1) > H) return
+      const now = leftNow()
       const layout = st ? st.layout(kIds()) : null
       const whole = { paper: { ...paper, pages: N }, units: bundle, left: { pages: left.pages, units: left.units() }, layout }
       const { K, F } = wholeFrontier(whole, undefined, grouped)
@@ -483,7 +489,7 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, 
   const run = () => R.run((id, an) => { side.add(id, an); settle(id) }, u => { side.none(u); settle(u) })
   run()
   return {
-    pages: side.pages, leftPages: side.leftPages, units: side.units, stats: side.stats,
+    pages: side.pages, leftPages: side.leftPages, units: side.units, firstPage: side.firstPage, stats: side.stats,
     done: i => done[i] === 1, all: () => doneCount === n, frontier: () => R.am, firstTok: p => (p <= lastPage ? R.firstTok[p] : doc.length),
     /** a number that changes whenever the units done or the frontier do (both only grow) */
     version: () => doneCount * (lastPage + 2) + R.am,
