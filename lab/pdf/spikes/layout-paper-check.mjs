@@ -24,17 +24,17 @@ import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, marksFile
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
-import { checkCompileImage, COMPILE_IMAGE, identityOf, PLATFORM } from './compile-image.mjs'
+import { checkCompileImage, compileIdentity, imageFromArg, PLATFORM } from './compile-image.mjs'
 
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const FRESH = process.argv.includes('--fresh')
-const IMAGE = argOf('image') ?? COMPILE_IMAGE
-const IDENTITY = identityOf(IMAGE, PLATFORM)
-// (an image given by --image with a digest is checked as the pin is; a tag alone is the caller's)
-if (IMAGE.includes('@')) await checkCompileImage(IMAGE)
+// (--image names an image by digest only: a tag is no identity, and a cache keyed by it would answer for the next image it points to)
+const IMAGE = imageFromArg(argOf('image'))
+const IDENTITY = compileIdentity(process.env, IMAGE, PLATFORM)
+await checkCompileImage(IMAGE)
 const TIMEOUT = Number(argOf('timeout') ?? 600)
 const DATA = process.env.AXT_DATA ?? join(root, 'data')
 const OUT = resolve(argOf('out') ?? join(root, 'out/layer-gate/e5-proof'))
