@@ -2570,7 +2570,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       return Math.min(R.am - 1, lowAt - 1, pages)
     }
     /** page q's rule-3 edges, after every unit placed on it and the pages before it (their pools first, in page order); a cover
-     *  page's passes after the place held until the first page with a body line gives its edges */
+     *  page's passes after the place held until a later page's pools give it its edges (earlierEdges: the first later page of its
+     *  own columns, not merely one with edges of its own), every one at the last page */
     const edgesTask = q => ({
       key: [0.5, q], pages: [q], edgesOf: q,
       run: () => {
@@ -2579,7 +2580,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         edgesTo = q
         const waiting = E.waiting()
         if (waiting.includes(q) && q < pages) held.add(q)
-        else if (held.size) { for (const p of held) work.push(p); held.clear() }
+        for (const p of [...held]) if (q === pages || !waiting.includes(p)) { work.push(p); held.delete(p) }
         work.push(q + 1)
       },
     })

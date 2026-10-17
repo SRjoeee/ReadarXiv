@@ -69,7 +69,27 @@ async function byPages(w: World, log: string) {
   if ('refused' in s3m || !('file' in whole3)) return null
   const s3 = await s3m.byStream()
   if ('refused' in s3) throw new Error('the rule-3 stream refused what the whole made')
-  return { whole, merged: mergeLayout([st.layout() as never]), plans: st.plans, marked: mergeLayout([sb.layout() as never]), markedPlans: sb.plans, late: both.stats.late, rule3: { whole: whole3.file, merged: mergeLayout([s3.layout() as never]) } }
+  // and production's: both streams under the default rules (1, 3 and 4) with nothing given, each made of its own predicates, the
+  // marked original read a page at a time in the second, against the whole run under the same rules
+  const dw = await makerOf({ ...input, arxiv: arxivOf(w.pages) })
+  if ('refused' in dw) return null
+  for (let p = 1; p <= dw.pages; p++) await dw.readPage(p)
+  const wholeD = await dw.whole()
+  if (!('file' in wholeD)) return null
+  const ds = await makerOf({ ...input, arxiv: arxivOf(w.pages), check: true })
+  if ('refused' in ds) throw new Error('the default stream refused what the whole made')
+  const sd = await ds.byStream()
+  if ('refused' in sd) throw new Error('the default stream refused what the whole made')
+  const events2 = markedPages(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, units: w.units, OPS } as never)
+  const head2 = ((await events2.next()).value as { head: Parameters<typeof marksOfHead>[0] }).head
+  const dm = await makerOf({ ...input, marks: marksOfHead(head2, 'pdflatex'), arxiv: arxivOf(w.pages), check: true })
+  if ('refused' in dm) throw new Error('the default marked stream refused what the whole made')
+  const sm = await dm.byStream({ head: head2, events: events2 } as never)
+  if ('refused' in sm) throw new Error('the default marked stream refused what the whole made')
+  return {
+    whole, merged: mergeLayout([st.layout() as never]), plans: st.plans, marked: mergeLayout([sb.layout() as never]), markedPlans: sb.plans, late: both.stats.late, rule3: { whole: whole3.file, merged: mergeLayout([s3.layout() as never]) },
+    defaults: { whole: wholeD.file, plans: wholeD.plans, stream: mergeLayout([sd.layout() as never]), streamPlans: sd.plans, marked: mergeLayout([sm.layout() as never]), markedPlans: sm.plans, late: dm.stats.late },
+  }
 }
 /** what a file's stats count, but its times and its gzip size */
 const counted = (s: LayoutStats) => { const { ms: _ms, bytes, ...rest } = s; return { ...rest, raw: bytes.raw } }
@@ -92,6 +112,12 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
     expect(four.markedPlans).toEqual(four.whole.plans)
     expect(four.late).toEqual({ rows: 0, vetoes: 0 })
     if (four.rule3) expect(rows(four.rule3.merged as never)).toEqual(rows(four.rule3.whole as never))
+    const d = four.defaults
+    expect(rows(d.stream as never)).toEqual(rows(d.whole as never))
+    expect(rows(d.marked as never)).toEqual(rows(d.whole as never))
+    expect(d.streamPlans).toEqual(d.plans)
+    expect(d.markedPlans).toEqual(d.plans)
+    expect(d.late).toEqual({ rows: 0, vetoes: 0 })
   }
   expect(parseLayout(new TextEncoder().encode(text))).toEqual(one.file)
   for (const [, rows] of one.file.erase) expect(rows.length).toBeGreaterThan(0)
@@ -2152,6 +2178,42 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
       if (!('file' in tasks)) throw new Error('refused')
       expect(encodeLayout(tasks.file)).toBe(encodeLayout(whole.file))
     }
+  })
+
+  it('a cover page of one column waits for a later page of one column, past the two-column pages between: the stream\'s file the whole run\'s', async () => {
+    // (page 1 one column, a caption alone; pages 2-5 two columns, edges of their own but none for page 1's class; page 6 one
+    // column, the paragraph whose column the caption is centred on: page 1's edges are page 6's, in the whole run and the stream)
+    const COLS2 = (page: number): Mark => [`c2-${page}`, page, 0, 0]
+    const twoOn = (o: number) => [...Array.from({ length: 4 }, (_, j): Run => ({ s: words(o + 10 * j, 10), x: 60, y: 700 - 12 * j })), ...Array.from({ length: 6 }, (_, j): Run => ({ s: words(o + 40 + 10 * j, 10), x: 320, y: 700 - 12 * j }))]
+    const lastTwo = twoOn(0).at(-1) as Run
+    const six: World = {
+      pages: [{ runs: cap }, { runs: twoOn(0) }, { runs: twoOn(100) }, { runs: twoOn(200) }, { runs: twoOn(300) }, { runs: para }],
+      marks: [
+        ['0s', 1, cap[0]?.x ?? 0, 600], ['0e', 1, endOf(cap[1] as Run), 588],
+        ...[2, 3, 4, 5].flatMap((pg, k): Mark[] => [COLS2(pg), [`${k + 1}s`, pg, 60, 700], [`${k + 1}e`, pg, endOf(lastTwo), lastTwo.y]]),
+        ['5s', 6, 72, 700], ['5e', 6, endOf(para[4] as Run), 652],
+      ],
+      units: [unit('caption', [text(ws(cap))]), ...[0, 100, 200, 300].map(o => unit('para', [text(words(o, 100))])), unit('para', [text(ws(para))])],
+    }
+    const of = async (rules: object | null) => ({ units: six.units, marks: await marksOf(six), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', rules: rules as never, inFloat: [] })
+    const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+    for (const rules of [{ frame: 'tokens', edges: 'earlier' }, null]) {
+      const first = await makerOf({ ...(await of(rules)), arxiv: arxivOf(six.pages) })
+      if ('refused' in first) throw new Error('refused')
+      for (let p = 1; p <= first.pages; p++) await first.readPage(p)
+      const whole = await first.whole()
+      if (!('file' in whole)) throw new Error('refused')
+      expect(first.stats.edgesAhead).toEqual([[1, 0, 6]])
+      expect((whole.file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
+      const own = await makerOf({ ...(await of(rules)), arxiv: arxivOf(six.pages), check: true })
+      if ('refused' in own) throw new Error('refused')
+      const so = await own.byStream()
+      if ('refused' in so) throw new Error('refused')
+      expect(rows(mergeLayout([so.layout() as never]) as never)).toEqual(rows(whole.file as never))
+      expect(own.stats.edgesAhead).toEqual(first.stats.edgesAhead)
+    }
+    // and through every comparison made() holds (its default rules' branch among them)
+    await made(six)
   })
 
   it('a rule that is none is refused', async () => {
