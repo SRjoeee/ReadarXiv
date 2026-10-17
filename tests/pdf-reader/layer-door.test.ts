@@ -757,7 +757,7 @@ describe('the door: the draw of a left part, handed to the run', () => {
     const before = seen.drawOfs.length
     const parts = M.readParts.slice(0, o.parts ?? 0)
     const doc = docFor(parts.at(-1)?.chain.r ?? 0)
-    const layer = await openLayer({ index: M.index, doc: o.doc ? o.doc(doc) : doc, parts, target: 'zh', faceSources, hyphUrl, leftPart, onRetired: () => {}, ...(o.drawsHeld ? { drawsHeld: o.drawsHeld } : {}) } as never)
+    const layer = await openLayer({ index: M.index, doc: o.doc ? o.doc(doc) : doc, parts, target: 'zh', faceSources, hyphUrl, leftPart, onRetired: () => {}, ...(o.drawsHeld !== undefined ? { drawsHeld: o.drawsHeld } : {}) } as never)
     const drawOf = seen.drawOfs[before]
     return { layer, M, docFor, fetched, drawOf }
   }
@@ -847,6 +847,14 @@ describe('the door: the draw of a left part, handed to the run', () => {
     expect(await (d.drawOf as (p: number) => Promise<unknown>)(4)).toEqual(DRAW)
     expect(d.layer.stats().draws).toEqual({ held: 0, bytes: 0 })
     d.layer.dispose()
+    // (a draw whose own left part passes the bound is not held at all, nor any where the bound is 0: the run reads those pages)
+    for (const held of [size - 1, 0]) {
+      const small = await drawDoor({ draws: all, parts: 4, drawsHeld: held })
+      await small.layer.leftPageOf(1)
+      expect(small.layer.stats().draws, `drawsHeld ${held}`).toEqual({ held: 0, bytes: 0 })
+      expect(await (small.drawOf as (p: number) => Promise<unknown>)(1)).toBeNull()
+      small.layer.dispose()
+    }
   })
 
   it('keeps no draw a left part brings once the layer is let go while reading it, nor after the run dies (drawOf null then)', async () => {

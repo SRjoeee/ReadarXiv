@@ -180,9 +180,11 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const dropDraw = page => { const e = draws.get(page); if (e) { drawsBytes -= e.bytes; draws.delete(page) } }
   const holdDraw = (page, draw, bytes) => {
     dropDraw(page)
+    // (one past the bound alone is not held: its page is read by the run)
+    if (bytes > drawsHeld) return
     draws.set(page, { draw, bytes })
     drawsBytes += bytes
-    for (const [p] of draws) { if (drawsBytes <= drawsHeld || p === page) break; dropDraw(p) }
+    for (const [p] of draws) { if (drawsBytes <= drawsHeld) break; dropDraw(p) }
   }
   const dropDraws = () => { draws.clear(); drawsBytes = 0 }
   const chain = { through: 0, last: null, r: 0 }, toldParts = new Set()
