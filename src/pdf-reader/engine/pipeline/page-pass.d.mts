@@ -19,8 +19,8 @@ export interface LayerOptions {
   /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none (or `marked`) */
   marks?: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string } | null
   /** the marked original to be read here instead (a PDF.js document of it, the caller's to open and destroy, its last pass's log,
-   *  and readMarked's options but the units and the operator codes, this pass's): read whole first (readMarked), or, under the
-   *  oracle, a page at a time beside arXiv's; its refusal is the marks' ('marks') */
+   *  and readMarked's options but the units and the operator codes, this pass's): a page at a time beside arXiv's in the page
+   *  stream (the default rules, or an oracle), else whole first (readMarked); its refusal is the marks' ('marks') */
   marked?: { doc: unknown; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'> } | null
   /** a PDF.js document of arXiv's PDF (the caller opens and destroys it: for the draw, with pdf-lite's LINK_TEXT_PIXELS and
    *  fontExtraProperties), and its text as readArxivText read it (step T, with `{ draw }` as this pass's: else the draw reads each
@@ -38,7 +38,11 @@ export interface LayerOptions {
   onPart(part: Written & { from: number; to: number; leftParts: (Written & { page: number })[] }, note: PartNote): void | Promise<void>
   /** each part judged as it is cut (the carry's share of its marked pages' lines, its reader's reading); default on */
   verdicts?: boolean
+  /** the frame's rule both anchorings are placed under where rules.frame is 'units' (anchors.mjs pageFrame by default); not read
+   *  under rule 1 (rules.frame 'tokens', the default), whose frame is arXiv's text's */
   frame?: FrameRule
+  /** the left's far-push columns' rule where rules.columns is 'units' (view/highlight.mjs pageColumns by default); not read under
+   *  rule 4 (rules.columns 'tokens', the default), whose columns are arXiv's text's */
   columns?: ColumnRule
   /** the page stream's rules (layout/make.mjs RULES), DEFAULT_RULES' each where not given (rules 1, 3 and 4: the page stream);
    *  WHOLE_RULES for next's whole run; a rule given there is taken over `frame` and `columns` */
@@ -60,6 +64,6 @@ export interface LayerOptions {
 export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<string, [number, number]>; leftFrame?: (t: unknown) => boolean; columns?: unknown }
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
-  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }; closed?: [from: number, to: number, read: number][] } }
+  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][] } }
   | { refused: 'anchors'; why: string }
 >

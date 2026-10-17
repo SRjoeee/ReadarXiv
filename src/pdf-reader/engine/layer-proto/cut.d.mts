@@ -36,7 +36,8 @@ export interface CutEntry extends NeedEntry {
 }
 export interface CutOptions {
   /** the page's left part input, called once for each page in page order (null: a page with no tokens) */
-  leftPages(page: number): LeftPageInput | null | Promise<LeftPageInput | null>
+  /** a page with no tokens may give its draw alone (`{ drawText }`): its first token the next page's, its tokens none */
+  leftPages(page: number): LeftPageInput | { drawText: string } | null | Promise<LeftPageInput | { drawText: string } | null>
   /** the last page of the part that begins at page `a` of `N` (a to N); default `partTarget` (the doubling schedule), extended over
    *  the need bound (`extend`). A harness cuts at any split with it; a target given is taken as given, never extended */
   target?(a: number, N: number): number

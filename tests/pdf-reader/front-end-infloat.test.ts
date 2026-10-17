@@ -29,6 +29,22 @@ const read = (tex: string) => {
 }
 
 describe('inFloat: the indices of the units written inside a float', () => {
+  it('a file a float reads (\\input, \\include, \\subfile, \\import) is inside it, and the text after the float is not', () => {
+    const files = (body: string): Record<string, string> => ({ 'main.tex': doc(body, '\\usepackage{import}\\usepackage{subfiles}'), 'fig/body.tex': 'Produced by the author from the survey data.\n', 'fig/sub.tex': '\\documentclass[main.tex]{subfiles}\n\\begin{document}\nA note set in the figure by its own file.\n\\end{document}\n' })
+    const readFiles = (f: Record<string, string>) => {
+      const p = loadProject(inMemory(new Map(Object.entries(f).map(([k, v]) => [k, enc(v)]))), 'main.tex', { tables: true }), floats = new Set(p.inFloat)
+      return (p.units as unknown as Unit[]).map((u, i) => [textOf(u), floats.has(i)] as const)
+    }
+    for (const call of ['\\input{fig/body}', '\\include{fig/body}', '\\import{fig/}{body}', '\\subfile{fig/sub}']) {
+      const units = readFiles(files(['The text before the figure goes on here.', `\\begin{figure}${call}\\caption{A figure of the results.}\\end{figure}`, 'The text after the figure goes on here.'].join('\n\n')))
+      const inside = call.includes('sub}') ? 'A note set in the figure by its own file.' : 'Produced by the author from the survey data.'
+      expect(units, call).toEqual([['The text before the figure goes on here.', false], [inside, true], ['A figure of the results.', true], ['The text after the figure goes on here.', false]])
+    }
+    // (and read outside a float, a file's units are not in one)
+    const outside = readFiles(files(['The text before the file goes on here.', '\\input{fig/body}', 'The text after the file goes on here.'].join('\n\n')))
+    expect(outside.map(([, f]) => f)).toEqual([false, false, false])
+  })
+
   it('a figure\'s caption and the paragraph of its own beside it, a table\'s cells and caption; the text around them is not', () => {
     const units = read(doc([
       'The text before the figure goes on here.',
@@ -114,7 +130,7 @@ describe('inFloat: the indices of the units written inside a float', () => {
 
 // ---------------------------------------------------------------- the thesis (AXT_LAB): the units rule 5's bound tripped on
 describe.skipIf(!LAB)('inFloat on 2307.16209 (the thesis): a figure\'s note is in its float, the text after it is not', () => {
-  it('units 165 and 167, 176 and 177', async ({ skip }) => {
+  it('units 166 and 168, 177 and 178', async ({ skip }) => {
     const file = join(LAB as string, 'data/layout/2307.16209v1/source.gz')
     if (!existsSync(file)) skip()
     const source = await unpackSource(new Uint8Array(readFileSync(file)))
@@ -123,10 +139,11 @@ describe.skipIf(!LAB)('inFloat on 2307.16209 (the thesis): a figure\'s note is i
     const units = paper.units as unknown as Unit[]
     const at = (i: number) => [textOf(units[i] as Unit).slice(0, 40), floats.has(i)]
     // a figure's notes, each a paragraph of its own after its caption, and the text after them: TeX set the float with its note
-    // on p52, after the text that follows it in the source (u167, on p51)
-    expect(at(165)).toEqual([expect.stringMatching(/^Produced by the author/), true])
-    expect(at(167)).toEqual([expect.stringMatching(/^Now we want to investigate/), false])
-    expect(at(176)).toEqual([expect.stringMatching(/^Adapted from/), true])
-    expect(at(177)).toEqual([expect.stringMatching(/^Now, let us focus/), false])
+    // on p52, after the text that follows it in the source (u168, on p51; one more each since \texorpdfstring's headings are
+    // units, PIPELINE_VERSION 13)
+    expect(at(166)).toEqual([expect.stringMatching(/^Produced by the author/), true])
+    expect(at(168)).toEqual([expect.stringMatching(/^Now we want to investigate/), false])
+    expect(at(177)).toEqual([expect.stringMatching(/^Adapted from/), true])
+    expect(at(178)).toEqual([expect.stringMatching(/^Now, let us focus/), false])
   })
 })

@@ -43,6 +43,7 @@ import { pageDirty, pagePlan, pageRules } from '../layer-proto/removal.mjs'
 import { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, checkBoxes, parseAddonManifest, REFUSED_MAX } from './addon-manifest.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
 import { listWithin } from './oplist.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf, makeAddon, openRemover, removalEntry, SETS } from './remove.mjs'
 
 /** the share of the manifest's byte and value caps that the paper's `dirty` and `rules` boxes may take, in page order: the
@@ -63,12 +64,13 @@ const reasonOf = e => { try { return String(e?.message ?? e) } catch { return 'a
  * remover's parse, the operator lists, the ink, the plan and the add-on; `ink`: pagePlansOf's, the pages whose ink was not
  * read whole or was degraded, which the manifest does not carry), or { ok: false, refused } for any error, a
  * disagreement of the PDF, PDF.js and the layout file on the pages, an add-on past ADDON_CAP or a manifest the reader's
- * bounds refuse. Never throws
+ * bounds refuse. Never throws, but a memory-class failure (pipeline/memory.mjs, C8.4), which it lets through
  */
 export async function paperAddon(o) {
   try {
     return await shipped(o)
   } catch (e) {
+    if (isMemoryError(e)) throw e
     return refusal(`the add-on could not be made: ${reasonOf(e)}`)
   }
 }

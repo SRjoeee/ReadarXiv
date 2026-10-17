@@ -20,7 +20,11 @@
 // So nothing a page given up on leaves grows with the pages given up before it, and no paper-wide count of them is kept: the
 // rest is time, the host's deadline's.
 //
-// An original module (no port statement). Imports nothing: PDF.js is the caller's.
+// A memory-class error (pipeline/memory.mjs, the bundle 4 contract's C8.4) is never a page given up on: within and listWithin
+// let it through, so that the run ends on it as the service's memory failure, not as a dark page of a degraded layer.
+//
+// An original module (no port statement). Imports the engine's memory predicate alone: PDF.js is the caller's.
+import { isMemoryError } from '../pipeline/memory.mjs'
 
 /** a page's operator list is waited for at most OPS_MS: past it the page has no ink and no plan, and the page's parse is given
  *  up (giveUp). PDF.js parses a page's whole content stream before it answers: 0.9 to 2.8 s for 2608.18626's page 8 (102,052
@@ -31,11 +35,11 @@
  *  page-local) */
 export const OPS_MS = 10_000
 
-/** a promise's value, or null where it does not come within `ms` or fails */
+/** a promise's value, or null where it does not come within `ms` or fails; a memory-class failure is thrown */
 export function within(promise, ms) {
   let timer
   const late = new Promise(resolve => { timer = setTimeout(() => resolve(null), Math.max(0, ms)) })
-  return Promise.race([Promise.resolve(promise).then(v => v, () => null), late]).finally(() => clearTimeout(timer))
+  return Promise.race([Promise.resolve(promise).then(v => v, e => { if (isMemoryError(e)) throw e; return null }), late]).finally(() => clearTimeout(timer))
 }
 
 /** a page's operator list given up on: PDF.js's own cancellation (its rendering's, PDFPageProxy._abortOperatorList on its
@@ -57,7 +61,7 @@ export function giveUp(page, seen) {
  *  fails */
 export async function listWithin(page, seen, ms = OPS_MS) {
   let list = null
-  try { list = await within(page.getOperatorList(), ms) } catch {}
+  try { list = await within(page.getOperatorList(), ms) } catch (e) { if (isMemoryError(e)) throw e }
   if (list) return list
   // (a list that failed has no stream left to cancel, and giveUp's cancellation of it cleans up nothing: PDF.js's
   // _abortOperatorList returns early; after a cancellation, cleaning up is a no-op)

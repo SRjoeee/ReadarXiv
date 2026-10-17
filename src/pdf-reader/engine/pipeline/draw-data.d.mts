@@ -9,4 +9,4 @@ export declare function drawTextOf(tc: unknown): DrawText
 /** page `page`'s draw (a PDF.js page proxy whose operator list has been read) and its JSON, or null with the reason: 'read', 'props' (opened without fontExtraProperties), 'font' (not embedded and not Type3:
  *  hosts read it differently), 'shed' (a cap). A memory-class error is thrown. `annots`: the page's annotations read once for
  *  every reader of the page (null where they could not be read), else read here; `text`: step T's read of the page (drawTextOf), else read here */
-export declare function drawDataOf(page: unknown, annots?: (() => Promise<unknown[] | null>) | null, text?: DrawText | null): Promise<{ draw: Draw | null; text?: string; why: null | 'read' | 'props' | 'font' | 'shed' }>
+export declare function drawDataOf(page: unknown, annots?: (() => Promise<unknown[] | null>) | null, text?: DrawText | null): Promise<{ draw: Draw | null; text?: string; /** the text's UTF-8 bytes */ bytes?: number; why: null | 'read' | 'props' | 'font' | 'shed' }>

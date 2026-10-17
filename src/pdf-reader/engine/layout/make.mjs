@@ -133,9 +133,9 @@ const EVEN = new Set(['para', 'abstract', 'theorem'])
  *  'forward': from the page of its last body neighbour on, a unit not written inside a float, rule 5: `inFloat` given) */
 export const RULES = Object.freeze({ frame: Object.freeze(['units', 'tokens']), edges: Object.freeze(['all', 'earlier']), columns: Object.freeze(['units', 'tokens']), floatSearch: Object.freeze(['whole', 'forward']) })
 /** the rules where none is given (P2, the coordinator's ruling of 2026-10-17): rules 1, 3 and 4, the page stream's, for every
- *  paper; rule 5 off (no accuracy rule: E2b's rule-5 note). The first part is told about three times sooner (3.4 s at arXiv's
- *  page 12 against 11.3 s on 2106.10165, 4.3 s at page 5 against 13.6 s on 2310.20360) for a whole job 0.6 s and 1.5 s longer
- *  on those books (docs/PDF-READER.md §19.6) */
+ *  paper; rule 5 off (no accuracy rule: E2b's rule-5 note). The first part is told about three times sooner (3.3 s at arXiv's
+ *  page 12 against 10.9 s on 2106.10165, 4.2 s at page 5 against 13.2 s on 2310.20360) for a whole job longer on those books:
+ *  +2.1 % and +7.6 % with the draw off, +15.8 % and +23.9 % with it, the page pass's default (docs/PDF-READER.md §19.6) */
 export const DEFAULT_RULES = Object.freeze({ frame: 'tokens', edges: 'earlier', columns: 'tokens', floatSearch: 'whole' })
 /** the whole run's rules, each reading the whole document: next's before the page stream (c77550a1), which the lab's comparisons
  *  with it take */
@@ -526,7 +526,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (unread.has(p)) return
     if (heldTheirs.has(p)) { theirLinks[p] = heldTheirs.get(p); dropHeld(p); return }
     let page = null
-    try { page = await arxiv.getPage(p) } catch {}
+    try { page = await arxiv.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
     if (page) theirLinks[p] = theirsOf(await within(readAnnots(page), OPS_MS), p)
   }
   /** page p's ink, read once, its time spent on the paper's `ms.ops` */
@@ -567,20 +567,21 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     drawStats.ms += now() - t0
     let why = r.why
     if (r.draw !== null) {
-      const text = r.text
-      if (drawHeld + text.length > drawHeldMax) why = 'held'
-      else { draws.set(p, text); drawHeld += text.length; drawStats.pages++; drawStats.bytes += text.length }
+      // (in its encoded bytes, as the left part holds it)
+      const text = r.text, bytes = r.bytes
+      if (drawHeld + bytes > drawHeldMax) why = 'held'
+      else { draws.set(p, { text, bytes }); drawHeld += bytes; drawStats.pages++; drawStats.bytes += bytes }
     }
     if (why !== null) { drawStats.none++; drawStats.why[why] = (drawStats.why[why] ?? 0) + 1 }
   }
   /** page p's draw as its JSON, once (wireText's, checked: what the left part holds, format.mjs writeLeftPart `drawText`; the held
    *  text is let go with it): null for none */
   const drawJsonOf = p => {
-    const text = draws.get(p)
-    if (text === undefined) return null
+    const e = draws.get(p)
+    if (e === undefined) return null
     draws.delete(p)
-    drawHeld -= text.length
-    return text
+    drawHeld -= e.bytes
+    return e.text
   }
   /** page p's draw, once: null for none */
   const drawOf = p => { const text = drawJsonOf(p); return text === null ? null : JSON.parse(text) }
@@ -588,9 +589,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const tx = drawTexts ? drawTexts[p - 1] ?? null : null
     if (drawTexts) drawTexts[p - 1] = null
     if (unread.has(p)) return
-    // (the page its text was read from: PDF.js keeps each page's proxy)
+    // (the page its text was read from: PDF.js keeps each page's proxy; a memory-class failure is no dark page, C8.4)
     let page = null
-    try { page = await arxiv.getPage(p) } catch {}
+    try { page = await arxiv.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
     if (!page) { dark.add(p); return }
     // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs)
     const ops = await listWithin(page, seen)
@@ -2310,7 +2311,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    */
   function stream({ marked: mh = null } = {}) {
     // (the columns' edges given, a whole run's; or under rule 3 its own, a page at a time: a page's edges read only the pages
-    // before it and its own, the cover pages the first page with a body line)
+    // before it and its own, a cover page's the first later page of its own columns whose pools give it some)
     const ownEdges = !edges && rules.edges === 'earlier'
     if (!edges && !ownEdges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`), or rule 3\'s (rules.edges \'earlier\')')
     let edgesTo = 0
@@ -2569,8 +2570,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (decidedCount === n) return Math.min(lowAt - 1, pages)
       return Math.min(R.am - 1, lowAt - 1, pages)
     }
+    /** the last page of each column count (the marks' columns, known from the head): past it no page's pools of that count move */
+    const lastOfColumns = new Map()
+    if (ownEdges) for (let r = 1; r <= pages; r++) lastOfColumns.set(twoCols(r), r)
     /** page q's rule-3 edges, after every unit placed on it and the pages before it (their pools first, in page order); a cover
-     *  page's passes after the place held until the first page with a body line gives its edges */
+     *  page's passes after the place held until a later page's pools give it its edges (earlierEdges: the first later page of its
+     *  own columns, not merely one with edges of its own), or until the last page of its columns has passed (its pools move no
+     *  more: none will come), every one at the last page */
     const edgesTask = q => ({
       key: [0.5, q], pages: [q], edgesOf: q,
       run: () => {
@@ -2579,7 +2585,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         edgesTo = q
         const waiting = E.waiting()
         if (waiting.includes(q) && q < pages) held.add(q)
-        else if (held.size) { for (const p of held) work.push(p); held.clear() }
+        for (const p of [...held]) if (q === pages || q >= lastOfColumns.get(twoCols(p)) || !waiting.includes(p)) { work.push(p); held.delete(p) }
         work.push(q + 1)
       },
     })

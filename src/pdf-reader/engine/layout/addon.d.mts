@@ -22,7 +22,8 @@ export interface AddonDocument { numPages: number; getPage(page: number): Promis
  * incremental update): arXiv's bytes followed by it are the add-on's document. The manifest is the shipped form, read back
  * by parseAddonManifest (byte and value caps too) before it is returned; where that fails the paper is refused whole.
  * Imports no `node:*` module (a Node child and a browser worker alike); run it in a process or worker of its own under a
- * hard memory limit (layout/remove.mjs head), `inflate` stopping at `limit + 1` bytes. Never throws
+ * hard memory limit (layout/remove.mjs head), `inflate` stopping at `limit + 1` bytes. Never throws, but a memory-class
+ * failure (pipeline/memory.mjs, C8.4), which it lets through
  */
 export declare function paperAddon(o: {
   bytes: Uint8Array; index: LayoutIndex; doc: AddonDocument; OPS: Record<string, number>; PL: PdfLib

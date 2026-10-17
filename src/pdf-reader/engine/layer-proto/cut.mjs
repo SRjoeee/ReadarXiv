@@ -228,8 +228,9 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
     while (lefts.length < b) {
       const page = lefts.length + 1
       const got = await leftPages(page)
-      const first = got ? got.first : tokens
-      const t = got ? got.tokens : empty
+      // (a page with no tokens may come with its draw alone: its first token is the next page's, its tokens none)
+      const first = got?.first ?? tokens
+      const t = got?.tokens ?? empty
       const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [], draw: got?.draw ?? null, drawText: got?.drawText ?? null })
       lefts.push(w)
       tokens = first + t.perPage[0]

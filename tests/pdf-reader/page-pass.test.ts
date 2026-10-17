@@ -10,7 +10,7 @@ import { anchorUnits, boundsFromMarks, floatMatches } from '@/pdf-reader/engine/
 import { leftSideOf } from '@/pdf-reader/engine/pipeline/left-side.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
-import { arxivOf, endOf, markedOf, type Run, text, unit, words, type World } from './helpers/make-world'
+import { arxivOf, endOf, type Mark, markedOf, type Run, text, unit, words, type World } from './helpers/make-world'
 
 // The page pass (pipeline/page-pass.mjs layerOfPaper) over the layout maker's fake world: a paper's layer made from its marks and
 // arXiv's PDF, told a part at a time, equal to cutBundle's of the same whole made as the web's producer makes it; each part judged
@@ -206,6 +206,30 @@ function deferredWorld(): World {
   return { pages, marks, units: at.map(p => unit('para', [text(words(100 * p, 100))])) }
 }
 
+/** six pages: page 1 one column, a caption alone (a cover page under rule 3); pages 2-5 two columns; page 6 one column, the
+ *  paragraph whose column the caption is centred on (the review of P2's B1: the cover page waits for page 6, not for page 2).
+ *  `alone`: no page 6, every page after the cover two columns (no later page of its columns, so nothing to wait for) */
+function coverWorld(alone = false): World {
+  const ws = (rs: Run[]) => rs.map(r => r.s).join(' ')
+  const cap = [{ s: 'Figure caption text', x: 172 - 47.5, y: 600 }, { s: 'its end', x: 172 - 17.5, y: 588 }]
+  const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
+  para.push({ s: 'last line of it', x: 72, y: 652 })
+  const COLS2 = (page: number): Mark => [`c2-${page}`, page, 0, 0]
+  const twoOn = (o: number) => [...Array.from({ length: 4 }, (_, j): Run => ({ s: words(o + 10 * j, 10), x: 60, y: 700 - 12 * j })), ...Array.from({ length: 6 }, (_, j): Run => ({ s: words(o + 40 + 10 * j, 10), x: 320, y: 700 - 12 * j }))]
+  const lastTwo = twoOn(0).at(-1) as Run
+  const w: World = {
+    pages: [{ runs: cap }, { runs: twoOn(0) }, { runs: twoOn(100) }, { runs: twoOn(200) }, { runs: twoOn(300) }, { runs: para }],
+    marks: [
+      ['0s', 1, cap[0]?.x ?? 0, 600], ['0e', 1, endOf(cap[1] as Run), 588],
+      ...[2, 3, 4, 5].flatMap((pg, k): Mark[] => [COLS2(pg), [`${k + 1}s`, pg, 60, 700], [`${k + 1}e`, pg, endOf(lastTwo), lastTwo.y]]),
+      ['5s', 6, 72, 700], ['5e', 6, endOf(para[4] as Run), 652],
+    ],
+    units: [unit('caption', [text(ws(cap))]), ...[0, 100, 200, 300].map(o => unit('para', [text(words(o, 100))])), unit('para', [text(ws(para))])],
+  }
+  if (alone) return { pages: w.pages.slice(0, 5), marks: w.marks.filter(m => m[1] !== 6), units: w.units.slice(0, 5) }
+  return w
+}
+
 describe('layerOfPaper: the marked original read by the pass (stage 2)', () => {
   for (const verdicts of [false, true]) {
     it(`read whole first it is the marks given; under the oracle, a page at a time beside arXiv's: the same layer, parts cut early (verdicts ${verdicts ? 'on' : 'off'})`, async () => {
@@ -310,17 +334,23 @@ describe('layerOfPaper: the production stream (rules 1, 3 and 4 give every predi
   const rules = { frame: 'tokens', edges: 'earlier', columns: 'tokens' } as const
   for (const verdicts of [false, true]) {
     it(`the marks given or the marked original read here: the whole path's layer under the same rules, its first part cut before the last page (verdicts ${verdicts ? 'on' : 'off'})`, async () => {
-      for (const w of [worldOf(), deferredWorld()]) {
+      for (const [w, cover] of [[worldOf(), false], [deferredWorld(), false], [coverWorld(), true], [coverWorld(true), false]] as const) {
         for (const input of [{}, { marks: null, marked: markedIn(w) }]) {
           const want = await passOf(w, { verdicts, rules, whole: true, ...input } as never)
           const got = await passOf(w, { verdicts, rules, ...input } as never)
+          // (and with no rule given, the default: production's own call)
+          const byDefault = await passOf(w, { verdicts, ...input } as never)
+          expect(byDefault.told).toEqual(want.told)
+          expect(shas(byDefault.parts)).toEqual(shas(want.parts))
           expect(got.told).toEqual(want.told)
           expect(shas(got.units)).toEqual(shas(want.units))
           expect(got.head?.sha256).toBe(want.head?.sha256)
           expect(shas(got.parts)).toEqual(shas(want.parts))
           expect(got.notes).toEqual(want.notes)
           const closed = (got.r as { stats: { closed?: [number, number, number][] } }).stats.closed
-          expect(closed?.[0]?.[2]).toBeLessThan(w.pages.length)
+          // (a cover page waits for the first later page of its own columns: here the last, so the parts with it)
+          if (cover) expect(closed?.[0]?.[2]).toBe(w.pages.length)
+          else expect(closed?.[0]?.[2]).toBeLessThan(w.pages.length)
         }
       }
     })

@@ -7,6 +7,7 @@ import { encodeLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { makerOf, OPS_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
+import { settleWithClock } from './helpers/clock'
 import { arxivOf, endOf, markedOf, marksOf, type Run, text, unit, words, type World } from './helpers/make-world'
 
 // The page pass tells each page's draw geometry in its left part (E-C): read with the page's operator list by the maker, taken once as
@@ -92,11 +93,8 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
 
   it('a read that never comes is given up at OPS_MS, that page alone', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    let done = false
-    const run = passOf(worldOf(), { 2: 'never' }).finally(() => { done = true })
-    // (the clock moved on a window at a time until the pass ends: a page's read may begin after one window's microtasks)
-    for (let k = 0; k < 8 && !done; k++) await vi.advanceTimersByTimeAsync(OPS_MS)
-    const got = await run
+    // (the clock moved on only while the pass waits on page 2's read alone: its parts' digests are real work)
+    const got = await settleWithClock(passOf(worldOf(), { 2: 'never' }), OPS_MS)
     expect(got.lefts.get(2)).toBeNull()
     expect(got.lefts.get(1)).not.toBeNull()
     expect(got.lefts.get(3)).not.toBeNull()
@@ -114,6 +112,36 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
     await passOf(worldOf(), {}, { capture: capture as never })
     const streamed = await passOf(worldOf(), {}, { oracle: capture as never })
     expect(headOf(streamed.heads[0] as Written).draw).toBe(1)
+  })
+
+  it('a page with no tokens ships the draw it read (C1.5: a page read and empty has one), as the stream and the whole path tell it', async () => {
+    // (page 2: no word, a row of symbols, and its link)
+    const w = worldOf()
+    w.pages[1] = { runs: [{ s: '* * *', x: 72, y: 700 }] }
+    w.marked = w.pages
+    w.marks = w.marks.filter(m => m[1] !== 2)
+    w.units = [w.units[0]!, w.units[2]!]
+    w.marks = w.marks.map(m => (m[0] === '2s' ? ['1s', ...m.slice(1)] : m[0] === '2e' ? ['1e', ...m.slice(1)] : m) as typeof m)
+    for (const o of [{}, { whole: true }]) {
+      const got = await passOf(w, {}, o)
+      expect(got.r).toMatchObject({ stats: { draw: { pages: 3, none: 0, shed: 0 } } })
+      expect([...got.lefts.keys()]).toEqual([1, 2, 3])
+      expect(got.lefts.get(2)).not.toBeNull()
+      expect(got.lefts.get(2)?.items.map(it => it[0])).toEqual(['* * *'])
+    }
+  })
+
+  it('a draw the writer sheds with its part\'s tokens (past TOKENS_PAGE) is counted in stats.draw.shed, and its part ships none', async () => {
+    // (page 3: 1,500 lines of eleven words, 16,500 tokens; its draw within every cap of its own)
+    const w = worldOf()
+    w.pages[2] = { runs: Array.from({ length: 1500 }, (_, j): Run => ({ s: words(10_000 + 11 * j, 11), x: 72, y: 780 - (j % 1400) * 0.5 })) }
+    w.marked = w.pages
+    w.marks = w.marks.filter(m => m[1] !== 3)
+    w.units = w.units.slice(0, 2)
+    const got = await passOf(w)
+    expect(got.r).toMatchObject({ stats: { draw: { pages: 3, none: 0, shed: 1 } } })
+    expect(got.lefts.get(3)).toBeNull()
+    expect(got.lefts.get(1)).not.toBeNull()
   })
 
   it('`draw: false` reads no page\'s draw: every page tells none', async () => {
@@ -178,6 +206,24 @@ describe('makerOf: the draw option', () => {
     if ('refused' in m) throw new Error('refused')
     await m.readPage(1)
     expect(text.draw?.map(x => x !== null)).toEqual([false, true, true])
+  })
+
+  it('counts a held draw in its encoded bytes, for the budget and the stats: a page of CJK text', async () => {
+    const w = worldOf()
+    w.pages[0] = { runs: Array.from({ length: 10 }, (_, j): Run => ({ s: '\u6f22\u5b57\u306e\u6587\u3002'.repeat(8), x: 72, y: 700 - 12 * j })) }
+    w.marked = w.pages
+    const m = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+    if ('refused' in m) throw new Error('refused')
+    await m.readPage(1)
+    const bytes = m.drawStats.bytes, text = m.drawJsonOf(1) as string
+    expect(bytes).toBe(new TextEncoder().encode(text).length)
+    expect(bytes).toBeGreaterThan(text.length + 500)
+    // (a budget past the text's code units and short of its bytes holds none)
+    const tight = await makerOf({ ...(await input(w, { draw: true, drawHeldMax: text.length + 100 })), arxiv: drawable(arxivOf(w.pages)) as never })
+    if ('refused' in tight) throw new Error('refused')
+    await tight.readPage(1)
+    expect(tight.drawOf(1)).toBeNull()
+    expect(tight.drawStats).toMatchObject({ pages: 0, none: 1, why: { held: 1 }, bytes: 0 })
   })
 
   it('past the held budget a page has none, and a page taken frees room for the next', async () => {
