@@ -47,6 +47,9 @@ export interface ReaderState {
   failedUnits: number
   /** why the last run could not translate, as the chain's error kind (the popup's REASON); null otherwise */
   failure: ProviderErrorKind | null
+  /** where `failure` came from: the original's own fetch (`pdf`: its open mends it), or the service, the session (`service`:
+   *  only a run mends it). Both may say `network`, so the source is named where the failure is told, never inferred */
+  failureOrigin: 'pdf' | 'service' | null
   languageSupported: boolean
   /** what can be downloaded: nothing yet, the original, or the translation (Task 20 fills it) */
   download: 'none' | 'original' | 'translation'
@@ -96,6 +99,7 @@ export const INITIAL: ReaderState = {
   loaded: 0,
   failedUnits: 0,
   failure: null,
+  failureOrigin: null,
   languageSupported: true,
   download: 'none',
   scale: 1,
@@ -141,7 +145,7 @@ const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_
 const drawn = (state: ReaderState) => state.layer.laid > 0
 /** the original could not be opened: its card stands, whatever the run does meanwhile (its rows wait for the original),
  *  until the original opens */
-const noOriginal = (state: ReaderState) => state.phase === 'failed' && state.sides.left.pages === 0
+const noOriginal = (state: ReaderState) => state.phase === 'failed' && state.failureOrigin === 'pdf'
 
 /**
  * One event folded into the state; the same object when nothing changed, so that no listener hears of it. The phase moves
@@ -195,12 +199,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     // the original on screen, in every display: readable, a failure of its open before it mended (a retry that opened)
     // (a failure the open mends is the original's own fetch failure alone: a service's, a key missing, stays with its card)
     case 'opened': {
-      const mends = state.phase === 'failed' && state.failure === 'network' && !drawn(state)
-      return { ...state, phase: state.phase === 'loading' || mends ? 'ready' : state.phase, failure: mends ? null : state.failure, download: state.download === 'none' ? 'original' : state.download }
+      const mends = state.phase === 'failed' && state.failureOrigin === 'pdf'
+      return { ...state, phase: state.phase === 'loading' || mends ? 'ready' : state.phase, failure: mends ? null : state.failure, failureOrigin: mends ? null : state.failureOrigin, download: state.download === 'none' ? 'original' : state.download }
     }
     case 'fail': {
       const failure = kindOf(event.kind)
-      return { ...state, phase: drawn(state) ? 'ready' : 'failed', failure }
+      return { ...state, phase: drawn(state) ? 'ready' : 'failed', failure, failureOrigin: event.event === 'fetch failed' ? 'pdf' : 'service' }
     }
     case 'preparing': {
       const preparing = { position: event.position, progress: event.progress }
@@ -234,21 +238,21 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
  *  phase and its reason kept) */
 function reduceRun(state: ReaderState, event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>, held: boolean): ReaderState {
   const next = reduceRunFree(state, event)
-  return held ? { ...next, phase: 'failed', failure: 'network' } : next
+  return held ? { ...next, phase: 'failed', failure: 'network', failureOrigin: 'pdf' } : next
 }
 function reduceRunFree(state: ReaderState, event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>): ReaderState {
   switch (event.type) {
     case 'translating': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 0
-      return { ...state, phase: 'translating', begun: true, laying: false, failure: null, progress, failedUnits: event.lost }
+      return { ...state, phase: 'translating', begun: true, laying: false, failure: null, failureOrigin: null, progress, failedUnits: event.lost }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
-      if (event.stopped && !drawn(state)) return { ...state, phase: 'failed', begun: true, failure: event.stopped, progress, failedUnits: event.lost }
+      if (event.stopped && !drawn(state)) return { ...state, phase: 'failed', begun: true, failure: event.stopped, failureOrigin: 'service', progress, failedUnits: event.lost }
       // done with nothing laid where the translation shows: the end held until a page is (laying)
-      if (!event.stopped && !drawn(state) && state.display !== 'original') return { ...state, phase: 'translating', begun: true, laying: true, progress, failedUnits: event.lost, failure: null }
-      return { ...state, phase: 'ready', begun: true, laying: false, progress, failedUnits: event.lost, failure: event.stopped }
+      if (!event.stopped && !drawn(state) && state.display !== 'original') return { ...state, phase: 'translating', begun: true, laying: true, progress, failedUnits: event.lost, failure: null, failureOrigin: null }
+      return { ...state, phase: 'ready', begun: true, laying: false, progress, failedUnits: event.lost, failure: event.stopped, failureOrigin: event.stopped ? 'service' : null }
     }
     case 'unavailable': {
       const lasting = LASTING.has(event.why)

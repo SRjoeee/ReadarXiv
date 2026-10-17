@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { createController, fromView, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
 import type { SessionEvent, SessionHost } from '@/pdf-reader/session/events'
-import { capsuleOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
+import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
 
 const fold = (events: SessionEvent[], from = INITIAL) => events.reduce(reduce, from)
 const opened: SessionEvent = { type: 'opened' }
@@ -131,6 +131,17 @@ describe('reduce: the layer\'s states (Task 12)', () => {
 
   it('a target the layer does not set: the language not supported (the menu offered), the paper not greyed', () => {
     expect(fold([opened, { type: 'unavailable', why: 'target', retryAt: null }])).toMatchObject({ languageSupported: false, available: true, phase: 'ready' })
+  })
+
+  it('the engine fails fast (network), the PDF opens later: the failure card stays, with its retry; the reverse, the PDF\'s own fetch failure mended by its open, is cleared (Devin, Codex on #391)', () => {
+    const service = fold([{ type: 'fail', event: 'service', text: '', kind: 'network' }, opened])
+    expect(service).toMatchObject({ phase: 'failed', failure: 'network' })
+    expect(cardOf(service)).toEqual({ reason: expect.any(String), action: 'retry' })
+    const pdf = fold([{ type: 'fail', event: 'fetch failed', text: '', kind: 'network' }, opened])
+    expect(pdf).toMatchObject({ phase: 'ready', failure: null })
+    expect(cardOf(pdf)).toBeNull()
+    // the run's events over a service's failure leave it the service's: no original's fetch failure is made of it
+    expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'no-key' }, { type: 'translated', got: 0, total: 9, lost: 0, stopped: null }, opened]).failure).not.toBe('network')
   })
 
   it('the original opening after a service failed keeps the service\'s reason: the card stays the one that says what to do (no key: the settings) (Codex on #390)', () => {
