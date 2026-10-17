@@ -26,6 +26,10 @@ import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+
+// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
+await checkCompileImage()
 
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
@@ -82,9 +86,9 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   const paper = openPaper(files)
   const main = paper.project.main, stem = main.split('/').pop().replace(/\.[^.]+$/, '')
   // the paper's own switch, as the run sets it: the mark probe in the font probe's compile, one pass, cached by its files
-  const docker = (dir, cmd) => run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
+  const docker = (dir, cmd) => run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
   const keyOf = over => {
-    const hash = createHash('sha256').update(String(EPOCH))
+    const hash = createHash('sha256').update(String(EPOCH)).update(COMPILE_IDENTITY)
     const all = new Map(files)
     for (const [p, b] of over) all.set(p, b)
     for (const [p, b] of [...all].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)

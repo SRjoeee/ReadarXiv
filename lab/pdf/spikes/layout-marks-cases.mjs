@@ -34,6 +34,10 @@ import { classOf, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES,
 import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.mjs'
 import { boxDiff, pageBoxes } from './layout-marks-compare.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
+import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+
+// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
+await checkCompileImage()
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
@@ -159,7 +163,7 @@ function compileAll(jobs) {
     try { execFileSync('sh', [join(dir, 'run.sh')], { cwd: dir, env, stdio: 'ignore', timeout: 1_800_000 }) } catch {}
     return
   }
-  try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', 'texlive/texlive:latest', 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 }) } catch {}
+  try { execFileSync('docker', ['run', ...PLATFORM, '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', COMPILE_IMAGE, 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 }) } catch {}
 }
 const jobs = [], queued = []
 /** the source as v0 and v1 of a job, queued: written once the mark probes have answered (prepare) */

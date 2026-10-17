@@ -9,6 +9,10 @@ import { dirname, join, relative } from 'node:path'
 import { promisify } from 'node:util'
 import { FONT_PROBE, loadProject, MARK_DEF, markUnits, patch, readFontProbe } from './latex-front.mjs'
 import { analyze } from './paper-meta.mjs'
+import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+
+// (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
+await checkCompileImage()
 const run = promisify(execFile)
 const root = new URL('..', import.meta.url).pathname
 const IMAGE = /\.(png|jpe?g|pdf|eps|gif|bmp|tiff?)$/i
@@ -33,7 +37,7 @@ for (const id of process.argv.slice(2)) {
     writeFileSync(mainPath, Buffer.concat([Buffer.from(MARK_DEF), Buffer.from(text, 'latin1')]))
   }
   const t0 = Date.now()
-  try { await run('docker', ['run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${work}:/work`, '-w', '/work', 'texlive/texlive:latest', 'timeout', '300', 'latexmk', FLAG[meta.compiler], ...(meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-file-line-error', '-f', meta.main], { maxBuffer: 1 << 26 }) } catch {}
+  try { await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${work}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '300', 'latexmk', FLAG[meta.compiler], ...(meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-file-line-error', '-f', meta.main], { maxBuffer: 1 << 26 }) } catch {}
   const stem = meta.main.split('/').pop().replace(/\.[^.]+$/, '')
   const log = readFileSync(join(work, `${stem}.log`), 'latin1'), ref = readFileSync(join(root, 'data/runs/native', id, `${stem}.log`), 'latin1')
   const errs = l => (l.match(/^(?:\S+:\d+: |! )/gm) ?? []).length
