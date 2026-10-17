@@ -4,7 +4,8 @@ import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { giveUp, listWithin, OPS_MS, within } from '@/pdf-reader/engine/layout/oplist.mjs'
-import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
+import { pagePlansOf, paperAddon } from '@/pdf-reader/engine/layout/addon.mjs'
+import { readAnnots } from '@/pdf-reader/engine/layer-proto/links.mjs'
 import { ALLOCATION_FAILED, isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
@@ -85,6 +86,17 @@ describe('listWithin, giveUp: a page\'s operator list within OPS_MS, a page give
     }
     // (another failure is still a page given up on: null)
     await expect(within(Promise.reject(new RangeError('Invalid array buffer length')), OPS_MS)).resolves.toBeNull()
+  })
+
+  it('nor is it a page without links, or an add-on refused: readAnnots and paperAddon let it through, other failures as before', async () => {
+    const oom = Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
+    await expect(readAnnots({ getAnnotations: () => Promise.reject(oom) })).rejects.toBe(oom)
+    await expect(readAnnots({ getAnnotations: () => { throw oom } })).rejects.toBe(oom)
+    await expect(readAnnots({ getAnnotations: () => Promise.reject(new Error('broken page')) })).resolves.toBeNull()
+    // (the add-on's maker, failing inside: an input it cannot read)
+    const failing = (e: unknown) => new Proxy({}, { get: () => { throw e } })
+    await expect(paperAddon(failing(oom) as never)).rejects.toBe(oom)
+    await expect(paperAddon(failing(new Error('a broken input')) as never)).resolves.toMatchObject({ ok: false })
   })
 
   it('a PDF.js with no cancel: a warning once a reader, naming it', () => {

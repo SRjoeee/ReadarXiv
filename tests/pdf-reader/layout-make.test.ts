@@ -11,6 +11,7 @@ import { type Annot, arxivOf, endOf, FONTS, type Mark, markedOf, marksOf, type P
 import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
 import { LINKS_MAX, markedPages, marksOfHead, readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { MAX_LINKS } from '@/pdf-reader/engine/layer-proto/links.mjs'
+import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { inkOfPage } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 
 // The layout maker over the fake world of helpers/make-world.ts
@@ -2029,6 +2030,25 @@ describe('the link-anchor locator in the page stream: the whole run\'s pieces pl
       const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
       for (const s of [st, sm]) expect(rows(mergeLayout([s.layout() as never]) as never)).toEqual(rows(whole.file as never))
     }
+  })
+
+  it('a memory-class failure reading a page is no dark page and no paper without links: the head and the maker end on it (C8.4)', async () => {
+    const oom = Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
+    const w = world(['C', 'D'])
+    const marked = markedOf(w.marked ?? w.pages, w.marks) as unknown as { getPage(n: number): Promise<Record<string, unknown>> }
+    const headOf = (doc: unknown) => markedPages(doc as never, '', { engine: 'pdflatex', units: w.units, OPS } as never).next()
+    // (the head reads its link pages' annotations, and each such page)
+    await expect(headOf({ ...marked, getPage: async (n: number) => { const p = await marked.getPage(n); return n === 2 ? { ...p, getAnnotations: () => Promise.reject(oom) } : p } })).rejects.toBe(oom)
+    await expect(headOf({ ...marked, getPage: async (n: number) => { if (n === 2) throw oom; return marked.getPage(n) } })).rejects.toBe(oom)
+    // (arXiv's page: step T's read of its text, and the maker's of its ink)
+    const arx = arxivOf(w.pages) as unknown as { getPage(n: number): Promise<unknown> }
+    const broken = { ...arx, getPage: async (n: number) => { if (n === 2) throw oom; return arx.getPage(n) } }
+    const input = async () => ({ units: w.units, marks: await marksOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+    await expect(makerOf({ ...(await input()), arxiv: broken as never })).rejects.toBe(oom)
+    const m = await makerOf({ ...(await input()), arxiv: broken as never, text: await readArxivText(arxivOf(w.pages)) })
+    if ('refused' in m) throw new Error('refused')
+    await m.readPage(1)
+    await expect(m.readPage(2)).rejects.toBe(oom)
   })
 
   it('the head tells the paper\'s links as the whole read holds them: their count and destinations, or none past LINKS_MAX', async () => {

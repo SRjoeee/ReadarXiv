@@ -526,7 +526,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (unread.has(p)) return
     if (heldTheirs.has(p)) { theirLinks[p] = heldTheirs.get(p); dropHeld(p); return }
     let page = null
-    try { page = await arxiv.getPage(p) } catch {}
+    try { page = await arxiv.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
     if (page) theirLinks[p] = theirsOf(await within(readAnnots(page), OPS_MS), p)
   }
   /** page p's ink, read once, its time spent on the paper's `ms.ops` */
@@ -588,9 +588,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const tx = drawTexts ? drawTexts[p - 1] ?? null : null
     if (drawTexts) drawTexts[p - 1] = null
     if (unread.has(p)) return
-    // (the page its text was read from: PDF.js keeps each page's proxy)
+    // (the page its text was read from: PDF.js keeps each page's proxy; a memory-class failure is no dark page, C8.4)
     let page = null
-    try { page = await arxiv.getPage(p) } catch {}
+    try { page = await arxiv.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
     if (!page) { dark.add(p); return }
     // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs)
     const ops = await listWithin(page, seen)
@@ -2310,7 +2310,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    */
   function stream({ marked: mh = null } = {}) {
     // (the columns' edges given, a whole run's; or under rule 3 its own, a page at a time: a page's edges read only the pages
-    // before it and its own, the cover pages the first page with a body line)
+    // before it and its own, a cover page's the first later page of its own columns whose pools give it some)
     const ownEdges = !edges && rules.edges === 'earlier'
     if (!edges && !ownEdges) throw new TypeError('the page stream needs the columns\' edges given (`columnEdges`), or rule 3\'s (rules.edges \'earlier\')')
     let edgesTo = 0
@@ -2569,9 +2569,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (decidedCount === n) return Math.min(lowAt - 1, pages)
       return Math.min(R.am - 1, lowAt - 1, pages)
     }
+    /** the last page of each column count (the marks' columns, known from the head): past it no page's pools of that count move */
+    const lastOfColumns = new Map()
+    if (ownEdges) for (let r = 1; r <= pages; r++) lastOfColumns.set(twoCols(r), r)
     /** page q's rule-3 edges, after every unit placed on it and the pages before it (their pools first, in page order); a cover
      *  page's passes after the place held until a later page's pools give it its edges (earlierEdges: the first later page of its
-     *  own columns, not merely one with edges of its own), every one at the last page */
+     *  own columns, not merely one with edges of its own), or until the last page of its columns has passed (its pools move no
+     *  more: none will come), every one at the last page */
     const edgesTask = q => ({
       key: [0.5, q], pages: [q], edgesOf: q,
       run: () => {
@@ -2580,7 +2584,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         edgesTo = q
         const waiting = E.waiting()
         if (waiting.includes(q) && q < pages) held.add(q)
-        for (const p of [...held]) if (q === pages || !waiting.includes(p)) { work.push(p); held.delete(p) }
+        for (const p of [...held]) if (q === pages || q >= lastOfColumns.get(twoCols(p)) || !waiting.includes(p)) { work.push(p); held.delete(p) }
         work.push(q + 1)
       },
     })

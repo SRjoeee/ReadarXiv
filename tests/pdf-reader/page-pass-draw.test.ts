@@ -131,6 +131,19 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
     }
   })
 
+  it('a draw the writer sheds with its part\'s tokens (past TOKENS_PAGE) is counted in stats.draw.shed, and its part ships none', async () => {
+    // (page 3: 1,500 lines of eleven words, 16,500 tokens; its draw within every cap of its own)
+    const w = worldOf()
+    w.pages[2] = { runs: Array.from({ length: 1500 }, (_, j): Run => ({ s: words(10_000 + 11 * j, 11), x: 72, y: 780 - (j % 1400) * 0.5 })) }
+    w.marked = w.pages
+    w.marks = w.marks.filter(m => m[1] !== 3)
+    w.units = w.units.slice(0, 2)
+    const got = await passOf(w)
+    expect(got.r).toMatchObject({ stats: { draw: { pages: 3, none: 0, shed: 1 } } })
+    expect(got.lefts.get(3)).toBeNull()
+    expect(got.lefts.get(1)).not.toBeNull()
+  })
+
   it('`draw: false` reads no page\'s draw: every page tells none', async () => {
     const off = await passOf(worldOf(), {}, { draw: false })
     expect([...off.lefts.values()]).toEqual([null, null, null])
