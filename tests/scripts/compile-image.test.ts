@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { COVERAGE_SOURCE } from '../../src/pdf-reader/engine/rules/font-coverage.mjs'
 import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, compileIdentity, compileImageRef, identityOf, imageFromArg, platformArgs } from '../../lab/pdf/spikes/compile-image.mjs'
 
 // The compile image's identity (lab/pdf/spikes/compile-image.mjs): one reference for every Docker compile of the lab, the same
@@ -117,5 +118,11 @@ describe('a native compile, the platform in the inspection and the key, and --im
     expect(() => imageFromArg('texlive/texlive:latest')).toThrow(/by digest/)
     expect(() => imageFromArg('texlive/texlive')).toThrow(/by digest/)
     expect(readFileSync(join(import.meta.dirname, '../../lab/pdf/spikes/layout-paper-check.mjs'), 'utf8')).toContain("imageFromArg(argOf('image'))")
+  })
+})
+
+describe('the font coverage is of the pinned image', () => {
+  it('names the image the TeX Live faces were measured in: the pin\'s texlive', () => {
+    expect(COVERAGE_SOURCE.release.texlive, 'regenerate scripts/font-roles.py from the pinned image\'s faces, or pin the image they were measured in').toBe(pin.texlive)
   })
 })
