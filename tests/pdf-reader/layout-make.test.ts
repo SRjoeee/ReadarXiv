@@ -1,13 +1,13 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, PH_KINDS, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
 import { CARRY_MIN, fontName, GIVEN_UP_MAX, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
-import { arxivOf, endOf, FONTS, type Mark, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
+import { type Annot, arxivOf, endOf, FONTS, type Mark, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
 import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
 
 // The layout maker over the fake world of helpers/make-world.ts
@@ -1628,5 +1628,150 @@ describe('makeLayout, a piece TeX broke over lines past the unit\'s lines (2609.
     })
     expect(phOf(taken.file, 0, 1)).toEqual([0, 1, 2, PH_FLAG.LOST])
     expect(rowsOf(taken.file, 0, 'lines')).toHaveLength(8)
+  })
+})
+
+describe('makeLayout, the link-anchor locator: a reference or a citation placed by its link annotation', () => {
+  // ours (the marked compile) and arXiv's alike but the reference's name: cleveref's "Appendix C" in TeX Live 2026, "Section C"
+  // on arXiv's; the link on the number alone in both (hyperref's), its destination appendix.C. Every character 5 pt wide
+  const OURS = 'w0 w1 w2 w3 see Appendix C for w4 w5 w6', THEIRS = 'w0 w1 w2 w3 see Section C for w4 w5 w6'
+  // (another paragraph of nine lines, the same in both: the carry's share over CARRY_MIN where one line of ours is not carried)
+  const filler: Run[] = Array.from({ length: 9 }, (_, j) => ({ s: words(20 + 10 * j, 10), x: 72, y: 664 - 12 * j }))
+  const fillerEnd: Mark = ['1e', 1, endOf(filler[8] as Run), (filler[8] as Run).y]
+  const tail: Run = { s: 'w7 w8 w9', x: 72, y: 688 }
+  const drift = (ours: string, theirs: string, o: { mine?: Annot[]; arxiv?: Annot[]; cref?: string; theirRuns?: Run[] } = {}): World => ({
+    marked: [{ runs: [{ s: ours, x: 72, y: 700 }, tail, ...filler], ...(o.mine ? { annots: o.mine } : {}) }],
+    pages: [{ runs: o.theirRuns ?? [{ s: theirs, x: 72, y: 700 }, tail, ...filler], ...(o.arxiv ? { annots: o.arxiv } : {}) }],
+    marks: [['0s', 1, 72, 700], ['0e', 1, endOf(tail), 688], ['p0.1a', 1, 152, 700], ['p0.1b', 1, xAt({ s: ours, x: 72, y: 700 }, ours.indexOf(' for')), 700], ['1s', 1, 72, 664], fillerEnd],
+    units: [unit('para', [text('w0 w1 w2 w3 see '), ph(o.cref ?? '\\cref{app:c}'), text(' for w4 w5 w6 w7 w8 w9')]), unit('para', [text(words(20, 90))])],
+  })
+  /** a link over a run's characters [from, to) on its baseline, hyperref's 1 pt margin round them */
+  const over = (r: Run, from: number, to: number, dest: string): Annot => ({ rect: [xAt(r, from) - 1, r.y - 3, xAt(r, to) + 1, r.y + 9], dest })
+  const ours = { s: OURS, x: 72, y: 700 }, theirs = { s: THEIRS, x: 72, y: 700 }
+  const C = (r: Run) => r.s.indexOf(' C ') + 1
+  const cref = () => drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')], arxiv: [over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] })
+
+  it("cleveref's other name: the link on arXiv's page, paired by its destination, and the word before it, found (2609.26457)", async () => {
+    const { file, stats } = await made(cref())
+    // from Section's S to the C under the link, one segment of the line
+    expect(phOf(file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('ref'), 0, 1, 152, 700, xAt(theirs, C(theirs) + 1), 707.5, 697.5])
+    expect(file.pageText).toContainEqual([0, 1, 'Section C'])
+    expect(stats.links.placed).toEqual([[0, 1]])
+    expect(stats.ph).toMatchObject({ found: 1, lost: 0, foreign: 0, twice: 0 })
+  })
+
+  it('found today, it is the same row, links or none, and the locator never tries it', async () => {
+    const same = (mine?: Annot[], arxiv?: Annot[]) => made(drift(THEIRS, THEIRS, { ...(mine ? { mine } : {}), ...(arxiv ? { arxiv } : {}) }))
+    const plain = await same(), linkedToo = await same([over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')], [over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')])
+    expect(phOf(plain.file, 0, 1)[3]).toBe(0)
+    expect(encodeLayout(linkedToo.file)).toBe(encodeLayout(plain.file))
+    expect(linkedToo.stats.links).toEqual({ tried: 0, placed: [], why: {} })
+  })
+
+  it('no hyperref (no link in either PDF, or none in ours): LOST, the file the same bytes', async () => {
+    const none = await made(drift(OURS, THEIRS))
+    expect(phOf(none.file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('ref'), PH_FLAG.LOST])
+    const theirsOnly = await made(drift(OURS, THEIRS, { arxiv: [over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] }))
+    expect(encodeLayout(theirsOnly.file)).toBe(encodeLayout(none.file))
+    expect(theirsOnly.stats.links.tried).toBe(0)
+    // arXiv's page whose annotations cannot be read: no rank is known there
+    const unread = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')] }))
+    expect(encodeLayout(unread.file)).toBe(encodeLayout(none.file))
+    expect(unread.stats.links.why).toEqual({ 'pair: no partner': 1 })
+  })
+
+  it('a citation on a line our compile set otherwise (no line carried, so no glyph matched): found by its link, its brackets ours', async () => {
+    const M1: Run = { s: 'w8 w9 [12] w10 w11 w12 w13 w14 w15 w16 w17', x: 72, y: 688 }, A1: Run = { s: 'w8 w9 [12] w10', x: 72, y: 688 }
+    const head: Run = { s: words(0, 8), x: 72, y: 700 }
+    const more: Run[] = Array.from({ length: 9 }, (_, j) => ({ s: words(30 + 10 * j, 10), x: 72, y: 652 - 12 * j }))
+    const M2: Run = { s: 'w18 w19', x: 72, y: 676 }, A2: Run = { s: 'w11 w12 w13 w14 w15 w16 w17 w18 w19', x: 72, y: 676 }
+    const at = M1.s.indexOf('[')
+    const w: World = {
+      marked: [{ runs: [head, M1, M2, ...more], annots: [over(M1, at + 1, at + 3, 'cite.k')] }],
+      pages: [{ runs: [head, A1, A2, ...more], annots: [over(A1, at + 1, at + 3, 'cite.k')] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(M2), 676], ['p0.1a', 1, xAt(M1, at), 688], ['p0.1b', 1, xAt(M1, at + 4), 688], ['1s', 1, 72, 652], ['1e', 1, endOf(more[8] as Run), more[8]?.y as number]],
+      units: [unit('para', [text(`${words(0, 10)} `), ph('\\citep{k}'), text(` ${words(10, 10)}`)]), unit('para', [text(words(30, 90))])],
+    }
+    const { file, stats } = await made(w)
+    expect(phOf(file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('cite'), 0, 1, xAt(A1, at), 688, xAt(A1, at + 4), 695.5, 685.5])
+    expect(file.pageText).toContainEqual([0, 1, '[12]'])
+    expect(stats.links.placed).toEqual([[0, 1]])
+    // a link of another key: LOST
+    const other = await made({ ...w, pages: [{ runs: [head, A1, A2, ...more], annots: [over(A1, at + 1, at + 3, 'cite.j')] }], marked: [{ runs: [head, M1, M2, ...more], annots: [over(M1, at + 1, at + 3, 'cite.j')] }] })
+    expect(phOf(other.file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('cite'), PH_FLAG.LOST])
+    expect(other.stats.links.why).toEqual({ 'ours: a link of another kind': 1 })
+  })
+
+  it('two links of one piece (\\cref{a,b}): each paired, our gap between them exactly arXiv\'s, the word before the first', async () => {
+    const O: Run = { s: 'w0 w1 w2 w3 see Appendices A and B for w4 w5 w6', x: 72, y: 700 }, T: Run = { s: 'w0 w1 w2 w3 see Sections A and B for w4 w5 w6', x: 72, y: 700 }
+    const A = (r: Run) => r.s.indexOf(' A ') + 1, B = (r: Run) => r.s.indexOf(' B ') + 1
+    const w = drift(O.s, T.s, { mine: [over(O, A(O), A(O) + 1, 'appendix.A'), over(O, B(O), B(O) + 1, 'appendix.B')], arxiv: [over(T, A(T), A(T) + 1, 'appendix.A'), over(T, B(T), B(T) + 1, 'appendix.B')], cref: '\\cref{app:a,app:b}' })
+    const { file, stats } = await made(w)
+    expect(phOf(file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('ref'), 0, 1, 152, 700, xAt(T, B(T) + 1), 707.5, 697.5])
+    expect(file.pageText).toContainEqual([0, 1, 'Sections A and B'])
+    expect(stats.links.placed).toEqual([[0, 1]])
+    // arXiv's gap another word ("A to B"): LOST
+    const U: Run = { s: 'w0 w1 w2 w3 see Sections A to B for w4 w5 w6', x: 72, y: 700 }
+    const to = await made(drift(O.s, U.s, { mine: [over(O, A(O), A(O) + 1, 'appendix.A'), over(O, B(O), B(O) + 1, 'appendix.B')], arxiv: [over(U, A(U), A(U) + 1, 'appendix.A'), over(U, B(U), B(U) + 1, 'appendix.B')], cref: '\\cref{app:a,app:b}' }))
+    expect(phOf(to.file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('ref'), PH_FLAG.LOST])
+    expect(to.stats.links.why).toEqual({ 'order: a gap not ours': 1 })
+  })
+
+  it('hyperref named the equation otherwise: paired by its family and rank, its partner\'s name none of ours', async () => {
+    const O = 'w0 w1 w2 w3 see Equation 3 for w4 w5 w6', T = 'w0 w1 w2 w3 see Eq. 3 for w4 w5 w6'
+    const o: Run = { s: O, x: 72, y: 700 }, t: Run = { s: T, x: 72, y: 700 }
+    const three = (r: Run) => r.s.indexOf(' 3 ') + 1
+    const { file, stats } = await made(drift(O, T, { mine: [over(o, three(o), three(o) + 1, 'equation.3')], arxiv: [over(t, three(t), three(t) + 1, 'equation.2.3')], cref: '\\cref{eq:x}' }))
+    expect(phOf(file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('ref'), 0, 1, 152, 700, xAt(t, three(t) + 1), 707.5, 697.5])
+    expect(file.pageText).toContainEqual([0, 1, 'Eq. 3'])
+    expect(stats.links.placed).toEqual([[0, 1]])
+    // its partner by family is named as one of ours (ours names equation.2.3 too, later): LOST
+    const named = await made(drift(O, T, { mine: [over(o, three(o), three(o) + 1, 'equation.3'), over(filler[0] as Run, 0, 3, 'equation.2.3')], arxiv: [over(t, three(t), three(t) + 1, 'equation.2.3'), over(filler[0] as Run, 0, 3, 'equation.2.3')], cref: '\\cref{eq:x}' }))
+    expect(phOf(named.file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('ref'), PH_FLAG.LOST])
+    expect(named.stats.links.why).toEqual({ 'pair: no partner': 1 })
+  })
+
+  it('ambiguous stays LOST: our link part outside the piece; arXiv\'s r-th of the name another\'s (one more before it); the partners on two lines', async () => {
+    const lost = [0, 1, PH_KINDS.indexOf('ref'), PH_FLAG.LOST]
+    // our link over "C f": a glyph of it outside the piece
+    const part = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 3, 'appendix.C')], arxiv: [over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] }))
+    expect(phOf(part.file, 0, 1)).toEqual(lost)
+    expect(part.stats.links.why).toEqual({ "ours: a link not wholly the piece's": 1 })
+    // arXiv's first appendix.C is another line's (natbib's split, a link more): its rank-0 partner is not on the unit's line
+    const off = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')], arxiv: [over(filler[0] as Run, 0, 3, 'appendix.C'), over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] }))
+    expect(phOf(off.file, 0, 1)).toEqual(lost)
+    expect(off.stats.links.why).toEqual({ 'link: not on one line of the unit': 1 })
+    // \cref{a,b}: "Appendices A and B" ours on one line, arXiv's "Sections A and" / "B for …" on two
+    const head: Run = { s: words(40, 8), x: 72, y: 712 }
+    const O: Run = { s: 'w0 w1 w2 w3 see Appendices A and B for w4 w5 w6', x: 72, y: 700 }
+    const T1: Run = { s: 'w0 w1 w2 w3 see Sections A and', x: 72, y: 700 }, T2: Run = { s: 'B for w4 w5 w6 w7 w8 w9', x: 72, y: 688 }
+    const a = O.s.indexOf(' A ') + 1, b = O.s.indexOf(' B ') + 1
+    const two = await made({
+      marked: [{ runs: [head, O, tail, ...filler], annots: [over(O, a, a + 1, 'appendix.A'), over(O, b, b + 1, 'appendix.B')] }],
+      pages: [{ runs: [head, T1, T2, ...filler], annots: [over(T1, T1.s.indexOf(' A ') + 1, T1.s.indexOf(' A ') + 2, 'appendix.A'), over(T2, 0, 1, 'appendix.B')] }],
+      marks: [['0s', 1, 72, 712], ['0e', 1, endOf(tail), 688], ['p0.1a', 1, 152, 700], ['p0.1b', 1, xAt(O, O.s.indexOf(' for')), 700], ['1s', 1, 72, 664], fillerEnd],
+      units: [unit('para', [text(`${words(40, 8)} w0 w1 w2 w3 see `), ph('\\cref{app:a,app:b}'), text(' for w4 w5 w6 w7 w8 w9')]), unit('para', [text(words(20, 90))])],
+    })
+    expect(phOf(two.file, 0, 1)).toEqual(lost)
+    expect(two.stats.links.why).toEqual({ 'link: not on one line of the unit': 1 })
+  })
+
+  it('bounds refuse: two words before the link, a word of no reference name, one wider than PREFIX_EM', async () => {
+    const at = (s: string) => {
+      const r: Run = { s, x: 72, y: 700 }
+      return drift(OURS, s, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')], arxiv: [over(r, C(r), C(r) + 1, 'appendix.C')] })
+    }
+    const lost = [0, 1, PH_KINDS.indexOf('ref'), PH_FLAG.LOST]
+    const twoWords = await made(at('w0 w1 w2 w3 see in Section C for w4 w5 w6'))
+    expect(phOf(twoWords.file, 0, 1)).toEqual(lost)
+    expect(twoWords.stats.links.why).toEqual({ 'prefix: not our text before it': 1 })
+    const annex = await made(at('w0 w1 w2 w3 see Annex C for w4 w5 w6'))
+    expect(phOf(annex.file, 0, 1)).toEqual(lost)
+    expect(annex.stats.links.why).toEqual({ 'prefix: theirs no reference word': 1 })
+    // "Section" 20 pt a character: 140 pt, far past PREFIX_EM of its 10 pt
+    const wideRuns: Run[] = [{ s: 'w0 w1 w2 w3 see', x: 72, y: 700 }, { s: 'Section', x: 152, y: 700, w: 2 }, { s: 'C for w4 w5 w6', x: 297, y: 700 }, tail, ...filler]
+    const wide = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')], arxiv: [over(wideRuns[2] as Run, 0, 1, 'appendix.C')], theirRuns: wideRuns }))
+    expect(phOf(wide.file, 0, 1)).toEqual(lost)
+    expect(wide.stats.links.why).toEqual({ 'prefix: too wide': 1 })
   })
 })

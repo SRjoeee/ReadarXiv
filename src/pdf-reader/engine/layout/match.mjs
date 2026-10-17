@@ -255,9 +255,12 @@ export function matcherOf({ ink, carry, pageWork = MATCH_PAGE_WORK }) {
     }
     const out = rigid(best.out)
     for (const x of out) if (x) { ink[x.page].taken[x.g] = 1; stats[x.how]++ }
-    if (out.some(x => !x)) return { why: "its glyphs not all matched on arXiv's page" }
+    // (a piece not matched names the glyphs it took all the same, `took`: the maker's link-anchor locator sets them aside for
+    // the piece's own search, and gives them back)
+    const took = () => out.filter(Boolean).map(x => [x.page, x.g])
+    if (out.some(x => !x)) return { why: "its glyphs not all matched on arXiv's page", took: took() }
     const boxes = list.length ? rules(list, items, out, ca, A) : []
-    if (!boxes) return { why: "a rule not matched on arXiv's page" }
+    if (!boxes) return { why: "a rule not matched on arXiv's page", took: took() }
     return { glyphs: out.map(x => [x.page, x.g]), boxes }
   }
   return { match, stats }

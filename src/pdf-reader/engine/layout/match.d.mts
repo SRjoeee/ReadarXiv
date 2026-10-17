@@ -6,7 +6,7 @@ export interface MatchInk { n: number; x0: Float64Array; x1: Float64Array; y: Fl
 export interface Matched { glyphs: [page: number, index: number][]; boxes: [page: number, index: number][]; why?: undefined }
 /** a paper's matcher: each piece's own glyphs and rules carried and matched on arXiv's page, every one, or why not */
 export declare function matcherOf(o: { ink: (MatchInk | null)[]; carry: (page: number, x: number, y: number) => { page: number; x: number; y: number } | null; pageWork?: number }): {
-  match(items: { page: number; x0: number; y: number; size: number; u: string }[], rules: { page: number; x0: number; y0: number; x1: number; y1: number }[], A: { page: number; x: number; y: number } | null, B: { page: number; x: number; y: number } | null): Matched | { why: string }
+  match(items: { page: number; x0: number; y: number; size: number; u: string }[], rules: { page: number; x0: number; y0: number; x1: number; y1: number }[], A: { page: number; x: number; y: number } | null, B: { page: number; x: number; y: number } | null): Matched | { why: string; took?: [page: number, index: number][] }
   /** `most`: the most work a page cost */
   stats: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number; most: number }
 }
