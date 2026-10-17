@@ -68,6 +68,22 @@ describe('drawDataOf', () => {
     expect((await drawDataOf(type3)).draw).not.toBeNull()
   })
 
+  it('tells a Type3 font\'s map as the live reading does (fontMappedOf): its characters, null with none, the same under any type3 row', async () => {
+    const page = pageOf({
+      items: [item('a', 'm'), item('b', 'n'), item('c', 'e'), item('d', 'z')],
+      styles: { m: { fontFamily: 'serif' }, n: { fontFamily: 'serif' }, e: { fontFamily: 'serif' }, z: { fontFamily: 'serif' } },
+      fonts: {
+        m: font({ name: 'T3', isType3Font: true, toUnicode: { _map: ['a', 'ﬁ'] } }),
+        n: font({ name: 'T3b', isType3Font: true, toUnicode: undefined, missingFile: false }),
+        e: { fontName: 'error', loadedName: 'e' },
+        z: font({ name: 'T3c', isType3Font: true, toUnicode: { _map: [] } }),
+      },
+    })
+    const { draw, why } = await drawDataOf(page)
+    expect(why).toBeNull()
+    expect(draw!.fonts.map(f => [f[2], f[3]])).toEqual([[1, ['a', 'ﬁ', 'f', 'i']], [1, null], [2, null], [1, []]])
+  })
+
   it('ships nothing when a call fails, or a font was opened without its extra properties; a memory error is thrown', async () => {
     expect(await drawDataOf(pageOf({ textFails: new Error('x') }))).toEqual({ draw: null, why: 'read' })
     expect(await drawDataOf(pageOf({ annotFails: new Error('x') }))).toEqual({ draw: null, why: 'read' })

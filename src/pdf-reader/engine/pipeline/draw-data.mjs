@@ -55,9 +55,11 @@ export async function drawDataOf(page) {
           const fallback = typeof styles[name]?.fontFamily === 'string' ? styles[name].fontFamily : null
           const type3 = f !== null && typeof f === 'object' && typeof f.isType3Font === 'boolean' ? (f.isType3Font ? 1 : 0) : 2
           let mapped = null
-          if (type3 === 0) {
-            // (the document was opened without `fontExtraProperties: true`: the fonts carry no map; a setup fault, told apart in the stats)
-            if (!('toUnicode' in f)) return { draw: null, why: 'props' }
+          if (type3 !== 2) {
+            // (the document was opened without `fontExtraProperties: true`: the fonts carry no map; a setup fault, told apart in the stats. A
+            //  Type3 font is no exception to the map but to the refusal: the live reading (layer2.mjs fontMappedOf) takes the map PDF.js
+            //  exports for it under fontExtraProperties and throws for no Type3 font without one, so a Type3 font with none ships null)
+            if (type3 === 0 && !('toUnicode' in f)) return { draw: null, why: 'props' }
             const set = mappedChars(f.toUnicode)
             mapped = set === null ? null : [...set]
           }
