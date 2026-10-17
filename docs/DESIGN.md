@@ -963,7 +963,8 @@ only how it meets the rest of the extension.
 - **Its store** (`src/cache/layer-store.ts`): the layer's objects by digest, the last catalog of each paper version and
   our copies of arXiv's PDF, in an IndexedDB of their own (`axt-layer`), each object checked against its digest before it
   is kept and each time it is read (a mismatch is a miss, dropped), capped at 200 MB with the papers opened least recently
-  going first (an object held by two papers, one digest, goes only with the last of them); a slow read is a miss. A paper whose catalog is held opens on the layer with our server out of reach. The
+  going first (an object held by two papers, one digest, goes only with the last of them: who holds one is its `refs`); a
+  slow read is a miss. A cache made again from our server: a change of its schema clears it, nothing carried over. A paper whose catalog is held opens on the layer with our server out of reach. The
   experiment's store of compiled PDFs (`axt-pdf`) is deleted on an install or an update. The settings page counts paper
   versions and clears them (UI.md S-O-73).
 - **When there is no layer** — none for this paper (no source, no PDF, a prepare that cannot succeed, a CTAG our server

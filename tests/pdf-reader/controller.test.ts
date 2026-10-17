@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { createController, fromView, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
 import type { SessionEvent, SessionHost } from '@/pdf-reader/session/events'
-import { capsuleOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
+import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
 
 const fold = (events: SessionEvent[], from = INITIAL) => events.reduce(reduce, from)
 const opened: SessionEvent = { type: 'opened' }
@@ -133,6 +133,60 @@ describe('reduce: the layer\'s states (Task 12)', () => {
     expect(fold([opened, { type: 'unavailable', why: 'target', retryAt: null }])).toMatchObject({ languageSupported: false, available: true, phase: 'ready' })
   })
 
+  it('the engine fails fast (network), the PDF opens later: the failure card stays, with its retry; the reverse, the PDF\'s own fetch failure mended by its open, is cleared (Devin, Codex on #391)', () => {
+    const service = fold([{ type: 'fail', event: 'service', text: '', kind: 'network' }, opened])
+    expect(service).toMatchObject({ phase: 'failed', failure: 'network' })
+    expect(cardOf(service)).toEqual({ reason: expect.any(String), action: 'retry' })
+    const pdf = fold([{ type: 'fail', event: 'fetch failed', text: '', kind: 'network' }, opened])
+    expect(pdf).toMatchObject({ phase: 'ready', failure: null })
+    expect(cardOf(pdf)).toBeNull()
+    // the run's events over a service's failure leave it the service's: no original's fetch failure is made of it
+    expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'no-key' }, { type: 'translated', got: 0, total: 9, lost: 0, stopped: null }, opened]).failure).not.toBe('network')
+  })
+
+  describe('a failure per origin: the PDF\'s and the service\'s, each set and cleared by its own events alone (Codex on #391)', () => {
+    const pdfFails: SessionEvent = { type: 'fail', event: 'fetch failed', text: '', kind: 'network' }
+    const serviceFails = (kind: 'network' | 'no-key' = 'no-key'): SessionEvent => ({ type: 'fail', event: 'service', text: '', kind })
+    const recovers: SessionEvent = { type: 'translating', got: 0, total: 9, lost: 0 }
+    it('the PDF fails, then the service: the PDF\'s card first (nothing reads without the original), its retry; the service\'s held', () => {
+      const s = fold([pdfFails, serviceFails()])
+      expect(s.failures).toEqual({ pdf: 'network', service: 'no-key' })
+      expect(s.phase).toBe('failed')
+      expect(cardOf(s)?.action).toBe('retry')
+    })
+    it('the service fails, then the PDF: the PDF\'s card first all the same', () => {
+      const s = fold([serviceFails(), pdfFails])
+      expect(s.failures).toEqual({ pdf: 'network', service: 'no-key' })
+      expect(cardOf(s)?.action).toBe('retry')
+      // the run's events under no original move nothing
+      expect(fold([{ type: 'translated', got: 0, total: 9, lost: 0, stopped: null }], s)).toMatchObject({ phase: 'failed', failures: { pdf: 'network' } })
+    })
+    it('the PDF opens: the service\'s card stays, actionable (no key: the settings); the service recovers: the PDF\'s card stays', () => {
+      const opened1 = fold([pdfFails, serviceFails(), opened])
+      expect(opened1).toMatchObject({ phase: 'failed', failures: { pdf: null, service: 'no-key' }, failure: 'no-key' })
+      expect(cardOf(opened1)?.action).toBe('settings')
+      const recovered = fold([pdfFails, serviceFails('network'), recovers])
+      expect(recovered).toMatchObject({ phase: 'failed', failures: { pdf: 'network', service: null }, failure: 'network' })
+      expect(cardOf(recovered)?.action).toBe('retry')
+    })
+    it('both fail, then each recovers, in either order: reading at the end, no failure left', () => {
+      for (const order of [[opened, recovers], [recovers, opened]]) {
+        const s = fold([pdfFails, serviceFails('network'), ...order])
+        expect(s.failures, JSON.stringify(order.map(e => e.type))).toEqual({ pdf: null, service: null })
+        expect(s.failure).toBeNull()
+        expect(s.phase).not.toBe('failed')
+      }
+    })
+  })
+
+  it('the original opening after a service failed keeps the service\'s reason: the card stays the one that says what to do (no key: the settings) (Codex on #390)', () => {
+    const noKey = fold([{ type: 'fail', event: 'service', text: '', kind: 'no-key' }, opened])
+    expect(noKey).toMatchObject({ phase: 'failed', failure: 'no-key' })
+    // the original's own fetch failure, mended by its open: cleared, reading
+    const fetchFailed = fold([{ type: 'fail', event: 'fetch failed', text: '', kind: 'network' }, opened])
+    expect(fetchFailed).toMatchObject({ phase: 'ready', failure: null })
+  })
+
   it("names a failure by the chain's error kinds alone, the popup's reasons (final review)", () => {
     expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'auth' }]).failure).toBe('auth')
     expect(fold([{ type: 'fail', event: 'service', text: '', kind: 'unavailable' as never }]).failure).toBe('unknown')
@@ -210,6 +264,18 @@ describe('createController', () => {
     await controller.download('original')
     expect(session.openOriginal).toHaveBeenCalledOnce()
     expect(session.pdfBytes).not.toHaveBeenCalled()
+  })
+
+  it('both failures told in the start\'s order: the controller shows the PDF\'s, then, once it opens, the service\'s (Codex on #391)', async () => {
+    let host: SessionHost | null = null
+    const controller = createController({ open: async (h: SessionHost) => { host = h; return fakeSession() }, params: new URLSearchParams('paper=2600.00001v1') })
+    await controller.attach(panes())
+    const tell = (e: SessionEvent) => (host as unknown as SessionHost).emit(e)
+    tell({ type: 'fail', event: 'fetch failed', text: '', kind: 'network' })
+    tell({ type: 'fail', event: 'service', text: '', kind: 'no-key' })
+    expect(cardOf(controller.getState())?.action).toBe('retry')
+    tell({ type: 'opened' })
+    expect(cardOf(controller.getState())?.action).toBe('settings')
   })
 
   it('a session that could not open: the failure card, and its retry loads the page again rather than doing nothing (Codex on #301)', async () => {

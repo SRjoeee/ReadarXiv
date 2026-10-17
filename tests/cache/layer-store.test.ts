@@ -3,6 +3,7 @@
 // first beyond the cap; a slow read a miss
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
 import { describe, expect, it } from 'vitest'
+import Dexie from 'dexie'
 import { createLayerDb, createLayerStore } from '@/cache/layer-store'
 
 let n = 0
@@ -78,6 +79,66 @@ describe('the layer store', () => {
     const last = bytes(100, 10)
     await s.putObject('d', await sha(last), last)
     expect(await s.object(d)).toBeUndefined()
+  })
+
+  it('every holder of a shared object counts, the first too: the later holder let go while the first keeps it, the object stays (Devin on #390)', async () => {
+    let t = 0
+    const s = createLayerStore({ db: dbOf(), maxBytes: 350, now: () => ++t })
+    const shared = bytes(100, 11), d = await sha(shared)
+    await s.putObject('a', d, shared)
+    await s.putObject('b', d, shared)
+    await s.opened('a')
+    const own = bytes(100, 12), more = bytes(100, 13)
+    await s.putObject('c', await sha(own), own)
+    await s.putObject('c', await sha(more), more)
+    // past the cap: b, the oldest, goes; a holds the object still
+    expect(await s.object(d)).toEqual(shared)
+  })
+
+  it('a holder let go and kept again holds the object again: its membership restored, the object kept while it lasts (Devin on #390)', async () => {
+    let t = 0
+    const s = createLayerStore({ db: dbOf(), maxBytes: 350, now: () => ++t })
+    const shared = bytes(100, 14), d = await sha(shared)
+    await s.putObject('a', d, shared)
+    await s.putObject('b', d, shared)
+    const fill = async (paper: string, n: number) => { const b = bytes(100, n); await s.putObject(paper, await sha(b), b) }
+    await fill('c', 15)
+    await fill('c', 16)
+    // a, the oldest, went; b holds the object
+    expect((await s.usage()).count).toBe(2)
+    expect(await s.object(d)).toEqual(shared)
+    // a kept again: it holds the object again, and b, now the oldest, goes; the object stays with a
+    await s.putObject('a', d, shared)
+    expect((await s.usage()).count).toBe(2)
+    expect(await s.object(d)).toEqual(shared)
+    // c next (kept before a was again): a still holds it
+    await fill('e', 17)
+    expect(await s.object(d)).toEqual(shared)
+  })
+
+  it('a store of an earlier schema (version 1, 2 or 3) opens empty, cleared, a cache made again as papers are read; a put and a read work then (Devin, Codex on #391)', async () => {
+    for (const schema of [1, 2, 3]) {
+      const name = `axt-layer-test-${++n}`
+      const old = new Dexie(name, { indexedDB, IDBKeyRange })
+      old.version(1).stores({ objects: 'sha256, paper', papers: 'paper, openedAt' })
+      if (schema >= 2) old.version(2).stores({ refs: '[paper+sha256], sha256, paper' })
+      if (schema === 3) old.version(3).stores({})
+      const kept = bytes(100, 31), d = await sha(kept)
+      await old.table('objects').put({ sha256: d, paper: 'a', bytes: 100, data: kept.slice().buffer })
+      await old.table('papers').put({ paper: 'a', openedAt: 1, bytes: 100, catalog: null })
+      if (schema >= 2) await old.table('refs').put({ paper: 'b', sha256: d })
+      old.close()
+      const db = createLayerDb(name, { indexedDB, IDBKeyRange })
+      const s = createLayerStore({ db })
+      expect(await s.object(d), `version ${schema}`).toBeUndefined()
+      expect(await s.usage(), `version ${schema}`).toEqual({ count: 0, bytes: 0 })
+      expect(await db.table('refs').count(), `version ${schema}`).toBe(0)
+      const b = bytes(50, 32), e = await sha(b)
+      await s.putObject('c', e, b)
+      expect(await s.object(e), `version ${schema}`).toEqual(b)
+      expect(await s.usage(), `version ${schema}`).toEqual({ count: 1, bytes: 50 })
+      db.close()
+    }
   })
 
   it('the last catalog of a paper version, counted in its bytes; usage counts paper versions; clear leaves nothing', async () => {

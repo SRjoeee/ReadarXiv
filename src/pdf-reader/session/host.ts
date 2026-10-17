@@ -173,6 +173,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
       hidden: { now: () => document.visibilityState === 'hidden', shown: signal => shownAgain(document, signal) },
       readingPage: () => readingPage,
       mayPrepare: () => { if (prepareAsked) return false; prepareAsked = true; return true },
+      prepareUnsent: () => { prepareAsked = false },
       emit(e) {
         if (e.type === 'unavailable') {
           // the paper's own, or its language's: the translated displays greyed, the original shown for this visit

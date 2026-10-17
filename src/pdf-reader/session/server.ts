@@ -102,8 +102,8 @@ async function fetched(f: typeof fetch, url: string, init: RequestInit, ms = REQ
     const done = () => { clearTimeout(timer); caller?.removeEventListener('abort', stop) }
     try {
       const r = await f(url, { ...REQUEST, ...init, signal: ac.signal })
-      // (the bound runs on over the body's read; the caller's abort too)
-      if (r.status < 500) return r
+      // the bound runs on over the body's read, and is let go once the body ends, breaks or is cancelled
+      if (r.status < 500) return boundBody(r, done)
       done()
       void r.body?.cancel().catch(() => {})
       if (!again) throw new LayerUnreachable(`the server answered ${r.status}`)
@@ -115,6 +115,25 @@ async function fetched(f: typeof fetch, url: string, init: RequestInit, ms = REQ
     }
     await sleep(RETRY_MS, caller ?? undefined)
   }
+}
+/** the statuses whose answers carry no body (a Response made with one throws) */
+const NO_BODY = new Set([101, 103, 204, 205, 304])
+/** `r` with `done` told once its body has ended, broken or been cancelled (at once where it has none) */
+function boundBody(r: Response, done: () => void): Response {
+  if (!r.body || NO_BODY.has(r.status)) { done(); return r }
+  const reader = r.body.getReader()
+  let told = false
+  const end = () => { if (!told) { told = true; done() } }
+  const body = new ReadableStream<Uint8Array>({
+    async pull(c) {
+      try {
+        const { done: over, value } = await reader.read()
+        if (over) { end(); c.close() } else c.enqueue(value)
+      } catch (e) { end(); c.error(e) }
+    },
+    cancel(reason) { end(); return reader.cancel(reason) },
+  })
+  return new Response(body, { status: r.status, statusText: r.statusText, headers: r.headers })
 }
 /** an answer's body within `cap` bytes, as its length says and as it comes; past it, the read is let go */
 export async function bodyWithin(r: Response, cap: number): Promise<Uint8Array> {

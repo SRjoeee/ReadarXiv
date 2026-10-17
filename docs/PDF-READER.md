@@ -801,7 +801,8 @@ contract §4.3), started by the host once a translated display is shown in a vis
    phase, so that a poll after the translation has begun moves no phase); each 202 is the prepare under way, said (S-R-23),
    its objects so far told, asked again once its wait has passed (never sooner, at least a second; every 5 s at most once
    it has been polled for 2 minutes; given up after 10, S-R-24 with its retry; none while the tab is hidden, that time not
-   counted); a 404 `not-prepared` asks the prepare, once a visit; any other 404 is why there is none (S-R-17); a 429 waits
+   counted); a 404 `not-prepared` asks the prepare, once a visit (given back where the prepare never reached our server, so
+   that a retry asks it again); any other 404 is why there is none (S-R-17); a 429 waits
    its time (S-R-24 meanwhile, whose retry waits it out too); our server out of reach (a 5xx, the network, or nothing within
    30 s, its answer and body together, `REQUEST_MS`: twice) opens a paper whose catalog this machine holds (its place in the
    store renewed), else S-R-24. A retry begins the run again where the side refused its layer (a new side, its look, its bind,
@@ -828,7 +829,8 @@ contract §4.3), started by the host once a translated display is shown in a vis
 
 The served faces are `session/faces.ts` (our site's static table: `/static-fonts/index.json` and `/static-fonts/<group>.json`),
 the hyphenation `<api>/hyph/<lang>.json`.
-An id with no version is the latest version arXiv's abstract page lists (`session/paper.ts`). The run's rows are
+An id with no version is the latest version arXiv's abstract page lists (`session/paper.ts`: within 15 s and 2 MB, a read
+that cannot be had forgotten so that a retry reads it again). The run's rows are
 `tests/pdf-reader/run.test.ts`, `server.test.ts`, `ranges.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
 reader on the sample served by the stand-in of the layer API, through the echo service.
 
