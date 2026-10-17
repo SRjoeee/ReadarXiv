@@ -107,8 +107,12 @@ function addShapes(by, units) {
  *   stats(), dispose()   what it has done; the run let go, every ask rejected, its documents told to onRetired once read by
  *                        nothing. After dispose pageOf, leftPageOf, copyOf and pageState throw; stats and unitAt answer
  */
+/** the draws of left parts the door holds for the run at most (their left parts' bytes): past it the oldest go, and the run reads
+ *  those pages itself (drawOf null) */
+export const DRAWS_HELD = 16 * 2 ** 20
+
 export async function openLayer(o = {}) {
-  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES } = o ?? {}
+  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD } = o ?? {}
   const four = bundle === undefined
   if (four) {
     if (index === null || typeof index !== 'object' || index.kind !== 'index' || !Array.isArray(index.units) || !index.head) throw new TypeError(`index: a layer index (indexOf's), not ${kindOf(index)}`)
@@ -143,7 +147,7 @@ export async function openLayer(o = {}) {
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}
   opened = token
-  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules }, token) } catch (e) { if (opened === token) opened = null; throw e }
+  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld }, token) } catch (e) { if (opened === token) opened = null; throw e }
 }
 
 /** a part told to the door, against the index and the chain so far (`ch`: through, last): a ReadPart of the index's head that
@@ -155,7 +159,7 @@ function checkPart(part, index, ch) {
   if (part.prev !== ch.last) throw new BundleRefusal('not following the digest of the last part', { kind: 'part', path: 'prev' })
 }
 
-async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules }, token) {
+async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld }, token) {
   const source = four ? index : bundle
   const expect = toTranslate(source, target)
   // (each cell's group as the units' cells give it: a group is read once its own cells' rows are in)
@@ -168,8 +172,19 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   // the chain told
   const asks = new Map(), listeners = new Set(), shapes = new Map()
   const streamOf = new Map(), leftRefs = new Map(), leftCache = new Map(), leftWaiters = new Map()
-  // (the draws of the left parts fetched, each held from its fetch until the run takes it: the pages the view reads hold none)
+  // (the draws of the left parts fetched, each held from its fetch until the run takes it, at most `drawsHeld` bytes of their left
+  // parts, the oldest let go first (the run then reads the page itself): the pages the view reads hold none; none past dispose
+  // or the run's death)
   const draws = new Map()
+  let drawsBytes = 0
+  const dropDraw = page => { const e = draws.get(page); if (e) { drawsBytes -= e.bytes; draws.delete(page) } }
+  const holdDraw = (page, draw, bytes) => {
+    dropDraw(page)
+    draws.set(page, { draw, bytes })
+    drawsBytes += bytes
+    for (const [p] of draws) { if (drawsBytes <= drawsHeld || p === page) break; dropDraw(p) }
+  }
+  const dropDraws = () => { draws.clear(); drawsBytes = 0 }
   const chain = { through: 0, last: null, r: 0 }, toldParts = new Set()
   let goneNow = () => {}
   const gone = new Promise((_, no) => { goneNow = no })
@@ -284,6 +299,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const die = e => {
     if (dead || disposed) return
     dead = e
+    dropDraws()
     for (const [, list] of asks) for (const a of list) { off(a); a.reject(e) }
     asks.clear()
     askedAt.clear()
@@ -342,7 +358,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       if (disposed) throw letGoError()
       const lp = await readLeftPart(bytes, { ref, streamOf: id => streamOf.get(id) })
       // (the draw goes to the run's hand-off alone: the view's page, and the cache that keeps it, hold none)
-      if (lp.draw) draws.set(page, lp.draw)
+      if (lp.draw && !disposed && !dead) holdDraw(page, lp.draw, bytes.length)
       return { ...lp, draw: null }
     })()
     leftCache.set(page, p)
@@ -387,10 +403,11 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
    *  checkDraw refuses refuses the whole part), parts that end without covering the page, a page asked again, a layer let go. It
    *  never resolves null because the page is not covered yet: it waits, as leftPageOf does */
   const drawOfPage = async page => {
-    if (disposed || !Number.isSafeInteger(page) || page < 1 || page > run.N) return null
+    if (disposed || dead || !Number.isSafeInteger(page) || page < 1 || page > run.N) return null
     try { await awaitLeft(page, null) } catch { return null }
-    const draw = draws.get(page) ?? null
-    draws.delete(page)
+    if (disposed || dead) return null
+    const draw = draws.get(page)?.draw ?? null
+    dropDraw(page)
     return draw
   }
 
@@ -534,7 +551,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       }
       let slowestTaskMs = 0
       for (const ms of run.ms.values()) if (ms > slowestTaskMs) slowestTaskMs = ms
-      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size } }
+      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size }, draws: { held: draws.size, bytes: drawsBytes } }
     },
     dispose() {
       if (disposed) return
@@ -546,7 +563,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       committed.clear()
       for (const [, list] of leftWaiters) for (const w of list) w.no(e)
       leftWaiters.clear()
-      draws.clear()
+      dropDraws()
       goneNow(e)
       listeners.clear()
       run.dispose()
