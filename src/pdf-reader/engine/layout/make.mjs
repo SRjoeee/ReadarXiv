@@ -2176,11 +2176,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (mh) resolveNames()
     wake()
 
-    /** what is ready run: the units whose marks' pages are read carried, the ranges anchored, the pages decided, their tasks */
-    const step = () => {
+    /** what is ready run: the units whose marks' pages are read carried, the ranges anchored, the pages decided, their tasks;
+     *  `anchor` false, the ranges left to the step of arXiv's page read next (a marked page's, read before it: what the two
+     *  steps anchor is the same, the second's at once) */
+    const step = (anchor = true) => {
       if (refusal) return
       wake()
-      R.run(onAnchor, decide)
+      if (anchor) R.run(onAnchor, decide)
       advance()
       for (let q = Math.max(1, releasedTo + 1); q <= Math.min(readyTo(), decidedTo); q++) work.push(q)
       pump()
@@ -2239,7 +2241,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (; foundTo < page.found; foundTo++) for (const i of rowsAt.get(foundTo) ?? []) rowDone(i)
       resolveNames()
       stats.ms.carry += now() - t
-      step()
+      // (arXiv's page X + 1 is read next, while one is left: its step anchors)
+      step(X >= pages)
     }
     /** the marked original's end (markedPages' end, after its last page): the pieces found at its end, its points read twice,
      *  every piece known; the carry's share */

@@ -262,26 +262,60 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   const sum = new Int32Array(P + 2), diff = new Int32Array(P + 2), F0 = new Uint8Array(P + 2), F1 = new Uint8Array(P + 2), F2 = new Uint8Array(P + 2)
   const prefix = pages => { for (let p = 1; p <= P; p++) sum[p] = sum[p - 1] + pages[p] }
   const meets = u => { for (let j = ivOff[u]; j < ivOff[u + 1]; j++) if (sum[Math.min(ivB[j], P)] - sum[Math.max(ivA[j], 1) - 1] > 0) return true; return false }
-  const meet = (pages, next, list) => {
+  // (`final`: false, as soon as a unit not final meets them, where only that is asked)
+  const meet = (pages, next, list, final = false) => {
     prefix(pages)
     diff.fill(0)
     for (let u = 0; u < n; u++) {
       if (!meets(u)) continue
+      if (final && !fin[u]) return false
       if (list) list.push(u)
       for (let j = ivOff[u]; j < ivOff[u + 1]; j++) { const x = Math.max(ivA[j], 1), y = Math.min(ivB[j], P); if (x <= y) { diff[x]++; diff[y + 1]-- } }
     }
     next.fill(0)
     for (let p = 1, run = 0; p <= P; p++) { run += diff[p]; if (run > 0) next[p] = 1 }
+    return true
   }
   const part = (a, b) => { F0.fill(0); for (let p = Math.max(a, 1); p <= Math.min(b, P); p++) F0[p] = 1 }
-  /** whether every unit the left of pages a to b reads (V2) has its match final */
+  /** whether every unit the left of pages a to b reads (V2) has its match final: C and V1 are in V2, so a unit of theirs not
+   *  final answers before V2 is made */
   const ready = (a, b) => {
-    part(a, b); meet(F0, F1, null); meet(F1, F2, null); prefix(F2)
+    part(a, b)
+    if (!meet(F0, F1, null, true) || !meet(F1, F2, null, true)) return false
+    prefix(F2)
     for (let u = 0; u < n; u++) if (!fin[u] && meets(u)) return false
     return true
   }
   /** the left of pages a to b's C and V2 (units, rising) */
   const setsOf = (a, b) => { const C = [], V2 = []; part(a, b); meet(F0, F1, C); meet(F1, F2, null); meet(F2, F0, V2); return [C, V2] }
+  // ---- why the first page is not ready, kept (most runs fail there, waiting on one unit): a unit not yet marked whose own
+  // marks' pages, or a float's match over the whole document, meet `am` or the pages final units alone link to it (those that
+  // meet `am`, and those that meet their pages). A final unit's reach never changes again (its bounds and its neighbours' are
+  // final) and an unmarked unit is not final, so while `am` stands, the unit is unmarked and those pages of it meet the linked
+  // ones, it is in V2 of `am` and the page is not ready: a run stops there without making the reach again
+  let witness = null
+  const ownPages = u => (ownLow[u] && firstTok[ownLow[u]] <= lastTok[ownHigh[u]] ? [tokPage[firstTok[ownLow[u]]], tokPage[lastTok[ownHigh[u]]]] : null)
+  const floatPages = u => (isFloat[u] && !hasB[u] && !forward && N && fA[u] >= 0 && bounds.size > 0 ? [tokPage[fA[u]], tokPage[fB[u]]] : null)
+  const linked = (L, iv) => iv !== null && L[Math.min(iv[1], P)] - L[Math.max(iv[0], 1) - 1] > 0
+  const stillWaits = () => witness !== null && witness.am === am && !marked[witness.u] && (linked(witness.L, ownPages(witness.u)) || linked(witness.L, floatPages(witness.u)))
+  const findWitness = () => {
+    witness = null
+    // (the pages linked to `am` by final units: `am`, the pages of the final units meeting it, of those meeting theirs)
+    const finalMeet = (pages, next) => {
+      prefix(pages)
+      diff.fill(0)
+      for (let u = 0; u < n; u++) {
+        if (!fin[u] || !meets(u)) continue
+        for (let j = ivOff[u]; j < ivOff[u + 1]; j++) { const x = Math.max(ivA[j], 1), y = Math.min(ivB[j], P); if (x <= y) { diff[x]++; diff[y + 1]-- } }
+      }
+      next.fill(0)
+      for (let p = 1, run = 0; p <= P; p++) { run += diff[p]; if (run > 0) next[p] = 1 }
+    }
+    part(am, am); finalMeet(F0, F1); finalMeet(F1, F2)
+    const L = new Int32Array(P + 2)
+    for (let p = 1; p <= P; p++) L[p] = L[p - 1] + (F0[p] | F1[p] | F2[p])
+    for (let u = 0; u < n; u++) if (!marked[u] && (linked(L, ownPages(u)) || linked(L, floatPages(u)))) { witness = { am, u, L }; return }
+  }
   const settle = (u, f) => { if (settled[u]) return; settled[u] = 1; f(u) }
   // (whether a mark, a bound or a unit's own pages changed since a run found nothing more ready: what a run reads is that alone)
   let dirty = true
@@ -310,14 +344,14 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
         if (am > lastPage) for (let u = 0; u < n; u++) settle(u, onSettle)
         return
       }
-      if (!dirty) return
+      if (!dirty || stillWaits()) return
       dirty = false
       // (the matches' finality and the reaches are those of the marks known now, whatever page the ranges reach)
       reachNow()
       while (am <= lastPage) {
         // the pages from `am` anchored in one range as far as every unit the range reads has its match final (a range's
         // anchors are the whole paper's, as a page at a time would make them: leftOfPart)
-        if (!ready(am, am)) return
+        if (!ready(am, am)) { findWitness(); return }
         let to = am
         if (finCount === n) to = lastPage
         else while (to < lastPage && ready(am, to + 1)) to++
