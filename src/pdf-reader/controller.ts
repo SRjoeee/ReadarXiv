@@ -47,9 +47,11 @@ export interface ReaderState {
   failedUnits: number
   /** why the last run could not translate, as the chain's error kind (the popup's REASON); null otherwise */
   failure: ProviderErrorKind | null
-  /** where `failure` came from: the original's own fetch (`pdf`: its open mends it), or the service, the session (`service`:
-   *  only a run mends it). Both may say `network`, so the source is named where the failure is told, never inferred */
-  failureOrigin: 'pdf' | 'service' | null
+  /** the failures by origin, each set and cleared by its own events alone: the original's own fetch (`pdf`: its open
+   *  mends it) and the service's, or the session's (`service`: a run under way mends it). Both may say `network`, and both
+   *  may fail during the start, so one slot cannot hold them. `failure` is the one shown: the PDF's first (nothing reads
+   *  without the original), then the service's */
+  failures: { pdf: ProviderErrorKind | null; service: ProviderErrorKind | null }
   languageSupported: boolean
   /** what can be downloaded: nothing yet, the original, or the translation (Task 20 fills it) */
   download: 'none' | 'original' | 'translation'
@@ -99,7 +101,7 @@ export const INITIAL: ReaderState = {
   loaded: 0,
   failedUnits: 0,
   failure: null,
-  failureOrigin: null,
+  failures: { pdf: null, service: null },
   languageSupported: true,
   download: 'none',
   scale: 1,
@@ -145,7 +147,9 @@ const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_
 const drawn = (state: ReaderState) => state.layer.laid > 0
 /** the original could not be opened: its card stands, whatever the run does meanwhile (its rows wait for the original),
  *  until the original opens */
-const noOriginal = (state: ReaderState) => state.phase === 'failed' && state.failureOrigin === 'pdf'
+const noOriginal = (state: ReaderState) => state.failures.pdf !== null
+/** the failures given, with the one shown derived from them */
+const withFailures = (state: ReaderState, failures: ReaderState['failures']): ReaderState => ({ ...state, failures, failure: failures.pdf ?? failures.service })
 
 /**
  * One event folded into the state; the same object when nothing changed, so that no listener hears of it. The phase moves
@@ -199,12 +203,16 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     // the original on screen, in every display: readable, a failure of its open before it mended (a retry that opened)
     // (a failure the open mends is the original's own fetch failure alone: a service's, a key missing, stays with its card)
     case 'opened': {
-      const mends = state.phase === 'failed' && state.failureOrigin === 'pdf'
-      return { ...state, phase: state.phase === 'loading' || mends ? 'ready' : state.phase, failure: mends ? null : state.failure, failureOrigin: mends ? null : state.failureOrigin, download: state.download === 'none' ? 'original' : state.download }
+      const mends = state.failures.pdf !== null
+      const next = withFailures(state, { ...state.failures, pdf: null })
+      // a service's failure left with nothing laid keeps its card
+      const failed = next.failures.service !== null && !drawn(next) && state.phase === 'failed'
+      return { ...next, phase: state.phase === 'loading' || (mends && !failed) ? 'ready' : state.phase, download: state.download === 'none' ? 'original' : state.download }
     }
     case 'fail': {
-      const failure = kindOf(event.kind)
-      return { ...state, phase: drawn(state) ? 'ready' : 'failed', failure, failureOrigin: event.event === 'fetch failed' ? 'pdf' : 'service' }
+      const kind = kindOf(event.kind)
+      const failures = event.event === 'fetch failed' ? { ...state.failures, pdf: kind } : { ...state.failures, service: kind }
+      return { ...withFailures(state, failures), phase: drawn(state) ? 'ready' : 'failed' }
     }
     case 'preparing': {
       const preparing = { position: event.position, progress: event.progress }
@@ -238,21 +246,22 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
  *  phase and its reason kept) */
 function reduceRun(state: ReaderState, event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>, held: boolean): ReaderState {
   const next = reduceRunFree(state, event)
-  return held ? { ...next, phase: 'failed', failure: 'network', failureOrigin: 'pdf' } : next
+  // (the PDF's slot is no run event's: it stands, and the phase with it)
+  return held ? { ...withFailures(next, { ...next.failures, pdf: state.failures.pdf }), phase: 'failed' } : next
 }
 function reduceRunFree(state: ReaderState, event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>): ReaderState {
   switch (event.type) {
     case 'translating': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 0
-      return { ...state, phase: 'translating', begun: true, laying: false, failure: null, failureOrigin: null, progress, failedUnits: event.lost }
+      return { ...withFailures(state, { ...state.failures, service: null }), phase: 'translating', begun: true, laying: false, progress, failedUnits: event.lost }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
-      if (event.stopped && !drawn(state)) return { ...state, phase: 'failed', begun: true, failure: event.stopped, failureOrigin: 'service', progress, failedUnits: event.lost }
+      if (event.stopped && !drawn(state)) return { ...withFailures(state, { ...state.failures, service: event.stopped }), phase: 'failed', begun: true, progress, failedUnits: event.lost }
       // done with nothing laid where the translation shows: the end held until a page is (laying)
-      if (!event.stopped && !drawn(state) && state.display !== 'original') return { ...state, phase: 'translating', begun: true, laying: true, progress, failedUnits: event.lost, failure: null, failureOrigin: null }
-      return { ...state, phase: 'ready', begun: true, laying: false, progress, failedUnits: event.lost, failure: event.stopped, failureOrigin: event.stopped ? 'service' : null }
+      if (!event.stopped && !drawn(state) && state.display !== 'original') return { ...withFailures(state, { ...state.failures, service: null }), phase: 'translating', begun: true, laying: true, progress, failedUnits: event.lost }
+      return { ...withFailures(state, { ...state.failures, service: event.stopped }), phase: 'ready', begun: true, laying: false, progress, failedUnits: event.lost }
     }
     case 'unavailable': {
       const lasting = LASTING.has(event.why)
