@@ -290,6 +290,14 @@ describe('hyperref\'s \\texorpdfstring{TeX}{PDF}: its first argument is the text
     const { seed } = await seedFrom(record, now.units)
     expect(seed.has(units(now).length - 1)).toBe(true)
   })
+  it('its call ends with its second argument, hyperref loaded or not: a brace group after it is the text\'s own (the review\'s m4)', () => {
+    for (const pre of ['', '\\usepackage{hyperref}']) {
+      const p = project(doc('In running text \\texorpdfstring{$x$ words}{x} {\\bf bold words here} and more text after it.', pre))
+      expect(texts(p), pre).toEqual(['In running text words bold words here and more text after it.'])
+      const close = units(p)[0]?.pieces.find(x => x.t === 'close')
+      expect(close?.src, pre).toBe('}{x}')
+    }
+  })
   it('the source written back: the first argument translated, the second as it is', () => {
     const p = project(doc('\\section{\\texorpdfstring{The Finite Limit Here}{The Finite Limit}}\nThe text of the section goes on.'))
     const out = patched(p)

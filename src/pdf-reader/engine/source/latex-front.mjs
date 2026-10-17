@@ -1169,7 +1169,9 @@ function walk(s, from, to, b, ctx) {
     // (\\texorpdfstring's first argument whether or not the paper's packages tell the role table of it: a class may define it)
     const pdfString = PDF_STRING.has(name) && args?.args.length >= 2 && s[args.args[0].start] === '{' && s[args.args[1].start] === '{'
     const walked = pdfString ? args.args.slice(0, 1) : args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : []
-    if (walked.length) { endText(); walkArgs(s, i, args.end, walked, b, ctx); i = args.end; continue }
+    // (its call ends with its second argument: where the table does not know it, every adjacent group was read as one of its)
+    const callEnd = pdfString ? args.args[1].end : args?.end
+    if (walked.length) { endText(); walkArgs(s, i, callEnd, walked, b, ctx); i = callEnd; continue }
     let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : args
     // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
     if (args?.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
