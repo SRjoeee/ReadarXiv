@@ -187,7 +187,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   const r3 = x => Math.round(x * 1000) / 1000
   // (a unit whose last row the next unit's first continues on a shared line, laid from where its fit ended there (`share`,
   // layer2.mjs shareOf), is filled only where that stays so: no leading, tracking or size that sets its text there further
-  // right, or sets text there where its fit left the row free. Its fill leading is still its fit's, which the page's target
+  // right, sets text there where its fit left the row free, or moves its line there off the baseline the next unit's first
+  // line was set on (the fit's, `at`). Its fill leading is still its fit's, which the page's target
   // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own)
   const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
   const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l.lines) ? l : null }
@@ -1582,12 +1583,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // began, 10.9 pt in the original). The first line shortens where that unit's translation ends further on, and gives way to
     // the next row where none of it is left (slotsAt's sliver). That unit is laid before it (layIn), and its page's fill keeps
     // where it ended (fillPage). The first line stays where TeX set it where that unit is the original's (not placed, refused, or
-    // its row kept), or anything of the page stands between the two on the row (a label or a name kept as the original's)
+    // its row kept), or anything of the page stands between the two on the row (a label or a name kept as the original's).
+    // Where that unit's text on the row stands off TeX's baseline (its leading spread its lines over its rows: shareOf's `at`),
+    // the first line stands on that unit's baseline (`startY`, slotsAt), so that the row is one line and not two a few points
+    // apart (2608.16117 p39: unit 115's last line 7.2 pt over the row, unit 119 set from its end); on TeX's, it stays there
     const row = fileLines ? candOf.get(p.id)?.lead : null
     if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
       const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
       const between = (chars2[b.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size)
-      if (share && !between) b.start = share.end !== null ? share.end + Math.max(0, x - row.x1) : row.x0
+      if (share && !between) {
+        b.start = share.end !== null ? share.end + Math.max(0, x - row.x1) : row.x0
+        if (share.end !== null && Math.abs(share.at - b.B[0]) >= 0.05) b.startY = share.at
+      }
     }
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
     const t2 = lap()

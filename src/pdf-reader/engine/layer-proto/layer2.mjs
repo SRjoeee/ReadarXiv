@@ -2451,14 +2451,17 @@ function slotsAt(blocks, st, P, s) {
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own)
     const G = b.G ?? b.B
     for (let k = 0; k < 400; k++) {
-      let y = onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
+      // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
+      // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
+      const shared = bi === 0 && k === 0 && b.startY !== undefined
+      let y = shared ? b.startY : onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
-      if (y < low - 0.05) break
+      if (y < low - 0.05 && !shared) break
       const target = k === 0 || (onGrid && k < b.B.length) ? k : null
       // (each slot the measure of the line it is laid at, where the paragraph's changed: measuresOf; the block's grid, its
       // pitch and its flow its own across the change, one paragraph's)
-      const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, onGrid && k < G.length ? k : -1) : [b.x0, b.x1]
+      const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && k < G.length ? k : -1) : [b.x0, b.x1]
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
       const x0 = bi === 0 && k === 0 && b.start !== undefined ? b.start : bi === 0 && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
@@ -2974,25 +2977,34 @@ export function layoutAt(tokens, blocks, s, P, st) {
 const onShare = (share, l) => l.page === share.page && Math.abs(l.baseline - share.y) < share.band && Math.min(l.x0 + l.used, share.x1) > Math.max(l.x0, share.x0)
 /**
  * The shared row as a unit's layout leaves it: `row` (the unit's last row in the layout file: page, baseline, size) in the
- * unit's block that holds it (its x0 and x1, so that a line of another column on that baseline is no line of the row), and
+ * unit's block that holds it (its x0 and x1, so that a line of another column on that baseline is no line of the row),
  * `end`, the furthest end of the unit's text laid within an em of the row (its lines there, which the next unit's first line
- * would meet), null where it set none there (its translation ended higher: the row is free). Null where no block of the
- * unit holds the row (a row kept as the original's, or dropped as another unit's): the row stays the original's.
+ * would meet), and `at`, the baseline of the line that ends there: the row's own where the unit's line stands on TeX's, else
+ * where its leading set it (a paragraph's two lines spread over its three rows, 2608.16117's unit 115 on page 39, 7.2 pt
+ * over the row), which the next unit's first line stands on, so that the row reads as one line. Both null where it set
+ * none there (its translation ended higher: the row is free). Null where no block of the unit holds the row (a row kept as
+ * the original's, or dropped as another unit's): the row stays the original's.
  */
 export function shareOf(layout, blocks, row) {
   const b = blocks.find(q => q.page === row.page && q.B.some(y => Math.abs(y - row.baseline) < 0.05))
   if (!b) return null
-  const share = { page: row.page, y: row.baseline, band: row.size, x0: b.x0, x1: b.x1, end: null }
-  for (const l of layout.lines) if (onShare(share, l)) share.end = Math.max(share.end ?? -Infinity, l.x0 + l.used)
+  const share = { page: row.page, y: row.baseline, band: row.size, x0: b.x0, x1: b.x1, end: null, at: null }
+  for (const l of layout.lines) if (onShare(share, l) && (share.end === null || l.x0 + l.used > share.end)) { share.end = l.x0 + l.used; share.at = l.baseline }
   return share
 }
 /** whether a layout of a unit keeps its shared row as the unit's fit left it (shareOf): its text there ending no further
- *  right, and none there where the fit set none, so that the next unit on the row, laid from the fit's end, stays clear of it
+ *  right, none there where the fit set none, and the line that ends furthest there on the baseline the fit set it at (`at`),
+ *  so that the next unit on the row, laid from the fit's end and on its baseline, stays clear of it and on its line
  *  (run.mjs fillPage). True with no share */
 export function keepsShare(share, lines) {
   if (!share) return true
-  for (const l of lines) if (onShare(share, l) && (share.end === null || l.x0 + l.used > share.end + 0.01)) return false
-  return true
+  let far = null
+  for (const l of lines) {
+    if (!onShare(share, l)) continue
+    if (share.end === null || l.x0 + l.used > share.end + 0.01) return false
+    if (!far || l.x0 + l.used > far.x0 + far.used) far = l
+  }
+  return far === null || share.at === null || Math.abs(far.baseline - share.at) < 0.01
 }
 
 // ---- drawing: the layer as data (erasing, restoring, crops), drawn on a copy of the page at any resolution; the SVG text
