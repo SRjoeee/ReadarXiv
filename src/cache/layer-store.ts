@@ -30,21 +30,12 @@ class LayerDatabase extends Dexie {
   refs!: Table<RefRow, [string, string]>
   constructor(name = LAYER_DB, options?: DexieOptions) {
     super(name, options)
-    this.version(1).stores({ objects: 'sha256, paper', papers: 'paper, openedAt' })
-    // which papers hold each object
-    this.version(2).stores({ refs: '[paper+sha256], sha256, paper' })
-    // every holder in `refs`, the first too: an object of an earlier version's rows is its first paper's where that paper
-    // is kept (version 1 had no refs, and version 2 could leave the first holder out once it was let go and kept again);
-    // one no kept paper holds goes
-    this.version(3).stores({}).upgrade(async tx => {
-      const papers = new Set((await tx.table('papers').toCollection().primaryKeys()) as string[])
-      const refs = tx.table('refs'), objects = tx.table('objects')
-      await objects.toCollection().each(async (o: ObjectRow) => {
-        if (papers.has(o.paper)) await refs.put({ paper: o.paper, sha256: o.sha256 })
-      })
-      const held = new Set(((await refs.toCollection().primaryKeys()) as [string, string][]).filter(k => papers.has(k[0])).map(k => k[1]))
-      await refs.filter((r: RefRow) => !papers.has(r.paper)).delete()
-      await objects.filter((o: ObjectRow) => !held.has(o.sha256)).delete()
+    // A cache this machine can make again from our server: a change of its schema drops what it holds rather than carry it
+    // over (a migration that copies rows can only carry an earlier schema's errors with them). Version 4: every holder of
+    // an object in `refs`; a store of an earlier version (1, 2, or a test build's 3, whose migration copied rows) opens
+    // cleared
+    this.version(4).stores({ objects: 'sha256, paper', papers: 'paper, openedAt', refs: '[paper+sha256], sha256, paper' }).upgrade(async tx => {
+      await Promise.all(['objects', 'papers', 'refs'].map(t => tx.table(t).clear()))
     })
   }
 }

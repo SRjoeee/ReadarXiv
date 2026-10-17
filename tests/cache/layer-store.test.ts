@@ -116,26 +116,29 @@ describe('the layer store', () => {
     expect(await s.object(d)).toEqual(shared)
   })
 
-  it('an earlier version\'s rows: each object counted for its paper where that paper is kept, so that nothing a kept paper holds goes (Devin on #390)', async () => {
-    const name = `axt-layer-test-${++n}`
-    // the store as version 2 wrote it: the first holder in the object row alone
-    const old = new Dexie(name, { indexedDB, IDBKeyRange })
-    old.version(1).stores({ objects: 'sha256, paper', papers: 'paper, openedAt' })
-    old.version(2).stores({ refs: '[paper+sha256], sha256, paper' })
-    const b = bytes(100, 21), d = await sha(b)
-    await old.table('objects').put({ sha256: d, paper: 'a', bytes: 100, data: b.slice().buffer })
-    await old.table('papers').put({ paper: 'a', openedAt: 1, bytes: 100, catalog: null })
-    await old.table('refs').put({ paper: 'b', sha256: d })
-    await old.table('papers').put({ paper: 'b', openedAt: 2, bytes: 100, catalog: null })
-    old.close()
-    const db = createLayerDb(name, { indexedDB, IDBKeyRange })
-    expect((await db.table('refs').where('sha256').equals(d).primaryKeys()).map(k => (k as string[])[0]).sort()).toEqual(['a', 'b'])
-    // b let go first: a holds it
-    const s = createLayerStore({ db, maxBytes: 250, now: () => 10 })
-    await s.opened('a')
-    const c = bytes(100, 22)
-    await s.putObject('c', await sha(c), c)
-    expect(await s.object(d)).toEqual(b)
+  it('a store of an earlier schema (version 1, 2 or 3) opens empty, cleared, a cache made again as papers are read; a put and a read work then (Devin, Codex on #391)', async () => {
+    for (const schema of [1, 2, 3]) {
+      const name = `axt-layer-test-${++n}`
+      const old = new Dexie(name, { indexedDB, IDBKeyRange })
+      old.version(1).stores({ objects: 'sha256, paper', papers: 'paper, openedAt' })
+      if (schema >= 2) old.version(2).stores({ refs: '[paper+sha256], sha256, paper' })
+      if (schema === 3) old.version(3).stores({})
+      const kept = bytes(100, 31), d = await sha(kept)
+      await old.table('objects').put({ sha256: d, paper: 'a', bytes: 100, data: kept.slice().buffer })
+      await old.table('papers').put({ paper: 'a', openedAt: 1, bytes: 100, catalog: null })
+      if (schema >= 2) await old.table('refs').put({ paper: 'b', sha256: d })
+      old.close()
+      const db = createLayerDb(name, { indexedDB, IDBKeyRange })
+      const s = createLayerStore({ db })
+      expect(await s.object(d), `version ${schema}`).toBeUndefined()
+      expect(await s.usage(), `version ${schema}`).toEqual({ count: 0, bytes: 0 })
+      expect(await db.table('refs').count(), `version ${schema}`).toBe(0)
+      const b = bytes(50, 32), e = await sha(b)
+      await s.putObject('c', e, b)
+      expect(await s.object(e), `version ${schema}`).toEqual(b)
+      expect(await s.usage(), `version ${schema}`).toEqual({ count: 1, bytes: 50 })
+      db.close()
+    }
   })
 
   it('the last catalog of a paper version, counted in its bytes; usage counts paper versions; clear leaves nothing', async () => {
