@@ -177,6 +177,8 @@ export interface Block2 extends Block { measures?: Map<string, [number, number]>
 type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number
+/** each block's displays TeX set with its short skip: those under a line of its own (`line`, lineInfo's `j`); mutates the blocks */
+export declare function shortSkipsTo(blocks: Block2[], skips: readonly { page: number; x0: number; x1: number; top: number; bottom: number; line: number }[], lineInfo: ReadonlyMap<string, LineInfo> | null | undefined): void
 /** of a line's size: how far before a display TeX's short skip asks the line over it to end (\predisplaysize) */
 export declare const PREDISPLAY: number
 

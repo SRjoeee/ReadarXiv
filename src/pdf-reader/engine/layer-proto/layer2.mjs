@@ -2369,6 +2369,22 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
   return blocks
 }
 
+/**
+ * Each block's displays TeX set with its short skip (tex.mjs shortSkipsOf, its `shortSkips`, slotsAt's): those set under a
+ * line of the block's own (`line`, the layout file's line of the unit, lineInfo's `j`), none another block's line stands
+ * over (a line of the other column beside the display, short of it, makes no short skip of the display's own column's
+ * line). Mutates the blocks
+ */
+export function shortSkipsTo(blocks, skips, lineInfo) {
+  if (!skips.length) return
+  const info = r => lineInfo?.get(rectKey(r)) ?? lineInfo?.get(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`)
+  for (const b of blocks) {
+    const own = new Set(b.rects.map(r => info(r)?.j).filter(Number.isInteger))
+    const mine = skips.filter(d => own.has(d.line))
+    if (mine.length) b.shortSkips = mine
+  }
+}
+
 /** whether two laid lines or slots are one flow of TeX's lines (blocks2: blocks of one unit that follow each other in the
  *  layout file with only the unit's own lines between, in one frame, and no kept region the text passes; every other block
  *  a flow of its own) */

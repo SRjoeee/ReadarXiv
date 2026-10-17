@@ -1722,10 +1722,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt)
     for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
-    // (the unit's displays TeX set with its short skip under a line of its own that ends 2 em before them, on each block's
-    // page: the line laid there ends as far before them, layer2.mjs slotsAt)
+    // (the unit's displays TeX set with its short skip under a line of its own that ends 2 em before them, each the block's of
+    // that line: the line laid there ends as far before them, layer2.mjs slotsAt)
     const luOf = p.tex?.lu ?? (filed(p.id) ? tex.index.unit(p.id) : null)
-    if (luOf) { const ds = shortSkipsOf(luOf); if (ds.length) for (const b of p.blocks) b.shortSkips = ds.filter(d => d.page === b.page) }
+    if (luOf) L2.shortSkipsTo(p.blocks, shortSkipsOf(luOf), prep.lineInfo)
     // a label the first line starts with stays the original's: the line starts after it. A file's first line starts at
     // the unit's own mark, and so where the original's text does: after a label the file sets apart, at the line's own
     // start; after one it holds (a footnote's mark), where its first word is, never before the label's end (v0's quarter

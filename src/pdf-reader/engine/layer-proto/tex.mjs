@@ -386,10 +386,12 @@ const segmentsOf = segs => {
  * The unit's displayed formulas TeX set under a line of its own with its short skip: each segment of a display row the file
  * found (neither LOST nor EMPTY; a later display of a group, JOINED, has none of its own), as segmentsOf gives it, whose top
  * stands under the baseline of a line of the unit's (none it holds: a display's row) nearer than SHORT_SKIP of its size, a
- * line that ends PREDISPLAY em or more before the segment starts. TeX's own test: \abovedisplayshortskip, nothing but
- * stretch, under a line that ends 2 em before the display (\predisplaysize), \abovedisplayskip under any other; a display
- * as near under a line that runs on over it is set so for another reason, and the original's line stands over it as it
- * is. layer2.mjs slotsAt holds the line laid there to TeX's test too
+ * line that ends PREDISPLAY em or more before the segment starts, with that line (`line`, its index in the file: once for
+ * each such line). TeX's own test: \abovedisplayshortskip, nothing but stretch, under a line that ends 2 em before the
+ * display (\predisplaysize), \abovedisplayskip under any other; a display as near under a line that runs on over it is set
+ * so for another reason, and the original's line stands over it as it is. The segment is the block's of that line alone
+ * (layer2.mjs shortSkipsTo: another column's line beside the display is none of its), and slotsAt holds the line laid
+ * there to TeX's test too
  */
 export function shortSkipsOf(lu) {
   const out = [], L = lu.lines, held = new Set(lu.held ?? [])
@@ -399,8 +401,7 @@ export function shortSkipsOf(lu) {
       for (let j = 0; j < L.length / 8; j++) {
         const base = L[8 * j + 3], size = L[8 * j + 6]
         if (held.has(j) || L[8 * j] !== s.page || !(s.top < base && s.top > base - SHORT_SKIP * size) || L[8 * j + 2] + PREDISPLAY * size > s.x0) continue
-        out.push(s)
-        break
+        out.push({ ...s, line: j })
       }
     }
   }

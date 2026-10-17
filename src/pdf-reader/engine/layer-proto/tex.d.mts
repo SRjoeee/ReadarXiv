@@ -31,8 +31,9 @@ export declare function texRects(lu: LayoutUnit, maxPage?: number): TexLines
 /** a segment of a row in the file: its page, its extent across, its baseline, and its box's top and bottom */
 export interface Segment { page: number; x0: number; base: number; x1: number; top: number; bottom: number }
 /** the unit's displayed formulas TeX set under a line of its own with its short skip (that line ends 2 em before the display,
- *  its top nearer than SHORT_SKIP of the line's size under its baseline): each such segment of a found display row */
-export declare function shortSkipsOf(lu: LayoutUnit): Segment[]
+ *  its top nearer than SHORT_SKIP of the line's size under its baseline): each such segment of a found display row, with that
+ *  line's index in the file (`line`), once for each such line */
+export declare function shortSkipsOf(lu: LayoutUnit): (Segment & { line: number })[]
 /** a placeholder's rendering from its segments (stride 6): the unit's characters inside them and its ink's box */
 export declare function renderingOf(segs: Float64Array, uc: readonly Char[], display: boolean): Gap | null
 /** part 5 for any unit the hybrid draws, the safe rule's one place: every rendering proven by the file (the file's own

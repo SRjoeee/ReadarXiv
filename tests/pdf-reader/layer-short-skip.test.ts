@@ -68,8 +68,8 @@ describe("the displays TeX set with its short skip (tex.mjs shortSkipsOf), which
   const line = (x1: number, base = 263.34, page = 23) => [page, 79.37, x1, base, base + 8.6, base - 2.6, 11.96, 0]
   const matrix = [23, 220.4, 240.2, 391.9, 262.18, 219.2]
   const seg = { page: 23, x0: 220.4, base: 240.2, x1: 391.9, top: 262.18, bottom: 219.2 }
-  it('a display under a line of the unit that ends 2 em before it, in reach of its descent: its segment', () => {
-    expect(T.shortSkipsOf(unitOf([line(532.9, 277.79), line(106.36)], [[31, row('display', 0, matrix)]]))).toEqual([seg])
+  it('a display under a line of the unit that ends 2 em before it, in reach of its descent: its segment, with that line', () => {
+    expect(T.shortSkipsOf(unitOf([line(532.9, 277.79), line(106.36)], [[31, row('display', 0, matrix)]]))).toEqual([{ ...seg, line: 1 }])
   })
   it('none under a line that runs on over it (TeX set no short skip there), nor out of its reach, nor on another page', () => {
     expect(T.shortSkipsOf(unitOf([line(532.9)], [[31, row('display', 0, matrix)]]))).toEqual([])
@@ -82,5 +82,28 @@ describe("the displays TeX set with its short skip (tex.mjs shortSkipsOf), which
   it('none for a display LOST or EMPTY, a row of another kind, or under a line the unit holds (a display\'s own row)', () => {
     expect(T.shortSkipsOf(unitOf([line(106.36)], [[31, row('display', 32, [])], [32, row('display', 16, [])], [33, row('math', 0, matrix)]]))).toEqual([])
     expect(T.shortSkipsOf(unitOf([line(532.9, 290), line(106.36)], [[31, row('display', 0, matrix)]], [1]))).toEqual([])
+  })
+})
+
+describe("a display TeX set with its short skip is the block's of the line set short before it (layer2.mjs shortSkipsTo)", () => {
+  // (two columns of one page: the left column's last line ends at 120, the right column's line over a display runs on over it to
+  // 550; the display, from 330 in the right column, 0.8 under both baselines. TeX's short skip is the right line's to give, and
+  // that line runs over the display: none. The left line, short of the display's start though it is, stands over no part of
+  // it and makes no short skip of the right column's: the right block's line is laid over the display as the original's is)
+  const row = (kind: string, flags: number, segs: number[]) => ({ kind, flags, segs: Float64Array.from(segs) })
+  const lines = [[3, 50, 120, 400, 408, 397.5, 10, 0], [3, 310, 550, 400, 408, 397.5, 10, 0]]
+  const lu = { lines: Float64Array.from(lines.flat()), ph: new Map([[5, row('display', 0, [3, 330, 385, 520, 399.2, 372])]]), held: [] } as never
+  const blockOf = (x0: number, x1: number, j: number) => ({ page: 3, rects: [[3, x0, 397.85, lines[j]![2]!, 406.83]], x0, x1, B: [400], exact: [true], sizes: [10], pitch0: null, free: 0, indent: 0, after: 0, flow: j, centred: false, j })
+  const info = new Map(lines.map((l, j) => [`3|${l[1]},397.85,${l[2]},406.83`, { baseline: 400, size: 10, exact: true, file: true, j }]))
+  it('a left column\'s short line gives the right column\'s display to its own block alone, which no slot of it meets', () => {
+    const skips = T.shortSkipsOf(lu)
+    expect(skips.map(d => [d.x0, d.line])).toEqual([[330, 0]])
+    const left = blockOf(50, 290, 0), right = blockOf(310, 550, 1)
+    L2.shortSkipsTo([left, right] as never, skips, info as never)
+    expect([(left as { shortSkips?: unknown[] }).shortSkips?.length, (right as { shortSkips?: unknown[] }).shortSkips]).toEqual([1, undefined])
+    // (the right column's line laid over the display, as with no display at all: five words, 40 each, to 520)
+    const layRight = (b: object) => L2.layoutUnit2(words(5) as never, [b] as never, 10, P as never).lines.map(x => [x.baseline, Math.round((x.x0 + x.used) * 100) / 100])
+    expect(layRight(right)).toEqual([[400, 520]])
+    expect(layRight(blockOf(310, 550, 1))).toEqual([[400, 520]])
   })
 })
