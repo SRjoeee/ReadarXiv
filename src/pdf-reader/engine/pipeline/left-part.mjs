@@ -177,7 +177,33 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   }
   const tokPage = new Int32Array(N)
   for (let k = 0; k < N; k++) tokPage[k] = doc[k].page
-  const setBounds = (k, b) => { bounds.set(k, b); const u = unitOf.get(k); if (u !== undefined) { hasB[u] = 1; bS[u] = b[0]; bE[u] = b[1] } }
+  // (the units in the text with bounds, a bit each: a unit's nearest such neighbours, leftReach's, found without a scan)
+  const textBits = new Uint32Array((n + 31) >>> 5)
+  const setBounds = (k, b) => {
+    bounds.set(k, b)
+    const u = unitOf.get(k)
+    if (u === undefined) return
+    hasB[u] = 1; bS[u] = b[0]; bE[u] = b[1]
+    if (!isFloat[u]) textBits[u >>> 5] |= 1 << (u & 31)
+  }
+  // (and the units not yet marked: a unit's nearest such one either side)
+  const openBits = new Uint32Array((n + 31) >>> 5)
+  for (let u = 0; u < n; u++) openBits[u >>> 5] |= 1 << (u & 31)
+  const prevOf = (bitsOf, u) => {
+    const i = u - 1
+    if (i < 0) return -1
+    let w = i >>> 5, bits = bitsOf[w] & (0xffffffff >>> (31 - (i & 31)))
+    while (!bits) { if (--w < 0) return -1; bits = bitsOf[w] }
+    return (w << 5) + 31 - Math.clz32(bits)
+  }
+  const nextOf = (bitsOf, u) => {
+    const i = u + 1
+    if (i >= n) return -1
+    let w = i >>> 5, bits = bitsOf[w] & (~0 << (i & 31))
+    while (!bits) { if (++w >= bitsOf.length) return -1; bits = bitsOf[w] }
+    return (w << 5) + 31 - Math.clz32(bits & -bits)
+  }
+  const prevText = u => prevOf(textBits, u), nextText = u => nextOf(textBits, u)
   // (rule 5: a float's whole-document search from the page of its last body neighbour, a unit not written inside a float, on;
   // the whole document's index its searches read, made once)
   const start = forward ? pageStarts(doc) : null, wholeIndex = forward ? { index: null } : null
@@ -288,16 +314,37 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   }
   /** the left of pages a to b's C and V2 (units, rising) */
   const setsOf = (a, b) => { const C = [], V2 = []; part(a, b); meet(F0, F1, C); meet(F1, F2, null); meet(F2, F0, V2); return [C, V2] }
-  // ---- why the first page is not ready, kept (most runs fail there, waiting on one unit): a unit not yet marked whose own
-  // marks' pages, or a float's match over the whole document, meet `am` or the pages final units alone link to it (those that
+  // ---- why the first page is not ready, kept (most runs fail there, waiting on one unit): a unit not final whose reach, as
+  // far as it is known exactly without a run (a unit not yet marked: its own marks' pages, a float's match over the whole
+  // document, its window between its bounded neighbours; one marked without bounds while a unit not yet marked stands between it
+  // and a bounded neighbour: its window and a float's match), meets `am` or the pages final units alone link to it (those that
   // meet `am`, and those that meet their pages). A final unit's reach never changes again (its bounds and its neighbours' are
-  // final) and an unmarked unit is not final, so while `am` stands, the unit is unmarked and those pages of it meet the linked
-  // ones, it is in V2 of `am` and the page is not ready: a run stops there without making the reach again
+  // final), so while `am` stands and the unit still is so, it is in V2 of `am` and the page is not ready: a run stops there
+  // without making the reach again
   let witness = null
   const ownPages = u => (ownLow[u] && firstTok[ownLow[u]] <= lastTok[ownHigh[u]] ? [tokPage[firstTok[ownLow[u]]], tokPage[lastTok[ownHigh[u]]]] : null)
   const floatPages = u => (isFloat[u] && !hasB[u] && !forward && N && fA[u] >= 0 && bounds.size > 0 ? [tokPage[fA[u]], tokPage[fB[u]]] : null)
+  // (leftReach's window of a unit without bounds, between its nearest bounded neighbours in the text)
+  const windowPages = u => {
+    if (hasB[u] || !N || !bounds.size) return null
+    const e = prevText(u), j = nextText(u)
+    const a = Math.max(0, (e >= 0 ? bE[e] : -1) + 1 - MARGIN), b = Math.min(N - 1, (j >= 0 ? bS[j] : N) - 1 + MARGIN)
+    return a <= b ? [tokPage[a], tokPage[b]] : null
+  }
   const linked = (L, iv) => iv !== null && L[Math.min(iv[1], P)] - L[Math.max(iv[0], 1) - 1] > 0
-  const stillWaits = () => witness !== null && witness.am === am && !marked[witness.u] && (linked(witness.L, ownPages(witness.u)) || linked(witness.L, floatPages(witness.u)))
+  // (a unit marked without bounds is not final while a unit not yet marked stands between it and a bounded neighbour in the
+  // text: that unit, -1 for none)
+  const pendingBy = u => {
+    const e = prevText(u), z = prevOf(openBits, u)
+    if (z >= 0 && z > e) return z
+    const j = nextText(u), y = nextOf(openBits, u)
+    return y >= 0 && (j < 0 || y < j) ? y : -1
+  }
+  const waits = (L, u) => {
+    if (!marked[u]) return linked(L, ownPages(u)) || linked(L, floatPages(u)) || linked(L, windowPages(u))
+    return !hasB[u] && pendingBy(u) >= 0 && (linked(L, windowPages(u)) || linked(L, floatPages(u)))
+  }
+  const stillWaits = () => witness !== null && witness.am === am && waits(witness.L, witness.u)
   const findWitness = () => {
     witness = null
     // (the pages linked to `am` by final units: `am`, the pages of the final units meeting it, of those meeting theirs)
@@ -314,7 +361,7 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
     part(am, am); finalMeet(F0, F1); finalMeet(F1, F2)
     const L = new Int32Array(P + 2)
     for (let p = 1; p <= P; p++) L[p] = L[p - 1] + (F0[p] | F1[p] | F2[p])
-    for (let u = 0; u < n; u++) if (!marked[u] && (linked(L, ownPages(u)) || linked(L, floatPages(u)))) { witness = { am, u, L }; return }
+    for (let u = 0; u < n; u++) if (waits(L, u)) { witness = { am, u, L }; return }
   }
   const settle = (u, f) => { if (settled[u]) return; settled[u] = 1; f(u) }
   // (whether a mark, a bound or a unit's own pages changed since a run found nothing more ready: what a run reads is that alone)
@@ -334,6 +381,7 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
       if (marked[u]) return
       if (b) setBounds(String(units[u].id), b)
       marked[u] = 1
+      openBits[u >>> 5] &= ~(1 << (u & 31))
       markedCount++
       dirty = true
     },
