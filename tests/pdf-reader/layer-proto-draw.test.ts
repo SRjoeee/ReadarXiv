@@ -317,6 +317,46 @@ describe('the read order where the paper\'s parts carry draws (drawsComing, the 
   })
 })
 
+describe('the door\'s bounded draws (DRAWS_HELD): a draw let go before the run asks is a live read, never a wrong one', () => {
+  it('a page whose draw the door evicted is read live, the others from data, and every page drawn as by a door reading all live', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const { cutBundle } = await import('@/pdf-reader/engine/layer-proto/cut.mjs')
+    const { leftPagesOfSpec, readCut, wholeOfSpec } = await import('./helpers/parts-paper')
+    const D = await docsOf(SPEC).draws()
+    const cut = await cutBundle(wholeOfSpec(SPEC), { leftPages: (p: number) => ({ ...leftPagesOfSpec(SPEC)(p), draw: D[p - 1] }), draw: true } as never)
+    const { index, parts } = await readCut(cut)
+    const common = { index, parts, target: 'zh', faceSources: async (id: string) => [{ url: `/f/${id}.otf`, ranges: [0, 0x10ffff] }], hyphUrl: (lang: string) => `/hyph/${lang}.json`, onRetired: () => {} }
+    const answer = async (layer: { pageOf(p: number, o: { lang: string }): Promise<{ svg: SVGSVGElement; words: unknown; links: unknown }> }, p: number) => {
+      const got = await layer.pageOf(p, { lang: 'zh' })
+      return { svg: got.svg.outerHTML, words: JSON.stringify(got.words, (_, v) => (ArrayBuffer.isView(v) ? Array.from(v as Float32Array) : v)), links: JSON.stringify(got.links) }
+    }
+    // (every page read live: a door whose left parts never come right)
+    const live = docsOf(SPEC)
+    const all = await openLayer({ ...common, doc: live.doc as never, leftPart: async () => new Uint8Array() } as never)
+    let want: Awaited<ReturnType<typeof answer>>[]
+    try {
+      all.take(rowsOf(index))
+      all.end()
+      want = [await answer(all, 3), await answer(all, 1), await answer(all, 2)]
+    } finally { all.dispose() }
+    // (room for one left part's draw: the view's reads of pages 1, 2 and 3 leave page 3's alone held)
+    const data = docsOf(SPEC)
+    const room = Math.max(...cut.left.map(l => l.bytes.length)) + 1
+    const layer = await openLayer({ ...common, doc: data.doc as never, leftPart: async (page: number) => cut.left[page - 1]!.bytes, drawsHeld: room } as never)
+    try {
+      layer.take(rowsOf(index))
+      layer.end()
+      for (const p of [1, 2, 3]) await layer.leftPageOf(p)
+      expect((layer.stats() as unknown as { draws: { held: number } }).draws.held).toBe(1)
+      const got = [await answer(layer, 3), await answer(layer, 1), await answer(layer, 2)]
+      expect(got).toEqual(want!)
+      // (pages 1 and 2 read live, page 3 from its draw: no text read of it)
+      expect(data.counts.text.slice(1)).toEqual([1, 1, 0])
+      expect((layer.stats() as unknown as { draws: { held: number } }).draws.held).toBe(0)
+    } finally { layer.dispose() }
+  })
+})
+
 describe('NeedPixels', () => {
   it('is what an ink read of a page drawn from data with no pixels yet throws, never an undefined map', async () => {
     const { NeedPixels } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
