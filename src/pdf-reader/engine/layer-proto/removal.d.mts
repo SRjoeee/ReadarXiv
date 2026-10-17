@@ -1,11 +1,14 @@
 // removal.mjs's types: the layer's side of the text-removed PDF
-import type { Glyph } from '../layout/ink.mjs'
+import type { Glyph, Unread } from '../layout/ink.mjs'
 import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
 import type { Char, Prepared } from './layer2.mjs'
 
-export interface RemovalInk { glyphs: Glyph[]; boxes: number[]; paths: number[]; shows: number }
-/** a page's ink as the remover names its glyphs and rules, each glyph its outline's box (this reading's, else `outlines`') */
-export declare function inkOfPage(OPS: Record<string, number>, page: unknown, outlines?: ReadonlyMap<string, number[]> | null, collect?: Map<string, number[]> | null): Promise<RemovalInk>
+export interface RemovalInk { glyphs: Glyph[]; boxes: number[]; paths: number[]; shows: number; unread?: false }
+/** a page whose ink was not read whole (ink.mjs unreadOf): no ink at all, so that its reader keeps the page the original's */
+export interface UnreadInk { unread: true; reason: Unread }
+/** a page's ink as the remover names its glyphs and rules, each glyph its outline's box (this reading's, else `outlines`'),
+ *  or the page refused (UnreadInk) where it was not read whole; `limits` pageInk's own, for a test */
+export declare function inkOfPage(OPS: Record<string, number>, page: unknown, outlines?: ReadonlyMap<string, number[]> | null, collect?: Map<string, number[]> | null, limits?: { stepsMax?: number; msMax?: number; glyphsMax?: number }): Promise<RemovalInk | UnreadInk>
 /** the text layer's characters on a page carried to its glyphs, by `page|item|k` */
 export declare function glyphsOfChars(chars: readonly Char[], ink: RemovalInk, page: number): Map<string, number>
 /** the layout file's ownership of a page's glyphs (unit id or -1), their placeholders (source k or -1), and rules */

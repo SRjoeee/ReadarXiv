@@ -9,6 +9,7 @@ import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mj
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 import { type Annot, arxivOf, endOf, FONTS, type Mark, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
 import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
+import { inkOfPage } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 
 // The layout maker over the fake world of helpers/make-world.ts
 
@@ -1470,6 +1471,35 @@ describe('makeLayout with the add-on\'s plans (`plans`): each page\'s operator l
     expect(plans.has(4)).toBe(false)
     // without `plans`, none
     expect('plans' in want).toBe(false)
+  })
+
+  it("a page the walk does not read whole, capped or timed out, keeps its units the original's end to end: none located, no plan, its ink refused", async () => {
+    const marks = await marksOf(w)
+    const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', plans: true }
+    const slow: Page[] = w.pages.map((pg, i) => (i === 3 ? { ...pg, ops: 'slow' } : pg))
+    // (page 4 past OPS_CAP, the world's; or walked past the backstop on a clock that moves INK_MS at each reading, which a
+    // page of fewer steps than come between two readings never sees)
+    const capped = await makeLayout({ ...base, arxiv: arxivOf(w.pages) })
+    const real = performance.now.bind(performance)
+    let skew = 0
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => { skew += INK_MS; return real() + skew })
+    const late = await makeLayout({ ...base, arxiv: arxivOf(slow) }).finally(() => clock.mockRestore())
+    if (!('file' in capped) || !('file' in late)) throw new Error('refused')
+    expect(capped.stats.capped).toEqual([4])
+    expect(late.stats.inkTimedOut).toEqual([4])
+    for (const got of [capped, late]) {
+      // unit 2, the page's only one, located nowhere: the original's; no plan of the page, nothing of it removed
+      expect(got.file.units.map(u => u[0])).not.toContain(2)
+      expect(indexLayout(got.file).onPage(4)).toEqual([])
+      expect(got.plans?.has(4)).toBe(false)
+      expect(got.plans?.has(1)).toBe(true)
+    }
+    // and the removal's own reading of the page (the gate's, removal.mjs inkOfPage) refuses it, no prefix of its ink given
+    expect(await inkOfPage(OPS, await arxivOf(w.pages).getPage(4))).toEqual({ unread: true, reason: 'capped' })
+    expect(await inkOfPage(OPS, await arxivOf(slow).getPage(4), null, null, { msMax: -1 })).toEqual({ unread: true, reason: 'timedOut' })
+    const whole = await inkOfPage(OPS, await arxivOf(w.pages).getPage(1))
+    expect(whole.unread).toBeFalsy()
+    if (!whole.unread) expect(whole.glyphs.length).toBeGreaterThan(0)
   })
 })
 

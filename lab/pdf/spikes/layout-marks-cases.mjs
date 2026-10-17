@@ -28,7 +28,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { lastTexLog, latin1, latin1Bytes } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
+import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { NAME_KEYS } from '../../../src/pdf-reader/engine/layout/names.mjs'
 import { classOf, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe, readNameProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.mjs'
@@ -834,6 +834,8 @@ async function inkOf(name) {
  *  edge, how many past 0.001 pt; or why they cannot be compared */
 function inkDiff(a, b) {
   if (a.pages.length !== b.pages.length) return { why: `${a.pages.length} pages, ${b.pages.length}` }
+  // (a page not read whole is compared from no prefix of its ink: ink.mjs unreadOf)
+  for (const [c, at] of [[a, 'the first'], [b, 'the second']]) { const p = c.pages.findIndex(x => unreadOf(x)); if (p >= 0) return { why: `page ${p + 1} of ${at} not read whole (${unreadOf(c.pages[p])})` } }
   let worst = 0, over = 0, glyphs = 0
   for (let p = 0; p < a.pages.length; p++) {
     const A = a.pages[p], B = b.pages[p]

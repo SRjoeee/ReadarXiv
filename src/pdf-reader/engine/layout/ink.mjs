@@ -539,6 +539,11 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
+/** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or
+ *  'timedOut' (past the walk's backstop). What such a reading holds is a prefix of the page, or nothing: every reader keeps
+ *  the page the original's (no unit located, owned or removed there) and never reads the prefix as the page */
+export const unreadOf = ink => (ink?.rotated ? 'rotated' : ink?.capped ? 'capped' : ink?.timedOut ? 'timedOut' : null)
+
 /** every column packGlyphs may keep */
 export const GLYPH_COLUMNS = Object.freeze(['x0', 'x1', 'y', 'top', 'bottom', 'ix0', 'ix1', 'size', 'font', 'u'])
 /**

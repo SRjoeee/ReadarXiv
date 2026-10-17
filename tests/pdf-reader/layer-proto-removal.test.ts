@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { type Glyph, MERGED } from '@/pdf-reader/engine/layout/ink.mjs'
-import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, pageDirty, pagePlan, pageRules, planOf, protection, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { fileOwnership, fileSwap, glyphsOfChars, indicesOf, inkOfPage, pageDirty, pagePlan, pageRules, planOf, protection, type RemovalInk, unitRemoval, unmappedOf } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 import { swapRects } from '@/pdf-reader/engine/layer/swap.mjs'
 
 // The layer's side of the text-removed PDF (layer-proto/removal.mjs): the text layer's characters carried to glyphs, the
@@ -25,6 +26,32 @@ describe("the text layer's characters carried to glyphs", () => {
     const ink = inkOf([g('Z', 10, 100, 0, 0), g('u', 15, 100, 0, 1), g('¨', 15.5, 100, 0, 2), g('r', 20, 100, 0, 3), g('Z', 10, 80, 1, 0)])
     const map = glyphsOfChars(chars('Zu¨r', 10, 100, 0), ink, 1)
     expect([...map.values()]).toEqual([0, 1, 2, 3])
+  })
+})
+
+describe('inkOfPage: a page not read whole is refused, never a prefix of its ink', () => {
+  const font = { name: 'F1', loadedName: 'F1', ascent: 0.75, descent: -0.25, fontMatrix: [0.001, 0, 0, 0.001, 0, 0] }
+  /** a page of one text object showing `n` glyphs, each its own operation, as PDF.js's list for a page */
+  const pageOf = (n: number, rotate = 0) => {
+    const fnArray = [OPS.beginText, OPS.setFont, OPS.setTextMatrix], argsArray: unknown[] = [[], ['F1', 10], [[1, 0, 0, 1, 72, 700]]]
+    for (let i = 0; i < n; i++) { fnArray.push(OPS.showText); argsArray.push([[{ unicode: 'x', width: 500, isSpace: false, fontChar: 'x', vmetric: null }]]) }
+    return { rotate, commonObjs: { get: (id: string) => (id === 'F1' ? font : null), has: () => false }, getOperatorList: async () => ({ fnArray, argsArray }) }
+  }
+  it('gives the ink of a page read whole, and for one capped, timed out or rotated its reason alone', async () => {
+    const whole = await inkOfPage(OPS, pageOf(3000))
+    expect(whole.unread).toBeFalsy()
+    if (!whole.unread) expect(whole.glyphs).toHaveLength(3000)
+    // past a cap (pageInk's step bound, lowered), past the backstop (a clock past at its first reading), turned
+    expect(await inkOfPage(OPS, pageOf(3000), null, null, { stepsMax: 1000 })).toEqual({ unread: true, reason: 'capped' })
+    expect(await inkOfPage(OPS, pageOf(3000), null, null, { glyphsMax: 10 })).toEqual({ unread: true, reason: 'capped' })
+    expect(await inkOfPage(OPS, pageOf(3000), null, null, { msMax: -1 })).toEqual({ unread: true, reason: 'timedOut' })
+    expect(await inkOfPage(OPS, pageOf(3, 90))).toEqual({ unread: true, reason: 'rotated' })
+    // the refusal is a type of its own: its glyphs cannot be read before it is told apart from ink
+    const refused = await inkOfPage(OPS, pageOf(3000), null, null, { stepsMax: 1000 })
+    // @ts-expect-error a page refused holds no glyphs
+    expect(refused.glyphs).toBeUndefined()
+    if (refused.unread) expect(refused.reason).toBe('capped')
+    else expect.unreachable()
   })
 })
 

@@ -1127,7 +1127,9 @@ async function makeAddonOf(key, bytes, layoutFile) {
   if (!existsSync(join(dir, 'done.json')) || !existsSync(shippedFile)) {
     mkdirSync(dir, { recursive: true })
     const { checkPage } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/remove.mjs'))
-    const { pageInk } = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs'))
+    const I = await import(join(ENGINE, 'src/pdf-reader/engine/layout/ink.mjs')), { pageInk } = I
+    // (a reading not whole: an engine before ink.mjs unreadOf reads its flags so)
+    const unreadOf = I.unreadOf ?? (k => (k?.rotated ? 'rotated' : k?.capped ? 'capped' : k?.timedOut ? 'timedOut' : null))
     const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
     const { doc, inks, plan, shipped, out, collected, ms, ink } = await buildAddon(bytes, layoutFile)
     // the check: each removed page against the original, by PDF.js's reading of the new file
@@ -1135,7 +1137,15 @@ async function makeAddonOf(key, bytes, layoutFile) {
     const comb = await openNode(out.bytes)
     const check = {}, N = doc.numPages
     const inkAt = async q => { const pg = await comb.getPage(q); return pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate, indices: true }) }
-    for (let p = 1; p <= N; p++) if (out.manifest.page[p]?.ok) check[p] = checkPage({ orig: inks[p], removed: await inkAt(out.manifest.sets.R + p), kept: await inkAt(out.manifest.sets.P + p), entry: plan.pages[p] })
+    // (a page one of the three readings does not read whole is checked from no prefix of its ink: left unchecked, and said)
+    const checkUnread = []
+    for (let p = 1; p <= N; p++) {
+      if (!out.manifest.page[p]?.ok) continue
+      const removed = await inkAt(out.manifest.sets.R + p), kept = await inkAt(out.manifest.sets.P + p)
+      const why = unreadOf(inks[p]) ?? unreadOf(removed) ?? unreadOf(kept)
+      if (why) checkUnread.push([p, why])
+      else check[p] = checkPage({ orig: inks[p], removed, kept, entry: plan.pages[p] })
+    }
     ms.check = performance.now() - t
     for (const d of [doc, comb]) { try { await d.loadingTask.destroy() } catch {} }
     writeFileSync(file, out.bytes)
@@ -1152,6 +1162,7 @@ async function makeAddonOf(key, bytes, layoutFile) {
       // (the pages of arXiv's PDF the add-on's walk did not read whole, capped or timed out, which no unit is drawn on, and
       // those it read degraded, ink.mjs BOXES_PAGE: the gate's ink line)
       ink,
+      ...(checkUnread.length ? { checkUnread } : {}),
     }
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(out.manifest))
     writeFileSync(join(dir, 'plan.json'), JSON.stringify(plan))

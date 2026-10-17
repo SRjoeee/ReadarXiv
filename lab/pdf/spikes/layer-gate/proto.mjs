@@ -225,7 +225,8 @@ async function gpuPlane(doc, n, W, H) {
  * layout file's ownership): `items`, every glyph and rule the add-on removed, device pixels, and whether a unit drawn
  * by the add-on replaces it; `erase`, what such a unit replaces that the add-on kept (paper white in the truth); and the
  * areas of the units drawn the old way (v0's own readings), which the truth leaves out (their erase is the gate's own
- * measures')
+ * measures'). A page whose ink this reading does not read whole (removal.mjs inkOfPage's refusal) is `{ unread }`: the truth
+ * is then the original page, nothing of it removed or erased, and the page says so (never owned from a prefix of its ink)
  */
 async function truthOf(p, page) {
   const R = await import('/engine/layer-proto/removal.mjs'), I = await import('/engine/layout/ink.mjs')
@@ -233,6 +234,7 @@ async function truthOf(p, page) {
   if (!index) return null
   S.outlines ??= I.readOutlines(S.rm.manifest.outlines)
   const ink = await R.inkOfPage(pdfjs.OPS, page, S.outlines)
+  if (ink.unread) return { unread: ink.reason }
   const own = R.fileOwnership(index, p, ink), plan = R.pagePlan(index, p, ink, own)
   const charMap = R.glyphsOfChars(run.chars[p - 1] ?? [], ink, p), unmapped = R.unmappedOf(ink, charMap)
   const at = new Map(), byPath = new Map()
@@ -267,7 +269,7 @@ async function removalMeasures(cur, T) {
   const { cdoc, rdoc, manifest, plan, mode } = S.rm
   const set = s => manifest.sets[s]
   const ok = !!manifest.page[p]?.ok
-  let Rm = O
+  let Rm = O, unread = null
   if (ok) {
     const own = mode === 'draw' ? S.run.removedCanvas(p) : null
     const R = own ? own.getContext('2d').getImageData(0, 0, W, H).data : await gpuPlane(rdoc, set('R') + p, W, H)
@@ -276,10 +278,14 @@ async function removalMeasures(cur, T) {
     // footprint pixel its glyph's, replacedFoot), and leaves the rest the original's (a line a reading keeps, a unit not
     // drawn); what a unit replaces that the add-on kept is erased, paper white
     const truth = mode === 'draw' ? await truthOf(p, await S.doc.getPage(p)) : null
-    const take = truth ? replacedFoot(foot, W, H, truth.items) : foot
-    Rm = new Uint8ClampedArray(O)
-    for (let i = 0, q = 0; i < W * H; i++, q += 4) if (take[i]) { Rm[q] = R[q]; Rm[q + 1] = R[q + 1]; Rm[q + 2] = R[q + 2] }
-    for (const e of truth?.erase ?? []) for (let y = Math.max(0, Math.floor(e[1])); y < Math.min(H, Math.ceil(e[3])); y++) for (let x = Math.max(0, Math.floor(e[0])); x < Math.min(W, Math.ceil(e[2])); x++) { const q = 4 * (y * W + x); Rm[q] = Rm[q + 1] = Rm[q + 2] = 255 }
+    // (a page this reading cannot read whole: its truth the original's, nothing taken or erased, and said: `unread`)
+    if (truth?.unread) unread = truth.unread
+    else {
+      const take = truth ? replacedFoot(foot, W, H, truth.items) : foot
+      Rm = new Uint8ClampedArray(O)
+      for (let i = 0, q = 0; i < W * H; i++, q += 4) if (take[i]) { Rm[q] = R[q]; Rm[q + 1] = R[q + 1]; Rm[q + 2] = R[q + 2] }
+      for (const e of truth?.erase ?? []) for (let y = Math.max(0, Math.floor(e[1])); y < Math.min(H, Math.ceil(e[3])); y++) for (let x = Math.max(0, Math.floor(e[0])); x < Math.min(W, Math.ceil(e[2])); x++) { const q = 4 * (y * W + x); Rm[q] = Rm[q + 1] = Rm[q + 2] = 255 }
+    }
   }
   const drawn = units.filter(u => u.drawn)
   // (the units drawn the old way, v0's own readings: their erase is the gate's erase measures', not the truth's)
@@ -305,6 +311,8 @@ async function removalMeasures(cur, T) {
     const toPx = (x, y) => [(x - qv[0]) * K, (qv[3] - y) * K]
     const dev = b => { const [ax, ay] = toPx(b[0], b[3]), [bx, by] = toPx(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
     const ink = await plane(`ink${q}`, async () => R.inkOfPage(pdfjs.OPS, await cdoc.getPage(q)))
+    // (a source page this reading cannot read whole: the crop is not measured from a prefix of its ink, and is said)
+    if (ink.unread) { ;((out.at ??= {}).cropsUnread ??= []).push([u.id, c.k, q, ink.reason]); continue }
     const at = ci >= 0 ? R.indicesOf(ink, plan.pages[q].crops[ci]) : null
     const rules = (at?.paths ?? []).map(b => dev(ink.boxes.slice(4 * b, 4 * b + 4)))
     // (a crop drawn through its own ink's boxes carries nothing outside them: v0's device pixels, at the gate's)
@@ -318,7 +326,7 @@ async function removalMeasures(cur, T) {
       ;((out.at ??= {}).crops ??= []).push([u.id, c.k, S.byId.get(u.id)?.tex ? 'tex' : 'v0', c.clip ? 'clip' : 'box', n])
     }
   }
-  return { ...out, ok, crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
+  return { ...out, ok, ...(unread ? { unread } : {}), crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
 }
 
 /** each translated piece's source index (the layout file's k) of a unit drawn: the hybrid's own where the file locates

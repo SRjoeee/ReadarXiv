@@ -21,7 +21,7 @@
 // An original module (no port statement), importing only relative modules.
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import { PH_FLAG } from '../layout/file.mjs'
-import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, pageInk, unreadOf } from '../layout/ink.mjs'
 
 /** a glyph on a line, scripts included: its baseline within this of the line's (the layout maker's SCRIPT) */
 const SCRIPT = size => 0.6 * Math.max(size, 5) + 1.5
@@ -32,10 +32,16 @@ const norm = s => String(s ?? '').normalize('NFKC').replace(/\s+/g, '')
 /** a page's ink as the remover names its glyphs and rules (pageInk with `indices`; every painted glyph, a blank one too),
  *  each glyph's box its outline's: this reading's where PDF.js gives it (Node), else the paper's outline table's (the
  *  browser: `outlines`, layout/ink.mjs readOutlines of the add-on's manifest), so that both readings own alike; its boxes
- *  and glyphs within the add-on's bounds (BOXES_PAGE, GLYPHS_PAGE: layout/addon.mjs pagePlansOf), so that both read alike */
-export async function inkOfPage(OPS, page, outlines = null, collect = null) {
+ *  and glyphs within the add-on's bounds (BOXES_PAGE, GLYPHS_PAGE: layout/addon.mjs pagePlansOf), so that both read alike.
+ *  A page not read whole (rotated, past a cap, past the walk's backstop: ink.mjs unreadOf) is refused, `{ unread: true,
+ *  reason }` and no ink at all: its reader keeps the page the original's (nothing owned, removed or measured as removed
+ *  there), never the prefix the walk read, which would own and plan the page wrongly. `limits`: pageInk's own (`stepsMax`,
+ *  `msMax`, `glyphsMax`), for a test */
+export async function inkOfPage(OPS, page, outlines = null, collect = null, limits = {}) {
   const ops = await page.getOperatorList()
-  return pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, outlines, collect, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
+  const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, outlines, collect, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE, ...limits })
+  const reason = unreadOf(ink)
+  return reason ? { unread: true, reason } : ink
 }
 
 /**

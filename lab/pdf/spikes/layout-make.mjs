@@ -22,7 +22,7 @@ import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { keptFor, openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, inkSamples, layoutMarksOf, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { encodeLayout, PH_FLAG } from '../../../src/pdf-reader/engine/layout/file.mjs'
-import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
+import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
@@ -189,7 +189,8 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   const pt = { texts: texts.size, ink: 0, inkSpaces: 0, layer: 0, layerChars: 0, layerRun: 0, misses: [] }
   if (texts.size) {
     const t2 = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf')))), doc2 = await t2.promise, inks = new Map(), layers = new Map()
-    const inkOf = async p => { if (!inks.has(p)) { const pg = await doc2.getPage(p); inks.set(p, pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate }).glyphs); layers.set(p, (await pg.getTextContent()).items) } return inks.get(p) }
+    // (a page not read whole: no glyphs, never a prefix of them, so that its page texts are counted not spelt)
+    const inkOf = async p => { if (!inks.has(p)) { const pg = await doc2.getPage(p), got = pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate }); inks.set(p, unreadOf(got) ? [] : got.glyphs); layers.set(p, (await pg.getTextContent()).items) } return inks.get(p) }
     const norm = x => x.replace(/\s+/g, ' ').trim(), bare = x => x.replace(/\s+/g, '')
     for (const r of out.file.ph) {
       const t = texts.get(`${r[0]}.${r[1]}`)
