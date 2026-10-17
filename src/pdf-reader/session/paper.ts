@@ -22,17 +22,19 @@ export function abstractOf(html: string): Abstract {
 }
 
 /** the abstract page of `paper`, one request a visit (arxiv.org, the extension's host): what it says, or nothing where it
- *  cannot be had */
+ *  cannot be had. One that could not be read (the network, a status that is no page) is forgotten once it has answered, so
+ *  that a retry reads it again; one request at a time */
 export function abstractPage(paper: string, f: typeof fetch = (...a) => fetch(...a)): () => Promise<Abstract> {
   let asked: Promise<Abstract> | null = null
+  const none = (): Abstract => { asked = null; return { title: '', version: null } }
   return () => (asked ??= (async () => {
     if (!paper) return { title: '', version: null }
     try {
       const res = await f(`https://arxiv.org/abs/${ownVersion(paper)?.id ?? paper}`, { credentials: 'omit', referrerPolicy: 'no-referrer' })
-      if (!res.ok) return { title: '', version: null }
+      if (!res.ok) return none()
       return abstractOf(await res.text())
     } catch {
-      return { title: '', version: null }
+      return none()
     }
   })())
 }

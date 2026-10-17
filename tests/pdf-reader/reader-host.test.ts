@@ -107,6 +107,24 @@ describe('the run, once a translated display is shown (what is not seen takes no
     expect(a.events).toContainEqual({ type: 'unavailable', why: 'unreachable', retryAt: null })
   })
 
+  it('an id with no version whose abstract page could not be read: a retry reads it again, and the run starts once arXiv answers (Devin on #390)', async () => {
+    let up = false
+    const html = '<!doctype html><meta name="citation_title" content="T"><div class="submission-history"><b>[v1]</b> <strong>[v2]</strong></div>'
+    const fetch = vi.fn(async (url: string) => {
+      if (String(url).includes('/abs/')) { if (!up) throw new TypeError('Failed to fetch'); return new Response(html, { status: 200 }) }
+      return new Response('', { status: 404 })
+    })
+    const a = await opened('paper=2600.00001', { fetch: fetch as never })
+    await flush(20)
+    expect(a.run).not.toHaveBeenCalled()
+    expect(a.events).toContainEqual({ type: 'unavailable', why: 'unreachable', retryAt: null })
+    up = true
+    a.session.retry()
+    await flush(30)
+    expect(a.run).toHaveBeenCalledOnce()
+    expect((a.run.mock.calls[0] as unknown[])[1]).toEqual({ id: '2600.00001', version: 2 })
+  })
+
   it('a paper the layer cannot be had for: the original shown for the visit, the translated displays not chosen again; the HTML version said', async () => {
     const a = await opened()
     await flush()
