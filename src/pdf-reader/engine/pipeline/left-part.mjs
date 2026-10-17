@@ -80,11 +80,11 @@ export function leftOfPart(doc, units, { bounds, floating = () => false, floatMa
  * leftOfPart's place, its sets made (C's units and V2's, rising: partSets'), C's units alone placed. `matched` (a Map unit →
  * matchUnits' match, a caller's across its parts): the matches made already, each made once — a unit's match is a function of
  * its own bounds, its neighbours', its text and the document's tokens in its window, all final once its match is (a range's
- * units' are: rangedAnchors)
+ * units' are: rangedAnchors); `known` matchUnits', the caller's bounds and neighbours of those units
  */
-function leftOfSets(doc, units, { bounds, floating, floatMatch, frame, minCoverage = 0.6, forward, wholeIndex }, [a, b], cUnits, read, matched = null) {
+function leftOfSets(doc, units, { bounds, floating, floatMatch, frame, minCoverage = 0.6, forward, wholeIndex, known = null }, [a, b], cUnits, read, matched = null) {
   const todo = matched ? read.filter(u => !matched.has(u)) : read
-  const fresh = todo.length ? matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(todo), forward, wholeIndex }) : null
+  const fresh = todo.length ? matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, only: new Set(todo), forward, wholeIndex, known }) : null
   if (matched) for (const u of todo) matched.set(u, fresh[u])
   const found = matched ? read.map(u => matched.get(u)) : read.map(u => fresh[u])
   const at = new Map(read.map((u, j) => [u, j]))
@@ -179,11 +179,12 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   for (let k = 0; k < N; k++) tokPage[k] = doc[k].page
   // (the units in the text with bounds, a bit each: a unit's nearest such neighbours, leftReach's, found without a scan)
   const textBits = new Uint32Array((n + 31) >>> 5)
+  const hard = new Array(n).fill(null)
   const setBounds = (k, b) => {
     bounds.set(k, b)
     const u = unitOf.get(k)
     if (u === undefined) return
-    hasB[u] = 1; bS[u] = b[0]; bE[u] = b[1]
+    hasB[u] = 1; bS[u] = b[0]; bE[u] = b[1]; hard[u] = b
     if (!isFloat[u]) textBits[u >>> 5] |= 1 << (u & 31)
   }
   // (and the units not yet marked: a unit's nearest such one either side)
@@ -213,8 +214,9 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   const forwardSpan = (id, from) => (spans ??= forwardSpans(doc, units, floating, (wholeIndex.index ??= buildIndexOf(doc))))(id, from)
   const pageAfter = k => { let q = k; while (q < N && doc[q].page === doc[k].page) q++; return q }
   // ---- the matches' finality and the reaches of the marks known now (a run's), each unit's reach as page intervals, flat:
-  // unit u's are ivA[j], ivB[j] for j from ivOff[u] to ivOff[u + 1]; maxB[u] the last page any of them reaches (-1: none)
-  const fin = new Uint8Array(n), maxB = new Int32Array(n), ivOff = new Int32Array(n + 1)
+  // unit u's are ivA[j], ivB[j] for j from ivOff[u] to ivOff[u + 1]; maxB[u] the last page any of them reaches (-1: none),
+  // minA[u] the first (past the last page: none)
+  const fin = new Uint8Array(n), maxB = new Int32Array(n), minA = new Int32Array(n), ivOff = new Int32Array(n + 1)
   let ivA = new Int32Array(4 * n + 16), ivB = new Int32Array(4 * n + 16), m = 0, finCount = 0
   const before = new Int32Array(n), after = new Int32Array(n), bodyEnd = new Int32Array(n)
   const pendBefore = new Uint8Array(n), pendAfter = new Uint8Array(n), lo = new Int32Array(n), hi = new Int32Array(n)
@@ -284,9 +286,9 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
           }
         }
       }
-      let mx = -1
-      for (let j = at; j < m; j++) if (ivB[j] > mx) mx = ivB[j]
-      maxB[u] = mx
+      let mx = -1, mn = lastPage + 1
+      for (let j = at; j < m; j++) { if (ivB[j] > mx) mx = ivB[j]; if (ivA[j] < mn) mn = ivA[j] }
+      maxB[u] = mx; minA[u] = mn
     }
     ivOff[n] = m
     while (u0 < n && fin[u0]) u0++
@@ -295,8 +297,18 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   // and the pages their reach makes (`next`)
   const P = lastPage
   const sum = new Int32Array(P + 2), diff = new Int32Array(P + 2), F0 = new Uint8Array(P + 2), F1 = new Uint8Array(P + 2), F2 = new Uint8Array(P + 2)
-  const prefix = pages => { for (let p = 1; p <= P; p++) sum[p] = sum[p - 1] + pages[p] }
-  const meets = u => { for (let j = ivOff[u]; j < ivOff[u + 1]; j++) if (sum[Math.min(ivB[j], P)] - sum[Math.max(ivA[j], 1) - 1] > 0) return true; return false }
+  // (and the first and last page flagged: a unit whose reach lies wholly before or after them meets none, told without its
+  // intervals)
+  let fLo = 0, fHi = -1
+  const prefix = pages => {
+    fLo = P + 1; fHi = 0
+    for (let p = 1; p <= P; p++) { sum[p] = sum[p - 1] + pages[p]; if (pages[p]) { if (p < fLo) fLo = p; fHi = p } }
+  }
+  const meets = u => {
+    if (maxB[u] < fLo || minA[u] > fHi) return false
+    for (let j = ivOff[u]; j < ivOff[u + 1]; j++) if (sum[Math.min(ivB[j], P)] - sum[Math.max(ivA[j], 1) - 1] > 0) return true
+    return false
+  }
   // (`final`: false, as soon as a unit not final meets them, where only that is asked)
   const meet = (pages, next, list, final = false) => {
     prefix(pages)
@@ -413,7 +425,8 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
         if (finCount === n) to = lastPage
         else while (to < lastPage && ready(am, to + 1)) to++
         const [C, V2] = setsOf(am, to)
-        const got = leftOfSets(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex }, [am, to], C, V2, matched)
+        // (a range's units are final: their neighbours are the scans', fixed since they became so)
+        const got = leftOfSets(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex, known: { hard, before, after, body: forward ? bodyEnd : null } }, [am, to], C, V2, matched)
         for (const id of got.before) if (!settled[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
         for (const [id, an] of got.anchors) settle(id, u => onAnchor(u, an))
         am = to + 1

@@ -41,7 +41,9 @@ export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?
 /** every floating unit's match over the whole document (id → its tokens, or null), from the document and the words alone */
 export declare function floatMatches(doc: DocToken[], units: UnitText[], floating?: (id: number) => boolean): Map<number, number[] | null>
 /** anchorUnits' first half: each unit's match by the units' order (null: not found, or not in `only`) */
-export declare function matchUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { only?: ReadonlySet<number> | null; wholeIndex?: { index: unknown } | null }): (UnitMatch | null)[]
+/** a caller's units' bounds and neighbours (matchUnits' `known`), true at least of the units matched */
+export interface KnownNeighbours { hard: readonly ([number, number] | null | undefined)[]; before: ArrayLike<number>; after: ArrayLike<number>; body: ArrayLike<number> | null }
+export declare function matchUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { only?: ReadonlySet<number> | null; wholeIndex?: { index: unknown } | null; known?: KnownNeighbours | null }): (UnitMatch | null)[]
 /** each page's first token: the first token of token k's page (0 for k -1): rule 5's start of a float's search, its last body
  *  neighbour's end's */
 export declare function pageStarts(doc: readonly DocToken[]): (k: number) => number

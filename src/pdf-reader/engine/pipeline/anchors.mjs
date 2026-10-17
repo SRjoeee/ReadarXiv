@@ -845,30 +845,36 @@ export function forwardSpans(doc, units, floating = () => false, index = buildIn
  * read from every unit's bounds: a unit's match is a function of its own bounds, its neighbours', its text and the document's
  * tokens in its window. The 3-gram index is made over the windows searched alone and let go (a window's hits are those
  * inside it: locate). `forward`: anchorUnits' (rule 5); `wholeIndex` (a holder, { index }): the whole document's index
- * its forward searches read, made there once and kept (the page stream's, a range at a time), in place of one made a call
+ * its forward searches read, made there once and kept (the page stream's, a range at a time), in place of one made a call.
+ * `known` { hard, before, after, body }: each unit's bounds (`bounds`' of its id, or null) and its neighbours (neighbours'),
+ * a caller's that keeps them (the page stream), true at least of the units `only` holds: a call is then of those units alone
  */
-export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, only = null, forward = null, wholeIndex = null } = {}) {
-  const hard = units.map(u => bounds?.get(String(u.id)) ?? null)
-  const { before, after, body } = neighbours(doc, units, hard, floating, forward)
+export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, only = null, forward = null, wholeIndex = null, known = null } = {}) {
+  const hard = known ? known.hard : units.map(u => bounds?.get(String(u.id)) ?? null)
+  const { before, after, body } = known ?? neighbours(doc, units, hard, floating, forward)
   // (rule 5: a float's search of the whole document from the page of its last body neighbour on)
   const start = forward ? pageStarts(doc) : null
   const fromOf = u => start(body[u])
-  // the units' words, and the span of the document their searches by 3-grams read
-  const words = units.map(({ text, gaps }, u) => (only && !only.has(u) ? null : unitWords(text, hard[u] ? null : gaps)))
+  // the units matched (`only`'s, rising; else every one), their words, and the span of the document their searches by
+  // 3-grams read
+  const list = only ? [...only].sort((a, b) => a - b) : units.map((_, u) => u)
+  const words = new Array(units.length).fill(null)
+  for (const u of list) words[u] = unitWords(units[u].text, hard[u] ? null : units[u].gaps)
   let from = Infinity, to = -Infinity
-  units.forEach(({ id }, u) => {
-    const w = words[u]
-    if (!w || w.ws.length < K) return
+  for (const u of list) {
+    const { id } = units[u], w = words[u]
+    if (!w || w.ws.length < K) continue
     const [lo, hi] = windowOf(doc, u, hard, bounds, before, after)
     // (a float's search of the whole document, where no match of it is given; under rule 5 from its start, on an index of the
     // whole document's given where it is)
     const all = !hard[u] && bounds?.size && floating(id) && (forward ? !wholeIndex : !floatMatch?.has(id))
     from = Math.min(from, all ? (forward ? fromOf(u) : 0) : lo); to = Math.max(to, all ? doc.length - 1 : hi)
-  })
+  }
   const index = from <= to ? buildIndex(doc, from, to) : new Map()
-  const found = []
-  units.forEach(({ id }, u) => {
-    if (!words[u]) { found.push(null); return }
+  const found = new Array(units.length).fill(null)
+  for (const u of list) {
+    const { id } = units[u]
+    if (!words[u]) continue
     const b = hard[u]
     // where its placeholders stood matters to a unit found as a run of words, which a unit with marks never is
     const { ws, gap } = words[u]
@@ -893,11 +899,11 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
     }
     // a run takes a placeholder's words besides the unit's own, which are all there
     const coverage = m ? Math.min(1, m.length / ws.length) : 0
-    if (!b && (!m || coverage < minCoverage)) { found.push(null); return }
+    if (!b && (!m || coverage < minCoverage)) continue
     // a unit with marks keeps its words and which of them were matched where, for a break (wordsBetween); one found by
     // its text alone keeps the match's map too, for its sentences' starts before any marks come (sentenceStarts, B3c)
-    found.push(b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs })
-  })
+    found[u] = b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs }
+  }
   return found
 }
 
