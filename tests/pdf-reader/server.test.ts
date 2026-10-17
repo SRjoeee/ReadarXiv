@@ -3,7 +3,7 @@
 // bounds and by its status's shape, only the paper's id and version leaving the machine
 import { describe, expect, it, vi } from 'vitest'
 import { CATALOG_CAP, CTAG4, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { askPrepare, bodyWithin, fetchObject, fetchOriginal, LayerUnreachable, layerPath, lookLayer, OBJECT_MARGIN, paperSegment, RETRY_MS, sha256Of } from '@/pdf-reader/session/server'
+import { askPrepare, bodyWithin, fetchObject, fetchOriginal, LayerUnreachable, layerPath, lookLayer, OBJECT_MARGIN, paperSegment, REQUEST_MS, RETRY_MS, sha256Of } from '@/pdf-reader/session/server'
 import { made, N, PAPER } from './helpers/format-paper'
 
 const API = 'https://readarxiv.com'
@@ -142,6 +142,25 @@ describe('B4: a 5xx or a network that fails is asked once more after a second, t
       const aborted = recording(() => { throw Object.assign(new Error('aborted'), { name: 'AbortError' }) })
       await expect(lookLayer(API, PAPER, { fetch: aborted.f, signal: ac.signal })).rejects.toThrow(/aborted/)
       expect(aborted.calls.length).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a request that never settles (no answer, or a body that stops) is let go at REQUEST_MS, asked once more, then the server is not to be had (Codex on #390)', async () => {
+    vi.useFakeTimers()
+    try {
+      // a connection taken and never answered: the fetch hears only its signal
+      const hung = vi.fn((_u: string, init: RequestInit) => new Promise<Response>((_, reject) => init.signal?.addEventListener('abort', () => reject(init.signal?.reason))))
+      const a = lookLayer(API, PAPER, { fetch: hung as unknown as typeof fetch }).catch(e => e)
+      await vi.advanceTimersByTimeAsync(REQUEST_MS + RETRY_MS + REQUEST_MS)
+      expect(await a).toBeInstanceOf(LayerUnreachable)
+      expect(hung).toHaveBeenCalledTimes(2)
+      // headers come, then the body stops: let go as well
+      const stops = vi.fn(async (_u: string, init: RequestInit) => new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('{')); init.signal?.addEventListener('abort', () => c.error(init.signal?.reason)) } }), { status: 200 }))
+      const b = lookLayer(API, PAPER, { fetch: stops as unknown as typeof fetch }).catch(e => e)
+      await vi.advanceTimersByTimeAsync(REQUEST_MS + 10)
+      expect(await b).toBeInstanceOf(LayerUnreachable)
     } finally {
       vi.useRealTimers()
     }

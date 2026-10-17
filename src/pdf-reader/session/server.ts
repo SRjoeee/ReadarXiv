@@ -35,6 +35,12 @@ export const SMALL_CAP = 4096
 export const OBJECT_MARGIN = 1024
 /** how long after a 5xx or a network failure an answer is asked once more */
 export const RETRY_MS = 1000
+/** how long one ask may take, its answer and its body together, before it is let go as a network failure is (asked once
+ *  more, then the server not to be had): a connection taken and never answered, or a body that stops, would otherwise hold
+ *  the reader in its look for good. Thirty seconds bring the largest object at 64 kbit/s */
+export const REQUEST_MS = 30_000
+/** our copy of the original read whole (no tag to read it by ranges): its own bound, a 46 MB copy at 80 KB/s */
+export const ORIGINAL_MS = 600_000
 /** the header of the catalog's and the objects' answers that names the original the layer is bound to: our copy's entity-tag */
 export const BASE_ETAG_HEADER = 'x-axt-base-etag'
 /** a strong entity-tag (RFC 9110 §8.8.3), as R2 tags an object: the only kind a range is held to */
@@ -83,21 +89,31 @@ const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, 
 })
 const messageOf = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 200)
 
-/** `url` asked, and once more after RETRY_MS where the network failed or the server answered 5xx; a second failure is
- *  LayerUnreachable. An abort of the caller's signal is the caller's, never asked again */
-async function fetched(f: typeof fetch, url: string, init: RequestInit): Promise<Response> {
+/** `url` asked, and once more after RETRY_MS where the network failed, the server answered 5xx or nothing came within
+ *  REQUEST_MS; a second failure is LayerUnreachable. The bound holds over the answer's body too (its read is let go at
+ *  REQUEST_MS: bodyWithin says so as LayerUnreachable). An abort of the caller's signal is the caller's, never asked again */
+async function fetched(f: typeof fetch, url: string, init: RequestInit, ms = REQUEST_MS): Promise<Response> {
   for (let again = true; ; again = false) {
+    const ac = new AbortController(), caller = init.signal ?? null
+    const stop = () => ac.abort(caller?.reason)
+    if (caller?.aborted) stop()
+    else caller?.addEventListener('abort', stop, { once: true })
+    const timer = setTimeout(() => ac.abort(Object.assign(new Error(`nothing within ${ms / 1000} s`), { name: 'TimeoutError' })), ms)
+    const done = () => { clearTimeout(timer); caller?.removeEventListener('abort', stop) }
     try {
-      const r = await f(url, { ...REQUEST, ...init })
+      const r = await f(url, { ...REQUEST, ...init, signal: ac.signal })
+      // (the bound runs on over the body's read; the caller's abort too)
       if (r.status < 500) return r
+      done()
       void r.body?.cancel().catch(() => {})
       if (!again) throw new LayerUnreachable(`the server answered ${r.status}`)
     } catch (e) {
-      if (init.signal?.aborted) throw e
+      done()
+      if (caller?.aborted) throw e
       if (e instanceof LayerUnreachable) throw e
       if (!again) throw new LayerUnreachable(`not fetched: ${messageOf(e)}`)
     }
-    await sleep(RETRY_MS, init.signal ?? undefined)
+    await sleep(RETRY_MS, caller ?? undefined)
   }
 }
 /** an answer's body within `cap` bytes, as its length says and as it comes; past it, the read is let go */
@@ -109,7 +125,12 @@ export async function bodyWithin(r: Response, cap: number): Promise<Uint8Array> 
   const reader = r.body.getReader(), chunks: Uint8Array[] = []
   let n = 0
   for (;;) {
-    const { done, value } = await reader.read()
+    // a body that stops past its request's bound (fetched's REQUEST_MS), or breaks: the server not to be had; an abort of the
+    // caller's stays one
+    const { done, value } = await reader.read().catch((e: unknown) => {
+      if ((e as Error)?.name === 'AbortError') throw e
+      throw new LayerUnreachable(`the answer's body stopped: ${messageOf(e)}`)
+    })
     if (done) break
     n += value.length
     if (n > cap) { void reader.cancel().catch(() => {}); throw past(n) }
@@ -206,7 +227,7 @@ export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256'
 }
 /** our copy of arXiv's PDF of the version, exactly the base's bytes and digest; any other answer, or other bytes, refused */
 export async function fetchOriginal(api: string, p: Paper, base: { bytes: number; sha256: string }, o: { fetch?: typeof fetch; signal?: AbortSignal } = {}): Promise<Uint8Array> {
-  const r = await fetched(o.fetch ?? fetch, originalPath(api, p), { signal: o.signal ?? null })
+  const r = await fetched(o.fetch ?? fetch, originalPath(api, p), { signal: o.signal ?? null }, ORIGINAL_MS)
   if (r.status !== 200) { void r.body?.cancel().catch(() => {}); throw new Error(`our copy of the original: ${r.status}`) }
   const bytes = await bodyWithin(r, base.bytes)
   if (bytes.length !== base.bytes || (await sha256Of(bytes)) !== base.sha256) throw new Error('our copy of the original is not the bytes the layer extends')
