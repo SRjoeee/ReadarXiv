@@ -786,6 +786,30 @@ try {
     const darkPaper = await ringOn(false), focusDark = await focusNow(), darkDimmed = await ringOn(true)
     await setConfig({ theme: 'system', pdfReader: { dimPages: true } })
     check('the focus ring reads on the page in the dark theme, on white paper and on dimmed pages alike (3:1 at least)', (darkPaper?.contrast ?? 0) >= 3 && (darkDimmed?.contrast ?? 0) >= 3, `undimmed ${JSON.stringify(darkPaper)}, dimmed ${JSON.stringify(darkDimmed)}; the focus ${focusBefore}, then ${focusDark}`)
+    // a real keyboard: the focus on a link, its page scrolled far by PageDown, then Tab: the page held while it holds the
+    // focus, the focus moved on inside the layer, never to the document's body (Chromium tells focusout, and runs its
+    // microtasks, before the focus arrives at the next link)
+    await page.evaluate(() => window.__reader.controller.goToPage('right', 1))
+    await sleep(900)
+    const tabFrom = await page.evaluate(() => { const a = document.querySelector('#right .axt-place[data-page-number="1"] a.axt-link'); a?.focus(); return a ? 1 : null })
+    // (PageDown scrolls the pane only where the browser takes the focused link's scroller for the keyboard's: the wheel is
+    // the reader's own scroll either way)
+    for (let i = 0; i < 4; i++) { await page.keyboard.press('PageDown'); await sleep(150) }
+    const Rb = await page.locator('#right').boundingBox()
+    await page.mouse.move(Rb.x + Rb.width / 2, Rb.y + Rb.height / 2)
+    if (await page.evaluate(() => document.getElementById('right').scrollTop) < 1500) { for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 1200); await sleep(250) } }
+    await sleep(900)
+    // page 1 out of view and still laid, holding the focus, before the Tab (the Tab's focus brings its link back into view)
+    const beforeTab = await page.evaluate(() => { const place = document.querySelector('#right .axt-place[data-page-number="1"]'), right = document.getElementById('right'); return { held: !!place?.querySelector('.axt-layer svg'), outOfView: !!place && place.offsetTop + place.offsetHeight < right.scrollTop, scrolled: right.scrollTop } })
+    await page.keyboard.press('Tab')
+    await sleep(600)
+    const tabbed = await page.evaluate(() => {
+      const a = document.activeElement, place = document.querySelector('#right .axt-place[data-page-number="1"]'), right = document.getElementById('right')
+      return { at: a === document.body ? 'body' : a?.matches?.('#right a.axt-link, #right .axt-place') ? `${a.tagName.toLowerCase()} on page ${a.closest('.axt-place')?.dataset.pageNumber}` : a?.tagName ?? 'none', held: !!place?.querySelector('.axt-layer svg'), outOfView: !!place && place.offsetTop + place.offsetHeight < right.scrollTop, scrolled: right.scrollTop }
+    })
+    check('a real Tab from a link whose page a scroll took out of view: the page held, the focus moved on inside it, never to the document\'s body', tabFrom === 1 && beforeTab.held && beforeTab.outOfView && tabbed.at === 'a on page 1', `before the Tab ${JSON.stringify(beforeTab)}, after it ${JSON.stringify(tabbed)}`)
+    await page.evaluate(() => window.__reader.controller.goToPage('right', 1))
+    await sleep(900)
     // Enter on a link inside the paper: the right jumps (the pane it is on), the left follows with the sync on, nothing levelled
     const internal = await page.evaluate(() => { const a = [...document.querySelectorAll('#right a.axt-link[href^="#"]')][0]; a?.focus(); return a ? a.getAttribute('aria-label') : null })
     const jumpFrom = await page.evaluate(() => ({ right: document.getElementById('right').scrollTop, align: window.__reader.view.probe().lastAlign }))
@@ -819,6 +843,16 @@ try {
       check('a link of the layer out of the paper opens in a new tab through the host, with no opener, the reader staying', !!tab && opener === true && page.url().includes('pdf-reader.html'), `opened ${tab?.url() ?? 'nothing'}, no opener ${opener}`)
       await tab?.close()
     } else note('the laid pages near the view hold no link out of the paper (the sample\'s \\href is elsewhere)')
+    // the original's download: arXiv's own PDF in a tab of its own, at #axt-viewer, which the PDF page lays no reader over
+    // whatever the setting (on here), and with no opener: the browser streams and saves it, the reader reads none of it
+    const viewerTab = context.waitForEvent('page', { timeout: 10_000 }).catch(() => null)
+    await page.evaluate(() => window.__reader.controller.download('original'))
+    const vt = await viewerTab
+    await vt?.waitForLoadState('load').catch(() => undefined)
+    await sleep(3000)
+    const viewer = vt ? await vt.evaluate(() => ({ url: location.href, reader: !!document.querySelector('iframe[data-axt-pdf-reader]'), buttons: document.querySelectorAll('.axt-floating').length, noOpener: window.opener === null })).catch(e => ({ error: String(e.message).slice(0, 80) })) : null
+    check('the original\'s download opens arXiv\'s PDF in a tab of its own at #axt-viewer, no reader laid over it (the setting on), the floating button there, no opener', !!viewer && /^https:\/\/arxiv\.org\/pdf\/[^#]+#axt-viewer$/.test(viewer.url ?? '') && viewer.reader === false && viewer.buttons === 1 && viewer.noOpener === true, JSON.stringify(viewer))
+    await vt?.close()
     // the links name themselves to assistive technology: axe's link-name over the right, none failing
     const axe = await new AxeBuilder({ page }).include('#right .axt-links').withRules(['link-name', 'nested-interactive', 'aria-hidden-focus']).analyze().catch(e => ({ violations: [{ id: `axe did not run: ${e.message}` }] }))
     check('axe over the layer\'s links: no link without a name, none hidden while focusable', axe.violations.length === 0, axe.violations.map(v => v.id).join(', ') || 'none')

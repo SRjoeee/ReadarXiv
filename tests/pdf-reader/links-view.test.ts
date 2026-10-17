@@ -307,6 +307,28 @@ describe('the layer side: links with the laid page (the fake door)', () => {
     expect(document.activeElement?.getAttribute('aria-label')).toBe('[2]')
   })
 
+  it('LS6d: a Tab inside a held far page keeps it: the focus leaves for <body> and its microtasks run before it arrives at the next link (Chromium\'s order), and the page is not let go meanwhile', async () => {
+    const s = await opened()
+    const [a, b] = anchors(layerOf(s, 1)) as HTMLAnchorElement[]
+    a?.focus()
+    await nearOn(s, [1], false)
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    // a native Tab: the focused element cleared, focusout (no related target, as Chromium tells it) and its microtasks,
+    // then the focus on the next link, inside the same page
+    a?.blur()
+    expect(document.activeElement).toBe(document.body)
+    await flush(10)
+    b?.focus()
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    expect(document.activeElement).toBe(b)
+    // a reopen: the drawing of an earlier door the focus holds is kept too, until the focus leaves it
+    s.side.again()
+    await flush(10)
+    expect(document.activeElement?.closest('.axt-place')).toBe(places(s)[0])
+  })
+
   it('LS7: a click on a link levels nothing (alignClick\'s guard), where the same click beside it does', async () => {
     const s = await opened()
     const box = anchors(layerOf(s, 1))[0]?.querySelector('span') as HTMLElement

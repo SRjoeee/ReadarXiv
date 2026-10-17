@@ -45,6 +45,8 @@ What changes on the extension's side is §9; here, the ways in.
   address stays arXiv's. Off, the browser's viewer shows the PDF with the floating button.
   - A PDF address carrying `#readarxiv` opens the reader whatever the setting says: it is an explicit request, and the
     abstract page's entry and the floating button use it (the HTML version's link carries the same hash today).
+  - A PDF address carrying `#axt-viewer` opens no reader whatever the setting says: the browser's own viewer asked for,
+    with the floating button (the reader's original download opens arXiv's PDF so: `core/pdf/entry.ts` `VIEWER_HASH`).
 - **The abstract page's popup**: the entry view's one button becomes two, side by side, **HTML 翻译** and **PDF 翻译**
   (the maintainer, 2026-09-25: as few words as stay clear), where `reading.openIn` says (a new tab by default). The
   reader chooses; we do not choose for them (the maintainer: 「在PDF入口和HTML入口中自选——我们不替用户做决定」). PDF 翻译 opens the paper's PDF address with
@@ -206,7 +208,8 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 5. 下载 (`download`), a menu of two items, text only: 译文 PDF, 原文 PDF (the maintainer: 「只要译文 PDF / 原文 PDF」).
    The translation's file is named `<id>.<target>.pdf`. Free. 译文 PDF is the final translation: while the translation is
    still coming in (previews), the item is greyed. The original's item opens arXiv's own PDF in a tab of its own, with no
-   opener: the browser streams it and its viewer saves it (`<id>.pdf` as arXiv names it). The reader never reads the whole
+   opener and no referrer, at `#axt-viewer` (§2: no reader laid over it): the browser streams it and its viewer saves it
+   (`<id>.pdf` as arXiv names it). The reader never reads the whole
    original to save it: that is 46 MB through the page for every reader, in case one asks (ruled 2026-10-17, for the web
    too); a true download from the reader would need the `downloads` permission, a store-listing item not taken.
 6. 设置 (`settings`): opens the settings page at its PDF reader section.
@@ -723,7 +726,10 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
   600 ms after it, nothing laid again. A page this door laid that leaves the view lets its SVG and its copy go and holds an
   empty element (retired: the place shows no page, and no page view is made of it); a page the door makes ready while it
-  is far is retired at once, and committed directly when it comes near. A page that fails, or whose copy fails, shows the
+  is far is retired at once, and committed directly when it comes near. The one exception: a page that holds the focus (a
+  link, or the place a jump gave it to) is kept as it goes far, and let go once the focus has left it (read a task after
+  the focus moves, never in a microtask: a native Tab clears the focus before it arrives at the next link), so at most one
+  far page stays laid, and the focus never falls to the document. A page that fails, or whose copy fails, shows the
   original and is asked again on a zoom, on coming near or (a copy) on the next scroll; one asked, told `laying` and not
   laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked again on the next scroll, its late
   `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page
@@ -778,7 +784,7 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   system's in forced colours.
 - **Gone with the drawing.** A page let go far from the view takes its links; after a reopen the drawing kept keeps its own
   until the new door's replaces it; dispose leaves none. A link holding the focus when its page is drawn again gives it to
-  the link of the same rank, else to the place; one let go far from the view lets it go.
+  the link of the same rank, else to the place; its page is not let go far from the view while it holds it (above).
 
 The rows are `tests/pdf-reader/links-view.test.ts` (LV1–LV4 on links.mjs, LS1–LS7 on the side over the fake door) and the
 real door's in `layer-side-door.test.ts`.

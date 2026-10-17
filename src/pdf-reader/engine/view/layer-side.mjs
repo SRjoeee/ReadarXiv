@@ -326,16 +326,37 @@ export function createLayerSide(view, o) {
    *  the focus has left it, if it is far still */
   const keptForFocus = new Set()
   const holdsFocus = n => { const div = V.places.page(n), at = document.activeElement; return !!div && !!at && at !== document.body && div.contains(at) }
-  const focusMoved = () => queueMicrotask(() => {
-    if (disposed) return
-    for (const n of [...keptForFocus]) {
-      if (holdsFocus(n)) continue
-      keptForFocus.delete(n)
-      if (!V.places.near(n) && pages.get(n)?.content?.wrap) retire(n)
-    }
-  })
+  /** a page far from the view let go as the near handler lets it go: retired where this door laid it, else back to its own
+   *  content; held instead while it holds the focus */
+  function farGone(n) {
+    const c = pages.get(n)?.content
+    if (!c?.wrap) return
+    if (holdsFocus(n)) { keptForFocus.add(n); return }
+    if (c.gen === gen) retire(n); else unlay(n)
+  }
+  // The focus's move read a task later, never in a microtask: on a native Tab Chromium clears the focus, tells focusout and
+  // runs its microtasks before the focus arrives at the next element, so a microtask's look sees <body> and would let go
+  // the very page the focus is moving to. A focusout whose related target is inside a held page asks nothing
+  let focusCheck = 0
+  const focusMoved = () => {
+    if (focusCheck || disposed) return
+    focusCheck = clock.later(() => {
+      focusCheck = 0
+      if (disposed) return
+      for (const n of [...keptForFocus]) {
+        if (holdsFocus(n)) continue
+        keptForFocus.delete(n)
+        if (!V.places.near(n)) farGone(n)
+      }
+    }, 0)
+  }
   document.addEventListener('focusin', () => { if (keptForFocus.size) focusMoved() }, { capture: true, signal: ac.signal })
-  document.addEventListener('focusout', () => { if (keptForFocus.size) focusMoved() }, { capture: true, signal: ac.signal })
+  document.addEventListener('focusout', e => {
+    if (!keptForFocus.size) return
+    const to = e.relatedTarget
+    if (to instanceof Node && [...keptForFocus].some(n => V.places.page(n)?.contains(to))) return
+    focusMoved()
+  }, { capture: true, signal: ac.signal })
   /** a laid page far from the view: its SVG and copy let go, an empty element in its place (no page view made of it); one
    *  that holds the focus is kept until the focus leaves it (keptForFocus) */
   function retire(n) {
@@ -520,9 +541,9 @@ export function createLayerSide(view, o) {
         toAsk.delete(n)
         abortAsk(n)
         rearm.delete(n)
-        // a page this door laid is retired; a drawing kept from an earlier door goes, the place back to its own content
-        const c = pages.get(n)?.content
-        if (c?.wrap) { if (c.gen === gen) retire(n); else unlay(n) }
+        // a page this door laid is retired; a drawing kept from an earlier door goes, the place back to its own content; either
+        // held while it holds the focus (farGone)
+        farGone(n)
       }
       windowed()
     }),
