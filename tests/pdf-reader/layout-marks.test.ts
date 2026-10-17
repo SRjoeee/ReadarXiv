@@ -1005,11 +1005,12 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 6 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 6 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 6 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 6 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 6 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 7 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 7 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 7 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 7 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 7 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 7 }, 'schema'],
       ['a lineskip of one number', m => { (m.marking as Record<string, unknown>).lineskip = [1] }, 'marking.lineskip'],
       ['a lineskip past \\maxdimen', m => { (m.marking as Record<string, unknown>).lineskip = [1, 1e6] }, 'marking.lineskip[1]'],
       ['a lineskip a hundredth past \\maxdimen as written', m => { (m.marking as Record<string, unknown>).lineskip = [1, 16322.8] }, 'marking.lineskip[1]'],
