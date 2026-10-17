@@ -40,7 +40,8 @@ vi.mock('@/pdf-reader/engine/layer-proto/run.mjs', async importOriginal => {
     ...actual,
     openProto: async (o: Parameters<typeof actual.openProto>[0]) => {
       seen.opened.push(o as unknown as Record<string, unknown>)
-      if ((o as { drawOf?: never }).drawOf) seen.drawOfs.push((o as { drawOf: never }).drawOf)
+      const given = (o as unknown as { drawOf?: (page: number) => Promise<unknown> }).drawOf
+      if (given) seen.drawOfs.push(given)
       const run = await actual.openProto({ ...o, onWait: (what: string) => { seen.log.push(`wait:${what}`); if (what === 'part') seen.starved?.() } } as never)
       seen.runs.push(run)
       return run
