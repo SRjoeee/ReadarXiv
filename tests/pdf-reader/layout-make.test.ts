@@ -1671,6 +1671,24 @@ describe('makeLayout, the link-anchor locator: a reference or a citation placed 
     expect(stats.links.why).toEqual({})
   })
 
+  it("arXiv's links are read only where the locator may want them: none for a reference found where it is carried", async () => {
+    /** makeLayout over a world, each getAnnotations of arXiv's pages counted */
+    const counted = async (w: World) => {
+      const calls: number[] = [], doc = arxivOf(w.pages)
+      const arxiv = { ...doc, getPage: async (n: number) => { const p = (await doc.getPage(n)) as Record<string, unknown>; const get = p.getAnnotations as (() => Promise<unknown>) | undefined; return get ? { ...p, getAnnotations: async () => { calls.push(n); return get() } } : p } }
+      const out = await makeLayout({ units: w.units, marks: await marksOf(w), arxiv, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+      return { calls, out }
+    }
+    const link = (r: Run) => [over(r, C(r), C(r) + 1, 'appendix.C')]
+    // the reference's own text where its opening point is carried: no page's links asked
+    const same = await counted(drift(THEIRS, THEIRS, { mine: link(theirs), arxiv: link(theirs) }))
+    expect(same.calls).toEqual([])
+    // our compile's other name: the unit's page, once
+    const other = await counted(cref())
+    expect(other.calls).toEqual([1])
+    expect('file' in other.out && other.out.stats.links.placed).toEqual([[0, 1]])
+  })
+
   it('found today, it is the same row, links or none, and the locator never tries it', async () => {
     const same = (mine?: Annot[], arxiv?: Annot[]) => made(drift(THEIRS, THEIRS, { ...(mine ? { mine } : {}), ...(arxiv ? { arxiv } : {}) }))
     const plain = await same(), linkedToo = await same([over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')], [over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')])
@@ -1688,7 +1706,7 @@ describe('makeLayout, the link-anchor locator: a reference or a citation placed 
     // arXiv's page whose annotations cannot be read: no rank is known there
     const unread = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')] }))
     expect(encodeLayout(unread.file)).toBe(encodeLayout(none.file))
-    expect(unread.stats.links.why).toEqual({ 'pair: no partner': 1 })
+    expect(unread.stats.links.why).toEqual({ 'pair: a page of the unit not read': 1 })
   })
 
   it('a citation on a line our compile set otherwise (no line carried, so no glyph matched): found by its link, its brackets ours', async () => {
@@ -1742,16 +1760,21 @@ describe('makeLayout, the link-anchor locator: a reference or a citation placed 
     expect(named.stats.links.why).toEqual({ 'pair: no partner': 1 })
   })
 
-  it('ambiguous stays LOST: our link part outside the piece; arXiv\'s r-th of the name another\'s (one more before it); the partners on two lines', async () => {
+  it('ambiguous stays LOST: our link part outside the piece; arXiv\'s r-th of the name within the unit another\'s (one more before it); the partners on two lines', async () => {
     const lost = [0, 1, PH_KINDS.indexOf('ref'), PH_FLAG.LOST]
     // our link over "C f": a glyph of it outside the piece
     const part = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 3, 'appendix.C')], arxiv: [over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] }))
     expect(phOf(part.file, 0, 1)).toEqual(lost)
     expect(part.stats.links.why).toEqual({ "ours: a link not wholly the piece's": 1 })
-    // arXiv's first appendix.C is another line's (natbib's split, a link more): its rank-0 partner is not on the unit's line
-    const off = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')], arxiv: [over(filler[0] as Run, 0, 3, 'appendix.C'), over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] }))
+    // arXiv's unit holds one appendix.C more before ours (natbib's split, a link more on its line): its first of the name, the
+    // order's partner, is another's, over a word of the unit's own text ("w3")
+    const off = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')], arxiv: [over(theirs, 9, 11, 'appendix.C'), over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] }))
     expect(phOf(off.file, 0, 1)).toEqual(lost)
-    expect(off.stats.links.why).toEqual({ 'link: not on one line of the unit': 1 })
+    expect(off.stats.links.why).toEqual({ 'link: a glyph not free': 1 })
+    // (one more of the name on another unit's line is no link of this unit's: the order is read within the unit)
+    const elsewhere = await made(drift(OURS, THEIRS, { mine: [over(ours, C(ours), C(ours) + 1, 'appendix.C')], arxiv: [over(filler[0] as Run, 0, 3, 'appendix.C'), over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] }))
+    expect(phOf(elsewhere.file, 0, 1)[3]).toBe(0)
+    expect(elsewhere.stats.links.placed).toEqual([[0, 1]])
     // \cref{a,b}: "Appendices A and B" ours on one line, arXiv's "Sections A and" / "B for …" on two
     const head: Run = { s: words(40, 8), x: 72, y: 712 }
     const O: Run = { s: 'w0 w1 w2 w3 see Appendices A and B for w4 w5 w6', x: 72, y: 700 }

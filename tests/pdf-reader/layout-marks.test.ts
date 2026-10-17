@@ -1260,20 +1260,25 @@ describe('markedPages: the marked original a page at a time (the page stream, E2
 
 describe("the marked compile's links (the link-anchor locator's)", () => {
   /** streamDocument's, each page with its Link annotations (getAnnotations: a list, a failure, or none at all) */
-  const linked = (pages: { view: number[]; shown: Shown[]; annots?: unknown[] | 'fails' }[]) => {
-    const doc = streamDocument(pages, [['axt-0s', 1, 72, 700]])
+  /** each page's getAnnotations asked, by page */
+  const asked: number[] = []
+  const linked = (pages: { view: number[]; shown: Shown[]; annots?: unknown[] | 'fails' }[], dests: [string, number, number | null, number | null][]) => {
+    const doc = streamDocument(pages, [['axt-0s', 1, 72, 700], ...dests])
     return {
       ...doc,
       getPage: async (n: number) => {
         const p = nth(pages, n - 1), page = await doc.getPage(n)
-        return p.annots === undefined ? page : { ...page, getAnnotations: async () => { if (p.annots === 'fails') throw new Error('no annotations'); return p.annots } }
+        return p.annots === undefined ? page : { ...page, getAnnotations: async () => { asked.push(n); if (p.annots === 'fails') throw new Error('no annotations'); return p.annots } }
       },
     }
   }
   const view = [0, 0, 612, 792]
   // "see Appendix C for" at 72: each character 5 pt, the C at 137
   const line: Shown = ['see Appendix C for', 72, 700]
-  const read = (pages: Parameters<typeof linked>[0], withOps = true) => layoutMarksOf(linked(pages), '', { engine: 'pdflatex', ...(withOps ? { units: [], OPS } : {}) })
+  // (a reference's placeholder, whose two points stand on page 1, or from page 1 to page `to`: the pages whose links are read)
+  const refUnits = [unit('para', [text('see '), ph('\\cref{app:c}'), text(' for')])]
+  const pointsOn = (to = 1): [string, number, number, number][] => [['axt-p0.1a', 1, 92, 700], ['axt-p0.1b', to, 142, 700]]
+  const read = (pages: Parameters<typeof linked>[0], withOps = true, to = 1) => layoutMarksOf(linked(pages, pointsOn(to)), '', { engine: 'pdflatex', ...(withOps ? { units: refUnits, OPS } : {}) })
 
   it('each Link annotation that names a destination, its glyphs by PDF.js\'s rule: their origins, count and text; none under it, n 0', async () => {
     const annots = [
@@ -1294,11 +1299,31 @@ describe("the marked compile's links (the link-anchor locator's)", () => {
     const long: Shown = { glyphs: Array.from({ length: 70 }, () => 'x'), x: 72, y: 650 }
     const m = await read([{ view, shown: [line, long], annots: [{ subtype: 'Link', rect: [70, 647, 430, 660], dest: 'cite.long' }] }])
     expect(m.links).toEqual([['cite.long', 1, 70, 647, 430, 660, 0, 0, 0, '']])
-    const fails = await read([{ view, shown: [line], annots: [{ subtype: 'Link', rect: [136, 697, 143, 709], dest: 'appendix.C' }] }, { view, shown: [line], annots: 'fails' }])
+    const fails = await read([{ view, shown: [line], annots: [{ subtype: 'Link', rect: [136, 697, 143, 709], dest: 'appendix.C' }] }, { view, shown: [line], annots: 'fails' }], true, 2)
     expect(fails.links).toEqual([])
     const noOps = await read([{ view, shown: [line], annots: [{ subtype: 'Link', rect: [136, 697, 143, 709], dest: 'appendix.C' }] }], false)
     expect(noOps.links).toEqual([])
     // and a page of no getAnnotations at all (a PDF.js of none: the tests' fakes) is one whose annotations are not known
     expect((await read([{ view, shown: [line] }])).links).toEqual([])
   })
+
+  it('reads the links of the pages a placeholder that names a link has a point on, and no other page\'s', async () => {
+    const annots = [{ subtype: 'Link', rect: [136, 697, 143, 709], dest: 'appendix.C' }]
+    asked.length = 0
+    const m = await read([{ view, shown: [line], annots }, { view, shown: [line], annots }, { view, shown: [line], annots }])
+    // (page 1 holds the reference's points; pages 2 and 3 none: never asked)
+    expect(asked).toEqual([1])
+    expect(m.links).toEqual([['appendix.C', 1, 136, 697, 143, 709, 137, 137, 1, 'C']])
+    // a piece across pages 1 and 2: both read, and the page beyond neither point is not
+    asked.length = 0
+    const across = await read([{ view, shown: [line], annots }, { view, shown: [line], annots }, { view, shown: [line], annots }], true, 2)
+    expect(asked).toEqual([1, 2])
+    expect(across.links.map(l => l[1])).toEqual([1, 2])
+    // no placeholder names a link (a formula's): no page asked, no link
+    asked.length = 0
+    const none = await layoutMarksOf(linked([{ view, shown: [line], annots }], pointsOn()), '', { engine: 'pdflatex', units: [unit('para', [text('see '), ph('$x$'), text(' for')])], OPS })
+    expect(asked).toEqual([])
+    expect(none.links).toEqual([])
+  })
 })
+
