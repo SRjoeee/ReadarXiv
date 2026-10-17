@@ -80,6 +80,9 @@ export interface RunHost {
   readingPage(): number | null
   /** whether the prepare may be asked: true once a visit */
   mayPrepare(): boolean
+  /** the prepare asked never reached our server (the network, a 5xx twice): the visit's one prepare given back, so that a
+   *  retry asks it again rather than taking the paper for one that cannot be had */
+  prepareUnsent?(): void
   emit(e: RunEvent): void
   /** the faces' sources (servedFaces over `api` by default) */
   faces?: LayerSideOptions['faceSources']
@@ -360,7 +363,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
             if (p.kind === 'preparing') { emit({ type: 'preparing', position: p.preparing.position, progress: p.preparing.progress }); await paced(p.preparing.retryAfterMs, signal) }
           } catch (e) {
             if (gone() || isAbort(e)) return
-            if (e instanceof LayerUnreachable) return unavailable('unreachable')
+            if (e instanceof LayerUnreachable) { host.prepareUnsent?.(); return unavailable('unreachable') }
             throw e
           }
           continue

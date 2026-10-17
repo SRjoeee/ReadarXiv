@@ -78,7 +78,7 @@ function pdfjs() {
   const getDocument = vi.fn((p: Record<string, unknown>) => { docs.push(p); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } })
   return { lib: { getDocument, PDFDataRangeTransport } as never, docs }
 }
-function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
+function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
   const s = server(o.looks, o), side = fakeSide(), v = o.view ?? view(), events: RunEvent[] = []
   const engine = o.engine ?? echo()
   const opened: Uint8Array[] = []
@@ -89,7 +89,7 @@ function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | 
     openPdf: (data: Uint8Array) => { opened.push(data); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } as never },
     ...(o.ranged ? { pdfjs: lib.lib, originalUrl: ARXIV } : {}),
     ...(o.hidden ? { hidden: o.hidden } : {}),
-    readingPage: () => 1, mayPrepare: o.may ?? (() => true), emit: e => events.push(e), faces: async () => null, createSide: side.make as never,
+    readingPage: () => 1, mayPrepare: o.may ?? (() => true), ...(o.unsent ? { prepareUnsent: o.unsent } : {}), emit: e => events.push(e), faces: async () => null, createSide: side.make as never,
   }
   const r = startRun(v as never, PAPER, host)
   return { r, s, side, v, events, engine: engine as ReturnType<typeof echo>, opened, docs: lib.docs, host }
@@ -214,6 +214,29 @@ describe('Review Focus 1: our server\'s every answer', () => {
     await vi.advanceTimersByTimeAsync(WAIT_MIN)
     expect(b.s.calls.filter(c => c.url.endsWith('/prepare')).length).toBe(0)
     expect(b.events.at(-1)).toEqual({ type: 'unavailable', why: 'cannot-prepare', retryAt: null })
+  })
+
+  it('a prepare that never reached our server (the network, a 5xx twice) gives the visit\'s one prepare back: a retry asks it again, never a paper that cannot be had (Codex on #390)', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let token = true, posts = 0, down = true, begun = false
+    const a = run({
+      // none made until a prepare is taken, then the prepare under way
+      looks: [() => (begun ? json(202, { position: 1, stage: null, progress: 0.1, retryAfterMs: 1000 }) : json(404, { why: 'not-prepared' }))],
+      prepare: () => { posts++; if (down) return new Response('', { status: 503 }); begun = true; return json(202, { position: 1, stage: null, progress: 0, retryAfterMs: 1000 }) },
+      may: () => { const t = token; token = false; return t },
+      unsent: () => { token = true },
+    })
+    await vi.advanceTimersByTimeAsync(WAIT_MIN * 3)
+    expect(a.events.at(-1)).toEqual({ type: 'unavailable', why: 'unreachable', retryAt: null })
+    expect(posts).toBe(2)
+    down = false
+    a.r.retry()
+    await vi.advanceTimersByTimeAsync(WAIT_MIN * 3)
+    expect(posts).toBe(3)
+    expect(a.events.some(e => e.type === 'unavailable' && e.why === 'cannot-prepare')).toBe(false)
+    expect(a.events.at(-1)?.type).toBe('preparing')
+    a.r.dispose()
   })
 
   it('B4: none for the paper: why, and nothing asked again; a limit: its time said, asked again only once it has passed', async () => {
