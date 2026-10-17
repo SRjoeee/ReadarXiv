@@ -410,6 +410,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   for (const part of parts) if (!toldParts.has(part.sha256)) tell(part)
 
   return {
+    // (known at open: the head says whether this paper's parts may carry draws; a BUNDLE 3 layer has none)
+    drawsComing: four && index.head.draw === 1,
     take(rows) {
       if (disposed) return { complete: [] }
       const got = new Map()

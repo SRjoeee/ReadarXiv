@@ -62,6 +62,8 @@ export interface CutOptions {
   base?: { bytes: number; sha256: string; xref: number }
   image?: string
   lineskip?: [number, number] | null
+  /** the parts' left parts may carry draws (the head says so): set where the caller's `leftPages` give them */
+  draw?: boolean
   /** the producer's verdict on each part as cut with its layout (partCutter's) */
   verdict?: PartVerdict | null
 }

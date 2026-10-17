@@ -92,6 +92,8 @@ export interface ReadHead {
   kind: 'head'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }
   base: { bytes: number; sha256: string; xref: number }; versions: HeadVersions
   units: (Ref & { from: number; to: number })[]; lineskip: [number, number] | null
+  /** 1: the parts may carry the draw of their pages' left parts (a page can still have none); 0 (absent in the bytes): not made with them */
+  draw: 0 | 1
 }
 export interface LayerIndex {
   kind: 'index'; sha256: string
@@ -240,6 +242,8 @@ export declare function writeUnitChunks(o: { paper: { id: string; version: numbe
 export declare function writeHead(o: {
   paper: { id: string; version: number; pages: number }; base: { bytes: number; sha256: string; xref: number }; image: string
   units: readonly (Written & { from: number; to: number })[]; lineskip: readonly [number, number] | null
+  /** the parts may carry draws: the head says `draw: 1` (omitted when false) */
+  draw?: boolean
 }): Promise<Written>
 export declare function writeLeftPart(o: {
   paper: { id: string; version: number }; page: number; first: number; tokens: TokenWire

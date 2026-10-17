@@ -116,6 +116,8 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     edges(): Map<string, [number, number]> | null
     /** the marks carried to arXiv's PDF (whole()'s first step): null, or 'carry' where no line is */
     carrying(): 'carry' | null
+    /** whether the draws are read (the `draw` option): the head of the layer made says so */
+    draw: boolean
     /** page p's draw geometry (the `draw` option), once: the held text is let go with it; null for none (not read, failed, a font a host
      *  would read differently, past the held budget) */
     drawOf(p: number): import('../layer-proto/draw.mjs').Draw | null

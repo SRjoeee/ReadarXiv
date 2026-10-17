@@ -58,7 +58,7 @@ async function cutOf(w: World) {
   const side = leftSideOf({ doc: text.tokens, views: text.views as number[][], anchors, edges: text.edges })
   const made = await makeLayout({ units: w.units, marks: read.marks, arxiv: arxivOf(w.pages), OPS, paper: PAPER, left: '', pdfjs: '6.3.289', text, floatMatch })
   if (!('file' in made)) throw new Error('refused')
-  return cutBundle({ paper: { ...PAPER, pages: w.pages.length }, base: BASE, units: bundleUnitsOf(source(w)), left: { pages: side.pages, units: side.units }, layout: made.file }, { leftPages: side.leftPages, base: BASE, image: '1' })
+  return cutBundle({ paper: { ...PAPER, pages: w.pages.length }, base: BASE, units: bundleUnitsOf(source(w)), left: { pages: side.pages, units: side.units }, layout: made.file }, { leftPages: side.leftPages, base: BASE, image: '1', draw: true })
 }
 const shas = (ws: readonly Written[]) => ws.map(x => x.sha256)
 

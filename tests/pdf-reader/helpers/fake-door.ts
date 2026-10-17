@@ -61,9 +61,12 @@ class FakeLayer implements Layer {
   /** rejected at dispose: what waits on the host's transport races it */
   private readonly gone: Promise<never>
   private goneNow!: (e: unknown) => void
+  /** as the real door: the head says the parts may carry draws */
+  readonly drawsComing: boolean
 
   constructor(private readonly o: OpenLayerOptions, private readonly fake: { opts: FakeDoorOptions; failing: Set<number>; released(): void }) {
     this.N = o.index.head.paper.pages
+    this.drawsComing = o.index.head.draw === 1
     this.gone = new Promise<never>((_, reject) => { this.goneNow = reject })
     this.gone.catch(() => {})
     this.doc = o.doc

@@ -128,10 +128,10 @@ export interface Made {
 }
 
 /** the paper written, then read back by the readers in the order the service reads it */
-/** `draws`: the draw geometry each page's left part carries (by page), none by default */
-export async function made(o: { draws?: Record<number, unknown> } = {}): Promise<Made> {
+/** `draws`: the draw geometry each page's left part carries (by page), none by default; `draw`: the head says the parts may carry them */
+export async function made(o: { draws?: Record<number, unknown>; draw?: boolean } = {}): Promise<Made> {
   const chunks = await writeUnitChunks({ paper: PAPER, units: UNITS })
-  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: [1, 0] })
+  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: [1, 0], ...(o.draw ? { draw: true } : {}) })
   const rh = await readHead(head.bytes, { ref: head.ref })
   const readChunks: ReadUnitsChunk[] = []
   for (const c of chunks) readChunks.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: readChunks.at(-1) ?? null }))

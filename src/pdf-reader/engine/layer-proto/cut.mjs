@@ -169,7 +169,7 @@ export async function wholeCutter(whole, o) {
   const image = o.image ?? whole.versions?.image
   const base = o.base ?? whole.base
   const lineskip = 'lineskip' in o ? o.lineskip : whole.layout?.lineskip ?? null
-  const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip })
+  const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip, draw: o.draw === true })
 
   // K and its frontier, then the parts
   const { K, F } = wholeFrontier(whole, frontier)

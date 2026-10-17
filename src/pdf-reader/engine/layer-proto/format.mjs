@@ -121,13 +121,13 @@ function exactKeys(kind, v, keys, path) {
 }
 
 /** the object's first two keys: the format (`bundle`, a units chunk's own `format`) and the kind it is; refused for what it is
- *  before its other keys are looked at */
-function envelope(kind, v, keys) {
+ *  before its other keys are looked at; `optional`: keys that may be there besides `keys` */
+function envelope(kind, v, keys, optional = []) {
   const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? UNITS_FORMAT : BUNDLE5
   if (!isObject(v)) throw refuse(kind, '', `not an object (${kindOf(v)})`)
   if (v[tag] !== want) throw refuse(kind, tag, `not this reader's '${want}' (${typeof v[tag] === 'string' ? told(v[tag]) : kindOf(v[tag])})`)
   if (v.kind !== kind) throw refuse(kind, 'kind', `not a ${kind} (${typeof v.kind === 'string' ? told(v.kind) : kindOf(v.kind)})`)
-  exactKeys(kind, v, keys, '')
+  exactKeys(kind, v, optional.length ? [...keys, ...optional.filter(k => Object.hasOwn(v, k))] : keys, '')
 }
 
 function digestField(kind, v, path) {
@@ -613,6 +613,9 @@ export function droppedOf(chunks) {
 
 // ---------------------------------------------------------------- the head
 const HEAD_KEYS = ['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip']
+/** the head's optional key (BUNDLE 5): `draw` 1 says the parts MAY carry the draw of their pages' left parts (a page can still have none); absent
+ *  (0 is read too, never written) for a paper made without them */
+const HEAD_OPTIONAL = ['draw']
 const HEAD_DEF = { cap: HEAD_CAP, values: HEAD_VALUES, depth: HEAD_DEPTH }
 
 /** the head's fields, checked: what a reader and a writer share */
@@ -629,7 +632,8 @@ function headShape(v) {
   for (const r of v.units) total += r.bytes
   if (total > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, total)
   inside(K, '', () => checkLineskip(v.lineskip, 'lineskip'))
-  return { paper, base, versions, units: v.units, lineskip: v.lineskip }
+  if ('draw' in v && v.draw !== 0 && v.draw !== 1) throw refuse(K, 'draw', `not 0 or 1, but ${kindOf(v.draw)}`)
+  return { paper, base, versions, units: v.units, lineskip: v.lineskip, draw: v.draw === 1 ? 1 : 0 }
 }
 
 /**
@@ -641,14 +645,14 @@ function headShape(v) {
  */
 export async function readHead(bytes, { ref, caps }) {
   const { value: v, sha256 } = await opened('head', bytes, ref, HEAD_DEF, caps)
-  envelope('head', v, HEAD_KEYS)
+  envelope('head', v, HEAD_KEYS, HEAD_OPTIONAL)
   const h = headShape(v)
-  return { kind: 'head', sha256, bytes: bytes.length, paper: h.paper, base: h.base, versions: h.versions, units: h.units, lineskip: h.lineskip }
+  return { kind: 'head', sha256, bytes: bytes.length, paper: h.paper, base: h.base, versions: h.versions, units: h.units, lineskip: h.lineskip, draw: h.draw }
 }
 
 /** the head written: the paper, the original, the versions this engine writes (with the compiler image's name) and the
  *  chunks `writeUnitChunks` gave, in order */
-export async function writeHead({ paper, base, image, units, lineskip }) {
+export async function writeHead({ paper, base, image, units, lineskip, draw = false }) {
   const obj = {
     bundle: BUNDLE5, kind: 'head',
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
@@ -656,6 +660,7 @@ export async function writeHead({ paper, base, image, units, lineskip }) {
     versions: { pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image },
     units: units.map(u => ({ kind: 'units', from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes.length })),
     lineskip: lineskip === null ? null : lineskip.map(r2),
+    ...(draw ? { draw: 1 } : {}),
   }
   headShape(obj)
   return written('head', obj, HEAD_DEF, paper, {})
