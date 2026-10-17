@@ -94,7 +94,7 @@ describe('the run, once a translated display is shown (what is not seen takes no
     await flush(20)
     expect((a.run.mock.calls[0] as unknown[])[1]).toEqual({ id: '2600.00001', version: 3 })
     expect(fetch).toHaveBeenCalledTimes(1)
-    expect(fetch).toHaveBeenCalledWith('https://arxiv.org/abs/2600.00001', { credentials: 'omit', referrerPolicy: 'no-referrer' })
+    expect(fetch).toHaveBeenCalledWith('https://arxiv.org/abs/2600.00001', { credentials: 'omit', referrerPolicy: 'no-referrer', signal: expect.any(AbortSignal) })
     expect(abstractOf(html)).toEqual({ title: 'A Title', version: 3 })
     expect(ownVersion('hep-th/9711200v2')).toEqual({ id: 'hep-th/9711200', version: 2 })
     expect(ownVersion('2600.00001')).toBeNull()
