@@ -309,6 +309,13 @@ describe('the work counters (work.mjs): integer counts of what a page cost, the 
     expect(a.pageWork).toEqual(b.pageWork)
     expect(b.workTotal()).toEqual(a.workTotal())
   })
+  it("leave no mark on a unit: a property added to every unit object put each in dictionary mode, 800 bytes a unit the gate keeps", async () => {
+    // (the speed check of 2026-10-17: the heap's growth a laid page +4.5 KB over the base, one property store of 800 bytes a
+    // unit on 1512.03385 in Chinese, from the work mark the run set on each unit it laid)
+    const run = await laid([1, 2, 3, 4])
+    expect(run.placed.length).toBeGreaterThan(0)
+    for (const p of run.placed) expect(Object.hasOwn(p as object, 'workMark'), `unit ${(p as { id: number }).id}`).toBe(false)
+  })
   it('add up to the same total whatever order the pages were asked in', async () => {
     const want = (await laid([1, 2, 3, 4])).workTotal()
     for (const order of [[4], [3, 1], [4, 3, 2, 1]]) expect((await laid(order)).workTotal(), `${order} first`).toEqual(want)

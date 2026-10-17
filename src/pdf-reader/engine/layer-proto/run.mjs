@@ -1769,7 +1769,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (no) { p.refused = true; p.why = no.why; p.missing = no.missing; unlead(p); return }
     }
     // (from here to the unit's end nothing is awaited: its work is charged to its first page in `arrive`)
-    p.workMark = markWork()
+    workMarks.set(p, markWork())
     const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
@@ -2022,7 +2022,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       unlead(p)
     }
     // (let go while it was laid: neither recorded, nor painted, nor counted)
-    if (p.workMark) { if (!disposed) chargeWork(p.pages[0], p.workMark); p.workMark = null }
+    const mark = workMarks.get(p)
+    if (mark) { workMarks.delete(p); if (!disposed) chargeWork(p.pages[0], mark) }
     if (disposed) return
     // (the faces it waited for apart from its laying: no task of v0's)
     timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
@@ -2090,6 +2091,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // interleaved; `inWork` keeps a stretch inside another from being charged twice. Nothing the drawing reads
   const pageWork = []
   const workOf = pg => (pageWork[pg] ??= newWork())
+  // (each unit's mark from where its lay stops awaiting to its end, kept beside the unit, not on it: a property set on every
+  // unit object put each into dictionary mode, 800 bytes a unit for the run's length where the units are kept, the speed
+  // check's heap growth a laid page, 2026-10-17)
+  const workMarks = new Map()
   let inWork = false
   const chargeWork = (pg, m) => { const w = workOf(pg); for (const k of WORK_KEYS) w[k] += work[k] - m[k] }
   const withWork = (pg, f) => {
