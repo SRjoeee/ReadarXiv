@@ -1168,10 +1168,12 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     const raw = page ? await within(readAnnots(page), OPS_MS) : null
     annotsAt.set(q, raw)
     const ls = Array.isArray(raw) ? raw.filter(a => a?.subtype === 'Link') : null
-    if (ls === null || ls.length > MAX_LINKS) { noLinks = true; continue }
+    if (ls === null || ls.length > MAX_LINKS) { noLinks = true; break }
     for (const a of ls) if (destRect(a)) { linkCount++; linkDests.add(a.dest) }
+    if (linkCount > LINKS_MAX) { noLinks = true; break }
   }
-  if (linkCount > LINKS_MAX) noLinks = true
+  // (a paper with no links reads no further page's and keeps none: each page's links are then none, as they would be)
+  if (noLinks) annotsAt.clear()
   const links = noLinks ? null : { count: linkCount, dests: [...linkDests].sort() }
   yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, links } }
   // ---- each page, once

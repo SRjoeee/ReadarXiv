@@ -2032,6 +2032,18 @@ describe('the link-anchor locator in the page stream: the whole run\'s pieces pl
     }
   })
 
+  it('once a link page\'s annotations cannot be read, the head reads no other\'s: the paper has no links, the same as before', async () => {
+    const w = world(['C', 'D', 'E'])
+    const marked = markedOf(w.marked ?? w.pages, w.marks) as unknown as { getPage(n: number): Promise<Record<string, unknown>> }
+    const asked: number[] = []
+    const failing = { ...marked, getPage: async (n: number) => { const p = await marked.getPage(n); const get = p.getAnnotations as () => Promise<unknown>; return { ...p, getAnnotations: async () => { asked.push(n); return n === 1 ? null : get() } } } }
+    const read = await readMarked(failing as never, '', { engine: 'pdflatex', units: w.units, OPS } as never)
+    expect(asked).toEqual([1])
+    expect(read.marks.links).toEqual([])
+    const head = ((await markedPages(failing as never, '', { engine: 'pdflatex', units: w.units, OPS } as never).next()).value as { head: { links: unknown } }).head
+    expect(head.links).toBeNull()
+  })
+
   it('a memory-class failure reading a page is no dark page and no paper without links: the head and the maker end on it (C8.4)', async () => {
     const oom = Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
     const w = world(['C', 'D'])
