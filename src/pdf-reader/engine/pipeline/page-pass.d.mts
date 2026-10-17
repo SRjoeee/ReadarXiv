@@ -60,6 +60,6 @@ export interface LayerOptions {
 export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<string, [number, number]>; leftFrame?: (t: unknown) => boolean; columns?: unknown }
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
-  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }; closed?: [from: number, to: number, read: number][] } }
+  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][] } }
   | { refused: 'anchors'; why: string }
 >

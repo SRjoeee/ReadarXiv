@@ -114,6 +114,23 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
     expect(headOf(streamed.heads[0] as Written).draw).toBe(1)
   })
 
+  it('a page with no tokens ships the draw it read (C1.5: a page read and empty has one), as the stream and the whole path tell it', async () => {
+    // (page 2: no word, a row of symbols, and its link)
+    const w = worldOf()
+    w.pages[1] = { runs: [{ s: '* * *', x: 72, y: 700 }] }
+    w.marked = w.pages
+    w.marks = w.marks.filter(m => m[1] !== 2)
+    w.units = [w.units[0]!, w.units[2]!]
+    w.marks = w.marks.map(m => (m[0] === '2s' ? ['1s', ...m.slice(1)] : m[0] === '2e' ? ['1e', ...m.slice(1)] : m) as typeof m)
+    for (const o of [{}, { whole: true }]) {
+      const got = await passOf(w, {}, o)
+      expect(got.r).toMatchObject({ stats: { draw: { pages: 3, none: 0, shed: 0 } } })
+      expect([...got.lefts.keys()]).toEqual([1, 2, 3])
+      expect(got.lefts.get(2)).not.toBeNull()
+      expect(got.lefts.get(2)?.items.map(it => it[0])).toEqual(['* * *'])
+    }
+  })
+
   it('`draw: false` reads no page\'s draw: every page tells none', async () => {
     const off = await passOf(worldOf(), {}, { draw: false })
     expect([...off.lefts.values()]).toEqual([null, null, null])

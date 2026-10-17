@@ -239,7 +239,8 @@ async function tell(ctx, state, cutter, part, layout, lines) {
     }
     state.chain = state.read.chain
   }
-  for (const l of part.leftParts) await ctx.onLeft(l)
+  // (a left part whose draw the writer shed, for its size or with its tokens: the stats' `draw.shed`)
+  for (const l of part.leftParts) { if (l.drawShed) ctx.drawShed = (ctx.drawShed ?? 0) + 1; await ctx.onLeft(l) }
   await ctx.onPart(part, { pages: [part.from, part.to], layout: refused ?? (layout ? 'kept' : 'none'), lines: linesOf(lines, ctx.N, part.from, part.to) })
 }
 
@@ -259,14 +260,14 @@ async function cutWhole(ctx, r) {
     if (part === null) break
     await tell(ctx, state, cutter, part, layout, lines)
   }
-  return { through: N, count: cutter.parts.length, stats: { left: side.stats, layout: ctx.made, plans: plans ? { pages: plans.size, dirty: [...plans.values()].filter(p => p.remove).length } : null, addon: hooks ? hooks.state() : null, ...(ctx.maker ? { draw: ctx.maker.drawStats } : {}) } }
+  return { through: N, count: cutter.parts.length, stats: { left: side.stats, layout: ctx.made, plans: plans ? { pages: plans.size, dirty: [...plans.values()].filter(p => p.remove).length } : null, addon: hooks ? hooks.state() : null, ...(ctx.maker ? { draw: { ...ctx.maker.drawStats, shed: ctx.drawShed ?? 0 } } : {}) } }
 }
 
 /** the left's page input with the maker's draw geometry for the page (E-C), taken once as the left part is written; a page with no tokens
- *  has no left part input, so ships none (the browser reads it) */
+ *  has no left part input of its own, and ships its draw all the same (C1.5: a page read and empty has a draw) */
 const drawn = (leftPages, maker) => (maker ? async p => {
   const l = await leftPages(p), d = maker.drawJsonOf(p)
-  return l && d !== null ? { ...l, drawText: d } : l
+  return d !== null ? { ...(l ?? {}), drawText: d } : l
 } : leftPages)
 
 /** the left anchored whole before the maker (the marks given): every unit's anchor final */
@@ -450,7 +451,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   }
   if (!headTold) return { refused: 'anchors', why: 'the anchors located no unit on arXiv\'s PDF' }
   const layoutStats = failed ? { refused: 'failed', why: failed, ...(maker ? { stats: maker.stats } : {}) } : carry ? { refused: carry, stats: maker.stats } : st ? { stats: maker.stats, ...(st.plansFailed() ? { plansFailed: st.plansFailed() } : {}) } : ctx.made
-  return { through: N, count: cutter.parts.length, stats: { left: left.stats, layout: layoutStats, plans: st?.plans ? { pages: planned.pages + st.plans.size, dirty: planned.dirty + [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, ...(maker ? { draw: maker.drawStats } : {}), closed } }
+  return { through: N, count: cutter.parts.length, stats: { left: left.stats, layout: layoutStats, plans: st?.plans ? { pages: planned.pages + st.plans.size, dirty: planned.dirty + [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, ...(maker ? { draw: { ...maker.drawStats, shed: ctx.drawShed ?? 0 } } : {}), closed } }
 }
 
 /** the drive with the marks given: arXiv's pages in order, each read and its stream told */
