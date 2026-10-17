@@ -1,8 +1,8 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
-import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, MARKS_SCHEMA, marksFile, parseLayoutMarks, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { layoutMarksOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
+import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, MARKS_SCHEMA, marksFile, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe } from '@/pdf-reader/engine/layout/marks.mjs'
+import { layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 
 // A paper's layout marks in one call (layout/paper.mjs): the order of the two compiles and what each is asked, what the
@@ -237,6 +237,40 @@ const cmOf = async (answers: (Compiled | Error)[], paper = paperOf(), doc = fake
   const made = await layoutMarksOfPaper(paper, { compile: c.compile, open: o.open, OPS, converge: true, ...(filesBound ? { filesBound } : {}) })
   return { made, asked: c.asked, ...o, paper }
 }
+
+describe('markedOfPaper: the probe and the marked compile, the reading left to the host', () => {
+  it('gives the marked PDF, its last pass\'s log and readMarked\'s options; read by the host it is layoutMarksOfPaper\'s marks', async () => {
+    const paper = paperOf()
+    // (a browser compiler's log of two passes: the last pass's is the one read)
+    const log = stepped('AXT-LINES 0 1 12.0pt 10', 'AXT-LINES 0 3 12.0pt 10')
+    const made = await markedOfPaper(paper, { compile: compiler([{ ok: true, log: PROBE_LOG }, original(log)]).compile, OPS })
+    if (!('pdf' in made)) throw new Error(`refused: ${made.refused}`)
+    expect(made.pdf).toBe(PDF)
+    expect(made.log).toContain('AXT-LINES 0 3 12.0pt 10')
+    expect(made.log).not.toContain('AXT-LINES 0 1 12.0pt 10')
+    const ink = inkSamples(paper.units)
+    expect(made.options).toEqual({ engine: 'pdflatex', classes: LAYOUT_CLASSES, switches: readMarkProbe(PROBE_LOG, probeSamples(paper.units)), inkless: readInkProbe(PROBE_LOG, ink), texts: readInkTexts(PROBE_LOG, ink), names: readNameProbe(PROBE_LOG), lineskip: readSkipProbe(PROBE_LOG) })
+    expect(made.ms).toEqual({ probe: expect.any(Number), compile: expect.any(Number) })
+    expect(made).not.toHaveProperty('cm')
+    // read by the host as layerOfPaper reads `marked` (readMarked with the units and the operator codes): the same marks
+    const read = await readMarked(fakeDoc().doc, made.log, { ...made.options, units: paper.units, OPS } as never)
+    const whole = await layoutMarksOfPaper(paper, { compile: compiler([{ ok: true, log: PROBE_LOG }, original(log)]).compile, open: opener().open, OPS })
+    if (!('marks' in whole)) throw new Error(`refused: ${whole.refused}`)
+    expect(encodeLayoutMarks(read.marks)).toBe(encodeLayoutMarks(whole.marks))
+    expect(read.unitMarks).toEqual(whole.unitMarks)
+  })
+
+  it('refuses as layoutMarksOfPaper does, its probe or its compile, with the times of the stages that ran (and CM\'s record)', async () => {
+    expect(await markedOfPaper(paperOf(), { compile: compiler([{ ok: true, log: '' }]).compile })).toEqual({ refused: 'probe', ms: { probe: expect.any(Number) } })
+    expect(await markedOfPaper(paperOf(), { compile: compiler([new Error('no compiler')]).compile })).toEqual({ refused: 'probe', ms: { probe: expect.any(Number) } })
+    expect(await markedOfPaper(paperOf(), { compile: compiler([{ ok: true, log: PROBE_LOG }, { ok: false, error: 'TeX stopped' }]).compile })).toEqual({ refused: 'compile', ms: { probe: expect.any(Number), compile: expect.any(Number) } })
+    const cm = await markedOfPaper(paperOf(), { compile: compiler([{ ok: true, log: PROBE_LOG }, { ok: false, error: 'TeX stopped' }]).compile, converge: true })
+    expect(cm).toMatchObject({ refused: 'compile', cm: expect.any(Object) })
+    for (const [answers, why] of [[[{ ok: true, log: '' }], 'probe'], [[{ ok: true, log: PROBE_LOG }, { ok: false, error: 'TeX stopped' }], 'compile']] as const) {
+      expect(await layoutMarksOfPaper(paperOf(), { compile: compiler([...answers]).compile, open: opener().open, OPS })).toMatchObject({ refused: why })
+    }
+  })
+})
 
 describe('layoutMarksOfPaper without converge', () => {
   it('asks exactly today\'s two compiles, and gives no CM record', async () => {

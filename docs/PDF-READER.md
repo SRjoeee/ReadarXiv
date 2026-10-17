@@ -1429,6 +1429,11 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   its boxes past the budget are merged by cell (`degraded`, its text whole). Each bound is an abuse guard twenty times or more
   above the corpus's heaviest page (`layout/ink.mjs`, the census of 2026-10-16), and none is a fixed number of the paper's:
   each is a page's or a part's (see below for why none is needed).
+- **The marked original for a host that reads it itself.** `markedOfPaper` (layout/paper.mjs, in the pipeline entry) is
+  `layoutMarksOfPaper` without its reading: the mark probe and the marked compile, and the marked PDF, its last pass's log and
+  readMarked's options, which a host passes as `marked: { doc, log, options }` so that the pass reads the marked original a
+  page at a time beside arXiv's; its refusals are the same ('probe', 'compile'), and `layoutMarksOfPaper` is it followed by
+  one `readMarked`, its marks the same bytes.
 - **The page stream, the default (rules 1, 3 and 4).** Every predicate a part reads is had a page at a time with no whole run
   before it: the pages' frame and the far push's columns of arXiv's text alone (rules 1 and 4, made once at step T), the
   maker's columns' edges of the pages before a page and its own (rule 3). The maker is made a page at a time and the marked

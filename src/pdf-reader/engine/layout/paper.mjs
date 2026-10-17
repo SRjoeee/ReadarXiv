@@ -15,7 +15,8 @@
 //      convergeThenMark below), the passes that only make the aux and its lists are those of the unmarked original, as
 //      drafts, and the marked one is compiled once in their files, for as long as its own files differ from them
 //   3. its PDF opened by the caller, and read once (marks.mjs readMarked) with the compile's last pass's log, the paper's
-//      units and PDF.js's operator codes, so that each marked piece's own ink is read from its operator lists: the marks
+//      units and PDF.js's operator codes (markedOfPaper stops before it: the marked original and what reads it, for a host
+//      that reads it elsewhere, the page pass a page at a time), so that each marked piece's own ink is read from its operator lists: the marks
 //      in memory (the maker takes them as they are: no file is written and read back) and the unit marks the left is
 //      anchored by (their words read from the same pages)
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
@@ -26,12 +27,12 @@ import { completeLog } from '../pipeline/typeset/tex.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /**
- * A paper's layout marks (paper.d.mts): the marks file's bytes, with each stage's time, or the stage that failed with the
- * times of those that ran. Never throws: a compiler that throws, a PDF that does not open and a reading that refuses
- * are each their stage's refusal. `converge`: the marked original made by convergeThenMark, its passes in `cm`, within
- * `compileBudgetMs` and `filesBound` where the host gives them
+ * A paper's marked original (paper.d.mts), the layout marks' stages 1 and 2 without the reading: the marked compile's PDF, its
+ * last pass's log and the options readMarked reads it with (`engine`, `classes`, the probe's answers; the units and the
+ * operator codes are the reader's), with each stage's time, or the stage that failed with the times of those that ran. For a
+ * host that reads the marked original elsewhere (the page pass's `marked`, layerOfPaper, a page at a time). Never throws
  */
-export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null }) {
+export async function markedOfPaper(paper, { compile, converge = false, compileBudgetMs = null, filesBound = null }) {
   const ms = {}
   /** a stage, timed; null where it fails or throws */
   const stage = async (name, run) => {
@@ -64,17 +65,34 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
     return c?.ok && c.pdf?.length ? c : null
   })
   if (!marked) return result({ refused: 'compile', ms })
-  const read = await stage('marks', async () => {
-    const opened = await open(marked.pdf)
+  return result({ pdf: marked.pdf, log: lastTexLog(marked.log), options: { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, lineskip }, ms })
+}
+
+/**
+ * A paper's layout marks (paper.d.mts): markedOfPaper's marked original, then read once (stage 3), with each stage's time, or
+ * the stage that failed with the times of those that ran. Never throws: a compiler that throws, a PDF that does not open and
+ * a reading that refuses are each their stage's refusal. `converge`: the marked original made by convergeThenMark, its passes
+ * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them
+ */
+export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null }) {
+  const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound })
+  if (made.refused) return made
+  const ms = { ...made.ms }
+  /** the result, with CM's record where it ran */
+  const result = r => (made.cm ? { ...r, cm: made.cm } : r)
+  const t0 = performance.now()
+  let read = null
+  try {
+    const opened = await open(made.pdf)
     try {
       // (read once, a page at a time: the marks in memory, handed to the maker as they are, and the unit marks the left is
       // anchored by, from the same pages)
-      return await readMarked(opened.doc, lastTexLog(marked.log), { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, lineskip, units: paper.units, OPS })
+      read = await readMarked(opened.doc, made.log, { ...made.options, units: paper.units, OPS })
     } finally {
       // (a failing close loses nothing: the marks are read)
       try { await opened.close() } catch {}
     }
-  })
+  } catch { read = null } finally { ms.marks = Math.round(performance.now() - t0) }
   if (!read) return result({ refused: 'marks', ms })
   return result({ marks: read.marks, unitMarks: read.unitMarks, ms })
 }
