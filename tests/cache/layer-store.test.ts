@@ -59,6 +59,27 @@ describe('the layer store', () => {
     expect(await s.usage()).toEqual({ count: 2, bytes: 200 })
   })
 
+  it('an object two papers hold (one digest) is kept for each: the first let go, the second still reads it (Codex on #390)', async () => {
+    let t = 0
+    // (each paper counts the bytes it holds, a shared object under each: the cap is kept conservatively)
+    const s = createLayerStore({ db: dbOf(), maxBytes: 350, now: () => ++t })
+    const shared = bytes(100, 7), d = await sha(shared)
+    await s.putObject('a', d, shared)
+    await s.putObject('b', d, shared)
+    const own = bytes(100, 8)
+    await s.putObject('b', await sha(own), own)
+    // past the cap: a, opened first, goes; the object b holds too stays
+    const more = bytes(100, 9)
+    await s.putObject('c', await sha(more), more)
+    expect(await s.object(d)).toEqual(shared)
+    expect((await s.usage()).count).toBe(2)
+    // b let go as well: the object no paper holds goes with it
+    await s.opened('c')
+    const last = bytes(100, 10)
+    await s.putObject('d', await sha(last), last)
+    expect(await s.object(d)).toBeUndefined()
+  })
+
   it('the last catalog of a paper version, counted in its bytes; usage counts paper versions; clear leaves nothing', async () => {
     const s = createLayerStore({ db: dbOf() })
     await s.putCatalog('2600.00001v1', bytes(30, 5))
