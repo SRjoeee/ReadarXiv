@@ -15,7 +15,8 @@ export const LAYER_STORE_BYTES = 200 * 2 ** 20
 export const READ_BUDGET_MS = 1500
 export const LAYER_DB = 'axt-layer'
 
-/** an object of a paper's layer, or our copy of its original, by digest (`paper`: the first paper that kept it) */
+/** an object of a paper's layer, or our copy of its original, by digest (`paper`: the first paper that kept it, a hint
+ *  alone: who holds an object is `refs`) */
 interface ObjectRow { sha256: string; paper: string; bytes: number; data: ArrayBuffer }
 /** a paper that holds an object: one digest may be two papers' (an object is named by its content), and it goes only once
  *  no paper holds it */
@@ -30,8 +31,21 @@ class LayerDatabase extends Dexie {
   constructor(name = LAYER_DB, options?: DexieOptions) {
     super(name, options)
     this.version(1).stores({ objects: 'sha256, paper', papers: 'paper, openedAt' })
-    // which papers hold each object (version 1's objects are their first paper's alone, as `objects.paper` says)
+    // which papers hold each object
     this.version(2).stores({ refs: '[paper+sha256], sha256, paper' })
+    // every holder in `refs`, the first too: an object of an earlier version's rows is its first paper's where that paper
+    // is kept (version 1 had no refs, and version 2 could leave the first holder out once it was let go and kept again);
+    // one no kept paper holds goes
+    this.version(3).stores({}).upgrade(async tx => {
+      const papers = new Set((await tx.table('papers').toCollection().primaryKeys()) as string[])
+      const refs = tx.table('refs'), objects = tx.table('objects')
+      await objects.toCollection().each(async (o: ObjectRow) => {
+        if (papers.has(o.paper)) await refs.put({ paper: o.paper, sha256: o.sha256 })
+      })
+      const held = new Set(((await refs.toCollection().primaryKeys()) as [string, string][]).filter(k => papers.has(k[0])).map(k => k[1]))
+      await refs.filter((r: RefRow) => !papers.has(r.paper)).delete()
+      await objects.filter((o: ObjectRow) => !held.has(o.sha256)).delete()
+    })
   }
 }
 export function createLayerDb(name?: string, options?: DexieOptions): LayerDatabase {
@@ -78,8 +92,8 @@ export function createLayerStore(o: { db?: LayerDatabase; maxBytes?: number; bud
       if (total <= maxBytes) break
       if (p.paper === keep) continue
       await db.transaction('rw', db.objects, db.papers, db.refs, async () => {
-        // the objects it holds (and those version 1 kept for it alone) go once no other paper holds them
-        const held = new Set([...(await db.refs.where('paper').equals(p.paper).primaryKeys()).map(k => k[1]), ...(await db.objects.where('paper').equals(p.paper).primaryKeys())])
+        // the objects it holds go once no other paper holds them (who holds one is `refs` alone)
+        const held = new Set((await db.refs.where('paper').equals(p.paper).primaryKeys()).map(k => k[1]))
         await db.refs.where('paper').equals(p.paper).delete()
         for (const sha256 of held) if (!(await db.refs.where('sha256').equals(sha256).count())) await db.objects.delete(sha256)
         await db.papers.delete(p.paper)
@@ -95,7 +109,7 @@ export function createLayerStore(o: { db?: LayerDatabase; maxBytes?: number; bud
     // bytes that are not the ones their digest names: never drawn, and gone, from every paper that held them
     await db.transaction('rw', db.objects, db.papers, db.refs, async () => {
       await db.objects.delete(sha256)
-      const holders = new Set([row.paper, ...(await db.refs.where('sha256').equals(sha256).primaryKeys()).map(k => k[0])])
+      const holders = new Set((await db.refs.where('sha256').equals(sha256).primaryKeys()).map(k => k[0]))
       await db.refs.where('sha256').equals(sha256).delete()
       for (const paper of holders) {
         const p = await db.papers.get(paper)
@@ -110,12 +124,10 @@ export function createLayerStore(o: { db?: LayerDatabase; maxBytes?: number; bud
       try {
         if (bytes.length > maxBytes || (await digestOf(bytes)) !== sha256) return
         await db.transaction('rw', db.objects, db.papers, db.refs, async () => {
-          // held by this paper already: nothing to do; another paper's: this one holds it too, and counts its bytes (each
-          // paper counts what it holds, so the cap is kept conservatively)
+          // held by this paper already: nothing to do; else this one holds it (kept again after it was let go, or another
+          // paper's), and counts its bytes (each paper counts what it holds, so the cap is kept conservatively)
           if (await db.refs.get([paper, sha256])) return
-          const kept = await db.objects.get(sha256)
-          if (kept?.paper === paper) return
-          if (!kept) await db.objects.put({ sha256, paper, bytes: bytes.length, data: copyOf(bytes) })
+          if (!(await db.objects.get(sha256))) await db.objects.put({ sha256, paper, bytes: bytes.length, data: copyOf(bytes) })
           await db.refs.put({ paper, sha256 })
           const p = await db.papers.get(paper)
           await db.papers.put({ paper, openedAt: p?.openedAt ?? now(), bytes: (p?.bytes ?? 0) + bytes.length, catalog: p?.catalog ?? null })
