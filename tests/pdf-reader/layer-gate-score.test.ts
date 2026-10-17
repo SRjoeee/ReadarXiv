@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cropPlacementOf, modelPage, type OrigLine, pixelPage, type UnitIn } from '../../lab/pdf/spikes/layer-gate/measure.mjs'
-import { compare, completenessRows, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
+import { compare, completenessRows, fixtureTotals, type Measure, MEASURES, pageEntry, pooled, REPORTED, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
 
 // The layer gate's arithmetic (lab/pdf/spikes/layer-gate.mjs, Plan 8b Task 12): a page's model measures
 // against the original, a fixture's totals, and the merge rule against a recorded run — shares within 0.2 points, ratios
@@ -232,9 +232,11 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
     expect(p.paraGapN).toBe(6)
     expect(p.paraGap).toBeCloseTo((1.55 * 4 + 2 * 2) / 6, 3)
     expect(p.pageDrift).toBeCloseTo(0.07, 6)
-    // gated: closer to 1 is better, and fewer wide gaps
-    expect(worse(measure('paraGap'), { paraGap: 2 }, { paraGap: 1.2 })?.better).toBe(true)
+    // gated: fewer wide gaps, and fewer tight ones; the ratio to the original's gap reported, no longer gated (2026-10-17)
     expect(worse(measure('paraGapWide'), { paraGapWide: 0.1 }, { paraGapWide: 0.2 })?.worse).toBe(true)
+    expect(MEASURES.some(m => m[0] === 'paraGap')).toBe(false)
+    expect(REPORTED.map(r => r[0])).toContain('paraGap')
+    expect(measure('paraGapTight').slice(1, 4)).toEqual(['model', 'defect', 'down'])
   })
 })
 

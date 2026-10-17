@@ -1513,7 +1513,7 @@ function fidelityMd(record) {
   for (const k of keys) { const r = record.tiers[k]; cols.push([`${k}, shared ten`, r.totals.shared], [`${k}, all ${r.totals.all?.outputs ?? ''}`, r.totals.all]) }
   L.push('## Against the original', '', `| measure | Original | ${cols.map(c => c[0]).join(' | ')} |`, `|---|---|${cols.map(() => '---|').join('')}`)
   for (const m of ms) L.push(`| ${m[4]} | ${originalOf(m)} | ${cols.map(c => shown(c[1], m)).join(' | ')} |`)
-  for (const [key, label] of REPORTED) L.push(`| ${label} (not gated) | ${key === 'pitch' ? '1' : key === 'onGrid' ? '100.0 %' : key === 'hanging' ? '0.0 %' : '0'} | ${cols.map(c => (key === 'onGrid' || key === 'hanging' ? pct(c[1]?.[key]) : num(c[1]?.[key], 3))).join(' | ')} |`)
+  for (const [key, label] of REPORTED) L.push(`| ${label} (not gated) | ${key === 'pitch' || key === 'paraGap' ? '1' : key === 'onGrid' ? '100.0 %' : key === 'hanging' ? '0.0 %' : '0'} | ${cols.map(c => (key === 'onGrid' || key === 'hanging' ? pct(c[1]?.[key]) : num(c[1]?.[key], 3))).join(' | ')} |`)
   L.push('')
   const below = ms.filter(m => fl[m[0]] !== undefined && run.totals.shared && (() => { const w = closer(m, fl, run.totals.shared); return w !== null && w < 0 })())
   L.push(`**Below the prototype's floor on the shared ten** (${keys[0]}): ${below.length ? below.map(m => m[4]).join(', ') : 'none'}.`, '')

@@ -28,13 +28,13 @@ export const MEASURES = [
   // (a frame past it by its hanging marks alone, by at most their own width, is no frame past it: it hangs, `hanging`
   // below, measure.mjs hangFromOf)
   ['overRight', 'model', 'share', 'down', 'frames past the right edge'],
-  // the gaps between paragraphs (D6, 2026-10-08; measure.mjs paraGapsOf): drawn ÷ original, median, and the share of
-  // gaps a pitch or more wider than the original's (a frame drawn short leaves its blank in the gap below it)
-  ['paraGap', 'model', 'ratio', 'one', 'paragraph gap / the original\'s (median)'],
+  // the gaps between paragraphs (D6, 2026-10-08; measure.mjs paraGapsOf): the share of gaps a pitch or more wider than the
+  // original's (a frame drawn short leaves its blank in the gap below it), and those narrower than the lines beside them (the
+  // half-leading round, 2026-10-17: the drawn gap less the drawn leading short of the original's room past its pitch, capped
+  // at a pitch, measure.mjs paraGapsOf `tight`; a defect compared as a rate, as the measures of TeX's file entered). The
+  // drawn gap against the original's (paraGap, its median ratio) is reported, no longer gated (the maintainer, 2026-10-17):
+  // it held a translation spread past the original's pitch to the original's gap, a pitch, which is tighter than its lines
   ['paraGapWide', 'model', 'share', 'down', 'paragraph gaps a pitch or more wider'],
-  // (and those narrower than the lines beside them, the half-leading round, 2026-10-17: the drawn gap less the drawn leading
-  // short of the original's room past its pitch, measure.mjs paraGapsOf `tight`; a defect compared as a rate, as the
-  // measures of TeX's file entered)
   ['paraGapTight', 'model', 'defect', 'down', 'paragraph gaps tighter than the lines beside them'],
   ['overlap', 'pixel', 'defect', 'down', 'overlap regions'],
   ['stray', 'pixel', 'defect', 'down', 'stray text'],
@@ -112,6 +112,8 @@ export const MEASURES = [
  *  most a page's drawn rhythm (its body frames' median line gap within a flow segment against the original's, measure.mjs
  *  rhythm) moves from the last page before it that has one (D6: the rhythm a reader sees, page to page) */
 export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"],
+  // (the drawn gap between two paragraphs against the original's, the median ratio: gated until 2026-10-17, paraGapTight above)
+  ['paraGap', "paragraph gap / the original's (median)"],
   // the crops with no TeX baseline to hold them to, the units v0 draws alone (the layout file not locating them whole: D4),
   // and the lines TeX's rule opened, or would have where the paper has no values for it (layer2.mjs breakLines)
   ['cropNoTex', 'crops with no TeX baseline'], ['aloneUnits', 'units v0 draws alone'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"],
