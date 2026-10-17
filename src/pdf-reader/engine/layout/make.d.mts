@@ -65,7 +65,7 @@ export interface LayoutStats {
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }
   /** |baseline − TeX's start or end mark|, pt */
   baselines: { first: number[]; last: number[] }
-  /** pages past OPS_CAP, STEPS_MAX, STACK_MAX, GLYPHS_PAGE or BOXES_CAP (ink.mjs): no ink */
+  /** pages past OPS_CAP, STEPS_MAX, GLYPHS_PAGE or BOXES_CAP, or drawing in a state lost past STACK_MAX (ink.mjs): no ink */
   capped: number[]
   /** pages whose operator list did not come within OPS_MS, or failed, or was never asked (past GIVEN_UP_MAX): no ink */
   timedOut: number[]

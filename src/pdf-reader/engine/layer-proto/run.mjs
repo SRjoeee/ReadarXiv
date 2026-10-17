@@ -130,10 +130,11 @@ export const layOrder = (placed, batch = 8) => layGroups(placed, batch).flatMap(
 /**
  * A unit's layout made final: a CJK cell's lines moved into their bands between the rules over and under them
  * (layer2.mjs cellBands, clearLines) at the size it is drawn at. Every step that lays a unit anew (its fit, the page's
- * even pass, adaptiveFill's) ends here, before the unit is recorded or painted.
+ * even pass, adaptiveFill's) ends here, before the unit is recorded or painted, or before anything is read of a layout it may
+ * take (`layout`, the unit's own by default: adaptiveFill's tries, fillPage).
  */
-export function settleLayout(p) {
-  if (p.clear) L2.clearLines(p.layout.lines ?? [], p.clear.bands, p.s * (p.layout.scale ?? 1))
+export function settleLayout(p, layout = p.layout) {
+  if (p.clear) L2.clearLines(layout.lines ?? [], p.clear.bands, p.s * (layout.scale ?? 1))
 }
 
 /**
@@ -189,8 +190,10 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   // layer2.mjs shareOf), is filled only where that stays so: no leading, tracking or size that sets its text there further
   // right, sets text there where its fit left the row free, or moves its line there off the baseline the next unit's first
   // line was set on (the fit's, `at`). Its fill leading is still its fit's, which the page's target
-  // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own)
-  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); return l.clipped ? null : l }
+  // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own. Each try is
+  // settled (settleLayout: a cell's lines in their bands) before anything is read of it, as the fit's share was: the row is
+  // kept as it is drawn)
+  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped) return null; settleLayout(p, l); return l }
   const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l.lines) ? l : null }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
@@ -237,9 +240,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
     if (st.knob !== 'grow') l.knob = p.layout.knob
     p.layout = l
     p.layout.extents = keep
-    // (laid anew: its clearance at its new size, before it is recorded or painted; the pass put a cleared CJK cell's
-    // first line back on the original's baseline, over its rule, 2026-10-07)
-    settleLayout(p)
+    // (laid anew, and settled as it was tried (`free`): its clearance at its new size, before it is recorded or painted; the
+    // pass put a cleared CJK cell's first line back on the original's baseline, over its rule, 2026-10-07)
     onFilled(p, target)
   }
   return told
@@ -607,10 +609,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       c.reads = segPagesOf(c)
       c.group = tableGroups?.get(c.id) ?? null
       // (and the unit before it in K whose last row its first row continues on one of TeX's lines, a shared line (need.mjs
-      // rowLeadOf): its lay reads that unit's (layout2's start), which Need lays with it, `follows`; that unit's lay reads that it
-      // has one, `followers`)
-      c.lead = tex?.use === 'lines' ? rowLeadOf(tex.index, c.id) : null
-      c.follows = c.lead && candOf.has(c.lead.id) ? c.lead.id : null
+      // rowLeadOf, chosen among the entries before it in K, `candOf` so far: what every part told by now holds, the same however
+      // the door's parts come): its lay reads that unit's (layout2's start), which Need lays with it, `follows`; that unit's lay
+      // reads that it has one, `followers`. Only where a page is laid by its closure alone (ORDER_FREE): there the unit before it
+      // is laid first and no pass lays it anew or moves it after (the page fill keeps its share, fillPage). Rules that lay in
+      // order (the even pass and the leftover's packing, which lay a unit anew or move it once the unit after it has been laid
+      // from it, or no pass, whose closures may leave the unit before it to a later one) share no line: the next unit's first
+      // line stays where TeX set it, the same however the paper is opened)
+      c.lead = ORDER_FREE && tex?.use === 'lines' ? rowLeadOf(tex.index, c.id, aid => candOf.has(aid)) : null
+      c.follows = c.lead ? c.lead.id : null
       if (c.follows !== null) followers.set(c.follows, c.id)
       c.k = K.length
       c.decided = false
@@ -1594,6 +1601,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (share && !between) {
         b.start = share.end !== null ? share.end + Math.max(0, x - row.x1) : row.x0
         if (share.end !== null && Math.abs(share.at - b.B[0]) >= 0.05) b.startY = share.at
+        // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
+        p.ledBy = row.id
       }
     }
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
@@ -1799,12 +1808,41 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (done.has(f)) continue
       if (!passed[f]) break
       done.add(f)
-      for (const u of passOrder[f]) if (u.pages.includes(q)) paint(u, q)
+      for (const u of passOrder[f]) if (u.pages.includes(q)) paintLed(u, q)
       for (const g of settledAt[f]) paintGroup(g, q)
     }
   }
-  /** whether unit u's part of page q (its first page's) is painted */
-  const partPainted = (u, q) => !!paintedOn[q]?.has(u.pages[0])
+  /** each page's units painted there by their parts (ids), and those waiting there for the unit before them on a shared line,
+   *  by that unit's id */
+  const paintedIds = [], awaitLead = []
+  /**
+   * Unit u's part of page q painted, after the unit before it on a shared line (`ledBy`, layout2: its first line laid from
+   * where that unit's translation ends on the row, inside the rectangle that unit's erasing of the row covers), so that the
+   * erasing never takes what u drew there (its crops) however the page's parts fall: they paint in their passes' order, and a
+   * unit from an earlier page (one whose page holds a unit that skips a page ranks late) may paint after the unit it leads. u
+   * waits for it while it is still to be painted there by its own part (laid, and no table cell, which paints with its group),
+   * and is painted right after it; then whatever waited for u
+   */
+  const paintLed = (u, q) => {
+    const painted = (paintedIds[q] ??= new Set())
+    const a = u.ledBy === undefined ? null : byId.get(u.ledBy)
+    if (a && !painted.has(a.id) && a.pages.includes(q) && !a.refused && (!a.unit.group || !groupCells.has(a.unit.group))) {
+      const waiting = (awaitLead[q] ??= new Map())
+      ;(waiting.get(a.id) ?? waiting.set(a.id, []).get(a.id)).push(u)
+      ;(u.waitsOn ??= new Set()).add(q)
+      return
+    }
+    u.waitsOn?.delete(q)
+    paint(u, q)
+    painted.add(u.id)
+    const next = awaitLead[q]?.get(u.id)
+    if (!next) return
+    awaitLead[q].delete(u.id)
+    for (const w of next) paintLed(w, q)
+  }
+  /** whether unit u's part of page q (its first page's) is painted, u with it (not waiting there for the unit before it on a
+   *  shared line: paintLed) */
+  const partPainted = (u, q) => !!paintedOn[q]?.has(u.pages[0]) && !u.waitsOn?.has(q)
   /** page pg's pass: the even pass, the page fill and the leftover packed over the units that begin on it, its groups
    *  settled, then each page its units are on painted as far as it can be */
   const passPage = pg => withWork(pg, () => passPageOf(pg))
@@ -2315,7 +2353,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // (a unit whose first row continues another's on a shared line reads that one's lay (layout2's start): that one is laid
       // first, ahead of its rank where it ranks after it (a paragraph from the page before, 2608.16117's unit 57, whose last row
       // its unit 59 continues on page 19), Need laying it with it (`follows`); every other unit in its rank. Its growth is its
-      // pages' rank's, whichever is laid first, and its lay reads nothing of the units after it)
+      // pages' rank's, whichever is laid first, and its lay reads nothing of the units after it. Only where ORDER_FREE: rules
+      // that lay in order share no line, addUnits)
       const order2 = [], left = new Set(units)
       const put = u => { if (!left.delete(u)) return; const a = byId.get(candOf.get(u.id)?.follows); if (a) put(a); order2.push(u) }
       for (const u of units) put(u)

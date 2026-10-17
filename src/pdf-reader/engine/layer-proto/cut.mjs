@@ -69,7 +69,8 @@ function entriesOf(whole, N, grouped) {
       lists, reach: new Set([...rectPages, ...lines]),
       // (and what Need reads of it besides, as the door's K has it (run.mjs addUnits): its placeholders' segments' pages and its table group)
       reads: lu ? [...new Set((segPages.get(id) ?? []).filter(q => q >= 1 && q <= N))] : [], group: grouped.of[id] >= 0 ? grouped.of[id] : null,
-      follows: lu ? rowLeadOf(index, id)?.id ?? null : null,
+      // (set once K is in order, below)
+      follows: null,
       // the least page of its rects and its lines: where the reader says a part may no longer tell it
       first: Math.min(...rectPages, ...lines),
       // the last page its left rects reach, and the last page any of its rows does (what the part's views must reach)
@@ -79,9 +80,9 @@ function entriesOf(whole, N, grouped) {
     if (w && w[1] > before) before = w[1]
   }
   entries.sort((a, b) => a.slot - b.slot || a.id - b.id)
-  // (a unit follows one before it in K alone, as the door's K holds it: run.mjs addUnits)
+  // (a unit follows one before it in K alone, chosen among those, as the door's K holds it: run.mjs addUnits)
   const at = new Map(entries.map((e, i) => [e.id, i]))
-  for (const e of entries) if (e.follows !== null && !(at.get(e.follows) < at.get(e.id))) e.follows = null
+  for (const e of entries) if (e.lu) e.follows = rowLeadOf(index, e.id, aid => at.get(aid) < at.get(e.id))?.id ?? null
   return entries
 }
 

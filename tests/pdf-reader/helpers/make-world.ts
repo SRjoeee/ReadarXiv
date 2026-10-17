@@ -77,10 +77,14 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
   for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
   // (past OPS_CAP: operations the walk reads and does nothing with, after the page's own, as one typed array)
   if (p.ops === 'capped') { const fn = new Uint16Array(OPS_CAP + 1).fill(OPS.setFillRGBColor); fn.set(ops.map(o => o[0])); return { fnArray: fn, argsArray: ops.map(o => o[1]) } }
-  // (after the page's own: saves past STACK_MAX, or two thousand operations the walk does nothing with, more steps than
-  // come between two readings of its clock; before it, one painted path more than BOXES_PAGE, off the page's columns, one
-  // operand each, so that the page is degraded and every box of its own past the budget)
-  if (p.ops === 'deep') for (let i = 0; i <= STACK_MAX; i++) ops.push([OPS.save, []])
+  // (after the page's own: saves past STACK_MAX, one of them restored and a path painted then, in a state the walk lost (so
+  // the page is capped), or two thousand operations the walk does nothing with, more steps than come between two readings
+  // of its clock; before it, one painted path more than BOXES_PAGE, off the page's columns, one operand each, so that the
+  // page is degraded and every box of its own past the budget)
+  if (p.ops === 'deep') {
+    for (let i = 0; i <= STACK_MAX; i++) ops.push([OPS.save, []])
+    ops.push([OPS.restore, []], [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([-100, 0, -90, 10])]])
+  }
   if (p.ops === 'dense' || p.ops === 'slow') {
     const dense = p.ops === 'dense', extra = dense ? BOXES_PAGE + 1 : 2000, own = ops.length
     const fn = new Uint16Array(own + extra).fill(dense ? OPS.constructPath : OPS.setFillRGBColor)

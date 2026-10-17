@@ -23,7 +23,8 @@ export declare const STEPS_MAX: number
 export declare const BOXES_PAGE: number
 /** the walk's backstop, in milliseconds (`msMax`'s default): past it the page is timed out */
 export declare const INK_MS: number
-/** the graphics state's stack at most this deep: past it the page is capped */
+/** the graphics state's levels that hold a copy at most: past it a level holds none, and ink placed in a state a restore
+ *  past it could not give back caps the page */
 export declare const STACK_MAX: number
 /** a merged box's kind in `paths` (a degraded page's): no path of the page's own */
 export declare const MERGED: number
@@ -31,7 +32,7 @@ export declare const MERGED: number
 export interface InkPoint { name: string; glyph: number; box: number }
 /** a page's glyphs and graphics boxes (images, paths: x0, y0, x1, y1) from its operator list, in stream order, every
  *  painted glyph whatever its Unicode; the marked compile's points among them, and each glyph's boxes before it; `capped`
- *  when the walk stopped at OPS_CAP, `stepsMax`, STACK_MAX, `glyphsMax` or BOXES_CAP, `timedOut` when it stopped past `msMax`
+ *  when the walk stopped at OPS_CAP, `stepsMax`, a state lost past STACK_MAX, `glyphsMax` or BOXES_CAP, `timedOut` when it stopped past `msMax`
  *  (INK_MS); `degraded` when the boxes past `boxesMax` were merged by the grid's cells (after the others, from `mergedAt`,
  *  each MERGED in `paths`); `rotated` when the page's /Rotate is not 0 (then nothing is returned) */
 export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; glyphsMax?: number; boxesMax?: number; stepsMax?: number; msMax?: number }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paths?: number[]; shows?: number; capped: boolean; timedOut: boolean; degraded: boolean; mergedAt: number | null; rotated: boolean }

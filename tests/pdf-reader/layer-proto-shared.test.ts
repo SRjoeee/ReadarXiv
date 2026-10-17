@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { build, installStubs, line, openRun, type Paper, type Run } from './helpers/order-paper'
+import { build, installStubs, line, openRun, PAPERS, type Paper, type Run, runSnap } from './helpers/order-paper'
 
 // A shared line (need.mjs rowLeadOf): a unit whose first row TeX set on the line another unit's last row ends — a run-in
 // heading and its text (1810.04805's "Model Architecture", 1706.03762's "Acknowledgements"), a paragraph's part after the
@@ -12,10 +12,10 @@ beforeAll(() => { installStubs() })
 
 type RecLine = [number, number, number | null, boolean, string, number, number, number, number]
 const linesOf = (run: Run, id: number) => (run.stats.find(r => r.id === id) as unknown as { lines: RecLine[] } | undefined)?.lines
-async function laid(paper: Paper, edit: (P: ReturnType<typeof build>) => void = () => {}) {
+async function laid(paper: Paper, edit: (P: ReturnType<typeof build>) => void = () => {}, o: Parameters<typeof openRun>[1] = {}) {
   const P = build(paper)
   edit(P)
-  const run = await openRun(P)
+  const run = await openRun(P, o)
   for (let p = 1; p <= paper.pages; p++) await run.layFor(p)
   return run
 }
@@ -172,5 +172,90 @@ describe('a shared line in the order of the asks', () => {
       const want = run.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r)
       expect(alone.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r), `page ${p} alone`).toEqual(want)
     }
+  })
+})
+
+describe('the page fill keeps a shared row as it is drawn: each try settled before the row is read (fillPage)', () => {
+  it('a try its settling moves off the row\'s baseline is not taken: the row stays one line', async () => {
+    const { fillPage } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const run = await laid(split(56), undefined, { free: false })
+    type Laid = { id: number; share: { at: number | null }; clear: unknown; layout: { lines: { baseline: number }[] } }
+    const p = run.placed.find(u => u.id === 0) as unknown as Laid
+    // (the paragraph's last line on the shared row, TeX's, which the part after it stands on: the fit's)
+    expect([p.layout.lines.at(-1)!.baseline, p.share.at]).toEqual([226, 226])
+    // (a rule 4 pt over the shared row's baseline, the row's band as cellBands makes it: the line's em box, 0.88 of its size
+    // over the baseline, held under the rule, so settling lowers the line there to 221.2)
+    p.clear = { cap: 1, bands: new Map([[0, [{ B: 226, lo: 200, hi: 230 }]]]) }
+    fillPage([p] as never, run.P as never)
+    expect(p.layout.lines.filter(l => Math.abs(l.baseline - 226) < 10).map(l => l.baseline)).toEqual([226])
+  })
+})
+
+describe('a shared line under rules that lay a page in order: none, the next unit where TeX set it, however the paper is opened', () => {
+  // (the even pass and the leftover's packing lay a unit anew or move it once the unit after it has been laid from where it
+  // ended on the row; with no page pass a closure may leave the unit before it to a later one: either would set the row from a
+  // layout it is not drawn in, or from none, by the order of the asks)
+  /** the built-in rules with Chinese's own fields changed */
+  const rulesWith = async (o: Record<string, unknown>) => {
+    const { BUILTIN_RULES } = await import('@/pdf-reader/engine/rules/layout.mjs')
+    const set = structuredClone(BUILTIN_RULES) as unknown as { languages: Record<string, Record<string, unknown>> }
+    Object.assign(set.languages.zh as Record<string, unknown>, o)
+    return set
+  }
+  const modes: [string, Record<string, unknown>][] = [['the even pass', { even: 1 }], ['the leftover packed', { leftover: 'pack' }], ['no page pass', { adaptiveFill: null }]]
+  for (const [mode, o] of modes) {
+    it(`${mode}: a heading shorter than its English, its text where TeX set it; S-E's pages the same in every order`, async () => {
+      const rules = await rulesWith(o)
+      const run = await laid(runIn(3), undefined, { rules })
+      expect(linesOf(run, 0)![0]![7]).toBeLessThan(80)
+      expect(linesOf(run, 1)![0]!.slice(0, 2).concat(linesOf(run, 1)![0]![6])).toEqual([1, 250, 90])
+      const paper = PAPERS.find(x => x.name === 'S-E shared line')!
+      const pages = Array.from({ length: paper.pages }, (_, i) => i + 1)
+      const inOrder = await laid(paper, undefined, { rules })
+      // (each unit's first line on the row it shares, where TeX set it)
+      expect([linesOf(inOrder, 1)![0]![6], linesOf(inOrder, 3)![0]![6]]).toEqual([160, 90])
+      const want = pages.map(p => runSnap(inOrder, p))
+      for (const order of [[4, 3, 2, 1], [2, 4, 1, 3], [2], [3], [4]]) {
+        const run2 = await openRun(build(paper), { rules })
+        for (const p of order) await run2.layFor(p)
+        for (const p of order) expect(runSnap(run2, p), `${mode}, ${order}: page ${p}`).toEqual(want[p - 1])
+      }
+    })
+  }
+})
+
+describe('a shared row painted with the unit before it first, wherever their parts fall', () => {
+  /** S-F: a paragraph from page 1 to page 2 (unit 1) whose last row its part after a float continues (unit 2), and on page 1 a
+   *  paragraph that skips page 2 for page 3 (unit 0: a full-page float between), which ranks page 1's pass after page 2's: so
+   *  page 2's own part paints before page 1's part of it */
+  const late: Paper = {
+    name: 'S-F the unit before painted late', pages: 3, specs: [
+      { id: 0, kind: 'para', lines: [line(1, 270, 'Alpha beta gamma'), line(1, 258, 'delta epsilon zeta'), line(3, 270, 'eta theta iota'), line(3, 258, 'kappa lambda mu')], chars: 60, at: 0x4e00 },
+      { id: 1, kind: 'para', lines: [line(1, 234, 'nu xi omicron'), line(1, 222, 'pi rho sigma'), line(2, 270, 'tau upsilon phi'), line(2, 258, 'chi psi. The', 20, 150)], chars: 82, at: 0x5200 },
+      { id: 2, kind: 'para', lines: [line(2, 258, 'omega alpha', 160, 280), line(2, 246, 'beta gamma delta'), line(2, 234, 'epsilon zeta eta')], chars: 30, at: 0x5600 },
+    ],
+  }
+  type Entry = { what: string; unit: number | null; page: number; box: number[] }
+
+  it('a paragraph from an earlier page whose part paints later: its erasing of the row never takes the part after it', async () => {
+    const run = await laid(late)
+    const a = linesOf(run, 1)!.at(-1)!, b = linesOf(run, 2)![0]!
+    // (the part after the float set from the paragraph's end on its row, inside what the paragraph's erasing of the row covers)
+    expect([a[0], b[0], b[1]]).toEqual([2, 2, a[1]])
+    expect(b[6]).toBeCloseTo(a[7] + 10, 1)
+    expect(b[6]).toBeLessThan(150)
+    // (its first line's box in the page's pixels: 300 pt high, a pixel a point)
+    const box = [b[6], 300 - (b[1] + 7), b[7], 300 - (b[1] - 2)]
+    const meets = (e: Entry) => e.box[0]! < box[2]! && e.box[2]! > box[0]! && e.box[1]! < box[3]! && e.box[3]! > box[1]!
+    const on2 = (run.audit as unknown as Entry[]).filter(e => e.page === 2)
+    expect(on2.some(e => e.unit === 1 && e.what === 'erase' && meets(e)), 'the paragraph\'s erasing meets it').toBe(true)
+    // (no other unit's erasing on the page after it is painted: its crops are never taken)
+    const from = on2.findIndex(e => e.unit === 2)
+    expect(from).toBeGreaterThanOrEqual(0)
+    expect(on2.slice(from).filter(e => e.unit !== 2 && e.what === 'erase' && meets(e))).toEqual([])
+    // (and page 2 asked first, alone, is the same page)
+    const alone = await openRun(build(late))
+    await alone.layFor(2)
+    expect(runSnap(alone, 2)).toEqual(runSnap(run, 2))
   })
 })

@@ -79,7 +79,7 @@ export declare function slicer(o?: { now?: () => number; budget?: number; give?:
 export declare function layGroups(placed: readonly { id: number; pages: readonly number[] }[], batch?: number): [number, number[]][]
 export declare const layOrder: (placed: readonly { id: number; pages: readonly number[] }[], batch?: number) => number[]
 /** a unit's layout made final: a CJK cell's lines moved into their bands between the rules at the size it is drawn at */
-export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }): void
+export declare function settleLayout(p: { clear?: { bands: Map<number, import('./layer2.mjs').CellBand[]> } | null; layout: { lines?: { block: number; baseline: number }[]; scale?: number }; s: number }, layout?: { lines?: { block: number; baseline: number }[]; scale?: number }): void
 /** a page's fill target (pageTarget's answer, fillPage's too): see PageFill */
 export type Filled = PageFill
 /** a page's fill target as a pure function of its page: the units that begin on it and those running on to it (each with its fit's `fillLead` and `fitLines`), and the band. Null where nothing tells a fill leading */

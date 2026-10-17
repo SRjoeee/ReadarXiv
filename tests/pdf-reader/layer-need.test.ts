@@ -290,4 +290,17 @@ describe('rowLeadOf: the unit a unit\'s first row continues on one of TeX\'s lin
     expect(rowLeadOf(indexOf([[1, 'heading', [[1, 20, 80, 250.02]]], [2, 'para', [[1, 90, 280, 250]]]]), 2)).toBe(null)
     expect(rowLeadOf(indexOf([[1, 'heading', [[1, 20, 95, 250]]], [2, 'para', [[1, 90, 280, 250]]]]), 2)).toBe(null)
   })
+  it('chosen among the units before it in the lay order (`before`): the door\'s facade answers as the whole layout, however the parts come', () => {
+    // (a head (2) and, nearer the text's (3) start on its row, a unit of a smaller id (1) that comes after the text in K, which a
+    // later part tells: the door's facade over the parts told so far holds the head and the text alone)
+    const whole = indexOf([[1, 'heading', [[1, 130, 140, 250]]], [2, 'heading', [[1, 20, 125, 250]]], [3, 'para', [[1, 150, 280, 250]]]])
+    const told = indexOf([[2, 'heading', [[1, 20, 125, 250]]], [3, 'para', [[1, 150, 280, 250]]]])
+    const beforeIt = (id: number) => id === 2
+    // (by the ids alone the nearer, 1, which the facade does not hold yet)
+    expect([rowLeadOf(whole, 3)?.id, rowLeadOf(told, 3)?.id]).toEqual([1, 2])
+    expect(rowLeadOf(whole, 3, beforeIt)).toEqual({ id: 2, page: 1, baseline: 250, x0: 20, x1: 125, size: 10 })
+    expect(rowLeadOf(told, 3, beforeIt)).toEqual(rowLeadOf(whole, 3, beforeIt))
+    // (and none where nothing before it in K is on the row)
+    expect(rowLeadOf(whole, 3, () => false)).toBe(null)
+  })
 })

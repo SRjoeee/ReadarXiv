@@ -402,13 +402,33 @@ describe('pageInk\'s guards', () => {
     expect(boxesOf(r)).toEqual([{ box: [0, 0, 1, 1], kind: 0 }, { box: [1600, -90, 1700, -80], kind: MERGED }, { box: [-500, 2000, -400, 2100], kind: MERGED }])
   })
 
-  it('a stack deeper than STACK_MAX caps the page; as deep as STACK_MAX it does not', () => {
-    const saves = (n: number): Op[] => [...Array.from({ length: n }, (): Op => [OPS.save, []]), ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))]
-    const deep = ink(saves(STACK_MAX + 1)), held = ink(saves(STACK_MAX))
-    expect(deep.capped).toBe(true)
-    expect(deep.glyphs).toEqual([])
-    expect(held.capped).toBe(false)
-    expect(held.glyphs.map(q => q.u)).toEqual(['A'])
+  it('a stack deeper than STACK_MAX is read exactly or not at all: saves left open read on, ink in a state a restore lost caps the page', () => {
+    const open = (n: number): Op[] => Array.from({ length: n }, (): Op => [OPS.save, []])
+    const restores = (n: number): Op[] => Array.from({ length: n }, (): Op => [OPS.restore, []])
+    const A = text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))
+    // (saves left open, as a stream that opens one for each thing it draws: every glyph after the cap where the canvas places
+    // it, under the transform the deepest level set; and the restores PDF.js closes the list with, after the last ink)
+    const left = ink([...open(STACK_MAX + 10), [OPS.transform, [2, 0, 0, 2, 0, 0]], ...A, ...restores(STACK_MAX + 10)])
+    expect(left.capped).toBe(false)
+    expect(left.glyphs.map(q => [q.u, q.x0, q.y])).toEqual([['A', 144, 1400]])
+    // (a level past it restored: the state of its save, which no copy holds, is lost; ink placed then caps the page, a glyph
+    // or a box alike, whatever the state says of it, here a glyph its scale would have put at 144)
+    const lostAt = (...drawn: Op[]) => ink([...open(STACK_MAX + 1), [OPS.save, []], [OPS.transform, [2, 0, 0, 2, 0, 0]], [OPS.restore, []], ...drawn])
+    for (const drawn of [A, [[OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([10, 10, 20, 20])]] as Op], [[OPS.paintImageXObject, ['img1', 1, 1]] as Op]]) {
+      const r = lostAt(...drawn)
+      expect(r.capped).toBe(true)
+      expect([r.glyphs, r.boxes]).toEqual([[], []])
+    }
+    // (a restore down to a level that holds a copy gives the state back exactly, and ink after it is read; drawing nothing
+    // while it is lost caps nothing)
+    const back = ink([...open(STACK_MAX), [OPS.save, []], [OPS.transform, [2, 0, 0, 2, 0, 0]], [OPS.restore, []], [OPS.transform, [3, 0, 0, 3, 0, 0]], [OPS.restore, []], ...A])
+    expect(back.capped).toBe(false)
+    expect(back.glyphs.map(q => [q.u, q.x0])).toEqual([['A', 72]])
+    // (an annotation sets a state of its own, known; its end gives back the lost one)
+    const annotated = ink([...open(STACK_MAX), [OPS.save, []], [OPS.restore, []], [OPS.beginAnnotation, ['a1', [0, 0, 600, 800], [1, 0, 0, 1, 0, 0], [1, 0, 0, 1, 0, 0]]], ...A, [OPS.endAnnotation, []]])
+    expect(annotated.capped).toBe(false)
+    expect(annotated.glyphs.map(q => q.u)).toEqual(['A'])
+    expect(ink([...open(STACK_MAX), [OPS.save, []], [OPS.restore, []], [OPS.beginAnnotation, ['a1', [0, 0, 600, 800], [1, 0, 0, 1, 0, 0], [1, 0, 0, 1, 0, 0]]], [OPS.endAnnotation, []], ...A]).capped).toBe(true)
   })
 
   it('a walk past stepsMax stops and the page is capped, alike on every machine: each operation, element shown, placement a step', () => {

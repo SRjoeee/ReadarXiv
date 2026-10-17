@@ -16,8 +16,9 @@ export interface RowLead { id: number; page: number; baseline: number; x0: numbe
 /** a shared line's separation at most, in em of the row's size */
 export declare const SHARED_SEP: number
 /** the unit unit `id`'s first row continues on one of TeX's lines, by the layout file's index (indexLayout's `unit` and
- *  `onPage`, or the door's facade), or null */
-export declare function rowLeadOf(index: { unit(id: number): { kind: string; lines: ArrayLike<number>; frames: ArrayLike<number>; held: readonly number[] } | null; onPage(page: number): readonly number[] } | null | undefined, id: number): RowLead | null
+ *  `onPage`, or the door's facade), or null; with `before`, chosen among the units it holds true of alone (those before `id`
+ *  in K: the same however a door's parts come) */
+export declare function rowLeadOf(index: { unit(id: number): { kind: string; lines: ArrayLike<number>; frames: ArrayLike<number>; held: readonly number[] } | null; onPage(page: number): readonly number[] } | null | undefined, id: number, before?: ((id: number) => boolean) | null): RowLead | null
 /** Need(p): the pages and K entries laying page p reads (`lay`, `rows`: K indices ascending; pages ascending, `draw` from page 1),
  *  the pages laid with it (`ready`, p among them) and the last page whose part it reads (`bound`) */
 export interface Closure { pass: number[]; lay: number[]; draw: number[]; rows: number[]; ready: number[]; bound: number }

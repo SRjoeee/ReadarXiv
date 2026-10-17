@@ -62,8 +62,9 @@ async function oracleK(whole: Whole): Promise<OracleEntry[]> {
     for (const row of lu ? (lu as unknown as { ph: Map<number, { segs: Float64Array }> }).ph.values() : []) for (let o = 0; o + 5 < row.segs.length; o += 6) if (row.segs[o]! >= 1 && row.segs[o]! <= N) out.add(row.segs[o]!)
     c.reads = [...out]
   }
-  // (and the unit before it in K whose last row its first row continues on a shared line, as run.mjs addUnits reads it)
-  K.forEach((c, i) => { const l = index ? rowLeadOf(index, c.id) : null; c.follows = l && K.slice(0, i).some(x => x.id === l.id) ? l.id : null })
+  // (and the unit before it in K whose last row its first row continues on a shared line, chosen among those before it in K,
+  // as run.mjs addUnits reads it)
+  K.forEach((c, i) => { const before = new Set(K.slice(0, i).map(x => x.id)); c.follows = (index ? rowLeadOf(index, c.id, id => before.has(id)) : null)?.id ?? null })
   return K
 }
 

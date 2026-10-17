@@ -1660,6 +1660,17 @@ describe('makeLayout, the link-anchor locator: a reference or a citation placed 
     expect(stats.ph).toMatchObject({ found: 1, lost: 0, foreign: 0, twice: 0 })
   })
 
+  it('a link of no width before it in both PDFs is in neither side\'s order: the reference is paired with its own link', async () => {
+    // (an appendix.C link of no area at the start of the next paragraph's first line, first on the page in both PDFs: our marks
+    // file cannot hold it, and arXiv's links ranked with it paired our first appendix.C with it, under which no glyph stands)
+    const zero = (r: Run): Annot => ({ rect: [xAt(r, 0), r.y - 3, xAt(r, 0), r.y + 9], dest: 'appendix.C' })
+    const head = filler[0] as Run
+    const { file, stats } = await made(drift(OURS, THEIRS, { mine: [zero(head), over(ours, C(ours), C(ours) + 1, 'appendix.C')], arxiv: [zero(head), over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')] }))
+    expect(phOf(file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('ref'), 0, 1, 152, 700, xAt(theirs, C(theirs) + 1), 707.5, 697.5])
+    expect(stats.links.placed).toEqual([[0, 1]])
+    expect(stats.links.why).toEqual({})
+  })
+
   it('found today, it is the same row, links or none, and the locator never tries it', async () => {
     const same = (mine?: Annot[], arxiv?: Annot[]) => made(drift(THEIRS, THEIRS, { ...(mine ? { mine } : {}), ...(arxiv ? { arxiv } : {}) }))
     const plain = await same(), linkedToo = await same([over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')], [over(theirs, C(theirs), C(theirs) + 1, 'appendix.C')])

@@ -197,14 +197,15 @@ export function build(paper: Paper): Built {
 export type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run.mjs').openProto>>
 /** v0 over the paper, every unit at once (the hybrid over the layout file, each cell's group given, or with `groups` false
  *  none: the groups read from the rows, as the gate's and the lab's whole opens do); `expect`: the rows to be taken after the
- *  open (take) rather than given; `free`: the run lets go of what it has laid, as the reader's does */
-export async function openRun(P: Built, { free = true, groups = true, expect = false, records = true } = {}) {
+ *  open (take) rather than given; `free`: the run lets go of what it has laid, as the reader's does; `rules`: a layout rule set
+ *  (rules/layout.mjs) in place of the built-in one */
+export async function openRun(P: Built, { free = true, groups = true, expect = false, records = true, rules = null as unknown } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const units: unknown[] = []
   const pieces = new Map<number, unknown[]>()
   for (const [id, r] of P.rows) { if (!expect) units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
-    doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, records, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}),
+    doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, records, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}), ...(rules ? { rules } : {}),
     tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }

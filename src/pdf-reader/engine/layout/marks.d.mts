@@ -147,6 +147,9 @@ export interface LayoutMarks {
 export type LinkRow = [dest: string, page: number, x0: number, y0: number, x1: number, y1: number, a: number, b: number, n: number, text: string]
 /** the links a marks file holds at most: a paper past it has none */
 export declare const LINKS_MAX: number
+/** a Link annotation as both PDFs' links are ranked by (ours in the marks file, arXiv's in the maker): its rectangle's corners
+ *  in order, to a hundredth, where it names a destination the file can hold and its rectangle has an area there; else null */
+export declare function destRect(a: unknown): [x0: number, y0: number, x1: number, y1: number] | null
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number

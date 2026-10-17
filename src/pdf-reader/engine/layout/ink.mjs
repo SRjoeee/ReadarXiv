@@ -10,7 +10,8 @@
 // In PDF.js 6 the evaluator gives every text-showing operator as showText (TJ's numbers inside its array), a text
 // matrix as one argument, and a path as one constructPath ([painting op, data, minMax], minMax its box in the path's
 // own space). arXiv's PDF is untrusted: no more than OPS_CAP operations and STEPS_MAX steps are read, the graphics
-// state's stack is no deeper than STACK_MAX, a reader that asks keeps no more than GLYPHS_PAGE glyphs and BOXES_PAGE boxes
+// state's stack holds no more than STACK_MAX copies (a level past it holds none, and ink placed in a state it lost caps the
+// page), a reader that asks keeps no more than GLYPHS_PAGE glyphs and BOXES_PAGE boxes
 // one by one (the boxes past it merged, below), INK_MS is the walk's backstop, a matrix or a number that is not one places
 // nothing, and nothing here throws on a malformed list. Each bound is an abuse guard, twenty times or more above the
 // corpus's heaviest page (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus, read by the pinned
@@ -58,8 +59,12 @@ export const BOXES_CAP = 1_000_000
  *  15 to 18 ms on a laptop, the dearest list to STEPS_MAX in 0.6 s; this is 100 times the one and 3 times the other. The
  *  clock is read once every CLOCK_EVERY steps */
 export const INK_MS = 2_000
-/** the graphics state's stack at most this deep (a save, a form, a group, an annotation each push one): past it the page
- *  is capped. Each level holds a copy of the state; 3,000,000 saves unrestored held 530 MB. The corpus's deepest: 27 */
+/** the graphics state's levels that hold a copy of it at most (a save, a form, a group, an annotation each push one; a copy
+ *  some 177 bytes: 3,000,000 saves unrestored held 530 MB). Past it a level holds none: its save changes nothing, and the
+ *  walk goes on exactly; its restore cannot give back the state of its save, and ink placed before a restore reaches a level
+ *  that holds a copy caps the page (pageInk's `lost`), so a page is read exactly or not at all. The census of 2026-10-17 (the
+ *  127 papers of data/corpus and the gate's pack, 2,836 pages, by the pinned PDF.js): the deepest 27 (2608.04183 page 15),
+ *  then 26 and 19, the median paper's deepest 6; and no page leaves a save open at its list's end. This is 37 times that */
 export const STACK_MAX = 1_000
 /** a degraded page's grid: cells of TILE points from the page's origin, TILES across and up (1,536 points), the
  *  outermost reaching on past the grid (a box beyond it lands there). A merged box is the union of the parts of the boxes
@@ -95,7 +100,7 @@ const finite = (...xs) => xs.every(Number.isFinite)
 /** a fresh graphics state: the page's own, or an annotation's */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
-  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false,
+  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false,
 })
 
 /**
@@ -183,9 +188,10 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * form's box, a clipping path), and one wholly outside it left out. Glyphs and boxes in the order the content stream
  * shows them; `points`: each point of the marked compile (POINT), { name, glyph, box }, the glyphs and the boxes shown
  * before it; `boxAt`: for each glyph, the boxes shown before it. On arXiv's PDF the points are nobody's. `capped`: the
- * list held more than OPS_CAP operations, the walk took more than `stepsMax` steps (STEPS_MAX), the stack went deeper
- * than STACK_MAX, (`glyphsMax`) the page showed more glyphs than that, or it kept more than BOXES_CAP boxes, and reading
- * stopped there, within the operation. `timedOut`: the walk
+ * list held more than OPS_CAP operations, the walk took more than `stepsMax` steps (STEPS_MAX), (`glyphsMax`) the page
+ * showed more glyphs than that, ink was to be placed in a state a restore past STACK_MAX could not give back, or it kept
+ * more than BOXES_CAP boxes, and reading stopped there, within the operation (a stack deeper than STACK_MAX alone caps
+ * nothing: saves left open are read on exactly). `timedOut`: the walk
  * passed `msMax` (INK_MS, the backstop), and reading stopped there. A reader gives a page capped or timed out no ink.
  * `rotated`: the page's /Rotate is not 0, and nothing is read (the layer lays over no rotated page).
  * `boxesMax` (BOXES_PAGE where a reader asks; none by default): the boxes past it, of every kind, are not kept one by one
@@ -214,8 +220,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
   const glyphs = [], boxes = [], points = [], boxAt = [], paths = []
-  // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` past STACK_MAX, `many` past stepsMax, the
-  // three caps; `late` past msMax, the backstop. The clock is read once every CLOCK_EVERY steps)
+  // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
+  // kept, `many` past stepsMax, the three caps; `late` past msMax, the backstop. The clock is read once every CLOCK_EVERY steps)
   let stop = false, over = false, deep = false, many = false, late = false, steps = 0, check = CLOCK_EVERY
   const t0 = clock()
   const step = k => {
@@ -272,8 +278,15 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
   let s = fresh()
   const stack = []
-  const push = () => { if (stack.length >= STACK_MAX) { deep = true; stop = true; return } stack.push({ ...s }) }
-  const pop = () => { const t = stack.pop(); if (t) s = t }
+  // (past STACK_MAX a level holds no copy, `unsaved` counting them. Its save changes nothing, so the state goes on exact; its
+  // restore cannot give back the state of its save, which is then unknown (`lost`, kept in each copy) until a restore
+  // reaches a level that holds one, or an annotation sets a state of its own. Ink placed while the state is unknown stops
+  // the reading and caps the page (`deep`): a page is read exactly or not at all, never with its ink misplaced)
+  let unsaved = 0
+  const push = () => { if (stack.length >= STACK_MAX) { unsaved++; return } stack.push({ ...s }) }
+  const pop = () => { if (unsaved > 0) { unsaved--; s.lost = true; return } const t = stack.pop(); if (t) s = t }
+  /** whether ink may be placed now: not while the state is unknown (the page then capped) */
+  const known = () => { if (s.lost) { deep = true; stop = true } return !s.lost }
 
   /** a rectangle of space `m` as its box on the page, cut to `clip` (null: wholly outside it) */
   const boxOf = (m, x0, y0, x1, y1, clip) => {
@@ -293,13 +306,13 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
    *  boxes kept (a reader that asks for no budget), reading stops, the page capped */
   const put = (x0, y0, x1, y1, path) => {
     step(1)
-    if (stop) return
+    if (stop || !known()) return
     if (boxes.length >= 4 * keep) { merge(x0, y0, x1, y1); return }
     if (boxes.length >= 4 * BOXES_CAP) { over = true; stop = true; return }
     boxes.push(x0, y0, x1, y1)
     if (indices) paths.push(path)
   }
-  const addBox = (m, x0, y0, x1, y1, path = -1) => { const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path); else step(1) }
+  const addBox = (m, x0, y0, x1, y1, path = -1) => { if (!known()) return; const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path); else step(1) }
   /** the clip in force cut to a rectangle of space `m`; nothing left of it is a clip of no area */
   const clipTo = (m, x0, y0, x1, y1) => {
     const b = boxOf(m, x0, y0, x1, y1, s.clip)
@@ -332,7 +345,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   }
   const emit = (g, M, hs, xa, xb, ascent, descent) => {
     const u = g.unicode
-    if (typeof u !== 'string' || (s.tr & 3) === 3) return
+    if (typeof u !== 'string' || !known() || (s.tr & 3) === 3) return
     const ty = s.y + s.rise, size = s.size
     const level = M[0] * hs > 0 && M[3] > 0 && Math.abs(M[1]) <= LEVEL * Math.abs(M[0])
     if (!level) { addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4); return }
@@ -356,6 +369,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
   const show = arr => {
     if (indices) { if (!inAnnotation) showAt++; curShow = inAnnotation ? -1 : showAt; glyphAt = -1 }
+    // (in a state not known, its font, size and mode are not either: nothing shown is placed, and the page is capped)
+    if (!known()) return
     const f = s.font
     if (!f || !Array.isArray(arr)) return
     const size = s.size, hs = s.hs * s.dir, vertical = !!f.vertical
@@ -485,8 +500,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         break
       }
       case SHADING:
-        // painted over the clip in force; with none, the page's background, left out
-        if (s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) put(s.clip[0], s.clip[1], s.clip[2], s.clip[3], -2)
+        // painted over the clip in force; with none, the page's background, left out (a clip not known: the page capped)
+        if (known() && s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) put(s.clip[0], s.clip[1], s.clip[2], s.clip[3], -2)
         break
       case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: addBox(s.ctm, 0, 0, 1, 1, -3); break
       case IMAGE_REPEAT: case MASK_REPEAT: {

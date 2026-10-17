@@ -1017,8 +1017,22 @@ const isDest = d => {
   return true
 }
 /**
- * Page p's Link annotations that name a destination (a string `dest`: no URL, no explicit array), in PDF.js's order, as the
- * marks file's `links` hold them: [dest, page, x0, y0, x1, y1, a, b, n, text], the rectangle's corners to a hundredth, and
+ * A Link annotation as both PDFs' links are ranked by (the link-anchor locator, make.mjs: our compile's here, arXiv's there):
+ * its rectangle's corners in order and to a hundredth, [x0, y0, x1, y1], where it names a destination the marks file can hold
+ * (isDest) and its rectangle is four numbers within ±COORD_MAX with an area at a hundredth; else null, and it is no link of
+ * either side's order. One rule for both, so that a link one side leaves out the other leaves out too: a rank of a
+ * destination is then read over the same links in each (a zero-width link kept on one side alone paired every later link of
+ * its destination with the one before it)
+ */
+export function destRect(a) {
+  const r = a?.rect
+  if (!isDest(a?.dest) || !Array.isArray(r) || r.length !== 4 || !r.every(v => isNumber(v) && Math.abs(v) <= COORD_MAX)) return null
+  const [x0, y0, x1, y1] = [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3])].map(r2z)
+  return x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : null
+}
+/**
+ * Page p's Link annotations that name a destination (a string `dest`: no URL, no explicit array; destRect's), in PDF.js's
+ * order, as the marks file's `links` hold them: [dest, page, x0, y0, x1, y1, a, b, n, text], the rectangle's corners to a hundredth, and
  * the glyphs under it by PDF.js's rule (links.mjs annotsOf: a glyph's advance centre on its baseline strictly inside the
  * rectangle or a quad) over the page's own glyphs (pageInk's, `glyphs`): their least and greatest origin, their count and
  * their characters in stream order. One with none, with more than MAX_GLYPHS, or with a text past LINK_TEXT_MAX is kept with
@@ -1035,10 +1049,9 @@ function linksOfPage(raw, glyphs, p) {
   const { list } = annotsOf(ls, pts)
   const out = []
   ls.forEach((a, i) => {
-    const r = a.rect
-    if (!isDest(a.dest) || !Array.isArray(r) || r.length !== 4 || !r.every(v => isNumber(v) && Math.abs(v) <= COORD_MAX)) return
-    const [x0, y0, x1, y1] = [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3])].map(r2z)
-    if (!(x0 < x1 && y0 < y1)) return
+    const rect = destRect(a)
+    if (!rect) return
+    const [x0, y0, x1, y1] = rect
     const e = list[i], keys = e && !e.unsupported ? e.g.key : []
     const text = keys.map(k => glyphs[k].u).join('')
     if (!keys.length || keys.length > MAX_GLYPHS || text.length > LINK_TEXT_MAX) { out.push([a.dest, p, x0, y0, x1, y1, 0, 0, 0, '']); return }

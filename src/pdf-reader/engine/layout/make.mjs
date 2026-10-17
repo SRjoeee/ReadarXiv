@@ -32,7 +32,7 @@ import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf } from './remove.mjs'
-import { asSet, classOf, headEnd, layoutMarking, symbolText } from './marks.mjs'
+import { asSet, classOf, destRect, headEnd, layoutMarking, symbolText } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { annotsOf, linkKindOf, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
@@ -497,12 +497,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       theirIndex.pages = q
     }
   }
-  /** a page's Link annotations that name a destination, as the locator reads them: null where not read, or past MAX_LINKS */
+  /** a page's Link annotations that name a destination, as the locator reads them: null where not read, or past MAX_LINKS;
+   *  each one ours would hold (marks.mjs destRect, the one rule of both sides' order), so that a rank is read over the same
+   *  links in both PDFs */
   const theirsOf = (raw, p) => {
     if (!Array.isArray(raw)) return null
     const ls = raw.filter(a => a?.subtype === 'Link')
     if (ls.length > MAX_LINKS) return null
-    return ls.filter(a => typeof a.dest === 'string' && a.dest && Array.isArray(a.rect) && a.rect.length === 4 && a.rect.every(Number.isFinite)).map(a => ({ page: p, dest: a.dest, raw: { subtype: 'Link', rect: [...a.rect], dest: a.dest, ...(a.quadPoints ? { quadPoints: Array.from(a.quadPoints) } : {}) } }))
+    return ls.filter(a => destRect(a) !== null).map(a => ({ page: p, dest: a.dest, raw: { subtype: 'Link', rect: [...a.rect], dest: a.dest, ...(a.quadPoints ? { quadPoints: Array.from(a.quadPoints) } : {}) } }))
   }
   /** page p's ink, read once, its time spent on the paper's `ms.ops` */
   async function readPage(p) {
