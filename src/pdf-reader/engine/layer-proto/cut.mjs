@@ -169,7 +169,7 @@ export async function wholeCutter(whole, o) {
   const image = o.image ?? whole.versions?.image
   const base = o.base ?? whole.base
   const lineskip = 'lineskip' in o ? o.lineskip : whole.layout?.lineskip ?? null
-  const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip })
+  const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip, draw: o.draw === true })
 
   // K and its frontier, then the parts
   const { K, F } = wholeFrontier(whole, frontier)
@@ -185,11 +185,11 @@ export async function wholeCutter(whole, o) {
 /**
  * K over the whole paper and its frontier closed over the table groups (what partCutter cuts a paper made whole on): `whole`
  * cutBundle's, `frontier(K, N)` F as an array of pages 0 to N (needFrontier's by default), checked: a TypeError or a
- * RangeError for one that is not an index of K for each page, rising from -1
+ * RangeError for one that is not an index of K for each page, rising from -1. `grouped` groupsOfUnits(whole.units), made by a
+ * caller that asks for K more than once (the page stream: a function of the units alone)
  */
-export function wholeFrontier(whole, frontier = needFrontier) {
+export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOfUnits(whole.units)) {
   const N = whole.paper.pages
-  const grouped = groupsOfUnits(whole.units)
   const K = entriesOf(whole, N, grouped)
   const given = frontier(K, N)
   if (!Array.isArray(given) || given.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)
@@ -228,9 +228,10 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
     while (lefts.length < b) {
       const page = lefts.length + 1
       const got = await leftPages(page)
-      const first = got ? got.first : tokens
-      const t = got ? got.tokens : empty
-      const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [] })
+      // (a page with no tokens may come with its draw alone: its first token is the next page's, its tokens none)
+      const first = got?.first ?? tokens
+      const t = got?.tokens ?? empty
+      const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [], draw: got?.draw ?? null, drawText: got?.drawText ?? null })
       lefts.push(w)
       tokens = first + t.perPage[0]
     }

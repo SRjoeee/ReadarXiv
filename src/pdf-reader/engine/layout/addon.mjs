@@ -42,6 +42,8 @@
 import { pageDirty, pagePlan, pageRules } from '../layer-proto/removal.mjs'
 import { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, checkBoxes, parseAddonManifest, REFUSED_MAX } from './addon-manifest.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
+import { listWithin } from './oplist.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
 import { alignOf, makeAddon, openRemover, removalEntry, SETS } from './remove.mjs'
 
 /** the share of the manifest's byte and value caps that the paper's `dirty` and `rules` boxes may take, in page order: the
@@ -62,12 +64,13 @@ const reasonOf = e => { try { return String(e?.message ?? e) } catch { return 'a
  * remover's parse, the operator lists, the ink, the plan and the add-on; `ink`: pagePlansOf's, the pages whose ink was not
  * read whole or was degraded, which the manifest does not carry), or { ok: false, refused } for any error, a
  * disagreement of the PDF, PDF.js and the layout file on the pages, an add-on past ADDON_CAP or a manifest the reader's
- * bounds refuse. Never throws
+ * bounds refuse. Never throws, but a memory-class failure (pipeline/memory.mjs, C8.4), which it lets through
  */
 export async function paperAddon(o) {
   try {
     return await shipped(o)
   } catch (e) {
+    if (isMemoryError(e)) throw e
     return refusal(`the add-on could not be made: ${reasonOf(e)}`)
   }
 }
@@ -109,19 +112,20 @@ export function pagePlanOf(index, p, ink, facts) {
 /**
  * Every page's plan (pagePlanOf) of PDF.js's document `doc` of arXiv's PDF, `OPS` PDF.js's operator codes, `index` the layout
  * file's: { plans, a Map from each planned page to its plan, ms { ops, ink, plan }, ink { capped, timedOut, degraded }, the
- * pages whose ink the walk did not read whole (no plan: past a cap, past the walk's backstop) or read with its boxes past
- * BOXES_PAGE merged, each page in one list, as the layout maker reads it (layout/make.mjs: the same bounds) }. Reads each
- * page's operator list once
- * and keeps none: each page is cleaned up (page.cleanup) once its plan is made, so a caller that reads the page's operator list
- * again pays the parse again. The document is the caller's to destroy
+ * pages whose ink the walk did not read whole (no plan: its list not given within OPS_MS, as the layout maker waits
+ * (oplist.mjs), and given up on; past a cap; past the walk's backstop) or read with its boxes past BOXES_PAGE merged, each page
+ * in one list, as the layout maker reads it (layout/make.mjs: the same bounds), that page alone }. Reads each page's operator
+ * list once and keeps none: each page is cleaned up (page.cleanup) once its plan is made, so a caller that reads the page's
+ * operator list again pays the parse again. The document is the caller's to destroy
  */
 export async function pagePlansOf({ doc, OPS, index }) {
-  const plans = new Map(), ms = { ops: 0, ink: 0, plan: 0 }, read = { capped: [], timedOut: [], degraded: [] }
+  const plans = new Map(), ms = { ops: 0, ink: 0, plan: 0 }, read = { capped: [], timedOut: [], degraded: [] }, seen = { warned: false, who: 'add-on plans' }
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p)
     let t = performance.now()
-    const list = await page.getOperatorList()
+    const list = await listWithin(page, seen)
     ms.ops += performance.now() - t
+    if (!list) { read.timedOut.push(p); continue }
     t = performance.now()
     const ink = pageInk(OPS, list, page.commonObjs, { rotate: page.rotate, indices: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     ms.ink += performance.now() - t

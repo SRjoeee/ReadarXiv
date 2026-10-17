@@ -2,7 +2,7 @@
 // shapes as the web names them, src/shared/layer-api.ts): every request over a recording fetch, every answer read within its
 // bounds and by its status's shape, only the paper's id and version leaving the machine
 import { describe, expect, it, vi } from 'vitest'
-import { CATALOG_CAP, CTAG4, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { CATALOG_CAP, CTAG5, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { askPrepare, bodyWithin, fetchObject, fetchOriginal, LayerUnreachable, layerPath, lookLayer, OBJECT_MARGIN, paperSegment, REQUEST_MS, RETRY_MS, sha256Of } from '@/pdf-reader/session/server'
 import { made, N, PAPER } from './helpers/format-paper'
 
@@ -39,7 +39,7 @@ describe('B2: only the paper\'s id and version leave the machine', () => {
     await fetchOriginal(API, PAPER, { bytes: 3, sha256: await sha256Of(new Uint8Array([1, 2, 3])) }, { fetch: f })
     const seg = `${PAPER.id}v${PAPER.version}`
     expect(calls.map(c => c.url)).toEqual([
-      `${API}/api/v1/layer/${seg}/${CTAG4}`, `${API}/api/v1/layer/${seg}/${CTAG4}/prepare`, `${API}/api/v1/layer/${seg}/${CTAG4}/o/${'a'.repeat(64)}`, `${API}/api/v1/original/${seg}`,
+      `${API}/api/v1/layer/${seg}/${CTAG5}`, `${API}/api/v1/layer/${seg}/${CTAG5}/prepare`, `${API}/api/v1/layer/${seg}/${CTAG5}/o/${'a'.repeat(64)}`, `${API}/api/v1/original/${seg}`,
     ])
     for (const c of calls) {
       expect(new URL(c.url).search, c.url).toBe('')

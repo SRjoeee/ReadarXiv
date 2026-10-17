@@ -26,16 +26,34 @@ export declare function markWords(doc: DocToken[], marks: Map<string, { page: nu
 /** the pages' frame's rule: (doc, every unit's located tokens) → whether a token is inside the frame (pageFrame, today's) */
 export type FrameRule = (doc: DocToken[], ms: readonly (number[] | null)[]) => (t: DocToken) => boolean
 export declare const pageFrame: FrameRule
+/** the pages' frame from the document's tokens alone (rule 1 of the page stream, made at step T): pageFrame's arithmetic over the
+ *  body words (a letter; at most 1.5 times the body size; on no line that recurs at its baseline on another page), the same
+ *  verdict's shape; a function of `doc` alone. As placeUnits' `frame`: `() => frameOfTokens(doc)` */
+export declare function frameOfTokens(doc: readonly DocToken[]): (t: DocToken) => boolean
+/** the largest a body word is set: 1.5 times the document's body size (the height most of its tokens with text have, to a tenth) */
+export declare function bodyMax(doc: readonly DocToken[]): number
 /** a unit's match (matchUnits): its matched tokens, coverage, bounds where it has marks, and the word → token map */
 export interface UnitMatch { m: number[]; coverage: number; bounded: [number, number] | null; ws?: string[]; pairs?: Map<number, number> | null; textPairs?: Map<number, number> | null }
-export interface MatchOptions { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null }
+/** `forward` (rule 5): the indices of the units written inside a float (the source parse's `inFloat`); a float's search of the
+ *  whole document then begins at the page of its last body neighbour (a unit not in it), `floatMatch` unread */
+export interface MatchOptions { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null; forward?: ReadonlySet<number> | null }
 export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { frame?: FrameRule }): Map<number, Anchor | null>
 /** every floating unit's match over the whole document (id → its tokens, or null), from the document and the words alone */
 export declare function floatMatches(doc: DocToken[], units: UnitText[], floating?: (id: number) => boolean): Map<number, number[] | null>
 /** anchorUnits' first half: each unit's match by the units' order (null: not found, or not in `only`) */
-export declare function matchUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { only?: ReadonlySet<number> | null }): (UnitMatch | null)[]
+/** a caller's units' bounds and neighbours (matchUnits' `known`), true at least of the units matched */
+export interface KnownNeighbours { hard: readonly ([number, number] | null | undefined)[]; before: ArrayLike<number>; after: ArrayLike<number>; body: ArrayLike<number> | null }
+export declare function matchUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { only?: ReadonlySet<number> | null; wholeIndex?: { index: unknown } | null; known?: KnownNeighbours | null }): (UnitMatch | null)[]
+/** each page's first token: the first token of token k's page (0 for k -1): rule 5's start of a float's search, its last body
+ *  neighbour's end's */
+export declare function pageStarts(doc: readonly DocToken[]): (k: number) => number
+/** the document's 3-grams, for a caller that keeps them (rule 5's searches a range at a time) */
+export declare function buildIndexOf(doc: readonly DocToken[]): unknown
+/** rule 5's reach of a float: the stretch its search of the document from token `from` on takes ([lo, hi], the pages it holds,
+ *  and its first hit: the search from any token up to it takes the same), or null where it finds none */
+export declare function forwardSpans(doc: readonly DocToken[], units: readonly UnitText[], floating?: (id: number) => boolean, index?: unknown): (id: number, from: number) => { lo: number; hi: number; first: number } | null
 /** anchorUnits' second half, over these units and their matches */
-export declare function placeUnits(doc: DocToken[], units: UnitText[], found: readonly (UnitMatch | null)[], options?: { frame?: FrameRule }): Map<number, Anchor | null>
+export declare function placeUnits(doc: DocToken[], units: UnitText[], found: readonly (UnitMatch | null)[], options?: { frame?: FrameRule; only?: ReadonlySet<number> | null }): Map<number, Anchor | null>
 /** where each of a unit's sentences after the first begins on the page: the page token of its first word found, rising */
 export declare function sentenceStarts(anchor: Anchor | null | undefined, text: string, offsets: number[] | undefined): Int32Array | null
 /** the pairs sentenceStarts reads as runs [word, token, count, …] (global tokens, word rising, maximal): only for a unit it admits, and

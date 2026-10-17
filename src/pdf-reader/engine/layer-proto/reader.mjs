@@ -107,8 +107,12 @@ function addShapes(by, units) {
  *   stats(), dispose()   what it has done; the run let go, every ask rejected, its documents told to onRetired once read by
  *                        nothing. After dispose pageOf, leftPageOf, copyOf and pageState throw; stats and unitAt answer
  */
+/** the draws of left parts the door holds for the run at most (their left parts' bytes): past it the oldest go, and the run reads
+ *  those pages itself (drawOf null) */
+export const DRAWS_HELD = 16 * 2 ** 20
+
 export async function openLayer(o = {}) {
-  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES } = o ?? {}
+  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD } = o ?? {}
   const four = bundle === undefined
   if (four) {
     if (index === null || typeof index !== 'object' || index.kind !== 'index' || !Array.isArray(index.units) || !index.head) throw new TypeError(`index: a layer index (indexOf's), not ${kindOf(index)}`)
@@ -143,7 +147,7 @@ export async function openLayer(o = {}) {
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}
   opened = token
-  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules }, token) } catch (e) { if (opened === token) opened = null; throw e }
+  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld }, token) } catch (e) { if (opened === token) opened = null; throw e }
 }
 
 /** a part told to the door, against the index and the chain so far (`ch`: through, last): a ReadPart of the index's head that
@@ -155,7 +159,7 @@ function checkPart(part, index, ch) {
   if (part.prev !== ch.last) throw new BundleRefusal('not following the digest of the last part', { kind: 'part', path: 'prev' })
 }
 
-async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules }, token) {
+async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld }, token) {
   const source = four ? index : bundle
   const expect = toTranslate(source, target)
   // (each cell's group as the units' cells give it: a group is read once its own cells' rows are in)
@@ -168,6 +172,21 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   // the chain told
   const asks = new Map(), listeners = new Set(), shapes = new Map()
   const streamOf = new Map(), leftRefs = new Map(), leftCache = new Map(), leftWaiters = new Map()
+  // (the draws of the left parts fetched, each held from its fetch until the run takes it, at most `drawsHeld` bytes of their left
+  // parts, the oldest let go first (the run then reads the page itself): the pages the view reads hold none; none past dispose
+  // or the run's death)
+  const draws = new Map()
+  let drawsBytes = 0
+  const dropDraw = page => { const e = draws.get(page); if (e) { drawsBytes -= e.bytes; draws.delete(page) } }
+  const holdDraw = (page, draw, bytes) => {
+    dropDraw(page)
+    // (one past the bound alone is not held: its page is read by the run)
+    if (bytes > drawsHeld) return
+    draws.set(page, { draw, bytes })
+    drawsBytes += bytes
+    for (const [p] of draws) { if (drawsBytes <= drawsHeld) break; dropDraw(p) }
+  }
+  const dropDraws = () => { draws.clear(); drawsBytes = 0 }
   const chain = { through: 0, last: null, r: 0 }, toldParts = new Set()
   let goneNow = () => {}
   const gone = new Promise((_, no) => { goneNow = no })
@@ -180,7 +199,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, proof: true, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, onStep: () => evaluate() }
   run = await openProto(four
     ? {
-        ...common, parts: true, doc, pages: index.head.paper.pages, onRetired,
+        ...common, parts: true, doc, pages: index.head.paper.pages, onRetired, drawOf: page => drawOfPage(page),
         geometry: { schema: 1, kinds: index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } },
         tex: { ...HYBRID, index: facade.index, pieces: new Map() },
         removal: { mode: 'draw', doc, manifest: { schema: 1, removal: index.head.versions.removal, pages: index.head.paper.pages, sets: {}, page: {} } },
@@ -282,6 +301,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const die = e => {
     if (dead || disposed) return
     dead = e
+    dropDraws()
     for (const [, list] of asks) for (const a of list) { off(a); a.reject(e) }
     asks.clear()
     askedAt.clear()
@@ -338,11 +358,39 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     p = (async () => {
       const bytes = await Promise.race([leftPart(page, ref), gone])
       if (disposed) throw letGoError()
-      return readLeftPart(bytes, { ref, streamOf: id => streamOf.get(id) })
+      const lp = await readLeftPart(bytes, { ref, streamOf: id => streamOf.get(id) })
+      // (the draw goes to the run's hand-off alone: the view's page, and the cache that keeps it, hold none)
+      if (lp.draw && !disposed && !dead) holdDraw(page, lp.draw, bytes.length)
+      return { ...lp, draw: null }
     })()
     leftCache.set(page, p)
     p.catch(() => { if (leftCache.get(page) === p) leftCache.delete(page) })
     return p
+  }
+  /** the page's left part, once a part covers it: fetched at once where one does, else when the covering part comes (nothing is fetched
+   *  once no asker is left); rejects where the parts end without covering it, and at dispose */
+  const awaitLeft = (page, signal) => {
+    if (page <= chain.through) return withSignal(fetchLeft(page), signal)
+    if (run.partsEnded) return Promise.reject(new Error(`page ${page} is covered by no part`))
+    return new Promise((resolve, reject) => {
+      const w = {
+        go: () => { off(w); withSignal(fetchLeft(page), signal).then(resolve, reject) },
+        no: e => { off(w); reject(e) },
+        signal, onAbort: null,
+      }
+      if (signal) {
+        w.onAbort = () => {
+          const list = leftWaiters.get(page)
+          const at = list ? list.indexOf(w) : -1
+          if (at < 0) return
+          list.splice(at, 1)
+          if (!list.length) leftWaiters.delete(page)
+          reject(abortError())
+        }
+        signal.addEventListener('abort', w.onAbort, { once: true })
+      }
+      ;(leftWaiters.get(page) ?? leftWaiters.set(page, []).get(page)).push(w)
+    })
   }
   /** an ask of a promise that its signal may end (the promise itself goes on for the others) */
   const withSignal = (p, signal) => (!signal ? p : new Promise((resolve, reject) => {
@@ -350,6 +398,20 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     signal.addEventListener('abort', onAbort, { once: true })
     p.then(v => { signal.removeEventListener('abort', onAbort); resolve(v) }, e => { signal.removeEventListener('abort', onAbort); reject(e) })
   }))
+
+  /** the page's draw, for the run (run.mjs openProto's `drawOf`): once a part covers the page, the draw of its left part, handed over
+   *  once (the door keeps none after it); null where there is none to hand over and the run reads the page itself: a draw the page
+   *  has none of (BUNDLE 4's parts, a part written without one), a left part that fails to arrive or is refused (a draw that
+   *  checkDraw refuses refuses the whole part), parts that end without covering the page, a page asked again, a layer let go. It
+   *  never resolves null because the page is not covered yet: it waits, as leftPageOf does */
+  const drawOfPage = async page => {
+    if (disposed || dead || !Number.isSafeInteger(page) || page < 1 || page > run.N) return null
+    try { await awaitLeft(page, null) } catch { return null }
+    if (disposed || dead) return null
+    const draw = draws.get(page)?.draw ?? null
+    dropDraw(page)
+    return draw
+  }
 
   // ---- the parts
   const tell = part => {
@@ -367,6 +429,8 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   for (const part of parts) if (!toldParts.has(part.sha256)) tell(part)
 
   return {
+    // (known at open: the head says whether this paper's parts may carry draws; a BUNDLE 3 layer has none)
+    drawsComing: four && index.head.draw === 1,
     take(rows) {
       if (disposed) return { complete: [] }
       const got = new Map()
@@ -451,28 +515,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       if (signal?.aborted) return Promise.reject(abortError())
       if (dead) return Promise.reject(dead)
       if (!four) return Promise.reject(new Error('leftPageOf: a bundle 3 layer has no left parts'))
-      if (page <= chain.through) return withSignal(fetchLeft(page), signal)
-      if (run.partsEnded) return Promise.reject(new Error(`page ${page} is covered by no part`))
-      // (wait for the part that covers it; once no asker is left, nothing is fetched)
-      return new Promise((resolve, reject) => {
-        const w = {
-          go: () => { off(w); withSignal(fetchLeft(page), signal).then(resolve, reject) },
-          no: e => { off(w); reject(e) },
-          signal, onAbort: null,
-        }
-        if (signal) {
-          w.onAbort = () => {
-            const list = leftWaiters.get(page)
-            const at = list ? list.indexOf(w) : -1
-            if (at < 0) return
-            list.splice(at, 1)
-            if (!list.length) leftWaiters.delete(page)
-            reject(abortError())
-          }
-          signal.addEventListener('abort', w.onAbort, { once: true })
-        }
-        ;(leftWaiters.get(page) ?? leftWaiters.set(page, []).get(page)).push(w)
-      })
+      return awaitLeft(page, signal)
     },
     copyOf(page, source, k) {
       live()
@@ -510,7 +553,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       }
       let slowestTaskMs = 0
       for (const ms of run.ms.values()) if (ms > slowestTaskMs) slowestTaskMs = ms
-      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size } }
+      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size }, draws: { held: draws.size, bytes: drawsBytes } }
     },
     dispose() {
       if (disposed) return
@@ -522,6 +565,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       committed.clear()
       for (const [, list] of leftWaiters) for (const w of list) w.no(e)
       leftWaiters.clear()
+      dropDraws()
       goneNow(e)
       listeners.clear()
       run.dispose()

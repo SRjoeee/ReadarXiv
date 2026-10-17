@@ -278,6 +278,8 @@ export function boundsFromMarks(doc, marks, byPage = pageIndex(doc)) {
  *  word joined across two items keeps a box and no text (tokenizeDocument), and would break every 3-gram through it.
  *  Over doc[from..to] alone: every 3-gram of tokens inside it, in the same order, so that a search inside it (locate's
  *  hits are only those inside [lo, hi]) finds what the whole document's index finds */
+/** the document's 3-grams (buildIndex's), for a caller that keeps them: rule 5's searches of the document a range at a time */
+export const buildIndexOf = doc => buildIndex(doc)
 function buildIndex(doc, from = 0, to = doc.length - 1) {
   const index = new Map()
   const live = []
@@ -488,12 +490,89 @@ const HELD = 'held'
  * place of the units of some pages is exact only under the whole document's frame
  */
 export function pageFrame(doc, ms) {
+  const located = new Uint8Array(doc.length)
+  for (const m of ms) if (m) for (const k of m) located[k] = 1
+  return frameOf(doc, located)
+}
+
+/**
+ * The pages' frame from the document's tokens alone (the page stream's rule 1, made at step T while the marked original
+ * compiles, before any unit is located): pageFrame's arithmetic, its percentiles and its head and foot votes, over the
+ * document's body words (bodyWords) in place of the located units' words. A function of `doc` alone — of every page's
+ * tokens, so final once arXiv's text is read, and the same whatever the units, the marks or the anchors; a frame of some
+ * pages' tokens is not that of the whole. The verdict a token has, `(t) => boolean`, as pageFrame's; as placeUnits'
+ * `frame` it is `() => frameOfTokens(doc)` made once
+ */
+export function frameOfTokens(doc) {
+  return frameOf(doc, bodyWords(doc))
+}
+
+/** a letter, no digit: what a body word has (bodyWords) */
+const A_LETTER = /\p{L}/u
+/** a word set more than this many times the document's body size is no body word: arXiv's stamp at 20 pt beside a 10 pt body,
+ *  a title */
+const BODY_MAX = 1.5
+
+/** the largest a body word is set: BODY_MAX times the document's body size, the height most of its tokens with text have, to
+ *  a tenth (the smaller of two as common) */
+export function bodyMax(doc) {
+  const sizes = new Map()
+  for (const t of doc) if (t.t) { const s = Math.round(t.h * 10); sizes.set(s, (sizes.get(s) ?? 0) + 1) }
+  let size = 0, most = 0
+  for (const [s, c] of sizes) if (c > most || (c === most && s < size)) { size = s; most = c }
+  return (BODY_MAX * size) / 10
+}
+
+/**
+ * The document's body words, a flag a token: what stands where the units' words stand, told from the text alone. A token
+ * with a letter (a page's number, a line's, a row of digits are none), set at most BODY_MAX times the body size (bodyMax),
+ * on a line that does not recur: a line (a run of the stream on one
+ * baseline, as placeUnits cuts them) whose words, digits dropped, stand at the same baseline (rounded) on another page is a
+ * running head or foot, which a unit never is
+ */
+function bodyWords(doc) {
+  const n = doc.length, body = new Uint8Array(n)
+  if (!n) return body
+  const big = bodyMax(doc)
+  // each line's words with a letter, digits dropped, its first such word's baseline and its page
+  const line = linesOf(doc), words = new Map()
+  for (let k = 0; k < n; k++) {
+    const t = doc[k].t
+    if (!t || !A_LETTER.test(t)) continue
+    const w = t.replace(/\p{N}+/gu, ''), e = words.get(line[k])
+    if (e) e.key += ` ${w}`
+    else words.set(line[k], { key: `${Math.round(doc[k].y)} ${w}`, page: doc[k].page })
+  }
+  const pagesOf = new Map()
+  for (const { key, page } of words.values()) (pagesOf.get(key) ?? pagesOf.set(key, new Set()).get(key)).add(page)
+  for (let k = 0; k < n; k++) {
+    const t = doc[k]
+    if (!t.t || !A_LETTER.test(t.t) || t.h > big) continue
+    if (pagesOf.get(words.get(line[k]).key).size >= 2) continue
+    body[k] = 1
+  }
+  return body
+}
+
+/** each token's line: a run of the stream on one baseline — a new page, a baseline more than half a line away, or a word
+ *  far back left of the one before begins another (placeUnits' lines) */
+function linesOf(doc) {
+  const line = new Int32Array(doc.length)
+  for (let k = 1, n = 0; k < doc.length; k++) {
+    const a = doc[k - 1], b = doc[k]
+    if (b.page !== a.page || Math.abs(b.y - a.y) > Math.min(a.h, b.h) * 0.5 || b.x + b.w < a.x - a.h * 30) n++
+    line[k] = n
+  }
+  return line
+}
+
+/** the frame's arithmetic over the words flagged in `located` (pageFrame's: the located units'; frameOfTokens': the body words) */
+function frameOf(doc, located) {
   // arrays by page number, the document's tokens being in page order
   const pages = doc.length ? doc[doc.length - 1].page + 1 : 1
   const x0 = new Float64Array(pages).fill(Infinity), x1 = new Float64Array(pages).fill(-Infinity), y0 = new Float64Array(pages).fill(Infinity), y1 = new Float64Array(pages).fill(-Infinity)
-  const located = new Uint8Array(doc.length)
-  for (const m of ms) if (m) for (const k of m) {
-    located[k] = 1
+  for (let k = 0; k < doc.length; k++) {
+    if (!located[k]) continue
     const t = doc[k], p = t.page
     if (t.x < x0[p]) x0[p] = t.x
     if (t.x + t.w > x1[p]) x1[p] = t.x + t.w
@@ -592,15 +671,18 @@ function inOrder(doc, words, dir) {
  * them — a display's limits, scripts and fractions' parts. Further, or smaller and apart, is a float, a footnote, the
  * page's foot. What is taken becomes the unit's, so that no other unit takes it
  */
-function walker(doc, ms, owner, line, inFrame) {
-  // which unit each line holds words of: -1 none, -2 several
-  const lineOwner = new Int32Array((line[doc.length - 1] ?? 0) + 1).fill(-1)
-  const own = (k, u) => { const l = line[k]; lineOwner[l] = lineOwner[l] === -1 || lineOwner[l] === u ? u : -2 }
-  for (let k = 0; k < doc.length; k++) {
-    const u = owner[k]
-    if (u === -1) continue
-    const l = line[k], o = lineOwner[l]
-    if (o !== u) lineOwner[l] = o === -1 ? u : -2
+function walker(doc, ms, owner, line, inFrame, lineOwner, owned, wrote) {
+  // which unit each line holds words of: -1 none, -2 several (of the owned tokens, `owned`: disjoint [a, b] rising; `wrote`
+  // keeps each token and line written, which the caller sets back)
+  const own = (k, u) => { const l = line[k]; if (lineOwner[l] === -1) wrote.lines.push(l); lineOwner[l] = lineOwner[l] === -1 || lineOwner[l] === u ? u : -2 }
+  for (const [a, b] of owned) {
+    for (let k = a; k <= b; k++) {
+      const u = owner[k]
+      if (u === -1) continue
+      const l = line[k], o = lineOwner[l]
+      if (o === -1) wrote.lines.push(l)
+      if (o !== u) lineOwner[l] = o === -1 ? u : -2
+    }
   }
   const body = new Float64Array(ms.length)
   const bodyOf = u => { if (!body[u]) { const hs = ms[u].map(k => doc[k].h).sort((x, y) => x - y); body[u] = hs[hs.length >> 1] } return body[u] }
@@ -637,7 +719,7 @@ function walker(doc, ms, owner, line, inFrame) {
   }
   return {
     take,
-    claim(u, k0, dir, first, fits) { const ks = take(u, k0, dir, first, fits); for (const k of ks) { owner[k] = u; own(k, u) } return ks },
+    claim(u, k0, dir, first, fits) { const ks = take(u, k0, dir, first, fits); for (const k of ks) { owner[k] = u; wrote.tokens.push(k); own(k, u) } return ks },
   }
 }
 
@@ -650,11 +732,13 @@ function walker(doc, ms, owner, line, inFrame) {
  * foot of the page — which is no neighbour to search between: a heading's neighbours in the source were a caption
  * placed a column later, and the heading was searched in a range that ended before it began (2608.02163, Japanese).
  * `floatMatch`: floatMatches' of this `doc` and these units, taken in place of a float's search of the whole document.
+ * `forward` (rule 5: a Set of the indices of the units written inside a float, the source parse's `inFloat`): a float's search
+ * of the whole document begins at the page of its last body neighbour (pageStarts), `floatMatch` unread.
  * `frame(doc, ms)`: the pages' frame's rule (pageFrame, today's). The matching (matchUnits) and the placing (placeUnits),
  * one after the other
  */
-export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, frame = pageFrame } = {}) {
-  return placeUnits(doc, units, matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch }), { frame })
+export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, frame = pageFrame, forward = null } = {}) {
+  return placeUnits(doc, units, matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, forward }), { frame })
 }
 
 /** a unit without marks — a heading, whose words are also in the running head of every page of its section — is searched
@@ -662,13 +746,31 @@ export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = 
  *  MARGIN tokens either side */
 const MARGIN = 100
 /** each unit's nearest marked neighbours in the text (no float: its marks are where TeX set it), by the units' order: the
- *  last token of the one before (-1 for none), the first token of the one after (doc.length for none) */
-function neighbours(doc, units, hard, floating) {
-  const before = [], after = []
+ *  last token of the one before (-1 for none), the first token of the one after (doc.length for none); with `inFloat` (the
+ *  indices of the units written inside a float), also `body`: the last token of the one before that is no unit written inside
+ *  a float (rule 5's neighbour: a paragraph in a figure is set where its figure is) */
+function neighbours(doc, units, hard, floating, inFloat = null) {
+  const before = [], after = [], body = inFloat ? [] : null
   const inText = u => hard[u] && !floating(units[u].id)
-  for (let u = 0, e = -1; u < units.length; u++) { before[u] = e; if (inText(u)) e = hard[u][1] }
+  for (let u = 0, e = -1, b = -1; u < units.length; u++) {
+    before[u] = e
+    if (body) body[u] = b
+    if (inText(u)) { e = hard[u][1]; if (body && !inFloat.has(u)) b = hard[u][1] }
+  }
   for (let u = units.length - 1, a = doc.length; u >= 0; u--) { after[u] = a; if (inText(u)) a = hard[u][0] }
-  return { before, after }
+  return { before, after, body }
+}
+/**
+ * Each page's first token (the tokens are in page order): `pageStarts(doc)(k)` the first token of token k's page, 0 for k -1.
+ * Rule 5's start of a float's search of the whole document (the page stream's bound on where it may stand: E2b design §1.3) is
+ * that of its last body neighbour's end (`body`, neighbours'): a float's source comes after that neighbour's, so TeX sets it on
+ * that page or a later one (here, at the top, at the bottom, on a page of floats; a figure* the next page at the earliest; a
+ * footnote at its call's page's foot or the next)
+ */
+export function pageStarts(doc) {
+  const first = new Map()
+  doc.forEach((t, k) => { if (!first.has(t.page)) first.set(t.page, k) })
+  return k => (k < 0 ? 0 : first.get(doc[k].page))
 }
 /** where unit u's text is searched: its own bounds; with marks elsewhere, between its marked neighbours, MARGIN past them;
  *  with no marks at all, the whole document */
@@ -695,30 +797,84 @@ export function floatMatches(doc, units, floating = () => false) {
 }
 
 /**
+ * Rule 5's reach of a float searched from a page on (the page stream's: where its forward search may stand, before its start
+ * is known): `forwardSpans(doc, units, floating, index)` → `(id, from)` → the tokens its search of the document from token
+ * `from` on may take, [first, last] (the pages of the densest stretch locate takes there: its matched tokens lie in them), and
+ * the stretch's first hit (`first`: the search from any token up to it takes the same stretch), or null where it finds none
+ * (fewer than K words, or no 3-gram of them there). `index` the whole document's 3-grams (buildIndex's), made by the caller once
+ */
+export function forwardSpans(doc, units, floating = () => false, index = buildIndex(doc)) {
+  const N = doc.length, byId = new Map(units.map(u => [u.id, u])), memo = new Map()
+  const first = new Map(), last = new Map()
+  doc.forEach((t, k) => { if (!first.has(t.page)) first.set(t.page, k); last.set(t.page, k) })
+  /** a float's hits (locate's), by their first token, with each stretch's count and the first best from each on */
+  const of = id => {
+    if (memo.has(id)) return memo.get(id)
+    const u = byId.get(id), ws = u && floating(id) ? unitWords(u.text, u.gaps).ws : []
+    let out = null
+    if (ws.length >= K) {
+      const hits = []
+      for (let i = 0; i + K <= ws.length; i++) { const list = index.get(ws[i] + '\u0001' + ws[i + 1] + '\u0001' + ws[i + 2]); if (list) for (const js of list) hits.push(js) }
+      hits.sort((a, b) => a[0] - b[0])
+      const span = ws.length * 3 + 80, n = hits.length, ends = new Int32Array(n), best = new Int32Array(n + 1).fill(-1)
+      for (let l = 0, h = 0; l < n; l++) { while (h < n && hits[h][0] - hits[l][0] <= span) h++; ends[l] = h }
+      // (the first stretch of the most hits from each on, as locate's scan meets it: a later one only where it has more)
+      for (let l = n - 1; l >= 0; l--) { const b = best[l + 1]; best[l] = b < 0 || ends[l] - l >= ends[b] - b ? l : b }
+      out = { hits, ends, best }
+    }
+    memo.set(id, out)
+    return out
+  }
+  return (id, from) => {
+    const f = of(id)
+    if (!f) return null
+    let lo = 0, hi = f.hits.length
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (f.hits[mid][0] < from) lo = mid + 1; else hi = mid }
+    const l = lo < f.hits.length ? f.best[lo] : -1
+    if (l < 0) return null
+    let top = -1
+    for (let j = l; j < f.ends[l]; j++) top = Math.max(top, f.hits[j][K - 1])
+    const a = f.hits[l][0]
+    return { lo: first.get(doc[a].page), hi: Math.min(N - 1, last.get(doc[top].page)), first: a }
+  }
+}
+
+/**
  * Each unit's match (anchorUnits' first half): an array by the units' order, each { m, coverage, bounded, ws?, pairs?,
  * textPairs? } or null. `only`: a Set of indices into `units`, the units matched (the others null), their neighbours still
  * read from every unit's bounds: a unit's match is a function of its own bounds, its neighbours', its text and the document's
  * tokens in its window. The 3-gram index is made over the windows searched alone and let go (a window's hits are those
- * inside it: locate)
+ * inside it: locate). `forward`: anchorUnits' (rule 5); `wholeIndex` (a holder, { index }): the whole document's index
+ * its forward searches read, made there once and kept (the page stream's, a range at a time), in place of one made a call.
+ * `known` { hard, before, after, body }: each unit's bounds (`bounds`' of its id, or null) and its neighbours (neighbours'),
+ * a caller's that keeps them (the page stream), true at least of the units `only` holds: a call is then of those units alone
  */
-export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, only = null } = {}) {
-  const hard = units.map(u => bounds?.get(String(u.id)) ?? null)
-  const { before, after } = neighbours(doc, units, hard, floating)
-  // the units' words, and the span of the document their searches by 3-grams read
-  const words = units.map(({ text, gaps }, u) => (only && !only.has(u) ? null : unitWords(text, hard[u] ? null : gaps)))
+export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, only = null, forward = null, wholeIndex = null, known = null } = {}) {
+  const hard = known ? known.hard : units.map(u => bounds?.get(String(u.id)) ?? null)
+  const { before, after, body } = known ?? neighbours(doc, units, hard, floating, forward)
+  // (rule 5: a float's search of the whole document from the page of its last body neighbour on)
+  const start = forward ? pageStarts(doc) : null
+  const fromOf = u => start(body[u])
+  // the units matched (`only`'s, rising; else every one), their words, and the span of the document their searches by
+  // 3-grams read
+  const list = only ? [...only].sort((a, b) => a - b) : units.map((_, u) => u)
+  const words = new Array(units.length).fill(null)
+  for (const u of list) words[u] = unitWords(units[u].text, hard[u] ? null : units[u].gaps)
   let from = Infinity, to = -Infinity
-  units.forEach(({ id }, u) => {
-    const w = words[u]
-    if (!w || w.ws.length < K) return
+  for (const u of list) {
+    const { id } = units[u], w = words[u]
+    if (!w || w.ws.length < K) continue
     const [lo, hi] = windowOf(doc, u, hard, bounds, before, after)
-    // (a float's search of the whole document, where no match of it is given)
-    const all = !hard[u] && bounds?.size && floating(id) && !floatMatch?.has(id)
-    from = Math.min(from, all ? 0 : lo); to = Math.max(to, all ? doc.length - 1 : hi)
-  })
+    // (a float's search of the whole document, where no match of it is given; under rule 5 from its start, on an index of the
+    // whole document's given where it is)
+    const all = !hard[u] && bounds?.size && floating(id) && (forward ? !wholeIndex : !floatMatch?.has(id))
+    from = Math.min(from, all ? (forward ? fromOf(u) : 0) : lo); to = Math.max(to, all ? doc.length - 1 : hi)
+  }
   const index = from <= to ? buildIndex(doc, from, to) : new Map()
-  const found = []
-  units.forEach(({ id }, u) => {
-    if (!words[u]) { found.push(null); return }
+  const found = new Array(units.length).fill(null)
+  for (const u of list) {
+    const { id } = units[u]
+    if (!words[u]) continue
     const b = hard[u]
     // where its placeholders stood matters to a unit found as a run of words, which a unit with marks never is
     const { ws, gap } = words[u]
@@ -736,41 +892,84 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
     if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap)
     // a float's text that is not there: its float may stand anywhere, so the whole document, as with no marks at all —
     // the words of a located unit are that unit's (owner, below)
-    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) m = (floatMatch?.has(id) ? floatMatch.get(id) : locate(doc, index, ws, 0, doc.length - 1, false)?.tokens) ?? null
+    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) {
+      // (rule 5: from the page of its last body neighbour on, never step T's match of the whole document, which may stand before)
+      if (forward) m = locate(doc, wholeIndex ? (wholeIndex.index ??= buildIndex(doc)) : index, ws, fromOf(u), doc.length - 1, false)?.tokens ?? null
+      else m = (floatMatch?.has(id) ? floatMatch.get(id) : locate(doc, index, ws, 0, doc.length - 1, false)?.tokens) ?? null
+    }
     // a run takes a placeholder's words besides the unit's own, which are all there
     const coverage = m ? Math.min(1, m.length / ws.length) : 0
-    if (!b && (!m || coverage < minCoverage)) { found.push(null); return }
+    if (!b && (!m || coverage < minCoverage)) continue
     // a unit with marks keeps its words and which of them were matched where, for a break (wordsBetween); one found by
     // its text alone keeps the match's map too, for its sentences' starts before any marks come (sentenceStarts, B3c)
-    found.push(b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs })
-  })
+    found[u] = b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs }
+  }
   return found
 }
 
-/**
- * The units' places from their matches (anchorUnits' second half): Map id → Anchor | null. `found` is matchUnits' for
- * these units, by their order; `units` may be any of the paper's units in their order, with their matches: a unit's place
- * reads the matches of the units whose tokens share its pages, and of those that share theirs (their walks), and the
- * frame (`frame(doc, ms)`, its rule: pageFrame, which reads every located unit)
- */
-export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
-  // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
-  // is the footnote's); an unmarked unit its matched words
-  const owner = new Int32Array(doc.length).fill(-1)
-  const ranged = found.map((f, u) => [f?.bounded, u]).filter(([b]) => b).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
-  for (const [[a, b], u] of ranged) owner.fill(u, a, b + 1)
-  found.forEach((f, u) => { if (f && !f.bounded) for (const k of f.m) if (owner[k] === -1) owner[k] = u })
-  // a unit's words on a line where they are few count only next to a line where they are most: its first line after a
-  // theorem's label or its last line of formula stay, three words it shares with a table row it passes by go (lines
-  // are runs of the stream on one baseline, so two columns never share one)
+/** placeUnits' lines of the document (runs of the stream on one baseline) and each line's tokens, made once a document: a
+ *  function of the tokens alone, which the page stream places a range at a time */
+const linesMade = new WeakMap()
+function placeLines(doc) {
+  let made = linesMade.get(doc)
+  if (made) return made
   const line = new Int32Array(doc.length)
   for (let k = 1, n = 0; k < doc.length; k++) {
     const a = doc[k - 1], b = doc[k]
     if (b.page !== a.page || Math.abs(b.y - a.y) > Math.min(a.h, b.h) * 0.5 || b.x + b.w < a.x - a.h * 30) n++
     line[k] = n
   }
-  const lineSize = new Map()
-  for (let k = 0; k < doc.length; k++) lineSize.set(line[k], (lineSize.get(line[k]) ?? 0) + 1)
+  const counts = new Int32Array(doc.length ? line[doc.length - 1] + 1 : 0)
+  for (let k = 0; k < doc.length; k++) counts[line[k]]++
+  made = { line, lineSize: { get: l => counts[l] }, lines: counts.length }
+  linesMade.set(doc, made)
+  return made
+}
+/** placeUnits' owners of a document's tokens and of its lines (-1: none), kept a document and -1 throughout between calls
+ *  (each call sets back what it wrote): a call reads and writes the tokens its units own, not the whole document's */
+const ownersMade = new WeakMap()
+function ownersOf(doc, lines) {
+  let o = ownersMade.get(doc)
+  if (!o) ownersMade.set(doc, o = { token: new Int32Array(doc.length).fill(-1), line: new Int32Array(Math.max(1, lines)).fill(-1) })
+  return o
+}
+/**
+ * The units' places from their matches (anchorUnits' second half): Map id → Anchor | null. `found` is matchUnits' for
+ * these units, by their order; `units` may be any of the paper's units in their order, with their matches: a unit's place
+ * reads the matches of the units whose tokens share its pages, and of those that share theirs (their walks), and the
+ * frame (`frame(doc, ms)`, its rule: pageFrame, which reads every located unit). `only`: a Set of indices into `units`, the
+ * units whose places the map holds (the page stream's range: the others are read, not placed); null, every unit's
+ */
+export function placeUnits(doc, units, found, { frame = pageFrame, only = null } = {}) {
+  const { line, lineSize, lines } = placeLines(doc)
+  const { token: owner, line: lineOwner } = ownersOf(doc, lines)
+  const wrote = { tokens: [], lines: [] }, ranges = []
+  try {
+    return placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOwner, wrote, ranges)
+  } finally {
+    for (const [a, b] of ranges) owner.fill(-1, a, b + 1)
+    for (const k of wrote.tokens) owner[k] = -1
+    for (const l of wrote.lines) lineOwner[l] = -1
+  }
+}
+/** placeUnits' work (`only`: a Set of indices into `units`, the units whose places are made; every unit's words are owned
+ *  and its displays taken all the same), its owners' arrays given, -1 throughout, and what it writes kept for the caller to set
+ *  back: the ranges filled (`ranges`), the tokens and lines written one at a time (`wrote`) */
+function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOwner, wrote, ranges) {
+  // who owns each token: a marked unit its whole range, the innermost range winning (a footnote inside a paragraph
+  // is the footnote's); an unmarked unit its matched words
+  const ranged = found.map((f, u) => [f?.bounded, u]).filter(([b]) => b).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
+  for (const [[a, b], u] of ranged) { owner.fill(u, a, b + 1); ranges.push([a, b]) }
+  found.forEach((f, u) => { if (f && !f.bounded) for (const k of f.m) if (owner[k] === -1) { owner[k] = u; wrote.tokens.push(k) } })
+  // (the tokens owned, as disjoint intervals rising: the line owners are made of them alone)
+  const owned = []
+  for (const [a, b] of [...ranges, ...wrote.tokens.map(k => [k, k])].sort((x, y) => x[0] - y[0])) {
+    const last = owned.at(-1)
+    if (last && a <= last[1] + 1) { if (b > last[1]) last[1] = b } else owned.push([a, b])
+  }
+  // a unit's words on a line where they are few count only next to a line where they are most: its first line after a
+  // theorem's label or its last line of formula stay, three words it shares with a table row it passes by go (lines
+  // are runs of the stream on one baseline, so two columns never share one)
   // each located unit's words
   const ms = units.map((_, u) => {
     const f = found[u]
@@ -799,7 +998,7 @@ export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
   // line a lead walk takes stands up to 19.6 pt above the unit's first line at a 10 pt body — 5 of 62 over 16 pt, each
   // a row of the display before it. So a table at a page's head, headed by single letters over rows of digits (which
   // no letters refuse), is still taken where the display closed the page before (the re-review of A1, n1: open)
-  const walk = walker(doc, ms, owner, line, frame(doc, ms))
+  const walk = walker(doc, ms, owner, line, frame(doc, ms), lineOwner, owned, wrote)
   const beyond = []
   for (const edge of ['lead', 'trail']) {
     units.forEach((unit, u) => {
@@ -817,6 +1016,7 @@ export function placeUnits(doc, units, found, { frame = pageFrame } = {}) {
   }
   const out = new Map()
   units.forEach(({ id }, u) => {
+    if (only && !only.has(u)) return
     const f = found[u], m = ms[u]
     if (!m) { out.set(id, null); return }
     const idx = []

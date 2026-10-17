@@ -70,7 +70,12 @@
 //     went out as three markers, Microsoft's Chinese moved the first one, its brace with it, and page 31 drew the set
 //     broken apart. A copy of 10 or 11 carries every unit but one that holds a run (live.mjs PIPELINE_CARRIES, given the
 //     unit; with none, every unit but one whose translation holds a formula that does not balance on its own)
-export const PIPELINE_VERSION = '12'
+// 13: \texorpdfstring's first argument is the heading's text (latex-front.mjs): a heading wholly in \texorpdfstring is a
+//     unit. 2307.16209: 13 of its 14 headings, 452 -> 466 units; 6 of the corpus's 127 papers change, 41 headings new; a new
+//     brace pair renumbers the later pairs of its file, so 60 units of 2307.16209 and 49 of 2608.18502 keep their text and
+//     change their hash, found again by seedFrom. The wire, the translation and its reading back are 12's: a copy of 12
+//     carries every unit it holds the source of (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '13'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
