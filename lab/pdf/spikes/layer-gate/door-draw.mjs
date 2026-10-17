@@ -229,11 +229,11 @@ window.doorDraw = {
   },
 
   /** a page asked first and alone, every part at the open, with drawOf (and over `link`) */
-  async jump({ name, target, rules, page, perf = false, link = null }) {
+  async jump({ name, target, rules, page, perf = false, link = null, draw = true }) {
     const longTasks = []
     let observer = null
     const t0 = performance.now()
-    const d = await openB({ name, target, rules, at: 'open', draw: true, link })
+    const d = await openB({ name, target, rules, at: 'open', draw, link })
     const t1 = performance.now()
     if (perf && typeof PerformanceObserver === 'function') {
       observer = new PerformanceObserver(list => { for (const e of list.getEntries()) longTasks.push(e.duration) })

@@ -172,7 +172,8 @@
 //                a fresh load, every part told at the open (as --door-jump), against the pages reference, with J (the pages read
 //                from data and live, the pages whose pixels were read and why); --link=<rtt>:<bytes/s> reads the document and
 //                the left parts over a modelled link (the E-C handoff's sim2: FIFO, RTT after the ask, a left part its gzip size),
-//                --perf the time to the page on one worker. The run is written to out/layer-gate/door-draw-<commit>-<time>.json
+//                --perf the time to the page on one worker, --draw-off the same jump with no drawOf (every page read live), to time
+//                against. The run is written to out/layer-gate/door-draw-<commit>-<time>.json
 // The consistency measures (the table-groups brief, 2026-10-07), checked with the completeness ones and each to be 0: a
 // table group drawn partly (the record's translated cells of one `group`, some drawn and some not) and a float's label
 // left in the source language where the final names it in the target's (the record's `captions`, the layout rules' labels'
@@ -278,6 +279,9 @@ const DRAW_MODE = DOOR_DRAW === null ? null : DOOR_DRAW.startsWith('jump:') ? 'j
 /** --link=<rtt ms>:<bytes/s>: --door-draw=jump's modelled link */
 const LINK = typeof arg('link') === 'string' ? arg('link').split(':').map(Number) : null
 if (arg('link') !== null && (DRAW_MODE !== 'jump' || !LINK || LINK.length !== 2 || !LINK.every(v => Number.isFinite(v) && v >= 0) || !(LINK[1] > 0))) throw new Error(`--link=${arg('link')}: <rtt ms>:<bytes/s>, with --door-draw=jump:…`)
+/** --draw-off: --door-draw=jump's run with no drawOf (the stand-in takes it away: every page read live, as without E-C), to time against */
+const DRAW_OFF = !!arg('draw-off')
+if (DRAW_OFF && DRAW_MODE !== 'jump') throw new Error('--draw-off: with --door-draw=jump:…')
 /** the pages a jump asks (--door-jump's, or --door-draw=jump's) */
 const JUMP_SPEC = DOOR_JUMP ?? (DRAW_MODE === 'jump' ? DOOR_DRAW.slice(5) : null)
 if ([MEMORY, DOOR_PARTS, DOOR_ORDER, DOOR_JUMP, DOOR_DRAW].filter(x => x !== null).length > 1) throw new Error('--door-memory, --door-parts, --door-order, --door-jump and --door-draw are proofs of their own: one at a time')
@@ -1002,14 +1006,14 @@ async function doorDrawJump(page, key, errors) {
     const out = []
     for (const p of pages) {
       await openDoorPage(page, 'doordraw')
-      const r = await page.evaluate(x => window.doorDraw.jump(x), { name, target, rules: '/rules/layout-rules.json', page: p, perf: PERF, link: LINK })
+      const r = await page.evaluate(x => window.doorDraw.jump(x), { name, target, rules: '/rules/layout-rules.json', page: p, perf: PERF, link: LINK, draw: !DRAW_OFF })
       out.push({ p, ...sameAs(r, ref.pages[p - 1], target), j: r.j, closure: r.closure, reads: readsOf(r.j.drawStats, r.j.counts), ...(r.ms ? { ms: r.ms, longest: r.longest } : {}) })
     }
     const n = k => out.filter(e => e[k]).length
-    const ok = out.length === pages.length && KEYS.every(k => n(k) === out.length) && out.every(e => e.closure.within && e.reads === null) && !errors.length
+    const ok = out.length === pages.length && KEYS.every(k => n(k) === out.length) && out.every(e => e.closure.within && (DRAW_OFF || e.reads === null)) && !errors.length
     if (!ok) failures.push(key)
     const detail = out.map(e => {
-      const st = e.j.drawStats
+      const st = e.j.drawStats ?? { data: [], live: [], pixels: {}, retries: 0 }
       return `p${e.p}${e.ms ? ` ask ${secondsOf(e.ms.ask)} s (open ${secondsOf(e.ms.open)} s), longest task ${e.longest} ms,` : ''} read ${st.data.length} from data (${st.data.join(' ')}) and ${st.live.length} live, pixels ${Object.entries(st.pixels).map(([q, w]) => `${q}:${w}`).join(' ') || 'none'}, lays again ${st.retries}, ${e.j.units} units laid${e.j.link ? `, the link ${(e.j.link.bytes / 1e6).toFixed(2)} MB in ${e.j.link.asked} asks` : ''}${e.reads ? `; ${e.reads}` : ''}`
     }).join('; ')
     const line = `${out.length} pages asked first and alone${LINK ? ` over ${LINK[0]} ms and ${(LINK[1] / 1e6).toFixed(1)} MB/s` : ''}: SVG ${n('svg')}/${out.length} equal, words ${n('words')}, links ${n('links')}, copy ${n('copy')}, records ${n('recs')}; ${detail}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
@@ -1472,7 +1476,7 @@ if (DOOR_DRAW !== null) {
     console.log(`\ndoor-draw (pages): ${ran.length} outputs, ${all.length} pages asked in order, drawn from their draws against the same door reading every page live: SVG markup equal on ${count('svg')}, the word tables on ${count('words')}, the link records on ${count('links')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; units left, states and units drawn equal on ${ran.filter(r => r.left?.skipped && r.left.states && r.left.drawn).length} outputs; pages read from data ${st('data')}, live ${st('live')}, refused ${st('refused')}, late ${st('late')}; PDF.js's reads as the run tells them on ${ran.filter(r => r.reads === null).length} outputs; ${done}`)
   } else {
     const ask = all.filter(e => e.ms).map(e => e.ms.ask)
-    console.log(`\ndoor-draw (${DOOR_DRAW}${LINK ? `, link ${LINK[0]} ms ${(LINK[1] / 1e6).toFixed(1)} MB/s` : ''}): ${new Set(ran.map(r => r.name)).size} outputs, ${all.length} pages each asked first and alone: SVG markup equal to the page asked in order on ${count('svg')}, the word tables on ${count('words')}, the link records on ${count('links')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; pages read from data ${all.reduce((n, e) => n + e.j.drawStats.data.length, 0)}, live ${all.reduce((n, e) => n + e.j.drawStats.live.length, 0)}, pixels read ${all.reduce((n, e) => n + Object.keys(e.j.drawStats.pixels).length, 0)}; closure held on ${all.filter(e => e.closure?.within).length}/${all.length}; PDF.js's reads as the run tells them on ${all.filter(e => e.reads === null).length}/${all.length}${ask.length ? `; the ask ${(ask.reduce((a, b) => a + b, 0) / ask.length / 1000).toFixed(2)} s on average, ${(Math.max(...ask) / 1000).toFixed(2)} s at most` : ''}; ${done}`)
+    console.log(`\ndoor-draw (${DOOR_DRAW}${LINK ? `, link ${LINK[0]} ms ${(LINK[1] / 1e6).toFixed(1)} MB/s` : ''}): ${new Set(ran.map(r => r.name)).size} outputs, ${all.length} pages each asked first and alone: SVG markup equal to the page asked in order on ${count('svg')}, the word tables on ${count('words')}, the link records on ${count('links')}, copyOf's pixels on ${count('copy')}, the records on ${count('recs')}; pages read from data ${all.reduce((n, e) => n + (e.j.drawStats?.data.length ?? 0), 0)}, live ${all.reduce((n, e) => n + (e.j.drawStats?.live.length ?? 0), 0)}, pixels read ${all.reduce((n, e) => n + Object.keys(e.j.drawStats?.pixels ?? {}).length, 0)}; closure held on ${all.filter(e => e.closure?.within).length}/${all.length}; PDF.js's reads as the run tells them on ${all.filter(e => e.reads === null).length}/${all.length}${ask.length ? `; the ask ${(ask.reduce((a, b) => a + b, 0) / ask.length / 1000).toFixed(2)} s on average, ${(Math.max(...ask) / 1000).toFixed(2)} s at most` : ''}; ${done}`)
   }
   process.exit(failures.length || new Set(ran.map(r => r.name)).size !== asked.length ? 1 : 0)
 }
