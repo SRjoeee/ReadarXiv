@@ -321,10 +321,28 @@ export function createLayerSide(view, o) {
     P.content = null
     V.places.restore(n)
   }
-  /** a laid page far from the view: its SVG and copy let go, an empty element in its place (no page view made of it) */
+  /** the laid pages far from the view kept for the focus inside them (a link, or the place a jump gave it to): retiring one
+   *  would take the focused element out of the document, and the focus with it to the document's body. Each is retired once
+   *  the focus has left it, if it is far still */
+  const keptForFocus = new Set()
+  const holdsFocus = n => { const div = V.places.page(n), at = document.activeElement; return !!div && !!at && at !== document.body && div.contains(at) }
+  const focusMoved = () => queueMicrotask(() => {
+    if (disposed) return
+    for (const n of [...keptForFocus]) {
+      if (holdsFocus(n)) continue
+      keptForFocus.delete(n)
+      if (!V.places.near(n) && pages.get(n)?.content?.wrap) retire(n)
+    }
+  })
+  document.addEventListener('focusin', () => { if (keptForFocus.size) focusMoved() }, { capture: true, signal: ac.signal })
+  document.addEventListener('focusout', () => { if (keptForFocus.size) focusMoved() }, { capture: true, signal: ac.signal })
+  /** a laid page far from the view: its SVG and copy let go, an empty element in its place (no page view made of it); one
+   *  that holds the focus is kept until the focus leaves it (keptForFocus) */
   function retire(n) {
     const P = rec(n)
     if (P.content && !P.content.wrap) return
+    if (holdsFocus(n)) { keptForFocus.add(n); return }
+    keptForFocus.delete(n)
     const was = P.content
     P.content = { wrap: null, svg: null, copy: null, k: 0, gen }
     if (V.places.swap(n, empty(), { blank: true })) counts.retired++

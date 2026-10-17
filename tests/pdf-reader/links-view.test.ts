@@ -292,6 +292,21 @@ describe('the layer side: links with the laid page (the fake door)', () => {
     expect(document.activeElement).toBe(other)
   })
 
+  it('LS6c: a laid page that holds the focus is not retired as it goes far, so the focus never falls to the document; it is retired once the focus has left it', async () => {
+    const s = await opened()
+    const link = anchors(layerOf(s, 1))[1] as HTMLAnchorElement
+    link.focus()
+    await nearOn(s, [1], false)
+    await settle(s)
+    expect(document.activeElement).toBe(link)
+    expect(content(s, 1)).toBe('layer')
+    // the focus moves on, to page 2's link: page 1, far, goes now
+    ;(anchors(layerOf(s, 2))[0] as HTMLAnchorElement).focus()
+    await settle(s)
+    expect(content(s, 1)).toBe('none')
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('[2]')
+  })
+
   it('LS7: a click on a link levels nothing (alignClick\'s guard), where the same click beside it does', async () => {
     const s = await opened()
     const box = anchors(layerOf(s, 1))[0]?.querySelector('span') as HTMLElement

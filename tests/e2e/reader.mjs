@@ -763,6 +763,9 @@ try {
     check('Tab reaches a link of the laid page, after the left\'s, its focus ring drawn (2 px, solid)', !!reached && reached.ring === 'solid' && reached.width === '2px', `${tabs} Tab(s): ${JSON.stringify(reached)}`)
     // the ring reads on the page in the dark theme too, the pages undimmed (white paper) and dimmed: 3:1 at least on the
     // paper under it (WCAG 2.2 SC 1.4.11), its colour drawn on a canvas to be read
+    /** where the focus is, said: an element's tag, class and name */
+    const focusNow = () => page.evaluate(() => { const a = document.activeElement; return a ? `${a.tagName.toLowerCase()}.${String(a.className).split(' ')[0]}[${a.getAttribute('aria-label') ?? ''}]` : 'none' })
+    const focusBefore = await focusNow()
     const ringOn = async (dim) => {
       await setConfig({ theme: 'dark', pdfReader: { dimPages: dim } })
       await page.waitForFunction(d => document.documentElement.dataset.theme === 'dark' && document.documentElement.hasAttribute('data-axt-dim') === d, dim, { timeout: 10_000 }).catch(() => undefined)
@@ -780,9 +783,9 @@ try {
         return { ring, contrast: Math.round(ratio(lum(ring), lum(paper)) * 10) / 10 }
       }, dim)
     }
-    const darkPaper = await ringOn(false), darkDimmed = await ringOn(true)
+    const darkPaper = await ringOn(false), focusDark = await focusNow(), darkDimmed = await ringOn(true)
     await setConfig({ theme: 'system', pdfReader: { dimPages: true } })
-    check('the focus ring reads on the page in the dark theme, on white paper and on dimmed pages alike (3:1 at least)', (darkPaper?.contrast ?? 0) >= 3 && (darkDimmed?.contrast ?? 0) >= 3, `undimmed ${JSON.stringify(darkPaper)}, dimmed ${JSON.stringify(darkDimmed)}`)
+    check('the focus ring reads on the page in the dark theme, on white paper and on dimmed pages alike (3:1 at least)', (darkPaper?.contrast ?? 0) >= 3 && (darkDimmed?.contrast ?? 0) >= 3, `undimmed ${JSON.stringify(darkPaper)}, dimmed ${JSON.stringify(darkDimmed)}; the focus ${focusBefore}, then ${focusDark}`)
     // Enter on a link inside the paper: the right jumps (the pane it is on), the left follows with the sync on, nothing levelled
     const internal = await page.evaluate(() => { const a = [...document.querySelectorAll('#right a.axt-link[href^="#"]')][0]; a?.focus(); return a ? a.getAttribute('aria-label') : null })
     const jumpFrom = await page.evaluate(() => ({ right: document.getElementById('right').scrollTop, align: window.__reader.view.probe().lastAlign }))
@@ -858,8 +861,13 @@ try {
     for (const dy of [4000, 4000, -8000]) { await page.mouse.wheel(0, dy); await page.waitForTimeout(700) }
     await page.waitForFunction(() => window.__reader.view.probe().motion === null, null, { timeout: 5000 }).catch(() => undefined)
     await page.waitForTimeout(1200)
+    // (a page far from the view that holds the focus is kept until the focus leaves it: the focus is in the toolbar meanwhile)
+    const focusedPlace = await page.evaluate(() => Number(document.activeElement?.closest?.('#right .axt-place')?.dataset.pageNumber ?? 0))
+    const keptForFocus = await page.evaluate(n => n > 0 && !!document.querySelector(`#right .axt-place[data-page-number="${n}"] .axt-layer svg`), focusedPlace)
+    await page.evaluate(() => document.querySelector('header button')?.focus())
+    await page.waitForTimeout(300)
     const w1 = await held()
-    check('through the paper and back: the layer held near the view alone, each page far from it let go (its copy, its SVG and its links)', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}`)
+    check('through the paper and back: the layer held near the view alone, each page far from it let go (its copy, its SVG and its links), the one the focus held once the focus left it', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}; the focus was on place ${focusedPlace || 'none'}${keptForFocus ? ', laid while it held it' : ''}`)
     note(`the window on the sample (4 pages; JS heap in MB): before ${JSON.stringify(w0)}, after a scroll through it and back ${JSON.stringify(w1)}`)
     const long = await page.evaluate(() => window.__long)
     note(`the layer's longest main-thread task in this run: ${Math.max(0, ...long)} ms over ${long.length} long task(s) (a reading on a shared machine: L7 is reader-perf's)`)
