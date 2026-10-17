@@ -42,6 +42,10 @@ const siteHosts = [...(/WEB_APP_HOSTS[^=]*=\s*\[([^\]]*)\]/.exec(readFileSync('s
 // it is, which marks staging's pages as well. The hosts the manifest may name, exactly
 const STAGING = 'app-staging.readarxiv.org'
 const staging = (manifest.host_permissions ?? []).includes(`https://${STAGING}/*`)
+// The build asked for: a release (`pnpm build`) unless the staging build is (`pnpm build:staging`, AXT_BUILD=staging), so that
+// a staging package never passes as a release (an AXT_READER_API left in the environment at a release's cut); a staging
+// package names itself where Chrome shows the version (version_name), a release never does
+const asked = process.env.AXT_BUILD === 'staging' ? 'staging' : 'release'
 const HOSTS = ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*', 'https://readarxiv.com/*', ...(staging ? [`https://${STAGING}/*`] : [])]
 const siteMatches = [...siteHosts, ...(staging ? [STAGING] : [])].map(host => `https://${host}/*`)
 const SITE_SCRIPT = 'content-scripts/web-app.js'
@@ -115,6 +119,7 @@ for (const [what, ok] of [
   [`a production build names no staging host${stagingNamed.length > 0 ? ` (${stagingNamed.join(', ')})` : ''}`, stagingNamed.length === 0],
   [`the web-accessible resources are popup.html and pdf-reader.html, to https://arxiv.org/* alone`, war.length === 2 && war.every(entry => entry.resources.length === 1 && sameList(entry.matches, ['https://arxiv.org/*'])) && sameList(war.map(entry => entry.resources[0]), ['popup.html', 'pdf-reader.html'])],
   [`the offscreen document stays, for the figure recogniser alone`, (manifest.permissions ?? []).includes('offscreen')],
+  [`the build is the one asked for: ${asked === 'staging' ? "staging's (pnpm build:staging), its version named so" : "a release, production's server alone, no version name"}${staging !== (asked === 'staging') ? ` (the package is ${staging ? "staging's" : "production's"})` : ''}`, staging === (asked === 'staging') && (staging ? / staging$/.test(manifest.version_name ?? '') : manifest.version_name === undefined)],
   [`the extension's pages frame nothing (frame-src 'none')`, /(?:^|;)\s*frame-src\s+'none'\s*(?:;|$)/.test(manifest.content_security_policy?.extension_pages ?? '')],
 ]) {
   if (ok) console.log(`✓ ${what}`)

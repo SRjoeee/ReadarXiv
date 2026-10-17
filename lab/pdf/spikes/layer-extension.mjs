@@ -1,5 +1,5 @@
 // The layer reader measured in the extension (Stage 5 Task 11): a real window on a build of the extension, against the build's
-// own server (a staging build: `AXT_READER_API=https://app-staging.readarxiv.org pnpm build`), the paper's PDF from arXiv and
+// own server (a staging build: `pnpm build:staging`), the paper's PDF from arXiv and
 // its translation from the service the settings name (Microsoft's, the default). For each paper:
 //   - the open: the original on screen, then the first page laid on the right; every unit with its row (the run's end);
 //   - whether the layer was ready at the edge (a catalog at the first look) or prepared on the way (202s, a prepare);

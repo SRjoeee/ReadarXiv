@@ -46,8 +46,9 @@ const DEV_PAGES = ['gallery', 'controls', 'capsule']
 /**
  * Our server, the reader's layer API (src/pdf-reader/addresses.ts READER_API; Stage 5 Task 17): production's in a production
  * build, staging's in a development build, and either where `AXT_READER_API` names it — the maintainer's test build is
- * `AXT_READER_API=https://app-staging.readarxiv.org pnpm build`. No other host: the manifest grants the one it names
- * (`readarxiv.com` always: the website's mark runs there), and a staging build grants staging and marks its pages too
+ * `pnpm build:staging` (and `pnpm zip:staging`), which name staging's server here. No other host: the manifest grants the one it
+ * names (`readarxiv.com` always: the website's mark runs there), and a staging build grants staging, marks its pages too and
+ * names itself (`version_name`, its archive's name); `pnpm build`'s output check refuses a staging package
  */
 const PRODUCTION_API = 'https://readarxiv.com'
 const STAGING_API = 'https://app-staging.readarxiv.org'
@@ -67,10 +68,12 @@ function apiOf(mode: string): string {
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
+  // a staging archive never takes a release's name (WXT's own template otherwise)
+  zip: { artifactTemplate: process.env.AXT_READER_API === STAGING_API ? '{{name}}-{{packageVersion}}-staging-{{browser}}.zip' : '{{name}}-{{packageVersion}}-{{browser}}{{modeSuffix}}.zip' },
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
   // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
-  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)) } }),
+  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)), __AXT_LOOPBACK__: JSON.stringify(env.mode !== 'production') } }),
   hooks: {
     'entrypoints:found': (wxt, infos) => {
       if (wxt.config.mode !== 'production') return
@@ -89,6 +92,8 @@ export default defineConfig({
     'build:manifestGenerated': (wxt, manifest) => {
       const api = readerApi(wxt.config.mode)
       if (api === PRODUCTION_API) return
+      // named where Chrome shows the version, so that a staging package is never taken for a release (check-output)
+      manifest.version_name = `${manifest.version} staging`
       manifest.host_permissions = [...(manifest.host_permissions ?? []), `${api}/*`]
       for (const entry of manifest.content_scripts ?? []) if (entry.matches?.includes(`${PRODUCTION_API}/*`)) entry.matches = [...entry.matches, `${api}/*`]
     },

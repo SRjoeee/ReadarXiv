@@ -127,6 +127,22 @@ describe('the layer reader\'s package', () => {
     put(`${OUT}/manifest.json`, JSON.stringify({ host_permissions: [...RELEASE, 'https://app-staging.readarxiv.org/*'] }))
     expect(verdict(NO_STAGING)).toBe('✓')
   })
+  it('a release is production\'s alone: a staging package fails the release\'s check, and passes only as the staging build it names itself', () => {
+    const ASKED = 'the build is the one asked for'
+    const STAGING = [...RELEASE, 'https://app-staging.readarxiv.org/*']
+    put(`${OUT}/manifest.json`, JSON.stringify({ version: '0.4.1', host_permissions: RELEASE }))
+    expect(verdict(ASKED)).toBe('✓')
+    // an AXT_READER_API left in the environment at a release's cut: a staging package under `pnpm build`
+    put(`${OUT}/manifest.json`, JSON.stringify({ version: '0.4.1', version_name: '0.4.1 staging', host_permissions: STAGING }))
+    expect(verdict(ASKED)).toBe('✗')
+    // the staging build, asked for (pnpm build:staging), and named so
+    expect(verdict(ASKED, { AXT_BUILD: 'staging' })).toBe('✓')
+    put(`${OUT}/manifest.json`, JSON.stringify({ version: '0.4.1', host_permissions: STAGING }))
+    expect(verdict(ASKED, { AXT_BUILD: 'staging' })).toBe('✗')
+    // a release asked as staging is no staging build either
+    put(`${OUT}/manifest.json`, JSON.stringify({ version: '0.4.1', host_permissions: RELEASE }))
+    expect(verdict(ASKED, { AXT_BUILD: 'staging' })).toBe('✗')
+  })
   it('the web-accessible resources are the popup and the reader to arXiv alone; the offscreen document stays', () => {
     const war = [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'] }]
     put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: war, permissions: ['storage', 'offscreen'], content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'; frame-src 'none'" } }))
