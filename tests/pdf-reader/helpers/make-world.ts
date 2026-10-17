@@ -15,7 +15,9 @@ export const CH = 0.5
 /** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32); `one`: the whole
  *  string one glyph's Unicode (a character and its variation selector) */
 export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
-export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[] }
+/** a Link annotation as PDF.js reports it (getAnnotations): its rectangle and the destination it names */
+export type Annot = { rect: number[]; dest: string | unknown[]; quadPoints?: number[]; url?: string }
+export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
 export type Mark = [name: string, page: number, x: number, y: number]
 export type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
 
@@ -79,6 +81,8 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
 /** PDF.js's glyph outlines (where it draws glyphs as paths, as in Node), by `<loadedName>_path_<fontChar>`: DrawOPS in em */
 export const PATHS: Record<string, number[]> = {}
 export const commonObjs = { get: (id: string) => (id in PATHS ? { path: new Float32Array(PATHS[id]!) } : (FONTS[id] ?? null)), has: (id: string) => id in PATHS || id in FONTS }
+/** a page's getAnnotations, where it has annotations (`annots`): its Link annotations as PDF.js lists them; none, no such call */
+const annotsOf = (p: Page) => (p.annots ? { getAnnotations: async () => (p.annots ?? []).map(a => ({ subtype: 'Link', ...a })) } : {})
 export function arxivOf(pages: Page[], asked: number[] = []) {
   return {
     numPages: pages.length,
@@ -87,6 +91,7 @@ export function arxivOf(pages: Page[], asked: number[] = []) {
       return {
         view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs,
         getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }),
+        ...annotsOf(p),
         getOperatorList: () => {
           asked.push(n)
           return p.ops === 'never' ? new Promise(() => {}) : p.ops === 'fails' ? Promise.reject(new Error('broken page')) : Promise.resolve(opsOf(p))
@@ -100,7 +105,7 @@ export function markedOf(pages: Page[], marks: Mark[]) {
     numPages: pages.length,
     getPage: async (n: number) => {
       const p = pages[n - 1] as Page
-      return { view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }), getOperatorList: async () => opsOf({ ...p, ops: undefined }, pointsOf(p, n, marks)) }
+      return { view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }), getOperatorList: async () => opsOf({ ...p, ops: undefined }, pointsOf(p, n, marks)), ...annotsOf(p) }
     },
     getDestinations: async () => new Map(marks.map(([name, page, x, y]) => [`axt-${name}`, [{ num: 100 + page, gen: 0 }, { name: 'FitR' }, x, y, null]])),
     getPageIndex: async (ref: { num: number }) => ref.num - 101,

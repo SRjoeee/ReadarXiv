@@ -136,7 +136,17 @@ export interface LayoutMarks {
    *  rising: [name, how] where it is not owned (how ≥ OWNED, OWNED_HOW), else [name, how, n, …n glyphs (page, x0,
    *  baseline, size, a character of chars), …its rules (page, x0, y0, x1, y1)] */
   owned: (string | number)[][]
+  /** the marked compile's Link annotations that name a destination (a string `dest`), pages rising, then PDF.js's order: the
+   *  rectangle, the least and greatest origin of the glyphs under it (PDF.js's rule: a glyph's advance centre on its baseline
+   *  strictly inside), their count and characters; n 0 where none, too many or a text too long (counted for the order, never
+   *  an anchor: make.mjs's link-anchor locator). [] where a page's could not be read, past LINKS_MAX, or not read (no `units`
+   *  and `OPS`) */
+  links: LinkRow[]
 }
+/** a link of the marked compile: [dest, page, x0, y0, x1, y1, a, b, n, text] */
+export type LinkRow = [dest: string, page: number, x0: number, y0: number, x1: number, y1: number, a: number, b: number, n: number, text: string]
+/** the links a marks file holds at most: a paper past it has none */
+export declare const LINKS_MAX: number
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
@@ -158,7 +168,7 @@ export type MarkedOptions = Parameters<typeof layoutMarksOf>[2] & { paper?: bool
 /** what the marked original gives a page at a time (markedPages): its head, each page, its end */
 export type MarkedEvent =
   | { head: { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; unitMarks: UnitMarks | null } }
-  | { page: { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][] } }
+  | { page: { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][]; links: LinkRow[] | null } }
   | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][] } }
 /** the marked original read a page at a time, an async generator: its head, each page in order, its end */
 export declare function markedPages(marked: unknown, log: string, o: MarkedOptions): AsyncGenerator<MarkedEvent>
