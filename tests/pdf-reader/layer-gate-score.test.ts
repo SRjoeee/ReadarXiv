@@ -169,6 +169,45 @@ describe('the gaps between paragraphs (paraGap, D6): the drawn gap against the o
     expect(m2.geo[0]!.rhythm).toBeCloseTo(15 / 12, 6)
   })
 
+  it("reads a gap tighter than the lines beside it (paraGapTight): the drawn baselines' gap less the drawn leading against the original's room past its pitch", () => {
+    // (k lines `pitch` apart from the frame's first baseline less `shift`)
+    const at = (orig: OrigLine[], k: number, pitch: number, shift: number) => Array.from({ length: k }, (_, i) => ({ baseline: orig[0]!.baseline - shift - pitch * i, size: 10, x0: 72, x1: 472 }))
+    const pair = (la: { baseline: number; size: number; x0: number; x1: number }[], lb: typeof la, lower = B) => modelPage({
+      units: [unit({ id: 1, orig: A, lines: la }), unit({ id: 2, orig: lower, lines: lb })],
+      ref: [{ id: 1, kind: 'para', orig: A }, { id: 2, kind: 'para', orig: lower }], items: [], translated: new Set([1, 2]),
+    }).gaps
+    // (spread from the frame's first baseline to its last: A's four lines 16 apart from 700 to 652, B's three from 640; the gap a
+    // pitch, 12, under the lines' 16: tight)
+    expect(pair(at(A, 4, 16, 0), at(B, 3, 16, 0))[0]!.tight).toBe(true)
+    // (in line boxes at 1.25 of the pitch: 1.5 under each frame's first baseline, A's last box's foot on its frame's, the gap
+    // between their baselines 15, the lines' own)
+    expect(pair(at(A, 4, 15, 1.5), at(B, 3, 15, 1.5))[0]!.tight).toBe(false)
+    // (and a skip of 6 the original sets between them, past its pitch: kept, it is no tighter; lost, it is)
+    const B6 = lines(4, 634)
+    expect(pair(at(A, 4, 15, 1.5), at(B6, 3, 15, 1.5), B6)[0]!.tight).toBe(false)
+    expect(pair(at(A, 4, 15, 1.5), at(B6, 3, 15, -4.5), B6)[0]!.tight).toBe(true)
+    // (a frame whose third drawn line is past a display it holds, another flow segment: its leading the lines' own, 15, never
+    // the display's room)
+    const across = (shift: number) => at(B, 3, 15, shift).map((l, i) => ({ ...l, block: i === 2 ? 1 : 0, baseline: l.baseline - (i === 2 ? 35 : 0) }))
+    expect(pair(at(A, 4, 15, 1.5), across(1.5))[0]!.tight).toBe(false)
+    expect(pair(at(A, 4, 15, 1.5), across(0))[0]!.tight).toBe(true)
+    // (nothing to compare where neither frame draws two lines; on the original's own lines no tighter)
+    expect(pair(at(A, 1, 15, 0), at(B, 1, 15, 0))[0]!.tight).toBeNull()
+    expect(gapsOf()[0]!.tight).toBe(false)
+    // (none between two frames of one unit: a display's room inside a paragraph is its own)
+    const C = lines(4, 608)
+    const two = modelPage({ units: [unit({ id: 1, orig: [...A, ...C], lines: [...at(A, 4, 16, 0), ...at(C, 3, 16, 0)] })], ref: [{ id: 1, kind: 'para', orig: [...A, ...C] }], items: [], translated: new Set([1]) }).gaps
+    expect(two).toHaveLength(1)
+    expect(two[0]!.tight).toBeNull()
+    // (counted a page, a defect of the model tier: fewer is better)
+    const entry = pageEntry(1, {
+      model: { units: { textOn: 1, textDrawn: 1, cellsOn: 0, cellsDrawn: 0, left: {} }, fills: [], geo: [], gaps: [{ ratio: 1, extra: 0, tight: true }, { ratio: 1, extra: 0, tight: false }, { ratio: 1, extra: 0, tight: null }], wrongPageText: 0, droppedPh: 0, cropForeign: 0, modelCells: 100 },
+      check: { missing: [], twice: [], brackets: [], duplicated: [], numbers: { shown: 0, total: 0 }, clipped: 0 }, where: {}, style: [0, 0], drawn: 1,
+    }, null).entry
+    expect(entry.paraGapTight).toBe(1)
+    expect(measure('paraGapTight').slice(1, 4)).toEqual(['model', 'defect', 'down'])
+  })
+
   it('pairs frames of one column only', () => {
     const right = B.map(l => ({ ...l, x0: 320, x1: 540 }))
     const left = A.map(l => ({ ...l, x1: 300 }))

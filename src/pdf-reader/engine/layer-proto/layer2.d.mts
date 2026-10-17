@@ -34,6 +34,11 @@ export interface Params {
   keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: 'en' | 'de'
   /** a table cell's room to a rule (PDF units) and the least share of the size it may be capped to between its rules */
   cellClear: number; cellCapMin: number
+  /** the unit's edges (run.mjs edgesOf; layer2.mjs footFloorAt): whether its first line and its last share their baseline
+   *  with no ink that stays (`head`, `foot`), and the original's room from its last baseline down to the next line of its
+   *  column (`below`, PDF units; Infinity where nothing is under it), which the page fill keeps its last line a leading over;
+   *  none (a table cell, a caller of its own): its lines as slotted */
+  halfLead?: { head: boolean; foot: boolean; below: number } | null
   /** the shortest word hyphenated, and the fewest letters before and after a break, by language */
   hyphenation: { minWord: number; en: { left: number; right: number }; de: { left: number; right: number } }
 }
@@ -164,7 +169,7 @@ export interface Line { block: number; page: number; x0: number; x1: number; bas
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
  *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
-export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; opened: number; unopened: number; extents?: Map<string, number[]> }
+export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string; box?: boolean; next?: number }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; opened: number; unopened: number; extents?: Map<string, number[]> }
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */

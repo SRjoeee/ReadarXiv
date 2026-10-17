@@ -28,9 +28,10 @@ export declare function modelPage(o: { units: UnitIn[]; ref: RefUnit[]; items: I
   gaps: ParaGap[]
   wrongPageText: number; droppedPh: number; cropForeign: number; modelCells: number
 } & Partial<PlacementCounts>
-/** a gap between two drawn body frames of a column with nothing between them: drawn ÷ original, and the drawn gap's excess
- *  in the upper frame's original pitches */
-export interface ParaGap { ratio: number; extra: number }
+/** a gap between two drawn body frames of a column with nothing between them: drawn ÷ original, the drawn gap's excess
+ *  in the upper frame's original pitches, and whether it is narrower than the lines beside it (paraGapTight; null where
+ *  there is no leading to hold it to, or between two frames of one unit) */
+export interface ParaGap { ratio: number; extra: number; tight: boolean | null }
 export declare function paraGapsOf(drawn: UnitIn[], ref: RefUnit[], items: Item[]): ParaGap[]
 export declare function pixelPage(o: Record<string, unknown>): Record<string, unknown>
 /** the wire formats' syntax left in a translation's text (a marker, its `#`, an escaped `@`, an entity, a tag): the matches */
