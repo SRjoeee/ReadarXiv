@@ -94,6 +94,45 @@ describe('a shared line: the next unit\'s first line starts where the translatio
   })
 })
 
+describe('a shared line and the half-leading (layer2.mjs lineBoxes, run.mjs edgesOf): neither edge on the row takes it', () => {
+  type Half = { head: boolean; foot: boolean } | null
+  const halfOf = (run: Run, id: number) => (run.placed.find(p => p.id === id) as unknown as { P: { halfLead: Half } }).P.halfLead
+  const leadOf = (run: Run, id: number) => (run.placed.find(p => p.id === id) as unknown as { layout: { state: { lead: number } } }).layout.state.lead
+  /** laid as `laid` lays it, the run keeping what it laid (its units' P and layout, which a run that lets go drops) */
+  async function kept(paper: Paper, edit: (P: ReturnType<typeof build>) => void = () => {}) {
+    const P = build(paper)
+    edit(P)
+    const run = await openRun(P, { free: false })
+    for (let p = 1; p <= paper.pages; p++) await run.layFor(p)
+    return run
+  }
+
+  it("keeps the next unit's first line on the shared row while its lines spread: the paragraph before it ends on the row, the next begins on it", async () => {
+    const run = await kept(split(30))
+    // (each shares the row with the other's ink, within its frame's span: the paragraph before keeps its last baseline, the
+    // part after it its first)
+    expect([halfOf(run, 0)?.foot, halfOf(run, 1)?.head]).toEqual([false, false])
+    // (the part after it is spread past the original's pitch, so a head's half-leading would have moved its first line off the row)
+    expect(leadOf(run, 1)).toBeGreaterThan(1)
+    expect(linesOf(run, 1)![0]![1]).toBe(226)
+  })
+
+  it("keeps a run-in heading's text on the heading's row while it spreads; the heading's frame of one line gives no room", async () => {
+    const run = await kept(runIn(3))
+    // (the heading's own ink is in the text's frame: its first line keeps its baseline. The text is outside the heading's frame,
+    // so the heading's foot is asked, but a frame of one line has no room to give: the heading stays on its baseline too)
+    expect(halfOf(run, 1)?.head).toBe(false)
+    expect(leadOf(run, 1)).toBeGreaterThan(1)
+    expect([linesOf(run, 0)![0]![1], linesOf(run, 1)![0]![1]]).toEqual([250, 250])
+  })
+
+  it("keeps the row's baseline where the unit before it is left the original's: its ink still stands on the row", async () => {
+    const run = await kept(runIn(3), P => { P.rows.get(0)!.state = 'failed' })
+    expect(halfOf(run, 1)?.head).toBe(false)
+    expect(linesOf(run, 1)![0]![1]).toBe(250)
+  })
+})
+
 describe('a shared line in the order of the asks', () => {
   it('lays the unit before it first, whatever their ranks: the part after a float on page 2 of a paragraph from page 1', async () => {
     // (helpers/order-paper's S-E: unit 1's first row continues unit 0's last on page 2; unit 0 runs from page 1, so it ranks after
