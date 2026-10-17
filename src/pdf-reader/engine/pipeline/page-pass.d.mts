@@ -38,16 +38,16 @@ export interface LayerOptions {
   verdicts?: boolean
   frame?: FrameRule
   columns?: ColumnRule
-  /** the page stream's rules (layout/make.mjs RULES), today's each where not given; a rule given there is taken over `frame`
-   *  and `columns` */
+  /** the page stream's rules (layout/make.mjs RULES), DEFAULT_RULES' each where not given (rules 1, 3 and 4: the page stream);
+   *  WHOLE_RULES for next's whole run; a rule given there is taken over `frame` and `columns` */
   rules?: Partial<PageStreamRules> | null
   /** tests and the lab: a whole run's maker frame predicate and columns' edges (`capture`'s); the maker made a page at a time
    *  and each part cut as soon as what it reads is final (`stats.closed`) */
   oracle?: LayerOracle | null
   /** an object the whole run writes its maker frame predicate and columns' edges into: an oracle */
   capture?: Partial<LayerOracle> | null
-  /** tests and the lab: today's path, the whole made first, whatever the rules (under rules 1, 3 and 4 the pass is a page
-   *  stream by itself, its parts cut early) */
+  /** tests and the lab: the whole path, the whole made first, whatever the rules (under rules 1, 3 and 4, the default, the pass
+   *  is a page stream by itself, its parts cut early) */
   whole?: boolean
 }
 /** a whole run's rules (`capture`'s): the maker's frame predicate and columns' edges, and the left's frame predicate and its

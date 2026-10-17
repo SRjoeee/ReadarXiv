@@ -3,11 +3,12 @@
 // the layout file (makeLayout, its operator lists read once for the add-on's plans too), the add-on chained over the parts
 // (layout/chain.mjs chainedAddon over the host's remover), and the cut (layer-proto/cut.mjs partCutter, cutBundle's own), each
 // part judged as it is cut: the carry's share of the lines of its marked pages (CARRY_MIN) and its own reader's reading of it
-// (readPart), a part refused either way the same pages with no layout. Under today's rules the frame, the column edges and the
-// far-push columns read the whole document, so every part is cut once the whole is known (one flush at the end); the parts are
-// then cutBundle's of the same whole, byte for byte, wherever no verdict refuses one. Under the page stream's rules 1, 3 and 4
-// each of them is had a page at a time, and the pass is a page stream (the marked original read beside arXiv's): each part cut
-// as soon as what it reads is final, the same parts as the whole path's under those rules. What a part holds at most, and
+// (readPart), a part refused either way the same pages with no layout. Under the page stream's rules 1, 3 and 4, the default
+// (layout/make.mjs DEFAULT_RULES), the frame, the column edges and the far-push columns are each had a page at a time, and the
+// pass is a page stream (the marked original read beside arXiv's): each part cut as soon as what it reads is final, the same
+// parts as the whole path's under those rules. Under the whole run's rules (WHOLE_RULES, next's before the stream) they read
+// the whole document, so every part is cut once the whole is known (one flush at the end); the parts are then cutBundle's of
+// the same whole, byte for byte, wherever no verdict refuses one. What a part holds at most, and
 // what the pass holds of arXiv's ink (GLYPHS_PAGE glyphs and OPS_CAP boxes a page, a page past either dark): docs/PDF-READER.md
 // §19.6.
 //
@@ -58,8 +59,9 @@ function fitted(text) {
  * text as readArxivText read it (step T), else read here; `OPS` PDF.js's operator codes; `pdfjs` its version; `base` { bytes,
  * sha256, xref } of arXiv's PDF (the head's); `image` the compiler image's name; `remove({ from, to, plans })` the remover's
  * transport (chain.mjs), null for none (no part has an add-on, M20). `frame`: the frame's rule both anchorings are placed
- * under (anchors.mjs pageFrame, today's); `columns`: the left's far-push columns' rule (view/highlight.mjs, today's). `rules`
- * (layout/make.mjs RULES, today's each where not given): `frame` 'tokens' both anchorings under the frame of arXiv's text alone
+ * under (anchors.mjs pageFrame by default, read under rules.frame 'units'); `columns`: the left's far-push columns' rule
+ * (view/highlight.mjs, read under rules.columns 'units'). `rules` (layout/make.mjs RULES, DEFAULT_RULES' each where not given:
+ * rules 1, 3 and 4 on, rule 5 off): `frame` 'tokens' both anchorings under the frame of arXiv's text alone
  * (rule 1, anchors.mjs frameOfTokens, made once), `edges` 'earlier' the maker's columns' edges of the pages before a page and
  * its own alone (rule 3), `columns` 'tokens' the left's far push under the columns of arXiv's text alone (rule 4,
  * view/highlight.mjs columnsOfTokens), `floatSearch` 'forward' both anchorings' floats searched from the page of their last
@@ -72,8 +74,8 @@ function fitted(text) {
  * caller's to open and destroy, its last pass's log, markedPages' options but the units and the operator codes): read whole
  * first (readMarked, as the prepare's marks stage reads it; its refusal the marks'), or in a page stream a page at a time.
  *
- * Under today's rules the maker's frame and the columns' edges read the whole document, so every part is cut at the end
- * (stage 1). `oracle` (tests and the lab: what a whole run of the same paper gave, `capture`'s): { frame, columnEdges }, the
+ * Under the whole run's rules (WHOLE_RULES) the maker's frame and the columns' edges read the whole document, so every part is
+ * cut at the end (stage 1). `oracle` (tests and the lab: what a whole run of the same paper gave, `capture`'s): { frame, columnEdges }, the
  * maker's frame predicate and edges given, the maker made a page at a time (layout/make.mjs stream), arXiv's ink let go as
  * its pages are done, and each part cut as soon as everything it reads is final (`stats.closed`: each part's pages and the
  * arXiv page read when it was cut); the same parts. With `marked`, also { leftFrame, columns }, the left's frame predicate
@@ -85,8 +87,8 @@ function fitted(text) {
  * predicate is had a page at a time with no whole run before it (the frames and the far push's columns of arXiv's text
  * alone, made at step T; the columns' edges of the pages before a page, the maker's own), so the pass is the oracle's
  * stream with those, the marks given (the left anchored whole first) or the marked original read here (a page at a time
- * beside arXiv's): the same parts as today's path under the same rules, cut as soon as what they read is final. `whole`
- * (tests and the lab) asks for today's path whatever the rules; `capture` runs it too
+ * beside arXiv's): the same parts as the whole path's under the same rules, cut as soon as what they read is final; the default.
+ * `whole` (tests and the lab) asks for the whole path, the whole made first, whatever the rules; `capture` runs it too
  *
  * Told in order: `onHead(head, units)` (the head and the units' chunks), then for each part its left parts (`onLeft(written)`,
  * each page's once) and the part (`onPart(written, note)`), each awaited. `note`: { pages, layout: 'kept' | 'none' |
@@ -97,8 +99,8 @@ function fitted(text) {
 export async function layerOfPaper({ paper, source, marks = null, marked = null, arxiv, OPS, pdfjs, base, image, remove = null, onHead = null, onLeft, onPart, verdicts = true, frame: frameGiven = pageFrame, columns: columnsGiven = undefined, rules: rulesGiven = null, oracle = null, capture = null, whole: wholeAsked = false }) {
   const rules = rulesOf(rulesGiven)
   // (the page stream without a whole run before it: rules 1, 3 and 4 give every predicate a page at a time, the frames and the
-  // far push's columns of arXiv's text alone, the columns' edges of the pages before a page; else, or `whole` asked (tests and
-  // the lab), today's path, the whole made first; with an oracle, the oracle's predicates)
+  // far push's columns of arXiv's text alone, the columns' edges of the pages before a page: the default; else, or `whole` asked
+  // (tests and the lab), the whole path, the whole made first; with an oracle, the oracle's predicates)
   const streams = !wholeAsked && !capture && (!!oracle || (rules.frame === 'tokens' && rules.edges === 'earlier' && rules.columns === 'tokens'))
   if (typeof onLeft !== 'function' || typeof onPart !== 'function') throw new TypeError('onLeft, onPart: the host\'s sinks')
   if (marks && marked) throw new TypeError('marks or marked: the marked original read, or to be read here, not both')
@@ -119,7 +121,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const floatMatch = left.tokens === text.tokens ? leftFloats : floatMatches(text.tokens, texts, floating)
   const bundle = bundleUnitsOf(source)
   // the rule set's frame and columns, of arXiv's text alone where it says so (rules 1 and 4: made once, at step T), each side's
-  // of its own tokens; else the rules given (today's)
+  // of its own tokens; else the rules given (pageFrame and pageColumns by default: the whole run's)
   const frameOn = tokens => (rules.frame === 'tokens' ? (F => () => F)(frameOfTokens(tokens)) : frameGiven)
   const frame = frameOn(text.tokens), leftFrameRule = left.tokens === text.tokens ? frame : frameOn(left.tokens)
   const columns = rules.columns === 'tokens' ? views => columnsOfTokens(left.tokens, views) : columnsGiven

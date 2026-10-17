@@ -22,15 +22,15 @@ export interface MakeInput {
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
   /** the pages' frame's rule the maker's anchors are placed under, given (a whole run's); else the rule set's: frameOfTokens
-   *  (rule 1), or pageFrame (today's) for the whole paper alone: the page stream (makerOf's stream, byStream) needs one, the
+   *  (rule 1), or pageFrame (rules.frame 'units', the whole run's) for the whole paper alone: the page stream (makerOf's stream, byStream) needs one, the
    *  whole document's, given or rule 1's (a TypeError without) */
   frame?: FrameRule | null
-  /** the page stream's rules (RULES), today's each where not given: the maker reads `frame`, `edges` and `floatSearch` */
+  /** the page stream's rules (RULES), DEFAULT_RULES' each where not given: the maker reads `frame`, `edges` and `floatSearch` */
   rules?: Partial<PageStreamRules> | null
   /** the indices of the units written inside a float (the source parse's), for rules.floatSearch 'forward' */
   inFloat?: readonly number[] | null
   /** the columns' text edges the names, the displays' numbers and the centred flag read (`page|column`,
-   *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of every placed unit's body lines (today's) */
+   *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of the placed units' body lines (rules.edges') */
   columnEdges?: ReadonlyMap<string, [number, number]> | null
   /** the add-on's plans as well (`plans` in the result), of the ink the maker reads: each page's operator list read once */
   plans?: boolean
@@ -137,12 +137,16 @@ export interface MakerStream {
   progress(): { read: number; marked?: number; anchored: number; decided: number; released: number; held: number; glyphs: number }
   trace?: { read: number; marked?: number; anchored: number; decided: number; released: number; held: number; glyphs: number }[]
 }
-/** the page stream's rules, each rule's values today's first: the pages' frame ('units' | 'tokens', rule 1), the columns'
+/** the page stream's rules, each rule's values the whole run's first: the pages' frame ('units' | 'tokens', rule 1), the columns'
  *  text edges a page without its own takes ('all' | 'earlier', rule 3), the left side's far-push columns ('units' | 'tokens',
  *  rule 4: the page pass's), a float's whole-document search ('whole' | 'forward': from its last body neighbour's page, rule 5) */
 export interface PageStreamRules { frame: 'units' | 'tokens'; edges: 'all' | 'earlier'; columns: 'units' | 'tokens'; floatSearch: 'whole' | 'forward' }
 export declare const RULES: { readonly [K in keyof PageStreamRules]: readonly PageStreamRules[K][] }
-/** a rule set checked, each rule today's where it is not given; a TypeError for a rule or a value that is none */
+/** the rules where none is given: rules 1, 3 and 4 (frame 'tokens', edges 'earlier', columns 'tokens'), rule 5 off */
+export declare const DEFAULT_RULES: Readonly<PageStreamRules>
+/** the whole run's rules, each reading the whole document (next's before the page stream): the lab's comparisons with it */
+export declare const WHOLE_RULES: Readonly<PageStreamRules>
+/** a rule set checked, each rule DEFAULT_RULES' where it is not given; a TypeError for a rule or a value that is none */
 export declare function rulesOf(rules?: Partial<PageStreamRules> | null): PageStreamRules
 /** the share of the marked original's lines that must be carried, else no file */
 export declare const CARRY_MIN: number

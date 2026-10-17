@@ -5,9 +5,9 @@
 // spreads over all of them. The sides:
 //   base   an engine of next's (--base=<a tree of it>: `git archive <commit> | tar -x -C <dir>`, its node_modules linked): the
 //          marked original read whole first (readMarked), then the pass
-//   off    this engine, the same: today's path (no rule)
-//   on     this engine, the page stream in production: rules 1, 3 and 4 (frame and far-push columns of arXiv's text, the
-//          columns' edges of the pages before a page), the marked original read by the pass a page at a time
+//   off    this engine, the same: the whole run's rules (WHOLE_RULES: next's path, the marked original read whole first)
+//   on     this engine, the page stream in production (its default rules): rules 1, 3 and 4 (frame and far-push columns of
+//          arXiv's text, the columns' edges of the pages before a page), the marked original read by the pass a page at a time
 //   on5    `on` and rule 5 (a float's search from its last body neighbour's page on)
 // Each run records, from the process's start: the source's parse, step T (arXiv's text), the marked read (base and off; the
 // stream reads it inside the pass), the maker's own times (stats.layout.stats.ms: ops, carry, anchor, rows), the rest of the
@@ -31,7 +31,9 @@ const SELF = fileURLToPath(import.meta.url)
 const REPO = resolve(SELF, '../../../..')
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const has = name => process.argv.includes(`--${name}`)
+// (the stream's sides, the marked original read by the pass; off takes the whole run's rules, next's, as base takes its own)
 const RULES = { on: { frame: 'tokens', edges: 'earlier', columns: 'tokens' }, on5: { frame: 'tokens', edges: 'earlier', columns: 'tokens', floatSearch: 'forward' } }
+const OFF_RULES = { frame: 'units', edges: 'all', columns: 'units', floatSearch: 'whole' }
 
 if (has('child')) await child()
 else await driver()
@@ -83,7 +85,7 @@ async function child() {
   let first = null, parts = 0
   t = at()
   const r = await pass.layerOfPaper({
-    paper, source, ...(marks ? { marks } : { marked: { doc: mdoc, log, options }, rules: RULES[side] }), arxiv: { doc: arxiv, text }, OPS, pdfjs: versions.PDFJS, base, image: '1',
+    paper, source, ...(marks ? { marks, ...(side === 'off' ? { rules: OFF_RULES } : {}) } : { marked: { doc: mdoc, log, options }, rules: RULES[side] }), arxiv: { doc: arxiv, text }, OPS, pdfjs: versions.PDFJS, base, image: '1',
     remove: ({ plans }) => remover.remove(plans),
     onHead: () => {}, onLeft: () => {},
     onPart: () => { parts++; if (!first) first = { ms: at(), ...(MEM ? { live: liveSet() } : {}) } },

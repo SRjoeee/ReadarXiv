@@ -1325,9 +1325,12 @@ PDF and tells it to its host a part at a time: the left (anchored on arXiv's tok
 remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
 
 - **In.** `paper { id, version }`; `source` (`openPaper`'s); `marks` (`layoutMarksOfPaper`'s: `{ marks, unitMarks }` or
-  `{ refused }`); `arxiv { doc, text? }` (a PDF.js document of arXiv's PDF, the caller's to open and destroy, and its text as
-  `readArxivText` read it, else read here); `OPS`; `pdfjs`; `base { bytes, sha256, xref }`; `image`; `remove` (the remover's
-  transport, or null: no add-on); the rules (`frame`, `columns`, today's by default); `verdicts` (default on).
+  `{ refused }`), or `marked { doc, log, options }` (the marked original, read by the pass a page at a time); `arxiv { doc,
+  text? }` (a PDF.js document of arXiv's PDF, the caller's to open and destroy, and its text as `readArxivText` read it, else
+  read here); `OPS`; `pdfjs`; `base { bytes, sha256, xref }`; `image`; `remove` (the remover's transport, or null: no add-on);
+  `rules` (`DEFAULT_RULES` where not given: rules 1, 3 and 4, the page stream; `WHOLE_RULES`, next's whole run), `whole`
+  (the whole made first, whatever the rules), and `frame`, `columns` (read under the whole run's rules); `verdicts`
+  (default on).
 - **Out, in order.** `onHead(head, chunks)`, then for each part its left parts (`onLeft`) and the part (`onPart(part, note)`),
   each awaited; `note` is `{ pages, layout: 'kept' | 'none' | { refused, … }, lines: [carried, total] }`. It returns
   `{ through, count, stats }`, or `{ refused: 'anchors', why }` before anything is told.
@@ -1340,18 +1343,32 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   `OPS_MS`, is dark (its units stay the original's), that page alone, whatever the pages before it: no count of pages given up
   on darkens a later page, and a marked page whose carry passes `PAGE_WORK` carries none of its lines, that page alone. No bound
   of the engine's is a fixed number of the paper's: each is a page's or a part's (see below for why none is needed).
-- **Today's rules.** The maker's frame, the columns' edges and the far-push columns read the whole document, so every part is
-  cut once the whole is made, and the parts are `cutBundle`'s of the same whole, byte for byte. With the oracle (`oracle {
-  frame, columnEdges }`, a whole run's, for tests and the lab) the maker is made a page at a time and each part cut as soon as
-  everything it reads is final: the same parts, cut early (`stats.closed`).
+- **The page stream, the default (rules 1, 3 and 4).** Every predicate a part reads is had a page at a time with no whole run
+  before it: the pages' frame and the far push's columns of arXiv's text alone (rules 1 and 4, made once at step T), the
+  maker's columns' edges of the pages before a page and its own (rule 3). The maker is made a page at a time and the marked
+  original read beside arXiv's (its page p + 1 before arXiv's page p), the left anchored by ranges as the unit marks' pages
+  arrive, and each part cut as soon as everything it reads is final: the same parts as the whole path's under the same rules,
+  byte for byte (the six gate papers, verdicts on; the books' digests), told early (`stats.closed`). Against the whole run's
+  rules the rules move none of the gate's 30 outputs and 10 far pushes of the 124-paper corpus (each judged right). The
+  maintainer's reason is the reader's wait: the first part comes about three times sooner — 3.4 s at arXiv's page 12 against
+  11.3 s on 2106.10165 (471 pages), 4.3 s at page 5 against 13.6 s on 2310.20360 (737 pages), 1.8 s against 4.2 s on
+  2307.16209 — and the parts stream from there, for a whole prepare 0.6 s and 1.5 s longer on those two books (+4.9 % and
+  +9.8 % on the quiet runs, peak RSS within next's spread; the six gate papers within next's spread but 2608.16117, +5.6 % on its quiet runs),
+  inside a job whose compile takes about 100 s (2026-10-17, against next c77550a1, five runs a side, sides interleaved: the
+  books at 88037aa8, the six papers at 4b938a01). Rule 5 (a float searched from the page
+  of its last body neighbour on) stays off: it is no accuracy rule.
+- **The whole run's rules** (`WHOLE_RULES`, next's, or `whole: true` under any rules). The maker's frame, the columns' edges and
+  the far-push columns read the whole document, so every part is cut once the whole is made, and the parts are `cutBundle`'s of
+  the same whole, byte for byte. With the oracle (`oracle { frame, columnEdges }`, a whole run's, for tests and the lab) the
+  maker is made a page at a time and each part cut as soon as everything it reads is final: the same parts, cut early.
 - **Memory, a part's ceiling.** What the pass holds of arXiv's ink is each page's glyphs, `GLYPHS_PAGE` (100,000) at most, and
   its boxes, one an operation, `OPS_CAP` (150,000) at most, about 22 MiB a page (the corpus's densest page holds 9,332 glyphs,
   about 1 MiB; its busiest 146,115 operations; its most boxes 22,101); one operation may place more (an image repeat's or
   group's placements, which PDF.js's list for `getOperatorList` never holds, and a run of glyphs set turned, a box each), and
   `BOXES_CAP` (1,000,000, some 140 bytes a box in all) bounds them, the very most of a hostile page; a page past any of these
   is dark
-  (`tests/pdf-reader/layout-hostile.test.ts`, on the lite worker, which decodes no image's pixels). Today the ink of every page
-  is held until the cut (2307.16209's 147 pages: 17 MiB of typed arrays). Made a page at a time, a page's ink is let go once
+  (`tests/pdf-reader/layout-hostile.test.ts`, on the lite worker, which decodes no image's pixels). Made whole, the ink of every
+  page is held until the cut (2307.16209's 147 pages: 17 MiB of typed arrays). Made a page at a time, a page's ink is let go once
   its tasks have run and its plan is made, so the ink held is that of the pages decided and not yet done (on 2307.16209 up to
   96 pages while a float's whole-document match on its List of Figures keeps the early pages undecided, then none); a unit's
   rows are held until its part is written, a told unit's as the few numbers K reads of it, and the parts are the host's once
@@ -1363,9 +1380,10 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   only a parse's waits (for a font's data, a CMap): in Node PDF.js's worker runs on the main thread and slices a parse in
   microtasks, so no timer fires while a parse runs that waits for nothing (a page of 15,000 unclosed saves: its 1 s timer fired
   at 1,498 ms, as its list came); such a parse is bounded by the page's content alone, and only the run's deadline, or a reader
-  in a thread or a process of its own, stops it. The marked original's ink (its owned glyphs, `markedPages`) is read with no
-  glyph cap and no `OPS_MS`, and the marked original is as hostile as its author's source. What is held is the pages' sum: the
-  whole paper's today, up to the whole of it made a page at a time while a float's match keeps the early pages undecided.
+  in a thread or a process of its own, stops it. The marked original's ink (its owned glyphs, `markedPages`) is read under the
+  same page's bounds as arXiv's (`OPS_MS`, `GLYPHS_PAGE`, `OPS_CAP`: a page past one has no ink, so no piece on it is owned),
+  for the marked original is as hostile as its author's source. What is held is the pages' sum: the whole paper's made whole,
+  up to the whole of it made a page at a time while a float's match keeps the early pages undecided.
 - **No bound of the paper's.** A real paper's costs grow with its pages, so a fixed paper-wide bound binds on a long book first:
   the carrier's work was 8.6 million steps on 2310.20360 (737 pages) and 7.1 million on 2106.10165 (471), 43 % and 36 % of the
   20 million the carrier once bounded a paper by, against 9.1 % and 5.8 % of `PAGE_WORK` on their heaviest pages. Nor does a

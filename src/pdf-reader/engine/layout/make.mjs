@@ -97,21 +97,29 @@ const NAME_START = /^n(\d+)\.([a-z]+)\.s$/
 /** a name's text as it is compared: letters and digits, folded */
 const letters = s => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
 const EVEN = new Set(['para', 'abstract', 'theorem'])
-/** the page stream's rules (E2b design §0: a rule of today's reads the whole document) and today's, each rule's values, today's
- *  first: `frame` the pages' frame the anchors are placed under ('units': pageFrame of the located units; 'tokens': anchors.mjs
- *  frameOfTokens, arXiv's text alone, rule 1); `edges` the columns' text edges a page without its own takes ('all': those of
- *  every page like it; 'earlier': of the pages before it and its own alone, rule 3); `columns` the left side's far-push columns
- *  (the page pass's: 'units' pageColumns, 'tokens' columnsOfTokens, rule 4; the maker reads none); `floatSearch` a float's
- *  search of the whole document where it is not found between its neighbours ('whole': step T's match of it, anywhere;
+/** the page stream's rules (E2b design §0: a rule of the whole run reads the whole document), each rule's values, the whole
+ *  run's first: `frame` the pages' frame the anchors are placed under ('units': pageFrame of the located units; 'tokens':
+ *  anchors.mjs frameOfTokens, arXiv's text alone, rule 1); `edges` the columns' text edges a page without its own takes ('all':
+ *  those of every page like it; 'earlier': of the pages before it and its own alone, rule 3); `columns` the left side's far-push
+ *  columns (the page pass's: 'units' pageColumns, 'tokens' columnsOfTokens, rule 4; the maker reads none); `floatSearch` a
+ *  float's search of the whole document where it is not found between its neighbours ('whole': step T's match of it, anywhere;
  *  'forward': from the page of its last body neighbour on, a unit not written inside a float, rule 5: `inFloat` given) */
 export const RULES = Object.freeze({ frame: Object.freeze(['units', 'tokens']), edges: Object.freeze(['all', 'earlier']), columns: Object.freeze(['units', 'tokens']), floatSearch: Object.freeze(['whole', 'forward']) })
-/** a rule set checked, each rule today's where it is not given */
+/** the rules where none is given (P2, the coordinator's ruling of 2026-10-17): rules 1, 3 and 4, the page stream's, for every
+ *  paper; rule 5 off (no accuracy rule: E2b's rule-5 note). The first part is told about three times sooner (3.4 s at arXiv's
+ *  page 12 against 11.3 s on 2106.10165, 4.3 s at page 5 against 13.6 s on 2310.20360) for a whole job 0.6 s and 1.5 s longer
+ *  on those books (docs/PDF-READER.md §19.6) */
+export const DEFAULT_RULES = Object.freeze({ frame: 'tokens', edges: 'earlier', columns: 'tokens', floatSearch: 'whole' })
+/** the whole run's rules, each reading the whole document: next's before the page stream (c77550a1), which the lab's comparisons
+ *  with it take */
+export const WHOLE_RULES = Object.freeze({ frame: 'units', edges: 'all', columns: 'units', floatSearch: 'whole' })
+/** a rule set checked, each rule DEFAULT_RULES' where it is not given */
 export function rulesOf(rules = null) {
   if (rules !== null && (typeof rules !== 'object' || Array.isArray(rules))) throw new TypeError('rules: an object of the page stream\'s rules')
   const out = {}
   for (const k of Object.keys(rules ?? {})) if (!Object.hasOwn(RULES, k)) throw new TypeError(`rules.${k}: no rule of the page stream's`)
   for (const [k, values] of Object.entries(RULES)) {
-    const v = rules?.[k] ?? values[0]
+    const v = rules?.[k] ?? DEFAULT_RULES[k]
     if (!values.includes(v)) throw new TypeError(`rules.${k}: ${String(v)} is none of ${values.join(', ')}`)
     out[k] = v
   }
@@ -375,8 +383,9 @@ async function gzipSize(bytes) {
  * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: arXiv's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T, read once for the left and the maker), else read here;
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
- * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule: pageFrame, today's, where none is given; the page
- * stream, which places a range's units alone, needs one given, the whole document's). `plans`:
+ * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule), given; else the rule set's (`rules`, DEFAULT_RULES'
+ * where not given: rule 1's frameOfTokens; pageFrame under rules.frame 'units', the whole paper alone: the page stream, which
+ * places a range's units alone, needs the whole document's). `plans`:
  * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
  * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again (null where they
  * fail, `plansFailed` why: the add-on's loss, never the file's). A page whose ink
@@ -399,7 +408,7 @@ export async function makeLayout(o) {
  * `phOf`, `heldOf`, `outsideOf`, `labelOf`, `rowsOf`; `bars()` and `assemble()` the file. `whole()` runs them in their order
  * over every unit. Each pass reads and writes the ink of its own pages alone. `columnEdges`: the columns' text edges (Map
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
- * flag read, given; else made of every placed unit's body lines once the lines are placed (today's rule: `columnEdgesOf`)
+ * flag read, given; else made of the placed units' body lines once the lines are placed (`columnEdgesOf`, by rules.edges)
  */
 export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null }) {
   const rules = rulesOf(rulesGiven)
@@ -425,8 +434,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // (the pages whose ink is never read: dark by their text alone; and those whose ink was read, whether or not it is held still)
   const unread = new Set(dark), inked = new Uint8Array(pages + 1)
   const doc = read.tokens
-  // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of arXiv's text, made once; today's
-  // (pageFrame) the whole paper's alone, none for the page stream (its ranges are placed from their own units)
+  // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of arXiv's text, made once; the whole
+  // run's (pageFrame) the whole paper's alone, none for the page stream (its ranges are placed from their own units)
   let tokensFrame = null
   const frame = frameGiven ?? (rules.frame === 'tokens' ? () => (tokensFrame ??= frameOfTokens(doc)) : null)
   const viewAt = p => views.slice(4 * (p - 1), 4 * p)

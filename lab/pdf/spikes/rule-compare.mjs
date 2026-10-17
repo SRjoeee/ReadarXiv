@@ -178,7 +178,8 @@ for (const id of papers) {
         const key = `${frame}|${edges}|${float}`
         if (!byFrame.has(key)) {
           const rule1 = frame ? () => F : pageFrame
-          const rules = { ...(edges ? { edges: 'earlier' } : {}), ...(float ? { floatSearch: 'forward' } : {}) }
+          // (every rule named: the defaults are the page stream's, rules 1, 3 and 4; the frame is given)
+          const rules = { edges: edges ? 'earlier' : 'all', floatSearch: float ? 'forward' : 'whole' }
           const out = made ? await makeLayout({ units: paper.units, marks: made.marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1, rules, inFloat: paper.inFloat }) : null
           const left = anchorUnits(doc, texts, { bounds, floating, floatMatch, frame: rule1, ...(float ? { forward: new Set(paper.inFloat) } : {}) })
           byFrame.set(key, { layout: out && 'file' in out ? encodeLayout(out.file) : null, refused: !out ? 'text only' : 'file' in out ? null : out.refused, stats: out?.stats ?? null, left })

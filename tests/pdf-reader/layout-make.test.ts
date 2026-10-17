@@ -77,7 +77,8 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
   const text = encodeLayout(one.file)
   expect(encodeLayout(two.file)).toBe(text)
   expect(encodeLayout(three.file)).toBe(text)
-  expect(counted(three.stats)).toEqual(counted(one.stats))
+  // (but the pages whose rule-3 edges were taken from a later page: the passes as tasks are given the whole run's edges)
+  expect({ ...counted(three.stats), edgesAhead: null }).toEqual({ ...counted(one.stats), edgesAhead: null })
   // a page at a time: every unit's rows and every name's, as the whole file holds them, and every page's plan
   const four = await byPages(w, log)
   if (four) {
@@ -1374,16 +1375,19 @@ describe('makeLayout over arXiv\'s text read once (the prepare\'s step T, layout
     expect(calls[0]).toBeGreaterThan(0)
   })
 
-  it('the page stream places a range\'s units alone: it takes no frame by default (pageFrame over them is not the whole\'s), a TypeError', async () => {
+  it('the page stream places a range\'s units alone: under the whole run\'s frame rule it takes none (pageFrame over them is not the whole\'s), a TypeError; by default rule 1 gives it one', async () => {
     const marks = await marksOf(DISPLAY)
     const base = { units: DISPLAY.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
-    const first = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages) })
+    const first = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages), rules: { frame: 'units' } })
     if ('refused' in first && first.refused) throw new Error('refused')
     for (let p = 1; p <= first.pages; p++) await first.readPage(p)
     await first.whole()
-    const m = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages), columnEdges: first.edges() })
+    const m = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages), columnEdges: first.edges(), rules: { frame: 'units' } })
     if ('refused' in m && m.refused) throw new Error('refused')
     await expect(m.byStream()).rejects.toThrow(/frame/)
+    const d = await makerOf({ ...base, arxiv: arxivOf(DISPLAY.pages), columnEdges: first.edges() })
+    if ('refused' in d && d.refused) throw new Error('refused')
+    await expect(d.byStream()).resolves.toBeTruthy()
   })
 
   it('a text of another page count than the document is the caller\'s mistake', async () => {
@@ -1587,9 +1591,9 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
   }
   const input = async (rules: object | null) => ({ units: w.units, marks: await marksOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', rules: rules as never, inFloat: [] })
 
-  it('today\'s edges are every page\'s like it; rule 3\'s those before a page and its own, a cover page the first later one\'s: page 1\'s caption CENTRED both ways', async () => {
-    const today = await makeLayout({ ...(await input(null)), arxiv: arxivOf(w.pages) })
-    const rule3 = await makeLayout({ ...(await input({ edges: 'earlier' })), arxiv: arxivOf(w.pages) })
+  it('the whole run\'s edges are every page\'s like it; rule 3\'s those before a page and its own, a cover page the first later one\'s: page 1\'s caption CENTRED both ways', async () => {
+    const today = await makeLayout({ ...(await input({ frame: 'units', edges: 'all', columns: 'units' })), arxiv: arxivOf(w.pages) })
+    const rule3 = await makeLayout({ ...(await input({ frame: 'units', edges: 'earlier' })), arxiv: arxivOf(w.pages) })
     if (!('file' in today) || !('file' in rule3)) throw new Error('refused')
     expect((today.file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
     expect((rule3.file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
@@ -1597,10 +1601,12 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
     // (page 1's column 0 takes page 2's: it waits for page 2; today's run borrows nothing ahead)
     expect(rule3.stats.edgesAhead).toEqual([[1, 0, 2]])
     expect(today.stats.edgesAhead).toEqual([])
-    // (the default is today's: the same bytes as rules given today's values)
-    const named = await makeLayout({ ...(await input({ frame: 'units', edges: 'all', columns: 'units' })), arxiv: arxivOf(w.pages) })
-    if (!('file' in named)) throw new Error('refused')
-    expect(encodeLayout(named.file)).toBe(encodeLayout(today.file))
+    // (the default is DEFAULT_RULES', rules 1, 3 and 4: the same bytes as those rules given)
+    const byDefault = await makeLayout({ ...(await input(null)), arxiv: arxivOf(w.pages) })
+    const named = await makeLayout({ ...(await input({ frame: 'tokens', edges: 'earlier', columns: 'tokens' })), arxiv: arxivOf(w.pages) })
+    if (!('file' in named) || !('file' in byDefault)) throw new Error('refused')
+    expect(encodeLayout(byDefault.file)).toBe(encodeLayout(named.file))
+    expect(byDefault.stats.edgesAhead).toEqual([[1, 0, 2]])
   })
 
   it('under rule 3 (and rule 1) a page at a time and the passes in another order make the whole run\'s file', async () => {
