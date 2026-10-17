@@ -2463,6 +2463,9 @@ function footFloorAt(blocks, st, P, s) {
   return floor > low + 1e-9 ? floor : null
 }
 
+/** footFloorAt for the page fill's guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
+export const footFloorOf = (blocks, st, P, s) => footFloorAt(blocks, st, P, s)
+
 /** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
  *  the original's times the leading, whatever the size (D6's F6a, 2026-10-08: a Latin line shrunk with its size sat on none
  *  of the original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it; every

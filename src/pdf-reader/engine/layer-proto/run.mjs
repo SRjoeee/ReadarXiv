@@ -70,6 +70,19 @@ import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
  *  opened without it is refused as the run reads a page's fonts (layer2.mjs fontMappedOf), never read as one whose fonts
  *  have no map */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true, fontExtraProperties: true }
+/** a page's characters by baseline, for its units' edges (openProto edgesOf): its non-blank characters sorted by baseline,
+ *  their baselines, and its largest size, so that a read of the characters within a band of baselines halves to it and
+ *  visits that band alone, where a scan of the page for every unit made the edges cost units x characters (the speed check
+ *  of 2026-10-17: 3 ms a laid page) */
+function rowsOf(chars) {
+  const cs = chars.filter(c => /\S/.test(c.ch)).sort((a, b) => a.yb - b.yb)
+  let size = 0
+  for (const c of cs) if (c.size > size) size = c.size
+  return { cs, yb: Float64Array.from(cs, c => c.yb), size }
+}
+const NO_ROWS = rowsOf([])
+/** the first index of an ascending list at or over y (its length where none is) */
+const firstAtOrOver = (a, y) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < y) lo = m + 1; else hi = m } return lo }
 /** the page's body units that the even pass sets alike (a unit on two pages keeps its own fit) */
 const EVEN_KINDS = new Set(['para', 'abstract', 'list', 'item'])
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink, in the faces it was
@@ -232,13 +245,13 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
     let l = at(p, st), closer = false
     if (!l && st.next) {
       // (its leading leaves the gap under it tighter than the next paragraph's lines: the loosest closer one that sets it,
-      // by halving, down to the original's pitch)
+      // down to the original's pitch; the floor is the next one's leading's, the same at every closer leading)
       const K = Math.ceil((lead - 1) / 0.01 - 1e-9), L = k => (k >= K ? 1 : r3(lead - k * 0.01))
-      if (K > 0 && at(p, { ...st, lead: L(K) })) {
-        let no = 0, ok = K
-        while (ok - no > 1) { const k = (ok + no) >> 1; if (at(p, { ...st, lead: L(k) })) ok = k; else no = k }
-        st = { ...st, lead: L(ok) }
-        l = at(p, st)
+      const floor = L2.footFloorOf(p.blocks, st, p.P, p.s)
+      const found = K > 0 ? closerLead(K, k => at(p, { ...st, lead: L(k) }), floor === null ? null : guessCloser(p, K, L, () => floor)) : null
+      if (found) {
+        st = { ...st, lead: L(found.k) }
+        l = found.l
         closer = true
       }
     }
@@ -310,8 +323,9 @@ function fillLeadsOf(p, P) {
   // search from the top is the reference, and the halving drew the same on every fixture. So for the tracking and size)
   p.fitLines = p.layout.lines.length
   const st = p.layout.state
-  if (!at(p, st)) { p.fillLead = null; return }
-  // (as the page fill lays it, its last line no lower than a leading over the next line of its column: layer2.mjs footFloorAt)
+  // (as the page fill lays it, its last line no lower than a leading over the next line of its column: layer2.mjs footFloorAt.
+  // A state that sets it so sets it without the floor too, which only takes slots off its last frame's foot: the fitted state
+  // is laid again only where that one does not set it)
   const lo = st.lead, bx = { ...st, box: true }
   if (at(p, bx)) {
     const hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
@@ -320,14 +334,50 @@ function fillLeadsOf(p, P) {
     p.fillLead = ok ? L(ok) : lo
     return
   }
+  if (!at(p, st)) { p.fillLead = null; return }
   // (its fitted leading leaves the gap under it tighter than its lines, the fit having set its last line to its frame's foot:
   // the loosest closer one that does not, down to the original's pitch, which asks nothing. Where even that does not set it,
-  // its fitted one)
+  // its fitted one. The floor moves with the leading here, its own)
   const floor = Math.max(1, P.leadFloor ?? 1), K = Math.ceil((lo - floor) / 0.01 - 1e-9), L = k => (k >= K ? floor : r3(lo - k * 0.01))
-  if (!(K > 0) || !at(p, { ...bx, lead: L(K) })) { p.fillLead = lo; return }
+  const found = K > 0 ? closerLead(K, k => at(p, { ...bx, lead: L(k) }), guessCloser(p, K, L, lead => L2.footFloorOf(p.blocks, { ...bx, lead }, p.P, p.s))) : null
+  p.fillLead = found ? L(found.k) : lo
+}
+
+/**
+ * The loosest leading of a closer search's grid at which a unit sets (fillLeadsOf, fillPage): L(k) for k from 1 to K, closer
+ * as k grows, L(K) the original's pitch, the leading before them (k 0) known not to. `sets(k)`, the layout at L(k) or null.
+ * By halving from the grid's ends, as a looser leading holds no more lines than a closer one (monotone in practice, as the
+ * fill's other searches take it); first, where a guess is given (guessCloser), the guess confirmed by two layouts, it set
+ * and the step looser not, which the halving would have found by the same order: each search of the kind took six layouts
+ * or seven a unit, which the speed check of 2026-10-17 found (the page fill under the gap rule 0.7 % more fit states).
+ * Returns { k, l } (the layout at L(k), the one the search laid there) or null where L(K) does not set it either
+ */
+function closerLead(K, sets, guess) {
+  if (guess !== null && guess >= 1 && guess <= K) {
+    const l = sets(guess)
+    if (l && (guess === 1 || !sets(guess - 1))) return { k: guess, l }
+  }
+  let best = sets(K)
+  if (!best) return null
   let no = 0, ok = K
-  while (ok - no > 1) { const k = (ok + no) >> 1; if (at(p, { ...bx, lead: L(k) })) ok = k; else no = k }
-  p.fillLead = L(ok)
+  while (ok - no > 1) { const k = (ok + no) >> 1, l = sets(k); if (l) { ok = k; best = l } else no = k }
+  return { k: ok, l: best }
+}
+
+/**
+ * Where on a closer search's grid (closerLead's L(k)) a unit of one frame first ends no lower than its floor (`floorAt(L)`,
+ * footFloorAt's at that leading, null where none is asked): its n lines from the frame's first baseline B0, L p0 apart (no
+ * first line moves), its last at B0 - (n - 1) L p0, which a slot holds 0.05 under its floor; arithmetic, no layout. Null for a
+ * unit of more frames or of one line, where its lines' places are not that simple: the halving decides
+ */
+function guessCloser(p, K, L, floorAt) {
+  if (p.blocks?.length !== 1 || !(p.layout?.lines.length >= 2)) return null
+  const b = p.blocks[0], n = p.layout.lines.length, p0 = b.pitch0 ?? 1.2 * p.s
+  for (let k = 1; k <= K; k++) {
+    const f = floorAt(L(k))
+    if (f === null || b.B[0] - (n - 1) * L(k) * p0 >= f - 0.05) return k
+  }
+  return null
 }
 
 /**
@@ -588,6 +638,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return fontMapped.get(name)
   }
   const chars2 = [], inks = [], views = [], pageBottom = []
+  /** each page's characters by baseline (rowsOf), made as its characters are read and let go with them */
+  const rowsByPage = []
 
   // the geometry's units with v0's own copy of their line rectangles: v0 grows and moves a unit's lines as it lays it,
   // and every other unit reads them as grown (its others), so the copy is shared by all of v0's reading; the geometry
@@ -864,7 +916,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     freezeLinksOf(q)
     annots[q - 1] = consumed[q] = whyOf[q] = undefined
     unswept.delete(q)
-    chars2[q - 1] = undefined
+    chars2[q - 1] = rowsByPage[q] = undefined
     inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
   }
   /** whether a unit on page q is still to be painted on one of its pages (its first page's part there not painted yet,
@@ -1286,18 +1338,33 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const edgesOf = (p, prep) => {
     if (p.unit.kind === 'cell' || !p.blocks.length) return null
     const spanOf = b => [Math.min(...b.rects.map(q => q[1])), Math.max(...b.rects.map(q => q[3]))]
+    const rows = b => rowsByPage[b.page] ?? (chars2[b.page - 1] ? (rowsByPage[b.page] = rowsOf(chars2[b.page - 1])) : NO_ROWS)
     const alone = (b, r, yb, size) => {
-      const [cx0, cx1] = spanOf(b)
-      return !(chars2[b.page - 1] ?? []).some(c => /\S/.test(c.ch) && Math.abs(c.yb - yb) < 0.4 * size && c.x1 > cx0 && c.x0 < cx1 && (c.x1 < r[1] - 0.5 || c.x0 > r[3] + 0.5))
+      const [cx0, cx1] = spanOf(b), R = rows(b), t = 0.4 * size
+      // (the characters within the band of its baseline alone, by halving the page's baselines: never the whole page)
+      for (let i = firstAtOrOver(R.yb, yb - t - 1e-6); i < R.cs.length && R.yb[i] <= yb + t + 1e-6; i++) {
+        work.edges++
+        const c = R.cs[i]
+        if (Math.abs(c.yb - yb) < 0.4 * size && c.x1 > cx0 && c.x0 < cx1 && (c.x1 < r[1] - 0.5 || c.x0 > r[3] + 0.5)) return false
+      }
+      return true
     }
     // (the next line under its last: its column's characters under it by more than three quarters of its pitch, the line's own
-    // scripts and stacked formulas aside; of the highest of them, those within half an em, their median baseline)
+    // scripts and stacked formulas aside; of the highest of them, those within half an em, their median baseline: from the
+    // page's baselines downward, the first of its column the highest, then down half the page's largest em)
     const below = b => {
-      const [cx0, cx1] = spanOf(b), yb = b.B.at(-1), p0 = b.pitch0 ?? 1.2 * (b.sizes.at(-1) ?? 10)
-      const under = (chars2[b.page - 1] ?? []).filter(c => /\S/.test(c.ch) && c.yb < yb - 0.75 * p0 && c.x1 > cx0 && c.x0 < cx1)
-      if (!under.length) return Infinity
-      const top = Math.max(...under.map(c => c.yb))
-      const line = under.filter(c => c.yb > top - 0.5 * c.size).map(c => c.yb).sort((x, y) => x - y)
+      const [cx0, cx1] = spanOf(b), yb = b.B.at(-1), p0 = b.pitch0 ?? 1.2 * (b.sizes.at(-1) ?? 10), R = rows(b), T = yb - 0.75 * p0
+      const under = c => c.yb < T && c.x1 > cx0 && c.x0 < cx1
+      let i = firstAtOrOver(R.yb, T) - 1
+      for (; i >= 0; i--) { work.edges++; if (under(R.cs[i])) break }
+      if (i < 0) return Infinity
+      const top = R.cs[i].yb, line = []
+      for (let j = i; j >= 0 && R.yb[j] > top - 0.5 * R.size - 1e-6; j--) {
+        work.edges++
+        const c = R.cs[j]
+        if (under(c) && c.yb > top - 0.5 * c.size) line.push(c.yb)
+      }
+      line.sort((x, y) => x - y)
       return yb - line[(line.length - 1) >> 1]
     }
     const b0 = p.blocks[0], bl = p.blocks.at(-1)
@@ -2086,6 +2153,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
       }
       chars2[i - 1] = L2.pageChars2(tc, fontOf, mappedOfPage(page))
+      // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)
+      rowsByPage[i] = rowsOf(chars2[i - 1])
+      workOf(i).edges += chars2[i - 1].length
       timesOf(i).text += performance.now() - tRendered
       // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
       const raw = await annP

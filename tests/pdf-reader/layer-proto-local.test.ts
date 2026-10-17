@@ -293,7 +293,7 @@ describe('the work counters (work.mjs): integer counts of what a page cost, the 
     { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [Q2, Q3], rects: [[2, 20, 197.85, 70, 206.83], [3, 20, 197.85, 80, 206.83]], from: 'geometry', tr: [text(CJK(8, 0x4e20))] },
     { id: 2, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], from: 'geometry', tr: [text(CJK(8, 0x4e60))] },
   ]
-  const KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops']
+  const KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'edges']
   const laid = async (order: number[]) => {
     const run = await open(paper(specs, 4))
     for (const p of order) await run.layFor(p)
@@ -312,6 +312,19 @@ describe('the work counters (work.mjs): integer counts of what a page cost, the 
   it('add up to the same total whatever order the pages were asked in', async () => {
     const want = (await laid([1, 2, 3, 4])).workTotal()
     for (const order of [[4], [3, 1], [4, 3, 2, 1]]) expect((await laid(order)).workTotal(), `${order} first`).toEqual(want)
+  })
+  it("read a page's characters for its units' edges once, not once a unit (run.mjs edgesOf): each edge a band of baselines", async () => {
+    // (eight paragraphs of two lines on one page, each line's 11 characters; every unit reads its first line's baseline, its
+    // last's and the next line under it. Read by scanning the page for each, eight units cost 3 x 8 x 176 visits; by the
+    // page's index of its characters, its 176 once and the few in each band)
+    const words = ['Alpha beta', 'gamma delt', 'epsilon ze', 'eta theta ', 'iota kappa', 'lambda mu ', 'nu xi omic', 'ron pi rho']
+    const many: Spec[] = words.map((w, i) => ({ id: i, kind: 'para', src: `${w} ${w}`, lines: [line(1, 280 - 30 * i, [20, `${w}x`]), line(1, 268 - 30 * i, [20, `${w}y`])], from: 'geometry', tr: [text(CJK(6, 0x4e00 + 40 * i))] }))
+    const run = await open(paper(many, 1))
+    await run.until(1)
+    const chars = many.reduce((n, u) => n + u.lines.reduce((m, l) => m + l.items.reduce((k, [, t]) => k + t.length, 0), 0), 0)
+    const edges = (run.pageWork[1] as unknown as { edges: number }).edges
+    expect(edges).toBeGreaterThan(0)
+    expect(edges).toBeLessThanOrEqual(chars + many.length * 3 * 2 * 11)
   })
 })
 

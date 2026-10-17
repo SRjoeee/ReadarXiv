@@ -553,6 +553,21 @@ describe("a paragraph gap never tighter than its lines and its skip, its first l
     expect(at(40, 1.66, { PP: P(40) }).clipped).toBe(false)
   })
 
+  it("finds the closer leading the next paragraph's gap asks with two layouts where the unit is one frame's, the halving's own answer", async () => {
+    // (the pass alone, the fill leadings already told: A's own 1.5, laid at 1.16 under B's 2.5; B's own. Its lines' places
+    // guessed, the guess confirmed at it and a step looser: A's three layouts and B's one, where the halving laid A nine)
+    const { work } = await import('@/pdf-reader/engine/layer-proto/work.mjs')
+    const told = async () => { const a = laid(1, 40, [block(6, 500)], P(12)), b = laid(2, 20, [block(6, 428)], P(Infinity)); await fill([a, b]); return [a, b] }
+    const [a0, b0] = await told()
+    const a = laid(1, 40, [block(6, 500)], P(12)), b = laid(2, 20, [block(6, 428)], P(Infinity))
+    for (const [u, v] of [[a, a0], [b, b0]] as const) Object.assign(u, { fillLead: v!.fillLead, fillTop: (v as unknown as { fillTop: number }).fillTop, fitLines: (v as unknown as { fitLines: number }).fitLines })
+    const before = work.fit
+    await fill([a, b])
+    expect(work.fit - before).toBe(4)
+    expect([a.layout.state.lead, b.layout.state.lead]).toEqual([a0!.layout.state.lead, b0!.layout.state.lead])
+    expect(a.layout.lines.map(l => l.baseline)).toEqual(a0!.layout.lines.map(l => l.baseline))
+  })
+
   it("reads no leading of a unit of one line under it: a heading's or a one-line paragraph's fill leading is its fill's top", async () => {
     const a = laid(1, 40, [block(6, 500)], P(12)), b = laid(2, 8, [block(2, 428)], P(Infinity))
     await fill([a, b])
