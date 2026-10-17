@@ -371,6 +371,44 @@ describe('a link\'s text found whole, or the link left: never over a part of ano
   })
 })
 
+describe('a link over the number alone of a reference drawn with its name (cleveref): found across the drawing\'s space', () => {
+  // (\cref{fig:a} drawn as the page wrote it, "Figure 1", where arXiv's link covers its "1" alone: the number is a word of its
+  // own, the drawing's space or its line's end before it, never a part of "Figure")
+  it('"Figure 1" with the annotation of its "1": one record over the "1" alone, named by it, never the piece whole', () => {
+    const L = lay([text('\u89c1'), ph('\\cref{fig:a}'), text('\u3002')], { 1: { mode: 'orig-text', text: 'Figure 1' } })
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'figure.1' }, '1', ['5|7']))], targets: [target(1, { kind: 'internal', gap: gapOf(1, 5, 8) })] })
+    const { records, tried } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(tried).toEqual([])
+    expect(records.map(r => [r.rec.name, r.rec.dest, r.sources.tier])).toEqual([['1', 'figure.1', 'geometry']])
+    expect(letters(drawnBetween(L, 2, records[0]!.rec.boxes))).toBe('1')
+  })
+  it('"sections 3.2 and 3.3" with an annotation of each number: two records, each over its number', () => {
+    const L = lay([text('\u89c1'), ph('\\cref{sec:a,sec:b}'), text('\u3002')], { 1: { mode: 'orig-text', text: 'sections 3.2 and 3.3' } }, [block(3, 300)])
+    const a = ann(0, { dest: 'subsection.3.2' }, '3.2', ['5|9', '5|10', '5|11']), b = ann(1, { dest: 'subsection.3.3' }, '3.3', ['5|17', '5|18', '5|19'])
+    const m = matchUnit({ cands: [cand(a), cand(b)], targets: [target(1, { kind: 'internal', single: false, gap: gapOf(1, 5, 20) })] })
+    const { records, tried } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(tried).toEqual([])
+    expect(records.map(r => [r.rec.name, r.rec.dest])).toEqual([['3.2', 'subsection.3.2'], ['3.3', 'subsection.3.3']])
+    expect(records.map(r => letters(drawnBetween(L, 2, r.rec.boxes)))).toEqual(['32', '33'])
+  })
+  it('"Figure" ending a line and its "1" opening the next: the record over the "1" on its line', () => {
+    // (a narrow block: seven characters and "Figure" fill the first line, its "1" opens the next)
+    const L = lay([text('\u5982\u5982\u5982\u5982\u5982\u5982\u5982'), ph('\\cref{fig:a}'), text('\u6240\u793a')], { 1: { mode: 'orig-text', text: 'Figure 1' } }, [block(3, 105)])
+    const lineOf = (s: string) => L.lines.findIndex(l => l.items.some(it => it.t.s === s))
+    expect([lineOf('Figure'), lineOf('1')]).toEqual([0, 1])
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'figure.1' }, '1', ['5|7']))], targets: [target(1, { kind: 'internal', gap: gapOf(1, 5, 8) })] })
+    const { records } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records.map(r => [r.rec.name, r.li, r.rec.boxes.length])).toEqual([['1', 1, 4]])
+    expect(letters(drawnBetween(L, 2, records[0]!.rec.boxes))).toBe('1')
+  })
+  it('a number glued to its word is no word of its own: "Figure1" with the annotation of its "1" alone is the piece whole, as before', () => {
+    const L = lay([text('\u89c1'), ph('\\cref{fig:a}'), text('\u3002')], { 1: { mode: 'orig-text', text: 'Figure1' } })
+    const m = matchUnit({ cands: [cand(ann(0, { dest: 'figure.1' }, '1', ['5|6']))], targets: [target(1, { kind: 'internal', gap: gapOf(1, 5, 7) })] })
+    const { records } = placeUnit({ groups: m.groups, ...placing(L) })
+    expect(records.map(r => r.rec.name)).toEqual(['Figure1'])
+  })
+})
+
 describe('what the match never does', () => {
   it('gives an annotation whose glyphs are a kept piece\'s to no other piece: it stays the freeze\'s', () => {
     // (an \eqref inside a display kept where it stands, and a reference of the unit drawn from its source: order would pair them)
