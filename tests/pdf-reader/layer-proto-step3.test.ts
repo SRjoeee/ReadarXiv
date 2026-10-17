@@ -480,7 +480,7 @@ describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every o
   })
 })
 
-describe("a paragraph gap never tighter than its lines, its first line on the original's (2026-10-17, footFloorAt)", () => {
+describe("a paragraph gap never tighter than its lines and its skip, its first line on the original's (2026-10-17, footFloorAt)", () => {
   // frames of n lines 12 pt apart from `top`, 100 pt wide, at size 10; CJK characters 10 pt wide at size 10, ten a line;
   // `below`: the original's room from the unit's last baseline down to the next line of its column (a pitch: the next
   // paragraph's first line; Infinity: nothing under it)
@@ -519,19 +519,44 @@ describe("a paragraph gap never tighter than its lines, its first line on the or
     expect(at(40, 1.66, { PP: P(40) }).clipped).toBe(false)
   })
 
-  it("gives two paragraphs a gap of at least the leading of each, the lower one's first line where TeX set it; a skip counts toward it", async () => {
+  it("gives two paragraphs a gap of at least the leading of each and the original's skip, the lower one's first line where TeX set it", async () => {
     for (const skip of [0, 6, 28]) {
       // (A: six lines from 500; B: six lines one pitch and `skip` under A's last)
       const a = laid(1, 40, [block(6, 500)], P(12 + skip)), b = laid(2, 40, [block(6, 428 - skip)], P(Infinity))
       await fill([a, b])
       const gap = a.layout.lines.at(-1)!.baseline - b.layout.lines[0]!.baseline
       expect(b.layout.lines[0]!.baseline, `${skip}`).toBe(428 - skip)
-      expect(gap, `${skip}`).toBeGreaterThanOrEqual(Math.max(a.layout.state.lead, b.layout.state.lead) * 12 - 0.05)
-      // (A's own fill leading: filled to the floor its own leading asks, 1.5; a skip of 6 lets it spread to 1.62; a heading's
-      // room under it asks nothing, 1.66. Laid under B, which spreads to 1.66: a leading of 1.66 over B's first line, 1.44
-      // and 1.61; with the heading's room, its own)
-      expect([a.fillLead, a.layout.state.lead, b.layout.state.lead], `${skip}`).toEqual([[1.5, 1.44, 1.66], [1.62, 1.61, 1.66], [1.66, 1.66, 1.66]][[0, 6, 28].indexOf(skip)])
+      expect(gap, `${skip}`).toBeGreaterThanOrEqual(Math.max(a.layout.state.lead, b.layout.state.lead) * 12 + Math.min(skip, 12) - 0.05)
+      // (A's own fill leading: filled to the floor its own leading and the skip ask, 1.5 with or without a skip of 6; a
+      // heading's room of 40 under it asks nothing, 1.66. Laid under B, which spreads to 1.66: a leading of 1.66 and the skip
+      // over B's first line, 1.44 both; with the heading's room, its own)
+      expect([a.fillLead, a.layout.state.lead, b.layout.state.lead], `${skip}`).toEqual([[1.5, 1.44, 1.66], [1.5, 1.44, 1.66], [1.66, 1.66, 1.66]][[0, 6, 28].indexOf(skip)])
     }
+  })
+
+  it("keeps a parskip-style paper's skip over the leading: a pitch of 11 and a skip of 5.5 become the leading and 5.5, not a leading of 1.5 alone", async () => {
+    // (11 pt lines and a 5.5 pt skip, NeurIPS's; A alone over a paragraph it is not laid with: its own leading and the skip)
+    const blk = (n: number, top: number) => { const b = block(n, top); const B = b.B.map((_, k) => top - 11 * k); return { ...b, B, rects: B.map(y => [1, 0, y - 2, 100, y + 8]), pitch0: 11 } }
+    const a = laid(1, 40, [blk(6, 500)], P(16.5))
+    await fill([a])
+    const last = a.layout.lines.at(-1)!.baseline, next = 445 - 16.5
+    expect(last - next).toBeGreaterThanOrEqual(a.layout.state.lead * 11 + 5.5 - 0.05)
+    // (without the skip kept, B's floor: the gap a leading, 16.5, the skip gone)
+    expect(a.layout.state.lead * 11 + 5.5).toBeGreaterThan(16.5)
+  })
+
+  it("caps the skip it keeps at a pitch, as the gate does: a room of two pitches asks a leading and a pitch, one of three or more nothing more", () => {
+    // (a room of 24 under its last line: a floor of 428 + 12 L, as a skip of 12; at 1.5 four lines still fit, at 1.55 three)
+    expect(at(40, 1.5, { PP: P(24) }).clipped).toBe(false)
+    expect(at(40, 1.55, { PP: P(24) }).clipped).toBe(true)
+    // (a room of 40: 412 + 12 L, under the frame's last baseline below a leading of 2.33)
+    expect(at(40, 1.66, { PP: P(40) }).clipped).toBe(false)
+  })
+
+  it("reads no leading of a unit of one line under it: a heading's or a one-line paragraph's fill leading is its fill's top", async () => {
+    const a = laid(1, 40, [block(6, 500)], P(12)), b = laid(2, 8, [block(2, 428)], P(Infinity))
+    await fill([a, b])
+    expect([a.fillLead, a.layout.state.lead]).toEqual([1.5, 1.5])
   })
 
   it("ends a paragraph a leading of the next one over its first line where the next one spreads further: the upper one pays", async () => {

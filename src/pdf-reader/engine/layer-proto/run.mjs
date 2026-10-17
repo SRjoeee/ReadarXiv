@@ -192,8 +192,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   const { target } = told
   // (each unit's leading as the pass lays it, its fill leading under the band over the target; and the next paragraph's: the
   // unit begun on the page whose first line is the next line of its column, P.halfLead's `below` under its last baseline. The
-  // gap between two paragraphs is held to the leading of both, the lower one's first line kept on its baseline, so the upper
-  // one ends a leading of the larger over it (layer2.mjs footFloorAt, `next`). Read from the units begun on the page alone,
+  // gap between two paragraphs is held to the leading of both and the original's skip there, the lower one's first line kept
+  // on its baseline, so the upper one ends that much over it (layer2.mjs footFloorAt, `next`). Read from the units begun on the page alone,
   // whose leadings are fixed before any is laid: no laying order is read)
   const leadOf = p => Math.min(p.fillLead, r3(target + band))
   const spanOf = b => [Math.min(...b.rects.map(r => r[1])), Math.max(...b.rects.map(r => r[3]))]
@@ -204,7 +204,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
     let best = null, most = 0
     for (const q of units) {
       const b0 = q.blocks?.[0]
-      if (q === p || typeof q.fillLead !== 'number' || !b0 || b0.page !== bl.page || Math.abs(b0.B[0] - y) > 0.3 * (b0.sizes[0] ?? p.s)) continue
+      // (a unit of one line has no leading to show: a heading's or a one-line paragraph's fill leading is its fill's top)
+      if (q === p || typeof q.fillLead !== 'number' || !(q.fitLines >= 2) || !b0 || b0.page !== bl.page || Math.abs(b0.B[0] - y) > 0.3 * (b0.sizes[0] ?? p.s)) continue
       const [a0, a1] = spanOf(b0), over = Math.min(x1, a1) - Math.max(x0, a0)
       if (over > most && over > 0.5 * Math.min(x1 - x0, a1 - a0)) { most = over; best = q }
     }

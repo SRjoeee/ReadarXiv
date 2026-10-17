@@ -110,11 +110,10 @@ a `\parskip`, capped at a pitch, so that a line borrowed into a wider room is no
 no pair where neither frame draws two lines. It entered as a defect, `next`'s value its baseline: 250 pairs on the 30
 outputs (1512.03385-zh 52, 1706.03762-zh 27, 1810.04805-zh 33, 2608.04322-zh 43, the thesis 39, 2608.16117 10, the Korean
 39, the Japanese 3, the alphabets 4). With each paragraph's first line kept on the original's and the paragraph above it
-ending a leading of either over it (`layer-proto/layer2.mjs footFloorAt`, `run.mjs fillPage`) 148, the alphabets' 4
-unchanged: the measure asks for the original's skip past the leading too, which that rule does not add (a NeurIPS
-`\parskip` of 5.5 pt under a leading of 1.5 reads tight). Gaps under the larger of the two leadings are 25 there (144 on
-`next`): a frame of one line above (no room to give), a paragraph above begun on an earlier page, and one whose fit fills
-its frame at any leading.
+ending the larger of the two leadings and the original's own skip over it (`layer-proto/layer2.mjs footFloorAt`, `run.mjs
+fillPage`) 64, the alphabets' 4 unchanged. Gaps under the larger of the two leadings are 23 there (144 on `next`): a frame
+of one line above (no room to give), a paragraph above begun on an earlier page, and one whose fit fills its frame at any
+leading.
 
 **The links** (3a-0, the first of the links' pull requests: the instrument before the engine's anchors; `layer-gate/links.mjs`, `tests/pdf-reader/layer-gate-links.test.ts`). The owner's ruling: links kept / total at least 0.95, the text drawn under each moved link equal to PDF.js's overlaid text at least 0.98, links over erased text 0. The original's links are the Link annotations PDF.js reports on arXiv's file (`getAnnotations()`) that the reader can carry (T: a rectangle with an area and a non-empty destination, or a url of http:, https: or mailto:); the rest are reported (U: a named action, JavaScript with no url, an attachment, `unsafeUrl` alone, another scheme). The engine's answer is `run.linksOf(p)` (records, plain data) and `run.linkSources(p)` (gate-only: each record's source annotations `[page, i]`, `i` the rank among the page's Link annotations, and its tier); an engine with neither has no record, and the measures read it so (kept 0). The attribution is the engine's own claim, checked and not trusted: by target, by the in-place rectangle, by uniqueness and, for a moved record, by the drawn text. What no check can tell is a right link from a wrong one that has the same target and the same rectangle; the gate accepts that.
 

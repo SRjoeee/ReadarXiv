@@ -2220,11 +2220,12 @@ const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 
  * page's head): a first line moved under it by half the leading drifted from the original by (L - 1) / 2 of a pitch on 56 %
  * of the paragraph starts in CJK, 70 % of them with a leading's room over them already (the maintainer's question). So the
  * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than a leading, L p0, of
- * either paragraph (its own, `lead`, or the next one's, `next`, the page fill's: run.mjs fillPage), it ends higher by the
- * deficit, its last baseline no lower than that line's plus L p0 of the larger, its fill spread over a shorter height
+ * either paragraph (its own, `lead`, or the next one's, `next`, the page fill's: run.mjs fillPage) and the original's own
+ * skip there past its pitch, it ends higher by the deficit, its last baseline no lower than that line's plus L p0 of the
+ * larger and the skip, its fill spread over a shorter height
  * (the page fill's states, `box`: slotsAt stops its last frame's slots there, so that the lines a frame holds still fall with
- * the leading and the fill's search is monotone). Where the original leaves a leading or more (a \parskip of (L - 1) p0, a
- * heading's room, nothing under it in its column) nothing changes. Null where nothing is asked: at the original's pitch or
+ * the leading and the fill's search is monotone). Where the original leaves that much or more (a heading's room, nothing under
+ * it in its column) nothing changes. Null where nothing is asked: at the original's pitch or
  * closer (the alphabets: nothing moves), a last line it shares with ink that stays (`foot` false: a unit begins on it), a
  * last frame of one line (no room to give), no line under it
  */
@@ -2233,7 +2234,11 @@ function footFloorAt(blocks, st, P, s) {
   if (!e?.foot || !(L > 1 + 1e-9) || !blocks.length || !Number.isFinite(e.below)) return null
   const bl = blocks.at(-1), low = lowOf(bl, st, s)
   if (!(bl.B[0] - low > 0.05)) return null
-  const floor = bl.B.at(-1) - e.below + L * (bl.pitch0 ?? 1.2 * s)
+  // (and the original's own skip at that boundary, its room past its pitch, capped at a pitch as the gate's measure caps
+  // it, measure.mjs paraGapsOf: a NeurIPS \parskip of 5.5 pt under 11 is kept over the leading, where without it a gap of a
+  // pitch and a skip equalled a leading of 1.5 and the paragraphs ran together)
+  const p0 = bl.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, e.below - p0), p0)
+  const floor = bl.B.at(-1) - e.below + L * p0 + skip
   return floor > low + 1e-9 ? floor : null
 }
 
