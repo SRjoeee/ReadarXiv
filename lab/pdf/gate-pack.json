@@ -1,15 +1,15 @@
 {
  "schema": 2,
- "pipeline": "12",
+ "pipeline": "13",
  "layout": {
   "schema": 4,
   "version": "7"
  },
  "compileImage": {
   "texlive": "texlive/texlive@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f",
-  "base": "debian:testing-20260918-slim@sha256:ef76a72934d568a8ef1198090dfc3d91f34d9d2af0e3ab6a0e22030c84eb3e79",
+  "base": "debian:trixie-slim@sha256:7792b1f7702a86946cd518db72b6a407302c3e9bc1635634368b878189e8221c",
   "node": "node:22-trixie-slim@sha256:6f851b42f05219411b716d43be5525cad33f872ee4d7808fbcb57616f00b6d57",
-  "aptSnapshot": "20261001T000000Z",
+  "aptSnapshot": "20261017T000000Z",
   "texFormat": {
    "texlive": 2025,
    "banner": "TeX Live 2025",
@@ -23,8 +23,8 @@
    "fmtutil": "r77314"
   }
  },
- "made": "2026-10-17T16:15:48.421Z",
- "digest": "9a191793da0e2127b2a30edad1e6ba3f7393e82fa1bbbddebf40dd25007b4cc1",
+ "made": "2026-10-17T19:48:53.923Z",
+ "digest": "1d6fbf5215aa0a4f0f085bdd7aeac9a13e95781937221b8a79c8c747eaf15d06",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -1031,21 +1031,21 @@
   },
   {
    "path": "fixtures/2307.16209v1-zh/layout.json",
-   "sha256": "4eb33c472cdb3e8cd9b336bb51c3b96342ec36cfd5977cd86bd16afae82f67e5",
-   "bytes": 497492,
-   "url": "r2://readarxiv-ci/gate-pack/4eb33c472cdb3e8cd9b336bb51c3b96342ec36cfd5977cd86bd16afae82f67e5"
+   "sha256": "8042334650fc294cb953f9945fa2e0b9984fd9af768225e4f6d99099615ec378",
+   "bytes": 501437,
+   "url": "r2://readarxiv-ci/gate-pack/8042334650fc294cb953f9945fa2e0b9984fd9af768225e4f6d99099615ec378"
   },
   {
    "path": "fixtures/2307.16209v1-zh/record.json",
-   "sha256": "8f6faf9beae0ec3a18cfd859c8d5c3cbfb06d194f93e92f4e2b21b270713c5af",
-   "bytes": 1017575,
-   "url": "r2://readarxiv-ci/gate-pack/8f6faf9beae0ec3a18cfd859c8d5c3cbfb06d194f93e92f4e2b21b270713c5af"
+   "sha256": "128177adca0f1ec5f69f2879a4796843b2cd49532f1804abaf1003844f8b6900",
+   "bytes": 1024364,
+   "url": "r2://readarxiv-ci/gate-pack/128177adca0f1ec5f69f2879a4796843b2cd49532f1804abaf1003844f8b6900"
   },
   {
    "path": "fixtures/2307.16209v1-zh/units.json",
-   "sha256": "2eb0e7d9a85423c9a4fa9542d7e5cd08945567aad39bd05b96699f6562d8cea5",
-   "bytes": 234840,
-   "url": "r2://readarxiv-ci/gate-pack/2eb0e7d9a85423c9a4fa9542d7e5cd08945567aad39bd05b96699f6562d8cea5"
+   "sha256": "7c9b276d111cecea2a675006ef1217347bd06d4e0d7416b8b34fc294010c5c70",
+   "bytes": 236659,
+   "url": "r2://readarxiv-ci/gate-pack/7c9b276d111cecea2a675006ef1217347bd06d4e0d7416b8b34fc294010c5c70"
   },
   {
    "path": "fixtures/2608.04322v1-de/arxiv.pdf",
@@ -1295,9 +1295,9 @@
   },
   {
    "path": "geometry/2307.16209v1-de-geometry.json",
-   "sha256": "f6ca64f099413c834175ea619fbe1dbeec3f7865cd13392fbab5942991e1d3c6",
-   "bytes": 390653,
-   "url": "r2://readarxiv-ci/gate-pack/f6ca64f099413c834175ea619fbe1dbeec3f7865cd13392fbab5942991e1d3c6"
+   "sha256": "3884f899fa7c39465495472759c2aa4fdff94233c8b734cf11407badc026d7bb",
+   "bytes": 390793,
+   "url": "r2://readarxiv-ci/gate-pack/3884f899fa7c39465495472759c2aa4fdff94233c8b734cf11407badc026d7bb"
   },
   {
    "path": "geometry/2608.04322v1-zh-geometry.json",
@@ -1565,15 +1565,15 @@
   },
   {
    "path": "refs/2307.16209v1-zh/layout.json",
-   "sha256": "ef0f3f6bc2deee985c31ad117cc7458a646d863934681fe637e5af8b01607c0b",
+   "sha256": "04283b1bbafdbb76184e3c9924808fb9c026b4cd68693a0565499c0ccda2fa20",
    "bytes": 491885,
-   "url": "r2://readarxiv-ci/gate-pack/ef0f3f6bc2deee985c31ad117cc7458a646d863934681fe637e5af8b01607c0b"
+   "url": "r2://readarxiv-ci/gate-pack/04283b1bbafdbb76184e3c9924808fb9c026b4cd68693a0565499c0ccda2fa20"
   },
   {
    "path": "refs/2307.16209v1-zh/ref.json",
-   "sha256": "9f7fa642cee7c364754956d991ec93d45667dd9a47b55e2f333bd3cfe34246b5",
-   "bytes": 162066,
-   "url": "r2://readarxiv-ci/gate-pack/9f7fa642cee7c364754956d991ec93d45667dd9a47b55e2f333bd3cfe34246b5"
+   "sha256": "9d9fe2356a1a1d874ee67965e8970e22fcdfb746af094d0d5783416dbdf27786",
+   "bytes": 162584,
+   "url": "r2://readarxiv-ci/gate-pack/9d9fe2356a1a1d874ee67965e8970e22fcdfb746af094d0d5783416dbdf27786"
   },
   {
    "path": "refs/2608.04322v1-de/layout.json",
