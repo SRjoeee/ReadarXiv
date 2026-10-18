@@ -190,14 +190,19 @@ export async function endsAlike(theirs: string, ours: string, base: { bytes: num
   const from = endsFrom(base), length = base.bytes - from
   try {
     const mine = rangeSource(ours, bound, { fetch: f, signal: ac.signal }).read(from, base.bytes).catch(() => null)
+    // arXiv's ask is let go where it says nothing for STALL_MS, as rangeSource lets go of ours (the end is small, so one clock
+    // for the answer and its body); the verdict is then null, as for any ask that fails
+    const attempt = new AbortController(), silent = setTimeout(() => attempt.abort(), STALL_MS)
+    const leaveAttempt = () => attempt.abort()
+    ac.signal.addEventListener('abort', leaveAttempt, { once: true })
     const arxiv = await (async (): Promise<Uint8Array | 'other' | null> => {
-      const r = await f(theirs, { ...REQUEST, headers: { range: `bytes=${from}-${base.bytes - 1}` }, signal: ac.signal })
+      const r = await f(theirs, { ...REQUEST, headers: { range: `bytes=${from}-${base.bytes - 1}` }, signal: attempt.signal })
       const m = r.status === 206 ? CONTENT_RANGE.exec(r.headers.get('content-range') ?? '') : null
       const verdict = !m ? null : Number(m[3]) !== base.bytes ? 'other' : Number(m[1]) !== from || Number(m[2]) !== base.bytes - 1 ? null : undefined
       if (verdict !== undefined) { void r.body?.cancel().catch(() => {}); return verdict }
       const b = await bodyWithin(r, length)
       return b.length === length ? b : null
-    })().catch(() => null)
+    })().catch(() => null).finally(() => { clearTimeout(silent); ac.signal.removeEventListener('abort', leaveAttempt) })
     if (arxiv === null || arxiv === 'other') return arxiv
     const b = await mine
     if (!b) return null
