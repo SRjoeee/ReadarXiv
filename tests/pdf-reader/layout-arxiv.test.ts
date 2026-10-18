@@ -42,7 +42,9 @@ async function sameAsWhole(bytes: Uint8Array) {
     expect(Array.from(text.edges.r)).toEqual(Array.from(r))
     const at = whole.map(t => (t.item as { transform: number[] }).transform[4])
     expect(Array.from(text.spans.x0)).toEqual(at)
-    expect(Array.from(text.spans.x1)).toEqual(whole.map((t, k) => (at[k] as number) + (t.item as { width: number }).width))
+    // (the item's end along its baseline: its width across for upright text, less for text set at an angle)
+    const across = (tr: number[]) => { const along = Math.hypot(tr[0]!, tr[1]!); return along ? tr[0]! / along : 1 }
+    expect(Array.from(text.spans.x1)).toEqual(whole.map((t, k) => (at[k] as number) + (t.item as { width: number }).width * across((t.item as { transform: number[] }).transform)))
     return { text, whole }
   } finally { await task.destroy() }
 }
