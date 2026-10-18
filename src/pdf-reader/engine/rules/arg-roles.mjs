@@ -227,11 +227,12 @@ const tokenEnd = (s, k) => {
   if (j < s.length && isLetter(s[j])) { while (j < s.length && isLetter(s[j])) j++; return j }
   return j + 1
 }
-// TeX's number and dimension: a sign, digits or a register, a unit; glue with its plus and minus
+// TeX's number and dimension: a sign, digits or a register, a unit; glue with its plus and minus; a box's specification,
+// `to` or `spread` before its dimension (\\hbox to 2cm{…}, \\vbox spread 1em{…})
 const UNIT = String.raw`(?:true\s*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|px|fill?l?)(?![A-Za-z])`
 const FACTOR = String.raw`[-+\s]*(?:\d+(?:[.,]\d*)?|[.,]\d+)?\s*`
 const QUANTITY = String.raw`${FACTOR}(?:${UNIT}|\\[A-Za-z@]+(?:\s*\d+)?|\d*)`
-const TEX_VALUE = new RegExp(String.raw`^\s*=?\s*(?:${QUANTITY})(?:\s*(?:plus|minus)\s*${QUANTITY})*`)
+const TEX_VALUE = new RegExp(String.raw`^\s*=?\s*(?:(?:to|spread)(?![A-Za-z])\s*)?(?:${QUANTITY})(?:\s*(?:plus|minus)\s*${QUANTITY})*`)
 /**
  * The arguments of a command whose parameters the table knows, at s[i] just after its name: each { shape, role, param,
  * start, end } (`param` its parameter's index, a group's start at its brace or bracket), an optional one or a star only
@@ -247,8 +248,10 @@ export function readArgs(s, i, params, to = s.length) {
     if (shape === '[') { if (s[k] === '[') { const e = groupEnd(s, k, '[', ']'); if (e < 0 || e > to) return { args, end: at, complete: false }; args.push({ shape, role, param, start: k, end: e }); at = e } continue }
     if (shape === '*') { if (s[k] === '*') { args.push({ shape, role, param, start: k, end: k + 1 }); at = k + 1 } continue }
     if (shape === '?' || shape === '=') { if (s[k] === '=') at = k + 1; continue }
+    // TeX's scanner reads a number or a dimension, never a group: \\hbox{…}'s group is its content, not its specification
+    // (taken for one, the token after the box became its content: `\\vbox{…}\\begin` then `{center}` walked as text, its
+    // lead written inside \\begin's name; `\\hbox{abc} more` sent `ore`)
     if (shape === '_' && role === 'd') {
-      if (s[k] === '{') { const e = groupEnd(s, k); if (e < 0 || e > to) return { args, end: at, complete: false }; args.push({ shape, role, param, start: k, end: e }); at = e; continue }
       const m = TEX_VALUE.exec(s.slice(at, Math.min(to, at + 200)))
       if (m && /\S/.test(m[0])) { args.push({ shape, role, param, start: at, end: at + m[0].length }); at += m[0].length }
       continue

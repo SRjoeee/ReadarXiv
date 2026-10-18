@@ -447,7 +447,18 @@ function commandArgs(s, i, name, to = s.length) {
     if (params.length === 1 && params[0].shape === '=') return { args: [], end: i, known: true }
     const r = readArgs(s, i, params, to)
     if (r.complete) {
-      return { args: r.args.map(a => ({ ...a, kind: a.shape === '[' ? 'opt' : 'req' })), end: r.end, known: true }
+      const args = r.args.map(a => ({ ...a, kind: a.shape === '[' ? 'opt' : 'req' }))
+      // a last argument TeX takes as one token that is a command it sets (text, content, an untyped argument): TeX hands
+      // the command the token, which reads its own arguments where it stands, so the call ends past them
+      // (\\raise2pt\\hbox{…}) — the walk never ends a placeholder between a command and its arguments, where a lead or a
+      // mark would be written. Taken alone, a \\begin read as a box's content left its {center} a group of text, and the
+      // lead was written inside the environment's name (#407's review)
+      const last = args.at(-1), token = last && last.end === r.end && last.kind === 'req' && 'tca'.includes(last.role) && s[last.start] === '\\' ? commandAt(s, last.start) : null
+      if (token && token.end === last.end && /^[A-Za-z@]+$/.test(token.name)) {
+        const own = commandArgs(s, token.end, token.name, to)
+        if (own.end > last.end) return { args: [...args.slice(0, -1), { ...last, end: own.end }], end: own.end, known: true }
+      }
+      return { args, end: r.end, known: true }
     }
   }
   return argsAfter(s, i)
