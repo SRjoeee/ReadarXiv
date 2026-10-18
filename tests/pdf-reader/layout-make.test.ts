@@ -245,6 +245,22 @@ describe('makeLayout', () => {
     expect([1, 3, 5, 7].map(k => index.unit(0)?.ph.get(k)?.fill)).toEqual([0x0071bc, MIXED_FILL, null, null])
   })
 
+  it('a piece drawn stroked alone (text rendering mode 1 or 5) has no fill, whatever fill the state holds; filled and stroked (2) its fill', async () => {
+    // (three citations in a state whose fill is red: one stroked alone, one stroked and clipped, one filled and stroked)
+    const parts: [string, number?][] = [['see '], ['[1]', 1], [' and '], ['[2]', 5], [' then '], ['[3]', 2], [' end']]
+    const runs: Run[] = []
+    let x = 72
+    for (const [s, tr] of parts) { runs.push({ s, x, y: 700, ...(tr !== undefined ? { tr, fill: '#ff0000' } : {}) }); x += s.length * CH * 10 }
+    const at = (j: number) => 72 + j * CH * 10
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, x, 700], ['p0.1a', 1, at(4), 700], ['p0.1b', 1, at(7), 700], ['p0.3a', 1, at(12), 700], ['p0.3b', 1, at(15), 700], ['p0.5a', 1, at(21), 700], ['p0.5b', 1, at(24), 700]],
+      units: [unit('para', [text('see '), ph('\\cite{a}'), text(' and '), ph('\\cite{b}'), text(' then '), ph('\\cite{c}'), text(' end')])],
+    })
+    expect([1, 3, 5].map(k => phOf(file, 0, k)?.length)).toEqual([10, 10, 11])
+    expect(phOf(file, 0, 5)?.at(-1)).toBe(0xff0000)
+  })
+
   it('a piece whose points are out of order, or set twice, is LOST; one whose points hold nothing is EMPTY', async () => {
     const runs: Run[] = [{ s: 'one two three four five six seven', x: 72, y: 700 }]
     const at = (j: number) => xAt(runs[0] as Run, j)

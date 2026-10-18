@@ -359,7 +359,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4]
     const sz = size * M[3]
     const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
-    const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name, ix0: Math.min(ox, ex), ix1: Math.max(ox, ex), fill: s.fill }
+    // (its fill where its rendering mode paints one: 0, 2, 4 and 6 fill; 1 and 5 stroke alone; 3 and 7 paint nothing, above)
+    const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name, ix0: Math.min(ox, ex), ix1: Math.max(ox, ex), fill: s.tr & 1 ? NO_FILL : s.fill }
     const box = outlineOf(g)
     if (box?.length === 4) {
       // the outline across from the origin (its x in em × size, the horizontal scale and the direction), and up
