@@ -374,6 +374,35 @@ describe('a copy made under pipeline 14, reopened under 15', () => {
   })
 })
 
+// A copy made under pipeline 15, reopened under 16: 16 cuts no unit in an environment the paper defines as code
+// (latex-front.mjs codeEnvsOf; 2610.19159's transcripts), the wire and its reading back 15's. The copy's units of prose
+// are carried as it has them: one whose source is the copy's by its hash, and one the code's skipped pairs renumber, its
+// hash new, found again by seedFrom. The code's unit is no unit now, and nothing is sent
+describe('a copy made under pipeline 15, reopened under 16', () => {
+  const BODY = ['A paragraph of the paper, with words that run on for a line or two of prose and an end.', '\\begin{transcript}\nprint({x}, \\textbf{y})\n\\end{transcript}', 'A paragraph whose \\textbf{compute resources} are set in bold, after the transcript.', 'A last paragraph of the paper, with words that run on for a line or two of prose and an end.'].join('\n\n')
+  const paperWith = (definition: string) => openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n${definition}\n\\begin{document}\n${BODY}\n\\end{document}\n`)]]))
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit of prose as the copy has it, the renumbered one too: nothing is sent again', async () => {
+    // the units 15 cut: the transcript's line a unit, as an environment that is no code still cuts it
+    const before = paperWith('\\newenvironment{transcript}{\\itshape}{}'), n0 = before.units.length
+    expect(n0).toBe(4)
+    const r0 = await runLive(before, { lang: 'zh', compile: compiler(n0).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n0) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '15', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(before.units, keptFor(before, 'zh'), await Promise.all(before.units.map(u => sourceHash(u))), r0.results) }))
+    const p = paperWith('\\newenvironment{transcript}{\\begingroup\\ttfamily\\obeylines}{\\par\\endgroup}'), n = p.units.length
+    expect(n).toBe(3)
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u))), recorded = new Set(record.units.map((u: { hash: string }) => u.hash))
+    expect(hashes.filter(h => !recorded.has(h))).toHaveLength(1)
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(3)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either

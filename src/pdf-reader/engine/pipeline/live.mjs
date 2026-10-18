@@ -413,6 +413,10 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   15 sends it, and is carried where its translation keeps a letter or a digit, its source having a letter. Every older pipeline's test
  *   takes this one with its own: what 15 changed, each of them sent the old way. Without the unit, a translation that
  *   holds no pair, no such placeholder between its texts, and a letter
+ * - 15: 16 changes what a unit is (an environment the paper defines as code is none, latex-front.mjs codeEnvsOf), not what
+ *   is sent for one or how a reply is read back: a unit whose pieces are what they were (its hash, or its source but for
+ *   its pairs' numbers, seedFrom) was sent and read back as 16 would, and every one is carried. Older pipelines keep
+ *   their own tests: 16 changes nothing they were sent
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -421,7 +425,8 @@ const holding = re => pieces => pieces.some(p => p?.t === 'text' && typeof p.s =
 const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
 const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
 const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
-export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE }
+const EVERY = () => true
+export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
