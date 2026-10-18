@@ -10,8 +10,9 @@
 // six Float32 fields, each unit's tokens and runs, and the units on each page.
 //
 // A rectangle the part's writer would refuse for its place (a coordinate past its page's view by more than RECT_SLACK) or its
-// shape (no box) is clipped to the view, and dropped where nothing of it is left on it; a unit with no rectangle left is not
-// located (its tokens stay on their pages, owned by no span). Any other rectangle is shipped as the anchor gives it, on the grid.
+// shape (no box) is clipped to the view, and dropped where nothing of it is left on it; a page left with no rectangle of the unit
+// keeps none of its tokens (they stay on the page, owned by no span), and a unit with no rectangle left is not located. Any
+// other rectangle is shipped as the anchor gives it, on the grid.
 // What reaches past a view is text whose box the tokenizer cannot know: 1406.1078v3's landscape pages set their captions
 // vertically, and a vertical item's words are laid along x from its origin, past the page's right edge.
 //
@@ -78,15 +79,19 @@ function sideOf(doc, pages, tokOf, first) {
     const tokens = a ? [...new Set(a.tokens)].sort((x, y) => x - y) : []
     const grid = a ? a.rects.map(r => [r.page, onGrid(r.x0), onGrid(r.y0), onGrid(r.x1), onGrid(r.y1)]) : []
     if (!tokens.length || !grid.length || !grid.every(r => r.every(Number.isFinite))) return null
-    const rects = []
+    const rects = [], gone = new Set()
     for (const r of grid) {
       const v = pages[r[0] - 1]
       if (!v || carried(r, v)) { rects.push(r); continue }
       const c = [r[0], Math.max(r[1], v[0]), Math.max(r[2], v[1]), Math.min(r[3], v[2]), Math.min(r[4], v[3])]
-      if (c[3] > c[1] && c[4] > c[2]) { rects.push(c); stats.clipped++ } else stats.dropped++
+      if (c[3] > c[1] && c[4] > c[2]) { rects.push(c); stats.clipped++ } else { stats.dropped++; gone.add(r[0]) }
     }
-    if (!rects.length) return null
-    return { id, a, tokens: Int32Array.from(tokens), rects }
+    // (a page left with no rectangle keeps none of the unit's tokens either: the unit's pages are its rectangles', which the cut
+    // tells it by, and a left part names only the units the parts up to it told)
+    for (const r of rects) gone.delete(r[0])
+    const kept = gone.size ? tokens.filter(k => !gone.has(doc[k]?.page)) : tokens
+    if (!rects.length || !kept.length) return null
+    return { id, a, tokens: Int32Array.from(kept), rects }
   }
   const given = []
   for (const [id, a] of first) { const u = located(id, a); if (u) given.push(u) }

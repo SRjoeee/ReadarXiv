@@ -253,6 +253,50 @@ describe('a left rectangle past its page\'s view', () => {
     expect(side.stats).toEqual(want.stats)
   })
 
+  it('drops the tokens of a page whose every rectangle it dropped: a part a page, each left part read as its part arrives', async () => {
+    // unit 1 runs from page 1 (its line there wholly past the view) to page 2; told by the part of page 2, so page 1's left part
+    // must not name it
+    const two: DocToken[] = [0, 1, 2, 3].map(k => ({ t: `w${k}`, page: k < 2 ? 1 : 2, x: 100 + (k % 2) * 40, y: 400, w: 30, h: 10, top: 408, bottom: 398 }))
+    const at = (page: number, x0: number, x1: number) => ({ page, x0, y0: 398, x1, y1: 408 })
+    const found = new Map<number, Anchor | null>([
+      [0, { rects: [at(1, 100, 130)], coverage: 1, tokens: [0], bounded: true }],
+      [1, { rects: [at(1, 700, 760), at(2, 100, 170)], coverage: 1, tokens: [1, 2, 3], bounded: true }],
+    ])
+    const side = leftSideOf({ doc: two, views: [VIEW, VIEW], anchors: found })
+    const whole = {
+      paper: { id: '2608.04322', version: 1, pages: 2 }, base: { ...BASE_OF }, versions: { image: '1' },
+      units: [0, 1].map(i => ['para', 0, null, null, null, [[0, `unit ${i}`]]]) as never, left: { pages: side.pages, units: side.units }, layout: null,
+    }
+    const c = await cutBundle(whole as never, { leftPages: side.leftPages, base: BASE_OF, target: (a: number) => a })
+    expect(c.parts.length).toBe(2)
+    const head = await readHead(c.head.bytes, { ref: c.head.ref })
+    const chunks: ReadUnitsChunk[] = []
+    for (const u of c.units) chunks.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: chunks.at(-1) ?? null }))
+    const index = indexOf(head, chunks)
+    const streams = new Map<number, number>()
+    let chain = null
+    for (const p of c.parts) {
+      const r = await readPart(p.bytes, { ref: p.ref, index, chain })
+      for (const w of r.left) streams.set(w[0], w[1])
+      chain = r.chain
+      for (let page = r.pages[0]; page <= r.pages[1]; page++) {
+        const l = c.left[page - 1]!
+        await readLeftPart(l.bytes, { ref: l.ref as Ref & { page: number }, streamOf: id => streams.get(id) })
+      }
+    }
+    expect(streams).toEqual(new Map([[0, 0], [1, 2]]))
+    expect(side.units).toEqual([[0, 0, [[1, 100, 398, 130, 408]]], [1, 2, [[2, 100, 398, 170, 408]]]])
+    expect(side.leftPages(1)!.spans.map(s => s[0])).toEqual([0])
+    expect(side.leftPages(2)!.spans).toEqual([[1, [0, 2]]])
+    expect(side.stats.dropped).toBe(1)
+    // a unit at a time, the same
+    const stream = leftSideStream({ doc: two, views: [VIEW, VIEW], columns: (() => pageColumns([VIEW, VIEW], new Map())) as never })
+    for (const id of [1, 0]) stream.add(id, found.get(id) ?? null)
+    expect(stream.units()).toEqual(side.units)
+    expect(stream.firstPage(1)).toBe(2)
+    for (const p of [1, 2]) expect(stream.leftPages(p)!.spans).toEqual(side.leftPages(p)!.spans)
+  })
+
   it('cuts 1406.1078v3\'s page 14 as the prepare does: a vertical caption anchored on its tokens, the part written and read back', async () => {
     // page 14's two items, as PDF.js gives them: rotated a quarter turn (transform [0, s, -s, 0, x, y]), their widths along +y
     const words = (n: number, from: number) => Array.from({ length: n }, (_, k) => `word${from + k}`)
