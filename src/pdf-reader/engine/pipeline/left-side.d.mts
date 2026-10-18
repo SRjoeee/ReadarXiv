@@ -13,9 +13,9 @@ export interface LeftSide {
    *  A page past the writer's bounds is given in full (the writer empties it). Throws a RangeError for a page that is none and
    *  for a token whose field is not finite or is past ±TOKEN_LIMIT */
   leftPages(page: number): LeftPageInput | null
-  /** the units located, the document's tokens, the units that ship runs, the runs, the units with pairs the gate left out, and the pairs the
-   *  filter dropped from the units that ship runs */
-  stats: { units: number; tokens: number; paired: number; runs: number; gated: number; filtered: number }
+  /** the units located, the document's tokens, the units that ship runs, the runs, the units with pairs the gate left out, the pairs the
+   *  filter dropped from the units that ship runs, and the rectangles past their page's view (or no box) clipped to it and dropped */
+  stats: { units: number; tokens: number; paired: number; runs: number; gated: number; filtered: number; clipped: number; dropped: number }
 }
 /**
  * `doc`: the tokens the anchors were made on, in page order (fitted: tokens whose fields are not finite are dropped before anchoring);

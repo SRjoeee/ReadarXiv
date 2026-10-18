@@ -209,6 +209,112 @@ describe('a page past TOKENS_PAGE', () => {
   })
 })
 
+// A rectangle the part's writer refuses for its place (a coordinate past its page's view by more than the wire's slack, format.mjs
+// partShape) is never handed to it: 1406.1078v3's landscape pages (/Rotate 90) set their captions vertically, the tokenizer lays a
+// vertical item's words along x from its origin, and the caption's line ran from x 554.427 to 1241.035 on a view 595.276 wide
+describe('a left rectangle past its page\'s view', () => {
+  const VIEW = [0, 0, 595.276, 841.89]
+  const doc: DocToken[] = Array.from({ length: 8 }, (_, k) => ({ t: `w${k}`, page: 1, x: 100 + k * 40, y: 400, w: 30, h: 10, top: 408, bottom: 398 }))
+  const anchor = (rects: [number, number, number, number][], tokens: number[]): Anchor => ({ rects: rects.map(([x0, y0, x1, y1]) => ({ page: 1, x0, y0, x1, y1 })), coverage: 1, tokens, bounded: true })
+  const anchors = new Map<number, Anchor | null>([
+    // partly outside: clipped to the view (page 14's caption line)
+    [0, anchor([[554.427, 76.568, 1241.035, 86.32]], [0])],
+    // one rectangle within the view, one wholly outside it (page 15's second line, x 1058.191 to 1076.03): that one dropped
+    [1, anchor([[100, 390, 300, 410], [1058.191, 76.568, 1076.03, 86.32]], [1, 2])],
+    // every rectangle wholly outside: no rectangle left, so the unit is not located, as one with none is
+    [2, anchor([[700, 76.568, 760, 86.32]], [3])],
+    // past the view within the slack the writer allows: kept as it is
+    [3, anchor([[-0.5, 380, 595.9, 392]], [4])],
+    // past the view below and above: clipped on both
+    [4, anchor([[10, -20, 50, 900]], [5])],
+  ])
+
+  it('clips a rectangle partly outside to the view, drops one wholly outside, and keeps one within the slack as it is', () => {
+    const side = leftSideOf({ doc, views: [VIEW], anchors })
+    expect(side.units).toEqual([
+      [0, 0, [[1, 554.427, 76.568, 595.276, 86.32]]],
+      [1, 1, [[1, 100, 390, 300, 410]]],
+      [3, 4, [[1, -0.5, 380, 595.9, 392]]],
+      [4, 5, [[1, 10, 0, 50, 841.89]]],
+    ])
+    expect(side.stats.units).toBe(4)
+    expect(side.stats.clipped).toBe(2)
+    expect(side.stats.dropped).toBe(2)
+    // a page's left part input is its tokens' alone: the dropped unit's token is still on the page, owned by no span
+    expect(side.leftPages(1)!.spans.map(s => s[0])).toEqual([0, 1, 3, 4])
+  })
+
+  it('does the same a unit at a time', () => {
+    const want = leftSideOf({ doc, views: [VIEW], anchors })
+    const side = leftSideStream({ doc, views: [VIEW], columns: (() => pageColumns([VIEW], new Map())) as never })
+    for (const id of [4, 2, 0, 3, 1]) side.add(id, anchors.get(id) ?? null)
+    expect(side.units()).toEqual(want.units)
+    expect(side.firstPage(2)).toBeNull()
+    expect(side.stats).toEqual(want.stats)
+  })
+
+  it('drops the tokens of a page whose every rectangle it dropped: a part a page, each left part read as its part arrives', async () => {
+    // unit 1 runs from page 1 (its line there wholly past the view) to page 2; told by the part of page 2, so page 1's left part
+    // must not name it
+    const two: DocToken[] = [0, 1, 2, 3].map(k => ({ t: `w${k}`, page: k < 2 ? 1 : 2, x: 100 + (k % 2) * 40, y: 400, w: 30, h: 10, top: 408, bottom: 398 }))
+    const at = (page: number, x0: number, x1: number) => ({ page, x0, y0: 398, x1, y1: 408 })
+    const found = new Map<number, Anchor | null>([
+      [0, { rects: [at(1, 100, 130)], coverage: 1, tokens: [0], bounded: true }],
+      [1, { rects: [at(1, 700, 760), at(2, 100, 170)], coverage: 1, tokens: [1, 2, 3], bounded: true }],
+    ])
+    const side = leftSideOf({ doc: two, views: [VIEW, VIEW], anchors: found })
+    const whole = {
+      paper: { id: '2608.04322', version: 1, pages: 2 }, base: { ...BASE_OF }, versions: { image: '1' },
+      units: [0, 1].map(i => ['para', 0, null, null, null, [[0, `unit ${i}`]]]) as never, left: { pages: side.pages, units: side.units }, layout: null,
+    }
+    const c = await cutBundle(whole as never, { leftPages: side.leftPages, base: BASE_OF, target: (a: number) => a })
+    expect(c.parts.length).toBe(2)
+    const head = await readHead(c.head.bytes, { ref: c.head.ref })
+    const chunks: ReadUnitsChunk[] = []
+    for (const u of c.units) chunks.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: chunks.at(-1) ?? null }))
+    const index = indexOf(head, chunks)
+    const streams = new Map<number, number>()
+    let chain = null
+    for (const p of c.parts) {
+      const r = await readPart(p.bytes, { ref: p.ref, index, chain })
+      for (const w of r.left) streams.set(w[0], w[1])
+      chain = r.chain
+      for (let page = r.pages[0]; page <= r.pages[1]; page++) {
+        const l = c.left[page - 1]!
+        await readLeftPart(l.bytes, { ref: l.ref as Ref & { page: number }, streamOf: id => streams.get(id) })
+      }
+    }
+    expect(streams).toEqual(new Map([[0, 0], [1, 2]]))
+    expect(side.units).toEqual([[0, 0, [[1, 100, 398, 130, 408]]], [1, 2, [[2, 100, 398, 170, 408]]]])
+    expect(side.leftPages(1)!.spans.map(s => s[0])).toEqual([0])
+    expect(side.leftPages(2)!.spans).toEqual([[1, [0, 2]]])
+    expect(side.stats.dropped).toBe(1)
+    // a unit at a time, the same
+    const stream = leftSideStream({ doc: two, views: [VIEW, VIEW], columns: (() => pageColumns([VIEW, VIEW], new Map())) as never })
+    for (const id of [1, 0]) stream.add(id, found.get(id) ?? null)
+    expect(stream.units()).toEqual(side.units)
+    expect(stream.firstPage(1)).toBe(2)
+    for (const p of [1, 2]) expect(stream.leftPages(p)!.spans).toEqual(side.leftPages(p)!.spans)
+  })
+
+  it('cuts 1406.1078v3\'s page 14 as the prepare does: a vertical caption anchored on its tokens, the part written and read back', async () => {
+    // page 14's two items, as PDF.js gives them: rotated a quarter turn (transform [0, s, -s, 0, x, y]), their widths along +y
+    const words = (n: number, from: number) => Array.from({ length: n }, (_, k) => `word${from + k}`)
+    const one = words(30, 0), two = words(5, 30)
+    const vertical = (str: string, x: number, width: number) => ({ str, transform: [0, 10.91, -10.91, 0, x, 78.92], width, height: 10.91, hasEOL: true, fontName: 'f' })
+    const pages: TextPage[] = [{ page: 1, items: [vertical(one.join(' '), 540.88, 700.16), vertical(two.join(' '), 554.43, 169.91)], styles: {} }]
+    const tokens = tokenizeDocument(pages)
+    const found = anchorUnits(tokens, [{ id: 0, text: [...one, ...two].join(' ') }], {})
+    const a = found.get(0) as Anchor
+    expect(Math.max(...a.rects.map(r => r.x1))).toBeGreaterThan(VIEW[2]! + 600)
+    const side = leftSideOf({ doc: tokens, views: [VIEW], anchors: found })
+    for (const [, , rects] of side.units) for (const r of rects) expect(r[3]).toBeLessThanOrEqual(VIEW[2]!)
+    const { cut, streams } = await cutAndRead(side, 1)
+    expect(cut.parts.length).toBe(1)
+    expect(streams.get(0)).toBe(Math.min(...a.tokens))
+  })
+})
+
 describe('leftSideStream: the side a unit at a time (the page stream, stage 2)', () => {
   it('the units given in any order, a page asked once every unit on it is: leftSideOf\'s, byte for byte', () => {
     const { doc, anchors } = make()
