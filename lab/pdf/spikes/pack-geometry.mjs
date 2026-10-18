@@ -8,6 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { getDocument, OPS, version as PDFJS_V } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { COMPILE_IDENTITY } from './compile-image.mjs'
 import { LITE } from './lite-pdfjs.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
@@ -31,7 +32,7 @@ let bounds
 if (compiles) {
   // the marks as layer-fixtures makes them, each compile read from the cache it filled (the key is its)
   const { files: source } = await unpackSource(new Uint8Array(readFileSync(sourceGz)))
-  const keyOf = marked => { const h = createHash('sha256'); for (const [p, b] of [...source, ...marked].sort((a, b) => (a[0] < b[0] ? -1 : 1))) h.update(p).update(b); return h.digest('hex').slice(0, 16) }
+  const keyOf = marked => { const h = createHash('sha256').update(COMPILE_IDENTITY); for (const [p, b] of [...source, ...marked].sort((a, b) => (a[0] < b[0] ? -1 : 1))) h.update(p).update(b); return h.digest('hex').slice(0, 16) }
   const compile = async req => {
     const probe = !req.rerun, name = `${probe ? 'probe-' : ''}${keyOf(req.overrides)}`
     const f = join(compiles, `${name}.pdf`), pdf = existsSync(f) ? new Uint8Array(readFileSync(f)) : null

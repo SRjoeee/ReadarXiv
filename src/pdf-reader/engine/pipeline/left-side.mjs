@@ -9,12 +9,30 @@
 // anchors.mjs startRuns, clipped to the page. Nothing is kept of `doc` or of the anchors but what a page needs: the tokens'
 // six Float32 fields, each unit's tokens and runs, and the units on each page.
 //
+// A rectangle the part's writer would refuse for its place (a coordinate past its page's view by more than RECT_SLACK) or its
+// shape (no box) is clipped to the view, and dropped where nothing of it is left on it; a page left with no rectangle of the unit
+// keeps none of its tokens (they stay on the page, owned by no span), and a unit with no rectangle left is not located. Any
+// other rectangle is shipped as the anchor gives it, on the grid.
+// What reaches past a view is text that does run off its page: upright words past an edge (2503.06072 pp 45-46, 2608.12606 p5,
+// 2608.28697 p5). 1406.1078v3's landscape captions, whose words the tokenizer once laid along x past the page's right edge, are
+// placed along their own direction now (anchors.mjs tokenizeDocument).
+//
 // An original module (no port statement). It imports the engine's own pure modules: no canvas, no `node:*` one.
-import { TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, onGrid } from '../layer-proto/format.mjs'
+import { RECT_SLACK, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, onGrid } from '../layer-proto/format.mjs'
 import { layoutOf } from '../view/highlight.mjs'
 import { startRuns } from './anchors.mjs'
 
 const LIMIT = TOKEN_LIMIT * TOKEN_SCALE
+
+/** whether the part's writer carries the rectangle `r` [page, x0, y0, x1, y1] on its page's view `v` as it is (format.mjs
+ *  partShape): each coordinate within the view by RECT_SLACK, and a box */
+function carried(r, v) {
+  for (let q = 1; q < 5; q++) {
+    const up = (q - 1) % 2
+    if (r[q] < v[up] - RECT_SLACK || r[q] > v[2 + up] + RECT_SLACK) return false
+  }
+  return r[3] > r[1] && r[4] > r[2]
+}
 
 /** the index of the first of the rising `xs` that is at least `v` */
 function lowerBound(xs, v) {
@@ -57,11 +75,24 @@ function sideOf(doc, pages, tokOf, first) {
   const N = pages.length, n = doc.length
   // the units located, by id: tokens rising and unique, the first the stream, the rectangles on the grid
   const placed = new Map()
+  const stats = { units: 0, tokens: n, paired: 0, runs: 0, gated: 0, filtered: 0, clipped: 0, dropped: 0 }
   const located = (id, a) => {
     const tokens = a ? [...new Set(a.tokens)].sort((x, y) => x - y) : []
-    const rects = a ? a.rects.map(r => [r.page, onGrid(r.x0), onGrid(r.y0), onGrid(r.x1), onGrid(r.y1)]) : []
-    if (!tokens.length || !rects.length || !rects.every(r => r.every(Number.isFinite))) return null
-    return { id, a, tokens: Int32Array.from(tokens), rects }
+    const grid = a ? a.rects.map(r => [r.page, onGrid(r.x0), onGrid(r.y0), onGrid(r.x1), onGrid(r.y1)]) : []
+    if (!tokens.length || !grid.length || !grid.every(r => r.every(Number.isFinite))) return null
+    const rects = [], gone = new Set()
+    for (const r of grid) {
+      const v = pages[r[0] - 1]
+      if (!v || carried(r, v)) { rects.push(r); continue }
+      const c = [r[0], Math.max(r[1], v[0]), Math.max(r[2], v[1]), Math.min(r[3], v[2]), Math.min(r[4], v[3])]
+      if (c[3] > c[1] && c[4] > c[2]) { rects.push(c); stats.clipped++ } else { stats.dropped++; gone.add(r[0]) }
+    }
+    // (a page left with no rectangle keeps none of the unit's tokens either: the unit's pages are its rectangles', which the cut
+    // tells it by, and a left part names only the units the parts up to it told)
+    for (const r of rects) gone.delete(r[0])
+    const kept = gone.size ? tokens.filter(k => !gone.has(doc[k]?.page)) : tokens
+    if (!rects.length || !kept.length) return null
+    return { id, a, tokens: Int32Array.from(kept), rects }
   }
   const given = []
   for (const [id, a] of first) { const u = located(id, a); if (u) given.push(u) }
@@ -79,7 +110,6 @@ function sideOf(doc, pages, tokOf, first) {
 
   // the units on each page (ids; rising when a page is asked for), each unit's start runs
   const on = Array.from({ length: N + 1 }, () => [])
-  const stats = { units: 0, tokens: n, paired: 0, runs: 0, gated: 0, filtered: 0 }
   // (the pages a unit was added to since they were last asked for: their units sorted again)
   const unsorted = new Set()
   let done = 0

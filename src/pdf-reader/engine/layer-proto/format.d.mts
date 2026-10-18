@@ -50,6 +50,8 @@ export declare const TOKEN_FIELDS: readonly ['l', 'r', 'y', 'h', 'top', 'bottom'
 /** a number on the wire's grid (thousandths of a PDF unit), as the views and rectangles of a part are written */
 export declare const onGrid: (v: number) => number
 export declare const TOKEN_LIMIT: number
+/** a left rectangle of a part lies within its page's view by this, PDF units */
+export declare const RECT_SLACK: number
 /** why the parts end before the paper does: FINAL (the paper's own, which no other build changes) and BUILD-SCOPED (of the
  *  build's resources), and both */
 export declare const FINAL_END_WHYS: readonly ['bound', 'part']

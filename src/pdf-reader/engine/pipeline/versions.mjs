@@ -75,7 +75,12 @@
 //     brace pair renumbers the later pairs of its file, so 60 units of 2307.16209 and 49 of 2608.18502 keep their text and
 //     change their hash, found again by seedFrom. The wire, the translation and its reading back are 12's: a copy of 12
 //     carries every unit it holds the source of (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '13'
+// 14: the left side of a paper with text set at an angle (anchors.mjs tokenizeDocument): a turned item's tokens lie along its
+//     baseline, no longer read along x, and the left parts that hold them change — arXiv's stamp up every first page's margin,
+//     a landscape page's captions, a figure's turned labels: 130 of the corpus's 132 PDFs. The units, the wire, the
+//     translation and the layout file are 13's byte for byte; the bundle's content is not, under the same key (VTAG), so a
+//     bundle made before is never taken for one made now. A copy of 13 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '14'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

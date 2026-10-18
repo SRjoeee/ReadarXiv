@@ -405,12 +405,14 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 12: 13 changes what a unit is (a heading wholly in \texorpdfstring is one, latex-front.mjs), not what is sent for one or
  *   how a reply is read back: a unit whose pieces are what they were (its hash) was sent and read back as 13 would, and every
  *   one is carried; the units 13 cuts anew (the headings, and those its new brace pairs renumber) have new hashes
+ * - 13: 14 changes the left side alone (a turned item's tokens, anchors.mjs): every unit, its pieces and its wire are 13's, and
+ *   every one is carried
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
 const NO_MARKER_HASH_OR_RUN = (pieces, unit = null) => NO_MARKER_HASH(pieces) && NO_RUN(pieces, unit)
 const EVERY = () => true
-export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH_OR_RUN, 8: NO_MARKER_HASH_OR_RUN, 9: NO_MARKER_HASH_OR_RUN, 10: NO_RUN, 11: NO_RUN, 12: EVERY }
+export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH_OR_RUN, 8: NO_MARKER_HASH_OR_RUN, 9: NO_MARKER_HASH_OR_RUN, 10: NO_RUN, 11: NO_RUN, 12: EVERY, 13: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
