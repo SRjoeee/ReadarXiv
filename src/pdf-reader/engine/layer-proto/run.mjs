@@ -1427,8 +1427,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (let j = 0; L && j + 7 < L.length; j += 8) if (L[j] === r0[0]) spans.push([L[j + 1], L[j + 2]])
     }
     if (spans.length < 2) return false
-    const mids = spans.map(([a, z]) => (a + z) / 2).sort((a, b) => a - b), m = mids[mids.length >> 1], widths = spans.map(([a, z]) => z - a)
-    return mids.every(x => Math.abs(x - m) <= 2) && Math.max(...widths) - Math.min(...widths) > 4
+    // (every middle within 2 of every other: a column whose cells share a start or an end has its middles half its widths'
+    // spread apart, and a spread of widths more than 4 puts them more than 2 apart)
+    const mids = spans.map(([a, z]) => (a + z) / 2).sort((a, b) => a - b), widths = spans.map(([a, z]) => z - a)
+    return mids.at(-1) - mids[0] <= 2 && Math.max(...widths) - Math.min(...widths) > 4
   }
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
   // the units the hybrid draws that v0's geometry does not hold, as each is placed)

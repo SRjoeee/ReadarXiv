@@ -36,6 +36,26 @@ describe('a table cell is centred by its own lines or by its column', () => {
   }
 })
 
+describe('a column whose cells share a start or an end is not centred, whatever its widths', () => {
+  // (an l column at 160 of widths 20, 22 and 25, its middles 2.5 apart; an r column ending at 250 of the same widths: each
+  // middle within 2 of the median, the widths 5 apart, which a test of each middle against the median had called centred)
+  const paper: Paper = {
+    name: 'flush columns', pages: 1,
+    specs: [
+      para(0, [[1, 270, 4]], 30),
+      cellSpec(1, [[200, 160, 180]], '0:c1'), cellSpec(2, [[188, 160, 182]], '0:c1'), cellSpec(3, [[176, 160, 185]], '0:c1'),
+      cellSpec(4, [[200, 230, 250]], '0:c2'), cellSpec(5, [[188, 228, 250]], '0:c2'), cellSpec(6, [[176, 225, 250]], '0:c2'),
+    ],
+  }
+  for (const groups of [true, false]) {
+    it(`${groups ? 'the open\'s table groups' : 'the units\' own groups'}: the l and the r column's cells not centred`, async () => {
+      const run = await openRun(build(paper), { groups })
+      await run.layFor(1)
+      expect([1, 2, 3, 4, 5, 6].map(id => kindsOf(run, id))).toEqual([['last'], ['last'], ['last'], ['last'], ['last'], ['last']])
+    })
+  }
+})
+
 describe('a unit of a part with no layout is centred by the page\'s column', () => {
   it('a line on its column\'s middle, short of it, in one column of two: centred, as before the file had a flag', async () => {
     // (the left column 20 to 140, its middle 80: four paragraph lines over it; a line of 60 about 80, not the page's middle 150)
