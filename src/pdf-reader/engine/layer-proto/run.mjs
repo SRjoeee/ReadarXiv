@@ -638,8 +638,8 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * unit's lay that reads a page's ink (borrowing below its lines, widening over the paper beside them: laid again once the pixels
  * are in, NeedPixels), a crop's growth, a name put back; and a paint, which waits for the page's own closure (a unit running on to
  * a page beside the one asked is painted there once that page is laid, in its own order). Every page is drawn as without drawOf.
- * Used where every ink read can wait so: no copy kept (`copy` false), a page pass, no leftover packed; else ignored (`drawStats`
- * null). Absent: every page read live, today's path. `drawsComing` (the door's, its head's `draw: 1`: the parts may carry
+ * Used where every ink read can wait so: no copy kept (`copy` false), a page pass, no even pass, no leftover packed; else ignored
+ * (`drawStats` null). Absent: every page read live, today's path. `drawsComing` (the door's, its head's `draw: 1`: the parts may carry
  * draws): the page asked is read for its pixels at its ask, once a part covers it, before its draw (or page 1's) is in, whether it
  * is then read from its draw or live; without it, once its draw is in, a page with none read in the closure's order, page 1 first.
  */
@@ -668,9 +668,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  the stream's order, the prefix needsOf reads. No built-in rule set is so */
   const ORDER_FREE = PASSES && !P.even && P.leftover !== 'pack'
   /** whether pages are read from their draws (drawOf): where every ink read can wait for a page's pixels, no copy kept (the
-   *  checker's, which reads every page's), a page pass (each unit painted as it is laid reads its pages' ink at once) and no
-   *  leftover packed (the pass reads its page's ink as it moves units) */
-  const DATA = drawOf !== null && !copy && PASSES && P.leftover !== 'pack'
+   *  checker's, which reads every page's), a page pass (each unit painted as it is laid reads its pages' ink at once), no even pass
+   *  (it lays a page's units anew, and a fit may then measure the room below a block, its page's ink, outside the lay that waits
+   *  for pixels) and no leftover packed (the pass reads its page's ink as it moves units). The other passes read no ink: the page
+   *  fill lays at a fit's own state (layoutAt), and a paint waits for its page's pixels (paintOn) */
+  const DATA = drawOf !== null && !copy && PASSES && !P.even && P.leftover !== 'pack'
   // iteration 2's hyphenation, fetched at once (local, small)
   const hyphP = Promise.all(R.patterns.map(async l => L2.setHyphenData(l, await loadHyphenation(l, hyphUrl(l)))))
   // the target's likely faces loaded meanwhile (Times-like until the paper's own designs are known), and Latin Modern at

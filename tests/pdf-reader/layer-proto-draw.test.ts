@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { checkDraw, type Draw } from '@/pdf-reader/engine/layer-proto/draw.mjs'
+import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { layoutFacade } from '@/pdf-reader/engine/layer-proto/facade.mjs'
 import type { LayerIndex, ReadPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { layerRows, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
@@ -46,6 +47,18 @@ vi.mock('@/pdf-reader/engine/layer-proto/draw.mjs', async importOriginal => {
     return { ...x, items: x.items.map(it => ({ ...it, fontName: it.fontName === null ? null : 'axt-draw-one' })), fonts: new Map([['axt-draw-one', [...x.fonts.values()][0]!]]), styles: { 'axt-draw-one': Object.values(x.styles)[0]! } }
   }
   return { ...actual, drawInputsOf }
+})
+
+/** a test's switch: the even pass's fit (layoutUnit2 asked with a maxScale) reaches the borrow knob, which measures the room
+ *  below each block (its freeOf: the page's ink), as a fit at a smaller size may where the breaking is not monotone */
+const evenBorrows = vi.hoisted(() => ({ on: false, reads: 0 }))
+vi.mock('@/pdf-reader/engine/layer-proto/layer2.mjs', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')>()
+  const layoutUnit2 = (tokens: never, blocks: { freeOf?: (() => number) | null; free?: number }[], s: number, P: { maxScale?: number }) => {
+    if (evenBorrows.on && P.maxScale !== undefined) for (const b of blocks) if (b.freeOf) { evenBorrows.reads++; b.free = b.freeOf(); b.freeOf = null }
+    return actual.layoutUnit2(tokens, blocks as never, s, P as never)
+  }
+  return { ...actual, layoutUnit2 }
 })
 
 // ---------------------------------------------------------------- the paper, its PDF.js pages counted, its draws
@@ -119,16 +132,16 @@ const drawing = (run: Run) => ({
 
 /** the run over the paper, every part told at the open, its rows taken and ended, the pages asked for in `order` (each laid by
  *  its closure, layFor): with `drawOf`, each page's draw handed over once a page */
-async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, order: number[], drawOf?: (page: number) => Promise<Draw | null>, o: { copy?: boolean; drawsComing?: boolean } = {}) {
+async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, order: number[], drawOf?: (page: number) => Promise<Draw | null>, o: { copy?: boolean; drawsComing?: boolean; rules?: unknown; spec?: PaperSpec } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const facade = layoutFacade(P.index.head)
-  const N = SPEC.pages
+  const N = (o.spec ?? SPEC).pages
   const asked: number[] = []
   const run = await openProto({
     parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: N, scale: 1, dpr: 1, copy: o.copy ?? false, free: true, records: true, labels: LABELS as never,
     tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page: {} } as never },
-    ...(drawOf ? { drawOf: (p: number) => { asked.push(p); return drawOf(p) } } : {}), ...(o.drawsComing ? { drawsComing: true } : {}),
+    ...(drawOf ? { drawOf: (p: number) => { asked.push(p); return drawOf(p) } } : {}), ...(o.drawsComing ? { drawsComing: true } : {}), ...(o.rules ? { rules: o.rules } : {}),
   } as never)
   for (const part of P.parts) { facade.add(part); run.grow(part) }
   run.endParts()
@@ -340,6 +353,41 @@ describe('a page whose pixels cannot be read', () => {
       expect(run.drawStats!.pixels[2]).toBe('asked')
       expect(unobserved).toEqual([])
     } finally { process.off('unhandledRejection', onRejection) }
+  })
+})
+
+describe('the even pass: pages read live, its fits reading any page\'s ink at once', () => {
+  /** page 2: a paragraph translated long on its lowest line (no room below to borrow: it shrinks, the page's target under 1) and
+   *  one above it running on to page 3, which the pass lays anew at the target */
+  const EVEN: PaperSpec = {
+    pages: 3,
+    units: [
+      para('First page body text', 1, 200, { stream: 0 }),
+      para('A long paragraph of page two', 2, 40, { stream: 30 }),
+      { ...para('Running from two on to three', 2, 200, { stream: 20 }), lines: [[2, 20, 280, 200], [3, 20, 280, 270]] },
+      para('Third page body text', 3, 200, { stream: 45 }),
+    ],
+  }
+  const rules = (() => { const r = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }; r.scripts.Hans!.even = 1; return r })()
+  it('with drawOf, reads every page live where the rules have an even pass, and draws as without it (no NeedPixels past a lay)', async () => {
+    const c = await cutSpec(EVEN)
+    const P = { index: c.index, parts: c.parts }
+    const was = LONG.get(1)
+    LONG.set(1, 32)
+    evenBorrows.on = true
+    try {
+      const live = docsOf(EVEN)
+      const want = drawing((await runOf(P, live.doc, [2], undefined, { rules, spec: EVEN })).run)
+      const data = docsOf(EVEN)
+      const D = await docsOf(EVEN).draws()
+      // (the pass laid a unit anew and its fit measured the room below its blocks: an ink read)
+      expect(evenBorrows.reads).toBeGreaterThan(0)
+      evenBorrows.reads = 0
+      const { run } = await runOf(P, data.doc, [2], async p => D[p - 1]!, { rules, spec: EVEN })
+      expect(run.drawStats).toBeNull()
+      expect(drawing(run)).toEqual(want)
+      expect(data.counts.text.slice(1)).toEqual(live.counts.text.slice(1))
+    } finally { evenBorrows.on = false; LONG.set(1, was!) }
   })
 })
 

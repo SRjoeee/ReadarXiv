@@ -249,8 +249,8 @@ export interface ProtoRun {
   check(): CheckResult
   /** how the removal went */
   removalStats(): RemovalStats | null
-  /** where pages are read from their draws (`drawOf`), a copy; null where none is (no drawOf, a copy kept, no page pass, the
-   *  leftover packed) */
+  /** where pages are read from their draws (`drawOf`), a copy; null where none is (no drawOf, a copy kept, no page pass, an even
+   *  pass, the leftover packed) */
   readonly drawStats: DrawStats | null
   /** a done page's removed page at v0's own resolution (mode 'draw', with v0's copy), until it is released */
   removedCanvas(page: number): HTMLCanvasElement | null
@@ -339,7 +339,7 @@ export declare function openProto(o: {
   records?: boolean
   /** E-C (the door's, BUNDLE 5): each page's draw geometry, asked once a page; a page with one is read from it (its viewport alone
    *  of PDF.js's, its pixels where a step reads its ink), one with none (null, a throw, a draw refused or later than DRAW_WAIT_MS)
-   *  live. Every page is drawn as without it. Used with `copy` false, a page pass and no leftover packed; else ignored */
+   *  live. Every page is drawn as without it. Used with `copy` false, a page pass, no even pass and no leftover packed; else ignored */
   drawOf?: ((page: number) => Promise<Draw | null>) | null
   /** the paper's parts may carry draws (the door's Layer.drawsComing, the head's `draw: 1`): the page asked is read for its pixels at
    *  its ask (once a part covers it), before its draw or page 1's is in; default false, once its draw is in */
