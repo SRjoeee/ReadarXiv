@@ -748,15 +748,16 @@ describe('the door: three opens, the same pages', () => {
 // ---------------------------------------------------------------- the draw hand-off (E-C): the run's `drawOf`
 describe('the door: the draw of a left part, handed to the run', () => {
   const DRAW = { fonts: [['CMR10', 'serif', 0, ['a', 'b']]], items: [['hello', 10, 0, 10, 72, 700, 30, 10, 0], ['', 10, 0, 10, 102, 700, 0, 10, -1]], links: [] }
-  async function drawDoor(o: { draws?: Record<number, unknown>; parts?: number; leftPart?: (page: number) => Promise<Uint8Array> } = {}) {
+  async function drawDoor(o: { draws?: Record<number, unknown>; parts?: number; leftPart?: (page: number, M: Made) => Promise<Uint8Array>; drawsHeld?: number; doc?: (base: LayerDocument) => LayerDocument } = {}) {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const M = await made({ draws: o.draws ?? { 1: DRAW, 2: DRAW } })
     const docFor = docsOf(textOf(M)) as unknown as (r: number) => LayerDocument
     const fetched: number[] = []
-    const leftPart = async (page: number) => { fetched.push(page); return o.leftPart ? o.leftPart(page) : (M.lefts[page] as { bytes: Uint8Array }).bytes }
+    const leftPart = async (page: number) => { fetched.push(page); return o.leftPart ? o.leftPart(page, M) : (M.lefts[page] as { bytes: Uint8Array }).bytes }
     const before = seen.drawOfs.length
     const parts = M.readParts.slice(0, o.parts ?? 0)
-    const layer = await openLayer({ index: M.index, doc: docFor(parts.at(-1)?.chain.r ?? 0), parts, target: 'zh', faceSources, hyphUrl, leftPart, onRetired: () => {} })
+    const doc = docFor(parts.at(-1)?.chain.r ?? 0)
+    const layer = await openLayer({ index: M.index, doc: o.doc ? o.doc(doc) : doc, parts, target: 'zh', faceSources, hyphUrl, leftPart, onRetired: () => {}, ...(o.drawsHeld !== undefined ? { drawsHeld: o.drawsHeld } : {}) } as never)
     const drawOf = seen.drawOfs[before]
     return { layer, M, docFor, fetched, drawOf }
   }
@@ -826,6 +827,57 @@ describe('the door: the draw of a left part, handed to the run', () => {
     gone.layer.dispose()
     expect(await waiting).toBeNull()
     expect(await (gone.drawOf as (p: number) => Promise<unknown>)(1)).toBeNull()
+  })
+
+  it('holds the draws the run has not taken within `drawsHeld` bytes, the oldest let go first (the run reads such a page itself)', async () => {
+    const all = { 1: DRAW, 2: DRAW, 3: DRAW, 4: DRAW }
+    const one = await drawDoor({ draws: all, parts: 4 })
+    await one.layer.leftPageOf(1)
+    const size = (one.M.lefts[1] as { bytes: Uint8Array }).bytes.length
+    expect(one.layer.stats().draws).toEqual({ held: 1, bytes: size })
+    one.layer.dispose()
+    expect(one.layer.stats().draws).toEqual({ held: 0, bytes: 0 })
+    // (room for two: the view reads pages 1 to 4, the run has asked for none)
+    const d = await drawDoor({ draws: all, parts: 4, drawsHeld: 2 * size + 1 })
+    for (const p of [1, 2, 3, 4]) await d.layer.leftPageOf(p)
+    expect(d.layer.stats().draws.held).toBe(2)
+    expect(await (d.drawOf as (p: number) => Promise<unknown>)(1)).toBeNull()
+    expect(await (d.drawOf as (p: number) => Promise<unknown>)(2)).toBeNull()
+    expect(await (d.drawOf as (p: number) => Promise<unknown>)(3)).toEqual(DRAW)
+    expect(await (d.drawOf as (p: number) => Promise<unknown>)(4)).toEqual(DRAW)
+    expect(d.layer.stats().draws).toEqual({ held: 0, bytes: 0 })
+    d.layer.dispose()
+    // (a draw whose own left part passes the bound is not held at all, nor any where the bound is 0: the run reads those pages)
+    for (const held of [size - 1, 0]) {
+      const small = await drawDoor({ draws: all, parts: 4, drawsHeld: held })
+      await small.layer.leftPageOf(1)
+      expect(small.layer.stats().draws, `drawsHeld ${held}`).toEqual({ held: 0, bytes: 0 })
+      expect(await (small.drawOf as (p: number) => Promise<unknown>)(1)).toBeNull()
+      small.layer.dispose()
+    }
+  })
+
+  it('keeps no draw a left part brings once the layer is let go while reading it, nor after the run dies (drawOf null then)', async () => {
+    // (dispose while the left part is read: its bytes come, then the layer goes during readLeftPart's digest)
+    const late = await drawDoor({ parts: 3 })
+    const digest = crypto.subtle.digest.bind(crypto.subtle)
+    const spy = vi.spyOn(crypto.subtle, 'digest').mockImplementation((async (a: AlgorithmIdentifier, b: BufferSource) => { late.layer.dispose(); return digest(a, b) }) as never)
+    await late.layer.leftPageOf(1).catch(() => {})
+    for (let i = 0; i < 20; i++) await tick()
+    spy.mockRestore()
+    expect(late.fetched).toEqual([1])
+    expect(late.layer.stats().draws).toEqual({ held: 0, bytes: 0 })
+    // (a run that dies: every draw let go, and a draw asked of a dead layer is null at once)
+    const fatal = new RangeError('Array buffer allocation failed')
+    const dies = await drawDoor({ parts: 4, draws: { 1: DRAW, 2: DRAW, 3: DRAW, 4: DRAW }, doc: base => ({ ...base, getPage: (n: number) => (n === 3 ? Promise.reject(fatal) : base.getPage(n)) }) as never })
+    await dies.layer.leftPageOf(1)
+    expect(dies.layer.stats().draws.held).toBe(1)
+    dies.layer.take(rowsOfIndex(dies.M.index))
+    dies.layer.end()
+    await dies.layer.pageOf(3, { lang: 'zh' }).catch(() => {})
+    expect(dies.layer.stats().draws).toEqual({ held: 0, bytes: 0 })
+    expect(await (dies.drawOf as (p: number) => Promise<unknown>)(2)).toBeNull()
+    dies.layer.dispose()
   })
 
   it('refuses a page number outside the paper without fetching', async () => {

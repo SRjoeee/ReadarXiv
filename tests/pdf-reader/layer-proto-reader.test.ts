@@ -669,7 +669,7 @@ describe('the door reaches no server-only module', () => {
   it('exports what the hosts take, and not the role table\'s or v0\'s own calls', async () => {
     const door = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     expect(Object.keys(door).sort()).toEqual([
-      'ADDON_CAP', 'ADDON_MANIFEST_CAP', 'ADDON_MANIFEST_VALUES', 'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'BundleRefusal', 'CTAG', 'FACES', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal', 'PDF_OPTIONS', 'VTAG',
+      'ADDON_CAP', 'ADDON_MANIFEST_CAP', 'ADDON_MANIFEST_VALUES', 'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'BundleRefusal', 'CTAG', 'DRAWS_HELD', 'FACES', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal', 'PDF_OPTIONS', 'VTAG',
       'batchesOf', 'bundleKey', 'firstFaceOf', 'indexLayout', 'layerRows', 'openLayer', 'parseAddonManifest', 'parseLayout', 'readBundle', 'rowOf', 'runRows', 'toTranslate', 'trPiecesOf', 'translateUnits', 'unitOf',
     ].sort())
   })

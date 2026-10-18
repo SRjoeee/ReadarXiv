@@ -7,6 +7,7 @@ import { Worker } from 'node:worker_threads'
 import { constants as zlibConstants, deflateRawSync, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
+import { settleWithClock } from './helpers/clock'
 import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { BOXES_BYTES, type PagePlan, pagePlanOf, pagePlansOf, paperAddon, rangeEntries } from '@/pdf-reader/engine/layout/addon.mjs'
 import { ADDON_CAP, parseAddonManifest, REFUSED_MAX, REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
@@ -412,9 +413,7 @@ describe('the plans (pagePlansOf) and the range assembly (rangeEntries): the add
     }
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
-      const run = pagePlansOf({ doc: doc as never, OPS, index })
-      await vi.advanceTimersByTimeAsync(OPS_MS + 1000)
-      const got = await run
+      const got = await settleWithClock(pagePlansOf({ doc: doc as never, OPS, index }), OPS_MS)
       expect(got.ink.timedOut).toEqual([1, 4])
       expect(events).toContain('cleanup 1')
       expect(events).toContain('cleanup 4')

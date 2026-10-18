@@ -9,6 +9,7 @@
 // Imports the engine's own pure modules: no PDF.js, no `node:*` one.
 import { inkEdges, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { drawTextOf } from '../pipeline/draw-data.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
 
 /**
  * arXiv's text, every page read once: { pages, views, ok, tokens, edges: { l, r }, spans: { x0, x1 } }.
@@ -36,7 +37,10 @@ export async function readArxivText(doc, { draw = false } = {}) {
       styles = tc?.styles ?? {}
       read = true
       drawn?.push(drawTextOf(tc))
-    } catch {}
+    } catch (e) {
+      // (a memory-class failure is no page unread: the run ends on it, C8.4)
+      if (isMemoryError(e)) throw e
+    }
     if (drawn && drawn.length < p) drawn.push(null)
     views.push(view ?? null)
     ok.push(read)

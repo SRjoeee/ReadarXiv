@@ -14,6 +14,8 @@ import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchor
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
+import { settleWithClock } from './helpers/clock'
+import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
 // marks file and its bounds. What the TeX does under TeX — that no line moves, that nothing written to a file changes —
@@ -943,10 +945,12 @@ describe('reading the marked original', () => {
     // page 1's operator list never comes: given up past OPS_MS, page 1 has no ink, page 2's piece still owned
     vi.useFakeTimers()
     const stuck = { ...base, getPage: async (n: number) => { const p = await base.getPage(n); return n === 1 ? { ...p, getOperatorList: () => new Promise(() => {}) } : p } }
-    const reading = readMarked(stuck, '', { engine: 'pdflatex', units, OPS } as never)
-    await vi.advanceTimersByTimeAsync(OPS_MS + 10)
-    const late = await reading
+    const late = await settleWithClock(readMarked(stuck, '', { engine: 'pdflatex', units, OPS } as never), OPS_MS)
     vi.useRealTimers()
+    // (a memory-class failure of a page's list is no dark page: the read ends on it, C8.4)
+    const oom = Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
+    const failing = { ...base, getPage: async (n: number) => { const p = await base.getPage(n); return n === 1 ? { ...p, getOperatorList: () => Promise.reject(oom) } : p } }
+    await expect(readMarked(failing, '', { engine: 'pdflatex', units, OPS } as never)).rejects.toBe(oom)
     // (a row's character by its index into its marks' `chars`, which the rows before it fill)
     const rowOf = (m: typeof want, name: string) => { const e = m.marks.owned.find(r => r[0] === name); return e && [...e.slice(0, 7), m.marks.chars[e[7] as number], ...e.slice(8)] }
     expect(late.dark).toEqual({ timedOut: [1], capped: [], degraded: [] })
@@ -969,9 +973,7 @@ describe('reading the marked original', () => {
     const asked: number[] = []
     const stuck = { ...base, getPage: async (k: number) => { const p = await base.getPage(k); return { ...p, getOperatorList: () => { asked.push(k); return new Promise(() => {}) } } } }
     vi.useFakeTimers()
-    const reading = readMarked(stuck, '', { engine: 'pdflatex', units: [unit('para', [text('see')])], OPS } as never)
-    await vi.advanceTimersByTimeAsync((n + 1) * OPS_MS)
-    const got = await reading
+    const got = await settleWithClock(readMarked(stuck, '', { engine: 'pdflatex', units: [unit('para', [text('see')])], OPS } as never), OPS_MS)
     vi.useRealTimers()
     expect(asked).toEqual(Array.from({ length: n }, (_, i) => i + 1))
     expect(got.dark.timedOut).toEqual(Array.from({ length: n }, (_, i) => i + 1))

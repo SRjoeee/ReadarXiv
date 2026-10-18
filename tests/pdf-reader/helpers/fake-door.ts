@@ -396,6 +396,8 @@ class FakeLayer implements Layer {
       links: { total: 0, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 }, unsupported: 0, unread: 0 },
       rules: { schema: RULES_SCHEMA, version: (this.o.rules ?? BUILTIN_RULES).version },
       parts: { through: this.through, told: this.parts.length },
+      // (the fake holds no draw for a run)
+      draws: { held: 0, bytes: 0 },
     }
   }
   dispose(): void {

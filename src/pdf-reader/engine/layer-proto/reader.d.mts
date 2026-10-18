@@ -151,7 +151,7 @@ export interface Layer {
    *  is located or the page is uncovered (D-6). Answers after dispose */
   unitAt(page: number, x: number, y: number): number | null
   /** answers after dispose */
-  stats(): LayerStats & { parts: { through: number; told: number } }
+  stats(): LayerStats & { parts: { through: number; told: number }; /** the draws held for the run: their pages and their left parts' bytes */ draws: { held: number; bytes: number } }
   /** idempotent. Every pending pageOf and leftPageOf rejects; the last document is told to `onRetired`; after it addPart is a
    *  no-op and pageOf, leftPageOf, copyOf and pageState throw */
   dispose(): void
@@ -174,7 +174,11 @@ export interface OpenLayerOptions {
   /** a superseded document is no longer read (told at the swap, once the tasks reading it are done), and once at dispose for the
    *  last: the host destroys it. The Layer never destroys a document */
   onRetired(doc: LayerDocument): void
+  /** the draws held for the run at most, in their left parts' bytes (DRAWS_HELD by default): past it the oldest are let go */
+  drawsHeld?: number
 }
+/** the draws of left parts the door holds for the run at most (their left parts' bytes) */
+export declare const DRAWS_HELD: number
 /** BUNDLE 3's open, until the pin move: the whole paper at once (every page covered, no part to come) */
 export interface OpenBundleLayerOptions {
   bundle: ReadBundle

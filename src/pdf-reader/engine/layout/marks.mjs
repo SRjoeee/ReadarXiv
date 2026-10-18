@@ -21,6 +21,7 @@ import { readLines } from '../pipeline/typeset/tex.mjs'
 import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
@@ -1114,7 +1115,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     if (Number.isInteger(ref)) return ref + 1
     const key = ref && typeof ref === 'object' ? `${ref.num}R${ref.gen}` : null
     if (key === null) return null
-    if (!pageOf.has(key)) pageOf.set(key, pdf.getPageIndex(ref).then(i => i + 1, () => null))
+    if (!pageOf.has(key)) pageOf.set(key, pdf.getPageIndex(ref).then(i => i + 1, e => { if (isMemoryError(e)) throw e; return null }))
     return pageOf.get(key)
   }
   const dests = await pdf.getDestinations(), set = new Set(dropped)
@@ -1163,14 +1164,16 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   const linkDests = new Set()
   for (const q of [...linkPages].sort((a, b) => a - b)) {
     let page = null
-    try { page = await pdf.getPage(q) } catch {}
+    try { page = await pdf.getPage(q) } catch (e) { if (isMemoryError(e)) throw e }
     const raw = page ? await within(readAnnots(page), OPS_MS) : null
     annotsAt.set(q, raw)
     const ls = Array.isArray(raw) ? raw.filter(a => a?.subtype === 'Link') : null
-    if (ls === null || ls.length > MAX_LINKS) { noLinks = true; continue }
+    if (ls === null || ls.length > MAX_LINKS) { noLinks = true; break }
     for (const a of ls) if (destRect(a)) { linkCount++; linkDests.add(a.dest) }
+    if (linkCount > LINKS_MAX) { noLinks = true; break }
   }
-  if (linkCount > LINKS_MAX) noLinks = true
+  // (a paper with no links reads no further page's and keeps none: each page's links are then none, as they would be)
+  if (noLinks) annotsAt.clear()
   const links = noLinks ? null : { count: linkCount, dests: [...linkDests].sort() }
   yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, links } }
   // ---- each page, once
