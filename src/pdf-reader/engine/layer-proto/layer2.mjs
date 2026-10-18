@@ -821,6 +821,8 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // unit's lines the file's own: what the renderings leave of the gaps is the unit's text, categoriesOf. With part 4
   // alone the unit's characters are v0's rectangles', and a leftover may be a rendering the segments do not reach)
   out.inkKnown = !!(parts?.renderings && parts.lines)
+  // (each placeholder's fill by the file, where a source gives it: what its rendering's text is drawn in, tokensOf2)
+  out.fillOf = parts?.fillOf ?? null
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
   if (parts?.proof) { const k = parts.proof(out, unit); if (k >= 0) out.unproven = k }
   // (a source that knows where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it)
@@ -2275,7 +2277,11 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     if (!r.text) return
     if (r.text === ' ') { pushText(' ', style()); return }
-    const st = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3 } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
+    const own = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3 } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
+    // (in its glyphs' own colour where the file gives one: a citation in hyperref's colorlinks blue, which the unit's source
+    // does not name; mixed or black, its run's)
+    const fill = resolved.fillOf?.(k)
+    const st = Number.isInteger(fill) && fill >= 0 ? { ...own, color: hexOf(fill) } : own
     if (r.sup) {
       const face = faceOf(st, 'latin', to)
       tokens.push({ s: r.text, st, face, cls: 'latin', w100: measure(r.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
@@ -3381,6 +3387,10 @@ function faceClass(face) {
 }
 const n2 = v => Math.round(v * 100) / 100
 const COLOURS = { red: '#d00', blue: '#00c', green: '#080', gray: '#777', grey: '#777', orange: '#e60', purple: '#80a', magenta: '#c0c', cyan: '#0aa', violet: '#80f', brown: '#850', black: '#141414' }
+/** a fill (0xRRGGBB) as the drawing writes it */
+export const hexOf = rgb => `#${rgb.toString(16).padStart(6, '0')}`
+/** a run's colour as the drawing writes it: a fill as it is, a name by its CSS colour */
+const fillAttr = c => (/^#[0-9a-f]{6}$/.test(c) ? c : COLOURS[c] ?? '#141414')
 
 /**
  * The unit's lines on one page as SVG: a <text> per line at its baseline, a <tspan> per run with its own x (a CJK run
@@ -3403,7 +3413,7 @@ export function svgOfUnit(L, page, toPx, scale, id) {
         continue
       }
       const cls = faceClass(run.face)
-      const fill = run.color ? ` fill="${COLOURS[run.color] ?? '#141414'}"` : ''
+      const fill = run.color ? ` fill="${fillAttr(run.color)}"` : ''
       // (v0: a role table face's size correction, 1 for the prototype's faces)
       const size = n2((run.sup ? fs * 0.62 : fs) * (run.face.size ?? 1))
       const y = run.sup ? n2(by - L.f * 0.36 * scale) : n2(by)

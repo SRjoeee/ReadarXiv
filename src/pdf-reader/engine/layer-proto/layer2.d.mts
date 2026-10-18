@@ -126,6 +126,9 @@ export interface Prepared extends Map<number, Resolved> {
   /** part 4's source knows each placeholder's ink (a layout file's segments) over part 1's lines (the file's): a gap's piece
    *  none took is the unit's text */
   inkKnown?: boolean
+  /** each placeholder's fill by a source that knows it (tex.mjs fillOf), by piece index: what its rendering's text is drawn
+   *  in, 0xRRGGBB; MIXED_FILL or null, its run's colour */
+  fillOf?: ((k: number) => number | null) | null
 }
 /** part 1 and part 2 as a source gives them */
 export interface UnitLines {
@@ -163,6 +166,8 @@ export interface UnitParts {
   /** where the unit's forced breaks end its lines (with part 1's lines, the file's): each break piece's index to the line
    *  set after it, by its index in the file (LineInfo.j) */
   breaks?: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
+  /** each placeholder's fill by the source (a layout file's row), by piece index: 0xRRGGBB, MIXED_FILL (-1) or null */
+  fillOf?: (k: number) => number | null
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it
@@ -220,6 +225,8 @@ export declare function measuresOf(rects: readonly Rect[], keep?: ReadonlySet<st
 export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean): (Block & { measures?: Map<string, [number, number]> | null })[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
 /** the unit against its page, in parts: v0's, or `parts` another source gives (the per-unit reading's contract above) */
+/** a fill (0xRRGGBB) as the drawing writes it, `#rrggbb` */
+export declare const hexOf: (rgb: number) => string
 export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: CiteMap | null, deny?: ReadonlySet<string> | null, parts?: UnitParts | null): Prepared
 /** the unit's placeholders by piece index; `proven`: classed as a unit drawn under the proof is (phClassProven) */
 export declare function placeholdersOf(unit: Unit, proven?: boolean): Placeholder[]

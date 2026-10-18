@@ -917,3 +917,38 @@ describe('a piece TeX set no ink for never refuses its unit (EMPTY, the no-ink r
     expect([1, 2, 3].map(k => [prep.get(k)?.mode, prep.get(k)?.text, (prep.get(k) as { empty?: boolean } | undefined)?.empty])).toEqual([['symbol', '%', undefined], ['none', ' ', undefined], ['none', '', undefined]])
   })
 })
+
+describe("a placeholder's text drawn in its glyphs' fill, the file's (PR-C: 2608.16117's blue citations)", () => {
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  // "as shown by Vinayak and Kumar (2026) here": a natbib \citet in hyperref's colorlinks blue, found by its segments
+  const page = [...item('as shown by', 10, 100, 10, 0), ...item('Vinayak and Kumar (2026)', 70, 100, 10, 1), ...item('here', 200, 100, 10, 2)]
+  const u = { kind: 'para', src: 'as shown by here', pieces: [text('\u5982 '), ph('\\citet{vinayak}'), text(' \u6240\u793A')] } as never
+  const fileOf = (fill: number | null) => {
+    const lu = unitOf([[1, 10, 230, 100, 108, 97, 10, 0]], [[1, 0, [1, 69.5, 100, 190.5, 108, 97]]]) as unknown as { ph: Map<number, { kind: string; fill: number | null }> }
+    const row = lu.ph.get(1)
+    if (row) { row.kind = 'cite'; row.fill = fill }
+    return lu as never
+  }
+  const read = (lu: never) => {
+    const t = T.texRects(lu)
+    return L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+  }
+  const colourOf = (prep: never) => L2.tokensOf2(u, prep, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && (t as { k?: number }).k === 1 && /\S/.test(t.s)).map(t => (t.st as { color?: string }).color ?? null)
+  it("is drawn in its row's fill exactly where the file gives one colour, and in its run's where the fill is mixed or black", () => {
+    const blue = read(fileOf(0x0000ff))
+    expect(blue.get(1)?.mode).toBe('orig-text')
+    expect(new Set(colourOf(blue as never))).toEqual(new Set(['#0000ff']))
+    expect(new Set(colourOf(read(fileOf(-1)) as never))).toEqual(new Set([null]))
+    expect(new Set(colourOf(read(fileOf(null)) as never))).toEqual(new Set([null]))
+  })
+  it('and the drawing writes that fill as it is', () => {
+    const tokens = L2.tokensOf2(u, read(fileOf(0x0000ff)) as never, 'zh', BASE as never, DESIGNS as never, P as never, null, undefined, true)
+    const block = { page: 1, rects: [[1, 10, 97.85, 300, 106.83]], x0: 10, x1: 300, B: [100], exact: [true], sizes: [10], pitch0: 12, free: 0, indent: 0, after: 0, centred: false }
+    const L = L2.layoutUnit2(tokens, [block] as never, 10, P as never)
+    const svg = L2.svgOfUnit(L as never, 1, (x: number, y: number) => [x, 792 - y], 1, 0)
+    expect(svg).toContain('fill="#0000ff"')
+  })
+})

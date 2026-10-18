@@ -390,6 +390,11 @@ export const inklessOf = (lu, kOf, p) => MACROS.has(p.cls) && !lu.ph.has(kOf[p.k
  */
 export const emptyOf = (lu, kOf, p) => VISIBLE.has(p.cls) && p.cls !== 'symbol' && !!((lu.ph.get(kOf[p.k])?.flags ?? 0) & PH_FLAG.EMPTY)
 
+/** each placeholder's fill by the file, by its piece index (`k`): its row's, the colour more than half its glyphs on arXiv's
+ *  page are filled with (0xRRGGBB), MIXED_FILL where no one colour holds more than half, null where they are black or
+ *  the file has no row with segments for it (layout/file.mjs indexLayout's `fill`) */
+export const fillOf = (lu, kOf) => k => (lu && kOf && kOf[k] >= 0 ? lu.ph.get(kOf[k])?.fill ?? null : null)
+
 /** a row's segments (stride 6: page, x0, baseline, x1, top, bottom) as boxes */
 const segmentsOf = segs => {
   const S = []
@@ -576,6 +581,7 @@ export function proofOf(lu, kOf, shown = Infinity) {
 export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = Infinity, lineskip = null }) {
   const parts = {
     proof: proofOf(lu, kOf, shown),
+    fillOf: fillOf(lu, kOf),
     renderings({ unit, phs, uc, gaps, citeMap }) {
       const found = new Map(), joined = []
       let cover
