@@ -1,13 +1,13 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, PH_KINDS, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
+import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, MIXED_FILL, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, PH_KINDS, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
 import { CARRY_MIN, fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
-import { type Annot, arxivOf, endOf, FONTS, type Mark, markedOf, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
+import { type Annot, arxivOf, CH, endOf, FONTS, type Mark, markedOf, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
 import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
 import { LINKS_MAX, markedPages, marksOfHead, readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { MAX_LINKS } from '@/pdf-reader/engine/layer-proto/links.mjs'
@@ -223,6 +223,28 @@ describe('makeLayout', () => {
     expect(phOf(file, 0, 3).slice(5, 8)).toEqual([at(12), 700, at(15)])
   })
 
+  it('a found piece\'s row ends with its glyphs\' fill where it is not black: the one colour of more than half of them, else MIXED_FILL', async () => {
+    // (a citation in hyperref's colorlinks blue; a formula of a red glyph and a blue one; one black; one filled with a pattern)
+    const parts: [string, string?][] = [['see the work '], ['[12]', '#0071bc'], [' and '], ['a', '#ff0000'], ['b', '#0071bc'], [' then x and '], ['y', 'pattern'], [' end']]
+    const runs: Run[] = []
+    let x = 72
+    for (const [s, fill] of parts) { runs.push({ s, x, y: 700, ...(fill ? { fill } : {}) }); x += s.length * CH * 10 }
+    const at = (j: number) => 72 + j * CH * 10
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, x, 700], ['p0.1a', 1, at(13), 700], ['p0.1b', 1, at(17), 700], ['p0.3a', 1, at(22), 700], ['p0.3b', 1, at(24), 700],
+        ['p0.5a', 1, at(30), 700], ['p0.5b', 1, at(31), 700], ['p0.7a', 1, at(36), 700], ['p0.7b', 1, at(37), 700]],
+      units: [unit('para', [text('see the work '), ph('\\cite{k}'), text(' and '), ph('$ab$'), text(' then '), ph('$x$'), text(' and '), ph('$y$'), text(' end')])],
+    })
+    const cite = phOf(file, 0, 1), two = phOf(file, 0, 3), black = phOf(file, 0, 5), pattern = phOf(file, 0, 7)
+    expect([cite, two, black, pattern].map(r => r?.length)).toEqual([11, 11, 10, 10])
+    expect(cite?.at(-1)).toBe(0x0071bc)
+    expect(two?.at(-1)).toBe(MIXED_FILL)
+    // (the index's: the drawer's)
+    const index = indexLayout(file)
+    expect([1, 3, 5, 7].map(k => index.unit(0)?.ph.get(k)?.fill)).toEqual([0x0071bc, MIXED_FILL, null, null])
+  })
+
   it('a piece whose points are out of order, or set twice, is LOST; one whose points hold nothing is EMPTY', async () => {
     const runs: Run[] = [{ s: 'one two three four five six seven', x: 72, y: 700 }]
     const at = (j: number) => xAt(runs[0] as Run, j)
@@ -312,6 +334,59 @@ describe('makeLayout', () => {
     })
     expect((file.units[1]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
     expect((file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(0)
+  })
+
+  it('a unit\'s CENTRED is TeX\'s where the log tells its alignment (marks.mjs readAlign), whatever its lines look like', async () => {
+    const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
+    para.push({ s: 'last line of it', x: 72, y: 652 })
+    const cap = [{ s: 'Figure caption text', x: 172 - 47.5, y: 600 }, { s: 'its end', x: 172 - 17.5, y: 588 }]
+    const ws = (rs: Run[]) => rs.map(r => r.s).join(' ')
+    const w: World = {
+      pages: [{ runs: [...para, ...cap] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[4] as Run), 652], ['1s', 1, cap[0]?.x ?? 0, 600], ['1e', 1, endOf(cap[1] as Run), 588]],
+      units: [unit('para', [text(ws(para))]), unit('caption', [text(ws(cap))])],
+    }
+    // (the paragraph told centred, the caption flush left: TeX's word, not the lines')
+    const { file } = await made(w, 'AXT-ALIGN 0 p 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN 1 p 0 0.0pt 1 1.0pt 1 1.0pt\n')
+    expect((file.units[0]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
+    expect((file.units[1]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(0)
+    // (a caption in a box, mode h: no word, its lines read as before)
+    const boxed = await made(w, 'AXT-ALIGN 1 h 0 0.0pt 0 0.0pt 1 1.0pt\n')
+    expect((boxed.file.units[1]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
+  })
+
+  it('with no word from TeX, a block of wide centred lines is CENTRED: one short of its column by more than an em', async () => {
+    const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
+    // (the paragraph spans 72 to 272; the caption's two lines centred on it, 190 and 185 wide, the second short of it by an em
+    // and a half: both over 0.9 of the column, which had refused them)
+    const cap = [{ s: 'x'.repeat(38), x: 77, y: 600 }, { s: 'y'.repeat(37), x: 79.5, y: 588 }]
+    const ws = (rs: Run[]) => rs.map(r => r.s).join(' ')
+    const { file } = await made({
+      pages: [{ runs: [...para, ...cap] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[3] as Run), 664], ['1s', 1, 77, 600], ['1e', 1, endOf(cap[1] as Run), 588]],
+      units: [unit('para', [text(ws(para))]), unit('caption', [text(ws(cap))])],
+    })
+    expect((file.units[1]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
+  })
+
+  it('a line across both columns is centred on the middle of the columns\' centres: an abstract indented in the left one moves its edges, not its centre (1810.04805\'s first page)', async () => {
+    // (the left column 72 to 292, its abstract 87 to 277 in five lines against its paragraph's three, so that the column's
+    // edges are the abstract's; the right column 320 to 540; a heading 206 to 406 across both, centred on the text block)
+    const fill = (seed: string, n: number) => { let t = ''; for (let i = 0; t.length < n; i++) t += `${t ? ' ' : ''}${seed}${String.fromCharCode(97 + (i % 26))}${i}`.padEnd(4, 'q'); return t.slice(0, n).replace(/ $/, 'z') }
+    const at = (s: string, x: number, y: number): Run => ({ s, x, y })
+    const head = at(fill('h', 40), 206, 740)
+    const abstract = [0, 1, 2, 3, 4].map(j => at(fill(`a${j}`, 38), 87, 700 - 12 * j))
+    const left = [0, 1, 2].map(j => at(fill(`l${j}`, 44), 72, 630 - 12 * j))
+    const right = [0, 1, 2, 3].map(j => at(fill(`r${j}`, 44), 320, 700 - 12 * j))
+    const ws = (rs: Run[]) => rs.map(r => r.s).join(' ')
+    const lastOf = (rs: Run[]) => rs.at(-1) as Run
+    const { file } = await made({
+      pages: [{ runs: [head, ...abstract, ...left, ...right] }],
+      marks: [COLS2(1), ['0s', 1, 206, 740], ['0e', 1, endOf(head), 740], ['1s', 1, 87, 700], ['1e', 1, endOf(lastOf(abstract)), lastOf(abstract).y],
+        ['2s', 1, 72, 630], ['2e', 1, endOf(lastOf(left)), lastOf(left).y], ['3s', 1, 320, 700], ['3e', 1, endOf(lastOf(right)), lastOf(right).y]],
+      units: [unit('heading', [text(head.s)]), unit('abstract', [text(ws(abstract))]), unit('para', [text(ws(left))]), unit('para', [text(ws(right))])],
+    })
+    expect(file.units.map(u => (u[3] ?? 0) & UNIT_FLAG.CENTRED)).toEqual([UNIT_FLAG.CENTRED, 0, 0, 0])
   })
 
   it('below CARRY_MIN the paper is refused, with the stats', async () => {

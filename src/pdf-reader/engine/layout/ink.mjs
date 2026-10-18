@@ -97,11 +97,17 @@ function matrixOf(v) {
 const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const finite = (...xs) => xs.every(Number.isFinite)
 
-/** a fresh graphics state: the page's own, or an annotation's */
+/** a fresh graphics state: the page's own, or an annotation's. `fill`: the fill colour, 0xRRGGBB (PDF's default black, 0), or
+ *  NO_FILL for one of no colour (a pattern, PDF.js's transparent) */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
-  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false,
+  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0,
 })
+/** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
+export const NO_FILL = -1
+/** a fill colour as PDF.js's operator list gives it, every colour space turned to RGB (setFillRGBColor: '#rrggbb'), as
+ *  0xRRGGBB; NO_FILL for anything else */
+const fillOf = a => (typeof a?.[0] === 'string' && /^#[0-9a-f]{6}$/i.test(a[0]) ? Number.parseInt(a[0].slice(1), 16) : NO_FILL)
 
 /**
  * A glyph's own ink in em, [x0, y0, x1, y1] from its origin, y up: the extremes of its outline, as PDF.js gives it where
@@ -273,6 +279,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     shadingFill: SHADING, paintImageXObject: IMAGE, paintInlineImageXObject: INLINE_IMAGE, paintImageMaskXObject: MASK,
     paintSolidColorImageMask: SOLID_MASK, paintImageXObjectRepeat: IMAGE_REPEAT, paintImageMaskXObjectRepeat: MASK_REPEAT,
     paintImageMaskXObjectGroup: MASK_GROUP, paintInlineImageXObjectGroup: INLINE_GROUP, setRenderingIntent: INTENT,
+    setFillRGBColor: FILL_RGB, setFillTransparent: FILL_NONE, setFillColorN: FILL_N,
   } = OPS
   const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
@@ -352,7 +359,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4]
     const sz = size * M[3]
     const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
-    const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name, ix0: Math.min(ox, ex), ix1: Math.max(ox, ex) }
+    const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name, ix0: Math.min(ox, ex), ix1: Math.max(ox, ex), fill: s.fill }
     const box = outlineOf(g)
     if (box?.length === 4) {
       // the outline across from the origin (its x in em × size, the horizontal scale and the direction), and up
@@ -440,6 +447,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case RESTORE: pop(); break
       case TRANSFORM: s.ctm = mul(s.ctm, matrixOf(a)); break
       case LINE_WIDTH: s.lw = num(a[0]); break
+      // (the fill colour, every space PDF.js turns to RGB; a pattern's or a transparent one none)
+      case FILL_RGB: s.fill = fillOf(a); break
+      case FILL_NONE: case FILL_N: s.fill = NO_FILL; break
       case GSTATE:
         for (const e of Array.isArray(a[0]) ? a[0] : []) {
           step(1)
@@ -545,7 +555,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
 export const unreadOf = ink => (ink?.rotated ? 'rotated' : ink?.capped ? 'capped' : ink?.timedOut ? 'timedOut' : null)
 
 /** every column packGlyphs may keep */
-export const GLYPH_COLUMNS = Object.freeze(['x0', 'x1', 'y', 'top', 'bottom', 'ix0', 'ix1', 'size', 'font', 'u'])
+export const GLYPH_COLUMNS = Object.freeze(['x0', 'x1', 'y', 'top', 'bottom', 'ix0', 'ix1', 'size', 'font', 'u', 'fill'])
 /**
  * A page's glyphs (pageInk's, a Glyph each) packed as columns, the form a reading keeps them in past its page: { n, most,
  * and each of `columns` (GLYPH_COLUMNS, all where none are given) }, the i-th of each column the glyph `order[i]`
@@ -559,8 +569,8 @@ export const GLYPH_COLUMNS = Object.freeze(['x0', 'x1', 'y', 'top', 'bottom', 'i
 export function packGlyphs(glyphs, { order = null, fontIds = null, columns = GLYPH_COLUMNS } = {}) {
   const n = order ? order.length : glyphs.length
   const P = { n, most: 0 }
-  for (const k of columns) P[k] = k === 'u' ? new Array(n) : k === 'font' ? new Int32Array(n).fill(-1) : new Float64Array(n)
-  const { x0, x1, y, top, bottom, ix0, ix1, size, font, u } = P
+  for (const k of columns) P[k] = k === 'u' ? new Array(n) : k === 'font' || k === 'fill' ? new Int32Array(n).fill(-1) : new Float64Array(n)
+  const { x0, x1, y, top, bottom, ix0, ix1, size, font, u, fill } = P
   for (let i = 0; i < n; i++) {
     const t = glyphs[order ? order[i] : i]
     if (x0) x0[i] = t.x0
@@ -573,6 +583,7 @@ export function packGlyphs(glyphs, { order = null, fontIds = null, columns = GLY
     if (size) size[i] = t.size
     if (font && fontIds) font[i] = fontIds(t.font)
     if (u) u[i] = t.u
+    if (fill) fill[i] = Number.isInteger(t.fill) ? t.fill : NO_FILL
     if (t.size > P.most) P.most = t.size
   }
   return P

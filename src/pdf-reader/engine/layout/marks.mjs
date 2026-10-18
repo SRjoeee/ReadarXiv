@@ -13,7 +13,7 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
+import { lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
@@ -492,8 +492,14 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
 // ---------------------------------------------------------------- the TeX
 /**
  * The TeX that goes after MARK_DEF in the marked original. One line, no comment: the paper's lines keep their numbers
- * in the log. Allocates no register and writes nothing to the log: no line of it changes but pdfTeX's warnings of a
- * destination set twice. Each part keeps TeX's lists as the paper's, a destination (a whatsit) beside them:
+ * in the log. Allocates no register and writes to the log one line a unit, its alignment (below), and else nothing: no
+ * line of it changes but pdfTeX's warnings of a destination set twice. Each part keeps TeX's lists as the paper's, a
+ * destination (a whatsit) beside them:
+ * - **The alignment.** At a unit's or a heading's end mark (`<i>e`, `h<i>e`; not a cell's), a message to the log,
+ *   `AXT-ALIGN <i> <mode> <lo> <ls> <ro> <rs> <po> <ps>`: the mode TeX is in (p a paragraph, h an \hbox's restricted
+ *   horizontal mode, v vertical), and the stretch's order and amount of \leftskip, \rightskip and \parfillskip, which TeX
+ *   sets the paragraph's lines by when it ends (readAlign): the author's own alignment, \centering's both skips infinite and
+ *   its \parfillskip none. Through \message, which puts nothing in any list
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
  *   MARK_DEF's own \axtmark is gated too, so a caption's start mark is set where its float is and not first in the list
@@ -665,7 +671,9 @@ export const LAYOUT_TEX = [
   '\\def\\axt@ic{\\global\\axt@sigfalse\\ifcase\\lastnodetype\\axt@icm\\or\\or\\or\\or\\or\\or\\global\\axt@sigtrue\\or\\axt@icm\\or\\or\\axt@icm\\fi}',
   '\\def\\axt@put#1{\\axt@ic\\axt@mark{#1}\\ifaxt@sig\\vadjust{}\\fi}',
   '\\def\\axt@ift#1#2\\relax{\\if t#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
-  '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',
+  '\\def\\axt@alg#1e#2\\@nil{\\ifx\\relax#2\\relax\\else\\message{^^JAXT-ALIGN #1 \\ifhmode\\ifinner h\\else p\\fi\\else v\\fi\\space\\the\\gluestretchorder\\leftskip\\space\\the\\gluestretch\\leftskip\\space\\the\\gluestretchorder\\rightskip\\space\\the\\gluestretch\\rightskip\\space\\the\\gluestretchorder\\parfillskip\\space\\the\\gluestretch\\parfillskip^^J}\\fi}',
+  '\\def\\axt@align#1{\\axt@ift#1\\relax{}{\\axt@alg#1e\\@nil}}',
+  '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
   '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@tg\\or\\expandafter\\axt@tk\\or\\expandafter\\axt@tp\\fi}',
   '\\def\\axt@tg{\\edef\\axt@back{\\hskip\\the\\lastskip\\relax\\axt@back}\\unskip\\axt@take}',
@@ -685,7 +693,7 @@ export const LAYOUT_TEX = [
   '\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}',
   '\\protected\\def\\axt@pm#1{\\ifaxt@off\\else\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1}\\fi\\fi\\fi}',
-  '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\ifhmode\\relax\\axt@put{#1}\\fi\\fi}',
+  '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@put{#1}\\fi\\fi}',
   '\\def\\axtpma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pma\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpmm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pmm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pm\\else\\expandafter\\@gobble\\fi}',
@@ -700,6 +708,36 @@ export const LAYOUT_TEX = [
   POINTS_TEX,
   '\\makeatother',
 ].join('')
+
+/** a unit's alignment as the marks file holds it (readAlign): centred, flush left, flush right, justified */
+export const ALIGN_CODES = Object.freeze(['c', 'l', 'r', 'j'])
+/** the code of a paragraph's skips: both sides stretch and \parfillskip none past them, centred (\centering, a center
+ *  environment, a class's centred heading); \rightskip alone, flush left (\raggedright, ragged2e's \RaggedRight); \leftskip
+ *  alone, flush right; neither, justified (both sides with a \parfillskip as infinite as theirs: its last line not centred) */
+const alignCode = (lo, ls, ro, rs, po, ps) => {
+  const L = lo > 0 || ls > 0, R = ro > 0 || rs > 0, F = po > 0 || ps > 0
+  if (L && R) return !F || po < Math.min(lo, ro) ? 'c' : 'j'
+  return L ? 'r' : R ? 'l' : 'j'
+}
+/**
+ * Each unit's alignment as TeX set its paragraph, from the marked original's log (LAYOUT_TEX's AXT-ALIGN at its end mark, the
+ * last pass's: lastTexLog): [[unit, code]], ids rising, the code ALIGN_CODES'. A unit's last line counts (a caption measured
+ * in a box and then set as a paragraph: the paragraph's). One TeX set in an \hbox (mode h: a caption \@makecaption centres
+ * on one line, \centerline, a table's cell) tells nothing of its alignment, and has no entry; nor has one with no line. A
+ * line not of the form is passed over: a log cut short or a template that redefines what the marks sit in gives fewer
+ * entries, never a refusal
+ */
+export function readAlign(log) {
+  const last = new Map()
+  // (a line TeX wrapped at its 79 characters, max_print_line, joined back: the message starts a line of its own)
+  const text = lastTexLog(typeof log === 'string' ? log : '').replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
+  for (const m of text.matchAll(/^AXT-ALIGN h?(\d{1,9}) ([phv]) ([0-3]) (-?[\d.]+)pt ([0-3]) (-?[\d.]+)pt ([0-3]) (-?[\d.]+)pt$/gm)) {
+    const v = [m[3], m[4], m[5], m[6], m[7], m[8]].map(Number)
+    if (!v.every(Number.isFinite)) continue
+    last.set(Number(m[1]), m[2] === 'h' ? null : alignCode(...v))
+  }
+  return [...last].filter(([, c]) => c !== null).sort((a, b) => a[0] - b[0])
+}
 
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
@@ -850,10 +888,11 @@ export const MARKS_DEPTH = 3
  *  \lineskip and \lineskiplimit (`marking.lineskip`, PDF units, readSkipProbe: one pair, at the body's start); 6 an inline
  *  formula's opening mark set on the empty list after a display (\axtpmm), and `owned` by stream.mjs's OWNED_HOW of a
  *  piece past its column's end and of a display group (a later display of one 'in the display before it'); 7 the marked compile's Link annotations that name a destination (`links`:
- *  rectangle, the glyphs under it, their text), which a reference the matcher misses is placed by */
-export const MARKS_SCHEMA = 7
+ *  rectangle, the glyphs under it, their text), which a reference the matcher misses is placed by; 8 each unit's alignment as
+ *  TeX set its paragraph (`align`: LAYOUT_TEX's AXT-ALIGN at its end mark, readAlign), which the maker's centred flag is */
+export const MARKS_SCHEMA = 8
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
-const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned', 'links']
+const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
 /** the marked compile's links (`links`, the link-anchor locator's: make.mjs phOf) at most: a paper's, past which it has none;
  *  a destination's name's code units; a link's text's, past which it is kept with no glyph (n 0: counted for the order, never
  *  an anchor) */
@@ -1144,8 +1183,10 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     if (isInteger(page, 1, pages)) destPage.set(name, page)
     named.push([name, page, x, y])
   }
-  // (the log's line counts, read before any page: a maker reading the pages as they come takes them with the head)
+  // (the log's line counts and the units' alignments, read before any page: a maker reading the pages as they come takes them
+  // with the head)
   const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
+  const align = readAlign(log)
   // the pages whose links are read: those a placeholder that names a link (linkablePiece) has a point on, the pages between its
   // two points too. Any other page's links are no piece's, and the link-anchor locator never pairs them (make.mjs): PDF.js reads
   // a page's annotations at a cost of its own
@@ -1175,7 +1216,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   // (a paper with no links reads no further page's and keeps none: each page's links are then none, as they would be)
   if (noLinks) annotsAt.clear()
   const links = noLinks ? null : { count: linkCount, dests: [...linkDests].sort() }
-  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, links } }
+  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, align, links } }
   // ---- each page, once
   const views = [], wordOf = new Map()
   let words = 0
@@ -1273,7 +1314,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     yield { page: { p, view, tokens, words: fresh, owned, links, dark, found: stream ? stream.found() : p + 1, repeats: stream ? stream.repeats() : [] } }
   }
   if (stream) stream.end(take)
-  yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines } }
+  yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines, align } }
 }
 
 /**
@@ -1339,7 +1380,7 @@ export async function readMarked(marked, log, o) {
       owned.push(row)
     }
   }
-  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned, links: links ?? [] }, unitMarks, dark }
+  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, align: end.align, words, tokens, chars, owned, links: links ?? [] }, unitMarks, dark }
 }
 
 /** whether a destination the head names is a mark of the marks file: on a page of the paper, at numbers within its view
@@ -1364,7 +1405,7 @@ export function columnsOf(head) {
 export function marksOfHead(head, engine) {
   // (its links none yet, each page's added as it is read; how many the paper holds and their destinations' names the head's,
   // for the maker's link-anchor locator: none where the paper has no links)
-  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, words: [], tokens: [], chars: [], owned: [], links: [], linkCount: head.links?.count ?? 0, linkDests: head.links?.dests ?? [] }
+  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, align: head.align, words: [], tokens: [], chars: [], owned: [], links: [], linkCount: head.links?.count ?? 0, linkDests: head.links?.dests ?? [] }
 }
 
 /** a point read twice on pages apart (markedPages' `twice`): its piece 'a mark set twice', owning nothing, nor the displays
@@ -1423,9 +1464,9 @@ function fitted(m) {
 
 /** the marks file as written: the schema's keys in order, numbers to a hundredth */
 export function encodeLayoutMarks(m) {
-  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned, links } = m
+  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, align, words, tokens, chars, owned, links } = m
   return JSON.stringify({
-    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
+    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, align, words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
     owned: owned.map(ownedRow),
     links: (links ?? []).map(e => e.map((v, j) => (j >= 2 && j <= 7 ? r2(v) : v))),
@@ -1473,6 +1514,15 @@ export function parseLayoutMarks(bytes) {
     if (!Array.isArray(e) || e.length !== 2) throw new LayoutRefusal(`lines[${i}]`, 'not [id, count]')
     if (!isInteger(e[0], id + 1, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`lines[${i}][0]`, 'not an id above the last')
     if (!isInteger(e[1], 0, LINES_MAX)) throw new LayoutRefusal(`lines[${i}][1]`, `not a count 0 to ${LINES_MAX}`)
+    id = e[0]
+  }
+  if (!Array.isArray(m.align)) throw new LayoutRefusal('align', 'not an array')
+  id = -1
+  for (let i = 0; i < m.align.length; i++) {
+    const e = m.align[i]
+    if (!Array.isArray(e) || e.length !== 2) throw new LayoutRefusal(`align[${i}]`, 'not [id, code]')
+    if (!isInteger(e[0], id + 1, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`align[${i}][0]`, 'not an id above the last')
+    if (!ALIGN_CODES.includes(e[1])) throw new LayoutRefusal(`align[${i}][1]`, `not one of ${ALIGN_CODES.join(', ')}`)
     id = e[0]
   }
   if (!Array.isArray(m.words) || m.words.length > WORDS_MAX) throw new LayoutRefusal('words', `not an array of at most ${WORDS_MAX}`)

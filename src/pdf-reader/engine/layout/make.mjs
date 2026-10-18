@@ -27,8 +27,8 @@ import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, shown as shownText, unitText } from '../translate/mt.mjs'
 import { carrier as carrierFor, carrierOf, tokensOfMarks } from './carry.mjs'
-import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
@@ -73,7 +73,8 @@ const BAND_DOWN = 0.45, BAND_UP = 0.95
 const SCRIPT_SIZE = 0.85
 /** a placeholder's ink raised or lowered: its baseline this share of its line's size off the line's */
 const SHIFT = 0.2
-/** a centred unit: every line's centre within CENTRE of its column's, one line at least shorter than SHORT of it */
+/** a centred unit where TeX does not tell its alignment: every line's centre within CENTRE of its column's; a centred name's line
+ *  shorter than SHORT of its column */
 const CENTRE = 2, SHORT = 0.9
 /** segments a placeholder may have: an inline one, a display */
 const SEGS_INLINE = 4, SEGS_DISPLAY = 64
@@ -702,7 +703,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
 
   // ---------------------------------------------------------------- the units located on arXiv's tokens
-  let unitMarks = null, nameOf = null, carriedUnit = null, unplaced = null, linesTeX = null, anchors = null
+  let unitMarks = null, nameOf = null, carriedUnit = null, unplaced = null, linesTeX = null, alignTeX = null, anchors = null
   /** the unit start marks by page: [key, mark, place], the place the key's first name's in the marks' order (the order the
    *  unit marks are met in), for the unit a babel name leads (leadAt) */
   let startsOn = new Map()
@@ -750,7 +751,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
-    linesTeX = new Map(marks.lines)
+    linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? [])
     anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
     stats.ms.anchor = now() - t
   }
@@ -871,6 +872,16 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (e || c !== 2) return e
     const l = edgesBy(p, 0), r = edgesBy(p, 1)
     return l && r ? [l[0], r[1]] : null
+  }
+  /** a page of two columns' text block, as a line across both is centred on it: on the middle of the two columns' centres (an
+   *  abstract indented on its side moves its column's edges, not its centre: 1810.04805's first page, whose left column's
+   *  start its abstract's lines give), as wide as the left one's start to the right one's end; the pool's own where the two
+   *  are not both known */
+  const blockEdges = p => {
+    const l = edgesBy(p, 0), r = edgesBy(p, 1)
+    if (!l || !r) return edgesOf(p, 2)
+    const mid = (l[0] + l[1] + r[0] + r[1]) / 4, half = (r[1] - l[0]) / 2
+    return [mid - half, mid + half]
   }
 
   // ---------------------------------------------------------------- babel's names, by their two marks
@@ -1096,6 +1107,24 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   /** a found piece's matched glyphs, by its key: the twice bar's */
   const matchedBy = new Map()
+  /** a placeholder's fill as its row holds it: the colour more than half its inked glyphs are filled with, 0xRRGGBB, where
+   *  that is not black (PDF's default) nor one of no colour (a pattern's): null, none in the row; MIXED_FILL where no one
+   *  colour holds more than half (a link inside coloured prose, a formula of two colours) */
+  const fillOfGlyphs = gs => {
+    const n = new Map()
+    let all = 0
+    for (const [p, g] of gs) {
+      const P = ink[p]
+      if (!P?.fill || !/\S/u.test(P.u[g] ?? '')) continue
+      all++
+      n.set(P.fill[g], (n.get(P.fill[g]) ?? 0) + 1)
+    }
+    if (!all) return null
+    let best = null, most = 0
+    for (const [f, c] of n) if (c > most) { best = f; most = c }
+    if (2 * most <= all) return MIXED_FILL
+    return best === 0 || best === NO_FILL ? null : best
+  }
   /** unit i's placeholders, each found on arXiv's page (matched), LOST, EMPTY or JOINED, its rows' ink taken in */
   function phOf(one) {
     const { id: i, u, a, rows } = one
@@ -1526,6 +1555,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         row.push(s.page, x0, Math.min(viewAt(s.page)[3], Math.max(viewAt(s.page)[1], r2(s.base))), x1, top, bottom)
         if (cls === 'display') keep(s.page, [x0, bottom, x1, top])
       }
+      // (its glyphs' fill, the row's last number where it is not black: a link's colour, colorlinks' cite blue)
+      const fill = fillOfGlyphs(gs)
+      if (fill !== null) row.push(fill)
       const key = `${i}.${k}`
       matchedBy.set(key, gs)
       for (const [p, g] of gs) foundGs.add(`${p}|${g}`)
@@ -2058,17 +2090,22 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const below = Math.min(H, Math.max(0, r2(lastRow.bottom - (Number.isFinite(next) ? next : view[1] + FOOT))))
       frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
     }
-    // flags: centred where every line's centre is its column's and one line at least is short of it; the first line from
-    // its label on (a caption's "Figure 1." centred with its text)
+    // flags: centred as TeX set the unit's paragraph, where the marked original's log tells it (marks.mjs readAlign: its
+    // \leftskip, \rightskip and \parfillskip at its end mark; the author's own alignment). Where it does not (a caption
+    // \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a cell): centred where
+    // every line's centre is its column's and one line at least is short of it by an em; the first line from its label on
+    // (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the text block
+    // (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own)
+    const told = alignTeX.get(i)
     let centred = rows.length > 0, short = false
-    rows.forEach((r, j) => {
+    if (told === undefined) rows.forEach((r, j) => {
       if (!centred) return
       const x0 = j === 0 && labelAt.has(i) ? Math.min(r.x0, labelAt.get(i)) : r.x0
-      const e = edgesOf(r.page, columnOf(r.page, x0, r.x1))
+      const c = columnOf(r.page, x0, r.x1), e = c === 2 ? blockEdges(r.page) : edgesOf(r.page, c)
       if (!e || Math.abs((x0 + r.x1) / 2 - (e[0] + e[1]) / 2) > CENTRE) { centred = false; return }
-      if (r.x1 - x0 < SHORT * (e[1] - e[0])) short = true
+      if (e[1] - e[0] - (r.x1 - x0) > (r.size > 0 ? r.size : 10)) short = true
     })
-    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (centred && short ? UNIT_FLAG.CENTRED : 0)
+    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | ((told !== undefined ? told === 'c' : centred && short) ? UNIT_FLAG.CENTRED : 0)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
     one.out = { unit: [i, KIND.get(u.kind), depth, flags, u.pieces.length], lines, frames, erase, splits: fs.length > 1 }
   }
@@ -2339,7 +2376,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // ---- the names in their order (the marks file's): each page's, each unit key's ([th]?<id>[se]), the babel names', the
     // draft frames'
     unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
-    carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); anchors = new Map()
+    carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); anchors = new Map()
     const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours)
     const byName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
     const listed = mh ? mh.named.filter(([, page]) => Number.isInteger(page) && page >= 1 && page <= M).sort(byName) : [...at].map(([nm, m]) => [nm, m.page, m.x, m.y])

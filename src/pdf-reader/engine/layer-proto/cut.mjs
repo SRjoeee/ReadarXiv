@@ -32,7 +32,8 @@ function carriedEntry(manifest, p) {
 
 /** the pages of a flat rows array: the value at `at` of every `stride` */
 function pagesAt(rows, at, stride, into) {
-  for (let j = at; j < rows.length; j += stride) into.push(rows[j])
+  // (whole strides alone: a placeholder row's fill, last, is no segment's)
+  for (let j = at; j + stride <= rows.length; j += stride) into.push(rows[j])
 }
 
 /**

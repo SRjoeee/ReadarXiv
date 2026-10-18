@@ -1386,18 +1386,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
 
-  // the columns of each page, as its paragraphs' lines span them: a line centred in its column (a caption under its
-  // figure, a title over the text) is set centred, whatever the page's own middle (each unit's lines as it is added, addUnits)
+  // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits)
   const cols = []
-  const centredInColumn = b => {
-    const rs = b.rects, list = cols[b.page] ?? []
-    const mid = (b.x0 + b.x1) / 2
-    const own = list.filter(([a, z]) => a <= mid && z >= mid)
-    if (own.length < 3) return false
-    const cx0 = Math.min(...own.map(c => c[0])), cx1 = Math.max(...own.map(c => c[1])), cmid = (cx0 + cx1) / 2
-    const centres = rs.map(r => (r[1] + r[3]) / 2)
-    return centres.every(c => Math.abs(c - cmid) < 2.5) && rs.every(r => r[3] - r[1] < 0.92 * (cx1 - cx0)) && rs[0][1] > cx0 + 4
-  }
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
   // the units the hybrid draws that v0's geometry does not hold, as each is placed)
   // (and a copy of each as it was added, before any unit grew one: what decides whether all of a unit's lines are another's)
@@ -1861,8 +1851,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const s = orig?.size ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
     const base = orig && orig.st.fam !== 'math' ? { ...orig.st } : { fam: 'serif', bold: p.unit.kind === 'heading', italic: false, caps: false, design: designs.serif }
     const keep = prep.keep?.length ? new Set(prep.keep) : null
-    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt)
-    for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
+    // (centred as the layout file has the unit, UNIT_FLAG.CENTRED: TeX's own alignment where the marked original tells it, else
+    // the maker's reading of arXiv's lines, make.mjs; a unit of a part with no layout by its lines, blocks2's)
+    const lu = filed(p.id) ? tex.index.unit(p.id) : null
+    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt, lu ? lu.centred : undefined)
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // (the unit's displays TeX set with its short skip under a line of its own that ends 2 em before them, each the block's of
     // that line: the line laid there ends as far before them, layer2.mjs slotsAt)

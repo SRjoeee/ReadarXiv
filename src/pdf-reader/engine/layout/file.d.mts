@@ -2,9 +2,12 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
  *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
-export declare const LAYOUT: '6'
-/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE */
-export declare const LAYOUT_SCHEMA: 4
+export declare const LAYOUT: '8'
+/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
+ *  row's last number where its glyphs are not black (4 + 6 × n + 1) */
+export declare const LAYOUT_SCHEMA: 5
+/** a placeholder's fill where no one colour holds more than half its glyphs (the row's last number, schema 5) */
+export declare const MIXED_FILL: -1
 /** a new-style arXiv identifier, or an old one (archive, subject class, a slash and 7 digits); never a version suffix */
 export declare const isPaperId: (id: unknown) => id is string
 /** a paper's version at most */
@@ -35,7 +38,7 @@ export declare const PAGE_TEXT_ALL: number
 export declare function isPageText(s: unknown): s is string
 /** prep/<mid>/layout-<sha256>.json (spec §4.2). arXiv's PDF units, each page unrotated, y up, pages 1-based */
 export interface LayoutFile {
-  schema: 4
+  schema: 5
   layout: string
   pdfjs: string
   paper: { id: string; version: number; pages: number }
@@ -95,7 +98,7 @@ export interface LayoutUnit {
   lines: Float64Array                      // stride 8, as the file
   frames: Float64Array                     // stride 6
   erase: Float64Array[]                    // per line: x0, y0, x1, y1 (stride 4)
-  ph: ReadonlyMap<number, { kind: (typeof PH_KINDS)[number]; flags: number; segs: Float64Array; text: string | null }>   // by k; segs stride 6; text: the page text
+  ph: ReadonlyMap<number, { kind: (typeof PH_KINDS)[number]; flags: number; segs: Float64Array; text: string | null; fill: number | null }>   // by k; segs stride 6; text: the page text; fill: its glyphs' colour (0xRRGGBB, MIXED_FILL), null where black
   labels: Float64Array                     // per label: kind, page, x0, baseline, x1, top, bottom (stride 7)
   heading: string | null
   /** the lines its source does not write: no slot, never erased (rising, never its first) */

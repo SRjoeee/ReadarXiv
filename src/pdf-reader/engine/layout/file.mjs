@@ -22,10 +22,18 @@ export { LayoutRefusal } from './json.mjs'
  *  formula first after a display found by its own opening mark (marks.mjs \axtpmm), a display group's later displays
  *  JOINED to its first, a LOST piece outside the unit's lines OUTSIDE (the file's schema 4), and an inline piece whose
  *  two marks stand on one line of the unit wholly on it; 7: a piece TeX broke over lines gives its unit the line it wraps onto, and a
- *  reference the matcher misses is placed by its link annotation (the file's schema is 4 still) */
-export const LAYOUT = '7'
-/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE */
-export const LAYOUT_SCHEMA = 4
+ *  reference the matcher misses is placed by its link annotation (the file's schema is 4 still); 8: a unit's CENTRED as TeX
+ *  set its paragraph where the marked original's log tells it (marks.mjs readAlign), else by arXiv's lines, a line across
+ *  both columns on the middle of their centres and one line short of its column by an em; and a found placeholder's fill
+ *  (the file's schema 5) */
+export const LAYOUT = '8'
+/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
+ *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL) */
+export const LAYOUT_SCHEMA = 5
+/** a placeholder's fill where no one colour holds more than half its glyphs (the row's last number, schema 5) */
+export const MIXED_FILL = -1
+/** a fill's largest value, 0xFFFFFF */
+const FILL_MAX = 0xffffff
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
@@ -34,6 +42,9 @@ export const LAYOUT_DEPTH = 4
 export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author'])
 export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
+/** a unit's flags. TITLE: the paper's title; FRONT: its front matter; CENTRED: its lines set centred, as TeX set its
+ *  paragraph where the marked original tells it (\centering, a center environment, a class's centred heading), else as
+ *  arXiv's lines show it (make.mjs): what the layer sets the translation's lines by (run.mjs) */
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
 /** babel's names (names.mjs), whose occurrences the file locates (`names`) */
 export { NAME_KEYS } from './names.mjs'
@@ -343,11 +354,14 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     last = e[0]
   }
 
-  // placeholders: unit, k, kind, flags, then per segment: page, x0, baseline, x1, top, bottom
+  // placeholders: unit, k, kind, flags, then per segment: page, x0, baseline, x1, top, bottom; then, where its glyphs are not
+  // black, their fill (MIXED_FILL, or 0xRRGGBB): only a placeholder with segments has one
   const ph = array(f.ph, 'ph'), seen = new Set(), pageTexts = new Set(), symbols = new Set()
   for (let i = 0; i < ph.length; i++) {
     const r = ph[i]
-    if (!Array.isArray(r) || r.length < 4 || (r.length - 4) % 6 !== 0) throw refuse(`ph[${i}]`, `not 4 + 6 × n numbers (${kindOf(r)})`)
+    if (!Array.isArray(r) || r.length < 4 || (r.length - 4) % 6 > 1) throw refuse(`ph[${i}]`, `not 4 + 6 × n numbers, and a fill (${kindOf(r)})`)
+    const fill = (r.length - 4) % 6 === 1
+    if (fill && !(r.length > 4 + 6 && isInteger(r.at(-1), MIXED_FILL, FILL_MAX))) throw refuse(`ph[${i}][${r.length - 1}]`, `not a fill of a placeholder with segments: ${MIXED_FILL} or 0 to ${FILL_MAX}`)
     const u = slot.get(r[0])
     if (u === undefined) throw refuse(`ph[${i}][0]`, 'not a unit of units')
     const k = r[1]
@@ -364,9 +378,9 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     if ((flags & PH_FLAG.OUTSIDE) !== 0 && flags !== (PH_FLAG.LOST | PH_FLAG.OUTSIDE)) throw refuse(`ph[${i}][3]`, 'OUTSIDE but not LOST alone')
     if (symbol && (empty || lost || kind !== MACRO || r.length !== 4)) throw refuse(`ph[${i}]`, 'TEXT but on a macro alone, with no segments')
     if ((flags & PH_FLAG.NUMBERED) !== 0 && kind !== DISPLAY) throw refuse(`ph[${i}][3]`, 'NUMBERED on a kind not display')
-    const segs = (r.length - 4) / 6, most = kind === DISPLAY ? SEGS_DISPLAY : SEGS_INLINE
+    const segs = Math.floor((r.length - 4) / 6), most = kind === DISPLAY ? SEGS_DISPLAY : SEGS_INLINE
     if (empty || lost || symbol || joined ? segs !== 0 : segs < 1 || segs > most) throw refuse(`ph[${i}]`, empty || lost || symbol || joined ? 'segments on an EMPTY, LOST, TEXT or JOINED placeholder' : `not 1 to ${most} segments`)
-    for (let o = 4; o < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, span, 'ph', i, -1)
+    for (let o = 4; o + 5 < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, span, 'ph', i, -1)
     zeroes(r)
     if (!empty && !lost && !joined && PAGE_TEXT.has(kind)) pageTexts.add(key)
     if (symbol) { pageTexts.add(key); symbols.add(key) }
@@ -601,9 +615,10 @@ export function indexLayout(file) {
   const textOf = new Map()
   for (let i = 0; i < pageText.length; i++) textOf.set(`${pageText[i][0]}|${pageText[i][1]}`, pageText[i][2])
   for (let i = 0; i < ph.length; i++) {
-    const r = ph[i], segs = new Float64Array(r.length - 4)
-    for (let j = 4; j < r.length; j++) segs[j - 4] = r[j]
-    byId.get(r[0]).ph.set(r[1], { kind: PH_KINDS[r[2]], flags: r[3], segs, text: textOf.get(`${r[0]}|${r[1]}`) ?? null })
+    const r = ph[i], n = 6 * Math.floor((r.length - 4) / 6), segs = new Float64Array(n)
+    for (let j = 0; j < n; j++) segs[j] = r[4 + j]
+    // (`fill`: its glyphs' colour, 0xRRGGBB, MIXED_FILL, or null where they are black: what the layer draws its rendering in)
+    byId.get(r[0]).ph.set(r[1], { kind: PH_KINDS[r[2]], flags: r[3], segs, text: textOf.get(`${r[0]}|${r[1]}`) ?? null, fill: 4 + n < r.length ? r[4 + n] : null })
   }
   const labelsOf = new Map()
   for (let i = 0; i < labels.length; i++) {

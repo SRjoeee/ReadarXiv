@@ -104,7 +104,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 7
+  schema: 8
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -125,6 +125,8 @@ export interface LayoutMarks {
   dropped: string[]
   /** each unit's line count (LINES_TEX's AXT-LINES) */
   lines: [id: number, n: number][]
+  /** each unit's alignment as TeX set its paragraph (readAlign): centred, flush left, flush right, justified; ids rising */
+  align: [id: number, code: AlignCode][]
   /** the marked original's distinct words */
   words: string[]
   /** its text tokens (tokenizeDocument): page, x, y, w, h, word (stride 6); word -1 the rest of the word before, given
@@ -155,7 +157,13 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 7
+export declare const MARKS_SCHEMA: 8
+/** a unit's alignment code (readAlign) */
+export type AlignCode = 'c' | 'l' | 'r' | 'j'
+export declare const ALIGN_CODES: readonly AlignCode[]
+/** each unit's alignment from the marked original's log (LAYOUT_TEX's AXT-ALIGN at its end mark): [[unit, code]], ids rising;
+ *  none for a unit TeX set in an hbox or that wrote no line */
+export declare function readAlign(log: string | null | undefined): [number, AlignCode][]
 /** a piece's own ink at most, its glyphs and its rules; and a paper's in all */
 export declare const GLYPHS_PIECE: number
 export declare const RULES_PIECE: number
@@ -178,7 +186,7 @@ export type MarkedDark = 'timedOut' | 'capped' | 'degraded' | null
 /** the head's verdict on the paper's links (read before any page): how many its link pages hold and their destinations' names,
  *  or null where it has none (a page's not read within OPS_MS or past MAX_LINKS, or all past LINKS_MAX) */
 export interface MarkedLinks { count: number; dests: string[] }
-export interface MarkedHead { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; pageOf: Map<string, number>; lines: [number, number][]; unitMarks: UnitMarks | null; links: MarkedLinks | null }
+export interface MarkedHead { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; pageOf: Map<string, number>; lines: [number, number][]; align: [number, AlignCode][]; unitMarks: UnitMarks | null; links: MarkedLinks | null }
 /** one page of the marked original as it is read: its tokens, the words first seen on it, the pieces found once it was read,
  *  why it has no ink (null: it has), the page before which every opening point's piece is found, the points read again on it */
 export interface MarkedPage { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][]; links: LinkRow[] | null; dark: MarkedDark; found: number; repeats: string[] }
@@ -186,7 +194,7 @@ export interface MarkedPage { p: number; view: number[]; tokens: number[]; words
 export type MarkedEvent =
   | { head: MarkedHead }
   | { page: MarkedPage }
-  | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][] } }
+  | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][]; align: [number, AlignCode][] } }
 /** the marked original read a page at a time, an async generator: its head, each page in order, its end */
 export declare function markedPages(marked: unknown, log: string, o: MarkedOptions): AsyncGenerator<MarkedEvent>
 /** the marked original read once, a page at a time (markedPages, drained): the marks in memory (as parseLayoutMarks reads their

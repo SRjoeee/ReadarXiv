@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countValues } from '@/pdf-reader/engine/layout/json.mjs'
 import {
-  checkLayoutPart, checkLineskip, encodeLayout, encodeLayoutPart, indexLayout, layoutPartRows, mergeLayout, PART_KEYS, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_ALL, PAGE_TEXT_KINDS, PH_FLAG, PH_KINDS,
+  checkLayoutPart, checkLineskip, encodeLayout, encodeLayoutPart, indexLayout, layoutPartRows, mergeLayout, PART_KEYS, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_SCHEMA, MIXED_FILL, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_ALL, PAGE_TEXT_KINDS, PH_FLAG, PH_KINDS,
   parseLayout, TEXT_MAX, UNIT_FLAG, UNIT_KINDS,
 } from '@/pdf-reader/engine/layout/file.mjs'
 
@@ -21,7 +21,7 @@ const MATH = PH_KINDS.indexOf('math'), DISPLAY = PH_KINDS.indexOf('display'), CI
  *  and onto the next page, a caption, a footnote */
 function made(): LayoutFile {
   return {
-    schema: 4,
+    schema: LAYOUT_SCHEMA,
     layout: LAYOUT,
     pdfjs: '5.4.296',
     paper: { id: '2608.04322', version: 1, pages: 3 },
@@ -64,8 +64,9 @@ function made(): LayoutFile {
     ],
     ph: [
       [2, 1, MATH, 0, 1, 200, 650, 230.5, 657.5, 646],
-      [2, 3, CITE, PH_FLAG.SOURCE_BRACKETS, 1, 300, 638, 320, 645.5, 635.25],
-      [5, 0, MATH, PH_FLAG.RAISED, 2, 280, 690, 300, 697.5, 687.25, 2, 72, 678, 90, 685.5, 675.25],
+      // (a citation's glyphs coloured, hyperref's colorlinks blue; a formula's of two colours, none holding half: the fill last)
+      [2, 3, CITE, PH_FLAG.SOURCE_BRACKETS, 1, 300, 638, 320, 645.5, 635.25, 0x0071bc],
+      [5, 0, MATH, PH_FLAG.RAISED, 2, 280, 690, 300, 697.5, 687.25, 2, 72, 678, 90, 685.5, 675.25, MIXED_FILL],
       [5, 2, DISPLAY, PH_FLAG.NUMBERED, 2, 312, 690, 500, 697.5, 687.25, 2, 520, 690, 540, 697.5, 687.25],
       [5, 4, REF, PH_FLAG.EMPTY],
       [8, 1, MACRO, PH_FLAG.LOST],
@@ -114,7 +115,7 @@ describe('a valid file', () => {
     row[3] = PH_FLAG.TEXT
     f.pageText.push([8, 1, '%'])
     const index = indexLayout(parseLayout(new TextEncoder().encode(encodeLayout(f))))
-    expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.TEXT, segs: new Float64Array(0), text: '%' })
+    expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.TEXT, segs: new Float64Array(0), text: '%', fill: null })
   })
   it('a later display of a display group (JOINED) and a LOST piece outside the unit (OUTSIDE) parse with no segments', () => {
     const f = made()
@@ -124,7 +125,7 @@ describe('a valid file', () => {
     if (!r8) throw new Error('no row 8.1')
     r8[3] = PH_FLAG.LOST | PH_FLAG.OUTSIDE
     const index = indexLayout(parseLayout(new TextEncoder().encode(encodeLayout(f))))
-    expect(index.unit(5)!.ph.get(3)).toEqual({ kind: 'display', flags: PH_FLAG.JOINED, segs: new Float64Array(0), text: null })
+    expect(index.unit(5)!.ph.get(3)).toEqual({ kind: 'display', flags: PH_FLAG.JOINED, segs: new Float64Array(0), text: null, fill: null })
     expect(index.unit(8)!.ph.get(1)?.flags).toBe(PH_FLAG.LOST | PH_FLAG.OUTSIDE)
   })
   it('a valid file parses, round-trips and indexes', () => {
@@ -150,19 +151,23 @@ describe('a valid file', () => {
     expect(u.ph.get(2)!.kind).toBe('display')
     expect(u.ph.get(2)!.flags).toBe(PH_FLAG.NUMBERED)
     expect([...u.ph.get(2)!.segs]).toEqual([2, 312, 690, 500, 697.5, 687.25, 2, 520, 690, 540, 697.5, 687.25])
-    expect(u.ph.get(4)).toEqual({ kind: 'ref', flags: PH_FLAG.EMPTY, segs: new Float64Array(0), text: null })
+    expect(u.ph.get(4)).toEqual({ kind: 'ref', flags: PH_FLAG.EMPTY, segs: new Float64Array(0), text: null, fill: null })
     expect(u.ph.has(1)).toBe(false)
     const two = index.unit(2)!
     expect(two.erase.map(e => [...e])).toEqual([[72, 647.25, 300, 657.5, 310, 647.25, 540, 657.5], [72, 635.25, 380.75, 645.5]])
     // a page-text placeholder's own text, as its glyphs give it
-    expect(two.ph.get(3)).toEqual({ kind: 'cite', flags: PH_FLAG.SOURCE_BRACKETS, segs: new Float64Array([1, 300, 638, 320, 645.5, 635.25]), text: '[12, 3]' })
+    expect(two.ph.get(3)).toEqual({ kind: 'cite', flags: PH_FLAG.SOURCE_BRACKETS, segs: new Float64Array([1, 300, 638, 320, 645.5, 635.25]), text: '[12, 3]', fill: 0x0071bc })
+    // (the fill not a segment's: a formula's two segments, and its fill apart)
+    expect([...u.ph.get(0)!.segs]).toEqual([2, 280, 690, 300, 697.5, 687.25, 2, 72, 678, 90, 685.5, 675.25])
+    expect(u.ph.get(0)!.fill).toBe(MIXED_FILL)
+    expect(two.ph.get(1)!.fill).toBeNull()
     expect(two.ph.get(1)?.text).toBeNull()
     expect(index.unit(0)).toMatchObject({ kind: 'heading', depth: 0, title: true, heading: 'A title' })
     expect(index.unit(7)).toMatchObject({ kind: 'caption', centred: true })
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
-    expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null })
-    expect(LAYOUT).toBe('7')
+    expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null, fill: null })
+    expect(LAYOUT).toBe('8')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
@@ -369,7 +374,8 @@ const ROWS: [string, Edit, string][] = [
   ['schema 1, a file before the names', f => { f.schema = 1 }, 'schema'],
   ['schema 2, a file before the interline glue', f => { f.schema = 2 }, 'schema'],
   ['schema 3', f => { f.schema = 3 }, 'schema'],
-  ['schema 5', f => { f.schema = 5 }, 'schema'],
+  ['schema 4, a file before the fill', f => { f.schema = 4 }, 'schema'],
+  ['schema 6', f => { f.schema = 6 }, 'schema'],
   ['a lineskip of one number', f => { (f as { lineskip: unknown }).lineskip = [1] }, 'lineskip'],
   ['a lineskip that is a string', f => { (f as { lineskip: unknown }).lineskip = ['1pt', 0] }, 'lineskip[0]'],
   ['a lineskiplimit past \\maxdimen', f => { (f as { lineskip: unknown }).lineskip = [1, 1e6] }, 'lineskip[1]'],
@@ -500,6 +506,13 @@ const ROWS: [string, Edit, string][] = [
   ['held a line with an erase', f => { f.held[0]![1] = [3] }, 'held[0][1][0]'],
   ['held of no lines', f => { f.held[0]![1] = [] }, 'held[0][1]'],
   ['a placeholder row of 9', f => { f.ph[0].pop() }, 'ph[0]'],
+  ['a fill past 0xFFFFFF', f => { f.ph[1][10] = 0x1000000 }, 'ph[1][10]'],
+  ['a fill of -2', f => { f.ph[1][10] = -2 }, 'ph[1][10]'],
+  ['a fill of 1.5', f => { f.ph[1][10] = 1.5 }, 'ph[1][10]'],
+  ['a fill as a string', f => { (f.ph[1] as unknown[])[10] = '#0071bc' }, 'ph[1][10]'],
+  ['a fill on an EMPTY placeholder', f => { f.ph[4].push(0x0071bc) }, 'ph[4][4]'],
+  ['a fill on a LOST placeholder', f => { f.ph[5].push(MIXED_FILL) }, 'ph[5][4]'],
+  ['a fill and a number more', f => { f.ph[1].push(0) }, 'ph[1]'],
   ['a segment on page 4', f => { f.ph[0][4] = 4 }, 'ph[0][4]'],
   ['a segment of x0 = x1', f => { f.ph[0][7] = f.ph[0][5] }, 'ph[0][7]'],
   ['a segment with bottom = top', f => { f.ph[0][9] = f.ph[0][8] }, 'ph[0][9]'],
@@ -787,7 +800,7 @@ function largest(): LayoutFile {
   const views: number[] = []
   for (let p = 0; p < PAGES; p++) views.push(0, 0, 612, 792)
   const fonts = Array.from({ length: 512 }, (_, i) => `NimbusRomNo9L-Regu${i}`)
-  const f: LayoutFile = { schema: 4, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null }
+  const f: LayoutFile = { schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '2608.30730', version: 3, pages: PAGES }, left: 'f'.repeat(64), views, fonts, units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null }
   for (let i = 0; i < UNITS; i++) {
     const id = 2 * i, heading = i % 10 === 0, n = linesOf(i), page = 1 + (i % (PAGES - 1))
     f.units.push([id, heading ? H : P, heading ? 1 : 9, i % 8 === 0 ? UNIT_FLAG.CENTRED : 0, 40])

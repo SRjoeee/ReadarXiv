@@ -13,8 +13,9 @@ import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, typ
 
 export const CH = 0.5
 /** a run of glyphs; `blank`: each painted with the Unicode of a space (a symbolic font's code 32); `one`: the whole
- *  string one glyph's Unicode (a character and its variation selector) */
-export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean }
+ *  string one glyph's Unicode (a character and its variation selector); `fill`: its glyphs' fill as PDF.js reports it
+ *  ('#rrggbb', setFillRGBColor; 'pattern', setFillColorN), black again after it */
+export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean; fill?: string }
 /** a Link annotation as PDF.js reports it (getAnnotations): its rectangle and the destination it names */
 export type Annot = { rect: number[]; dest: string | unknown[]; quadPoints?: number[]; url?: string }
 export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
@@ -59,11 +60,12 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
   for (const ri of p.order ?? p.runs.map((_, i) => i)) {
     const r = p.runs[ri] as Run
     for (const b of p.boxes ?? []) if (b[4] === ri) box(b)
+    if (r.fill) ops.push(r.fill === 'pattern' ? [OPS.setFillColorN, ['P0']] : [OPS.setFillRGBColor, [r.fill]])
     ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [[1, 0, 0, 1, r.x, r.y]]])
     // a space is a move, as TeX's pages show it: no glyph (the ink reader keeps every painted glyph); a point between two
     // characters parts the run's showText
     let glyphs: unknown[] = []
-    if (r.one) { ops.push([OPS.showText, [[{ unicode: r.s, width: (r.w ?? CH) * 1000, isSpace: false, fontChar: r.s, vmetric: null }]]], [OPS.endText, []]); continue }
+    if (r.one) { ops.push([OPS.showText, [[{ unicode: r.s, width: (r.w ?? CH) * 1000, isSpace: false, fontChar: r.s, vmetric: null }]]], [OPS.endText, []]); if (r.fill) ops.push([OPS.setFillRGBColor, ['#000000']]); continue }
     for (let c = 0; c <= r.s.length; c++) {
       if (points.some(([, pr, pc]) => pr === ri && pc === c)) { if (glyphs.length) ops.push([OPS.showText, [glyphs]]); glyphs = []; at(ri, c) }
       if (c === r.s.length) break
@@ -72,6 +74,7 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
     }
     if (glyphs.length) ops.push([OPS.showText, [glyphs]])
     ops.push([OPS.endText, []])
+    if (r.fill) ops.push([OPS.setFillRGBColor, ['#000000']])
   }
   at(p.runs.length, 0)
   for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
