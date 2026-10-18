@@ -64,6 +64,15 @@ export function readerWanted({ enabled, hash }: { enabled: boolean; hash: string
  */
 export const ENTRY_CHECK_MS = 3000
 
+/** a HEAD that says nothing within ENTRY_CHECK_MS fails (and is let go), as any failed request does: the entry is offered.
+ *  The timer is cleared once the answer is in */
+function headWithin(fetchFn: typeof fetch, url: string): Promise<Response> {
+  const ac = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => { ac.abort(); reject(new Error(`nothing within ${ENTRY_CHECK_MS / 1000} s`)) }, ENTRY_CHECK_MS) })
+  return Promise.race([fetchFn(url, { method: 'HEAD', credentials: 'omit', signal: ac.signal }), late]).finally(() => clearTimeout(timer))
+}
+
 /**
  * The paper's HTML version with the hash that starts its translation, or null where arXiv says it has none: one HEAD.
  * **Only arXiv saying so means there is none** (404, or 410): a request that failed, a 429 or a 5xx say nothing about
@@ -71,7 +80,7 @@ export const ENTRY_CHECK_MS = 3000
  * caller's: the PDF page asks its own origin, the popup arXiv's by its host permission
  */
 export function htmlVersionOf(id: string, fetchFn: typeof fetch, origin = 'https://arxiv.org'): Promise<string | null> {
-  return fetchFn(htmlUrlOf(id, origin), { method: 'HEAD', credentials: 'omit' })
+  return headWithin(fetchFn, htmlUrlOf(id, origin))
     .then(res => res.status, () => null)
     .then(status => (status === 404 || status === 410 ? null : translatedHtmlUrlOf(id, origin)))
 }
@@ -82,7 +91,7 @@ export function htmlVersionOf(id: string, fetchFn: typeof fetch, origin = 'https
  * Whether this browser runs the reader at all is the caller's to ask first (pdf-reader/support.ts)
  */
 export function bilingualPdfOf(id: string, fetchFn: typeof fetch, origin = 'https://arxiv.org'): Promise<string | null> {
-  return fetchFn(`${origin}/src/${id}`, { method: 'HEAD', credentials: 'omit' })
+  return headWithin(fetchFn, `${origin}/src/${id}`)
     .then(res => (res.ok ? sourceKindOf(res.headers.get('content-type')) : ('unknown' as const)), () => 'unknown' as const)
     .then(source => (source === 'pdf-only' ? null : pdfUrlOf(id, origin)))
 }

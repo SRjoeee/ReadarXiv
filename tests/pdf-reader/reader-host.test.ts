@@ -5,6 +5,7 @@
 // real page e2e:reader's
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
+import { ENTRY_CHECK_MS } from '@/core/pdf/entry'
 import type { SessionEvent } from '@/pdf-reader/session/events'
 
 vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, pdfjsLib: { getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {} }) } }))
@@ -105,6 +106,18 @@ describe('the run, once a translated display is shown (what is not seen takes no
     await flush(20)
     expect(a.run).not.toHaveBeenCalled()
     expect(a.events).toContainEqual({ type: 'unavailable', why: 'unreachable', retryAt: null })
+  })
+
+  it('an unversioned paper whose abstract page failed and whose HTML probe never answers: unavailable still comes, within ENTRY_CHECK_MS', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetch = vi.fn((url: string) => (String(url).includes('/abs/') ? Promise.reject(new TypeError('Failed to fetch')) : new Promise<Response>(() => {})))
+      const a = await opened('paper=2600.00001', { fetch: fetch as never })
+      await vi.advanceTimersByTimeAsync(ENTRY_CHECK_MS - 1)
+      expect(a.events.some(e => e.type === 'unavailable')).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(a.events).toContainEqual({ type: 'unavailable', why: 'unreachable', retryAt: null })
+    } finally { vi.useRealTimers() }
   })
 
   it('an id with no version whose abstract page could not be read: a retry reads it again, and the run starts once arXiv answers (Devin on #390)', async () => {
