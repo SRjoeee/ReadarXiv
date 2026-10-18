@@ -891,7 +891,7 @@ describe('a piece TeX set no ink for never refuses its unit (EMPTY, the no-ink r
   // which sets nothing (the maker's tail row EMPTY: no glyph beside the unit's end mark)
   const pieces = [{ t: 'open', id: 1, src: '\\trajectoryRole[trajectoryoutput]{' }, { t: 'open', id: 2, src: '\\trajectoryIndex{' }, text('Step 2149'), { t: 'close', id: 2, src: '}' }, ph('\\enspace'), text(' Tool Output'), ph('\\trajectoryMark{}'), { t: 'close', id: 1, src: '}{}' }]
   const u = { kind: 'para', src: 'Step 2149 Tool Output', pieces } as never
-  const tr = [[2, 0, 0], [2, 1, 0], [0, '步骤 2149'], [3, 3], [1, 4], [0, ' 工具输出'], [1, 6], [3, 7]]
+  const tr = [[2, 0, 0], [2, 1, 0], [0, '\u6B65\u9AA4 2149'], [3, 3], [1, 4], [0, ' \u5DE5\u5177\u8F93\u51FA'], [1, 6], [3, 7]]
   it("an EMPTY row passes on the file's lines, and is still refused on v0's (there its ink is not ruled off the unit's lines)", () => {
     const lu = rowsOf([[6, PH_FLAG.EMPTY, 'macro']])
     expect(T.locatedWhole(lu, u, tr, { held: true })).toMatchObject({ ok: true })
