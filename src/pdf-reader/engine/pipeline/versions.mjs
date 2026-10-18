@@ -85,7 +85,14 @@
 //     word-by-word colour runs went out as a marker at every style boundary and came back as word salad, its "Before"
 //     labels empty. A copy of 14 (and of each older pipeline, with its own test) carries every unit that holds no pair
 //     and no inkless placeholder between its words and whose translation keeps a letter (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '15'
+// 16: an environment the paper defines as code is no unit (latex-front.mjs codeEnvsOf): one a listing package's definer
+//     makes, one whose begin code opens a code environment, one set as alltt sets its body (typewriter type, its lines
+//     obeyed). 2610.19159's 720 transcripts were 832 of its 2,645 units, its command lines and terminal output sent to the
+//     translator; 1,813 now. Its later pairs in that file renumbered, 451 units keep their text and change their hash,
+//     found again by seedFrom. The 7 pack papers and the corpus's 124 keep their units byte for byte. The wire, its
+//     reading back and the layout file are 15's: a copy of 15 carries every unit it holds the source of (live.mjs
+//     PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '16'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
