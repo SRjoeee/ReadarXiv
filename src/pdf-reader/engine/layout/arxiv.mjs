@@ -17,8 +17,8 @@ import { isMemoryError } from '../pipeline/memory.mjs'
  * - `ok[p - 1]`: page p and its text were read (where not, its text is none);
  * - `tokens`: tokenizeDocument's of every page, in page order, each with its text item let go (`item` null);
  * - `edges`: each token's ink across (inkEdges), made while the items were there;
- * - `spans`: each token's item's start and end across (its transform's x, and that plus its width; NaN with none), which the
- *   wire's check of a token reads;
+ * - `spans`: each token's item's start and end across (its transform's x, and that plus its width along its baseline's
+ *   direction: its width for upright text; NaN with none), which the wire's check of a token reads;
  * - `draw` (with `draw` asked): each page's text as its draw geometry reads it (pipeline/draw-data.mjs drawTextOf; null where the
  *   page's text was not read), which the layout maker takes a page at a time as it reads the page's draw (and lets go): no page's
  *   text is read twice. Else null.
@@ -50,9 +50,9 @@ export async function readArxivText(doc, { draw = false } = {}) {
     const x0 = new Float64Array(own.length), x1 = new Float64Array(own.length)
     own.forEach((w, k) => {
       const it = w.item
-      const at = it?.transform?.[4]
+      const t = it?.transform, at = t?.[4], along = t ? Math.hypot(t[0], t[1]) : 0
       x0[k] = typeof at === 'number' ? at : Number.NaN
-      x1[k] = typeof at === 'number' && typeof it.width === 'number' ? at + it.width : Number.NaN
+      x1[k] = typeof at === 'number' && typeof it.width === 'number' ? at + it.width * (along ? t[0] / along : 1) : Number.NaN
       // (set, not deleted: the token keeps its shape)
       w.item = null
       tokens.push(w)

@@ -210,8 +210,10 @@ describe('a page past TOKENS_PAGE', () => {
 })
 
 // A rectangle the part's writer refuses for its place (a coordinate past its page's view by more than the wire's slack, format.mjs
-// partShape) is never handed to it: 1406.1078v3's landscape pages (/Rotate 90) set their captions vertically, the tokenizer lays a
-// vertical item's words along x from its origin, and the caption's line ran from x 554.427 to 1241.035 on a view 595.276 wide
+// partShape) is never handed to it: 1406.1078v3's landscape pages (/Rotate 90) set their captions vertically, and the tokenizer laid a
+// vertical item's words along x from its origin, the caption's line from x 554.427 to 1241.035 on a view 595.276 wide. The tokenizer
+// lays them along the item's direction now (anchors.mjs tokenizeDocument); the clip stays for text that does run off its page
+// (upright words past an edge: 2503.06072 pp 45-46, 2608.12606 p5, 2608.28697 p5)
 describe('a left rectangle past its page\'s view', () => {
   const VIEW = [0, 0, 595.276, 841.89]
   const doc: DocToken[] = Array.from({ length: 8 }, (_, k) => ({ t: `w${k}`, page: 1, x: 100 + k * 40, y: 400, w: 30, h: 10, top: 408, bottom: 398 }))
@@ -297,7 +299,7 @@ describe('a left rectangle past its page\'s view', () => {
     for (const p of [1, 2]) expect(stream.leftPages(p)!.spans).toEqual(side.leftPages(p)!.spans)
   })
 
-  it('cuts 1406.1078v3\'s page 14 as the prepare does: a vertical caption anchored on its tokens, the part written and read back', async () => {
+  it('cuts 1406.1078v3\'s page 14 as the prepare does: a vertical caption anchored on its tokens, inside the view with nothing clipped, the part written and read back', async () => {
     // page 14's two items, as PDF.js gives them: rotated a quarter turn (transform [0, s, -s, 0, x, y]), their widths along +y
     const words = (n: number, from: number) => Array.from({ length: n }, (_, k) => `word${from + k}`)
     const one = words(30, 0), two = words(5, 30)
@@ -306,12 +308,29 @@ describe('a left rectangle past its page\'s view', () => {
     const tokens = tokenizeDocument(pages)
     const found = anchorUnits(tokens, [{ id: 0, text: [...one, ...two].join(' ') }], {})
     const a = found.get(0) as Anchor
-    expect(Math.max(...a.rects.map(r => r.x1))).toBeGreaterThan(VIEW[2]! + 600)
+    // (its words along the caption, up the page: the rectangles inside the view as anchored, at the caption's two lines' place)
+    for (const r of a.rects) { expect(r.x0).toBeGreaterThan(530); expect(r.x1).toBeLessThanOrEqual(VIEW[2]!); expect(r.y1).toBeLessThanOrEqual(VIEW[3]!) }
     const side = leftSideOf({ doc: tokens, views: [VIEW], anchors: found })
+    expect(side.stats.clipped).toBe(0)
+    expect(side.stats.dropped).toBe(0)
     for (const [, , rects] of side.units) for (const r of rects) expect(r[3]).toBeLessThanOrEqual(VIEW[2]!)
     const { cut, streams } = await cutAndRead(side, 1)
     expect(cut.parts.length).toBe(1)
     expect(streams.get(0)).toBe(Math.min(...a.tokens))
+  })
+
+  it('clips upright text that does run off its page, anchored on its tokens: the part written and read back', async () => {
+    // a line whose last word runs past the right edge, as 2608.28697's hash does on its page 5 (x 465.1 to 614 on a view 612 wide)
+    const line = { str: 'the digest cf0005685626dcaedb4c96a64f', transform: [10.91, 0, 0, 10.91, 380, 179.6], width: 240, height: 10.91, hasEOL: true, fontName: 'f' }
+    const view = [0, 0, 612, 792]
+    const tokens = tokenizeDocument([{ page: 1, items: [line], styles: {} }])
+    const found = anchorUnits(tokens, [{ id: 0, text: line.str }], {})
+    expect(Math.max(...(found.get(0) as Anchor).rects.map(r => r.x1))).toBeGreaterThan(view[2]! + 1)
+    const side = leftSideOf({ doc: tokens, views: [view], anchors: found })
+    expect(side.stats.clipped).toBe(1)
+    expect(side.units).toEqual([[0, 0, [[1, 380, expect.any(Number), 612, expect.any(Number)]]]])
+    const { cut } = await cutAndRead(side, 1)
+    expect(cut.parts.length).toBe(1)
   })
 })
 
