@@ -1860,6 +1860,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (centred as the layout file has the unit, UNIT_FLAG.CENTRED: TeX's own alignment where the marked original tells it, else
     // the maker's reading of arXiv's lines, make.mjs; a unit of a part with no layout by its lines, blocks2's)
     const lu = filed(p.id) ? tex.index.unit(p.id) : null
+    // a centred unit whose first line starts with a label kept as the original's (IEEEtran's "I." before its centred section
+    // heading): centred with the line, label and text one, as TeX centred them, its ink copied as the line's start (a crop, as
+    // a numbered heading's below), the line from the label on (`carried`). Left where it was, the shorter text centred alone
+    // stood an em or more away from it
+    const carried = !!lu?.centred && !!prep.label?.chars?.length && !prep.label.drawn && !!p.rects[0] && prep.label.chars.every(c => c.page === p.rects[0][0])
+    if (carried) { const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r0[1]) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]] }
     p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt, lu ? lu.centred : undefined)
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // (the unit's displays TeX set with its short skip under a line of its own that ends 2 em before them, each the block's of
@@ -1879,7 +1885,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the original's last ones (layer2.mjs laidOut, P.lastLines). Where its class set its number before its first line, kept
     // as the original's ink there, the number goes with it, its ink copied as the line's start (`numbered`, once it is laid)
     const heading = p.unit.kind === 'heading' && !p.unit.title && !p.unit.front
-    const numbered = heading && !prep.lead && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
+    const numbered = heading && !carried && !prep.lead && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
     // a first row TeX set on the line another unit's last row ends (a shared line, need.mjs rowLeadOf: a run-in heading's text,
     // a paragraph's part after the float that split it) starts where that unit's translation ends on the row, the original's
     // separation after it (`start`, slotsAt), or at the row's own start where that unit set no text there (shareOf): not where
@@ -1919,7 +1925,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     // (from here to the unit's end nothing is awaited: its work is charged to its first page in `arrive`)
     workMarks.set(p, markWork())
-    const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
+    let tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
+    if (carried && p.blocks[0]?.centred) {
+      const cs = prep.label.chars, b0 = p.blocks[0], start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
+      const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
+      const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: median(cs.map(c => c.yb)), text: prep.label.text }
+      tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0 }, ...tokens], { base: tokens.base })
+      b0.indent = 0
+      prep.label = { ...prep.label, drawn: prep.label.text }
+      for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
+    }
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
