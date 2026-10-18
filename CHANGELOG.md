@@ -2,7 +2,7 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
-## 0.5.0
+## 0.5.0 — 2026-10-19
 
 - PDF papers have a reader of their own: arXiv's PDF on one side, its translation on the other, page for page. Figures and formulas stay as the author drew them, the translated text is set in fonts close to the original's, and the two sides scroll together; point at a sentence and its counterpart lights up.
 - Links work in the translated pages. A citation or a reference jumps to its place in the paper, a web address opens in a new tab, and every link can be reached with the keyboard; Enter on a citation goes to the bibliography and the focus goes with you. References written as "Figure 1" or "sections 3.2 and 3.3" are links too.
