@@ -1043,9 +1043,9 @@ describe("LaTeX's text symbols: one table for the maker and the layer (rules/tex
     const S = await import('@/pdf-reader/engine/rules/text-symbols.mjs')
     const M = await import('@/pdf-reader/engine/layout/marks.mjs')
     const L1 = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
-    for (const [cmd, ch] of Object.entries(M.TEXT_SYMBOLS)) expect(S.TEXT_SYMBOLS[cmd], cmd).toBe(ch)
-    // (the maker's own copy until it imports the table: the two straight quotes alone are new to it)
-    expect(Object.keys(S.TEXT_SYMBOLS).filter(cmd => !Object.hasOwn(M.TEXT_SYMBOLS, cmd)).every(cmd => ['\\textquotesingle', '\\textquotedbl'].includes(cmd))).toBe(true)
+    // (the maker's own: the one table, its symbolText too)
+    expect(M.TEXT_SYMBOLS).toBe(S.TEXT_SYMBOLS)
+    expect(M.symbolText).toBe(S.symbolText)
     for (const [cmd, ch] of Object.entries(S.TEXT_SYMBOLS)) {
       expect([S.symbolText(cmd), S.symbolText(`${cmd}{}`), L2.texToText2(cmd), L2.texToText2(`${cmd}{}`)], cmd).toEqual([ch, ch, ch, ch])
       expect([ch, ''], cmd).toContain(L1.texToText(cmd))

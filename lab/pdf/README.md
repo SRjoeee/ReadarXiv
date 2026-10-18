@@ -240,7 +240,9 @@ of the unit, before its start, on a held line; a rendering that is not its sourc
 layer reads a placeholder that is a LaTeX text symbol by one table (`rules/text-symbols.mjs`: the maker's, with the two
 straight quotes): it knew none of `\textbackslash`, `\textasciicircum` and `\textbar`, which the maker's had, and
 neither side `\textquotesingle` or `\textquotedbl`, so that 256 units of 2610.19159 were left English for them as a
-paper's own macros. The maker keeps its own copy until a LAYOUT version takes the table.
+paper's own macros. The maker reads the same table (`layout/marks.mjs` re-exports it), so that it draws the two quotes as
+text symbols too: a paper that writes either gets another layout file, which wants LAYOUT 8; none of the pack's papers
+writes either.
 
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
 folders, and a `--record` that would drop an output the record's run of its kind holds (for a model run, the pixel run's
