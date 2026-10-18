@@ -605,8 +605,10 @@ describe("babel's names (D1a)", () => {
     expect(NAMES_TEX).toContain('\\def\\axtnmb{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nmb\\else\\protect\\axtnmb\\fi}')
     // gated, hmode only, glue put back (\axt@set), the start waiting for a paragraph from vertical mode
     expect(NAMES_TEX).toMatch(/\\protected\\def\\axt@nma#1\{\\ifaxt@off\\else/)
-    expect(NAMES_TEX).toContain('\\relax\\axt@put{n\\axt@nmn.#1.s}')
-    expect(NAMES_TEX).toContain('\\axt@set{n\\axt@nmn.#1.e}')
+    // (each held: a name a class runs into the paragraph is set as it starts, and leaves the opening point waiting there for
+    // the unit's own start mark, LAYOUT_TEX's \axt@hold)
+    expect(NAMES_TEX).toContain('\\relax\\axt@holdtrue\\axt@put{n\\axt@nmn.#1.s}\\axt@holdfalse')
+    expect(NAMES_TEX).toContain('\\axt@holdtrue\\axt@set{n\\axt@nmn.#1.e}\\axt@holdfalse')
     expect(NAMES_TEX).toContain('\\AddToHookNext{para/begin}{\\axt@nmlate}')
     // at \begin{document} and after babel's switches; the names kept off a float's label
     expect(NAMES_TEX).toContain('\\AddToHook{begindocument/end}{\\global\\axt@nmontrue\\axt@nmall}')
@@ -1410,7 +1412,7 @@ describe("each colour piece's fill, as TeX set its run in the marked original (P
     expect([open('\\textcolor[rgb]{0,0,1}{'), ph('\\color{red}'), ph('\\color{red} x'), open('\\textcolor{red}'), open('\\colorbox{red}{')].map(colourPieceOf)).toEqual([true, true, false, false, false])
   })
   it("LAYOUT_TEX writes it through \\message alone, gated as the marks are, and never into a file or a PDF string", () => {
-    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi}')
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}')
     expect(LAYOUT_TEX).toContain('\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}')
     expect(LAYOUT_TEX).toContain('\\let\\axtcolour\\@gobble')
   })
@@ -1437,5 +1439,16 @@ describe("each colour piece's fill, as TeX set its run in the marked original (P
     const back = parseLayoutMarks(bytes(text))
     expect(back.colours).toEqual([])
     expect(encodeLayoutMarks(back)).toBe(encodeLayoutMarks({ ...before, colours: [] } as never))
+  })
+})
+
+describe('an opening point that waits in vertical mode is set with its unit, not with a run-in heading or name (PR-C)', () => {
+  it("the heading's and the names' marks hold it; every other mark sets it beside its own", () => {
+    expect(LAYOUT_TEX).toContain('\\newif\\ifaxt@hold')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifaxt@hold\\else\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi\\fi}')
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}')
+    // (the unit's start mark and a placeholder's own still set it)
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}')
+    expect((LAYOUT_TEX.match(/\\axt@holdtrue/g) ?? []).length).toBe(3)
   })
 })

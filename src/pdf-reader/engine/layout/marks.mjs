@@ -519,7 +519,11 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  *   On an empty list — the paragraph TeX resumes after a display — it sets nothing, and expands to nothing: a mark there
  *   would keep the empty paragraph between two displays a line, and would end the \ignorespaces amsmath's \] began
  *   (2608.20051, 2608.29782). In vertical mode it waits for the next mark that is set, the unit's start mark at the same
- *   place (layoutMarking marks only a placeholder at or after it).
+ *   place (layoutMarking marks only a placeholder at or after it), but a heading's or a babel name's (\axt@hold): a class
+ *   that runs its heading or name into the paragraph sets it first, as the paragraph starts (\everypar, para/begin), and a
+ *   point set there took the run-in text for the placeholder's (2610.19159's "Task specification." owned by the
+ *   $\mathcal{T}$ that opens the paragraph after it: its row covered the heading, and the paragraph's first line began at
+ *   the heading's start, so that no shared line was found).
  * - **\axtpmm{name}, before an inline formula** (its source begins $, \( or \ensuremath): \axtpma, but set on the empty
  *   list too. The formula's math-on node follows the mark at once, so the paragraph TeX resumes after a display is no
  *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
@@ -542,7 +546,9 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  *   after a \color switch): a message to the log, `AXT-COLOUR c<i>.<k> <\current@color>`, the fill the driver paints the
  *   run with where TeX is (readColours): every colour the paper's own TeX accepts, defined anywhere (a body's \definecolor,
  *   a group's \colorlet), mixed (blue!60!black) or by a model, exactly as it is set. Through \message, which puts nothing
- *   in any list, gated as the marks are; nothing where no colour package is loaded
+ *   in any list, gated as the marks are; nothing where no colour package is loaded. It ends in \ignorespaces: \color ends
+ *   in one, which the mark, unexpandable, would stop short of the spaces after it (2503.06072's `\textcolor{red}{ \underline`
+ *   moved its URL a space right)
  * - **Nothing written.** The three test \protect against \@typeset@protect and gobble their name otherwise, so written
  *   to a file (\protected@write: the aux's labels, the contents lists) or into a mark (running heads) they are gone; in a
  *   PDF string they are gobbled (\pdfstringdefDisableCommands); nameref's titles, which it keeps as strings, have them
@@ -611,10 +617,10 @@ export const POINTS_TEX = [
 export const NAMES_TEX = [
   '\\gdef\\axt@nmn{0}\\global\\let\\axt@nmopen\\@empty\\global\\let\\axt@nmwait\\@empty\\newif\\ifaxt@nmon\\newif\\ifaxt@nmgo\\def\\axt@nmfigure{figure}\\def\\axt@nmtable{table}',
   '\\def\\axt@nmok#1{\\axt@nmgotrue\\ifdefined\\@captype\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmfigure\\axt@nmgofalse\\fi\\ifx\\axt@nmt\\axt@nmtable\\axt@nmgofalse\\fi\\fi}',
-  '\\def\\axt@nmstart#1{\\xdef\\axt@nmn{\\the\\numexpr\\axt@nmn+1\\relax}\\xdef\\axt@nmopen{#1}\\relax\\axt@put{n\\axt@nmn.#1.s}}',
+  '\\def\\axt@nmstart#1{\\xdef\\axt@nmn{\\the\\numexpr\\axt@nmn+1\\relax}\\xdef\\axt@nmopen{#1}\\relax\\axt@holdtrue\\axt@put{n\\axt@nmn.#1.s}\\axt@holdfalse}',
   '\\def\\axt@nmlate{\\ifx\\axt@nmwait\\@empty\\else\\ifaxt@off\\else\\ifhmode\\expandafter\\axt@nmstart\\expandafter{\\axt@nmwait}\\fi\\fi\\global\\let\\axt@nmwait\\@empty\\fi}',
   '\\protected\\def\\axt@nma#1{\\ifaxt@off\\else\\axt@nmok{#1}\\ifaxt@nmgo\\ifhmode\\axt@nmstart{#1}\\else\\ifvmode\\ifdefined\\AddToHookNext\\xdef\\axt@nmwait{#1}\\AddToHookNext{para/begin}{\\axt@nmlate}\\fi\\fi\\fi\\fi\\fi}',
-  '\\protected\\def\\axt@nmb#1{\\global\\let\\axt@nmwait\\@empty\\ifaxt@off\\else\\ifhmode\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmopen\\global\\let\\axt@nmopen\\@empty\\axt@set{n\\axt@nmn.#1.e}\\fi\\fi\\fi}',
+  '\\protected\\def\\axt@nmb#1{\\global\\let\\axt@nmwait\\@empty\\ifaxt@off\\else\\ifhmode\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmopen\\global\\let\\axt@nmopen\\@empty\\axt@holdtrue\\axt@set{n\\axt@nmn.#1.e}\\axt@holdfalse\\fi\\fi\\fi}',
   '\\def\\axtnma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nma\\else\\protect\\axtnma\\fi}',
   '\\def\\axtnmb{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nmb\\else\\protect\\axtnmb\\fi}',
   '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn',
@@ -670,9 +676,9 @@ const UNMARK_TEX = [
 ].join('')
 
 export const LAYOUT_TEX = [
-  '\\makeatletter\\newif\\ifaxt@off\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
+  '\\makeatletter\\newif\\ifaxt@off\\newif\\ifaxt@hold\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
-  '\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi}',
+  '\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifaxt@hold\\else\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi\\fi}',
   '\\def\\axt@icm{\\axt@icr\\ifnum\\lastnodetype=12 \\xdef\\axt@icv{\\the\\lastkern}\\unkern\\ifdim\\axt@icv=\\z@\\else\\global\\axt@sigtrue\\fi\\fi}',
   '\\def\\axt@ic{\\global\\axt@sigfalse\\ifcase\\lastnodetype\\axt@icm\\or\\or\\or\\or\\or\\or\\global\\axt@sigtrue\\or\\axt@icm\\or\\or\\axt@icm\\fi}',
   '\\def\\axt@put#1{\\axt@ic\\axt@mark{#1}\\ifaxt@sig\\vadjust{}\\fi}',
@@ -699,8 +705,8 @@ export const LAYOUT_TEX = [
   '\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}',
   '\\protected\\def\\axt@pm#1{\\ifaxt@off\\else\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1}\\fi\\fi\\fi}',
-  '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@put{#1}\\fi\\fi}',
-  '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi}',
+  '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}',
+  '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}',
   '\\def\\axtpma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pma\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpmm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pmm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pm\\else\\expandafter\\@gobble\\fi}',

@@ -18,7 +18,8 @@
 //                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone;
 //                                                                  ONLY=wrappers: the wrappers' alone; ONLY=lost: the LOST
 //                                                                  survey's, an inline formula first after a display, a
-//                                                                  display group and a display at a page's foot)
+//                                                                  display group and a display at a page's foot; ONLY=runin:
+//                                                                  the run-in leads' stream case, F)
 // NATIVE_TEX=1 compiles with this machine's TeX Live in place of Docker's (lab/pdf/spikes/native-tex/: its NATIVE_TEX_BIN,
 // NATIVE_TEXMFLOCAL and NATIVE_TEXMFVAR), the jobs one after another as in the container; a compile so is not the image's
 // package versions byte for byte
@@ -41,8 +42,10 @@ await checkCompileImage()
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
-/** the stream's own cases alone */
-const STREAM_ONLY = process.env.ONLY === 'stream'
+/** the run-in leads' stream case alone (F) */
+const RUNIN_ONLY = process.env.ONLY === 'runin'
+/** the stream's own cases alone (F's alone with RUNIN_ONLY) */
+const STREAM_ONLY = process.env.ONLY === 'stream' || RUNIN_ONLY
 /** the names' cases alone */
 const NAMES_ONLY = process.env.ONLY === 'names'
 /** \axt@unmark's case alone */
@@ -170,7 +173,7 @@ const jobs = [], queued = []
 function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true, trace = false, files = {} } = {}) {
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-'))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-'))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -611,6 +614,23 @@ where the text resumes with $u$ and more words.
 ${Array.from({ length: 10 }, (_, i) => `\\newpage\\vspace*{${548 + 4 * i}pt}\\noindent Words before the display at the foot of page ${i + 2}:\n\\begin{equation} p_{${i}} = q_{${i}} \\end{equation}\nand the words after it with $w_{${i}}$ words.`).join('\n')}
 \end{document}
 `
+// F (PR-C's run-in leads, 2026-10-19): a heading and a proof's name the class runs into the paragraph, each followed by a
+// placeholder first in it, whose opening mark waits in vertical mode for the unit's start mark (\\axtpmm, \\axtpma): TeX sets
+// the heading and the name first, as the paragraph starts, and their marks must leave it waiting (\\axt@hold), or the
+// placeholder owns the run-in text (2610.19159's "Task specification." owned by its $\\mathcal{T}$)
+STREAM.F = String.raw`\documentclass{article}
+\usepackage{amsmath,amsthm}
+\begin{document}
+\section{First}\label{sec:first}
+\paragraph{Task specification.} $\phi$ specifies the words that follow it on the heading's line, and more words after them.
+
+\paragraph{A second heading.} \ref{sec:first} is a reference first in its paragraph, and more words after it.
+
+\begin{proof}
+$\psi$ opens the proof right after its name, and more words after it.
+\end{proof}
+\end{document}
+`
 const streamKey = (name, engine) => `stream-${name}-${engine}`
 const streams = []
 for (const [name, src] of Object.entries(STREAM)) for (const engine of ['pdflatex', 'xelatex']) streams.push({ key: streamKey(name, engine), name, engine, paper: queue(streamKey(name, engine), src, { engine, variants: ['v1', 'v1np'] }) })
@@ -883,11 +903,13 @@ const OWN = {
   // its aligns numbered on from 1, 9, 21 and 37
   C: [['$\\phi$', '\u03d5'], ['$', glyphsOf], ['\\cite{one}', '[1]'], ['call:Note ', null], ['\\begin{align}', (src, nth) => rowsOf(src.trim(), [1, 9, 21, 37][nth])]],
   D: [['$b_', glyphsOf], ['$', null]],
+  // each its own glyphs, none of the run-in heading's or name's before it
+  F: [['$\\phi$', '\u03d5'], ['\\ref{sec:first}', '1'], ['$\\psi$', '\u03c8']],
   // the group's first display owns the group (an align's row, an equation's, an equation*'s); each foot display its own
   E: [['\\begin{equation} a = b', 'a=b(1)'], ['$x_1$', 'x1'], ['\\begin{align} c', 'c=d(2)e=f(3)g=h'], ['\\begin{equation} e = f', 'LOST:in the display before it'], ['\\begin{equation*} g', 'LOST:in the display before it'], ['$u$', 'u'],
     ['\\begin{equation} p_', (src, n) => ({ s: `${glyphsOf(src.replace(/\\(?:begin|end)\{equation\}/g, '')).s}(${4 + n})`, rules: 0 })], ['$w_', glyphsOf]],
 }
-for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? streams.filter(x => x.name === 'E') : [...streams, luaStream]) {
+for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? streams.filter(x => x.name === 'E') : RUNIN_ONLY ? streams.filter(x => x.name === 'F') : [...streams, luaStream]) {
   const label = `the stream, ${s.name} (${s.engine})`
   const [a, b] = [await inkOf(`${s.key}-v1`), await inkOf(`${s.key}-v1np`)]
   if (!a || !b) { check(`${label}: compiled`, false, `no PDF (${a ? 'v1np' : 'v1'})`); continue }
@@ -962,7 +984,7 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
 }
 
 // TeX's own boxes: the points' nodes out (the corpus check's comparison), nothing else different
-for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY || LOST_ONLY ? [] : Object.keys(TRACED)) {
+for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY || LOST_ONLY || RUNIN_ONLY ? [] : Object.keys(TRACED)) {
   const boxesOf = v => { const log = read(`${traceKey(name)}-${v}`, 'log', 'latin1') ?? ''; const out = [], lines = log.split('\n'); for (let i = 0; i < lines.length; i++) if (/^Completed box being shipped out \[/.test(lines[i])) { const at = i; while (i < lines.length && lines[i] !== '') i++; out.push(...lines.slice(at, i), '') } return pageBoxes(out.join('\n')) }
   const [a, b] = [boxesOf('v1np'), boxesOf('v1')], d = boxDiff(a, b)
   check(`the stream, TeX's boxes with the points and without them the same: ${name}`, a.length > 0 && a.length === b.length && !d.length, JSON.stringify({ pages: [a.length, b.length], differences: d.length, first: d.slice(0, 3).map(x => [x.page, x.v0, x.v1]) }))
