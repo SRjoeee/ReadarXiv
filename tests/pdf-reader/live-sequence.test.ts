@@ -352,6 +352,28 @@ describe('a copy made under pipeline 10 or 11, reopened under 12 (and on); one o
   }
 })
 
+// A copy made under pipeline 14, reopened under 15: 15 sends a pair inside a sentence and a placeholder that sets no ink on
+// no wire (mt.mjs planOf, TRANSLATE_VERSION 3), the units and their hashes as they were. Given the units, the carry test
+// asks whether the unit holds a pair or such a placeholder between its words: such a unit's translation was made of its
+// pieces sent apart, and it is sent again; every other unit's is taken as the copy has it, one with a \noindent at its head too
+describe('a copy made under pipeline 14, reopened under 15', () => {
+  const PARAS = ['A paragraph of the paper, with words that run on for a line or two of prose and an end.', '\\noindent A paragraph set without its indent, with words that run on for a line and an end.', 'A paragraph whose \\textbf{compute resources} and \\textbf{operating constraints} are set in bold.', 'A last paragraph of the paper, with words that run on for a line or two of prose and an end.']
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('sends the unit with bold words inside its sentence, one of four, and takes the other three as the copy has them', async () => {
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\\begin{document}\n${PARAS.join('\n\n')}\n\\end{document}\n`)]])), n = p.units.length
+    expect(n).toBe(4)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ pipeline: '14', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES }), units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(seed.size).toBe(4)
+    expect(sent).toEqual(['A paragraph whose compute resources and operating constraints are set in bold.'])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either
