@@ -160,17 +160,18 @@ describe('styled runs on the markers wire (2610.19159)', () => {
 
   it('a word-by-word colour run: one span, its sentence between two markers and none between its words (unit 375)', () => {
     const ser = serialize(COLOURED)
-    expect(ser.wire).toBe('@a#@b# Fit the learned-descriptor model (same architecture, possibly retrained weights) and a reimplemented quadratic-SNAP model on the new material. @c# Learned descriptor model and comparisons to quadratic - SNAP must use the exact same training set . @d#')
-    // the switches before the bullet go on no wire: they come back before it
-    expect(shape(ser.front as P[])).toBe('\\smallskip|\\noindent')
-    const r = read(rehydrate(REPLY.coloured, ser))
+    expect(ser.wire).toBe('@a# Fit the learned-descriptor model (same architecture, possibly retrained weights) and a reimplemented quadratic-SNAP model on the new material. @b# Learned descriptor model and comparisons to quadratic - SNAP must use the exact same training set . @c#')
+    // the skip, the switch and the bullet before the sentence one marker, in their order: none goes on the wire alone
+    expect(ser.front).toBeUndefined()
+    // (the reply to the wire as it went, its first two markers then this wire's one)
+    const r = read(rehydrate(REPLY.coloured.replace('@a#@b#', '@a#').replace('@c#', '@b#').replace('@d#', '@c#'), ser))
     // the second sentence inside the first pair, after its switch; the other sixteen pairs back empty after it, in order
     const s = shape(r)
-    expect(s).toMatch(/^\\smallskip\|\\noindent\|\\textbullet\|\\ \|[^|]+\|<522\|\\bfseries\| [^|<>]+\u8bad\u7ec3\u96c6\u3002\|522>\|<523\|\\bfseries\|523>\|/)
+    expect(s).toMatch(/^\\smallskip\|\n\|\\noindent\|\\textbullet\|\\ \|[^|]+\|<522\|\\bfseries\| [^|<>]+\u8bad\u7ec3\u96c6\u3002\|522>\|<523\|\\bfseries\|523>\|/)
     expect(s.endsWith('<538|\\bfseries|538>')).toBe(true)
     expect(salad(r)).toBe(false)
     // tags: the span one pair, the switches off the wire
-    expect(serializeTags(COLOURED).wire).toBe('<x id="1"/><x id="2"/>Fit the learned-descriptor model (same architecture, possibly retrained weights) and a reimplemented quadratic-SNAP model on the new material. <t id="3"> Learned descriptor model and comparisons to quadratic - SNAP must use the exact same training set .</t>')
+    expect(serializeTags(COLOURED).wire).toBe('<x id="1"/>Fit the learned-descriptor model (same architecture, possibly retrained weights) and a reimplemented quadratic-SNAP model on the new material. <t id="2"> Learned descriptor model and comparisons to quadratic - SNAP must use the exact same training set .</t>')
   })
 
   it('a lone styled word: alone on the wire, back inside its box, its colour and its bold (units 372, 374)', () => {
@@ -242,9 +243,11 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     expect(serialize(LEAD_TERMS).wire).toBe('compute resources and operating constraints under which the work from @a# is carried out.')
   })
 
-  it('a fill or a skip taken off the wire leaves a word boundary where it stood between two words', () => {
-    expect(serialize(unit({ t: 'text', s: 'Left' }, { t: 'ph', src: '\\hfill{}' }, { t: 'text', s: 'Right' })).wire).toBe('Left Right')
-    expect(serialize(unit({ t: 'text', s: 'Left ' }, { t: 'ph', src: '\\hfill' }, { t: 'text', s: ' Right' })).wire).toBe('Left Right')
+  it('a fill or a skip stays a marker where it stands: it sets where the fields fall (2608.10322\'s flush-right \\hfill)', () => {
+    const fields = unit({ t: 'text', s: 'Left' }, { t: 'ph', src: '\\hfill{}' }, { t: 'text', s: 'Right' })
+    expect(serialize(fields).wire).toBe('Left @a# Right')
+    expect(shape(read(rehydrate('\u5de6 @a# \u53f3', serialize(fields))))).toBe('\u5de6 |\\hfill{}| \u53f3')
+    expect(serialize(unit({ t: 'text', s: 'One. ' }, { t: 'ph', src: '\\smallskip' }, { t: 'text', s: ' Two.' })).wire).toBe('One. @a# Two.')
     // a break's permission sets no space: the word stays one
     expect(serialize(unit({ t: 'text', s: 'long' }, { t: 'ph', src: '\\allowbreak' }, { t: 'text', s: 'word' })).wire).toBe('longword')
   })

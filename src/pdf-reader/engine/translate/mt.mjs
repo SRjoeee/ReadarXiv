@@ -80,15 +80,17 @@ const srcOf = slot => (slot.t === 'edge' ? (slot.pieces.find(p => !isInkless(p))
 // ---------------------------------------------------------------- a unit's styling on the wire
 /**
  * A placeholder that sets no ink and that no translator needs: a style or size switch (`\bfseries`, `\small`,
- * `\color{red}`), a strut, a skip, a paragraph's shape (`\noindent`, `\centering`), a fill, a break's permission
- * (`\allowbreak`), `\relax` and its kind. Sent as a marker, each one cut the sentence it stood in: Microsoft reads a
+ * `\color{red}`), a strut, a paragraph's shape (`\noindent`, `\centering`), a break's permission (`\allowbreak`),
+ * `\relax` and its kind. Sent as a marker, each one cut the sentence it stood in: Microsoft reads a
  * marker as a hard boundary, and 2610.19159's 6,681 `\allowbreak{}` and 3,516 `\bfseries` (one before every word of
  * its coloured runs) went out as 13,000 markers. It goes on no wire: it is put back after the open of its innermost
  * group that went out (the unit's front, a kept pair's open) where it stood before that group's first word, else before
- * its close, in the source's order. A space (a tie, `\quad`, mt.mjs SPACING's) or a forced break is not one of them:
- * it stands between words, and goes as a marker
+ * its close, in the source's order; next to a placeholder that goes as a marker, it rides in that marker, in its place
+ * (planOf). A space (a tie, `\quad`, mt.mjs SPACING's), a forced break, a fill or a skip is not one of them: each sets
+ * where the words around it fall (a fill taken to the end set 2608.10322's flush-right end of proof after its words),
+ * and goes as a marker where it stands
  */
-const INKLESS = /^(?:\\(?:centering|raggedright|raggedleft|noindent|indent|normalfont|rmfamily|sffamily|ttfamily|bfseries|mdseries|itshape|upshape|slshape|scshape|em|bf|it|rm|sf|tt|sc|sl|normalsize|small|footnotesize|scriptsize|tiny|large|Large|LARGE|huge|Huge|selectfont|smallskip|medskip|bigskip|hfill|hfil|vfill|vfil|protect|relax|leavevmode|strut|null|nobreak|allowbreak|sloppy|fussy|ignorespaces|unskip)(?![A-Za-z@])(?:\s*\{\})?|\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}|\\vspace\*?\s*\{[^{}]*\})\s*$/
+const INKLESS = /^(?:\\(?:centering|raggedright|raggedleft|noindent|indent|normalfont|rmfamily|sffamily|ttfamily|bfseries|mdseries|itshape|upshape|slshape|scshape|em|bf|it|rm|sf|tt|sc|sl|normalsize|small|footnotesize|scriptsize|tiny|large|Large|LARGE|huge|Huge|selectfont|protect|relax|leavevmode|strut|null|nobreak|allowbreak|sloppy|fussy|ignorespaces|unskip)(?![A-Za-z@])(?:\s*\{\})?|\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\})\s*$/
 /** whether a piece is a placeholder that sets no ink (INKLESS) */
 export const isInkless = p => p?.t === 'ph' && typeof p.src === 'string' && p.src[0] === '\\' && INKLESS.test(p.src)
 /** a link's open: its text is what a reader clicks, kept a pair on every wire (the layer draws the link by it) */
@@ -101,8 +103,6 @@ const LINK = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
  * printed "Kimi K" for each empty call)
  */
 const STYLE_OPEN = /^(?:\{|\\(?:textbf|textit|emph|textsl|textsc|underline|textup|textrm|textsf|textmd|textnormal|uline|mbox)\s*\{|\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{)$/
-/** a fill or a skip: taken off the wire between two words, it leaves a space there (`Left\hfill{}Right`) */
-const FILL = /^\\(?:hfill|hfil|vfill|vfil|smallskip|medskip|bigskip|vspace)(?![A-Za-z@])/
 /** a text that ends where a sentence or a run-in label ends: a full stop, a colon, a semicolon, a question or an
  *  exclamation mark, closing quotes or brackets after it; never after an abbreviation (`e.g.`, `Fig.`, sentences ABBR) */
 const SENTENCE_END = /[.!?\u3002\uff01\uff1f]["'\u201d\u2019)\]]*$/
@@ -161,7 +161,7 @@ function treeOf(pieces) {
  */
 function planOf(u, format) {
   const pieces = u.pieces
-  const ink = pieces.map(isInkless)
+  const ink = pieces.map(isInkless), hasInk = ink.includes(true)
   const styled = pieces.some((p, k) => p.t === 'open' || p.t === 'close' || ink[k])
   const root = styled ? treeOf(pieces) : null
   const items = []
@@ -176,6 +176,12 @@ function planOf(u, format) {
     return { items, front: [], back: [], styled: false }
   }
   // a formula run one leaf (its pieces are a stretch of one level: a pair breaks a run)
+  // a stretch of placeholders, some of them setting no ink, white space alone between them, one leaf too: the marker of
+  // the ones with ink carries the others in their place (2610.19159's `\smallskip \noindent\textbullet\ `, whose
+  // \noindent would else have gone after the translation, the \smallskip a marker before it)
+  const texts = new Array(pieces.length)
+  const textOf = k => (texts[k] ??= utf8(pieces[k].s))
+  const blankText = k => pieces[k].t === 'text' && blank(textOf(k))
   const runsIn = node => {
     const out = []
     for (let i = 0; i < node.seq.length; i++) {
@@ -185,11 +191,28 @@ function planOf(u, format) {
       if (last > e.k && node.seq[i + last - e.k]?.k === last) { out.push({ run: [e.k, last] }); i += last - e.k; continue }
       out.push(e)
     }
-    node.seq = out
+    // (one pass: each stretch read once, from a placeholder to the last placeholder before text or a pair)
+    if (!hasInk) { node.seq = out; return }
+    const joined = []
+    const member = x => x.run || (x.k !== undefined && (pieces[x.k].t !== 'text' || blankText(x.k)))
+    for (let i = 0; i < out.length; i++) {
+      const e = out[i]
+      if (e.seq || (e.k !== undefined && pieces[e.k].t === 'text')) { joined.push(e); continue }
+      let j = i, end = i, inked = false, inkless = false
+      for (; j < out.length && member(out[j]); j++) {
+        const x = out[j]
+        if (x.k !== undefined && pieces[x.k].t === 'text') continue
+        end = j
+        if (x.run || !ink[x.k]) inked = true; else inkless = true
+      }
+      if (end > i && inked && inkless) joined.push({ run: [e.run?.[0] ?? e.k, out[end].run?.[1] ?? out[end].k] })
+      else if (end === i) joined.push(e)
+      else for (let x = i; x <= end; x++) joined.push(out[x])
+      i = end
+    }
+    node.seq = joined
   }
   runsIn(root)
-  const texts = new Array(pieces.length)
-  const textOf = k => (texts[k] ??= utf8(pieces[k].s))
   const infoOf = seq => {
     const info = { text: false, voids: false, letters: false }
     for (const e of seq) {
@@ -286,8 +309,8 @@ function planOf(u, format) {
   const unit = { lead: [], end: [], seen: false }, stack = [unit]
   let group = unit, sink = null, joint = false
   const seen = () => { for (const g of stack) g.seen = true }
-  // (`joint`: something stood off the wire since the last text; 'space' where it was a fill, which leaves a word boundary)
-  const off = k => { (sink ?? (group.seen ? group.end : group.lead)).push(k); joint = joint === 'space' || (ink[k] && FILL.test(pieces[k].src)) ? 'space' : true }
+  // (`joint`: something stood off the wire since the last text)
+  const off = k => { (sink ?? (group.seen ? group.end : group.lead)).push(k); joint = true }
   const text = k => {
     const last = items.at(-1)
     if (last?.t === 'text') { last.ks.push(k); last.joints.push(joint) } else items.push({ t: 'text', ks: [k], joints: [false] })
@@ -350,11 +373,7 @@ function wireText(pieces, it, wire, esc, texts = null) {
     if (k === 0) s = s.trimStart()
     if (k === pieces.length - 1) s = s.trimEnd()
     // (the wire's last character read only at a joint: reading it flattens the string the wire is being built as)
-    if (it.joints[j]) {
-      const tail = (out || wire).at(-1) ?? ''
-      if (s.startsWith(' ') && /\s/.test(tail)) s = s.slice(1)
-      else if (it.joints[j] === 'space' && tail && !/\s/.test(tail) && s && !s.startsWith(' ')) s = ` ${s}`
-    }
+    if (it.joints[j] && s.startsWith(' ') && /\s/.test((out || wire).at(-1) ?? '')) s = s.slice(1)
     out += esc(s)
   })
   return out
