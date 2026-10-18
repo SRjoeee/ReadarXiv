@@ -696,8 +696,19 @@ try {
     const p1 = await side()
     check('the side read every object: its parts through the end', p1?.ended === true && p1?.parts === sampleCut.refs.parts.length, JSON.stringify(p1))
 
-    // the highlight: nothing of the left fetched before the pointer wants a page (trap 2); a want over the right fetches it once
-    check('nothing of the left is fetched before the pointer wants a page', objectsAsked().filter(x => lefts.has(x)).length === 0, `${objectsAsked().length} objects fetched`)
+    // the highlight: the view reads nothing of the left before the pointer wants a page (trap 2); a want over the right reads its
+    // page's. The layer fetches the left parts of the pages it draws for their draw geometry (E-C: the door's drawOf), through the
+    // door's one cache of left parts the view reads too: each left part is downloaded once in all, whoever asked for it first
+    const pageOfLeft = new Map(Object.entries(sampleCut.leftRefs).map(([p, sha]) => [sha, Number(p)]))
+    /** each left part's downloads, by its digest */
+    const leftFetches = (asked = objectsAsked()) => { const n = new Map(); for (const x of asked) if (lefts.has(x)) n.set(x, (n.get(x) ?? 0) + 1); return n }
+    const onceEach = (asked = objectsAsked()) => [...leftFetches(asked).values()].every(k => k === 1)
+    const leftLine = () => { const n = leftFetches(); return `left parts downloaded: ${[...n].map(([sha, k]) => `p${pageOfLeft.get(sha)}${k > 1 ? ` x${k}` : ''}`).join(' ') || 'none'}, ${[...n.keys()].reduce((a, sha) => a + sampleCut.objects.get(sha).length, 0)} bytes` }
+    const viewLeft = async () => { const p = await side(); return { asked: p?.leftAsked, read: p?.leftParts } }
+    const v0 = await viewLeft()
+    check('nothing of the left is read by the view before the pointer wants a page; the layer\'s draws downloaded each left part once at most', v0.asked === 0 && v0.read === 0 && onceEach(), `the view asked ${v0.asked} and read ${v0.read}; ${leftLine()}`)
+    const twice = objectsAsked().find(x => lefts.has(x)) ?? Object.values(sampleCut.leftRefs)[0]
+    control('a left part downloaded twice (the draw\'s fetch and the view\'s not shared) fails the check of once', { ok: onceEach([...objectsAsked(), twice, twice]), detail: `p${pageOfLeft.get(twice)} counted three more times` })
     /** where a unit's first rectangle's middle is on the screen, on a pane's page */
     const screenOf = (pane, unit) => page.evaluate(([pane, page, r, view]) => {
       const box = document.querySelector(`#${pane} .pdfViewer > .page[data-page-number="${page}"]`).getBoundingClientRect()
@@ -713,8 +724,8 @@ try {
     await page.mouse.move(at.x + 1, at.y)
     const lightRight = await page.waitForFunction(id => window.__reader.view.probe().lit === id, unit[0], { timeout: 10_000 }).then(() => true, () => false)
     const h1 = await litOf()
-    const fetchedLeft = objectsAsked().filter(x => lefts.has(x))
-    check('the pointer over the right lights the unit under it on both panes, its page\'s left part fetched once', lightRight && h1.left > 0 && h1.right > 0 && fetchedLeft.length === 1 && fetchedLeft[0] === sampleCut.leftRefs[1], `${JSON.stringify(h1)}, left parts fetched ${fetchedLeft.length}`)
+    const v1 = await viewLeft()
+    check('the pointer over the right lights the unit under it on both panes, the view reading its page\'s left part alone, downloaded once', lightRight && h1.left > 0 && h1.right > 0 && v1.asked === 1 && v1.read === 1 && leftFetches().get(sampleCut.leftRefs[1]) === 1 && onceEach(), `${JSON.stringify(h1)}; the view asked ${v1.asked} and read ${v1.read}; ${leftLine()}`)
     const other = onPage1[1] ?? onPage1[0]
     const atL = await screenOf('left', other)
     await page.mouse.move(atL.x, atL.y)
@@ -722,7 +733,8 @@ try {
     await page.mouse.move(atL.x + 1, atL.y)
     const lightLeft = await page.waitForFunction(id => window.__reader.view.probe().lit === id, other[0], { timeout: 10_000 }).then(() => true, () => false)
     const h2 = await litOf()
-    check('the pointer over the left lights the unit on both panes; the page\'s left part not fetched again', lightLeft && h2.left > 0 && h2.right > 0 && objectsAsked().filter(x => lefts.has(x)).length === 1, JSON.stringify(h2))
+    const v2 = await viewLeft()
+    check('the pointer over the left lights the unit on both panes; the page\'s left part not read nor downloaded again', lightLeft && h2.left > 0 && h2.right > 0 && v2.asked === 1 && v2.read === 1 && leftFetches().get(sampleCut.leftRefs[1]) === 1 && onceEach(), `${JSON.stringify(h2)}; the view asked ${v2.asked} and read ${v2.read}; ${leftLine()}`)
     // the dark look: the layer's text dimmed by the reader's filter, its copy by the page canvas's, the wash over the layer screened
     await page.evaluate(() => document.documentElement.setAttribute('data-axt-dim', ''))
     const dark = await page.evaluate(() => { const css = sel => (document.querySelector(sel) ? getComputedStyle(document.querySelector(sel)) : null); return { svg: css('#right .axt-layer > svg')?.filter ?? null, copy: css('#right .axt-layer > canvas')?.filter ?? null, wash: css('#right .axt-hl')?.mixBlendMode ?? null, links: css('#right .axt-layer > .axt-links')?.filter ?? null } })
