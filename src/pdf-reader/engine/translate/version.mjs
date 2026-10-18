@@ -31,6 +31,6 @@
 //    round the whole translation, a placeholder that sets no ink goes on no wire; a reply that lost every letter is
 //    none (sent again as runs), a kept pair come back empty takes back the text set just outside it, and runs go whole
 //    across a pair that went flat. 2610.19159: 55,261 markers -> 19,688, units whose wire cut a sentence at a style
-//    marker 650 -> 7; the corpus's 124 papers: 1,841 -> 114. A unit with no pair and no such placeholder is sent as
-//    under 2, byte for byte
+//    marker 640 -> 0; the corpus's 124 papers: 1,753 -> 27, each at a link, kept a pair on purpose. A unit with no pair
+//    and no such placeholder is sent as under 2, byte for byte
 export const TRANSLATE_VERSION = '3'
