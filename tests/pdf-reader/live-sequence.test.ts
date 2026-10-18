@@ -403,6 +403,32 @@ describe('a copy made under pipeline 15, reopened under 16', () => {
   })
 })
 
+// A copy made under pipeline 16, reopened under 17: 17 reads a command and its arguments as one piece (arg-roles.mjs
+// readArgs, latex-front.mjs commandArgs), the wire and its reading back 16's. 2212.06817's figure label, a key 16 cut as a
+// unit after \\hbox{\\includegraphics…}, is no unit now; every other unit is the copy's by its hash, carried as it has
+// it, and nothing is sent
+describe('a copy made under pipeline 16, reopened under 17', () => {
+  const PARAS = ['A paragraph of the paper, with words that run on for a line or two of prose and an end.', '\\centering\n\\hbox{\\includegraphics[scale=0.3]{card.png}}\n\\label{fig:main_card}', 'A last paragraph of the paper, with words that run on for a line or two of prose and an end.']
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit as the copy has it; the label key the copy holds is no unit to seed: nothing is sent again', async () => {
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\\begin{document}\n${PARAS.join('\n\n')}\n\\end{document}\n`)]])), n = p.units.length
+    expect(n).toBe(2)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const made = unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results)
+    // (the key's unit as 16 cut it: its text the key's words, translated)
+    const key = { kind: 'para', src: 'fig:main card', hash: 'f'.repeat(64), pieces: [{ t: 'text', tr: true, s: '\u8bba\u6587' }], state: 'whole', by: 'B', tried: ['B'] }
+    const record = JSON.parse(JSON.stringify({ pipeline: '16', format: 'markers', context: {}, marks: [['0s', {}]], units: [made[0], key, ...made.slice(1)] }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(2)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either
