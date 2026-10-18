@@ -61,13 +61,18 @@ export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.t
  *  (its comment never ended: latex-front.mjs LINE_ENVS); the TeX page's BusyTeX halts on a TeX error, and gives none */
 export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceeded, sorry|\(That makes 100 errors; please try again\.\)|! This can't happen|! I can't go on meeting you like this)/m.test(lastTexLog(log))
 /**
- * A compile that did not finish is one that failed, as the TeX page's is: its PDF not taken. One that stopped short
- * (stoppedShort), and one whose last pass never reached the document's end — every compile carries END_TEX, and only a
+ * Whether a compile ran through, the one test of a compile's success wherever a PDF or a log of it is taken (runLive's
+ * compiles, finished below; the marked original and CM's passes, layout/paper.mjs): TeX ran (`ok`), and its last pass
+ * neither stopped short (stoppedShort) nor ended before the document's end — every compile carries END_TEX, and only a
  * pass that set the last page logs it (completeLog). A pass halted at a TeX error writes no such line, whatever the
  * compiler made of it: a TeX page that took a halted pass's status for a success gave 2610.02069's final as the 18 pages
- * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole (2026-10-05)
+ * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole (2026-10-05); a
+ * marked original taken on its PDF alone gave 2610.20713's layout from the 7 pages of 15 TL2025 set before its hundredth
+ * error (2026-10-19). Whether it gave a PDF is the caller's to ask: a draft gives none
  */
-const finished = r => (r.ok && (stoppedShort(r.log) || !completeLog(r.log)) ? { ...r, ok: false, pdf: null } : r)
+export const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
+/** a compile that did not run through is one that failed, as the TeX page's is: its PDF not taken */
+const finished = r => (r.ok && !ranThrough(r) ? { ...r, ok: false, pdf: null } : r)
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or

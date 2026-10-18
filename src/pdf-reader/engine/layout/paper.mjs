@@ -22,14 +22,14 @@
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { jobName, lastTexLog, latin1 } from '../source/latex-front.mjs'
-import { listsMissing, notFound, originalFiles, probeFiles, stoppedShort } from '../pipeline/live.mjs'
-import { completeLog } from '../pipeline/typeset/tex.mjs'
+import { listsMissing, notFound, originalFiles, probeFiles, ranThrough } from '../pipeline/live.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /**
  * A paper's marked original (paper.d.mts), the layout marks' stages 1 and 2 without the reading: the marked compile's PDF, its
  * last pass's log and the options readMarked reads it with (`engine`, `classes`, the probe's answers; the units and the
- * operator codes are the reader's), with each stage's time, or the stage that failed with the times of those that ran. For a
+ * operator codes are the reader's), with each stage's time, or the stage that failed with the times of those that ran: the
+ * compile's where the marked original gave no PDF or did not run through (live.mjs ranThrough), whatever PDF it left. For a
  * host that reads the marked original elsewhere (the page pass's `marked`, layerOfPaper, a page at a time). Never throws
  */
 export async function markedOfPaper(paper, { compile, converge = false, compileBudgetMs = null, filesBound = null }) {
@@ -60,9 +60,10 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   const marked = await stage('compile', async () => {
     const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless })
     if (cm) return convergeThenMark(paper, asked, files, cm, { wall, budget: compileBudgetMs, bound: filesBound })
-    // (runLive's request for the marked original)
+    // (runLive's request for the marked original, taken as runLive takes it: one that did not run through is no marked
+    // original, whatever PDF it left — 2610.20713's, TL2025's 7 pages of 15 before its hundredth error)
     const c = await compile({ main, engine, rerun: true, bibtex: paper.meta.bbl ? false : null, overrides: files })
-    return c?.ok && c.pdf?.length ? c : null
+    return ranThrough(c) && c.pdf?.length ? c : null
   })
   if (!marked) return result({ refused: 'compile', ms })
   return result({ pdf: marked.pdf, log: lastTexLog(marked.log), options: { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, lineskip }, ms })
@@ -121,8 +122,6 @@ const bibMissing = (files, fsys) => {
   }
   return names.map(n => n.trim()).filter(Boolean).some(n => !fsys.read(n.endsWith('.bib') ? n : `${n}.bib`))
 }
-/** a pass that ran to the document's end: TeX ran (`ok`), did not stop short, and logged END_TEX's AXT-END */
-const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
 
 /**
  * CM, converge then mark (paper.d.mts): the files the marked original's passes read, made by the unmarked original's
@@ -192,9 +191,9 @@ async function convergeThenMark(paper, compile, marked, cm, { wall, budget, boun
   const bibtexNext = () => !shipped && bibInput(carried) !== bibSeen
   const fallback = async why => {
     cm.fallback = why
-    // (today's request for the marked original)
+    // (today's request for the marked original, judged as today's: ran through, a PDF)
     const c = await compile({ main, engine, rerun: true, bibtex: shipped ? false : null, overrides: marked })
-    return c?.ok && c.pdf?.length ? c : null
+    return ranThrough(c) && c.pdf?.length ? c : null
   }
   const first = await pass(unmarked, true, !shipped)
   if (!ranThrough(first)) return fallback('draft-failed')

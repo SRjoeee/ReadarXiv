@@ -32,6 +32,9 @@ export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a
  *  compile is one that failed */
 export declare const stoppedShort: (log: string | null | undefined) => boolean
+/** whether a compile ran through, the one test of a compile's success: `ok`, and its last TeX pass neither stopped short
+ *  (stoppedShort) nor ended before END_TEX's AXT-END (completeLog). Whether it gave a PDF is the caller's to ask */
+export declare const ranThrough: (c: Compiled | null | undefined) => boolean
 /** whether a pass set a contents list from nothing: one its aux writes whose file the pass did not find ("No file
  *  <job>.<ext>."); `main`, the project's main file */
 export declare const listsMissing: (r: { log?: string | null; aux?: string | null }, main: string) => boolean

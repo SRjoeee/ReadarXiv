@@ -16,11 +16,13 @@ export interface LayerOptions {
   paper: { id: string; version: number }
   /** openPaper's paper: its units (ids their indices) and those it keeps */
   source: { units: readonly { kind: string; pieces: unknown[] }[]; kept: ReadonlySet<unknown>; inFloat?: readonly number[] }
-  /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none (or `marked`) */
-  marks?: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string } | null
+  /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none (or `marked`); marks of fewer pages than
+   *  arXiv's PDF are none, the compile's refusal (`stats.layout` { refused: 'compile', why }), their unit marks with them */
+  marks?: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string; why?: string } | null
   /** the marked original to be read here instead (a PDF.js document of it, the caller's to open and destroy, its last pass's log,
    *  and readMarked's options but the units and the operator codes, this pass's): a page at a time beside arXiv's in the page
-   *  stream (the default rules, or an oracle), else whole first (readMarked); its refusal is the marks' ('marks') */
+   *  stream (the default rules, or an oracle), else whole first (readMarked); its refusal is the marks' ('marks'), and one of
+   *  fewer pages than arXiv's PDF is not read: the compile's refusal, as `marks` of fewer pages */
   marked?: { doc: unknown; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'> } | null
   /** a PDF.js document of arXiv's PDF (the caller opens and destroys it: for the draw, with pdf-lite's LINK_TEXT_PIXELS and
    *  fontExtraProperties), and its text as readArxivText read it (step T, with `{ draw }` as this pass's: else the draw reads each

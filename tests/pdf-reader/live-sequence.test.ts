@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { copyReuse, copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
-import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, ranThrough, runLive, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { END_TEX } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
 
@@ -482,6 +482,21 @@ describe('a compile that stopped short of the document\'s end', () => {
     const step = (cmd: string, log: string) => `$ ${cmd}\nEXITCODE: 0\n\nLOG:\n${log}\n==\nSTDOUT:\n${log}\n==\nSTDERR:\n\n======`
     expect(stoppedShort([step('xelatex main.tex', STOP), step('xelatex main.tex', end)].join('\n\n'))).toBe(false)
     expect(stoppedShort([step('xelatex main.tex', end), step('xelatex main.tex', STOP), step('xdvipdfmx main.xdv', '')].join('\n\n'))).toBe(true)
+  })
+
+  it('ran through, the one predicate of a compile\'s success: TeX ran, its last pass neither stopped short nor short of AXT-END', () => {
+    const end = 'Output written on main.pdf (12 pages, 412345 bytes).\nAXT-END\n'
+    const pdf = new Uint8Array([1])
+    expect(ranThrough({ ok: true, pdf, log: `! Undefined control sequence.\nl.12 \\foo\n${end}` })).toBe(true)
+    // (a draft gives no PDF and ran through all the same: the PDF is the caller's to ask for)
+    expect(ranThrough({ ok: true, pdf: null, log: end })).toBe(true)
+    // 2610.20713 on TL2025: a hundred errors, the PDF of the 7 pages of 15 set before them, no AXT-END
+    expect(ranThrough({ ok: true, pdf, log: '! Extra alignment tab has been changed to \\cr.\n(That makes 100 errors; please try again.) \nOutput written on main.xdv (7 pages, 540996 bytes).\n' })).toBe(false)
+    expect(ranThrough({ ok: true, pdf, log: `${STOP}AXT-END\n` })).toBe(false)
+    // a pass halted at an error: no fatal line, no AXT-END
+    expect(ranThrough({ ok: true, pdf, log: '! Missing $ inserted.\nOutput written on main.xdv (2 pages, 88144 bytes).\n' })).toBe(false)
+    expect(ranThrough({ ok: false, pdf: null, log: end })).toBe(false)
+    expect([ranThrough(null), ranThrough(undefined)]).toEqual([false, false])
   })
 
   it('every compile carries the end\'s line: the probe, the marked original, every preview, measure and final', async () => {

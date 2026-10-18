@@ -1434,6 +1434,19 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   readMarked's options, which a host passes as `marked: { doc, log, options }` so that the pass reads the marked original a
   page at a time beside arXiv's; its refusals are the same ('probe', 'compile'), and `layoutMarksOfPaper` is it followed by
   one `readMarked`, its marks the same bytes.
+- **A compile that did not make the paper is a failed compile** (2026-10-19). A marked original
+  that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test runLive's compiles and CM's passes use too:
+  its last pass stopped short — an emergency stop, a hundred errors, TeX's capacity — or never logged END_TEX's AXT-END)
+  is the compile's refusal, whatever PDF it left, today's compile and CM's fallback alike; so is one of fewer pages than
+  arXiv's PDF, which the pass counts from the document or the marks it is given (`stats.layout` { refused: 'compile',
+  why }), its unit marks dropped with it. 2610.20713 on TL2025 stopped at its hundredth error after 7 of 15 pages, and
+  2608.03994 went past 751 errors to 14 of 17, its tables broken; each had carried 95 % and 97 % of its lines, so the carry
+  (`CARRY_MIN`, the marked original's lines found on arXiv's) took both and drew their pages from a layout arXiv never
+  set. Of 141 compiles counted against arXiv's PDF (the corpus's 113, the TL2025/TL2023 survey's 28) the other 139 have
+  arXiv's count and none has more: fewer by any page is refused, more is left to the carry. Such a paper's layer is that
+  of a paper with no layout: a part's `layout: null`, every unit read under the proof with no file, so a unit the left
+  locates by its text and that holds no placeholder but a space, a text symbol or TeX's nothing is drawn translated, and
+  every other unit is left the original's; no unit is placed by the short original's lines.
 - **The page stream, the default (rules 1, 3 and 4).** Every predicate a part reads is had a page at a time with no whole run
   before it: the pages' frame and the far push's columns of arXiv's text alone (rules 1 and 4, made once at step T), the
   maker's columns' edges of the pages before a page and its own (rule 3). The maker is made a page at a time and the marked

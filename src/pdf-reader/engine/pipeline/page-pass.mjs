@@ -75,6 +75,8 @@ function fitted(text) {
  * `marked` { doc, log, options } in place of `marks`: the marked original to be read here (a PDF.js document of it, the
  * caller's to open and destroy, its last pass's log, markedPages' options but the units and the operator codes): read whole
  * first (readMarked, as the prepare's marks stage reads it; its refusal the marks'), or in a page stream a page at a time.
+ * A marked original, given either way, of fewer pages than arXiv's PDF gives no layout and no unit marks: the compile's
+ * refusal (`stats.layout` { refused: 'compile', why }), the layer that of a paper whose marked compile was refused.
  *
  * Under the whole run's rules (WHOLE_RULES) the maker's frame and the columns' edges read the whole document, so every part is
  * cut at the end (stage 1). `oracle` (tests and the lab: what a whole run of the same paper gave, `capture`'s): { frame, columnEdges }, the
@@ -111,6 +113,17 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const N = doc.numPages
   const text = arxiv.text ?? await readArxivText(doc, { draw })
   if (text.pages !== N) throw new TypeError(`arXiv's text is of ${text.pages} pages, its document of ${N}`)
+  // a marked original of fewer pages than arXiv's PDF is a compile that did not make the paper arXiv made, however much of it
+  // carries: no layout of it and none of its unit marks, the compile's refusal as markedOfPaper's (2610.20713, TL2025's 7 pages
+  // of 15 before its hundredth error, 95 % of its lines carried; 2608.03994, 14 of 17, its tables broken by 751 errors TeX went
+  // past, 97 % carried). Of 141 compiles of an original counted against arXiv's PDF (2026-10-19: the corpus's 113, the
+  // survey's 28 on TL2025 and TL2023) the other 139 have arXiv's count, none more: so fewer by any page is refused, more is
+  // the carry's to judge. The count is the open document's (`marked`) or the marks' own (`marks`): nothing more is read for it
+  const M = marked ? marked.doc?.numPages : marks && 'marks' in marks ? marks.marks?.pages : null
+  if (Number.isInteger(M) && M < N) {
+    marks = { refused: 'compile', why: `the marked original has ${M} pages, arXiv's PDF ${N}` }
+    marked = null
+  }
   const units = source.units
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
   const floating = id => FLOATING.has(units[id]?.kind ?? '')
@@ -166,7 +179,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       made = { refused: 'failed', why: why(e) }
       maker = null
     }
-  } else made = { refused: marks?.refused ?? 'marks' }
+  } else made = { refused: marks?.refused ?? 'marks', ...(marks?.why ? { why: marks.why } : {}) }
 
   const ctx = { paper, N, base, image, remove, pdfjs, onHead, onLeft, onPart, verdicts, side, bundle, made, maker }
   if (maker && streams) {
