@@ -2586,7 +2586,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     /** the rows K reads of a unit told (layer-proto/cut.mjs entriesOf: its unit row, its lines' pages, its placeholders'
      *  segments' pages and its labels' pages), one row a page: what the cut of the parts after its own reads of it */
     const stubOf = (i, r) => {
-      const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j < v.length; j += stride) set.add(v[j]); return [...set] }
+      // (whole strides alone, as cut.mjs pagesAt reads them: a placeholder row's fill, last, is no segment's page)
+      const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j + stride <= v.length; j += stride) set.add(v[j]); return [...set] }
       const lines = pagesIn(r.lines.map(e => e[1]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2]))]
       return {
         units: r.units, lines: lines.length ? [[i, lines.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],

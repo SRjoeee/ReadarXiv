@@ -2209,6 +2209,26 @@ describe('makerOf, the marked original a page at a time (stage 2): its pages rea
   }
   const lines = (page: number, n = 10): Run[] => Array.from({ length: n }, (_, j) => ({ s: words(100 * page + 10 * j, 10), x: 72, y: 700 - 12 * j }))
 
+  it("a unit told keeps its placeholders' segments' pages alone in its stub, never a coloured row's fill as a page (#407)", async () => {
+    // (a citation in hyperref's colorlinks blue: its row ends with the fill, 4 + 6n + 1 numbers)
+    const parts: [string, string?][] = [['see the work '], ['[12]', '#0071bc'], [' and the rest of the line']]
+    const runs: Run[] = []
+    let x = 72
+    for (const [s, fill] of parts) { runs.push({ s, x, y: 700, ...(fill ? { fill } : {}) }); x += s.length * CH * 10 }
+    const at = (j: number) => 72 + j * CH * 10
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, x, 700], ['p0.1a', 1, at(13), 700], ['p0.1b', 1, at(17), 700]],
+      units: [unit('para', [text('see the work '), ph('\\cite{k}'), text(' and the rest of the line')])],
+    }
+    const { whole, st } = await streamed(w)
+    if (!('file' in whole) || 'refused' in st) throw new Error('refused')
+    expect(phOf(whole.file, 0, 1).at(-1)).toBe(0x0071bc)
+    // (told through page 1: the rows the cut of the parts after it reads of the unit, its pages)
+    ;(st as unknown as { tell: (ids: number[], through: number) => void }).tell([0], 1)
+    expect(st.layout([0]).ph).toEqual([[0, 0, 0, 0, 1, 0, 0, 0, 0, 0]])
+  })
+
   it('a piece whose closing point is on the next page: its own ink is the unit\'s once that page is read, none too late', async () => {
     // a paragraph from page 1's last line to page 2's first, a formula across the break (x on page 1, y on page 2)
     const p1 = lines(1, 9), p2 = lines(2, 9)
