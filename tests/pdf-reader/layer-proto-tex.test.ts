@@ -1000,6 +1000,22 @@ describe("a colour run drawn in the fill TeX set it in, the layout file's `colou
     const tokens = L2.tokensOf2(black, prep as never, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && /\S/.test(t.s))
     expect(tokens.map(t => (t.st as { color?: string }).color)).toEqual(['#ff0000', '#000000'])
   })
+  // (#407: a unit no layout holds, as a paper whose source does not compile, has no colour measured at all: there a base
+  // colour xcolor names is drawn as xcolor defines it; a unit the file holds draws a measured row or the colour around it)
+  const named = { kind: 'para', src: 'x', pieces: [open('\\textcolor{red}{'), text('\u7EA2 '), close(), text(' \u800C '), ph('\\color{cyan}'), text(' \u9752 '), ph('\\color{ForestGreen}'), text(' \u7EFF')] } as never
+  const namedColours = (parts: unknown) => {
+    const prep = L2.prepareUnit(named, [] as never, [item('red and cyan green', 10, 100, 10, 0) as never], new Map() as never, null, parts as never)
+    return L2.tokensOf2(named, prep as never, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && /\S/.test(t.s)).map(t => (t.st as { color?: string }).color ?? null)
+  }
+  it("no layout at all: a base colour by its name, as xcolor defines it (cyan its CMYK as PDF.js draws it); another name the colour around it", () => {
+    expect(namedColours(null)).toEqual(['#ff0000', null, '#00b9f2', '#00b9f2'])
+  })
+  it('a layout that holds the unit and no row for a piece: the colour around it; a row: the row, over the name', () => {
+    const lu = fileOf([], null), t = T.texRects(lu)
+    expect(namedColours(T.texParts(lu, [0, -1, -1, -1, 4, -1, 6, -1], { use: 'lines', lines: t }))).toEqual([null, null, null, null])
+    const rows = fileOf([[0, 0x123456], [4, 0x00ffff]], null), t2 = T.texRects(rows)
+    expect(namedColours(T.texParts(rows, [0, -1, -1, -1, 4, -1, 6, -1], { use: 'lines', lines: t2 }))).toEqual(['#123456', null, '#00ffff', '#00ffff'])
+  })
 })
 
 describe('a LOST text piece, drawn as the run of its unit\'s own characters that spells it (the soundness round, 2026-10-19)', () => {

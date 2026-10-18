@@ -61,6 +61,7 @@ import { breakPoints } from './hyph.mjs'
 import { shown } from '../layer/pieces.mjs'
 import { escapeMap, plainTracker, transformMap } from './words.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
+import { fillOfColour } from '../layout/colour.mjs'
 
 // (the fit's parameters, per script and language, are the layout rules': rules/layout.mjs resolveRules gives a run its P)
 
@@ -2107,7 +2108,15 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   const style = () => stack.at(-1)
   // (a colour piece's run, a \textcolor's or a \color switch's: drawn in the fill TeX set it in, the file's `colours` row,
   // `colourRun` that it came so; a piece the file has no row for keeps the colour around it, never a guess from its name)
-  const colourRun = k => { const rgb = resolved.colourOf?.(k); return Number.isInteger(rgb) ? { color: hexOf(rgb), colourRun: true } : {} }
+  // A unit no layout holds (none for the paper: its source does not compile; or none for the unit) has no colour measured at
+  // all: there a base colour xcolor names is drawn as xcolor defines it (BASE_COLOURS), and another name keeps the colour
+  // around it, as a piece the file holds and has no row for does (#407)
+  const colourRun = (k, src, named) => {
+    const rgb = resolved.colourOf?.(k)
+    if (Number.isInteger(rgb)) return { color: hexOf(rgb), colourRun: true }
+    const base = resolved.colourOf ? undefined : BASE_COLOURS.get(named.exec(src)?.[1] ?? '')
+    return base !== undefined ? { color: hexOf(base), colourRun: true } : {}
+  }
   // (the layout rules': whether lines break only at spaces, which quotes are CJK's, centred punctuation, the Latin words'
   // hyphenation patterns and shortest hyphenated word, the line-break marks)
   const { keepAll, cjkQuotes, centredPunct: centred, latinPatterns: latinLang, hyphenation: { minWord } } = P
@@ -2236,7 +2245,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // (a link's text, \href's, \hyperref's or \hyperlink's: each token of it tells its pair by `link`, the open's id, which the
       // engine's links read (links.mjs) and no drawing does)
       const link = LINK_OPEN.test(p.src) && p.id !== undefined ? { link: p.id } : {}
-      stack.push({ ...(next ?? style()), ...colourRun(k), ...link })
+      stack.push({ ...(next ?? style()), ...colourRun(k, p.src, NAMED_OPEN), ...link })
       return
     }
     if (p.t === 'close') {
@@ -2247,7 +2256,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // a switch: the rest of its group
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) { stack[stack.length - 1] = sw; return }
-      const run = colourRun(k)
+      const run = colourRun(k, p.src, NAMED_SWITCH)
       if (run.color) stack[stack.length - 1] = { ...style(), ...run }
     }
     const r = resolved.get(k)
@@ -3397,11 +3406,20 @@ function faceClass(face) {
   return c
 }
 const n2 = v => Math.round(v * 100) / 100
-const COLOURS = { red: '#d00', blue: '#00c', green: '#080', gray: '#777', grey: '#777', orange: '#e60', purple: '#80a', magenta: '#c0c', cyan: '#0aa', violet: '#80f', brown: '#850', black: '#141414' }
+/** xcolor's base colours by name, each in its natural model as xcolor.sty defines it (rgb; cmyk for cyan, magenta, yellow and
+ *  olive; gray for the grays), read as the marked compile's would be (layout/colour.mjs fillOfColour of the driver's fill):
+ *  what a unit no layout holds draws a run its source names one of in (colourRun) */
+const BASE_COLOURS = new Map(Object.entries({
+  red: '1 0 0 rg', green: '0 1 0 rg', blue: '0 0 1 rg', brown: '.75 .5 .25 rg', lime: '.75 1 0 rg', orange: '1 .5 0 rg', pink: '1 .75 .75 rg',
+  purple: '.75 0 .25 rg', teal: '0 .5 .5 rg', violet: '.5 0 .5 rg', cyan: '1 0 0 0 k', magenta: '0 1 0 0 k', yellow: '0 0 1 0 k', olive: '0 0 1 .5 k',
+  black: '0 g', darkgray: '.25 g', gray: '.5 g', lightgray: '.75 g', white: '1 g',
+}).map(([name, fill]) => [name, fillOfColour(fill)]))
+/** a colour named in braces: a \textcolor's open, a \color switch */
+const NAMED_OPEN = /^\\textcolor\s*\{([A-Za-z]+)\}/, NAMED_SWITCH = /^\\color\s*\{([A-Za-z]+)\}$/
 /** a fill (0xRRGGBB) as the drawing writes it */
 export const hexOf = rgb => `#${rgb.toString(16).padStart(6, '0')}`
 /** a run's colour as the drawing writes it: a fill as it is, a name by its CSS colour */
-const fillAttr = c => (/^#[0-9a-f]{6}$/.test(c) ? c : COLOURS[c] ?? '#141414')
+const fillAttr = c => (/^#[0-9a-f]{6}$/.test(c) ? c : '#141414')
 
 /**
  * The unit's lines on one page as SVG: a <text> per line at its baseline, a <tspan> per run with its own x (a CJK run
