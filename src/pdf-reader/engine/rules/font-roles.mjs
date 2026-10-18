@@ -172,9 +172,17 @@ pt-mono-regular          PTM55F.ttf                      texlive  pt-mono       
 pt-mono-bold             PTM75F.ttf                      texlive  pt-mono        700  normal  1      ParaType-Free-Font-1.3                                notice
 `
 
-// Four groups are served under a neutral family name, not their own: the OFL (§3) lets a modified subset carry no
-// Reserved Font Name, and Harano Aji, Linux Biolinum, Erewhon and PT Mono each reserve theirs. The group stays the
-// handle of the table (a face's id, the roles below); only the CSS family a face is declared and drawn in is renamed
+// A face's family is more than the CSS family it is declared and drawn in: it is the name inside every subset served of
+// it. The web's subsetter (readarxiv-web, container/src/fonts/subset.py) writes it as the name table's family, unique
+// identifier, full and PostScript names (IDs 1, 3, 4, 6; the typographic names, 16 and 17, are dropped) and as the CFF
+// table's font, full and family names and each CID font dictionary's, keeps the face's copyright and licence (IDs 0, 13
+// and 14, the CFF notice) and states the change (ID 10). A subset is a Modified Version, which may carry no name its
+// face's licence reserves (OFL §3; ParaType's and Bitstream Vera's licences ask the same), so no family may hold one:
+// Source (Source Han Serif SC, TC and K, and Harano Aji, made from Source Han Serif JP), Harano Aji, Linux Libertine and
+// Biolinum, Heuristica and Erewhon, Computer Modern Unicode fonts, PT Sans, PT Serif and PT Mono, Bitstream and Vera
+// (DejaVu Sans Mono). The four groups whose own name holds one are served under a neutral family; the others' names
+// (shs-sc, shs-tc, shs-k, libertine, cmun-*, dejavu-mono) hold none. The group stays the handle of the table (a face's
+// id, the roles below); only the family is renamed
 const FAMILY_NAME = { haranoaji: 'mincho', biolinum: 'humanist-sans', erewhon: 'transitional', 'pt-mono': 'slab-mono' }
 const familyOf = group => `axt-${FAMILY_NAME[group] ?? group}`
 // a row's licence is every column between its size and its web status: an SPDX expression may hold spaces (`WITH`)

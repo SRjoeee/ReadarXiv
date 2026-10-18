@@ -202,10 +202,32 @@ describe('the faces', () => {
     }
   })
 
-  it('no family carries a Reserved Font Name (OFL §3: a modified subset may not)', () => {
-    // the four groups whose fonts reserve theirs are declared under neutral names; the face ids and files stay
-    const RESERVED = /harano|biolinum|erewhon|pt-?mono/i
-    for (const [id, face] of Object.entries(FACES)) expect(face.family, id).not.toMatch(RESERVED)
+  it('no family carries a name its face\'s licence reserves (OFL §3: a modified subset may not)', () => {
+    // the family is the name inside every served subset (the web's subsetter writes it as name IDs 1, 3, 4 and 6 and the CFF
+    // names), so it holds none of the names its face's licence reserves, compared as the licences do in effect: without
+    // case, spaces or punctuation. The names are the faces' own notices' (the web's credits); every face is in one row, so a
+    // face the table gains is a decision
+    const RESERVED: [RegExp, string[]][] = [
+      [/^shs-(sc|tc|k)-/, ['Source']],
+      [/^haranoaji-/, ['Harano Aji', 'Source']],
+      [/^(libertine|biolinum)-/, ['Linux Libertine', 'Biolinum']],
+      [/^erewhon-/, ['Heuristica', 'Erewhon']],
+      [/^cmun-/, ['Computer Modern Unicode fonts']],
+      [/^pt-mono-/, ['PT Sans', 'PT Serif', 'PT Mono']],
+      [/^dejavu-mono-/, ['Bitstream', 'Vera']],
+      [/^(fandolkai|bkai00mp|lm-|nimbus-|freemono-|xcharter-|ebgaramond-|domitian-|inconsolata-)/, []],
+    ]
+    const flat = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const rowsOf = (id: string) => RESERVED.filter(([ids]) => ids.test(id))
+    const held = (family: string, id: string) => rowsOf(id).flatMap(([, names]) => names).filter(name => flat(family).includes(flat(name)))
+    for (const [id, face] of Object.entries(FACES)) {
+      expect(rowsOf(id), id).toHaveLength(1)
+      expect(held(face.family, id), id).toEqual([])
+    }
+    // a family that spelled its face's name would be found: Source Han Serif's, which its group's own name does not hold
+    expect(held('axt-source-han-serif-sc', 'shs-sc-regular')).toEqual(['Source'])
+    expect(held('axt-haranoaji', 'haranoaji-regular')).toEqual(['Harano Aji'])
+    // the four groups whose own names hold one are declared under neutral names; the face ids and files stay
     expect(Object.values(FACES).filter(f => /^(haranoaji|biolinum|erewhon|pt-mono)-/.test(f.id))).toHaveLength(15)
     expect(new Set(Object.values(FACES).filter(f => /^haranoaji-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-mincho']))
     expect(new Set(Object.values(FACES).filter(f => /^biolinum-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-humanist-sans']))
