@@ -56,7 +56,9 @@ function compiler(answers: (Compiled | Error)[]) {
     },
   }
 }
-const original = (log = 'AXT-LINES 0 3 12.0pt 10\n'): Compiled => ({ ok: true, pdf: PDF, log })
+/** the marked original's answer: its PDF and a log whose last pass ran to the document's end (END_TEX's AXT-END, which every
+ *  marked original carries: live.mjs originalFiles) */
+const original = (log = 'AXT-LINES 0 3 12.0pt 10\nAXT-END\n'): Compiled => ({ ok: true, pdf: PDF, log })
 
 function opener(doc: unknown = fakeDoc().doc, closing: () => Promise<void> = async () => {}) {
   const close = vi.fn(closing)
@@ -120,7 +122,7 @@ describe('layoutMarksOfPaper', () => {
     const last = ['This is pdfTeX', CITE, REF, ...INK, ''].join('\n')
     const switches = readMarkProbe(last, probeSamples(paper.units))
     expect(switches).toEqual({ '\\cite': '22220000', '\\ref': '00000000' })
-    const c = compiler([{ ok: true, log: stepped(PROBE_LOG, last) }, original(stepped('AXT-LINES 2 9 12.0pt 10\npdfTeX warning (dest): destination with the same identifier (name{axt-0s}) has been already used, duplicate ignored\n', 'AXT-LINES 0 3 12.0pt 10\nAXT-LINES 1 2 12.0pt 10\n'))])
+    const c = compiler([{ ok: true, log: stepped(PROBE_LOG, last) }, original(stepped('AXT-LINES 2 9 12.0pt 10\npdfTeX warning (dest): destination with the same identifier (name{axt-0s}) has been already used, duplicate ignored\n', 'AXT-LINES 0 3 12.0pt 10\nAXT-LINES 1 2 12.0pt 10\nAXT-END\n'))])
     const made = await layoutMarksOfPaper(paper, { compile: c.compile, open: opener().open, OPS })
     if (!('marks' in made)) throw new Error(`refused: ${made.refused}`)
     expect(text(c.asked[1]?.overrides ?? new Map())).toEqual(text(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless: readInkProbe(last, inkSamples(paper.units)) })))
@@ -242,7 +244,7 @@ describe('markedOfPaper: the probe and the marked compile, the reading left to t
   it('gives the marked PDF, its last pass\'s log and readMarked\'s options; read by the host it is layoutMarksOfPaper\'s marks', async () => {
     const paper = paperOf()
     // (a browser compiler's log of two passes: the last pass's is the one read)
-    const log = stepped('AXT-LINES 0 1 12.0pt 10', 'AXT-LINES 0 3 12.0pt 10')
+    const log = stepped('AXT-LINES 0 1 12.0pt 10', 'AXT-LINES 0 3 12.0pt 10\nAXT-END')
     const made = await markedOfPaper(paper, { compile: compiler([{ ok: true, log: PROBE_LOG }, original(log)]).compile, OPS })
     if (!('pdf' in made)) throw new Error(`refused: ${made.refused}`)
     expect(made.pdf).toBe(PDF)
@@ -258,6 +260,31 @@ describe('markedOfPaper: the probe and the marked compile, the reading left to t
     if (!('marks' in whole)) throw new Error(`refused: ${whole.refused}`)
     expect(encodeLayoutMarks(read.marks)).toBe(encodeLayoutMarks(whole.marks))
     expect(read.unitMarks).toEqual(whole.unitMarks)
+  })
+
+  it('takes no marked original that did not run through: stopped short or short of AXT-END, today\'s compile and CM\'s fallback alike', async () => {
+    // 2610.20713 on TL2025: a hundred errors, the PDF of the 7 pages of 15 set before them, no AXT-END
+    const HUNDRED = '! Extra alignment tab has been changed to \\cr.\n(That makes 100 errors; please try again.) \nOutput written on main.xdv (7 pages, 540996 bytes).\n'
+    const STOP = '! File ended while scanning use of \\next.\n! Emergency stop.\n*** (job aborted, no legal \\end found)\n\nOutput written on main.xdv (2 pages, 88144 bytes).\n'
+    const short = [
+      ['a hundred errors', `${LINES}${HUNDRED}`],
+      ['an emergency stop in the last pass, an earlier one complete', stepped(`${LINES}${END}`, `${LINES}${STOP}`)],
+      ['a last pass halted short of AXT-END, an earlier one complete', stepped(`${LINES}${END}`, `${LINES}! Missing $ inserted.\n`)],
+    ] as const
+    const refused = { refused: 'compile', ms: { probe: expect.any(Number), compile: expect.any(Number) } }
+    for (const [why, log] of short) {
+      const answer: Compiled = { ok: true, pdf: PDF, log }
+      expect(await markedOfPaper(paperOf(), { compile: compiler([PROBE, answer]).compile }), why).toEqual(refused)
+      const o = opener()
+      expect(await layoutMarksOfPaper(paperOf(), { compile: compiler([PROBE, answer]).compile, open: o.open, OPS }), why).toEqual(refused)
+      expect(o.open, why).not.toHaveBeenCalled()
+      // (CM: a draft that did not run through falls back to today's compile, judged the same way)
+      const cm = await markedOfPaper(paperOf(), { compile: compiler([PROBE, draftOf({ 'main.aux': AUX }, 'the log of a halted pass\n'), answer]).compile, converge: true })
+      expect(cm, why).toEqual({ ...refused, cm: { drafts: 1, marked: 0, settled: false, fallback: 'draft-failed' } })
+    }
+    // one that went past its errors to the document's end is the marked original, as before
+    const past = await markedOfPaper(paperOf(), { compile: compiler([PROBE, original(`! Undefined control sequence.\nl.12 \\foo\n${LINES}${END}`)]).compile })
+    expect(past).toHaveProperty('pdf', PDF)
   })
 
   it('refuses as layoutMarksOfPaper does, its probe or its compile, with the times of the stages that ran (and CM\'s record)', async () => {

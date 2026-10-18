@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { copyReuse, copyTexts, decideWrite, passagesInSource, pipelineCurrentFor, reusable, seedAgain, seedFrom, sourceHash, unitsOf, unsetAfter } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
-import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, runLive, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, ranThrough, runLive, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { END_TEX } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
 
@@ -429,6 +429,26 @@ describe('a copy made under pipeline 16, reopened under 17', () => {
   })
 })
 
+// A copy made under pipeline 17, reopened under 18: 18 changes which papers get a layout (a marked original that did not run
+// through, or of fewer pages than arXiv's PDF, gives none), not a unit, the wire or its reading back: every unit is the
+// copy's by its hash, carried as it has it, and nothing is sent
+describe('a copy made under pipeline 17, reopened under 18', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit as the copy has it: nothing is sent again', async () => {
+    const p = paper(), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '17', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(n - keptFor(p, 'zh').size)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either
@@ -537,6 +557,21 @@ describe('a compile that stopped short of the document\'s end', () => {
     const step = (cmd: string, log: string) => `$ ${cmd}\nEXITCODE: 0\n\nLOG:\n${log}\n==\nSTDOUT:\n${log}\n==\nSTDERR:\n\n======`
     expect(stoppedShort([step('xelatex main.tex', STOP), step('xelatex main.tex', end)].join('\n\n'))).toBe(false)
     expect(stoppedShort([step('xelatex main.tex', end), step('xelatex main.tex', STOP), step('xdvipdfmx main.xdv', '')].join('\n\n'))).toBe(true)
+  })
+
+  it('ran through, the one predicate of a compile\'s success: TeX ran, its last pass neither stopped short nor short of AXT-END', () => {
+    const end = 'Output written on main.pdf (12 pages, 412345 bytes).\nAXT-END\n'
+    const pdf = new Uint8Array([1])
+    expect(ranThrough({ ok: true, pdf, log: `! Undefined control sequence.\nl.12 \\foo\n${end}` })).toBe(true)
+    // (a draft gives no PDF and ran through all the same: the PDF is the caller's to ask for)
+    expect(ranThrough({ ok: true, pdf: null, log: end })).toBe(true)
+    // 2610.20713 on TL2025: a hundred errors, the PDF of the 7 pages of 15 set before them, no AXT-END
+    expect(ranThrough({ ok: true, pdf, log: '! Extra alignment tab has been changed to \\cr.\n(That makes 100 errors; please try again.) \nOutput written on main.xdv (7 pages, 540996 bytes).\n' })).toBe(false)
+    expect(ranThrough({ ok: true, pdf, log: `${STOP}AXT-END\n` })).toBe(false)
+    // a pass halted at an error: no fatal line, no AXT-END
+    expect(ranThrough({ ok: true, pdf, log: '! Missing $ inserted.\nOutput written on main.xdv (2 pages, 88144 bytes).\n' })).toBe(false)
+    expect(ranThrough({ ok: false, pdf: null, log: end })).toBe(false)
+    expect([ranThrough(null), ranThrough(undefined)]).toEqual([false, false])
   })
 
   it('every compile carries the end\'s line: the probe, the marked original, every preview, measure and final', async () => {

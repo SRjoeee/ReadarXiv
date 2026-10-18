@@ -61,13 +61,18 @@ export const unsettable = (r, known = new Map()) => /^! Font .* not loadable/m.t
  *  (its comment never ended: latex-front.mjs LINE_ENVS); the TeX page's BusyTeX halts on a TeX error, and gives none */
 export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceeded, sorry|\(That makes 100 errors; please try again\.\)|! This can't happen|! I can't go on meeting you like this)/m.test(lastTexLog(log))
 /**
- * A compile that did not finish is one that failed, as the TeX page's is: its PDF not taken. One that stopped short
- * (stoppedShort), and one whose last pass never reached the document's end — every compile carries END_TEX, and only a
+ * Whether a compile ran through, the one test of a compile's success wherever a PDF or a log of it is taken (runLive's
+ * compiles, finished below; the marked original and CM's passes, layout/paper.mjs): TeX ran (`ok`), and its last pass
+ * neither stopped short (stoppedShort) nor ended before the document's end — every compile carries END_TEX, and only a
  * pass that set the last page logs it (completeLog). A pass halted at a TeX error writes no such line, whatever the
  * compiler made of it: a TeX page that took a halted pass's status for a success gave 2610.02069's final as the 18 pages
- * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole (2026-10-05)
+ * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole (2026-10-05); a
+ * marked original taken on its PDF alone gave 2610.20713's layout from the 7 pages of 15 TL2025 set before its hundredth
+ * error (2026-10-19). Whether it gave a PDF is the caller's to ask: a draft gives none
  */
-const finished = r => (r.ok && (stoppedShort(r.log) || !completeLog(r.log)) ? { ...r, ok: false, pdf: null } : r)
+export const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
+/** a compile that did not run through is one that failed, as the TeX page's is: its PDF not taken */
+const finished = r => (r.ok && !ranThrough(r) ? { ...r, ok: false, pdf: null } : r)
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
@@ -420,6 +425,9 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 16: 17 changes what a unit is (a command and its arguments are one piece, arg-roles.mjs readArgs and latex-front.mjs
  *   commandArgs: 2212.06817's label key no unit), not what is sent for one or how a reply is read back: every unit whose
  *   source a copy holds is carried, and older pipelines keep their own tests
+ * - 17: 18 changes which papers get a layout (a marked original that did not run through, or of fewer pages than arXiv's
+ *   PDF, gives none: ranThrough, page-pass.mjs), not what a unit is, what is sent for one or how a reply is read back:
+ *   every unit whose source a copy holds is carried, and older pipelines keep their own tests
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -429,7 +437,7 @@ const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
 const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
 const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
 const EVERY = () => true
-export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY }
+export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY, 17: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

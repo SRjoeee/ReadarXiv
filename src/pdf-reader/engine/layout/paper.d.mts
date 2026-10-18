@@ -43,7 +43,8 @@ export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Pr
  * pass's log, with the units and OPS): `marks` in memory, as the maker takes them (marksFile writes them as the lab's file, or refuses where they pass the file's bounds),
  * and `unitMarks`, the unit marks the left is anchored by (null: by its text alone). `ms` times each stage. A stage that fails
  * gives { refused } naming it, with the times of the stages that ran: the probe where its compile gave no log, the
- * compile where the original's gave no PDF, the marks where `open` or the reading failed. `open` is called once, on the
+ * compile where the original's gave no PDF or did not run through (live.mjs ranThrough: stopped short, or its last pass
+ * short of AXT-END; today's compile and CM's fallback alike), the marks where `open` or the reading failed. `open` is called once, on the
  * original's PDF, and its `close` is called whatever the reading did. The compile and the PDF opening are the caller's
  * (a native TeX Live and PDF.js in Node, the TeX page and a worker in a browser): this module imports neither. Never throws.
  * Without `converge` (the default), the original is one compile with every pass (`rerun`). With it (CM), the unmarked
