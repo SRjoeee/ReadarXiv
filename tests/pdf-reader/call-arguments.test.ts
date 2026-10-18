@@ -42,10 +42,16 @@ describe('the reader writes nothing between a command and its arguments', () => 
     expect(misplaced(marked(body))).toEqual([])
   })
 
-  it('an argument TeX takes as one token takes that command\'s own arguments with it: \\raise2pt\\hbox{…} is one call', () => {
-    const tex = marked('\\raise2pt\\hbox{Raised words open the paragraph} and the paragraph goes on.')
-    expect(misplaced(tex)).toEqual([])
-    expect(tex).toContain('\\raise2pt\\hbox{Raised words open the paragraph}')
+  it('an argument TeX takes as one token takes that command\'s own arguments with it: \\raise2pt\\hbox{…} is one call, its words set', () => {
+    const calls = ['\\raise2pt\\hbox', '\\lower.5ex\\hbox', '\\moveleft 1em\\vbox', '\\raise 1pt\\hbox to 2cm']
+    for (const call of calls) {
+      const body = `${call}{Raised words open the paragraph} and the paragraph goes on.`
+      const tex = marked(body)
+      expect(misplaced(tex), call).toEqual([])
+      // nothing between the command and the box it takes: the mark inside the box's group
+      expect(tex, call).toContain(`${call}{\\leavevmode\\axtmark{0s}Raised words`)
+      expect(texts(body), call).toEqual(['Raised words open the paragraph and the paragraph goes on.'])
+    }
   })
 })
 

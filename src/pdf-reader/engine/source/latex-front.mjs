@@ -452,11 +452,14 @@ function commandArgs(s, i, name, to = s.length) {
       // the command the token, which reads its own arguments where it stands, so the call ends past them
       // (\\raise2pt\\hbox{…}) — the walk never ends a placeholder between a command and its arguments, where a lead or a
       // mark would be written. Taken alone, a \\begin read as a box's content left its {center} a group of text, and the
-      // lead was written inside the environment's name (#407's review)
+      // lead was written inside the environment's name (#407's review). The token's own groups of text and content come
+      // with it (`kind` 'inner', no `param`: no argument of this command's), so that the walk sets their words as it
+      // would the token's call alone: its pair opens with `\\raise2pt\\hbox{`, and nothing goes between the two
       const last = args.at(-1), token = last && last.end === r.end && last.kind === 'req' && 'tca'.includes(last.role) && s[last.start] === '\\' ? commandAt(s, last.start) : null
       if (token && token.end === last.end && /^[A-Za-z@]+$/.test(token.name)) {
         const own = commandArgs(s, token.end, token.name, to)
-        if (own.end > last.end) return { args: [...args.slice(0, -1), { ...last, end: own.end }], end: own.end, known: true }
+        const inner = own.known ? own.args.filter(a => (a.kind === 'req' || a.kind === 'inner') && s[a.start] === '{' && (a.role === 't' || a.role === 'c')).map(({ param: _, ...a }) => ({ ...a, kind: 'inner' })) : []
+        if (own.end > last.end) return { args: [...args.slice(0, -1), { ...last, end: own.end }, ...inner], end: own.end, known: true }
       }
       return { args, end: r.end, known: true }
     }

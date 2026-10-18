@@ -12,7 +12,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 - The reader's Download opens arXiv's own PDF in a tab of its own, in the browser's viewer.
 - Fixed: in the PDF reader, a translated line after a short last line no longer runs over the formula set on a line of its own below it.
 - Fixed: when arXiv or Read arXiv's website takes a request and then goes silent, the PDF reader and the floating button no longer wait for ever: the reader ends in its failure note with Retry, and the button appears.
-- Fixed: in the PDF reader, a paper that puts a box of text straight before a centred passage can be prepared, and the words after a box are translated whole. The first word after a box could lose its first letter, and a figure's label could be sent for translation.
+- Fixed: in the PDF reader, a paper that puts a box of text straight before a centred passage can be prepared, and the words after a box are translated whole. The first word after a box could lose its first letter, and a figure's internal name could be sent for translation.
 - Fixed: in the PDF reader, code and command output stay as the paper prints them when the paper sets them out in a block style of its own. They were translated as prose: in one paper, 720 blocks of commands and their output, their punctuation turned full-width.
 - Fixed: in the PDF reader, text printed at an angle (a caption up a landscape page, a figure's label turned on its side) is highlighted where it is printed. One paper with landscape pages could not be opened at all.
 - Fixed: in the PDF reader, the section headings some papers write with a plain-text version for the PDF's bookmarks are translated. They stayed in English: 13 of one paper's 14 headings.
