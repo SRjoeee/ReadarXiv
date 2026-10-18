@@ -3,6 +3,8 @@
 // layout.json, units.json and record.json under fixtures/<name>/), made with the engine tree <engine>: the inputs may come from several
 // places (another engine's layout files, a new output's own), which the make from the record's folders cannot name. The compile image
 // is checked as  checks it, and written into the manifest. <repo> is the tree whose gate-pack.mjs runs.
+// A carried pack whose outputs' translations are stamped with several pipelines (units.json `pipeline`: 10, 12, 13) is rebuilt with this script,
+// whose manifest `pipeline` is the engine's PIPELINE_VERSION; `gate-pack.mjs make` derives it from the stamps (pipelineOf) and refuses a mix.
 //   node lab/pdf/spikes/pack-make.mjs <repo> <engine> <inputs> <out pack folder> <out gate-pack.json>
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
