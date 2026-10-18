@@ -76,7 +76,7 @@ beside you is not a nicety — it is how you catch that.
 ## Start reading
 
 Not on the Chrome Web Store yet, so it is built from source. Desktop Chrome 131 or newer. arXiv's
-HTML papers only — PDFs are not translated.
+HTML papers are translated in place; PDFs open in a reader of their own, beside their translation.
 
 1. **Build it.**
 
@@ -157,12 +157,12 @@ decisions they justify.
 
 ## Status
 
-Version 0.4.1 ([`CHANGELOG.md`](CHANGELOG.md)); the Chrome Web Store listing is pending, so it is built
+Version 0.5.0 ([`CHANGELOG.md`](CHANGELOG.md)); the Chrome Web Store listing is pending, so it is built
 from source for now. Everything above works today — translating, the three layouts, showing the
 original, the four services, sentence alignment, figure translation and the settings. The roadmap is
 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155).
 
-Out of scope for now: other paper sites, PDFs, Firefox and Safari.
+Out of scope for now: other paper sites, Firefox and Safari.
 
 ## Development
 
