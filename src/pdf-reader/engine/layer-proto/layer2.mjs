@@ -60,6 +60,7 @@ import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
 import { shown } from '../layer/pieces.mjs'
 import { escapeMap, plainTracker, transformMap } from './words.mjs'
+import { symbolText } from '../rules/text-symbols.mjs'
 
 // (the fit's parameters, per script and language, are the layout rules': rules/layout.mjs resolveRules gives a run its P)
 
@@ -268,8 +269,11 @@ function lineInfoOf(rects, uc) {
  *  gave "equationeq:identity y= F(x, Wi) + x. equation" for a displayed equation, which no rendering resembles) */
 const MORE_SYMBOLS = { downarrow: '↓', uparrow: '↑', Downarrow: '⇓', Uparrow: '⇑', leftrightarrow: '↔', longrightarrow: '⟶', dagger: '†', ddagger: '‡', varnothing: '∅', emptyset: '∅', ell: 'ℓ', prime: '′', bullet: '•', checkmark: '✓', triangle: '△', square: '□', blacksquare: '■', diamond: '◇', lfloor: '⌊', rfloor: '⌋', lceil: '⌈', rceil: '⌉', hbar: 'ℏ', Re: 'ℜ', Im: 'ℑ', aleph: 'ℵ', wedge: '∧', vee: '∨', neg: '¬', lnot: '¬', setminus: '∖', subsetneq: '⊊', supset: '⊃', supseteq: '⊇', ni: '∋', perp: '⊥', parallel: '∥', angle: '∠', models: '⊨', vdash: '⊢', gg: '≫', ll: '≪', equiv: '≡', cong: '≅', asymp: '≍', doteq: '≐', bigcup: '⋃', bigcap: '⋂', oint: '∮', iint: '∬', coloneqq: '≔', mapsto: '↦', leadsto: '⇝', circledast: '⊛', textdagger: '†', textbullet: '•', S: '§', P: '¶' }
 const ACCENTS = { '~': '\u0303', "'": '\u0301', '"': '\u0308', '`': '\u0300', '^': '\u0302', '=': '\u0304', '.': '\u0307', u: '\u0306', v: '\u030C', H: '\u030B', c: '\u0327', k: '\u0328', r: '\u030A' }
-/** (an alignment tab goes, not an escaped ampersand: "Vinyals \& Kaiser" drew as "Vinyals \ Kaiser", 2026-10-07) */
+/** (an alignment tab goes, not an escaped ampersand: "Vinyals \& Kaiser" drew as "Vinyals \ Kaiser", 2026-10-07; a LaTeX
+ *  text symbol, alone or before an empty group, is its character, the maker's table's: rules/text-symbols.mjs) */
 export function texToText2(src) {
+  const own = symbolText(src)
+  if (own !== null) return own
   // an accent over its letter, composed: \~{n} is "ñ", \"u "ü"
   const acc = src.replace(/\\([~'"`^=.]|[uvHckr](?![A-Za-z]))\s*\{?\\?([A-Za-z])\}?/g, (m, a, l) => `${l}${ACCENTS[a]}`.normalize('NFC'))
   if (acc !== src) return texToText2(acc)
@@ -303,8 +307,8 @@ export function phClass2(src) {
   return /^\$|^\\\(/.test(src) ? { cls: 'other', unknown: true } : { cls: 'umacro', unknown: true }
 }
 /** a 'symbol' placeholder's drawn text (resolvePlaceholders): its source's plain text, less the mark of the superscript
- *  it is drawn as */
-const symbolDrawn = src => texToText2(src).replace(/^\^\(?|\)$/g, '')
+ *  it is drawn as; a LaTeX text symbol's character as it is (\textasciicircum's caret is no such mark) */
+const symbolDrawn = src => symbolText(src) ?? texToText2(src).replace(/^\^\(?|\)$/g, '')
 const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
 /**
  * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
@@ -1253,10 +1257,13 @@ function resolvePlaceholders(out, ctx, renderingsOf) {
     else if (p.cls === 'zero') out.set(p.k, { mode: 'none', text: '' })
     else if (p.cls === 'space') out.set(p.k, { mode: 'none', text: ' ' })
     else if (p.cls === 'symbol') {
-      const text = texToText2(p.src)
+      // (a LaTeX text symbol is its character, never a superscript: \textasciicircum's caret is no script's mark)
+      const own = symbolText(p.src)
+      const text = own ?? texToText2(p.src)
       // a mark the unit starts with that the original shows just before the unit's first line (not erased): not drawn
       // twice (2610.02069's "* These authors…", drawn "**")
-      if (p === phs[0] && unit.pieces.slice(0, p.k).every(q => q.t === 'ph' || !/\S/.test(q.s ?? '')) && leadMark(rects, charsByPage, text.replace(/^\^/, ''))) out.set(p.k, { mode: 'kept', text: '' })
+      if (p === phs[0] && unit.pieces.slice(0, p.k).every(q => q.t === 'ph' || !/\S/.test(q.s ?? '')) && leadMark(rects, charsByPage, own ?? text.replace(/^\^/, ''))) out.set(p.k, { mode: 'kept', text: '' })
+      else if (own !== null) out.set(p.k, { mode: 'symbol', text: own, math: true, sup: false })
       else out.set(p.k, { mode: 'symbol', text: text.replace(/^\^\(?|\)$/g, ''), math: true, sup: /^\$?\^/.test(p.src.replace(/^\$/, '')) || /^\^/.test(text) })
     }
     else {

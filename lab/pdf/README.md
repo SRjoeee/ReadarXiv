@@ -224,6 +224,24 @@ read it without the script ("AIDE" alone), the proof reads it from the segment. 
 "BERT BASE") reads as the same words and stays page text, which breaks across lines where a crop cannot: cropping
 those too moved 1810.04805's `\bertbase` in all 7 of its outputs and made layout measures worse.
 
+**A LOST text piece, and one table of LaTeX's text symbols (the soundness round, 2026-10-19).** A unit was left English
+whenever any one of its pieces was LOST, a plain text piece too: 2609.26457's unit 24, whose second `\texttt{gemini 3
+flash}` the layout's own compile broke over two lines where arXiv's sets it whole. The proof guards wrong ink and content
+the source cannot give; the erase works line by line, so a text piece's ink, wherever on the unit's own lines TeX set it,
+goes with them. A text piece (`tex.mjs textPieceOf`) is a placeholder whose plain text is its whole rendering: a code or
+URL mark (`\texttt`, `\verb`, `\lstinline`, `\url`, `\path`) or a plain-text source, its argument literal (no command,
+group, math or tie; outside the typewriter face no dash or quote ligature and none of OT1's substitutes); no citation,
+reference, footnote mark, formula, display, paper's macro or `\textsuperscript` is one. `locatedWhole` passes one LOST
+(not EMPTY) with the file's lines, and the proof (`textRunsOf`) draws it as the run of the unit's leftover characters
+that spells it (no matched source word, no found piece's segment, no other rendering's, no held or kept line; spaces and
+line breaks aside, no character no Unicode stands for, each inside its line's erase rectangles), in the run's own face
+(the typewriter's for `\texttt`), the pieces taking their runs in the source's order; with no such run (its ink on no line
+of the unit, before its start, on a held line; a rendering that is not its source) the unit stays the original's. The
+layer reads a placeholder that is a LaTeX text symbol by one table (`rules/text-symbols.mjs`: the maker's, with the two
+straight quotes): it knew none of `\textbackslash`, `\textasciicircum` and `\textbar`, which the maker's had, and
+neither side `\textquotesingle` or `\textquotedbl`, so that 256 units of 2610.19159 were left English for them as a
+paper's own macros. The maker keeps its own copy until a LAYOUT version takes the table.
+
 **Recording the 30 outputs.** The gate's defaults hold 29 (`data/layer-fixtures`); the record's inputs name the 30th's
 folders, and a `--record` that would drop an output the record's run of its kind holds (for a model run, the pixel run's
 where the record has no model run of its own) is refused (`score.mjs droppedOutputs`). The record of 2026-10-15:
