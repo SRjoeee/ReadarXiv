@@ -482,11 +482,17 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  * in the log. Allocates no register and writes to the log one line a unit, its alignment (below), and else nothing: no
  * line of it changes but pdfTeX's warnings of a destination set twice. Each part keeps TeX's lists as the paper's, a
  * destination (a whatsit) beside them:
- * - **The alignment.** At a unit's or a heading's end mark (`<i>e`, `h<i>e`; not a cell's), a message to the log,
+ * - **The alignment.** For a unit's or a heading's end mark (`<i>e`, `h<i>e`; not a cell's), a message to the log,
  *   `AXT-ALIGN <i> <mode> <lo> <ls> <ro> <rs> <po> <ps>`: the mode TeX is in (p a paragraph, h an \hbox's restricted
- *   horizontal mode, v vertical), and the stretch's order and amount of \leftskip, \rightskip and \parfillskip, which TeX
- *   sets the paragraph's lines by when it ends (readAlign): the author's own alignment, \centering's both skips infinite and
- *   its \parfillskip none. Through \message, which puts nothing in any list
+ *   horizontal mode, v vertical), and the stretch's order and amount of \leftskip, \rightskip and \parfillskip (readAlign):
+ *   the author's own alignment, \centering's both skips infinite and its \parfillskip none. TeX breaks a paragraph's lines
+ *   by the skips in force at its \par, not at the mark, so a paragraph's are read once it ends (a one-shot para/after hook
+ *   set at the mark): `{\centering text}` and a blank line is set justified, the group closed before the paragraph ended.
+ *   The paragraph is the next to end at the mark's group level or below, or one ending deeper inside ordinary groups (a
+ *   list's \par, a font's group) whose groups close back to it in vertical mode, each followed by \aftergroup, as the
+ *   lines probe's (latex-front.mjs PARA_END_TEX): one ending inside a box, a note or a cell is one inside the unit, and the
+ *   hook waits for the next. In an \hbox, or after the paragraph ended (v), the skips at the mark. Through \message and
+ *   hooks, which put nothing in any list
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
  *   MARK_DEF's own \axtmark is gated too, so a caption's start mark is set where its float is and not first in the list
@@ -669,7 +675,14 @@ export const LAYOUT_TEX = [
   '\\def\\axt@ic{\\global\\axt@sigfalse\\ifcase\\lastnodetype\\axt@icm\\or\\or\\or\\or\\or\\or\\global\\axt@sigtrue\\or\\axt@icm\\or\\or\\axt@icm\\fi}',
   '\\def\\axt@put#1{\\axt@ic\\axt@mark{#1}\\ifaxt@sig\\vadjust{}\\fi}',
   '\\def\\axt@ift#1#2\\relax{\\if t#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
-  '\\def\\axt@alg#1e#2\\@nil{\\ifx\\relax#2\\relax\\else\\message{^^JAXT-ALIGN #1 \\ifhmode\\ifinner h\\else p\\fi\\else v\\fi\\space\\the\\gluestretchorder\\leftskip\\space\\the\\gluestretch\\leftskip\\space\\the\\gluestretchorder\\rightskip\\space\\the\\gluestretch\\rightskip\\space\\the\\gluestretchorder\\parfillskip\\space\\the\\gluestretch\\parfillskip^^J}\\fi}',
+  '\\def\\axt@ags{\\the\\gluestretchorder\\leftskip\\space\\the\\gluestretch\\leftskip\\space\\the\\gluestretchorder\\rightskip\\space\\the\\gluestretch\\rightskip\\space\\the\\gluestretchorder\\parfillskip\\space\\the\\gluestretch\\parfillskip}',
+  '\\def\\axt@agnow#1#2{\\message{^^JAXT-ALIGN #1 #2\\space\\axt@ags^^J}}\\def\\axt@agcap#1{\\expandafter\\xdef\\csname axt@ag@#1\\endcsname{\\axt@ags}}\\def\\axt@agmsg#1{\\message{^^JAXT-ALIGN #1 p \\csname axt@ag@#1\\endcsname^^J}}',
+  '\\def\\axt@agplain{\\ifnum\\ifnum\\currentgrouptype=1 1\\else\\ifnum\\currentgrouptype=14 1\\else0\\fi\\fi=1 \\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
+  '\\def\\axt@agover#1#2{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agcap{#1}\\axt@agafter{#1}{#2}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}}\\else\\axt@agcap{#1}\\axt@agmsg{#1}\\fi}',
+  '\\def\\axt@agafter#1#2{\\expandafter\\gdef\\csname axt@agb@#1\\endcsname{\\axt@agback{#1}{#2}}\\expandafter\\aftergroup\\csname axt@agb@#1\\endcsname}',
+  '\\def\\axt@agback#1#2{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agafter{#1}{#2}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}}\\else\\ifhmode\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}\\else\\axt@agmsg{#1}\\fi\\fi}',
+  '\\def\\axt@agpar#1{\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}}}\\axt@agt}',
+  '\\def\\axt@alg#1e#2\\@nil{\\ifx\\relax#2\\relax\\else\\ifhmode\\ifinner\\axt@agnow{#1}h\\else\\ifdefined\\AddToHookNext\\axt@agpar{#1}\\fi\\fi\\else\\axt@agnow{#1}v\\fi\\fi}',
   '\\def\\axt@align#1{\\axt@ift#1\\relax{}{\\axt@alg#1e\\@nil}}',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
@@ -731,7 +744,8 @@ export function readAlign(log) {
   const last = new Map()
   // (a line TeX wrapped at its 79 characters, max_print_line, joined back: the message starts a line of its own)
   const text = lastTexLog(typeof log === 'string' ? log : '').replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
-  for (const m of text.matchAll(/^AXT-ALIGN h?(\d{1,9}) ([phv]) ([0-3]) (-?[\d.]+)pt ([0-3]) (-?[\d.]+)pt ([0-3]) (-?[\d.]+)pt$/gm)) {
+  // (an order 0 to 3 in pdfTeX and XeTeX, normal to filll; 0 to 4 in LuaTeX, whose fi is 1 and fil 2)
+  for (const m of text.matchAll(/^AXT-ALIGN h?(\d{1,9}) ([phv]) ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt$/gm)) {
     const v = [m[3], m[4], m[5], m[6], m[7], m[8]].map(Number)
     if (!v.every(Number.isFinite)) continue
     last.set(Number(m[1]), m[2] === 'h' ? null : alignCode(...v))

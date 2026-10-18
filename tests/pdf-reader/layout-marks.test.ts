@@ -499,11 +499,11 @@ describe('LAYOUT_TEX', () => {
     // MARK_DEF's own mark gated too
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
     for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
-    // two messages alone, a unit's alignment at its end mark (AXT-ALIGN, layout-align.test.ts) and a colour piece's fill
+    // three messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts) and a colour piece's fill
     // (AXT-COLOUR, readColours): each a line of its own, which no reader of the log but theirs reads, and nothing typeset
     // changes
-    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(2)
-    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-COLOUR'])
+    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(3)
+    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-COLOUR'])
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')

@@ -393,6 +393,20 @@ describe('makeLayout', () => {
     expect((boxed.file.units[1]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
   })
 
+  it('a one-line paragraph TeX set justified and its own glue centred (\\hfill X\\hfill) is CENTRED, off both edges by more than two ems; one nearer an edge is not', async () => {
+    const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
+    // (the paragraph spans 72 to 272, its middle 172: a line of 60 on it, 70 off each edge; one of 170, 15 off each, an em and
+    // a half: a footnote's line set from its mark that happens to sit on the middle, 1810.04805's unit 45)
+    const narrow: Run = { s: 'x'.repeat(12), x: 142, y: 600 }, wide: Run = { s: 'y'.repeat(34), x: 87, y: 580 }
+    const ws = (rs: Run[]) => rs.map(r => r.s).join(' ')
+    const { file } = await made({
+      pages: [{ runs: [...para, narrow, wide] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[3] as Run), 664], ['1s', 1, 142, 600], ['1e', 1, endOf(narrow), 600], ['2s', 1, 87, 580], ['2e', 1, endOf(wide), 580]],
+      units: [unit('para', [text(ws(para))]), unit('para', [text(narrow.s)]), unit('footnote', [text(wide.s)])],
+    }, 'AXT-ALIGN 0 p 0 0.0pt 0 0.0pt 1 1.0pt\nAXT-ALIGN 1 p 0 0.0pt 0 0.0pt 1 1.0pt\nAXT-ALIGN 2 p 0 0.0pt 0 0.0pt 1 1.0pt\n')
+    expect(file.units.map(u => (u[3] ?? 0) & UNIT_FLAG.CENTRED)).toEqual([0, UNIT_FLAG.CENTRED, 0])
+  })
+
   it('with no word from TeX, a block of wide centred lines is CENTRED: one short of its column by more than an em', async () => {
     const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
     // (the paragraph spans 72 to 272; the caption's two lines centred on it, 190 and 185 wide, the second short of it by an em

@@ -64,11 +64,41 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     expect(readAlign(undefined)).toEqual([])
   })
 
-  it('the probe is LAYOUT_TEX\'s: at a unit\'s and a heading\'s end mark, never a cell\'s; through \\message, which sets nothing', () => {
+  it('the probe is LAYOUT_TEX\'s: for a unit\'s and a heading\'s end mark, never a cell\'s; through \\message, which sets nothing', () => {
     expect(LAYOUT_TEX).toContain('\\def\\axt@align#1{\\axt@ift#1\\relax{}{\\axt@alg#1e\\@nil}}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}')
-    expect(LAYOUT_TEX).toContain('\\message{^^JAXT-ALIGN #1 \\ifhmode\\ifinner h\\else p\\fi\\else v\\fi')
+    // (the skips a paragraph is broken by are those at its \\par, so its own are read once it ends: a one-shot para/after hook set
+    // at the mark, at its group level or below, or deeper through ordinary groups back to it; in a box, or after its end, at the mark)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@agpar#1{\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}}}\\axt@agt}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@agover#1#2{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agcap{#1}\\axt@agafter{#1}{#2}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}}\\else\\axt@agcap{#1}\\axt@agmsg{#1}\\fi}')
+    expect(LAYOUT_TEX).toContain('\\ifhmode\\ifinner\\axt@agnow{#1}h\\else\\ifdefined\\AddToHookNext\\axt@agpar{#1}\\fi\\fi\\else\\axt@agnow{#1}v\\fi')
+  })
+})
+
+/** TeX Live 2025's pdfLaTeX, the probe reading each paragraph's skips once it ended: `{\\centering ...}` and a blank line (the
+ *  group closed before the paragraph ended: set justified, which the mark's own skips had called centred), `\\noindent\\hfill X
+ *  \\hfill\\null` (centred by its glue, the paper's skips: j, which the maker reads by its line), a footnote's paragraph and the
+ *  paragraph it is in; and LuaLaTeX's orders, fil 2 (its fi 1) */
+const PARAGRAPH_END = `AXT-ALIGN 14 p 0 0.0pt 0 0.0pt 1 1.0pt
+AXT-ALIGN 15 p 0 0.0pt 0 0.0pt 1 1.0pt
+AXT-ALIGN 16 p 0 0.0pt 0 0.0pt 1 1.0pt
+AXT-ALIGN 17 p 0 0.0pt 0 0.0pt 1 1.0pt
+`
+const LUATEX = `AXT-ALIGN 1 p 0 0.0pt 0 0.0pt 2 1.0pt
+AXT-ALIGN 2 p 2 1.0pt 2 1.0pt 0 0.0pt
+AXT-ALIGN 6 p 0 0.0pt 2 1.0pt 2 1.0pt
+AXT-ALIGN 8 p 2 1.0pt 0 0.0pt 0 0.0pt
+AXT-ALIGN 13 p 0 20.0pt 0 20.0pt 0 0.0pt
+AXT-ALIGN 18 p 4 1.0pt 4 1.0pt 0 0.0pt
+`
+
+describe('readAlign: a paragraph\'s own skips, LuaTeX\'s orders', () => {
+  it('a centring group closed before its paragraph ended reads justified, as TeX set it', () => {
+    expect(readAlign(PARAGRAPH_END)).toEqual([[14, 'j'], [15, 'j'], [16, 'j'], [17, 'j']])
+  })
+  it('LuaTeX\'s orders, fil 2 and filll 4, read as pdfTeX\'s 1 and 3', () => {
+    expect(readAlign(LUATEX)).toEqual([[1, 'j'], [2, 'c'], [6, 'l'], [8, 'r'], [13, 'c'], [18, 'c']])
   })
 })
 

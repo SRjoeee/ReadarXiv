@@ -78,6 +78,8 @@ const SHIFT = 0.2
 /** a centred unit where TeX does not tell its alignment: every line's centre within CENTRE of its column's; a centred name's line
  *  shorter than SHORT of its column */
 const CENTRE = 2, SHORT = 0.9
+/** a one-line paragraph TeX set justified, centred by its own glue: off both edges of its column by more than INSET ems */
+const INSET = 2
 /** segments a placeholder may have: an inline one, a display */
 const SEGS_INLINE = 4, SEGS_DISPLAY = 64
 /** what a label reads as (the prototype's layer2.js LABEL): a mark of one to three digits or signs, an item's number or
@@ -2108,21 +2110,25 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
     }
     // flags: centred as TeX set the unit's paragraph, where the marked original's log tells it (marks.mjs readAlign: its
-    // \leftskip, \rightskip and \parfillskip at its end mark; the author's own alignment). Where it does not (a caption
+    // \leftskip, \rightskip and \parfillskip when it ended; the author's own alignment). Where it does not (a caption
     // \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a cell): centred where
     // every line's centre is its column's and one line at least is short of it by an em; the first line from its label on
     // (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the text block
-    // (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own)
+    // (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own). A justified one-line
+    // paragraph centred by its own glue (\noindent\hfill X\hfill\null, whose skips are the paper's) is centred where its
+    // line is on its column's middle and stands off both edges by more than INSET ems
     const told = alignTeX.get(i)
-    let centred = rows.length > 0, short = false
-    if (told === undefined) rows.forEach((r, j) => {
+    let centred = rows.length > 0, short = false, inset = rows.length === 1
+    rows.forEach((r, j) => {
       if (!centred) return
-      const x0 = j === 0 && labelAt.has(i) ? Math.min(r.x0, labelAt.get(i)) : r.x0
+      const x0 = j === 0 && labelAt.has(i) ? Math.min(r.x0, labelAt.get(i)) : r.x0, em = r.size > 0 ? r.size : 10
       const c = columnOf(r.page, x0, r.x1), e = c === 2 ? blockEdges(r.page) : edgesOf(r.page, c)
       if (!e || Math.abs((x0 + r.x1) / 2 - (e[0] + e[1]) / 2) > CENTRE) { centred = false; return }
-      if (e[1] - e[0] - (r.x1 - x0) > (r.size > 0 ? r.size : 10)) short = true
+      if (e[1] - e[0] - (r.x1 - x0) > em) short = true
+      if (!(x0 - e[0] > INSET * em && e[1] - r.x1 > INSET * em)) inset = false
     })
-    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | ((told !== undefined ? told === 'c' : centred && short) ? UNIT_FLAG.CENTRED : 0)
+    const isCentred = told === undefined ? centred && short : told === 'c' || (told === 'j' && centred && inset)
+    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : 0)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
     one.out = { unit: [i, KIND.get(u.kind), depth, flags, u.pieces.length], lines, frames, erase, splits: fs.length > 1 }
   }
