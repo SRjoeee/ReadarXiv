@@ -81,4 +81,4 @@ The dashboard asks for each **named** permission separately, but for **all host 
 
 **Privacy policy URL** (required: the extension handles website content and stores API keys): `https://github.com/SRjoeee/ReadarXiv/blob/main/PRIVACY.md`. It points at `main` so the listing always shows the policy in force; the file's history records every change. The questionnaire above and `PRIVACY.md` describe the same practices, and change together.
 
-**Single purpose**: reading arXiv papers bilingually: the HTML paper translated in place, and the PDF beside its translation.
+**Single purpose**: Reading arXiv papers bilingually: the HTML paper translated in place, and the PDF beside its translation.
