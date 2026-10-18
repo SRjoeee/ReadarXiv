@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AUTO_TRANSLATE_HASH } from '@/core/abstract/link'
-import { bilingualPdfOf, htmlUrlOf, htmlVersionOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf, VIEWER_HASH, viewerUrlOf } from '@/core/pdf/entry'
+import { bilingualPdfOf, ENTRY_CHECK_MS, htmlUrlOf, htmlVersionOf, paperIdFromPdfPath, pdfUrlOf, readerWanted, sourceKindOf, translatedHtmlUrlOf, VIEWER_HASH, viewerUrlOf } from '@/core/pdf/entry'
 
 // The bilingual entry on arXiv's PDF page (issue #169): where it leads. The floating button itself: floating-button.test.ts
 
@@ -88,7 +88,7 @@ describe('a paper\'s two entries, checked (the PDF page\'s HEADs, and the popup\
   it('offers the HTML version unless arXiv says there is none: only a 404 or a 410 does', async () => {
     const fetchFn = answering(200)
     expect(await htmlVersionOf('2501.07202', fetchFn)).toBe('https://arxiv.org/html/2501.07202#readarxiv')
-    expect(fetchFn).toHaveBeenCalledWith('https://arxiv.org/html/2501.07202', { method: 'HEAD', credentials: 'omit' })
+    expect(fetchFn).toHaveBeenCalledWith('https://arxiv.org/html/2501.07202', { method: 'HEAD', credentials: 'omit', signal: expect.any(AbortSignal) })
     for (const status of [404, 410]) expect(await htmlVersionOf('2501.07202', answering(status))).toBeNull()
     for (const said of [answering(429), answering(503), failing()]) expect(await htmlVersionOf('2501.07202', said)).toBe('https://arxiv.org/html/2501.07202#readarxiv')
     expect(await htmlVersionOf('hep-th/9711200', answering(200), 'https://export.arxiv.org')).toBe('https://export.arxiv.org/html/hep-th/9711200#readarxiv')
@@ -97,8 +97,21 @@ describe('a paper\'s two entries, checked (the PDF page\'s HEADs, and the popup\
   it('offers the bilingual PDF unless the source is a PDF-only submission; anything else says nothing', async () => {
     const fetchFn = answering(200, 'application/gzip')
     expect(await bilingualPdfOf('2501.07202', fetchFn)).toBe('https://arxiv.org/pdf/2501.07202#readarxiv')
-    expect(fetchFn).toHaveBeenCalledWith('https://arxiv.org/src/2501.07202', { method: 'HEAD', credentials: 'omit' })
+    expect(fetchFn).toHaveBeenCalledWith('https://arxiv.org/src/2501.07202', { method: 'HEAD', credentials: 'omit', signal: expect.any(AbortSignal) })
     expect(await bilingualPdfOf('2501.07202', answering(200, 'application/pdf'))).toBeNull()
     for (const said of [answering(200, 'text/html'), answering(404), answering(503), failing()]) expect(await bilingualPdfOf('2501.07202', said)).toBe('https://arxiv.org/pdf/2501.07202#readarxiv')
+  })
+
+  it('probes that never settle give the entries as offered once ENTRY_CHECK_MS has passed: the PDF page\'s button is installed after both', async () => {
+    vi.useFakeTimers()
+    try {
+      const never = vi.fn(() => new Promise<Response>(() => {}))
+      let gate: [string | null, string | null] | null = null
+      void Promise.all([htmlVersionOf('2501.07202', never), bilingualPdfOf('2501.07202', never)]).then(found => { gate = found })
+      await vi.advanceTimersByTimeAsync(ENTRY_CHECK_MS - 1)
+      expect(gate).toBeNull()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(gate).toEqual(['https://arxiv.org/html/2501.07202#readarxiv', 'https://arxiv.org/pdf/2501.07202#readarxiv'])
+    } finally { vi.useRealTimers() }
   })
 })

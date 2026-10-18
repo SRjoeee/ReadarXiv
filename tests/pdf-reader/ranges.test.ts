@@ -179,6 +179,24 @@ describe('the base check\'s two ends', () => {
     return { f: f as unknown as typeof fetch, calls, arxiv }
   }
 
+  it('a body arXiv stops sending after accepting the range: unknown once STALL_MS has passed, the request let go', async () => {
+    vi.useFakeTimers()
+    const ours = serving(FILE)
+    let letGo = false
+    const f = vi.fn(async (url: string, init: RequestInit) => {
+      if (url === URL_OURS) return (ours.f as unknown as (u: string, i: RequestInit) => Promise<Response>)(url, init)
+      const body = new ReadableStream<Uint8Array>({ start(c) { init.signal?.addEventListener('abort', () => { letGo = true; c.error(new DOMException('aborted', 'AbortError')) }) } })
+      return new Response(body, { status: 206, headers: { 'content-range': `bytes ${base.xref}-${FILE.length - 1}/${FILE.length}`, 'content-length': String(FILE.length - base.xref) } })
+    })
+    let verdict: string | null | undefined
+    void endsAlike(URL_ARXIV, URL_OURS, base, bound, { fetch: f as unknown as typeof fetch }).then(v => { verdict = v })
+    await vi.advanceTimersByTimeAsync(STALL_MS - 1)
+    expect(verdict).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(verdict).toBeNull()
+    expect(letGo).toBe(true)
+  })
+
   it('from the base\'s startxref to the end, within ENDS_MAX; no startxref, the last kilobyte', () => {
     expect(endsFrom({ bytes: 300, xref: 250 })).toBe(250)
     expect(endsFrom({ bytes: 10_000_000, xref: 1_000 })).toBe(10_000_000 - ENDS_MAX)
