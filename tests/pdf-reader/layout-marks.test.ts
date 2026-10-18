@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { GLYPHS_PAGE } from '@/pdf-reader/engine/layout/ink.mjs'
 import { OPS_MS } from '@/pdf-reader/engine/layout/oplist.mjs'
@@ -498,7 +498,12 @@ describe('LAYOUT_TEX', () => {
     for (const name of ['axtpma', 'axtpm', 'axthmark']) expect(LAYOUT_TEX).toContain(`\\def\\${name}{\\ifx\\protect\\@typeset@protect`)
     // MARK_DEF's own mark gated too
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
-    for (const word of ['\\message', '\\typeout', 'AXT-', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
+    for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
+    // three messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts) and a colour piece's fill
+    // (AXT-COLOUR, readColours): each a line of its own, which no reader of the log but theirs reads, and nothing typeset
+    // changes
+    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(3)
+    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-COLOUR'])
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')
@@ -600,8 +605,10 @@ describe("babel's names (D1a)", () => {
     expect(NAMES_TEX).toContain('\\def\\axtnmb{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nmb\\else\\protect\\axtnmb\\fi}')
     // gated, hmode only, glue put back (\axt@set), the start waiting for a paragraph from vertical mode
     expect(NAMES_TEX).toMatch(/\\protected\\def\\axt@nma#1\{\\ifaxt@off\\else/)
-    expect(NAMES_TEX).toContain('\\relax\\axt@put{n\\axt@nmn.#1.s}')
-    expect(NAMES_TEX).toContain('\\axt@set{n\\axt@nmn.#1.e}')
+    // (each held: a name a class runs into the paragraph is set as it starts, and leaves the opening point waiting there for
+    // the unit's own start mark, LAYOUT_TEX's \axt@hold)
+    expect(NAMES_TEX).toContain('\\relax\\axt@holdtrue\\axt@put{n\\axt@nmn.#1.s}\\axt@holdfalse')
+    expect(NAMES_TEX).toContain('\\axt@holdtrue\\axt@set{n\\axt@nmn.#1.e}\\axt@holdfalse')
     expect(NAMES_TEX).toContain('\\AddToHookNext{para/begin}{\\axt@nmlate}')
     // at \begin{document} and after babel's switches; the names kept off a float's label
     expect(NAMES_TEX).toContain('\\AddToHook{begindocument/end}{\\global\\axt@nmontrue\\axt@nmall}')
@@ -610,7 +617,7 @@ describe("babel's names (D1a)", () => {
     // a blank name is left as it is: a class may test it for emptiness (REVTeX's jcp style, an empty \refname)
     expect(NAMES_TEX).toContain('{!\\tl_if_blank_p:o{#1}}')
     // a case change keeps their keys; a PDF string gobbles them
-    expect(LAYOUT_TEX).toContain('\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}')
+    expect(LAYOUT_TEX).toContain('\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}')
     expect(LAYOUT_TEX).toContain('\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble')
     expect(LAYOUT_TEX.indexOf(NAMES_TEX)).toBeGreaterThan(0)
     expect(LAYOUT_TEX.indexOf(NAMES_TEX)).toBeLessThan(LAYOUT_TEX.indexOf(POINTS_TEX))
@@ -1008,12 +1015,14 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: 7, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0] }, pages: 2,
+  schema: MARKS_SCHEMA, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
   dropped: ['h4s'],
   lines: [[0, 3], [2, 1], [7, 12]],
+  align: [[0, 'j'], [2, 'c'], [7, 'l']],
+  colours: [[0, 3, 0x0000ff], [2, 1, 0xa60000], [2, 4, 0]],
   words: ['the', 'model', 'x'],
   tokens: [1, 72, 700, 15.5, 10, 0, 1, 90, 700, 25, 10, 1, 2, 72, 720, 6, 12, 2],
   chars: ['x', '2', '\u2211', ''],
@@ -1043,7 +1052,7 @@ describe('the marks file', () => {
   it('encodeLayoutMarks and parseLayoutMarks round-trip', () => {
     const m = valid()
     expect(parseLayoutMarks(bytes(encodeLayoutMarks(m)))).toEqual(m)
-    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned', 'links'])
+    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'colours', 'words', 'tokens', 'chars', 'owned', 'links'])
   })
   it('parseLayoutMarks refuses past its bounds', () => {
     const big = new Uint8Array(MARKS_CAP + 1).fill(0x20)
@@ -1054,12 +1063,13 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 7 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 7 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 7 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 7 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 7 }, 'schema'],
-      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 7 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 8 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 8 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 8 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 8 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 8 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 8 }, 'schema'],
+      ['schema 7, a file before the alignment', m => { m.schema = 7 as 8 }, 'schema'],
       ['a lineskip of one number', m => { (m.marking as Record<string, unknown>).lineskip = [1] }, 'marking.lineskip'],
       ['a lineskip past \\maxdimen', m => { (m.marking as Record<string, unknown>).lineskip = [1, 1e6] }, 'marking.lineskip[1]'],
       ['a lineskip a hundredth past \\maxdimen as written', m => { (m.marking as Record<string, unknown>).lineskip = [1, 16322.8] }, 'marking.lineskip[1]'],
@@ -1390,3 +1400,62 @@ describe("the marked compile's links (the link-anchor locator's)", () => {
   })
 })
 
+
+describe("each colour piece's fill, as TeX set its run in the marked original (PR-C)", () => {
+  const unit = (pieces: unknown[]) => ({ kind: 'para', pieces }) as unknown as SourceUnit
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const open = (src: string, id = 1) => ({ t: 'open', id, src }), close = (src: string, id = 1) => ({ t: 'close', id, src })
+  it('the marking writes the colour right inside a \\textcolor group and right after a \\color switch, and nowhere else', () => {
+    const u = unit([text('a '), open('\\textcolor{blue!60!black}{'), text('b'), close('}'), text(' c '), ph('\\color[HTML]{245B60}'), text(' d '), open('\\colorbox{blue!5}{', 2), text('e'), close('}', 2), ph('\\color')])
+    const marked = layoutMarking([u], MARK_CLASSES, { lines: false }).units[0]?.pieces as { t: string; src?: string; s?: string }[]
+    expect(marked.map(p => p.src ?? p.s)).toEqual(['a ', '\\textcolor{blue!60!black}{', '\\axtcolour{c0.1}', 'b', '}', ' c ', '\\color[HTML]{245B60}', '\\axtcolour{c0.5}', ' d ', '\\colorbox{blue!5}{', 'e', '}', '\\color'])
+    expect([open('\\textcolor[rgb]{0,0,1}{'), ph('\\color{red}'), ph('\\color{red} x'), open('\\textcolor{red}'), open('\\colorbox{red}{')].map(colourPieceOf)).toEqual([true, true, false, false, false])
+  })
+  it("LAYOUT_TEX writes it through \\message alone, gated as the marks are, and never into a file or a PDF string", () => {
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}')
+    expect(LAYOUT_TEX).toContain('\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}')
+    expect(LAYOUT_TEX).toContain('\\let\\axtcolour\\@gobble')
+  })
+  it('reads each piece\'s fill from the log, joins a line TeX wrapped, and gives none to a piece set in two colours or of no form', () => {
+    const wrapped = 'AXT-COLOUR c9.2 0.12345 0.23456 0.34567 0.45678 k 0.12345 0.23456 0.34567 0.45678 K'
+    const log = ['x', 'AXT-COLOUR c2.4 0 0 1 rg 0 0 1 RG', '', 'AXT-COLOUR c0.1 0.65 0 0 rg 0.65 0 0 RG', 'AXT-COLOUR c0.1 0.65 0 0 rg 0.65 0 0 RG',
+      'AXT-COLOUR c3.1 1 0 0 rg 1 0 0 RG', 'AXT-COLOUR c3.1 0 0 1 rg 0 0 1 RG', 'AXT-COLOUR c4.1 Red', wrapped.slice(0, 79), wrapped.slice(79), 'AXT-COLOUR c5.0 0 g 0 G'].join('\n')
+    const out = readColours(log)
+    expect(out.map(([i, k]) => [i, k])).toEqual([[0, 1], [2, 4], [5, 0], [9, 2]])
+    expect(out.find(e => e[0] === 0)?.[2]).toBe(0xa60000)
+    expect(out.find(e => e[0] === 2)?.[2]).toBe(0x0000ff)
+    expect(out.find(e => e[0] === 5)?.[2]).toBe(0)
+  })
+  it('a piece set in two colours has none, however many times and in whatever order (#407: A, B, B; A, A, B; B, A, A)', () => {
+    const A = '1 0 0 rg 1 0 0 RG', B = '0 0 1 rg 0 0 1 RG'
+    for (const order of [[A, B, B], [A, A, B], [B, A, A], [A, 'Red', A], ['Red', A, A]]) {
+      expect(readColours(order.map(c => `AXT-COLOUR c1.2 ${c}`).join('\n')), order.join(' / ')).toEqual([])
+    }
+    expect(readColours([A, A, A].map(c => `AXT-COLOUR c1.2 ${c}`).join('\n'))).toEqual([[1, 2, 0xff0000]])
+  })
+  it('the marks file holds them, rising, each a fill 0 to 0xFFFFFF', () => {
+    const v = valid()
+    const back = parseLayoutMarks(bytes(encodeLayoutMarks(v)))
+    expect(back.colours).toEqual(v.colours)
+    for (const colours of [[], [[0, 3]], [[2, 1, 1], [0, 3, 1]], [[0, 3, 0x1000000]], [[0, 3, -1]], 'x']) expect(() => parseLayoutMarks(bytes({ ...v, colours })), JSON.stringify(colours)).toThrow(LayoutRefusal)
+  })
+  it('a marks file with none, one of before among them, holds no key: read as none, and written back the bytes it was', () => {
+    const { colours: _none, ...before } = valid()
+    const text = JSON.stringify(JSON.parse(encodeLayoutMarks({ ...before, colours: [] } as never)))
+    expect(JSON.parse(text)).not.toHaveProperty('colours')
+    const back = parseLayoutMarks(bytes(text))
+    expect(back.colours).toEqual([])
+    expect(encodeLayoutMarks(back)).toBe(encodeLayoutMarks({ ...before, colours: [] } as never))
+  })
+})
+
+describe('an opening point that waits in vertical mode is set with its unit, not with a run-in heading or name (PR-C)', () => {
+  it("the heading's and the names' marks hold it; every other mark sets it beside its own", () => {
+    expect(LAYOUT_TEX).toContain('\\newif\\ifaxt@hold')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifaxt@hold\\else\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi\\fi}')
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}')
+    // (the unit's start mark and a placeholder's own still set it)
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}')
+    expect((LAYOUT_TEX.match(/\\axt@holdtrue/g) ?? []).length).toBe(3)
+  })
+})

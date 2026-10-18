@@ -1,7 +1,8 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { cutBundle } from '@/pdf-reader/engine/layer-proto/cut.mjs'
-import type { Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { indexOf, mergeParts, type PartChain, type ReadPart, type ReadUnitsChunk, readHead, readPart, readUnitsChunk, type Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { indexLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { DEFAULT_RULES, makeLayout, WHOLE_RULES } from '@/pdf-reader/engine/layout/make.mjs'
@@ -61,6 +62,35 @@ async function cutOf(w: World) {
   return cutBundle({ paper: { ...PAPER, pages: w.pages.length }, base: BASE, units: bundleUnitsOf(source(w)), left: { pages: side.pages, units: side.units }, layout: made.file }, { leftPages: side.leftPages, base: BASE, image: '1', draw: true })
 }
 const shas = (ws: readonly Written[]) => ws.map(x => x.sha256)
+
+describe("layerOfPaper: a colour piece's fill reaches the reader (#407)", () => {
+  it("each part carries the colour rows of its own units, and the reader's colourOf reads them back", async () => {
+    // (page 2's paragraph in \\textcolor{blue}, its fill as the marked original's log gives it)
+    const w = worldOf()
+    const blue = w.units[1]!
+    w.units[1] = { ...blue, pieces: [{ t: 'open', id: 1, src: '\\textcolor{blue}{' }, ...blue.pieces, { t: 'close', id: 1, src: '}' }] } as never
+    const log = 'AXT-COLOUR c1.0 0 0 1 rg 0 0 1 RG\n'
+    const marks = await readMarked(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, units: w.units, OPS } as never)
+    const got = await passOf(w, { marks } as never)
+    expect(got.r).toMatchObject({ through: 3, count: 2 })
+    // read back as the service reads a cut: the head, the units' chunks, each part in order
+    const rh = await readHead(got.head!.bytes, { ref: got.head!.ref })
+    const chunks: ReadUnitsChunk[] = []
+    for (const u of got.units) chunks.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: chunks.at(-1) ?? null }))
+    const index = indexOf(rh, chunks), parts: ReadPart[] = []
+    let chain: PartChain | null = null
+    for (const p of got.parts) { const r = await readPart(p.bytes, { ref: p.ref, index, chain }); parts.push(r); chain = r.chain }
+    expect(parts.map(p => p.layout?.colours ?? null)).toEqual([null, [[1, 0, 0x0000ff]]])
+    // (the reader's: the layer's tex.mjs, which opens a canvas at import, as a browser's modules may)
+    const g = globalThis as { OffscreenCanvas?: unknown }, had = g.OffscreenCanvas
+    g.OffscreenCanvas = class { width = 8; height = 8; getContext() { return null } }
+    try {
+      const { colourOf } = await import('@/pdf-reader/engine/layer-proto/tex.mjs')
+      const lu = indexLayout(mergeParts(index, parts).layout!).unit(1)
+      expect(colourOf(lu as never, [0, -1, 2])(0)).toBe(0x0000ff)
+    } finally { g.OffscreenCanvas = had }
+  })
+})
 
 describe('layerOfPaper: the page pass', () => {
   for (const verdicts of [false, true]) {

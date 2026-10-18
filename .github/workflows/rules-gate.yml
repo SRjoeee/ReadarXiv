@@ -19,6 +19,7 @@ on:
       - 'src/pdf-reader/engine/layout/addon.mjs'
       - 'src/pdf-reader/engine/layout/chain-wire.mjs'
       - 'src/pdf-reader/engine/layout/chain.mjs'
+      - 'src/pdf-reader/engine/layout/colour.mjs'
       - 'src/pdf-reader/engine/layout/file.mjs'
       - 'src/pdf-reader/engine/layout/ink.mjs'
       - 'src/pdf-reader/engine/layout/json.mjs'

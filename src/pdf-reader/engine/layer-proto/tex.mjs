@@ -65,7 +65,8 @@ export function kOfPieces(unit, trPieces) {
  * text piece (textPieceOf: a placeholder whose plain text is its whole rendering) passes with the file's lines too
  * (`held`): the file erases a unit line by line, so its ink, wherever on the unit's own lines TeX set it, goes with them,
  * and the proof draws it from the run of the unit's characters that spells it, or leaves the unit the original's
- * (proofOf, textRunsOf). An EMPTY one does not. So a
+ * (proofOf, textRunsOf). And with them an EMPTY piece, one TeX set no ink for where it stands, is drawn as nothing
+ * (emptyOf, the controller's ruling of 2026-10-19): nothing of it is on the unit's lines to erase or to draw. So a
  * unit the file holds is drawn by the file, a piece by its own segments, wherever every piece of it is one the file
  * accounts for; any other LOST piece sends it to v0's reading, where no rendering of it can be proven (proofOf) and the
  * unit stays the original's.
@@ -82,7 +83,8 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = fals
     if (!cls || !VISIBLE.has(cls) || (cls === 'symbol' && symbols === 'text')) continue
     const row = lu.ph.get(kOf[i])
     if (!row) { if (MACROS.has(cls)) continue; return { ok: false, why: 'no row' } }
-    if (row.flags & PH_FLAG.EMPTY) return { ok: false, why: 'empty' }
+    // (one TeX set no ink for, on the file's lines: drawn as nothing, emptyOf)
+    if (row.flags & PH_FLAG.EMPTY) { if (held) continue; return { ok: false, why: 'empty' } }
     if (row.flags & (PH_FLAG.TEXT | PH_FLAG.JOINED)) continue
     // (outside the unit's lines: the file's lines, which never hold it; v0's rectangles may)
     if (row.flags & PH_FLAG.OUTSIDE && held) continue
@@ -381,6 +383,25 @@ export function texRects(lu, maxPage = Infinity) {
 /** whether a placeholder of the unit's sets no ink by the file: a text macro (v0's 'macro' or 'umacro') the file holds no
  *  row for (locatedWhole) */
 export const inklessOf = (lu, kOf, p) => MACROS.has(p.cls) && !lu.ph.has(kOf[p.k])
+/**
+ * Whether a placeholder of the unit's is one TeX set no ink for, by the file (PH_FLAG.EMPTY; the controller's ruling of
+ * 2026-10-19): the marked compile's content stream holds nothing between its two points, no glyph, path, image or shading
+ * (layout/make.mjs, stream.mjs: what TeX ships elsewhere for it, a footnote's text, a float, lies outside its region and on
+ * no line of the unit; one whose closing point was never read the maker writes LOST, its ink not known), or, an unmarked
+ * piece at the unit's head or tail, arXiv's page shows no glyph beside the unit's mark on its line (its ink, if any, before
+ * the unit's start or after its end, which its lines never take). Either way nothing of it is on the unit's lines: nothing
+ * to erase and nothing to draw (2610.19159's \trajectoryMark{}, whose empty argument sets nothing, left 298 units
+ * English). A piece the layer draws by its class, a text symbol, a space, one that sets nothing, as before
+ */
+export const emptyOf = (lu, kOf, p) => VISIBLE.has(p.cls) && p.cls !== 'symbol' && !!((lu.ph.get(kOf[p.k])?.flags ?? 0) & PH_FLAG.EMPTY)
+
+/** each placeholder's fill by the file, by its piece index (`k`): its row's, the colour more than half its glyphs on arXiv's
+ *  page are filled with (0xRRGGBB), MIXED_FILL where no one colour holds more than half, null where they are black or
+ *  the file has no row with segments for it (layout/file.mjs indexLayout's `fill`) */
+export const fillOf = (lu, kOf) => k => (lu && kOf && kOf[k] >= 0 ? lu.ph.get(kOf[k])?.fill ?? null : null)
+/** each colour piece's run's fill by the file, by its piece index (`k`): the fill TeX set the run of a \textcolor or a \color
+ *  switch in (0xRRGGBB, the file's `colours`), null where the file has none (its colour not known: no guess) */
+export const colourOf = (lu, kOf) => k => (lu && kOf && kOf[k] >= 0 ? lu.colours?.get(kOf[k]) ?? null : null)
 
 /** a row's segments (stride 6: page, x0, baseline, x1, top, bottom) as boxes */
 const segmentsOf = segs => {
@@ -673,6 +694,8 @@ export function proofOf(lu, kOf, shown = Infinity, { textRuns = false } = {}) {
 export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = Infinity, lineskip = null }) {
   const parts = {
     proof: proofOf(lu, kOf, shown, { textRuns: use === 'lines' }),
+    fillOf: fillOf(lu, kOf),
+    colourOf: colourOf(lu, kOf),
     renderings({ unit, phs, uc, gaps, citeMap }) {
       const found = new Map(), joined = []
       let cover
@@ -704,10 +727,12 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = I
           found.set(p, { text: '', chars: [], held: [...new Set([...(g.held ?? []), ...g.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`)])], proof: true })
         }
       }
-      // (a text macro that sets no ink is drawn as nothing, as one outside the unit's lines is, its ink never erased; a
-      // text symbol the file draws as its character, as that)
+      // (a text macro that sets no ink is drawn as nothing, as one outside the unit's lines is, its ink never erased, and one
+      // TeX set no ink for, EMPTY; a text symbol the file draws as its character, as that)
       const fixed = p => {
         if (inklessOf(lu, kOf, p)) return { mode: 'none', text: '', proof: true }
+        // (`empty`: TeX set no ink for it, which the checker counts as no rendering lost)
+        if (lines?.lineOf && emptyOf(lu, kOf, p)) return { mode: 'none', text: '', proof: true, empty: true }
         const row = lu.ph.get(kOf[p.k])
         // (`inPlace`: shown by its own ink, left where it stands: the checker's)
         if (row && row.flags & PH_FLAG.OUTSIDE && lines?.lineOf) return { mode: 'none', text: '', proof: true, inPlace: true }

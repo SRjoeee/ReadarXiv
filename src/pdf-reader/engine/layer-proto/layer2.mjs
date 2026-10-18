@@ -61,6 +61,7 @@ import { breakPoints } from './hyph.mjs'
 import { shown } from '../layer/pieces.mjs'
 import { escapeMap, plainTracker, transformMap } from './words.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
+import { fillOfColour } from '../layout/colour.mjs'
 
 // (the fit's parameters, per script and language, are the layout rules': rules/layout.mjs resolveRules gives a run its P)
 
@@ -612,7 +613,7 @@ function measureAt(b, y, k) {
  * by the key of the line TeX set after it (finishUnit): that line goes on the block of the line before it, whatever the
  * gap TeX's room opened between them (blocks2 closes it), and the gap is no pitch the next line is read by.
  */
-export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null, joinAt = null) {
+export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null, joinAt = null, centred = undefined) {
   const kept = r => !!keep?.has(rectKey(r))
   const blocks = []
   let cur = null
@@ -640,7 +641,10 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
     const view = pageViews[b.page - 1]
     const pageCentre = view ? (view[0] + view[2]) / 2 : 306
     const widthsVary = Math.max(...rs.map(r => r[3] - r[1])) - Math.min(...rs.map(r => r[3] - r[1])) > 6
-    b.centred = rs.length > 1 ? Math.max(...centres) - Math.min(...centres) < 3 && widthsVary : Math.abs(centres[0] - pageCentre) < 3 && b.x1 - b.x0 < 0.8 * (view ? view[2] - view[0] : 612)
+    // (centred as the layout file has the unit, `centred`: TeX's own alignment, else the maker's reading of arXiv's lines,
+    // make.mjs; a unit no file holds, a part laid with no layout, by its lines here: several whose centres agree and whose
+    // widths differ, or one in the page's middle)
+    b.centred = typeof centred === 'boolean' ? centred : rs.length > 1 ? Math.max(...centres) - Math.min(...centres) < 3 && widthsVary : Math.abs(centres[0] - pageCentre) < 3 && b.x1 - b.x0 < 0.8 * (view ? view[2] - view[0] : 612)
     // (the measures its lines are set to, where TeX changed it within the paragraph: measuresOf; a centred block's lines
     // are no measure's)
     b.measures = b.centred ? null : measuresOf(rs, keep)
@@ -822,6 +826,10 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // unit's lines the file's own: what the renderings leave of the gaps is the unit's text, categoriesOf. With part 4
   // alone the unit's characters are v0's rectangles', and a leftover may be a rendering the segments do not reach)
   out.inkKnown = !!(parts?.renderings && parts.lines)
+  // (each placeholder's fill and each colour piece's run's by the file, where a source gives them: what its rendering's text
+  // and the run are drawn in, tokensOf2)
+  out.fillOf = parts?.fillOf ?? null
+  out.colourOf = parts?.colourOf ?? null
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
   if (parts?.proof) { const k = parts.proof(out, unit); if (k >= 0) out.unproven = k }
   // (a source that knows where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it)
@@ -2098,6 +2106,17 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   const base = baseOf(unit, baseIn)
   const stack = [{ ...base }]
   const style = () => stack.at(-1)
+  // (a colour piece's run, a \textcolor's or a \color switch's: drawn in the fill TeX set it in, the file's `colours` row,
+  // `colourRun` that it came so; a piece the file has no row for keeps the colour around it, never a guess from its name)
+  // A unit no layout holds (none for the paper: its source does not compile; or none for the unit) has no colour measured at
+  // all: there a base colour xcolor names is drawn as xcolor defines it (BASE_COLOURS), and another name keeps the colour
+  // around it, as a piece the file holds and has no row for does (#407)
+  const colourRun = (k, src, named) => {
+    const rgb = resolved.colourOf?.(k)
+    if (Number.isInteger(rgb)) return { color: hexOf(rgb), colourRun: true }
+    const base = resolved.colourOf ? undefined : BASE_COLOURS.get(named.exec(src)?.[1] ?? '')
+    return base !== undefined ? { color: hexOf(base), colourRun: true } : {}
+  }
   // (the layout rules': whether lines break only at spaces, which quotes are CJK's, centred punctuation, the Latin words'
   // hyphenation patterns and shortest hyphenated word, the line-break marks)
   const { keepAll, cjkQuotes, centredPunct: centred, latinPatterns: latinLang, hyphenation: { minWord } } = P
@@ -2223,11 +2242,10 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     plain?.gap()
     if (p.t === 'open') {
       const next = applyCmd(p.src, style(), designs)
-      const colour = /^\\textcolor\{([a-zA-Z]+)\}/.exec(p.src)
       // (a link's text, \href's, \hyperref's or \hyperlink's: each token of it tells its pair by `link`, the open's id, which the
       // engine's links read (links.mjs) and no drawing does)
       const link = LINK_OPEN.test(p.src) && p.id !== undefined ? { link: p.id } : {}
-      stack.push({ ...(next ?? style()), ...(colour ? { color: colour[1] } : {}), ...link })
+      stack.push({ ...(next ?? style()), ...colourRun(k, p.src, NAMED_OPEN), ...link })
       return
     }
     if (p.t === 'close') {
@@ -2238,8 +2256,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // a switch: the rest of its group
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) { stack[stack.length - 1] = sw; return }
-      const colour = /^\\color\{([a-zA-Z]+)\}$/.exec(p.src)
-      if (colour) stack[stack.length - 1] = { ...style(), color: colour[1] }
+      const run = colourRun(k, p.src, NAMED_SWITCH)
+      if (run.color) stack[stack.length - 1] = { ...style(), ...run }
     }
     const r = resolved.get(k)
     if (!r) return
@@ -2279,7 +2297,11 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     if (!r.text) return
     if (r.text === ' ') { pushText(' ', style()); return }
-    const st = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3 } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
+    const own = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3 } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
+    // (in its glyphs' own colour where the file gives one: a citation in hyperref's colorlinks blue, which the unit's source
+    // does not name; mixed or black, its run's. A run the source colours, which the file's `colours` row gives, wins)
+    const fill = resolved.fillOf?.(k)
+    const st = !own.colourRun && Number.isInteger(fill) && fill >= 0 ? { ...own, color: hexOf(fill) } : own
     if (r.sup) {
       const face = faceOf(st, 'latin', to)
       tokens.push({ s: r.text, st, face, cls: 'latin', w100: measure(r.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
@@ -2318,8 +2340,8 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
  * TeX did puts the line after it on TeX's own, and the room the translation does not use of the block is at its foot.
  * The block's pitch is its grid's.
  */
-export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null, joinAt = null) {
-  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt, joinAt)
+export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null, joinAt = null, centred = undefined) {
+  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt, joinAt, centred)
   const info = r => lineInfo.get(rectKey(r)) ?? lineInfo.get(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`)
   for (const b of blocks) {
     b.B = b.rects.map(r => info(r)?.baseline ?? r[2] + 0.24 * (r[4] - r[2]))
@@ -3015,15 +3037,16 @@ export function layoutUnit2(tokens, blocks, s, P) {
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }
-  return laidOut(last, s, P, tried)
+  return laidOut(last, s, P, tried, blocks)
 }
 
 /** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted; the lines TeX's rule
  *  opened (`opened`), and with no values for it (P.lineskip none) the lines that come nearer the one before them in their
  *  block than nothing, its foot over their top, and stay so (`unopened`: what the rule would have opened) */
-function laidOut({ r, st, f }, s, P, tried) {
+function laidOut({ r, st, f }, s, P, tried, blocks) {
   const clipped = r.rest < r.total
   P._compress = st.compress
+  if (P.lastLines && !clipped) toLastLines(r.lines, blocks, P.halfLead?.below, f)
   placeItems(r.lines, f, P)
   const count = t => (t.s ? [...t.s].length : t.crop ? 1 : 0)
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)
@@ -3044,8 +3067,37 @@ function laidOut({ r, st, f }, s, P, tried) {
 export function layoutAt(tokens, blocks, s, P, st) {
   work.fit++
   const f = s * st.scale
-  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1)
+  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1, blocks)
 }
+
+/**
+ * A heading its translation sets in fewer lines than the original's (P.lastLines, run.mjs: a section heading): its lines
+ * moved down onto the original's last ones, so that the room it frees falls above it, not between it and the text it heads
+ * (the owner, 2026-10-19: 1810.04805's "C.2 Ablation for Different Masking Procedures", two lines, its Chinese one, left a
+ * blank line before its paragraph; the coordinator's ruling: on the original's last baseline, past the page fill's floor,
+ * footFloorAt, which would have left 7.4 pt of C.2's 13.5 under it). The last line goes onto the original's last baseline,
+ * and every line above it as far down; each keeps its slot's measure (the first its start, where the heading's number is
+ * drawn with it: run.mjs). Never nearer the next line of its column (the original's room under its last line, `below`:
+ * P.halfLead, run.mjs edgesOf) than the size it is set at, `f`: the line's box clear of the next line's. Only a heading of
+ * one block (its lines one run of a column); a body paragraph is never moved
+ */
+function toLastLines(lines, blocks, below, f) {
+  if (blocks?.length !== 1 || !lines.length || lines.some(l => l.block !== 0)) return
+  const B = blocks[0].B
+  if (lines.length >= originalLines(blocks[0])) return
+  const last = Math.min(...B)
+  let by = last - lines.at(-1).baseline
+  if (Number.isFinite(below) && below < f) by += f - below
+  if (!(by < -0.05)) return
+  // (each line's target the original's line it now stands on, where it does: the record's drift reads it)
+  for (const l of lines) {
+    l.baseline += by
+    const t = B.findIndex(v => Math.abs(v - l.baseline) < 0.05)
+    l.target = t >= 0 ? t : null
+  }
+}
+/** a block's lines as the original sets them: its baselines, a line its rectangles cut in two (a formula, a gap) one */
+export const originalLines = b => new Set(b.B.map(v => Math.round(v * 100))).size
 
 // ---- a shared line (need.mjs rowLeadOf): a unit's last row on which TeX set another unit's first, which is laid from where
 // this one's translation ends there (run.mjs layout2's `start`)
@@ -3354,7 +3406,20 @@ function faceClass(face) {
   return c
 }
 const n2 = v => Math.round(v * 100) / 100
-const COLOURS = { red: '#d00', blue: '#00c', green: '#080', gray: '#777', grey: '#777', orange: '#e60', purple: '#80a', magenta: '#c0c', cyan: '#0aa', violet: '#80f', brown: '#850', black: '#141414' }
+/** xcolor's base colours by name, each in its natural model as xcolor.sty defines it (rgb; cmyk for cyan, magenta, yellow and
+ *  olive; gray for the grays), read as the marked compile's would be (layout/colour.mjs fillOfColour of the driver's fill):
+ *  what a unit no layout holds draws a run its source names one of in (colourRun) */
+const BASE_COLOURS = new Map(Object.entries({
+  red: '1 0 0 rg', green: '0 1 0 rg', blue: '0 0 1 rg', brown: '.75 .5 .25 rg', lime: '.75 1 0 rg', orange: '1 .5 0 rg', pink: '1 .75 .75 rg',
+  purple: '.75 0 .25 rg', teal: '0 .5 .5 rg', violet: '.5 0 .5 rg', cyan: '1 0 0 0 k', magenta: '0 1 0 0 k', yellow: '0 0 1 0 k', olive: '0 0 1 .5 k',
+  black: '0 g', darkgray: '.25 g', gray: '.5 g', lightgray: '.75 g', white: '1 g',
+}).map(([name, fill]) => [name, fillOfColour(fill)]))
+/** a colour named in braces: a \textcolor's open, a \color switch */
+const NAMED_OPEN = /^\\textcolor\s*\{([A-Za-z]+)\}/, NAMED_SWITCH = /^\\color\s*\{([A-Za-z]+)\}$/
+/** a fill (0xRRGGBB) as the drawing writes it */
+export const hexOf = rgb => `#${rgb.toString(16).padStart(6, '0')}`
+/** a run's colour as the drawing writes it: a fill as it is, a name by its CSS colour */
+const fillAttr = c => (/^#[0-9a-f]{6}$/.test(c) ? c : '#141414')
 
 /**
  * The unit's lines on one page as SVG: a <text> per line at its baseline, a <tspan> per run with its own x (a CJK run
@@ -3377,7 +3442,7 @@ export function svgOfUnit(L, page, toPx, scale, id) {
         continue
       }
       const cls = faceClass(run.face)
-      const fill = run.color ? ` fill="${COLOURS[run.color] ?? '#141414'}"` : ''
+      const fill = run.color ? ` fill="${fillAttr(run.color)}"` : ''
       // (v0: a role table face's size correction, 1 for the prototype's faces)
       const size = n2((run.sup ? fs * 0.62 : fs) * (run.face.size ?? 1))
       const y = run.sup ? n2(by - L.f * 0.36 * scale) : n2(by)

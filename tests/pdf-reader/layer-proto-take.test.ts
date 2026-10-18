@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { indexLayout, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
+import { indexLayout, LAYOUT_SCHEMA, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
@@ -85,7 +85,7 @@ function paper(specs = SPECS) {
   const doc = { numPages: 3, asked, getPage: async (n: number) => { asked.push(n); return pageOf(n) } }
   const file = specs.filter(s => s.from === 'file')
   const layout = {
-    schema: 4, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 3 }, left: '', views: pages.flatMap(() => VIEW), fonts: ['F1'],
+    schema: LAYOUT_SCHEMA, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 3 }, left: '', views: pages.flatMap(() => VIEW), fonts: ['F1'],
     units: file.map(s => [s.id, KINDS.indexOf(s.kind), 9, 0, s.cite ? 2 : 1]),
     lines: file.map(s => [s.id, s.lines.flatMap(([p, x0, x1, b]) => [p, x0, x1, b, b + 7, b - 2, 10, 0])]),
     frames: file.map(s => [s.id, s.lines.flatMap(([p], j) => [p, 0, j, 1, j ? 0 : -1, 0])]),
