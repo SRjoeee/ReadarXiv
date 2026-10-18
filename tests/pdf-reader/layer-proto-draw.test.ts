@@ -317,6 +317,32 @@ describe('the read order where the paper\'s parts carry draws (drawsComing, the 
   })
 })
 
+describe('a page whose pixels cannot be read', () => {
+  it('fails that page alone, no rejection unobserved: its render rejects after its draw came (the draw-arrival path, no drawsComing)', async () => {
+    const P = await paper()
+    const data = docsOf(SPEC)
+    // (page 2's render rejects, a non-memory error, as a broken stream's would)
+    const doc = { numPages: data.doc.numPages, getPage: async (n: number) => { const page = await data.doc.getPage(n); return n === 2 ? { ...page, render: () => ({ promise: Promise.reject(new Error('page 2 cannot be drawn')) }) } : page } }
+    const D = await docsOf(SPEC).draws()
+    let release = () => {}
+    const gate = new Promise<void>(ok => { release = ok })
+    const unobserved: unknown[] = []
+    const onRejection = (e: unknown) => { unobserved.push(e) }
+    process.on('unhandledRejection', onRejection)
+    try {
+      const { run } = await runOf(P, doc, [], async p => { if (p === 2) await gate; return D[p - 1]! })
+      const asking = run.layFor(2)
+      for (let i = 0; i < 10; i++) await new Promise(ok => setTimeout(ok, 0))
+      release()
+      await asking
+      for (let i = 0; i < 10; i++) await new Promise(ok => setTimeout(ok, 0))
+      expect(run.failed(2)).toBe(true)
+      expect(run.drawStats!.pixels[2]).toBe('asked')
+      expect(unobserved).toEqual([])
+    } finally { process.off('unhandledRejection', onRejection) }
+  })
+})
+
 describe('the door\'s bounded draws (DRAWS_HELD): a draw let go before the run asks is a live read, never a wrong one', () => {
   it('a page whose draw the door evicted is read live, the others from data, and every page drawn as by a door reading all live', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')

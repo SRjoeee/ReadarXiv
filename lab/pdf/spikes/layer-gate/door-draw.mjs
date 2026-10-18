@@ -16,7 +16,8 @@
 //           pages from data and live, the pages whose pixels were read and why, PDF.js's calls) and with `perf` the time and the
 //           longest task. `link` [rtt ms, bytes/s]: the document read through a range transport over a modelled link (each range
 //           answered RTT after it is asked or after the link is free, in order, at the rate: the E-C handoff's sim2) and each
-//           left part fetched over the same link, charged its gzip size
+//           left part fetched over the same link, charged its gzip size; the document's first 64 KiB is given at once and not charged
+//           (sim2's model: a host's first request is the open's, before the ask), so the link's bytes and time exclude it
 import { answerOf, base64, bytes, faceSourcesOf, hyphUrl, json, K, lastRun, PDF_ASSETS, pdfjs, pngOf, recsOf, ruleSetOf, skippedOf, statesOf } from '/gate/door-common.mjs'
 
 /** the cut as the driver served it, read as a host reads it: the chunks in id order, the head, the index, each part against the chain */

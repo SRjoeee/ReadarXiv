@@ -403,7 +403,7 @@ if (JUMP_LIST && ONLY && ONLY.some(n => !JUMP_LIST.has(n))) throw new Error(`--o
 const asked0 = JUMP_LIST ? fixtures.filter(n => JUMP_LIST.has(n) && (!ONLY || ONLY.includes(n))) : ONLY ? fixtures.filter(n => ONLY.includes(n)) : fixtures
 /** --door-draw=inputs reads a paper's pages, not an output's: one fixture a paper */
 const asked = DRAW_MODE === 'inputs' ? asked0.filter((n, i) => asked0.findIndex(m => nameOf(m).paper === nameOf(n).paper) === i) : asked0
-if (ONLY && !JUMP_LIST && DRAW_MODE !== 'inputs' && asked.length !== ONLY.length) throw new Error(`--only: no fixture ${ONLY.filter(n => !fixtures.includes(n)).join(', ')} in ${FIXTURES}`)
+if (ONLY && !JUMP_LIST && asked0.length !== ONLY.length) throw new Error(`--only: no fixture ${ONLY.filter(n => !fixtures.includes(n)).join(', ')} in ${FIXTURES}`)
 for (const name of asked) if (!existsSync(join(REFS, name, 'ref.json'))) throw new Error(`${name}: no frozen reference (${join(REFS, name, 'ref.json')}): run --freeze once`)
 
 // ---------------------------------------------------------------- the server: every file the page asks for, from disk

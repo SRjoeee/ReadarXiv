@@ -2354,15 +2354,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         tRendered = performance.now()
       } else {
         if (DATA) drawStats.live.push(i)
+        // (its render's time from here where its draw was waited for, which is no render's; the page's own start otherwise)
+        const tLive = asked ? performance.now() : tPage
         const textP = page.getTextContent()
-        // (read for its pixels already, its draw then refused or late: its ink is that reading's, the same pixels at the same size)
-        if (pixelTasks.has(i)) await pixelTasks.get(i)
+        // (read for its pixels already, its draw then refused or late: its ink is that reading's, the same pixels at the same size,
+        // their render charged there, pixelsOf)
+        const prefetched = pixelTasks.has(i)
+        if (prefetched) await pixelTasks.get(i)
         else await page.render({ canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
         tRendered = performance.now()
         // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
         // read before the page is cleaned up)
         annP = LK.readAnnots(page)
-        timesOf(i).render += tRendered - tPage
+        if (!prefetched) timesOf(i).render += tRendered - tLive
         tc = await textP
         fonts = FR.live(page, tc.styles)
       }
