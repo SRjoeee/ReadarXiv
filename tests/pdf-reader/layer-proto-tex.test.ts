@@ -877,3 +877,43 @@ describe("a cell whose citation wrapped onto the cell's next line, made by the m
     expect(T.texRects(lu as never).rects.map(r => [r[0], r[1], r[3]])).toEqual([[1, 72, 232], [1, 72, 132]])
   })
 })
+
+describe('a piece TeX set no ink for never refuses its unit (EMPTY, the no-ink round, 2026-10-19)', () => {
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const L = (y: number) => [1, 10, 200, y, y + 8, y - 3, 10, 0]
+  const rowsOf = (rows: [number, number, string][]) => {
+    const lu = unitOf([L(100)], rows.map(([k, f]) => [k, f, []])) as unknown as { ph: Map<number, { kind: string }>; erase: Float64Array[] }
+    for (const [k, , kind] of rows) { const row = lu.ph.get(k); if (row) row.kind = kind }
+    lu.erase = [Float64Array.from([10, 97, 200, 108])]
+    return lu as never
+  }
+  // 2610.19159's step headers: a role box holding an index and "Tool Output", then \trajectoryMark{} with an empty argument,
+  // which sets nothing (the maker's tail row EMPTY: no glyph beside the unit's end mark)
+  const pieces = [{ t: 'open', id: 1, src: '\\trajectoryRole[trajectoryoutput]{' }, { t: 'open', id: 2, src: '\\trajectoryIndex{' }, text('Step 2149'), { t: 'close', id: 2, src: '}' }, ph('\\enspace'), text(' Tool Output'), ph('\\trajectoryMark{}'), { t: 'close', id: 1, src: '}{}' }]
+  const u = { kind: 'para', src: 'Step 2149 Tool Output', pieces } as never
+  const tr = [[2, 0, 0], [2, 1, 0], [0, '步骤 2149'], [3, 3], [1, 4], [0, ' 工具输出'], [1, 6], [3, 7]]
+  it("an EMPTY row passes on the file's lines, and is still refused on v0's (there its ink is not ruled off the unit's lines)", () => {
+    const lu = rowsOf([[6, PH_FLAG.EMPTY, 'macro']])
+    expect(T.locatedWhole(lu, u, tr, { held: true })).toMatchObject({ ok: true })
+    expect(T.locatedWhole(lu, u, tr).why).toBe('empty')
+    // (a LOST row, as the maker writes an open ownership that owned nothing, its ink not known: refused as before)
+    expect(T.locatedWhole(rowsOf([[6, PH_FLAG.LOST, 'macro']]), u, tr, { held: true }).why).toBe('lost')
+  })
+  it('the piece is drawn as nothing, proven, and the unit is drawn, not left English', () => {
+    const lu = rowsOf([[6, PH_FLAG.EMPTY, 'macro']])
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(u, t.rects as never, [item('Step 2149 Tool Output', 12, 100, 10, 0) as never], new Map() as never, null, T.texParts(lu, [-1, -1, -1, -1, 4, -1, 6, -1], { use: 'lines', lines: t }) as never)
+    expect(prep.unproven).toBeUndefined()
+    expect(prep.get(6)).toMatchObject({ mode: 'none', text: '', proof: true, empty: true })
+    // (on v0's own reading of the unit, which the file does not locate: unproven, as before)
+    const v0 = L2.prepareUnit(u, t.rects as never, [item('Step 2149 Tool Output', 12, 100, 10, 0) as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, -1, -1, -1, 4, -1, 6, -1]) } as never)
+    expect(v0.unproven).toBe(6)
+  })
+  it('a text symbol, a space or a piece that sets nothing is drawn by its class whatever its row says', () => {
+    const lu = rowsOf([[1, PH_FLAG.EMPTY, 'macro'], [2, PH_FLAG.EMPTY, 'macro'], [3, PH_FLAG.EMPTY, 'macro']])
+    const sym = { kind: 'para', src: 'a b', pieces: [text('a '), ph('\\%'), ph('\\enspace'), ph('\\includegraphics{f.pdf}'), text(' b')] } as never
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(sym, t.rects as never, [item('a % b', 12, 100, 10, 0) as never], new Map() as never, null, T.texParts(lu, [-1, 1, 2, 3, -1], { use: 'lines', lines: t }) as never)
+    expect([1, 2, 3].map(k => [prep.get(k)?.mode, prep.get(k)?.text, (prep.get(k) as { empty?: boolean } | undefined)?.empty])).toEqual([['symbol', '%', undefined], ['none', ' ', undefined], ['none', '', undefined]])
+  })
+})

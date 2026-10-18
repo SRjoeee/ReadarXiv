@@ -117,8 +117,9 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
       if (!VISIBLE.has(r.cls)) continue
       const where = { unit: p.id, kind: p.unit.kind, k: r.k, src: r.src.slice(0, 80), mode: r.mode, page: p.pages[0] }
       if (r.mode === 'none') {
-        // shown by its own ink, left where it stands: outside the unit's lines, which the drawing never erases
-        if (r.inPlace) continue
+        // shown by its own ink, left where it stands: outside the unit's lines, which the drawing never erases; or one TeX set
+        // no ink for (tex.mjs emptyOf)
+        if (r.inPlace || r.empty) continue
         // a rendering never found on the page: a display there may still stand outside the unit's lines, untouched
         if (r.cls === 'display') B.unlocated.push(where)
         else if (r.text !== ' ') B.missing.push({ ...where, why: 'not found, nothing drawn' })
