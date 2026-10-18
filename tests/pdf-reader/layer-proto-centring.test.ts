@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
+import { indexLayout, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { build, type Built, installStubs, line, openRun, type Paper, para, type Spec } from './helpers/order-paper'
 
 // Where the layout file's centring is no unit's (run.mjs): a table cell, which TeX's probe does not read (a cell's marks carry
@@ -52,6 +53,29 @@ describe('a column whose cells share a start or an end is not centred, whatever 
       const run = await openRun(build(paper), { groups })
       await run.layFor(1)
       expect([1, 2, 3, 4, 5, 6].map(id => kindsOf(run, id))).toEqual([['last'], ['last'], ['last'], ['last'], ['last'], ['last']])
+    })
+  }
+})
+
+describe('a cell its column cannot decide is drawn as the layout file\'s flag says', () => {
+  // (a header cell, whose group names no column, and a body cell alone in its column, each flagged CENTRED; a lone cell not
+  // flagged: the column decides none of them, the flag does)
+  const paper: Paper = {
+    name: 'undecided cells', pages: 1,
+    specs: [para(0, [[1, 270, 4]], 30), cellSpec(1, [[220, 60, 110]], '0:h'), cellSpec(2, [[200, 60, 110]], '0:c0'), cellSpec(3, [[180, 160, 200]], '0:c1')],
+  }
+  const flagged = () => {
+    const P = build(paper)
+    const layout = P.layout as unknown as { units: number[][] }
+    layout.units = layout.units.map(u => (u[0] === 1 || u[0] === 2 ? [u[0], u[1], u[2], UNIT_FLAG.CENTRED, u[4]] : u)) as never
+    P.index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(P.layout))))
+    return P
+  }
+  for (const groups of [true, false]) {
+    it(`${groups ? 'the open\'s table groups' : 'the units\' own groups'}: the flagged header and lone cell centred, the lone cell not flagged not`, async () => {
+      const run = await openRun(flagged(), { groups })
+      await run.layFor(1)
+      expect([1, 2, 3].map(id => kindsOf(run, id))).toEqual([['centred'], ['centred'], ['last']])
     })
   }
 })
