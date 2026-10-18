@@ -2,8 +2,15 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
-## Unreleased
+## 0.5.0
 
+- PDF papers have a reader of their own: arXiv's PDF on one side, its translation on the other, page for page. Figures and formulas stay as the author drew them, the translated text is set in fonts close to the original's, and the two sides scroll together; point at a sentence and its counterpart lights up.
+- Links work in the translated pages. A citation or a reference jumps to its place in the paper, a web address opens in a new tab, and every link can be reached with the keyboard; Enter on a citation goes to the bibliography and the focus goes with you. References written as "Figure 1" or "sections 3.2 and 3.3" are links too.
+- A long paper's first translated page appears within seconds of the original, where the reader used to wait for the whole PDF to arrive: 3 seconds against 16 to 22 on a 46 MB paper, in our measurements. Jumping far into a long paper shows the page you land on sooner.
+- The first time anyone opens a paper, the reader says it is being prepared and shows its progress; a paper that cannot be prepared right now says so, with Retry and a link to its HTML version.
+- The files of the PDF papers you read are kept on your computer, up to 200 MB, the papers opened longest ago going first, so that a paper you reopen opens sooner and still opens when Read arXiv's website cannot be reached. The settings page shows how many are kept and clears them. Only the paper's identifier and version go to Read arXiv's website: no text of a paper, no translation and no key; the translation itself is made, as for an HTML paper, by the service you chose.
+- The reader's Download opens arXiv's own PDF in a tab of its own, in the browser's viewer.
+- Fixed: in the PDF reader, a translated line after a short last line no longer runs over the formula set on a line of its own below it.
 - Fixed: in the PDF reader, the section headings some papers write with a plain-text version for the PDF's bookmarks are translated. They stayed in English: 13 of one paper's 14 headings.
 - Fixed: in the PDF reader, a set or a tuple that a paper writes as several formulas side by side — `{Φ0, Φ1, Φ2}` written as three, its brace opened in the first and closed in the last — stays whole in the translation. The translator could move one of its parts away, and the set was drawn broken apart around the translated words.
 - Fixed: the permission to reach a service's address is given back once no service uses it, every time. A service deleted while the settings page closed before its five seconds of Undo were up kept that permission, and pages translating with it went on using it until they reloaded; now they move to the next service and the permission goes. An address you edited away, or asked for in a form you then closed, goes back too — never while a page still translates with it or a form is connecting to it.

@@ -1,6 +1,6 @@
 {
   "description": {
-    "message": "Bilingual translation for arxiv.org/html that keeps the paper's structure and can be undone",
+    "message": "Bilingual arXiv papers: HTML translated in place, PDFs side by side with their translation, both easy to undo",
     "description": "The extensions page and the store listing"
   },
   "toggle": {

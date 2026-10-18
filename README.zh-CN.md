@@ -68,7 +68,7 @@ Read arXiv 是一款专为 arXiv HTML 页面打造的阅读翻译扩展。
 
 ## 开始阅读
 
-尚未上架 Chrome 应用商店，因此需要从源码构建。桌面版 Chrome 131 或更新版本。只翻 arXiv 的 HTML 论文，不翻 PDF。
+尚未上架 Chrome 应用商店，因此需要从源码构建。桌面版 Chrome 131 或更新版本。HTML 论文就地翻译；PDF 在自带的阅读器里与译文并排显示。
 
 1. **构建。**
 
@@ -137,11 +137,11 @@ flowchart LR
 
 ## 状态
 
-0.4.1 版（见 [`CHANGELOG.md`](CHANGELOG.md)）；Chrome 应用商店上架待办，目前从源码构建。
+0.5.0 版（见 [`CHANGELOG.md`](CHANGELOG.md)）；Chrome 应用商店上架待办，目前从源码构建。
 上面写到的功能今天都可用——翻译、三种读法、显示原文、四种服务、逐句对齐、图片翻译与设置页。
 路线图见 [issue #155](https://github.com/SRjoeee/ReadarXiv/issues/155)。
 
-暂不考虑：其他论文站点、PDF、Firefox 与 Safari。
+暂不考虑：其他论文站点、Firefox 与 Safari。
 
 ## 开发
 
