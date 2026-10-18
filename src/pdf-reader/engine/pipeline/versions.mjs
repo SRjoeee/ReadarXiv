@@ -94,11 +94,13 @@
 //     PIPELINE_CARRIES)
 // 17: a command and its arguments are one piece (arg-roles.mjs readArgs, latex-front.mjs commandArgs): TeX's number, dimension
 //     or glue (`_d`) is never a group, a box's specification `to` or `spread` and a dimension, and a last argument TeX takes
-//     as one token that is a command it sets takes that command's own arguments with it. #407's review: \vbox{…}\begin{center}
-//     was marked \begin{\leavevmode\axtmark{0s}center} and the marked compile stopped. Of the corpus's 132 sources one
-//     changes: 2212.06817's \hbox{\includegraphics…}\label{…} key is no unit (432 -> 431). The units of every other paper,
-//     the wire and the layout file are 16's byte for byte: a copy of 16 carries every unit it holds the source of (live.mjs
-//     PIPELINE_CARRIES)
+//     as one token that is a command it sets takes that command's own arguments with it, its groups of text and content
+//     walked as before (\raise2pt\hbox{…}). #407's review: \vbox{…}\begin{center} was marked
+//     \begin{\leavevmode\axtmark{0s}center} and the marked compile stopped. Of the corpus's 132 sources one changes:
+//     2212.06817's \hbox{\includegraphics…}\label{…} key is no unit (432 -> 431), every other unit of it keeping its
+//     hash. Every other paper's units and marked original (so its layout file), the wire and its reading back are 16's byte
+//     for byte, the pack's 32 outputs among them: a copy of 16 carries every unit it holds the source of, matched by
+//     sourceHash (live.mjs PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '17'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
