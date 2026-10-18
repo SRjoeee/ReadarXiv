@@ -86,7 +86,7 @@ export function tokens(s) {
  * page's right edge). An upright item's (rightwards, its glyphs up) are worked out as they always were, to the bit. A word
  * is joined across two items only where both run the same way, unskewed; a turned token's box takes the marks its item sets
  * against the word (its ink, which inkEdges reads across alone, is its box); the carry of an item of marks alone, read along
- * x, is upright text's alone
+ * x, is that of text whose baseline runs rightwards alone
  */
 export function tokenizeDocument(pages) {
   const doc = []
@@ -95,9 +95,9 @@ export function tokenizeDocument(pages) {
     // the page's monospaced faces (inkEdges: their items an even share), by name, a page's styles at once
     for (const name in styles) if (styles[name]?.fontFamily === 'monospace') { const m = monospaced.get(doc) ?? monospaced.set(doc, new Set()).get(doc); m.add(name) }
     // carry: the token the next one joins; last: the token holding the last word's text; prev: the last item's end;
-    // inkOpen, inkEnd: whether an item of marks alone may still carry the last token's ink on, and from where; lastUp:
-    // whether the last token's item is upright
-    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0, lastUp = true
+    // inkOpen, inkEnd: whether an item of marks alone may still carry the last token's ink on, and from where; lastAcross:
+    // whether the last token's item is read along x
+    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0, lastAcross = true
     for (const it of items) {
       if (!it.str) continue
       const [a, b, c, d, x, y] = it.transform
@@ -108,7 +108,7 @@ export function tokenizeDocument(pages) {
       const toks = tokens(it.str)
       // the baseline's direction, a unit (ux, uy), and where the item ends along it (ex, ey); unskewed: its glyphs' up
       // square to it, so that two items' words may join
-      const up = isUpright(a, b, d)
+      const up = isUpright(a, b, d), across = up || readsAcross(a, b)
       const ux = up ? 1 : a / along, uy = up ? 0 : b / along, ex = up ? x + it.width : x + it.width * ux, ey = up ? y : y + it.width * uy
       const square = Math.abs(a * c + b * d) <= SKEW * (a * a + b * b)
       if (!carry && prev?.word && square && prev.square && Math.abs(ux * prev.uy - uy * prev.ux) <= SKEW && ux * prev.ux + uy * prev.uy > 0) {
@@ -116,8 +116,9 @@ export function tokenizeDocument(pages) {
         const gap = (x - prev.ex) * prev.ux + (y - prev.ey) * prev.uy, off = (y - prev.ey) * prev.ux - (x - prev.ex) * prev.uy
         if (Math.abs(off) < 0.3 * Math.max(size, prev.size) && gap > -0.3 * size && gap < 0.12 * size && WORD_START.test(it.str) && !CJK.test(it.str[0])) carry = last
       }
-      // a turned item's text as its tokens' places count it (tokens(): folded), for the marks set against a word
-      const folded = up ? '' : it.str.normalize('NFKC').toLowerCase()
+      // a turned item's text as its tokens' places count it (tokens(): folded), for the marks set against a word (an item
+      // read along x has them in its ink, inkEdges)
+      const folded = across ? '' : it.str.normalize('NFKC').toLowerCase()
       for (const tk of toks) {
         // `item`: the text item the token was read from, for its ink (inkEdges); `sym`: where the items of marks alone
         // right after it end; `far`: where one set apart after it ends (NaN: more than one). Nothing more is worked out
@@ -147,10 +148,10 @@ export function tokenizeDocument(pages) {
       // baseline and right after it carries that word's ink to its end, and the next one on from there; a space or a
       // gap of over half an em ends the carry (a cell's word lit over three cells of a dash, 2608.02163). One set apart
       // is kept aside (`far`) for the layout, which takes it where it ends at the column's text edge (a proof's box set
-      // flush right, highlight.mjs); a second one there is a row of cells, and neither is taken. Upright text's alone:
-      // the ink is read along x
-      if (toks.length) { inkOpen = true; inkEnd = x + it.width; lastUp = up }
-      else if (doc.length && up && lastUp) {
+      // flush right, highlight.mjs); a second one there is a row of cells, and neither is taken. Text whose baseline runs
+      // rightwards alone (readsAcross): the ink is read along x
+      if (toks.length) { inkOpen = true; inkEnd = x + it.width; lastAcross = across }
+      else if (doc.length && across && lastAcross) {
         const t = doc[doc.length - 1]
         if (t.page === page && Math.abs(y - t.y) < 0.5 * t.h && x + it.width > t.x) {
           if (!/\S/.test(it.str)) inkOpen = false
@@ -173,9 +174,13 @@ export function tokenizeDocument(pages) {
 /** how far from square a baseline and its glyphs' up may stand, or two baselines from parallel, and be read as such: a
  *  sine (a turned item's transform, rounded, is square to a few units in the last place) */
 const SKEW = 1e-6
-/** whether a transform sets its text upright — rightwards, its glyphs up (or has no direction): its tokens are read along x
- *  (tokenizeDocument), and so is their ink (inkEdges) */
+/** whether a transform sets its text upright — rightwards, its glyphs up (or has no direction): its tokens' boxes are made as
+ *  they always were (tokenizeDocument) */
 const isUpright = (a, b, d) => (b === 0 && a > 0 && d >= 0) || (a === 0 && b === 0)
+/** whether a transform's baseline runs rightwards, to a sine of SKEW (a rotation's rounding, or a mirror's glyphs down): its
+ *  ink, and an item of marks alone after it, are read along x (inkEdges, tokenizeDocument's carry), as layer2.mjs pageChars2
+ *  reads such text, whatever its box. An upright transform is one */
+const readsAcross = (a, b) => a > 0 && Math.abs(b) <= SKEW * a
 
 /** a document's monospaced faces by name (getTextContent's fontName: one name a face, in every page's styles) */
 const monospaced = new WeakMap()
@@ -204,7 +209,7 @@ export function inkEdges(doc) {
     if (it && it !== item) {
       // (an item set at an angle: its tokens' boxes, made along its baseline, are their ink; this reading is along x)
       const t = it.transform
-      item = it; perChar = it.str.length && isUpright(t[0], t[1], t[3]) ? it.width / it.str.length : 0
+      item = it; perChar = it.str.length && (isUpright(t[0], t[1], t[3]) || readsAcross(t[0], t[1])) ? it.width / it.str.length : 0
       if (perChar > 0) {
         s = it.str.normalize('NFKC').toLowerCase(); x0 = t[4]
         cum = shares(it.str, s.length, !!mono?.has(it.fontName)); scale = cum[s.length] ? it.width / cum[s.length] : 0

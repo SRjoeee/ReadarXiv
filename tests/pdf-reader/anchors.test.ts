@@ -124,7 +124,8 @@ describe('tokenizeDocument: a rotated item\'s tokens lie along its direction', (
 
   it('mirrored: right to left with its glyphs up, and left to right with its glyphs down', () => {
     near(boxes(at([-10, 0, 0, 10, 100, 200])), [['ab', 80, 100, 197.8, 207.5, 200], ['cd', 50, 70, 197.8, 207.5, 200]])
-    near(boxes(at([10, 0, 0, -10, 100, 200])), [['ab', 100, 120, 192.5, 202.2, 200], ['cd', 130, 150, 192.5, 202.2, 200]])
+    // (its baseline runs rightwards: its ink is read along x, as an upright item's, below)
+    near(boxes(at([10, 0, 0, -10, 100, 200])), [['ab', 100, 120, 192.5, 202.2, 200], ['cd', 130, 150, 192.5, 202.2, 200]], false)
   })
 
   it('the glyphs\' up is the transform\'s own (c, d): a turned item scaled across, and one slanted (the review of #399)', () => {
@@ -158,6 +159,21 @@ describe('tokenizeDocument: a rotated item\'s tokens lie along its direction', (
     for (let k = 1; k < doc.length; k++) expect(doc[k]!.bottom).toBeGreaterThanOrEqual(doc[k - 1]!.top)
   })
 
+  it('a baseline that runs rightwards is read along x for its ink and its marks, whatever its box: a rotation\'s rounding, a mirror\'s glyphs down (the review of #399, M2)', () => {
+    const ink = (tr: number[], str: string) => {
+      const doc = tokenizeDocument([{ page: 1, items: [{ str, transform: tr, width: 35, height: 10, hasEOL: false, fontName: 'f' }, { str: ').', transform: [tr[0]!, tr[1]!, tr[2]!, tr[3]!, 135, 200], width: 6, height: 10, hasEOL: true, fontName: 'f' }], styles: {} }])
+      const { l, r } = inkEdges(doc)
+      return doc.map((t, k) => [t.t, t.sym, l[k], r[k]])
+    }
+    const flat = ink([10, 0, 0, 10, 100, 200], '(word),')
+    expect(flat).toEqual([['word', 141, expect.any(Number), 141]])
+    for (const tr of [[10, 1e-9, -1e-9, 10, 100, 200], [10, 0, 0, -10, 100, 200]]) {
+      const got = ink(tr, '(word),')
+      expect(got.map(g => [g[0], g[1]])).toEqual(flat.map(g => [g[0], g[1]]))
+      got.forEach((g, i) => { expect(g[2]).toBeCloseTo(flat[i]![2] as number, 6); expect(g[3]).toBeCloseTo(flat[i]![3] as number, 6) })
+    }
+  })
+
   it('a turned token\'s box takes the marks its item sets against the word: the bracket before it, the bracket and the stop after (the review of #399)', () => {
     // "Figure (6)." up the page, 10 units a character: "figure" from 0 to 60, "(6)." from 70 to 110
     near(boxes(at([0, 10, -10, 0, 100, 200], 'Figure (6).', 110)), [['figure', 92.5, 102.2, 200, 260, 230], ['6', 92.5, 102.2, 270, 310, 290]])
@@ -165,7 +181,8 @@ describe('tokenizeDocument: a rotated item\'s tokens lie along its direction', (
 
   it('an item of marks alone after a rotated word carries no ink across: its end along x is no edge of the word', () => {
     const word = { str: 'word', transform: [0, 10, -10, 0, 100, 200], width: 20, height: 10, hasEOL: false, fontName: 'f' }
-    const stop = { str: ').', transform: [0, 10, -10, 0, 100, 220], width: 8, height: 10, hasEOL: true, fontName: 'f' }
+    // (the stop on the word's middle, y 210, where a carry read along x would take it: the guard, not the distance, keeps it out)
+    const stop = { str: ').', transform: [0, 10, -10, 0, 100, 210], width: 8, height: 10, hasEOL: true, fontName: 'f' }
     const doc = tokenizeDocument([{ page: 1, items: [word, stop], styles: {} }]), { l, r } = inkEdges(doc)
     expect(doc.map(t => [t.t, t.sym, t.far])).toEqual([['word', null, null]])
     expect([l[0], r[0]].map(v => Math.round(v! * 1000) / 1000)).toEqual([92.5, 102.2])

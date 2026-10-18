@@ -13,8 +13,9 @@
 // shape (no box) is clipped to the view, and dropped where nothing of it is left on it; a page left with no rectangle of the unit
 // keeps none of its tokens (they stay on the page, owned by no span), and a unit with no rectangle left is not located. Any
 // other rectangle is shipped as the anchor gives it, on the grid.
-// What reaches past a view is text whose box the tokenizer cannot know: 1406.1078v3's landscape pages set their captions
-// vertically, and a vertical item's words are laid along x from its origin, past the page's right edge.
+// What reaches past a view is text that does run off its page: upright words past an edge (2503.06072 pp 45-46, 2608.12606 p5,
+// 2608.28697 p5). 1406.1078v3's landscape captions, whose words the tokenizer once laid along x past the page's right edge, are
+// placed along their own direction now (anchors.mjs tokenizeDocument).
 //
 // An original module (no port statement). It imports the engine's own pure modules: no canvas, no `node:*` one.
 import { RECT_SLACK, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, onGrid } from '../layer-proto/format.mjs'
