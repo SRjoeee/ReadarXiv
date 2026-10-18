@@ -25,12 +25,14 @@
  */
 // 2: a formula split across inline formulas goes out as one marker, read back as its own pieces in their order (mt.mjs
 //    formulaRuns): 16 runs in 3 of the corpus's 124 papers, whose units' wires change; every other unit's is 1's
-// 3: a sentence whose words change style goes out whole (mt.mjs planOf): a pair inside a sentence takes no marker (its
-//    words translated with the sentence, its attribute lost: the endpoint gives no word alignment), same-style neighbours
-//    are one span, a pair that holds whole sentences keeps its two markers, one around the unit's whole content goes
-//    round the whole translation, a placeholder that sets no ink goes on no wire; a reply that lost every letter is
-//    none (sent again as runs), a kept pair come back empty takes back the text set just outside it, and runs go whole
-//    across a pair that went flat. 2610.19159: 55,261 markers -> 19,688, units whose wire cut a sentence at a style
-//    marker 640 -> 0; the corpus's 124 papers: 1,753 -> 27, each at a link, kept a pair on purpose. A unit with no pair
-//    and no such placeholder is sent as under 2, byte for byte
+// 3: a sentence whose words change style goes out whole (mt.mjs planOf): a pair that sets a style and nothing else, inside
+//    a sentence, takes no marker (its words translated with the sentence, its attribute lost: the endpoint gives no word
+//    alignment); same-style neighbours are one span; a style pair that holds whole sentences, or a run-in label, keeps its
+//    two markers, and so does every other pair (a link, a box, a cell, a macro of the paper's), as under 2; one around the
+//    unit's whole content goes round the whole translation; a placeholder that sets no ink goes on no wire, a fill leaving
+//    a space; a reply with no letter or digit is none (sent again as runs), a kept pair come back empty takes back the
+//    words set just outside it to their sentence's end, and runs go whole across a pair that went flat. 2610.19159: 55,261
+//    markers -> 19,614, units whose wire cut a sentence at a marker 640 -> 5; the corpus's 124 papers: 1,753 -> 222 (70
+//    cuts at run-in labels, the rest at pairs that keep their markers as under 2). A unit with no pair and no such
+//    placeholder is sent as under 2, byte for byte
 export const TRANSLATE_VERSION = '3'

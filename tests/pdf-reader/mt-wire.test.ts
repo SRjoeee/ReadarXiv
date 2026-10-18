@@ -17,6 +17,9 @@ describe('serialize: a marker is set apart from what an engine would read with i
     const around = (text: string, rest: string) => unit({ t: 'ph', src: '$x$' }, { t: 'text', s: text }, { t: 'ph', src: '\\cite{a}' }, { t: 'text', s: rest })
     expect(serialize(around('Service Auto-Scaling', 'To accommodate loads.')).wire).toBe('@a# Service Auto-Scaling @b# To accommodate loads.')
     expect(serialize(around('Stage 2', ' next.')).wire).toBe('@a# Stage 2 @b# next.')
+    // a run-in label with no stop of its own, before a sentence that begins (\textbf{Service Auto-Scaling}To accommodate)
+    expect(serialize(bold('Service Auto-Scaling', 'To accommodate loads.')).wire).toBe('@a# Service Auto-Scaling @b# To accommodate loads.')
+    expect(serialize(bold('High-fidelity isolated sandbox runtime', ' As agents run.')).wire).toBe('@a# High-fidelity isolated sandbox runtime @b# As agents run.')
   })
 
   it('not after other punctuation, which the engine reads apart', () => {
@@ -207,7 +210,8 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     const link = unit({ t: 'text', s: 'See ' }, ...pairs(1, '\\href{https://example.org}{', 'the site'), { t: 'text', s: ' for details.' })
     const ser = serialize(link)
     expect(ser.wire).toBe('See @a# the site @b# for details.')
-    expect(shape(read(rehydrate('\u8be6\u60c5\u8bf7\u53c2\u9605 @a#@b# \u8be5\u7f51\u7ad9\u3002', ser)))).toBe('\u8be6\u60c5\u8bf7\u53c2\u9605 |<1| \u8be5\u7f51\u7ad9\u3002|1>')
+    // (the words up to the sentence's end alone: the next sentence stays outside the link)
+    expect(shape(read(rehydrate('\u8be6\u60c5\u8bf7\u53c2\u9605 @a#@b# \u8be5\u7f51\u7ad9\u3002\u5176\u4ed6\u3002', ser)))).toBe('\u8be6\u60c5\u8bf7\u53c2\u9605 |<1| \u8be5\u7f51\u7ad9|1>|\u3002\u5176\u4ed6\u3002')
   })
 
   it('a run-in label that ends its sentence keeps its markers; one inside a sentence does not', () => {
@@ -215,6 +219,40 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     expect(serialize(unit(...pairs(1, '\\emph{', 'Note'), { t: 'text', s: '. It holds.' })).wire).toBe('@a# Note @b#. It holds.')
     // after an abbreviation no sentence begins
     expect(serialize(unit({ t: 'text', s: 'Many, e.g. ' }, ...pairs(1, '\\emph{', 'this one.'), { t: 'text', s: ' Then more.' })).wire).toBe('Many, e.g. this one. Then more.')
+    // a colon or a semicolon inside a sentence is a clause's end, not a sentence's
+    expect(serialize(unit({ t: 'text', s: 'Options: ' }, ...pairs(1, '\\emph{', 'fast'), { t: 'text', s: '; and safe.' })).wire).toBe('Options: fast; and safe.')
+  })
+
+  it('only a pair that sets a style goes flat: any other keeps its two markers, as before (the review of #404, M1)', () => {
+    // a cell's wrapper after its rule (2607.24653's tables: `\midrule \multicolumn{7}{@{}l}{\textbf{}}`, Misplaced \omit)
+    const cell = { kind: 'cell', pieces: [{ t: 'ph', src: '\\midrule' }, { t: 'open', id: 1, src: '\\multicolumn{7}{@{}l}{' }, ...pairs(2, '\\textbf{', 'Text'), { t: 'close', id: 1, src: '}' }] }
+    const ser = serialize(cell)
+    expect(ser.wire).toBe('@a#@b#@c# Text @d#@e#')
+    expect(shape(read(rehydrate('@a#@b#@c#\u6587\u672c@d#@e#', ser)))).toBe('\\midrule|<1|<2|\u6587\u672c|2>|1>')
+    // a macro with a prose argument (2607.24653's \kimi{3}, `Kimi K#1`, printed thrice when it came back empty)
+    expect(serialize(unit({ t: 'text', s: 'We compare ' }, ...pairs(1, '\\kimi{', '3'), { t: 'text', s: ' with the others.' })).wire).toBe('We compare @a# 3 @b# with the others.')
+    // a box that draws (2608.12333's \colorbox swatches, drawn empty)
+    expect(serialize(unit({ t: 'text', s: 'a ' }, ...pairs(1, '\\colorbox{yellow}{', 'marked phrase'), { t: 'text', s: ' in the text.' })).wire).toBe('a @a# marked phrase @b# in the text.')
+    // two links side by side, to the same address, stay two
+    expect(serialize(unit({ t: 'text', s: 'See ' }, ...pairs(1, '\\href{u}{', 'this'), { t: 'text', s: ' ' }, ...pairs(2, '\\href{u}{', 'that'), { t: 'text', s: ' page.' })).wire).toBe('See @a# this @b# @c# that @d# page.')
+    // an empty macro's call may print (2608.12096's `\inv{}`): one marker where it stands; an empty style pair sets nothing
+    expect(serialize(unit({ t: 'text', s: 'By ' }, { t: 'ph', src: '\\cref{p}' }, { t: 'text', s: ', ' }, { t: 'open', id: 1, src: '\\inv{' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ' acts as negation.' })).wire).toBe('By @a#, @b# acts as negation.')
+    expect(serialize(unit({ t: 'text', s: 'By ' }, { t: 'ph', src: '\\cref{p}' }, { t: 'text', s: ', ' }, { t: 'open', id: 1, src: '{' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ' acts as negation.' })).wire).toBe('By @a#, acts as negation.')
+    // a style pair inside its sentence still goes flat
+    expect(serialize(LEAD_TERMS).wire).toBe('compute resources and operating constraints under which the work from @a# is carried out.')
+  })
+
+  it('a fill or a skip taken off the wire leaves a word boundary where it stood between two words', () => {
+    expect(serialize(unit({ t: 'text', s: 'Left' }, { t: 'ph', src: '\\hfill{}' }, { t: 'text', s: 'Right' })).wire).toBe('Left Right')
+    expect(serialize(unit({ t: 'text', s: 'Left ' }, { t: 'ph', src: '\\hfill' }, { t: 'text', s: ' Right' })).wire).toBe('Left Right')
+    // a break's permission sets no space: the word stays one
+    expect(serialize(unit({ t: 'text', s: 'long' }, { t: 'ph', src: '\\allowbreak' }, { t: 'text', s: 'word' })).wire).toBe('longword')
+  })
+
+  it('a reply of digits for a word is a translation: two is 2 (Devin on #404)', () => {
+    const two = unit({ t: 'text', s: 'two' })
+    expect(shape(read(rehydrate('2', serialize(two))))).toBe('2')
+    expect(rehydrate(' ', serialize(two))).toEqual({ error: 'lost text' })
   })
 
   it('tags keep every pair that holds text, the switches off the wire', () => {

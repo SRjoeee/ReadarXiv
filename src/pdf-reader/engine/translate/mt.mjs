@@ -93,13 +93,27 @@ const INKLESS = /^(?:\\(?:centering|raggedright|raggedleft|noindent|indent|norma
 export const isInkless = p => p?.t === 'ph' && typeof p.src === 'string' && p.src[0] === '\\' && INKLESS.test(p.src)
 /** a link's open: its text is what a reader clicks, kept a pair on every wire (the layer draws the link by it) */
 const LINK = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
+/**
+ * An open that sets a style and nothing else (the front end's INLINE_TEXT, \textcolor, \mbox, a bare group): only such a
+ * pair may go flat, coming back empty after the translation, where it sets nothing. Any other pair keeps its two markers
+ * as before: a box that draws (an empty \colorbox is a swatch, 2608.12333), a table's cell (`\multicolumn{7}{@{}l}{}` after
+ * a \midrule is a Misplaced \omit, 2607.24653), a macro of the paper's whose argument is prose (`\kimi{3}`, `Kimi K#1`,
+ * printed "Kimi K" for each empty call)
+ */
+const STYLE_OPEN = /^(?:\{|\\(?:textbf|textit|emph|textsl|textsc|underline|textup|textrm|textsf|textmd|textnormal|uline|mbox)\s*\{|\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{)$/
+/** a fill or a skip: taken off the wire between two words, it leaves a space there (`Left\hfill{}Right`) */
+const FILL = /^\\(?:hfill|hfil|vfill|vfil|smallskip|medskip|bigskip|vspace)(?![A-Za-z@])/
 /** a text that ends where a sentence or a run-in label ends: a full stop, a colon, a semicolon, a question or an
  *  exclamation mark, closing quotes or brackets after it; never after an abbreviation (`e.g.`, `Fig.`, sentences ABBR) */
-const SENTENCE_END = /[.!?:;\u3002\uff01\uff1f\uff1a\uff1b]["'\u201d\u2019)\]]*$/
+const SENTENCE_END = /[.!?\u3002\uff01\uff1f]["'\u201d\u2019)\]]*$/
 const endsSentence = s => { const t = s.trimEnd(); return SENTENCE_END.test(t) && !ABBR.test(t.replace(/["'\u201d\u2019)\]]+$/, '')) }
-const SENTENCE_LEAD = /^[.!?:;\u3002\uff01\uff1f\uff1a\uff1b]/
+const SENTENCE_LEAD = /^[.!?\u3002\uff01\uff1f]/
+/** a colon or a semicolon: a run-in label's end at the unit's head (\textbf{Setup:}), a clause's anywhere else
+ *  (`Options: \emph{fast}; and safe` is one sentence) */
+const CLAUSE_END = /[:;\uff1a\uff1b]["'\u201d\u2019)\]]*$/
+const CLAUSE_LEAD = /^[:;\uff1a\uff1b]/
 const blank = s => !/\S/.test(s)
-const OBJ = '￼'
+const OBJ = '\ufffc'
 /** whether a unit's pieces hold what TRANSLATE_VERSION 3 changed on the wire: a pair, or a placeholder that sets no ink
  *  between two stretches of text (one at an edge took a marker at the wire's edge, which cut no sentence) */
 export function holdsStyle(pieces) {
@@ -202,18 +216,20 @@ function planOf(u, format) {
     }
     return out.join('\u0001')
   }
+  // (only pairs that set a style merge: two links side by side to one address stay two)
+  const setsStyle = n => (n.style ??= STYLE_OPEN.test(pieces[n.open].src ?? ''))
   const styleOf = n => (n.key ??= `${pieces[n.open].src}\u0000${headOf(n)}\u0000${pieces[n.close].src}`)
   const spans = node => {
     const out = []
     for (let i = 0; i < node.seq.length; i++) {
       const e = node.seq[i]
       if (e.seq) spans(e)
-      if (!e.seq || !e.info.text) { out.push(e); continue }
+      if (!e.seq || !e.info.text || !setsStyle(e)) { out.push(e); continue }
       const key = styleOf(e), members = [e], gaps = [[]]
       for (let j = i + 1, ws = []; j < node.seq.length; j++) {
         const f = node.seq[j]
         if (f.k !== undefined && pieces[f.k].t === 'text' && blank(textOf(f.k))) { ws.push(f); continue }
-        if (!f.seq || !f.info?.text || (f.info.text && styleOf(f) !== key)) break
+        if (!f.seq || !f.info?.text || !setsStyle(f) || styleOf(f) !== key) break
         spans(f)
         members.push(f); gaps.push(ws); ws = []; i = j
       }
@@ -241,21 +257,27 @@ function planOf(u, format) {
     }
   }
   if (format !== 'tags') flatOf(root.seq)
-  const flat = parts.join(''), first = flat.search(/\S/)
-  let last = flat.length
+  const flat = parts.join(''), first = flat.search(/\S/), word = flat.search(/[^\s\ufffc]/)
+  let last = flat.length, lastWord = flat.length
   while (last > 0 && /\s/.test(flat[last - 1])) last--
+  while (lastWord > 0 && /[\s\ufffc]/.test(flat[lastWord - 1])) lastWord--
   const solid = /\S/g
   const nextSolid = b => { solid.lastIndex = b; return solid.exec(flat)?.[0] ?? '' }
   // (a sentence's end is read in the last words before a place, its start in the first after it)
   const WINDOW = 200
   const classOf = e => {
-    if (!e.info.text) return e.info.voids ? 'group' : 'skeleton'
+    // (an empty pair that sets more than a style, `\inv{}`, may print: one marker, where it stands)
+    if (!e.info.text) return e.info.voids || !setsStyle(e) ? 'group' : 'skeleton'
     if (format === 'tags') return 'kept'
-    const [a, b] = ranges.get(e), clearBefore = a <= first, clearAfter = b >= last
-    if (clearBefore && clearAfter) return 'enclose'
-    if (LINK.test(pieces[e.open].src ?? '')) return 'kept'
-    const starts = clearBefore || endsSentence(flat.slice(Math.max(0, a - WINDOW), a))
-    const ends = clearAfter || endsSentence(flat.slice(Math.max(a, b - WINDOW), b)) || SENTENCE_LEAD.test(nextSolid(b))
+    const [a, b] = ranges.get(e)
+    if (a <= first && b >= last) return 'enclose'
+    if (!setsStyle(e) || LINK.test(pieces[e.open].src ?? '')) return 'kept'
+    // (placeholders before its first word or after its last are the unit's edge: a cell's rule, a citation at the end)
+    const head = a <= word, tail = b >= lastWord, inside = flat.slice(Math.max(a, b - WINDOW), b), next = nextSolid(b)
+    const starts = head || endsSentence(flat.slice(Math.max(0, a - WINDOW), a))
+    // a run-in label at the unit's head ends with a colon, before one, or before a sentence that begins with no stop
+    // between (\textbf{Service Auto-Scaling} To accommodate)
+    const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
     return starts && ends ? 'kept' : 'flat'
   }
   // the wire, and where each piece that does not go on it is put back: in its innermost kept group (the unit, a kept
@@ -264,7 +286,8 @@ function planOf(u, format) {
   const unit = { lead: [], end: [], seen: false }, stack = [unit]
   let group = unit, sink = null, joint = false
   const seen = () => { for (const g of stack) g.seen = true }
-  const off = k => { (sink ?? (group.seen ? group.end : group.lead)).push(k); joint = true }
+  // (`joint`: something stood off the wire since the last text; 'space' where it was a fill, which leaves a word boundary)
+  const off = k => { (sink ?? (group.seen ? group.end : group.lead)).push(k); joint = joint === 'space' || (ink[k] && FILL.test(pieces[k].src)) ? 'space' : true }
   const text = k => {
     const last = items.at(-1)
     if (last?.t === 'text') { last.ks.push(k); last.joints.push(joint) } else items.push({ t: 'text', ks: [k], joints: [false] })
@@ -304,7 +327,7 @@ function planOf(u, format) {
     }
   }
   walk(root.seq)
-  return { items, front: unit.lead, back: unit.end, styled: true }
+  return { items, front: unit.lead, back: unit.end, styled: true, texts }
 }
 /** a plan's list of piece indices and blocks as the pieces, in order */
 const placed = (pieces, list, out = []) => { for (const x of list) if (Array.isArray(x)) placed(pieces, x, out); else out.push(pieces[x]); return out }
@@ -312,22 +335,26 @@ const placed = (pieces, list, out = []) => { for (const x of list) if (Array.isA
  *  before its first word; its close's: what came after, merged pairs' ends among them) */
 function edgeOf(pieces, it) {
   const { g } = it
-  if (it.t === 'open') { const lead = placed(pieces, g.lead); return lead.length ? { t: 'edge', pieces: [pieces[g.open], ...lead] } : pieces[g.open] }
-  const end = placed(pieces, g.end)
-  return end.length ? { t: 'edge', pieces: [...end, pieces[g.close]] } : pieces[g.close]
+  if (it.t === 'open') return g.lead.length ? { t: 'edge', pieces: placed(pieces, g.lead, [pieces[g.open]]) } : pieces[g.open]
+  return g.end.length ? { t: 'edge', pieces: [...placed(pieces, g.end), pieces[g.close]] } : pieces[g.close]
 }
 /** the kept pairs whose source holds letters, innermost first, as rehydrate refills one that comes back empty: its
  *  open, the last piece of its open's slot (`a`), the first of its close's (`b`), its close */
 const refillOf = (pieces, kept) => kept.filter(([g]) => g.letters).sort(([a], [b]) => b.depth - a.depth).map(([g, a, b]) => ({ open: pieces[g.open], a, b, close: pieces[g.close] }))
 /** a text item's pieces as the wire writes them: white space collapsed, the unit's first and last pieces trimmed, one
  *  space where a piece off the wire stood between two that each had one */
-function wireText(pieces, it, wire, esc) {
+function wireText(pieces, it, wire, esc, texts = null) {
   let out = ''
   it.ks.forEach((k, j) => {
-    let s = utf8(pieces[k].s).replace(/\s+/g, ' ')
+    let s = (texts?.[k] ?? utf8(pieces[k].s)).replace(/\s+/g, ' ')
     if (k === 0) s = s.trimStart()
     if (k === pieces.length - 1) s = s.trimEnd()
-    if (it.joints[j] && s.startsWith(' ') && /\s/.test((out || wire).at(-1) ?? '')) s = s.slice(1)
+    // (the wire's last character read only at a joint: reading it flattens the string the wire is being built as)
+    if (it.joints[j]) {
+      const tail = (out || wire).at(-1) ?? ''
+      if (s.startsWith(' ') && /\s/.test(tail)) s = s.slice(1)
+      else if (it.joints[j] === 'space' && tail && !/\s/.test(tail) && s && !s.startsWith(' ')) s = ` ${s}`
+    }
     out += esc(s)
   })
   return out
@@ -366,9 +393,9 @@ export function serialize(u) {
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
-  const { items, front, back, styled } = planOf(u, 'markers')
+  const { items, front, back, styled, texts } = planOf(u, 'markers')
   items.forEach((it, i) => {
-    if (it.t === 'text') { wire += wireText(u.pieces, it, wire, escape); return }
+    if (it.t === 'text') { wire += wireText(u.pieces, it, wire, escape, texts); return }
     const slot = it.t === 'void' ? it.slot : edgeOf(u.pieces, it)
     slots.push(slot)
     if (it.t === 'open') kept.set(it.g, [it.g, piecesOf(slot).at(-1)])
@@ -398,26 +425,43 @@ export function serialize(u) {
 }
 
 /** the pieces of a kept pair whose content came back empty (none of its text: the translator set it outside, 2610.19159's
- *  "After" behind the closes of its bold and its colour) take the text right after its close, past other closes, or
- *  else right before its open, past other opens; a text without a letter stays where it is */
+ *  "After" behind the closes of its bold and its colour) take the text right after its close, past other closes, up to
+ *  the end of its sentence, or else right before its open, past other opens, from the start of its sentence; a text
+ *  without a letter stays where it is */
 function refillPairs(pieces, refill) {
   const solid = p => p.t === 'text' && /[^\s]/.test(p.s)
-  const lettered = p => p?.t === 'text' && /\p{L}/u.test(p.s)
   for (const r of refill ?? []) {
     const i = pieces.indexOf(r.a), j = pieces.indexOf(r.b)
     if (i < 0 || j <= i || pieces.slice(i + 1, j).some(solid)) continue
     let x = pieces.indexOf(r.close) + 1
     while (x > 0 && pieces[x]?.t === 'close') x++
-    if (x > 0 && lettered(pieces[x])) { const [t] = pieces.splice(x, 1); pieces.splice(j, 0, t); continue }
+    // (the words up to the end of their sentence alone: a link that came back empty takes no sentence after it)
+    if (x > 0 && pieces[x]?.t === 'text') {
+      const t = pieces[x], cut = t.s.search(STOP), inside = cut < 0 ? t.s : t.s.slice(0, cut)
+      if (/\p{L}/u.test(inside)) {
+        if (cut < 0) pieces.splice(x, 1); else pieces[x] = { ...t, s: t.s.slice(cut) }
+        pieces.splice(j, 0, { ...t, s: inside })
+        continue
+      }
+    }
     x = pieces.indexOf(r.open) - 1
     while (x >= 0 && pieces[x].t === 'open') x--
-    if (x >= 0 && lettered(pieces[x])) { const [t] = pieces.splice(x, 1); pieces.splice(pieces.indexOf(r.a) + 1, 0, t) }
+    if (x >= 0 && pieces[x].t === 'text') {
+      const t = pieces[x], cut = Math.max(-1, ...[...t.s.matchAll(STOPS)].map(m => m.index)), inside = t.s.slice(cut + 1)
+      if (/\p{L}/u.test(inside)) {
+        if (cut < 0) pieces.splice(x, 1); else pieces[x] = { ...t, s: t.s.slice(0, cut + 1) }
+        pieces.splice(pieces.indexOf(r.a) + 1, 0, { ...t, s: inside })
+      }
+    }
   }
 }
+const STOP = /[.!?\u3002\uff01\uff1f]/, STOPS = new RegExp(STOP.source, 'g')
 /** whether a reply lost every letter of a wire that had one outside its markers or tags (`atoms`): the unit's text gone,
  *  its placeholders all back — 2610.19159's "Before", `@a#@b#@c#@d#@e# Before @f#@g#@h#` back as the markers alone —,
  *  which reads as whole and draws an empty box. An error: the unit goes as runs */
-const lostText = (wire, atoms, pieces) => !pieces.some(p => p.t === 'text' && /\p{L}/u.test(p.s)) && /\p{L}/u.test(wire.replace(atoms, ''))
+const lostText = (wire, atoms, pieces) => !pieces.some(p => p.t === 'text' && SAYS.test(p.s)) && /\p{L}/u.test(wire.replace(atoms, ''))
+/** what a translation of words holds: a letter, or a digit (two is 2) */
+const SAYS = /[\p{L}\p{N}]/u
 /** the pairs of read pieces in order and nested */
 const pairsInOrder = pieces => {
   const stack = []
@@ -624,17 +668,17 @@ export function serializeTags(u) {
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
-  const { items, front, back, styled } = planOf(u, 'tags')
+  const { items, front, back, styled, texts } = planOf(u, 'tags')
   const pairSlot = new Map()
   for (const it of items) {
-    if (it.t === 'text') { wire += wireText(u.pieces, it, wire, escapeTags); continue }
+    if (it.t === 'text') { wire += wireText(u.pieces, it, wire, escapeTags, texts); continue }
     if (it.t === 'open') { slots.push({ open: u.pieces[it.g.open] }); pairSlot.set(it.g, slots.length); wire += `<t id="${slots.length}">`; continue }
     if (it.t === 'close') {
-      const n = pairSlot.get(it.g), slot = slots[n - 1], head = placed(u.pieces, it.g.lead), tail = placed(u.pieces, it.g.end)
+      const n = pairSlot.get(it.g), slot = slots[n - 1]
       slot.close = u.pieces[it.g.close]
-      if (head.length) slot.head = head
-      if (tail.length) slot.tail = tail
-      kept.push([it.g, head.at(-1) ?? slot.open, tail[0] ?? slot.close])
+      if (it.g.lead.length) slot.head = placed(u.pieces, it.g.lead)
+      if (it.g.end.length) slot.tail = placed(u.pieces, it.g.end)
+      if (it.g.letters) kept.push([it.g, slot.head?.at(-1) ?? slot.open, slot.tail?.[0] ?? slot.close])
       wire += '</t>'
       continue
     }
@@ -854,8 +898,8 @@ export async function translateUnits(units, send, format = 'markers') {
   const byUnit = new Map(), total = new Map()
   runs.forEach((r, j) => {
     total.set(r.u, (total.get(r.u) ?? 0) + 1)
-    // (a reply that lost every letter of its run is none: the run stays the source's)
-    if (runTexts[j] != null && /\p{L}/u.test(wire.unrun(runTexts[j].text ?? ''))) (byUnit.get(r.u) ?? byUnit.set(r.u, new Map()).get(r.u)).set(r.k, runTexts[j])
+    // (a reply that lost every letter and digit of its run is none: the run stays the source's)
+    if (runTexts[j] != null && SAYS.test(wire.unrun(runTexts[j].text ?? ''))) (byUnit.get(r.u) ?? byUnit.set(r.u, new Map()).get(r.u)).set(r.k, runTexts[j])
   })
   const lostUnits = new Set(runs.filter((r, j) => runsLost?.has(j)).map(r => r.u))
   for (const u of failed) {
