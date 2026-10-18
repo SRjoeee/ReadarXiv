@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { openPaper, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
+import { seedFrom, sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
+import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The front end's round of 2026-10-06: every piece of typeset body text a unit, no TeX argument drawn as text (the
 // missing-units research: ResNet's appendix C, 37 of 117 papers missing some text)
@@ -257,6 +259,50 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
   it('a caption outside a float, caption\'s \\captionof{figure}{…}: its text the caption\'s, its kind name kept (2608.24961)', () => {
     const p = project(doc('\\begin{minipage}{\\linewidth}\\captionof{table}{AI use categories and subcategories.}\\end{minipage}'))
     expect(units(p).map(u => [u.kind, textOf(u)])).toEqual([['caption', 'AI use categories and subcategories.']])
+  })
+})
+
+describe('hyperref\'s \\texorpdfstring{TeX}{PDF}: its first argument is the text typeset, its second the bookmark\'s, kept', () => {
+  it('a heading wholly one is a unit of the first argument\'s words (2307.16209: 13 of its 14 headings made none), hyperref loaded or not', () => {
+    for (const pre of ['', '\\usepackage{hyperref}']) {
+      const p = project(doc('\\section{\\texorpdfstring{Numerical Results for $0\\leq a \\leq M$}%\n{Numerical Results for 0 <= a <= M}}\nThe text of the section goes on.', pre))
+      expect(units(p).map(u => [u.kind, textOf(u)]), pre).toEqual([['heading', 'Numerical Results for'], ['para', 'The text of the section goes on.']])
+      const h = units(p)[0] as Unit
+      // the command and the bookmark's string stay with the pair that holds the text; the formula is a placeholder
+      expect(h.pieces.map(x => x.t)).toEqual(['open', 'text', 'ph', 'close'])
+      expect(h.pieces[0]?.src).toBe('\\texorpdfstring{')
+      expect(h.pieces.at(-1)?.src).toBe('}%\n{Numerical Results for 0 <= a <= M}')
+    }
+  })
+  it('in a heading among other words, and in running text: only the first argument\'s words are the text', () => {
+    const p = project(doc('\\subsection{The \\texorpdfstring{$\\tau_V$-function}{tau-function} and its zeros}\nIn text, \\texorpdfstring{the typeset words}{the bookmark words} stand too.'))
+    expect(texts(p)).toEqual(['The -function and its zeros', 'In text, the typeset words stand too.'])
+  })
+  it('its pair moves the numbers of the pairs after it in its file; a stored translation of a unit after it is found again (seedFrom)', async () => {
+    // the heading as it was read before (one placeholder, no pair) and as now (a pair): the paragraph after it the same but for
+    // its group's number, so its hash is another; the record of before still gives it its translation, renumbered
+    const before = project(doc('\\section{Plain heading words \\ref{x}}\nThe text with {a group} of words here.'))
+    const now = project(doc('\\section{\\texorpdfstring{Plain heading words}{Plain}}\nThe text with {a group} of words here.'))
+    const [was, is] = [units(before).at(-1) as Unit, units(now).at(-1) as Unit]
+    expect(plainSource(is as never)).toBe(plainSource(was as never))
+    expect(await sourceHash(is as never)).not.toBe(await sourceHash(was as never))
+    const record = { units: await Promise.all(units(before).map(async u => ({ hash: await sourceHash(u as never), src: plainSource(u as never), pieces: u.pieces, state: 'whole', tried: 'microsoft' }))) }
+    const { seed } = await seedFrom(record, now.units)
+    expect(seed.has(units(now).length - 1)).toBe(true)
+  })
+  it('its call ends with its second argument, hyperref loaded or not: a brace group after it is the text\'s own (the review\'s m4)', () => {
+    for (const pre of ['', '\\usepackage{hyperref}']) {
+      const p = project(doc('In running text \\texorpdfstring{$x$ words}{x} {\\bf bold words here} and more text after it.', pre))
+      expect(texts(p), pre).toEqual(['In running text words bold words here and more text after it.'])
+      const close = units(p)[0]?.pieces.find(x => x.t === 'close')
+      expect(close?.src, pre).toBe('}{x}')
+    }
+  })
+  it('the source written back: the first argument translated, the second as it is', () => {
+    const p = project(doc('\\section{\\texorpdfstring{The Finite Limit Here}{The Finite Limit}}\nThe text of the section goes on.'))
+    const out = patched(p)
+    expect(out).toContain('\\texorpdfstring{<T0>}{The Finite Limit}')
+    expect(out).not.toContain('The Finite Limit Here')
   })
 })
 

@@ -20,6 +20,8 @@ import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
 import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { listWithin, OPS_MS, within } from './oplist.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
@@ -963,7 +965,7 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
  * the group's last one's
  */
-function followsOf(units, names) {
+export function followsOf(units, names) {
   const nameOf = (i, k) => { const c = classOf(units[i]?.pieces[k]); return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null }
   return name => {
     const m = /^([pn])(\d+)\.(\d+)a$/.exec(name)
@@ -1074,7 +1076,8 @@ const UNIT_MARK = /^\d+[se]$/
  * The marked original read a page at a time (the page stream): an async generator of what each page gives, in page order.
  * - first `{ head }`: { pages, marking, dropped, set (every name of the destinations and the log's dropped ones), named
  *   ([name, page, x, y] of the destinations the marks keep, in the names' order, the place as given), destPage (name → page),
- *   unitMarks } — `unitMarks` the unit marks the left is anchored by (destinations `axt-<id>s`, `axt-<id>e`, a dropped one
+ *   pageOf (name → page of every destination MARK_NAME takes, a dropped one's too: TeX's first), lines (the log's, as the
+ *   end gives them), unitMarks } — `unitMarks` the unit marks the left is anchored by (destinations `axt-<id>s`, `axt-<id>e`, a dropped one
  *   too: Map name → { page, x, y, t }, in the names' order), each one's word `t` filled as its page is read, or null where a
  *   unit mark's page could not be looked up. The names are read first, each page looked up once by its reference;
  * - then for each page p `{ page }`: { p, view (its four numbers to a hundredth, checked as the marks' views are), tokens
@@ -1082,7 +1085,11 @@ const UNIT_MARK = /^\d+[se]$/
  *   order), owned (the pieces found once p was read: [name, row], each row [name, how] or [name, how, n, glyphs (page, x0,
  *   y, size, its character itself), rules (page, x0, y0, x1, y1)]), links (with `units` and `OPS`, its Link annotations that
  *   name a destination, linksOfPage's rows, where a placeholder that names a link has a point on it; [] without or elsewhere;
- *   null where they could not be read) }. Each page's view, text and, with `units` and `OPS`,
+ *   null where they could not be read), dark (null, or why the page's ink was not read: 'timedOut', its operator list not
+ *   given within OPS_MS and given up, or its ink's walk past its backstop; 'capped', past OPS_CAP, GLYPHS_PAGE or a guard of
+ *   pageInk's own; 'degraded', its boxes past BOXES_PAGE merged. It has no ink then: no piece on it is owned), found (every
+ *   piece whose opening point stands on a page before it has been given: stream.mjs ownedPages `found()`), repeats (the point
+ *   names read a second time on p: `twice` a page at a time) }. Each page's view, text and, with `units` and `OPS`,
  *   its operator list are read once and the page cleaned up after (page.cleanup); its tokens (tokenizeDocument, which begins
  *   again on every page) are let go once read; its packed ink (packGlyphs, STREAM_COLUMNS) is held only until every piece
  *   that may read it is found (stream.mjs ownedPages);
@@ -1108,11 +1115,11 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     if (Number.isInteger(ref)) return ref + 1
     const key = ref && typeof ref === 'object' ? `${ref.num}R${ref.gen}` : null
     if (key === null) return null
-    if (!pageOf.has(key)) pageOf.set(key, pdf.getPageIndex(ref).then(i => i + 1, () => null))
+    if (!pageOf.has(key)) pageOf.set(key, pdf.getPageIndex(ref).then(i => i + 1, e => { if (isMemoryError(e)) throw e; return null }))
     return pageOf.get(key)
   }
   const dests = await pdf.getDestinations(), set = new Set(dropped)
-  const named = [], destPage = new Map()
+  const named = [], destPage = new Map(), pageOfName = new Map()
   let unitMarks = new Map()
   /** the unit marks by page, for their words as each page is read */
   const unitsOn = new Map()
@@ -1131,21 +1138,44 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     }
     if (!Array.isArray(d) || !MARK_NAME.test(name)) continue
     set.add(name)
-    if (twice.has(name)) continue
     const page = await pageNumber(d[0]), x = d[2], y = d[3]
+    if (isInteger(page, 1, pages)) pageOfName.set(name, page)
+    if (twice.has(name)) continue
     if (isInteger(page, 1, pages)) destPage.set(name, page)
     named.push([name, page, x, y])
   }
-  yield { head: { pages, marking, dropped, set, named, destPage, unitMarks } }
+  // (the log's line counts, read before any page: a maker reading the pages as they come takes them with the head)
+  const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
   // the pages whose links are read: those a placeholder that names a link (linkablePiece) has a point on, the pages between its
   // two points too. Any other page's links are no piece's, and the link-anchor locator never pairs them (make.mjs): PDF.js reads
   // a page's annotations at a cost of its own
   const linkPages = new Set()
-  units?.forEach((u, i) => u.pieces.forEach((piece, k) => {
+  if (units && OPS) units.forEach((u, i) => u.pieces.forEach((piece, k) => {
     if (!linkablePiece(piece)) return
     const a = destPage.get(`p${i}.${k}a`) ?? destPage.get(`p${i}.${k}b`), b = destPage.get(`p${i}.${k}b`) ?? a
     if (a !== undefined) for (let q = Math.min(a, b); q <= Math.max(a, b); q++) linkPages.add(q)
   }))
+  // their annotations read first, each page's within OPS_MS (a page not answered within it could not be read), and kept until
+  // its page is read: what the paper's links are is a function of them alone, so it is told with the head (`links`: their count
+  // and their destinations' names, or null where the paper has none: a page's could not be read, held more than MAX_LINKS, or
+  // all were past LINKS_MAX), for a reader that takes the pages as they come (the page stream's maker) to know it before any page
+  const annotsAt = new Map()
+  let linkCount = 0, noLinks = false
+  const linkDests = new Set()
+  for (const q of [...linkPages].sort((a, b) => a - b)) {
+    let page = null
+    try { page = await pdf.getPage(q) } catch (e) { if (isMemoryError(e)) throw e }
+    const raw = page ? await within(readAnnots(page), OPS_MS) : null
+    annotsAt.set(q, raw)
+    const ls = Array.isArray(raw) ? raw.filter(a => a?.subtype === 'Link') : null
+    if (ls === null || ls.length > MAX_LINKS) { noLinks = true; break }
+    for (const a of ls) if (destRect(a)) { linkCount++; linkDests.add(a.dest) }
+    if (linkCount > LINKS_MAX) { noLinks = true; break }
+  }
+  // (a paper with no links reads no further page's and keeps none: each page's links are then none, as they would be)
+  if (noLinks) annotsAt.clear()
+  const links = noLinks ? null : { count: linkCount, dests: [...linkDests].sort() }
+  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, links } }
   // ---- each page, once
   const views = [], wordOf = new Map()
   let words = 0
@@ -1154,6 +1184,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   const follows = units ? followsOf(units, set) : null
   const stream = units && OPS ? ownedPages({ follows, dropped, closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
   let all = 0, found = []
+  const seen = { warned: false, who: 'marked read' }
   const take = (name, e, W) => {
     if (e.how >= OWNED) { found.push([name, [name, e.how]]); return }
     const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); found.push([name, [name, k]]) }
@@ -1188,16 +1219,25 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     views.push(...view)
     const content = await page.getTextContent()
     let ink = null, links = []
+    let dark = null
     if (stream) {
       // the columns of its glyphs ownedOf reads (ink.mjs packGlyphs, in stream order), not a Glyph object each, and each
       // glyph's boxes before it as 32-bit integers: held until every piece that may read the page is found. Bounded as the
-      // layout maker's read of arXiv's PDF is (the compile is the paper's source, as untrusted): a page past a bound of
-      // pageInk's own (`capped`, `timedOut`), or read with its boxes past BOXES_PAGE merged (`degraded`: a piece's rule
-      // there would be left out of its own ink, unseen), is unread: no ink, so that no piece on it is owned (each LOST to
-      // the maker), and no glyph under its links
-      const raw = linkPages.has(p) ? await readAnnots(page) : []
-      const got = pageInk(OPS, await page.getOperatorList(), page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
-      const { glyphs, boxes, points, boxAt } = got.capped || got.timedOut || got.degraded ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
+      // layout maker's read of arXiv's PDF is (the compile is the paper's source, as untrusted): its operator list waited for
+      // OPS_MS at most and given up past it (oplist.mjs: that page alone); a page past a bound of pageInk's own (`capped`,
+      // `timedOut`), or read with its boxes past BOXES_PAGE merged (`degraded`: a piece's rule there would be left out of its
+      // own ink, unseen), is unread: no ink, so that no piece on it is owned (each LOST to the maker, `dark` says why), and no
+      // glyph under its links
+      // (its annotations as the head read them, let go here)
+      const raw = linkPages.has(p) ? annotsAt.get(p) ?? null : []
+      annotsAt.delete(p)
+      const ops = await listWithin(page, seen)
+      const got = ops ? pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE }) : null
+      if (!ops) dark = 'timedOut'
+      else if (got.capped) dark = 'capped'
+      else if (got.timedOut) dark = 'timedOut'
+      else if (got.degraded) dark = 'degraded'
+      const { glyphs, boxes, points, boxAt } = dark ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
       ink = { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) }
       // its links, by the glyphs under them (linksOfPage): read where the operator list is
       links = linksOfPage(raw, glyphs, p)
@@ -1230,10 +1270,9 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     if (stream) stream.add(p, ink, take)
     const owned = found
     found = []
-    yield { page: { p, view, tokens, words: fresh, owned, links } }
+    yield { page: { p, view, tokens, words: fresh, owned, links, dark, found: stream ? stream.found() : p + 1, repeats: stream ? stream.repeats() : [] } }
   }
   if (stream) stream.end(take)
-  const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
   yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines } }
 }
 
@@ -1245,16 +1284,20 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
  *   opening points' order, WORDS_MAX). A point read twice on pages apart makes its piece 'a mark set twice' (ownedOf over the
  *   whole says so), and owns nothing, nor the displays of its group. The characters' table in the rows' order, as before.
  * - `unitMarks`: markedPages' (null where a unit mark's page could not be looked up).
+ * - `dark`: the pages whose ink was not read (markedPages' `dark`): `timedOut`, their operator list given up past OPS_MS;
+ *   `capped`, past OPS_CAP's operations or GLYPHS_PAGE's glyphs. No piece on them is owned; the marks file says nothing of
+ *   them (its keys are exact), the run's stats do.
  * `marked` a PDF.js document of the marked original, `log` its last pass's log; the options are layoutMarksOf's
  */
 export async function readMarked(marked, log, o) {
   let head = null, end = null
-  const views = [], words = [], tokens = [], rows = new Map()
+  const views = [], words = [], tokens = [], rows = new Map(), dark = { timedOut: [], capped: [], degraded: [] }
   // (the links, the pages' in order; none at all where a page's could not be read or past LINKS_MAX)
   let links = []
   for await (const x of markedPages(marked, log, o)) {
     if (x.head) head = x.head
     else if (x.page) {
+      if (x.page.dark) dark[x.page.dark].push(x.page.p)
       views.push(...x.page.view)
       for (const w of x.page.words) words.push(w)
       for (const v of x.page.tokens) tokens.push(v)
@@ -1268,14 +1311,8 @@ export async function readMarked(marked, log, o) {
   }
   const { pages, marking, dropped, named, unitMarks } = head
   // ---- the marks, by the views now known
-  const columns = new Array(pages).fill(0), marks = []
-  for (const [name, page, x, y] of named) {
-    if (!isInteger(page, 1, pages) || !isNumber(x) || !isNumber(y)) continue
-    const c = /^c([12])-\d+$/.exec(name)
-    if (c) columns[page - 1] = Number(c[1])
-    if (!inView(views, page, r2(x), r2(y))) continue
-    marks.push([name, page, r2z(x), r2z(y)])
-  }
+  const columns = columnsOf(head), marks = []
+  for (const [name, page, x, y] of named) if (markAt(views, pages, page, x, y)) marks.push([name, page, r2z(x), r2z(y)])
   marks.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   const chars = [], owned = []
   if (o.units && o.OPS) {
@@ -1302,7 +1339,32 @@ export async function readMarked(marked, log, o) {
       owned.push(row)
     }
   }
-  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned, links: links ?? [] }, unitMarks }
+  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned, links: links ?? [] }, unitMarks, dark }
+}
+
+/** whether a destination the head names is a mark of the marks file: on a page of the paper, at numbers within its view
+ *  (`views` the pages' read so far, stride 4: its page's must be among them) */
+export const markAt = (views, pages, page, x, y) => isInteger(page, 1, pages) && isNumber(x) && isNumber(y) && inView(views, page, r2(x), r2(y))
+/** each page's columns as the marks file has them (MARK_DEF's c<n>-<k>, the last of a page's): of the head's names alone */
+export function columnsOf(head) {
+  const columns = new Array(head.pages).fill(0)
+  for (const [name, page, x, y] of head.named) {
+    if (!isInteger(page, 1, head.pages) || !isNumber(x) || !isNumber(y)) continue
+    const c = /^c([12])-\d+$/.exec(name)
+    if (c) columns[page - 1] = Number(c[1])
+  }
+  return columns
+}
+/**
+ * The marks of a marked original whose pages are still to be read (the page stream's maker, layout/make.mjs stream with
+ * `marked`): what its head tells — its marking, its pages' columns, the names the log dropped, its line counts, how many links
+ * the paper holds and their destinations (`linkCount`, `linkDests`: no field of the file's) — and nothing of its pages: no
+ * mark, token, word, owned piece or link yet, which the maker takes as each page comes
+ */
+export function marksOfHead(head, engine) {
+  // (its links none yet, each page's added as it is read; how many the paper holds and their destinations' names the head's,
+  // for the maker's link-anchor locator: none where the paper has no links)
+  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, words: [], tokens: [], chars: [], owned: [], links: [], linkCount: head.links?.count ?? 0, linkDests: head.links?.dests ?? [] }
 }
 
 /** a point read twice on pages apart (markedPages' `twice`): its piece 'a mark set twice', owning nothing, nor the displays

@@ -18,14 +18,22 @@
 // applies the guard to a document that passes it and to no other, so a document opened without it in the same process decodes as
 // ever. Masks and small inline images are decoded and awaited inside the operator list's own stream; they are not touched.
 // The same document's Link annotations (getAnnotations) come without their overlaid text: PDF.js makes it by extracting the page's
-// whole text a second time for every page that holds a link, which the server's readers never read (they find the glyphs under a
-// link themselves: layer-proto/links.mjs annotsOf); a second guard skips that extraction for a document that opts in.
+// whole text a second time for every page that holds a link (through its Intersector, which reads the glyphs as that extraction
+// sets them); the marks read and the layout maker never read it (they find the glyphs under a link themselves: layer-proto/links.mjs
+// annotsOf), and a second guard skips that extraction for a document that opts in. The draw geometry (pipeline/draw-data.mjs)
+// ships it, as the browser's own reading has it: a document read for its draw opts in with `maxImageSize: LINK_TEXT_PIXELS`
+// instead, the image guard on and the text guard off (its pages' annotations, read once for the draw and the maker, keep their
+// overlaid text exactly as a stock worker makes it). The one extraction cannot be shared with the page's getTextContent: through an
+// Intersector PDF.js builds no item's string, and its whitespace reads an item's string's length.
 //
 // HOW A HOST USES IT (Node: PDF.js runs its worker on the main thread, taking `globalThis.pdfjsWorker` when one is set):
 //   const source = readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8')
 //   globalThis.pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(source, { version })).toString('base64')}`)
 //   const doc = await getDocument({ data, maxImageSize: NO_IMAGE_PIXELS, ... }).promise
-// once, before the first getDocument. Server-side only: the browser layer (the extension, removal.mjs's rendering, copyOf) keeps stock
+// once, before the first getDocument. A document whose pages' draw geometry is read (pipeline/draw-data.mjs) is opened with
+// `maxImageSize: LINK_TEXT_PIXELS` and `fontExtraProperties: true`: without the latter a font carries no ToUnicode map and every page
+// tells its draw as none (`why: 'props'`).
+// Server-side only: the browser layer (the extension, removal.mjs's rendering, copyOf) keeps stock
 // PDF.js, which has to decode the images it draws.
 //
 // BUMPING PDFJS (layout versions.mjs): the anchor is one line of the worker. Install the new version, run
@@ -40,14 +48,18 @@
 export const LITE_PDFJS = '6.3.289'
 /** `maxImageSize` for a document that is to be read without its images' pixels (a stock worker takes it as "no limit") */
 export const NO_IMAGE_PIXELS = Number.MAX_SAFE_INTEGER
+/** `maxImageSize` for a document read without its images' pixels whose Link annotations keep their overlaid text (the draw's); "no
+ *  limit" to a stock worker too */
+export const LINK_TEXT_PIXELS = Number.MAX_SAFE_INTEGER - 1
 
 /** the one line of buildPaintImageXObject that decodes an image's pixels, in the callback of the unawaited buildImage */
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
-const GUARD = `if (this.options.maxImageSize === ${NO_IMAGE_PIXELS}) throw new Error("image pixels not decoded");\n      `
+const GUARD = `if (this.options.maxImageSize >= ${LINK_TEXT_PIXELS}) throw new Error("image pixels not decoded");\n      `
 /** the one condition of Page.getAnnotationsData under which a Link annotation's overlaid text is made: the page's whole text
  *  extracted again, through an Intersector, for every page that holds a link. The server's readers (the marks read, the
  *  layout maker) take an annotation's rectangle and destination and find the glyphs under it themselves: for a document that
- *  opts in, the condition is false and no text is extracted (`overlaidText` stays unset); the annotations are the same */
+ *  opts in with NO_IMAGE_PIXELS, the condition is false and no text is extracted (`overlaidText` stays unset); the annotations are
+ *  the same. LINK_TEXT_PIXELS leaves it as it stands */
 const TEXT_ANCHOR = '} else if (annotation.overlaysTextContent && isVisible) {'
 const TEXT_GUARD = `} else if (annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS}) {`
 

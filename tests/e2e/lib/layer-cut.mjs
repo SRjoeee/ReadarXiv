@@ -1,4 +1,4 @@
-// The repository's sample paper (tests/fixtures/pdf/sample-1/) as BUNDLE 4's objects, made the way the prepare makes them and
+// The repository's sample paper (tests/fixtures/pdf/sample-1/) as BUNDLE 5's objects, made the way the prepare makes them and
 // served by the stand-in of the layer API (layer-api.mjs): its stand-in PDF read by the pinned PDF.js and anchored by the
 // bundle's units (anchors.mjs), the original's side made of the anchors (left-side.mjs leftSideOf: each page's view, each
 // unit's rectangles and stream, each page's left part), and the paper made whole of the bundle's units, layout and add-on
@@ -15,6 +15,7 @@ import { indexOf, readHead, readPart, readUnitsChunk, writeCatalog } from '../..
 import { layerRows, sourceUnitsOf, toTranslate } from '../../../src/pdf-reader/engine/layer-proto/rows.mjs'
 import { startxrefOf } from '../../../src/pdf-reader/engine/layout/tail.mjs'
 import { anchorUnits, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { drawDataOf } from '../../../src/pdf-reader/engine/pipeline/draw-data.mjs'
 import { leftSideOf } from '../../../src/pdf-reader/engine/pipeline/left-side.mjs'
 import { textsShown } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 
@@ -22,15 +23,17 @@ const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package
 /** the kinds TeX sets away from where the source has them (anchorUnits' `floating`) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 
-/** the PDF's pages as the anchors read them: each page's text content and view, by the pinned PDF.js (legacy build: node) */
+/** the PDF's pages as the anchors read them: each page's text content and view, and its draw geometry (E-C: read after the operator list, whose
+ *  parse loads the page's fonts, as the prepare reads it), by the pinned PDF.js (legacy build: node) */
 async function textOf(pdf) {
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const task = getDocument({ data: pdf.slice(), verbosity: 0, cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/') })
+  const task = getDocument({ data: pdf.slice(), verbosity: 0, fontExtraProperties: true, cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/') })
   const doc = await task.promise
   const pages = []
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p), tc = await page.getTextContent()
-    pages.push({ page: p, items: tc.items, styles: tc.styles, view: page.view })
+    await page.getOperatorList()
+    pages.push({ page: p, items: tc.items, styles: tc.styles, view: page.view, draw: (await drawDataOf(page)).draw })
   }
   await task.destroy()
   return pages
@@ -56,7 +59,8 @@ export async function cutSample({ pdf, bundle }) {
     paper: read.paper, base: { bytes: read.base.bytes, sha256: read.base.sha256, xref }, versions: { image: read.versions.image },
     units: raw.units, left: { pages: side.pages, units: side.units }, layout: read.layout, addon: read.addon ? { manifest: read.addon.manifest } : null,
   }
-  const cut = await cutBundle(whole, { leftPages: side.leftPages })
+  // (each left part carries its page's draw, none for a page with no tokens)
+  const cut = await cutBundle(whole, { leftPages: p => { const l = side.leftPages(p); return l && pages[p - 1].draw ? { ...l, draw: pages[p - 1].draw } : l } })
   const objects = new Map()
   for (const w of [...cut.units, cut.head, ...cut.parts, ...cut.left]) objects.set(w.sha256, w.bytes)
   // the index and the chain as the service reads them: the cut is held to its own readers

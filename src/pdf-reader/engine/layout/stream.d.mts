@@ -30,4 +30,8 @@ export declare function ownedPages(o: { follows: (name: string) => Follow | null
   add(p: number, page: StreamPage, take: (name: string, e: Owned, pages: readonly StreamPage[]) => void): void
   end(take: (name: string, e: Owned, pages: readonly StreamPage[]) => void): void
   twice(): Set<string>
+  /** the point names read a second time since this was last asked */
+  repeats(): string[]
+  /** the least page an opening point still to be found stands on (one past the last page added where none is) */
+  found(): number
 }

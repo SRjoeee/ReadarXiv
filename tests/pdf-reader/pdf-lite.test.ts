@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
+import { LINK_TEXT_PIXELS, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
@@ -20,7 +20,8 @@ describe('liteWorkerSource', () => {
     const out = liteWorkerSource(src)
     expect(out.startsWith('a\n')).toBe(true)
     expect(out.endsWith('\nc')).toBe(true)
-    expect(out).toContain(`this.options.maxImageSize === ${NO_IMAGE_PIXELS}`)
+    expect(out).toContain(`this.options.maxImageSize >= ${LINK_TEXT_PIXELS}`)
+    expect(LINK_TEXT_PIXELS).toBe(NO_IMAGE_PIXELS - 1)
     expect(out).toContain(`annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS}) {`)
     expect(out).not.toContain(TEXT_ANCHOR)
     expect(out.length).toBeLessThan(src.length + 300)
@@ -77,8 +78,8 @@ const IMAGES = pdfOf([
   ['', 'q 120 0 0 120 72 72 cm /Im1 Do Q'],
 ])
 
-async function read(data: Uint8Array, lite: boolean) {
-  const task = getDocument({ data: data.slice(), verbosity: 0, ...(lite ? LITE : {}) })
+async function read(data: Uint8Array, lite: boolean | 'links') {
+  const task = getDocument({ data: data.slice(), verbosity: 0, ...(lite === 'links' ? { maxImageSize: LINK_TEXT_PIXELS } : lite ? LITE : {}) })
   const doc = await task.promise
   const out: { fn: number[]; args: unknown[]; decoded: (boolean | null)[] }[] = []
   for (let p = 1; p <= doc.numPages; p++) {
@@ -109,10 +110,12 @@ describe('a document read without its images\' pixels', () => {
   })
 
   it('decodes no pixel for it, while a document opened without the option in the same process decodes as ever', async () => {
-    const stock = await read(IMAGES, false), lite = await read(IMAGES, true)
-    // stock: each image's pixels came; lite: the decode failed (a null image) and nothing was kept
+    const stock = await read(IMAGES, false), lite = await read(IMAGES, true), links = await read(IMAGES, 'links')
+    // stock: each image's pixels came; lite: the decode failed (a null image) and nothing was kept; the draw's opt-in the same
     expect(stock.out.flatMap(p => p.decoded)).toEqual([true, true, true])
     expect(lite.out.flatMap(p => p.decoded)).toEqual([null, null, null])
+    expect(links.out.flatMap(p => p.decoded)).toEqual([null, null, null])
+    expect(links.out.map(p => [p.fn, p.args])).toEqual(stock.out.map(p => [p.fn, p.args]))
     // and a stock reading after a lite one in the same process still decodes
     const again = await read(IMAGES, false)
     expect(again.out.flatMap(p => p.decoded)).toEqual([true, true, true])
@@ -128,8 +131,8 @@ const LINKED = pdfOf([
   '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   '<< /Type /Annot /Subtype /Link /Rect [70 695 200 712] /Border [0 0 0] /Dest (appendix.C) >>',
 ])
-async function linksOf(lite: boolean) {
-  const task = getDocument({ data: LINKED.slice(), verbosity: 0, ...(lite ? LITE : {}) })
+async function linksOf(lite: boolean | 'links') {
+  const task = getDocument({ data: LINKED.slice(), verbosity: 0, ...(lite === 'links' ? { maxImageSize: LINK_TEXT_PIXELS } : lite ? LITE : {}) })
   const doc = await task.promise
   const page = await doc.getPage(1)
   const list = await page.getOperatorList()
@@ -148,5 +151,12 @@ describe("a document read without its images' pixels: its links", () => {
     expect(lite.annots).toEqual(stock.annots.map(a => ({ ...a, overlaidText: undefined })))
     // (and the page's operator list is the same)
     expect(lite.fn).toEqual(stock.fn)
+  })
+
+  it('come with the overlaid text exactly as the stock worker makes it where the document is read for its draw (LINK_TEXT_PIXELS)', async () => {
+    const stock = await linksOf(false), links = await linksOf('links')
+    expect(links.annots).toEqual(stock.annots)
+    expect(links.annots[0]?.overlaidText).toBe(stock.annots[0]?.overlaidText)
+    expect(links.fn).toEqual(stock.fn)
   })
 })

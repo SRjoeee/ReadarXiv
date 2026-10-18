@@ -23,6 +23,7 @@ on:
       - 'src/pdf-reader/engine/layout/ink.mjs'
       - 'src/pdf-reader/engine/layout/json.mjs'
       - 'src/pdf-reader/engine/layout/names.mjs'
+      - 'src/pdf-reader/engine/layout/oplist.mjs'
       - 'src/pdf-reader/engine/layout/remove.mjs'
       - 'src/pdf-reader/engine/pipeline/anchors.mjs'
       - 'src/pdf-reader/engine/layout/tail.mjs'

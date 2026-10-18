@@ -22,7 +22,8 @@ export interface AddonDocument { numPages: number; getPage(page: number): Promis
  * incremental update): arXiv's bytes followed by it are the add-on's document. The manifest is the shipped form, read back
  * by parseAddonManifest (byte and value caps too) before it is returned; where that fails the paper is refused whole.
  * Imports no `node:*` module (a Node child and a browser worker alike); run it in a process or worker of its own under a
- * hard memory limit (layout/remove.mjs head), `inflate` stopping at `limit + 1` bytes. Never throws
+ * hard memory limit (layout/remove.mjs head), `inflate` stopping at `limit + 1` bytes. Never throws, but a memory-class
+ * failure (pipeline/memory.mjs, C8.4), which it lets through
  */
 export declare function paperAddon(o: {
   bytes: Uint8Array; index: LayoutIndex; doc: AddonDocument; OPS: Record<string, number>; PL: PdfLib
@@ -43,7 +44,8 @@ export interface PagePlan { dirty: number[]; rules: number[]; unfit: string | nu
  *  function giving them) the page's alignment facts, read only for a page with kept ink the manifest can hold. Pure */
 export declare function pagePlanOf(index: LayoutIndex, p: number, ink: ReturnType<typeof pageInk>, facts: AlignFacts | (() => AlignFacts)): PagePlan | null
 /** every planned page's plan over PDF.js's document of arXiv's PDF, and the time its operator lists, inks and plans took */
-/** the pages whose ink the walk did not read whole (capped, timed out: no plan) or read with its boxes past BOXES_PAGE merged */
+/** the pages whose ink the walk did not read whole (no plan: its operator list not given within OPS_MS, or failing, and given up
+ *  on; capped; timed out) or read with its boxes past BOXES_PAGE merged, each that page alone */
 export interface InkRead { capped: number[]; timedOut: number[]; degraded: number[] }
 export declare function pagePlansOf(o: { doc: AddonDocument; OPS: Record<string, number>; index: LayoutIndex }): Promise<{ plans: Map<number, PagePlan>; ms: { ops: number; ink: number; plan: number }; ink: InkRead }>
 /** a manifest entry as the plans make it, before the remover: null for a page the remover is asked about */

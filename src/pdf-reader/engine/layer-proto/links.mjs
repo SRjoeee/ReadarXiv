@@ -1,7 +1,8 @@
 // src/pdf-reader/engine/layer-proto/links.mjs
 // The links of a laid page (3a; the 3a design, docs/ and the contract in reader.d.mts `LinkRecord`): the original's Link
 // annotations read once as the page is drawn, owned by the unit whose rectangle holds their glyphs, and, once the page is final,
-// frozen into the records `pageOf` answers. A pure leaf: no DOM, no clock, no PDF.js object but the plain data it is given.
+// frozen into the records `pageOf` answers. A pure leaf: no DOM, no clock, no PDF.js object but the plain data it is given, and
+// of the engine's modules the memory predicate alone (pipeline/memory.mjs, which imports nothing).
 //
 // A link over text the layer redraws moves with it (3a-2): at a unit's first paint the annotations it owns (ownedBy) are
 // matched to its pieces (matchUnit: by geometry, a citation's key, a url, the order of a kind) and placed over what is drawn of
@@ -20,6 +21,8 @@
 // Bounds (a page may be hostile): at most MAX_LINKS Link annotations a page are read (the rest counted unsupported), one with
 // more than MAX_GLYPHS glyph points is not carried, the glyph points are found through a grid (not links x points), and the
 // freeze spends at most WORK_MAX point-against-operation comparisons, dropping what is left as `unplaced`.
+
+import { isMemoryError } from '../pipeline/memory.mjs'
 
 /** the schemes a record's `url` may have (the contract's allow-list: PDF.js also lets ftp: and tel: through) */
 export const LINK_SCHEMES = ['http:', 'https:', 'mailto:']
@@ -49,14 +52,18 @@ export function urlAllowed(url) {
 
 /**
  * A page's annotations as PDF.js reports them (`page.getAnnotations()`), or null: a throw, a rejection, a page object that has no
- * such call (the tests' fakes), a reply that is no list. Never rejects: a page never fails for its links (L6)
+ * such call (the tests' fakes), a reply that is no list. Never rejects, a page never failing for its links (L6), but for a
+ * memory-class failure (pipeline/memory.mjs, C8.4), which it lets through: the run ends on it, no paper loses its links to it
  */
 export async function readAnnots(page) {
   try {
     if (typeof page?.getAnnotations !== 'function') return null
     const raw = await page.getAnnotations()
     return Array.isArray(raw) ? raw : null
-  } catch { return null }
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    return null
+  }
 }
 
 /**

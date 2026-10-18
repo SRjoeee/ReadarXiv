@@ -3,9 +3,9 @@
 // under way with the objects made so far, or why there is none, or a wait —, its prepare, each object of it by its digest,
 // and our copy of arXiv's PDF of the version.
 //
-//   GET  /api/v1/layer/<id>v<n>/<CTAG4>             200 the catalog | 202 Preparing | 404 { why } | 429 { retryAfterMs }
-//   POST /api/v1/layer/<id>v<n>/<CTAG4>/prepare     (application/json, body {}) 202 Preparing | 200 { ready: true } | 404 | 429
-//   GET  /api/v1/layer/<id>v<n>/<CTAG4>/o/<sha256>  200 the object, immutable
+//   GET  /api/v1/layer/<id>v<n>/<CTAG5>             200 the catalog | 202 Preparing | 404 { why } | 429 { retryAfterMs }
+//   POST /api/v1/layer/<id>v<n>/<CTAG5>/prepare     (application/json, body {}) 202 Preparing | 200 { ready: true } | 404 | 429
+//   GET  /api/v1/layer/<id>v<n>/<CTAG5>/o/<sha256>  200 the object, immutable
 //   GET  /api/v1/original/<id>v<n>                  200 application/pdf, or 206 for a range (ranges.ts)
 //
 // The catalog's and each object's answer name the original the layer was made over (BASE_ETAG_HEADER: our copy's entity-tag,
@@ -18,7 +18,7 @@
 // the one asked), the others within a few kilobytes and by their shape here; an object within the bytes its ref names; our
 // copy within the base's bytes and checked against its digest. A 5xx or a network that fails is asked once more after a
 // second; a second failure, or an answer not of its status's shape, is the server unreachable for now (LayerUnreachable).
-import { CATALOG_CAP, CTAG4, readCatalog } from '../engine/layer.mjs'
+import { CATALOG_CAP, CTAG5, readCatalog } from '../engine/layer.mjs'
 import type { ReadCatalog, Ref } from '../engine/layer.mjs'
 import type { TellRef } from '../engine/view.mjs'
 
@@ -75,7 +75,7 @@ export function paperSegment(p: Paper): string {
   if (typeof p?.id !== 'string' || !/^(\d{4}\.\d{4,5}|[a-z-]+(\.[A-Za-z-]+)?\/\d{7})$/.test(p.id) || !Number.isSafeInteger(p.version) || p.version < 1) throw new TypeError(`not a paper version: ${String(p?.id).slice(0, 40)}v${String(p?.version).slice(0, 8)}`)
   return `${p.id.replace('/', '_')}v${p.version}`
 }
-export const layerPath = (api: string, p: Paper) => `${api}${API_ROOT}layer/${paperSegment(p)}/${CTAG4}`
+export const layerPath = (api: string, p: Paper) => `${api}${API_ROOT}layer/${paperSegment(p)}/${CTAG5}`
 export const objectPath = (api: string, p: Paper, sha256: string) => `${layerPath(api, p)}/o/${sha256}`
 export const originalPath = (api: string, p: Paper) => `${api}${API_ROOT}original/${paperSegment(p)}`
 

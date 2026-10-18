@@ -215,13 +215,14 @@ export function compilerKeeper(open) {
   }
 }
 
-/** a paper's files (Map path → bytes) → what the pipeline works on */
+/** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
+ *  float (`inFloat`, their indices, latex-front.mjs loadProject's) */
 export function openPaper(files) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
   if (!meta.main) throw new Error('no main file')
   const project = loadProject(fsys, meta.main, { tables: true })
-  return { fsys, meta, project, units: project.units, kept: nameCells(project.units) }
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units) }
 }
 
 /** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the
@@ -401,11 +402,15 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   balance on its own (mt.mjs holdsUnbalanced) is sent again: a few more units, whose wire is unchanged and which the
  *   per-text cache answers. 7, 8 and 9 take that test with their own. 10 is carried for the first time: under 11 a copy
  *   of 10 was sent again whole
+ * - 12: 13 changes what a unit is (a heading wholly in \texorpdfstring is one, latex-front.mjs), not what is sent for one or
+ *   how a reply is read back: a unit whose pieces are what they were (its hash) was sent and read back as 13 would, and every
+ *   one is carried; the units 13 cuts anew (the headings, and those its new brace pairs renumber) have new hashes
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
 const NO_MARKER_HASH_OR_RUN = (pieces, unit = null) => NO_MARKER_HASH(pieces) && NO_RUN(pieces, unit)
-export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH_OR_RUN, 8: NO_MARKER_HASH_OR_RUN, 9: NO_MARKER_HASH_OR_RUN, 10: NO_RUN, 11: NO_RUN }
+const EVERY = () => true
+export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH_OR_RUN, 8: NO_MARKER_HASH_OR_RUN, 9: NO_MARKER_HASH_OR_RUN, 10: NO_RUN, 11: NO_RUN, 12: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

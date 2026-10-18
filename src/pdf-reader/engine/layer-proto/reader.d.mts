@@ -100,6 +100,9 @@ export type LeftPage = ReadLeftPart
  *  layer terminal: every page not ready is told `failed`, once; every pending and later pageOf (of a page not ready) and
  *  leftPageOf rejects with that error; addPart and endParts are no-ops; a ready page still answers, until dispose */
 export interface Layer {
+  /** whether this paper's parts may carry the draw of their pages (the head says so, `draw: 1`: a page can still have none), known at open;
+   *  false for a BUNDLE 3 layer and for a paper made without them */
+  readonly drawsComing: boolean
   /** each row as v0's unit (a row that is no unit is skipped and counted): `complete`, the pages newly complete, each told once:
    *  laying it waits for no row and no part more (its closure's, Need(p)), so pages come out of the stream's order (page 137
    *  before page 3, whose closure waits for a float translated later) */
@@ -148,7 +151,7 @@ export interface Layer {
    *  is located or the page is uncovered (D-6). Answers after dispose */
   unitAt(page: number, x: number, y: number): number | null
   /** answers after dispose */
-  stats(): LayerStats & { parts: { through: number; told: number } }
+  stats(): LayerStats & { parts: { through: number; told: number }; /** the draws held for the run: their pages and their left parts' bytes */ draws: { held: number; bytes: number } }
   /** idempotent. Every pending pageOf and leftPageOf rejects; the last document is told to `onRetired`; after it addPart is a
    *  no-op and pageOf, leftPageOf, copyOf and pageState throw */
   dispose(): void
@@ -171,7 +174,11 @@ export interface OpenLayerOptions {
   /** a superseded document is no longer read (told at the swap, once the tasks reading it are done), and once at dispose for the
    *  last: the host destroys it. The Layer never destroys a document */
   onRetired(doc: LayerDocument): void
+  /** the draws held for the run at most, in their left parts' bytes (DRAWS_HELD by default): past it the oldest are let go */
+  drawsHeld?: number
 }
+/** the draws of left parts the door holds for the run at most (their left parts' bytes) */
+export declare const DRAWS_HELD: number
 /** BUNDLE 3's open, until the pin move: the whole paper at once (every page covered, no part to come) */
 export interface OpenBundleLayerOptions {
   bundle: ReadBundle

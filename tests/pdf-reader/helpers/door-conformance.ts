@@ -359,6 +359,19 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
     })
   })
 
+  describe('the door: drawsComing', () => {
+    const noLeft: DoorSetup['leftPart'] = async () => new Uint8Array()
+    it('is false for a paper whose head says nothing of draws, and true where the head says draw 1, known at open', async () => {
+      M ??= await made()
+      const plain = await makeDoor({ paper: M, parts: 0, leftPart: noLeft, onRetired: () => {} })
+      expect(plain.layer.drawsComing).toBe(false)
+      plain.layer.dispose()
+      const drawn = await makeDoor({ paper: await made({ draw: true }), parts: 0, leftPart: noLeft, onRetired: () => {} })
+      expect(drawn.layer.drawsComing).toBe(true)
+      drawn.layer.dispose()
+    })
+  })
+
   describe('the door: leftPageOf', () => {
     it('waits for the covering part, fetches the ref once through leftPart and caches the parse', async () => {
       const d = await open()

@@ -61,9 +61,12 @@ class FakeLayer implements Layer {
   /** rejected at dispose: what waits on the host's transport races it */
   private readonly gone: Promise<never>
   private goneNow!: (e: unknown) => void
+  /** as the real door: the head says the parts may carry draws */
+  readonly drawsComing: boolean
 
   constructor(private readonly o: OpenLayerOptions, private readonly fake: { opts: FakeDoorOptions; failing: Set<number>; released(): void }) {
     this.N = o.index.head.paper.pages
+    this.drawsComing = o.index.head.draw === 1
     this.gone = new Promise<never>((_, reject) => { this.goneNow = reject })
     this.gone.catch(() => {})
     this.doc = o.doc
@@ -393,6 +396,8 @@ class FakeLayer implements Layer {
       links: { total: 0, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 }, unsupported: 0, unread: 0 },
       rules: { schema: RULES_SCHEMA, version: (this.o.rules ?? BUILTIN_RULES).version },
       parts: { through: this.through, told: this.parts.length },
+      // (the fake holds no draw for a run)
+      draws: { held: 0, bytes: 0 },
     }
   }
   dispose(): void {

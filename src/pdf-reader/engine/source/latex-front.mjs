@@ -191,6 +191,10 @@ const ASSIGNMENT = new RegExp(String.raw`^[ \t]*(?:[=<>][ \t]*(?:${DIMEN}|\\[A-Z
 // \hrule height 0.9pt, \vrule width .4pt depth 2pt: a rule's own keywords and sizes
 const RULE_SPEC = new RegExp(String.raw`^(?:[ \t]*(?:height|depth|width)[ \t]*${DIMEN})+(?![A-Za-z])`)
 const TABLE_ENVS = /^(tabular|tabularx|tabular\*|longtable|tabu|tabulary|supertabular|xtabular)\*?$/
+/** the floats: what TeX sets away from where the source has it, so that a unit written inside one (`inFloat`, whatever holds
+ *  it there: a minipage, a subfigure) is no neighbour in the text of the units around it. A longtable breaks across pages where
+ *  it stands, and is none */
+const FLOAT_ENVS = /^(?:figure\*?|table\*?|wrapfigure|sidewaystable|algorithm|listing)$/
 /** tabularray's tables, \\begin{tblr}[outer]{inner}, and the paper's own (\\NewTblrEnviron): their cells are math where
  *  the table says so — mode = math, imath or dmath, for the cells, a column, a row or one cell, in the table's own
  *  specifications or in \\SetTblrInner for every table. Such a table is math throughout, as an array is: nothing in it
@@ -603,9 +607,10 @@ function displayOutside(pieces, displays, macros) {
   const letters = ps => { const ds = ps.filter(p => displays.has(p)); return ds.length ? ds.map(p => displayLetters(p.src, macros)).join(' ') : null }
   return { lead: first > 0 ? letters(pieces.slice(0, first)) : null, trail: last >= 0 ? letters(pieces.slice(last + 1)) : null, inner: first >= 0 && last > first ? letters(pieces.slice(first + 1, last)) : null }
 }
-// A unit: { file, kind, start, end, pieces: [{t:'text', s} | {t:'ph', src} | {t:'open', id, src} | {t:'close', id, src}] }
+// A unit: { file, kind, start, end, pieces: [{t:'text', s} | {t:'ph', src} | {t:'open', id, src} | {t:'close', id, src}] }.
+// `floats`: the units written inside a float (FLOAT_ENVS), which the project gives as their indices (inFloat)
 class Builder {
-  constructor(file, units, src = '', macros = new Map()) { this.file = file; this.units = units; this.src = src; this.macros = macros; this.cur = null; this.pairId = 0; this.displays = new WeakSet() }
+  constructor(file, units, src = '', macros = new Map(), floats = null) { this.file = file; this.units = units; this.src = src; this.macros = macros; this.floats = floats; this.cur = null; this.pairId = 0; this.displays = new WeakSet() }
   text(s, start, end) { if (!this.cur) { if (!s.trim()) return; this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] } } this.cur.pieces.push({ t: 'text', s }); this.cur.end = end }
   /** `display`: a formula set on lines of its own (displayOutside) */
   ph(src, start, end, display = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'ph', src }; if (display) this.displays.add(p); this.cur.pieces.push(p); this.cur.end = end; return true }
@@ -634,6 +639,9 @@ class Builder {
     // the paper's title, which goes with every batch to an LLM as the HTML page's does (DESIGN §8.2)
     if (this.title) u.title = true
     if (this.depth !== undefined) u.depth = this.depth
+    // (written inside a float: told beside the units, by index — no field of the unit, whose objects a nested piece holds
+    // and its parent's hash reads)
+    if (this.inFloat) this.floats?.add(u)
     this.units.push(u)
   }
 }
@@ -829,6 +837,10 @@ function walkArgs(s, i, end, walked, b, ctx) {
  *  on every page (llncs' \\titlerunning, a token register, made a marked unit with its leading, and 2608.10091's zh final
  *  two pages longer) */
 const RUNNING_HEADS = new Set(['markboth', 'markright', 'titlerunning', 'authorrunning', 'toctitle', 'tocauthor'])
+/** hyperref's \\texorpdfstring{TeX}{PDF}: the first argument the text typeset, the second the bookmark's string, kept with the
+ *  command as it is. The role table leaves both untyped (LaTeXML's prototype), so the call was one placeholder, and a heading
+ *  wholly one no unit: 13 of 2307.16209's 14 */
+const PDF_STRING = new Set(['texorpdfstring'])
 /** the parameters of a theorem-like environment: its title, optional */
 const THEOREM_PARAMS = paramsOf('[t')
 /**
@@ -986,10 +998,14 @@ function walk(s, from, to, b, ctx) {
       // eleven proofs in English) —, but a theorem's title, a heading of its own (\\begin{theorem}[Convergence of X]:
       // the reader sees it as the body's words)
       const { end: argsEnd, title } = envArgs(s, afterBegin, bodyEnd, env, ctx)
+      // (a float's units, and those of whatever it holds, `inFloat`)
+      const outside = b.inFloat
+      if (FLOAT_ENVS.test(env)) b.inFloat = true
       // (its units `bracketed`: written back in its brackets, a translation's own ] would end them, patch)
       if (title) { const saved = b.kind, before = b.units.length; b.kind = 'heading'; walk(s, title.start + 1, title.end - 1, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.bracketed = true }
       const saved = b.kind; b.kind = env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved
       walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
+      b.inFloat = outside
       i = afterEnd; continue
     }
     if (name === 'end') {
@@ -1006,10 +1022,11 @@ function walk(s, from, to, b, ctx) {
       const [a, f] = args.map(x => s.slice(x.start + 1, x.end - 1).trim())
       // import.sty: \import{dir}{file} reads dir/file and puts dir first on the path an \input in it is looked for on,
       // \subimport the same from the directory imported last; subfiles loads \subfile{dir/file} by \subimport{dir}{file}
-      const imported = (dir, file) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs])
+      // (the file read inside a float is the float's: its units in `inFloat`, as TeX sets them there)
+      const imported = (dir, file) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs], b.inFloat)
       if (IMPORTS.has(name)) { if (f !== undefined) imported(IMPORTS.get(name) ? `${ctx.dirs[0] ?? ''}/${a}` : a, f) }
       else if (name === 'subfile') { if (a) imported(`${ctx.dirs[0] ?? ''}/${a.slice(0, a.lastIndexOf('/') + 1)}`, a.slice(a.lastIndexOf('/') + 1)) }
-      else if (a) ctx.visit(a, ctx.dirs)
+      else if (a) ctx.visit(a, ctx.dirs, b.inFloat)
       i = e; continue
     }
     if (HEADINGS.has(name) || OWN_UNIT_ARG.has(name)) {
@@ -1150,8 +1167,12 @@ function walk(s, from, to, b, ctx) {
     let from = end
     if (name === 'cmidrule') { const k0 = skipSpaces(s, argsAfter(s, end, 1).end); if (s[k0] === '(') { const c0 = s.indexOf(')', k0); if (c0 > 0 && c0 < to) from = c0 + 1 } }
     const args = !/^[A-Za-z@]+$/.test(name) || NO_ARGS.has(name) ? null : commandArgs(s, from, name, to)
-    const walked = args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : []
-    if (walked.length) { endText(); walkArgs(s, i, args.end, walked, b, ctx); i = args.end; continue }
+    // (\\texorpdfstring's first argument whether or not the paper's packages tell the role table of it: a class may define it)
+    const pdfString = PDF_STRING.has(name) && args?.args.length >= 2 && s[args.args[0].start] === '{' && s[args.args[1].start] === '{'
+    const walked = pdfString ? args.args.slice(0, 1) : args?.known ? args.args.filter(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[')) : []
+    // (its call ends with its second argument: where the table does not know it, every adjacent group was read as one of its)
+    const callEnd = pdfString ? args.args[1].end : args?.end
+    if (walked.length) { endText(); walkArgs(s, i, callEnd, walked, b, ctx); i = callEnd; continue }
     let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : args
     // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
     if (args?.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
@@ -1406,7 +1427,7 @@ function storedBodies(calls, { ctx, files, units, own }) {
     if ((all.match(named)?.length ?? 0) - (all.match(defined)?.length ?? 0) !== call.n) continue
     const text = files.get(file) ?? own.find(x => x.file === file)?.text
     if (text === undefined || units.some(u => u.file === file && u.start < end && u.end > start)) continue
-    const had = files.has(file), before = units.length, b = new Builder(file, units, text, ctx.bodies)
+    const had = files.has(file), before = units.length, b = new Builder(file, units, text, ctx.bodies, ctx.floats)
     if (kind === 'author') frontBlock(text, start, end, b, ctx)
     else { b.kind = kind; walk(text, start, end, b, ctx); b.flush() }
     // the words its units hold, as they would be sent: fewer than four, and it is no prose (\contentsname's
@@ -1457,14 +1478,16 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs) => visit(rel, dirs), dirs: [], bodies: macroBodies(sources.map(sourceText)), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
-  /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first */
-  function visit(rel, dirs = []) {
+  /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
+   *  `inFloat`: whether the file is read inside a float (the walk's builder there) */
+  function visit(rel, dirs = [], inFloat = false) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
-    const b = new Builder(f.rel, units, f.text, ctx.bodies), outer = ctx.dirs
+    const b = new Builder(f.rel, units, f.text, ctx.bodies, ctx.floats), outer = ctx.dirs
+    if (inFloat) b.inFloat = true
     ctx.dirs = dirs
     // the file as TeX reads it: up to the line of an \endinput it acts on; its \end{document}s, where the walk stops,
     // those it surely reaches (documentEnds)
@@ -1487,7 +1510,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   function visitFront(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel)
-    const before = units.length, b = new Builder(f.rel, units, f.text, ctx.bodies)
+    const before = units.length, b = new Builder(f.rel, units, f.text, ctx.bodies, ctx.floats)
     frontMatter(f.text, 0, f.text.length, b, ctx); b.flush()
     if (units.length > before) files.set(f.rel, f.text)
   }
@@ -1500,7 +1523,9 @@ function readProject(fsys, main, tables, sourceText, own) {
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
-  return { main: mainFile.rel, files, units, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }
+  // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
+  const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
+  return { main: mainFile.rel, files, units, inFloat, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */
