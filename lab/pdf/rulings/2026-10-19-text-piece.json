@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-19",
+  "by": "the maintainer",
+  "on": "the lost text piece proof rule (pull request 405): a unit whose pieces are plain text and symbols from the shared text-symbol table is proved by the layer and drawn instead of refused",
+  "quote": "接受",
+  "english": "accepted, 2026-10-19, relayed by the coordinator",
+  "measures": [
+    "paraGapTight",
+    "contentUnknown"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "zh, 2609.26457 pages 4 and 5, unit 24 only (the one unit that moves: it spans both pages and was refused before): paragraph gaps tighter than the lines beside them 46 to 47 and content unknown 5 to 6; every other output and unit is unchanged",
+  "why": "a refused unit could not count in either measure; drawn, it carries its own paragraph gap and its own unknown content mark. The same change takes the unit from refused to drawn: text units left English 4 to 2 and English text 7.8 to 4.0 percent on that output."
+}
