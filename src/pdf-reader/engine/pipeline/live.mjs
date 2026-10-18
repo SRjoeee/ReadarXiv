@@ -26,7 +26,7 @@ import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { decideGroups, groupOf } from '../translate/groups.mjs'
-import { batchOf, FIRST_BATCH, formulaRuns, holdsUnbalanced, NEXT_BATCH, nameCells, plainSource, textsShown, translateUnits } from '../translate/mt.mjs'
+import { batchOf, FIRST_BATCH, formulaRuns, holdsStyle, holdsUnbalanced, NEXT_BATCH, nameCells, plainSource, textsShown, translateUnits, utf8 } from '../translate/mt.mjs'
 import { kOfSource, trPiecesOf } from '../layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
@@ -407,12 +407,21 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   one is carried; the units 13 cuts anew (the headings, and those its new brace pairs renumber) have new hashes
  * - 13: 14 changes the left side alone (a turned item's tokens, anchors.mjs): every unit, its pieces and its wire are 13's, and
  *   every one is carried
+ * - 14: 15 sends a pair inside a sentence and a placeholder that sets no ink on no wire, and reads a reply that lost
+ *   every letter as none (mt.mjs planOf, TRANSLATE_VERSION 3; its units are 14's): a unit that holds neither a pair nor
+ *   such a placeholder between two stretches of its text (mt.mjs holdsStyle; one at an edge cut no sentence) was sent as
+ *   15 sends it, and is carried where its translation keeps a letter or a digit, its source having a letter. Every older pipeline's test
+ *   takes this one with its own: what 15 changed, each of them sent the old way. Without the unit, a translation that
+ *   holds no pair, no such placeholder between its texts, and a letter
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
 const NO_MARKER_HASH_OR_RUN = (pieces, unit = null) => NO_MARKER_HASH(pieces) && NO_RUN(pieces, unit)
-const EVERY = () => true
-export const PIPELINE_CARRIES = { 7: NO_MARKER_HASH_OR_RUN, 8: NO_MARKER_HASH_OR_RUN, 9: NO_MARKER_HASH_OR_RUN, 10: NO_RUN, 11: NO_RUN, 12: EVERY, 13: EVERY }
+const holding = re => pieces => pieces.some(p => p?.t === 'text' && typeof p.s === 'string' && re.test(p.tr ? p.s : utf8(p.s)))
+const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
+const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
+const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
+export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

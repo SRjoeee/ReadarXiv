@@ -80,7 +80,12 @@
 //     a landscape page's captions, a figure's turned labels: 130 of the corpus's 132 PDFs. The units, the wire, the
 //     translation and the layout file are 13's byte for byte; the bundle's content is not, under the same key (VTAG), so a
 //     bundle made before is never taken for one made now. A copy of 13 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '14'
+// 15: raised with TRANSLATE_VERSION 3 (a sentence whose words change style goes out whole, mt.mjs planOf), so that copies
+//     are judged again; the units, their pieces and the layout file are 14's, byte for byte. 2610.19159's lead terms and
+//     word-by-word colour runs went out as a marker at every style boundary and came back as word salad, its "Before"
+//     labels empty. A copy of 14 (and of each older pipeline, with its own test) carries every unit that holds no pair
+//     and no inkless placeholder between its words and whose translation keeps a letter (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '15'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
