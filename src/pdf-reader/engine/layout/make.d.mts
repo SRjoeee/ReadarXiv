@@ -70,6 +70,8 @@ export interface LayoutStats {
   /** the link-anchor locator: the references and citations the matcher did not find that it tried, those it placed by
    *  their links ([unit, k], rising), and why each other stays LOST (its step) */
   links: { tried: number; placed: [unit: number, k: number][]; why: Record<string, number> }
+  /** the colour pieces of the units the file holds, and those whose run's fill TeX wrote (the file's `colours` rows) */
+  colours: { pieces: number; evaluated: number }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */
   labels: Record<string, [found: number, units: number]>
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }

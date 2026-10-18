@@ -190,6 +190,20 @@ describe('the cut of a small paper', () => {
     expect(fits(c)).toEqual([[1, 1], [2, 3], [4, 7], [8, 8]])
   })
 
+  it("carries each colour piece's run's fill in the part of its unit alone, and the parts merge back to them all (#407)", async () => {
+    const whole = wholeOf(SMALL)
+    whole.layout!.colours = [[0, 0, 0xff0000], [6, 0, 0x0000ff]]
+    const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })
+    await checkCut('small, coloured', whole, c)
+    const back = await readBack(c)
+    for (const p of back.parts) {
+      const ids = new Set((p.layout?.units ?? []).map(u => u[0]))
+      for (const r of p.layout?.colours ?? []) expect(ids.has(r[0]), JSON.stringify(r)).toBe(true)
+    }
+    expect(back.parts.flatMap(p => (p.layout?.colours ?? []).map(r => r[0])).sort((x, y) => x - y)).toEqual([0, 6])
+    expect(indexLayout(mergeParts(back.index, back.parts).layout!).unit(6)?.colours).toEqual(new Map([[0, 0x0000ff]]))
+  })
+
   it('without a layout file: left only, no file-only units, every part\'s add-on null', async () => {
     const whole = wholeOf(SMALL, { layout: false })
     const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })

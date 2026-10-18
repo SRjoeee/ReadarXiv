@@ -196,7 +196,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
       const t = texts.get(`${r[0]}.${r[1]}`)
       if (!t) continue
       const fromInk = [], fromLayer = [], items = []
-      for (let o = 4; o < r.length; o += 6) {
+      for (let o = 4; o + 5 < r.length; o += 6) {
         const [page, x0, , x1, top, bottom] = r.slice(o, o + 6), gs = await inkOf(page)
         const inside = (x, y) => x >= x0 - 0.01 && x <= x1 + 0.01 && y >= bottom - 0.01 && y <= top + 0.01
         const here = gs.filter(g => inside((g.x0 + g.x1) / 2, (g.top + g.bottom) / 2)).sort((a, b) => a.x0 - b.x0)

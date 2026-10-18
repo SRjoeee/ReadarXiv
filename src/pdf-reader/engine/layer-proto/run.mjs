@@ -56,7 +56,7 @@ import * as L2 from './layer2.mjs'
 import { fileSwap, protection } from './removal.mjs'
 import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import * as LK from './links.mjs'
-import { kOfPieces, locatedWhole, proofOf, shortSkipsOf, texParts, texRects } from './tex.mjs'
+import { colourOf, fillOf, kOfPieces, locatedWhole, proofOf, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
@@ -1386,8 +1386,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
 
-  // the columns of each page, as its paragraphs' lines span them: a line centred in its column (a caption under its
-  // figure, a title over the text) is set centred, whatever the page's own middle (each unit's lines as it is added, addUnits)
+  // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits): a unit of a
+  // part with no layout is centred where its lines are its column's middle, every line short of it, the first not at its
+  // edge (a caption under its figure, a title over the text), as the file's flag is no such unit's
   const cols = []
   const centredInColumn = b => {
     const rs = b.rects, list = cols[b.page] ?? []
@@ -1397,6 +1398,42 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const cx0 = Math.min(...own.map(c => c[0])), cx1 = Math.max(...own.map(c => c[1])), cmid = (cx0 + cx1) / 2
     const centres = rs.map(r => (r[1] + r[3]) / 2)
     return centres.every(c => Math.abs(c - cmid) < 2.5) && rs.every(r => r[3] - r[1] < 0.92 * (cx1 - cx0)) && rs[0][1] > cx0 + 4
+  }
+  // a table cell's centring, which TeX's probe does not tell (a cell's marks carry none) and the page's column does not
+  // either: a cell of several lines by its own (blocks2's rule, `undefined`: their middles agree and their widths do not, a
+  // makecell's or a shortstack's); one of a single line by its table's column on its page, the file's lines of the cells of
+  // its column: centred where their middles agree and their widths do not (a c column's), not where their middles do not
+  // agree (an l or p column's, whose cells share their start: 2609.26457's unit 126), and where the column cannot tell (a
+  // cell alone in it, a header's whose group names no column, widths alike) `null`: the layout file's flag, as for any
+  // unit. Its column's cells: the open's table groups where it is given them (the door's, every group whole from the open),
+  // else the units' own places or groups (a whole open's, every unit given)
+  const columnKey = (id, u) => {
+    const c = u?.cell
+    if (c) return `${c.table}:c${c.col}${c.span > 1 ? `+${c.span}` : ''}`
+    const g = u?.group ?? null
+    return typeof g === 'string' && !g.endsWith(':h') ? g : null
+  }
+  const columnOfCell = p => {
+    if (tableGroups) { const g = tableGroups.get(p.id); return typeof g === 'string' && !g.endsWith(':h') ? membersOf.get(g) ?? [] : [] }
+    const key = columnKey(p.id, p.unit), ids = []
+    if (key !== null) for (const [id, u] of U) if (columnKey(id, u) === key) ids.push(id)
+    return ids
+  }
+  const cellCentred = p => {
+    const r0 = p.rects[0]
+    if (!r0) return null
+    if (new Set(p.rects.filter(r => r[0] === r0[0]).map(r => Math.round(r[2]))).size > 1) return undefined
+    const spans = []
+    for (const id of columnOfCell(p)) {
+      const L = filed(id) ? tex.index.unit(id)?.lines : null
+      for (let j = 0; L && j + 7 < L.length; j += 8) if (L[j] === r0[0]) spans.push([L[j + 1], L[j + 2]])
+    }
+    if (spans.length < 2) return null
+    // (every middle within 2 of every other: a column whose cells share a start or an end has its middles half its widths'
+    // spread apart, and a spread of widths more than 4 puts them more than 2 apart)
+    const mids = spans.map(([a, z]) => (a + z) / 2).sort((a, b) => a - b), widths = spans.map(([a, z]) => z - a)
+    if (mids.at(-1) - mids[0] > 2) return false
+    return Math.max(...widths) - Math.min(...widths) > 4 ? true : null
   }
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
   // the units the hybrid draws that v0's geometry does not hold, as each is placed)
@@ -1413,17 +1450,23 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** the text area of page pg as unit p reads it: as the page's growth step left it once p's own lines there grew (growOn),
    *  the units ranked before it on the page grown and those after it not yet, whenever p is laid */
   const areaOf = (p, pg) => p.area?.get(pg) ?? textArea(pg)
-  const columnOf = (b, p) => {
+  const columnOf = (b, p, size) => {
     const mid = (b.x0 + b.x1) / 2
     const own = (cols[b.page] ?? []).filter(([a, z]) => a <= mid && z >= mid)
-    return own.length >= 3 ? [Math.min(...own.map(c => c[0])), Math.max(...own.map(c => c[1]))] : areaOf(p, b.page)
+    if (own.length < 3) return areaOf(p, b.page)
+    // (its right edge the furthest of its lines reach, but a line TeX set overfull: one past the furthest end two lines share
+    // by less than an em is no edge; a single line widened to it ran 3.4 pt into the margin, 2608.16117's page 11)
+    const ends = own.map(c => c[1]).sort((x, y) => y - x)
+    let right = ends[0]
+    for (let i = 0; i + 1 < ends.length; i++) if (ends[i] - ends[i + 1] <= 0.2) { if (ends[0] - ends[i] < size) right = ends[i]; break }
+    return [Math.min(...own.map(c => c[0])), right]
   }
   // a single line may run on to its column's edge or the next glyph on its baseline (a heading is as wide as its
   // column, not as its English words); a centred one as far to either side
   const widen = (b, p) => {
     if (b.rects.length !== 1) return
     const r = b.rects[0], yb = b.B[0], size = b.sizes[0]
-    const [cx0, cx1] = columnOf(b, p)
+    const [cx0, cx1] = columnOf(b, p, size)
     const line = (chars2[b.page - 1] ?? []).filter(c => Math.abs(c.yb - yb) < 0.4 * size && /\S/.test(c.ch))
     const right = Math.min(cx1, ...line.filter(c => c.x0 > r[3] + 6).map(c => c.x0 - 0.5 * size))
     const left = Math.max(cx0, ...line.filter(c => c.x1 < r[1] - 1).map(c => c.x1 + 0.5 * size))
@@ -1803,7 +1846,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the hybrid: a unit the file locates whole read with the file's parts; any other, v0's reading, each rendering proven
     // by the file (proofOf: a crop cut from its placeholder's own ink, page text in its segments), or the unit left the
     // original's where the file proves one not; a unit of a part with no layout as with no file (filed), through the same proof
-    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N, lineskip: LINESKIP }) : filed(p.id) ? { proof: proofOf(tex.index.unit(p.id), kOfPieces(p.unit, tex.pieces.get(p.id)), N) } : proof ? { proof: proofOf(null, null, N) } : null
+    // (and each placeholder's fill and each colour piece's run's by the file where it holds the unit: what they are drawn in)
+    const fileLu = !p.tex && filed(p.id) ? tex.index.unit(p.id) : null, fileK = fileLu ? kOfPieces(p.unit, tex.pieces.get(p.id)) : null
+    const parts = p.tex ? texParts(p.tex.lu, p.tex.kOf, { use: tex.use, lines: p.tex.lines, extents: tex.extents ?? 'v0', shown: N, lineskip: LINESKIP }) : filed(p.id) ? { proof: proofOf(fileLu, fileK, N), fillOf: fillOf(fileLu, fileK), colourOf: colourOf(fileLu, fileK) } : proof ? { proof: proofOf(null, null, N) } : null
     // (the citations and macros its renderings teach are the unit's own, learnt as it is read: a later placeholder of the
     // unit reads its earlier ones, never another unit's, S2. The paper's, learnt in lay order, made a unit's reading a
     // function of every unit laid before it; no unit of the 30 outputs is read otherwise without it, 2026-10-15)
@@ -1861,8 +1906,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const s = orig?.size ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
     const base = orig && orig.st.fam !== 'math' ? { ...orig.st } : { fam: 'serif', bold: p.unit.kind === 'heading', italic: false, caps: false, design: designs.serif }
     const keep = prep.keep?.length ? new Set(prep.keep) : null
-    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt)
-    for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
+    // (centred as the layout file has the unit, UNIT_FLAG.CENTRED: TeX's own alignment where the marked original tells it, else
+    // the maker's reading of arXiv's lines, make.mjs; a unit of a part with no layout by its lines, blocks2's)
+    const lu = filed(p.id) ? tex.index.unit(p.id) : null
+    // a centred unit whose first line starts with a label kept as the original's (IEEEtran's "I." before its centred section
+    // heading): centred with the line, label and text one, as TeX centred them, its ink copied as the line's start (a crop, as
+    // a numbered heading's below), the line from the label on (`carried`). Left where it was, the shorter text centred alone
+    // stood an em or more away from it
+    const byCell = lu && p.unit.kind === 'cell' ? cellCentred(p) : null
+    const centredFlag = !lu ? undefined : byCell !== null ? byCell : lu.centred
+    const carried = centredFlag === true && !!prep.label?.chars?.length && !prep.label.drawn && !!p.rects[0] && prep.label.chars.every(c => c.page === p.rects[0][0])
+    if (carried) { const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r0[1]) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]] }
+    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt, centredFlag)
+    if (!lu) for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // (the unit's displays TeX set with its short skip under a line of its own that ends 2 em before them, each the block's of
     // that line: the line laid there ends as far before them, layer2.mjs slotsAt)
@@ -1877,6 +1933,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!fileLines) b.indent = Math.max(b.indent, prep.label.x1 + 0.25 * s - b.x0)
       else if (prep.label.x1 > p.rects[0][1] + 0.1) b.indent = Math.max(b.indent, (prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s) - b.x0)
     }
+    // a section heading (not the paper's title or front matter) of several lines in one block: set in fewer lines, it stands on
+    // the original's last ones (layer2.mjs laidOut, P.lastLines). Where its class set its number before its first line, kept
+    // as the original's ink there, the number goes with it, its ink copied as the line's start (`numbered`, once it is laid)
+    const heading = p.unit.kind === 'heading' && !p.unit.title && !p.unit.front
+    const numbered = heading && !carried && !prep.lead && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
     // a first row TeX set on the line another unit's last row ends (a shared line, need.mjs rowLeadOf: a run-in heading's text,
     // a paragraph's part after the float that split it) starts where that unit's translation ends on the row, the original's
     // separation after it (`start`, slotsAt), or at the row's own start where that unit set no text there (shareOf): not where
@@ -1916,13 +1977,22 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     // (from here to the unit's end nothing is awaited: its work is charged to its first page in `arrive`)
     workMarks.set(p, markWork())
-    const tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
+    let tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
+    if (carried && p.blocks[0]?.centred) {
+      const cs = prep.label.chars, b0 = p.blocks[0], start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
+      const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
+      const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: median(cs.map(c => c.yb)), text: prep.label.text }
+      tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0 }, ...tokens], { base: tokens.base })
+      b0.indent = 0
+      prep.label = { ...prep.label, drawn: prep.label.text }
+      for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
+    }
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
     p.prep = prep
     p.s = s
-    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: filed(p.id) ? LINESKIP : null, halfLead: edgesOf(p, prep) }
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: filed(p.id) ? LINESKIP : null, halfLead: edgesOf(p, prep), lastLines: heading && !numbered }
     // (no larger than its lines' room between the rules over and under them leaves its script's em box: clearanceOf)
     p.clear = clearanceOf(p, s)
     if (p.clear && p.clear.cap < 1) p.P.capScale = p.clear.cap
@@ -1940,6 +2010,21 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       p.P.growTo = 0
     }
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P)
+    // a numbered heading set in fewer lines than the original's: laid again on the original's last lines with its number as
+    // its first line's start, the number's own ink copied there (a crop: its face, its colour, the space its class set after
+    // it, as the original's) and erased where it was. Where that does not fit, or moves it nowhere, as it was
+    if (numbered && !p.layout.clipped && p.layout.lines.length < L2.originalLines(p.blocks[0])) {
+      const cs = prep.label.chars, b0 = p.blocks[0], start = b0.x0 + b0.indent
+      const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
+      const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: median(cs.map(c => c.yb)), text: prep.label.text }
+      const blocks = [{ ...b0, start: x0 + 0.4 }], nTokens = [{ crop, cw: x1 - x0, glue: false, w100: 0 }, ...tokens], PL = { ...p.P, lastLines: true }
+      const laid = L2.layoutUnit2(nTokens, blocks, s, PL)
+      if (!laid.clipped && laid.lines.at(-1).baseline < p.layout.lines.at(-1).baseline - 0.05) {
+        p.blocks = blocks; p.tokens = nTokens; p.P = PL; p.layout = laid
+        prep.label = { ...prep.label, drawn: prep.label.text }
+        for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
+      }
+    }
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
