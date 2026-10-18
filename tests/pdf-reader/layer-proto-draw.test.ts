@@ -82,7 +82,7 @@ const FONT = { name: 'NimbusRomNo9L-Regu', isType3Font: false, missingFile: fals
 type Counts = Record<'text' | 'annots' | 'render', number[]>
 /** the paper's documents (one: no tails), each page's PDF.js calls counted; a page's text items and Link annotations as docsOf
  *  makes them, its font a Times with its map */
-function docsOf(spec: PaperSpec) {
+function docsOf(spec: PaperSpec, o: { textHold?: (n: number) => Promise<void> | null; renderHold?: (n: number) => Promise<void> | null; pageHold?: (n: number) => Promise<void> | null } = {}) {
   const N = spec.pages
   const counts: Counts = { text: Array(N + 1).fill(0), annots: Array(N + 1).fill(0), render: Array(N + 1).fill(0) }
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
@@ -100,12 +100,12 @@ function docsOf(spec: PaperSpec) {
   }
   const pageOf = (n: number) => ({
     view: VIEW, rotate: 0, getViewport: ({ scale }: { scale: number }) => viewportOf(scale),
-    getTextContent: async () => { counts.text[n]!++; return { items: items(n), styles: { g_d0_f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } } },
-    render: () => { counts.render[n]!++; return { promise: Promise.resolve() } },
+    getTextContent: async () => { counts.text[n]!++; await o.textHold?.(n); return { items: items(n), styles: { g_d0_f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } } },
+    render: () => { counts.render[n]!++; return { promise: Promise.resolve(o.renderHold?.(n) ?? undefined) } },
     commonObjs: { get: (name: string) => { if (name !== 'g_d0_f1') throw new Error(`${name} not resolved`); return FONT } },
     cleanup() {}, getAnnotations: async () => { counts.annots[n]!++; return annotationsOf(n) },
   })
-  const doc = { numPages: N, getPage: async (n: number) => pageOf(n) }
+  const doc = { numPages: N, getPage: async (n: number) => { await o.pageHold?.(n); return pageOf(n) } }
   /** each page's draw, as the server reads it (pipeline/draw-data.mjs) and a left part carries it (checked JSON) */
   const draws = async () => {
     const out: (Draw | null)[] = []
@@ -388,6 +388,81 @@ describe('the even pass: pages read live, its fits reading any page\'s ink at on
       expect(drawing(run)).toEqual(want)
       expect(data.counts.text.slice(1)).toEqual(live.counts.text.slice(1))
     } finally { evenBorrows.on = false; LONG.set(1, was!) }
+  })
+})
+
+describe('a page\'s pixels held only while they are its reading\'s', () => {
+  const sleep = (ms: number) => new Promise<void>(ok => setTimeout(ok, ms))
+  const state = (run: Run, p: number) => run.held(p).state.filter(k => k === 'ink' || k === 'pixels')
+
+  it('a draw that comes after its page gave up waiting for it starts no second drawing of the page (one render, read live)', async () => {
+    const { DRAW_WAIT_MS } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const P = await paper()
+    // (page 2's live reading slow, its draw coming once the drawing has given up on it and is reading live)
+    const data = docsOf(SPEC, { textHold: n => (n === 2 ? sleep(400) : null) })
+    const D = await docsOf(SPEC).draws()
+    const { run } = await runOf(P, data.doc, [2], p => (p === 2 ? sleep(DRAW_WAIT_MS + 100).then(() => D[1]!) : Promise.resolve(D[p - 1]!)))
+    await sleep(50)
+    expect(run.drawStats!.late).toEqual([2])
+    expect(run.drawStats!.live).toEqual([2])
+    expect(data.counts.render[2]).toBe(1)
+    expect(run.drawStats!.pixels[2]).toBeUndefined()
+  })
+
+  it('a page let go while its pixels are still being read holds none of them once they come (free: an asked page with no units)', async () => {
+    const SPEC4: PaperSpec = { pages: 4, units: SPEC.units }
+    const c = await cutSpec(SPEC4)
+    const P = { index: c.index, parts: c.parts }
+    let release = () => {}
+    const slow = new Promise<void>(ok => { release = ok })
+    const data = docsOf(SPEC4, { renderHold: n => (n === 4 ? slow : null) })
+    const D = await docsOf(SPEC4).draws()
+    const { run } = await runOf(P, data.doc, [4], async p => D[p - 1]!, { spec: SPEC4 })
+    expect(run.ready(4)).toBe(true)
+    // (ready and let go at once: no unit on it; its pixels, asked as its draw came, come after)
+    expect(run.drawStats!.pixels[4]).toBe('asked')
+    release()
+    await sleep(20)
+    expect(data.counts.render[4]).toBe(1)
+    expect(state(run, 4)).toEqual([])
+  })
+
+  it('a page asked and given up before it is drawn (its rows to come) holds none of its pixels, nor a reading under way', async () => {
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const P = await paper()
+    // (page 2's drawing held: the ask of page 3 is given up while its closure is still being drawn, page 3 not drawn yet)
+    let let2 = () => {}
+    const hold2 = new Promise<void>(ok => { let2 = ok })
+    let held2 = true
+    const data = docsOf(SPEC, { pageHold: n => (n === 2 && held2 ? hold2 : null) })
+    const D = await docsOf(SPEC).draws()
+    const facade = layoutFacade(P.index.head)
+    const run = await openProto({
+      parts: true, proof: true, doc: data.doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
+      target: 'zh', pages: SPEC.pages, scale: 1, dpr: 1, copy: false, free: true, records: true, labels: LABELS as never,
+      tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc: data.doc, manifest: { schema: 1, removal: REMOVAL, pages: SPEC.pages, sets: {}, page: {} } as never },
+      drawOf: async (p: number) => D[p - 1]!, drawsComing: true,
+    } as never)
+    for (const part of P.parts) { facade.add(part); run.grow(part) }
+    run.endParts()
+    // (the rows of page 3's units still to come: its closure waits for them)
+    const rows = unitsOfRows(P.index, rowsOf(P.index))
+    run.take(new Map([...rows].filter(([id]) => id < 3)) as never)
+    let wanted = true
+    const asking = run.layFor(3, () => wanted)
+    await sleep(20)
+    // (page 3 asked, its pixels read at once: the parts carry draws)
+    expect(run.drawStats!.pixels[3]).toBe('asked')
+    expect(state(run, 3)).toEqual(['ink', 'pixels'])
+    wanted = false
+    held2 = false
+    let2()
+    run.poke()
+    await asking
+    expect(run.ready(3)).toBe(false)
+    expect(run.held(3).state).not.toContain('chars')
+    expect(state(run, 3)).toEqual([])
+    run.dispose()
   })
 })
 

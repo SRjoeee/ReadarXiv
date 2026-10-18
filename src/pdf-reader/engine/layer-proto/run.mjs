@@ -1010,6 +1010,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     unswept.delete(q)
     chars2[q - 1] = rowsByPage[q] = undefined
     inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
+    // (a reading of its pixels still under way is no longer the page's: its result is dropped as it comes, pixelsOf)
+    pixelTasks.delete(q)
   }
   /** whether a unit on page q is still to be painted on one of its pages (its first page's part there not painted yet,
    *  paintOn): its paint elsewhere may cut a crop from q, on v0's own copy (release), and its own state stays until then */
@@ -2303,17 +2305,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       c.width = Math.floor(viewport.width * dpr)
       c.height = Math.floor(viewport.height * dpr)
       try { await page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise } finally { page.cleanup() }
-      if (!disposed) {
+      // (kept only while it is still the page's reading: not where the page was let go (letGoPage) or the ask it was read for
+      // given up before the page was drawn (dropPixels), whose result would be held for good)
+      if (!disposed && pixelTasks.get(q) === t) {
         inks[q] = L2.inkMapOf(c)
         workOf(q).inkSteps += inks[q].w * inks[q].h
+        pixelsIn[q] = 1
       }
       c.width = 0
       c.height = 0
-      pixelsIn[q] = 1
       timesOf(q).render += performance.now() - t0
     })
     t.catch(e => {
-      if (isMemoryError(e)) return
+      if (isMemoryError(e) || pixelTasks.get(q) !== t) return
       failedPages.add(q)
       if (rows[q - 1]) rows[q - 1].base = false
       touched.add(q)
@@ -2326,6 +2330,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (its draw, where pages are read from theirs: asked at its closure's taking, or now)
     const asked = DATA ? drawAsk(i) : null
     const page = await d.getPage(i)
+    const tGot = performance.now()
     const r = rows[i - 1]
     let x = null
     try {
@@ -2368,7 +2373,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
         // read before the page is cleaned up)
         annP = LK.readAnnots(page)
-        if (!prefetched) timesOf(i).render += tRendered - tLive
+        // (and its getPage, which an ordinary live reading's time holds too; never the wait for its draw)
+        if (!prefetched) timesOf(i).render += tRendered - tLive + (asked ? tGot - tPage : 0)
         tc = await textP
         fonts = FR.live(page, tc.styles)
       }
@@ -2695,8 +2701,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const q of [p, 1, ...C.draw]) if (!drawnPages[q] && !failedPages.has(q)) drawAsk(q)
     if (pixelTasks.has(p)) return
     if (fromData[p] || (drawsComing && p <= through && !failedPages.has(p) && !drawnPages[p])) { pixelsOf(p, 'asked'); return }
-    // (a page drawn live by then, its draw refused, has its ink already)
-    if (!drawnPages[p]) drawAsks.get(p)?.then(d => { if (d && !disposed && !pixelTasks.has(p) && (!drawnPages[p] || fromData[p])) pixelsOf(p, 'asked') })
+    // (not for a page whose drawing has taken its ask by then, drawPageOn: one read from its draw has its pixels asked there, and
+    // one read live, its draw late or refused, draws itself)
+    if (!drawnPages[p]) drawAsks.get(p)?.then(d => { if (d && !disposed && !pixelTasks.has(p) && !drawnPages[p] && drawAsks.has(p)) pixelsOf(p, 'asked') })
   }
   /**
    * Page p's closure laid (the 1b-D design §2.1): page 1 drawn first; then, the closure taken again after every wait (a part
@@ -2707,7 +2714,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    * wait, between pages and between units) is false: what is done stays done, each step having run on complete inputs, and
    * the next closure takes it up from there
    */
-  const layIn = async (p, still) => {
+  /** page p's pixels, read for it before it was drawn, let go (its ask given up: layIn), read again if it is asked again */
+  const dropPixels = q => {
+    if (drawnPages[q] || !pixelTasks.has(q)) return
+    pixelTasks.delete(q)
+    pixelsIn[q] = 0
+    inks[q] = undefined
+  }
+  /** layWithin; where pages are read from their draws, a page asked and given up before it was drawn lets go of its pixels, so
+   *  that a reader passing pages whose rows are still to come holds none of theirs */
+  const layIn = (p, still) => (DATA ? layWatched(p, still) : layWithin(p, still))
+  const layWatched = async (p, still) => {
+    try { await layWithin(p, still) } finally { if (!disposed) dropPixels(p) }
+  }
+  const layWithin = async (p, still) => {
     if (disposed || readyOf(p)) return
     const t0 = performance.now()
     let waited = 0
@@ -2913,7 +2933,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     held(pg) {
       if (pg === undefined) return { free, records, shelf: !!shelf }
       const r = rows[pg - 1]
-      const state = Object.entries({ chars: chars2[pg - 1], ink: inks[pg], items: pageItems[pg], accounted: accounted[pg], kept: keptOf[pg], laid: laid[pg], canvas: r?.left ?? r?.right, removed: RM?.removed[pg] }).filter(([, v]) => v).map(([k]) => k)
+      const state = Object.entries({ chars: chars2[pg - 1], ink: inks[pg], items: pageItems[pg], accounted: accounted[pg], kept: keptOf[pg], laid: laid[pg], canvas: r?.left ?? r?.right, removed: RM?.removed[pg], pixels: pixelTasks.get(pg), draw: drawAsks.get(pg) }).filter(([, v]) => v).map(([k]) => k)
       const units = [...byId.values()].filter(u => u.pages.includes(pg) && (HEAVY.some(k => u[k] !== undefined) || !!u.tex?.lines)).map(u => u.id)
       return { state, units, reads: reads[pg] ?? 0 }
     },

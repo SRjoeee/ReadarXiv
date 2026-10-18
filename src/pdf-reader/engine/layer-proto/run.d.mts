@@ -60,7 +60,7 @@ export interface Row {
 }
 /** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the
  *  units still to be laid that read it */
-export interface PageHeld { state: ('chars' | 'ink' | 'items' | 'accounted' | 'kept' | 'laid' | 'canvas' | 'removed')[]; units: number[]; reads: number }
+export interface PageHeld { state: ('chars' | 'ink' | 'items' | 'accounted' | 'kept' | 'laid' | 'canvas' | 'removed' | 'pixels' | 'draw')[]; units: number[]; reads: number }
 /** a laid unit's record, as main.js kept it (each line: page, baseline, target baseline, exact, mode, overflow, x0, x1) */
 export interface Rec {
   id: number; kind: string; v: 2; pages: number[]; cut: boolean; s?: number; f?: number; fitScale: number; knob: string; clipped: boolean
