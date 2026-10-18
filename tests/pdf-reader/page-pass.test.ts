@@ -337,6 +337,39 @@ describe('layerOfPaper: the marked original read by the pass (stage 2)', () => {
   })
 })
 
+describe('layerOfPaper: a marked original of fewer pages than arXiv\'s PDF', () => {
+  /** worldOf's three pages on arXiv's, the marked original their first two alone, every line of it carried: a compile that
+   *  stopped short of the paper's end (2610.20713 on TL2025, 7 pages of 15, 95 % of its lines carried) */
+  const shortWorld = (): World => { const w = worldOf(); return { ...w, marked: w.pages.slice(0, 2), marks: w.marks.filter(m => m[1] <= 2) } }
+  const layouts = (notes: unknown[]) => notes.map(n => (n as { layout: unknown }).layout)
+
+  it('is no layout, the compile\'s refusal: the layer of a paper whose compile was refused, the marks given or read here', async () => {
+    const w = shortWorld()
+    const none = await passOf(w, { marks: { refused: 'compile' } as never })
+    expect(layouts(none.notes)).toEqual(['none', 'none'])
+    for (const input of [{}, { whole: true }, { marks: null, marked: markedIn(w) }, { marks: null, marked: markedIn(w), whole: true }]) {
+      const got = await passOf(w, input as never)
+      const at = JSON.stringify(input)
+      expect(got.r, at).toMatchObject({ count: 2, stats: { layout: { refused: 'compile', why: 'the marked original has 2 pages, arXiv\'s PDF 3' }, plans: null, addon: null } })
+      expect(got.notes, at).toEqual(none.notes)
+      // (the left by the units' text alone, as with the compile refused: no unit mark of the short original bounds it)
+      expect(got.told, at).toEqual(none.told)
+      expect(shas(got.parts), at).toEqual(shas(none.parts))
+    }
+  })
+
+  it('as many pages or more is the carry\'s to judge, as before', async () => {
+    const w = worldOf()
+    const longer = { ...w, marked: [...w.pages, { runs: [] }] }
+    for (const world of [w, longer]) {
+      for (const input of [{}, { marks: null, marked: markedIn(world) }]) {
+        const got = await passOf(world, input as never)
+        expect(layouts(got.notes)).toEqual(['kept', 'kept'])
+      }
+    }
+  })
+})
+
 describe('layerOfPaper: the page stream\'s rules (`rules`: rules 1, 3, 4 and 5)', () => {
   it('today\'s by default; under the four rules each oracle tells the whole run\'s layer', async () => {
     const w = deferredWorld()

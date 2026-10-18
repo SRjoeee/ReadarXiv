@@ -101,7 +101,14 @@
 //     hash. Every other paper's units and marked original (so its layout file), the wire and its reading back are 16's byte
 //     for byte, the pack's 32 outputs among them: a copy of 16 carries every unit it holds the source of, matched by
 //     sourceHash (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '17'
+// 18: a marked original that stopped at its error limit, never reached the document's end, or has fewer pages than arXiv's
+//     PDF is a failed compile, no layout (live.mjs ranThrough, layout/paper.mjs, page-pass.mjs): 2610.20713 (TL2025, xelatex
+//     and nicematrix, its hundredth error after 7 of 15 pages) and 2608.03994 (751 errors TeX went past, 14 of 17 pages) had
+//     each a layout of the pages it set, 95 and 97 % of their lines carried. Such a paper's bundle is now one with no layout,
+//     under a new key (VTAG). Of 141 compiles counted against arXiv's PDF the other 139 have its count: every other
+//     paper's units, marked original, layout file, wire and reading back are 17's byte for byte, and a copy of 17 carries
+//     every unit it holds the source of (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '18'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
