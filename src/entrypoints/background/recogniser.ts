@@ -1,6 +1,7 @@
 // The background's side of the recogniser (DESIGN §15.3): it opens the offscreen document when a figure needs
-// reading, hands figures over one at a time, and gives up on one that does not come back. The document closes itself
-// when idle (entrypoints/ocr/main.ts), so "is it there" is asked before every figure rather than remembered.
+// reading, hands figures over one at a time, and gives up on one that does not come back, its worker started again. The
+// document closes itself when idle (entrypoints/ocr/main.ts), so "is it there" is asked before every figure rather than
+// remembered.
 import { OCR_VERSION } from '@/core/ocr/version'
 import type { OcrRunResponse } from '@/shared/ocr'
 import { type OcrBackend, OcrBackendError } from './ocr-backend'
@@ -17,6 +18,11 @@ export interface RecogniserClientDeps {
    * open — the popup, the settings page — it is heard, left unanswered, and resolves to nothing
    */
   run(request: { image: string; mime: string }): Promise<OcrRunResponse | undefined>
+  /**
+   * The document's recogniser reset: its worker ended, and the figure in it answered as failed → whether the document
+   * did. Not the document closed: the TeX page's warm-up may run in it (./offscreen.ts) and would end with it (Devin on #311)
+   */
+  reset(): Promise<boolean>
   /** One figure: a third of a second as measured, two on the slowest of the sample */
   timeoutMs?: number
   /** The first figure in a document also pays for compiling 14 MB of WebAssembly and loading the models */
@@ -34,6 +40,9 @@ interface Job {
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_FIRST_TIMEOUT_MS = 90_000
+/** How long the document has to say it reset its recogniser before it is closed instead: it answers at once, its own
+ *  thread doing no recognition */
+const RESET_MS = 2_000
 
 export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS
@@ -68,9 +77,9 @@ export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
 
   /**
    * The figure sent; once more when nobody answered — the document may close itself between the asking and the
-   * sending. **Not once it is settled**: a figure given up on has the document closed under it, which is what fails its
-   * send, and sent again it would be in the fresh document beside the next figure, taking the worker and the budget
-   * from it (Codex on #281)
+   * sending. **Not once it is settled**: a figure given up on has its worker ended (answered as failed) or the document
+   * closed under it (its send failed), and sent again it would be in the fresh worker beside the next figure, taking it
+   * and the budget from it (Codex on #281)
    */
   const send = async (job: Job): Promise<OcrRunResponse> => {
     const { request } = job
@@ -82,6 +91,21 @@ export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
     const again = await deps.run(request)
     if (!again) throw new Error('no page answered')
     return again
+  }
+
+  /**
+   * The recogniser started again after a figure given up on: whatever its worker is doing, it is not coming back. The
+   * worker is ended and the document stays; a document that does not say so in time — gone, or hung — is closed, as
+   * before the warm-up shared it
+   */
+  const restart = async (): Promise<void> => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const reset = await Promise.race([
+      deps.reset().catch(() => false),
+      new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), RESET_MS) }),
+    ])
+    clearTimeout(timer)
+    if (!reset) await deps.offscreen.close().catch(() => undefined)
   }
 
   const pump = (): void => {
@@ -97,14 +121,15 @@ export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true
+      // the next figure has a fresh worker, which starts cold — in this document or a new one
+      warmed = false
       settle(job, () => job.reject(new OcrBackendError('timeout', `the recogniser did not answer within ${budget} ms`)))
-      // Whatever it is doing, it is not coming back: the document is closed, and only then is there a worker to give
-      // the next figure to — a fresh one
-      void deps.offscreen.close().catch(() => undefined).finally(next)
+      // only once the worker is ended is there one to give the next figure to
+      void restart().finally(next)
     }, budget)
     send(job).then(
       reply => {
-        // After a timeout the answer is the closed document's, and says nothing of the one open now
+        // After a timeout the answer is the ended worker's, and says nothing of the one there now
         if (!timedOut) warmed = reply.ok && reply.warm
         settle(job, () => (reply.ok ? job.resolve(reply.result) : job.reject(new OcrBackendError(reply.kind, `recogniser: ${reply.message}`))))
       },
@@ -114,7 +139,7 @@ export function createRecogniserClient(deps: RecogniserClientDeps): OcrBackend {
       },
     ).finally(() => {
       clearTimeout(timer)
-      // After a timeout the closing of the document moves the queue on, not this late answer
+      // After a timeout the restart moves the queue on, not this late answer
       if (!timedOut) next()
     })
   }

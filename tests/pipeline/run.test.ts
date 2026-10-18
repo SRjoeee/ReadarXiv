@@ -6,6 +6,7 @@ import { ERROR_CLASS, FOR_ATTR, INLINE_ATTR, ON_ATTR, PARTIAL_ATTR, PENDING_CLAS
 import { TABLE_RULES } from '@/core/rules/latexml'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
 import type { TranslateCall } from '@/providers/translate-service'
+import { RECORD_SHAPES } from '@/shared/diagnostics'
 import { reasonText } from '@/ui/strings'
 
 const PAGE =
@@ -35,7 +36,7 @@ function makeTransport(mutate?: (req: TranslateCall, seg: { id: string; text: st
       }
       segments.push({ id: seg.id, text: typeof out === 'string' ? out : seg.text })
     }
-    return { ok: true, result: { segments, provider: 'mock' }, cached: 1 }
+    return { ok: true, result: { segments, provider: 'mock', kind: 'mt' }, cached: 1 }
   }
   return { transport, requests }
 }
@@ -58,7 +59,7 @@ describe('startTranslation', () => {
     const transport: Transport = async req => {
       calls++
       const provider = calls <= 1 ? 'llm' : 'free'
-      return { ok: true, result: { segments: req.request.segments.map(seg => ({ id: seg.id, text: seg.text })), provider }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(seg => ({ id: seg.id, text: seg.text })), provider, kind: calls <= 1 ? 'llm' : 'mt' }, cached: 0 }
     }
     const seen: string[] = []
     const run = await start(doc, blocks, transport, { onProvider: id => seen.push(id) })
@@ -82,7 +83,7 @@ describe('startTranslation', () => {
     expect(doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(0)
     // One text batch per section + one table batch
     expect(requests).toHaveLength(3)
-    expect(requests[0]?.cache).toEqual({ paper: 'test', renderPath: 'tags' })
+    expect(requests[0]?.cache).toEqual({ paper: 'test', renderPath: 'tags', source: 'html' })
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('math')).not.toBeNull()
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="T1"]`)?.querySelector(TABLE_RULES.cell)?.textContent).toBe('Model')
     expect(doc.documentElement.hasAttribute('data-axt-on')).toBe(true)
@@ -111,7 +112,7 @@ describe('startTranslation', () => {
     const gate = new Promise<void>(resolve => { release = resolve })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock' }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
     }
     const seen: Progress[] = []
     const run = await start(doc, blocks, transport, { onProgress: p => seen.push(p) })
@@ -140,7 +141,7 @@ describe('startTranslation', () => {
     await run.translate(blocks)
     expect(run.progress()).toMatchObject({ done: 6, failed: 0 })
     const retry = requests.find(r => r.request.segments.length === 1 && r.request.segments[0]?.id === 'p2')
-    expect(retry?.cache).toEqual({ paper: 'test', renderPath: 'tags', bypass: true })
+    expect(retry?.cache).toEqual({ paper: 'test', renderPath: 'tags', source: 'html', bypass: true })
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)?.querySelector('math')).not.toBeNull()
   })
 
@@ -233,7 +234,7 @@ describe('startTranslation', () => {
     expect(widget.classList.contains(ERROR_CLASS)).toBe(true)
     // Hovering shows the sentence in the interface language; the raw diagnostic is in the attribute (Codex on #161)
     expect(widget.getAttribute('title')).toBe(reasonText('unknown'))
-    expect(widget.getAttribute('data-axt-reason')).toBe('unknown: unknown')
+    expect(widget.getAttribute('data-axt-reason')).toBe('unknown: message withheld (7 chars)')
     expect(doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(0)
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)?.classList.contains(ERROR_CLASS)).toBe(false)
     // failed() lists the failed blocks; handing them to translate again is a retry, and on success the widget is replaced by the translation
@@ -243,6 +244,38 @@ describe('startTranslation', () => {
     expect(run.progress()).toMatchObject({ failed: 0, done: 6 })
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.classList.contains(ERROR_CLASS)).toBe(false)
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('math')).not.toBeNull()
+  })
+
+  it('the reason the page carries is the kind, the status and the length of the message — an endpoint\'s words never reach the page (issue #237)', async () => {
+    const doc = docOf()
+    const blocks = extract(doc)
+    const transport: Transport = async () => ({ ok: false, error: { kind: 'auth', message: 'Unauthorized: key=sk-live-0123456789 echoed; the Fourier transform of f', isolatable: false, status: 401 } })
+    const run = await start(doc, blocks, transport)
+    await run.translate(blocks.slice(1, 2))
+    const reason = doc.querySelector(`.${ERROR_CLASS}`)!.getAttribute('data-axt-reason')!
+    expect(reason).toBe('auth: HTTP 401, message withheld (71 chars)')
+    expect(reason).not.toMatch(/sk-live|Fourier/)
+    expect(doc.querySelector(`.${ERROR_CLASS}`)!.getAttribute('title')).toBe(reasonText('auth'))
+  })
+
+  it('records the halving of a batch that failed because of one of its segments, and only that', async () => {
+    const doc = docOf()
+    const blocks = extract(doc)
+    const lines: string[] = []
+    const { transport } = makeTransport((_req, seg) => (seg.id === 'p2' ? { error: 'unknown' } : undefined as unknown as string))
+    const run = await start(doc, blocks, transport, { scope: 'abcdef12-3456-4789', trace: line => lines.push(line) })
+    await run.translate(blocks)
+    const splits = lines.filter(line => line.startsWith('split '))
+    // The section's three segments, halved once: the two that came through, and p2 alone, which is the one that failed
+    expect(splits).toEqual(['split abcdef12 segments=3 into=2+1'])
+    for (const line of splits) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+    // a clean run records no split
+    const clean: string[] = []
+    const cleanDoc = docOf()
+    const cleanBlocks = extract(cleanDoc)
+    const second = await start(cleanDoc, cleanBlocks, makeTransport().transport, { scope: 'abcdef12-3456-4789', trace: line => clean.push(line) })
+    await second.translate(cleanBlocks)
+    expect(clean).toEqual([])
   })
 
   it('a lost placeholder does not move the formula to the end of the sentence: each clause keeps its own (the acceptance criterion of research audit F03)', async () => {
@@ -355,7 +388,7 @@ describe('startTranslation', () => {
     const gate = new Promise<void>(resolve => { release = resolve })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock' }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
     }
     const seen: Progress[] = []
     const run = await start(doc, blocks, transport, { onProgress: p => seen.push(p) })
@@ -522,7 +555,7 @@ describe('onRendered: hands over the blocks whose DOM just changed, for each bat
     const gate = new Promise<void>(r => { release = r })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock' }, cached: 0 }
+      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
     }
     const seen: Block[][] = []
     const run = await start(doc, blocks, transport, { onRendered: b => seen.push(b) })

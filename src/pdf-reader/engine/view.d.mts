@@ -1,0 +1,15 @@
+// view.mjs's types
+
+export { blockOf, bySentence, clickOf, hitOf, layoutOf, pageGeometry, pageSentences, runsOf, sentenceOf, sentencesFit, shapePath } from './view/highlight.mjs'
+export { captionFor, floatHitOf, floatOf, floatShapes, floatsAgree, floatsOn, pageFloats, pathsOf, wantsFloats } from './view/floats.mjs'
+export { blockWire, figureLabels, figureRegions, splitBlock, vectorLines } from './view/figures.mjs'
+export { measurePane, pointOn, pointerPath } from './view/pointer.mjs'
+export { flowChain, knots, lineTable, makeMap, posAt } from './view/sync.mjs'
+export { keepOverlays, pinned } from './view/overlay.mjs'
+export { contentsOf, outlineOf } from './view/outline'
+export { createReaderView } from './view/reader-view.mjs'
+export { createLayerSide, PAGE_MS } from './view/layer-side.mjs'
+export type { LayerSide, LayerSideOptions, TellRef } from './view/layer-side.mjs'
+export type { ComposedOpener, Display, DocumentOpener, DocumentTask, PageBox, PdfJsKit, ReaderHost, ReaderView, Shapes, Side, ViewDocument, ViewEvent, ViewPrefs, ViewWords, Zoom } from './view/reader-view.mjs'
+export type { Layout, Run } from './view/highlight.mjs'
+export type { Float, Shape } from './view/floats.mjs'

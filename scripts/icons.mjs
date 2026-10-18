@@ -4,11 +4,13 @@
 //   - public/icon/tile.svg — the book on a white rounded tile, the app-icon shape. It goes to
 //     public/icon/<size>.png, the naming WXT looks for, and fills the manifest's `icons`: the
 //     extensions page, the install dialog and the store, where an icon sits on a card of its own.
-//   - public/icon/mark.svg — the bare book with a white outline, no tile: the identity itself. It
+//   - public/icon/mark.svg — the book on its white ground, 2 units round it, no tile: the identity itself. It
 //     goes to public/icon/mark-<size>.png, declared as `action.default_icon` in wxt.config.ts, and
 //     is what the toolbar, the page tabs and our own pages' brand rows draw. A white tile in those
 //     places would read as a sticker; the outline is what keeps the mark legible on a light and a
-//     dark surface alike.
+//     dark surface alike. At 16 px both marks are pixel drawings (docs/brand/mark-16.svg,
+//     mark-off-16.svg: one <rect> a pixel), since a scaled vector blurs the letters there (logo round 7,
+//     2026-09-26); from 32 px up the vectors are rendered.
 //   - public/icon/mark-off.svg — the same book in grey: the toolbar button everywhere the extension
 //     has nothing to do. It is the manifest's `default_icon`, as mark-off-<size>.png, and a page the
 //     extension works on lights its own tab with mark-<size>.png (UI.md §5.1).
@@ -55,6 +57,9 @@ const page = await browser.newPage({ deviceScaleFactor: 1 })
 const tile = await readFile(resolve(root, 'public/icon/tile.svg'), 'utf8')
 const mark = await readFile(resolve(root, 'public/icon/mark.svg'), 'utf8')
 const markOff = await readFile(resolve(root, 'public/icon/mark-off.svg'), 'utf8')
+// the 16 px toolbar icons are drawn pixel by pixel (docs/brand/mark-16.svg); a scaled vector blurs the letters at 16
+const mark16 = await readFile(resolve(root, 'docs/brand/mark-16.svg'), 'utf8')
+const markOff16 = await readFile(resolve(root, 'docs/brand/mark-off-16.svg'), 'utf8')
 
 await mkdir(resolve(root, 'public/icon'), { recursive: true })
 for (const size of SIZES) {
@@ -62,9 +67,9 @@ for (const size of SIZES) {
   console.log(`public/icon/${size}.png`)
 }
 for (const size of MARK_SIZES) {
-  await writeFile(resolve(root, `public/icon/mark-${size}.png`), await shot(page, mark, size))
+  await writeFile(resolve(root, `public/icon/mark-${size}.png`), await shot(page, size === 16 ? mark16 : mark, size))
   console.log(`public/icon/mark-${size}.png`)
-  await writeFile(resolve(root, `public/icon/mark-off-${size}.png`), await shot(page, markOff, size))
+  await writeFile(resolve(root, `public/icon/mark-off-${size}.png`), await shot(page, size === 16 ? markOff16 : markOff, size))
   console.log(`public/icon/mark-off-${size}.png`)
 }
 

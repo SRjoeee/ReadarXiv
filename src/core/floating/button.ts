@@ -6,8 +6,9 @@
 // §4.0c): our mark in a circle docked to the window's edge, with the control panel above it and the settings below.
 //
 // **Read Frog's is the frame** (the maintainer, 2026-09-18): the column around a main button, the corner controls, the
-// tooltips, the sizes and surfaces, and the whole drag — the long press, the threshold, docking to the nearer edge,
-// the height kept as a fraction with its clearances, the lock, cancelling on fullscreen.
+// tooltips' places, the sizes, and the whole drag — the long press, the threshold, docking to the nearer edge,
+// the height kept as a fraction with its clearances, the lock, cancelling on fullscreen. **The material is the
+// extension's** (the redesign's design, §7; the style sheet below says what that is).
 //
 // **How it rests and opens follows Immersive Translate** (the maintainer, same day; measured on its 1.33.1 in
 // Chromium 153, none of its code is used): the whole circle shows at rest, at 70 % opacity; the pointer lights it to
@@ -19,8 +20,9 @@
 // - **No React, jotai, Tailwind or Base UI.** This runs on every arXiv page a reader opens, where those would be four
 //   dependencies and a React root for one button (the reason DESIGN §7.6 gives for the failure widget). Their utility
 //   classes are written out below as the CSS Tailwind v4 generates for them, their state as a few variables.
-// - **Three buttons, ours**: the control panel, the main button (translate this page, or open the paper's bilingual
-//   version), the settings. Their feedback button is gone. **The control panel opens beside the button, in the page**,
+// - **Three buttons, ours**: the control panel, the main button (translate this page), the settings. Their feedback
+//   button is gone. On the abstract and PDF pages the main button is itself the way into the panel, where the paper's
+//   two entries are, and the column is two (the reader's design, §2). **The control panel opens beside the button, in the page**,
 //   as Immersive Translate's does (measured: a 316 px panel fixed beside its button, a click elsewhere closes it): the
 //   extension's own popup page in a frame, so there is one popup and not two. The toolbar's popup
 //   (`action.openPopup`) was tried first and did not open in the maintainer's Chrome.
@@ -49,6 +51,7 @@
 
 import { Check, type IconNode, Lock, LockOpen, Settings, SlidersHorizontal, X } from 'lucide'
 import { MARK_DISC } from './mark'
+import { tokenSheet } from '@/shared/tokens'
 
 /** A press this long turns into a drag without moving (Read Frog) */
 const LONG_PRESS_MS = 350
@@ -69,6 +72,8 @@ const LEAVE_GRACE_MS = 200
 export const FLOATING_CLASS = 'axt-floating'
 
 export type DockSide = 'left' | 'right'
+/** The extension's appearance (its configuration's `theme`) */
+export type FloatingTheme = 'system' | 'light' | 'dark'
 export interface DockPlacement {
   side: DockSide
   /** Where the dock's top sits, as a fraction of the window's height */
@@ -78,12 +83,11 @@ export interface DockPlacement {
 
 /** What the main button does on this page */
 export type MainAction =
-  /** Abstract and PDF pages: a real link to the HTML full text, so a middle click or "copy link" work as on any link */
-  | { kind: 'link'; href: string }
   /** The HTML full text: translate, or show the original again */
   | { kind: 'toggle'; run: () => void }
-  /** The paper has no HTML version: the button is there, disabled, and its tooltip says why */
-  | { kind: 'none' }
+  /** Abstract and PDF pages: open the control panel, where the paper's HTML and PDF entries are. The column has no
+   *  panel button of its own there, since this one does what it did (the maintainer, 2026-09-24) */
+  | { kind: 'panel' }
 
 /** Every word the button shows or announces, in the reader's interface language */
 export interface FloatingButtonStrings {
@@ -100,10 +104,10 @@ export interface FloatingButtonStrings {
 
 export interface FloatingButtonOptions {
   main: MainAction
-  /** A link opens in a new tab unless the reader chose otherwise; ignored by the other kinds */
-  newTab: boolean
   /** The page's zoom factor (1 when the page is not zoomed, as the document hosting a PDF never is); see `rescale` */
   zoom?: number
+  /** The extension's appearance (the redesign's design, §3); the system's when absent */
+  theme?: FloatingTheme
   placement: DockPlacement
   strings: FloatingButtonStrings
   /**
@@ -122,7 +126,6 @@ export interface FloatingButtonOptions {
 
 export interface FloatingButton {
   relabel: (strings: FloatingButtonStrings) => void
-  retarget: (newTab: boolean) => void
   /** The page shows its translation (the tick), or does not */
   activate: (active: boolean) => void
   /** A placement saved elsewhere (another tab's drag): taken unless a drag is under way here */
@@ -131,6 +134,8 @@ export interface FloatingButton {
   openPanel: () => void
   /** The page's zoom changed: the button undoes it, and stays the size it is on every other page */
   rescale: (zoom: number) => void
+  /** The extension's appearance changed: the dock is marked again */
+  retheme: (theme: FloatingTheme) => void
   remove: () => void
 }
 
@@ -149,28 +154,27 @@ const ICONS = {
 const svg = (shapes: string, stroke = 2) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
 
-// Read Frog's surfaces and sizes as the CSS Tailwind v4 generates for their classes (their theme's `--rf-*` colours
-// and Tailwind's neutral scale, light and dark); the mark's disc, the tick, the motion and the panel are ours.
+// Read Frog's sizes, as the CSS Tailwind v4 generates for their classes. **The material is the extension's** (the
+// redesign's design, §7): every colour a role of the host token sheet (src/shared/tokens.ts), light or dark as the
+// extension's appearance marks the dock — the surfaces `chrome` with a hairline under the floating shadow, the close
+// menu and the tooltips the shared menu's and tooltip's looks (src/styles/controls.css `.pop`, `.item`, `.tip`) in the
+// dock's own places and motion, the tick `success`, the keyboard's ring the focus ink. The disc, its shadow and the
+// tick's white are the mark's (mark.ts); the motion and the panel are ours.
 //
 // **The motion** (see the header): `--fade-in`, `--grow-in` and `--exit` are the only timings a part that comes out may use, and
 // such a part — `.hidden-button`, `.control`, the main button's `.tip` — animates opacity and transform and nothing
 // else. Closed, each rests a few pixels towards the main button and a little smaller, so that open they grow out of it.
 const STYLE = `
 :host { all: initial }
+${tokenSheet('host')}
 .axt-fb-dock {
-  --axt-border: oklch(0.92 0.004 286.32); --axt-surface: #fff; --axt-hidden-fg: oklch(0.439 0 0); --axt-hidden-hover: oklch(0.97 0 0);
-  --axt-control: oklch(0.708 0 0); --axt-control-hover: oklch(0.439 0 0);
-  --axt-tip-bg: oklch(0.141 0.005 285.823); --axt-tip-fg: #fff;
-  --axt-popover: #fff; --axt-popover-fg: oklch(0.141 0.005 285.823); --axt-accent: oklch(0.967 0.001 286.375); --axt-accent-fg: oklch(0.21 0.006 285.885);
-  --axt-active: #2fa84f;
-  --axt-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   /* Coming out: the fade is the gentler and shorter of the two, the growth decelerates for longer, so a part is
      fully there a moment before it has quite settled. Going: both at once and quickly */
   --axt-fade-in: 200ms cubic-bezier(0.33, 1, 0.68, 1);
   --axt-grow-in: 280ms cubic-bezier(0.22, 1, 0.36, 1);
   --axt-exit: 140ms cubic-bezier(0.4, 0, 1, 1);
   position: fixed; z-index: 2147483647;
-  font-family: ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  font-family: var(--axt-font); -webkit-font-smoothing: antialiased;
   /* The column's box is mostly empty — the folded buttons, the gaps — and must not take the page's clicks: only
      what is drawn answers the pointer (Immersive Translate's container does the same) */
   pointer-events: none;
@@ -178,13 +182,6 @@ const STYLE = `
 /* What the reader sees, at the size it has on every page: the page's zoom undone (button.ts \`rescale\`) */
 .axt-fb-column { display: flex; flex-direction: column; gap: 8px; zoom: var(--axt-unzoom, 1) }
 .axt-fb-main, .axt-fb-menu, .axt-fb-shield, .axt-fb-panel-box { pointer-events: auto }
-@media (prefers-color-scheme: dark) {
-  .axt-fb-dock {
-    --axt-border: oklch(1 0 0 / 10%); --axt-surface: oklch(0.205 0 0); --axt-hidden-fg: oklch(0.708 0 0); --axt-hidden-hover: oklch(0.269 0 0);
-    --axt-control: oklch(0.556 0 0); --axt-control-hover: oklch(0.87 0 0); --axt-tip-bg: oklch(0.985 0 0); --axt-tip-fg: oklch(0.141 0.005 285.823);
-    --axt-popover: oklch(0.21 0.006 285.885); --axt-popover-fg: oklch(0.985 0 0); --axt-accent: oklch(0.274 0.006 286.033); --axt-accent-fg: oklch(0.985 0 0);
-  }
-}
 @media print { .axt-fb-dock { display: none } }
 .axt-fb-dock[hidden] { display: none }
 /* The room for the two corner controls is always there (pl-6 / pr-6 in Read Frog's open state): opening lays nothing out */
@@ -228,20 +225,21 @@ svg { display: block }
 /* HiddenButton */
 .axt-fb-hidden-button {
   position: relative; display: flex; box-sizing: border-box; padding: 6px; cursor: pointer;
-  border: 1px solid var(--axt-border); border-radius: 9999px; background: var(--axt-surface); color: var(--axt-hidden-fg);
-  box-shadow: var(--axt-shadow-lg);
+  border: 1px solid var(--axt-chrome-line); border-radius: 9999px; background: var(--axt-chrome); color: var(--axt-ink-2);
+  box-shadow: var(--axt-float-shadow);
 }
-.axt-fb-hidden-button::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--axt-hidden-hover); opacity: 0; transition: opacity 150ms ease 80ms }
+.axt-fb-hidden-button::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--axt-fill); opacity: 0; transition: opacity 150ms ease 80ms }
 .axt-fb-hidden-button:hover::before, .axt-fb-hidden-button[aria-expanded="true"]::before { opacity: 1; transition-delay: 0s }
 .axt-fb-hidden-button > svg { position: relative; width: 20px; height: 20px }
 .axt-fb-dock[data-axt-side="right"] .axt-fb-hidden-button { margin-right: 8px }
 .axt-fb-dock[data-axt-side="left"] .axt-fb-hidden-button { margin-left: 8px }
 
-/* FloatingButtonTooltip: beside the button, on the side away from the edge */
+/* FloatingButtonTooltip: beside the button, on the side away from the edge; drawn as the shared tooltip (controls.css
+   .tip: its padding, radius, ground, words and shadow), dark in both themes */
 .axt-fb-tip {
   position: absolute; top: 50%; pointer-events: none; white-space: nowrap; max-width: 320px; box-sizing: border-box;
-  padding: 6px 12px; border-radius: 8px; background: var(--axt-tip-bg); color: var(--axt-tip-fg); font-size: 12px; line-height: 16px;
-  font-weight: 400;
+  padding: 5px 8px; border-radius: 6px; background: var(--axt-tip-bg); color: var(--axt-tip-ink); font: 12px/1.2 var(--axt-font);
+  box-shadow: var(--axt-tip-shadow);
 }
 .axt-fb-hidden-button .axt-fb-tip { opacity: 0; visibility: hidden; transition: opacity var(--axt-exit), transform var(--axt-exit), visibility 0s linear 140ms }
 .axt-fb-dock[data-axt-side="right"] .axt-fb-hidden-button .axt-fb-tip { right: calc(100% + 8px); transform: translate(6px, -50%) }
@@ -271,7 +269,7 @@ svg { display: block }
 .axt-fb-dock[data-axt-dragging="yes"] .axt-fb-anchor::before { display: none }
 .axt-fb-main {
   position: relative; display: flex; align-items: center; box-sizing: border-box; height: 40px; width: 44px;
-  border: 1px solid var(--axt-border); background: var(--axt-surface); box-shadow: var(--axt-shadow-lg); cursor: pointer;
+  border: 1px solid var(--axt-chrome-line); background: var(--axt-chrome); box-shadow: var(--axt-float-shadow); cursor: pointer;
   touch-action: none; -webkit-user-drag: none; user-select: none; opacity: 0.7;
   transition: opacity 250ms ease-out;
 }
@@ -291,56 +289,56 @@ svg { display: block }
 /* The page shows its translation: Immersive Translate's tick, at the circle's lower right; it lands with a small overshoot */
 .axt-fb-tick {
   position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; box-sizing: border-box;
-  width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid #fff; background: var(--axt-active); color: #fff;
+  width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid #fff; background: var(--axt-success); color: #fff;
   transform: scale(0); transition: transform var(--axt-exit);
 }
 .axt-fb-tick svg { width: 8px; height: 8px }
 .axt-fb-dock[data-axt-active="yes"] .axt-fb-tick { transform: none; transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1) }
-/* Nothing to open: the circle greys, and the tooltip says why */
-.axt-fb-main[aria-disabled="true"] { cursor: default }
-.axt-fb-main[aria-disabled="true"] .axt-fb-mark { filter: grayscale(1); opacity: 0.5 }
 .axt-fb-dock[data-axt-dragging="yes"] .axt-fb-main {
-  width: 40px; justify-content: center; border: 1px solid var(--axt-border); border-radius: 9999px;
+  width: 40px; justify-content: center; border: 1px solid var(--axt-chrome-line); border-radius: 9999px;
   opacity: 1; cursor: grabbing;
 }
 .axt-fb-dock[data-axt-dragging="yes"] .axt-fb-disc { margin: 0 }
-.axt-fb-main:focus-visible, .axt-fb-hidden-button:focus-visible, .axt-fb-control:focus-visible { outline: 2px solid oklch(0.705 0.015 286.067); outline-offset: 2px }
+.axt-fb-main:focus-visible, .axt-fb-hidden-button:focus-visible, .axt-fb-control:focus-visible { outline: 2px solid var(--axt-focus); outline-offset: 2px }
 
 /* The close trigger above the main button's outer corner and the lock below it, in the room the dock keeps for them */
 .axt-fb-control {
   position: absolute; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-  cursor: pointer; color: var(--axt-control);
+  cursor: pointer; color: var(--axt-ink-3);
 }
 /* Hover feedback comes at once and goes after a beat, like the tooltips: an edge under a trembling pointer does not strobe */
 .axt-fb-control > svg { width: 13px; height: 13px; transition: color 150ms ease 80ms, transform 150ms ease 80ms }
-.axt-fb-control:hover > svg, .axt-fb-control[aria-expanded="true"] > svg { color: var(--axt-control-hover); transform: scale(1.12); transition-delay: 0s }
+.axt-fb-control:hover > svg, .axt-fb-control[aria-expanded="true"] > svg { color: var(--axt-ink); transform: scale(1.12); transition-delay: 0s }
 .axt-fb-control:active > svg { transform: scale(0.9) }
 .axt-fb-control.axt-fb-options { top: 4px }
 .axt-fb-control.axt-fb-lock { bottom: 4px }
 .axt-fb-dock[data-axt-side="right"] .axt-fb-control { left: -24px }
 .axt-fb-dock[data-axt-side="left"] .axt-fb-control { right: -24px }
 
-/* DropdownMenuContent, opened from the close trigger: beside it, away from the edge, aligned to its top */
+/* The close menu, opened from the close trigger: beside it, away from the edge, aligned to its top, coming out as the
+   dock's parts do. Drawn as the shared menu (controls.css .pop and .item): its ground, words, shadow and radius, rows of
+   30 px lit by the fill, the keyboard's row ringed inside as the reader's is; its width its words' */
 .axt-fb-menu {
-  position: absolute; top: 4px; z-index: 1; box-sizing: border-box; padding: 4px; min-width: 0; white-space: nowrap;
-  border-radius: 10px; background: var(--axt-popover); color: var(--axt-popover-fg);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1), 0 0 0 1px color-mix(in oklab, var(--axt-popover-fg) 10%, transparent);
+  position: absolute; top: 4px; z-index: 1; box-sizing: border-box; min-width: 0; white-space: nowrap;
+  padding: 4px; border-radius: 12px; background: var(--axt-chrome); color: var(--axt-ink); box-shadow: var(--axt-pop-shadow); font-size: 13px;
   animation: axt-pop-in var(--axt-grow-in);
 }
 .axt-fb-menu[hidden] { display: none }
 .axt-fb-dock[data-axt-side="right"] .axt-fb-menu { right: calc(100% + 28px); transform-origin: right top }
 .axt-fb-dock[data-axt-side="left"] .axt-fb-menu { left: calc(100% + 28px); transform-origin: left top }
 .axt-fb-menu button {
-  display: flex; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; padding: 4px 6px;
-  border-radius: 8px; font-size: 14px; line-height: 20px; cursor: default; user-select: none; outline: none; text-align: start;
+  display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; height: 30px; padding: 0 10px 0 8px;
+  border-radius: 8px; cursor: pointer; user-select: none; text-align: start;
 }
-.axt-fb-menu button:hover, .axt-fb-menu button:focus-visible { background: var(--axt-accent); color: var(--axt-accent-fg) }
+.axt-fb-menu button:hover, .axt-fb-menu button:focus-visible { background: var(--axt-fill) }
+.axt-fb-menu button:focus-visible { outline: 2px solid var(--axt-focus); outline-offset: -2px }
 @keyframes axt-pop-in { from { opacity: 0; transform: scale(0.96) } }
 
-/* The control panel: the extension's popup in a frame, beside the dock, grown out of it like the menu */
+/* The control panel: the extension's popup in a frame, beside the dock, grown out of it like the menu; the frame the
+   shared popover's radius and shadow, on the popup's own ground */
 .axt-fb-panel-box {
-  position: fixed; z-index: 1; width: 320px; overflow: hidden; zoom: var(--axt-unzoom, 1); border-radius: 16px; background: var(--axt-popover);
-  box-shadow: 0 20px 40px -8px rgb(0 0 0 / 0.22), 0 4px 12px -4px rgb(0 0 0 / 0.12), 0 0 0 1px color-mix(in oklab, var(--axt-popover-fg) 10%, transparent);
+  position: fixed; z-index: 1; width: 320px; overflow: hidden; zoom: var(--axt-unzoom, 1); border-radius: 12px; background: var(--axt-chrome);
+  box-shadow: var(--axt-pop-shadow);
   opacity: 0; transform: scale(0.96); transition: opacity var(--axt-exit), transform var(--axt-exit);
 }
 .axt-fb-panel-box[data-axt-ready="yes"] { opacity: 1; transform: none; transition: opacity var(--axt-fade-in), transform var(--axt-grow-in) }
@@ -403,6 +401,17 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   const style = make('style', '')
   style.textContent = STYLE
   const dock = make('div', 'axt-fb-dock')
+  /**
+   * The extension's appearance, marked on the dock inside the shadow root (the redesign's design, §3): the host token
+   * sheet answers the mark, or the system when there is none. Not on the host, which is an element of the page:
+   * restoring a translated page strips every data-axt-* of the document's own elements, and the button would fall
+   * back to the system's until the settings next changed
+   */
+  const setTheme = (theme: FloatingTheme | undefined) => {
+    if (theme === 'light' || theme === 'dark') dock.dataset.axtTheme = theme
+    else delete dock.dataset.axtTheme
+  }
+  setTheme(options.theme)
   /** Every button carries its name as `aria-label`; the tooltip is the same words for the eye */
   const tip = () => {
     const element = make('span', 'axt-fb-tip')
@@ -417,10 +426,11 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   panel.append(panelTip)
 
   const anchor = make('div', 'axt-fb-anchor')
-  // A link where there is somewhere to go, a button where there is something to do; one type for the listeners below
-  const main: HTMLElement = action.kind === 'link' ? make('a', 'axt-fb-main') : make('button', 'axt-fb-main')
-  if (main instanceof HTMLButtonElement) main.type = 'button'
-  if (action.kind === 'none') main.setAttribute('aria-disabled', 'true')
+  const main = make('button', 'axt-fb-main')
+  main.type = 'button'
+  if (action.kind === 'panel') main.setAttribute('aria-haspopup', 'dialog')
+  /** The control that opens the panel, says whether it is open, and takes the focus back when it closes */
+  const opener = action.kind === 'panel' ? main : panel
   main.draggable = false
   const disc = make('span', 'axt-fb-disc', MARK_DISC)
   disc.append(make('span', 'axt-fb-tick', svg(ICONS.tick, 3.2)))
@@ -460,7 +470,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   // The column is what the reader sees and what undoes the page's zoom; the dock around it only places it, in the
   // page's own pixels, and the two full-window layers stay out of the zoom so that they stay full-window
   const column = make('div', 'axt-fb-column')
-  column.append(panel, anchor, settings)
+  column.append(...(action.kind === 'panel' ? [anchor, settings] : [panel, anchor, settings]))
   dock.append(column, panelBox, shield, ...(catcher ? [catcher] : []))
   root.append(style, dock)
 
@@ -532,7 +542,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     }
     menu.hidden = !menuOpen
     optionsButton.setAttribute('aria-expanded', menuOpen ? 'true' : 'false')
-    panel.setAttribute('aria-expanded', panelOpen ? 'true' : 'false')
+    opener.setAttribute('aria-expanded', panelOpen ? 'true' : 'false')
   }
 
   const label = () => {
@@ -548,17 +558,6 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     hideAlways.textContent = strings.hideAlways
   }
 
-  const retarget = (newTab: boolean) => {
-    if (action.kind !== 'link' || !(main instanceof HTMLAnchorElement)) return
-    main.href = action.href
-    if (newTab) {
-      main.target = '_blank'
-      main.rel = 'noopener'
-    } else {
-      main.removeAttribute('target')
-      main.removeAttribute('rel')
-    }
-  }
 
   // Lighting and opening. The pointer lights the circle the moment it arrives; the other buttons come out once it
   // has stayed, so a pointer crossing the button on its way elsewhere opens nothing (Immersive Translate)
@@ -639,13 +638,13 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   const onOutside = (event: Event) => {
     const path = event.composedPath()
     if (menuOpen && !path.includes(menu) && !path.includes(optionsButton)) setMenu(false)
-    if (panelOpen && !path.includes(panelBox) && !path.includes(panel)) setPanel(false)
+    if (panelOpen && !path.includes(panelBox) && !path.includes(opener)) setPanel(false)
   }
   doc.addEventListener('pointerdown', onOutside, true)
   const onEscape = (event: KeyboardEvent) => {
     if (event.key !== 'Escape' || !panelOpen) return
     setPanel(false)
-    panel.focus()
+    opener.focus()
   }
   doc.addEventListener('keydown', onEscape, true)
   const hide = (scope: 'now' | 'always') => {
@@ -686,7 +685,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     const data = event.data as { type?: unknown; height?: unknown } | null
     if (data?.type === 'axt:panel-close') {
       setPanel(false)
-      panel.focus()
+      opener.focus()
     } else if (data?.type === 'axt:panel-size' && typeof data.height === 'number' && data.height > 0) {
       panelHeight = data.height
       placePanel()
@@ -821,6 +820,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       return
     }
     if (action.kind === 'toggle') action.run()
+    else setPanel(!panelOpen)
   })
 
   // Fullscreen hides the button, and a drag it interrupts never sees its release: cancel it here, or the page keeps
@@ -848,7 +848,6 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   view.addEventListener('resize', onResize)
 
   label()
-  retarget(options.newTab)
   draw()
 
   const button: FloatingButton = {
@@ -857,7 +856,6 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       label()
       draw()
     },
-    retarget,
     activate: next => {
       active = next
       draw()
@@ -875,6 +873,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
       draw()
       if (panelOpen) placePanel()
     },
+    retheme: next => setTheme(next),
     remove: () => {
       if (press !== null) clearTimeout(press.timer)
       press = null

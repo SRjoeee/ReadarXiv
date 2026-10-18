@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ensureFixtures, readManifest } from '../../scripts/fetch-fixtures.mjs'
+import { defaultCacheDir, ensureFixtures, readManifest } from '../../scripts/fetch-fixtures.mjs'
 
 // The fixtures that are not in the repository (tests/fixtures/remote.json): present and verified, or a failure that
 // says what to do — never a silently different file, never a half-written one
@@ -18,11 +18,17 @@ const file = () => join(root, ENTRY.path)
 const serving = (body: Buffer, status = 200) => vi.fn(async () => new Response(new Uint8Array(body), { status })) as unknown as typeof fetch
 
 beforeEach(() => {
+  // (a machine that holds the CI token must not send these tests' requests to the bucket)
+  vi.stubEnv('READARXIV_CI_TOKEN', '')
+  vi.stubEnv('CF_ACCOUNT_ID', '')
   root = mkdtempSync(join(tmpdir(), 'axt-fixtures-'))
   mkdirSync(join(root, 'tests/fixtures'), { recursive: true })
   writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [ENTRY] }))
 })
-afterEach(() => rmSync(root, { recursive: true, force: true }))
+afterEach(() => {
+  vi.unstubAllEnvs()
+  rmSync(root, { recursive: true, force: true })
+})
 
 describe('ensureFixtures', () => {
   it('a missing fixture is downloaded from the pinned URL, identified, verified and written whole', async () => {
@@ -33,6 +39,41 @@ describe('ensureFixtures', () => {
     expect(url).toBe(ENTRY.url)
     expect(new Headers(init.headers).get('user-agent')).toMatch(/ReadarXiv/)
     expect(readdirSync(join(root, 'tests/fixtures/arxiv'))).toEqual(['0000.00000.html'])
+  })
+
+  it("the machine's cache: a copy fetched once is found by the next run with no network, and only the pinned bytes are taken from it", async () => {
+    const cacheDir = join(root, 'cache')
+    await ensureFixtures({ root, cacheDir, fetchImpl: serving(BODY), gapMs: 0 })
+    expect(readFileSync(join(cacheDir, ENTRY.sha256))).toEqual(BODY)
+    // a fresh checkout of the same machine, arXiv unreachable (or serving other bytes)
+    rmSync(file())
+    const offline = vi.fn(async () => { throw new TypeError('fetch failed') }) as unknown as typeof fetch
+    const log = vi.fn()
+    expect(await ensureFixtures({ root, cacheDir, fetchImpl: offline, log, gapMs: 0 })).toEqual({ verified: [], downloaded: [ENTRY.path] })
+    expect(readFileSync(file())).toEqual(BODY)
+    expect(offline).not.toHaveBeenCalled()
+    expect(log.mock.calls[0]![0]).toMatch(/from the machine's cache/)
+    // a cached file that is not the pinned bytes is ignored, never copied, and arXiv is asked
+    rmSync(file())
+    writeFileSync(join(cacheDir, ENTRY.sha256), 'something else')
+    const fetchImpl = serving(BODY)
+    await ensureFixtures({ root, cacheDir, fetchImpl, gapMs: 0 })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(readFileSync(file())).toEqual(BODY)
+    // a verified copy on disk seeds an empty cache
+    const seeded = join(root, 'seeded')
+    await ensureFixtures({ root, cacheDir: seeded, fetchImpl: offline, gapMs: 0 })
+    expect(readFileSync(join(seeded, ENTRY.sha256))).toEqual(BODY)
+  })
+
+  it('a cache that cannot be written is no failure; by default there is none, and CI has none', async () => {
+    const blocked = join(root, 'blocked')
+    writeFileSync(blocked, 'a file where the cache directory should be')
+    expect(await ensureFixtures({ root, cacheDir: join(blocked, 'sub'), fetchImpl: serving(BODY), gapMs: 0 })).toEqual({ verified: [], downloaded: [ENTRY.path] })
+    expect(defaultCacheDir({ READARXIV_FIXTURE_CACHE: '/x/y' })).toBe('/x/y')
+    expect(defaultCacheDir({ READARXIV_FIXTURE_CACHE: '' })).toBeNull()
+    expect(defaultCacheDir({ CI: 'true' })).toBeNull()
+    expect(defaultCacheDir({})).toMatch(/\.cache\/readarxiv\/fixtures$/)
   })
 
   it('a fixture already there and intact asks the network nothing', async () => {
@@ -275,6 +316,11 @@ describe('the manifest', () => {
       return rest.slice(0, end < 0 ? undefined : end).join('\n').trim()
     }
     expect(blockOf('actions/cache/save@v4')).toBe(blockOf('actions/cache/restore@v4'))
+    // the key names every input of the step that fills the cache: the pins and the code that decides where the bytes come from, so
+    // that a change to how fixtures arrive is exercised cold on its own pull request
+    const key = /key: (remote-fixtures-\$\{\{ hashFiles\((.*)\) \}\})/.exec(blockOf('actions/cache/restore@v4'))
+    expect(key, 'the cache key').not.toBeNull()
+    expect(key![2]!.split(',').map(f => f.trim().replace(/^'|'$/g, ''))).toEqual(['tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs'])
   })
 
   it('the script takes no argument and refuses one, rather than fetch on a mistyped command', () => {
@@ -292,5 +338,200 @@ describe('the manifest', () => {
   it('no file the manifest names is tracked: the repository does not redistribute them', async () => {
     const tracked = new Set(execFileSync('git', ['ls-files'], { cwd: join(import.meta.dirname, '../..'), encoding: 'utf8' }).split('\n'))
     for (const entry of await readManifest()) expect(tracked.has(entry.path), entry.path).toBe(false)
+  })
+})
+
+// The pinned bytes are also kept in the private bucket under their digest (`fixtures/<sha256>`), read before arXiv where the CI
+// token and the account are set. A stand-in for Cloudflare's token-verify endpoint, the bucket and arXiv, every request recorded.
+describe('the bucket', () => {
+  const ACCOUNT = '612fe563f8ba720019ffa3b35269aaa4'
+  const TOKEN = 'cf-token-that-must-never-be-printed'
+  const KEY_ID = '0123456789abcdef0123456789abcdef'
+  const VERIFY_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/tokens/verify`
+  const BODY2 = Buffer.from('<html>the second pinned page</html>')
+  const ENTRY2 = { path: 'tests/fixtures/arxiv/0000.00001.html', url: 'https://arxiv.org/html/0000.00001v1', sha256: sha(BODY2), bytes: BODY2.length }
+  const keyOf = (entry: { sha256: string }) => `https://${ACCOUNT}.r2.cloudflarestorage.com/readarxiv-ci/fixtures/${entry.sha256}`
+  const ENV = { READARXIV_CI_TOKEN: TOKEN, CF_ACCOUNT_ID: ACCOUNT }
+  const NOW = new Date('2026-10-13T08:30:15.123Z')
+  type Init = { headers?: Record<string, string> }
+
+  /** what each address answers: a status and a body, or a throw; the bucket holds both pins unless an override says otherwise */
+  function world(over: Record<string, () => Response> = {}) {
+    const requests: { url: string; init: Init }[] = []
+    const answers: Record<string, () => Response> = {
+      [VERIFY_URL]: () => Response.json({ success: true, result: { id: KEY_ID, status: 'active' } }),
+      [keyOf(ENTRY)]: () => new Response(new Uint8Array(BODY)),
+      [keyOf(ENTRY2)]: () => new Response(new Uint8Array(BODY2)),
+      [ENTRY.url]: () => new Response(new Uint8Array(BODY)),
+      [ENTRY2.url]: () => new Response(new Uint8Array(BODY2)),
+      ...over,
+    }
+    const fetchImpl = (async (url: string, init: Init) => {
+      requests.push({ url, init })
+      const answer = answers[url]
+      if (!answer) throw new Error(`unexpected request to ${url}`)
+      return answer()
+    }) as unknown as typeof fetch
+    const count = (pick: (url: string) => boolean) => requests.filter(r => pick(r.url)).length
+    return {
+      fetchImpl, requests,
+      verifies: () => count(url => url === VERIFY_URL),
+      bucket: () => count(url => url.includes('.r2.cloudflarestorage.com/')),
+      arxiv: () => count(url => url.startsWith('https://arxiv.org/')),
+    }
+  }
+  const twoPins = () => writeFileSync(join(root, 'tests/fixtures/remote.json'), JSON.stringify({ fixtures: [ENTRY, ENTRY2] }))
+  const run = (w: ReturnType<typeof world>, over: Record<string, unknown> = {}) => {
+    const lines: string[] = []
+    const done = ensureFixtures({ root, fetchImpl: w.fetchImpl, gapMs: 0, retryMs: 0, env: ENV, now: () => NOW, log: line => lines.push(line), ...over })
+    return { lines, done }
+  }
+  /** every secret-bearing value a line or an error could carry */
+  const leaks = (text: string, w: ReturnType<typeof world>) => [TOKEN, sha(Buffer.from(TOKEN)), ...w.requests.map(r => r.init.headers?.authorization).filter((a): a is string => !!a && !a.startsWith('Bearer')), ...w.requests.map(r => /Signature=([0-9a-f]+)/.exec(r.init.headers?.authorization ?? '')?.[1]).filter((v): v is string => !!v)].filter(v => text.includes(v))
+
+  it('a hit is signed, digest-checked and written whole, asks arXiv nothing, and derives the credentials once for the whole run', async () => {
+    twoPins()
+    const w = world()
+    const { lines, done } = run(w)
+    expect(await done).toEqual({ verified: [], downloaded: [ENTRY.path, ENTRY2.path] })
+    expect(readFileSync(file())).toEqual(BODY)
+    expect(readFileSync(join(root, ENTRY2.path))).toEqual(BODY2)
+    expect(w.verifies()).toBe(1)
+    expect(w.bucket()).toBe(2)
+    expect(w.arxiv()).toBe(0)
+    expect(w.requests.filter(r => r.url === VERIFY_URL).map(r => r.init.headers)).toEqual([{ authorization: `Bearer ${TOKEN}` }])
+    for (const r of w.requests.filter(r => r.url.includes('r2.cloudflarestorage'))) {
+      expect(Object.keys(r.init.headers ?? {}).sort()).toEqual(['authorization', 'x-amz-content-sha256', 'x-amz-date'])
+      expect(r.init.headers?.['x-amz-date']).toBe('20261013T083015Z')
+    }
+    expect(readdirSync(join(root, 'tests/fixtures/arxiv')).sort()).toEqual(['0000.00000.html', '0000.00001.html'])
+    expect(lines).toEqual([
+      `fetched ${ENTRY.path} (${BODY.length} bytes) from the bucket (fixtures/${ENTRY.sha256}): HTTP 200`,
+      `fetched ${ENTRY2.path} (${BODY2.length} bytes) from the bucket (fixtures/${ENTRY2.sha256}): HTTP 200`,
+    ])
+    expect(leaks(lines.join('\n'), w)).toEqual([])
+  })
+
+  it.each([
+    ['a 404', () => new Response('', { status: 404 }), /bucket fixtures\/[0-9a-f]{64}: HTTP 404; reading arXiv instead/],
+    ['a 403', () => new Response('', { status: 403 }), /bucket fixtures\/[0-9a-f]{64}: HTTP 403; reading arXiv instead/],
+    ['a server error that does not clear', () => new Response('', { status: 503 }), /bucket fixtures\/[0-9a-f]{64}: HTTP 503; reading arXiv instead/],
+    ['bytes that are not the pinned ones', () => new Response('<html>something else</html>'), /bucket fixtures\/[0-9a-f]{64}: HTTP 200, but the bytes are not the pinned ones; nothing was written, reading arXiv instead/],
+    ['the right digest and another size is no pin either', () => new Response(new Uint8Array(Buffer.concat([BODY, Buffer.from(' ')]))), /the bytes are not the pinned ones/],
+    ['a request that fails', () => { throw new TypeError('fetch failed') }, /bucket fixtures\/[0-9a-f]{64}: the request failed; reading arXiv instead/],
+  ])('%s: one line naming the status and the key, nothing of the bad bytes written, and arXiv is read', async (_name, answer, line) => {
+    const w = world({ [keyOf(ENTRY)]: answer })
+    const { lines, done } = run(w)
+    expect(await done).toEqual({ verified: [], downloaded: [ENTRY.path] })
+    expect(readFileSync(file())).toEqual(BODY)
+    expect(w.arxiv()).toBe(1)
+    const said = lines.filter(l => l.startsWith('bucket'))
+    expect(said).toHaveLength(1)
+    expect(said[0]).toMatch(line)
+    expect(said[0]).toContain(ENTRY.sha256)
+    expect(lines).toContain(`fetched ${ENTRY.path} (${BODY.length} bytes) from ${ENTRY.url}: HTTP 200`)
+    expect(readdirSync(join(root, 'tests/fixtures/arxiv'))).toEqual(['0000.00000.html'])
+    expect(leaks(lines.join('\n'), w)).toEqual([])
+  })
+
+  it('when arXiv serves other bytes too, the run fails with arXiv\'s own message and writes nothing', async () => {
+    const w = world({ [keyOf(ENTRY)]: () => new Response('', { status: 404 }), [ENTRY.url]: () => new Response('<html>rendered again</html>') })
+    const { done } = run(w)
+    await expect(done).rejects.toThrow(/now serves other bytes.*Nothing was written/s)
+    expect(existsSync(file())).toBe(false)
+  })
+
+  it('a token that cannot be verified says so once, and every fixture then goes to arXiv without another request to the bucket', async () => {
+    twoPins()
+    const w = world({ [VERIFY_URL]: () => Response.json({ success: false }, { status: 401 }) })
+    const { lines, done } = run(w)
+    expect(await done).toEqual({ verified: [], downloaded: [ENTRY.path, ENTRY2.path] })
+    expect(w.verifies()).toBe(1)
+    expect(w.bucket()).toBe(0)
+    expect(w.arxiv()).toBe(2)
+    expect(lines.filter(l => l.startsWith('bucket'))).toEqual(['bucket: the token is not an active Account API token of this account (HTTP 401); reading arXiv instead'])
+    expect(leaks(lines.join('\n'), w)).toEqual([])
+  })
+
+  it('a token with white space in it, or an account that is no account id, says so without the token and reads arXiv', async () => {
+    for (const env of [{ ...ENV, READARXIV_CI_TOKEN: `${TOKEN}\n` }, { ...ENV, CF_ACCOUNT_ID: 'nope' }]) {
+      rmSync(join(root, 'tests/fixtures/arxiv'), { recursive: true, force: true })
+      const w = world()
+      const { lines, done } = run(w, { env })
+      expect(await done).toEqual({ verified: [], downloaded: [ENTRY.path] })
+      expect(w.verifies() + w.bucket()).toBe(0)
+      expect(lines.filter(l => l.startsWith('bucket'))).toHaveLength(1)
+      expect(lines.join('\n')).not.toContain(TOKEN)
+      expect(lines.join('\n')).not.toContain(sha(Buffer.from(`${TOKEN}\n`)))
+    }
+  })
+
+  it.each([
+    ['no token', { CF_ACCOUNT_ID: ACCOUNT }],
+    ['no account', { READARXIV_CI_TOKEN: TOKEN }],
+    ['an empty token', { ...ENV, READARXIV_CI_TOKEN: '' }],
+    ['neither', {}],
+  ])('%s: no request to the bucket and none to verify, only arXiv', async (_name, env) => {
+    const w = world()
+    const { lines, done } = run(w, { env })
+    expect(await done).toEqual({ verified: [], downloaded: [ENTRY.path] })
+    expect(w.verifies() + w.bucket()).toBe(0)
+    expect(w.arxiv()).toBe(1)
+    expect(lines.filter(l => l.startsWith('bucket'))).toEqual([])
+  })
+
+  it('every fixture on disk: no request of any kind, the credentials not even derived, and nothing logged', async () => {
+    twoPins()
+    mkdirSync(join(root, 'tests/fixtures/arxiv'), { recursive: true })
+    writeFileSync(file(), BODY)
+    writeFileSync(join(root, ENTRY2.path), BODY2)
+    const w = world()
+    const { lines, done } = run(w)
+    expect(await done).toEqual({ verified: [ENTRY.path, ENTRY2.path], downloaded: [] })
+    expect(w.requests).toEqual([])
+    expect(lines).toEqual([])
+  })
+
+  it('one missing, one on disk: the credentials are derived for the missing one only', async () => {
+    twoPins()
+    mkdirSync(join(root, 'tests/fixtures/arxiv'), { recursive: true })
+    writeFileSync(file(), BODY)
+    const w = world()
+    const { done } = run(w)
+    expect(await done).toEqual({ verified: [ENTRY.path], downloaded: [ENTRY2.path] })
+    expect(w.verifies()).toBe(1)
+    expect(w.bucket()).toBe(1)
+  })
+
+  it('the bucket for one fixture and arXiv for the other: the gap is arXiv\'s, so none is waited before the only arXiv request', async () => {
+    twoPins()
+    const w = world({ [keyOf(ENTRY2)]: () => new Response('', { status: 404 }) })
+    const started = Date.now()
+    const { lines, done } = run(w, { gapMs: 400 })
+    expect(await done).toEqual({ verified: [], downloaded: [ENTRY.path, ENTRY2.path] })
+    expect(Date.now() - started).toBeLessThan(380)
+    expect(lines.at(-1)).toBe(`fetched ${ENTRY2.path} (${BODY2.length} bytes) from ${ENTRY2.url}: HTTP 200`)
+  })
+
+  it('a token, its digest, a signature or an authorization value is in no line, whatever the bucket does', async () => {
+    const outcomes: (() => Response)[] = [
+      () => new Response('', { status: 403 }),
+      () => new Response('<html>other</html>'),
+      () => { throw new TypeError(`fetch failed for ${TOKEN}`) },
+    ]
+    for (const answer of outcomes) {
+      rmSync(join(root, 'tests/fixtures/arxiv'), { recursive: true, force: true })
+      const w = world({ [keyOf(ENTRY)]: answer })
+      const { lines, done } = run(w)
+      await done
+      expect(leaks(lines.join('\n'), w)).toEqual([])
+    }
+    // and the errors of a run that fails altogether
+    rmSync(join(root, 'tests/fixtures/arxiv'), { recursive: true, force: true })
+    const w = world({ [keyOf(ENTRY)]: () => new Response('', { status: 403 }), [ENTRY.url]: () => new Response('', { status: 404 }) })
+    const { lines, done } = run(w)
+    const message = String(((await done.catch((e: Error) => e)) as Error).message)
+    expect(message).toMatch(/pin needs moving/)
+    expect(leaks([message, ...lines].join('\n'), w)).toEqual([])
   })
 })

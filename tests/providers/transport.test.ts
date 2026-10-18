@@ -8,6 +8,8 @@ import { createChainHolder } from '@/entrypoints/background/chain'
 import { createSessionRouter } from '@/entrypoints/background/sessions'
 import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
 import { createLocalTransport } from '@/providers/transport'
+import { translationIdentity } from '@/cache/key'
+import { RECORD_SHAPES } from '@/shared/diagnostics'
 import type { CachePort } from '@/providers/translate-service'
 import { ProviderError, type TranslateRequest, type TranslationProvider } from '@/providers/types'
 
@@ -38,11 +40,60 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('createLocalTransport: the records (issue #237)', () => {
+  it('a hand-over leaves the batch of the engine that failed, the chain\'s outcome and the batch of the one that answered, in that order, all in the ring\'s grammar', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const notes: string[] = []
+    const failing = mockProvider(async () => { throw new ProviderError('auth', 'Unauthorized') }, { id: 'llm' })
+    const free = mockProvider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `\u8bd1:${s.text}` })), provider: 'free' }), { id: 'free', kind: 'mt' })
+    const t = await withChain([failing, free], { note: line => notes.push(line), batch: { maxRetries: 0 } })
+    expect((await t.translate({ request: req, scope: 'abcdef12-3456' })).ok).toBe(true)
+    expect(notes).toEqual([
+      'batch abcdef12 segments=1 cached=0 calls=1 done=0 outcome=failed:auth',
+      'batch abcdef12 segments=1 cached=0 calls=1 done=1 outcome=ok',
+      'chain abcdef12 tried=2 served-by=free outcome=ok',
+    ])
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
+})
+
+describe('createLocalTransport: the records of a connection test (issue #237; Codex on #329)', () => {
+  const onChain = () => ({ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id })
+
+  it('a candidate, which is never on the chain, leaves its batch in the ring as a call of the chain does, in the ring\'s grammar', async () => {
+    const notes: string[] = []
+    const t = await withChain([onChain()], { note: line => notes.push(line), batch: { maxRetries: 0 } })
+    const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+    expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/^batch .*segments=1 .*outcome=failed:no-key$/)
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
+
+  it('a stored service the chain is not built around, tested by its id, does too', async () => {
+    const notes: string[] = []
+    const spare = { ...SVC, id: 'svc-99999999', apiKey: '' }
+    const t = await createLocalTransport(
+      { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC, spare] },
+      { cancelled: new CancelledScopeRegistry(), note: line => notes.push(line), batch: { maxRetries: 0 }, buildChain: async () => ({ chain: [onChain()], renderPath: 'tags' as const }) },
+    )
+    expect(await t.translate({ request: req, providerId: spare.id })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/^batch .*outcome=failed:no-key$/)
+  })
+
+  it('with no note given an off-chain test still answers, as before', async () => {
+    const t = await withChain([onChain()])
+    const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+    expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+  })
+})
+
 describe('createLocalTransport: translation', () => {
   it('the successful response shape', async () => {
     const t = await withChain([mockProvider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `译:${s.text}` })), provider: 'mock' }))])
     // The model rides only on the chosen service's engine: changing it must not expire a free engine's cache
-    expect(await t.translate({ request: req })).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }], provider: 'mock' }, cached: 0 })
+    expect(await t.translate({ request: req })).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }], provider: 'mock', kind: 'llm' }, cached: 0 })
   })
 
   it('retries successfully after one rate limit', async () => {
@@ -120,6 +171,32 @@ describe('createLocalTransport: translation', () => {
     expect(await t.translate({ request: req, providerId: 'chrome-builtin' })).toEqual({ ok: false, error: { kind: 'unknown', message: 'engine chrome-builtin is not on the current chain', isolatable: false } })
   })
 
+  describe('a candidate: the settings page\'s test of a service as it would save it (the redesign\'s design, §6.3)', () => {
+    it('a service not stored yet is asked as the call carries it', async () => {
+      const t = await withChain([{ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id }])
+      const fresh = { ...SVC, id: 'svc-fresh000', apiKey: '' }
+      expect(await t.translate({ request: req, providerId: fresh.id, candidate: fresh })).toEqual({ ok: false, error: { kind: 'no-key', message: 'no API key configured', isolatable: false } })
+    })
+
+    it('a stored service carried with another key is asked with that key, never through the chain\'s step', async () => {
+      const t = await withChain([{ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id }])
+      expect((await t.translate({ request: req, providerId: SVC.id })).ok).toBe(true)
+      expect(await t.translate({ request: req, providerId: SVC.id, candidate: { ...SVC, apiKey: '' } })).toMatchObject({ ok: false, error: { kind: 'no-key' } })
+    })
+
+    it('a candidate that is not the service named is refused', async () => {
+      const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))])
+      expect(await t.translate({ request: req, providerId: 'svc-other000', candidate: SVC })).toEqual({ ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } })
+    })
+
+    it('a candidate with no providerId is refused, never taking the fallback chain', async () => {
+      const chainAsked = vi.fn(async (r: TranslateRequest) => ({ segments: r.segments, provider: 'mock' }))
+      const t = await withChain([mockProvider(chainAsked)])
+      expect(await t.translate({ request: req, candidate: SVC })).toEqual({ ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } })
+      expect(chainAsked).not.toHaveBeenCalled()
+    })
+  })
+
   it('cancel withdraws the in-flight requests and reports the count withdrawn as it is', async () => {
     vi.useFakeTimers()
     const t = await withChain([mockProvider(() => new Promise(() => undefined) as never)])
@@ -164,7 +241,7 @@ describe('createLocalTransport: translation', () => {
     }
     const registry = new CancelledScopeRegistry()
     const t = await withChain([mockProvider(async r => { calls.push('call'); return { segments: r.segments, provider: 'mock' } })], { cache, cancelled: registry })
-    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await reached
     t.retire!()
     release()
@@ -219,7 +296,7 @@ describe('createLocalTransport: translation', () => {
     let entered: () => void = () => {}
     const atEndpoint = new Promise<void>(resolve => { entered = resolve })
     const t = await withChain([mockProvider(async r => { entered(); await held; return { segments: r.segments, provider: 'mock' } })], { cache })
-    const pending = t.translate({ request: req, cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: req, cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await atEndpoint // real timers: the request is at the endpoint
     t.retire!()
     release()
@@ -237,8 +314,8 @@ describe('createLocalTransport: translation', () => {
     const atEndpoint = new Promise<void>(resolve => { entered = resolve })
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async entries => { writes.push(entries) } }
     const t = await withChain([mockProvider(async r => { entered(); await held; return { segments: r.segments, provider: 'mock' } })], { cache })
-    const scoped = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
-    const unscoped = t.translate({ request: req, cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const scoped = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
+    const unscoped = t.translate({ request: req, cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await atEndpoint
     t.retire!()
     release()
@@ -257,7 +334,7 @@ describe('createLocalTransport: translation', () => {
     const writes: unknown[] = []
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async entries => { writes.push(entries) } }
     const t = await withChain([mockProvider(async r => { if (++calls === 2) { entered(); await held } return { segments: r.segments, provider: 'mock' } }, { maxBatchItems: 1 })], { cache })
-    const pending = t.translate({ request: { segments: [{ id: 'a', text: 'x' }, { id: 'b', text: 'y' }], source: 'en', target: 'zh-CN' }, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: { segments: [{ id: 'a', text: 'x' }, { id: 'b', text: 'y' }], source: 'en', target: 'zh-CN' }, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await second // the second batch is at the endpoint
     await new Promise(resolve => setTimeout(resolve, 0)) // and the first has settled in the queue: only the second is drained
     t.retire!()
@@ -277,7 +354,7 @@ describe('createLocalTransport: translation', () => {
     const writeStarted = new Promise<void>(resolve => { atWrite = resolve })
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async () => { atWrite(); await writing } }
     const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))], { cache })
-    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await writeStarted
     t.retire!()
     releaseWrite()
@@ -292,7 +369,7 @@ describe('createLocalTransport: translation', () => {
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async () => { atWrite(); await writing } }
     const registry = new CancelledScopeRegistry()
     const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: 'mock' }))], { cache, cancelled: registry })
-    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags' } })
+    const pending = t.translate({ request: req, scope: 'live', cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const } })
     await writeStarted
     registry.markScope('live') // the router's drop: mark, then drain
     await t.cancel('live')
@@ -455,7 +532,7 @@ describe('createLocalTransport: translation', () => {
     const blocking = new Promise<void>(resolve => { releaseBlocker = resolve })
     const registry = new CancelledScopeRegistry()
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async () => undefined }
-    const paper = { paper: '2410.00260', renderPath: 'tags' as const }
+    const paper = { paper: '2410.00260', renderPath: 'tags' as const, source: 'html' as const }
     let calls = 0
     const t = await withChain([mockProvider(async r => { calls++; if (r.segments[0]?.id === 'blocker') await blocking; return { segments: r.segments, provider: 'mock' } }, { maxConcurrent: 1, maxBatchItems: 1 })], { cancelled: registry, cache })
     const blocker = t.translate({ request: { segments: [{ id: 'blocker', text: 'hold' }], source: 'en', target: 'zh-CN' }, scope: 'x', cache: paper })
@@ -479,7 +556,7 @@ describe('createLocalTransport: translation', () => {
     // the second attempt the task survived on the dead A and a third attempt reached the endpoint for nobody
     const registry = new CancelledScopeRegistry()
     const cache: CachePort = { getMany: async keys => keys.map(() => null), putMany: async () => undefined }
-    const paper = { paper: '2410.00260', renderPath: 'tags' as const }
+    const paper = { paper: '2410.00260', renderPath: 'tags' as const, source: 'html' as const }
     const gates: { entered: () => void; release: () => void }[] = []
     const attempt = (n: number) => new Promise<void>(resolve => { gates[n] = { entered: resolve, release: () => undefined } })
     const first = attempt(1)
@@ -590,7 +667,29 @@ describe('createLocalTransport: status', () => {
       chain: [SVC.id, 'google-web'],
       demotions: [],
       engine: { id: SVC.id },
+      identity: expect.stringMatching(/^[0-9a-f]{64}$/),
     })
+  })
+
+  it('an answer names the kind of engine that gave it: the LLM\'s, then, the same call handed over after a transient failure that restarts no page, the free engine\'s (§15.1)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let broken = false
+    const llm: TranslationProvider = {
+      ...engine(SVC.id, true),
+      kind: 'llm',
+      translate: async r => {
+        // A systemic failure (the answer is not JSON at all): no retry and no smaller batch helps, so the chain hands over at once
+        if (broken) throw new ProviderError('invalid-response', 'not JSON', { isolatable: false })
+        return { segments: r.segments, provider: SVC.id }
+      },
+    }
+    const free = { ...engine('google-web', true), translate: async (r: TranslateRequest) => ({ segments: r.segments, provider: 'google-web' }) }
+    const t = await withChain([llm, free])
+    expect(await t.translate({ request: req })).toMatchObject({ ok: true, result: { provider: SVC.id, kind: 'llm' } })
+    broken = true
+    // A new segment, so no step answers from the cache
+    expect(await t.translate({ request: { ...req, segments: [{ id: 'b', text: 'y' }] } })).toMatchObject({ ok: true, result: { provider: 'google-web', kind: 'mt' } })
+    expect((await t.status()).demotions).toEqual([{ id: SVC.id, kind: 'invalid-response' }])
   })
 
   it('a saved service id naming nothing: the status says which service was chosen and which engine it resolved to, so the toggle can tell them apart (local review)', async () => {
@@ -645,16 +744,18 @@ describe('createLocalTransport: the cache', () => {
     calls.push(r.segments.map(s => s.id))
     return { segments: r.segments.map(s => ({ ...s, text: `译:${s.text}` })), provider: 'mock', model: 'm' }
   })
-  const withCache = { paper: '2410.00260', renderPath: 'tags' as const }
+  const withCache = { paper: '2410.00260', renderPath: 'tags' as const, source: 'html' as const }
   const two: TranslateRequest = { segments: [{ id: 'a', text: 'x' }, { id: 'b', text: 'y' }], source: 'en', target: 'zh-CN' }
 
   it('the first time all miss and are written to the cache; the second time all hit and the provider is not called', async () => {
     const calls: string[][] = []
     const t = await withChain([echo(calls)], { cache: portOf(cacheOf()) })
     const first = await t.translate({ request: two, cache: withCache })
-    expect(first).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock' }, cached: 0 })
+    // a call with a cache: each segment carries its identity, a cache hit's included (types.ts TranslatedSegment.identity)
+    const segs = [{ id: 'a', text: '译:x', identity: expect.any(String) }, { id: 'b', text: '译:y', identity: expect.any(String) }]
+    expect(first).toEqual({ ok: true, result: { segments: segs, provider: 'mock', kind: 'llm' }, cached: 0 })
     const second = await t.translate({ request: two, cache: withCache })
-    expect(second).toEqual({ ok: true, result: { segments: [{ id: 'a', text: '译:x' }, { id: 'b', text: '译:y' }], provider: 'mock' }, cached: 2 })
+    expect(second).toEqual({ ok: true, result: { segments: segs, provider: 'mock', kind: 'llm' }, cached: 2 })
     expect(calls).toEqual([['a', 'b']])
   })
 
@@ -688,10 +789,10 @@ describe('chainConfigChanged: which configuration changes rebuild the chain', ()
     const base = DEFAULT_CONFIG
     expect(chainConfigChanged(base, { ...base, mode: 'side' })).toBe(false)
     expect(chainConfigChanged(base, { ...base, appearance: { ...base.appearance, activeStyle: 'green' } })).toBe(false)
-    expect(chainConfigChanged(base, { ...base, preload: { margin: 42, threshold: 0.5 } })).toBe(false)
+    expect(chainConfigChanged(base, { ...base, preload: 'whole' })).toBe(false)
     expect(chainConfigChanged(base, { ...base, glossary: [{ term: 'token', translation: '词元' }] })).toBe(false)
-    // The image translation's mode gate (§15) is only a display gate; a reader unticking a mode mid-translation must not clear the queue
-    expect(chainConfigChanged(base, { ...base, image: { enabled: true, modes: ['side'] } })).toBe(false)
+    // The image translation switch (§15) only opens or closes a display gate; flipping it mid-translation must not clear the queue
+    expect(chainConfigChanged(base, { ...base, image: { enabled: false } })).toBe(false)
   })
 
   it('a changed engine, endpoint, model, key, target language, prompt or fallback switch rebuilds', () => {
@@ -742,5 +843,68 @@ describe('chainRevision: the identity of the settings a chain is built from', ()
     for (const field of VOLATILE_CONFIG_FIELDS) {
       expect(await chainRevision({ ...base, [field]: { changed: true } } as unknown as Config), field).toBe(a)
     }
+  })
+})
+
+describe('createLocalTransport: the status identity', () => {
+  it('is the chosen engine\'s while it can answer, and its fallback\'s while it cannot', async () => {
+    const first = mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })
+    const second = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([first, second])
+    expect((await t.status()).identity).toBe(await translationIdentity({ providerId: SVC.id, model: SVC.model, promptKey: '', target: DEFAULT_CONFIG.targetLanguage, renderPath: 'tags' }))
+    const down = await withChain([mockProvider(first.translate, { id: SVC.id, isAvailable: async () => false }), second])
+    expect((await down.status()).identity).toBe(await translationIdentity({ providerId: 'google-web', model: '', promptKey: '', target: DEFAULT_CONFIG.targetLanguage, renderPath: 'tags' }))
+  })
+  it('follows a demotion: after the chosen engine refuses its key, the fallback that answers is the identity (final review)', async () => {
+    // the chosen service's probe still says available (a key is set); the refusal demotes it for the session
+    const refusing = mockProvider(async () => { throw new ProviderError('auth', '401') }, { id: SVC.id })
+    const fallback = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([refusing, fallback])
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
+    expect(res.ok && res.result.provider).toBe('google-web')
+    expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
+  })
+  it('skips a fallback set aside: the chosen engine unavailable, the first fallback refusing, the second answering (Devin on #298)', async () => {
+    const down = mockProvider(async () => { throw new ProviderError('auth', 'no key') }, { id: SVC.id, isAvailable: async () => false })
+    // its probe says available; its key refused, the chain sets it aside for the session
+    const refusing = mockProvider(async () => { throw new ProviderError('auth', '401') }, { id: 'microsoft', kind: 'mt' })
+    const answering = mockProvider(async r => ({ segments: r.segments, provider: 'google-web' }), { id: 'google-web', kind: 'mt' })
+    const t = await withChain([down, refusing, answering])
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
+    expect(res.ok && res.result.provider).toBe('google-web')
+    expect((await t.status()).identity).toBe(res.ok ? res.result.segments[0]!.identity : 'no answer')
+  })
+  it('equals the identity on the segments the same engine translates', async () => {
+    const t = await withChain([mockProvider(async r => ({ segments: r.segments, provider: SVC.id }), { id: SVC.id })])
+    // the target the reader sends is the status's own (engine.mjs), as here
+    const res = await t.translate({ request: { ...req, target: DEFAULT_CONFIG.targetLanguage }, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
+    expect(res.ok && res.result.segments[0]!.identity).toBe((await t.status()).identity)
+  })
+})
+
+describe('createLocalTransport: a refused key (the redesign\'s design, §4)', () => {
+  const engine = (id: string, calls: string[]) => mockProvider(async r => { calls.push(id); return { segments: r.segments, provider: id } }, { id })
+
+  it('passes a refused service over from the first call, and reports it unable to run, the free one taking over', async () => {
+    const calls: string[] = []
+    const t = await withChain([engine(SVC.id, calls), engine('microsoft', calls)], { rejected: new Set([SVC.id]) })
+    expect((await t.translate({ request: req })).ok).toBe(true)
+    expect(calls).toEqual(['microsoft'])
+    const status = await t.status()
+    expect(status.available).toBe(false)
+    expect(status.fallback).toEqual({ id: 'microsoft' })
+    // The seeded demotion names the refused service as the reason, from the first status — not only after a call
+    // has run and set it (Codex review, round 1)
+    expect(status.engine.id).toBe('microsoft')
+    expect(status.engine.demoted?.id).toBe(SVC.id)
+    // the record holds 401s alone, and the hand-over says so: the retranslate cue tells a refused key by it (#299, row 75)
+    expect(status.demotions).toEqual([{ id: SVC.id, kind: 'auth', status: 401 }])
+  })
+
+  it('still reaches it for a call that names it: the settings page asking whether the key works now', async () => {
+    const calls: string[] = []
+    const t = await withChain([engine(SVC.id, calls), engine('microsoft', calls)], { rejected: new Set([SVC.id]) })
+    expect((await t.translate({ request: req, providerId: SVC.id })).ok).toBe(true)
+    expect(calls).toEqual([SVC.id])
   })
 })

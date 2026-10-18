@@ -1,0 +1,9575 @@
+{
+ "written": "2026-10-06",
+ "image": "sha256:7334b00bf8e7a0996f7ddd65482363aaf7711d372e569f3ea78509619e3083ff",
+ "classes": [
+  "math",
+  "display",
+  "cite",
+  "ref",
+  "eqref",
+  "code",
+  "url",
+  "footnote",
+  "macro"
+ ],
+ "tolerance": {
+  "item": 0.01
+ },
+ "counts": {
+  "papers": 113,
+  "clean": 106,
+  "accepted": 5,
+  "switched": 2,
+  "failing": 0,
+  "passedOver": 0,
+  "unanswered": 0,
+  "lines": 198875,
+  "lost": {
+   "strict": 5,
+   "joined": 3,
+   "tex": 6,
+   "all": 6
+  },
+  "untraced": [],
+  "moved": {
+   "strict": 13,
+   "joined": 6
+  },
+  "unitMarksMoved": 5,
+  "captionPapers": 0,
+  "switchOff": []
+ },
+ "rows": [
+  {
+   "id": "2608.11761",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 494
+   },
+   "ms": [
+    4265,
+    6926
+   ],
+   "pages": [
+    44,
+    44
+   ],
+   "items": 3054,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1616,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 575,
+    "dropped": 0,
+    "marks": 1529
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 321,
+     "carried": 321
+    },
+    "heading": {
+     "lines": 18,
+     "carried": 18
+    },
+    "ref": {
+     "lines": 51,
+     "carried": 51
+    },
+    "cite": {
+     "lines": 64,
+     "carried": 64
+    },
+    "math": {
+     "lines": 202,
+     "carried": 202
+    },
+    "macro": {
+     "lines": 7,
+     "carried": 7
+    },
+    "cell": {
+     "lines": 96,
+     "carried": 96
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.27728",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 712
+   },
+   "ms": [
+    5924,
+    6966
+   ],
+   "pages": [
+    17,
+    17
+   ],
+   "items": 2502,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 915,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 244,
+    "dropped": 0,
+    "marks": 646
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 103,
+     "carried": 103
+    },
+    "heading": {
+     "lines": 37,
+     "carried": 37
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
+    },
+    "math": {
+     "lines": 108,
+     "carried": 108
+    },
+    "cite": {
+     "lines": 65,
+     "carried": 65
+    },
+    "ref": {
+     "lines": 12,
+     "carried": 12
+    },
+    "display": {
+     "lines": 14,
+     "carried": 14
+    },
+    "eqref": {
+     "lines": 2,
+     "carried": 2
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 9,
+     "carried": 9
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.28692",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 582
+   },
+   "ms": [
+    4499,
+    6300
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 1419,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 795,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 233,
+    "dropped": 0,
+    "marks": 569
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 96,
+     "carried": 96
+    },
+    "heading": {
+     "lines": 30,
+     "carried": 30
+    },
+    "macro": {
+     "lines": 69,
+     "carried": 69
+    },
+    "math": {
+     "lines": 52,
+     "carried": 52
+    },
+    "ref": {
+     "lines": 29,
+     "carried": 29
+    },
+    "cite": {
+     "lines": 35,
+     "carried": 35
+    },
+    "display": {
+     "lines": 9,
+     "carried": 9
+    },
+    "eqref": {
+     "lines": 7,
+     "carried": 7
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.06701",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 970
+   },
+   "ms": [
+    3661,
+    4191
+   ],
+   "pages": [
+    12,
+    12
+   ],
+   "items": 3336,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1208,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 324,
+    "dropped": 0,
+    "marks": 1235
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 156,
+     "carried": 156
+    },
+    "heading": {
+     "lines": 23,
+     "carried": 23
+    },
+    "footnote": {
+     "lines": 12,
+     "carried": 12
+    },
+    "macro": {
+     "lines": 250,
+     "carried": 250
+    },
+    "cite": {
+     "lines": 63,
+     "carried": 63
+    },
+    "ref": {
+     "lines": 32,
+     "carried": 32
+    },
+    "code": {
+     "lines": 7,
+     "carried": 7
+    },
+    "math": {
+     "lines": 32,
+     "carried": 32
+    },
+    "cell": {
+     "lines": 139,
+     "carried": 139
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.06007",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1308
+   },
+   "ms": [
+    11628,
+    12761
+   ],
+   "pages": [
+    19,
+    19
+   ],
+   "items": 2530,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1569,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 426,
+    "dropped": 0,
+    "marks": 965
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 189,
+     "carried": 189
+    },
+    "heading": {
+     "lines": 30,
+     "carried": 30
+    },
+    "macro": {
+     "lines": 205,
+     "carried": 205
+    },
+    "cite": {
+     "lines": 62,
+     "carried": 62
+    },
+    "url": {
+     "lines": 3,
+     "carried": 3
+    },
+    "math": {
+     "lines": 28,
+     "carried": 28
+    },
+    "cell": {
+     "lines": 43,
+     "carried": 43
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.27181",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 790
+   },
+   "ms": [
+    8633,
+    13071
+   ],
+   "pages": [
+    20,
+    20
+   ],
+   "items": 5691,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1770,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 575,
+    "dropped": 0,
+    "marks": 2889
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 239,
+     "carried": 239
+    },
+    "heading": {
+     "lines": 31,
+     "carried": 31
+    },
+    "cite": {
+     "lines": 343,
+     "carried": 343
+    },
+    "ref": {
+     "lines": 46,
+     "carried": 46
+    },
+    "math": {
+     "lines": 216,
+     "carried": 216
+    },
+    "macro": {
+     "lines": 8,
+     "carried": 8
+    },
+    "display": {
+     "lines": 8,
+     "carried": 8
+    },
+    "cell": {
+     "lines": 291,
+     "carried": 291
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.12333",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 1631
+   },
+   "ms": [
+    12818,
+    13807
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 1947,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1043,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 233,
+    "dropped": 0,
+    "marks": 726
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 99,
+     "carried": 99
+    },
+    "heading": {
+     "lines": 38,
+     "carried": 38
+    },
+    "footnote": {
+     "lines": 4,
+     "carried": 4
+    },
+    "math": {
+     "lines": 64,
+     "carried": 64
+    },
+    "ref": {
+     "lines": 31,
+     "carried": 31
+    },
+    "macro": {
+     "lines": 89,
+     "carried": 89
+    },
+    "code": {
+     "lines": 4,
+     "carried": 4
+    },
+    "display": {
+     "lines": 4,
+     "carried": 4
+    },
+    "cite": {
+     "lines": 83,
+     "carried": 83
+    },
+    "cell": {
+     "lines": 17,
+     "carried": 17
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.08880",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 619
+   },
+   "ms": [
+    3740,
+    4352
+   ],
+   "pages": [
+    12,
+    12
+   ],
+   "items": 2962,
+   "moved": {
+    "strict": 2,
+    "joined": 0
+   },
+   "lines": 1198,
+   "lost": {
+    "strict": 1,
+    "joined": 0,
+    "tex": 1,
+    "all": 1
+   },
+   "unitMarksMoved": 1,
+   "captions": [],
+   "readings": "offsets",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 350,
+    "dropped": 0,
+    "marks": 1041
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 1,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 6,
+     "near": "h84e",
+     "what": "heading end"
+    }
+   ],
+   "classes": {
+    "unit": {
+     "lines": 181,
+     "carried": 180
+    },
+    "heading": {
+     "lines": 46,
+     "carried": 45,
+     "texLost": 1
+    },
+    "macro": {
+     "lines": 148,
+     "carried": 148
+    },
+    "cite": {
+     "lines": 63,
+     "carried": 63
+    },
+    "code": {
+     "lines": 9,
+     "carried": 9
+    },
+    "ref": {
+     "lines": 22,
+     "carried": 22
+    },
+    "math": {
+     "lines": 44,
+     "carried": 44
+    },
+    "display": {
+     "lines": 3,
+     "carried": 3
+    },
+    "cell": {
+     "lines": 79,
+     "carried": 79
+    }
+   },
+   "own": {
+    "lost": 1
+   },
+   "verdict": "accepted"
+  },
+  {
+   "id": "2608.08350",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 1050
+   },
+   "ms": [
+    11046,
+    13778
+   ],
+   "pages": [
+    58,
+    58
+   ],
+   "items": 15989,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 7554,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 975,
+    "dropped": 0,
+    "marks": 3613
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 517,
+     "carried": 517
+    },
+    "heading": {
+     "lines": 74,
+     "carried": 74
+    },
+    "footnote": {
+     "lines": 9,
+     "carried": 9
+    },
+    "cite": {
+     "lines": 108,
+     "carried": 108
+    },
+    "math": {
+     "lines": 923,
+     "carried": 923
+    },
+    "ref": {
+     "lines": 128,
+     "carried": 128
+    },
+    "eqref": {
+     "lines": 128,
+     "carried": 128
+    },
+    "display": {
+     "lines": 203,
+     "carried": 203
+    },
+    "code": {
+     "lines": 20,
+     "carried": 20
+    },
+    "macro": {
+     "lines": 3,
+     "carried": 3
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.02991",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 486
+   },
+   "ms": [
+    2883,
+    3758
+   ],
+   "pages": [
+    26,
+    26
+   ],
+   "items": 4494,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1512,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 324,
+    "dropped": 0,
+    "marks": 1458
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 229,
+     "carried": 229
+    },
+    "heading": {
+     "lines": 40,
+     "carried": 40
+    },
+    "ref": {
+     "lines": 22,
+     "carried": 22
+    },
+    "math": {
+     "lines": 245,
+     "carried": 245
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cite": {
+     "lines": 30,
+     "carried": 30
+    },
+    "display": {
+     "lines": 73,
+     "carried": 73
+    },
+    "eqref": {
+     "lines": 41,
+     "carried": 41
+    },
+    "cell": {
+     "lines": 102,
+     "carried": 102
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.00812",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 651
+   },
+   "ms": [
+    5541,
+    6777
+   ],
+   "pages": [
+    34,
+    34
+   ],
+   "items": 16914,
+   "moved": {
+    "strict": 2,
+    "joined": 0
+   },
+   "lines": 2753,
+   "lost": {
+    "strict": 1,
+    "joined": 0,
+    "tex": 1,
+    "all": 1
+   },
+   "unitMarksMoved": 1,
+   "captions": [],
+   "readings": "offsets",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 708,
+    "dropped": 0,
+    "marks": 4077
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 1,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 7,
+     "near": "h51e",
+     "what": "heading end"
+    }
+   ],
+   "classes": {
+    "unit": {
+     "lines": 382,
+     "carried": 381
+    },
+    "heading": {
+     "lines": 26,
+     "carried": 25,
+     "texLost": 1
+    },
+    "cite": {
+     "lines": 67,
+     "carried": 67
+    },
+    "math": {
+     "lines": 709,
+     "carried": 709
+    },
+    "display": {
+     "lines": 174,
+     "carried": 174
+    },
+    "ref": {
+     "lines": 194,
+     "carried": 193
+    },
+    "eqref": {
+     "lines": 43,
+     "carried": 43
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    }
+   },
+   "own": {
+    "lost": 1
+   },
+   "verdict": "accepted"
+  },
+  {
+   "id": "2608.03994",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 1269
+   },
+   "ms": [
+    11860,
+    12770
+   ],
+   "pages": [
+    14,
+    14
+   ],
+   "items": 2351,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1355,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 308,
+    "dropped": 0,
+    "marks": 874
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 232,
+     "carried": 232
+    },
+    "heading": {
+     "lines": 57,
+     "carried": 57
+    },
+    "footnote": {
+     "lines": 7,
+     "carried": 7
+    },
+    "ref": {
+     "lines": 45,
+     "carried": 45
+    },
+    "cite": {
+     "lines": 73,
+     "carried": 73
+    },
+    "macro": {
+     "lines": 12,
+     "carried": 12
+    },
+    "math": {
+     "lines": 105,
+     "carried": 105
+    },
+    "display": {
+     "lines": 3,
+     "carried": 3
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.30640",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 829
+   },
+   "ms": [
+    6443,
+    12305
+   ],
+   "pages": [
+    34,
+    34
+   ],
+   "items": 4182,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1316,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 457,
+    "dropped": 0,
+    "marks": 1487
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 198,
+     "carried": 198
+    },
+    "heading": {
+     "lines": 67,
+     "carried": 67
+    },
+    "ref": {
+     "lines": 73,
+     "carried": 73
+    },
+    "math": {
+     "lines": 228,
+     "carried": 228
+    },
+    "cite": {
+     "lines": 78,
+     "carried": 78
+    },
+    "code": {
+     "lines": 24,
+     "carried": 24
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    },
+    "display": {
+     "lines": 10,
+     "carried": 10
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 19,
+     "carried": 19
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.28697",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 431
+   },
+   "ms": [
+    1525,
+    1887
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 1216,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 370,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 145,
+    "dropped": 0,
+    "marks": 716
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 108,
+     "carried": 108
+    },
+    "heading": {
+     "lines": 30,
+     "carried": 30
+    },
+    "math": {
+     "lines": 85,
+     "carried": 85
+    },
+    "ref": {
+     "lines": 15,
+     "carried": 15
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "code": {
+     "lines": 11,
+     "carried": 11
+    },
+    "cite": {
+     "lines": 8,
+     "carried": 8
+    },
+    "display": {
+     "lines": 1,
+     "carried": 1
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 36,
+     "carried": 36
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.08826",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 412
+   },
+   "ms": [
+    3480,
+    3555
+   ],
+   "pages": [
+    9,
+    9
+   ],
+   "items": 3667,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1240,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 253,
+    "dropped": 0,
+    "marks": 993
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 132,
+     "carried": 132
+    },
+    "heading": {
+     "lines": 19,
+     "carried": 19
+    },
+    "math": {
+     "lines": 308,
+     "carried": 308
+    },
+    "ref": {
+     "lines": 27,
+     "carried": 27
+    },
+    "display": {
+     "lines": 33,
+     "carried": 33
+    },
+    "cite": {
+     "lines": 34,
+     "carried": 34
+    },
+    "cell": {
+     "lines": 19,
+     "carried": 19
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.03063",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1311
+   },
+   "ms": [
+    12660,
+    15749
+   ],
+   "pages": [
+    14,
+    14
+   ],
+   "items": 3331,
+   "moved": {
+    "strict": 4,
+    "joined": 2
+   },
+   "lines": 1437,
+   "lost": {
+    "strict": 1,
+    "joined": 1,
+    "tex": 2,
+    "all": 2
+   },
+   "unitMarksMoved": 1,
+   "captions": [],
+   "readings": "offsets",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 442,
+    "dropped": 0,
+    "marks": 1683
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 2,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 7,
+     "near": "h174e",
+     "what": "heading end"
+    },
+    {
+     "page": 10,
+     "near": "h273e",
+     "what": "heading end"
+    }
+   ],
+   "classes": {
+    "unit": {
+     "lines": 270,
+     "carried": 268
+    },
+    "heading": {
+     "lines": 72,
+     "carried": 70,
+     "texLost": 2
+    },
+    "footnote": {
+     "lines": 5,
+     "carried": 5
+    },
+    "math": {
+     "lines": 179,
+     "carried": 178
+    },
+    "ref": {
+     "lines": 97,
+     "carried": 97
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "macro": {
+     "lines": 7,
+     "carried": 7
+    },
+    "cite": {
+     "lines": 43,
+     "carried": 43
+    },
+    "code": {
+     "lines": 5,
+     "carried": 5
+    },
+    "display": {
+     "lines": 7,
+     "carried": 7
+    },
+    "cell": {
+     "lines": 125,
+     "carried": 125
+    }
+   },
+   "own": {
+    "lost": 1
+   },
+   "verdict": "accepted"
+  },
+  {
+   "id": "2608.15955",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 751
+   },
+   "ms": [
+    2230,
+    2333
+   ],
+   "pages": [
+    11,
+    11
+   ],
+   "items": 4262,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 707,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 236,
+    "dropped": 0,
+    "marks": 1449
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 168,
+     "carried": 168
+    },
+    "heading": {
+     "lines": 9,
+     "carried": 9
+    },
+    "math": {
+     "lines": 260,
+     "carried": 260
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cite": {
+     "lines": 39,
+     "carried": 39
+    },
+    "display": {
+     "lines": 31,
+     "carried": 31
+    },
+    "ref": {
+     "lines": 28,
+     "carried": 28
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.10073",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 1,
+    "answered": 1,
+    "ms": 446
+   },
+   "ms": [
+    1359,
+    1420
+   ],
+   "pages": [
+    15,
+    15
+   ],
+   "items": 1702,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 657,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 212,
+    "dropped": 0,
+    "marks": 621
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 78,
+     "carried": 78
+    },
+    "heading": {
+     "lines": 8,
+     "carried": 8
+    },
+    "math": {
+     "lines": 190,
+     "carried": 190
+    },
+    "macro": {
+     "lines": 16,
+     "carried": 16
+    },
+    "display": {
+     "lines": 6,
+     "carried": 6
+    },
+    "ref": {
+     "lines": 27,
+     "carried": 27
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.18090",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 539
+   },
+   "ms": [
+    5572,
+    7639
+   ],
+   "pages": [
+    15,
+    15
+   ],
+   "items": 3056,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 732,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 328,
+    "dropped": 0,
+    "marks": 1463
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 175,
+     "carried": 175
+    },
+    "heading": {
+     "lines": 61,
+     "carried": 61
+    },
+    "cite": {
+     "lines": 45,
+     "carried": 45
+    },
+    "math": {
+     "lines": 268,
+     "carried": 268
+    },
+    "macro": {
+     "lines": 32,
+     "carried": 32
+    },
+    "ref": {
+     "lines": 30,
+     "carried": 30
+    },
+    "code": {
+     "lines": 6,
+     "carried": 6
+    },
+    "cell": {
+     "lines": 21,
+     "carried": 21
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.22816",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1145
+   },
+   "ms": [
+    2799,
+    2901
+   ],
+   "pages": [
+    5,
+    5
+   ],
+   "items": 2131,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 429,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 74,
+    "dropped": 0,
+    "marks": 368
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 43,
+     "carried": 43
+    },
+    "heading": {
+     "lines": 8,
+     "carried": 8
+    },
+    "math": {
+     "lines": 70,
+     "carried": 70
+    },
+    "eqref": {
+     "lines": 3,
+     "carried": 3
+    },
+    "display": {
+     "lines": 20,
+     "carried": 20
+    },
+    "ref": {
+     "lines": 11,
+     "carried": 11
+    },
+    "cite": {
+     "lines": 5,
+     "carried": 5
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.02055",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 885
+   },
+   "ms": [
+    8193,
+    10950
+   ],
+   "pages": [
+    63,
+    63
+   ],
+   "items": 19055,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 6037,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 828,
+    "dropped": 0,
+    "marks": 4495
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 341,
+     "carried": 341
+    },
+    "heading": {
+     "lines": 37,
+     "carried": 37
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cite": {
+     "lines": 80,
+     "carried": 80
+    },
+    "math": {
+     "lines": 979,
+     "carried": 979
+    },
+    "display": {
+     "lines": 146,
+     "carried": 146
+    },
+    "ref": {
+     "lines": 131,
+     "carried": 131
+    },
+    "eqref": {
+     "lines": 53,
+     "carried": 53
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "code": {
+     "lines": 3,
+     "carried": 3
+    },
+    "macro": {
+     "lines": 5,
+     "carried": 5
+    },
+    "cell": {
+     "lines": 116,
+     "carried": 116
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.23818",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 8,
+    "answered": 8,
+    "ms": 739
+   },
+   "ms": [
+    5311,
+    6190
+   ],
+   "pages": [
+    14,
+    14
+   ],
+   "items": 1764,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1144,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 251,
+    "dropped": 0,
+    "marks": 570
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 112,
+     "carried": 112
+    },
+    "heading": {
+     "lines": 34,
+     "carried": 34
+    },
+    "footnote": {
+     "lines": 3,
+     "carried": 3
+    },
+    "ref": {
+     "lines": 14,
+     "carried": 14
+    },
+    "macro": {
+     "lines": 34,
+     "carried": 34
+    },
+    "cite": {
+     "lines": 100,
+     "carried": 100
+    },
+    "math": {
+     "lines": 35,
+     "carried": 35
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "display": {
+     "lines": 8,
+     "carried": 8
+    },
+    "cell": {
+     "lines": 16,
+     "carried": 16
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.29181",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 1540
+   },
+   "ms": [
+    16551,
+    17141
+   ],
+   "pages": [
+    33,
+    33
+   ],
+   "items": 18104,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 4802,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 544,
+    "dropped": 0,
+    "marks": 2328
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 252,
+     "carried": 252
+    },
+    "heading": {
+     "lines": 22,
+     "carried": 22
+    },
+    "cite": {
+     "lines": 28,
+     "carried": 28
+    },
+    "math": {
+     "lines": 488,
+     "carried": 488
+    },
+    "display": {
+     "lines": 165,
+     "carried": 165
+    },
+    "eqref": {
+     "lines": 98,
+     "carried": 98
+    },
+    "ref": {
+     "lines": 83,
+     "carried": 83
+    },
+    "macro": {
+     "lines": 5,
+     "carried": 5
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.21180",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 397
+   },
+   "ms": [
+    2310,
+    2303
+   ],
+   "pages": [
+    13,
+    13
+   ],
+   "items": 743,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 539,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 189,
+    "dropped": 0,
+    "marks": 344
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 74,
+     "carried": 74
+    },
+    "heading": {
+     "lines": 20,
+     "carried": 20
+    },
+    "cite": {
+     "lines": 20,
+     "carried": 20
+    },
+    "math": {
+     "lines": 18,
+     "carried": 18
+    },
+    "ref": {
+     "lines": 7,
+     "carried": 7
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 36,
+     "carried": 36
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.04322",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 866
+   },
+   "ms": [
+    3744,
+    4314
+   ],
+   "pages": [
+    13,
+    13
+   ],
+   "items": 3325,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1438,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 397,
+    "dropped": 0,
+    "marks": 1024
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 213,
+     "carried": 213
+    },
+    "heading": {
+     "lines": 21,
+     "carried": 21
+    },
+    "cite": {
+     "lines": 77,
+     "carried": 77
+    },
+    "macro": {
+     "lines": 3,
+     "carried": 3
+    },
+    "math": {
+     "lines": 72,
+     "carried": 72
+    },
+    "ref": {
+     "lines": 17,
+     "carried": 17
+    },
+    "display": {
+     "lines": 1,
+     "carried": 1
+    },
+    "eqref": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 88,
+     "carried": 88
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.27043",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 730
+   },
+   "ms": [
+    4802,
+    5426
+   ],
+   "pages": [
+    18,
+    18
+   ],
+   "items": 1118,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 788,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 233,
+    "dropped": 2,
+    "marks": 597
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 135,
+     "carried": 135
+    },
+    "heading": {
+     "lines": 20,
+     "carried": 20
+    },
+    "math": {
+     "lines": 8,
+     "carried": 8
+    },
+    "cite": {
+     "lines": 26,
+     "carried": 26
+    },
+    "code": {
+     "lines": 17,
+     "carried": 17
+    },
+    "ref": {
+     "lines": 16,
+     "carried": 16
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 109,
+     "carried": 109
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.29558",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 591
+   },
+   "ms": [
+    3489,
+    4022
+   ],
+   "pages": [
+    17,
+    17
+   ],
+   "items": 6924,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2450,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 231,
+    "dropped": 0,
+    "marks": 1159
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 133,
+     "carried": 133
+    },
+    "heading": {
+     "lines": 22,
+     "carried": 22
+    },
+    "math": {
+     "lines": 197,
+     "carried": 197
+    },
+    "eqref": {
+     "lines": 67,
+     "carried": 67
+    },
+    "display": {
+     "lines": 131,
+     "carried": 131
+    },
+    "cite": {
+     "lines": 19,
+     "carried": 19
+    },
+    "ref": {
+     "lines": 24,
+     "carried": 24
+    },
+    "macro": {
+     "lines": 3,
+     "carried": 3
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.30886",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 756
+   },
+   "ms": [
+    3551,
+    3970
+   ],
+   "pages": [
+    9,
+    9
+   ],
+   "items": 4032,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1140,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 177,
+    "dropped": 0,
+    "marks": 351
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 54,
+     "carried": 54
+    },
+    "heading": {
+     "lines": 5,
+     "carried": 5
+    },
+    "cite": {
+     "lines": 31,
+     "carried": 31
+    },
+    "math": {
+     "lines": 72,
+     "carried": 72
+    },
+    "ref": {
+     "lines": 18,
+     "carried": 18
+    },
+    "display": {
+     "lines": 3,
+     "carried": 3
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "eqref": {
+     "lines": 2,
+     "carried": 2
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.12425",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 739
+   },
+   "ms": [
+    4548,
+    4506
+   ],
+   "pages": [
+    13,
+    13
+   ],
+   "items": 5043,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1082,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 271,
+    "dropped": 0,
+    "marks": 1937
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 205,
+     "carried": 205
+    },
+    "heading": {
+     "lines": 12,
+     "carried": 12
+    },
+    "cite": {
+     "lines": 36,
+     "carried": 36
+    },
+    "math": {
+     "lines": 388,
+     "carried": 388
+    },
+    "ref": {
+     "lines": 51,
+     "carried": 51
+    },
+    "display": {
+     "lines": 16,
+     "carried": 16
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.08903",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 720
+   },
+   "ms": [
+    3138,
+    3933
+   ],
+   "pages": [
+    14,
+    14
+   ],
+   "items": 3212,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 741,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 319,
+    "dropped": 0,
+    "marks": 876
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 96,
+     "carried": 96
+    },
+    "heading": {
+     "lines": 14,
+     "carried": 14
+    },
+    "cite": {
+     "lines": 44,
+     "carried": 44
+    },
+    "math": {
+     "lines": 111,
+     "carried": 111
+    },
+    "display": {
+     "lines": 11,
+     "carried": 11
+    },
+    "eqref": {
+     "lines": 24,
+     "carried": 24
+    },
+    "ref": {
+     "lines": 15,
+     "carried": 15
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.01890",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1048
+   },
+   "ms": [
+    7607,
+    8311
+   ],
+   "pages": [
+    16,
+    16
+   ],
+   "items": 6384,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2537,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 403,
+    "dropped": 0,
+    "marks": 1459
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 167,
+     "carried": 167
+    },
+    "heading": {
+     "lines": 14,
+     "carried": 14
+    },
+    "footnote": {
+     "lines": 10,
+     "carried": 10
+    },
+    "math": {
+     "lines": 384,
+     "carried": 384
+    },
+    "eqref": {
+     "lines": 16,
+     "carried": 16
+    },
+    "cite": {
+     "lines": 60,
+     "carried": 60
+    },
+    "macro": {
+     "lines": 10,
+     "carried": 10
+    },
+    "display": {
+     "lines": 55,
+     "carried": 55
+    },
+    "ref": {
+     "lines": 36,
+     "carried": 36
+    },
+    "cell": {
+     "lines": 9,
+     "carried": 9
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.15016",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1001
+   },
+   "ms": [
+    6006,
+    6328
+   ],
+   "pages": [
+    6,
+    6
+   ],
+   "items": 2197,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 889,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 184,
+    "dropped": 0,
+    "marks": 559
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 85,
+     "carried": 85
+    },
+    "heading": {
+     "lines": 14,
+     "carried": 14
+    },
+    "ref": {
+     "lines": 6,
+     "carried": 6
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cite": {
+     "lines": 24,
+     "carried": 24
+    },
+    "math": {
+     "lines": 157,
+     "carried": 157
+    },
+    "display": {
+     "lines": 7,
+     "carried": 7
+    },
+    "cell": {
+     "lines": 24,
+     "carried": 24
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.20144",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 275
+   },
+   "ms": [
+    1893,
+    1989
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 950,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 419,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 124,
+    "dropped": 0,
+    "marks": 388
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 69,
+     "carried": 69
+    },
+    "heading": {
+     "lines": 24,
+     "carried": 24
+    },
+    "cite": {
+     "lines": 26,
+     "carried": 26
+    },
+    "ref": {
+     "lines": 7,
+     "carried": 7
+    },
+    "math": {
+     "lines": 38,
+     "carried": 38
+    },
+    "display": {
+     "lines": 3,
+     "carried": 3
+    },
+    "macro": {
+     "lines": 5,
+     "carried": 5
+    },
+    "cell": {
+     "lines": 29,
+     "carried": 29
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.02163",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 479
+   },
+   "ms": [
+    3549,
+    3655
+   ],
+   "pages": [
+    25,
+    25
+   ],
+   "items": 7953,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1865,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 551,
+    "dropped": 0,
+    "marks": 1256
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 202,
+     "carried": 202
+    },
+    "heading": {
+     "lines": 42,
+     "carried": 42
+    },
+    "cite": {
+     "lines": 22,
+     "carried": 22
+    },
+    "math": {
+     "lines": 210,
+     "carried": 210
+    },
+    "ref": {
+     "lines": 16,
+     "carried": 16
+    },
+    "code": {
+     "lines": 5,
+     "carried": 5
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    },
+    "display": {
+     "lines": 9,
+     "carried": 9
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 186,
+     "carried": 186
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.04473",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 1,
+    "answered": 1,
+    "ms": 435
+   },
+   "ms": [
+    1375,
+    1323
+   ],
+   "pages": [
+    20,
+    20
+   ],
+   "items": 4003,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1669,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 298,
+    "dropped": 0,
+    "marks": 863
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 210,
+     "carried": 210
+    },
+    "heading": {
+     "lines": 25,
+     "carried": 25
+    },
+    "cite": {
+     "lines": 30,
+     "carried": 30
+    },
+    "math": {
+     "lines": 176,
+     "carried": 176
+    },
+    "macro": {
+     "lines": 47,
+     "carried": 47
+    },
+    "display": {
+     "lines": 64,
+     "carried": 64
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.08876",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 578
+   },
+   "ms": [
+    5541,
+    7599
+   ],
+   "pages": [
+    19,
+    19
+   ],
+   "items": 5224,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 957,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 407,
+    "dropped": 0,
+    "marks": 1423
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 123,
+     "carried": 123
+    },
+    "heading": {
+     "lines": 37,
+     "carried": 37
+    },
+    "cite": {
+     "lines": 27,
+     "carried": 27
+    },
+    "math": {
+     "lines": 234,
+     "carried": 234
+    },
+    "display": {
+     "lines": 6,
+     "carried": 6
+    },
+    "ref": {
+     "lines": 29,
+     "carried": 29
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "code": {
+     "lines": 1,
+     "carried": 1
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 118,
+     "carried": 118
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.16190",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 541
+   },
+   "ms": [
+    2821,
+    3334
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 1280,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 445,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 208,
+    "dropped": 0,
+    "marks": 587
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 114,
+     "carried": 114
+    },
+    "heading": {
+     "lines": 26,
+     "carried": 26
+    },
+    "macro": {
+     "lines": 14,
+     "carried": 14
+    },
+    "cite": {
+     "lines": 25,
+     "carried": 25
+    },
+    "math": {
+     "lines": 93,
+     "carried": 93
+    },
+    "ref": {
+     "lines": 6,
+     "carried": 6
+    },
+    "cell": {
+     "lines": 5,
+     "carried": 5
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.18685",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 528
+   },
+   "ms": [
+    3860,
+    3977
+   ],
+   "pages": [
+    9,
+    9
+   ],
+   "items": 1460,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 884,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 225,
+    "dropped": 0,
+    "marks": 518
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 93,
+     "carried": 93
+    },
+    "heading": {
+     "lines": 26,
+     "carried": 26
+    },
+    "macro": {
+     "lines": 35,
+     "carried": 35
+    },
+    "cite": {
+     "lines": 28,
+     "carried": 28
+    },
+    "ref": {
+     "lines": 8,
+     "carried": 8
+    },
+    "math": {
+     "lines": 44,
+     "carried": 44
+    },
+    "display": {
+     "lines": 4,
+     "carried": 4
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 59,
+     "carried": 59
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.20159",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1599
+   },
+   "ms": [
+    6193,
+    6718
+   ],
+   "pages": [
+    28,
+    28
+   ],
+   "items": 10557,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 4073,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 349,
+    "dropped": 0,
+    "marks": 1406
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 230,
+     "carried": 230
+    },
+    "heading": {
+     "lines": 17,
+     "carried": 17
+    },
+    "math": {
+     "lines": 306,
+     "carried": 306
+    },
+    "display": {
+     "lines": 115,
+     "carried": 115
+    },
+    "ref": {
+     "lines": 44,
+     "carried": 44
+    },
+    "eqref": {
+     "lines": 19,
+     "carried": 19
+    },
+    "cite": {
+     "lines": 33,
+     "carried": 33
+    },
+    "cell": {
+     "lines": 6,
+     "carried": 6
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.13416",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 1025
+   },
+   "ms": [
+    8118,
+    10250
+   ],
+   "pages": [
+    18,
+    18
+   ],
+   "items": 3159,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1042,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 384,
+    "dropped": 0,
+    "marks": 1294
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 134,
+     "carried": 134
+    },
+    "heading": {
+     "lines": 47,
+     "carried": 47
+    },
+    "macro": {
+     "lines": 32,
+     "carried": 32
+    },
+    "math": {
+     "lines": 183,
+     "carried": 183
+    },
+    "cite": {
+     "lines": 91,
+     "carried": 91
+    },
+    "ref": {
+     "lines": 20,
+     "carried": 20
+    },
+    "eqref": {
+     "lines": 5,
+     "carried": 5
+    },
+    "display": {
+     "lines": 14,
+     "carried": 14
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 60,
+     "carried": 60
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.12606",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 624
+   },
+   "ms": [
+    6390,
+    7221
+   ],
+   "pages": [
+    20,
+    20
+   ],
+   "items": 5532,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1979,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 501,
+    "dropped": 0,
+    "marks": 2236
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 134,
+     "carried": 134
+    },
+    "heading": {
+     "lines": 19,
+     "carried": 19
+    },
+    "math": {
+     "lines": 571,
+     "carried": 571
+    },
+    "ref": {
+     "lines": 84,
+     "carried": 84
+    },
+    "display": {
+     "lines": 27,
+     "carried": 27
+    },
+    "eqref": {
+     "lines": 16,
+     "carried": 16
+    },
+    "cite": {
+     "lines": 117,
+     "carried": 117
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.07683",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 643
+   },
+   "ms": [
+    3767,
+    4209
+   ],
+   "pages": [
+    17,
+    17
+   ],
+   "items": 7394,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1170,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 324,
+    "dropped": 0,
+    "marks": 2387
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 248,
+     "carried": 248
+    },
+    "heading": {
+     "lines": 20,
+     "carried": 20
+    },
+    "footnote": {
+     "lines": 3,
+     "carried": 3
+    },
+    "math": {
+     "lines": 384,
+     "carried": 384
+    },
+    "display": {
+     "lines": 84,
+     "carried": 84
+    },
+    "cite": {
+     "lines": 13,
+     "carried": 13
+    },
+    "ref": {
+     "lines": 41,
+     "carried": 41
+    },
+    "eqref": {
+     "lines": 5,
+     "carried": 5
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.09815",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 497
+   },
+   "ms": [
+    4473,
+    6172
+   ],
+   "pages": [
+    11,
+    11
+   ],
+   "items": 1491,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 488,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 263,
+    "dropped": 0,
+    "marks": 995
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 70,
+     "carried": 70
+    },
+    "heading": {
+     "lines": 6,
+     "carried": 6
+    },
+    "math": {
+     "lines": 176,
+     "carried": 176
+    },
+    "cite": {
+     "lines": 31,
+     "carried": 31
+    },
+    "ref": {
+     "lines": 32,
+     "carried": 32
+    },
+    "macro": {
+     "lines": 15,
+     "carried": 15
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.20990",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 736
+   },
+   "ms": [
+    4475,
+    5159
+   ],
+   "pages": [
+    9,
+    9
+   ],
+   "items": 2413,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 907,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 158,
+    "dropped": 0,
+    "marks": 609
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 45,
+     "carried": 45
+    },
+    "heading": {
+     "lines": 7,
+     "carried": 7
+    },
+    "math": {
+     "lines": 179,
+     "carried": 179
+    },
+    "cite": {
+     "lines": 9,
+     "carried": 9
+    },
+    "eqref": {
+     "lines": 14,
+     "carried": 14
+    },
+    "ref": {
+     "lines": 12,
+     "carried": 12
+    },
+    "display": {
+     "lines": 40,
+     "carried": 40
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.02459",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 461
+   },
+   "ms": [
+    4029,
+    5880
+   ],
+   "pages": [
+    88,
+    88
+   ],
+   "items": 33352,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 8062,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 1239,
+    "dropped": 0,
+    "marks": 7229
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 904,
+     "carried": 904
+    },
+    "heading": {
+     "lines": 59,
+     "carried": 59
+    },
+    "display": {
+     "lines": 741,
+     "carried": 741
+    },
+    "math": {
+     "lines": 1209,
+     "carried": 1209
+    },
+    "eqref": {
+     "lines": 250,
+     "carried": 250
+    },
+    "ref": {
+     "lines": 226,
+     "carried": 226
+    },
+    "macro": {
+     "lines": 22,
+     "carried": 22
+    },
+    "cite": {
+     "lines": 51,
+     "carried": 51
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.04183",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 663
+   },
+   "ms": [
+    4541,
+    6553
+   ],
+   "pages": [
+    18,
+    18
+   ],
+   "items": 3656,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1396,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 381,
+    "dropped": 0,
+    "marks": 1466
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 168,
+     "carried": 168
+    },
+    "heading": {
+     "lines": 48,
+     "carried": 48
+    },
+    "footnote": {
+     "lines": 1,
+     "carried": 1
+    },
+    "math": {
+     "lines": 207,
+     "carried": 207
+    },
+    "macro": {
+     "lines": 156,
+     "carried": 156
+    },
+    "ref": {
+     "lines": 48,
+     "carried": 48
+    },
+    "code": {
+     "lines": 19,
+     "carried": 19
+    },
+    "cite": {
+     "lines": 53,
+     "carried": 53
+    },
+    "display": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 47,
+     "carried": 47
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.15761",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 523
+   },
+   "ms": [
+    3262,
+    4045
+   ],
+   "pages": [
+    29,
+    29
+   ],
+   "items": 2079,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1078,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 380,
+    "dropped": 0,
+    "marks": 978
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 277,
+     "carried": 277
+    },
+    "heading": {
+     "lines": 60,
+     "carried": 60
+    },
+    "footnote": {
+     "lines": 1,
+     "carried": 1
+    },
+    "macro": {
+     "lines": 56,
+     "carried": 56
+    },
+    "ref": {
+     "lines": 38,
+     "carried": 38
+    },
+    "cite": {
+     "lines": 25,
+     "carried": 25
+    },
+    "math": {
+     "lines": 26,
+     "carried": 26
+    },
+    "url": {
+     "lines": 5,
+     "carried": 5
+    },
+    "cell": {
+     "lines": 88,
+     "carried": 88
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.25304",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 593
+   },
+   "ms": [
+    2976,
+    3574
+   ],
+   "pages": [
+    44,
+    44
+   ],
+   "items": 10999,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2963,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 569,
+    "dropped": 0,
+    "marks": 2501
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 295,
+     "carried": 295
+    },
+    "heading": {
+     "lines": 31,
+     "carried": 31
+    },
+    "display": {
+     "lines": 121,
+     "carried": 121
+    },
+    "math": {
+     "lines": 530,
+     "carried": 530
+    },
+    "ref": {
+     "lines": 88,
+     "carried": 88
+    },
+    "eqref": {
+     "lines": 14,
+     "carried": 14
+    },
+    "cite": {
+     "lines": 41,
+     "carried": 41
+    },
+    "code": {
+     "lines": 5,
+     "carried": 5
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 27,
+     "carried": 27
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.05876",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 529
+   },
+   "ms": [
+    4678,
+    4783
+   ],
+   "pages": [
+    13,
+    13
+   ],
+   "items": 2298,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1127,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 315,
+    "dropped": 0,
+    "marks": 1011
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 164,
+     "carried": 164
+    },
+    "heading": {
+     "lines": 49,
+     "carried": 49
+    },
+    "macro": {
+     "lines": 22,
+     "carried": 22
+    },
+    "cite": {
+     "lines": 63,
+     "carried": 63
+    },
+    "code": {
+     "lines": 13,
+     "carried": 13
+    },
+    "ref": {
+     "lines": 12,
+     "carried": 12
+    },
+    "math": {
+     "lines": 61,
+     "carried": 61
+    },
+    "display": {
+     "lines": 10,
+     "carried": 10
+    },
+    "cell": {
+     "lines": 134,
+     "carried": 134
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.05970",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 658
+   },
+   "ms": [
+    4321,
+    4961
+   ],
+   "pages": [
+    13,
+    13
+   ],
+   "items": 1412,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 606,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 212,
+    "dropped": 0,
+    "marks": 581
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 91,
+     "carried": 91
+    },
+    "heading": {
+     "lines": 20,
+     "carried": 20
+    },
+    "cite": {
+     "lines": 40,
+     "carried": 40
+    },
+    "math": {
+     "lines": 49,
+     "carried": 49
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "ref": {
+     "lines": 12,
+     "carried": 12
+    },
+    "display": {
+     "lines": 7,
+     "carried": 7
+    },
+    "cell": {
+     "lines": 51,
+     "carried": 51
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.25210",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 1459
+   },
+   "ms": [
+    13370,
+    14981
+   ],
+   "pages": [
+    18,
+    18
+   ],
+   "items": 7080,
+   "moved": {
+    "strict": 3,
+    "joined": 2
+   },
+   "lines": 2065,
+   "lost": {
+    "strict": 1,
+    "joined": 1,
+    "tex": 1,
+    "all": 1
+   },
+   "unitMarksMoved": 1,
+   "captions": [],
+   "readings": "offsets",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 672,
+    "dropped": 1,
+    "marks": 2669
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 1,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 9,
+     "near": "h189s",
+     "what": "heading start"
+    },
+    {
+     "page": 9,
+     "near": "h189e",
+     "what": "heading end"
+    },
+    {
+     "page": 9,
+     "near": "190s",
+     "what": "unit"
+    }
+   ],
+   "classes": {
+    "unit": {
+     "lines": 338,
+     "carried": 337,
+     "texLost": 1
+    },
+    "heading": {
+     "lines": 26,
+     "carried": 25,
+     "texLost": 1
+    },
+    "footnote": {
+     "lines": 3,
+     "carried": 3
+    },
+    "math": {
+     "lines": 427,
+     "carried": 427
+    },
+    "ref": {
+     "lines": 92,
+     "carried": 92
+    },
+    "cite": {
+     "lines": 47,
+     "carried": 47
+    },
+    "macro": {
+     "lines": 166,
+     "carried": 166
+    },
+    "url": {
+     "lines": 3,
+     "carried": 3
+    },
+    "code": {
+     "lines": 5,
+     "carried": 5
+    },
+    "display": {
+     "lines": 7,
+     "carried": 7
+    },
+    "cell": {
+     "lines": 133,
+     "carried": 133
+    }
+   },
+   "own": {
+    "lost": 1
+   },
+   "verdict": "accepted"
+  },
+  {
+   "id": "2608.14893",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 519
+   },
+   "ms": [
+    3176,
+    5291
+   ],
+   "pages": [
+    31,
+    31
+   ],
+   "items": 2414,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1238,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 386,
+    "dropped": 0,
+    "marks": 950
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 218,
+     "carried": 218
+    },
+    "heading": {
+     "lines": 34,
+     "carried": 34
+    },
+    "code": {
+     "lines": 10,
+     "carried": 10
+    },
+    "ref": {
+     "lines": 30,
+     "carried": 30
+    },
+    "cite": {
+     "lines": 26,
+     "carried": 26
+    },
+    "math": {
+     "lines": 84,
+     "carried": 84
+    },
+    "display": {
+     "lines": 11,
+     "carried": 11
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 122,
+     "carried": 122
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.27210",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 541
+   },
+   "ms": [
+    3204,
+    3718
+   ],
+   "pages": [
+    18,
+    18
+   ],
+   "items": 8485,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2497,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 318,
+    "dropped": 0,
+    "marks": 1452
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 209,
+     "carried": 209
+    },
+    "heading": {
+     "lines": 20,
+     "carried": 20
+    },
+    "cite": {
+     "lines": 35,
+     "carried": 35
+    },
+    "math": {
+     "lines": 333,
+     "carried": 333
+    },
+    "ref": {
+     "lines": 24,
+     "carried": 24
+    },
+    "display": {
+     "lines": 137,
+     "carried": 137
+    },
+    "eqref": {
+     "lines": 41,
+     "carried": 41
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.26008",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 761
+   },
+   "ms": [
+    5826,
+    7106
+   ],
+   "pages": [
+    16,
+    16
+   ],
+   "items": 2707,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1425,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 334,
+    "dropped": 0,
+    "marks": 1105
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 332,
+     "carried": 332
+    },
+    "heading": {
+     "lines": 48,
+     "carried": 48
+    },
+    "cite": {
+     "lines": 59,
+     "carried": 59
+    },
+    "math": {
+     "lines": 107,
+     "carried": 107
+    },
+    "ref": {
+     "lines": 23,
+     "carried": 23
+    },
+    "code": {
+     "lines": 15,
+     "carried": 15
+    },
+    "display": {
+     "lines": 10,
+     "carried": 10
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 49,
+     "carried": 49
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.24961",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 629
+   },
+   "ms": [
+    4569,
+    5988
+   ],
+   "pages": [
+    16,
+    16
+   ],
+   "items": 1386,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 644,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 273,
+    "dropped": 0,
+    "marks": 887
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 107,
+     "carried": 107
+    },
+    "heading": {
+     "lines": 12,
+     "carried": 12
+    },
+    "cite": {
+     "lines": 21,
+     "carried": 21
+    },
+    "math": {
+     "lines": 5,
+     "carried": 5
+    },
+    "ref": {
+     "lines": 18,
+     "carried": 18
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "cell": {
+     "lines": 181,
+     "carried": 181
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.14934",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 986
+   },
+   "ms": [
+    6635,
+    8501
+   ],
+   "pages": [
+    45,
+    45
+   ],
+   "items": 25439,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2319,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 954,
+    "dropped": 4,
+    "marks": 2473
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 165,
+     "carried": 165
+    },
+    "heading": {
+     "lines": 41,
+     "carried": 41
+    },
+    "math": {
+     "lines": 443,
+     "carried": 443
+    },
+    "eqref": {
+     "lines": 72,
+     "carried": 72
+    },
+    "cite": {
+     "lines": 79,
+     "carried": 79
+    },
+    "display": {
+     "lines": 51,
+     "carried": 51
+    },
+    "ref": {
+     "lines": 53,
+     "carried": 53
+    },
+    "code": {
+     "lines": 8,
+     "carried": 8
+    },
+    "macro": {
+     "lines": 34,
+     "carried": 34
+    },
+    "cell": {
+     "lines": 140,
+     "carried": 140
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.07584",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 723
+   },
+   "ms": [
+    5639,
+    6194
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 961,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 732,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 191,
+    "dropped": 0,
+    "marks": 325
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 144,
+     "carried": 144
+    },
+    "heading": {
+     "lines": 22,
+     "carried": 22
+    },
+    "ref": {
+     "lines": 7,
+     "carried": 7
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cite": {
+     "lines": 14,
+     "carried": 14
+    },
+    "math": {
+     "lines": 10,
+     "carried": 10
+    },
+    "display": {
+     "lines": 1,
+     "carried": 1
+    },
+    "code": {
+     "lines": 5,
+     "carried": 5
+    },
+    "cell": {
+     "lines": 17,
+     "carried": 17
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.20240",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1516
+   },
+   "ms": [
+    8136,
+    8023
+   ],
+   "pages": [
+    15,
+    15
+   ],
+   "items": 3505,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1582,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 433,
+    "dropped": 0,
+    "marks": 1184
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 216,
+     "carried": 216
+    },
+    "heading": {
+     "lines": 39,
+     "carried": 39
+    },
+    "display": {
+     "lines": 13,
+     "carried": 13
+    },
+    "math": {
+     "lines": 159,
+     "carried": 159
+    },
+    "ref": {
+     "lines": 37,
+     "carried": 37
+    },
+    "cite": {
+     "lines": 58,
+     "carried": 58
+    },
+    "eqref": {
+     "lines": 19,
+     "carried": 19
+    },
+    "code": {
+     "lines": 3,
+     "carried": 3
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "url": {
+     "lines": 4,
+     "carried": 4
+    },
+    "cell": {
+     "lines": 67,
+     "carried": 67
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.11884",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 2191
+   },
+   "ms": [
+    9455,
+    9682
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 2664,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1192,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 263,
+    "dropped": 0,
+    "marks": 915
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 129,
+     "carried": 129
+    },
+    "heading": {
+     "lines": 33,
+     "carried": 33
+    },
+    "math": {
+     "lines": 115,
+     "carried": 115
+    },
+    "macro": {
+     "lines": 3,
+     "carried": 3
+    },
+    "ref": {
+     "lines": 17,
+     "carried": 17
+    },
+    "cite": {
+     "lines": 44,
+     "carried": 44
+    },
+    "display": {
+     "lines": 22,
+     "carried": 22
+    },
+    "cell": {
+     "lines": 86,
+     "carried": 86
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.17206",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1531
+   },
+   "ms": [
+    4237,
+    4699
+   ],
+   "pages": [
+    19,
+    19
+   ],
+   "items": 5737,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1336,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 271,
+    "dropped": 0,
+    "marks": 2115
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 181,
+     "carried": 181
+    },
+    "heading": {
+     "lines": 13,
+     "carried": 13
+    },
+    "math": {
+     "lines": 408,
+     "carried": 408
+    },
+    "ref": {
+     "lines": 25,
+     "carried": 25
+    },
+    "cite": {
+     "lines": 37,
+     "carried": 37
+    },
+    "display": {
+     "lines": 139,
+     "carried": 139
+    },
+    "eqref": {
+     "lines": 22,
+     "carried": 22
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.17060",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1317
+   },
+   "ms": [
+    10586,
+    12473
+   ],
+   "pages": [
+    12,
+    12
+   ],
+   "items": 2786,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1138,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 370,
+    "dropped": 0,
+    "marks": 1643
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 179,
+     "carried": 179
+    },
+    "heading": {
+     "lines": 58,
+     "carried": 58
+    },
+    "ref": {
+     "lines": 48,
+     "carried": 48
+    },
+    "math": {
+     "lines": 273,
+     "carried": 273
+    },
+    "cite": {
+     "lines": 69,
+     "carried": 69
+    },
+    "display": {
+     "lines": 3,
+     "carried": 3
+    },
+    "url": {
+     "lines": 4,
+     "carried": 4
+    },
+    "cell": {
+     "lines": 67,
+     "carried": 67
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.11587",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 964
+   },
+   "ms": [
+    6381,
+    6865
+   ],
+   "pages": [
+    5,
+    5
+   ],
+   "items": 1233,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 590,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 151,
+    "dropped": 0,
+    "marks": 396
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 91,
+     "carried": 91
+    },
+    "heading": {
+     "lines": 14,
+     "carried": 14
+    },
+    "ref": {
+     "lines": 7,
+     "carried": 7
+    },
+    "math": {
+     "lines": 58,
+     "carried": 58
+    },
+    "cite": {
+     "lines": 22,
+     "carried": 22
+    },
+    "display": {
+     "lines": 8,
+     "carried": 8
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 14,
+     "carried": 14
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.23586",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1229
+   },
+   "ms": [
+    5037,
+    5521
+   ],
+   "pages": [
+    35,
+    35
+   ],
+   "items": 9304,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2733,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 784,
+    "dropped": 0,
+    "marks": 3320
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 446,
+     "carried": 446
+    },
+    "heading": {
+     "lines": 100,
+     "carried": 100
+    },
+    "cite": {
+     "lines": 13,
+     "carried": 13
+    },
+    "eqref": {
+     "lines": 106,
+     "carried": 106
+    },
+    "display": {
+     "lines": 125,
+     "carried": 125
+    },
+    "math": {
+     "lines": 710,
+     "carried": 710
+    },
+    "ref": {
+     "lines": 110,
+     "carried": 110
+    },
+    "cell": {
+     "lines": 44,
+     "carried": 44
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.18626",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 877
+   },
+   "ms": [
+    4566,
+    5469
+   ],
+   "pages": [
+    9,
+    9
+   ],
+   "items": 1086,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 665,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 205,
+    "dropped": 0,
+    "marks": 434
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 92,
+     "carried": 92
+    },
+    "heading": {
+     "lines": 19,
+     "carried": 19
+    },
+    "math": {
+     "lines": 40,
+     "carried": 40
+    },
+    "cite": {
+     "lines": 67,
+     "carried": 67
+    },
+    "macro": {
+     "lines": 19,
+     "carried": 19
+    },
+    "display": {
+     "lines": 4,
+     "carried": 4
+    },
+    "code": {
+     "lines": 9,
+     "carried": 9
+    },
+    "ref": {
+     "lines": 10,
+     "carried": 10
+    },
+    "cell": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.25750",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 573
+   },
+   "ms": [
+    4265,
+    6360
+   ],
+   "pages": [
+    18,
+    18
+   ],
+   "items": 4270,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1740,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 443,
+    "dropped": 0,
+    "marks": 1660
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 247,
+     "carried": 247
+    },
+    "heading": {
+     "lines": 49,
+     "carried": 49
+    },
+    "footnote": {
+     "lines": 1,
+     "carried": 1
+    },
+    "math": {
+     "lines": 353,
+     "carried": 353
+    },
+    "display": {
+     "lines": 16,
+     "carried": 16
+    },
+    "code": {
+     "lines": 13,
+     "carried": 13
+    },
+    "ref": {
+     "lines": 77,
+     "carried": 77
+    },
+    "cite": {
+     "lines": 47,
+     "carried": 47
+    },
+    "macro": {
+     "lines": 23,
+     "carried": 23
+    },
+    "eqref": {
+     "lines": 10,
+     "carried": 10
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 31,
+     "carried": 31
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.05519",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 813
+   },
+   "ms": [
+    3999,
+    4182
+   ],
+   "pages": [
+    8,
+    8
+   ],
+   "items": 1250,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 742,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 208,
+    "dropped": 0,
+    "marks": 481
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 119,
+     "carried": 119
+    },
+    "heading": {
+     "lines": 26,
+     "carried": 26
+    },
+    "cite": {
+     "lines": 25,
+     "carried": 25
+    },
+    "math": {
+     "lines": 29,
+     "carried": 29
+    },
+    "ref": {
+     "lines": 6,
+     "carried": 6
+    },
+    "code": {
+     "lines": 14,
+     "carried": 14
+    },
+    "display": {
+     "lines": 1,
+     "carried": 1
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 39,
+     "carried": 39
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.24839",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 760
+   },
+   "ms": [
+    4112,
+    3937
+   ],
+   "pages": [
+    7,
+    7
+   ],
+   "items": 1054,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 588,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 167,
+    "dropped": 0,
+    "marks": 460
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 102,
+     "carried": 102
+    },
+    "heading": {
+     "lines": 20,
+     "carried": 20
+    },
+    "cite": {
+     "lines": 27,
+     "carried": 27
+    },
+    "ref": {
+     "lines": 23,
+     "carried": 23
+    },
+    "math": {
+     "lines": 12,
+     "carried": 12
+    },
+    "display": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 28,
+     "carried": 28
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.20051",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1156
+   },
+   "ms": [
+    7710,
+    9309
+   ],
+   "pages": [
+    60,
+    60
+   ],
+   "items": 12414,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2068,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 850,
+    "dropped": 6,
+    "marks": 5928
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 747,
+     "carried": 747
+    },
+    "heading": {
+     "lines": 21,
+     "carried": 21
+    },
+    "math": {
+     "lines": 1066,
+     "carried": 1066
+    },
+    "ref": {
+     "lines": 202,
+     "carried": 202
+    },
+    "cite": {
+     "lines": 46,
+     "carried": 46
+    },
+    "display": {
+     "lines": 69,
+     "carried": 69
+    },
+    "eqref": {
+     "lines": 1,
+     "carried": 1
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 71,
+     "carried": 71
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.26528",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 635
+   },
+   "ms": [
+    4062,
+    6129
+   ],
+   "pages": [
+    31,
+    31
+   ],
+   "items": 5364,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1592,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 477,
+    "dropped": 0,
+    "marks": 1657
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 198,
+     "carried": 198
+    },
+    "heading": {
+     "lines": 38,
+     "carried": 38
+    },
+    "math": {
+     "lines": 288,
+     "carried": 288
+    },
+    "display": {
+     "lines": 74,
+     "carried": 74
+    },
+    "eqref": {
+     "lines": 21,
+     "carried": 21
+    },
+    "cite": {
+     "lines": 37,
+     "carried": 37
+    },
+    "ref": {
+     "lines": 31,
+     "carried": 31
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.18887",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 544
+   },
+   "ms": [
+    2191,
+    2287
+   ],
+   "pages": [
+    8,
+    8
+   ],
+   "items": 2451,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 901,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 245,
+    "dropped": 0,
+    "marks": 852
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 142,
+     "carried": 142
+    },
+    "heading": {
+     "lines": 49,
+     "carried": 49
+    },
+    "math": {
+     "lines": 177,
+     "carried": 177
+    },
+    "ref": {
+     "lines": 21,
+     "carried": 21
+    },
+    "cite": {
+     "lines": 33,
+     "carried": 33
+    },
+    "code": {
+     "lines": 2,
+     "carried": 2
+    },
+    "display": {
+     "lines": 13,
+     "carried": 13
+    },
+    "eqref": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 15,
+     "carried": 15
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.09189",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 917
+   },
+   "ms": [
+    10256,
+    11099
+   ],
+   "pages": [
+    20,
+    20
+   ],
+   "items": 3427,
+   "moved": {
+    "strict": 2,
+    "joined": 2
+   },
+   "lines": 1807,
+   "lost": {
+    "strict": 1,
+    "joined": 1,
+    "tex": 1,
+    "all": 1
+   },
+   "unitMarksMoved": 1,
+   "captions": [],
+   "readings": "offsets",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 516,
+    "dropped": 1,
+    "marks": 1367
+   },
+   "traced": true,
+   "cause": "tex",
+   "causes": {
+    "accepted": 1,
+    "unexplained": 0
+   },
+   "boxes": [
+    {
+     "page": 13,
+     "near": "h388e",
+     "what": "heading end"
+    }
+   ],
+   "classes": {
+    "unit": {
+     "lines": 465,
+     "carried": 464
+    },
+    "heading": {
+     "lines": 48,
+     "carried": 47,
+     "texLost": 1
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cite": {
+     "lines": 41,
+     "carried": 41
+    },
+    "math": {
+     "lines": 25,
+     "carried": 25
+    },
+    "display": {
+     "lines": 5,
+     "carried": 5
+    },
+    "ref": {
+     "lines": 14,
+     "carried": 14
+    },
+    "macro": {
+     "lines": 10,
+     "carried": 10
+    },
+    "cell": {
+     "lines": 207,
+     "carried": 207
+    }
+   },
+   "own": {
+    "lost": 1
+   },
+   "verdict": "accepted"
+  },
+  {
+   "id": "2608.12255",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 842
+   },
+   "ms": [
+    25305,
+    30575
+   ],
+   "pages": [
+    52,
+    52
+   ],
+   "items": 28827,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 7522,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 1364,
+    "dropped": 17,
+    "marks": 7516
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 507,
+     "carried": 507
+    },
+    "heading": {
+     "lines": 23,
+     "carried": 23
+    },
+    "footnote": {
+     "lines": 3,
+     "carried": 3
+    },
+    "ref": {
+     "lines": 115,
+     "carried": 115
+    },
+    "cite": {
+     "lines": 52,
+     "carried": 52
+    },
+    "math": {
+     "lines": 1886,
+     "carried": 1886
+    },
+    "display": {
+     "lines": 194,
+     "carried": 194
+    },
+    "eqref": {
+     "lines": 128,
+     "carried": 128
+    },
+    "macro": {
+     "lines": 5,
+     "carried": 5
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 4,
+     "carried": 4
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.00055",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 553
+   },
+   "ms": [
+    2325,
+    2970
+   ],
+   "pages": [
+    27,
+    27
+   ],
+   "items": 4239,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1160,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 317,
+    "dropped": 0,
+    "marks": 1455
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 142,
+     "carried": 142
+    },
+    "heading": {
+     "lines": 19,
+     "carried": 19
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
+    },
+    "ref": {
+     "lines": 38,
+     "carried": 38
+    },
+    "math": {
+     "lines": 419,
+     "carried": 419
+    },
+    "display": {
+     "lines": 17,
+     "carried": 17
+    },
+    "cite": {
+     "lines": 15,
+     "carried": 15
+    },
+    "eqref": {
+     "lines": 10,
+     "carried": 10
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.02015",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 953
+   },
+   "ms": [
+    6451,
+    7443
+   ],
+   "pages": [
+    26,
+    26
+   ],
+   "items": 12512,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2760,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 382,
+    "dropped": 0,
+    "marks": 1511
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 159,
+     "carried": 159
+    },
+    "heading": {
+     "lines": 19,
+     "carried": 19
+    },
+    "math": {
+     "lines": 296,
+     "carried": 296
+    },
+    "eqref": {
+     "lines": 57,
+     "carried": 57
+    },
+    "display": {
+     "lines": 128,
+     "carried": 128
+    },
+    "ref": {
+     "lines": 49,
+     "carried": 49
+    },
+    "cite": {
+     "lines": 17,
+     "carried": 17
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "code": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.10322",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 704
+   },
+   "ms": [
+    6381,
+    6996
+   ],
+   "pages": [
+    26,
+    26
+   ],
+   "items": 9926,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2678,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 328,
+    "dropped": 0,
+    "marks": 1738
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 105,
+     "carried": 105
+    },
+    "heading": {
+     "lines": 12,
+     "carried": 12
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
+    },
+    "math": {
+     "lines": 392,
+     "carried": 392
+    },
+    "macro": {
+     "lines": 92,
+     "carried": 92
+    },
+    "ref": {
+     "lines": 98,
+     "carried": 98
+    },
+    "cite": {
+     "lines": 37,
+     "carried": 37
+    },
+    "display": {
+     "lines": 7,
+     "carried": 7
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.03841",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 754
+   },
+   "ms": [
+    2256,
+    2517
+   ],
+   "pages": [
+    7,
+    7
+   ],
+   "items": 1746,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 564,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 124,
+    "dropped": 0,
+    "marks": 605
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 62,
+     "carried": 62
+    },
+    "heading": {
+     "lines": 5,
+     "carried": 5
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cite": {
+     "lines": 38,
+     "carried": 38
+    },
+    "ref": {
+     "lines": 24,
+     "carried": 24
+    },
+    "math": {
+     "lines": 118,
+     "carried": 118
+    },
+    "display": {
+     "lines": 22,
+     "carried": 22
+    },
+    "eqref": {
+     "lines": 13,
+     "carried": 13
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.30782",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 592
+   },
+   "ms": [
+    4358,
+    4428
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 2377,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 909,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 246,
+    "dropped": 0,
+    "marks": 736
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 88,
+     "carried": 88
+    },
+    "heading": {
+     "lines": 14,
+     "carried": 14
+    },
+    "cite": {
+     "lines": 84,
+     "carried": 84
+    },
+    "math": {
+     "lines": 80,
+     "carried": 80
+    },
+    "macro": {
+     "lines": 8,
+     "carried": 8
+    },
+    "eqref": {
+     "lines": 7,
+     "carried": 7
+    },
+    "display": {
+     "lines": 17,
+     "carried": 17
+    },
+    "cell": {
+     "lines": 61,
+     "carried": 61
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.18502",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 561
+   },
+   "ms": [
+    3682,
+    5460
+   ],
+   "pages": [
+    54,
+    54
+   ],
+   "items": 20660,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 3576,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 1094,
+    "dropped": 0,
+    "marks": 7157
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 411,
+     "carried": 411
+    },
+    "heading": {
+     "lines": 86,
+     "carried": 86
+    },
+    "footnote": {
+     "lines": 3,
+     "carried": 3
+    },
+    "math": {
+     "lines": 1780,
+     "carried": 1780
+    },
+    "display": {
+     "lines": 38,
+     "carried": 38
+    },
+    "cite": {
+     "lines": 83,
+     "carried": 83
+    },
+    "ref": {
+     "lines": 139,
+     "carried": 139
+    },
+    "macro": {
+     "lines": 34,
+     "carried": 34
+    },
+    "eqref": {
+     "lines": 3,
+     "carried": 3
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.11605",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 556
+   },
+   "ms": [
+    5057,
+    5647
+   ],
+   "pages": [
+    12,
+    12
+   ],
+   "items": 1349,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 607,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 224,
+    "dropped": 0,
+    "marks": 475
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 95,
+     "carried": 95
+    },
+    "heading": {
+     "lines": 28,
+     "carried": 28
+    },
+    "cite": {
+     "lines": 39,
+     "carried": 39
+    },
+    "ref": {
+     "lines": 13,
+     "carried": 13
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "math": {
+     "lines": 35,
+     "carried": 35
+    },
+    "display": {
+     "lines": 10,
+     "carried": 10
+    },
+    "cell": {
+     "lines": 27,
+     "carried": 27
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.12502",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1074
+   },
+   "ms": [
+    5626,
+    6644
+   ],
+   "pages": [
+    16,
+    16
+   ],
+   "items": 4886,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1709,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 424,
+    "dropped": 0,
+    "marks": 1514
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 253,
+     "carried": 253
+    },
+    "heading": {
+     "lines": 50,
+     "carried": 50
+    },
+    "cite": {
+     "lines": 57,
+     "carried": 57
+    },
+    "math": {
+     "lines": 213,
+     "carried": 213
+    },
+    "macro": {
+     "lines": 2,
+     "carried": 2
+    },
+    "ref": {
+     "lines": 30,
+     "carried": 30
+    },
+    "code": {
+     "lines": 6,
+     "carried": 6
+    },
+    "eqref": {
+     "lines": 9,
+     "carried": 9
+    },
+    "display": {
+     "lines": 23,
+     "carried": 23
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 98,
+     "carried": 98
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.16117",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 1180
+   },
+   "ms": [
+    11941,
+    15271
+   ],
+   "pages": [
+    40,
+    40
+   ],
+   "items": 5376,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2566,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 557,
+    "dropped": 0,
+    "marks": 1420
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 173,
+     "carried": 173
+    },
+    "heading": {
+     "lines": 20,
+     "carried": 20
+    },
+    "footnote": {
+     "lines": 6,
+     "carried": 6
+    },
+    "math": {
+     "lines": 263,
+     "carried": 263
+    },
+    "ref": {
+     "lines": 86,
+     "carried": 86
+    },
+    "display": {
+     "lines": 97,
+     "carried": 97
+    },
+    "cite": {
+     "lines": 117,
+     "carried": 117
+    },
+    "eqref": {
+     "lines": 7,
+     "carried": 7
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.21733",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 836
+   },
+   "ms": [
+    5448,
+    6291
+   ],
+   "pages": [
+    19,
+    19
+   ],
+   "items": 6043,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2436,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 445,
+    "dropped": 0,
+    "marks": 1343
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 273,
+     "carried": 273
+    },
+    "heading": {
+     "lines": 40,
+     "carried": 40
+    },
+    "footnote": {
+     "lines": 3,
+     "carried": 3
+    },
+    "math": {
+     "lines": 317,
+     "carried": 317
+    },
+    "ref": {
+     "lines": 21,
+     "carried": 21
+    },
+    "cite": {
+     "lines": 27,
+     "carried": 27
+    },
+    "display": {
+     "lines": 112,
+     "carried": 112
+    },
+    "eqref": {
+     "lines": 9,
+     "carried": 9
+    },
+    "cell": {
+     "lines": 13,
+     "carried": 13
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.29867",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 7723
+   },
+   "ms": [
+    41110,
+    10719
+   ],
+   "pages": [
+    19,
+    19
+   ],
+   "items": 1992,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 847,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 343,
+    "dropped": 0,
+    "marks": 1323
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 185,
+     "carried": 185
+    },
+    "heading": {
+     "lines": 27,
+     "carried": 27
+    },
+    "math": {
+     "lines": 126,
+     "carried": 126
+    },
+    "cite": {
+     "lines": 47,
+     "carried": 47
+    },
+    "ref": {
+     "lines": 30,
+     "carried": 30
+    },
+    "display": {
+     "lines": 5,
+     "carried": 5
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 39,
+     "carried": 39
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.10091",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 4644
+   },
+   "ms": [
+    20778,
+    5474
+   ],
+   "pages": [
+    15,
+    15
+   ],
+   "items": 1881,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 638,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 239,
+    "dropped": 0,
+    "marks": 897
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 94,
+     "carried": 94
+    },
+    "heading": {
+     "lines": 31,
+     "carried": 31
+    },
+    "math": {
+     "lines": 93,
+     "carried": 93
+    },
+    "cite": {
+     "lines": 63,
+     "carried": 63
+    },
+    "ref": {
+     "lines": 10,
+     "carried": 10
+    },
+    "code": {
+     "lines": 6,
+     "carried": 6
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "display": {
+     "lines": 2,
+     "carried": 2
+    },
+    "cell": {
+     "lines": 66,
+     "carried": 66
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.23865",
+   "v0": "ok",
+   "v1": "ok",
+   "switched": [
+    "\\cite"
+   ],
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 581
+   },
+   "ms": [
+    3045,
+    14669
+   ],
+   "pages": [
+    20,
+    20
+   ],
+   "items": 954,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 520,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 170,
+    "dropped": 0,
+    "marks": 372
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 77,
+     "carried": 77
+    },
+    "heading": {
+     "lines": 15,
+     "carried": 15
+    },
+    "macro": {
+     "lines": 9,
+     "carried": 9
+    },
+    "math": {
+     "lines": 71,
+     "carried": 71
+    },
+    "ref": {
+     "lines": 14,
+     "carried": 14
+    }
+   },
+   "verdict": "switched"
+  },
+  {
+   "id": "2608.19071",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 983
+   },
+   "ms": [
+    35403,
+    37589
+   ],
+   "pages": [
+    31,
+    31
+   ],
+   "items": 13152,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 3341,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 528,
+    "dropped": 31,
+    "marks": 2928
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 254,
+     "carried": 254
+    },
+    "heading": {
+     "lines": 11,
+     "carried": 11
+    },
+    "ref": {
+     "lines": 74,
+     "carried": 74
+    },
+    "cite": {
+     "lines": 66,
+     "carried": 66
+    },
+    "math": {
+     "lines": 729,
+     "carried": 729
+    },
+    "display": {
+     "lines": 107,
+     "carried": 107
+    },
+    "eqref": {
+     "lines": 27,
+     "carried": 27
+    },
+    "macro": {
+     "lines": 5,
+     "carried": 5
+    },
+    "cell": {
+     "lines": 2,
+     "carried": 2
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.01482",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 2970
+   },
+   "ms": [
+    9365,
+    8886
+   ],
+   "pages": [
+    8,
+    8
+   ],
+   "items": 955,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 648,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 171,
+    "dropped": 0,
+    "marks": 303
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 111,
+     "carried": 111
+    },
+    "heading": {
+     "lines": 16,
+     "carried": 16
+    },
+    "ref": {
+     "lines": 3,
+     "carried": 3
+    },
+    "macro": {
+     "lines": 5,
+     "carried": 5
+    },
+    "cite": {
+     "lines": 34,
+     "carried": 34
+    },
+    "url": {
+     "lines": 10,
+     "carried": 10
+    },
+    "cell": {
+     "lines": 11,
+     "carried": 11
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.13505",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 5,
+    "answered": 5,
+    "ms": 3090
+   },
+   "ms": [
+    15122,
+    20293
+   ],
+   "pages": [
+    35,
+    35
+   ],
+   "items": 4027,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1878,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 698,
+    "dropped": 0,
+    "marks": 1249
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 304,
+     "carried": 304
+    },
+    "heading": {
+     "lines": 40,
+     "carried": 40
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
+    },
+    "math": {
+     "lines": 86,
+     "carried": 86
+    },
+    "cite": {
+     "lines": 82,
+     "carried": 82
+    },
+    "ref": {
+     "lines": 18,
+     "carried": 18
+    },
+    "macro": {
+     "lines": 4,
+     "carried": 4
+    },
+    "code": {
+     "lines": 4,
+     "carried": 4
+    },
+    "display": {
+     "lines": 30,
+     "carried": 30
+    },
+    "eqref": {
+     "lines": 7,
+     "carried": 7
+    },
+    "cell": {
+     "lines": 92,
+     "carried": 92
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.16745",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1021
+   },
+   "ms": [
+    5780,
+    8189
+   ],
+   "pages": [
+    23,
+    23
+   ],
+   "items": 2465,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1125,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 404,
+    "dropped": 0,
+    "marks": 1544
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 264,
+     "carried": 264
+    },
+    "heading": {
+     "lines": 34,
+     "carried": 34
+    },
+    "cite": {
+     "lines": 120,
+     "carried": 120
+    },
+    "macro": {
+     "lines": 72,
+     "carried": 72
+    },
+    "ref": {
+     "lines": 31,
+     "carried": 31
+    },
+    "math": {
+     "lines": 87,
+     "carried": 87
+    },
+    "display": {
+     "lines": 7,
+     "carried": 7
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 187,
+     "carried": 187
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.24503",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 742
+   },
+   "ms": [
+    2096,
+    3511
+   ],
+   "pages": [
+    11,
+    11
+   ],
+   "items": 3067,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 691,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 137,
+    "dropped": 0,
+    "marks": 792
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 70,
+     "carried": 70
+    },
+    "heading": {
+     "lines": 6,
+     "carried": 6
+    },
+    "math": {
+     "lines": 163,
+     "carried": 163
+    },
+    "ref": {
+     "lines": 20,
+     "carried": 20
+    },
+    "cite": {
+     "lines": 12,
+     "carried": 12
+    },
+    "display": {
+     "lines": 63,
+     "carried": 63
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.04242",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 652
+   },
+   "ms": [
+    4281,
+    4747
+   ],
+   "pages": [
+    8,
+    8
+   ],
+   "items": 1757,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 824,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 238,
+    "dropped": 0,
+    "marks": 370
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 93,
+     "carried": 93
+    },
+    "heading": {
+     "lines": 22,
+     "carried": 22
+    },
+    "math": {
+     "lines": 46,
+     "carried": 46
+    },
+    "cite": {
+     "lines": 38,
+     "carried": 38
+    },
+    "ref": {
+     "lines": 4,
+     "carried": 4
+    },
+    "display": {
+     "lines": 1,
+     "carried": 1
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 4,
+     "carried": 4
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.12096",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 7,
+    "answered": 7,
+    "ms": 3552
+   },
+   "ms": [
+    22002,
+    22682
+   ],
+   "pages": [
+    23,
+    23
+   ],
+   "items": 10406,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1653,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 526,
+    "dropped": 0,
+    "marks": 3071
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 411,
+     "carried": 411
+    },
+    "heading": {
+     "lines": 21,
+     "carried": 21
+    },
+    "footnote": {
+     "lines": 3,
+     "carried": 3
+    },
+    "math": {
+     "lines": 509,
+     "carried": 509
+    },
+    "ref": {
+     "lines": 80,
+     "carried": 80
+    },
+    "macro": {
+     "lines": 65,
+     "carried": 65
+    },
+    "display": {
+     "lines": 18,
+     "carried": 18
+    },
+    "cite": {
+     "lines": 40,
+     "carried": 40
+    },
+    "eqref": {
+     "lines": 26,
+     "carried": 26
+    },
+    "url": {
+     "lines": 2,
+     "carried": 2
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.20847",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 690
+   },
+   "ms": [
+    2895,
+    3340
+   ],
+   "pages": [
+    9,
+    9
+   ],
+   "items": 4298,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1543,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 227,
+    "dropped": 0,
+    "marks": 593
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 61,
+     "carried": 61
+    },
+    "heading": {
+     "lines": 13,
+     "carried": 13
+    },
+    "cite": {
+     "lines": 18,
+     "carried": 18
+    },
+    "math": {
+     "lines": 174,
+     "carried": 174
+    },
+    "display": {
+     "lines": 39,
+     "carried": 39
+    },
+    "ref": {
+     "lines": 13,
+     "carried": 13
+    },
+    "eqref": {
+     "lines": 5,
+     "carried": 5
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.30730",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 1423
+   },
+   "ms": [
+    19945,
+    28905
+   ],
+   "pages": [
+    64,
+    64
+   ],
+   "items": 11628,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 3863,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 1398,
+    "dropped": 0,
+    "marks": 4675
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 594,
+     "carried": 594
+    },
+    "heading": {
+     "lines": 123,
+     "carried": 123
+    },
+    "ref": {
+     "lines": 155,
+     "carried": 155
+    },
+    "math": {
+     "lines": 450,
+     "carried": 450
+    },
+    "macro": {
+     "lines": 283,
+     "carried": 283
+    },
+    "cite": {
+     "lines": 69,
+     "carried": 69
+    },
+    "code": {
+     "lines": 62,
+     "carried": 62
+    },
+    "eqref": {
+     "lines": 25,
+     "carried": 25
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "display": {
+     "lines": 45,
+     "carried": 45
+    },
+    "cell": {
+     "lines": 584,
+     "carried": 584
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.02785",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1219
+   },
+   "ms": [
+    6887,
+    7479
+   ],
+   "pages": [
+    14,
+    14
+   ],
+   "items": 4915,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 699,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 254,
+    "dropped": 0,
+    "marks": 1828
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 164,
+     "carried": 164
+    },
+    "heading": {
+     "lines": 3,
+     "carried": 3
+    },
+    "footnote": {
+     "lines": 2,
+     "carried": 2
+    },
+    "ref": {
+     "lines": 34,
+     "carried": 34
+    },
+    "cite": {
+     "lines": 27,
+     "carried": 27
+    },
+    "math": {
+     "lines": 354,
+     "carried": 354
+    },
+    "display": {
+     "lines": 28,
+     "carried": 28
+    },
+    "eqref": {
+     "lines": 3,
+     "carried": 3
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.08872",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 1791
+   },
+   "ms": [
+    20932,
+    21872
+   ],
+   "pages": [
+    40,
+    40
+   ],
+   "items": 13241,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 3417,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 515,
+    "dropped": 0,
+    "marks": 2184
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 263,
+     "carried": 263
+    },
+    "heading": {
+     "lines": 23,
+     "carried": 23
+    },
+    "cite": {
+     "lines": 54,
+     "carried": 54
+    },
+    "math": {
+     "lines": 363,
+     "carried": 363
+    },
+    "display": {
+     "lines": 276,
+     "carried": 276
+    },
+    "eqref": {
+     "lines": 63,
+     "carried": 63
+    },
+    "ref": {
+     "lines": 27,
+     "carried": 27
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.14433",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 494
+   },
+   "ms": [
+    4948,
+    5069
+   ],
+   "pages": [
+    16,
+    16
+   ],
+   "items": 3528,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1595,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 382,
+    "dropped": 0,
+    "marks": 1004
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 196,
+     "carried": 196
+    },
+    "heading": {
+     "lines": 23,
+     "carried": 23
+    },
+    "ref": {
+     "lines": 49,
+     "carried": 49
+    },
+    "math": {
+     "lines": 230,
+     "carried": 230
+    },
+    "cite": {
+     "lines": 41,
+     "carried": 41
+    },
+    "macro": {
+     "lines": 6,
+     "carried": 6
+    },
+    "eqref": {
+     "lines": 13,
+     "carried": 13
+    },
+    "display": {
+     "lines": 16,
+     "carried": 16
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.06233",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1203
+   },
+   "ms": [
+    7391,
+    10170
+   ],
+   "pages": [
+    12,
+    12
+   ],
+   "items": 3731,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1412,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 327,
+    "dropped": 0,
+    "marks": 1163
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 100,
+     "carried": 100
+    },
+    "heading": {
+     "lines": 16,
+     "carried": 16
+    },
+    "cite": {
+     "lines": 53,
+     "carried": 53
+    },
+    "math": {
+     "lines": 345,
+     "carried": 345
+    },
+    "display": {
+     "lines": 21,
+     "carried": 21
+    },
+    "ref": {
+     "lines": 52,
+     "carried": 52
+    },
+    "eqref": {
+     "lines": 3,
+     "carried": 3
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.25960",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1072
+   },
+   "ms": [
+    11121,
+    14161
+   ],
+   "pages": [
+    25,
+    25
+   ],
+   "items": 4060,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2336,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 553,
+    "dropped": 0,
+    "marks": 1472
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 358,
+     "carried": 358
+    },
+    "heading": {
+     "lines": 52,
+     "carried": 52
+    },
+    "math": {
+     "lines": 73,
+     "carried": 73
+    },
+    "ref": {
+     "lines": 49,
+     "carried": 49
+    },
+    "macro": {
+     "lines": 9,
+     "carried": 9
+    },
+    "cite": {
+     "lines": 49,
+     "carried": 49
+    },
+    "code": {
+     "lines": 3,
+     "carried": 3
+    },
+    "display": {
+     "lines": 27,
+     "carried": 27
+    },
+    "cell": {
+     "lines": 195,
+     "carried": 195
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.25928",
+   "v0": "ok",
+   "v1": "ok",
+   "switched": [
+    "\\cite"
+   ],
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 903
+   },
+   "ms": [
+    5398,
+    5407
+   ],
+   "pages": [
+    30,
+    30
+   ],
+   "items": 1364,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 748,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 240,
+    "dropped": 0,
+    "marks": 523
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 117,
+     "carried": 117
+    },
+    "heading": {
+     "lines": 22,
+     "carried": 22
+    },
+    "math": {
+     "lines": 10,
+     "carried": 10
+    },
+    "macro": {
+     "lines": 16,
+     "carried": 16
+    },
+    "ref": {
+     "lines": 27,
+     "carried": 27
+    },
+    "cite": {
+     "lines": 7,
+     "carried": 7
+    },
+    "code": {
+     "lines": 3,
+     "carried": 3
+    },
+    "cell": {
+     "lines": 29,
+     "carried": 29
+    }
+   },
+   "verdict": "switched"
+  },
+  {
+   "id": "2608.14557",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1033
+   },
+   "ms": [
+    7217,
+    7476
+   ],
+   "pages": [
+    2,
+    2
+   ],
+   "items": 336,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 214,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 62,
+    "dropped": 1,
+    "marks": 189
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 35,
+     "carried": 35
+    },
+    "heading": {
+     "lines": 10,
+     "carried": 10
+    },
+    "cite": {
+     "lines": 6,
+     "carried": 6
+    },
+    "code": {
+     "lines": 2,
+     "carried": 2
+    },
+    "math": {
+     "lines": 16,
+     "carried": 16
+    },
+    "ref": {
+     "lines": 1,
+     "carried": 1
+    },
+    "macro": {
+     "lines": 1,
+     "carried": 1
+    },
+    "url": {
+     "lines": 1,
+     "carried": 1
+    },
+    "cell": {
+     "lines": 23,
+     "carried": 23
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.09038",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 556
+   },
+   "ms": [
+    3405,
+    3509
+   ],
+   "pages": [
+    10,
+    10
+   ],
+   "items": 8593,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2204,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 312,
+    "dropped": 0,
+    "marks": 1820
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 155,
+     "carried": 155
+    },
+    "heading": {
+     "lines": 20,
+     "carried": 20
+    },
+    "footnote": {
+     "lines": 1,
+     "carried": 1
+    },
+    "math": {
+     "lines": 431,
+     "carried": 431
+    },
+    "display": {
+     "lines": 79,
+     "carried": 79
+    },
+    "eqref": {
+     "lines": 95,
+     "carried": 95
+    },
+    "ref": {
+     "lines": 65,
+     "carried": 65
+    },
+    "cite": {
+     "lines": 19,
+     "carried": 19
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.22539",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1026
+   },
+   "ms": [
+    8810,
+    9128
+   ],
+   "pages": [
+    8,
+    8
+   ],
+   "items": 2215,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 529,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 108,
+    "dropped": 0,
+    "marks": 666
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 86,
+     "carried": 86
+    },
+    "heading": {
+     "lines": 10,
+     "carried": 10
+    },
+    "math": {
+     "lines": 134,
+     "carried": 134
+    },
+    "display": {
+     "lines": 35,
+     "carried": 35
+    },
+    "ref": {
+     "lines": 15,
+     "carried": 15
+    },
+    "cite": {
+     "lines": 8,
+     "carried": 8
+    },
+    "eqref": {
+     "lines": 5,
+     "carried": 5
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.23517",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 0,
+    "answered": 0,
+    "ms": 873
+   },
+   "ms": [
+    6993,
+    8464
+   ],
+   "pages": [
+    40,
+    40
+   ],
+   "items": 17297,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 6366,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 624,
+    "dropped": 0,
+    "marks": 70
+   },
+   "traced": true,
+   "classes": {},
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.09812",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 6,
+    "answered": 6,
+    "ms": 728
+   },
+   "ms": [
+    4943,
+    5306
+   ],
+   "pages": [
+    24,
+    24
+   ],
+   "items": 5455,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1631,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 316,
+    "dropped": 0,
+    "marks": 1385
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 158,
+     "carried": 158
+    },
+    "heading": {
+     "lines": 12,
+     "carried": 12
+    },
+    "footnote": {
+     "lines": 13,
+     "carried": 13
+    },
+    "cite": {
+     "lines": 35,
+     "carried": 35
+    },
+    "math": {
+     "lines": 305,
+     "carried": 305
+    },
+    "ref": {
+     "lines": 22,
+     "carried": 22
+    },
+    "display": {
+     "lines": 80,
+     "carried": 80
+    },
+    "eqref": {
+     "lines": 36,
+     "carried": 36
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.13799",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 1227
+   },
+   "ms": [
+    6439,
+    6762
+   ],
+   "pages": [
+    7,
+    7
+   ],
+   "items": 2804,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 799,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 193,
+    "dropped": 0,
+    "marks": 641
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 127,
+     "carried": 127
+    },
+    "heading": {
+     "lines": 25,
+     "carried": 25
+    },
+    "cite": {
+     "lines": 13,
+     "carried": 13
+    },
+    "math": {
+     "lines": 83,
+     "carried": 83
+    },
+    "ref": {
+     "lines": 7,
+     "carried": 7
+    },
+    "display": {
+     "lines": 7,
+     "carried": 7
+    },
+    "eqref": {
+     "lines": 4,
+     "carried": 4
+    },
+    "cell": {
+     "lines": 61,
+     "carried": 61
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.15334",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 8,
+    "answered": 8,
+    "ms": 919
+   },
+   "ms": [
+    22697,
+    26704
+   ],
+   "pages": [
+    24,
+    24
+   ],
+   "items": 6358,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2581,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 711,
+    "dropped": 0,
+    "marks": 2327
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 284,
+     "carried": 284
+    },
+    "heading": {
+     "lines": 21,
+     "carried": 21
+    },
+    "footnote": {
+     "lines": 20,
+     "carried": 20
+    },
+    "cite": {
+     "lines": 139,
+     "carried": 139
+    },
+    "math": {
+     "lines": 542,
+     "carried": 542
+    },
+    "display": {
+     "lines": 14,
+     "carried": 14
+    },
+    "ref": {
+     "lines": 116,
+     "carried": 116
+    },
+    "macro": {
+     "lines": 53,
+     "carried": 53
+    },
+    "code": {
+     "lines": 18,
+     "carried": 18
+    },
+    "url": {
+     "lines": 7,
+     "carried": 7
+    },
+    "cell": {
+     "lines": 22,
+     "carried": 22
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.29782",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 642
+   },
+   "ms": [
+    4298,
+    5204
+   ],
+   "pages": [
+    30,
+    30
+   ],
+   "items": 21525,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 5140,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "same",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 556,
+    "dropped": 0,
+    "marks": 2911
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 289,
+     "carried": 289
+    },
+    "heading": {
+     "lines": 22,
+     "carried": 22
+    },
+    "cite": {
+     "lines": 28,
+     "carried": 28
+    },
+    "math": {
+     "lines": 642,
+     "carried": 642
+    },
+    "display": {
+     "lines": 140,
+     "carried": 140
+    },
+    "macro": {
+     "lines": 21,
+     "carried": 21
+    },
+    "ref": {
+     "lines": 109,
+     "carried": 109
+    },
+    "eqref": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.29778",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 630
+   },
+   "ms": [
+    6297,
+    7394
+   ],
+   "pages": [
+    11,
+    11
+   ],
+   "items": 2241,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1055,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 259,
+    "dropped": 0,
+    "marks": 523
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 45,
+     "carried": 45
+    },
+    "heading": {
+     "lines": 12,
+     "carried": 12
+    },
+    "math": {
+     "lines": 151,
+     "carried": 151
+    },
+    "cite": {
+     "lines": 35,
+     "carried": 35
+    },
+    "ref": {
+     "lines": 26,
+     "carried": 26
+    },
+    "display": {
+     "lines": 1,
+     "carried": 1
+    },
+    "url": {
+     "lines": 13,
+     "carried": 13
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.17019",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 2,
+    "answered": 2,
+    "ms": 694
+   },
+   "ms": [
+    4942,
+    4801
+   ],
+   "pages": [
+    11,
+    11
+   ],
+   "items": 2135,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 1059,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "none"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 275,
+    "dropped": 0,
+    "marks": 867
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 216,
+     "carried": 216
+    },
+    "heading": {
+     "lines": 43,
+     "carried": 43
+    },
+    "cite": {
+     "lines": 28,
+     "carried": 28
+    },
+    "ref": {
+     "lines": 25,
+     "carried": 25
+    },
+    "math": {
+     "lines": 66,
+     "carried": 66
+    },
+    "display": {
+     "lines": 3,
+     "carried": 3
+    },
+    "macro": {
+     "lines": 5,
+     "carried": 5
+    },
+    "cell": {
+     "lines": 72,
+     "carried": 72
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.09746",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 3,
+    "answered": 3,
+    "ms": 635
+   },
+   "ms": [
+    3175,
+    3840
+   ],
+   "pages": [
+    23,
+    23
+   ],
+   "items": 6982,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 2627,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 266,
+    "dropped": 0,
+    "marks": 1112
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 215,
+     "carried": 215
+    },
+    "heading": {
+     "lines": 11,
+     "carried": 11
+    },
+    "math": {
+     "lines": 278,
+     "carried": 278
+    },
+    "display": {
+     "lines": 48,
+     "carried": 48
+    },
+    "eqref": {
+     "lines": 40,
+     "carried": 40
+    },
+    "macro": {
+     "lines": 8,
+     "carried": 8
+    },
+    "ref": {
+     "lines": 19,
+     "carried": 19
+    },
+    "cite": {
+     "lines": 18,
+     "carried": 18
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.23393",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 4,
+    "answered": 4,
+    "ms": 601
+   },
+   "ms": [
+    2629,
+    3337
+   ],
+   "pages": [
+    20,
+    20
+   ],
+   "items": 2983,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 965,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 346,
+    "dropped": 0,
+    "marks": 1038
+   },
+   "traced": true,
+   "classes": {
+    "unit": {
+     "lines": 155,
+     "carried": 155
+    },
+    "heading": {
+     "lines": 54,
+     "carried": 54
+    },
+    "ref": {
+     "lines": 51,
+     "carried": 51
+    },
+    "math": {
+     "lines": 157,
+     "carried": 157
+    },
+    "eqref": {
+     "lines": 18,
+     "carried": 18
+    },
+    "code": {
+     "lines": 17,
+     "carried": 17
+    },
+    "macro": {
+     "lines": 6,
+     "carried": 6
+    },
+    "cite": {
+     "lines": 39,
+     "carried": 39
+    },
+    "display": {
+     "lines": 15,
+     "carried": 15
+    }
+   },
+   "verdict": "clean"
+  },
+  {
+   "id": "2608.11084",
+   "v0": "ok",
+   "v1": "ok",
+   "probe": {
+    "samples": 0,
+    "answered": 0,
+    "ms": 1366
+   },
+   "ms": [
+    8673,
+    9384
+   ],
+   "pages": [
+    35,
+    35
+   ],
+   "items": 14749,
+   "moved": {
+    "strict": 0,
+    "joined": 0
+   },
+   "lines": 4953,
+   "lost": {
+    "strict": 0,
+    "joined": 0,
+    "tex": 0,
+    "all": 0
+   },
+   "unitMarksMoved": 0,
+   "captions": [],
+   "readings": "same",
+   "files": {
+    "aux": "same",
+    "toc": "none",
+    "lof": "none",
+    "lot": "none",
+    "out": "same"
+   },
+   "errors": 0,
+   "marksFile": {
+    "kb": 472,
+    "dropped": 0,
+    "marks": 36
+   },
+   "traced": true,
+   "classes": {
+    "heading": {
+     "lines": 1,
+     "carried": 1
+    }
+   },
+   "verdict": "clean"
+  }
+ ]
+}

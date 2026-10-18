@@ -6,6 +6,7 @@ import { serialize } from '@/core/protector'
 import { verifyAlignment } from '@/providers/alignment'
 import { sentenceCuts } from '@/core/sentences'
 import { markSentences, stripMarkers, unmarkSentences } from '@/providers/sentence-markers'
+import { turn } from '../turn'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
 
@@ -65,12 +66,13 @@ describe('sentence markers for engines that report nothing (#105)', () => {
     expect(unmarkSentences('一。<x id="1"/><x id="2"/>三。', ids)).toBeUndefined()
   })
 
-  it('round-trips every fixture block, and the alignment verifies', () => {
+  it('round-trips every fixture block, and the alignment verifies', async () => {
     // The identity translation stands in for the engine: what is being checked is that marking and
     // unmarking are inverse, that the marker ids never collide with the block's own, and that the
     // lengths reconstruct both texts exactly — which is what `verifyAlignment` demands.
     let marked = 0
     for (const f of readdirSync(FIXTURE_DIR).filter(n => n.endsWith('.html')).slice(0, 4)) {
+      await turn()
       const d = new DOMParser().parseFromString(readFileSync(join(FIXTURE_DIR, f), 'utf8'), 'text/html')
       for (const b of extract(d)) {
         if (b.kind !== 'text') continue

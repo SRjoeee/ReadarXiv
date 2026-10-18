@@ -7,10 +7,12 @@ import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { extract } from '@/core/extractor'
 import { ID_ATTR } from '@/core/extractor'
 import { MODE_ATTR, ON_ATTR, STATE_ATTR, UNDERLINE_ATTR } from '@/core/renderer/attrs'
+import { IMG_CLASS } from '@/core/marks'
 import { IMG_MODES_ATTR } from '@/core/renderer/image'
 import { createPageSession, type PageSession, type SessionDeps } from '@/core/session'
 import type { ProviderStatus, TranslationTransport } from '@/providers/transport'
 import type { TranslateCall } from '@/providers/translate-service'
+import type { ProviderKind } from '@/providers/types'
 import type { ImageBytes } from '@/core/image'
 import type { OcrCall, OcrLine } from '@/shared/ocr'
 import { chainRevision } from '@/config/revision'
@@ -29,7 +31,7 @@ function providerStatus(over: Partial<ProviderStatus> = {}): ProviderStatus {
   return {
     providerId: 'microsoft', available: true, maxBatchChars: 100_000, maxBatchItems: 100, renderPath: 'tags',
     targetLanguage: 'cmn', promptId: 'default', revision: 'r1', chosen: 'microsoft', engine: { id: 'microsoft' },
-    chain: ['microsoft'], demotions: [], ...over,
+    chain: ['microsoft'], demotions: [], identity: '', ...over,
   }
 }
 
@@ -39,6 +41,10 @@ interface HarnessOptions {
   config?: Partial<Config>
   /** What the backend says it translated with */
   provider?: string
+  /** The kind of engine the backend says answered; a free engine's (`mt`) when absent */
+  kind?: ProviderKind
+  /** What the backend gives back for a segment's text; the text itself when absent */
+  translated?: (text: string) => string
   status?: (scope: string | undefined, call: number, options?: { fresh?: boolean }) => ProviderStatus | Promise<ProviderStatus>
   /** Hold the very first configuration read until `releaseConfig()` */
   holdFirstConfig?: boolean
@@ -65,7 +71,8 @@ function harness(options: HarnessOptions = {}) {
   const backend: TranslationTransport = {
     async translate(call) {
       calls.push(call)
-      return { ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: s.text })), provider: options.provider ?? 'microsoft' }, cached: 0 }
+      const translated = options.translated ?? (text => text)
+      return { ok: true, result: { segments: call.request.segments.map(s => ({ id: s.id, text: translated(s.text) })), provider: options.provider ?? 'microsoft', kind: options.kind ?? 'mt' }, cached: 0 }
     },
     async cancel(scope) { cancelled.push(scope); return 0 },
     async status(scope, statusOptions) {
@@ -367,22 +374,22 @@ describe('page session', () => {
     expect(h.session.retryFailed()).toBe(0)
   })
 
-  it('the whole-paper range chosen mid-session releases everything still waiting in the run; any other range applies from the next session (Devin on #222)', async () => {
+  it('choosing to translate the whole paper mid-session releases everything still waiting in the run; choosing on demand applies from the next session (Devin on #222)', async () => {
     const h = harness()
     live = h.session
     await h.session.start()
     await settle()
     // happy-dom has no IntersectionObserver and no layout: nothing enters the viewport by itself
     expect((await h.session.status()).progress).toMatchObject({ state: 'on', requested: 0 })
-    h.session.onConfig({ ...h.config(), preload: { margin: 1800, threshold: 0 } })
+    h.session.onConfig({ ...h.config(), preload: 'on-demand' })
     await settle()
     expect((await h.session.status()).progress).toMatchObject({ requested: 0 })
-    h.session.onConfig({ ...h.config(), preload: { margin: 'all', threshold: 0 } })
+    h.session.onConfig({ ...h.config(), preload: 'whole' })
     await settle()
     expect((await h.session.status()).progress).toMatchObject({ requested: h.blocks.length, done: h.blocks.length, failed: 0 })
     // Chosen again: nothing is left to release, and nothing is requested twice
     const calls = h.calls.length
-    h.session.onConfig({ ...h.config(), preload: { margin: 'all', threshold: 0 } })
+    h.session.onConfig({ ...h.config(), preload: 'whole' })
     await settle()
     expect(h.calls.length).toBe(calls)
   })
@@ -430,7 +437,7 @@ describe('page session', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer
     const h = harness({
       page: PAGE + FIGURE,
-      config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } },
+      config: { image: { enabled: true } },
       fetchImage: async () => ({ bytes: png, mime: 'image/png' }),
       ocrLines: [{ text: 'Energy density', quad: [[0.1, 0.1], [0.5, 0.1], [0.5, 0.2], [0.1, 0.2]], conf: 0.99 }],
     })
@@ -564,6 +571,16 @@ describe('page session', () => {
     expect(h.config().mode).toBe('side')
   })
 
+  it('a display chosen on the HTML page lets the PDF reader\'s original go too, the stored mode the same or not (the reader\'s design, §3)', async () => {
+    const h = harness({ config: { mode: 'side', pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } } })
+    live = h.session
+    await h.session.setMode('side')
+    expect([h.config().mode, h.config().pdfReader.original]).toEqual(['side', false])
+    await h.deps.config.set({ ...h.config(), pdfReader: { ...h.config().pdfReader, original: true } })
+    await h.session.setMode('stack')
+    expect([h.config().mode, h.config().pdfReader.original]).toEqual(['stack', false])
+  })
+
   it('a save the store refuses on an untranslated page changes nothing: the preference reported, and the next start, stay the stored ones', async () => {
     const h = harness({ config: { mode: 'side' } })
     live = h.session
@@ -645,21 +662,50 @@ describe('page session', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer
     const h = harness({
       page: PAGE + FIGURE,
-      config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } },
+      config: { image: { enabled: true } },
       fetchImage: async () => ({ bytes: png, mime: 'image/png' }),
       ocrLines: [{ text: 'Energy density', quad: [[0.1, 0.1], [0.5, 0.1], [0.5, 0.2], [0.1, 0.2]], conf: 0.99 }],
     })
     live = h.session
     await h.session.start()
     await settle()
-    expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('side stack only')
+    expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('stack side only')
     expect(h.trace().some(line => line.startsWith('images: 0 SVG + 1 bitmaps'))).toBe(true)
     await h.session.translateImages()
     await settle(6)
     expect(h.ocrCalls).toHaveLength(1)
     // switching image translation off mid-session drops the gate attribute
-    h.session.onConfig({ ...h.config(), image: { enabled: false, modes: [] } })
+    h.session.onConfig({ ...h.config(), image: { enabled: false } })
     expect(document.documentElement.hasAttribute(IMG_MODES_ATTR)).toBe(false)
+  })
+
+  it('images: a figure\'s names go to every engine, and are drawn from one that reads the boxes together, kept from one that translates each on its own — by the engine that answered (§15.1)', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer
+    const answeredBy = async (kind: ProviderKind) => {
+      const h = harness({
+        page: PAGE + FIGURE,
+        config: { image: { enabled: true } },
+        kind,
+        translated: text => `tr:${text}`,
+        fetchImage: async () => ({ bytes: png, mime: 'image/png' }),
+        ocrLines: [
+          { text: 'HellaSwag', quad: [[0.1, 0.1], [0.5, 0.1], [0.5, 0.2], [0.1, 0.2]], conf: 0.99 },
+          { text: 'Energy density', quad: [[0.1, 0.6], [0.5, 0.6], [0.5, 0.7], [0.1, 0.7]], conf: 0.99 },
+        ],
+      })
+      live = h.session
+      await h.session.start()
+      await settle()
+      await h.session.translateImages()
+      await settle(6)
+      const sent = h.calls.flatMap(call => call.request.segments).filter(seg => seg.id.includes('#L')).map(seg => seg.text)
+      const drawn = Array.from(document.querySelectorAll(`.${IMG_CLASS} > span`)).map(span => (span as HTMLElement).title)
+      h.session.restore()
+      return { sent, drawn }
+    }
+    // The session starts on the same engine both times: what is drawn follows the answer, as after a hand-over mid-session
+    expect(await answeredBy('mt')).toEqual({ sent: ['HellaSwag', 'Energy density'], drawn: ['Energy density'] })
+    expect(await answeredBy('llm')).toEqual({ sent: ['HellaSwag', 'Energy density'], drawn: ['HellaSwag', 'Energy density'] })
   })
 
   describe('a figure\'s text — the labels of a TikZ picture, blocks of the text run (§15.6) — is asked for where the reader has figures translated', () => {
@@ -667,18 +713,18 @@ describe('page session', () => {
     const asked = (h: ReturnType<typeof harness>) => h.calls.flatMap(call => call.request.segments.map(seg => seg.id))
 
     it('figures on: a label is asked for with the text around it, and the display gate is set though the paper holds not one image', async () => {
-      const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } } })
+      const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: true } } })
       live = h.session
       await h.session.start()
       await settle()
-      expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('side stack only')
+      expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('stack side only')
       await h.session.translate(h.blocks)
       expect(asked(h)).toContain('label')
       expect(document.getElementById('label')!.nextElementSibling?.classList.contains('axt-t')).toBe(true)
     })
 
     it('figures off: the label is held, unasked, while every other block is translated; turned on mid-session it is asked for, and only it', async () => {
-      const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: false, modes: [] } } })
+      const h = harness({ page: PAGE + PICTURE, config: { image: { enabled: false } } })
       live = h.session
       await h.session.start()
       await settle()
@@ -688,30 +734,29 @@ describe('page session', () => {
       expect(document.getElementById('label')!.nextElementSibling).toBeNull()
       const before = asked(h).length
 
-      h.session.onConfig({ ...h.config(), image: { enabled: true, modes: ['side', 'stack', 'only'] } })
+      h.session.onConfig({ ...h.config(), image: { enabled: true } })
       await vi.waitFor(() => expect(asked(h)).toContain('label'))
       expect(asked(h).slice(before).filter(id => id !== 'label')).toEqual([])
       expect(document.getElementById('label')!.nextElementSibling?.classList.contains('axt-t')).toBe(true)
     })
 
-    it('the modes the reader ticked, not the switch alone: figures on in translation only, a label reached in stacked waits, and the switch to that mode releases it', async () => {
-      const h = harness({ page: PAGE + PICTURE, config: { mode: 'stack', image: { enabled: true, modes: ['only'] } } })
+    it('figures on show in every display (the redesign\'s design, §4): a label reached in stacked is asked for there', async () => {
+      const h = harness({ page: PAGE + PICTURE, config: { mode: 'stack', image: { enabled: true } } })
       live = h.session
       await h.session.start()
       await settle()
+      expect(document.documentElement.getAttribute(IMG_MODES_ATTR)).toBe('stack side only')
       await h.session.translate(h.blocks)
-      expect(asked(h)).not.toContain('label')
-      await h.session.setMode('only')
-      await vi.waitFor(() => expect(asked(h)).toContain('label'))
+      expect(asked(h)).toContain('label')
     })
   })
 
   it('images switched off mid-session leave no round behind: nothing to hand over', async () => {
-    const h = harness({ page: PAGE + FIGURE, config: { image: { enabled: true, modes: ['side', 'stack', 'only'] } } })
+    const h = harness({ page: PAGE + FIGURE, config: { image: { enabled: true } } })
     live = h.session
     await h.session.start()
     await settle()
-    h.session.onConfig({ ...h.config(), image: { enabled: false, modes: [] } })
+    h.session.onConfig({ ...h.config(), image: { enabled: false } })
     await h.session.translateImages()
     await settle(6)
     expect(h.ocrCalls).toEqual([])

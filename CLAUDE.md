@@ -6,9 +6,11 @@ Chrome extension (MV3) that translates `https://arxiv.org/html/*` in place: stru
 
 - `docs/DESIGN.md` — the current design: what the extension does, how it is built, why each non-obvious choice was made, with the measurements beside the decisions. Cite it by section (`DESIGN §7.2`). A decision that changes goes into its section in the same pull request as the code.
 - `docs/UI.md` — the interface contract: every control and string of the popup and the settings page, by id (`S-P-80`), with the reasons behind them.
+- `docs/PDF-READER.md` — the PDF reader's interface design: every control, state and motion with the reason behind it, the maintainer's words where a decision rests on them, and the measurements; §17 is the highlight. The reader's engine is held by the gates of `lab/pdf/README.md`; the experiment it grew in (its running record and plans) is read from the tag: `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`, `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/<file>`.
 - `docs/RELEASE.md` — how a version is cut, and the store listing.
 - `docs/THIRD_PARTY.md` — what was ported from which project, under which licence.
 - `CHANGELOG.md` — reader-facing changes.
+- `parked/README.md` — code and records the repository keeps and the product no longer uses (the TeX page program, the typesetting gates): linted by the English gate alone, never built, type-checked or tested, imported by nothing alive.
 - The design's history — the rebuild's charter, checkpoint log, inventory, baseline numbers and one-decision-per-file records — was archived from the tree on 2026-09-17 and stays in the repository's history: `git show d91debb:docs/rebuild/PROGRESS.md`, `git show d91debb:docs/adr/`.
 
 ## Hard rules
@@ -16,9 +18,9 @@ Chrome extension (MV3) that translates `https://arxiv.org/html/*` in place: stru
 Each is a product promise, a legal requirement, or a contract with something outside this repository.
 
 1. **DOM invariants** (DESIGN §7.1, guarded by tests): a translation node is inserted only as the next sibling of its original block; an original node gains `data-axt-*` attributes and nothing else; global state lives only on `<html>`; after restore the DOM equals the pre-translation DOM node by node.
-2. **Prefixes**: every injected class, data attribute and CSS variable starts with `axt-` / `data-axt-` / `--axt-`.
+2. **Prefixes**: every injected class, data attribute and CSS variable starts with `axt-` / `data-axt-` / `--axt-`. The one exception is `data-readarxiv-extension` on the Read arXiv website's own `<html>`: a contract with the website, not a mark of the extension's work (DESIGN §4.0d).
 3. **Free and built-in translation APIs are unreliable by assumption**: their failure must be recoverable and must trigger the fallback chain; it must never take the extension down.
-4. **Cache key** carries every input that changes a translation — today `CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | RULES_VERSION | target | renderPath | normalizedText | cuts` (`src/cache/key.ts`); bump the matching version whenever a prompt, a rule or the request shape changes meaning.
+4. **Cache key** carries every input that changes a translation — today `CACHE_KEY_VERSION | providerId | model | PROMPT_VERSION | promptKey | context | rules | target | renderPath | normalizedText | cuts`, and `marked-over-cap` for a segment marked over its engine's batch cap (`src/cache/key.ts`, DESIGN §9). The `rules` slot is the caller's: `RULES_VERSION` for a block of the HTML page, none for a text read from a PDF (its units are cut by the reader's engine, and the cache holds the translator's raw answer to a text, which no rule of reading changes). Bump the matching version whenever a prompt, a rule or the request shape changes meaning: `PROMPT_VERSION` for an LLM prompt (`src/providers/prompt.ts`); `RULES_VERSION` for the HTML page's rule file; `PIPELINE_VERSION` for what the PDF reader's units are; `TRANSLATE_VERSION` for how the PDF engine serialises a unit for a translator and reads the reply back (PDF-READER §18) — and, until the rows cache replaces the stored copies, `PIPELINE_VERSION` with it (§18.2); `CACHE_KEY_VERSION` for the background's shared request shaping or a provider's reply handling (the per-text key, `src/cache/key.ts`).
 5. **Secrets**: API keys live only in WXT storage — never in logs, cache keys, fixtures or git. A third party's public client constant (the Google web translator's key in `providers/google-web.ts`) is not a secret.
 6. **Attribution**: code ported from the reference projects (KISS Translator, Read Frog, FluentRead — GPL-3.0) keeps the header `// Ported from reference/<repo>/<path>@<commit> (GPL-3.0), <YYYY-MM-DD>, modified` and an entry in `docs/THIRD_PARTY.md`.
 7. **External contracts** get migration or compatibility handling, never silent replacement: the saved configuration schema (`CONFIG_VERSION` and a migration, DESIGN §9), and whatever a reader's machine or another program holds that a new version must still meet.
@@ -52,20 +54,28 @@ Chinese that is product data stays: the locale packs (`src/locales/*`, `public/_
 pnpm install
 pnpm dev                 # WXT dev mode; load .output/chrome-mv3-dev unpacked
 pnpm typecheck           # tsc --noEmit — vitest does not type-check
-pnpm lint                # Biome linter, the English gate, the boundary gate; pnpm lint:fix applies safe fixes
+pnpm lint                # Biome linter, the English gate, the boundary gate, the review-citation gate (src/pdf-reader names no reviewer; the rest of src/ is counted); pnpm lint:fix applies safe fixes
 pnpm test                # vitest; pnpm test:watch
 pnpm build               # wxt build + scripts/check-output.mjs
+pnpm exec wxt build --mode development   # the dev pages too: the gallery (every popup state) and the controls sheet
 pnpm e2e                 # real Chromium with the extension (pnpm build first; once: npx playwright install chromium)
 pnpm e2e:layout          # side-mode layout contract in a real browser
-pnpm e2e:a11y            # A/B axe audit: only differences the extension introduces
+pnpm e2e:a11y            # A/B axe audit, offline (fixture + vendored arXiv sheets + echo endpoint): only differences the extension introduces
 pnpm e2e:local-endpoint  # an http endpoint without CORS headers can translate a whole page
 pnpm e2e:pdf             # arXiv's PDF page: the button is drawn there, it and the popup open the bilingual version
+pnpm e2e:reader          # the PDF reader on a paper of our own, no network: a route table guards every request; the stand-in of the layer API serves the sample's bundle (tests/fixtures/pdf/sample-1/; pnpm build first)
 pnpm e2e:floating        # the floating button on the abstract, PDF and full-text pages: rest, hover, drag, hide, toggle, tick
+pnpm e2e:popup           # the popup: finding a paper, the menus under their rows, the entries, the panel growing
+pnpm e2e:viewer          # the figure viewer's control under a header the page pins, offline (AXT_CHROME=<Chrome 131> for the floor)
 pnpm e2e:image           # image translation, bitmaps read by the recogniser the extension ships
 pnpm e2e:placeholders    # placeholder survival per sentence shape against a live engine (DESIGN §6.3)
 pnpm fixtures:fetch      # download and verify the fixtures the repository may not hold (tests/fixtures/README.md); pnpm test does it too
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
+pnpm tokens              # src/styles/tokens.css from src/shared/tokens.ts; a test fails while the two differ
+pnpm exec tsx lab/pdf/spikes/highlight-gate.mjs     # the PDF reader's highlight in Node, on this machine's data (lab/pdf/data and lab/pdf/out, never in the repository): the ten papers' runs and the ground truth (data/runs/highlight-ten, highlight-gt), their sources and arXiv's PDFs (data/corpus), and the Microsoft answers their sentences are made again from (out/highlight/B3/ms-cache-zh-auto.json, ms-cache-zh-en.json; a set missing fails the gate); WRITE_BASELINE=1 records a change meant; the lab's other gates: lab/pdf/README.md
+pnpm exec tsx lab/pdf/spikes/highlight-papers.mjs lab/pdf/out/highlight/papers   # the browser gate's demo papers, their units carrying their sentences
+node lab/pdf/spikes/highlight-gate-browser.mjs checks  # the highlight in a real browser (pnpm build first; PAPERS defaults to those demo papers); floats, resting, tokens: those checks alone; costs: BASE_BUILD=<a build to compare with>
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```
@@ -82,4 +92,4 @@ The five default triage labels, each label string equal to its role's name. See 
 
 ### Domain docs
 
-Single-context, and the context is `docs/DESIGN.md`: §3 is the glossary, the sections hold the decisions; no `CONTEXT.md`, no `docs/adr/`. See `docs/agents/domain.md`.
+Single-context, and the context is `docs/DESIGN.md`: §3 is the glossary, the sections hold the decisions; no `CONTEXT.md`, and no directory of decision records. See `docs/agents/domain.md`.

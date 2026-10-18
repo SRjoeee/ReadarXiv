@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Progress } from '@/core/pipeline/run'
-import { behindSettings, messageFor, pageAction, pageDecision, savedFromStatus } from '@/shared/page-action'
+import { behindSettings, keyMadeGood, messageFor, pageAction, pageDecision, savedFromStatus } from '@/shared/page-action'
 
 // One decision for the popup's main button and the toggle
 
@@ -52,6 +52,62 @@ describe('pageDecision', () => {
     expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: false }))).toEqual({ action: 'translate', behind: false, enabled: false })
     expect(pageDecision({ progress: progress('stopped', 'auth: bad key') }, saved({ canRun: false, fallback: true }))).toEqual({ action: 'retranslate', behind: false, enabled: true })
     expect(pageDecision(undefined, saved())).toBeUndefined()
+  })
+
+  it('the retranslate cue: a running page whose refused key was made good re-translates, only on settings that run on their own; any other page decides as before', () => {
+    const on = { progress: progress('on'), running: running('r1') }
+    expect(pageDecision(on, saved(), true)).toEqual({ action: 'retranslate', behind: false, enabled: true })
+    expect(pageDecision(on, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'retranslate', behind: false, enabled: false })
+    expect(pageDecision(on, saved())).toEqual({ action: 'restore', behind: false, enabled: true })
+    expect(pageDecision({ progress: progress('idle') }, saved({ canRun: false, fallback: true }), true)).toEqual({ action: 'translate', behind: false, enabled: true })
+    // behind the settings as well: re-translates, on settings that run on their own
+    expect(pageDecision(on, saved({ revision: 'r2' }), true)).toEqual({ action: 'retranslate', behind: true, enabled: true })
+  })
+})
+
+describe('what the settings and the record decide', () => {
+  // The floating button's words ask again on a change of the settings or of the refused-key record only while the
+  // page runs, and not at all on an idle page (content/toggle-words.ts): both rest on this
+  const every = [null, 'r1', 'r2'].flatMap(revision => [true, false].flatMap(canRun => [true, false].map(fallback => ({ revision, canRun, fallback }))))
+
+  it('decide a running page\'s action alone: an idle page always translates, a paused one always retries, whatever is saved and whatever the cue', () => {
+    const idle = { progress: progress('idle') }
+    const paused = { progress: progress('stopped', 'auth: bad key'), running: running('r1') }
+    const stopped = { progress: progress('stopped') }
+    for (const saved of every) {
+      for (const madeGood of [true, false]) {
+        expect(pageAction(idle, saved.revision, madeGood)).toBe('translate')
+        expect(pageAction(paused, saved.revision, madeGood)).toBe('retranslate')
+        expect(pageAction(stopped, saved.revision, madeGood)).toBe('translate')
+        expect([pageDecision(idle, saved, madeGood)?.action, pageDecision(paused, saved, madeGood)?.action]).toEqual(['translate', 'retranslate'])
+      }
+    }
+    // a running page is the one they move
+    const on = { progress: progress('on'), running: running('r1') }
+    expect(new Set(every.flatMap(saved => [true, false].map(madeGood => pageAction(on, saved.revision, madeGood))))).toEqual(new Set(['restore', 'retranslate']))
+  })
+})
+
+describe('keyMadeGood', () => {
+  const session = { providerId: 'svc-a', demotions: [{ id: 'svc-a', kind: 'auth' as const, status: 401 }] }
+  const back = { engine: { id: 'svc-a' } }
+
+  it('the session left its own service for a refused key, the record no longer holds it, and the chain a start would run on runs it again', () => {
+    expect(keyMadeGood(session, [], back)).toBe(true)
+    expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'auth' as const, status: 401 }, { id: 'microsoft', kind: 'rate-limit' as const }] }, new Set<string>(), back)).toBe(true)
+  })
+
+  it('no cue while the record holds the service, while the chain in force still passes it over, for a hand-over that was not the key\'s, or without a session', () => {
+    expect(keyMadeGood(session, ['svc-a'], back)).toBe(false)
+    expect(keyMadeGood(session, [], { engine: { id: 'google-web', demoted: { id: 'svc-a', kind: 'auth' as const, message: '403' } } })).toBe(false)
+    expect(keyMadeGood({ ...session, demotions: [{ id: 'svc-a', kind: 'rate-limit' as const }] }, [], back)).toBe(false)
+    expect(keyMadeGood(null, [], back)).toBe(false)
+  })
+
+  it('no cue for a refusal that was not the key\'s — a 403, or an `auth` with no status — even once a rebuilt chain runs the service again: the record never held it, and a start meets the same refusal (#299, row 75)', () => {
+    for (const refused of [{ id: 'svc-a', kind: 'auth' as const, status: 403 }, { id: 'svc-a', kind: 'auth' as const }]) {
+      expect(keyMadeGood({ ...session, demotions: [refused] }, [], back)).toBe(false)
+    }
   })
 })
 

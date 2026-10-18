@@ -1,0 +1,11 @@
+--- a/web/busytex_biber.js
++++ b/web/busytex_biber.js
+@@ -64,7 +64,7 @@
+ 
+         const bcf = basename(bcf_path);
+         const bbl = bcf.replace(/\.bcf$/, '.bbl');
+-        const argv = [this.bin_biber, '--output-format=bbl', `--outfile=${bbl}`, '--nolog', ...verbose_args, bcf];
++        const argv = [this.bin_biber, '--output-format=bbl', `--outfile=${bbl}`, '--nolog', '--output-safechars', ...verbose_args, bcf];
+ 
+         const cmdline = '$ biber ' + argv.slice(1).join(' ');
+         this.last_output += cmdline + '\n';

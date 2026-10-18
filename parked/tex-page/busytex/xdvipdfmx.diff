@@ -1,0 +1,14 @@
+--- busytex_pipeline.js
++++ busytex_pipeline.js
+@@ -640,7 +640,10 @@
+         const luatex_nonfinal = ['lualatex', '-synctex=1', ...shell_escape_args, '--interaction=nonstopmode', '--halt-on-error', '--fmt', this.fmt.luatex, '--nosocket', main_tex_path].concat(verbose_args_for('luahbtex'));
+         const bibtex8_cmd = ['bibtex8', '--8bit'].concat(verbose_args_for('bibtex8')).concat([aux_path]);
+         const makeindex_cmd = ['makeindex', idx_path];
+-        const xdvipdfmx_cmd = ['xdvipdfmx'].concat(verbose_args_for('xdvipdfmx')).concat(['-o', pdf_path, xdv_path]);
++        // [research patch] xdvipdfmx's zlib at level 6 (zlib's own default), not its 9: every stream decodes to the same
++        // bytes, the PDF is 1.7-2.5% larger, and a paper of large PNGs with alpha, whose colour and mask xdvipdfmx
++        // decodes and deflates again, is converted 2.6 times faster (2608.16117's Chinese final: 67 s → 26 s)
++        const xdvipdfmx_cmd = ['xdvipdfmx', '-z', '6'].concat(verbose_args_for('xdvipdfmx')).concat(['-o', pdf_path, xdv_path]);
+ 
+         const driver_cmds = {
+             xetex_bibtex8_dvipdfmx: { initial: xetex_cmd, nonfinal: xetex_cmd, final: xetex_cmd, dvi: xdvipdfmx_cmd },

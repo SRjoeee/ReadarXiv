@@ -70,18 +70,6 @@ describe('fallbackText', () => {
   })
 })
 
-describe('the settings drawer issue sentence', () => {
-  it('speaks each language with its own punctuation and wraps an unknown field in that language', async () => {
-    const strings = await import('@/ui/strings')
-    setLocale('en')
-    expect(strings.O.services.issue('baseURL', 'Invalid URL')).toBe(`baseURL: ${strings.O.fallbackWhy.field.baseURL}`)
-    expect(strings.O.services.issue('thinking', 'Invalid enum')).toBe('thinking: Invalid enum')
-    setLocale('zh-CN')
-    expect(strings.O.services.issue('baseURL', 'Invalid URL')).toBe(`baseURL：${strings.O.fallbackWhy.field.baseURL}`)
-    expect(strings.O.services.issue('thinking', 'Invalid enum')).toBe('thinking：不合法（Invalid enum）')
-  })
-})
-
 describe('BUILD_REF', () => {
   it('is a commit, a release tag or main — the three things readBuildRef stamps (scripts/build-ref.mjs); it names the build in a reader\'s diagnostics', async () => {
     const { BUILD_REF } = await import('@/shared/build')
@@ -112,6 +100,8 @@ describe('the English pack', () => {
     const { LOCALES } = await import('@/locales')
     const texts: { path: string; text: string }[] = []
     const walk = (value: unknown, path: string) => {
+      // the search's keywords are what a reader may type, never drawn: the gate reads what is drawn
+      if (path === 'en.O.search.keywords') return
       if (typeof value === 'string') texts.push({ path, text: value })
       else if (typeof value === 'function') {
         // A sentence built from arguments: any arguments will do, the words around them are what is read

@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-16",
+  "by": "the maintainer",
+  "on": "the forced-break correction (PR 383): a paired forced break inside a frame ends the laid line and leaves TeX's room, instead of pinning the next segment to its first row",
+  "quote": "\u90fd\u540c\u610f",
+  "english": "agreed to all (2026-10-16), given in answer to the coordinator's summary of the one gated worsening",
+  "measures": [
+    "paragraph gaps a pitch or more wider"
+  ],
+  "targets": [
+    "ru"
+  ],
+  "scope": "ru 0.005 to 0.01 pooled over its outputs, on the metrics of the CI runner only: the one ru unit with a paired break is 1810.04805 p8 unit 140; its spare slot moves from inside the paragraph (where the old pin held it) to the paragraph's end, where TeX leaves the room, and an alphabet's fill cannot close it",
+  "why": "the correction removes the 4.38-pitch band at the top of 2608.16117 page 3 (the original has one empty line there), slotsSkipped falls to 0 on every output, and the pooled model tier shows no other measure worse; the blank line is the same one, in the place TeX puts it. The list is in quality-round/fix23-final-list.md and the images in layer-progress/Q11-fix3."
+}

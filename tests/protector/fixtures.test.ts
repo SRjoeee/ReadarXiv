@@ -7,6 +7,14 @@ import { htmlOf, sameModuloWhitespace, stripIds } from './helpers'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
 
+/**
+ * A case walks every block of a paper of up to 1.8 MB through the whole protector. The heaviest, 2609.04056.html, took
+ * 4.76 s alone (2026-09-27, the `[protector]` line below) and once ran past the suite's 30 s while three worktrees ran
+ * their suites at once — the machine's load, not the code (the redesign's ledger). Twenty times the heaviest case
+ * alone, so that load never fails it and a hang still does
+ */
+const TIMEOUT = 100_000
+
 describe('fixture round trip', () => {
   const files = readdirSync(FIXTURE_DIR).filter(f => f.endsWith('.html')).sort()
 
@@ -37,6 +45,6 @@ describe('fixture round trip', () => {
       // The line below stays, printed on every run, for anyone who changes the protector to compare against
       console.info(`[protector] ${f}: ${targets.length} blocks/cells round-tripped, ${dense} formula-dense blocks, ${ms} ms`)
       expect(doc.documentElement.outerHTML).toBe(before)
-    })
+    }, TIMEOUT)
   }
 })

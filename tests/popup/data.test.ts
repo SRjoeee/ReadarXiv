@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { AxtMessage, PageStatus } from '@/shared/messages'
 import { deferred, mountHook } from '../ui/render-hook'
@@ -30,9 +30,9 @@ vi.mock('wxt/browser', () => ({
 }))
 vi.mock('@/config/storage', () => ({
   getConfig: async () => { if (!store.config) throw new Error('no config'); return store.config },
+  readConfig: async () => { if (!store.config) throw new Error('no config'); return { config: store.config, fallbackReason: null } },
   setConfig: async (config: Config) => { store.config = config },
   watchConfig: (callback: (config: Config) => void) => { store.watchers.push(callback); return () => { store.watchers = store.watchers.filter(w => w !== callback) } },
-  configFallbackReason: () => null,
 }))
 vi.mock('@/shared/messages', async importOriginal => ({
   ...(await importOriginal<typeof import('@/shared/messages')>()),
@@ -54,8 +54,11 @@ vi.mock('@/shared/messages', async importOriginal => ({
     return Promise.resolve({ started: true })
   },
 }))
+// paperEntries's own test drives both of P0's HEADs (§5.4); the reader's own feature test stays out of its way
+vi.mock('@/pdf-reader/support', () => ({ readerRuns: () => true }))
 
-import { usePopupData } from '@/entrypoints/popup/data'
+import { paperEntries, usePopupData } from '@/entrypoints/popup/data'
+import { ENTRY_CHECK_MS, pdfUrlOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 import { applyLocaleFrom } from '@/ui/apply-locale'
 
 const page = (state: 'on' | 'stopped', session: string | null): PageStatus => ({ paper: '2401.00001', mode: 'side', preference: 'side', progress: { state, total: 1, requested: 1, done: 1, failed: 0, cached: 0, inFlight: 0 }, session, epoch: 'd#1' })
@@ -81,5 +84,20 @@ describe('usePopupData', () => {
     await hook.until(() => wire.toTab.includes('axt:set-mode'))
     expect(store.config?.mode).toBe(DEFAULT_CONFIG.mode)
     await hook.unmount()
+  })
+})
+
+describe('paperEntries: the ENTRY_CHECK_MS race (`within`, data.ts)', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  it('a check that never answers gives the entry as offered once ENTRY_CHECK_MS has passed', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => undefined)))
+    let settled: { html: string | null; pdf: string | null } | null = null
+    void paperEntries('2501.07202').then(found => { settled = found })
+    await vi.advanceTimersByTimeAsync(ENTRY_CHECK_MS - 1)
+    expect(settled).toBeNull()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(settled).toEqual({ html: translatedHtmlUrlOf('2501.07202'), pdf: pdfUrlOf('2501.07202') })
   })
 })

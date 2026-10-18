@@ -8,7 +8,11 @@ import { ANCHORS_ATTR, ANCHOR_ATTR, DIR_ATTR, FOR_ATTR, LANG_ATTR, MIRROR_CLASS,
 import { dropMirror } from './mirror'
 import { looseRootOf } from './side-layout'
 
-/** The mode gate on <html>: the set of modes the reader ticked, space-separated; CSS matches the current mode with ~= (the §15 setting) */
+/**
+ * The display gate on <html>: the displays figure text shows in, space-separated; CSS matches the current display with ~=
+ * (DESIGN §15). Since v20 every one of them while figures are translated (the session writes all three) — the PDF
+ * reader's page writes `only` — and none while they are not
+ */
 export const IMG_MODES_ATTR = 'data-axt-img-modes'
 
 export interface ImageTarget {

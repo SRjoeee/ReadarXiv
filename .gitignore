@@ -43,3 +43,6 @@ reference/
 
 # Local git worktrees
 .worktrees/
+
+# The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs): arXiv's papers and what is made from them, never committed
+/lab/pdf/out/gate-pack/

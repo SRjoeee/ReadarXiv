@@ -33,7 +33,7 @@ export function translateCall(base: CallBase, segments: TranslateSegment[], rend
   return {
     // **An empty context is left out**, never sent as `{}`: to the cache key the two are different contexts
     request: { segments, source: 'en', target: base.target, context: Object.keys(context).length ? context : undefined },
-    cache: { paper: base.paper, renderPath, ...(extra.bypassCache ? { bypass: true } : {}) },
+    cache: { paper: base.paper, renderPath, source: 'html', ...(extra.bypassCache ? { bypass: true } : {}) },
     ...(base.scope ? { scope: base.scope } : {}),
   }
 }

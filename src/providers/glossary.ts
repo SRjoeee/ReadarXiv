@@ -20,8 +20,11 @@ export interface ParsedGlossary {
   issues: GlossaryIssue[]
 }
 
-/** The first comma (ASCII or full-width) or tab in a line separates: the translation may itself hold commas, so one cut only */
-const SEPARATOR = /[,，\t]/
+/**
+ * The first comma (ASCII or full-width) or tab in a line separates: the translation may itself hold commas, so one
+ * cut only. The settings page's table splits a pasted line by it too
+ */
+export const GLOSSARY_SEPARATOR = /[,，\t]/
 
 /**
  * Parse glossary text. Blank lines and lines starting with `#` are skipped; a later entry of the same term overrides
@@ -40,7 +43,7 @@ export function parseGlossary(text: string): ParsedGlossary {
     lineNumber++
     const line = rawLine.trim()
     if (line === '' || line.startsWith('#')) continue
-    const match = SEPARATOR.exec(line)
+    const match = GLOSSARY_SEPARATOR.exec(line)
     if (!match) {
       issues.push({ line: lineNumber, text: line, reason: 'noSeparator' })
       continue

@@ -2,7 +2,7 @@ import { createLazyScheduler, readViewport, type LazyScheduler, type PreloadOpti
 
 // The bookkeeping the text run and the image run share (DESIGN §4.4): what each target is up to, whether the run may
 // still work, the permanent-error record, the viewport scheduler, and the counts both progress shapes are built
-// from. What a run does with a target — render, batch, fetch, park — stays in the run.
+// from. What a run does with a target — render, batch, fetch, hold — stays in the run.
 
 export type Outcome = 'waiting' | 'requested' | 'done' | 'failed'
 
@@ -25,7 +25,7 @@ export interface LedgerDeps<T extends { el: Element }> {
   isCurrent?: () => boolean
   /** A permanent error was just recorded: the run's consequence beyond the scheduler stopping (the image run aborts its fetches) */
   onFatal?: () => void
-  /** The run was stopped: its clean-up beyond the scheduler stopping (pending nodes, a parked set, a queue) */
+  /** The run was stopped: its clean-up beyond the scheduler stopping (pending nodes, a queue) */
   onStop?: () => void
 }
 
@@ -40,7 +40,7 @@ export interface RunLedger<T extends { el: Element }> {
   /**
    * The targets the run may take now: known, not yet requested and — when a gate is given — admitted. `taken`
    * are claimed from the scheduler (it will not hand them over again); `held` are the fresh ones the gate refused,
-   * for the run to park. Nothing when the run is halted
+   * for the run to hold (the text run holds a figure's labels while figures are off). Nothing when the run is halted
    */
   intake(picked: T[], admit?: (target: T) => boolean): { taken: T[]; held: T[] }
   /** Mark targets requested: the text run does it per batch as it renders the pending nodes, the image run at intake */

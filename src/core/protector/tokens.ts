@@ -23,6 +23,50 @@ export const TAG_RE = /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x
 // `@@` is the escape of a literal `@` (see escapeText in text.ts) and must be matched before a marker, or `@@a#` is read as a marker
 export const MARKER_RE = /@@|@([a-z]+)#/g
 
+/**
+ * The one reader of an engine's reply on the markers wire, the HTML page's (`rehydrate`) and the PDF reader's (`mt.mjs`
+ * `rehydrate`), DESIGN §6.4 and §16. Our own wire is read with MARKER_RE, exactly as it was written; a reply with
+ * `markerReader`, which forgives an engine's slips where they are unambiguous.
+ *
+ * **A marker's `#` set twice is the marker's**, a space or a tab between or none: Microsoft wrote 2610.02069's `@e#`
+ * back as `@e##` and `@d#` as `@d# #`, and read strictly the second `#` stood in the text, "Figure 10#" (#319, #320).
+ * Only where the source's text holds no `#` of its own (`hashFree`): the PDF reader's never does, TeX's `\#` being a
+ * placeholder there; on the HTML page 20 of the fixtures' 5 999 blocks do (`F#`, `#nodes`), and in them a `#` beside a
+ * marker may be the paper's, moved. The marker set is the same either way — the closer takes only `#`, spaces and tabs,
+ * none of which begins a marker — so validation (`tokenize`, MARKER_RE) needs no reading of its own.
+ */
+export const MARKER_CLOSER = '#(?:[ \\t]*#)*'
+
+export interface MarkerReading {
+  /** The source's text holds no `#` of its own (`isHashFree`): a `#` the reply sets right after a marker is the marker's */
+  hashFree: boolean
+  /**
+   * The PDF reader's second reading, of a reply the first left short (`mt.mjs` `rehydrate`, tolerant): a marker
+   * without its `#` too, `@b` before a Han character (#291), of at most `width` letters (the source's highest id's),
+   * followed by none of `a`-`z`, which would spell another id or a word, and by no `#`. A lone `@` is a marker's
+   * remains by the escaping, a literal `@` having gone out as `@@`. A marker read so owes the first stray `#` after
+   * it, where the engine displaced the closer; the PDF reader drops every stray `#`, its wire holding none (`mt.mjs`
+   * STRAY). The HTML page reads no marker without its `#`: over Microsoft's recorded Chinese answers, 3 of the 111
+   * replies it would have taken that way kept a `#` displaced before the marker or left as text (#291, DESIGN §6.3)
+   */
+  bare?: { width: number }
+}
+
+/**
+ * The pattern a reply's markers are read with: `@@` first, as MARKER_RE has it; group 1 a marker with its `#`, group
+ * 2 one without (`bare`). Under `bare` the first group is bounded by the width too, as the PDF reader's pipeline reads it.
+ * A new pattern each call: `mt.mjs` walks it with `exec` and may leave it mid-text on an error
+ */
+export function markerReader({ hashFree, bare }: MarkerReading): RegExp {
+  const closer = hashFree ? MARKER_CLOSER : '#'
+  if (!bare) return new RegExp(`@@|@([a-z]+)${closer}`, 'g')
+  const letters = `[a-z]{1,${bare.width}}`
+  return new RegExp(`@@|@(${letters})${closer}|@(${letters})(?![a-z#])`, 'g')
+}
+
+/** Whether a markers wire text of ours holds no `#` of its own, outside its markers */
+export const isHashFree = (wire: string): boolean => !wire.replace(MARKER_RE, '').includes('#')
+
 /** id → bijective base-26 letters (1→a, 26→z, 27→aa). Letters, not digits: MT engines reorder, merge and thousands-separate digits */
 export function toAlpha(id: number): string {
   let n = id

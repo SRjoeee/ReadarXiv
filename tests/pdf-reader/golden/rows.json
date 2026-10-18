@@ -1,0 +1,12 @@
+{
+  "the ids and batches each language translates": "e13030ab37d964e7d990682e07411907ec9f8c5540481e0148159602b58d21ef",
+  "runRows into zh over markers, faithful": "5e28746401d6868052b65b8517bcea1c6dcbf81f322366925614998f31a3f86d",
+  "runRows into zh over markers, lossy": "5e28746401d6868052b65b8517bcea1c6dcbf81f322366925614998f31a3f86d",
+  "runRows into de over markers, faithful": "73f8dca46f5ed5b11588be15f9376e855fbcef85d6ba26730678fa309905c93f",
+  "runRows into de over markers, lossy": "73f8dca46f5ed5b11588be15f9376e855fbcef85d6ba26730678fa309905c93f",
+  "runRows into zh over tags, faithful": "e2a58703625ad18f26e5da261a71231d64633c617b26d6c88f8dec8aba2bd6df",
+  "runRows into zh over tags, lossy": "0b5e2dde57a1b9719aa78e4a4dfc7e8ee8d7f4090ac5295a19cf59672aee7afa",
+  "runRows into zh over runs, faithful": "0e5f0c14160e15f80c9c82e7d7dedcb8a6c4854636c459ae954fec43ea0d182e",
+  "runRows into zh over runs, lossy": "0e5f0c14160e15f80c9c82e7d7dedcb8a6c4854636c459ae954fec43ea0d182e",
+  "layerRows over every result at once, and as the batches fill": "af84a23d4bdad11d1f7047030a40943d6cad0be07cee69d9fa89f113583baf30"
+}

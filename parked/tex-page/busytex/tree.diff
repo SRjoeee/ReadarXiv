@@ -1,0 +1,11 @@
+--- busytex.js
++++ busytex.js
+@@ -6982,6 +6982,8 @@
+               return (format + '/' + name) in KPSE_REMOTE.misses;
+           },
+   fetch:function (name, format) {
++              // [tree patch] the TeX page's index and tree answer, when the page has given them (poc-site/tex-worker.js)
++              if (typeof self !== 'undefined' && self.__axtTreeFetch) return self.__axtTreeFetch(name, format, KPSE_REMOTE);
+               var endpoint = Module.ENV['TEXLIVE_REMOTE_ENDPOINT'];
+               if (!endpoint) return null;
+               var url = endpoint + (endpoint.endsWith('/') ? '' : '/') + format + '/' + encodeURIComponent(name);

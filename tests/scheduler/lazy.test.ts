@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { extract, markBlocks, type Block } from '@/core/extractor'
-import { DEFAULT_PRELOAD, THRESHOLD_STEP, createLazyScheduler, observerThresholds, quantizeThreshold, readViewport } from '@/core/scheduler/lazy'
+import { DEFAULT_PRELOAD, THRESHOLD_STEP, createLazyScheduler, observerThresholds, preloadOf, quantizeThreshold, readViewport } from '@/core/scheduler/lazy'
 
 /** happy-dom has no IntersectionObserver: a fake records observe / unobserve, and the tests emit by hand */
 class FakeIntersectionObserver {
@@ -60,6 +60,11 @@ describe('createLazyScheduler', () => {
   afterEach(() => {
     delete g.IntersectionObserver
     document.body.innerHTML = ''
+  })
+
+  it('reads the reader\'s two choices as the observer\'s numbers: on demand is today\'s default, whole the paper at once (the redesign\'s design, §4)', () => {
+    expect(preloadOf('on-demand')).toEqual({ margin: 1000, threshold: 0 })
+    expect(preloadOf('whole')).toEqual({ margin: 'all', threshold: 0 })
   })
 
   it('the whole paper (margin: all, v15): every block enters at creation as one batch, boxless anchors included, and no observer is made', () => {

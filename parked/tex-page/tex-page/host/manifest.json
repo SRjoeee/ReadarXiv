@@ -1,0 +1,7 @@
+{
+  "manifest_version": 3,
+  "name": "TeX page host (measurements)",
+  "version": "1.0",
+  "description": "Frames the TeX page as the reader does, for experiments/pdf-bilingual/tex-page/measure.mjs",
+  "background": { "service_worker": "background.js" }
+}

@@ -64,6 +64,13 @@ export function quantizeThreshold(value: number): number {
 
 export const DEFAULT_PRELOAD = { margin: 1000, threshold: 0 } satisfies PreloadOptions
 
+/**
+ * The observer's numbers for the reader's choice (the redesign's design, §4): on demand is today's default, a screen
+ * below the window and a paragraph counting as entered as it first shows; whole is every block at once. The settings
+ * page offers nothing between them
+ */
+export const preloadOf = (choice: 'on-demand' | 'whole'): PreloadOptions => (choice === 'whole' ? { margin: 'all', threshold: 0 } : DEFAULT_PRELOAD)
+
 export interface LazyScheduler<T extends { el: Element } = Block> {
   /** Hand blocks over by hand (an environment without IntersectionObserver, retries); already handed over ones are not repeated */
   trigger(blocks: T[]): void

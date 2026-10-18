@@ -15,3 +15,10 @@
  */
 export const HTML_LINK = '#latexml-download-link'
 
+
+/**
+ * arXiv's own link to the paper's source (TeX Source, to `/src/<id>`), in the abstract page's Access Paper list. A
+ * PDF-only submission has none (checked 2026-09-25 on 1706.03762 and 2608.07562): the paper cannot be had as a
+ * bilingual PDF (the reader's design, §2)
+ */
+export const SOURCE_LINK = 'a.download-eprint'

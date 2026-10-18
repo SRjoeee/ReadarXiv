@@ -7,6 +7,7 @@ import type { Block } from '@/core/extractor'
 import { T_CLASS } from '@/core/marks'
 import { parseFatal } from '@/core/pipeline/fatal'
 import { coreStrings } from '@/core/strings'
+import { resolve } from '@/shared/tokens'
 import { ERROR_CLASS, FOR_ATTR } from './attrs'
 import { translationShell } from './shell'
 import { markTail } from './side-layout'
@@ -15,11 +16,21 @@ import { clearTranslation, setState } from './translation'
 /** The raw diagnostic stays in an attribute: `restore()` clears it with the injected marks as a whole, and it never reaches the interface */
 export const REASON_ATTR = 'data-axt-reason'
 
+/**
+ * The retry's edge and its mark in the family's danger (the redesign's design, §3, §7), light or dark **by the page**:
+ * the widget stands in the paper, and `light-dark()` answers the colour scheme it inherits from the page — arXiv's root
+ * is `light dark`, `dark only` under its dark theme, `light only` under light and sepia — so it follows arXiv's own
+ * switch at once, with no script and no read of the page's style while a translation is being written. The edge keeps
+ * the 60 % of the block's hint line beside it (modes.css)
+ */
+const [DANGER_LIGHT, DANGER_DARK] = [resolve('danger', 'light'), resolve('danger', 'dark')]
+const edge = (colour: string) => `color-mix(in oklab, ${colour} 60%, transparent)`
+
 const STYLE = `
-:host { display: inline-flex; align-items: center; gap: 4px; font: 12px system-ui, sans-serif; vertical-align: middle; }
-button { font: inherit; padding: 0 6px; border: 1px solid var(--axt-failed-color, rgba(220, 38, 38, 0.6)); border-radius: 3px; background: transparent; color: inherit; cursor: pointer; }
+:host { --axt-danger: light-dark(${DANGER_LIGHT}, ${DANGER_DARK}); --axt-danger-edge: light-dark(${edge(DANGER_LIGHT)}, ${edge(DANGER_DARK)}); display: inline-flex; align-items: center; gap: 4px; font: 12px system-ui, sans-serif; vertical-align: middle; }
+button { font: inherit; padding: 0 6px; border: 1px solid var(--axt-danger-edge); border-radius: 3px; background: transparent; color: inherit; cursor: pointer; }
 button:disabled { opacity: 0.5; cursor: default; }
-.mark { color: var(--axt-failed-color, rgba(220, 38, 38, 0.9)); font-weight: 700; cursor: help; }
+.mark { color: var(--axt-danger); font-weight: 700; cursor: help; }
 `
 
 /**

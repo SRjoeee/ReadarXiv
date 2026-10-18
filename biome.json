@@ -2,7 +2,7 @@
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
 	"files": {
-		"includes": ["**/*.ts", "**/*.tsx", "**/*.mjs", "!tests/fixtures"]
+		"includes": ["**/*.ts", "**/*.tsx", "**/*.mjs", "!tests/fixtures", "!parked"]
 	},
 	"formatter": { "enabled": false },
 	"assist": { "enabled": false },
@@ -16,6 +16,21 @@
 		}
 	},
 	"overrides": [
+		{
+			"includes": ["lab/**", "src/pdf-reader/engine/**", "src/pdf-reader/session/**", "src/pdf-reader/addresses.mjs"],
+			"linter": {
+				"rules": {
+					"complexity": { "noCommaOperator": "off" },
+					"correctness": { "noUnusedFunctionParameters": "off" },
+					"style": { "useTemplate": "off" },
+					"suspicious": {
+						"noAssignInExpressions": "off",
+						"noShadowRestrictedNames": "off",
+						"useIterableCallbackReturn": "off"
+					}
+				}
+			}
+		},
 		{
 			"includes": ["src/providers/request/**", "tests/providers/request/**"],
 			"linter": {

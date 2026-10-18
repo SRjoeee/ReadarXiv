@@ -45,6 +45,12 @@ export interface ChainHolder {
   /** Rebuild and make the result the chain in force: the reader's explicit actions (`axt:engine-ready`) */
   activate(config?: Config): Promise<Built>
   /**
+   * What every chain still around was built from — the one in force, the ones sessions are still on, the ones a call is
+   * still inside. A session holds to its chain (sessions.ts), so the services of these may still be asked: an address
+   * edited away stays in use until the last page translating on the chain before the edit ends (origin-keeper.ts)
+   */
+  configs(): Config[]
+  /**
    * Resolves when the next build starts — the chain in force is about to change. What awaits a chain's answer races
    * it against this, so an answer that will never come from a chain nobody wants any more does not hold anyone up
    */
@@ -90,7 +96,7 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
    * changes must not keep every chain it ever built, with its queues and native translator sessions
    * (local review)
    */
-  const built = new Set<TranslationTransport>()
+  const built = new Map<TranslationTransport, Config>()
   /**
    * What the chain was last asked to be built from — the configuration a change is compared with. `null` while a
    * build from the stored configuration is in flight: that one learns what it built from when it lands, unless a
@@ -105,7 +111,7 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
     requested = config ?? null
     failed = false
     const promise: Promise<Built> = deps.load(config).then(result => {
-      built.add(result.transport)
+      built.set(result.transport, result.config)
       if (requested === null && generation === mine) requested = result.config
       if (promise === active) landed = result
       return result
@@ -117,13 +123,14 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
   }
   const activate = (config?: Config): Promise<Built> => take(build(config))
   const sweep = (inForce: TranslationTransport): void => {
-    for (const transport of built) {
+    for (const transport of built.keys()) {
       if (transport === inForce || transport.busy?.() || deps.owned(transport)) continue
       built.delete(transport)
     }
   }
   return {
     activate,
+    configs: () => [...built.values()],
     replaced: () => replaced.promise,
     async current() {
       for (;;) {
@@ -152,13 +159,13 @@ export function createChainHolder(deps: ChainHolderDeps): ChainHolder {
     },
     async cancelScope(scope) {
       let cancelled = 0
-      for (const transport of built) cancelled += await transport.cancel(scope)
+      for (const transport of built.keys()) cancelled += await transport.cancel(scope)
       return cancelled
     },
     retireOthers() {
       const inForce = landed?.transport ?? null
       let cancelled = 0
-      for (const transport of built) {
+      for (const transport of built.keys()) {
         if (transport === inForce) continue
         cancelled += transport.retire?.() ?? 0
         built.delete(transport)

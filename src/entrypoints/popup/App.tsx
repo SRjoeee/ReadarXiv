@@ -4,7 +4,8 @@ import { PopupView } from './PopupView'
 import { usePopupData } from './data'
 import { derivePopupView } from './view-model'
 
-export function App() {
-  const { input, error, actions } = usePopupData()
+/** `rejected`: the record of refused keys, read before the first render (main.tsx) */
+export function App({ rejected }: { rejected?: readonly string[] }) {
+  const { input, error, actions } = usePopupData({ rejected })
   return <PopupView view={derivePopupView(input)} error={error} actions={actions} />
 }

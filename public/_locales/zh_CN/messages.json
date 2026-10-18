@@ -1,6 +1,6 @@
 {
   "description": {
-    "message": "面向 arxiv.org/html 的保结构、可逆双语翻译",
+    "message": "arXiv 论文双语阅读：HTML 原地翻译，PDF 原文与译文并排，随时可恢复原文",
     "description": "The extensions page and the store listing"
   },
   "toggle": {

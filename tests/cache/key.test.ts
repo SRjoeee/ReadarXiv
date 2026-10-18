@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCacheKey, cacheKeyFor, normalizeText, ocrCacheKey, wireFormatOf, type CacheIdentity, type RenderPath } from '@/cache/key'
+import { buildCacheKey, cacheKeyFor, normalizeText, ocrCacheKey, translationIdentity, wireFormatOf, type CacheIdentity, type RenderPath } from '@/cache/key'
 import type { WireFormat } from '@/core/protector'
 
 const base: CacheIdentity = {
@@ -29,7 +29,7 @@ describe('buildCacheKey', () => {
   it('any field differing gives a different key', async () => {
     const key = await buildCacheKey(base)
     const variants: Partial<CacheIdentity>[] = [
-      { providerId: 'x' }, { model: 'x' }, { promptVersion: '2' }, { rulesVersion: '0.3.0' }, { target: 'ja' }, { renderPath: 'runs' }, { text: 'Hello <x id="2"/> world' },
+      { providerId: 'x' }, { model: 'x' }, { promptVersion: '2' }, { rulesVersion: '0.3.0' }, { rulesVersion: null }, { target: 'ja' }, { renderPath: 'runs' }, { text: 'Hello <x id="2"/> world' },
     ]
     for (const v of variants) expect(await buildCacheKey({ ...base, ...v }), JSON.stringify(v)).not.toBe(key)
   })
@@ -88,7 +88,7 @@ describe('renderPath enters the key (#104)', () => {
   // The batch key uses the same field (translate-service's batchKey), so segments of the two formats are not gathered into one batch
   it('the same placeholder-free source gives three different keys on the three paths', async () => {
     const base = { providerId: 'p', model: 'm', promptKey: '', target: 'zh-CN', text: 'Hello world.' }
-    const keys = await Promise.all((['tags', 'markers', 'runs'] as const).map(renderPath => cacheKeyFor({ ...base, renderPath })))
+    const keys = await Promise.all((['tags', 'markers', 'runs'] as const).map(renderPath => cacheKeyFor({ ...base, renderPath, source: 'html' })))
     expect(new Set(keys).size).toBe(3)
   })
 
@@ -118,11 +118,25 @@ describe('why whitespace collapsing had to bump CACHE_KEY_VERSION (#122)', () =>
     const withNewlines = 'Automatic verification faces state\nexplosion due to\nthe interleavings.'
     const collapsed = withNewlines.replace(/[\t\n\f\r ]+/g, ' ')
     expect(withNewlines).not.toBe(collapsed)
-    const identity = { providerId: 'microsoft', model: '', promptKey: '', target: 'cmn', renderPath: 'markers' as const }
+    const identity = { providerId: 'microsoft', model: '', promptKey: '', target: 'cmn', renderPath: 'markers' as const, source: 'html' as const }
     const [a, b] = await Promise.all([
       cacheKeyFor({ ...identity, text: withNewlines }),
       cacheKeyFor({ ...identity, text: collapsed }),
     ])
     expect(a).toBe(b)
+  })
+})
+
+describe('translationIdentity', () => {
+  const base = { providerId: 'openai-compat:https://example.com/v1', model: 'm', promptKey: 'default', target: 'zh-CN', renderPath: 'tags' as const }
+  it('is stable for the same parts', async () => {
+    expect(await translationIdentity(base)).toBe(await translationIdentity({ ...base }))
+    expect(await translationIdentity(base)).toMatch(/^[0-9a-f]{64}$/)
+  })
+  it('changes with each part it is made of', async () => {
+    const one = await translationIdentity(base)
+    for (const change of [{ providerId: 'openai-compat:https://other.example/v1' }, { model: 'm2' }, { promptKey: 'custom text' }, { target: 'ja' }, { renderPath: 'markers' as const }]) {
+      expect(await translationIdentity({ ...base, ...change })).not.toBe(one)
+    }
   })
 })

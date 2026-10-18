@@ -11,9 +11,9 @@
    In a browser without anchor positioning the @supports fails and the overlay stays display: none, never falling
    below the image.
 
-   Visibility reads two attributes on <html> only: the current mode + the modes the reader ticked
-   (data-axt-img-modes, space-separated). The overlay carries no state attribute of its own — a split clone strips
-   every data-axt-*. */
+   Visibility reads two attributes on <html> only: the current mode + the displays figure text shows in
+   (data-axt-img-modes, space-separated: since v20 every display while figures are translated; the PDF reader's page
+   writes only). The overlay carries no state attribute of its own — a split clone strips every data-axt-*. */
 
 /* The baseline sits outside @supports: a browser without anchor positioning must not let the overlay fall below the image as a run of ordinary text (Codex on #89) */
 .axt-img {

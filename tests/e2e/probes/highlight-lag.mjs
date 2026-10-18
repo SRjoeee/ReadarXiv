@@ -226,7 +226,7 @@ async function setMode(page, name) {
   const popup = await context.newPage()
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await page.bringToFront()
-  await popup.getByRole('button', { name, exact: true }).click()
+  await popup.getByRole('radio', { name, exact: true }).click()
   await sleep(300)
   await popup.close()
   await page.bringToFront()

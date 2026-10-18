@@ -6,5 +6,6 @@
     "skipLibCheck": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "scripts", "tests", ".wxt/wxt.d.ts"]
+  "include": ["src", "scripts", "tests", ".wxt/wxt.d.ts"],
+  "exclude": ["parked"]
 }

@@ -6,12 +6,23 @@
 //
 //   pnpm fixtures:fetch                  # download what is missing, verify everything
 //
+// A missing fixture is looked for in this order: the file on disk (kept if it is the pinned one), the machine's own cache
+// of pinned copies (`defaultCacheDir`: one file per digest, so every checkout and worktree of this machine shares it, and
+// a run with no network finds what an earlier run fetched; every fetched or verified copy is put there), the private bucket
+// `readarxiv-ci` under `fixtures/<sha256>` (only where READARXIV_CI_TOKEN and CF_ACCOUNT_ID are both set: CI, never a fork's
+// pull request or a contributor's machine), and arXiv. arXiv's pages carry its own chrome, which it redeploys independently
+// of the paper, so the pinned bytes are kept where they cannot move; what the bucket serves is checked against the pin like
+// every other copy, and a bucket that cannot be read says so in one line and gives way to arXiv. A fixture already on disk
+// prints nothing; each one fetched prints one line, its path, its source and the status.
+//
 // `pnpm test` fetches them first (tests/global-setup.ts), and so does `pnpm fixtures:stats`.
 import { createHash, randomBytes } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { getObject, keyUrl, s3Credentials } from './r2-read.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MANIFEST = 'tests/fixtures/remote.json'
@@ -29,6 +40,39 @@ const STALE_PARTIAL_MS = 10 * 60_000
 /** Where a fixture may be written: the fixture directory, nowhere else */
 const FIXTURE_DIR = 'tests/fixtures'
 const ARXIV = 'https://arxiv.org/'
+
+/**
+ * The machine's cache of pinned copies, or null when there is none: READARXIV_FIXTURE_CACHE names it (empty: no cache),
+ * else `~/.cache/readarxiv/fixtures`; none in CI, which has the Actions cache and the bucket. A cache is a convenience:
+ * every copy read from it is checked against the pin like any other, and one that fails is ignored
+ */
+export function defaultCacheDir(env = process.env) {
+  if (env.READARXIV_FIXTURE_CACHE !== undefined) return env.READARXIV_FIXTURE_CACHE || null
+  if (env.CI) return null
+  return join(homedir(), '.cache', 'readarxiv', 'fixtures')
+}
+
+/** The pinned bytes the cache holds for this entry, or null (absent, or not the pinned bytes: then it is left alone and ignored) */
+async function cached(cacheDir, entry) {
+  if (!cacheDir) return null
+  const bytes = await existing(join(cacheDir, entry.sha256)).catch(() => null)
+  return bytes && bytes.length === entry.bytes && sha256(bytes) === entry.sha256 ? bytes : null
+}
+
+/** Put verified pinned bytes into the cache, whole or not at all; a cache that cannot be written is no failure */
+async function remember(cacheDir, entry, bytes) {
+  if (!cacheDir) return
+  const file = join(cacheDir, entry.sha256)
+  if (await stat(file).then(() => true, () => false)) return
+  const partial = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.partial`
+  try {
+    await mkdir(cacheDir, { recursive: true })
+    await writeFile(partial, bytes, { flag: 'wx' })
+    await rename(partial, file)
+  } catch {
+    await rm(partial, { force: true }).catch(() => undefined)
+  }
+}
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -140,7 +184,7 @@ async function download(entry, fetchImpl, gapMs) {
       if (response.redirected && !response.url.startsWith(ARXIV)) {
         throw new FinalError(`${entry.url} ended at ${response.url}, outside arXiv; nothing was written. The pin needs checking (tests/fixtures/README.md)`)
       }
-      if (response.ok) return Buffer.from(await response.arrayBuffer())
+      if (response.ok) return { bytes: Buffer.from(await response.arrayBuffer()), status: response.status }
       // Nothing more is read from an answer that is not the file: an unread body would keep the connection, and the process, open
       await response.body?.cancel().catch(() => undefined)
       if (response.status === 404 || response.status === 410) {
@@ -168,14 +212,55 @@ async function download(entry, fetchImpl, gapMs) {
 }
 
 /**
+ * The bucket as a source of the pinned bytes: a function of an entry that answers its bytes, or null (with one line logged,
+ * a status and a key) when it cannot — the caller then reads arXiv. null itself unless the token and the account are both set.
+ * The S3 credentials are derived once, by the first fixture that needs them; a derivation that fails says so once and every
+ * later fixture goes to arXiv without asking again. Nothing logged carries the token, its digest or a signature
+ *
+ * @returns {((entry: { sha256: string; bytes: number }) => Promise<{ bytes: Buffer; status: number } | null>) | null}
+ */
+function bucketSource({ env, fetchImpl, retryMs, now, log }) {
+  const token = env.READARXIV_CI_TOKEN
+  const account = env.CF_ACCOUNT_ID
+  if (!token || !account) return null
+  let credentials
+  return async entry => {
+    const key = `fixtures/${entry.sha256}`
+    try {
+      credentials ??= s3Credentials({ token, account, fetchImpl, retryMs, timeoutMs: TIMEOUT_MS }).catch(e => {
+        log(`bucket: ${e.message}; reading arXiv instead`)
+        return null
+      })
+      const derived = await credentials
+      if (!derived) return null
+      const { res, value } = await getObject({ url: keyUrl(account, key), credentials: derived, fetchImpl, retryMs, now, timeoutMs: TIMEOUT_MS })
+      if (!value) {
+        log(`bucket ${key}: ${res ? `HTTP ${res.status}` : 'the request failed'}; reading arXiv instead`)
+        return null
+      }
+      if (value.length !== entry.bytes || sha256(value) !== entry.sha256) {
+        log(`bucket ${key}: HTTP ${res.status}, but the bytes are not the pinned ones; nothing was written, reading arXiv instead`)
+        return null
+      }
+      return { bytes: value, status: res.status }
+    } catch {
+      log(`bucket ${key}: could not be read; reading arXiv instead`)
+      return null
+    }
+  }
+}
+
+/**
  * Make the remote fixtures present and verified.
  *
- * @param {{ root?: string; fetchImpl?: typeof fetch; log?: (line: string) => void; gapMs?: number }} [options]
+ * @param {{ root?: string; cacheDir?: string | null; fetchImpl?: typeof fetch; log?: (line: string) => void; gapMs?: number; env?: Record<string, string | undefined>; retryMs?: number; now?: () => Date }} [options]
  * @returns {Promise<{ verified: string[]; downloaded: string[] }>}
  */
-export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () => undefined, gapMs = GAP_MS } = {}) {
+export async function ensureFixtures({ root = ROOT, cacheDir = null, fetchImpl = fetch, log = () => undefined, gapMs = GAP_MS, env = process.env, retryMs = 1000, now = () => new Date() } = {}) {
   const verified = []
   const downloaded = []
+  const fromBucket = bucketSource({ env, fetchImpl, retryMs, now, log })
+  let askedArxiv = false
   const realRoot = await realpath(root)
   for (const entry of await readManifest(root)) {
     const file = join(root, entry.path)
@@ -189,19 +274,30 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
       if (digest !== entry.sha256) {
         throw new Error(`${entry.path} is not the pinned fixture (SHA-256 ${digest.slice(0, 12)}…, the manifest records ${entry.sha256.slice(0, 12)}…). Delete it to download the pinned copy, or see tests/fixtures/README.md for moving the pin.`)
       }
+      await remember(cacheDir, entry, present)
       verified.push(entry.path)
       continue
     }
-    if (downloaded.length > 0) await sleep(gapMs)
-    const bytes = await download(entry, fetchImpl, gapMs)
-    const digest = sha256(bytes)
-    if (digest === entry.sha256 && bytes.length !== entry.bytes) throw new Error(sizeMismatch(entry, bytes.length))
-    if (digest !== entry.sha256) {
-      throw new Error(
-        `${entry.url} now serves other bytes than the pinned fixture (SHA-256 ${digest.slice(0, 12)}…, ${bytes.length} bytes; the manifest records ${entry.sha256.slice(0, 12)}…, ${entry.bytes} bytes): a new rendering of the paper, or a page in its place. `
-        + 'Nothing was written: the snapshots and measurements were taken from the pinned bytes, and moving the pin is a maintainer\'s decision (tests/fixtures/README.md).',
-      )
+    const kept = await cached(cacheDir, entry)
+    let got = kept ? { bytes: kept, status: 'cache' } : await fromBucket?.(entry)
+    let source = kept ? `the machine's cache (${join(cacheDir ?? '', entry.sha256)})` : `the bucket (fixtures/${entry.sha256})`
+    if (!got) {
+      // The gap is arXiv's: between two requests to it, not before the first
+      if (askedArxiv) await sleep(gapMs)
+      askedArxiv = true
+      got = await download(entry, fetchImpl, gapMs)
+      source = entry.url
+      const { bytes } = got
+      const digest = sha256(bytes)
+      if (digest === entry.sha256 && bytes.length !== entry.bytes) throw new Error(sizeMismatch(entry, bytes.length))
+      if (digest !== entry.sha256) {
+        throw new Error(
+          `${entry.url} now serves other bytes than the pinned fixture (SHA-256 ${digest.slice(0, 12)}…, ${bytes.length} bytes; the manifest records ${entry.sha256.slice(0, 12)}…, ${entry.bytes} bytes): a new rendering of the paper, or a page in its place. `
+          + 'Nothing was written: the snapshots and measurements were taken from the pinned bytes, and moving the pin is a maintainer\'s decision (tests/fixtures/README.md).',
+        )
+      }
     }
+    const { bytes, status } = got
     // The path as it really is, checked before anything is created: the part of it that exists must resolve to itself
     // under the root — a symbolic link on the way would carry a directory or the file elsewhere — and once created, the
     // directory must be inside a fixture directory
@@ -225,7 +321,8 @@ export async function ensureFixtures({ root = ROOT, fetchImpl = fetch, log = () 
       await rm(partial, { force: true })
       throw e
     }
-    log(`fetched ${entry.path} (${bytes.length} bytes) from ${entry.url}`)
+    if (!kept) await remember(cacheDir, entry, bytes)
+    log(`fetched ${entry.path} (${bytes.length} bytes) from ${source}${status === 'cache' ? '' : `: HTTP ${status}`}`)
     downloaded.push(entry.path)
   }
   return { verified, downloaded }
@@ -248,7 +345,7 @@ if (invoked()) {
     process.exit(2)
   }
   try {
-    const { verified, downloaded } = await ensureFixtures({ log: line => console.log(line) })
+    const { verified, downloaded } = await ensureFixtures({ cacheDir: defaultCacheDir(), log: line => console.log(process.env.GITHUB_ACTIONS === 'true' && line.startsWith('bucket') ? `::warning::${line}` : line) })
     console.log(`remote fixtures: ${downloaded.length} downloaded, ${verified.length} already there, all verified`)
   } catch (e) {
     console.error(e instanceof Error ? e.message : e)

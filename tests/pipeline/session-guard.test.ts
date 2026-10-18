@@ -4,6 +4,7 @@ import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { extract } from '@/core/extractor'
 import { startTranslation } from '@/core/pipeline'
 import { restore } from '@/core/renderer/page'
+import { preloadOf } from '@/core/scheduler/lazy'
 import { createOpenAICompatProvider } from '@/providers/openai-compat'
 import { cacheKeyFor } from '@/cache/key'
 import type { CachePort } from '@/providers/translate-service'
@@ -29,7 +30,7 @@ describe('restoring the original during start-up (issue #45, experiment 1)', () 
       mode: 'stack',
       paper: '0000.00000',
       capabilities: { maxBatchChars: 1000, maxBatchItems: 4, renderPath: 'tags' },
-      preload: { margin: 1000, threshold: 0 },
+      preload: preloadOf('on-demand'),
       transport: async () => ({ ok: false, error: { kind: 'aborted', message: 'no request should be sent', isolatable: false } }),
     })
     // The reader restores at once. The marking used to be sliced, and a slice after the restore wrote its marks onto
@@ -62,7 +63,7 @@ describe('the wait budget of cache reads: no CachePort can drag it down (issue #
     })
     return { service, calls }
   }
-  const call = { request: { segments: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], source: 'en' as const, target: 'cmn' }, cache: { paper: '0000.00000', renderPath: 'tags' as const } }
+  const call = { request: { segments: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], source: 'en' as const, target: 'cmn' }, cache: { paper: '0000.00000', renderPath: 'tags' as const, source: 'html' as const } }
 
   it('a normal return is unaffected by the budget, and the segments hit are no longer sent to the provider', async () => {
     const { service, calls } = await serviceWith({ getMany: async keys => keys.map((_, i) => (i === 0 ? { translation: '甲' } : null)), putMany: async () => undefined })
@@ -105,6 +106,7 @@ describe('the cache identity includes the endpoint (issue #45, experiment 3)', (
     target: 'cmn',
     renderPath: 'tags',
     text: 'Hello',
+    source: 'html',
   })
 
   it('the same model name with different base URLs must not hit the same cache entry', async () => {
@@ -182,7 +184,7 @@ describe('cancellation crosses the message boundary (issue #42)', () => {
       mode: 'stack',
       paper: '0000.00000',
       capabilities: { maxBatchChars: 1000, maxBatchItems: 10, renderPath: 'tags' },
-      preload: { margin: 1000, threshold: 0 },
+      preload: preloadOf('on-demand'),
       scope: 'session-1',
       transport: call => transport.translate(call),
     })
@@ -229,7 +231,7 @@ describe('no cache write after a drop (Codex on #33)', () => {
     })
     const pending = service.translate({
       request: { segments: [{ id: 'a', text: 'A' }, { id: 'b', text: 'B' }], source: 'en', target: 'cmn' },
-      cache: { paper: '0000.00000', renderPath: 'tags' },
+      cache: { paper: '0000.00000', renderPath: 'tags', source: 'html' as const },
       scope: 'session-1',
     })
     // Wait for a's batch to land, then drop the scope the way the router does — mark, then drain — and release b

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RenderPath } from '@/cache/key'
+import { cacheKeyFor, translationIdentity, type RenderPath } from '@/cache/key'
 import { BatchCountMismatchError } from '@/providers/request/batch-queue'
 import { attachRequestErrorMeta } from '@/providers/request/retry-policy'
 import type { CachedEntry } from '@/cache/store'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createTranslateService, toErrorInfo, type CacheEntry, type CachePort, type TranslateServiceDeps } from '@/providers/translate-service'
 import { ProviderError, type TranslationProvider } from '@/providers/types'
+import { RECORD_SHAPES } from '@/shared/diagnostics'
 
 const provider = (translate: TranslationProvider['translate'], id = 'mock', extra: Partial<TranslationProvider> = {}): TranslationProvider => ({
   id, kind: 'llm', wireFormats: ['tags'] as const,
@@ -35,7 +36,7 @@ function fakePort(seed: Record<string, string> = {}) {
 
 const req = (ids: string[]) => ({
   request: { segments: ids.map(id => ({ id, text: `text-${id}` })), source: 'en' as const, target: 'zh-CN' },
-  cache: { paper: '2410.00260', renderPath: 'tags' as RenderPath },
+  cache: { paper: '2410.00260', renderPath: 'tags' as RenderPath, source: 'html' as const },
 })
 
 const rateLimited = () => attachRequestErrorMeta(new ProviderError('rate-limit', '429'), { statusCode: 429, responseHeaders: { 'retry-after': '1' }, isRetryable: true })
@@ -52,11 +53,110 @@ describe('the diagnostics hook (issue #156)', () => {
     const service = build({ getProvider: async () => provider(async () => { throw echo }), retired: () => false, warn: line => lines.push(line), batch: { maxRetries: 0 } })
     const res = await service.translate(req(['a']))
     expect(res.ok).toBe(false)
+    // and the status survives the queues to the answer, where the background reads it (the redesign's design, §4)
+    expect(res).toMatchObject({ ok: false, error: { kind: 'auth', status: 401 } })
     expect(lines.length).toBeGreaterThanOrEqual(1)
     for (const line of lines) {
       expect(line).toContain('auth (HTTP 401)')
       expect(line).not.toContain('my-secret')
       expect(line).not.toContain('Fourier')
+    }
+  })
+})
+
+describe('the batch record (issue #237)', () => {
+  const SCOPE = 'abcdef12-3456-4789-8abc-def012345678'
+  const ok = (calls: { n: number }) => provider(async r => { calls.n++; return { segments: r.segments.map(s => ({ id: s.id, text: `\u8bd1:${s.text}` })), provider: 'mock' } })
+
+  it('says what a call cost: its segments, the cache\'s share, the requests that carried it, how many came through', async () => {
+    const notes: string[] = []
+    const calls = { n: 0 }
+    const { port } = fakePort()
+    const service = build({ getProvider: async () => ok(calls), cache: port, note: line => notes.push(line) })
+    const res = await service.translate({ ...req(['a', 'b', 'c']), scope: SCOPE })
+    expect(res.ok).toBe(true)
+    expect(notes).toEqual(['batch abcdef12 segments=3 cached=0 calls=1 done=3 outcome=ok'])
+    expect(calls.n).toBe(1)
+  })
+
+  it('counts every request, retries and the per-item fallback included: that is the amplification a reader\'s export has to show', async () => {
+    const notes: string[] = []
+    let sent = 0
+    // A broken answer a smaller batch might not repeat: the batch is retried, then each segment goes alone (batch-queue.ts)
+    const broken = provider(async () => { sent++; throw new ProviderError('invalid-response', 'not the shape asked for') })
+    const service = build({ getProvider: async () => broken, note: line => notes.push(line), batch: { maxRetries: 1 }, queue: { maxRetries: 0 } })
+    const res = await service.translate({ ...req(['a', 'b', 'c']), scope: SCOPE })
+    expect(res.ok).toBe(false)
+    // one batch of three, once more, and three alone
+    expect(sent).toBe(1 + 1 + 3)
+    expect(notes).toEqual([`batch abcdef12 segments=3 cached=0 calls=${sent} done=0 outcome=failed:invalid-response`])
+  })
+
+  it('a call whose segment rode on a request another call made says so: two tabs, the same uncached segment, one request, and neither line reads as a miss that cost nothing (Devin and Codex on #329)', async () => {
+    const notes: string[] = []
+    const calls = { n: 0 }
+    const { port } = fakePort()
+    const service = build({ getProvider: async () => ok(calls), cache: port, note: line => notes.push(line) })
+    // the second call joins the first's task while it still gathers (BatchQueue), so its item never reaches the engine call
+    const [a, b] = await Promise.all([
+      service.translate({ ...req(['x']), scope: 'tabAAAAA-0000' }),
+      service.translate({ ...req(['x']), scope: 'tabBBBBB-0000' }),
+    ])
+    expect([a.ok, b.ok]).toEqual([true, true])
+    expect(calls.n).toBe(1)
+    expect(notes.toSorted()).toEqual([
+      'batch tabAAAAA segments=1 cached=0 calls=1 done=1 outcome=ok',
+      'batch tabBBBBB segments=1 cached=0 calls=1 done=1 outcome=ok',
+    ])
+  })
+
+  it('a call that sent requests of its own is not credited again for a segment that rode on the same batch: the line counts what carried it, once', async () => {
+    const notes: string[] = []
+    const calls = { n: 0 }
+    const { port } = fakePort()
+    const service = build({ getProvider: async () => ok(calls), cache: port, note: line => notes.push(line) })
+    // the first holds `x` and `y`, the second `y` and `z`: `y` is shared, and the one batch carries all three
+    await Promise.all([
+      service.translate({ ...req(['x', 'y']), scope: 'tabAAAAA-0000' }),
+      service.translate({ ...req(['y', 'z']), scope: 'tabBBBBB-0000' }),
+    ])
+    expect(calls.n).toBe(1)
+    expect(notes.toSorted()).toEqual([
+      'batch tabAAAAA segments=2 cached=0 calls=1 done=2 outcome=ok',
+      'batch tabBBBBB segments=2 cached=0 calls=1 done=2 outcome=ok',
+    ])
+    for (const line of notes) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+  })
+
+  it('names the kind of a failure and nothing of its message, whatever the message quotes', async () => {
+    const notes: string[] = []
+    const echo = attachRequestErrorMeta(new ProviderError('auth', 'Unauthorized: key=ZZZ-my-secret-shape; request was: the Fourier transform of f'), { statusCode: 401, isRetryable: false })
+    const service = build({ getProvider: async () => provider(async () => { throw echo }), note: line => notes.push(line), batch: { maxRetries: 0 } })
+    await service.translate({ ...req(['a']), scope: SCOPE })
+    expect(notes).toEqual(['batch abcdef12 segments=1 cached=0 calls=1 done=0 outcome=failed:auth'])
+  })
+
+  it('writes no record for a call the cache answered whole: it cost nothing and says nothing', async () => {
+    const notes: string[] = []
+    const calls = { n: 0 }
+    const { port } = fakePort()
+    const service = build({ getProvider: async () => ok(calls), cache: port, note: line => notes.push(line) })
+    await service.translate({ ...req(['a']), scope: SCOPE })
+    notes.length = 0
+    const again = await service.translate({ ...req(['a']), scope: SCOPE })
+    expect(again).toMatchObject({ ok: true, cached: 1 })
+    expect(notes).toEqual([])
+  })
+
+  it('every record it writes is of the ring\'s grammar, and carries nothing of the text', async () => {
+    const notes: string[] = []
+    const service = build({ getProvider: async () => provider(async () => { throw new ProviderError('timeout', 'the Fourier transform of f') }), note: line => notes.push(line), batch: { maxRetries: 0 }, queue: { maxRetries: 0 } })
+    await service.translate({ ...req(['a', 'b']), scope: SCOPE })
+    await service.translate(req(['c']))
+    expect(notes.length).toBe(2)
+    for (const line of notes) {
+      expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
+      expect(line).not.toMatch(/text-|Fourier|2410/)
     }
   })
 })
@@ -311,7 +411,7 @@ describe('createTranslateService', () => {
       cache: port,
     })
     await service.translate(req(['a']))
-    const again = await service.translate({ ...req(['a']), cache: { paper: '2410.00260', renderPath: 'tags', bypass: true } })
+    const again = await service.translate({ ...req(['a']), cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const, bypass: true } })
     expect(calls).toBe(2)
     expect(reads).toHaveLength(1)
     expect(writes).toHaveLength(2)
@@ -355,7 +455,7 @@ describe('createTranslateService', () => {
       cache: port,
     })
     const call = req(['a', 'b'])
-    call.cache = { paper: '2410.00260', renderPath: 'markers' }
+    call.cache = { paper: '2410.00260', renderPath: 'markers', source: 'html' }
     call.request.segments = [
       { id: 'a', text: '公式 @a# 见此处。' },
       { id: 'b', text: '公式 @a#。' },
@@ -375,7 +475,7 @@ describe('createTranslateService', () => {
       })),
       cache: port,
     })
-    const res = await service.translate({ ...req(['a', 'b']), cache: { paper: '2410.00260', renderPath: 'runs' } })
+    const res = await service.translate({ ...req(['a', 'b']), cache: { paper: '2410.00260', renderPath: 'runs', source: 'html' as const } })
     expect(res.ok && res.result.segments.map(s => s.text)).toEqual(['译文 <x id="7"/>', '译:text-b'])
     expect(writes[0]!.map(w => w.translation)).toEqual(['译:text-b'])
   })
@@ -398,6 +498,18 @@ describe('createTranslateService', () => {
     // Writing to the cache is not enough; the two that succeeded have to go back to the caller with the failure: otherwise run.ts marks the whole batch failed,
     // the reader sees “all failed”, and on retry they come back from the cache in a second (Codex on #163)
     if (!res.ok) expect(res.partial?.map(p => `${p.id}=${p.text}`)).toEqual(['a=译:text-a', 'b=译:text-b'])
+    // each carries the identity it was translated under, which a fallback's gathered answer keeps (types.ts)
+    if (!res.ok) expect(res.partial?.every(p => typeof p.identity === 'string' && p.identity.length === 64)).toBe(true)
+  })
+
+  it('every segment it returns carries the identity it was translated under; none without a cache', async () => {
+    const expected = await translationIdentity({ providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' })
+    const service = build({ getProvider: async () => provider(async r => ({ segments: r.segments.map(s => ({ ...s, text: `T:${s.text}` })), provider: 'mock' })) })
+    const request = { segments: [{ id: 'a', text: 'x' }], source: 'en' as const, target: 'zh-CN' }
+    const ok = await service.translate({ request, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
+    expect(ok.ok && ok.result.segments.every(s => s.identity === expected)).toBe(true)
+    const bare = await service.translate({ request })
+    expect(bare.ok && bare.result.segments.every(s => s.identity === undefined)).toBe(true)
   })
 
   it('ids do not match: BatchQueue retries the whole batch and then falls back one by one; RequestQueue itself does not retry (or it would hit 12 times before the fallback)', async () => {
@@ -661,7 +773,7 @@ describe('sentence markers: inserted by the service layer when the engine report
   // The cut points come from the caller: where to cut depends on the block itself (§8.6); the service layer inserts at the positions given only
   const twoSentences = (ids: string[]) => ({
     request: { segments: ids.map(id => ({ id, text: 'One sentence here. Two sentences here.', cuts: [19] })), source: 'en' as const, target: 'zh-CN' },
-    cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+    cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
   })
 
   it('inserts the markers, removes them, and brings the boundaries of both sides out as the alignment', async () => {
@@ -685,7 +797,7 @@ describe('sentence markers: inserted by the service layer when the engine report
     const service = build({ getProvider: async () => echoing(t => { sent = t; return '译文' }) })
     await service.translate({
       request: { segments: [{ id: 'a', text: 'One sentence here. Two sentences here.' }], source: 'en', target: 'zh-CN' },
-      cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
     })
     expect(sent).toBe('One sentence here. Two sentences here.')
   })
@@ -730,26 +842,60 @@ describe('sentence markers: inserted by the service layer when the engine report
     const service = build({ getProvider: async () => echoing(t => { sent = t; return '一句译文。' }) })
     const res = await service.translate({
       request: { segments: [{ id: 'a', text: 'Only one sentence here.', cuts: [] }], source: 'en', target: 'zh-CN' },
-      cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
     })
     expect(sent).toBe('Only one sentence here.')
     if (!res.ok) return
     expect(res.result.segments[0]!.alignment).toEqual({ source: ['Only one sentence here.'.length], target: ['一句译文。'.length] })
   })
 
-  it('when inserting would exceed the engine\'s per-request cap nothing is inserted', async () => {
-    // `BatchQueue`'s character cap only stops **merging**; a single task over it is sent all the same (Codex on #137).
-    // No alignment only means no highlight, while over the cap the whole batch fails
-    let sent = ''
-    const text = `${'x'.repeat(40)}. ${'y'.repeat(40)}.`
+  it('a segment whose marked text is over the engine\'s batch cap is marked all the same, sent alone, and nothing fails', async () => {
+    // `BatchQueue`'s character cap stops only the **merging**: a task over it is a batch of its own, sent at once — no
+    // request fails for it (Codex on #137). Sent unmarked, it lit as its paragraph: on the PDF reader with an LLM (cap
+    // 1 000), 10 of 81 sampled units of more than one sentence (the final review of the highlight)
+    const calls: string[][] = []
+    const long = `${'x'.repeat(40)}. ${'y'.repeat(40)}.`, short = 'One sentence here. Two sentences here.'
     const service = build({
-      getProvider: async () => echoing(t => { sent = t; return '译文' }, { maxBatchChars: text.length + 5 }),
+      getProvider: async () => provider(async ({ segments }) => {
+        calls.push(segments.map(s => s.text))
+        return { segments: segments.map(s => ({ id: s.id, text: s.text.replace(/x+\. /, 'A.').replace(/y+\./, 'B.').replace('One sentence here. ', 'P.').replace('Two sentences here.', 'Q.') })), provider: 'mock' }
+      }, 'mock', { maxBatchChars: long.length + 5 }),
     })
-    await service.translate({
-      request: { segments: [{ id: 'a', text, cuts: [42] }], source: 'en', target: 'zh-CN' },
-      cache: { paper: 'p', renderPath: 'tags' as RenderPath },
+    const res = await service.translate({
+      request: { segments: [{ id: 'a', text: short, cuts: [19] }, { id: 'b', text: long, cuts: [42] }], source: 'en', target: 'zh-CN' },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
     })
-    expect(sent).toBe(text)
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    // the long one in a request of its own, its marker in it; the short one marked in another
+    expect(calls.length).toBe(2)
+    const alone = calls.find(c => c.some(t => t.includes('xxxx')))!
+    expect(alone.length).toBe(1)
+    expect(alone[0]).toMatch(/<x id="\d+"\/>/)
+    expect(alone[0]!.length).toBeGreaterThan(long.length + 5)
+    expect(res.result.segments.map(s => s.alignment)).toEqual([{ source: [19, 19], target: [2, 2] }, { source: [42, 41], target: [2, 2] }])
+  })
+
+  it('the key of a segment marked over the cap is not the one its unmarked request was cached under; no other key changes', async () => {
+    // Until 2026-10-02 a segment over the cap went unmarked under the key its marked request has now: that entry's
+    // translation has no sentences, and hit, it would keep the paragraph unlit (hard rule 4: the request changed)
+    const long = `${'x'.repeat(40)}. ${'y'.repeat(40)}.`, short = 'One sentence here. Two sentences here.'
+    const identity = { providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' as RenderPath, source: 'html' as const }
+    const before = { long: await cacheKeyFor({ ...identity, text: long, cuts: [42] }), short: await cacheKeyFor({ ...identity, text: short, cuts: [19] }), whole: await cacheKeyFor({ ...identity, text: long, cuts: [] }) }
+    const { port, reads, writes } = fakePort({ [before.long]: 'the old translation, whole' })
+    const service = build({ getProvider: async () => echoing(t => t, { maxBatchChars: long.length + 5 }), cache: port })
+    const res = await service.translate({
+      // c: the same text taken as one sentence — nothing is inserted there, and its request is as it was
+      request: { segments: [{ id: 'a', text: short, cuts: [19] }, { id: 'b', text: long, cuts: [42] }, { id: 'c', text: long, cuts: [] }], source: 'en', target: 'zh-CN' },
+      cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const },
+    })
+    const [shortKey, longKey, wholeKey] = reads[0]!
+    expect([shortKey, wholeKey]).toEqual([before.short, before.whole])
+    expect(longKey).not.toBe(before.long)
+    // the old entry is not served: the long one is translated again, marked, and written under its new key
+    if (!res.ok) return
+    expect(res.result.segments[1]!.text).toBe(long)
+    expect(writes.flat().map(w => w.key)).toContain(longKey)
   })
 
   it('the cut points enter the cache key: the same wire text with different cut points must not hit each other', async () => {
@@ -758,8 +904,8 @@ describe('sentence markers: inserted by the service layer when the engine report
     const { port, writes } = fakePort()
     const service = build({ getProvider: async () => echoing(() => '译文一。译文二。'), cache: port })
     const text = 'One sentence here. Two sentences here.'
-    await service.translate({ request: { segments: [{ id: 'a', text, cuts: [19] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath } })
-    await service.translate({ request: { segments: [{ id: 'b', text, cuts: [] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath } })
+    await service.translate({ request: { segments: [{ id: 'a', text, cuts: [19] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const } })
+    await service.translate({ request: { segments: [{ id: 'b', text, cuts: [] }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags' as RenderPath, source: 'html' as const } })
     const keys = writes.flat().map(w => w.key)
     expect(new Set(keys).size).toBe(2)
   })
@@ -770,7 +916,7 @@ describe('sentence markers: inserted by the service layer when the engine report
       const service = build({ getProvider: async () => echoing(t => { sent = t; return '译文' }) })
       await service.translate({
         request: { segments: [{ id: 'a', text: 'One sentence here. Two sentences here.', cuts: [19] }], source: 'en', target: 'zh-CN' },
-        cache: { paper: 'p', renderPath },
+        cache: { paper: 'p', renderPath, source: 'html' as const },
       })
       expect([renderPath, sent]).toEqual([renderPath, 'One sentence here. Two sentences here.'])
     }
@@ -781,6 +927,33 @@ describe('sentence markers: inserted by the service layer when the engine report
     const service = build({ getProvider: async () => echoing(t => { sent = t; return '译文' }) })
     await service.translate({ request: { segments: [{ id: 'a', text: 'One sentence here. Two sentences here.', cuts: [19] }], source: 'en', target: 'zh-CN' } })
     expect(sent).toBe('One sentence here. Two sentences here.')
+  })
+})
+
+describe("the rules in a text's cache key are the caller's: the HTML page's, or none for a PDF's (rules as data, §9.1)", () => {
+  const echo = provider(async ({ segments }) => ({ segments: segments.map(s => ({ id: s.id, text: `\u8bd1:${s.text}` })), provider: 'mock' }))
+  const identity = { providerId: 'mock', model: '', promptKey: '', target: 'zh-CN', renderPath: 'tags' as RenderPath, text: 'text-a' }
+  const ask = (service: ReturnType<typeof build>, source: 'html' | 'pdf') =>
+    service.translate({ request: { segments: [{ id: 'a', text: 'text-a' }], source: 'en', target: 'zh-CN' }, cache: { paper: 'p', renderPath: 'tags', source } })
+
+  it('a call from the HTML page is read and written under the key with its rules; one from a PDF under the key with none', async () => {
+    const html = await cacheKeyFor({ ...identity, source: 'html' }), pdf = await cacheKeyFor({ ...identity, source: 'pdf' })
+    expect(pdf).not.toBe(html)
+    for (const [source, want] of [['html', html], ['pdf', pdf]] as const) {
+      const { port, reads, writes } = fakePort()
+      await ask(build({ getProvider: async () => echo, cache: port }), source)
+      expect(reads[0]).toEqual([want])
+      expect(writes.flat().map(w => w.key)).toEqual([want])
+    }
+  })
+
+  it('a translation cached for a PDF text answers the PDF text, and is no answer to the same text of the HTML page', async () => {
+    const pdf = await cacheKeyFor({ ...identity, source: 'pdf' })
+    const { port } = fakePort({ [pdf]: 'cached for the PDF' })
+    const service = build({ getProvider: async () => echo, cache: port })
+    const fromPdf = await ask(service, 'pdf'), fromHtml = await ask(service, 'html')
+    expect(fromPdf.ok && fromPdf.result.segments[0]?.text).toBe('cached for the PDF')
+    expect(fromHtml.ok && fromHtml.result.segments[0]?.text).toBe('\u8bd1:text-a')
   })
 })
 
@@ -805,6 +978,9 @@ describe('attributing failures: isolatable travels with the error across the mes
 
   it('toErrorInfo carries it across the boundary; a non-ProviderError gets it by origin', () => {
     expect(toErrorInfo(new ProviderError('rate-limit', 'slow down'))).toEqual({ kind: 'rate-limit', message: 'slow down', isolatable: false })
+    // The HTTP status goes along when the failure had one: the background tells a refused key (401) from a 403 by it
+    expect(toErrorInfo(attachRequestErrorMeta(new ProviderError('auth', 'refused'), { statusCode: 401 }))).toEqual({ kind: 'auth', message: 'refused', isolatable: false, status: 401 })
+    expect(toErrorInfo(attachRequestErrorMeta(new ProviderError('auth', 'forbidden'), { statusCode: 403 }))).toMatchObject({ kind: 'auth', status: 403 })
     // A count mismatch is the typical “one segment threw the output off”
     expect(toErrorInfo(new BatchCountMismatchError(4, 3, ['x'])).isolatable).toBe(true)
     expect(toErrorInfo(new Error('boom'))).toMatchObject({ kind: 'unknown', isolatable: true })
@@ -830,7 +1006,7 @@ describe('only the glossary entries in use are sent (§8.2)', () => {
       }, 'llm', { promptKey: 'default' }),
       cache: port,
     })
-    const res = await service.translate({ request: { segments, source: 'en', target: 'zho', context: context as never }, cache: { paper: 'p', renderPath: 'tags' } })
+    const res = await service.translate({ request: { segments, source: 'en', target: 'zho', context: context as never }, cache: { paper: 'p', renderPath: 'tags', source: 'html' as const } })
     expect(res.ok).toBe(true)
     // The key used to read the cache is this segment's key (writes are asynchronous; reads are steadier)
     return { context: seen[0] as { glossary?: { term: string }[] } | undefined, keys: reads[0] ?? [] }

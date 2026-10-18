@@ -13,7 +13,7 @@
 import { INJECTED_SELECTOR, isInjected } from '@/core/marks'
 import { NOTE } from '@/core/rules/latexml'
 import { decodeText, ENTITY_PATTERN } from './escape'
-import { MARKER_RE, TAG_RE, fromAlpha, type WireFormat } from './tokens'
+import { MARKER_RE, type MarkerReading, TAG_RE, fromAlpha, markerReader, type WireFormat } from './tokens'
 
 /** One run of wire text and where it came from. Text and slot spans together tile the whole string. */
 export type WireSpan =
@@ -369,8 +369,11 @@ function decodeRun(wire: string, wireStart: number, format: WireFormat): { text:
  * An escaped `@` is skipped without closing the text run, so a literal `@` never splits one token
  * into two the way it would if `@@` were treated as a placeholder — which is what makes the two
  * sequences correspond one to one.
+ *
+ * `reading`: a reply on the markers wire, read by `markerReader` (tokens.ts) rather than as we write it; a marker's
+ * `#` set twice is inside the marker's interval, so the text after it starts behind it.
  */
-export function scanTokens(s: string, format: WireFormat): PositionedToken[] {
+export function scanTokens(s: string, format: WireFormat, reading?: MarkerReading): PositionedToken[] {
   const out: PositionedToken[] = []
   const pushText = (from: number, to: number) => {
     if (to <= from) return
@@ -378,13 +381,13 @@ export function scanTokens(s: string, format: WireFormat): PositionedToken[] {
     out.push({ kind: 'text', text, from, to, anchors })
   }
   let last = 0
-  for (const m of s.matchAll(format === 'markers' ? MARKER_RE : TAG_RE)) {
+  for (const m of s.matchAll(format === 'markers' ? (reading ? markerReader(reading) : MARKER_RE) : TAG_RE)) {
     const index = m.index ?? 0
     const end = index + m[0].length
     // An escaped `@` is text, not a placeholder; decodeRun turns it back into one character
     if (m[0] === '@@') continue
     pushText(last, index)
-    if (format === 'markers') out.push({ kind: 'void', id: fromAlpha(m[1]!), from: index, to: end })
+    if (format === 'markers') out.push({ kind: 'void', id: fromAlpha((m[1] ?? m[2])!), from: index, to: end })
     else if (m[0].startsWith('</')) out.push({ kind: 'close', from: index, to: end })
     else if (m[0].startsWith('<x')) out.push({ kind: 'void', id: Number(m[1] ?? m[2] ?? m[3]), from: index, to: end })
     else out.push({ kind: 'open', id: Number(m[4] ?? m[5] ?? m[6]), from: index, to: end })

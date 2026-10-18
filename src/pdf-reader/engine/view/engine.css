@@ -1,0 +1,91 @@
+/* The engine's overlays and pane scrollers, for any page that hosts the reading view (reader-view.mjs) or the extension's
+   session (session.mjs): the highlight's bands, the figures' overlays, the scrollers PDF.js draws into and the right pane's
+   places. The page's own layout is its own sheet's.
+   --axt-green is the extension's default band colour (src/styles/presets.css); the active band's own colour and
+   strength come in as --axt-hl-color and --axt-hl-mix from the look sheet (session.mjs, the extension's appearanceRule) */
+:root { --axt-green: oklch(0.693 0.17 162.48); }
+/* PDF.js requires the container to be absolutely positioned */
+/* no scroll anchoring: the reader sets both sides' positions itself, and the browser nudging one after a page is drawn
+   in it (a highlight or figure layer inserted) put two paragraphs levelled by a click a few to tens of pixels apart */
+.viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; }
+/* the highlight layer sits over the text layer, never catches the pointer. Its blocks are the HTML page's band: one wash
+   per run of a unit, one page and one column of it (highlight.mjs), multiplied into the page, so the paper stays white
+   under nothing and the letters stay their own colour, as a band behind the text looks on an HTML page */
+.axt-hl-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.axt-hl { position: absolute; border-radius: 3px; mix-blend-mode: multiply;
+  background: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* a sentence over rows of different reach: one outline, its path filled with the band's wash (highlight.mjs shapePath) */
+.axt-hl-shape { background: none; border-radius: 0; overflow: visible; }
+.axt-hl-shape > path { fill: color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) var(--axt-hl-mix, 22%), transparent); }
+/* a newer compile being laid out and drawn under the one in view */
+.viewerContainer.axt-incoming { visibility: hidden; }
+/* a figure's place on a translation page, holding the empty <img> the extension's image overlay is anchored to and, over
+   a draft preview's frame, the left's figure drawn beneath it */
+.axt-fig { position: absolute; pointer-events: none; z-index: 2; }
+.axt-fig > div, .axt-fig > canvas, .axt-fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.axt-fig img { opacity: 0; }
+.axt-fig .axt-img > span { pointer-events: auto; }
+/* a figure lit: an outline in the band's colour, three times its wash's strength (a wash multiplied into a figure would
+   change its colours); drawn inside the figure's padded box */
+.axt-hl.axt-hl-frame { box-sizing: border-box; background: none;
+  border: 1.5px solid color-mix(in oklab, var(--axt-hl-color, var(--axt-green)) min(100%, calc(var(--axt-hl-mix, 22%) * 3)), transparent); }
+/* ----- the reading view's places (places.mjs): the right pane's page boxes, the original's pages at its sizes and zoom.
+   A place is a page box of the stack's (`.page`: the host sheet's page colour, shadow and margins, as the left's pages
+   have them); its size is the left page box's own style, read through the stack's --scale-factor. What it shows sits in
+   its holder, which fills it: the original's page drawn by PDF.js's page view, whose own box gives way to the place's,
+   or the skeleton, or the layer's content */
+.pdfViewer .page.axt-place { container-type: inline-size; }
+.axt-place-view { position: absolute; inset: 0; }
+.pdfViewer .page.axt-place .axt-place-view > .page { position: absolute !important; inset: 0; margin: 0 !important; border: 0 !important; box-shadow: none !important; }
+/* a page of text in grey, while there is no original to draw (round 4's skeleton): sized in the page's own width (cqw), so
+   that a page drawn at any zoom keeps its proportions; light, and dimmed in the dark */
+:root { --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
+html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29 29); }
+.axt-sk { position: absolute; inset: 9.5% 15.5% 9%; display: flex; flex-direction: column; overflow: hidden; }
+.axt-sk i { display: block; flex: none; background: var(--axt-sk); border-radius: 0.3cqw; }
+.axt-sk .axt-sk-lines { position: relative; block-size: calc(var(--axt-sk-n) * 2.05cqw - 0.9cqw); border-radius: 0;
+  background: repeating-linear-gradient(to bottom, var(--axt-sk) 0 1.15cqw, transparent 1.15cqw 2.05cqw); }
+/* a paragraph's last line, short */
+.axt-sk .axt-sk-lines::after { content: ""; position: absolute; inset-inline-end: 0; inset-block-end: 0; inline-size: var(--axt-sk-rest, 36%); block-size: 1.15cqw; background: var(--axt-sk-paper); }
+.axt-sk .axt-sk-gap { block-size: 2.2cqw; background: none; }
+.axt-sk .axt-sk-head { block-size: 1.7cqw; margin-block: 1.4cqw 2.2cqw; }
+.axt-sk .axt-sk-figure { block-size: 34cqw; margin-block: 1cqw 3cqw; border-radius: 0.6cqw; background: none; box-shadow: inset 0 0 0 0.25cqw var(--axt-sk); }
+.axt-sk .axt-sk-title { inline-size: 56%; block-size: 3.2cqw; margin: 4cqw auto 6cqw; }
+.axt-sk .axt-sk-label { inline-size: 13%; block-size: 1.7cqw; margin: 2cqw auto 2.6cqw; }
+.axt-sk-authors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.6cqw 4cqw; margin-block: 0 3cqw; margin-inline: 4%; }
+.axt-sk-authors i { block-size: 1.2cqw; }
+.axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
+.axt-sk-abstract { margin-inline: 9%; }
+/* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy and the
+   engine's SVG over it fill the place, the SVG scaled by its viewBox. The copy is a canvas of the page, dimmed in the dark by
+   the reader sheet's own rule for a page's canvas; the SVG's text by the same filter, so that the layer's page reads as the
+   original's beside it. Its text is drawn with fractional advances (geometricPrecision): the engine measures a word by the
+   canvas, and a system that draws SVG text with a hinted face's advances (Chromium on Linux at a pixel ratio of 1) rounds
+   each to a whole pixel. A place retired (far from the view) holds an empty one */
+.axt-layer { position: absolute; inset: 0; }
+.axt-layer > .axt-layer-copy { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.axt-layer > svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; }
+.axt-layer > svg text { white-space: pre; }
+html[data-axt-dim] .axt-layer > svg { filter: invert(88.8%) hue-rotate(180deg); }
+/* ----- the layer's links over a laid page (links.mjs): one anchor a link, at the union of its boxes, each box a span of its
+   own; every size a share of the page's (or the link's) box, so a zoom moves nothing. Over the copy and the SVG (outside the
+   dark filter: the left's links keep their colours too), under the highlight's layer. The anchor takes no pointer, its boxes
+   do. As PDF.js draws a link on the left (pdf_viewer.css .linkAnnotation): its border where the PDF gives one, a yellow wash
+   under a hovering pointer. The focus ring is the page's, not the interface's: the chrome's --focus is near-white in the
+   dark theme, and a page left undimmed is white paper (about 1.1:1). Two tones, a 2px ring in the page's ink between halos
+   in its paper, so that it reads on the page and over a figure of any colour; light on dark where the pages are dimmed.
+   The system's colours in forced colours */
+.axt-links { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.axt-link { position: absolute; display: block; pointer-events: none; outline: none; }
+.axt-link > .axt-link-box { position: absolute; box-sizing: border-box; pointer-events: auto; cursor: pointer; }
+.axt-link[data-axt-border="solid"] > .axt-link-box { border: var(--axt-link-border) solid var(--axt-link-colour); }
+.axt-link[data-axt-border="dashed"] > .axt-link-box { border: var(--axt-link-border) dashed var(--axt-link-colour); }
+.axt-link[data-axt-border="underline"] > .axt-link-box { border-bottom: var(--axt-link-border) solid var(--axt-link-colour); }
+@media (hover: hover) { .axt-link:hover > .axt-link-box { background-color: rgb(255 255 0 / 0.2); } }
+.axt-link { --axt-ring: oklch(0.235 0.012 255); --axt-ring-halo: oklch(1 0 0); }
+html[data-axt-dim] .axt-link { --axt-ring: oklch(0.935 0.005 255); --axt-ring-halo: oklch(0.255 0.006 255); }
+.axt-link:focus-visible > .axt-link-box { outline: 2px solid var(--axt-ring); outline-offset: 1px; box-shadow: 0 0 0 1px var(--axt-ring-halo), 0 0 0 4px var(--axt-ring-halo); }
+@media (forced-colors: active) {
+  .axt-link > .axt-link-box { outline: 1.5px solid LinkText; }
+  .axt-link:focus-visible > .axt-link-box { outline: 2px solid Highlight; box-shadow: none; }
+}
