@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 
 // Code stays as the paper has it: the body of an environment a paper defines as code is never a unit, so never sent to
 // a translator (2610.19159: 832 of its 2,645 units were the lines of its appendix's agent transcripts, set in an
@@ -88,5 +89,44 @@ describe('an environment the paper defines as code is kept as it is, never a uni
     expect(cut('\\newenvironment{tx}{\\ttfamily\\obeylines}{}\\renewenvironment{tx}{\\itshape}{}', 'tx')).toContain(block)
     expect(cut('\\newenvironment{tx}{\\itshape}{}\\renewenvironment{tx}{\\ttfamily\\obeylines}{}', 'tx')).not.toContain(block)
     expect(cut('\\newenvironment{tx}{\\itshape}{}\\ProvideDocumentEnvironment{tx}{}{\\ttfamily\\obeylines}{}', 'tx')).toContain(block)
+  })
+
+  it('by the last definition whatever made it: a listing package\'s environment the paper defines again as prose is prose', () => {
+    expect(cut('\\usepackage{listings}\\lstnewenvironment{snippet}{}{}\n\\renewenvironment{snippet}{\\itshape}{}', 'snippet')).toContain(block)
+  })
+
+  it('what the begin code defines is no part of what it sets: a definition\'s body there opens nothing, sets no type', () => {
+    expect(cut('\\usepackage{alltt}\\newenvironment{remark}{\\def\\code{\\begin{alltt}}\\itshape}{}', 'remark')).toContain(block)
+    expect(cut('\\newenvironment{verse}{\\newcommand\\code[1]{{\\tt ##1}}\\obeylines\\itshape}{}', 'verse')).toContain(block)
+    expect(cut('\\newenvironment{tx}{\\def\\code{x}\\ttfamily\\obeylines}{}', 'tx')).not.toContain(block)
+  })
+
+  it('a command \\let to one of the verbatim\'s internal macros is no verbatim (\\verbatim@font): a prompt box set in its type stays prose', () => {
+    expect(cut('\\makeatletter\\let\\promptfont\\verbatim@font\\makeatother\n\\newenvironment{promptbox}{\\par\\promptfont\\small}{\\par}', 'promptbox')).toContain(block)
+  })
+
+  it('a code environment begun and ended by macros of the paper\'s (\\newcommand\\btx{\\begin{tx}})', () => {
+    const got = texts({ 'main.tex': doc(`A paragraph before the block.\n\n\\btx\n${block}\n\\etx\n\nThe paragraph after the block.`, '\\newenvironment{tx}{\\ttfamily\\obeylines}{}\n\\newcommand\\btx{\\begin{tx}}\n\\newcommand\\etx{\\end{tx}}') })
+    expect(got).toEqual(['A paragraph before the block.', 'The paragraph after the block.'])
+  })
+})
+
+describe('an environment of the paper\'s own that opens a verbatim is read by lines, as the verbatim it opens', () => {
+  const VERBATIMS: [string, string][] = [
+    ['fancyvrb\'s Verbatim, as fancyvrb documents it', '\\usepackage{fancyvrb}\\newenvironment{fx}{\\VerbatimEnvironment\\begin{Verbatim}[fontsize=\\small]}{\\end{Verbatim}}'],
+    ['the kernel\'s verbatim, after a size', '\\newenvironment{fx}{\\small\\verbatim}{\\endverbatim}'],
+  ]
+  const source = (pre: string) => doc('A paragraph before the block.\n\n\\begin{fx}\nx = 1\n\\end{document}\n\\end{fx}\nThe paragraph after the block.', pre)
+  for (const [what, pre] of VERBATIMS) {
+    it(`${what}: an \\end{document} in its lines ends nothing, and nothing of the reader's goes on its \\end's line`, () => {
+      const p = openPaper(new Map([['main.tex', enc(source(pre))]]))
+      expect((p.units as unknown as Unit[]).map(textOf)).toEqual(['A paragraph before the block.', 'The paragraph after the block.'])
+      const tex = new TextDecoder().decode(originalFiles(p, { lines: true }).get('main.tex'))
+      expect(tex).toContain('\\end{fx}\n\\axtlines{1}\\leavevmode\\axtmark{1s}The paragraph after the block.')
+    })
+  }
+  it('not one set as alltt sets its body, whose lines TeX reads as it reads any', () => {
+    const p = project({ 'main.tex': doc('Words.', '\\newenvironment{tx}{\\ttfamily\\obeylines}{}') }) as unknown as { lineEnvs: Set<string> }
+    expect(p.lineEnvs.has('tx')).toBe(false)
   })
 })

@@ -105,54 +105,74 @@ const setsDisplay = (begin, end) => {
  *  math: read as prose, 2310.20360's 89 eqsplit displays were cut into units, whose marks came between a subscript's _
  *  and its operand (\\bfm_\\leavevmode\\axtmark{…}1: "Missing { inserted"). Not one whose begin code sets a display of
  *  its own and closes it, its body the text after it */
-const displayEnvsOf = codes => new Set([...codes].filter(([, c]) => setsDisplay(c.begin, c.end)).map(([name]) => name))
-/** the paper's own environments' begin and end code, { begin, end } by name, as its files define them by \\newenvironment
- *  and xparse's definers: by the last definition, as TeX takes it (\\provide… defines nothing a definition before it
- *  made) */
-const envCodesOf = texts => {
+const displayEnvsOf = defs => new Set([...defs].filter(([, d]) => d.begin !== undefined && setsDisplay(d.begin, d.end)).map(([name]) => name))
+/** a listing package's definers of an environment (listings', fancyvrb's, tcolorbox's), its name in group 1; then
+ *  minted's \\newminted[name]{lexer}, and a command \\let to a verbatim (\\let\\x\\verbatim, not \\verbatim@font) */
+const LISTING_DEFINERS = /\\(?:lstnewenvironment|(?:Define|(?:Re)?Custom)VerbatimEnvironment|(?:re)?newtcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g
+const NEWMINTED = /\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g
+const LET_VERBATIM = /\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:verbatim|Verbatim)(?![A-Za-z@])/g
+const ENV_DEFINERS = /\\(?:(?:re|provide)?newenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment)\s*\*?\s*\{([^}]+)\}/g
+/**
+ * The paper's own environments, by name, as the last of their definitions in its files leaves them, as TeX takes them
+ * (\\provide… defines nothing a definition before it made): `{ begin, end }`, the code of one \\newenvironment or an
+ * xparse definer made; `{ listing: true }`, one a listing package's definer made (minted's \\newminted{python}{} the
+ * environment pythoncode, \\newminted[name]{…} `name`, each with its star) or a \\let to a verbatim. A \\renewenvironment
+ * after \\lstnewenvironment{snippet} makes snippet the paper's own again
+ */
+const envDefinitionsOf = texts => {
   const out = new Map()
+  const define = (name, def, provide) => { if (!(provide && out.has(name))) out.set(name, def) }
   for (const t of texts.map(uncommented)) {
-    for (const m of t.matchAll(/\\(?:(?:re|provide)?newenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment)\s*\*?\s*\{([^}]+)\}/g)) {
+    const at = []
+    for (const m of t.matchAll(LISTING_DEFINERS)) at.push([m.index, () => define(m[1].trim(), { listing: true }, /^\\Provide/.test(m[0]))])
+    for (const m of t.matchAll(NEWMINTED)) { const name = m[1]?.trim() || `${m[2].trim()}code`; at.push([m.index, () => { define(name, { listing: true }); define(`${name}*`, { listing: true }) }]) }
+    for (const m of t.matchAll(LET_VERBATIM)) at.push([m.index, () => define(m[1], { listing: true })])
+    for (const m of t.matchAll(ENV_DEFINERS)) {
       const doc = m[0].includes('DocumentEnvironment'), name = m[1].trim()
-      if (/^\\(?:provide|Provide)/.test(m[0]) && out.has(name)) continue
       let k = skipSpaces(t, m.index + m[0].length)
       // \\newenvironment's [n][default]; a document environment's argument specification, a group
       if (doc) { if (t[k] !== '{') continue; const g = matchGroup(t, k); if (g < 0) continue; k = skipSpaces(t, g) } else for (let n = 0; n < 2 && t[k] === '['; n++) { const e = matchGroup(t, k, '[', ']'); if (e < 0) break; k = skipSpaces(t, e) }
       if (t[k] !== '{') continue
       const b = matchGroup(t, k), k2 = b > 0 ? skipSpaces(t, b) : -1, e = t[k2] === '{' ? matchGroup(t, k2) : -1
-      if (e > 0) out.set(name, { begin: t.slice(k + 1, b - 1), end: t.slice(k2 + 1, e - 1) })
+      if (e > 0) at.push([m.index, () => define(name, { begin: t.slice(k + 1, b - 1), end: t.slice(k2 + 1, e - 1) }, /^\\(?:provide|Provide)/.test(m[0]))])
     }
+    for (const [, run] of at.sort((a, b) => a[0] - b[0])) run()
   }
   return out
 }
 /** the code environments a package defines, whose body the paper's own may open (codeEnvsOf) */
-const LISTINGS = ['verbatim', 'Verbatim', 'BVerbatim', 'LVerbatim', 'lstlisting', 'minted', 'alltt', 'tcblisting']
-/** a listing package's definers of an environment (listings', fancyvrb's, tcolorbox's; minted's below), its name in group 1 */
-const LISTING_DEFINERS = /\\(?:lstnewenvironment|(?:Define|(?:Re)?Custom)VerbatimEnvironment|(?:re)?newtcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g
-const escaped = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const LISTINGS = new Set(['verbatim', 'Verbatim', 'BVerbatim', 'LVerbatim', 'lstlisting', 'minted', 'alltt', 'tcblisting'])
 /**
- * The environments a paper defines as code, whose body stays as the paper has it and is never a unit, as a listing
- * package's own are not (SKIP_ENVS): those a listing package's definer makes (minted's \\newminted{python}{} the
- * environment pythoncode, \\newminted[name]{…} `name`, each with its star); one of the paper's own (envCodesOf, and
- * \\let\\x\\verbatim) whose begin code opens a code environment — a package's, \\verbatim or \\begin{Verbatim}, or another
- * of these; and one whose begin code sets its body as alltt does, in typewriter type with its lines obeyed. 2610.19159's
- * transcripts (\\newenvironment{trajectoryCode}{\\begingroup…\\ttfamily…\\obeylines…}{…}): 832 units of code lines and
- * terminal output sent to the translator, their ASCII punctuation sent back full-width. Not typewriter type alone (a
+ * The environments a paper defines as code (envDefinitionsOf, by their last definition), whose body stays as the paper
+ * has it and is never a unit, as a listing package's own are not (SKIP_ENVS): `code`, one a listing package's definer
+ * made or a \\let to a verbatim; one of the paper's own whose begin code opens a code environment — a package's
+ * (LISTINGS: \\verbatim, \\begin{Verbatim}), or another of these —; and one whose begin code sets its body as alltt
+ * does, in typewriter type with its lines obeyed. Only what the begin code does where it stands: a definition in it
+ * (\\def\\code{\\begin{alltt}}, \\newcommand\\code[1]{{\\tt ##1}}) does nothing until it is used (texCommands'
+ * `inDef`). `lines`, those of them TeX reads by lines, as the verbatim they open or the listing package that made them
+ * (LINE_ENVS): nothing of the reader's on their \\begin's and \\end's lines, their \\end{document} none. 2610.19159's
+ * transcripts (\\newenvironment{trajectoryCode}{\\begingroup…\\ttfamily…\\obeylines…}{…}): 832 units of code lines
+ * and terminal output sent to the translator, their ASCII punctuation sent back full-width. Not typewriter type alone (a
  * prompt box, whose words are prose: 2608.03063's seqbox) nor lines obeyed alone (verse)
  */
-const codeEnvsOf = (texts, codes) => {
-  const text = texts.map(uncommented).join('\n'), out = new Set()
-  for (const m of text.matchAll(LISTING_DEFINERS)) out.add(m[1].trim())
-  for (const m of text.matchAll(/\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g)) { const name = m[1]?.trim() || `${m[2].trim()}code`; out.add(name).add(`${name}*`) }
-  for (const m of text.matchAll(/\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:verbatim|Verbatim)(?![A-Za-z])/g)) out.add(m[1])
-  const allttLike = begin => /\\(?:ttfamily|tt)(?![A-Za-z@])/.test(begin) && /\\obeylines(?![A-Za-z@])/.test(begin)
+const codeEnvsOf = defs => {
+  const code = new Set([...defs].filter(([, d]) => d.listing).map(([name]) => name)), lines = new Set(code)
+  const opened = new Map()
+  for (const [name, d] of defs) {
+    if (d.begin === undefined) continue
+    const cmds = texCommands(d.begin).filter(c => !c.inDef), has = n => cmds.some(c => c.name === n)
+    if ((has('ttfamily') || has('tt')) && has('obeylines')) code.add(name)
+    opened.set(name, cmds.map(c => (c.name === 'begin' ? c.env?.replace(/\*$/, '') : c.name)).filter(Boolean))
+  }
   // an environment that opens one found here is found in turn: until a pass finds none
   for (let found = true; found;) {
     found = false
-    const names = [...LISTINGS, ...out].map(escaped).join('|'), opens = new RegExp(String.raw`\\(?:begin\s*\{\s*(?:${names})\*?\s*\}|(?:${names})(?![A-Za-z@*]))`)
-    for (const [name, { begin }] of codes) if (!out.has(name) && (allttLike(begin) || opens.test(begin))) { out.add(name); found = true }
+    for (const [name, names] of opened) {
+      if (!code.has(name) && names.some(n => LISTINGS.has(n) || code.has(n))) { code.add(name); found = true }
+      if (!lines.has(name) && names.some(n => (LISTINGS.has(n) && LINE_ENVS.test(n)) || lines.has(n))) { lines.add(name); found = true }
+    }
   }
-  return out
+  return { code, lines }
 }
 /** whether `env` is read by lines (LINE_ENVS, or the paper's own `lineEnvs`: by its name, a star in it as defined
  *  (`\\DefineVerbatimEnvironment{Code*}`), or by the name its star is added to) */
@@ -1503,16 +1523,17 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the paper's macros twice over, each for its own reader: `macros`, how a call takes its arguments and which it sets
   // as prose (paperMacros, the walker's); `bodies`, what each expands to (macroBodies, a display's letters)
   // the environments of the paper's own that are code (codeEnvsOf), kept as they are
-  const envCodes = envCodesOf(ownTexts), skipEnvs = codeEnvsOf(ownTexts, envCodes)
-  // the environments of the paper's own that TeX reads by lines (LINE_ENVS), in a class it ships too
-  const lineEnvs = lineEnvsOf(ownTexts)
+  const definitions = envDefinitionsOf(ownTexts), codeEnvs = codeEnvsOf(definitions), skipEnvs = codeEnvs.code
+  // the environments of the paper's own that TeX reads by lines (LINE_ENVS), in a class it ships too, and the code
+  // environments that open one
+  const lineEnvs = new Set([...lineEnvsOf(ownTexts), ...codeEnvs.lines])
   // the theorem-like environments, as any of the package's files defines them (theoremsOf), and the paper's own
   // environments' arguments (envDefs)
   const theorems = theoremsOf(ownTexts)
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(envCodes), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
