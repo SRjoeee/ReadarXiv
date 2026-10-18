@@ -29,6 +29,9 @@ const language = process.argv[3] ?? '简体中文'
 const math = (tex, rendered) => `<math class="ltx_Math" alttext="${tex}" display="inline"><semantics><mi>${rendered}</mi><annotation encoding="application/x-tex">${tex}</annotation></semantics></math>`
 const cite = n => `<cite class="ltx_cite ltx_citemacro_cite">[<a href="#bib.bib${n}" class="ltx_ref">${n}</a>]</cite>`
 const ref = s => `<a href="#S${s}" class="ltx_ref"><span class="ltx_text ltx_ref_tag">${s}</span></a>`
+/** LaTeXML's \textbf, and its \textcolor{blue!65!black}{\bfseries …} */
+const bold = s => `<span class="ltx_text ltx_font_bold">${s}</span>`
+const coloured = s => `<span class="ltx_text ltx_font_bold" style="color:#0000A6;">${s}</span>`
 
 /**
  * Sentence shape × placeholder position. Each row matches a real failure mode:
@@ -55,6 +58,12 @@ const SHAPES = [
   ['citation after a full stop', `These distributions are useful for calibrating theoretical models.${cite(4)} However, the deviation remains.`, 'models'],
   ['paired placeholder', `<em class="ltx_emph ltx_font_italic">The model ${math('f', 'f')} is trained end to end</em> on four GPUs.`],
   ['seven in a long sentence', `The encoder maps ${math('x', 'x')} to ${math('z', 'z')}, the decoder reconstructs ${math('\\hat{x}', 'x̂')} from ${math('z', 'z')}, and the loss compares ${math('\\hat{x}', 'x̂')} with ${math('x', 'x')} under ${math('\\ell_2', 'ℓ₂')}.`],
+  // A sentence whose words change style (2610.19159, the owner's test of 2026-10-19: the PDF reader sent each styled run
+  // apart and got word salad back, a lone word dropped): the same shapes on the HTML page. `styled`: the translation must
+  // not read as pieces joined — in a CJK target, two of its words never set apart by a space
+  ['styled lead terms', `${bold('compute resources')} and ${bold('operating constraints')} under which the work from ${math('A', 'A')} is carried out.`, 'constraints', 'styled'],
+  ['per-word colour run', `Fit the model on the new material. ${'Learned descriptor models must use the exact same training set.'.split(' ').map(w => coloured(w)).join(' ')}`, 'training', 'styled'],
+  ['lone styled word', `<span class="ltx_text" style="background-color:#F2F2FF;">${coloured('Before')}</span>`, 'Before', 'styled'],
 ]
 
 const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Placeholder survival probe</title></head><body>
@@ -103,7 +112,7 @@ for (let i = 0, stable = 0; i < 80; i++) {
   if (stable >= 3 && i >= 4) break
 }
 
-const rows = await page.evaluate(([names, words]) => {
+const rows = await page.evaluate(([names, words, styled]) => {
   const countOf = el => ({
     math: el.querySelectorAll('math').length,
     cite: el.querySelectorAll('.ltx_cite').length,
@@ -124,17 +133,19 @@ const rows = await page.evaluate(([names, words]) => {
       // a word the engine must not hand back untranslated — told only where the translation is in a script other than
       // Latin: into English, or any language that may keep the word, it proves nothing (Devin on #305)
       english: words[i] && /(?![\p{Script=Latin}])\p{L}/u.test(t.textContent ?? '') && (t.textContent ?? '').includes(words[i]) ? words[i] : null,
+      // two Chinese or Japanese words set apart by a space: each styled run translated alone and joined
+      salad: !!styled[i] && /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]\s+[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(t.textContent ?? ''),
       text: (t.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60),
     }
   })
-}, [SHAPES.map(shape => shape[0]), SHAPES.map(shape => shape[2] ?? null)])
+}, [SHAPES.map(shape => shape[0]), SHAPES.map(shape => shape[2] ?? null), SHAPES.map(shape => shape[3] === 'styled')])
 
 let ok = 0
 for (const row of rows) {
-  const pass = row.same && !row.english
+  const pass = row.same && !row.english && !row.salad
   if (pass) ok++
   const counts = row.src ? `${Object.values(row.src).join('/')} → ${Object.values(row.out).join('/')}` : row.state
-  console.log(`${pass ? 'PASS' : 'FAIL'} ${row.name.padEnd(6)} math/cite/ref ${counts}${row.english ? `, "${row.english}" left untranslated` : ''}  ${row.text ?? ''}`)
+  console.log(`${pass ? 'PASS' : 'FAIL'} ${row.name.padEnd(6)} math/cite/ref ${counts}${row.english ? `, "${row.english}" left untranslated` : ''}${row.salad ? ', read as pieces joined' : ''}  ${row.text ?? ''}`)
 }
 const total = rows.reduce((sum, row) => sum + (row.src ? row.src.math + row.src.cite + row.src.ref : 0), 0)
 console.log(`\n${engine} → ${language}: ${ok}/${rows.length} sentence shapes passed, ${total} protected nodes in all`)

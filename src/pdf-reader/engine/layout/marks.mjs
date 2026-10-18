@@ -15,6 +15,7 @@
 // lines they carry and lose, and fails on a loss of no accepted cause.
 import { lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
+import { symbolText } from '../rules/text-symbols.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
@@ -429,25 +430,10 @@ export function literalNames(text) {
 }
 
 // ---- what a paper's symbol sets: LaTeX's own
-/**
- * LaTeX's text symbols (the kernel's and textcomp's commands, as LaTeX defines them in every encoding), each the one
- * character it sets: the layout draws one the marking cannot mark (glued to the word before it, at a unit's head) as
- * text, where arXiv's page shows that character on the unit's line (make.mjs). The prototype's texToText, for text
- */
-export const TEXT_SYMBOLS = Object.freeze({
-  '\\%': '%', '\\&': '&', '\\#': '#', '\\$': '$', '\\_': '_', '\\{': '{', '\\}': '}',
-  '\\textbackslash': '\\', '\\textless': '<', '\\textgreater': '>', '\\textbar': '|', '\\textasciitilde': '~', '\\textasciicircum': '^',
-  '\\textunderscore': '_', '\\textdollar': '$', '\\textbraceleft': '{', '\\textbraceright': '}',
-  '\\S': '\u00a7', '\\P': '\u00b6', '\\textsection': '\u00a7', '\\textparagraph': '\u00b6', '\\dag': '\u2020', '\\ddag': '\u2021',
-  '\\textdagger': '\u2020', '\\textdaggerdbl': '\u2021', '\\copyright': '\u00a9', '\\textcopyright': '\u00a9', '\\textregistered': '\u00ae',
-  '\\texttrademark': '\u2122', '\\pounds': '\u00a3', '\\textsterling': '\u00a3', '\\textdegree': '\u00b0', '\\textbullet': '\u2022',
-  '\\textperiodcentered': '\u00b7', '\\ldots': '\u2026', '\\dots': '\u2026', '\\textellipsis': '\u2026', '\\textendash': '\u2013', '\\textemdash': '\u2014',
-})
-/** a symbol's text: its source one of TEXT_SYMBOLS, alone or followed by an empty group (`\%{}`, `\dots{}`), else null */
-export function symbolText(src) {
-  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src ?? '')
-  return m && Object.hasOwn(TEXT_SYMBOLS, m[1]) ? TEXT_SYMBOLS[m[1]] : null
-}
+// LaTeX's text symbols (TEXT_SYMBOLS, each the one character it sets), the one table the layer reads too
+// (rules/text-symbols.mjs): the layout draws one the marking cannot mark (glued to the word before it, at a unit's head) as
+// text, where arXiv's page shows that character on the unit's line (make.mjs); symbolText, a symbol's text
+export { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 /** a line TeX logs for an error: `! …`, or `<file>:<line>: …` under -file-line-error */
 const TEX_ERROR = /^(?:! |[^\s:]+:\d+: )/
 /**

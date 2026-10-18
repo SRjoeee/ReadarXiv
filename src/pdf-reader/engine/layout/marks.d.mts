@@ -63,10 +63,8 @@ export declare function checkLineskip(v: unknown, path: string): [number, number
 export declare function literalNames(text: string): string
 /** where a unit's start mark goes, as patch places it: the first piece at or after it, from `from` */
 export declare function headEnd(pieces: readonly unknown[], from?: number): number
-/** LaTeX's text symbols, each the one character it sets */
-export declare const TEXT_SYMBOLS: Readonly<Record<string, string>>
-/** a symbol's text (TEXT_SYMBOLS), its source alone or followed by `{}`, else null */
-export declare function symbolText(src: string | undefined): string | null
+/** LaTeX's text symbols, each the one character it sets, and a symbol's text: the table the layer reads too */
+export { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 /** TeX's answers from the probe's `punct` rows, per sample's command */
 export declare function readMarkProbe(log: string, samples: readonly { command: string }[]): Switches
 /** the commands whose marks the answers take off anywhere but between two calls */
