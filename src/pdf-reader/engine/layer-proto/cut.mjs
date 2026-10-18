@@ -282,9 +282,11 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
         const rows = list => list.filter(r => ids.has(r[0]))
         const lines = rows(layout.lines).map(([uid, v]) => [uid, v.map((x, j) => (j % 8 === 7 ? fontAt(x) : x))])
         const named = names.map(r => r.map((x, j) => (j === 9 ? fontAt(x) : x)))
+        // (each colour piece's run's fill of the part's units: a key only where one of them has a row, as the file's)
+        const colours = rows(layout.colours ?? [])
         part = {
           fonts: table, units: rows(layout.units), lines, frames: rows(layout.frames), erase: rows(layout.erase), ph: rows(layout.ph), labels: rows(layout.labels),
-          headings: rows(layout.headings), pageText: rows(layout.pageText), held: rows(layout.held), names: named,
+          headings: rows(layout.headings), pageText: rows(layout.pageText), held: rows(layout.held), names: named, ...(colours.length ? { colours } : {}),
         }
       }
       return {
