@@ -345,7 +345,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
     const L = st.layout([i])
     let m = N + 1
     for (const [, v] of L.lines) for (let j = 0; j < v.length; j += 8) m = Math.min(m, v[j])
-    for (const r of L.ph) for (let j = 4; j < r.length; j += 6) m = Math.min(m, r[j])
+    for (const r of L.ph) for (let j = 4; j + 5 < r.length; j += 6) m = Math.min(m, r[j])
     for (const r of L.labels) m = Math.min(m, r[2])
     leastOf.set(i, m)
     return m

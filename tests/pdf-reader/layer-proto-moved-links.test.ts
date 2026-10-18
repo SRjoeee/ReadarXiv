@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { indexLayout, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
+import { indexLayout, LAYOUT, LAYOUT_SCHEMA, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { installStubs, shuffled } from './helpers/order-paper'
 
@@ -47,7 +47,7 @@ function paper({ annots = true } = {}) {
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(annots ? { getAnnotations: async () => annotationsOf(n) } : {}) })
   const doc = { numPages: PAGES, getPage: async (n: number) => pageOf(n) }
   const layout = {
-    schema: 4, lineskip: null, layout: '7', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: PAGES }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
+    schema: LAYOUT_SCHEMA, lineskip: null, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: PAGES }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
     units: specs.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, s.pieces ?? 1]),
     lines: specs.map(s => [s.id, s.lines.flatMap(l => { const [x0, x1] = spanOf(l); return [l.page, x0, x1, l.b, l.b + 7, l.b - 2, 10, 0] })]),
     frames: specs.map(s => [s.id, s.lines.flatMap((l, j) => [l.page, 0, j, 1, j ? 0 : -1, 0])]),

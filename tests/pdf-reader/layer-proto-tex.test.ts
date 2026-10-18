@@ -878,6 +878,146 @@ describe("a cell whose citation wrapped onto the cell's next line, made by the m
   })
 })
 
+describe('a piece TeX set no ink for never refuses its unit (EMPTY, the no-ink round, 2026-10-19)', () => {
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const L = (y: number) => [1, 10, 200, y, y + 8, y - 3, 10, 0]
+  const rowsOf = (rows: [number, number, string][]) => {
+    const lu = unitOf([L(100)], rows.map(([k, f]) => [k, f, []])) as unknown as { ph: Map<number, { kind: string }>; erase: Float64Array[] }
+    for (const [k, , kind] of rows) { const row = lu.ph.get(k); if (row) row.kind = kind }
+    lu.erase = [Float64Array.from([10, 97, 200, 108])]
+    return lu as never
+  }
+  // 2610.19159's step headers: a role box holding an index and "Tool Output", then \trajectoryMark{} with an empty argument,
+  // which sets nothing (the maker's tail row EMPTY: no glyph beside the unit's end mark)
+  const pieces = [{ t: 'open', id: 1, src: '\\trajectoryRole[trajectoryoutput]{' }, { t: 'open', id: 2, src: '\\trajectoryIndex{' }, text('Step 2149'), { t: 'close', id: 2, src: '}' }, ph('\\enspace'), text(' Tool Output'), ph('\\trajectoryMark{}'), { t: 'close', id: 1, src: '}{}' }]
+  const u = { kind: 'para', src: 'Step 2149 Tool Output', pieces } as never
+  const tr = [[2, 0, 0], [2, 1, 0], [0, '\u6B65\u9AA4 2149'], [3, 3], [1, 4], [0, ' \u5DE5\u5177\u8F93\u51FA'], [1, 6], [3, 7]]
+  it("an EMPTY row passes on the file's lines, and is still refused on v0's (there its ink is not ruled off the unit's lines)", () => {
+    const lu = rowsOf([[6, PH_FLAG.EMPTY, 'macro']])
+    expect(T.locatedWhole(lu, u, tr, { held: true })).toMatchObject({ ok: true })
+    expect(T.locatedWhole(lu, u, tr).why).toBe('empty')
+    // (a LOST row, as the maker writes an open ownership that owned nothing, its ink not known: refused as before)
+    expect(T.locatedWhole(rowsOf([[6, PH_FLAG.LOST, 'macro']]), u, tr, { held: true }).why).toBe('lost')
+  })
+  it('the piece is drawn as nothing, proven, and the unit is drawn, not left English', () => {
+    const lu = rowsOf([[6, PH_FLAG.EMPTY, 'macro']])
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(u, t.rects as never, [item('Step 2149 Tool Output', 12, 100, 10, 0) as never], new Map() as never, null, T.texParts(lu, [-1, -1, -1, -1, 4, -1, 6, -1], { use: 'lines', lines: t }) as never)
+    expect(prep.unproven).toBeUndefined()
+    expect(prep.get(6)).toMatchObject({ mode: 'none', text: '', proof: true, empty: true })
+    // (on v0's own reading of the unit, which the file does not locate: unproven, as before)
+    const v0 = L2.prepareUnit(u, t.rects as never, [item('Step 2149 Tool Output', 12, 100, 10, 0) as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, -1, -1, -1, 4, -1, 6, -1]) } as never)
+    expect(v0.unproven).toBe(6)
+  })
+  it('a text symbol, a space or a piece that sets nothing is drawn by its class whatever its row says', () => {
+    const lu = rowsOf([[1, PH_FLAG.EMPTY, 'macro'], [2, PH_FLAG.EMPTY, 'macro'], [3, PH_FLAG.EMPTY, 'macro']])
+    const sym = { kind: 'para', src: 'a b', pieces: [text('a '), ph('\\%'), ph('\\enspace'), ph('\\includegraphics{f.pdf}'), text(' b')] } as never
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(sym, t.rects as never, [item('a % b', 12, 100, 10, 0) as never], new Map() as never, null, T.texParts(lu, [-1, 1, 2, 3, -1], { use: 'lines', lines: t }) as never)
+    expect([1, 2, 3].map(k => [prep.get(k)?.mode, prep.get(k)?.text, (prep.get(k) as { empty?: boolean } | undefined)?.empty])).toEqual([['symbol', '%', undefined], ['none', ' ', undefined], ['none', '', undefined]])
+  })
+})
+
+describe("a placeholder's text drawn in its glyphs' fill, the file's (PR-C: 2608.16117's blue citations)", () => {
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  // "as shown by Vinayak and Kumar (2026) here": a natbib \citet in hyperref's colorlinks blue, found by its segments
+  const page = [...item('as shown by', 10, 100, 10, 0), ...item('Vinayak and Kumar (2026)', 70, 100, 10, 1), ...item('here', 200, 100, 10, 2)]
+  const u = { kind: 'para', src: 'as shown by here', pieces: [text('\u5982 '), ph('\\citet{vinayak}'), text(' \u6240\u793A')] } as never
+  const fileOf = (fill: number | null) => {
+    const lu = unitOf([[1, 10, 230, 100, 108, 97, 10, 0]], [[1, 0, [1, 69.5, 100, 190.5, 108, 97]]]) as unknown as { ph: Map<number, { kind: string; fill: number | null }> }
+    const row = lu.ph.get(1)
+    if (row) { row.kind = 'cite'; row.fill = fill }
+    return lu as never
+  }
+  const read = (lu: never) => {
+    const t = T.texRects(lu)
+    return L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+  }
+  const colourOf = (prep: never) => L2.tokensOf2(u, prep, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && (t as { k?: number }).k === 1 && /\S/.test(t.s)).map(t => (t.st as { color?: string }).color ?? null)
+  it("is drawn in its row's fill exactly where the file gives one colour, and in its run's where the fill is mixed or black", () => {
+    const blue = read(fileOf(0x0000ff))
+    expect(blue.get(1)?.mode).toBe('orig-text')
+    expect(new Set(colourOf(blue as never))).toEqual(new Set(['#0000ff']))
+    expect(new Set(colourOf(read(fileOf(-1)) as never))).toEqual(new Set([null]))
+    expect(new Set(colourOf(read(fileOf(null)) as never))).toEqual(new Set([null]))
+  })
+  it('and the drawing writes that fill as it is', () => {
+    const tokens = L2.tokensOf2(u, read(fileOf(0x0000ff)) as never, 'zh', BASE as never, DESIGNS as never, P as never, null, undefined, true)
+    const block = { page: 1, rects: [[1, 10, 97.85, 300, 106.83]], x0: 10, x1: 300, B: [100], exact: [true], sizes: [10], pitch0: 12, free: 0, indent: 0, after: 0, centred: false }
+    const L = L2.layoutUnit2(tokens, [block] as never, 10, P as never)
+    const svg = L2.svgOfUnit(L as never, 1, (x: number, y: number) => [x, 792 - y], 1, 0)
+    expect(svg).toContain('fill="#0000ff"')
+  })
+})
+
+describe("a colour run drawn in the fill TeX set it in, the layout file's `colours` row (PR-C)", () => {
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const open = (src: string, id = 1) => ({ t: 'open', id, src }), close = (id = 1) => ({ t: 'close', id, src: '}' })
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  // "see blue words [12] and then red ones": a \textcolor run holding a citation, then a \color switch
+  const page = [...item('see blue words', 10, 100, 10, 0), ...item('[12]', 90, 100, 10, 1), ...item('and then red ones', 120, 100, 10, 2)]
+  const u = { kind: 'para', src: 'see blue words and then red ones', pieces: [text('\u89C1 '), open('\\textcolor{blue!60!black}{'), text('\u84DD\u5B57 '), ph('\\cite{k}'), close(), text(' \u7136\u540E '), ph('\\color{red}'), text(' \u7EA2\u5B57')] } as never
+  const kOf = [-1, 1, -1, 3, 4, -1, 6, -1]
+  const fileOf = (colours: [number, number][], citeFill: number | null) => {
+    const lu = unitOf([[1, 10, 230, 100, 108, 97, 10, 0]], [[3, 0, [1, 89.5, 100, 110.5, 108, 97]]]) as unknown as { ph: Map<number, { kind: string; fill: number | null }>; colours: Map<number, number> }
+    const row = lu.ph.get(3)
+    if (row) { row.kind = 'cite'; row.fill = citeFill }
+    lu.colours = new Map(colours)
+    return lu as never
+  }
+  const coloursOf = (lu: never) => {
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, kOf, { use: 'lines', lines: t }) as never)
+    const tokens = L2.tokensOf2(u, prep as never, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && /\S/.test(t.s))
+    return tokens.map(t => [t.s, (t.st as { color?: string }).color ?? null])
+  }
+  it('each run in its row\'s fill exactly; the citation in it in the run\'s, which wins over its own fill; the switch to its group\'s end', () => {
+    const got = coloursOf(fileOf([[1, 0x000099], [6, 0xff0000]], 0x0000ff))
+    // (in order: see, blue words, the citation, and then, red words)
+    expect(got.map(([s]) => s).join('')).toBe('\u89C1\u84DD\u5B57[12]\u7136\u540E\u7EA2\u5B57')
+    const at = (from: number, to: number) => { let n = 0; return got.filter(([s]) => { const i = n; n += (s as string).length; return i >= from && i < to }).map(([, c]) => c) }
+    expect(at(0, 1).every(c => c === null)).toBe(true)
+    expect(at(1, 7).every(c => c === '#000099')).toBe(true)
+    expect(at(7, 9).every(c => c === null)).toBe(true)
+    expect(at(9, 11).every(c => c === '#ff0000')).toBe(true)
+  })
+  it('a colour piece with no row draws in the colour around it, never a guess from its name; a citation outside any run its own fill', () => {
+    const got = coloursOf(fileOf([], 0x0000ff))
+    expect(got.filter(([s]) => /[\u84DD\u7EA2]/.test(s as string)).map(([, c]) => c).every(c => c === null)).toBe(true)
+    // (no run's colour around it: the citation's own fill)
+    expect(got.filter(([s]) => /\d/.test(s as string)).map(([, c]) => c).every(c => c === '#0000ff')).toBe(true)
+  })
+  it('a black row inside a coloured run is black, written as such', () => {
+    const black = { kind: 'para', src: 'x', pieces: [open('\\textcolor{red}{'), text('\u7EA2 '), ph('\\color{black}'), text(' \u9ED1'), close()] } as never
+    const lu = fileOf([[0, 0xff0000], [2, 0]], null)
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(black, t.rects as never, [item('red black', 10, 100, 10, 0) as never], new Map() as never, null, T.texParts(lu, [0, -1, 2, -1, 4], { use: 'lines', lines: t }) as never)
+    const tokens = L2.tokensOf2(black, prep as never, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && /\S/.test(t.s))
+    expect(tokens.map(t => (t.st as { color?: string }).color)).toEqual(['#ff0000', '#000000'])
+  })
+  // (#407: a unit no layout holds, as a paper whose source does not compile, has no colour measured at all: there a base
+  // colour xcolor names is drawn as xcolor defines it; a unit the file holds draws a measured row or the colour around it)
+  const named = { kind: 'para', src: 'x', pieces: [open('\\textcolor{red}{'), text('\u7EA2 '), close(), text(' \u800C '), ph('\\color{cyan}'), text(' \u9752 '), ph('\\color{ForestGreen}'), text(' \u7EFF')] } as never
+  const namedColours = (parts: unknown) => {
+    const prep = L2.prepareUnit(named, [] as never, [item('red and cyan green', 10, 100, 10, 0) as never], new Map() as never, null, parts as never)
+    return L2.tokensOf2(named, prep as never, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && /\S/.test(t.s)).map(t => (t.st as { color?: string }).color ?? null)
+  }
+  it("no layout at all: a base colour by its name, as xcolor defines it (cyan its CMYK as PDF.js draws it); another name the colour around it", () => {
+    expect(namedColours(null)).toEqual(['#ff0000', null, '#00b9f2', '#00b9f2'])
+  })
+  it('a layout that holds the unit and no row for a piece: the colour around it; a row: the row, over the name', () => {
+    const lu = fileOf([], null), t = T.texRects(lu)
+    expect(namedColours(T.texParts(lu, [0, -1, -1, -1, 4, -1, 6, -1], { use: 'lines', lines: t }))).toEqual([null, null, null, null])
+    const rows = fileOf([[0, 0x123456], [4, 0x00ffff]], null), t2 = T.texRects(rows)
+    expect(namedColours(T.texParts(rows, [0, -1, -1, -1, 4, -1, 6, -1], { use: 'lines', lines: t2 }))).toEqual(['#123456', null, '#00ffff', '#00ffff'])
+  })
+})
+
 describe('a LOST text piece, drawn as the run of its unit\'s own characters that spells it (the soundness round, 2026-10-19)', () => {
   // 2609.26457's unit 24: the second of two \texttt{gemini 3 flash}, which TeX set whole on arXiv's page and the layout's own
   // compile broke over two lines, so that its glyphs were not all matched and its row is LOST; the unit was left English
@@ -921,8 +1061,10 @@ describe('a LOST text piece, drawn as the run of its unit\'s own characters that
     const tr = [[0, '\u4F7F\u7528 '], [1, 1], [0, ' \u8FD9\u91CC']]
     const one = (src: string, flags: number = PH_FLAG.LOST, kind = 'code') => T.locatedWhole(fileOf([L(100), L(88)], [[1, flags, [], kind]]), unit('a b', [text('\u4F7F\u7528 '), ph(src), text(' \u8FD9\u91CC')]), tr, { held: true })
     expect([TT, '\\url{http://x.org}', 'qianli@nwpu.edu.cn'].map(s => one(s).ok)).toEqual([true, true, true])
-    // (EMPTY: TeX set nothing for it; and without the file's lines, as 'ph' reads a unit, it is not proven)
-    expect(one(TT, PH_FLAG.EMPTY).why).toBe('empty')
+    // (EMPTY: TeX set nothing for it, drawn as nothing on the file's lines (emptyOf, the no-ink round) and refused without
+    // them; and a LOST one without the file's lines, as 'ph' reads a unit, is not proven)
+    expect(one(TT, PH_FLAG.EMPTY).ok).toBe(true)
+    expect(T.locatedWhole(fileOf([L(100), L(88)], [[1, PH_FLAG.EMPTY, [], 'code']]), unit('a b', [text('\u4F7F\u7528 '), ph(TT), text(' \u8FD9\u91CC')]), tr).why).toBe('empty')
     expect(T.locatedWhole(fileOf([L(100)], [lost]), unit(), tr).why).toBe('lost')
     // (a formula, a citation, a reference, a footnote's mark, a paper's macro, a superscript LOST: as before)
     for (const src of ['$x_i$', '\\cite{a}', '\\ref{a}', '\\footnotemark[1]', '\\ours{}', '\\textsuperscript{a}']) expect(one(src).why, src).toBe('lost')

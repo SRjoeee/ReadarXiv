@@ -1,5 +1,5 @@
 import {
-  encodeLayout, indexLayout, LABEL_KINDS, LAYOUT, type LayoutFile, type LayoutIndex, PH_KINDS, parseLayout, UNIT_KINDS,
+  encodeLayout, indexLayout, LABEL_KINDS, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, type LayoutIndex, PH_KINDS, parseLayout, UNIT_KINDS,
 } from '@/pdf-reader/engine/layout/file.mjs'
 
 // Layout files written in a test, made into an index through the real writer and parser (so that every unit a test lays is
@@ -24,7 +24,7 @@ const bottom = (l: LineSpec) => l.baseline - 0.25 * (l.size ?? 10)
 /** a layout file of these units on `pages` US Letter pages, written and parsed as a reader would get it */
 export function layoutOf(units: UnitDef[], pages = 2): LayoutIndex {
   const file: LayoutFile = {
-    schema: 4, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '1512.03385', version: 1, pages }, left: '',
+    schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs: '5.4.296', paper: { id: '1512.03385', version: 1, pages }, left: '',
     views: Array.from({ length: pages }, () => [0, 0, 612, 792]).flat(), fonts: ['NimbusRomNo9L-Regu'],
     units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null,
   }

@@ -4,10 +4,14 @@
  *  `ix1` across, where PDF.js gives its outline (outlineBox), else its font's declared ascent and descent and its advance */
 export interface Glyph {
   u: string; x0: number; x1: number; y: number; top: number; bottom: number; size: number; font: string; ix0: number; ix1: number
+  /** its fill colour, 0xRRGGBB (black 0), or NO_FILL for none (a pattern's, a transparent one); none given, NO_FILL */
+  fill?: number
   /** with `indices`: its text-showing operation's place among the page's own (-1 in an annotation's appearance), its
    *  place among that operation's glyphs, and whether its Unicode is blank */
   n?: number; k?: number; blank?: boolean
 }
+/** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
+export declare const NO_FILL: -1
 /** a glyph's outline box in em from its origin ([x0, y0, x1, y1], y up), [] for none drawn, null where PDF.js gives none */
 export declare function outlineBox(commonObjs: unknown, font: unknown, fontChar: unknown): number[] | null
 /** the operations read on a page at most: past it the page is capped */
@@ -44,10 +48,10 @@ export declare function unreadOf(ink: { rotated?: boolean; capped?: boolean; tim
  *  asked); `most` the largest size */
 export interface PackedGlyphs {
   n: number; x0: Float64Array; x1: Float64Array; y: Float64Array; top: Float64Array; bottom: Float64Array
-  ix0: Float64Array; ix1: Float64Array; size: Float64Array; font: Int32Array; u: string[]; most: number
+  ix0: Float64Array; ix1: Float64Array; size: Float64Array; font: Int32Array; u: string[]; fill: Int32Array; most: number
 }
 /** a column packGlyphs may keep */
-export type GlyphColumn = 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'ix0' | 'ix1' | 'size' | 'font' | 'u'
+export type GlyphColumn = 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'ix0' | 'ix1' | 'size' | 'font' | 'u' | 'fill'
 /** every column packGlyphs may keep, its default */
 export declare const GLYPH_COLUMNS: readonly GlyphColumn[]
 type PackOptions = { order?: readonly number[] | null; fontIds?: ((font: string) => number) | null }

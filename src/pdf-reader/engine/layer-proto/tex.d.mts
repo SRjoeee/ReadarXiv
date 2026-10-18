@@ -16,7 +16,14 @@ export declare function locatedWhole(lu: LayoutUnit | null, unit: Unit, trPieces
  *  layout file and the source's order (kOf), never the translation's pieces; empty where the two do not agree */
 export declare function displayCover(lu: LayoutUnit, unit: Unit, kOf: readonly number[]): Map<number, number[]>
 /** whether a placeholder sets no ink by the file: a text macro it holds no row for */
+/** each placeholder's fill by the file, by its piece index: 0xRRGGBB, MIXED_FILL (-1), or null */
+export declare function fillOf(lu: LayoutUnit | null, kOf: readonly number[] | null): (k: number) => number | null
+/** each colour piece's run's fill by the file, by its piece index: 0xRRGGBB, or null where the file has none */
+export declare function colourOf(lu: LayoutUnit | null, kOf: readonly number[] | null): (k: number) => number | null
 export declare function inklessOf(lu: LayoutUnit, kOf: readonly number[], p: { k: number; cls: string }): boolean
+/** whether a placeholder of the unit's is one TeX set no ink for by the file (EMPTY), of a class the layer draws ink for but a
+ *  text symbol: drawn as nothing on the file's lines */
+export declare function emptyOf(lu: LayoutUnit, kOf: readonly number[], p: { k: number; cls: string }): boolean
 /** LaTeX's forced line breaks: `\\` (starred, or with its optional space) and \newline */
 export declare const FORCED_BREAK: RegExp
 /** a forced break TeX set: the file's line after it, its frame's pitch, and the room TeX left between the two beyond it, in

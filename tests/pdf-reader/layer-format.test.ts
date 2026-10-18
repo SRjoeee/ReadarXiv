@@ -15,7 +15,7 @@ import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engi
 import { batchesOf, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
 import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
-import { encodeLayout, LAYOUT, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
+import { encodeLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import {
@@ -190,7 +190,7 @@ describe('mergeParts is the whole', () => {
     const merged = mergeParts(M.index, M.readParts)
     // the whole file by hand: the layout's fonts by first appearance (lines by unit id, then names), page 4 not planned
     const whole: LayoutFile = {
-      schema: 4, layout: LAYOUT, pdfjs: PDFJS, paper: { ...PAPER, pages: N }, left: '', views: VIEWS.flat(), fonts: ['CMR10', 'CMBX12'],
+      schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs: PDFJS, paper: { ...PAPER, pages: N }, left: '', views: VIEWS.flat(), fonts: ['CMR10', 'CMBX12'],
       units: [[0, 1, 9, 1, 1], [2, 0, 9, 0, 7], [3, 4, 9, 0, 1], [5, 4, 9, 0, 3]],
       lines: [
         [0, [1, 150, 460, 700, 712, 696, 17.28, 0]], [2, [1, 72, 540, 650, 657.5, 647.25, 10, 0, 2, 72, 300, 700, 710, 698, 10, 0]],

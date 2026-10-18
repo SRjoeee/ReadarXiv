@@ -18,6 +18,8 @@ export interface Params {
   /** the paper's \lineskip and \lineskiplimit, PDF units (the layout file's, TeX's): a line nearer the one before it than
    *  the limit is set the two's depth and height plus lineskip apart (breakLines); null: no line opens (the run's own) */
   lineskip?: readonly [number, number] | null
+  /** a section heading (run.mjs): set in fewer lines than the original's, its lines stand on the original's last ones (laidOut) */
+  lastLines?: boolean
   /** step 3: the CJK runs' tracking the fit's first state takes, in em; null: a face's size correction given back (run.mjs) */
   trackStart: number | null
   /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
@@ -124,6 +126,12 @@ export interface Prepared extends Map<number, Resolved> {
   /** part 4's source knows each placeholder's ink (a layout file's segments) over part 1's lines (the file's): a gap's piece
    *  none took is the unit's text */
   inkKnown?: boolean
+  /** each placeholder's fill by a source that knows it (tex.mjs fillOf), by piece index: what its rendering's text is drawn
+   *  in, 0xRRGGBB; MIXED_FILL or null, its run's colour */
+  fillOf?: ((k: number) => number | null) | null
+  /** each colour piece's run's fill by a source that knows it (tex.mjs colourOf), by piece index: what the run is drawn in,
+   *  0xRRGGBB, over a placeholder's own fill; null, the colour around it */
+  colourOf?: ((k: number) => number | null) | null
 }
 /** part 1 and part 2 as a source gives them */
 export interface UnitLines {
@@ -161,6 +169,10 @@ export interface UnitParts {
   /** where the unit's forced breaks end its lines (with part 1's lines, the file's): each break piece's index to the line
    *  set after it, by its index in the file (LineInfo.j) */
   breaks?: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
+  /** each placeholder's fill by the source (a layout file's row), by piece index: 0xRRGGBB, MIXED_FILL (-1) or null */
+  fillOf?: (k: number) => number | null
+  /** each colour piece's run's fill by the source (the layout file's `colours`), by piece index: 0xRRGGBB or null */
+  colourOf?: (k: number) => number | null
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it
@@ -178,6 +190,8 @@ type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number
 /** each block's displays TeX set with its short skip: those under a line of its own (`line`, lineInfo's `j`); mutates the blocks */
+/** a block's lines as the original sets them: its distinct baselines (a line its rectangles cut in two is one) */
+export declare function originalLines(b: { B: readonly number[] }): number
 export declare function shortSkipsTo(blocks: Block2[], skips: readonly { page: number; x0: number; x1: number; top: number; bottom: number; line: number }[], lineInfo: ReadonlyMap<string, LineInfo> | null | undefined): void
 /** of a line's size: how far before a display TeX's short skip asks the line over it to end (\predisplaysize) */
 export declare const PREDISPLAY: number
@@ -213,9 +227,11 @@ export declare function extendFirstLines(rects: Rect[], pageViews: readonly numb
 /** a block's lines by the measure TeX set each to, where it changed within the paragraph (a wrapped figure, \parshape,
  *  \hangindent): each line's key to its measure's [x0, x1], or null where the block is one measure */
 export declare function measuresOf(rects: readonly Rect[], keep?: ReadonlySet<string> | null): Map<string, [number, number]> | null
-export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null): (Block & { measures?: Map<string, [number, number]> | null })[]
+export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean): (Block & { measures?: Map<string, [number, number]> | null })[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
 /** the unit against its page, in parts: v0's, or `parts` another source gives (the per-unit reading's contract above) */
+/** a fill (0xRRGGBB) as the drawing writes it, `#rrggbb` */
+export declare const hexOf: (rgb: number) => string
 export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: CiteMap | null, deny?: ReadonlySet<string> | null, parts?: UnitParts | null): Prepared
 /** the unit's placeholders by piece index; `proven`: classed as a unit drawn under the proof is (phClassProven) */
 export declare function placeholdersOf(unit: Unit, proven?: boolean): Placeholder[]
@@ -266,7 +282,7 @@ export declare function restoreUnaccounted(erased: readonly number[][], px: ToDe
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
  *  is awaited before each measure (a face served in slices has the slice of the text by then) */
 export declare function warmFaces(to: string, cjk: boolean, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
-export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, lineskip?: readonly [skip: number, limit: number] | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null): Block2[]
+export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, lineskip?: readonly [skip: number, limit: number] | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean): Block2[]
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>

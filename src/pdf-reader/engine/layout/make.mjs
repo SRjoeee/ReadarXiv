@@ -27,21 +27,23 @@ import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, shown as shownText, unitText } from '../translate/mt.mjs'
 import { carrier as carrierFor, carrierOf, tokensOfMarks } from './carry.mjs'
-import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
-import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
 import { pagePlanOf } from './addon.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { alignOf } from './remove.mjs'
-import { asSet, classOf, destRect, followsOf, headEnd, layoutMarking, LINKS_MAX, linkablePiece, markAt, symbolText, vetoTwice } from './marks.mjs'
+import { asSet, classOf, colourPieceOf, destRect, followsOf, headEnd, layoutMarking, LINKS_MAX, linkablePiece, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { annotsOf, linkKindOf, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 
 /** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
 const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
+/** an ownership whose two points were both read (stream.mjs): the one in which nothing between them is no ink */
+const CLOSED = OWNED_HOW.indexOf('closed')
 
 /** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
 export const CARRY_MIN = 0.9
@@ -73,8 +75,11 @@ const BAND_DOWN = 0.45, BAND_UP = 0.95
 const SCRIPT_SIZE = 0.85
 /** a placeholder's ink raised or lowered: its baseline this share of its line's size off the line's */
 const SHIFT = 0.2
-/** a centred unit: every line's centre within CENTRE of its column's, one line at least shorter than SHORT of it */
+/** a centred unit where TeX does not tell its alignment: every line's centre within CENTRE of its column's; a centred name's line
+ *  shorter than SHORT of its column */
 const CENTRE = 2, SHORT = 0.9
+/** a one-line paragraph TeX set justified, centred by its own glue: off both edges of its column by more than INSET ems */
+const INSET = 2
 /** segments a placeholder may have: an inline one, a display */
 const SEGS_INLINE = 4, SEGS_DISPLAY = 64
 /** what a label reads as (the prototype's layer2.js LABEL): a mark of one to three digits or signs, an item's number or
@@ -390,6 +395,8 @@ function blank(units) {
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
     links: { tried: 0, placed: [], why: {} },
+    // (the colour pieces of the units the file holds, and those whose run's fill TeX wrote: marks.mjs readColours)
+    colours: { pieces: 0, evaluated: 0 },
     capped: [], timedOut: [], inkTimedOut: [], degraded: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
     // (the page stream's, the marked original read a page at a time: rows found after their unit's own ink was taken, and points
     // read twice after their unit's placeholders were matched; none on a paper read whole)
@@ -702,7 +709,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
 
   // ---------------------------------------------------------------- the units located on arXiv's tokens
-  let unitMarks = null, nameOf = null, carriedUnit = null, unplaced = null, linesTeX = null, anchors = null
+  let unitMarks = null, nameOf = null, carriedUnit = null, unplaced = null, linesTeX = null, alignTeX = null, anchors = null
+  /** each unit's colour rows, [unit, k, 0xRRGGBB] by k rising (the marks file's `colours`: the fill TeX set each colour piece's
+   *  run in), the file's `colours` for the units it holds */
+  let coloursBy = null
+  const coloursOf = list => { const by = new Map(); for (const r of list ?? []) (by.get(r[0]) ?? by.set(r[0], []).get(r[0])).push(r); return by }
+  /** a unit's colour pieces counted, and those with a row (stats.colours) */
+  const countColours = i => { for (const p of units[i]?.pieces ?? []) if (colourPieceOf(p)) stats.colours.pieces++; stats.colours.evaluated += coloursBy.get(i)?.length ?? 0 }
   /** the unit start marks by page: [key, mark, place], the place the key's first name's in the marks' order (the order the
    *  unit marks are met in), for the unit a babel name leads (leadAt) */
   let startsOn = new Map()
@@ -750,7 +763,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
-    linesTeX = new Map(marks.lines)
+    linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours)
     anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
     stats.ms.anchor = now() - t
   }
@@ -871,6 +884,16 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (e || c !== 2) return e
     const l = edgesBy(p, 0), r = edgesBy(p, 1)
     return l && r ? [l[0], r[1]] : null
+  }
+  /** a page of two columns' text block, as a line across both is centred on it: on the middle of the two columns' centres (an
+   *  abstract indented on its side moves its column's edges, not its centre: 1810.04805's first page, whose left column's
+   *  start its abstract's lines give), as wide as the left one's start to the right one's end; the pool's own where the two
+   *  are not both known */
+  const blockEdges = p => {
+    const l = edgesBy(p, 0), r = edgesBy(p, 1)
+    if (!l || !r) return edgesOf(p, 2)
+    const mid = (l[0] + l[1] + r[0] + r[1]) / 4, half = (r[1] - l[0]) / 2
+    return [mid - half, mid + half]
   }
 
   // ---------------------------------------------------------------- babel's names, by their two marks
@@ -1096,6 +1119,24 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   /** a found piece's matched glyphs, by its key: the twice bar's */
   const matchedBy = new Map()
+  /** a placeholder's fill as its row holds it: the colour more than half its inked glyphs are filled with, 0xRRGGBB, where
+   *  that is not black (PDF's default) nor one of no colour (a pattern's): null, none in the row; MIXED_FILL where no one
+   *  colour holds more than half (a link inside coloured prose, a formula of two colours) */
+  const fillOfGlyphs = gs => {
+    const n = new Map()
+    let all = 0
+    for (const [p, g] of gs) {
+      const P = ink[p]
+      if (!P?.fill || !/\S/u.test(P.u[g] ?? '')) continue
+      all++
+      n.set(P.fill[g], (n.get(P.fill[g]) ?? 0) + 1)
+    }
+    if (!all) return null
+    let best = null, most = 0
+    for (const [f, c] of n) if (c > most) { best = f; most = c }
+    if (2 * most <= all) return MIXED_FILL
+    return best === 0 || best === NO_FILL ? null : best
+  }
   /** unit i's placeholders, each found on arXiv's page (matched), LOST, EMPTY or JOINED, its rows' ink taken in */
   function phOf(one) {
     const { id: i, u, a, rows } = one
@@ -1428,8 +1469,15 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
       const n = e[2], items = itemsOfInk(e), rules = []
       for (let j = 3 + 5 * n; j < e.length; j += 5) rules.push({ page: e[j], x0: e[j + 1], y0: e[j + 2], x1: e[j + 3], y1: e[j + 4] })
-      // EMPTY only where its points hold nothing between them: the piece draws nothing
-      if (!items.length && !rules.length) { ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
+      // EMPTY only where both its points hold nothing between them: TeX set nothing there, and the piece draws nothing. One
+      // whose closing point was never read (an open ownership) that holds nothing says only that nothing stands before the
+      // next point or the text after it, which may be at its own glyph (2610.19159: a \textquotedbl{} whose opening point
+      // shares its glyph with another piece's, set late, the quote on arXiv's line): its ink is not known, LOST
+      if (!items.length && !rules.length) {
+        if (e[1] !== CLOSED) { lost('open, nothing owned'); continue }
+        ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' })
+        continue
+      }
       // every owned glyph and rule carried to arXiv's PDF and matched there, or the piece is LOST
       let got = matcher.match(items, rules, at.get(name) ?? null, at.get(`${prefix}${i}.${k}b`) ?? null)
       // (a reference or a citation not found by its own glyphs: by its links, the link-anchor locator, where ours has any)
@@ -1526,6 +1574,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         row.push(s.page, x0, Math.min(viewAt(s.page)[3], Math.max(viewAt(s.page)[1], r2(s.base))), x1, top, bottom)
         if (cls === 'display') keep(s.page, [x0, bottom, x1, top])
       }
+      // (its glyphs' fill, the row's last number where it is not black: a link's colour, colorlinks' cite blue)
+      const fill = fillOfGlyphs(gs)
+      if (fill !== null) row.push(fill)
       const key = `${i}.${k}`
       matchedBy.set(key, gs)
       for (const [p, g] of gs) foundGs.add(`${p}|${g}`)
@@ -2058,17 +2109,26 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const below = Math.min(H, Math.max(0, r2(lastRow.bottom - (Number.isFinite(next) ? next : view[1] + FOOT))))
       frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
     }
-    // flags: centred where every line's centre is its column's and one line at least is short of it; the first line from
-    // its label on (a caption's "Figure 1." centred with its text)
-    let centred = rows.length > 0, short = false
+    // flags: centred as TeX set the unit's paragraph, where the marked original's log tells it (marks.mjs readAlign: its
+    // \leftskip, \rightskip and \parfillskip when it ended; the author's own alignment). Where it does not (a caption
+    // \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a cell): centred where
+    // every line's centre is its column's and one line at least is short of it by an em; the first line from its label on
+    // (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the text block
+    // (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own). A justified one-line
+    // paragraph centred by its own glue (\noindent\hfill X\hfill\null, whose skips are the paper's) is centred where its
+    // line is on its column's middle and stands off both edges by more than INSET ems
+    const told = alignTeX.get(i)
+    let centred = rows.length > 0, short = false, inset = rows.length === 1
     rows.forEach((r, j) => {
       if (!centred) return
-      const x0 = j === 0 && labelAt.has(i) ? Math.min(r.x0, labelAt.get(i)) : r.x0
-      const e = edgesOf(r.page, columnOf(r.page, x0, r.x1))
+      const x0 = j === 0 && labelAt.has(i) ? Math.min(r.x0, labelAt.get(i)) : r.x0, em = r.size > 0 ? r.size : 10
+      const c = columnOf(r.page, x0, r.x1), e = c === 2 ? blockEdges(r.page) : edgesOf(r.page, c)
       if (!e || Math.abs((x0 + r.x1) / 2 - (e[0] + e[1]) / 2) > CENTRE) { centred = false; return }
-      if (r.x1 - x0 < SHORT * (e[1] - e[0])) short = true
+      if (e[1] - e[0] - (r.x1 - x0) > em) short = true
+      if (!(x0 - e[0] > INSET * em && e[1] - r.x1 > INSET * em)) inset = false
     })
-    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (centred && short ? UNIT_FLAG.CENTRED : 0)
+    const isCentred = told === undefined ? centred && short : told === 'c' || (told === 'j' && centred && inset)
+    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : 0)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
     one.out = { unit: [i, KIND.get(u.kind), depth, flags, u.pieces.length], lines, frames, erase, splits: fs.length > 1 }
   }
@@ -2137,6 +2197,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // the paper's \lineskip and \lineskiplimit as TeX gave them (marks.mjs readSkipProbe), which the layer opens a line by
       lineskip: marks.marking.lineskip ?? null,
     }
+    // each colour piece's run's fill (marks.mjs readColours), of the units it holds: a key only where one has a row
+    const outColours = outUnits.flatMap(r => coloursBy.get(r[0]) ?? [])
+    if (outColours.length) file.colours = outColours
+    for (const r of outUnits) countColours(r[0])
     stats.ph.texts = file.pageText.length
     Object.assign(stats.match, matcher.stats)
     // the placeholders and labels counted as the file holds them
@@ -2339,7 +2403,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // ---- the names in their order (the marks file's): each page's, each unit key's ([th]?<id>[se]), the babel names', the
     // draft frames'
     unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
-    carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); anchors = new Map()
+    carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours); anchors = new Map()
     const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours)
     const byName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
     const listed = mh ? mh.named.filter(([, page]) => Number.isInteger(page) && page >= 1 && page <= M).sort(byName) : [...at].map(([nm, m]) => [nm, m.page, m.x, m.y])
@@ -2514,7 +2578,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const last = (list, j = 0) => (list.at(-1)?.[j] === i ? [list.at(-1)] : [])
       const phs = [], texts_ = []
       for (let x = one.entries?.[0] ?? 0; x < (one.entries?.[1] ?? 0); x++) { phs.push(ph[x].row); if (ph[x].text) texts_.push([ph[x].row[0], ph[x].row[1], ph[x].text]) }
-      const mini = { fonts: [], units: [outUnits.at(-1)], lines: [outLines.at(-1)], frames: [outFrames.at(-1)], erase: last(outErase), ph: phs, labels: labelRows.has(i) ? [labelRows.get(i)] : [], headings: last(outHeadings), pageText: texts_, held: last(outHeld), names: [] }
+      const mini = { fonts: [], units: [outUnits.at(-1)], lines: [outLines.at(-1)], frames: [outFrames.at(-1)], erase: last(outErase), ph: phs, labels: labelRows.has(i) ? [labelRows.get(i)] : [], headings: last(outHeadings), pageText: texts_, held: last(outHeld), names: [], colours: coloursBy.get(i) ?? [] }
       unitRows.set(i, JSON.parse(JSON.stringify(layoutPartRows(mini))))
       // (admit's file of the whole holds none of them here: the stream's rows are unitRows')
       outUnits.length = 0; outLines.length = 0; outFrames.length = 0; outErase.length = 0; outHeld.length = 0; outHeadings.length = 0
@@ -2528,7 +2592,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     /** the rows K reads of a unit told (layer-proto/cut.mjs entriesOf: its unit row, its lines' pages, its placeholders'
      *  segments' pages and its labels' pages), one row a page: what the cut of the parts after its own reads of it */
     const stubOf = (i, r) => {
-      const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j < v.length; j += stride) set.add(v[j]); return [...set] }
+      // (whole strides alone, as cut.mjs pagesAt reads them: a placeholder row's fill, last, is no segment's page)
+      const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j + stride <= v.length; j += stride) set.add(v[j]); return [...set] }
       const lines = pagesIn(r.lines.map(e => e[1]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2]))]
       return {
         units: r.units, lines: lines.length ? [[i, lines.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
@@ -2659,6 +2724,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key] = []
       for (const i of ids) { const r = unitRows.get(i); for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key].push(...r[key]) }
       out.names = rows
+      // (each colour piece's run's fill: a key only where a unit of the part has one)
+      const colours = ids.flatMap(i => unitRows.get(i).colours ?? [])
+      if (colours.length) out.colours = colours
       return out
     }
     // ---- the babel names, each a task on the pages its marks are carried to and those of the unit it would lead (nameAt
@@ -2876,6 +2944,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (one.label) tally[0]++
       }
       stats.ph.texts = [...unitRows.values()].reduce((m, r) => m + r.pageText.length, 0)
+      for (const i of inFile) countColours(i)
       Object.assign(stats.match, matcher.stats)
     }
     return {
