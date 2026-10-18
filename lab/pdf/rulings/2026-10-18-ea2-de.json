@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-18",
+  "by": "the maintainer",
+  "on": "E-A2 (pull request 392): a line before a display TeX set short is cut at the display's x0 minus 2 em (a text line no longer runs into the formula), 2608.16117-de",
+  "quote": "\u5fb7\u8bed\u7248\u672c\u6309\u4f60\u5efa\u8bae \u9009a",
+  "english": "the German version: as you suggest, choose (a), 2026-10-18, relayed by the coordinator",
+  "measures": [
+    "frames with a blank line"
+  ],
+  "targets": [
+    "de"
+  ],
+  "scope": "de frames with a blank line 0.024 to 0.028, on 2608.16117-de only (a new pack output; the one-column paper), pages 19 and 23 and no other page of it, no other paper: p19 0 to 1 frame with a blank line (blank lines per frame .015 to .265, size .950 to .938), p23 0 to 1 (blank lines per frame .013 to .350, size .925 to .875, drawn lines over a display 1 to 0); the size cost is .925 to .875 on p23 and .900 to .875 on p17 and p18, where no frame gains a blank line. Pages 20 to 22 do not move.",
+  "why": "on p23 the base's last German line runs into the top of eq. (67)'s matrix and on p17 a line runs 8 pt past the left edge of eq. (64): a visible collision; the layer now ends such a line 2 em before the display, so the paragraph steps down one size step (0.025) and at the lower step has a slot to spare that stays empty before the display (p19: the paragraph ends one row early and the next starts at the margin). The cost is 3 to 5 percent smaller type in two paragraphs, one empty slot before a display and one extra break; a finer size search is a post-launch follow-up (issue 299)."
+}

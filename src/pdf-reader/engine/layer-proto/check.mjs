@@ -47,6 +47,19 @@ const fill = (mask, W, H, b, v = 1) => {
   for (let y = y0; y < y1; y++) mask.fill(v, y * W + x0, y * W + x1)
 }
 const r1 = x => Math.round(x * 10) / 10
+/** the kind of the brackets a rendering stands in, 'round' or 'square': its first character opens a pair that its last
+ *  closes, none closed before it ("(1)", "([3])"); else null ("eq. (1)", "(1)-(3)") */
+function enclosedBy(text) {
+  const s = text.trim(), kind = s[0] === '(' ? 'round' : s[0] === '[' ? 'square' : null
+  const [open, close] = kind === 'round' ? ['(', ')'] : ['[', ']']
+  if (!kind || s.length < 2 || s.at(-1) !== close) return null
+  let depth = 0
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === open) depth++
+    else if (s[i] === close && --depth === 0 && i < s.length - 1) return null
+  }
+  return depth === 0 ? kind : null
+}
 
 /**
  * The whole check. `placed`: main.js's placed units (each with prep, tokens, layout, blocks); `rows`: each page's
@@ -152,17 +165,26 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
         seq.push({ s, ph: true, k: t.crop.k, crop: true })
       } else if (t.s) seq.push({ s: t.s, ph: t.k !== undefined, k: t.k })
     }
-    // doubled brackets: a placeholder's own "(…)" inside the translation's brackets
+    // doubled brackets: a placeholder's own "(…)" inside the translation's brackets. Its own are a pair round the whole
+    // rendering, its first character opening and its last closing it ("(1)", "[32]"), read once a rendering, from its first
+    // item to its last (those of its k with only spaces between): the ")" that ends "eq. (1)" closes its number's "(", no pair
+    // round the rendering, which the translation's "\uFF08eq. (1)\uFF09" doubles nothing of (2609.26457's unit 17), nor does
+    // a pair round "(1)-(3)"
+    let past = -1
     seq.forEach((x, i) => {
-      if (!x.ph || !/^\s*[([]/.test(x.s)) return
-      const prev = seq.slice(0, i).reverse().find(y => /\S/.test(y.s) && y.k !== x.k)
-      const next = seq.slice(i + 1).find(y => /\S/.test(y.s) && y.k !== x.k)
-      const own = seq.filter(y => y.k === x.k).map(y => y.s).join('')
+      if (!x.ph || i <= past) return
+      let j = i
+      for (let q = i + 1; q < seq.length && (seq[q].k === x.k || (!seq[q].ph && !/\S/.test(seq[q].s))); q++) if (seq[q].k === x.k) j = q
+      past = j
+      const own = seq.slice(i, j + 1).filter(y => y.k === x.k).map(y => y.s).join('')
       // brackets of a kind: round in round, square in square ("\uFF08[32]\uFF09" is a citation in the translation's brackets, as
       // the compiled version sets it too)
-      const kind = /^\s*\(/.test(x.s) ? 'round' : 'square'
+      const kind = enclosedBy(own)
+      if (!kind) return
+      const prev = seq.slice(0, i).reverse().find(y => /\S/.test(y.s) && y.k !== x.k)
+      const next = seq.slice(j + 1).find(y => /\S/.test(y.s) && y.k !== x.k)
       const opens = kind === 'round' ? /[\uFF08(]\s*$/ : /[\uFF3B[]\s*$/, closes = kind === 'round' ? /^\s*[\uFF09)]/ : /^\s*[\uFF3D\]]/
-      if (prev && !prev.ph && opens.test(prev.s) && /[)\]]\s*$/.test(own) && next && !next.ph && closes.test(next.s)) {
+      if (prev && !prev.ph && opens.test(prev.s) && next && !next.ph && closes.test(next.s)) {
         const r = res.find(r => r.k === x.k)
         if (!B.brackets.some(b => b.unit === p.id && b.k === x.k)) B.brackets.push({ unit: p.id, kind: p.unit.kind, k: x.k, src: r?.src.slice(0, 60), mode: r?.mode, page: p.pages[0], shown: `${prev.s.slice(-2)}${own}${next.s.slice(0, 2)}` })
       }
