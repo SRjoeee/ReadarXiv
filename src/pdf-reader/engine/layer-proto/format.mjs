@@ -85,7 +85,9 @@ export const END_WHYS = Object.freeze([...FINAL_END_WHYS, ...BUILD_END_WHYS])
 /** whether an ending is final: no other build of the engine would end otherwise */
 export const isFinalEnd = why => FINAL_END_WHYS.includes(why)
 
-const SLACK = 1
+/** a left rectangle of a part lies within its page's view by this, PDF units (the layout file's slack): the producer's own
+ *  (pipeline/left-side.mjs) clips to the view what lies past it */
+export const RECT_SLACK = 1
 const SHA256 = /^[0-9a-f]{64}$/
 const BASE_MAX = 2 ** 31
 const ID_MAX = Number.MAX_SAFE_INTEGER
@@ -755,7 +757,7 @@ function partShape(v, { N, unitCount, atFrom }) {
       const o = 4 * (r[0] - a)
       for (let q = 1; q < 5; q++) {
         const x = r[q], up = (q - 1) % 2
-        if (!isNumber(x) || x < views[o + up] - SLACK || x > views[o + 2 + up] + SLACK) throw refuse(K, `${rp}[${q}]`, `not a number within its page's view (${kindOf(x)})`)
+        if (!isNumber(x) || x < views[o + up] - RECT_SLACK || x > views[o + 2 + up] + RECT_SLACK) throw refuse(K, `${rp}[${q}]`, `not a number within its page's view (${kindOf(x)})`)
         if (q >= 3 && x <= r[q - 2]) throw refuse(K, `${rp}[${q}]`, 'an empty box')
       }
     }
