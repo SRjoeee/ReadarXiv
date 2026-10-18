@@ -35,7 +35,7 @@ const seen = vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>
   g.OffscreenCanvas = class { width = 8; height = 8; getContext() { return ctxStub(this) } }
   ;(HTMLCanvasElement.prototype as unknown as { getContext: () => unknown }).getContext = function (this: HTMLCanvasElement) { return ctxStub(this) }
-  g.FontFace = class { family: string; status = 'loaded'; constructor(family: string) { this.family = family } load() { return Promise.resolve(this) } }
+  g.FontFace = class { family: string; constructor(family: string) { this.family = family } load() { return Promise.resolve(this) } }
   Object.defineProperty(document, 'fonts', { configurable: true, value: { add() {}, delete() {}, load: async () => [], check: () => true, ready: Promise.resolve() } })
   const out = { urls: [] as string[], opens: [] as Record<string, unknown>[], runs: [] as unknown[] }
   // (no hyphenation patterns: none is needed for these lines)

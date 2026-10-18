@@ -18,6 +18,8 @@ let fontStrings = new Set<string>()
 let rejects: (src: string) => boolean = () => false
 // WebKit: a load that matches a failed face and a loaded one fulfils with the loaded one, where Chromium rejects
 let fulfilsLoaded = false
+// a browser that loads only the faces of the first family of the list (a fallback family's face stays unloaded)
+let firstFamilyOnly = false
 
 /** the code points of a unicode-range descriptor, as [start, end] pairs */
 function rangesOf(descriptor: string | undefined): number[][] | null {
@@ -71,7 +73,7 @@ const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as 
 
 const g = globalThis as Record<string, unknown>
 beforeEach(() => {
-  faces = []; fontLoads = []; faceLoads = []; early = []; fontStrings = new Set(); rejects = () => false; fulfilsLoaded = false
+  faces = []; fontLoads = []; faceLoads = []; early = []; fontStrings = new Set(); rejects = () => false; fulfilsLoaded = false; firstFamilyOnly = false
   vi.resetModules()
   g.OffscreenCanvas = class { width = 8; height = 8; getContext() { return ctxStub(this) } }
   ;(HTMLCanvasElement.prototype as unknown as { getContext: () => unknown }).getContext = function (this: HTMLCanvasElement) { return ctxStub(this) }
@@ -96,7 +98,7 @@ beforeEach(() => {
       async load(font: string, text: string) {
         fontLoads.push({ font, text })
         const { weight, families } = parseFont(font)
-        const want = families.flatMap(fam => facesAt(fam, weight)).filter(f => [...text].some(ch => inRanges(rangesOf(f.unicodeRange), ch.codePointAt(0)!)))
+        const want = (firstFamilyOnly ? families.slice(0, 1) : families).flatMap(fam => facesAt(fam, weight)).filter(f => [...text].some(ch => inRanges(rangesOf(f.unicodeRange), ch.codePointAt(0)!)))
         const done = await Promise.allSettled(want.map(f => (f as unknown as { load(): Promise<unknown> }).load()))
         if (fulfilsLoaded) return want.filter(f => f.status === 'loaded')
         if (done.some(d => d.status === 'rejected')) throw new Error('NetworkError')
@@ -313,6 +315,32 @@ describe('a slice that does not load', () => {
     await run.until(1)
     expect(run.skipped).toEqual([])
     expect(run.stats.map(r => r.id)).toEqual([0, 1, 2])
+  })
+
+  // (a face never selected by the load is no failure: a fallback family's face the browser did not need, or another weight's)
+  const roleSet = async (bold: boolean, cls: 'latin' | 'cjk') => {
+    const F = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
+    F.setRoleFaces('zh', 'times', { group: 'shs-sc', kai: null, light: [] } as never)
+    return { set: F.roleFaceSet({ faceSources: slicesOfAll }), face: F.faceOf({ fam: 'serif', design: 'times', bold, italic: false, caps: false } as never, cls, 'zh') }
+  }
+  it('does not fail a unit whose primary face loaded because a fallback face the load did not select stays unloaded', async () => {
+    fulfilsLoaded = true; firstFamilyOnly = true
+    const { set, face } = await roleSet(false, 'latin')
+    expect(face.ids!.length).toBeGreaterThan(1)
+    expect(await set.check([{ face, text: 'abc' }] as never)).toBeNull()
+    expect(faces.some(f => f.status === 'unloaded')).toBe(true)
+  })
+  it('does not fail a bold unit for the regular CJK body, which the load did not select once a bold CJK face is declared', async () => {
+    fulfilsLoaded = true
+    rejects = src => src.includes('shs-sc-regular-2.woff2')
+    const { set, face } = await roleSet(true, 'latin')
+    const cjkBold = (await roleSet(true, 'cjk')).face, cjkRegular = (await roleSet(false, 'cjk')).face
+    // U+2014 is in the regular body's slice 0x2000, which fails; the bold CJK face is declared by its own run
+    expect(await set.check([{ face: cjkBold, text: '\u6c49' }] as never)).toBeNull()
+    expect(await set.check([{ face: cjkRegular, text: '\u2014' }] as never)).toEqual({ why: 'face' })
+    expect(faces.some(f => f.url.includes('shs-sc-regular-2.woff2') && f.status === 'error')).toBe(true)
+    expect(face.ids!).toContain('shs-sc-regular')
+    expect(await set.check([{ face, text: 'abc\u2014' }] as never)).toBeNull()
   })
 
   it('keeps a failed FontFace for the run it failed in, and lets it go before the next open, which declares it again', async () => {

@@ -88,6 +88,17 @@ const SLICE_URL = /^[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+$/
 /** the FontFaces added to document.fonts, once each, by face, file and code points: every run over the same page, or the
  *  next paper's, finds them there (the browser keeps what they loaded) */
 const added = new Map()
+/** whether `face` is the one of its family and style that a font of `weight` selects among the declared faces (CSS's order:
+ *  the weight itself, then, from 400 to 500, up to 500 and then lighter, below 400 lighter and then heavier, above 500
+ *  heavier and then lighter) */
+function selected(face, weight) {
+  const mine = [...added.values()].filter(f => f.family === face.family && f.style === face.style).map(f => Number(f.weight))
+  const w = Number(face.weight)
+  if (!mine.includes(w)) return false
+  const up = mine.filter(x => x > weight).sort((a, b) => a - b), down = mine.filter(x => x < weight).sort((a, b) => b - a)
+  const order = mine.includes(weight) ? [weight] : weight > 500 ? [...up, ...down] : weight < 400 ? [...down, ...up] : [...up.filter(x => x <= 500), ...down, ...up]
+  return order[0] === w
+}
 const hex = n => n.toString(16).toUpperCase()
 /** a slice's unicode-range descriptor from its [start, end] pairs */
 const unicodeRangeOf = ranges => {
@@ -209,13 +220,14 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
       const missing = need.filter(ch => !canDrawIn(ch, lists))
       if (missing.length) return { why: 'served', missing: missing.slice(0, 8).map(ch => ch.codePointAt(0)) }
     }
-    return { font, fresh, need, got }
+    return { font, fresh, need, got, weight: face.weight }
   }
-  /** whether a face that holds a glyph `v` asks is not loaded, now that its load has settled. The promise of
-   *  document.fonts.load is not the verdict: a browser that has seen a face fail (on an earlier character) fulfils a later
-   *  load that matches it with just the faces that did load. A face still unloaded counts as failed, and a failed one
-   *  stays failed, so the answer for a unit does not depend on which unit asked first */
-  const unloaded = v => v.got.some(t => t?.faces.some((f, n) => f.status !== 'loaded' && v.need.some(ch => t.ranges[n] === null || canDrawIn(ch, [t.ranges[n]]))))
+  /** whether the face the browser selects for a glyph of `v` (the declared face of its family and style nearest the weight
+   *  asked, by CSS's order) is one that failed. The promise of document.fonts.load is not the verdict: a browser that has seen
+   *  a face fail (on an earlier character) fulfils a later load that matches it with just the faces that did load. A face
+   *  never selected (a fallback family's, another weight's) stays unloaded and is no failure, only an errored one is, and an
+   *  errored one stays errored, so the answer for a unit does not depend on which unit asked first */
+  const errored = v => v.got.some(t => t?.faces.some((f, n) => f.status === 'error' && selected(f, v.weight) && v.need.some(ch => t.ranges[n] === null || canDrawIn(ch, [t.ranges[n]]))))
   return {
     async check(runs) {
       const plan = []
@@ -227,7 +239,7 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
       const results = await Promise.allSettled(plan.map(async v => document.fonts.load(v.font, v.fresh)))
       let failed = false
       results.forEach((r, n) => {
-        if (r.status === 'fulfilled' && !unloaded(plan[n])) for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
+        if (r.status === 'fulfilled' && !errored(plan[n])) for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
         else failed = true
       })
       return failed ? { why: 'face' } : null

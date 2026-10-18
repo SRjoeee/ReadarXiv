@@ -48,7 +48,7 @@ const g = globalThis as Record<string, unknown>
 beforeAll(() => {
   g.OffscreenCanvas = class { width = 8; height = 8; getContext() { return ctxStub(this) } }
   ;(HTMLCanvasElement.prototype as unknown as { getContext: () => unknown }).getContext = function (this: HTMLCanvasElement) { return ctxStub(this) }
-  g.FontFace = class { family: string; status = 'loaded'; constructor(family: string) { this.family = family } load() { return Promise.resolve(this) } }
+  g.FontFace = class { family: string; constructor(family: string) { this.family = family } load() { return Promise.resolve(this) } }
   Object.defineProperty(document, 'fonts', { configurable: true, value: { add() {}, delete() {}, load: async () => [], check: () => true, ready: Promise.resolve() } })
   g.fetch = async () => ({ ok: false, json: async () => null })
 })
