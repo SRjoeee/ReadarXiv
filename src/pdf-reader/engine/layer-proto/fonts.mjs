@@ -88,16 +88,17 @@ const SLICE_URL = /^[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+$/
 /** the FontFaces added to document.fonts, once each, by face, file and code points: every run over the same page, or the
  *  next paper's, finds them there (the browser keeps what they loaded) */
 const added = new Map()
-/** whether `face` is the one of its family and style that a font of `weight` selects among the declared faces (CSS's order:
- *  the weight itself, then, from 400 to 500, up to 500 and then lighter, below 400 lighter and then heavier, above 500
- *  heavier and then lighter) */
-function selected(face, weight) {
-  const mine = [...added.values()].filter(f => f.family === face.family && f.style === face.style).map(f => Number(f.weight))
-  const w = Number(face.weight)
-  if (!mine.includes(w)) return false
-  const up = mine.filter(x => x > weight).sort((a, b) => a - b), down = mine.filter(x => x < weight).sort((a, b) => b - a)
-  const order = mine.includes(weight) ? [weight] : weight > 500 ? [...up, ...down] : weight < 400 ? [...down, ...up] : [...up.filter(x => x <= 500), ...down, ...up]
-  return order[0] === w
+/** the code points of each added FontFace as [start, end] pairs, null for a whole file (every character) */
+const rangesOf = new WeakMap()
+/** whether a face of `family` and `style` that a font of `weight` selects for `ch` has failed: among the declared faces
+ *  whose range holds `ch`, those of the weight CSS picks (the weight itself, then, from 400 to 500, up to 500 and then
+ *  lighter, below 400 lighter and then heavier, above 500 heavier and then lighter) */
+function selectedFailed(family, style, ch, weight) {
+  const mine = [...added.values()].filter(f => f.family === family && f.style === style && (rangesOf.get(f) === null || canDrawIn(ch, [rangesOf.get(f)])))
+  const ws = mine.map(f => Number(f.weight))
+  const up = ws.filter(x => x > weight).sort((x, y) => x - y), down = ws.filter(x => x < weight).sort((x, y) => y - x)
+  const pick = ws.includes(weight) ? weight : weight > 500 ? [...up, ...down][0] : weight < 400 ? [...down, ...up][0] : [...up.filter(x => x <= 500), ...down, ...up][0]
+  return mine.some(f => Number(f.weight) === pick && f.status === 'error')
 }
 const hex = n => n.toString(16).toUpperCase()
 /** a slice's unicode-range descriptor from its [start, end] pairs */
@@ -150,6 +151,7 @@ function sliceFace(F, url, ranges) {
     f = new FontFace(F.family, `url("${url}")`, { weight: String(F.weight), style: F.style, ...(ranges ? { unicodeRange } : {}) })
     document.fonts.add(f)
     added.set(key, f)
+    rangesOf.set(f, ranges)
   }
   return f
 }
@@ -175,16 +177,15 @@ function forgetFailed() {
 export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}` } = {}) {
   forgetFailed()
   const tables = new Map()
-  /** a face's table: null (not served) or { lists (its served ranges, as one sorted list), faces (its FontFaces), ranges (each
-   *  one's code points as [start, end] pairs, null for a whole file: every character) } */
+  /** a face's table: null (not served) or { lists (its served ranges, as one sorted list), faces (its FontFaces) } */
   const table = id => {
     let t = tables.get(id)
     if (!t) {
       t = (async () => {
         const F = FACES[id]
-        if (!faceSources) return { lists: [COVERAGE[id]], faces: [sliceFace(F, faceUrl(F.file), null)], ranges: [null] }
+        if (!faceSources) return { lists: [COVERAGE[id]], faces: [sliceFace(F, faceUrl(F.file), null)] }
         const slices = slicesOf(id, await faceSources(id))
-        return slices && { lists: [mergeRanges(slices.map(sl => sl.ranges))], faces: slices.map(sl => sliceFace(F, sl.url, sl.ranges)), ranges: slices.map(sl => sl.ranges) }
+        return slices && { lists: [mergeRanges(slices.map(sl => sl.ranges))], faces: slices.map(sl => sliceFace(F, sl.url, sl.ranges)) }
       })()
       tables.set(id, t)
     }
@@ -222,12 +223,14 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
     }
     return { font, fresh, need, got, weight: face.weight }
   }
-  /** whether the face the browser selects for a glyph of `v` (the declared face of its family and style nearest the weight
-   *  asked, by CSS's order) is one that failed. The promise of document.fonts.load is not the verdict: a browser that has seen
-   *  a face fail (on an earlier character) fulfils a later load that matches it with just the faces that did load. A face
-   *  never selected (a fallback family's, another weight's) stays unloaded and is no failure, only an errored one is, and an
-   *  errored one stays errored, so the answer for a unit does not depend on which unit asked first */
-  const errored = v => v.got.some(t => t?.faces.some((f, n) => f.status === 'error' && selected(f, v.weight) && v.need.some(ch => t.ranges[n] === null || canDrawIn(ch, [t.ranges[n]]))))
+  /** whether a face the load selects for a glyph of `v` has failed. The promise of document.fonts.load is not the verdict: a
+   *  browser that has seen a face fail (on an earlier character) fulfils a later load that matches it with just the faces
+   *  that did load. A face never selected (a fallback family's, another weight's) stays unloaded and is no failure, only an
+   *  errored one is, and an errored one stays errored, so the answer for a unit does not depend on which unit asked first */
+  const errored = v => {
+    const families = new Map(v.got.flatMap(t => (t ? t.faces : [])).map(f => [`${f.family}|${f.style}`, f]))
+    return v.need.some(ch => [...families.values()].some(f => selectedFailed(f.family, f.style, ch, v.weight)))
+  }
   return {
     async check(runs) {
       const plan = []

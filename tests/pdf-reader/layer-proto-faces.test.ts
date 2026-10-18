@@ -343,6 +343,23 @@ describe('a slice that does not load', () => {
     expect(await set.check([{ face, text: 'abc\u2014' }] as never)).toBeNull()
   })
 
+  it('fails a bold unit for the failed regular slice that holds its glyph, though a bold slice of another character is declared and loaded', async () => {
+    fulfilsLoaded = true
+    rejects = src => src.includes('shs-sc-regular-6.woff2')
+    // (the bold CJK face is served in one slice, U+5B57 alone; U+6C49 is in the regular body's slice 0x6000, which fails)
+    const sources = async (id: string) => (id === 'shs-sc-bold' ? [{ url: '/s/shs-sc-bold-5.woff2', ranges: [0x5b57, 0x5b57] }] : slicesOfAll(id))
+    const F = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
+    F.setRoleFaces('zh', 'times', { group: 'shs-sc', kai: null, light: [] } as never)
+    const set = F.roleFaceSet({ faceSources: sources })
+    const style = { fam: 'serif', design: 'times', bold: true, italic: false, caps: false } as never
+    expect(await set.check([{ face: F.faceOf(style, 'cjk', 'zh'), text: '\u5b57' }] as never)).toBeNull()
+    // (the regular body's slice has failed, in a run of its own)
+    expect(await set.check([{ face: F.faceOf({ ...(style as object), bold: false } as never, 'cjk', 'zh'), text: '\u6c49' }] as never)).toEqual({ why: 'face' })
+    const latin = F.faceOf(style, 'latin', 'zh')
+    expect(await set.check([{ face: latin, text: 'abc\u6c49' }] as never)).toEqual({ why: 'face' })
+    expect(await set.check([{ face: latin, text: 'abc\u5b57' }] as never)).toBeNull()
+  })
+
   it('keeps a failed FontFace for the run it failed in, and lets it go before the next open, which declares it again', async () => {
     rejects = src => src.includes('shs-sc-regular-6.woff2')
     const first = await open([['Alpha beta gamma', '\u6c49'], ['Delta epsilon zeta', '\u6c49']], { faceSources: slicesOfAll })
