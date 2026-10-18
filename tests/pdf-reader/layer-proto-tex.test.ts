@@ -877,3 +877,180 @@ describe("a cell whose citation wrapped onto the cell's next line, made by the m
     expect(T.texRects(lu as never).rects.map(r => [r[0], r[1], r[3]])).toEqual([[1, 72, 232], [1, 72, 132]])
   })
 })
+
+describe('a LOST text piece, drawn as the run of its unit\'s own characters that spells it (the soundness round, 2026-10-19)', () => {
+  // 2609.26457's unit 24: the second of two \texttt{gemini 3 flash}, which TeX set whole on arXiv's page and the layout's own
+  // compile broke over two lines, so that its glyphs were not all matched and its row is LOST; the unit was left English
+  const mono = { fam: 'mono', bold: false, italic: false, caps: false, known: false } as never
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const TT = '\\texttt{gemini 3 flash}'
+  const L = (y: number) => [1, 10, 200, y, y + 8, y - 3, 10, 0]
+  /** the unit in the file: its lines (each erased across, x 10 to 200, unless told), its rows [k, flags, segs, kind] */
+  type Row = [number, number, number[], string?]
+  const fileOf = (lines: number[][], rows: Row[], { erase = lines.map(l => [10, (l[3] ?? 0) - 3, 200, (l[3] ?? 0) + 8]), held = [] as number[] } = {}) => {
+    const lu = unitOf(lines, rows.map(([k, f, s]) => [k, f, s])) as unknown as { ph: Map<number, { kind: string }>; erase: Float64Array[]; held: number[] }
+    for (const [k, , , kind] of rows) { const row = lu.ph.get(k); if (row) row.kind = kind ?? 'code' }
+    lu.erase = erase.map(e => Float64Array.from(e))
+    lu.held = held
+    return lu as never
+  }
+  /** "using gemini 3 flash here" on line 0 (the piece's words in the typewriter face), "and so on" on line 1 */
+  const pageOf = (tt = 'gemini 3 flash', o: { at?: number; first?: object; line1?: string } = {}) => [
+    ...item('using', 10, 100, 10, 0), ...item(tt, 40, o.at ?? 100, 10, 1, mono).map((c, i) => (i === 0 ? { ...c, ...o.first } : c)), ...item('here', 120, 100, 10, 2),
+    ...item(o.line1 ?? 'and so on', 10, 88, 10, 3),
+  ]
+  const unit = (src = 'using here and so on', pieces = [text('\u4F7F\u7528 '), ph(TT), text(' \u8FD9\u91CC')]) => ({ kind: 'para', src, pieces }) as never
+  const lost: Row = [1, PH_FLAG.LOST, []]
+  const read = (u: never, lu: never, page: object[], kOf = [-1, 1, -1]) => {
+    const t = T.texRects(lu)
+    return L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, kOf, { use: 'lines', lines: t }) as never)
+  }
+  const realText = (r: { gap?: { chars: { ch: string; sep?: boolean; space?: boolean }[] } } | undefined) => (r?.gap?.chars ?? []).filter(c => !c.sep && !c.space && /\S/.test(c.ch)).map(c => c.ch).join('')
+
+  it('a text piece: a code or URL mark or a plain-text source, its argument literal; no citation, reference, mark, formula or macro', () => {
+    const yes = [TT, '\\url{http://x.org/a_b#c}', '\\path{a/b}', '\\verb|x y|', '\\lstinline!a!', '\\lstinline{a}', 'qianli@nwpu.edu.cn', '\\texttt{a--b}']
+    expect(yes.map(s => T.textPieceOf(s)?.text)).toEqual(['gemini 3 flash', 'http://x.org/a_b#c', 'a/b', 'x y', 'a', 'a', 'qianli@nwpu.edu.cn', 'a--b'])
+    // (TeX's own marks; an argument with a command, a group, math, a tie, a script outside verbatim; a ligature or OT1's
+    // substitute outside the typewriter face; \verb*, which shows its spaces; options a listing may restyle by)
+    const no = ['\\cite{x}', '\\ref{x}', '\\eqref{x}', '\\footnotemark[1]', '$x$', '\\begin{equation}x\\end{equation}', '\\ours{}', '\\textsuperscript{a}', '\\href{http://x}{y}',
+      '\\texttt{a\\_b}', '\\texttt{{a}}', '\\texttt{a~b}', '\\texttt{$x$}', '\\texttt{a_b}', '\\texttt{ }', '\\url{a~b}', 'a--b', "``a''", 'a<b', 'a"b', '\\verb*|a b|', '\\lstinline[language=C]{a}']
+    expect(no.filter(s => T.textPieceOf(s) !== null)).toEqual([])
+  })
+
+  it('locatedWhole passes a LOST code, URL or plain-text row with the file\'s lines, and still refuses the others', () => {
+    const tr = [[0, '\u4F7F\u7528 '], [1, 1], [0, ' \u8FD9\u91CC']]
+    const one = (src: string, flags: number = PH_FLAG.LOST, kind = 'code') => T.locatedWhole(fileOf([L(100), L(88)], [[1, flags, [], kind]]), unit('a b', [text('\u4F7F\u7528 '), ph(src), text(' \u8FD9\u91CC')]), tr, { held: true })
+    expect([TT, '\\url{http://x.org}', 'qianli@nwpu.edu.cn'].map(s => one(s).ok)).toEqual([true, true, true])
+    // (EMPTY: TeX set nothing for it; and without the file's lines, as 'ph' reads a unit, it is not proven)
+    expect(one(TT, PH_FLAG.EMPTY).why).toBe('empty')
+    expect(T.locatedWhole(fileOf([L(100)], [lost]), unit(), tr).why).toBe('lost')
+    // (a formula, a citation, a reference, a footnote's mark, a paper's macro, a superscript LOST: as before)
+    for (const src of ['$x_i$', '\\cite{a}', '\\ref{a}', '\\footnotemark[1]', '\\ours{}', '\\textsuperscript{a}']) expect(one(src).why, src).toBe('lost')
+    expect(T.locatedWhole(fileOf([L(100)], [[1, PH_FLAG.LOST, [], 'footnote']]), unit('a b', [text('\u4F7F\u7528 '), { t: 'nested' } as never, text(' \u8FD9\u91CC')]), tr, { held: true }).why).toBe('lost')
+  })
+
+  it("proves it by its run, drawn as that run's page text in the run's own face, the unit drawn", () => {
+    const prep = read(unit(), fileOf([L(100), L(88)], [lost]), pageOf())
+    expect(prep.unproven).toBeUndefined()
+    const r = prep.get(1) as { mode: string; text: string; proof: boolean; st: { fam: string } } | undefined
+    expect(r).toMatchObject({ mode: 'orig-text', text: 'gemini 3 flash', proof: true })
+    expect(r?.st.fam).toBe('mono')
+    expect(realText(prep.get(1) as never)).toBe('gemini3flash')
+    // (its characters the piece's, erased with their line: none left standing as an orphan or kept)
+    const keys = pageOf().filter(c => c.item === 1 && /\S/.test(c.ch)).map(c => `1|${c.item}|${c.k}`)
+    expect(new Set(keys.map(k => prep.cat.get(k)))).toEqual(new Set(['acc']))
+    // drawn in the typewriter face
+    const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+    const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+    const tokens = L2.tokensOf2(unit(), prep as never, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 0)
+    const own = tokens.filter(t => typeof t.s === 'string' && (t as { k?: number }).k === 1 && /\S/.test(t.s))
+    expect(own.map(t => t.s).join('')).toBe('gemini3flash')
+    expect(new Set(own.map(t => (t.st as { fam: string; design: string }).fam + '/' + (t.st as { design: string }).design))).toEqual(new Set(['mono/courier']))
+  })
+
+  it('refuses where no run spells it: another spelling, a character no Unicode stands for, its ink not erased with its line', () => {
+    const lu = fileOf([L(100), L(88)], [lost])
+    for (const tt of ['gemini 2 flash', 'Gemini 3 flash', 'gemini-3-flash', 'gemini 3']) expect(read(unit(), lu, pageOf(tt)).unproven, tt).toBe(1)
+    expect(read(unit(), lu, pageOf('gemini 3 flash', { first: { nu: true } })).unproven).toBe(1)
+    // (the line's erase rectangles leave the piece's ink: the removal would not take it, and drawn again it is doubled)
+    const gapped = fileOf([L(100), L(88)], [lost], { erase: [[10, 97, 36, 108, 119, 97, 200, 108], [10, 85, 200, 96]] })
+    expect(read(unit(), gapped, pageOf()).unproven).toBe(1)
+  })
+
+  it('refuses a run on a held line, of the source\'s own words, or in a found piece\'s segments; takes one on its own next line', () => {
+    // the piece's words on line 1, which is held (no source word: a display's row): kept as the original's, never the run
+    const page1 = [...item('using here', 10, 100, 10, 0), ...item('gemini 3 flash', 10, 88, 10, 1, mono)]
+    expect(read(unit('using here'), fileOf([L(100), L(88)], [lost], { held: [1] }), page1).unproven).toBe(1)
+    // the control: line 1 the unit's own (TeX set the piece there)
+    expect(read(unit('using here'), fileOf([L(100), L(88)], [lost]), page1).get(1)).toMatchObject({ mode: 'orig-text', text: 'gemini 3 flash' })
+    // the source writes those words itself: the alignment takes them, and the piece has no run of its own
+    expect(read(unit('using gemini 3 flash here and so on'), fileOf([L(100), L(88)], [lost]), pageOf()).unproven).toBe(1)
+    // another piece's found segments hold them
+    const pieces = [text('\u4F7F\u7528 '), ph(TT), text(' \u8FD9\u91CC '), ph('\\texttt{gemini 3 flash}')]
+    const both = fileOf([L(100), L(88)], [lost, [3, 0, [1, 39.5, 100, 110.5, 108, 97]]])
+    expect(read(unit(undefined, pieces), both, pageOf(), [-1, 1, -1, 3]).unproven).toBe(1)
+  })
+
+  it('two alike take two runs in the source\'s order; one run for two leaves the second unproven', () => {
+    const pieces = [text('\u4F7F\u7528 '), ph(TT), text(' \u548C '), ph(TT), text(' \u8FD9\u91CC')]
+    const twice = [...item('using', 10, 100, 10, 0), ...item('gemini 3 flash', 40, 100, 10, 1, mono), ...item('and', 115, 100, 10, 2), ...item('gemini 3 flash', 10, 88, 10, 3, mono), ...item('here', 85, 88, 10, 4)]
+    const lu = fileOf([L(100), L(88)], [lost, [3, PH_FLAG.LOST, []]])
+    const prep = read(unit('using and here', pieces), lu, twice, [-1, 1, -1, 3, -1])
+    expect(prep.unproven).toBeUndefined()
+    type Drawn = { gap: { chars: { yb: number; space?: boolean; sep?: boolean }[] } }
+    const lineOf = (p: typeof prep, k: number) => [...new Set((p.get(k) as Drawn).gap.chars.filter(c => !c.sep && !c.space).map(c => c.yb))]
+    expect([lineOf(prep, 1), lineOf(prep, 3)]).toEqual([[100], [88]])
+    // (the translation setting them the other way, its first the source's second: each takes its run by the source's order)
+    const swapped = read(unit('using and here', pieces), lu, twice, [-1, 3, -1, 1, -1])
+    expect([lineOf(swapped, 1), lineOf(swapped, 3)]).toEqual([[88], [100]])
+    // one run on the page for the two
+    const once = [...item('using', 10, 100, 10, 0), ...item('gemini 3 flash', 40, 100, 10, 1, mono), ...item('and here', 115, 100, 10, 2)]
+    expect(read(unit('using and here', pieces), lu, once, [-1, 1, -1, 3, -1]).unproven).toBe(3)
+    // unit 24's own: the first found by its segments, the second LOST, which takes the run after it
+    const found = fileOf([L(100), L(88)], [[1, 0, [1, 39.5, 100, 110.5, 108, 97]], [3, PH_FLAG.LOST, []]])
+    const u24 = read(unit('using and here', pieces), found, twice, [-1, 1, -1, 3, -1])
+    expect(u24.unproven).toBeUndefined()
+    expect(lineOf(u24, 3)).toEqual([88])
+  })
+
+  it('the removal takes the run\'s glyphs, and a URL\'s link is matched to the piece by the characters it is drawn from', async () => {
+    const { fileOwnership, glyphsOfChars, unitRemoval, unmappedOf } = await import('@/pdf-reader/engine/layer-proto/removal.mjs')
+    const LK = await import('@/pdf-reader/engine/layer-proto/links.mjs')
+    const URL_SRC = '\\url{http://x.org}'
+    const u = unit(undefined, [text('\u4F7F\u7528 '), ph(URL_SRC), text(' \u8FD9\u91CC')])
+    const lu = fileOf([L(100), L(88)], [[1, PH_FLAG.LOST, [], 'url']]) as unknown as { lines: Float64Array; erase: Float64Array[] }
+    const page = pageOf('http://x.org')
+    const prep = read(u, lu as never, page)
+    expect(prep.unproven).toBeUndefined()
+    expect(prep.get(1)).toMatchObject({ mode: 'orig-text', text: 'http://x.org' })
+    // the page's ink: a glyph under each character, as the add-on reads it
+    const glyphs = page.filter(c => /\S/.test(c.ch)).map(c => ({ u: c.ch, x0: c.x0, x1: c.x1, y: c.yb, top: c.yb + 7.5, bottom: c.yb - 2.2, size: 10, font: 'F', ix0: c.x0, ix1: c.x1, n: c.item, k: c.k }))
+    const ink = { glyphs, boxes: [], paths: [], shows: 5 } as never
+    const index = { unit: () => ({ ...lu, id: 1, kind: 'para' }), onPage: () => [1] } as never
+    const own = fileOwnership(index, 1, ink)
+    const charMap = glyphsOfChars(page as never, ink, 1)
+    const r = unitRemoval({ id: 1, page: 1, prep: prep as never, tex: { lu: lu as never, kOf: [-1, 1, -1] }, own, charMap, unmapped: unmappedOf(ink, charMap), ink, claimed: new Map(), fileDrawn: new Set([1]) })
+    const run = glyphs.flatMap((x, i) => (x.n === 1 ? [i] : []))
+    expect(run.length).toBe(12)
+    expect(run.every(i => r.glyphs.includes(i))).toBe(true)
+    // its link: the row LOST has no segments, and the piece's own characters (the run, as run.mjs linkUnit reads a target's
+    // gap) take it by geometry
+    const gap = new Set(((prep.get(1) as { gap: { chars: { page: number; item: number; k: number; sep?: boolean; space?: boolean }[] } }).gap.chars).filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.item}|${c.k}`))
+    const keys = page.filter(c => c.item === 1 && /\S/.test(c.ch)).map(c => `${c.item}|${c.k}`)
+    const a = { i: 0, rect: [40, 97, 100, 108], boxes: [[40, 97, 100, 108]], url: 'http://x.org', ov: 'http://x.org', border: null, g: { x: [], y: [], ch: [] }, g2: { x: keys.map(() => 0), y: keys.map(() => 0), ch: [], key: keys } }
+    const target = { ord: 1, k: 1, ...LK.linkKindOf(ph(URL_SRC) as never), single: true, gap, segs: null, draw: 'text' }
+    expect(LK.matchUnit({ cands: [{ q: 1, a }], targets: [target] } as never).groups.map(g => g.annots.map(c => c.tier))).toEqual([['geometry']])
+    // where the link's box holds more than the run (a bracket beside it): by its url, the one of its kind
+    const wider = { ...a, g2: { ...a.g2, key: [...keys, '0|0'], x: [...a.g2.x, 0], y: [...a.g2.y, 0] } }
+    expect(LK.matchUnit({ cands: [{ q: 1, a: wider }], targets: [target] } as never).groups.map(g => g.annots.map(c => c.tier))).toEqual([['url']])
+  })
+})
+
+describe("LaTeX's text symbols: one table for the maker and the layer (rules/text-symbols.mjs)", () => {
+  it('the layer reads the five 2610.19159 left English as their characters: text symbols, drawn as they are', async () => {
+    const five = { '\\textquotesingle{}': "'", '\\textquotedbl{}': '"', '\\textbackslash{}': '\\', '\\textasciicircum{}': '^', '\\textbar{}': '|' }
+    for (const [src, ch] of Object.entries(five)) {
+      expect(L2.texToText2(src), src).toBe(ch)
+      expect([L2.phClass2(src).cls, L2.phClassProven(src).cls, L2.textSymbol(src)], src).toEqual(['symbol', 'symbol', true])
+      const unit = { kind: 'para', src: 'as shown here', pieces: [{ t: 'text', s: '\u5982 ' }, { t: 'ph', src }, { t: 'text', s: ' \u6240\u793A' }] } as never
+      const r = L2.prepareUnit(unit, [[1, 10, 97.85, 145, 106.83]] as never, [item('as shown here', 10, 100, 10, 0) as never], new Map() as never, null, { proof: T.proofOf(null, null) } as never)
+      // (the caret too: no superscript's mark to take off)
+      expect(r.unproven, src).toBeUndefined()
+      expect(r.get(1), src).toMatchObject({ mode: 'symbol', text: ch, sup: false })
+    }
+  })
+  it("every symbol is its character to both; the layer's tables of commands inside a source agree where they know one", async () => {
+    const S = await import('@/pdf-reader/engine/rules/text-symbols.mjs')
+    const M = await import('@/pdf-reader/engine/layout/marks.mjs')
+    const L1 = await import('@/pdf-reader/engine/layer-proto/layer1.mjs')
+    // (the maker's own: the one table, its symbolText too)
+    expect(M.TEXT_SYMBOLS).toBe(S.TEXT_SYMBOLS)
+    expect(M.symbolText).toBe(S.symbolText)
+    for (const [cmd, ch] of Object.entries(S.TEXT_SYMBOLS)) {
+      expect([S.symbolText(cmd), S.symbolText(`${cmd}{}`), L2.texToText2(cmd), L2.texToText2(`${cmd}{}`)], cmd).toEqual([ch, ch, ch, ch])
+      expect([ch, ''], cmd).toContain(L1.texToText(cmd))
+      expect([ch, ''], cmd).toContain(L2.texToText2(`$${cmd}$`))
+    }
+    expect([S.symbolText('\\textbar{}x'), S.symbolText('\\ours'), S.symbolText(undefined)]).toEqual([null, null, null])
+  })
+})

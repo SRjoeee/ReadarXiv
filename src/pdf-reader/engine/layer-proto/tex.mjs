@@ -15,7 +15,7 @@
 // restore counts as accounted for, are the same keys whichever source a unit took.
 import { PH_FLAG } from '../layout/file.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropOfBox, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, resolutionFrom, scriptedOf, SHORT_SKIP } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropOfBox, displayTouched, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, resolutionFrom, scriptedOf, SHORT_SKIP } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -61,7 +61,11 @@ export function kOfPieces(unit, trPieces) {
  * 2026-10-08): it is kept where it stands, as its held lines are, and breaks the unit's text there. A later display of a
  * display group (PH_FLAG.JOINED) is found with its group's first display, whose segments hold its ink; a LOST piece the
  * file says lies outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) is found
- * with the file's lines (`held`) as drawn as nothing, its ink never erased (the maintainer's ruling of 2026-10-15, the p59 ruling's edge display). So a
+ * with the file's lines (`held`) as drawn as nothing, its ink never erased (the maintainer's ruling of 2026-10-15, the p59 ruling's edge display). A LOST
+ * text piece (textPieceOf: a placeholder whose plain text is its whole rendering) passes with the file's lines too
+ * (`held`): the file erases a unit line by line, so its ink, wherever on the unit's own lines TeX set it, goes with them,
+ * and the proof draws it from the run of the unit's characters that spells it, or leaves the unit the original's
+ * (proofOf, textRunsOf). An EMPTY one does not. So a
  * unit the file holds is drawn by the file, a piece by its own segments, wherever every piece of it is one the file
  * accounts for; any other LOST piece sends it to v0's reading, where no rendering of it can be proven (proofOf) and the
  * unit stays the original's.
@@ -84,6 +88,8 @@ export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = fals
     if (row.flags & PH_FLAG.OUTSIDE && held) continue
     if (row.flags & PH_FLAG.LOST || !row.segs.length) {
       if (cls === 'display' && held && (cover ??= displayCover(lu, unit, kOf)).has(i)) continue
+      // (a LOST text piece: its run of the unit's characters, proofOf's to find)
+      if (held && row.flags & PH_FLAG.LOST && p.t === 'ph' && textPieceOf(p.src)) continue
       return { ok: false, why: 'lost' }
     }
   }
@@ -453,6 +459,107 @@ function heldRendering(run, lines, uc) {
   return { text: chars.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars, held: [...keys], proof: true }
 }
 
+/** the commands whose one argument TeX sets in the typewriter face as its own characters: \texttt; and verbatim, \url
+ *  and \path (url.sty's, a character at a time), \lstinline in braces */
+const TYPEWRITER_ARG = /^\\texttt\s*\{([^{}]*)\}$/, VERBATIM_GROUP = /^\\(?:url|path|lstinline)\s*\{([^{}]*)\}$/
+/** \verb and \lstinline between two of a character: verbatim, in the typewriter face (not \verb*, which shows its spaces) */
+const VERBATIM_ARG = /^\\(?:verb|lstinline)([^A-Za-z\s*{])([^\n]*?)\1$/
+/** what no literal argument holds: a command, a group, math, a tie; and outside a verbatim one, the characters TeX reads as
+ *  math's scripts, a comment, an alignment tab or a parameter */
+const NOT_LITERAL = /[\\{}$~]/, NOT_LITERAL_TEXT = /[\\{}$~^_%&#]/
+/** what TeX sets as other characters than they are outside the typewriter face: a dash or quote ligature, and OT1's
+ *  substitutes (< > as ¡ ¿, " as a closing quote, | as a dash) */
+const NOT_ITSELF = /--|``|''|[<>"|]/
+
+/**
+ * A text piece (the soundness round of 2026-10-19): a placeholder whose plain text is its whole rendering, TeX setting its
+ * characters as they are written. A code or URL mark (\texttt, \verb, \lstinline, \url, \path) or a plain-text source (no
+ * command), its argument literal: no command, group, math or tie (nor, but verbatim, a script mark, a comment, an
+ * alignment tab or a parameter); outside the typewriter face (a plain-text source) no dash or quote ligature and none of
+ * OT1's substitutes. No citation, reference, footnote mark, formula, display, paper's macro or \textsuperscript is one.
+ * Returns { text } (its plain text, as written), or null.
+ */
+export function textPieceOf(src) {
+  if (typeof src !== 'string') return null
+  const tt = TYPEWRITER_ARG.exec(src), group = !tt && VERBATIM_GROUP.exec(src), delimited = !tt && !group && VERBATIM_ARG.exec(src)
+  const arg = tt ? tt[1] : group ? group[1] : delimited ? delimited[2] : src
+  if (!/\S/.test(arg) || (group || delimited ? NOT_LITERAL : NOT_LITERAL_TEXT).test(arg)) return null
+  // (a plain-text source, set in the text's face)
+  if (!tt && !group && !delimited && NOT_ITSELF.test(arg)) return null
+  return { text: arg }
+}
+
+/**
+ * The proof of the unit's LOST text pieces (textPieceOf, locatedWhole), on the file's lines: each is drawn as a run of the
+ * unit's leftover characters that spells its plain text, or its k is the answer (-1: none is LOST, or each has its run).
+ * Leftover: a character of the unit's own lines (none held or kept: a display's rows, a label) that is no source word the
+ * alignment matched, stands in no found piece's segments and no other rendering's characters. A run: leftover characters
+ * one after another in the unit's order, the spaces and line breaks between them aside, that spell the plain text (its
+ * white space aside), none of them one no Unicode of the file's stands for (pageChars2's `nu`), each inside an erase
+ * rectangle of its own line (the file's: what the removal takes). The pieces take their runs in the source's order, each
+ * after the one before, so that two alike take two. A piece so proven is drawn as the run's page text (`orig-text`, its
+ * face the run's: the typewriter's for \texttt), proven (`proof`). Where the unit's text holds no such run, TeX set the
+ * piece elsewhere (another unit's line, a held one, before the unit's start: its ink never erased, and drawn again it
+ * would be doubled), or as other characters than its source writes (a paper's own \texttt, a ligature): the unit stays
+ * the original's.
+ */
+function textRunsOf(lu, kOf, res, unit) {
+  const { LOST, EMPTY, OUTSIDE, JOINED } = PH_FLAG
+  const want = []
+  for (const r of res.values()) {
+    const p = r && r.k !== undefined ? unit.pieces[r.k] : null
+    if (p?.t !== 'ph' || !(kOf[r.k] >= 0)) continue
+    const row = lu.ph.get(kOf[r.k])
+    if (!row || !(row.flags & LOST) || row.flags & (EMPTY | OUTSIDE)) continue
+    const t = textPieceOf(p.src)
+    if (t) want.push({ r, ord: kOf[r.k], text: t.text.replace(/\s+/g, ' ').trim(), spell: t.text.replace(/\s+/g, '') })
+  }
+  if (!want.length) return -1
+  want.sort((a, b) => a.ord - b.ord)
+  const uc = res.uc ?? []
+  const real = c => !c.sep && !c.space && /\S/.test(c.ch)
+  const lineKey = c => `${c.page}|${c.rect.join()}`
+  const kept = new Set([...(res.keep ?? []), ...displayTouched(res, uc)])
+  const mine = new Set(want.map(w => w.r.k))
+  const taken = new Set((res.label?.chars ?? []).map(charKey))
+  for (const r of res.values()) if (r?.gap && !mine.has(r.k)) for (const c of r.gap.chars) if (real(c)) taken.add(charKey(c))
+  const found = []
+  for (const row of lu.ph.values()) if (!(row.flags & (LOST | EMPTY | JOINED)) && row.segs.length) found.push([segmentsOf(row.segs), row.kind === 'display'])
+  const erased = c => {
+    const e = lu.erase[res.lineInfo?.get(lineKey(c))?.j] ?? []
+    const x = (c.x0 + c.x1) / 2, y = c.yb + 0.3 * c.size
+    for (let q = 0; q + 3 < e.length; q += 4) if (x >= e[q] - 0.5 && x <= e[q + 2] + 0.5 && y >= e[q + 1] - 0.5 && y <= e[q + 3] + 0.5) return true
+    return false
+  }
+  const leftover = c => !res.matchedKeys?.has(charKey(c)) && !kept.has(lineKey(c)) && !taken.has(charKey(c)) && !found.some(([S, display]) => insideOf(S, c, display))
+  // (the run spelling `spell` from uc[i], its last character's index, or -1)
+  const runFrom = (i, spell) => {
+    let at = 0
+    for (let j = i; j < uc.length; j++) {
+      const c = uc[j]
+      if (!real(c)) continue
+      if (c.nu || !spell.startsWith(c.ch, at) || !leftover(c) || !erased(c)) return -1
+      at += c.ch.length
+      if (at === spell.length) return j
+    }
+    return -1
+  }
+  let from = 0
+  for (const w of want) {
+    let first = -1, last = -1
+    for (let i = from; i < uc.length && last < 0; i++) if (real(uc[i]) && w.spell.startsWith(uc[i].ch) && (last = runFrom(i, w.spell)) >= 0) first = i
+    if (last < 0) return w.r.k
+    const chars = uc.slice(first, last + 1)
+    const tally = new Map()
+    for (const c of chars) if (real(c) && c.st) tally.set(c.st, (tally.get(c.st) ?? 0) + 1)
+    const st = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0]
+    const { k, src, cls } = w.r
+    res.set(k, { mode: 'orig-text', text: w.text, sup: false, st, k, src, cls, gap: { text: w.text, chars, proof: true }, proof: true })
+    from = last + 1
+  }
+  return -1
+}
+
 /**
  * Part 5, the proof (layer2.mjs prepareUnit), for any unit the hybrid draws: the one place the hybrid's safe rule is held
  * (the math round's `unproven`, from its crops to every rendering; the maintainer's ruling of 2026-10-15). A placeholder
@@ -464,7 +571,9 @@ function heldRendering(run, lines, uc) {
  * - and where v0's reading found no rendering at all (its source's plain text, a citation as the page wrote it before)
  *   and its row is found, its segments on the pages shown: the rendering read from those segments as the file's own
  *   reading reads one (renderingOf; layer2.mjs resolutionFrom: a crop cut at its segment, page text standing in them),
- *   given the unit (`unit`) whose pieces say whether the translation sets its brackets.
+ *   given the unit (`unit`) whose pieces say whether the translation sets its brackets;
+ * - and on the file's lines (`textRuns`: texParts 'lines'), a LOST text piece (textPieceOf) by the run of the unit's own
+ *   leftover characters that spells its plain text, drawn as that run's page text (textRunsOf).
  * Where none does (its row LOST, EMPTY, JOINED or missing, the unit not in the file, `lu` null, or its pieces not the
  * file's, `kOf` null, or its segments holding none of the unit's characters), or the rendering is no page ink with no
  * found row to read it from (its source's plain text, a citation as the page wrote it before, a display drawn as nothing),
@@ -487,8 +596,10 @@ function heldRendering(run, lines, uc) {
  * letter or digit ($\sum_{\alpha}^{\beta}$, drawn "Σ_α^β" from its source) is no text symbol: a unit under the proof
  * reads it as 'other' (phClassProven), and it is proven as any formula is.
  */
-export function proofOf(lu, kOf, shown = Infinity) {
+export function proofOf(lu, kOf, shown = Infinity, { textRuns = false } = {}) {
   return (res, unit = null) => {
+    // (with the file's lines, `textRuns`: a LOST text piece is proven by its run of the unit's characters, textRunsOf)
+    if (textRuns && lu && kOf && unit) { const k = textRunsOf(lu, kOf, res, unit); if (k >= 0) return k }
     for (const r of res.values()) {
       if (!r) continue
       // (whatever proves where its ink is: page text is drawn as its characters read, and one no Unicode of the file's
@@ -561,7 +672,7 @@ export function proofOf(lu, kOf, shown = Infinity) {
  */
 export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = Infinity, lineskip = null }) {
   const parts = {
-    proof: proofOf(lu, kOf, shown),
+    proof: proofOf(lu, kOf, shown, { textRuns: use === 'lines' }),
     renderings({ unit, phs, uc, gaps, citeMap }) {
       const found = new Map(), joined = []
       let cover

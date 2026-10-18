@@ -38,9 +38,13 @@ export declare function shortSkipsOf(lu: LayoutUnit): (Segment & { line: number 
 export declare function renderingOf(segs: Float64Array, uc: readonly Char[], display: boolean): Gap | null
 /** part 5 for any unit the hybrid draws, the safe rule's one place: every rendering proven by the file (the file's own
  *  rendering, a crop cut from its placeholder's segment on its page, that segment's baseline its own, page text or kept
- *  ink inside its segments, and one v0 found none for read from its row's segments: `unit` given); the k of one nothing
+ *  ink inside its segments, and one v0 found none for read from its row's segments: `unit` given; with `textRuns`, the
+ *  file's lines, a LOST text piece by the run of the unit's leftover characters that spells it); the k of one nothing
  *  proves (its unit stays the original's), else -1 */
-export declare function proofOf(lu: LayoutUnit | null, kOf: readonly number[] | null, shown?: number): (out: Prepared, unit?: Unit | null) => number
+export declare function proofOf(lu: LayoutUnit | null, kOf: readonly number[] | null, shown?: number, o?: { textRuns?: boolean }): (out: Prepared, unit?: Unit | null) => number
+/** a text piece: a placeholder whose plain text is its whole rendering (a code or URL mark, or a plain-text source, its
+ *  argument literal): its plain text as written, or null */
+export declare function textPieceOf(src: string | undefined | null): { text: string } | null
 /** the unit's parts from the file: 'ph' its placeholders' renderings; 'lines' its lines and label too; extents 'tex' the
  *  file's erase rectangles; every use, the proof (proofOf) */
 export declare function texParts(lu: LayoutUnit, kOf: readonly number[], o: { use: 'ph' | 'lines'; lines?: TexLines | null; extents?: 'v0' | 'tex'; shown?: number; lineskip?: readonly [skip: number, limit: number] | null }): UnitParts
