@@ -1877,6 +1877,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!fileLines) b.indent = Math.max(b.indent, prep.label.x1 + 0.25 * s - b.x0)
       else if (prep.label.x1 > p.rects[0][1] + 0.1) b.indent = Math.max(b.indent, (prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s) - b.x0)
     }
+    // a section heading (not the paper's title or front matter) of several lines in one block: set in fewer lines, it stands on
+    // the original's last ones (layer2.mjs laidOut, P.lastLines). Where its class set its number before its first line, kept
+    // as the original's ink there, the number goes with it, its ink copied as the line's start (`numbered`, once it is laid)
+    const heading = p.unit.kind === 'heading' && !p.unit.title && !p.unit.front
+    const numbered = heading && !prep.lead && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
     // a first row TeX set on the line another unit's last row ends (a shared line, need.mjs rowLeadOf: a run-in heading's text,
     // a paragraph's part after the float that split it) starts where that unit's translation ends on the row, the original's
     // separation after it (`start`, slotsAt), or at the row's own start where that unit set no text there (shareOf): not where
@@ -1922,7 +1927,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     p.tokens = tokens
     p.prep = prep
     p.s = s
-    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: filed(p.id) ? LINESKIP : null, halfLead: edgesOf(p, prep) }
+    p.P = { ...P, leadBase: L2.leadOf(p.blocks, s, P), trackStart: P.trackStart ?? cjkAdvance(), lineskip: filed(p.id) ? LINESKIP : null, halfLead: edgesOf(p, prep), lastLines: heading && !numbered }
     // (no larger than its lines' room between the rules over and under them leaves its script's em box: clearanceOf)
     p.clear = clearanceOf(p, s)
     if (p.clear && p.clear.cap < 1) p.P.capScale = p.clear.cap
@@ -1940,6 +1945,21 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       p.P.growTo = 0
     }
     p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P)
+    // a numbered heading set in fewer lines than the original's: laid again on the original's last lines with its number as
+    // its first line's start, the number's own ink copied there (a crop: its face, its colour, the space its class set after
+    // it, as the original's) and erased where it was. Where that does not fit, or moves it nowhere, as it was
+    if (numbered && !p.layout.clipped && p.layout.lines.length < L2.originalLines(p.blocks[0])) {
+      const cs = prep.label.chars, b0 = p.blocks[0], start = b0.x0 + b0.indent
+      const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
+      const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: median(cs.map(c => c.yb)), text: prep.label.text }
+      const blocks = [{ ...b0, start: x0 + 0.4 }], nTokens = [{ crop, cw: x1 - x0, glue: false, w100: 0 }, ...tokens], PL = { ...p.P, lastLines: true }
+      const laid = L2.layoutUnit2(nTokens, blocks, s, PL)
+      if (!laid.clipped && laid.lines.at(-1).baseline < p.layout.lines.at(-1).baseline - 0.05) {
+        p.blocks = blocks; p.tokens = nTokens; p.P = PL; p.layout = laid
+        prep.label = { ...prep.label, drawn: prep.label.text }
+        for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
+      }
+    }
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)

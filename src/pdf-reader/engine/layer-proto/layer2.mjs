@@ -3008,15 +3008,16 @@ export function layoutUnit2(tokens, blocks, s, P) {
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }
-  return laidOut(last, s, P, tried)
+  return laidOut(last, s, P, tried, blocks)
 }
 
 /** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted; the lines TeX's rule
  *  opened (`opened`), and with no values for it (P.lineskip none) the lines that come nearer the one before them in their
  *  block than nothing, its foot over their top, and stay so (`unopened`: what the rule would have opened) */
-function laidOut({ r, st, f }, s, P, tried) {
+function laidOut({ r, st, f }, s, P, tried, blocks) {
   const clipped = r.rest < r.total
   P._compress = st.compress
+  if (P.lastLines && !clipped) toLastLines(r.lines, blocks, P.halfLead?.below, f)
   placeItems(r.lines, f, P)
   const count = t => (t.s ? [...t.s].length : t.crop ? 1 : 0)
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)
@@ -3037,8 +3038,37 @@ function laidOut({ r, st, f }, s, P, tried) {
 export function layoutAt(tokens, blocks, s, P, st) {
   work.fit++
   const f = s * st.scale
-  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1)
+  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1, blocks)
 }
+
+/**
+ * A heading its translation sets in fewer lines than the original's (P.lastLines, run.mjs: a section heading): its lines
+ * moved down onto the original's last ones, so that the room it frees falls above it, not between it and the text it heads
+ * (the owner, 2026-10-19: 1810.04805's "C.2 Ablation for Different Masking Procedures", two lines, its Chinese one, left a
+ * blank line before its paragraph; the coordinator's ruling: on the original's last baseline, past the page fill's floor,
+ * footFloorAt, which would have left 7.4 pt of C.2's 13.5 under it). The last line goes onto the original's last baseline,
+ * and every line above it as far down; each keeps its slot's measure (the first its start, where the heading's number is
+ * drawn with it: run.mjs). Never nearer the next line of its column (the original's room under its last line, `below`:
+ * P.halfLead, run.mjs edgesOf) than the size it is set at, `f`: the line's box clear of the next line's. Only a heading of
+ * one block (its lines one run of a column); a body paragraph is never moved
+ */
+function toLastLines(lines, blocks, below, f) {
+  if (blocks?.length !== 1 || !lines.length || lines.some(l => l.block !== 0)) return
+  const B = blocks[0].B
+  if (lines.length >= originalLines(blocks[0])) return
+  const last = Math.min(...B)
+  let by = last - lines.at(-1).baseline
+  if (Number.isFinite(below) && below < f) by += f - below
+  if (!(by < -0.05)) return
+  // (each line's target the original's line it now stands on, where it does: the record's drift reads it)
+  for (const l of lines) {
+    l.baseline += by
+    const t = B.findIndex(v => Math.abs(v - l.baseline) < 0.05)
+    l.target = t >= 0 ? t : null
+  }
+}
+/** a block's lines as the original sets them: its baselines, a line its rectangles cut in two (a formula, a gap) one */
+export const originalLines = b => new Set(b.B.map(v => Math.round(v * 100))).size
 
 // ---- a shared line (need.mjs rowLeadOf): a unit's last row on which TeX set another unit's first, which is laid from where
 // this one's translation ends there (run.mjs layout2's `start`)

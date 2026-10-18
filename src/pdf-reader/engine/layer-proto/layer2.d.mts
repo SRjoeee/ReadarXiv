@@ -18,6 +18,8 @@ export interface Params {
   /** the paper's \lineskip and \lineskiplimit, PDF units (the layout file's, TeX's): a line nearer the one before it than
    *  the limit is set the two's depth and height plus lineskip apart (breakLines); null: no line opens (the run's own) */
   lineskip?: readonly [number, number] | null
+  /** a section heading (run.mjs): set in fewer lines than the original's, its lines stand on the original's last ones (laidOut) */
+  lastLines?: boolean
   /** step 3: the CJK runs' tracking the fit's first state takes, in em; null: a face's size correction given back (run.mjs) */
   trackStart: number | null
   /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
@@ -178,6 +180,8 @@ type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number
 /** each block's displays TeX set with its short skip: those under a line of its own (`line`, lineInfo's `j`); mutates the blocks */
+/** a block's lines as the original sets them: its distinct baselines (a line its rectangles cut in two is one) */
+export declare function originalLines(b: { B: readonly number[] }): number
 export declare function shortSkipsTo(blocks: Block2[], skips: readonly { page: number; x0: number; x1: number; top: number; bottom: number; line: number }[], lineInfo: ReadonlyMap<string, LineInfo> | null | undefined): void
 /** of a line's size: how far before a display TeX's short skip asks the line over it to end (\predisplaysize) */
 export declare const PREDISPLAY: number
