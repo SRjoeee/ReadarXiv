@@ -161,12 +161,16 @@ function treeOf(pieces) {
  */
 function planOf(u, format) {
   const pieces = u.pieces
-  const ink = pieces.map(isInkless), hasInk = ink.includes(true)
-  const styled = pieces.some((p, k) => p.t === 'open' || p.t === 'close' || ink[k])
+  const ink = new Array(pieces.length)
+  let hasInk = false, styled = false
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]
+    if (p.t === 'ph') { ink[k] = isInkless(p); if (ink[k]) hasInk = styled = true } else if (p.t === 'open' || p.t === 'close') styled = true
+  }
   const root = styled ? treeOf(pieces) : null
-  const items = []
   const runs = formulaRuns(pieces)
   if (!root) {
+    const items = []
     for (let k = 0; k < pieces.length; k++) {
       if (pieces[k].t === 'text') { const last = items.at(-1); if (last?.t === 'text') { last.ks.push(k); last.joints.push(false) } else items.push({ t: 'text', ks: [k], joints: [false] }); continue }
       const last = runs.get(k) ?? k
@@ -175,182 +179,195 @@ function planOf(u, format) {
     }
     return { items, front: [], back: [], styled: false }
   }
-  // a formula run one leaf (its pieces are a stretch of one level: a pair breaks a run)
-  // a stretch of placeholders, some of them setting no ink, white space alone between them, one leaf too: the marker of
-  // the ones with ink carries the others in their place (2610.19159's `\smallskip \noindent\textbullet\ `, whose
-  // \noindent would else have gone after the translation, the \smallskip a marker before it)
-  const texts = new Array(pieces.length)
-  const textOf = k => (texts[k] ??= utf8(pieces[k].s))
-  const blankText = k => pieces[k].t === 'text' && blank(textOf(k))
-  const runsIn = node => {
-    const out = []
+  // (one state for the unit, read by the functions below: none of them is made anew for each unit)
+  const P = { pieces, ink, runs, hasInk, texts: new Array(pieces.length), format }
+  runsIn(P, root)
+  root.info = infoOf(P, root.seq)
+  spans(P, root)
+  if (format !== 'tags') flatOf(P, root)
+  const unit = { lead: [], end: [], seen: false }
+  const W = { P, items: [], stack: [unit], group: unit, sink: null, joint: false }
+  walk(W, root.seq)
+  return { items: W.items, front: unit.lead, back: unit.end, styled: true, texts: P.texts }
+}
+const textAt = (P, k) => (P.texts[k] ??= utf8(P.pieces[k].s))
+const blankAt = (P, k) => P.pieces[k].t === 'text' && blank(textAt(P, k))
+/** a formula run one leaf (its pieces are a stretch of one level: a pair breaks a run); and a stretch of placeholders,
+ *  some of them setting no ink, white space alone between them, one leaf too: the marker of the ones with ink carries
+ *  the others in their place (2610.19159's `\smallskip \noindent\textbullet\ `, whose \noindent would else have gone
+ *  after the translation, the \smallskip a marker before it) */
+function runsIn(P, node) {
+  const { pieces, ink, runs } = P
+  let out = node.seq
+  if (runs.size) {
+    out = []
     for (let i = 0; i < node.seq.length; i++) {
       const e = node.seq[i]
-      if (e.seq) { runsIn(e); out.push(e); continue }
+      if (e.seq) { runsIn(P, e); out.push(e); continue }
       const last = runs.get(e.k)
       if (last > e.k && node.seq[i + last - e.k]?.k === last) { out.push({ run: [e.k, last] }); i += last - e.k; continue }
       out.push(e)
     }
-    // (one pass: each stretch read once, from a placeholder to the last placeholder before text or a pair)
-    if (!hasInk) { node.seq = out; return }
-    const joined = []
-    const member = x => x.run || (x.k !== undefined && (pieces[x.k].t !== 'text' || blankText(x.k)))
-    for (let i = 0; i < out.length; i++) {
-      const e = out[i]
-      if (e.seq || (e.k !== undefined && pieces[e.k].t === 'text')) { joined.push(e); continue }
-      let j = i, end = i, inked = false, inkless = false
-      for (; j < out.length && member(out[j]); j++) {
-        const x = out[j]
-        if (x.k !== undefined && pieces[x.k].t === 'text') continue
-        end = j
-        if (x.run || !ink[x.k]) inked = true; else inkless = true
-      }
-      if (end > i && inked && inkless) joined.push({ run: [e.run?.[0] ?? e.k, out[end].run?.[1] ?? out[end].k] })
-      else if (end === i) joined.push(e)
-      else for (let x = i; x <= end; x++) joined.push(out[x])
-      i = end
+  } else for (const e of out) if (e.seq) runsIn(P, e)
+  // (one pass: each stretch read once, from a placeholder to the last placeholder before text or a pair)
+  if (!P.hasInk) { node.seq = out; return }
+  const joined = []
+  for (let i = 0; i < out.length; i++) {
+    const e = out[i]
+    if (e.seq || (e.k !== undefined && pieces[e.k].t === 'text')) { joined.push(e); continue }
+    let j = i, end = i, inked = false, inkless = false
+    for (; j < out.length; j++) {
+      const x = out[j]
+      if (!x.run && (x.k === undefined || (pieces[x.k].t === 'text' && !blankAt(P, x.k)))) break
+      if (x.k !== undefined && pieces[x.k].t === 'text') continue
+      end = j
+      if (x.run || !ink[x.k]) inked = true; else inkless = true
     }
-    node.seq = joined
+    if (end > i && inked && inkless) joined.push({ run: [e.run?.[0] ?? e.k, out[end].run?.[1] ?? out[end].k] })
+    else if (end === i) joined.push(e)
+    else for (let x = i; x <= end; x++) joined.push(out[x])
+    i = end
   }
-  runsIn(root)
-  const infoOf = seq => {
-    const info = { text: false, voids: false, letters: false }
-    for (const e of seq) {
-      if (e.off !== undefined) continue
-      if (e.run) { info.voids = true; continue }
-      if (e.k !== undefined) {
-        const p = pieces[e.k]
-        if (p.t === 'text') { const s = textOf(e.k); if (!blank(s)) info.text = true; if (/\p{L}/u.test(s)) info.letters = true } else if (!ink[e.k]) info.voids = true
-        continue
-      }
-      e.info ??= infoOf(e.seq)
-      info.text ||= e.info.text; info.voids ||= e.info.voids; info.letters ||= e.info.letters
+  node.seq = joined
+}
+/** what a pair holds: text that is no white space, placeholders with ink, letters */
+function infoOf(P, seq) {
+  const info = { text: false, voids: false, letters: false }
+  for (const e of seq) {
+    if (e.off !== undefined) continue
+    if (e.run) { info.voids = true; continue }
+    if (e.k !== undefined) {
+      if (P.pieces[e.k].t === 'text') { const s = textAt(P, e.k); if (!blank(s)) info.text = true; if (/\p{L}/u.test(s)) info.letters = true } else if (!P.ink[e.k]) info.voids = true
+      continue
     }
-    return info
+    e.info ??= infoOf(P, e.seq)
+    info.text ||= e.info.text; info.voids ||= e.info.voids; info.letters ||= e.info.letters
   }
-  root.info = infoOf(root.seq)
-  // same-style neighbours, one span
-  const headOf = n => {
-    const out = []
-    for (const e of n.seq) {
-      if (e.k !== undefined && ink[e.k]) { out.push(pieces[e.k].src); continue }
-      if (e.k !== undefined && pieces[e.k].t === 'text' && blank(textOf(e.k))) continue
-      break
+  return info
+}
+/** the switches at a pair's head, before its first text or placeholder with ink */
+function headOf(P, n) {
+  let out = ''
+  for (const e of n.seq) {
+    if (e.k !== undefined && P.ink[e.k]) { out += `${P.pieces[e.k].src}\u0001`; continue }
+    if (e.k !== undefined && blankAt(P, e.k)) continue
+    break
+  }
+  return out
+}
+// (only pairs that set a style merge: two links side by side to one address stay two)
+const setsStyle = (P, n) => (n.style ??= STYLE_OPEN.test(P.pieces[n.open].src ?? ''))
+const styleOf = (P, n) => (n.key ??= `${P.pieces[n.open].src}\u0000${headOf(P, n)}\u0000${P.pieces[n.close].src}`)
+/** same-style neighbours, one span */
+function spans(P, node) {
+  const out = []
+  for (let i = 0; i < node.seq.length; i++) {
+    const e = node.seq[i]
+    if (e.seq) spans(P, e)
+    if (!e.seq || !e.info.text || !setsStyle(P, e)) { out.push(e); continue }
+    let members = null, gaps = null
+    for (let j = i + 1, ws = []; j < node.seq.length; j++) {
+      const f = node.seq[j]
+      if (f.k !== undefined && blankAt(P, f.k)) { ws.push(f); continue }
+      if (!f.seq || !f.info?.text || !setsStyle(P, f) || styleOf(P, f) !== styleOf(P, e)) break
+      spans(P, f)
+      members ??= [e]; gaps ??= [[]]
+      members.push(f); gaps.push(ws); ws = []; i = j
     }
-    return out.join('\u0001')
+    if (!members) { out.push(e); continue }
+    const seq = []
+    members.forEach((m, j) => { if (j) seq.push({ off: members[j - 1].close }, ...gaps[j], { off: m.open }); seq.push(...m.seq) })
+    out.push({ open: e.open, close: members.at(-1).close, seq, info: { text: true, voids: members.some(m => m.info.voids), letters: members.some(m => m.info.letters) } })
   }
-  // (only pairs that set a style merge: two links side by side to one address stay two)
-  const setsStyle = n => (n.style ??= STYLE_OPEN.test(pieces[n.open].src ?? ''))
-  const styleOf = n => (n.key ??= `${pieces[n.open].src}\u0000${headOf(n)}\u0000${pieces[n.close].src}`)
-  const spans = node => {
-    const out = []
-    for (let i = 0; i < node.seq.length; i++) {
-      const e = node.seq[i]
-      if (e.seq) spans(e)
-      if (!e.seq || !e.info.text || !setsStyle(e)) { out.push(e); continue }
-      const key = styleOf(e), members = [e], gaps = [[]]
-      for (let j = i + 1, ws = []; j < node.seq.length; j++) {
-        const f = node.seq[j]
-        if (f.k !== undefined && pieces[f.k].t === 'text' && blank(textOf(f.k))) { ws.push(f); continue }
-        if (!f.seq || !f.info?.text || !setsStyle(f) || styleOf(f) !== key) break
-        spans(f)
-        members.push(f); gaps.push(ws); ws = []; i = j
-      }
-      if (members.length === 1) { out.push(e); continue }
-      const seq = []
-      members.forEach((m, j) => { if (j) seq.push({ off: members[j - 1].close }, ...gaps[j], { off: m.open }); seq.push(...m.seq) })
-      out.push({ open: e.open, close: members.at(-1).close, seq, info: { text: true, voids: members.some(m => m.info.voids), letters: members.some(m => m.info.letters) } })
-    }
-    node.seq = out
-  }
-  spans(root)
-  // where each pair's content lies in the unit's text (formulas and the like one character, OBJ), and its class (on
-  // markers: tags keep every pair that holds text)
+  node.seq = out
+}
+/** where each pair's content lies in the unit's text (formulas and the like one character, OBJ): `P.ranges`, and the
+ *  text and its edges (`P.flat`) its class is read in */
+function flatOf(P, root) {
   const parts = [], ranges = new Map()
   let at = 0
-  const flatOf = seq => {
+  const visit = seq => {
     for (const e of seq) {
       if (e.off !== undefined) continue
       if (e.run) { parts.push(OBJ); at++; continue }
-      if (e.k !== undefined) { const s = pieces[e.k].t === 'text' ? textOf(e.k) : ink[e.k] ? '' : OBJ; parts.push(s); at += s.length; continue }
+      if (e.k !== undefined) { const s = P.pieces[e.k].t === 'text' ? textAt(P, e.k) : P.ink[e.k] ? '' : OBJ; parts.push(s); at += s.length; continue }
       if (!e.info.text) { if (e.info.voids) { parts.push(OBJ); at++ } continue }
       const a = at
-      flatOf(e.seq)
+      visit(e.seq)
       ranges.set(e, [a, at])
     }
   }
-  if (format !== 'tags') flatOf(root.seq)
-  const flat = parts.join(''), first = flat.search(/\S/), word = flat.search(/[^\s\ufffc]/)
+  visit(root.seq)
+  const flat = parts.join('')
   let last = flat.length, lastWord = flat.length
   while (last > 0 && /\s/.test(flat[last - 1])) last--
-  while (lastWord > 0 && /[\s\ufffc]/.test(flat[lastWord - 1])) lastWord--
-  const solid = /\S/g
-  const nextSolid = b => { solid.lastIndex = b; return solid.exec(flat)?.[0] ?? '' }
-  // (a sentence's end is read in the last words before a place, its start in the first after it)
-  const WINDOW = 200
-  const classOf = e => {
-    // (an empty pair that sets more than a style, `\inv{}`, may print: one marker, where it stands)
-    if (!e.info.text) return e.info.voids || !setsStyle(e) ? 'group' : 'skeleton'
-    if (format === 'tags') return 'kept'
-    const [a, b] = ranges.get(e)
-    if (a <= first && b >= last) return 'enclose'
-    if (!setsStyle(e) || LINK.test(pieces[e.open].src ?? '')) return 'kept'
-    // (placeholders before its first word or after its last are the unit's edge: a cell's rule, a citation at the end)
-    const head = a <= word, tail = b >= lastWord, inside = flat.slice(Math.max(a, b - WINDOW), b), next = nextSolid(b)
-    const starts = head || endsSentence(flat.slice(Math.max(0, a - WINDOW), a))
-    // a run-in label at the unit's head ends with a colon, before one, or before a sentence that begins with no stop
-    // between (\textbf{Service Auto-Scaling} To accommodate)
-    const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
-    return starts && ends ? 'kept' : 'flat'
-  }
-  // the wire, and where each piece that does not go on it is put back: in its innermost kept group (the unit, a kept
-  // pair) after the open where it stands before the group's first content, else before the close; a flat pair's open,
-  // close and what it holds off the wire together, one block
-  const unit = { lead: [], end: [], seen: false }, stack = [unit]
-  let group = unit, sink = null, joint = false
-  const seen = () => { for (const g of stack) g.seen = true }
-  // (`joint`: something stood off the wire since the last text)
-  const off = k => { (sink ?? (group.seen ? group.end : group.lead)).push(k); joint = true }
-  const text = k => {
-    const last = items.at(-1)
-    if (last?.t === 'text') { last.ks.push(k); last.joints.push(joint) } else items.push({ t: 'text', ks: [k], joints: [false] })
-    joint = false
-    if (!blank(textOf(k))) seen()
-  }
-  const void_ = (slot, hide) => { items.push({ t: 'void', slot, hide }); seen(); joint = false }
-  const walk = seq => {
-    for (const e of seq) {
-      if (e.off !== undefined) { off(e.off); continue }
-      if (e.run) { void_(runSlot(pieces.slice(e.run[0], e.run[1] + 1)), true); continue }
-      if (e.k !== undefined) {
-        const p = pieces[e.k]
-        if (p.t === 'text') text(e.k)
-        else if (ink[e.k]) off(e.k)
-        else void_(p, false)
-        continue
-      }
-      const c = classOf(e)
-      if (c === 'skeleton') { for (let k = e.open; k <= e.close; k++) off(k); continue }
-      if (c === 'group') { void_(runSlot(pieces.slice(e.open, e.close + 1)), true); continue }
-      if (c === 'enclose') { off(e.open); walk(e.seq); off(e.close); continue }
-      if (c === 'flat') {
-        const block = [e.open], saved = sink
-        ;(sink ?? group.end).push(block)
-        sink = block; joint = true
-        walk(e.seq)
-        block.push(e.close); sink = saved; joint = true
-        continue
-      }
-      const g = { open: e.open, close: e.close, lead: [], end: [], seen: false, letters: e.info.letters, depth: stack.length }
-      items.push({ t: 'open', g }); seen()
-      const saved = [group, sink]
-      stack.push(g); group = g; sink = null; joint = false
-      walk(e.seq)
-      items.push({ t: 'close', g }); stack.pop(); [group, sink] = saved; joint = false
+  while (lastWord > 0 && /[\s￼]/.test(flat[lastWord - 1])) lastWord--
+  P.ranges = ranges
+  P.flat = { text: flat, first: flat.search(/\S/), word: flat.search(/[^\s￼]/), last, lastWord }
+}
+const SOLID = /\S/g
+const nextSolid = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.[0] ?? '' }
+// (a sentence's end is read in the last words before a place, its start in the first after it)
+const WINDOW = 200
+/** a pair's class on the wire (planOf) */
+function classOf(P, e) {
+  // (an empty pair that sets more than a style, `\inv{}`, may print: one marker, where it stands)
+  if (!e.info.text) return e.info.voids || !setsStyle(P, e) ? 'group' : 'skeleton'
+  if (P.format === 'tags') return 'kept'
+  const [a, b] = P.ranges.get(e), { text: flat, first, word, last, lastWord } = P.flat
+  if (a <= first && b >= last) return 'enclose'
+  if (!setsStyle(P, e) || LINK.test(P.pieces[e.open].src ?? '')) return 'kept'
+  // (placeholders before its first word or after its last are the unit's edge: a cell's rule, a citation at the end)
+  const head = a <= word, tail = b >= lastWord, inside = flat.slice(Math.max(a, b - WINDOW), b), next = nextSolid(flat, b)
+  const starts = head || endsSentence(flat.slice(Math.max(0, a - WINDOW), a))
+  // a run-in label at the unit's head ends with a colon, before one, or before a sentence that begins with no stop
+  // between (\textbf{Service Auto-Scaling} To accommodate)
+  const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
+  return starts && ends ? 'kept' : 'flat'
+}
+// the wire, and where each piece that does not go on it is put back: in its innermost kept group (the unit, a kept
+// pair) after the open where it stands before the group's first content, else before the close; a flat pair's open,
+// close and what it holds off the wire together, one block. `W.joint`: something stood off the wire since the last text
+const seenAll = W => { for (const g of W.stack) g.seen = true }
+const offWire = (W, k) => { (W.sink ?? (W.group.seen ? W.group.end : W.group.lead)).push(k); W.joint = true }
+function textItem(W, k) {
+  const last = W.items.at(-1)
+  if (last?.t === 'text') { last.ks.push(k); last.joints.push(W.joint) } else W.items.push({ t: 'text', ks: [k], joints: [false] })
+  W.joint = false
+  if (!blank(textAt(W.P, k))) seenAll(W)
+}
+const voidItem = (W, slot, hide) => { W.items.push({ t: 'void', slot, hide }); seenAll(W); W.joint = false }
+function walk(W, seq) {
+  const { pieces, ink } = W.P
+  for (const e of seq) {
+    if (e.off !== undefined) { offWire(W, e.off); continue }
+    if (e.run) { voidItem(W, runSlot(pieces.slice(e.run[0], e.run[1] + 1)), true); continue }
+    if (e.k !== undefined) {
+      const p = pieces[e.k]
+      if (p.t === 'text') textItem(W, e.k)
+      else if (ink[e.k]) offWire(W, e.k)
+      else voidItem(W, p, false)
+      continue
     }
+    const c = classOf(W.P, e)
+    if (c === 'skeleton') { for (let k = e.open; k <= e.close; k++) offWire(W, k); continue }
+    if (c === 'group') { voidItem(W, runSlot(pieces.slice(e.open, e.close + 1)), true); continue }
+    if (c === 'enclose') { offWire(W, e.open); walk(W, e.seq); offWire(W, e.close); continue }
+    if (c === 'flat') {
+      const block = [e.open], saved = W.sink
+      ;(W.sink ?? W.group.end).push(block)
+      W.sink = block; W.joint = true
+      walk(W, e.seq)
+      block.push(e.close); W.sink = saved; W.joint = true
+      continue
+    }
+    const g = { open: e.open, close: e.close, lead: [], end: [], seen: false, letters: e.info.letters, depth: W.stack.length }
+    W.items.push({ t: 'open', g }); seenAll(W)
+    const group = W.group, sink = W.sink
+    W.stack.push(g); W.group = g; W.sink = null; W.joint = false
+    walk(W, e.seq)
+    W.items.push({ t: 'close', g }); W.stack.pop(); W.group = group; W.sink = sink; W.joint = false
   }
-  walk(root.seq)
-  return { items, front: unit.lead, back: unit.end, styled: true, texts }
 }
 /** a plan's list of piece indices and blocks as the pieces, in order */
 const placed = (pieces, list, out = []) => { for (const x of list) if (Array.isArray(x)) placed(pieces, x, out); else out.push(pieces[x]); return out }
@@ -368,14 +385,15 @@ const refillOf = (pieces, kept) => kept.filter(([g]) => g.letters).sort(([a], [b
  *  space where a piece off the wire stood between two that each had one */
 function wireText(pieces, it, wire, esc, texts = null) {
   let out = ''
-  it.ks.forEach((k, j) => {
+  for (let j = 0; j < it.ks.length; j++) {
+    const k = it.ks[j]
     let s = (texts?.[k] ?? utf8(pieces[k].s)).replace(/\s+/g, ' ')
     if (k === 0) s = s.trimStart()
     if (k === pieces.length - 1) s = s.trimEnd()
     // (the wire's last character read only at a joint: reading it flattens the string the wire is being built as)
     if (it.joints[j] && s.startsWith(' ') && /\s/.test((out || wire).at(-1) ?? '')) s = s.slice(1)
     out += esc(s)
-  })
+  }
   return out
 }
 
