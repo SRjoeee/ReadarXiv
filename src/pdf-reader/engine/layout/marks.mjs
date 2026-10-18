@@ -751,7 +751,7 @@ const PRINT_LINE = 79
  * joined back
  */
 export function readColours(log) {
-  const lines = lastTexLog(typeof log === 'string' ? log : '').split('\n'), seen = new Map()
+  const lines = lastTexLog(typeof log === 'string' ? log : '').split('\n'), seen = new Map(), twice = new Set()
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i]
     if (!line.startsWith('AXT-COLOUR ')) continue
@@ -759,10 +759,12 @@ export function readColours(log) {
     const m = COLOUR_LINE.exec(line)
     if (!m) continue
     const key = `${m[1]}.${m[2]}`, rgb = fillOfColour(m[3].trim())
-    seen.set(key, seen.has(key) && seen.get(key) !== rgb ? null : rgb)
+    // (a piece set in two colours, or once in a form not known, has none, whatever comes after)
+    if (seen.has(key) && seen.get(key) !== rgb) twice.add(key)
+    seen.set(key, rgb)
   }
   const out = []
-  for (const [key, rgb] of seen) if (rgb !== null) { const [i, k] = key.split('.').map(Number); out.push([i, k, rgb]) }
+  for (const [key, rgb] of seen) if (rgb !== null && !twice.has(key)) { const [i, k] = key.split('.').map(Number); out.push([i, k, rgb]) }
   return out.sort((a, b) => a[0] - b[0] || a[1] - b[1])
 }
 

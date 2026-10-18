@@ -1426,6 +1426,13 @@ describe("each colour piece's fill, as TeX set its run in the marked original (P
     expect(out.find(e => e[0] === 2)?.[2]).toBe(0x0000ff)
     expect(out.find(e => e[0] === 5)?.[2]).toBe(0)
   })
+  it('a piece set in two colours has none, however many times and in whatever order (#407: A, B, B; A, A, B; B, A, A)', () => {
+    const A = '1 0 0 rg 1 0 0 RG', B = '0 0 1 rg 0 0 1 RG'
+    for (const order of [[A, B, B], [A, A, B], [B, A, A], [A, 'Red', A], ['Red', A, A]]) {
+      expect(readColours(order.map(c => `AXT-COLOUR c1.2 ${c}`).join('\n')), order.join(' / ')).toEqual([])
+    }
+    expect(readColours([A, A, A].map(c => `AXT-COLOUR c1.2 ${c}`).join('\n'))).toEqual([[1, 2, 0xff0000]])
+  })
   it('the marks file holds them, rising, each a fill 0 to 0xFFFFFF', () => {
     const v = valid()
     const back = parseLayoutMarks(bytes(encodeLayoutMarks(v)))
