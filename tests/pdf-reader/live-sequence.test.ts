@@ -429,6 +429,26 @@ describe('a copy made under pipeline 16, reopened under 17', () => {
   })
 })
 
+// A copy made under pipeline 17, reopened under 18: 18 changes which papers get a layout (a marked original that did not run
+// through, or of fewer pages than arXiv's PDF, gives none), not a unit, the wire or its reading back: every unit is the
+// copy's by its hash, carried as it has it, and nothing is sent
+describe('a copy made under pipeline 17, reopened under 18', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit as the copy has it: nothing is sent again', async () => {
+    const p = paper(), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '17', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(n - keptFor(p, 'zh').size)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either

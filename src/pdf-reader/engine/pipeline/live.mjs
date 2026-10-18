@@ -425,6 +425,9 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 16: 17 changes what a unit is (a command and its arguments are one piece, arg-roles.mjs readArgs and latex-front.mjs
  *   commandArgs: 2212.06817's label key no unit), not what is sent for one or how a reply is read back: every unit whose
  *   source a copy holds is carried, and older pipelines keep their own tests
+ * - 17: 18 changes which papers get a layout (a marked original that did not run through, or of fewer pages than arXiv's
+ *   PDF, gives none: ranThrough, page-pass.mjs), not what a unit is, what is sent for one or how a reply is read back:
+ *   every unit whose source a copy holds is carried, and older pipelines keep their own tests
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -434,7 +437,7 @@ const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
 const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
 const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
 const EVERY = () => true
-export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY }
+export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY, 17: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
