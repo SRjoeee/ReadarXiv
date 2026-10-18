@@ -1403,17 +1403,23 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** the text area of page pg as unit p reads it: as the page's growth step left it once p's own lines there grew (growOn),
    *  the units ranked before it on the page grown and those after it not yet, whenever p is laid */
   const areaOf = (p, pg) => p.area?.get(pg) ?? textArea(pg)
-  const columnOf = (b, p) => {
+  const columnOf = (b, p, size) => {
     const mid = (b.x0 + b.x1) / 2
     const own = (cols[b.page] ?? []).filter(([a, z]) => a <= mid && z >= mid)
-    return own.length >= 3 ? [Math.min(...own.map(c => c[0])), Math.max(...own.map(c => c[1]))] : areaOf(p, b.page)
+    if (own.length < 3) return areaOf(p, b.page)
+    // (its right edge the furthest of its lines reach, but a line TeX set overfull: one past the furthest end two lines share
+    // by less than an em is no edge; a single line widened to it ran 3.4 pt into the margin, 2608.16117's page 11)
+    const ends = own.map(c => c[1]).sort((x, y) => y - x)
+    let right = ends[0]
+    for (let i = 0; i + 1 < ends.length; i++) if (ends[i] - ends[i + 1] <= 0.2) { if (ends[0] - ends[i] < size) right = ends[i]; break }
+    return [Math.min(...own.map(c => c[0])), right]
   }
   // a single line may run on to its column's edge or the next glyph on its baseline (a heading is as wide as its
   // column, not as its English words); a centred one as far to either side
   const widen = (b, p) => {
     if (b.rects.length !== 1) return
     const r = b.rects[0], yb = b.B[0], size = b.sizes[0]
-    const [cx0, cx1] = columnOf(b, p)
+    const [cx0, cx1] = columnOf(b, p, size)
     const line = (chars2[b.page - 1] ?? []).filter(c => Math.abs(c.yb - yb) < 0.4 * size && /\S/.test(c.ch))
     const right = Math.min(cx1, ...line.filter(c => c.x0 > r[3] + 6).map(c => c.x0 - 0.5 * size))
     const left = Math.max(cx0, ...line.filter(c => c.x1 < r[1] - 1).map(c => c.x1 + 0.5 * size))
