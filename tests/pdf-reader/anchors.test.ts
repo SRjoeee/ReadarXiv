@@ -127,6 +127,13 @@ describe('tokenizeDocument: a rotated item\'s tokens lie along its direction', (
     near(boxes(at([10, 0, 0, -10, 100, 200])), [['ab', 100, 120, 192.5, 202.2, 200], ['cd', 130, 150, 192.5, 202.2, 200]])
   })
 
+  it('the glyphs\' up is the transform\'s own (c, d): a turned item scaled across, and one slanted (the review of #399)', () => {
+    // twice as long along as across: the ascent 7.5 units off the baseline, not 15
+    near(boxes(at([0, 20, -10, 0, 100, 200])), [['ab', 92.5, 102.2, 200, 220, 210], ['cd', 92.5, 102.2, 230, 250, 240]])
+    // slanted: the glyphs' up (-10, 3), its corners 2.25 up at the ascent and 0.66 down at the descent
+    near(boxes(at([0, 10, -10, 3, 100, 200])), [['ab', 92.5, 102.2, 199.34, 222.25, 210], ['cd', 92.5, 102.2, 229.34, 252.25, 240]])
+  })
+
   it('at any angle: the box of the run\'s four corners', () => {
     const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6)
     const [ab] = boxes(at([10 * c, 10 * s, -10 * s, 10 * c, 100, 200]))
@@ -147,7 +154,13 @@ describe('tokenizeDocument: a rotated item\'s tokens lie along its direction', (
     }
     expect(doc[0]!.bottom).toBeCloseTo(78.92, 6)
     expect(doc.at(-1)!.top).toBeCloseTo(78.92 + 700.16, 6)
-    for (let k = 1; k < doc.length; k++) expect(doc[k]!.bottom).toBeGreaterThan(doc[k - 1]!.top)
+    // (one after another up the page, meeting at most: "2–D" is two tokens, the dash between them with the first)
+    for (let k = 1; k < doc.length; k++) expect(doc[k]!.bottom).toBeGreaterThanOrEqual(doc[k - 1]!.top)
+  })
+
+  it('a turned token\'s box takes the marks its item sets against the word: the bracket before it, the bracket and the stop after (the review of #399)', () => {
+    // "Figure (6)." up the page, 10 units a character: "figure" from 0 to 60, "(6)." from 70 to 110
+    near(boxes(at([0, 10, -10, 0, 100, 200], 'Figure (6).', 110)), [['figure', 92.5, 102.2, 200, 260, 230], ['6', 92.5, 102.2, 270, 310, 290]])
   })
 
   it('an item of marks alone after a rotated word carries no ink across: its end along x is no edge of the word', () => {

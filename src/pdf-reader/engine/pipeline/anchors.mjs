@@ -80,11 +80,13 @@ export function tokens(s) {
  * text of its own stands a third of an em further at least.
  * An item set at an angle (its transform turns or mirrors its baseline: a landscape page's caption, arXiv's stamp up the
  * first page's margin, a figure's axis label) has its tokens along its baseline, each token's box the axis-aligned box of
- * its run of the baseline from the ascent to the descent across it, its `y` the middle of that run: the box and the place
+ * its run of the baseline from the ascent to the descent along the glyphs' up (the transform's (c, d), scaled or slanted as
+ * it is drawn), its `y` the middle of that run: the box and the place
  * of its glyphs on the page, where read along x they ran off the page (1406.1078v3's landscape caption, 645 units past its
  * page's right edge). An upright item's (rightwards, its glyphs up) are worked out as they always were, to the bit. A word
- * is joined across two items only where both run the same way, unskewed; the carry of an item of marks alone, read along x,
- * is upright text's alone
+ * is joined across two items only where both run the same way, unskewed; a turned token's box takes the marks its item sets
+ * against the word (its ink, which inkEdges reads across alone, is its box); the carry of an item of marks alone, read along
+ * x, is upright text's alone
  */
 export function tokenizeDocument(pages) {
   const doc = []
@@ -107,15 +109,15 @@ export function tokenizeDocument(pages) {
       // the baseline's direction, a unit (ux, uy), and where the item ends along it (ex, ey); unskewed: its glyphs' up
       // square to it, so that two items' words may join
       const up = isUpright(a, b, d)
-      const ux = along ? a / along : 1, uy = along ? b / along : 0, ex = x + it.width * ux, ey = y + it.width * uy
+      const ux = up ? 1 : a / along, uy = up ? 0 : b / along, ex = up ? x + it.width : x + it.width * ux, ey = up ? y : y + it.width * uy
       const square = Math.abs(a * c + b * d) <= SKEW * (a * a + b * b)
       if (!carry && prev?.word && square && prev.square && Math.abs(ux * prev.uy - uy * prev.ux) <= SKEW && ux * prev.ux + uy * prev.uy > 0) {
         // the gap from the item before's end, along the baseline and across it (upright: x − its end, y − its y, exactly)
         const gap = (x - prev.ex) * prev.ux + (y - prev.ey) * prev.uy, off = (y - prev.ey) * prev.ux - (x - prev.ex) * prev.uy
         if (Math.abs(off) < 0.3 * Math.max(size, prev.size) && gap > -0.3 * size && gap < 0.12 * size && WORD_START.test(it.str) && !CJK.test(it.str[0])) carry = last
       }
-      // across the baseline, the glyphs' up: the baseline turned a quarter left, or right where the transform mirrors it
-      const flip = a * d - b * c < 0 ? -1 : 1, nx = -flip * b, ny = flip * a
+      // a turned item's text as its tokens' places count it (tokens(): folded), for the marks set against a word
+      const folded = up ? '' : it.str.normalize('NFKC').toLowerCase()
       for (const tk of toks) {
         // `item`: the text item the token was read from, for its ink (inkEdges); `sym`: where the items of marks alone
         // right after it end; `far`: where one set apart after it ends (NaN: more than one). Nothing more is worked out
@@ -124,10 +126,17 @@ export function tokenizeDocument(pages) {
         let w
         if (up) w = { t: tk.t, page, x: x + perChar * tk.at, y, w: perChar * tk.len, h: size, top: y + asc * size, bottom: y + desc * size, item: it, sym: null, far: null }
         else {
-          // the run's ends on the baseline, and the box of its four corners at the ascent and the descent
-          const s0 = perChar * tk.at, s1 = s0 + perChar * tk.len
+          // the run's ends on the baseline, and the box of its four corners at the ascent and the descent along the glyphs'
+          // up, the transform's own (c, d): its size across, a mirror's side and a slant as they are drawn. The run takes the
+          // marks its item sets against the word, as inkEdges widens an upright word's ink over them (the brackets that open
+          // before it, the stops and brackets that close after it): the box is a turned token's ink, a token's ink is read
+          // across alone
+          let from = tk.at, to = tk.at + tk.len
+          while (from > 0 && opens(folded.charCodeAt(from - 1))) from--
+          if (to < folded.length && !stopsMarks(folded, to)) { to++; while (to < folded.length && !stopsMarks(folded, to)) to++ }
+          const s0 = perChar * from, s1 = perChar * to
           const x0 = x + s0 * ux, y0 = y + s0 * uy, x1 = x + s1 * ux, y1 = y + s1 * uy
-          const ax = asc * nx, ay = asc * ny, dx = desc * nx, dy = desc * ny
+          const ax = asc * c, ay = asc * d, dx = desc * c, dy = desc * d
           const left = Math.min(x0 + ax, x0 + dx, x1 + ax, x1 + dx), right = Math.max(x0 + ax, x0 + dx, x1 + ax, x1 + dx)
           w = { t: tk.t, page, x: left, y: (y0 + y1) / 2, w: right - left, h: size, top: Math.max(y0 + ay, y0 + dy, y1 + ay, y1 + dy), bottom: Math.min(y0 + ay, y0 + dy, y1 + ay, y1 + dy), item: it, sym: null, far: null }
         }
@@ -151,7 +160,11 @@ export function tokenizeDocument(pages) {
       }
       const tail = it.str.trimEnd()
       carry = it.hasEOL && /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null
-      prev = { str: it.str, x, y, ex, ey, ux, uy, size, square, word: !it.hasEOL && toks.length > 0 && WORD_END.test(it.str) && !CJK.test(it.str.at(-1)) }
+      // (one object a page, set again for every item: a heavy paper's every item made one more, of more fields, cost its
+      // tokenizing a twentieth more)
+      prev ??= { str: '', x: 0, y: 0, ex: 0, ey: 0, ux: 1, uy: 0, size: 0, square: true, word: false }
+      prev.str = it.str; prev.x = x; prev.y = y; prev.ex = ex; prev.ey = ey; prev.ux = ux; prev.uy = uy; prev.size = size; prev.square = square
+      prev.word = !it.hasEOL && toks.length > 0 && WORD_END.test(it.str) && !CJK.test(it.str.at(-1))
     }
   }
   return doc
