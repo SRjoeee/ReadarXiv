@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { documentBounds, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 
 // Code stays as the paper has it: the body of an environment a paper defines as code is never a unit, so never sent to
@@ -105,6 +105,25 @@ describe('an environment the paper defines as code is kept as it is, never a uni
     expect(cut('\\makeatletter\\let\\promptfont\\verbatim@font\\makeatother\n\\newenvironment{promptbox}{\\par\\promptfont\\small}{\\par}', 'promptbox')).toContain(block)
   })
 
+  it('LaTeX\'s and the packages\' definers by their own names: \\provideenvironment (memoir, makecmds) defines nothing defined before it; no \\providenewenvironment', () => {
+    expect(cut('\\provideenvironment{tx}{\\ttfamily\\obeylines}{}', 'tx')).not.toContain(block)
+    expect(cut('\\newenvironment{tx}{\\itshape}{}\\provideenvironment{tx}{\\ttfamily\\obeylines}{}', 'tx')).toContain(block)
+    expect(cut('\\providenewenvironment{tx}{\\ttfamily\\obeylines}{}', 'tx')).toContain(block)
+  })
+
+  it('fancyvrb\'s \\RecustomVerbatimEnvironment, the last definition, makes code; there is no \\ReCustomVerbatimEnvironment', () => {
+    expect(cut('\\usepackage{fancyvrb}\\newenvironment{vz}{\\itshape}{}\\RecustomVerbatimEnvironment{vz}{Verbatim}{}', 'vz')).not.toContain(block)
+    expect(cut('\\usepackage{fancyvrb}\\ReCustomVerbatimEnvironment{vq}{Verbatim}{}', 'vq')).toContain(block)
+    const p = project({ 'main.tex': doc('Words.', '\\usepackage{fancyvrb}\\RecustomVerbatimEnvironment{vz}{Verbatim}{}\\ReCustomVerbatimEnvironment{vq}{Verbatim}{}') }) as unknown as { lineEnvs: Set<string> }
+    expect([p.lineEnvs.has('vz'), p.lineEnvs.has('vq')]).toEqual([true, false])
+  })
+
+  it('one that opens a starred environment of the paper\'s by its name (\\DefineVerbatimEnvironment{Code*})', () => {
+    const pre = '\\usepackage{fancyvrb}\\DefineVerbatimEnvironment{Code*}{Verbatim}{}\\newenvironment{wrap}{\\VerbatimEnvironment\\begin{Code*}}{\\end{Code*}}'
+    expect(cut(pre, 'wrap')).toEqual(['A paragraph before the block.', 'The paragraph after the block.'])
+    expect((project({ 'main.tex': doc('Words.', pre) }) as unknown as { lineEnvs: Set<string> }).lineEnvs.has('wrap')).toBe(true)
+  })
+
   it('a code environment begun and ended by macros of the paper\'s (\\newcommand\\btx{\\begin{tx}})', () => {
     const got = texts({ 'main.tex': doc(`A paragraph before the block.\n\n\\btx\n${block}\n\\etx\n\nThe paragraph after the block.`, '\\newenvironment{tx}{\\ttfamily\\obeylines}{}\n\\newcommand\\btx{\\begin{tx}}\n\\newcommand\\etx{\\end{tx}}') })
     expect(got).toEqual(['A paragraph before the block.', 'The paragraph after the block.'])
@@ -125,6 +144,15 @@ describe('an environment of the paper\'s own that opens a verbatim is read by li
       expect(tex).toContain('\\end{fx}\n\\axtlines{1}\\leavevmode\\axtmark{1s}The paragraph after the block.')
     })
   }
+  it('a \\begin of one in a definition\'s body begins nothing where it is defined: the document after it is read whole', () => {
+    for (const shorthand of ['\\newcommand\\start{\\begin{fx}}', '\\def\\start{\\begin{fx}}', '\\newenvironment{gx}{\\begin{fx}}{\\end{fx}}', '\\newcommand\\bv{\\begin{verbatim}}']) {
+      const tex = doc('A first paragraph of the paper.\n\n\\begin{fx}\nx = 1\n\\end{fx}\n\nA second paragraph of the paper.', `${VERBATIMS[0]?.[1]}\n${shorthand}`)
+      const p = openPaper(new Map([['main.tex', enc(tex)]]))
+      expect((p.units as unknown as Unit[]).map(textOf), shorthand).toEqual(['A first paragraph of the paper.', 'A second paragraph of the paper.'])
+      // the document as the walk finds it, by the paper's environments read by lines: its \\begin{document} the real one
+      expect(documentBounds(tex, { lineEnvs: (p.project as unknown as { lineEnvs: Set<string> }).lineEnvs }).begin, shorthand).toBe(tex.indexOf('\\begin{document}'))
+    }
+  })
   it('not one set as alltt sets its body, whose lines TeX reads as it reads any', () => {
     const p = project({ 'main.tex': doc('Words.', '\\newenvironment{tx}{\\ttfamily\\obeylines}{}') }) as unknown as { lineEnvs: Set<string> }
     expect(p.lineEnvs.has('tx')).toBe(false)

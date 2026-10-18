@@ -78,7 +78,7 @@ const LINE_ENVS = /^(?:verbatim|Verbatim|BVerbatim|LVerbatim|SaveVerbatim|Verbat
  *  \\let\\x\\comment) */
 const lineEnvsOf = texts => {
   const text = texts.map(uncommented).join('\n'), out = new Set()
-  for (const m of text.matchAll(/\\(?:(?:exclude|include|special|general|process)comment|(?:Re)?CustomVerbatimEnvironment|DefineVerbatimEnvironment|lstnewenvironment|(?:new|renew)tcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)) out.add(m[1].trim())
+  for (const m of text.matchAll(/\\(?:(?:exclude|include|special|general|process)comment|(?:Custom|Recustom|Define)VerbatimEnvironment|lstnewenvironment|(?:new|renew)tcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)) out.add(m[1].trim())
   for (const m of text.matchAll(/\\(?:re)?newenvironment\s*\*?\s*\{([^}]+)\}\s*(?:\[[^\]]*\]\s*)*\{\s*\\(?:comment|verbatim|Verbatim|BVerbatim|LVerbatim|lstlisting|minted)(?![A-Za-z])|\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:comment|verbatim|Verbatim)(?![A-Za-z])/g)) out.add((m[1] ?? m[2]).trim())
   // minted's \\newminted[name]{lexer}{options}: the environment `name`, else <lexer>code
   for (const m of text.matchAll(/\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g)) out.add(m[1]?.trim() || `${m[2].trim()}code`)
@@ -108,10 +108,10 @@ const setsDisplay = (begin, end) => {
 const displayEnvsOf = defs => new Set([...defs].filter(([, d]) => d.begin !== undefined && setsDisplay(d.begin, d.end)).map(([name]) => name))
 /** a listing package's definers of an environment (listings', fancyvrb's, tcolorbox's), its name in group 1; then
  *  minted's \\newminted[name]{lexer}, and a command \\let to a verbatim (\\let\\x\\verbatim, not \\verbatim@font) */
-const LISTING_DEFINERS = /\\(?:lstnewenvironment|(?:Define|(?:Re)?Custom)VerbatimEnvironment|(?:re)?newtcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g
+const LISTING_DEFINERS = /\\(?:lstnewenvironment|(?:Define|Custom|Recustom)VerbatimEnvironment|(?:re)?newtcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g
 const NEWMINTED = /\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g
 const LET_VERBATIM = /\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:verbatim|Verbatim)(?![A-Za-z@])/g
-const ENV_DEFINERS = /\\(?:(?:re|provide)?newenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment)\s*\*?\s*\{([^}]+)\}/g
+const ENV_DEFINERS = /\\(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment)\s*\*?\s*\{([^}]+)\}/g
 /**
  * The paper's own environments, by name, as the last of their definitions in its files leaves them, as TeX takes them
  * (\\provide… defines nothing a definition before it made): `{ begin, end }`, the code of one \\newenvironment or an
@@ -162,7 +162,7 @@ const codeEnvsOf = defs => {
     if (d.begin === undefined) continue
     const cmds = texCommands(d.begin).filter(c => !c.inDef), has = n => cmds.some(c => c.name === n)
     if ((has('ttfamily') || has('tt')) && has('obeylines')) code.add(name)
-    opened.set(name, cmds.map(c => (c.name === 'begin' ? c.env?.replace(/\*$/, '') : c.name)).filter(Boolean))
+    opened.set(name, cmds.flatMap(c => (c.name !== 'begin' ? [c.name] : c.env ? [c.env, c.env.replace(/\*$/, '')] : [])))
   }
   // an environment that opens one found here is found in turn: until a pass finds none
   for (let found = true; found;) {
@@ -1320,7 +1320,9 @@ function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Se
     if (m) {
       const env = m[1].trim(), after = end + m[0].length
       out.push({ name, at: i, end: after, depth, env, inDef, sure })
-      if (name === 'begin' && isLineEnv(env, lineEnvs)) { i = endOfEnv(s, after, env)[1] - 1; continue }
+      // (one in a definition's body is read where the definition is used, not here: \\newcommand\\start{\\begin{fx}} in a
+      // preamble read to the body's \\end{fx} past the real \\begin{document})
+      if (name === 'begin' && !inDef && isLineEnv(env, lineEnvs)) { i = endOfEnv(s, after, env)[1] - 1; continue }
       i = after - 1; continue
     }
     out.push({ name, at: i, end, depth, inDef, sure })
@@ -1445,13 +1447,13 @@ const theoremsOf = texts => {
 }
 /** every environment a paper's files define, by whatever package: none of them is the role table's environment of the
  *  same name */
-const OWN_ENVS = /\\(?:(?:re|provide)?newenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|newtheorem|declaretheorem|spnewtheorem|newmdtheoremenv|DefineVerbatimEnvironment|newminted|NewTblrEnviron)\s*\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
+const OWN_ENVS = /\\(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|newtheorem|declaretheorem|spnewtheorem|newmdtheoremenv|DefineVerbatimEnvironment|newminted|NewTblrEnviron)\s*\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
 const ownEnvsOf = texts => new Set([...texts.map(uncommented).join('\n').matchAll(OWN_ENVS)].flatMap(m => m[1].split(',').map(x => x.trim())))
 /** the paper's own environments' parameters, as its files define them: \\newenvironment{name}[n][default] takes n
  *  arguments, the first optional where it has a default; one defined twice, the last */
 const envDefs = texts => {
   const out = new Map()
-  for (const t of texts) for (const m of t.matchAll(/\\(?:re|provide)?newenvironment\s*\*?\s*\{([^}]+)\}\s*(?:\[\s*(\d)\s*\])?\s*(\[)?/g)) {
+  for (const t of texts) for (const m of t.matchAll(/\\(?:(?:re)?newenvironment|provideenvironment)\s*\*?\s*\{([^}]+)\}\s*(?:\[\s*(\d)\s*\])?\s*(\[)?/g)) {
     if (inComment(t, m.index)) continue
     const n = Number(m[2] ?? 0), opt = !!m[3] && n > 0
     out.set(m[1].trim(), paramsOf((opt ? '[a' : '') + '{a'.repeat(n - (opt ? 1 : 0))))
