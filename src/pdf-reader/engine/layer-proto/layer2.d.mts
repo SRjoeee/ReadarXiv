@@ -173,8 +173,14 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2)
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt)
 type ToDev = (x: number, y: number) => [number, number]
+/** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
+export declare const SHORT_SKIP: number
+/** each block's displays TeX set with its short skip: those under a line of its own (`line`, lineInfo's `j`); mutates the blocks */
+export declare function shortSkipsTo(blocks: Block2[], skips: readonly { page: number; x0: number; x1: number; top: number; bottom: number; line: number }[], lineInfo: ReadonlyMap<string, LineInfo> | null | undefined): void
+/** of a line's size: how far before a display TeX's short skip asks the line over it to end (\predisplaysize) */
+export declare const PREDISPLAY: number
 
 /** a spacing accent TeX sets as a glyph of its own */
 export declare const ACCENT: RegExp
@@ -226,6 +232,8 @@ export declare function learnCite(p: Placeholder, g: Gap, citeMap: CiteMap | nul
 export declare function displayTouched(res: Prepared, uc: readonly Char[]): Set<string>
 /** a crop grown over the ink it touches */
 export declare function growCrop(r: { crop: number[]; [more: string]: unknown }, ink: InkMap | undefined, toDev: ToDev, k: number, pageChars?: readonly Char[]): void
+/** whether growCrop grows a crop, and so reads its page's ink: a crop with a box, not one cut from a layout file's segment */
+export declare const cropGrows: (r: { crop?: number[] | null; gap?: { box?: unknown } | null } | null | undefined) => boolean
 export declare function nearIn(letters: string, hay: string, src?: string): boolean
 /** a page character's key: page|item|k */
 export declare const charKey: (c: { page?: number; item: number; k: number }) => string
