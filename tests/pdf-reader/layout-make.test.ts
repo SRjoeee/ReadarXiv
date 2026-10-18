@@ -106,7 +106,7 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
   // a page at a time: every unit's rows and every name's, as the whole file holds them, and every page's plan
   const four = await byPages(w, log)
   if (four) {
-    const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+    const rows = (f: Record<string, unknown>) => ({ ...Object.fromEntries(PART_KEYS.map(k => [k, f[k]])), colours: f.colours ?? null })
     expect(rows(four.merged as never)).toEqual(rows(four.whole.file as never))
     expect(four.plans).toEqual(four.whole.plans)
     expect(rows(four.marked as never)).toEqual(rows(four.whole.file as never))
@@ -278,6 +278,25 @@ describe('makeLayout', () => {
     // (both points read with nothing between them: TeX set nothing there, EMPTY as before)
     const closed = await made({ ...w, marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.3a', 1, at(9), 700], ['p0.3b', 1, at(9), 700]] })
     expect(phOf(closed.file, 0, 3)).toEqual([0, 3, 6, PH_FLAG.EMPTY])
+  })
+
+  it("each colour piece's run's fill as the marked original's log gives it, a key only where a unit has one (PR-C)", async () => {
+    const runs: Run[] = [{ s: 'see blue words and then red ones', x: 72, y: 700 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700]],
+      units: [unit('para', [text('see '), { t: 'open', id: 1, src: '\\textcolor{blue!60!black}{' }, text('blue words'), { t: 'close', id: 1, src: '}' }, text(' and then '), ph('\\color{red}'), text(' red ones')])],
+    }
+    const log = 'AXT-COLOUR c0.1 0 0 0.6 rg 0 0 0.6 RG\nAXT-COLOUR c0.5 1 0 0 rg 1 0 0 RG\n'
+    const { file, stats } = await made(w, log)
+    expect(file.colours).toEqual([[0, 1, 0x000099], [0, 5, 0xff0000]])
+    expect(stats.colours).toEqual({ pieces: 2, evaluated: 2 })
+    expect(indexLayout(file).unit(0)?.colours).toEqual(new Map([[1, 0x000099], [5, 0xff0000]]))
+    // (the log silent, the piece's colour not known: no row, and no key)
+    const silent = await made(w, 'AXT-COLOUR c0.1 Red\n')
+    expect(Object.hasOwn(silent.file, 'colours')).toBe(false)
+    expect(encodeLayout(silent.file)).not.toContain('colours')
+    expect(silent.stats.colours).toEqual({ pieces: 2, evaluated: 0 })
   })
 
   it('one arXiv glyph to one piece: a second piece whose own glyph is not on arXiv\'s page is LOST, and takes nothing of the first\'s', async () => {

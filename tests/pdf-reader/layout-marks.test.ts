@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, DISPLAY, encodeLayoutMarks, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { GLYPHS_PAGE } from '@/pdf-reader/engine/layout/ink.mjs'
 import { OPS_MS } from '@/pdf-reader/engine/layout/oplist.mjs'
@@ -499,10 +499,11 @@ describe('LAYOUT_TEX', () => {
     // MARK_DEF's own mark gated too
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
     for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
-    // one message alone, a unit's alignment at its end mark (AXT-ALIGN, layout-align.test.ts): a line of its own, which no
-    // reader of the log but readAlign reads, and nothing typeset changes
-    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(1)
-    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN'])
+    // two messages alone, a unit's alignment at its end mark (AXT-ALIGN, layout-align.test.ts) and a colour piece's fill
+    // (AXT-COLOUR, readColours): each a line of its own, which no reader of the log but theirs reads, and nothing typeset
+    // changes
+    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(2)
+    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-COLOUR'])
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')
@@ -614,7 +615,7 @@ describe("babel's names (D1a)", () => {
     // a blank name is left as it is: a class may test it for emptiness (REVTeX's jcp style, an empty \refname)
     expect(NAMES_TEX).toContain('{!\\tl_if_blank_p:o{#1}}')
     // a case change keeps their keys; a PDF string gobbles them
-    expect(LAYOUT_TEX).toContain('\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}')
+    expect(LAYOUT_TEX).toContain('\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}')
     expect(LAYOUT_TEX).toContain('\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble')
     expect(LAYOUT_TEX.indexOf(NAMES_TEX)).toBeGreaterThan(0)
     expect(LAYOUT_TEX.indexOf(NAMES_TEX)).toBeLessThan(LAYOUT_TEX.indexOf(POINTS_TEX))
@@ -1019,6 +1020,7 @@ const valid = (): LayoutMarks => ({
   dropped: ['h4s'],
   lines: [[0, 3], [2, 1], [7, 12]],
   align: [[0, 'j'], [2, 'c'], [7, 'l']],
+  colours: [[0, 3, 0x0000ff], [2, 1, 0xa60000], [2, 4, 0]],
   words: ['the', 'model', 'x'],
   tokens: [1, 72, 700, 15.5, 10, 0, 1, 90, 700, 25, 10, 1, 2, 72, 720, 6, 12, 2],
   chars: ['x', '2', '\u2211', ''],
@@ -1048,7 +1050,7 @@ describe('the marks file', () => {
   it('encodeLayoutMarks and parseLayoutMarks round-trip', () => {
     const m = valid()
     expect(parseLayoutMarks(bytes(encodeLayoutMarks(m)))).toEqual(m)
-    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links'])
+    expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'colours', 'words', 'tokens', 'chars', 'owned', 'links'])
   })
   it('parseLayoutMarks refuses past its bounds', () => {
     const big = new Uint8Array(MARKS_CAP + 1).fill(0x20)
@@ -1396,3 +1398,44 @@ describe("the marked compile's links (the link-anchor locator's)", () => {
   })
 })
 
+
+describe("each colour piece's fill, as TeX set its run in the marked original (PR-C)", () => {
+  const unit = (pieces: unknown[]) => ({ kind: 'para', pieces }) as unknown as SourceUnit
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const open = (src: string, id = 1) => ({ t: 'open', id, src }), close = (src: string, id = 1) => ({ t: 'close', id, src })
+  it('the marking writes the colour right inside a \\textcolor group and right after a \\color switch, and nowhere else', () => {
+    const u = unit([text('a '), open('\\textcolor{blue!60!black}{'), text('b'), close('}'), text(' c '), ph('\\color[HTML]{245B60}'), text(' d '), open('\\colorbox{blue!5}{', 2), text('e'), close('}', 2), ph('\\color')])
+    const marked = layoutMarking([u], MARK_CLASSES, { lines: false }).units[0]?.pieces as { t: string; src?: string; s?: string }[]
+    expect(marked.map(p => p.src ?? p.s)).toEqual(['a ', '\\textcolor{blue!60!black}{', '\\axtcolour{c0.1}', 'b', '}', ' c ', '\\color[HTML]{245B60}', '\\axtcolour{c0.5}', ' d ', '\\colorbox{blue!5}{', 'e', '}', '\\color'])
+    expect([open('\\textcolor[rgb]{0,0,1}{'), ph('\\color{red}'), ph('\\color{red} x'), open('\\textcolor{red}'), open('\\colorbox{red}{')].map(colourPieceOf)).toEqual([true, true, false, false, false])
+  })
+  it("LAYOUT_TEX writes it through \\message alone, gated as the marks are, and never into a file or a PDF string", () => {
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}')
+    expect(LAYOUT_TEX).toContain('\\let\\axtcolour\\@gobble')
+  })
+  it('reads each piece\'s fill from the log, joins a line TeX wrapped, and gives none to a piece set in two colours or of no form', () => {
+    const wrapped = 'AXT-COLOUR c9.2 0.12345 0.23456 0.34567 0.45678 k 0.12345 0.23456 0.34567 0.45678 K'
+    const log = ['x', 'AXT-COLOUR c2.4 0 0 1 rg 0 0 1 RG', '', 'AXT-COLOUR c0.1 0.65 0 0 rg 0.65 0 0 RG', 'AXT-COLOUR c0.1 0.65 0 0 rg 0.65 0 0 RG',
+      'AXT-COLOUR c3.1 1 0 0 rg 1 0 0 RG', 'AXT-COLOUR c3.1 0 0 1 rg 0 0 1 RG', 'AXT-COLOUR c4.1 Red', wrapped.slice(0, 79), wrapped.slice(79), 'AXT-COLOUR c5.0 0 g 0 G'].join('\n')
+    const out = readColours(log)
+    expect(out.map(([i, k]) => [i, k])).toEqual([[0, 1], [2, 4], [5, 0], [9, 2]])
+    expect(out.find(e => e[0] === 0)?.[2]).toBe(0xa60000)
+    expect(out.find(e => e[0] === 2)?.[2]).toBe(0x0000ff)
+    expect(out.find(e => e[0] === 5)?.[2]).toBe(0)
+  })
+  it('the marks file holds them, rising, each a fill 0 to 0xFFFFFF', () => {
+    const v = valid()
+    const back = parseLayoutMarks(bytes(encodeLayoutMarks(v)))
+    expect(back.colours).toEqual(v.colours)
+    for (const colours of [[], [[0, 3]], [[2, 1, 1], [0, 3, 1]], [[0, 3, 0x1000000]], [[0, 3, -1]], 'x']) expect(() => parseLayoutMarks(bytes({ ...v, colours })), JSON.stringify(colours)).toThrow(LayoutRefusal)
+  })
+  it('a marks file with none, one of before among them, holds no key: read as none, and written back the bytes it was', () => {
+    const { colours: _none, ...before } = valid()
+    const text = JSON.stringify(JSON.parse(encodeLayoutMarks({ ...before, colours: [] } as never)))
+    expect(JSON.parse(text)).not.toHaveProperty('colours')
+    const back = parseLayoutMarks(bytes(text))
+    expect(back.colours).toEqual([])
+    expect(encodeLayoutMarks(back)).toBe(encodeLayoutMarks({ ...before, colours: [] } as never))
+  })
+})

@@ -952,3 +952,52 @@ describe("a placeholder's text drawn in its glyphs' fill, the file's (PR-C: 2608
     expect(svg).toContain('fill="#0000ff"')
   })
 })
+
+describe("a colour run drawn in the fill TeX set it in, the layout file's `colours` row (PR-C)", () => {
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const open = (src: string, id = 1) => ({ t: 'open', id, src }), close = (id = 1) => ({ t: 'close', id, src: '}' })
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  // "see blue words [12] and then red ones": a \textcolor run holding a citation, then a \color switch
+  const page = [...item('see blue words', 10, 100, 10, 0), ...item('[12]', 90, 100, 10, 1), ...item('and then red ones', 120, 100, 10, 2)]
+  const u = { kind: 'para', src: 'see blue words and then red ones', pieces: [text('\u89C1 '), open('\\textcolor{blue!60!black}{'), text('\u84DD\u5B57 '), ph('\\cite{k}'), close(), text(' \u7136\u540E '), ph('\\color{red}'), text(' \u7EA2\u5B57')] } as never
+  const kOf = [-1, 1, -1, 3, 4, -1, 6, -1]
+  const fileOf = (colours: [number, number][], citeFill: number | null) => {
+    const lu = unitOf([[1, 10, 230, 100, 108, 97, 10, 0]], [[3, 0, [1, 89.5, 100, 110.5, 108, 97]]]) as unknown as { ph: Map<number, { kind: string; fill: number | null }>; colours: Map<number, number> }
+    const row = lu.ph.get(3)
+    if (row) { row.kind = 'cite'; row.fill = citeFill }
+    lu.colours = new Map(colours)
+    return lu as never
+  }
+  const coloursOf = (lu: never) => {
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, kOf, { use: 'lines', lines: t }) as never)
+    const tokens = L2.tokensOf2(u, prep as never, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && /\S/.test(t.s))
+    return tokens.map(t => [t.s, (t.st as { color?: string }).color ?? null])
+  }
+  it('each run in its row\'s fill exactly; the citation in it in the run\'s, which wins over its own fill; the switch to its group\'s end', () => {
+    const got = coloursOf(fileOf([[1, 0x000099], [6, 0xff0000]], 0x0000ff))
+    // (in order: see, blue words, the citation, and then, red words)
+    expect(got.map(([s]) => s).join('')).toBe('\u89C1\u84DD\u5B57[12]\u7136\u540E\u7EA2\u5B57')
+    const at = (from: number, to: number) => { let n = 0; return got.filter(([s]) => { const i = n; n += (s as string).length; return i >= from && i < to }).map(([, c]) => c) }
+    expect(at(0, 1).every(c => c === null)).toBe(true)
+    expect(at(1, 7).every(c => c === '#000099')).toBe(true)
+    expect(at(7, 9).every(c => c === null)).toBe(true)
+    expect(at(9, 11).every(c => c === '#ff0000')).toBe(true)
+  })
+  it('a colour piece with no row draws in the colour around it, never a guess from its name; a citation outside any run its own fill', () => {
+    const got = coloursOf(fileOf([], 0x0000ff))
+    expect(got.filter(([s]) => /[\u84DD\u7EA2]/.test(s as string)).map(([, c]) => c).every(c => c === null)).toBe(true)
+    // (no run's colour around it: the citation's own fill)
+    expect(got.filter(([s]) => /\d/.test(s as string)).map(([, c]) => c).every(c => c === '#0000ff')).toBe(true)
+  })
+  it('a black row inside a coloured run is black, written as such', () => {
+    const black = { kind: 'para', src: 'x', pieces: [open('\\textcolor{red}{'), text('\u7EA2 '), ph('\\color{black}'), text(' \u9ED1'), close()] } as never
+    const lu = fileOf([[0, 0xff0000], [2, 0]], null)
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(black, t.rects as never, [item('red black', 10, 100, 10, 0) as never], new Map() as never, null, T.texParts(lu, [0, -1, 2, -1, 4], { use: 'lines', lines: t }) as never)
+    const tokens = L2.tokensOf2(black, prep as never, 'zh', BASE as never, DESIGNS as never, P as never, null, () => 0).filter(t => typeof t.s === 'string' && /\S/.test(t.s))
+    expect(tokens.map(t => (t.st as { color?: string }).color)).toEqual(['#ff0000', '#000000'])
+  })
+})

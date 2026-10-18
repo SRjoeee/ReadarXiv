@@ -821,8 +821,10 @@ export function prepareUnit(unit, rects, charsByPage, citeMap = null, deny = nul
   // unit's lines the file's own: what the renderings leave of the gaps is the unit's text, categoriesOf. With part 4
   // alone the unit's characters are v0's rectangles', and a leftover may be a rendering the segments do not reach)
   out.inkKnown = !!(parts?.renderings && parts.lines)
-  // (each placeholder's fill by the file, where a source gives it: what its rendering's text is drawn in, tokensOf2)
+  // (each placeholder's fill and each colour piece's run's by the file, where a source gives them: what its rendering's text
+  // and the run are drawn in, tokensOf2)
   out.fillOf = parts?.fillOf ?? null
+  out.colourOf = parts?.colourOf ?? null
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts?.renderings ?? v0Renderings)
   if (parts?.proof) { const k = parts.proof(out, unit); if (k >= 0) out.unproven = k }
   // (a source that knows where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it)
@@ -2096,6 +2098,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   const base = baseOf(unit, baseIn)
   const stack = [{ ...base }]
   const style = () => stack.at(-1)
+  // (a colour piece's run, a \textcolor's or a \color switch's: drawn in the fill TeX set it in, the file's `colours` row,
+  // `colourRun` that it came so; a piece the file has no row for keeps the colour around it, never a guess from its name)
+  const colourRun = k => { const rgb = resolved.colourOf?.(k); return Number.isInteger(rgb) ? { color: hexOf(rgb), colourRun: true } : {} }
   // (the layout rules': whether lines break only at spaces, which quotes are CJK's, centred punctuation, the Latin words'
   // hyphenation patterns and shortest hyphenated word, the line-break marks)
   const { keepAll, cjkQuotes, centredPunct: centred, latinPatterns: latinLang, hyphenation: { minWord } } = P
@@ -2221,11 +2226,10 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     plain?.gap()
     if (p.t === 'open') {
       const next = applyCmd(p.src, style(), designs)
-      const colour = /^\\textcolor\{([a-zA-Z]+)\}/.exec(p.src)
       // (a link's text, \href's, \hyperref's or \hyperlink's: each token of it tells its pair by `link`, the open's id, which the
       // engine's links read (links.mjs) and no drawing does)
       const link = LINK_OPEN.test(p.src) && p.id !== undefined ? { link: p.id } : {}
-      stack.push({ ...(next ?? style()), ...(colour ? { color: colour[1] } : {}), ...link })
+      stack.push({ ...(next ?? style()), ...colourRun(k), ...link })
       return
     }
     if (p.t === 'close') {
@@ -2236,8 +2240,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // a switch: the rest of its group
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) { stack[stack.length - 1] = sw; return }
-      const colour = /^\\color\{([a-zA-Z]+)\}$/.exec(p.src)
-      if (colour) stack[stack.length - 1] = { ...style(), color: colour[1] }
+      const run = colourRun(k)
+      if (run.color) stack[stack.length - 1] = { ...style(), ...run }
     }
     const r = resolved.get(k)
     if (!r) return
@@ -2279,9 +2283,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (r.text === ' ') { pushText(' ', style()); return }
     const own = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3 } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
     // (in its glyphs' own colour where the file gives one: a citation in hyperref's colorlinks blue, which the unit's source
-    // does not name; mixed or black, its run's)
+    // does not name; mixed or black, its run's. A run the source colours, which the file's `colours` row gives, wins)
     const fill = resolved.fillOf?.(k)
-    const st = Number.isInteger(fill) && fill >= 0 ? { ...own, color: hexOf(fill) } : own
+    const st = !own.colourRun && Number.isInteger(fill) && fill >= 0 ? { ...own, color: hexOf(fill) } : own
     if (r.sup) {
       const face = faceOf(st, 'latin', to)
       tokens.push({ s: r.text, st, face, cls: 'latin', w100: measure(r.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })

@@ -23,6 +23,7 @@ import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { NAME_KEYS } from './names.mjs'
+import { fillOfColour } from './colour.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
 
@@ -537,6 +538,11 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  *   (\lastnodetype 9: TeX's \/ adds no correction after any other whatsit, so one there measures nothing). An adjust
  *   node is nothing to TeX's line breaking, hyphenation and pdfTeX's margin kerning, as a whatsit.
  *   A cell's marks do the same: its \axtmark.
+ * - **The colour, at each colour piece** (\axtcolour{c<i>.<k>}, layoutMarking: right inside a \textcolor's group, right
+ *   after a \color switch): a message to the log, `AXT-COLOUR c<i>.<k> <\current@color>`, the fill the driver paints the
+ *   run with where TeX is (readColours): every colour the paper's own TeX accepts, defined anywhere (a body's \definecolor,
+ *   a group's \colorlet), mixed (blue!60!black) or by a model, exactly as it is set. Through \message, which puts nothing
+ *   in any list, gated as the marks are; nothing where no colour package is loaded
  * - **Nothing written.** The three test \protect against \@typeset@protect and gobble their name otherwise, so written
  *   to a file (\protected@write: the aux's labels, the contents lists) or into a mark (running heads) they are gone; in a
  *   PDF string they are gobbled (\pdfstringdefDisableCommands); nameref's titles, which it keeps as strings, have them
@@ -694,15 +700,17 @@ export const LAYOUT_TEX = [
   '\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}',
   '\\protected\\def\\axt@pm#1{\\ifaxt@off\\else\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1}\\fi\\fi\\fi}',
   '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@put{#1}\\fi\\fi}',
+  '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi}',
   '\\def\\axtpma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pma\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpmm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pmm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axthmark{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hm\\else\\expandafter\\@gobble\\fi}',
+  '\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
   '\\AddToHook{package/gettitlestring/after}{\\let\\axt@title@of\\GetTitleString\\long\\def\\GetTitleString#1{\\def\\axt@title{#1}\\axt@unmark\\axt@title\\expandafter\\axt@title@of\\expandafter{\\axt@title}}}',
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
-  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
+  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtcolour\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
+  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
   UNMARK_TEX,
   NAMES_TEX,
   POINTS_TEX,
@@ -739,6 +747,33 @@ export function readAlign(log) {
   return [...last].filter(([, c]) => c !== null).sort((a, b) => a[0] - b[0])
 }
 
+/** a colour piece's name in the log, `c<unit>.<k>` */
+const COLOUR_LINE = /^AXT-COLOUR c(\d{1,9})\.(\d{1,9}) (.*)$/
+/** a log line TeX wraps at (max_print_line) */
+const PRINT_LINE = 79
+/**
+ * Each colour piece's fill as TeX set its run, from the marked original's log (LAYOUT_TEX's AXT-COLOUR at the piece, the
+ * last pass's: lastTexLog): [[unit, k, 0xRRGGBB]], rising by unit and k, the driver's colour string read by colour.mjs
+ * fillOfColour. A piece TeX set twice in two colours (a moving argument typeset in two places) has no entry, nor has one
+ * whose string is of no form known (a dvips named colour): its colour is not known. A line TeX wrapped at its 79 characters is
+ * joined back
+ */
+export function readColours(log) {
+  const lines = lastTexLog(typeof log === 'string' ? log : '').split('\n'), seen = new Map()
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]
+    if (!line.startsWith('AXT-COLOUR ')) continue
+    while (line.length % PRINT_LINE === 0 && i + 1 < lines.length && lines[i + 1] !== '') line += lines[++i]
+    const m = COLOUR_LINE.exec(line)
+    if (!m) continue
+    const key = `${m[1]}.${m[2]}`, rgb = fillOfColour(m[3].trim())
+    seen.set(key, seen.has(key) && seen.get(key) !== rgb ? null : rgb)
+  }
+  const out = []
+  for (const [key, rgb] of seen) if (rgb !== null) { const [i, k] = key.split('.').map(Number); out.push([i, k, rgb]) }
+  return out.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+}
+
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
  *  mark by its unit and source piece index, a draft image frame's corner (g), a babel name's start or end by its
@@ -746,6 +781,12 @@ export function readAlign(log) {
 export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d+[abt]|n\d+\.[a-z]{1,16}\.[se])$/
 
 // ---------------------------------------------------------------- the marking
+/** a colour piece: a \textcolor's open (`\textcolor{blue!60!black}{`, `\textcolor[rgb]{0,0,1}{`) or a \color switch
+ *  (`\color{red}`, `\color[HTML]{245B60}`): its run's text is set in the colour, which the marked original writes at it
+ *  (LAYOUT_TEX's AXT-COLOUR, readColours) */
+const COLOUR_OPEN = /^\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{$/, COLOUR_SWITCH = /^\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}$/
+export const colourPieceOf = p => (p?.t === 'open' && COLOUR_OPEN.test(p.src ?? '')) || (p?.t === 'ph' && COLOUR_SWITCH.test(p.src ?? ''))
+
 /** patch's own test of the pieces that are always set on the line, where a unit's start mark goes before one that opens
  *  the unit (latex-front.mjs INLINE: kept equal, which layout-marks.test.ts holds against patch itself) */
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
@@ -856,6 +897,8 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
       const after = last
       if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) last = p
+      // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
+      if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
       const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !free(after, p)) ? classOf(p) : null
       if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
@@ -889,10 +932,14 @@ export const MARKS_DEPTH = 3
  *  formula's opening mark set on the empty list after a display (\axtpmm), and `owned` by stream.mjs's OWNED_HOW of a
  *  piece past its column's end and of a display group (a later display of one 'in the display before it'); 7 the marked compile's Link annotations that name a destination (`links`:
  *  rectangle, the glyphs under it, their text), which a reference the matcher misses is placed by; 8 each unit's alignment as
- *  TeX set its paragraph (`align`: LAYOUT_TEX's AXT-ALIGN at its end mark, readAlign), which the maker's centred flag is */
+ *  TeX set its paragraph (`align`: LAYOUT_TEX's AXT-ALIGN at its end mark, readAlign), which the maker's centred flag is,
+ *  and each colour piece's fill as TeX set its run (`colours`: AXT-COLOUR at the piece, readColours) */
 export const MARKS_SCHEMA = 8
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
+/** the keys a marks file holds: KEYS, and `colours` where a colour piece has a fill (a file of before, or of a paper with
+ *  none, is the bytes it was) */
+const keysOf = m => (isObject(m) && Object.hasOwn(m, 'colours') ? [...KEYS, 'colours'] : KEYS)
 /** the marked compile's links (`links`, the link-anchor locator's: make.mjs phOf) at most: a paper's, past which it has none;
  *  a destination's name's code units; a link's text's, past which it is kept with no glyph (n 0: counted for the order, never
  *  an anchor) */
@@ -1186,7 +1233,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   // (the log's line counts and the units' alignments, read before any page: a maker reading the pages as they come takes them
   // with the head)
   const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
-  const align = readAlign(log)
+  const align = readAlign(log), colours = readColours(log)
   // the pages whose links are read: those a placeholder that names a link (linkablePiece) has a point on, the pages between its
   // two points too. Any other page's links are no piece's, and the link-anchor locator never pairs them (make.mjs): PDF.js reads
   // a page's annotations at a cost of its own
@@ -1216,7 +1263,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   // (a paper with no links reads no further page's and keeps none: each page's links are then none, as they would be)
   if (noLinks) annotsAt.clear()
   const links = noLinks ? null : { count: linkCount, dests: [...linkDests].sort() }
-  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, align, links } }
+  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, align, colours, links } }
   // ---- each page, once
   const views = [], wordOf = new Map()
   let words = 0
@@ -1314,7 +1361,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     yield { page: { p, view, tokens, words: fresh, owned, links, dark, found: stream ? stream.found() : p + 1, repeats: stream ? stream.repeats() : [] } }
   }
   if (stream) stream.end(take)
-  yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines, align } }
+  yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines, align, colours } }
 }
 
 /**
@@ -1380,7 +1427,7 @@ export async function readMarked(marked, log, o) {
       owned.push(row)
     }
   }
-  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, align: end.align, words, tokens, chars, owned, links: links ?? [] }, unitMarks, dark }
+  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, align: end.align, colours: end.colours, words, tokens, chars, owned, links: links ?? [] }, unitMarks, dark }
 }
 
 /** whether a destination the head names is a mark of the marks file: on a page of the paper, at numbers within its view
@@ -1405,7 +1452,7 @@ export function columnsOf(head) {
 export function marksOfHead(head, engine) {
   // (its links none yet, each page's added as it is read; how many the paper holds and their destinations' names the head's,
   // for the maker's link-anchor locator: none where the paper has no links)
-  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, align: head.align, words: [], tokens: [], chars: [], owned: [], links: [], linkCount: head.links?.count ?? 0, linkDests: head.links?.dests ?? [] }
+  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, align: head.align, colours: head.colours ?? [], words: [], tokens: [], chars: [], owned: [], links: [], linkCount: head.links?.count ?? 0, linkDests: head.links?.dests ?? [] }
 }
 
 /** a point read twice on pages apart (markedPages' `twice`): its piece 'a mark set twice', owning nothing, nor the displays
@@ -1464,9 +1511,9 @@ function fitted(m) {
 
 /** the marks file as written: the schema's keys in order, numbers to a hundredth */
 export function encodeLayoutMarks(m) {
-  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, align, words, tokens, chars, owned, links } = m
+  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, align, colours, words, tokens, chars, owned, links } = m
   return JSON.stringify({
-    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, align, words,
+    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, align, ...(colours?.length ? { colours } : {}), words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
     owned: owned.map(ownedRow),
     links: (links ?? []).map(e => e.map((v, j) => (j >= 2 && j <= 7 ? r2(v) : v))),
@@ -1477,7 +1524,8 @@ const ownedRow = e => e.map((v, j) => (j < 3 || (j - 3) % 5 === 0 || (j < 3 + 5 
 
 /** bytes, then values and nesting, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
 export function parseLayoutMarks(bytes) {
-  const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH }), KEYS, '')
+  const json = boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH })
+  const m = checkKeys(json, keysOf(json), '')
   if (m.schema !== MARKS_SCHEMA) throw new LayoutRefusal('schema', `not ${MARKS_SCHEMA}`)
   if (!ENGINES.includes(m.engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const marking = checkKeys(m.marking, MARKING_KEYS, 'marking')
@@ -1524,6 +1572,16 @@ export function parseLayoutMarks(bytes) {
     if (!isInteger(e[0], id + 1, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`align[${i}][0]`, 'not an id above the last')
     if (!ALIGN_CODES.includes(e[1])) throw new LayoutRefusal(`align[${i}][1]`, `not one of ${ALIGN_CODES.join(', ')}`)
     id = e[0]
+  }
+  // (each colour piece's fill: a key only where one has a row, none read as none)
+  if (!Object.hasOwn(m, 'colours')) m.colours = []
+  else if (!Array.isArray(m.colours) || m.colours.length === 0) throw new LayoutRefusal('colours', 'not an array of a row or more')
+  for (let i = 0; i < m.colours.length; i++) {
+    const e = m.colours[i], before = m.colours[i - 1]
+    if (!Array.isArray(e) || e.length !== 3) throw new LayoutRefusal(`colours[${i}]`, 'not [id, k, rgb]')
+    if (!isInteger(e[0], 0, Number.MAX_SAFE_INTEGER) || !isInteger(e[1], 0, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`colours[${i}]`, 'not a unit and a piece')
+    if (before && (e[0] < before[0] || (e[0] === before[0] && e[1] <= before[1]))) throw new LayoutRefusal(`colours[${i}]`, 'not a piece after the last')
+    if (!isInteger(e[2], 0, 0xffffff)) throw new LayoutRefusal(`colours[${i}][2]`, 'not a fill 0 to 0xFFFFFF')
   }
   if (!Array.isArray(m.words) || m.words.length > WORDS_MAX) throw new LayoutRefusal('words', `not an array of at most ${WORDS_MAX}`)
   for (let i = 0; i < m.words.length; i++) { const w = m.words[i]; if (typeof w !== 'string' || w.length < 1 || w.length > WORD_MAX) throw new LayoutRefusal(`words[${i}]`, `not a word of 1 to ${WORD_MAX} code units`) }

@@ -35,7 +35,7 @@ import { isMemoryError } from '../pipeline/memory.mjs'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { alignOf } from './remove.mjs'
-import { asSet, classOf, destRect, followsOf, headEnd, layoutMarking, LINKS_MAX, linkablePiece, markAt, symbolText, vetoTwice } from './marks.mjs'
+import { asSet, classOf, colourPieceOf, destRect, followsOf, headEnd, layoutMarking, LINKS_MAX, linkablePiece, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { matcherOf } from './match.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { annotsOf, linkKindOf, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
@@ -393,6 +393,8 @@ function blank(units) {
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
     links: { tried: 0, placed: [], why: {} },
+    // (the colour pieces of the units the file holds, and those whose run's fill TeX wrote: marks.mjs readColours)
+    colours: { pieces: 0, evaluated: 0 },
     capped: [], timedOut: [], inkTimedOut: [], degraded: [], over: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
     // (the page stream's, the marked original read a page at a time: rows found after their unit's own ink was taken, and points
     // read twice after their unit's placeholders were matched; none on a paper read whole)
@@ -706,6 +708,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
 
   // ---------------------------------------------------------------- the units located on arXiv's tokens
   let unitMarks = null, nameOf = null, carriedUnit = null, unplaced = null, linesTeX = null, alignTeX = null, anchors = null
+  /** each unit's colour rows, [unit, k, 0xRRGGBB] by k rising (the marks file's `colours`: the fill TeX set each colour piece's
+   *  run in), the file's `colours` for the units it holds */
+  let coloursBy = null
+  const coloursOf = list => { const by = new Map(); for (const r of list ?? []) (by.get(r[0]) ?? by.set(r[0], []).get(r[0])).push(r); return by }
+  /** a unit's colour pieces counted, and those with a row (stats.colours) */
+  const countColours = i => { for (const p of units[i]?.pieces ?? []) if (colourPieceOf(p)) stats.colours.pieces++; stats.colours.evaluated += coloursBy.get(i)?.length ?? 0 }
   /** the unit start marks by page: [key, mark, place], the place the key's first name's in the marks' order (the order the
    *  unit marks are met in), for the unit a babel name leads (leadAt) */
   let startsOn = new Map()
@@ -753,7 +761,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
-    linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? [])
+    linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours)
     anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
     stats.ms.anchor = now() - t
   }
@@ -2183,6 +2191,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // the paper's \lineskip and \lineskiplimit as TeX gave them (marks.mjs readSkipProbe), which the layer opens a line by
       lineskip: marks.marking.lineskip ?? null,
     }
+    // each colour piece's run's fill (marks.mjs readColours), of the units it holds: a key only where one has a row
+    const outColours = outUnits.flatMap(r => coloursBy.get(r[0]) ?? [])
+    if (outColours.length) file.colours = outColours
+    for (const r of outUnits) countColours(r[0])
     stats.ph.texts = file.pageText.length
     Object.assign(stats.match, matcher.stats)
     // the placeholders and labels counted as the file holds them
@@ -2385,7 +2397,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // ---- the names in their order (the marks file's): each page's, each unit key's ([th]?<id>[se]), the babel names', the
     // draft frames'
     unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
-    carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); anchors = new Map()
+    carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours); anchors = new Map()
     const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours)
     const byName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
     const listed = mh ? mh.named.filter(([, page]) => Number.isInteger(page) && page >= 1 && page <= M).sort(byName) : [...at].map(([nm, m]) => [nm, m.page, m.x, m.y])
@@ -2560,7 +2572,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const last = (list, j = 0) => (list.at(-1)?.[j] === i ? [list.at(-1)] : [])
       const phs = [], texts_ = []
       for (let x = one.entries?.[0] ?? 0; x < (one.entries?.[1] ?? 0); x++) { phs.push(ph[x].row); if (ph[x].text) texts_.push([ph[x].row[0], ph[x].row[1], ph[x].text]) }
-      const mini = { fonts: [], units: [outUnits.at(-1)], lines: [outLines.at(-1)], frames: [outFrames.at(-1)], erase: last(outErase), ph: phs, labels: labelRows.has(i) ? [labelRows.get(i)] : [], headings: last(outHeadings), pageText: texts_, held: last(outHeld), names: [] }
+      const mini = { fonts: [], units: [outUnits.at(-1)], lines: [outLines.at(-1)], frames: [outFrames.at(-1)], erase: last(outErase), ph: phs, labels: labelRows.has(i) ? [labelRows.get(i)] : [], headings: last(outHeadings), pageText: texts_, held: last(outHeld), names: [], colours: coloursBy.get(i) ?? [] }
       unitRows.set(i, JSON.parse(JSON.stringify(layoutPartRows(mini))))
       // (admit's file of the whole holds none of them here: the stream's rows are unitRows')
       outUnits.length = 0; outLines.length = 0; outFrames.length = 0; outErase.length = 0; outHeld.length = 0; outHeadings.length = 0
@@ -2705,6 +2717,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key] = []
       for (const i of ids) { const r = unitRows.get(i); for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key].push(...r[key]) }
       out.names = rows
+      // (each colour piece's run's fill: a key only where a unit of the part has one)
+      const colours = ids.flatMap(i => unitRows.get(i).colours ?? [])
+      if (colours.length) out.colours = colours
       return out
     }
     // ---- the babel names, each a task on the pages its marks are carried to and those of the unit it would lead (nameAt
@@ -2922,6 +2937,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (one.label) tally[0]++
       }
       stats.ph.texts = [...unitRows.values()].reduce((m, r) => m + r.pageText.length, 0)
+      for (const i of inFile) countColours(i)
       Object.assign(stats.match, matcher.stats)
     }
     return {

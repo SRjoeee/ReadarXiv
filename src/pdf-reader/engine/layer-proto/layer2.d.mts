@@ -129,6 +129,9 @@ export interface Prepared extends Map<number, Resolved> {
   /** each placeholder's fill by a source that knows it (tex.mjs fillOf), by piece index: what its rendering's text is drawn
    *  in, 0xRRGGBB; MIXED_FILL or null, its run's colour */
   fillOf?: ((k: number) => number | null) | null
+  /** each colour piece's run's fill by a source that knows it (tex.mjs colourOf), by piece index: what the run is drawn in,
+   *  0xRRGGBB, over a placeholder's own fill; null, the colour around it */
+  colourOf?: ((k: number) => number | null) | null
 }
 /** part 1 and part 2 as a source gives them */
 export interface UnitLines {
@@ -168,6 +171,8 @@ export interface UnitParts {
   breaks?: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
   /** each placeholder's fill by the source (a layout file's row), by piece index: 0xRRGGBB, MIXED_FILL (-1) or null */
   fillOf?: (k: number) => number | null
+  /** each colour piece's run's fill by the source (the layout file's `colours`), by piece index: 0xRRGGBB or null */
+  colourOf?: (k: number) => number | null
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it

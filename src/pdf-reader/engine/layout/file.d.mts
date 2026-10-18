@@ -62,6 +62,8 @@ export interface LayoutFile {
   names: number[][]
   /** the paper's \lineskip and \lineskiplimit, PDF units, as TeX gave them (marks.mjs readSkipProbe); null: none given */
   lineskip: [lineskip: number, lineskiplimit: number] | null
+  /** each colour piece's run's fill as TeX set it (marks.mjs readColours), by unit and k rising; the key only where a unit has one */
+  colours?: [id: number, k: number, rgb: number][]
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; a file of another `schema` is
  *  refused, one of another maker's `layout` is read; throws LayoutRefusal. `sized` false: none of the bounds a part holds
@@ -79,7 +81,7 @@ export declare function checkLineskip(lineskip: unknown, path: string): [lineski
 export declare const PART_KEYS: readonly ['fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names']
 /** a layout part: the file's rows and tables of PART_KEYS for the units of one part (a bundle 4 part holds one); its
  *  `fonts` is its own table, which its lines' font indices and its names' name an index of */
-export type LayoutPart = Pick<LayoutFile, (typeof PART_KEYS)[number]>
+export type LayoutPart = Pick<LayoutFile, (typeof PART_KEYS)[number] | 'colours'>
 /** a layout part already parsed: every row bound checkLayout checks, per part, with each row's page one of `lo` to `hi` and
  *  its box within that page's view; `views` are the views of pages lo to hi (stride 4), `pages` the paper's. Returns the
  *  value itself, its -0s written 0; throws LayoutRefusal (a RangeError for a call that is no pages of the paper) */
@@ -103,6 +105,8 @@ export interface LayoutUnit {
   heading: string | null
   /** the lines its source does not write: no slot, never erased (rising, never its first) */
   held: readonly number[]
+  /** each colour piece's run's fill (0xRRGGBB) as TeX set it, by its piece index */
+  colours: ReadonlyMap<number, number>
 }
 /** a name's occurrence as the layer reads it */
 export interface LayoutName {

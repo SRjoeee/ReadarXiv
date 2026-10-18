@@ -127,6 +127,8 @@ export interface LayoutMarks {
   lines: [id: number, n: number][]
   /** each unit's alignment as TeX set its paragraph (readAlign): centred, flush left, flush right, justified; ids rising */
   align: [id: number, code: AlignCode][]
+  /** each colour piece's fill as TeX set its run (readColours): [unit, k, 0xRRGGBB], rising by unit and k */
+  colours: [id: number, k: number, rgb: number][]
   /** the marked original's distinct words */
   words: string[]
   /** its text tokens (tokenizeDocument): page, x, y, w, h, word (stride 6); word -1 the rest of the word before, given
@@ -164,6 +166,11 @@ export declare const ALIGN_CODES: readonly AlignCode[]
 /** each unit's alignment from the marked original's log (LAYOUT_TEX's AXT-ALIGN at its end mark): [[unit, code]], ids rising;
  *  none for a unit TeX set in an hbox or that wrote no line */
 export declare function readAlign(log: string | null | undefined): [number, AlignCode][]
+/** each colour piece's fill from the marked original's log (LAYOUT_TEX's AXT-COLOUR at the piece): [[unit, k, 0xRRGGBB]],
+ *  rising; none for a piece set in two colours or whose colour string is of no form known */
+export declare function readColours(log: string | null | undefined): [number, number, number][]
+/** whether a piece is a colour piece: a \textcolor's open or a \color switch, which the marking writes its colour at */
+export declare function colourPieceOf(p: { t?: string; src?: string } | null | undefined): boolean
 /** a piece's own ink at most, its glyphs and its rules; and a paper's in all */
 export declare const GLYPHS_PIECE: number
 export declare const RULES_PIECE: number
@@ -186,7 +193,7 @@ export type MarkedDark = 'timedOut' | 'capped' | 'degraded' | null
 /** the head's verdict on the paper's links (read before any page): how many its link pages hold and their destinations' names,
  *  or null where it has none (a page's not read within OPS_MS or past MAX_LINKS, or all past LINKS_MAX) */
 export interface MarkedLinks { count: number; dests: string[] }
-export interface MarkedHead { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; pageOf: Map<string, number>; lines: [number, number][]; align: [number, AlignCode][]; unitMarks: UnitMarks | null; links: MarkedLinks | null }
+export interface MarkedHead { pages: number; marking: LayoutMarks['marking']; dropped: string[]; set: Set<string>; named: [string, number | null, number, number][]; destPage: Map<string, number>; pageOf: Map<string, number>; lines: [number, number][]; align: [number, AlignCode][]; colours: [number, number, number][]; unitMarks: UnitMarks | null; links: MarkedLinks | null }
 /** one page of the marked original as it is read: its tokens, the words first seen on it, the pieces found once it was read,
  *  why it has no ink (null: it has), the page before which every opening point's piece is found, the points read again on it */
 export interface MarkedPage { p: number; view: number[]; tokens: number[]; words: string[]; owned: [string, OwnedRow][]; links: LinkRow[] | null; dark: MarkedDark; found: number; repeats: string[] }
@@ -194,7 +201,7 @@ export interface MarkedPage { p: number; view: number[]; tokens: number[]; words
 export type MarkedEvent =
   | { head: MarkedHead }
   | { page: MarkedPage }
-  | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][]; align: [number, AlignCode][] } }
+  | { end: { owned: [string, OwnedRow][]; twice: Set<string>; lines: [number, number][]; align: [number, AlignCode][]; colours: [number, number, number][] } }
 /** the marked original read a page at a time, an async generator: its head, each page in order, its end */
 export declare function markedPages(marked: unknown, log: string, o: MarkedOptions): AsyncGenerator<MarkedEvent>
 /** the marked original read once, a page at a time (markedPages, drained): the marks in memory (as parseLayoutMarks reads their

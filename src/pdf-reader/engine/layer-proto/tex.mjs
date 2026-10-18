@@ -394,6 +394,9 @@ export const emptyOf = (lu, kOf, p) => VISIBLE.has(p.cls) && p.cls !== 'symbol' 
  *  page are filled with (0xRRGGBB), MIXED_FILL where no one colour holds more than half, null where they are black or
  *  the file has no row with segments for it (layout/file.mjs indexLayout's `fill`) */
 export const fillOf = (lu, kOf) => k => (lu && kOf && kOf[k] >= 0 ? lu.ph.get(kOf[k])?.fill ?? null : null)
+/** each colour piece's run's fill by the file, by its piece index (`k`): the fill TeX set the run of a \textcolor or a \color
+ *  switch in (0xRRGGBB, the file's `colours`), null where the file has none (its colour not known: no guess) */
+export const colourOf = (lu, kOf) => k => (lu && kOf && kOf[k] >= 0 ? lu.colours?.get(kOf[k]) ?? null : null)
 
 /** a row's segments (stride 6: page, x0, baseline, x1, top, bottom) as boxes */
 const segmentsOf = segs => {
@@ -582,6 +585,7 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = I
   const parts = {
     proof: proofOf(lu, kOf, shown),
     fillOf: fillOf(lu, kOf),
+    colourOf: colourOf(lu, kOf),
     renderings({ unit, phs, uc, gaps, citeMap }) {
       const found = new Map(), joined = []
       let cover

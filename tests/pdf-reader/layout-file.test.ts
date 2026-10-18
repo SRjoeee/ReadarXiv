@@ -872,3 +872,32 @@ describe('a hostile file costs no long task', () => {
     expect(no).toBeLessThan(50)
   })
 })
+
+describe("each colour piece's run's fill (`colours`, PR-C): a key only where a unit has one", () => {
+  const withColours = (colours: unknown) => { const f = structuredClone(made()) as unknown as Record<string, unknown>; f.colours = colours; return f }
+  it('is read, indexed by piece, written back as it is, and its absence leaves the file the bytes it was', () => {
+    const f = withColours([[2, 0, 0x000099], [2, 4, 0xff0000], [5, 1, 0]])
+    const parsed = parseLayout(utf8(JSON.stringify(f)))
+    expect(parsed.colours).toEqual([[2, 0, 0x000099], [2, 4, 0xff0000], [5, 1, 0]])
+    const index = indexLayout(parsed)
+    expect(index.unit(2)?.colours).toEqual(new Map([[0, 0x000099], [4, 0xff0000]]))
+    expect(index.unit(3)?.colours.size).toBe(0)
+    expect(parseLayout(utf8(encodeLayout(parsed)))).toEqual(parsed)
+    const none = parseLayout(utf8(JSON.stringify(made())))
+    expect(encodeLayout(none)).not.toContain('colours')
+  })
+  it('refuses an empty key, a row of another shape, a unit not of units, a piece past its unit\'s, rows out of order and a fill out of range', () => {
+    for (const [colours, path] of [[[], 'colours'], [[[2, 0]], 'colours[0]'], [[[4, 0, 1]], 'colours[0][0]'], [[[2, 5, 1]], 'colours[0][1]'], [[[2, 1, 1], [2, 0, 1]], 'colours[1][1]'], [[[2, 1, 0x1000000]], 'colours[0][2]'], [[[2, 1, -1]], 'colours[0][2]'], ['x', 'colours']] as const) {
+      expect(refusal(utf8(JSON.stringify(withColours(colours))))?.path, JSON.stringify(colours)).toBe(path)
+    }
+  })
+  it('a part holds them too, and the parts merged hold them by unit and piece', () => {
+    const f = parseLayout(utf8(JSON.stringify(withColours([[2, 0, 0x000099], [5, 1, 0]]))))
+    const rows = layoutPartRows(f as never)
+    expect(rows.colours).toEqual([[2, 0, 0x000099], [5, 1, 0]])
+    const a = { ...(rows as object), colours: [[5, 1, 0]] }, b = { ...(rows as object), colours: [[2, 0, 0x000099]] }
+    expect(mergeLayout([a, b] as never).colours).toEqual([[2, 0, 0x000099], [5, 1, 0]])
+    const { colours: _drop, ...bare } = rows as { colours?: unknown }
+    expect(Object.hasOwn(mergeLayout([bare] as never), 'colours')).toBe(false)
+  })
+})
