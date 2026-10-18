@@ -42,6 +42,8 @@ import { annotsOf, linkKindOf, MAX_LINKS, readAnnots } from '../layer-proto/link
 
 /** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
 const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
+/** an ownership whose two points were both read (stream.mjs): the one in which nothing between them is no ink */
+const CLOSED = OWNED_HOW.indexOf('closed')
 
 /** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
 export const CARRY_MIN = 0.9
@@ -1457,8 +1459,15 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
       const n = e[2], items = itemsOfInk(e), rules = []
       for (let j = 3 + 5 * n; j < e.length; j += 5) rules.push({ page: e[j], x0: e[j + 1], y0: e[j + 2], x1: e[j + 3], y1: e[j + 4] })
-      // EMPTY only where its points hold nothing between them: the piece draws nothing
-      if (!items.length && !rules.length) { ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
+      // EMPTY only where both its points hold nothing between them: TeX set nothing there, and the piece draws nothing. One
+      // whose closing point was never read (an open ownership) that holds nothing says only that nothing stands before the
+      // next point or the text after it, which may be at its own glyph (2610.19159: a \textquotedbl{} whose opening point
+      // shares its glyph with another piece's, set late, the quote on arXiv's line): its ink is not known, LOST
+      if (!items.length && !rules.length) {
+        if (e[1] !== CLOSED) { lost('open, nothing owned'); continue }
+        ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' })
+        continue
+      }
       // every owned glyph and rule carried to arXiv's PDF and matched there, or the piece is LOST
       let got = matcher.match(items, rules, at.get(name) ?? null, at.get(`${prefix}${i}.${k}b`) ?? null)
       // (a reference or a citation not found by its own glyphs: by its links, the link-anchor locator, where ours has any)

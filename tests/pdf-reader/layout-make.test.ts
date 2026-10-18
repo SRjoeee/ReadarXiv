@@ -261,6 +261,25 @@ describe('makeLayout', () => {
     expect(stats.ph).toMatchObject({ marked: 3, found: 0, empty: 1, lost: 2 })
   })
 
+  it('a piece whose closing point was never read and that owns nothing before the next point is LOST, not EMPTY (no-ink round)', async () => {
+    // 2610.19159's shape: a code line's opening quote, \textquotedbl{}, its opening point read at its own glyph and its
+    // closing one never, another piece's point (set late) at the same glyph: the open range holds nothing, though the
+    // quote stands right there. Nothing proves it set no ink: its ink is not known
+    const runs: Run[] = [{ s: 'x y echo "=== a b', x: 72, y: 700 }]
+    const at = (j: number) => xAt(runs[0] as Run, j)
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.3a', 1, at(9), 700], ['p0.1a', 1, at(9), 700]],
+      units: [unit('para', [text('x '), ph('\\#'), text(' y echo '), ph('\\textquotedbl{}'), text('=== a b')])],
+    }
+    const { file, stats } = await made(w)
+    expect(phOf(file, 0, 3)).toEqual([0, 3, 6, PH_FLAG.LOST])
+    expect(stats.ph.why['open, nothing owned']).toBe(1)
+    // (both points read with nothing between them: TeX set nothing there, EMPTY as before)
+    const closed = await made({ ...w, marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.3a', 1, at(9), 700], ['p0.3b', 1, at(9), 700]] })
+    expect(phOf(closed.file, 0, 3)).toEqual([0, 3, 6, PH_FLAG.EMPTY])
+  })
+
   it('one arXiv glyph to one piece: a second piece whose own glyph is not on arXiv\'s page is LOST, and takes nothing of the first\'s', async () => {
     const ours: Run[] = [{ s: 'say XX now and later', x: 72, y: 700 }]
     const at = (j: number) => xAt(ours[0] as Run, j)
