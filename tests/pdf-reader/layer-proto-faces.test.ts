@@ -16,6 +16,8 @@ let faceLoads: string[] = []
 let early: string[] = []
 let fontStrings = new Set<string>()
 let rejects: (src: string) => boolean = () => false
+// WebKit: a load that matches a failed face and a loaded one fulfils with the loaded one, where Chromium rejects
+let fulfilsLoaded = false
 
 /** the code points of a unicode-range descriptor, as [start, end] pairs */
 function rangesOf(descriptor: string | undefined): number[][] | null {
@@ -69,7 +71,7 @@ const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as 
 
 const g = globalThis as Record<string, unknown>
 beforeEach(() => {
-  faces = []; fontLoads = []; faceLoads = []; early = []; fontStrings = new Set(); rejects = () => false
+  faces = []; fontLoads = []; faceLoads = []; early = []; fontStrings = new Set(); rejects = () => false; fulfilsLoaded = false
   vi.resetModules()
   g.OffscreenCanvas = class { width = 8; height = 8; getContext() { return ctxStub(this) } }
   ;(HTMLCanvasElement.prototype as unknown as { getContext: () => unknown }).getContext = function (this: HTMLCanvasElement) { return ctxStub(this) }
@@ -96,6 +98,7 @@ beforeEach(() => {
         const { weight, families } = parseFont(font)
         const want = families.flatMap(fam => facesAt(fam, weight)).filter(f => [...text].some(ch => inRanges(rangesOf(f.unicodeRange), ch.codePointAt(0)!)))
         const done = await Promise.allSettled(want.map(f => (f as unknown as { load(): Promise<unknown> }).load()))
+        if (fulfilsLoaded) return want.filter(f => f.status === 'loaded')
         if (done.some(d => d.status === 'rejected')) throw new Error('NetworkError')
         return want
       },
@@ -284,6 +287,32 @@ describe('a slice that does not load', () => {
     expect(new Set(asked.map(l => l.font)).size).toBe(1)
     expect(run.svgOf(1).innerHTML).not.toContain('data-u="0"')
     expect(run.svgOf(1).innerHTML).not.toContain('data-u="2"')
+  })
+
+  // U+6C49 is in the failed slice, U+5B57 in a loaded one; the unit with both has a face failed among the faces it asks
+  const SLICES: [string, string][] = [['Alpha beta gamma', '\u6c49'], ['Delta epsilon zeta', '\u5b57\u5b57'], ['Eta theta iota', '\u6c49\u5b57']]
+  for (const [browser, webkit] of [['Chromium (the load rejects)', false], ['WebKit (the load fulfils with the faces that loaded)', true]] as const) {
+    it(`reads the status of the faces a unit asks, not the load's promise, in ${browser}, whichever unit is asked first`, async () => {
+      const verdicts: string[][] = []
+      for (const order of [[0, 1, 2], [2, 1, 0], [1, 0, 2]]) {
+        vi.resetModules()
+        faces = []
+        rejects = src => src.includes('shs-sc-regular-6.woff2')
+        fulfilsLoaded = webkit
+        const run = await open(order.map(i => SLICES[i]!), { faceSources: slicesOfAll })
+        await run.until(1)
+        verdicts.push(run.skipped.map(s => `${SLICES[order[s.id]!]![1]}:${s.why}`).sort())
+      }
+      for (const v of verdicts) expect(v).toEqual(['\u6c49:face', '\u6c49\u5b57:face'])
+    })
+  }
+
+  it('draws a unit whose faces all loaded, in a browser that fulfils the load with the faces that loaded', async () => {
+    fulfilsLoaded = true
+    const run = await open(SLICES, { faceSources: slicesOfAll })
+    await run.until(1)
+    expect(run.skipped).toEqual([])
+    expect(run.stats.map(r => r.id)).toEqual([0, 1, 2])
   })
 
   it('keeps a failed FontFace for the run it failed in, and lets it go before the next open, which declares it again', async () => {

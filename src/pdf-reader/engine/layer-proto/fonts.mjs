@@ -164,15 +164,16 @@ function forgetFailed() {
 export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}` } = {}) {
   forgetFailed()
   const tables = new Map()
-  /** a face's table: null (not served) or { lists (its served ranges, as one sorted list), faces (its FontFaces) } */
+  /** a face's table: null (not served) or { lists (its served ranges, as one sorted list), faces (its FontFaces), ranges (each
+   *  one's code points as [start, end] pairs, null for a whole file: every character) } */
   const table = id => {
     let t = tables.get(id)
     if (!t) {
       t = (async () => {
         const F = FACES[id]
-        if (!faceSources) return { lists: [COVERAGE[id]], faces: [sliceFace(F, faceUrl(F.file), null)] }
+        if (!faceSources) return { lists: [COVERAGE[id]], faces: [sliceFace(F, faceUrl(F.file), null)], ranges: [null] }
         const slices = slicesOf(id, await faceSources(id))
-        return slices && { lists: [mergeRanges(slices.map(sl => sl.ranges))], faces: slices.map(sl => sliceFace(F, sl.url, sl.ranges)) }
+        return slices && { lists: [mergeRanges(slices.map(sl => sl.ranges))], faces: slices.map(sl => sliceFace(F, sl.url, sl.ranges)), ranges: slices.map(sl => sl.ranges) }
       })()
       tables.set(id, t)
     }
@@ -208,8 +209,13 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
       const missing = need.filter(ch => !canDrawIn(ch, lists))
       if (missing.length) return { why: 'served', missing: missing.slice(0, 8).map(ch => ch.codePointAt(0)) }
     }
-    return { font, fresh }
+    return { font, fresh, need, got }
   }
+  /** whether a face that holds a glyph `v` asks is not loaded, now that its load has settled. The promise of
+   *  document.fonts.load is not the verdict: a browser that has seen a face fail (on an earlier character) fulfils a later
+   *  load that matches it with just the faces that did load. A face still unloaded counts as failed, and a failed one
+   *  stays failed, so the answer for a unit does not depend on which unit asked first */
+  const unloaded = v => v.got.some(t => t?.faces.some((f, n) => f.status !== 'loaded' && v.need.some(ch => t.ranges[n] === null || canDrawIn(ch, [t.ranges[n]]))))
   return {
     async check(runs) {
       const plan = []
@@ -221,7 +227,7 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
       const results = await Promise.allSettled(plan.map(async v => document.fonts.load(v.font, v.fresh)))
       let failed = false
       results.forEach((r, n) => {
-        if (r.status === 'fulfilled') for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
+        if (r.status === 'fulfilled' && !unloaded(plan[n])) for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
         else failed = true
       })
       return failed ? { why: 'face' } : null
