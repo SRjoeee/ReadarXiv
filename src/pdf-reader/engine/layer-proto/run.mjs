@@ -1386,8 +1386,50 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
 
-  // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits)
+  // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits): a unit of a
+  // part with no layout is centred where its lines are its column's middle, every line short of it, the first not at its
+  // edge (a caption under its figure, a title over the text), as the file's flag is no such unit's
   const cols = []
+  const centredInColumn = b => {
+    const rs = b.rects, list = cols[b.page] ?? []
+    const mid = (b.x0 + b.x1) / 2
+    const own = list.filter(([a, z]) => a <= mid && z >= mid)
+    if (own.length < 3) return false
+    const cx0 = Math.min(...own.map(c => c[0])), cx1 = Math.max(...own.map(c => c[1])), cmid = (cx0 + cx1) / 2
+    const centres = rs.map(r => (r[1] + r[3]) / 2)
+    return centres.every(c => Math.abs(c - cmid) < 2.5) && rs.every(r => r[3] - r[1] < 0.92 * (cx1 - cx0)) && rs[0][1] > cx0 + 4
+  }
+  // a table cell's centring, which TeX's probe does not tell (a cell's marks carry none) and the page's column does not
+  // either: a cell of several lines by its own (blocks2's rule: their middles agree and their widths do not, a makecell's or
+  // a shortstack's); one of a single line by its table's column on its page, the file's lines of the cells of its column:
+  // centred where their middles agree and their widths do not (a c column's), else not (an l or p column's, whose cells
+  // share their start: 2609.26457's unit 126). Its column's cells: the open's table groups where it is given them (the
+  // door's, every group whole from the open), else the units' own places or groups (a whole open's, every unit given)
+  const columnKey = (id, u) => {
+    const c = u?.cell
+    if (c) return `${c.table}:c${c.col}${c.span > 1 ? `+${c.span}` : ''}`
+    const g = u?.group ?? null
+    return typeof g === 'string' && !g.endsWith(':h') ? g : null
+  }
+  const columnOfCell = p => {
+    if (tableGroups) { const g = tableGroups.get(p.id); return typeof g === 'string' && !g.endsWith(':h') ? membersOf.get(g) ?? [] : [] }
+    const key = columnKey(p.id, p.unit), ids = []
+    if (key !== null) for (const [id, u] of U) if (columnKey(id, u) === key) ids.push(id)
+    return ids
+  }
+  const cellCentred = p => {
+    const r0 = p.rects[0]
+    if (!r0) return false
+    if (new Set(p.rects.filter(r => r[0] === r0[0]).map(r => Math.round(r[2]))).size > 1) return undefined
+    const spans = []
+    for (const id of columnOfCell(p)) {
+      const L = filed(id) ? tex.index.unit(id)?.lines : null
+      for (let j = 0; L && j + 7 < L.length; j += 8) if (L[j] === r0[0]) spans.push([L[j + 1], L[j + 2]])
+    }
+    if (spans.length < 2) return false
+    const mids = spans.map(([a, z]) => (a + z) / 2).sort((a, b) => a - b), m = mids[mids.length >> 1], widths = spans.map(([a, z]) => z - a)
+    return mids.every(x => Math.abs(x - m) <= 2) && Math.max(...widths) - Math.min(...widths) > 4
+  }
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
   // the units the hybrid draws that v0's geometry does not hold, as each is placed)
   // (and a copy of each as it was added, before any unit grew one: what decides whether all of a unit's lines are another's)
@@ -1866,9 +1908,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // heading): centred with the line, label and text one, as TeX centred them, its ink copied as the line's start (a crop, as
     // a numbered heading's below), the line from the label on (`carried`). Left where it was, the shorter text centred alone
     // stood an em or more away from it
-    const carried = !!lu?.centred && !!prep.label?.chars?.length && !prep.label.drawn && !!p.rects[0] && prep.label.chars.every(c => c.page === p.rects[0][0])
+    const centredFlag = !lu ? undefined : p.unit.kind === 'cell' ? cellCentred(p) : lu.centred
+    const carried = centredFlag === true && !!prep.label?.chars?.length && !prep.label.drawn && !!p.rects[0] && prep.label.chars.every(c => c.page === p.rects[0][0])
     if (carried) { const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r0[1]) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]] }
-    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt, lu ? lu.centred : undefined)
+    p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, filed(p.id) ? LINESKIP : null, prep.breakAt, prep.joinAt, centredFlag)
+    if (!lu) for (const b of p.blocks) if (!b.centred && centredInColumn(b)) b.centred = true
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // (the unit's displays TeX set with its short skip under a line of its own that ends 2 em before them, each the block's of
     // that line: the line laid there ends as far before them, layer2.mjs slotsAt)

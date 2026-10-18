@@ -45,3 +45,41 @@ describe('a centred heading\'s kept number goes with its line', () => {
     expect(ops.some(o => o.op === 'erase' && (o.box?.[0] ?? 999) <= 100)).toBe(true)
   })
 })
+
+// A heading of several lines whose class set its number before its first line (kept as the original's ink), set in fewer
+// lines: laid again on the original's last lines with its number as the line's start (run.mjs `numbered`: the number's ink
+// copied there, a crop, the original's erased), so that the room it frees falls above it (layer-heading-last.test.ts lays
+// the lines alone)
+const numberedPaper: Paper = {
+  name: 'numbered heading', pages: 1,
+  specs: [para(0, [[1, 270, 4]], 30), { id: 1, kind: 'heading', lines: [line(1, 200, 'A long heading of two', 40, 200), line(1, 188, 'lines here', 40, 120)], chars: 4, at: 0x4e00 + 64 }],
+}
+const numberedBuilt = () => {
+  const P = build(numberedPaper)
+  const layout = P.layout as unknown as { units: number[][]; labels: number[][]; frames: [number, number[]][] }
+  layout.units = layout.units.map(u => (u[0] === 1 ? [u[0], u[1], 1, 0, u[4]] : u)) as never
+  layout.frames = layout.frames.map(([id, rows]) => (id === 1 ? [id, [1, 0, 0, 2, -1, 0]] : [id, rows])) as never
+  layout.labels = [[1, LABEL_KINDS.indexOf('number'), 1, 20, 200, 30, 207, 198]]
+  P.index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(P.layout))))
+  const getPage = P.doc.getPage
+  P.doc.getPage = async (n: number) => {
+    const pg = (await getPage(n)) as { getTextContent: () => Promise<{ items: unknown[] }> }
+    const tc = pg.getTextContent
+    return { ...pg, getTextContent: async () => { const t = await tc(); return { ...t, items: [{ str: '1', transform: [10, 0, 0, 10, 20, 200], width: 5, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }, ...t.items] } } }
+  }
+  return P
+}
+
+describe('a numbered heading set in fewer lines goes on its last line with its number', () => {
+  it('one line on the second baseline, the number\'s ink copied as its start and erased where it stood', async () => {
+    const run = await openRun(numberedBuilt())
+    await run.layFor(1)
+    expect(run.recordErrors).toEqual([])
+    const lines = (run.stats.find(x => x.id === 1)?.lines ?? []) as unknown as [number, number][]
+    expect(lines.map(l => l[1])).toEqual([188])
+    const ops = (run.rows[0]?.ops ?? []) as { op: string; src?: number[]; dst?: number[]; box?: number[] }[]
+    const crop = ops.find(o => o.op === 'crop')
+    expect(crop?.src?.[0]).toBeCloseTo(19.6, 1)
+    expect(ops.some(o => o.op === 'erase' && (o.box?.[0] ?? 999) <= 20)).toBe(true)
+  })
+})

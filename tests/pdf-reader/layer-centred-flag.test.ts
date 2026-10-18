@@ -1,10 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 
 // A unit's blocks are centred as the layout file has it (layer2.mjs blocks2's `centred`, run.mjs: UNIT_FLAG.CENTRED, TeX's own
-// alignment where the marked original tells it, else the maker's reading of arXiv's lines). A unit no file holds (a part laid
-// with no layout) is read from its lines, as before: several whose centres agree and whose widths differ, or one in the page's
-// middle. 1810.04805's "C.1 Effect of Number of Training Steps" and "5.3 Feature-based Approach with BERT" were set centred by
-// the layer's own guess, the title's span after its number in its column's middle by chance; the guess (centredInColumn) is gone
+// alignment where the marked original tells it, else the maker's reading of arXiv's lines). Given no word, blocks2 reads the
+// block's own lines: several whose centres agree and whose widths differ, or one in the page's middle; the run adds, for a unit
+// of a part with no layout, the page's column (run.mjs centredInColumn, layer-proto-centring.test.ts), and decides a table cell
+// by its own lines and its table's column. 1810.04805's "C.1 Effect of Number of Training Steps" and "5.3 Feature-based Approach
+// with BERT" were set centred by the column's guess, the title's span after its number in its column's middle by chance: a unit
+// the file holds is no longer guessed
 
 type L2 = typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
 let L2: L2
@@ -25,7 +27,7 @@ describe('a unit\'s blocks centred as the layout file has it', () => {
     expect(told.map(b => [b.centred, b.measures ?? null])).toEqual([[true, null]])
   })
 
-  it('no file\'s word (a part laid with no layout): read from its lines, as before', () => {
+  it('no word given: blocks2 reads the block\'s own lines alone (the run adds the column for a unit with no layout)', () => {
     expect(L2.blocks2(middle as never, views, null, new Map()).map(b => b.centred)).toEqual([true])
     expect(L2.blocks2(para as never, views, null, new Map()).map(b => b.centred)).toEqual([false])
   })
