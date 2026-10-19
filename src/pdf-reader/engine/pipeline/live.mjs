@@ -447,10 +447,10 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 19: 20 changes what a unit is (none of what TeX reads as syntax, a declaration's digits its text: arg-roles.mjs
  *   readArgs and DELIMITED, latex-front.mjs), not what is sent for one or how a reply is read back (the wire keeps its own
  *   inkless list, mt.mjs INKLESS): every unit whose source a copy holds is carried, and older pipelines keep their own tests
- * - 20: 21 keeps a styled pair whose two ends stand where the wire has a marker anyway (mt.mjs classOf's boundary rule,
+ * - 20: 21 keeps a styled pair whose two ends stand where the wire is cut anyway (mt.mjs classOf's boundary rule,
  *   TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read back: a unit whose wire the rule leaves
  *   as it was (mt.mjs boundaryChanges, given the unit) was sent as 21 sends it, and is carried; without the unit, a
- *   translation that holds no pair. Over 137 papers' sources 295 of 36,104 units are asked again. Every older pipeline's
+ *   translation that holds no pair. Over 137 papers' sources 122 of 36,104 units are asked again. Every older pipeline's
  *   test takes this one with its own (7 to 14 carry no unit that holds a pair already)
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))

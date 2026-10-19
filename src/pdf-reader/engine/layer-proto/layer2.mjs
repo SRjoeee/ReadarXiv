@@ -2471,15 +2471,23 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     const st = !own.colourRun && Number.isInteger(fill) && fill >= 0 ? { ...own, color: hexOf(fill) } : own
     // (a rendering of the page's own characters in their own fills, each run of one fill its own colour: "[16]"'s black brackets and
     // blue digits, cleveref's black "Figure" before its linked "1"; a character whose fill is not told in the colour above)
-    const runs = r.mode === 'orig-text' && !r.math ? fillRunsOf(r.gap?.chars, r.text) : null
+    // (runs drawn alike, a character whose fill is not told beside one of the colour it falls back to, are one: no token more
+    // than the colours need)
+    const fills = r.mode === 'orig-text' && !r.math ? fillRunsOf(r.gap?.chars, r.text) : null
+    const runs = fills ? [] : null
+    for (const run of fills ?? []) {
+      const rs = run.fill === UNKNOWN ? st : { ...own, color: run.fill > 0 ? hexOf(run.fill) : undefined }
+      const last = runs.at(-1)
+      if (last && (last.st.color ?? null) === (rs.color ?? null)) last.text += run.text
+      else runs.push({ text: run.text, st: rs })
+    }
     if (r.sup) {
       // (a raised rendering in its runs too, each glued to the one before: a superscript citation's black brackets, its blue digits)
-      for (const run of runs ?? [{ text: r.text, fill: UNKNOWN }]) {
-        const sst = run.fill === UNKNOWN ? st : { ...own, color: run.fill > 0 ? hexOf(run.fill) : undefined }
-        const face = faceOf(sst, 'latin', to)
-        tokens.push({ s: run.text, st: sst, face, cls: 'latin', w100: measure(run.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
+      for (const run of runs ?? [{ text: r.text, st }]) {
+        const face = faceOf(run.st, 'latin', to)
+        tokens.push({ s: run.text, st: run.st, face, cls: 'latin', w100: measure(run.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
       }
-    } else if (runs) for (const run of runs) pushText(run.text, run.fill === UNKNOWN ? st : { ...own, color: run.fill > 0 ? hexOf(run.fill) : undefined }, { ph: r.mode, k })
+    } else if (runs) for (const run of runs) pushText(run.text, run.st, { ph: r.mode, k })
     else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true } : {}) })
   })
   while (tokens.at(-1)?.space) tokens.pop()

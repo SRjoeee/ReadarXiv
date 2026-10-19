@@ -522,6 +522,12 @@ describe('a copy made under pipeline 20, reopened under 21', () => {
     expect(sent.length).toBe(1)
     expect(sent[0]).toContain('Floor (must clear)')
     expect(r.settled).toBe(true)
+    // (every copy from 15 on, sent the old way, takes the boundary test: the changed unit is not carried, a plain one is)
+    const plain = p.units.find(u => !u.pieces.some(q => (q as { t: string }).t === 'open'))!
+    for (const v of ['15', '16', '17', '18', '19', '20']) {
+      expect(PIPELINE_CARRIES[v]!([], changed[0]!), v).toBe(false)
+      expect(PIPELINE_CARRIES[v]!([{ t: 'text', s: 'words', tr: true }], plain), v).toBe(true)
+    }
     // (without the unit, a translation that holds no pair is carried, one that holds a pair is not)
     expect(PIPELINE_CARRIES['20']!([{ t: 'text', s: 'words', tr: true }], null)).toBe(true)
     expect(PIPELINE_CARRIES['20']!([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'words', tr: true }, { t: 'close', id: 1, src: '}' }], null)).toBe(false)

@@ -73,6 +73,8 @@ export interface Rec {
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
 /** the longest a page's drawing waits for its draw (openProto `drawOf`) once it begins, ms; then the page is read live */
 export declare const DRAW_WAIT_MS: number
+/** the longest the live fills' glyph walk runs, ms: past it a page tells no fill */
+export declare const LIVE_FILLS_MS: number
 /** what an ink read of a page read from its draw throws while its pixels are not read: the page, and the step that reads them */
 export declare class NeedPixels extends Error {
   constructor(page: number, why: string)
@@ -107,6 +109,8 @@ export interface DrawStats {
   pixels: Record<number, 'asked' | 'freeFor' | 'paperTo' | 'crop' | 'names' | 'paint'>
   need: Partial<Record<'freeFor' | 'paperTo' | 'crop' | 'names' | 'paint', number>>
   retries: number; ms: number
+  /** the operator lists held now for pages whose early pixel read may yet be read live (heldLists) */
+  lists: number
 }
 /** the most of its own work v0 runs in one task, ms: units are laid back to back under it, then it yields */
 export declare const SLICE_MS: number

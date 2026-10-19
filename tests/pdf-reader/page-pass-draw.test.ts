@@ -14,6 +14,13 @@ import { arxivOf, endOf, markedOf, marksOf, type Run, text, unit, words, type Wo
 // the left part is written; a page it cannot read, a font a host would read differently or the held budget make that page's none, the
 // rest intact
 
+// (a page's ink made capped on demand: the maker's draw tells no fills of an ink that is not whole)
+const inkCap = vi.hoisted(() => ({ on: false }))
+vi.mock('@/pdf-reader/engine/layout/ink.mjs', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/pdf-reader/engine/layout/ink.mjs')>()
+  return { ...actual, pageInk: (...a: Parameters<typeof actual.pageInk>) => { const r = actual.pageInk(...a); return inkCap.on ? { ...r, capped: true } : r } }
+})
+
 const PAPER = { id: '2608.04322', version: 1 }
 const BASE = { bytes: 10_000, sha256: '0123456789abcdef'.repeat(4), xref: 9_000 }
 const linesOf = (page: number): Run[] => Array.from({ length: 10 }, (_, j) => ({ s: words(100 * page + 10 * j, 10), x: 72, y: 700 - 12 * j }))
@@ -188,6 +195,14 @@ describe('makerOf: the draw option', () => {
     const d = m.drawOf(1) as Draw
     expect(d.items.slice(0, 3).map(i => i[9])).toEqual([0x0000ff, -1, 0])
     expect(d.items.slice(3).every(i => i[9] === 0)).toBe(true)
+    // (an ink past its cap, its walk's backstop or turned is not the page's whole: its glyphs tell no item's fills)
+    inkCap.on = true
+    try {
+      const capped = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+      if ('refused' in capped) throw new Error('refused')
+      await capped.readPage(1)
+      expect((capped.drawOf(1) as Draw).items.every(i => i[9] === -1)).toBe(true)
+    } finally { inkCap.on = false }
   })
 
   it('takes each page\'s text as step T read it: no page\'s text asked twice, the draws the same JSON as those read again', async () => {

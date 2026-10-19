@@ -181,14 +181,11 @@ Caf\'e and na\"ive words, {\color{red} red} and \textcolor{blue}{blue}, to the d
 
 describe('slotKs', () => {
   it("are the slots' own indices", () => {
-    // text, $x$, an open, text, a close, \cite{a}: the bold word between two markers keeps its own (mt.mjs classOf's boundary
-    // rule: its two ends stand where the wire has a marker anyway); a bold word inside its sentence goes on no wire
+    // text, $x$, an open, text, a close, \cite{a}: the bold word inside its sentence goes on no wire (mt.mjs planOf)
     const u = unit([text('a '), ph('$x$'), open(1, '\\textbf{'), text('b'), close(1), ph('\\cite{a}')])
-    expect(slotKs(u, serialize(u as never).slots)).toEqual([1, 2, 4, 5])
-    const inside = unit([text('a '), ph('$x$'), open(1, '\\textbf{'), text('b'), close(1), text(' c '), ph('\\cite{a}')])
-    expect(slotKs(inside, serialize(inside as never).slots)).toEqual([1, 6])
+    expect(slotKs(u, serialize(u as never).slots)).toEqual([1, 5])
     // slots read from JSON (the early's, from the Worker) find the same
-    expect(slotKs(u, viaJson(serialize(u as never).slots))).toEqual([1, 2, 4, 5])
+    expect(slotKs(u, viaJson(serialize(u as never).slots))).toEqual([1, 5])
   })
   it("a kept pair's edges (a run-in label, its switch inside it) have their pieces' indices", () => {
     // \textbf{\bfseries Setup.} text $x$: the label's open with its switch one slot, its close another

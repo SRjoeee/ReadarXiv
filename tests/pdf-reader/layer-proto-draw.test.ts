@@ -194,11 +194,15 @@ describe('a page drawn from its draw geometry', () => {
     const P = await paper()
     const data = docsOf(SPEC)
     const D = await docsOf(SPEC).draws()
-    const { run } = await runOf(P, data.doc, [2], async p => D[p - 1]!)
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { run } = await runOf(P, data.doc, [2], async p => D[p - 1]!, { OPS })
     expect(run.ready(2)).toBe(true)
     const st = run.drawStats!
     // (page 2 asked; page 1's ink read by the long paragraph's lay, which borrows below its lines there: laid again once read)
     expect(st.pixels).toEqual({ 1: 'freeFor', 2: 'asked' })
+    // (pages read from their draws hold no operator list of their pixels' reading: a list is held only for a page that may yet
+    // be read live (the review of #415))
+    expect(st.lists).toBe(0)
     expect(st.retries).toBeGreaterThan(0)
     expect(data.counts.render.slice(1)).toEqual([1, 1, 0])
     // (page 3's part of the paragraph running on to it is not painted until page 3 is laid: no pixels of it read)
@@ -257,6 +261,32 @@ describe('a page drawn from its draw geometry', () => {
     // (its fills read, off the list its pixels' render kept: no operator list asked of PDF.js for it)
     expect(run.pageWork[2]!.fills).toBeGreaterThan(0)
     expect(data.counts.lists[2]).toBe(0)
+  })
+
+  it('a page read from its draw holds no list of its pixels\' reading, which may end after the draw was read (the review of #415)', async () => {
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const P = await paper()
+    const D = await docsOf(SPEC).draws()
+    // (page 2's pixels, asked at its draw's arrival, rendered only once the draw is read (a read of its fields, not the promise's
+    // look for a `then`): they come while the page is still being drawn, after it was read from its draw)
+    let release = () => {}
+    const held = new Promise<void>(ok => { release = ok })
+    const data = docsOf(SPEC, { renderHold: n => (n === 2 ? held : null) })
+    const readThen = (d: Draw) => { let once = false; return new Proxy(d, { get: (o, k) => { if (!once && k !== 'then') { once = true; queueMicrotask(release) } return (o as unknown as Record<string | symbol, unknown>)[k] } }) }
+    const { run } = await runOf(P, data.doc, [2], async p => (p === 2 ? readThen(D[1]!) : D[p - 1]!), { OPS })
+    expect(run.ready(2)).toBe(true)
+    expect(run.drawStats!.data).toContain(2)
+    expect(run.drawStats!.pixels[2]).toBeDefined()
+    expect(run.drawStats!.lists).toBe(0)
+  })
+
+  it('a page read live with no draw at all reads its fills off the list its render kept: no operator list asked (the review of #415)', async () => {
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const P = await paper()
+    const live = docsOf(SPEC)
+    const { run } = await runOf(P, live.doc, [1, 2, 3], undefined, { OPS })
+    expect(run.pageWork.slice(1).every(w => (w?.fills ?? 0) > 0)).toBe(true)
+    expect(live.counts.lists.slice(1)).toEqual([0, 0, 0])
   })
 
   it('without drawOf, and with the checker\'s copy, reads every page as today', async () => {
@@ -611,8 +641,9 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
     expect(data.chars.map(c => [c.ch, c.st?.fill])).toEqual(live.chars.map(c => [c.ch, c.st?.fill]))
     expect(live.chars.find(c => c.ch === '1')?.st?.fill).toBe(0x0000ff)
     expect(live.chars.find(c => c.ch === 'p')?.st?.fill).toBeUndefined()
-    // (no OPS: none told)
+    // (no OPS: none told; a turned page, its ink no reading of its items: none told, never a page of unknowns)
     expect(await liveFillsOf(null, page, tc.items)).toBeNull()
+    expect(await liveFillsOf(OPS, { ...page, rotate: 90 }, tc.items)).toBeNull()
     // (a list given, the one the page's pixels were drawn by: read, and none asked of PDF.js)
     const list = await page.getOperatorList()
     let asked = 0

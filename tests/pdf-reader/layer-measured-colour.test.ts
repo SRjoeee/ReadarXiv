@@ -78,6 +78,11 @@ describe('sourceScopes and measuredStyle', () => {
     expect(L2.measuredStyle([c(plain(0xff0000)), c(plain(0x0000ff))])!.fill).toBe(0xff0000)
     expect(L2.measuredStyle([c(plain(0x0000ff)), c(plain(0xff0000))])!.fill).toBe(0x0000ff)
     expect(L2.measuredStyle([c(plain(0x0000ff)), c(plain(0))])!.fill).toBe(0)
+    // (a piece's colour from its own glyphs, not a piece's inside it; where it has none of its own, from those inside it)
+    const k = (fill: number, chain: number[]) => ({ st: plain(fill) as never, sets: 16, chain })
+    const nested = L2.measuredStyle([k(0xff0000, [1]), k(0xff0000, [1]), k(0x0000ff, [1, 2]), k(0x0000ff, [1, 2]), k(0x0000ff, [1, 2])])!
+    expect([nested.pieces.get(1), nested.pieces.get(2)]).toEqual([0xff0000, 0x0000ff])
+    expect(L2.measuredStyle([k(0x0000ff, [1, 2]), k(0x0000ff, [1, 2])])!.pieces.get(1)).toBe(0x0000ff)
     // (the same input, the same answer)
     const xs = [c(bold(0x0c5388), 1), c(plain(0x0c5388)), c(italic(0), 2)]
     expect(L2.measuredStyle(xs)).toEqual(L2.measuredStyle(xs))
@@ -189,6 +194,13 @@ describe('a rendering of the page\'s characters, in their own fills', () => {
     const page = pageOf([['as', plain()], ['[16]', plain()], ['here', plain()]])
     const u = unitOf([text('as '), ph('\\cite{k}'), text(' here')], ['\u5982 ', 1, ' \u6240\u793A'])
     expect(tokensOf(u, page).drawn.filter(t => t.k === 1).map(t => t.st.color ?? null)).toEqual([null])
+  })
+
+  it('runs drawn alike are one token: brackets whose fill is not told beside digits of the colour the row falls back to', () => {
+    const page = pageOf([['as', plain(0)], ['[16]', k => (k === 1 || k === 2 ? plain(0x0000ff) : plain())], ['here', plain(0)]])
+    const u = unitOf([text('as '), ph('\\cite{k}'), text(' here')], ['\u5982 ', 1, ' \u6240\u793A'])
+    const { drawn } = tokensOf(u, page, { fillOf: (k: number) => (k === 1 ? 0x0000ff : null) })
+    expect(drawn.filter(t => t.k === 1).map(t => [t.s, t.st.color ?? null])).toEqual([['[16]', '#0000ff']])
   })
 })
 

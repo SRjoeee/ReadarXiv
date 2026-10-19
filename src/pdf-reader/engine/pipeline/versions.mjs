@@ -133,10 +133,10 @@
 //     twelve papers change (54 cut anew, 5 gone, 48 the same but for their pairs' numbers, found again by seedFrom); every
 //     other paper's units, the wire and its reading back are 19's, the pack's 32 outputs among them: a copy of 19 carries
 //     every unit it holds the source of (live.mjs PIPELINE_CARRIES)
-// 21: raised with TRANSLATE_VERSION 4 (the boundary rule: a styled pair whose two ends stand where the wire has a marker
+// 21: raised with TRANSLATE_VERSION 4 (the boundary rule: a styled pair whose two ends stand where the wire is cut
 //     anyway keeps its markers, mt.mjs classOf), so that copies made before it are not taken whole: a copy of 20, and of
 //     every pipeline before it, carries each unit whose wire the rule leaves as it was (mt.mjs boundaryChanges; live.mjs
-//     PIPELINE_CARRIES): over 137 papers' sources 295 of 36,104 units, in 56 papers, are asked again. The units, the
+//     PIPELINE_CARRIES): over 137 papers' sources 122 of 36,104 units, in 26 papers, are asked again. The units, the
 //     marked original and the layout file are 20's byte for byte
 export const PIPELINE_VERSION = '21'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a

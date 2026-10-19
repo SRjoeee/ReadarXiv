@@ -64,7 +64,7 @@ import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { drawInputsOf } from './draw.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { itemFills } from '../layout/fills.mjs'
-import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
+import { GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
 import { listWithin } from '../layout/oplist.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
@@ -159,6 +159,9 @@ const renderedList = page => {
 }
 /** what a bounded operator list read of the live fills warns as, once a run */
 const LIVE_LIST = { who: 'the reader\'s live fills' }
+/** the longest the live fills' glyph walk runs on the main thread, ms: past it the page tells none (its fallback colours), never a
+ *  part of them. The heavy-tier speed run on 31f36701 measured the whole walk at 5.0 ms a page p50, 13.8 ms at most */
+export const LIVE_FILLS_MS = 16
 /**
  * The fills of a page read live, as its draw tells them (layout/fills.mjs itemFills over pipeline/draw-data.mjs's glyphs): its ink
  * read off the list PDF.js drew it by (`list`, held from the page's early pixel read, or renderedList), else off its own operator
@@ -171,7 +174,8 @@ export async function liveFillsOf(OPS, page, items, counted = null, list = null)
   try {
     const ops = list ?? renderedList(page) ?? (await listWithin(page, LIVE_LIST, DRAW_WAIT_MS))
     if (!ops) return null
-    const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
+    // (the glyphs alone: no box, path, image or outline of the page's, which the fills do not read)
+    const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, glyphsOnly: true, msMax: LIVE_FILLS_MS })
     // (its work: the list's operations walked, the glyphs read, the items told)
     if (counted) counted.fills += (ops.fnArray?.length ?? 0) + ink.glyphs.length + items.length
     return ink.capped || ink.timedOut || ink.rotated ? null : itemFills(items, ink.glyphs)
@@ -2437,7 +2441,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // (kept only while it is still the page's reading: not where the page was let go (letGoPage) or the ask it was read for
       // given up before the page was drawn (dropPixels), whose result would be held for good)
       if (!disposed && pixelTasks.get(q) === t) {
-        if (list && !drawnPages[q]) heldLists.set(q, { doc: d, list })
+        // (held only for a page that may yet be read live: not one read from its draw, whose pixels may come after that read)
+        if (list && !drawnPages[q] && !fromData[q]) heldLists.set(q, { doc: d, list })
         inks[q] = L2.inkMapOf(c)
         workOf(q).inkSteps += inks[q].w * inks[q].h
         pixelsIn[q] = 1
@@ -3282,7 +3287,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** where pages are read from their draws (drawOf): the pages read from data and live, the draws refused, each page whose pixels
      *  were read and the step that asked first, the times a step needed a page's pixels it had not (by step), the lays done again
      *  and the draws' reading in ms; a copy. Null where no page is (no drawOf, or rules that read every page's ink at once) */
-    get drawStats() { return DATA ? { ...drawStats, data: drawStats.data.slice(), live: drawStats.live.slice(), refused: drawStats.refused.slice(), late: drawStats.late.slice(), pixels: { ...drawStats.pixels }, need: { ...drawStats.need } } : null },
+    get drawStats() { return DATA ? { ...drawStats, data: drawStats.data.slice(), live: drawStats.live.slice(), refused: drawStats.refused.slice(), late: drawStats.late.slice(), pixels: { ...drawStats.pixels }, need: { ...drawStats.need }, lists: heldLists.size } : null },
     /** a done page's removed page at v0's own resolution (draw mode, until released), for a check */
     removedCanvas: pg => RM?.removed[pg] ?? null,
     /** the prototype's completeness checker on one done page (main.js check=1's, its pixels of that page alone, its

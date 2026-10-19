@@ -3,7 +3,8 @@
 // told by the glyphs on its baseline within its extent, read in their order as its own text: its characters' text (NFKC, white
 // space aside) must be theirs exactly, a ligature's glyph standing for its letters. An item they do not spell so — rotated, none
 // there, one too many or too few, a combined accent set as two glyphs, a right-to-left run set in visual order, a character
-// standing on two glyphs of two colours — is told nothing (UNKNOWN): never a guess. One function for the maker's draw
+// standing on two glyphs of two colours — is told nothing (UNKNOWN): never a guess. Nor is a Type 3 glyph whose procedure
+// paints its own colours (layout/ink.mjs `ownColour`: its `fill` is only the fill it was shown in). One function for the maker's draw
 // (pipeline/draw-data.mjs, from the ink the maker reads) and the reader's page read live (layer-proto/run.mjs, from the page's own
 // operator list), so that a page reads alike either way. Pure; imports the ink's NO_FILL alone.
 import { NO_FILL } from './ink.mjs'
@@ -19,7 +20,7 @@ const PAST = 0.1
 const OVER = 0.1
 
 const textOf = u => (typeof u === 'string' ? u.normalize('NFKC').replace(/\s+/g, '') : '')
-const fillOfGlyph = g => (Number.isInteger(g.fill) && g.fill >= 0 && g.fill <= 0xffffff && g.fill !== NO_FILL ? g.fill : UNKNOWN)
+const fillOfGlyph = g => (!g.ownColour && Number.isInteger(g.fill) && g.fill >= 0 && g.fill <= 0xffffff && g.fill !== NO_FILL ? g.fill : UNKNOWN)
 
 /**
  * The fills of `items` (each { str, transform: [a, b, c, d, e, f], width, height }, PDF.js's text content items or the draw's

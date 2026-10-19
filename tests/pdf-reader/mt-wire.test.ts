@@ -232,6 +232,11 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     // (after a marker, but ending inside its sentence: flat, as a colour inside a sentence)
     expect(serialize(unit({ t: 'text', s: 'We use ' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' ' }, ...pairs(1, '\\textbf{', 'bold'), { t: 'text', s: ' words in it.' })).wire).toBe('We use @a# bold words in it.')
     expect(serialize(unit({ t: 'text', s: 'We see ' }, ...pairs(1, '\\textcolor{red}{', 'red words'), { t: 'text', s: ' in it.' })).wire).toBe('We see red words in it.')
+    // (an inline formula beside a pair is no cut: the translator moves it as a word, so the pair goes flat (the review of #415))
+    expect(serialize(unit({ t: 'text', s: 'We fix the ' }, { t: 'ph', src: '$\\theta$' }, { t: 'text', s: ' ' }, ...pairs(1, '\\textcolor{red}{', 'matrix described below'), { t: 'text', s: '.' })).wire).toBe('We fix the @a# matrix described below.')
+    expect(serialize(unit(...pairs(1, '\\textcolor{red}{', 'We define the loss'), { t: 'text', s: ' ' }, { t: 'ph', src: '$L$' }, { t: 'text', s: ' as the sum of the terms.' })).wire).toBe('We define the loss @a# as the sum of the terms.')
+    // (a display cuts the text, as a forced break does)
+    expect(serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\[ x = y \\]' }, { t: 'text', s: 'We use a model here.' })).wire).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
   })
 
   it('boundaryChanges tells the units whose wire the boundary rule changes, and no other (a copy made before it is asked again for those)', () => {

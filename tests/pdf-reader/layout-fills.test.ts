@@ -44,6 +44,8 @@ describe('itemFills', () => {
     expect(itemFills([item('ü')], [{ u: 'u', x0: 72, x1: 77, y: 700, size: 10, fill: BLUE }, { u: '¨', x0: 72.5, x1: 76, y: 703, size: 10, fill: BLUE }])).toEqual([UNKNOWN])
     expect(itemFills([item('שלום')], glyphs('םולש'))).toEqual([UNKNOWN])
     expect(itemFills([item('word')], null)).toEqual([UNKNOWN])
+    // (a Type 3 glyph that paints its own colours: its character's fill not told, never the fill it was shown in)
+    expect(itemFills([item('ab')], glyphs('ab', 72, 700, BLUE).map((x, i) => (i === 0 ? { ...x, ownColour: true } : x)))).toEqual([[0, UNKNOWN, 1, BLUE]])
     // (a glyph of no colour, a pattern's: its character's fill not told)
     expect(itemFills([item('ab')], glyphs('ab', 72, 700, [BLUE, -1]))).toEqual([[0, BLUE, 1, UNKNOWN]])
   })

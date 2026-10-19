@@ -293,13 +293,17 @@ function spans(P, node) {
 /** where each pair's content lies in the unit's text (formulas and the like one character, OBJ): `P.ranges`, and the
  *  text and its edges (`P.flat`) its class is read in */
 function flatOf(P, root) {
-  const parts = [], ranges = new Map()
+  const parts = [], ranges = new Map(), breaks = new Set()
   let at = 0
   const visit = seq => {
     for (const e of seq) {
       if (e.off !== undefined) continue
       if (e.run) { parts.push(OBJ); at++; continue }
-      if (e.k !== undefined) { const s = P.pieces[e.k].t === 'text' ? textAt(P, e.k) : P.ink[e.k] ? '' : OBJ; parts.push(s); at += s.length; continue }
+      if (e.k !== undefined) {
+        const s = P.pieces[e.k].t === 'text' ? textAt(P, e.k) : P.ink[e.k] ? '' : OBJ
+        if (s === OBJ && BREAKS.test(P.pieces[e.k].src ?? '')) breaks.add(at)
+        parts.push(s); at += s.length; continue
+      }
       if (!e.info.text) { if (e.info.voids) { parts.push(OBJ); at++ } continue }
       const a = at
       visit(e.seq)
@@ -312,12 +316,20 @@ function flatOf(P, root) {
   while (last > 0 && /\s/.test(flat[last - 1])) last--
   while (lastWord > 0 && /[\s￼]/.test(flat[lastWord - 1])) lastWord--
   P.ranges = ranges
+  P.breaks = breaks
   P.flat = { text: flat, first: flat.search(/\S/), word: flat.search(/[^\s￼]/), last, lastWord }
 }
 const SOLID = /\S/g
 const nextSolid = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.[0] ?? '' }
-/** the last character before `a` that is no white space, '' for none */
-const solidBefore = (flat, a) => { let i = a - 1; while (i >= 0 && /\s/.test(flat[i])) i--; return i < 0 ? '' : flat[i] }
+/** where the next character from `b` that is no white space stands, and the last before `a` (-1 for none) */
+const nextSolidAt = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.index ?? -1 }
+const solidBeforeAt = (flat, a) => { let i = a - 1; while (i >= 0 && /\s/.test(flat[i])) i--; return i }
+/** the placeholders that break the text where they stand: a forced line break, a display, an item. An inline formula does
+ *  not: the translator moves it with the words as one of them (`We fix the $\theta$ \textcolor{red}{matrix …}` kept would
+ *  cut its noun phrase in two; the review of #415, 100 of the 109 units its clause changed over the sweep's papers) */
+const BREAKS = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?|\$\$[\s\S]*|\\\[[\s\S]*|\\begin\s*\{(?:equation|align|gather|multline|eqnarray|displaymath|flalign|alignat)\*?\}[\s\S]*)\s*$/
+/** whether the text breaks at flat offset `i` (BREAKS) */
+const breaksAt = (P, i) => i >= 0 && P.breaks.has(i)
 /** the places the wire has a marker at anyway, by the sentence rule alone: each kept or enclosing pair's two edges, read before
  *  the boundary rule (classOf) and never after it, so that one pair's keeping makes no other's */
 function keptEdgesOf(P, root) {
@@ -352,11 +364,12 @@ function classOf(P, e) {
   // between (\textbf{Service Auto-Scaling} To accommodate)
   const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
   if (starts && ends) return 'kept'
-  // the boundary rule (E1 of the residuals' batch R2): a pair whose two ends both stand where the wire has a marker anyway — a void
-  // beside it (a placeholder's OBJ), a kept or enclosing pair's edge with white space alone between, or the unit's own end —
-  // is kept too: its two markers cut nothing Microsoft does not cut already (2610.19159's "\textit{Floor (must clear):}
-  // \textcolor{red}{… to the end}", whose colour went flat at a colon that starts no sentence)
-  if (P.keptEdges && (starts || solidBefore(flat, a) === OBJ || atEdge(P, a)) && (ends || next === OBJ || atEdge(P, b))) return 'kept'
+  // the boundary rule (E1 of the residuals' batch R2): a pair whose two ends both stand where the wire is cut anyway — a placeholder
+  // that breaks the text beside it (BREAKS: a forced break, a display, an item; never an inline formula, which the translator
+  // moves as a word), a kept or enclosing pair's edge with white space alone between, or the unit's own end — is kept too: its
+  // two markers cut nothing Microsoft does not cut already (2610.19159's "\textit{Floor (must clear):} \textcolor{red}{… to the
+  // end}", whose colour went flat at a colon that starts no sentence)
+  if (P.keptEdges && (starts || breaksAt(P, solidBeforeAt(flat, a)) || atEdge(P, a)) && (ends || breaksAt(P, nextSolidAt(flat, b)) || atEdge(P, b))) return 'kept'
   return 'flat'
 }
 // the wire, and where each piece that does not go on it is put back: in its innermost kept group (the unit, a kept

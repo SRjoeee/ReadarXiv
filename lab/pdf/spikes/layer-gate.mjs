@@ -871,7 +871,7 @@ function drawsOf(name) {
   if (!DRAWS.has(paper)) {
     DRAWS.set(paper, (async () => {
       const pdf = join(FIXTURES, name, 'arxiv.pdf'), script = join(GATE, 'draws.mjs')
-      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).filter(f => existsSync(f))
+      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).filter(f => existsSync(f))
       const key = sha256([fileSha(pdf), ...reading.map(fileSha), fileSha(script), readJson(join(PDFJS, 'package.json')).version].join('|')).slice(0, 24)
       const dir = join(ROOT, 'out/layer-gate/draws'), file = join(dir, `${key}.json`)
       if (!existsSync(file)) {
