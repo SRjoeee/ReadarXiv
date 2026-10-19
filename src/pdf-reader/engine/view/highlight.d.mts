@@ -52,6 +52,9 @@ export declare function sentenceOf(layout: Layout, run: Run, starts: Int32Array,
 /** whether a unit is lit by sentence on a side: running text, every run's shapes holding their words; `made`: from the
  *  pages whose geometry is made alone, undefined where one is not yet */
 export declare function sentencesFit(layout: Layout, id: number, starts: Int32Array, made?: boolean): boolean | undefined
+/** starts that know each token's sentence by the text (`of(token)`: a sentence, or -1 where the text does not tell): a run's
+ *  sentences take it from there, the stream's order only for the rest; the starts given back, unchanged */
+export declare function withSentences<T extends Int32Array | null | undefined>(starts: T, of: (token: number) => number): T
 /** a page's sentences worked out, each run's whose unit's starts `startsOf` gives */
 export declare function pageSentences(layout: Layout, page: number, startsOf: (id: number) => Int32Array | null | undefined): void
 /** one rounded outline of rectangles stacked from the top (CSS px, y down), as an SVG path */

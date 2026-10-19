@@ -648,31 +648,56 @@ export function hitOf(L, p, x, y, padX, startsOf = () => null) {
 const edgesOf = (run, padX) => { const b = blockOf(run, padX); return [b.y1, ...run.mids, b.y0] }
 /** each run's sentences' segments, kept for the starts they were made with */
 const segsMade = new WeakMap()
+/** each side's starts with the sentence each of its unit's tokens is in by the text (withSentences) */
+const bySentenceText = new WeakMap()
+/**
+ * Starts that know each token's sentence by the text: `of(k)` the sentence of the side's token k by its place in the unit's
+ * text — a left token by the word it is paired with, a laid page's token by its word or its place in the translation
+ * (shapes.mjs) —, or -1 where the text does not tell (a glyph no word is paired with). A run's sentences then take each
+ * token's sentence from the text, the stream's order only for a token the text does not place (segsOf). The starts, given
+ * back, are kept as they are: whatever reads them (their length, their tokens) reads the same
+ */
+export function withSentences(starts, of) {
+  if (starts && typeof of === 'function') bySentenceText.set(starts, of)
+  return starts
+}
 /**
  * A run's sentences row by row (`starts`: the page tokens where its unit's sentences after the first begin): on each row
  * each sentence's ink across, from its tokens there — the head before the unit's first word in the first sentence —
- * kept inside the run's extent; and each sentence's first and last row in the run. A token is its sentence's by the
- * stream's order, but on a row below one where a later sentence has begun it is that later one's: a script or a limit
- * the text layer gives after the line it hangs from (2608.08350, a subscript under a line where the next sentence began)
- * would otherwise give a sentence a row inside the next one's, and the sentences would no longer tile the run
+ * kept inside the run's extent; and each sentence's first and last row in the run. A token is its sentence's by the text
+ * where its starts know it (withSentences: a word, a laid formula or display by its place in the translation), else by the
+ * stream's order; and a token the text does not place, on a row below one where a later sentence has begun, is that later
+ * one's: a script or a limit the text layer gives after the line it hangs from (2608.08350, a subscript under a line where
+ * the next sentence began) would otherwise give a sentence a row inside the next one's, and the sentences would no longer
+ * tile the run. Token order decides the rows and the runs, never the sentence of a token the text places (a display the
+ * page's word table wrote after its unit's text had been the page's last sentence's, and every row below it with it)
  */
 function segsOf(L, run, starts) {
   const made = segsMade.get(run)
   if (made?.starts === starts) return made
   // the run's page's tokens: token k's at k - k0
   const T = L.pt[run.page], k0 = T.k0, { l, r } = T, rows = run.rows.map(() => []), first = [], last = []
-  // each token's sentence by the stream's order, then rows from the top, none before the latest begun above it
-  const of = new Int32Array(run.toks.length)
+  const byText = bySentenceText.get(starts) ?? null
+  /** a token's sentence by the stream's order: the starts at or before it */
+  const byOrder = k => { let lo = 0, hi = starts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (starts[m] <= k) lo = m + 1; else hi = m } return lo }
+  const sentenceOf = k => { const t = byText ? byText(k) : -1; return t >= 0 ? t : byOrder(k) }
+  // each token's sentence by the text where it is known, else by the stream's order; then rows from the top, a token the text
+  // does not place none before the latest begun above it
+  const of = new Int32Array(run.toks.length), known = new Uint8Array(run.toks.length)
   let s = 0
   while (s < starts.length && starts[s] <= run.toks[0]) s++
-  for (let n = 0; n < run.toks.length; n++) { while (s < starts.length && starts[s] <= run.toks[n]) s++; of[n] = s }
+  for (let n = 0; n < run.toks.length; n++) {
+    while (s < starts.length && starts[s] <= run.toks[n]) s++
+    const t = byText ? byText(run.toks[n]) : -1
+    if (t >= 0) { of[n] = t; known[n] = 1 } else of[n] = s
+  }
   const byRow = run.rows.map(() => [])
   for (let n = 0; n < run.toks.length; n++) byRow[run.rowOf[n]].push(n)
   let floor = 0
   byRow.forEach((ns, w) => {
     let top = floor
     for (const n of ns) {
-      const k = run.toks[n], t = Math.max(of[n], floor), row = rows[w], g = row.find(q => q.s === t)
+      const k = run.toks[n], t = known[n] ? of[n] : Math.max(of[n], floor), row = rows[w], g = row.find(q => q.s === t)
       of[n] = t
       const a = l[k - k0], b = r[k - k0]
       if (g) { if (a < g.x0) g.x0 = a; if (b > g.x1) g.x1 = b } else row.push({ s: t, x0: a, x1: b })
@@ -687,22 +712,30 @@ function segsOf(L, run, starts) {
   const inside = x => Math.min(run.x1, Math.max(run.x0, x))
   for (const row of rows) { row.sort((a, b) => a.s - b.s); for (const g of row) { g.x0 = inside(g.x0); g.x1 = inside(g.x1) } }
   // the sentence that began before the run (in a run before it in the stream: the column or the page before) and the
-  // one that goes on after it, or -1: their rows here are rows between, their first's start and last's end beyond
+  // one that goes on after it, or -1: their rows here are rows between, their first's start and last's end beyond. The
+  // unit's token before the run is in the sentence of the run's first, or the one after the run in that of its last
   const ts = L.anchors.get(run.id).tokens, t0 = run.toks[0], t1 = run.toks.at(-1)
-  let s0 = 0, s1 = 0
-  while (s0 < starts.length && starts[s0] <= t0) s0++
-  while (s1 < starts.length && starts[s1] <= t1) s1++
-  const next = ts[lowerBound(ts, t1 + 1)]
-  const from = (s0 > 0 ? starts[s0 - 1] : ts[0]) < t0 ? s0 : -1, on = next !== undefined && (s1 === starts.length || next < starts[s1]) ? s1 : -1
+  const s0 = sentenceOf(t0), s1 = sentenceOf(t1), at0 = lowerBound(ts, t0)
+  const prev = at0 > 0 ? ts[at0 - 1] : undefined, next = ts[lowerBound(ts, t1 + 1)]
+  const from = prev !== undefined && sentenceOf(prev) === s0 ? s0 : -1, on = next !== undefined && sentenceOf(next) === s1 ? s1 : -1
   const out = { starts, rows, first, last, from, on, fits: true }
   segsMade.set(run, out)
-  // whether the shapes hold their words: each word's ink's centre in its own sentence's shape. Not where two lines of
-  // text are one row (a tall formula between them, 2608.12502) and a sentence begins on the second: no boundary across
-  // divides them; nor where a glyph hangs past the middle between its row and the next, and the next is another
-  // sentence's or none's there (a display's subscripts over the row of its denominator, 2608.29181). The unit is lit
-  // whole then (sentencesFit). Two sentences' ink may overlap a little on a row — a Latin word's box is an even share
-  // of its text item, a CJK full stop's half em too — and the boundary halfway between still divides their words
-  {
+  // whether the shapes hold their words: each sentence's rows one after the other — a later sentence never begins above
+  // an earlier one's last row: a row it spans paints across the run, and every row holds a token, so a row inside a
+  // sentence's span then holds its words alone —, and each word's ink's centre in its own sentence's shape. By the stream's
+  // order the first is so by construction; by the text where the drawing keeps the text's order (the text a layout runs on
+  // above a display, 'flow', may not). Not where two lines of text are one row (a tall formula between them,
+  // 2608.12502) and a sentence begins on the second: no boundary across divides them; nor where a glyph hangs past the
+  // middle between its row and the next, and the next is another sentence's or none's there (a display's subscripts over the
+  // row of its denominator, 2608.29181). The unit is lit whole then (sentencesFit): never another sentence's words. Two
+  // sentences' ink may overlap a little on a row — a Latin word's box is an even share of its text item, a CJK full stop's
+  // half em too — and the boundary halfway between still divides their words
+  for (let t = 0, below = -1; t < first.length && out.fits; t++) {
+    if (first[t] === undefined) continue
+    if (first[t] < below) out.fits = false
+    below = last[t]
+  }
+  if (out.fits) {
     const ys = edgesOf(run, 0), spans = rows.map((_, i) => spansOf(null, out, run, i, 0)), { top, bottom } = T
     for (let n = 0; n < run.toks.length && out.fits; n++) {
       const k = run.toks[n] - k0, x = (l[k] + r[k]) / 2, y = (top[k] + bottom[k]) / 2
