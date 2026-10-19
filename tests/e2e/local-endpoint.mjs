@@ -8,7 +8,7 @@
 // as mixed content — the chain fell back silently to google-web, and the page still read as fluent Chinese. So the assertion here is “the translation carries the MARK prefix”,
 // not “it translated into Chinese”: the latter holds on the broken architecture too.
 //
-// Usage: pnpm build && pnpm e2e:local-endpoint     (first time: npx playwright install chromium)
+// Usage: pnpm build:staging && AXT_E2E_ONLINE=1 pnpm e2e:local-endpoint     (first time: npx playwright install chromium)
 // Environment: AXT_PAPER picks the paper; AXT_HEADED=1 watches it run.
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -16,6 +16,8 @@ import { chromium } from 'playwright'
 import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { addService, openOptions, openSection } from './options-page.mjs'
+import { goOnline, online } from './lib/online.mjs'
+goOnline('pnpm e2e:local-endpoint')
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -45,12 +47,12 @@ rmSync(PROFILE, { recursive: true, force: true })
 copyWithGrants(SRC, EXT, { hostPermissions: ['http://127.0.0.1/*'] })
 mkdirSync(SHOTS, { recursive: true })
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   channel: 'chromium',
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1440, height: 900 },
-})
+}))
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]

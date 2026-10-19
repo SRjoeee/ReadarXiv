@@ -724,7 +724,8 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   2^24 pixels; from the left's canvas where PDF.js drew it within 2 % of that k, else the place's own page view's canvas,
   else the page drawn from the composed document) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
-  600 ms after it, nothing laid again. A page this door laid that leaves the view lets its SVG and its copy go and holds an
+  600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at. A page this
+  door laid that leaves the view lets its SVG and its copy go and holds an
   empty element (retired: the place shows no page, and no page view is made of it); a page the door makes ready while it
   is far is retired at once, and committed directly when it comes near. The one exception: a page that holds the focus (a
   link, or the place a jump gave it to) is kept as it goes far, and let go once the focus has left it (read a task after
@@ -736,6 +737,44 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   keeps its drawing until the new door's page is ready; leaving the view, that drawing goes and the place shows its own
   content again. The window holds a copy for the places near the view alone: their pixels are bounded by the near area at
   any zoom, so no copy of a far page is kept.
+- **One frame a page** (`view/drawn.mjs`). PDF.js draws a page view at its viewport's unrounded scale times its output
+  scale, from the page's top-left corner, on a canvas it floors to whole CSS px (pdfjs-dist 6.3.289 `PDFPageView.draw`:
+  the canvas is `outputScale.sx` times the page's width floored to its rounding, the rest of the page cropped). So the
+  copy's source carries the scale it was drawn at, read as PDF.js begins the drawing (`pagerender`, its canvas sized and
+  its output scale set), checked against the canvas's size, and kept with the canvas once PDF.js tells that drawing done
+  (`pagerendered`, neither a CSS transform nor a detail view): not read at its end, where under restricted scaling PDF.js
+  lets a drawing run on after a zoom has given the page view its next viewport (`update`, `onlyCssZoom`); never the canvas's
+  width over the page's, which is short by up to a CSS px over the page's width (0.14 % at the 87 % fit), and an erase
+  laid at it left the original's ink showing past its rectangles where the floor drops near a pixel (80, 87, 110 and
+  125 %; at 125 % the page's 1020 CSS px floor to 1019 in floating point), deterministically, at any time. `copyAt`
+  hands `copyOf` the scale kept with the canvas, never one derived from a size.
+- **A canvas drawn at two scales is no source.** PDF.js approximates the pixel ratio by a fraction whose terms are at most
+  8 (`approximateFraction`) and floors the canvas's width and height each to its own term, so wherever the ratio is no
+  such fraction the canvas's scale across and its scale down come apart, at almost every zoom: at 1.1 and 0.9 (Chrome at
+  110 and 90 % on a 1× screen), 1.8 and 2.2 (the same on a 2× screen), 2.25 (Windows at 225 %), 2.4, 2.625, 2.75; and
+  under PDF.js's restricted scaling. Their anisotropy at 100 % is 1.4 to 3.7 device px over the page, above the erase's
+  pad, so no tolerance can take such a canvas: the copy is drawn from the composed document instead, at k, correctly.
+  At 1, 1.2, 1.25, 4/3, 1.5, 1.6, 1.75, 2, 2.5 and 3 the two agree to the bit (PDF.js's sizing replayed over zooms of 50
+  to 400 %, the review of 2026-10-19). Measured (`AXT_MEASURE=1 AXT_DPR=…
+  pnpm e2e:registration`, the sample, the fit and 100 %, the median of five): a copy at DPR 1.1 and 1.8 costs 14.3 to
+  17.3 ms (the page drawn 13.7 to 16.4 ms, the copy 0.6 to 0.9) against 0.1 to 0.2 ms from the left's canvas at DPR 1
+  and 2 (its raster left to the GPU), a recopy's long tasks none at any of the four: about a hundred times the cost, on
+  every commit and on each near page's recopy after a zoom, spread over PDF.js's slices of the main thread. The old code copied such a canvas and left the erase 4.4 device
+  px short across and 7.1 down at 100 % and DPR 1.1. Debt: a copy drawn at the canvas's two scales (`copyOf`, `drawCopy`,
+  `renderAt` and `drawOps` taking a scale across and one down) would take PDF.js's canvas at every ratio.
+- **The page drawn from the composed document** is drawn as PDF.js draws a page view: at k on a canvas of the place's box
+  at k's resolution (`places.box`, PDF.js's rounding of the viewport, nothing of the layout read), on the left's page
+  views' own context (opaque; read back by the CPU unless the host opens its documents with `enableHWA`, as PDF.js's
+  `willReadFrequently: !enableHWA` gives it). Where both are the CPU's (the extension) its copy is the left's to the
+  pixel; where the host draws on the GPU's (the web) the two differ by anti-aliasing, and a registration check there needs
+  a tolerance for it. The SVG and the links are laid in the same frame: the page's size at its scale (`--axt-frame-w` and
+  `-h`, `--total-scale-factor` times its size in PDF units), never the place's floored box. Measured by
+  `pnpm e2e:registration` on the sample, at DPR 1 and 2, at the zooms PDF.js floors at least 0.6 of a CSS px off:
+  before, 307 to 8,142 pixels of a page's copy from PDF.js's canvas differed from its copy at the place's k by more than
+  16 in a channel (up to 255; 1 to 1,101 at an aligned zoom, the document's copy then drawn on another context) and the
+  ink left at the erased rectangles reached 889 px against an aligned zoom's 0 to 2; after, 0 pixels differ at any zoom
+  and the ink left is the aligned zoom's. The whole-pixel snap of `drawOps` (`SWAP_PAD × k < 1`, added for 85 % at
+  DPR 1 on 2608.16117, whose page is 693.6 CSS px wide) is still to be measured again under the right registration.
 - **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
   page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own; the
   right's from the laid page's words where its place shows the layer, the left's mirrored elsewhere (`layerShapes`); a
@@ -754,7 +793,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
 
 The extension's run makes the side and tells it (§11.10). The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `layer-side-door.test.ts` (the real door),
 `feed.test.ts`, `contents.test.ts` and `shapes.test.ts` SH5; `pnpm e2e:reader` runs it on the sample cut into BUNDLE 4's
-objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API.
+objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API, and `pnpm e2e:registration` holds the
+frame (the side's `registration(n)`: a laid page's copy drawn from PDF.js's canvas and from the document at the place's k,
+compared pixel by pixel).
 
 ### 11.9 The layer's links
 
@@ -770,8 +811,9 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/ui/link-names.ts`). A record the view
   cannot carry (no box of area, neither or both targets, an address off the allow-list) is left out.
 - **Placed by shares.** The anchor spans the union of its boxes and each box is a span of it, every size a share of the
-  page's box (or the link's) made once from the place's viewport (its rotation, its box's origin): the place's own size
-  scales them at any zoom, nothing is read from the layout and nothing runs on a frame. The anchor takes no pointer, its
+  page's frame (or the link's) made once from the place's viewport (its rotation, its box's origin): the links' element is
+  laid at the page's size at its scale, the copy's frame (§11.8), never the place's box that PDF.js floors to whole CSS
+  px, so CSS scales them at any zoom, nothing is read from the layout and nothing runs on a frame. The anchor takes no pointer, its
   boxes do: the space between two lines of one link is the page's.
 - **Followed.** A link inside the paper is resolved on the left's document (a name by `getDestination`, its page by
   `getPageIndex`) and jumped to on the right, the pane clicked, by the view's own jump (its zoom too, as PDF.js takes one):

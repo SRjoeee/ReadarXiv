@@ -1,7 +1,7 @@
 // The end-to-end check of image translation (DESIGN §15): real Chromium, and the recogniser the extension ships — in its
 // offscreen document, as a reader's browser runs it. Nothing to install, so it runs wherever the other suites do.
 //
-// Usage: pnpm build && pnpm e2e:image
+// Usage: pnpm build:staging && AXT_E2E_ONLINE=1 pnpm e2e:image
 // Environment: AXT_PAPER picks the paper (default 2507.00150v1: 6 plots); AXT_HEADED=1 watches it run.
 //
 // Guarded are §15.2's structural promises: the overlay is the image's next sibling and its rectangle coincides with the image (anchor positioning); under side the overlay is only inside the split copy and
@@ -11,6 +11,8 @@ import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { chooseBuiltIn, openOptions, setSwitch } from './options-page.mjs'
+import { goOnline, online } from './lib/online.mjs'
+goOnline('pnpm e2e:image')
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -27,12 +29,12 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   channel: 'chromium',
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1440, height: 900 },
-})
+}))
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]

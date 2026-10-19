@@ -24,6 +24,7 @@ import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
 import { unitOf } from '../layer-proto/rows.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { createContents } from './contents.mjs'
+import { drew, scaleOf } from './drawn.mjs'
 import { createFeed } from './feed.mjs'
 import { figureRegions } from './figures.mjs'
 import { pathsOf, wantsFloats } from './floats.mjs'
@@ -427,33 +428,45 @@ export function createLayerSide(view, o) {
     const w = vp.width / vp.scale, h = vp.height / vp.scale, k = vp.scale * V.dpr()
     return w * h * k * k > COPY_PIXELS ? Math.sqrt(COPY_PIXELS / (w * h)) : k
   }
-  /** the page as PDF.js drew it at about k: the left's canvas, else the place's own page view's, else the page drawn here from
-   *  the latest composed document (its pages 1 to N are the original's) */
-  async function sourceOf(n, k, fromDoc = false) {
-    const vp = V.places.view(n)?.viewport
-    const w = vp.width / vp.scale
-    if (!fromDoc) {
-      for (const [from, c] of [['left', V.left.canvas(n)], ['place', V.places.canvas(n)]]) {
-        if (!c?.width || !c.height) continue
-        const kc = c.width / w
-        if (Math.abs(kc - k) / k <= K_SLACK) return { canvas: c, k: kc, from }
-      }
+  /** a canvas PDF.js drew page n on whole within K_SLACK of k (the left's, else the place's own page view's), with the scale
+   *  it drew it at (drawn.mjs); null where there is none */
+  function drawnSource(n, k) {
+    for (const [from, got] of [['left', V.left.canvas(n)], ['place', V.places.canvas(n)]]) {
+      if (got && Math.abs(got.k - k) / k <= K_SLACK) return { canvas: got.canvas, k: got.k, from }
     }
+    return null
+  }
+  /** the page as it was drawn at about k, with the scale it was drawn at (one frame a page: never a canvas's width over the
+   *  page's, which PDF.js floors to whole CSS px): a canvas PDF.js drew (drawnSource); else the page drawn here from the
+   *  latest composed document (its pages 1 to N are the original's) at k, as PDF.js draws a page view: from its top-left
+   *  corner on a canvas of the place's box at k's resolution (its CSS px times the pixel ratio, where k is not held to
+   *  COPY_PIXELS), the rest of the page cropped, so that its copy maps pixel for pixel onto the place; and on the context
+   *  PDF.js draws the left's page views on (opaque, read back by the CPU unless the host opens its documents with enableHWA,
+   *  as the web does), so that where both are the CPU's it is the left's canvas pixel for pixel (the extension: 0 pixels
+   *  differ, pnpm e2e:registration; on the GPU's the two differ by anti-aliasing) */
+  async function sourceOf(n, k, fromDoc = false) {
+    if (!fromDoc) { const got = drawnSource(n, k); if (got) return got }
+    const vp = V.places.view(n)?.viewport, box = V.places.box(n)
+    if (!vp?.scale || !box) throw new Error(`page ${n} has no viewport to draw its copy at`)
     const page = await latest.doc.getPage(n)
     const viewport = page.getViewport({ scale: k })
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.floor(viewport.width)
-    canvas.height = Math.floor(viewport.height)
+    const canvas = document.createElement('canvas'), r = k / vp.scale
+    canvas.width = Math.max(1, Math.round(box.width * r))
+    canvas.height = Math.max(1, Math.round(box.height * r))
     try {
-      await page.render({ canvas, canvasContext: canvas.getContext('2d'), viewport }).promise
+      await page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false, willReadFrequently: !V.assets?.enableHWA }), viewport }).promise
     } catch (e) { release(canvas); page.cleanup?.(); throw e }
+    drew(canvas, k)
     return { canvas, k, from: 'doc', page }
   }
   /** the page's copy at the place's k, drawn by `d` (the door asked, which a later open does not replace here) from the page's
-   *  source; again from the document where the source was let go meanwhile */
+   *  source at the scale kept with its canvas (drawn.mjs: never derived from a size here); again from the document where the
+   *  source was let go meanwhile */
   async function copyAt(d, n, k, my) {
     let src = await sourceOf(n, k)
     try {
+      // (a source PDF.js let go meanwhile: the page drawn from the document instead)
+      if (src.from !== 'doc' && scaleOf(src.canvas) === null) src = await sourceOf(n, k, true)
       let canvas = await d.copyOf(n, src.canvas, src.k)
       if (src.from !== 'doc' && !src.canvas.width) {
         release(canvas)
@@ -487,6 +500,15 @@ export function createLayerSide(view, o) {
     got.canvas.setAttribute('aria-hidden', 'true')
     const wrap = document.createElement('div')
     wrap.className = 'axt-layer'
+    // the SVG and the links in the copy's frame (engine.css): the page's size at the pane's scale from its top-left corner,
+    // --total-scale-factor times its size in PDF units (which a zoom's steps change by CSS alone), not the place's box, which
+    // PDF.js floors to whole CSS px as it does the copy's source
+    const vp = V.places.view(n)?.viewport
+    if (vp?.scale) {
+      const unit = vp.scale * (vp.userUnit || 1)
+      wrap.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${vp.width / unit}px)`)
+      wrap.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${vp.height / unit}px)`)
+    }
     // its links over the drawing, in the place's coordinates: one element, sized by shares of the page, which no zoom moves
     const links = V.links(n, laid.links)
     wrap.append(got.canvas, laid.svg, ...(links ? [links] : []))
@@ -503,11 +525,12 @@ export function createLayerSide(view, o) {
     const given = right?.lay(n, laid.words), shown = right?.show(n)
     if (given || shown) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
   }
-  /** a laid page's copy drawn again at the place's new k (a zoom): from the left's canvas once PDF.js drew it at that k */
+  /** a laid page's copy drawn again at the place's new k (a zoom): from the left's canvas once PDF.js drew it at that k. A
+   *  copy is kept while it is at the scale a copy drawn now would be at (its source's), whatever the zoom has done since */
   async function recopy(n) {
     const P = pages.get(n), k = kOf(n)
     if (!P?.content?.wrap || P.content.gen !== gen || !door || k === null || !V.places.near(n)) return
-    if (Math.abs(P.content.k - k) / k <= K_SLACK) return
+    if (P.content.k === (drawnSource(n, k)?.k ?? k)) return
     if (P.copying) { P.again = true; return }
     P.copying = true
     const my = gen
@@ -784,6 +807,43 @@ export function createLayerSide(view, o) {
         composed: counts.composed, docs: entries.size, opens: counts.opens, forks: counts.forks, asked: counts.asked, commits: counts.commits, copies: counts.copies, retirements: counts.retired,
         leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '),
         shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
+      }
+    },
+    /** the harness's registration check (layer-side.d.mts Registration): page n's copy drawn from the source a commit takes
+     *  and from the page drawn here at the place's k, the two compared pixel by pixel */
+    async registration(n, { tolerance = 16, canvases = false } = {}) {
+      if (disposed || !door || !V.places.near(n)) return null
+      const c = pages.get(n)?.content, vp = V.places.view(n)?.viewport, k = kOf(n), d = door
+      if (!c?.wrap || c.gen !== gen || !vp?.scale || k === null) return null
+      const w = vp.width / vp.scale
+      const mine = [], drawnHere = []
+      const letGo = s => { if (s?.from === 'doc') { release(s.canvas); s.page?.cleanup?.() } }
+      try {
+        // (the commit's own path, timed: its source, then its copy)
+        const t0 = clock.now(), src = await sourceOf(n, k), t1 = clock.now()
+        drawnHere.push(src)
+        const a = await d.copyOf(n, src.canvas, src.k), t2 = clock.now()
+        mine.push(a)
+        const out = { page: n, size: [w, vp.height / vp.scale], from: src.from, k, kSource: src.k, lost: k * w - src.canvas.width, source: [src.canvas.width, src.canvas.height], ms: { source: t1 - t0, copy: t2 - t1 } }
+        if (src.from === 'doc') return out
+        const doc = await sourceOf(n, k, true)
+        drawnHere.push(doc)
+        const b = await d.copyOf(n, doc.canvas, doc.k)
+        mine.push(b)
+        const W = Math.min(a.width, b.width), H = Math.min(a.height, b.height)
+        const pa = a.getContext('2d').getImageData(0, 0, W, H).data, pb = b.getContext('2d').getImageData(0, 0, W, H).data
+        let differing = 0, maxDiff = 0
+        for (let i = 0; i < pa.length; i += 4) {
+          const m = Math.max(Math.abs(pa[i] - pb[i]), Math.abs(pa[i + 1] - pb[i + 1]), Math.abs(pa[i + 2] - pb[i + 2]))
+          if (m > maxDiff) maxDiff = m
+          if (m > tolerance) differing++
+        }
+        Object.assign(out, { doc: [doc.canvas.width, doc.canvas.height], compared: W * H, differing, maxDiff })
+        if (canvases) { out.copies = { source: a, doc: b }; mine.length = 0 }
+        return out
+      } finally {
+        for (const s of drawnHere) letGo(s)
+        for (const m of mine) release(m)
       }
     },
     dispose() {

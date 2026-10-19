@@ -9,19 +9,21 @@
 import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/action-icon.mjs')
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
 const PROFILE = `${E2E}.profile-action-icon`
 const PAPER = '1706.03762'
 rmSync(PROFILE, { recursive: true, force: true })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   // Playwright turns the back/forward cache off by default, and check 3 is about exactly that cache
   ignoreDefaultArgs: ['--disable-back-forward-cache'],
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 const page = context.pages()[0] ?? await context.newPage()
 const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]
