@@ -275,10 +275,12 @@ export function readArgs(s, i, params, to = s.length) {
     // Nor a command the table reads parameters for: a register (\\baselineskip) or an internal quantity the table does not
     // know (\\fontdimen2\\font) is a value, \\vspace, \\vskip, \\kern or \\section is a call of its own. \\hrule\n\\vspace{0.5mm}
     // took \\vspace for the rule's dimension, and its {0.5mm} was walked as text, a mark written inside it (2610.21765);
-    // \\hrule\\vskip 4pt took `\\vskip 4` and left `pt` the text's, its mark between the 4 and its unit
+    // \\hrule\\vskip 4pt took `\\vskip 4` and left `pt` the text's, its mark between the 4 and its unit. A command whose
+    // expansion is the value (VALUES: \\number, \\the, \\romannumeral …) is a value whatever the table says it reads:
+    // \\vskip\\number\\count0 pt
     if (shape === '_' && role === 'd') {
       const m = TEX_VALUE.exec(s.slice(at, Math.min(to, at + 200)))
-      const call = m && [...m[0].matchAll(/\\([A-Za-z@]+)/g)].find(c => { const pp = commandParams(c[1]); return !!pp?.length && pp !== REGISTER })
+      const call = m && [...m[0].matchAll(/\\([A-Za-z@]+)/g)].find(c => { const pp = commandParams(c[1]); return !VALUES.has(c[1]) && !!pp?.length && pp !== REGISTER })
       const value = m ? (call ? m[0].slice(0, call.index) : m[0]) : ''
       if (/\S/.test(value)) { args.push({ shape, role, param, start: at, end: at + value.length }); at += value.length }
       continue
@@ -361,6 +363,13 @@ const TEXTLESS = new Set([
   // maker writes no row for them (layout/marks.mjs INVISIBLE, or no ink), so the layer's zero must read them so too
   'label', 'bibliographystyle', 'sethlcolor',
 ])
+/**
+ * TeX's commands whose expansion, or whose meaning to the scanner, is a number, a dimension or glue: a value where
+ * TeX's own syntax reads one (readArgs' `_d`), though the table gives some of them parameters of their own (\\number's
+ * and \\romannumeral's value, \\value's counter, \\toks's register). The kernel's and e-TeX's, checked by hand
+ * (latex.ltx, the e-TeX manual); the registers the table holds as REGISTER are values already
+ */
+const VALUES = new Set(['number', 'romannumeral', 'the', 'value', 'numexpr', 'dimexpr', 'glueexpr', 'muexpr', 'fontdimen', 'dimen', 'skip', 'count', 'muskip', 'toks', 'wd', 'ht', 'dp', 'fontcharwd', 'fontcharht', 'fontchardp', 'fontcharic', 'gluestretch', 'glueshrink', 'mutoglue', 'gluetomu'])
 /** control symbols that set no letters: a discretionary hyphen (its hyphen, where a line breaks there, is the line's
  *  break, which the layer sets anew) */
 const TEXTLESS_SYMBOLS = new Set(['\\-'])

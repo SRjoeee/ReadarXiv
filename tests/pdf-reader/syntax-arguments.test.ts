@@ -45,6 +45,13 @@ describe('a value in TeX\'s own syntax is never a command that reads arguments o
     expect(texts(tex)).toEqual(['Words before.', 'Introduction', 'Words of the section.'])
     expect(marked(tex)).not.toMatch(/\\vskip 4\\leavevmode|\\section\{[^}]*\\(?:axt|leavevmode)/)
   })
+  it('a command whose expansion is the value is still a value: \\number, \\the, \\fontdimen (no unit after it is text)', () => {
+    expect(read('\\number\\count0 pt', 'vskip')).toEqual(['\\number'])
+    for (const src of ['\\vskip\\number\\count0 pt', '\\vskip\\the\\dimexpr 2pt\\relax', '\\kern\\fontdimen2\\font']) expect(texts(doc(`${src} Words of the paragraph.`)), src).toEqual(['Words of the paragraph.'])
+    // and the cut of a command that reads parameters of its own stays
+    expect(texts(doc('\\hrule\\vskip 4pt Words after the rule.'))).toEqual(['Words after the rule.'])
+    expect(texts(doc('\\hrule\n\\section{Introduction}\nWords of the section.'))).toEqual(['Introduction', 'Words of the section.'])
+  })
   it('its group is no unit, and nothing of the reader\'s goes inside it', () => {
     // (as 2610.21765 has it: the rules after a list, the unit that follows beginning at them)
     const tex = doc('\\begin{itemize}\n  \\item[] Ext - a randomness extractor.\n\\end{itemize}\n\\hrule\n\\vspace{0.5mm}\n\\hrule\n\\vspace{0.2cm}\n{\\bf Protocol for the cycle}\n\\vspace{0.2cm}\n\nWords after the rules.')
