@@ -440,7 +440,9 @@ export function createLayerSide(view, o) {
    *  page's, which PDF.js floors to whole CSS px): a canvas PDF.js drew (drawnSource); else the page drawn here from the
    *  latest composed document (its pages 1 to N are the original's) at k, as PDF.js draws a page view: from its top-left
    *  corner on a canvas of the place's box at k's resolution (its CSS px times the pixel ratio, where k is not held to
-   *  COPY_PIXELS), the rest of the page cropped, so that its copy maps pixel for pixel onto the place */
+   *  COPY_PIXELS), the rest of the page cropped, so that its copy maps pixel for pixel onto the place; and on the context
+   *  PDF.js draws a page view of a document opened without enableHWA on (opaque, read back by the CPU), so that it is the
+   *  left's canvas pixel for pixel (measured: 0 pixels differ, pnpm e2e:registration) */
   async function sourceOf(n, k, fromDoc = false) {
     if (!fromDoc) { const got = drawnSource(n, k); if (got) return got }
     const vp = V.places.view(n)?.viewport, box = V.places.box(n)
@@ -451,7 +453,7 @@ export function createLayerSide(view, o) {
     canvas.width = Math.max(1, Math.round(box.width * r))
     canvas.height = Math.max(1, Math.round(box.height * r))
     try {
-      await page.render({ canvas, canvasContext: canvas.getContext('2d'), viewport }).promise
+      await page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false, willReadFrequently: true }), viewport }).promise
     } catch (e) { release(canvas); page.cleanup?.(); throw e }
     drew(canvas, k)
     return { canvas, k, from: 'doc', page }

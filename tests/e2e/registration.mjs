@@ -13,11 +13,13 @@
 //     the place's k (exact by construction) are the same, pixel for pixel, within anti-aliasing (the side's registration());
 //   - residue: the original's ink left within 2 px of the rectangles the copy's paper fills and swaps cover is no more than
 //     at the aligned zoom (100 %, where nothing is floored) on the same page, scaled by the zoom's area;
-//   - the frame: the SVG and the links are the page's size at its scale, not its floored box;
+//   - the frame: the SVG and the links are the page's size at its scale, not its floored box; and a copy drawn from the
+//     document is on the place's box at the pixel ratio, as PDF.js's canvas is;
 // and a page retired and laid again at the same zoom gives the same copy, 0 pixels differing (the time's half of the rule).
 //
 // Each check has its positive control: run on the code before the fix (origin/next a567506a), every registration and
-// frame check at a chosen zoom fails (the numbers are the fix's pull request's).
+// frame check at a chosen zoom fails (the numbers are the fix's pull request's). The copy drawn from the document is drawn
+// on the context PDF.js draws a page view on, so the two copies agree to the pixel where the frame is right: 0 differ.
 //
 // Usage: pnpm build && pnpm e2e:registration     (first time: npx playwright install chromium)
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1 or 2 runs one ratio alone.
@@ -211,7 +213,7 @@ try {
         await page.waitForFunction(settled, null, { timeout: 20_000 }).catch(() => undefined)
         const m = await page.evaluate(measureAll)
         seen.push({ z, ...m })
-        for (const p of m.pages) console.log(`  zoom ${z} (scale ${m.scale.toFixed(4)}) page ${p.page}: from ${p.from}, k ${p.k.toFixed(5)}, source k ${p.kSource.toFixed(5)}, PDF.js floored ${(p.lost / dpr).toFixed(3)} CSS px; ${p.differing ?? '-'} of ${p.compared ?? '-'} px differ (max ${p.maxDiff ?? '-'}), residue ${p.residue ?? '-'} over ${p.rects ?? '-'} rects (${p.kept ?? '-'} kept); frame ${JSON.stringify(p.frame)}`)
+        for (const p of m.pages) console.log(`  zoom ${z} (scale ${m.scale.toFixed(4)}) page ${p.page}: from ${p.from}, k ${p.k.toFixed(5)}, source k ${p.kSource.toFixed(5)}, PDF.js floored ${(p.lost / dpr).toFixed(3)} CSS px; source ${JSON.stringify(p.source)}, document ${JSON.stringify(p.doc ?? null)}; ${p.differing ?? '-'} of ${p.compared ?? '-'} px differ (max ${p.maxDiff ?? '-'}), residue ${p.residue ?? '-'} over ${p.rects ?? '-'} rects (${p.kept ?? '-'} kept); frame ${JSON.stringify(p.frame)}`)
       }
       const aligned = seen.find(s => s.z === 1)
       const floorOf = n => aligned?.pages.find(p => p.page === n)?.residue
@@ -224,6 +226,8 @@ try {
           const floor = floorOf(p.page)
           const bound = floor === undefined ? null : floor * (s.scale / aligned.scale) ** 2 + RESIDUE_SLACK * dpr
           check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the ink left at the erased rectangles is no more than at the aligned zoom`, bound !== null && p.residue <= bound, `${p.residue} px darker than 240 within 2 px of ${p.rects} rects; at 100 %: ${floor ?? 'not measured'} (bound ${bound === null ? '-' : bound.toFixed(1)})`)
+          const box = p.frame.box && [Math.round(p.frame.box[0] * dpr), Math.round(p.frame.box[1] * dpr)]
+          check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the copy drawn from the document is on the place's box at the pixel ratio, as PDF.js sizes a page view's`, !!box && p.doc?.[0] === box[0] && p.doc?.[1] === box[1] && p.source[0] === box[0] && p.source[1] === box[1], `document ${JSON.stringify(p.doc)}, PDF.js ${JSON.stringify(p.source)}, the box at ${dpr} ${JSON.stringify(box)}`)
           const near = (a, b) => !!a && Math.abs(a[0] - b[0]) <= 0.05 && Math.abs(a[1] - b[1]) <= 0.05
           check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the SVG and the links are the page's size at its scale, not its floored box`, near(p.frame.svg, p.frame.want) && (!p.frame.links || near(p.frame.links, p.frame.want)), JSON.stringify(p.frame))
         }
