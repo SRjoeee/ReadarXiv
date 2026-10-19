@@ -27,6 +27,28 @@ function atMost(xs, v) {
   return lo
 }
 
+/**
+ * A unit's sentence starts from its text match's pairs (anchors.mjs sentenceStarts: `anchor` its tokens and `pairs`, a word's
+ * place in its text → the page token), knowing each paired token's sentence by its word (highlight.mjs withSentences): a glyph
+ * no word is paired with by the order. The left's on the layer (createShapes) and a layout made whole alike (the highlight
+ * gate's reference), so that the two agree; null where sentenceStarts finds none
+ */
+export function startsOfPairs(anchor, text, offsets) {
+  const st = sentenceStarts(anchor, text, offsets)
+  if (!st) return st
+  const pairs = anchor.pairs, words = offsets.map(o => wordsOfText(text.slice(0, o)).length)
+  // (each paired token's word, its first where two name it, made on the first token asked)
+  let wordOf = null
+  return withSentences(st, k => {
+    if (!wordOf) {
+      wordOf = new Map()
+      for (const [w, t] of pairs) { const was = wordOf.get(t); if (was === undefined || w < was) wordOf.set(t, w) }
+    }
+    const w = wordOf.get(k)
+    return w === undefined ? -1 : atMost(words, w)
+  })
+}
+
 /** a PDF side's shapes, of its layout: highlight.mjs and floats.mjs, as the extension paints them */
 export function pdfShapes(L) {
   return {
@@ -144,7 +166,7 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
      * the unit is on has come; null before, without pairs, or where a start is not found (the unit lights whole). The
      * pairs are the producer's to ship where the reader reads them (a unit located by its marks, or by its text over
      * 80 % of it, sentenceStarts' TEXT_ONLY): what is shipped is read. The starts know each paired token's sentence by its
-     * word (withSentences): a glyph no word is paired with (a formula's, a script the text layer gives late) by the order
+     * word (startsOfPairs): a glyph no word is paired with (a formula's, a script the text layer gives late) by the order
      */
     starts(id, text, offsets) {
       if (!L.told.has(id) || !tokensIn(L, id)) return null
@@ -158,19 +180,7 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
         }
         pairsOf.set(id, pairs)
       }
-      const st = pairs && sentenceStarts({ tokens: L.anchors.get(id).tokens, pairs, bounded: true, coverage: 1 }, text, offsets)
-      if (!st) return st
-      // (each paired token's word, its first where two name it, made on the first token asked)
-      const words = offsets.map(o => wordsOfText(text.slice(0, o)).length)
-      let wordOf = null
-      return withSentences(st, k => {
-        if (!wordOf) {
-          wordOf = new Map()
-          for (const [w, t] of pairs) { const was = wordOf.get(t); if (was === undefined || w < was) wordOf.set(t, w) }
-        }
-        const w = wordOf.get(k)
-        return w === undefined ? -1 : atMost(words, w)
-      })
+      return pairs && startsOfPairs({ tokens: L.anchors.get(id).tokens, pairs, bounded: true, coverage: 1 }, text, offsets)
     },
     /** a page's floats (floats.mjs pageFloats) from what its drawing gave: its figures' regions and its paths; made now
      *  where its part is in, else on its first use after it comes, and again on its first use after the document part
