@@ -62,6 +62,8 @@ describe('the shear as the SVG draws it', () => {
     const toPx = (x: number, y: number): [number, number] => [x, 792 - y]
     const svg = L2.svgOfUnit(lay(true) as never, 1, toPx, 1, 0)
     expect(svg).toMatch(/<text transform="translate\(([\d.]+) 692\) skewX\(-13\) translate\(-\1 -692\)"><tspan[^>]*>\u4e59\u4e19<\/tspan><\/text>/)
+    // (in the line's order: the copy and a search take the runs as they read, the upright before and after the sheared one)
+    expect(svg.replace(/<[^>]+>/g, '')).toBe('\u7532\u4e59\u4e19\u4e01')
     // (the places are the upright's: the same lay, only the drawing differs)
     const xsOf = (L: { lines: { items: { x: number }[] }[] }) => L.lines.flatMap(l => l.items.map(i => i.x))
     expect(xsOf(lay(true) as never)).toEqual(xsOf(lay(false) as never))

@@ -3592,7 +3592,7 @@ const fillAttr = c => (/^#[0-9a-f]{6}$/.test(c) ? c : '#141414')
 
 /**
  * The unit's lines on one page as SVG: a <text> per line at its baseline, a <tspan> per run with its own x (a CJK run
- * a position per character), an oblique run a <text> of its own skewed about its baseline, a crop's formula as
+ * a position per character), an oblique run a <text> of its own skewed about its baseline, in the line's order, a crop's formula as
  * transparent text over it (so that it is copied and found). `toPx(x, y)`: PDF to the SVG's CSS pixels; `scale`: CSS
  * pixels per PDF unit.
  */
@@ -3602,7 +3602,9 @@ export function svgOfUnit(L, page, toPx, scale, id) {
   for (const line of L.lines) {
     if (line.page !== page) continue
     const [, by] = toPx(line.x0, line.baseline)
-    let body = '', oblique = ''
+    // (the line's runs in their order: the upright ones in a <text> at its baseline, each oblique run a <text> of its own
+    // between them, so that the copy, a search and every reader of the markup take the text in the line's order)
+    let body = '', parts = ''
     for (const run of lineRuns(line, L)) {
       if (run.crop !== undefined) {
         // the formula's plain text, invisible, over its crop: copied and found with the rest
@@ -3624,10 +3626,11 @@ export function svgOfUnit(L, page, toPx, scale, id) {
       // upright's; fonts.mjs CJK_SLANT_DEG for a CJK italic run in the role table's faces)
       if (run.face.oblique) {
         const ox = n2(cx[0])
-        oblique += `<text transform="translate(${ox} ${n2(by)}) skewX(${-run.face.oblique}) translate(${-ox} ${-n2(by)})">${span}</text>`
+        if (body) { parts += `<text y="${n2(by)}">${body}</text>`; body = '' }
+        parts += `<text transform="translate(${ox} ${n2(by)}) skewX(${-run.face.oblique}) translate(${-ox} ${-n2(by)})">${span}</text>`
       } else body += span
     }
-    out += `<text y="${n2(by)}">${body}</text>${oblique}`
+    out += parts && !body ? parts : `${parts}<text y="${n2(by)}">${body}</text>`
   }
   return `${out}</g>`
 }
