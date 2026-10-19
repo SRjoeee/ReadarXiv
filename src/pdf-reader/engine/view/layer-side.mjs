@@ -46,12 +46,12 @@ export const LEFT_RETRY_MS = 10_000
 /** the most other pages a wanted page's running units bring their left parts from (spreadFrom), the nearest first: a unit over
  *  many pages would otherwise fetch every one at once. On the 54 papers of the sweep a page brought at most 3 (2026-10-19) */
 export const SPREAD_MAX = 8
-/** the pages whose left parts page p's running units (`ids`) bring: the others of each unit's pages (`pagesOf`) not in yet
- *  (`isIn`), each once, nearest p first, at most `max` */
+/** the pages whose left parts page p's running units (`ids`) bring: of the others of each unit's pages (`pagesOf`), each once,
+ *  the `max` nearest p, nearest first, those not in yet (`isIn`): the same pages however many have come */
 export function spreadPages(p, ids, pagesOf, isIn, max = SPREAD_MAX) {
   const out = new Set()
-  for (const id of ids) for (const q of pagesOf(id) ?? []) if (q !== p && !isIn(q)) out.add(q)
-  return [...out].sort((a, b) => Math.abs(a - p) - Math.abs(b - p) || a - b).slice(0, max)
+  for (const id of ids) for (const q of pagesOf(id) ?? []) if (q !== p) out.add(q)
+  return [...out].sort((a, b) => Math.abs(a - p) - Math.abs(b - p) || a - b).slice(0, max).filter(q => !isIn(q))
 }
 /** the pages wanted last whose geometry is kept beside the near ones (§3.2) */
 const WANTED_KEPT = 20
@@ -621,7 +621,7 @@ export function createLayerSide(view, o) {
   let left = null, right = null, shapedParts = []
   let leftAc = new AbortController()
   const leftAsked = new Set(), wantsBefore = new Set(), floatsAsked = new Set()
-  /** the pages wanted, and those whose running units' other pages' left parts were asked for (spreadFrom) */
+  /** the pages wanted, and those whose running units' other pages' left parts are all in (spreadFrom) */
   const wantedOnce = new Set(), spread = new Set()
   /** when each page's left part last failed */
   const leftFailed = new Map()
@@ -684,9 +684,11 @@ export function createLayerSide(view, o) {
    */
   function spreadFrom(p) {
     if (spread.has(p) || !door || !left?.has(p)) return
-    spread.add(p)
     const L = left.layout, ids = (L.unitsOn[p] ?? []).filter(id => bySentence(index.kinds[id] ?? undefined))
-    for (const q of spreadPages(p, ids, id => L.pagesOf.get(id), q => left.has(q))) leftOf(q, false)
+    const qs = spreadPages(p, ids, id => L.pagesOf.get(id), q => left.has(q))
+    // (done once every page it brings is in; until then each want asks again for those not asked or past a failure's wait)
+    if (!qs.length) spread.add(p)
+    for (const q of qs) leftOf(q, false)
   }
   /** page p's left part fetched once (again on a later want once a failure's wait has passed), added in a task of its own;
    *  `wanted`: the pointer's, kept for the door where none is open yet */

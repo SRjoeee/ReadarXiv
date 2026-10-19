@@ -694,8 +694,9 @@ describe('H1, H2, H4, H5, H6: the highlight\'s data on both panes', () => {
     const pagesOf = (id: number) => (id === 1 ? long : id === 2 ? [10, 11] : undefined)
     expect(SPREAD_MAX).toBe(8)
     expect(spreadPages(10, [1, 2, 3], pagesOf, () => false)).toEqual([9, 11, 8, 12, 7, 13, 6, 14])
-    // (the pages in already, and the page itself, are none of them)
-    expect(spreadPages(10, [2, 1], pagesOf, q => q < 10, 3)).toEqual([11, 12, 13])
+    // (the page itself is none of them; of the nearest, those in already none: never more pages as the near ones come)
+    expect(spreadPages(10, [2, 1], pagesOf, q => q < 10, 3)).toEqual([11])
+    expect(spreadPages(10, [1], pagesOf, q => Math.abs(q - 10) <= 4)).toEqual([])
     expect(spreadPages(10, [3], pagesOf, () => false)).toEqual([])
   })
 
@@ -727,6 +728,46 @@ describe('H1, H2, H4, H5, H6: the highlight\'s data on both panes', () => {
     await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
     const lefts = Object.values(v.lefts).map(l => l.sha256)
     expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256])
+    expect(s.view.probe().lit).toBe(2)
+    expect(s.view.probe().litSentence).toBe(0)
+  })
+
+  it('H9: the other page\'s left part that fails is asked again on a later hover once its wait has passed, and the paragraph then lights by sentence', async () => {
+    // unit 2 paired on both of its pages (its four words: three on page 1, one on page 2), its second sentence beginning on
+    // page 2; no page laid, so that the right is the left's mirrored
+    const v = await made({ pairs: { 1: [[0, [0, 0, 2]], [2, [0, 12, 3]]], 2: [[2, [3, 0, 1]], [3, [0, 5, 2]]] } })
+    const s = await setup({ paper: { objects: [...v.chunks, v.head, ...v.parts, ...Object.values(v.lefts)], pages: N } })
+    s.refuse.add(v.lefts[2]!.sha256)
+    s.side.tell({ head: v.head.ref, units: v.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(v, i)), end: { through: N } })
+    await settle(s)
+    const { unitOf } = await import('@/pdf-reader/engine/layer-proto/rows.mjs')
+    const { tokens } = await import('@/pdf-reader/engine/pipeline/anchors.mjs')
+    const text = 'Aaa bbb ccc. Ddd eee.', src = unitOf(v.index, rowOf(2, text))!.src
+    const words = tokens(src)
+    expect(words.length).toBe(4)
+    s.side.take([rowOf(2, text, { src: [words[3]!.at], tr: [text.indexOf('Ddd')] })])
+    leftViewer().render(1)
+    // (the paper's tokens stand on one line, each 28 wide and 0.1 right of the one before: the title's block and unit 2's
+    // over each other, but for the 1.3 past the title's end. The point: past the title's padded block, in unit 2's, where a
+    // unit lit by sentence reaches, and a unit lit whole does not)
+    const { createShapes } = await import('@/pdf-reader/engine/view/shapes.mjs')
+    const h = createShapes({ kindOf: i => v.index.kinds[i] ?? undefined })
+    h.addParts(v.readParts)
+    h.addPage(v.readLefts[0]!)
+    const b = h.shapes.block(h.shapes.runs(2).find(r => r.page === 1)!, 0), title = h.shapes.block(h.shapes.runs(0)[0]!, 0)
+    const pad = 3 / (clientOf(s.panes.left, 1, 1, 0).clientX - clientOf(s.panes.left, 1, 0, 0).clientX)
+    const x = title.x1 + pad + 0.4
+    expect(x).toBeLessThan(b.x1 + pad - 0.4)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
+    // (page 2's fails: the paragraph lights whole meanwhile; asked again only once the wait has passed)
+    expect([s.view.probe().lit, s.view.probe().litSentence]).toEqual([2, -1])
+    s.refuse.delete(v.lefts[2]!.sha256)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 + 0.5 })
+    const lefts = Object.values(v.lefts).map(l => l.sha256)
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256])
+    await s.clock.advance(LEFT_RETRY_MS + 10)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256, v.lefts[2]!.sha256])
     expect(s.view.probe().lit).toBe(2)
     expect(s.view.probe().litSentence).toBe(0)
   })
