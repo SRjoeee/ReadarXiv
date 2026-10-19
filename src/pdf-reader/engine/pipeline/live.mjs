@@ -19,8 +19,8 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
-import { inkSamples, LAYOUT_TEX, layoutMarking, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
-import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../source/latex-front.mjs'
+import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
+import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
@@ -235,11 +235,14 @@ export function openPaper(files) {
  *  with `marks`, the layout marks' TeX (MARK_DEF, LAYOUT_TEX) first and, after the width probe, the mark probe
  *  (layout/marks.mjs markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
  *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units)`) are the paper's own switch, and what
- *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`). Without it, the bytes as before */
-export function probeFiles({ fsys, project }, { width = false, marks = false } = {}) {
+ *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`); under `latex` (latex-front.mjs dviEngine), each
+ *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
+ *  compile sets. Without it, the bytes as before */
+export function probeFiles({ fsys, project, meta }, { width = false, marks = false } = {}) {
   const text = latin1(fsys.read(project.main))
   const at = beginDocument(text)
-  const head = marks ? MARK_DEF + LAYOUT_TEX : '', probe = marks ? markProbeTex(probeSamples(project.units), inkSamples(project.units)) : ''
+  const dvi = dviEngine(meta?.compiler)
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units), inkSamples(project.units)) : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
 }
 
@@ -256,8 +259,10 @@ export function probeFiles({ fsys, project }, { width = false, marks = false } =
  *  before. With `layout`, the layout guard's two remedies (layout/guard.mjs): `unmarked`, unit indices each written as
  *  the paper's own bytes (patch `asSource`: no mark, no layout mark, no span), and `names` false, no babel name marked
  *  (none wrapped literally, LAYOUT_TEX's \axt@nmall made \relax on LAYOUT_TEX's own line: NAMES_OFF).
- *  Neither given: the bytes as before */
-export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null, inkless = null, unmarked = null, names = true } = {}) {
+ *  Neither given: the bytes as before. Under `latex` (latex-front.mjs dviEngine: arXiv's DVI compiler), MARK_DEF and
+ *  LAYOUT_TEX each followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX: xdvipdfmx's specials where pdfTeX
+ *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before */
+export function originalFiles({ fsys, project, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, unmarked = null, names = true } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
   let out, patched = null
@@ -283,7 +288,8 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null, 
     out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
     patched = spans ? new Map(out) : null
   }
-  const head = DRAFT + MARK_DEF + (layout ? LAYOUT_TEX + (names ? '' : NAMES_OFF) : '') + END_TEX + (lines ? LINES_TEX : '')
+  const dvi = dviEngine(meta?.compiler)
+  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (names ? '' : NAMES_OFF) : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   // (`skip`: the main file's head of ours, before the paper's first byte)
   if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }

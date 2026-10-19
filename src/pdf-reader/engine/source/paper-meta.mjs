@@ -29,7 +29,8 @@ export function analyze(fsys) {
       // how many toplevel sources arXiv compiles (its PDF is theirs in turn; the pipeline reads the first alone: the page
       // pass's several-toplevels rule, pipeline/page-pass.mjs)
       meta.toplevels = Array.isArray(r.sources) ? r.sources.filter(s => s?.usage === 'toplevel').length : 0
-      meta.compiler = r.process?.compiler
+      // (arXiv's long form of `latex`, the one DVI path it runs: "compiler: latex is actually shorthand for latex+dvips_ps2pdf")
+      meta.compiler = r.process?.compiler === 'latex+dvips_ps2pdf' ? 'latex' : r.process?.compiler
       meta.tlVersion = r.texlive_version ?? null
     } catch { meta.readme = 'json-unreadable' }
   } else if (files.find(f => /^00README(\.XXX)?$/i.test(f))) {

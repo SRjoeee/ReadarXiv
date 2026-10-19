@@ -722,6 +722,21 @@ export const LAYOUT_TEX = [
   '\\makeatother',
 ].join('')
 
+/** POINTS_TEX's point under `latex` (latex-front.mjs dviEngine), where pdfTeX writes no PDF itself and its \\pdfliteral sets
+ *  nothing: xdvipdfmx's, as POINTS_TEX sets it under XeTeX, a `pdf:code` special, the same rendering intent in the content
+ *  stream; pdfTeX's where it writes the PDF. DVI_LAYOUT_TEX's last part */
+export const DVI_POINTS_TEX = '\\let\\axt@pdfpoint\\axt@point\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\axt@pdfpoint{#1}\\else\\special{pdf:code /axt-#1 ri}\\fi}'
+/**
+ * LAYOUT_TEX under `latex` (latex-front.mjs dviEngine: arXiv's DVI compiler, the DVI made a PDF by dvipdfmx): where pdfTeX
+ * writes no PDF itself, its destination and its points are xdvipdfmx's, as LAYOUT_TEX sets them under XeTeX — MARK_DEF's
+ * XYZ `pdf:dest` (DVI_MARK_DEF's \\axt@dvidest, which goes before LAYOUT_TEX) and a `pdf:code` point (DVI_POINTS_TEX) —, and
+ * where it does, LAYOUT_TEX's own (its FitR). Each kind of node TeX sets is the one it sets under XeTeX, a whatsit, so the
+ * marks set nothing else (the native cases, lab/pdf/spikes/layout-marks-cases.mjs ONLY=dvi, hold every text item in place).
+ * After LAYOUT_TEX, for such a paper alone (live.mjs originalFiles, probeFiles): every other engine's files are byte for byte
+ * as before. One line, no comment
+ */
+export const DVI_LAYOUT_TEX = `\\makeatletter\\let\\axt@pdfdo\\axt@destonly\\def\\axt@destonly#1{\\ifnum\\pdfoutput>0 \\axt@pdfdo{#1}\\else\\axt@dvidest{#1}\\fi}${DVI_POINTS_TEX}\\makeatother`
+
 /** a unit's alignment as the marks file holds it (readAlign): centred, flush left, flush right, justified */
 export const ALIGN_CODES = Object.freeze(['c', 'l', 'r', 'j'])
 /** the code of a paragraph's skips: both sides stretch and \parfillskip none past them, centred (\centering, a center
