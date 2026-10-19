@@ -464,6 +464,8 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   as it was (mt.mjs boundaryChanges, given the unit) was sent as 22 sends it, and is carried; without the unit, a
  *   translation that holds no pair. Over 137 papers' sources 126 of 36,136 units are asked again. Every older pipeline's
  *   test takes this one with its own (7 to 14 carry no unit that holds a pair already)
+ * - 22: 24 changes the left side alone (a unit's lines at a page break, anchors.mjs placeWith and inOrder): every unit, its
+ *   pieces and its wire are 22's, and every one is carried; older pipelines keep their own tests
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -472,8 +474,9 @@ const holding = re => pieces => pieces.some(p => p?.t === 'text' && typeof p.s =
 const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
 const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
 const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
+const EVERY = () => true
 const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'open' || p?.t === 'close'))
-export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: NO_BOUNDARY, 16: NO_BOUNDARY, 17: NO_BOUNDARY, 18: NO_BOUNDARY, 19: NO_BOUNDARY, 20: NO_BOUNDARY, 21: NO_BOUNDARY }
+export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: NO_BOUNDARY, 16: NO_BOUNDARY, 17: NO_BOUNDARY, 18: NO_BOUNDARY, 19: NO_BOUNDARY, 20: NO_BOUNDARY, 21: NO_BOUNDARY, 22: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

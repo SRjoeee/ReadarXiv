@@ -532,7 +532,6 @@ describe('a copy made under pipeline 20, reopened under 21', () => {
 describe('a copy made under pipeline 21, reopened under 22', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
   it('sends again the unit whose wire the boundary rule changes, and no other', async () => {
-    expect(PIPELINE_VERSION).toBe('22')
     // (2610.19159's u325: a run-in label kept, a colour after it to the unit's end)
     const label = '\\textit{Floor (must clear):} \\textcolor{red}{all of the rest of the line to its end}'
     const p = openPaper(new Map([['main.tex', new TextEncoder().encode(sourceOf(PARAS).replace('\\end{document}', `\n${label}\n\n\\end{document}`))]])), n = p.units.length
@@ -557,6 +556,26 @@ describe('a copy made under pipeline 21, reopened under 22', () => {
     // (without the unit, a translation that holds no pair is carried, one that holds a pair is not)
     expect(PIPELINE_CARRIES['21']!([{ t: 'text', s: 'words', tr: true }], null)).toBe(true)
     expect(PIPELINE_CARRIES['21']!([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'words', tr: true }, { t: 'close', id: 1, src: '}' }], null)).toBe(false)
+  })
+})
+
+// A copy made under pipeline 22, reopened under 24: 24 changes a unit's lines at a page break (anchors.mjs), the left side alone,
+// not a unit, the wire or its reading back: every unit is the copy's by its hash, carried as it has it, and nothing is sent
+describe('a copy made under pipeline 22, reopened under 24', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit as the copy has it: nothing is sent again', async () => {
+    expect(PIPELINE_VERSION).toBe('24')
+    const p = paper(), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '22', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(n - keptFor(p, 'zh').size)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
   })
 })
 
