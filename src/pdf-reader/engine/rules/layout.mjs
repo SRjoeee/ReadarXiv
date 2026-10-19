@@ -163,7 +163,9 @@ const SCRIPT_FIELDS = [
     key: 'cjkFaces', group: 'faces', kind: 'object', nullable: true,
     members: [
       { key: 'group', kind: 'text', words: 'the CJK font group' },
-      { key: 'kai', kind: 'text', nullable: true, words: 'its Kai for emphasis; empty sets emphasis upright' },
+      // (read by the engines before the ruling of 2026-10-19, which draw emphasis in it; kept for them until the schema next
+      // moves: an engine since draws a CJK italic run in the body's face sheared, layer-proto/fonts.mjs CJK_SLANT_DEG)
+      { key: 'kai', kind: 'text', nullable: true, words: 'its Kai for emphasis in engines before 2026-10-19 (empty: upright); since, emphasis is the body slanted and this is not read' },
       { key: 'light', kind: 'list', words: 'the English designs beside which it takes the light weights' },
     ],
     words: 'The CJK family the script is drawn in; empty for an alphabet.',

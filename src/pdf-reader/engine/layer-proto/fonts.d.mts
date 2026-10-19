@@ -21,6 +21,8 @@ export declare function classifyFont(name: string, fallbackFamily?: string): Fon
 /** class, weight and slant: what the style match compares */
 export declare const styleKey: (s: Style) => string
 export declare const OBLIQUE_DEG: number
+/** the slant of a CJK italic run in the role table's faces, degrees: its weight's face sheared about its baseline */
+export declare const CJK_SLANT_DEG: number
 /** a run's face by its style, its class ('cjk' or 'latin') and the target */
 export declare function faceOf(st: Style, cls: 'cjk' | 'latin', to: string): Face
 /** a face's canvas font string at `px` */

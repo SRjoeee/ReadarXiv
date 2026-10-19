@@ -18,9 +18,10 @@
 //   Noto superfamily, one design per script. Source Han Serif is Noto Serif CJK: zh, zh-Hant and ko in Source Han Serif
 //   SC, TC and K, ja in Harano Aji Mincho (Source Han Serif JP), at static weights that follow the paper's English family
 //   (Light beside Computer Modern and Garamond, Regular beside the rest), its real bold (SemiBold, Bold) for bold and
-//   headings, as the original's serif bold; Korean's Hangul at the size of the family's ideographs (Face.size). The Kai
-//   stays as today (FandolKai, AR PL KaitiM Big5); Japanese and Korean emphasis is upright. GNU FreeFont's own Arabic,
-//   Indic and Thai glyphs are not taken for Tier 2: their styles are not one design.
+//   headings, as the original's serif bold; Korean's Hangul at the size of the family's ideographs (Face.size). Emphasis
+//   is that same face slanted (the owner's ruling of 2026-10-19: a shear the layer draws, layer-proto/fonts.mjs
+//   CJK_SLANT_DEG), in every CJK target alike; no Kai. GNU FreeFont's own Arabic, Indic and Thai glyphs are not taken for
+//   Tier 2: their styles are not one design.
 //
 // Also the names behind both renderers' reading of a paper's fonts: each design's NFSS family names (the TeX path's
 // font probe, familyOfProbe) and its PostScript names (a PDF's fonts, classifyFont and familyOfFonts), in one table.
@@ -336,22 +337,23 @@ const LATIN_FALLBACKS = Object.fromEntries(Object.values(FACES).filter(f => !CJK
 
 /**
  * What a target draws in, for a paper's English family. `cjkFaces`: the target's CJK family as the layout rule set gives
- * it (rules/layout.mjs: its group, its Kai, the English designs beside which it takes the light weights), null for an
- * alphabet. Which family a script takes is a layout rule, not a fact about the files: this table only builds the roles
- * from it (Light beside Computer Modern and Garamond, its bold SemiBold; Regular and Bold beside the rest, spec §4.4).
- * A script that is no alphabet's and is given none has no roles to draw in
+ * it (rules/layout.mjs: its group, the English designs beside which it takes the light weights), null for an alphabet.
+ * Which family a script takes is a layout rule, not a fact about the files: this table only builds the roles from it
+ * (Light beside Computer Modern and Garamond, its bold SemiBold; Regular and Bold beside the rest, spec §4.4). The set's
+ * `kai` is not read: an engine before the ruling of 2026-10-19 drew emphasis in it, and the set keeps it for those until
+ * its schema next moves (docs/PDF-READER.md §18.1, the font roles). A script that is no alphabet's and is given none has
+ * no roles to draw in
  */
 export function rolesFor(target, family, cjkFaces) {
   const script = scriptOf(target)
   let cjk = null
   const fallbacks = { ...LATIN_FALLBACKS }
   if (cjkFaces) {
-    const { group, kai } = cjkFaces
+    const { group } = cjkFaces
     const light = cjkFaces.light.includes(family)
-    cjk = { body: `${group}-${light ? 'light' : 'regular'}`, bold: `${group}-${light ? 'semibold' : 'bold'}`, italic: kai }
-    // Traditional Chinese's characters Source Han Serif TC lacks, from SC at the same weight; the Kai's, from the body
+    cjk = { body: `${group}-${light ? 'light' : 'regular'}`, bold: `${group}-${light ? 'semibold' : 'bold'}` }
+    // Traditional Chinese's characters Source Han Serif TC lacks, from SC at the same weight
     if (script === 'Hant') for (const w of ['light', 'regular', 'medium', 'semibold', 'bold']) fallbacks[`shs-tc-${w}`] = Object.freeze([`shs-sc-${w}`])
-    if (kai) fallbacks[kai] = Object.freeze([cjk.body])
   } else if (!ALPHABETS.has(script)) throw new Error(`no font roles for ${target} (script ${script}) yet`)
   return Object.freeze({ target, family, cjk: cjk && Object.freeze(cjk), fallbacks: Object.freeze(fallbacks) })
 }
@@ -406,20 +408,15 @@ const styled = (group, bold, italic, letters) => {
   return first
 }
 
-/** the face a run is drawn in. A CJK run takes its target's CJK family by weight and slant, whatever its class (no
- *  sans, no fangsong: §4.4); emphasis is the Kai, or upright where the target has none; and weight wins over slant: every
- *  bold italic run, a heading's or the text's, is the bold serif, as a compile of the translation sets it (ctex's fontsets
- *  give no bold italic face, and NFSS substitutes b/n for b/it), where the Kai, having no bold, would set it lighter than
- *  the text's own bold (docs/PDF-READER.md §18.1, the font roles). A Latin run takes its design's
+/** the face a run is drawn in. A CJK run takes its target's CJK family by weight, whatever its class (no sans, no
+ *  fangsong: §4.4): its slant is that face sheared where it is drawn (layer-proto/fonts.mjs CJK_SLANT_DEG), an italic run
+ *  the body's and a bold italic one the bold's (docs/PDF-READER.md §18.1, the font roles). A Latin run takes its design's
  *  group (math the math face); small capitals take Latin Modern's caps face, and elsewhere stay the face's: the drawing
  *  sets them by its smcp feature where METRICS says it has one, else as capitals at 0.8 of the size. A CJK run of a
  *  target with no CJK roles is set as a Latin run, and canDraw then finds what its face cannot draw */
 export function faceFor(roles, run) {
   const c = roles.cjk
-  if (run.script === 'cjk' && c) {
-    if (run.bold) return c.bold
-    return run.italic ? (c.italic ?? c.body) : c.body
-  }
+  if (run.script === 'cjk' && c) return run.bold ? c.bold : c.body
   if (run.cls === 'math') return 'lm-math'
   const cyrillic = scriptOf(roles.target) === 'Cyrl' ? 1 : 0
   const groups = Object.hasOwn(LATIN_GROUPS, run.design) ? LATIN_GROUPS[run.design] : Object.hasOwn(OTHER_GROUPS, run.cls) ? OTHER_GROUPS[run.cls] : OTHER_GROUPS.serif

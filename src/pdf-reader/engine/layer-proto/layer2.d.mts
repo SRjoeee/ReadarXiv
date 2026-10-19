@@ -124,6 +124,9 @@ export interface Prepared extends Map<number, Resolved> {
   joinAt?: Map<string, number>
   /** the finish: what became of each of the unit's page characters, by its key */
   cat: Map<string, 'acc' | 'keep' | 'orphan' | 'undrawn'>
+  /** the finish: the class's own marks after the unit's text, which its source does not write (a theorem's note's ")."),
+   *  each with its character's style: drawn after the translation (tokensOf2) */
+  tail?: { ch: string; st: Style | null }[] | null
   /** the finish: the lines a located display holds */
   displayLines?: Set<string>
   /** part 5: the piece index of a placeholder whose rendering no source proves (tex.mjs proofOf: the unit is left the
@@ -154,10 +157,13 @@ export interface RenderingsContext {
 /** part 4's answer: the gaps as it leaves them, and each placeholder's rendering (called once a placeholder, in the
  *  unit's order, for those the rules look for: 'cite', 'num', 'other'), or none found */
 export interface Renderings {
-  gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other'): Gap | null | undefined
+  gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other' | 'space'): Gap | null | undefined
   /** how a placeholder is drawn where the source knows it without the page (a layout file's macro that sets no ink: none;
    *  its text symbol: the character), else null */
   fixed?(p: Placeholder): { mode: 'none' | 'source'; text: string; proof?: boolean } | null
+  /** whether the source knows the ink of a placeholder the rules would draw as a space (a layout file's found row): it is
+   *  then looked for (gapFor) and drawn as that ink */
+  inked?(p: Placeholder): boolean
 }
 /** the parts of a unit another source gives in place of v0's; a part not given is v0's */
 export interface UnitParts {
@@ -181,11 +187,11 @@ export interface UnitParts {
   colourOf?: (k: number) => number | null
 }
 /** a token of a unit's translation */
-export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it
+export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; kernW?: number; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it; kernW: explicit glue after it (at 100 px), its item's `kern`
 /** a laid line: its slot, and its items at their places */
 /** a laid line: its slot's fields, its items, and `past`, how many of the unit's kept regions the text passed before its first item
  *  (breakLines: where the page's word table writes a region's kept lines) */
-export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number }[]; past?: number; after?: number; [more: string]: unknown }
+export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
  *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */

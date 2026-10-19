@@ -88,12 +88,13 @@ describe('a mark no line starts with stays with the text before it', () => {
   ]
   for (const [cls, mark, to] of CJK) {
     it(`${to} ${cls} ${mark} after a space: the character before it goes down with it`, () => {
+      // (the space between two CJK characters is not drawn in Chinese and Japanese, E3: the mark follows the character)
       const text = `${HAN8} ${mark}\u6c49\u5b57`
       const { shown, layout } = lay(text, to, 82, { measure: cjkMeasure })
       expect(layout.clipped).toBe(false)
       expect(opened(shown, to), JSON.stringify(shown)).toEqual([])
       expect(shown[0]).toBe(HAN8.slice(0, 7))
-      expect(shown[1]!.startsWith(`\u5b57 ${mark}`)).toBe(true)
+      expect(shown[1]!.startsWith(`\u5b57${mark}`)).toBe(true)
       expect(ink(shown.join(''))).toBe(ink(text))
     })
   }
@@ -148,7 +149,10 @@ describe('a layout no barred start touches is the one it was', () => {
   // a seeded generator of texts in which no line can open with a barred mark: words of letters (Latin, Cyrillic, Hangul),
   // CJK ideographs and kana, digits, opening brackets and dashes, with the rules' marks only right after a character (where
   // the rules already kept them from a line's start) and never after a space; laid at widths no token is wider than,
-  // every character of its own width. The digest is the layouts the breaker set before it learnt the barred starts
+  // every character of its own width. The digest is the layouts the breaker set before it learnt the barred starts, and
+  // since a script that sets no spaces between its words draws none between two of its characters (E3, 2026-10-19), the
+  // Chinese and Japanese texts' with those spaces gone: the German, Russian and Korean texts' digests are the ones they were
+  // (458033d154ed2821, fe6bba85f07f8b69, 31d1186069ea0844 for their 48 texts each)
   const rng = (seed: number) => () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
   const pick = (r: () => number, s: string) => { const a = [...s]; return a[Math.floor(r() * a.length)]! }
   const LETTERS: Record<string, string> = { de: 'abcdefghijklmnopqrstuvwxyz\u00e4\u00f6\u00fc\u00df', ru: '\u0430\u0431\u0432\u0433\u0434\u0435\u0436\u0437\u0438\u043a\u043b\u043c\u043d\u043e\u043f\u0440\u0441\u0442', ko: '\uac00\ub098\ub2e4\ub77c\ub9c8\ubc14\uc0ac\uc544\uc790\ucc28' }
@@ -183,6 +187,6 @@ describe('a layout no barred start touches is the one it was', () => {
       expect(opened(shown, to), `${n}: ${JSON.stringify(shown)}`).toEqual([])
       out.push(JSON.stringify([to, w, layout.clipped, shown, layout.lines.map(l => Math.round((l as unknown as { used: number }).used * 1000))]))
     }
-    expect(createHash('sha256').update(out.join('\n')).digest('hex').slice(0, 16)).toBe('a02276992d75c64a')
+    expect(createHash('sha256').update(out.join('\n')).digest('hex').slice(0, 16)).toBe('f84a57e2be4ce11b')
   })
 })
