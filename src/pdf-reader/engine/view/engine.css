@@ -56,26 +56,32 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 .axt-sk-authors i { block-size: 1.2cqw; }
 .axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
 .axt-sk-abstract { margin-inline: 9%; }
-/* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy and the
-   engine's SVG over it fill the place, the SVG scaled by its viewBox. The copy is a canvas of the page, dimmed in the dark by
-   the reader sheet's own rule for a page's canvas; the SVG's text by the same filter, so that the layer's page reads as the
-   original's beside it. Its text is drawn with fractional advances (geometricPrecision): the engine measures a word by the
+/* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy fills the
+   place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the page as PDF.js
+   draws a page view (drawn.mjs): at the pane's scale from the page's top-left corner, on a canvas of the place's box, which
+   PDF.js floors to whole CSS px, the rest of the page cropped; so the frame is the page's size at that scale
+   (--axt-frame-w and -h, --total-scale-factor times the page's size, set by the layer side), never the floored box, which
+   would shrink the translation and the links by up to a pixel over the page against the copy. The frame passes the box by
+   less than PDF.js's rounding at the right and the bottom, where a page holds nothing; nothing clips it there, as nothing
+   ever clipped the SVG (its overflow is visible), and a clip on the place would cut a link's focus ring at the page's
+   edge. The copy is a canvas of the page, dimmed in the dark by the reader sheet's own rule for a page's canvas; the SVG's
+   text by the same filter, so that the layer's page reads as the original's beside it. Its text is drawn with fractional advances (geometricPrecision): the engine measures a word by the
    canvas, and a system that draws SVG text with a hinted face's advances (Chromium on Linux at a pixel ratio of 1) rounds
    each to a whole pixel. A place retired (far from the view) holds an empty one */
 .axt-layer { position: absolute; inset: 0; }
 .axt-layer > .axt-layer-copy { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-.axt-layer > svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; }
+.axt-layer > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; }
 .axt-layer > svg text { white-space: pre; }
 html[data-axt-dim] .axt-layer > svg { filter: invert(88.8%) hue-rotate(180deg); }
 /* ----- the layer's links over a laid page (links.mjs): one anchor a link, at the union of its boxes, each box a span of its
-   own; every size a share of the page's (or the link's) box, so a zoom moves nothing. Over the copy and the SVG (outside the
-   dark filter: the left's links keep their colours too), under the highlight's layer. The anchor takes no pointer, its boxes
-   do. As PDF.js draws a link on the left (pdf_viewer.css .linkAnnotation): its border where the PDF gives one, a yellow wash
+   own; every size a share of the page's frame (the SVG's: the page's size at its scale) or of the link's, so a zoom moves
+   nothing. Over the copy and the SVG (outside the dark filter: the left's links keep their colours too), under the
+   highlight's layer. The anchor takes no pointer, its boxes do. As PDF.js draws a link on the left (pdf_viewer.css .linkAnnotation): its border where the PDF gives one, a yellow wash
    under a hovering pointer. The focus ring is the page's, not the interface's: the chrome's --focus is near-white in the
    dark theme, and a page left undimmed is white paper (about 1.1:1). Two tones, a 2px ring in the page's ink between halos
    in its paper, so that it reads on the page and over a figure of any colour; light on dark where the pages are dimmed.
    The system's colours in forced colours */
-.axt-links { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.axt-links { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); z-index: 1; pointer-events: none; }
 .axt-link { position: absolute; display: block; pointer-events: none; outline: none; }
 .axt-link > .axt-link-box { position: absolute; box-sizing: border-box; pointer-events: auto; cursor: pointer; }
 .axt-link[data-axt-border="solid"] > .axt-link-box { border: var(--axt-link-border) solid var(--axt-link-colour); }

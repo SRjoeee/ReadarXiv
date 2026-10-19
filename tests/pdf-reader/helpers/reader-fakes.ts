@@ -168,8 +168,12 @@ export class FakeLinkService {
 }
 export const LinkTarget = { NONE: 0, SELF: 1, BLANK: 2, PARENT: 3, TOP: 4 }
 
-/** a page view of the fake viewer: its div sized as PDF.js sizes one, floored to the pixel */
-export interface FakeViewerPage { id: number; div: HTMLElement; viewport: FakeViewport; pdfPage: FakePage | null; renderingState: number; canvas: HTMLCanvasElement | null; reset(): void }
+/** a page view of the fake viewer: its div sized as PDF.js sizes one, floored to the pixel; its output scale where a test
+ *  draws it as PDF.js does (render's `as`) */
+export interface FakeViewerPage { id: number; div: HTMLElement; viewport: FakeViewport; pdfPage: FakePage | null; renderingState: number; canvas: HTMLCanvasElement | null; outputScale?: { sx: number; sy: number }; reset(): void }
+/** a page's canvas as PDF.js sizes it for a drawing (pdf_viewer.mjs PDFPageView.draw): its pixels, and the output scale it
+ *  leaves (the canvas's size over the floored page's) */
+export interface DrawnAs { width: number; height: number; sx: number; sy: number }
 const PDF_TO_CSS = 96 / 72
 export class FakePDFViewer {
   static made: FakePDFViewer[] = []
@@ -278,15 +282,17 @@ export class FakePDFViewer {
   update() { this.updates++ }
   scrollPageIntoView({ pageNumber }: { pageNumber: number }) { const pv = this._pages[pageNumber - 1]; if (pv) this.container.scrollTop = pageTopIn(pv.div) }
   _getVisiblePages() { return { first: this._pages[0], views: [] } }
-  /** PDF.js drew page `n` (the test's: a canvas in its div, then `pagerendered`) */
-  render(n: number, error: unknown = null) {
+  /** PDF.js drew page `n` (the test's: a canvas in its div, then `pagerendered`). `as`: its canvas and its output scale as
+   *  PDF.js sizes them at its viewport; else a canvas of 100 px and no output scale, which is no copy's source */
+  render(n: number, error: unknown = null, as: DrawnAs | null = null) {
     const pv = this._pages[n - 1]
     if (!pv) return
     pv.canvas ??= document.createElement('canvas')
-    pv.canvas.width = 100
+    pv.canvas.width = as?.width ?? 100
+    if (as) { pv.canvas.height = as.height; pv.outputScale = { sx: as.sx, sy: as.sy } }
     pv.div.prepend(pv.canvas)
     pv.renderingState = 3
-    this.eventBus.dispatch('pagerendered', { pageNumber: n, error })
+    this.eventBus.dispatch('pagerendered', { source: pv, pageNumber: n, error, cssTransform: false, isDetailView: false })
   }
 }
 /** a page's top in its pane's scroll, as the layout model has it */

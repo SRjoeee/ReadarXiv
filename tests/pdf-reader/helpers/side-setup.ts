@@ -49,8 +49,9 @@ export interface Setup {
   hold: Set<string>; signals: Map<string, AbortSignal>
   composed: { tail: Uint8Array | null; options: Record<string, unknown>; task: FakeTask }[]
   destroyed: string[]; warned: () => string[]; opens: number; highlight(on: boolean): void
-  /** each door opened: the door, the rows it took, its ends, the copies it drew (page, source, k) */
-  doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][] }[]
+  /** each door opened: the door, the rows it took, its ends, the copies it drew (page, source, k) and each source's size as it
+   *  was handed (page, width, height: a source drawn from the document is let go after) */
+  doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][]; sized: [number, number, number][] }[]
   /** the door the side holds now (the last opened, while it lives) */
   layer(): Layer | null
   real: boolean
@@ -138,7 +139,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
       if (o.openFails) throw new BundleRefusal('the document has 9 pages, not 4', { kind: 'part', path: 'doc' })
       const layer = o.real ? await o.real.openLayer(oo) : await door.openLayer(oo)
       live = layer
-      const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [] }
+      const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [], sized: [] }
       doors.push(seen)
       const take = layer.take.bind(layer), end = layer.end.bind(layer), copyOf = layer.copyOf.bind(layer), dispose = layer.dispose.bind(layer)
       layer.take = r => { seen.taken.push(...r); return take(r) }
@@ -148,6 +149,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
       layer.copyOf = (n, src, k) => {
         const before = seen.copies.filter(c => c[0] === n).length
         seen.copies.push([n, src, k])
+        seen.sized.push([n, src.width, src.height])
         if (fails(which, n, before)) return Promise.reject(new Error(`the copy of page ${n} failed (the test's)`))
         return copyOf(n, src, k)
       }
