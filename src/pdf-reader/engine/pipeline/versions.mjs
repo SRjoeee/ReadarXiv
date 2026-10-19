@@ -133,7 +133,12 @@
 //     twelve papers change (54 cut anew, 5 gone, 48 the same but for their pairs' numbers, found again by seedFrom); every
 //     other paper's units, the wire and its reading back are 19's, the pack's 32 outputs among them: a copy of 19 carries
 //     every unit it holds the source of (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '20'
+// 21: a paper whose compiler is latex has a layout once the host runs latex (DVI marks, #414: latex-front.mjs DVI_MARK_DEF,
+//     marks.mjs DVI_LAYOUT_TEX, its DVI made a PDF by dvipdfmx); papers prepared before, refused as engine, are made again
+//     under a new key (VTAG). Every other paper's units, marked original, layout file, wire and reading back are 20's byte
+//     for byte (the pack's 32 outputs among them), and a latex paper's units are too: a copy of 20 carries every unit it
+//     holds the source of (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '21'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
