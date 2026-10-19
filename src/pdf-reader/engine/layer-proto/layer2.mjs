@@ -2150,12 +2150,13 @@ const SPACELESS = /[\p{sc=Han}\p{scx=Hira}\p{scx=Kana}\u3000-\u303F\uFF01-\uFF0F
 const SPACELESS_QUOTES = /[“”‘’—…·]/u
 /** two SPACELESS characters with white space between, in a unit's source: a paper that writes CJK so, its own */
 const CJK_SPACED = new RegExp(`${SPACELESS.source}\\s+${SPACELESS.source}`, 'u')
-/** a token whose edge (its last character, `end`, else its first) is a character SPACELESS holds (a superscript is no CJK
- *  token: tokensOf2 sets it 'latin') */
-const spacelessEdge = (t, end, quotes) => {
+/** a token whose edge (its last character, `end`, else its first) is a character SPACELESS holds, or a curly quote, dash,
+ *  ellipsis or middle dot: a CJK token holds one only where the rules set them as CJK's (cjkQuotes, cjkClassRe). A superscript
+ *  is no CJK token (tokensOf2 sets it 'latin') */
+const spacelessEdge = (t, end) => {
   if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
   const cps = [...t.s], ch = end ? cps.at(-1) : cps[0]
-  return SPACELESS.test(ch) || (quotes && SPACELESS_QUOTES.test(ch))
+  return SPACELESS.test(ch) || SPACELESS_QUOTES.test(ch)
 }
 /** a token cut in two by the breaker, its head: no kern of its own (the kern stays after the word's tail) */
 const headOfCut = (t, extra) => {
@@ -2457,7 +2458,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // code run's, and any in a unit whose source sets such characters with spaces between)
   if (!keepAll && !CJK_SPACED.test(unit.src ?? '')) {
     const drawnAt = (q, step) => { for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q].space) return tokens[q]; return null }
-    const kept = tokens.filter((t, q) => !t.space || t.keep || t.st?.fam === 'mono' || !spacelessEdge(drawnAt(q - 1, -1), true, cjkQuotes) || !spacelessEdge(drawnAt(q + 1, 1), false, cjkQuotes))
+    const kept = tokens.filter((t, q) => !t.space || t.keep || t.st?.fam === 'mono' || !spacelessEdge(drawnAt(q - 1, -1), true) || !spacelessEdge(drawnAt(q + 1, 1), false))
     if (kept.length < tokens.length) { tokens.length = 0; for (const t of kept) tokens.push(t) }
   }
   tokens.base = base
