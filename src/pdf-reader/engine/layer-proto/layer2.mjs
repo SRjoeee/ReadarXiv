@@ -1446,8 +1446,8 @@ const TAIL_MAX = 3
 /**
  * The class's own marks after a unit's text, which its source does not write: a theorem's note (amsthm sets
  * "Definition 4.5 (" before the note, its label, and ")." after it, 2610.21084 page 6), a run-in head's full stop. The
- * characters of its last line after the last one its source's words, its renderings or its label take, each a mark (no
- * letter or digit), TAIL_MAX at most, all on that line and none kept, where the unit's source ends with a letter or a digit
+ * characters of its last line after the last one its source's words, its renderings or its label take, each a punctuation
+ * mark in a text font, TAIL_MAX at most, all on that line and none kept, where the unit's source ends with a letter or a digit
  * (it writes no end mark of its own). Their ink is the unit's text, erased with its line; tokensOf2 draws them after the
  * translation, each in its own style: [{ ch, st }], or null
  */
@@ -1464,7 +1464,10 @@ function tailOf(out, unit, keepSet) {
   if (last < 0) return null
   const line = lineOf(uc[last])
   const rest = uc.slice(last + 1).filter(real)
-  if (!rest.length || rest.length > TAIL_MAX || keepSet.has(line) || rest.some(c => lineOf(c) !== line || /[\p{L}\p{N}]/u.test(c.ch) || out.cat.get(charKey(c)) !== 'acc')) return null
+  // (a punctuation mark in a text font, as a class sets its own: a formula's delimiter in a math font is its formula's ink,
+  // 1512.03385's Table 1 brackets beside its cells, never the unit's)
+  const mark = c => /^\p{P}$/u.test(c.ch) && !c.nu && c.st?.fam !== 'math'
+  if (!rest.length || rest.length > TAIL_MAX || keepSet.has(line) || rest.some(c => lineOf(c) !== line || !mark(c) || out.cat.get(charKey(c)) !== 'acc')) return null
   return rest.map(c => ({ ch: c.ch, st: c.st ?? null }))
 }
 

@@ -1280,7 +1280,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `latinPatterns` | script | breaking | `en`, `de` | The hyphenation patterns a Latin word uses. |
 | `cellClear` | script | cells | 0 to 5, step 0.1 | The room kept between a table cell's text and a rule over or under it, in PDF units. |
 | `cellCapMin` | script | cells | 0.3 to 1, step 0.05 | The smallest share of the size a cell's text may be capped to between its rules. |
-| `cjkFaces` | script | faces | group, kai (not read since 2026-10-19: the font roles, §18.1), light; or none | The CJK family the script is drawn in; empty for an alphabet. |
+| `cjkFaces` | script | faces | group, kai, light; or none | The CJK family the script is drawn in; empty for an alphabet. |
 | `labels` | language | labels | figure, table, abstract, ref, bib, contents, listfigure, listtable, appendix, index, proof, preface, glossary; or none | A float's label and each generated heading babel names (Abstract, References, Contents, …) in this language's words; an empty word, or none, keeps the original's. |
 | `hyphenation.minWord` | set | hyphenation | 2 to 20 | The shortest word, in letters, that is hyphenated. |
 | `hyphenation.en.left` | set | hyphenation | 1 to 6 | The fewest letters English leaves before a hyphen. |

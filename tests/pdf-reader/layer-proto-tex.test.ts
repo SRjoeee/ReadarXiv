@@ -1300,6 +1300,12 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
     expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee).')
     expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff09\u3002')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee).')
   })
+  it("none in a math font: a formula's delimiter beside a cell is its formula's ink (1512.03385's Table 1)", () => {
+    const pg = [...item('Def (', 10, 500, 10, 0, bold), ...item('Latent transition error', 50, 500, 4, 1), ...item(']', 96, 500, 4, 2, math)]
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(unit('\u6f5c\u5728'), t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu, [-1], { use: 'lines', lines: t }) as never)
+    expect(prep.tail).toBeNull()
+  })
   it('none where the source writes its own end mark: the line\'s marks are its translation\'s', () => {
     expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002', 'Latent transition error.')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002')
   })
