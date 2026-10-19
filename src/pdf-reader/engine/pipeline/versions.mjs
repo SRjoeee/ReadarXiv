@@ -133,7 +133,16 @@
 //     twelve papers change (54 cut anew, 5 gone, 48 the same but for their pairs' numbers, found again by seedFrom); every
 //     other paper's units, the wire and its reading back are 19's, the pack's 32 outputs among them: a copy of 19 carries
 //     every unit it holds the source of (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '20'
+// 21: a source's line ends read as TeX reads them (latex-front.mjs texText: web2c's input_line ends a line at a CR or an
+//     LF, the LF of a CRLF with its CR), wherever the front end turns a file into TeX text, the guard's brace balance and
+//     the probe's main file. A CRLF source's blank lines were no paragraph's end: 2610.10069v1's introduction (ten
+//     paragraphs) and a whole proof (sixteen) were one unit each, its p23 drawn on p22. Of 180 papers 12 have a CR in a
+//     source, and the units of four change: 2610.10069 (110 -> 193), 2608.10322 (70 -> 88), 2608.12096 (297 -> 304),
+//     2608.02991 (278 -> 285, sn-jnl.cls's CRLF hid its author macros); 2608.12502's marked original alone, written with
+//     LF. Every other paper's units and marked original, the wire and its reading back are 20's, the pack's 32 outputs
+//     among them: a copy of 20 carries every unit it holds the source of (live.mjs PIPELINE_CARRIES), and a unit cut
+//     anew, a CRLF file's paragraphs, is asked again
+export const PIPELINE_VERSION = '21'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
