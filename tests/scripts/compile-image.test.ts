@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { COVERAGE_SOURCE } from '../../src/pdf-reader/engine/rules/font-coverage.mjs'
-import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, compileIdentity, compileImageRef, identityOf, imageFromArg, imageIdOf, platformArgs } from '../../lab/pdf/spikes/compile-image.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, compileIdentity, compileImageRef, identityOf, imageFromArg, imageIdOf, latexmkEngine, platformArgs } from '../../lab/pdf/spikes/compile-image.mjs'
 
 // The compile image's identity (lab/pdf/spikes/compile-image.mjs): one reference for every Docker compile of the lab, the same
 // digest in every compile cache key, so that a cache of another TeX Live misses
@@ -39,6 +39,16 @@ describe('which image the lab compiles in', () => {
     expect(platformArgs({})).toEqual([])
     expect(platformArgs({ COMPILE_PLATFORM: 'linux/amd64' })).toEqual(['--platform', 'linux/amd64'])
     expect(() => platformArgs({ COMPILE_PLATFORM: 'amd64' })).toThrow(/os\/arch/)
+  })
+})
+
+describe('latexmk\'s engine for a paper\'s compiler', () => {
+  it('the three engines as before, any other pdfLaTeX; arXiv\'s `latex` in DVI mode, its DVI made a PDF by dvipdfmx', () => {
+    expect(latexmkEngine('pdflatex')).toEqual(['-pdf'])
+    expect(latexmkEngine('xelatex')).toEqual(['-xelatex'])
+    expect(latexmkEngine('lualatex')).toEqual(['-lualatex'])
+    expect(latexmkEngine(null)).toEqual(['-pdf'])
+    expect(latexmkEngine('latex')).toEqual(['-pdfdvi', '-e', '$dvipdf=q{dvipdfmx %O -o %D %S}'])
   })
 })
 

@@ -50,6 +50,16 @@ export function imageFromArg(value, env = process.env) {
   return value
 }
 
+/** latexmk's arguments for a paper's compiler, as the web container runs it: -pdf for pdfLaTeX (and any compiler not named
+ *  here), -xelatex, -lualatex, and for `latex` (arXiv's DVI compiler: src/pdf-reader/engine/source/latex-front.mjs dviEngine)
+ *  -pdfdvi with dvipdfmx as its dvipdf, the DVI made a PDF by dvipdfmx, which reads the marks' specials (latexmk's own dvipdf
+ *  is Ghostscript's): never pdfLaTeX in its place, which sets such a paper otherwise than arXiv's DVI build (2610.21765's
+ *  pages 8 to 14) */
+export function latexmkEngine(engine) {
+  if (engine === 'latex') return ['-pdfdvi', '-e', '$dvipdf=q{dvipdfmx %O -o %D %S}']
+  return [{ xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf']
+}
+
 export const COMPILE_IMAGE = compileImageRef()
 export const PLATFORM = platformArgs()
 export const COMPILE_IDENTITY = compileIdentity(process.env, COMPILE_IMAGE, PLATFORM)
