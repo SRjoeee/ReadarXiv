@@ -340,14 +340,20 @@ on 2307 is 2.3 million glyph visits of its 50 million bound.
   words are those inside the page frame (`frameOfTokens`): a running head that repeats a heading's words is no place
   (2307.16209's headings 262 and 438, whose start marks have no unit's end before them on their page).
 - Where the mark then stands: beside arXiv's token as ours stands beside our own, at our compile's offset from it (as
-  `besideOf` carries a mark by its partner's). The token is the word's last part where the text layer gives a word in parts
-  (its text-less tokens, as `sameWord` reads them: a hyphen at the line's end, a change of font inside the word), all of
-  them, or as many as ours has where our word runs on past the mark into the next unit's (unit 0's "3-" and unit 1's "I"
-  read as one word); a start mark's, as many rests of the word before as ours has before its first word (2005.14165's poems,
-  whose "I" is the rest of the cell before's "3"). An offset past an em is a formula no token holds: 2608.20051's unit 250
+  `besideOf` carries a mark by its partner's). A word the text layer gives in parts (its text-less tokens, as `sameWord`
+  reads them: a hyphen at the line's end, a change of font inside the word, a subscript after its letter) is read by its
+  parts. Where ours ends the word before an end mark (every part after the mark's own token set on the mark's line before
+  it: 1706.03762's T_0, whose subscript is the rest of "t0", 1.8 pt below), the mark stands after the last part of arXiv's
+  word, in as many parts or not (a word hyphenated in one PDF alone). Where ours' word runs on past the mark (its rest the
+  next unit's: unit 0's "3-" and unit 1's "I" read as one word), it stands after the same part of arXiv's word, which must
+  be in as many parts; a start mark whose unit begins with the rest of the word before (2005.14165's poems, whose "I" is
+  the rest of the cell before's "3") stands before the same part, in as many parts. A word split otherwise around the mark
+  is no place: as first written (174da293), a word of four parts in ours and five in arXiv's put the next unit's start at
+  arXiv's "c", four letters early, and left the unit before without its last line. An offset past an em is a formula no token holds: 2608.20051's unit 250
   ends 77.5 pt past "for", 2307.16209's footnote 203 80.5 pt past "g". It stands only where arXiv's ink runs on the line
   from the token to the mark with no gap past an em and none on past it within an em; and no mark stands on the other side
-  of the bound's own token on its line, nor outside the page's view. Placed at the word's box alone (the rule as first
+  of the bound's own token on its line (a part past the bound would be another unit's start, which the same text excludes),
+  nor outside the page's view. Placed at the word's box alone (the rule as first
   written), those two marks left the paragraph's final period out of the line and of the erase (177.5 pt against an erase
   ending at 177.52; 332.8 against 331.89), and 2203.02155's units 144 and 561 their last characters ("s)." and "l.").
 - (B) A text piece (`rules/text-piece.mjs`, the layer's rule of #405, now shared) that the matcher refuses is found by its
@@ -359,8 +365,8 @@ on 2307 is 2.3 million glyph visits of its 50 million bound.
   ours, a running head's or foot's words, a formula's offset where arXiv's ink does not run there, a glyph another unit or
   piece holds. LAYOUT 9 (the maker writes other files), the schema 5 still.
 - Its cost: the bounds are looked for among the unit marks of the mark's page of ours and the one before, indexed by page
-  at the first try (`tolerantWork` counts the marks so read) and added to as the marked original's pages are read; each
-  mark's line carry read once. 2307.16209 (8,046 marks): 32,184 marks walked for its six tries before (every mark at each
+  at the first try (`tolerantWork` counts the marks so read) and added to as the marked original's pages are read, made
+  anew with the marks (a maker's `whole()` then `byStream()`); each mark's line carry read once. 2307.16209 (8,046 marks): 32,184 marks walked for its six tries before (every mark at each
   of the four that reach the bounds), 56 now; the 34 papers' 49 tries 1,637. 2503.06072 tries none, before and now.
 
 **Counts** (next 94309439 against this branch, the same marked compiles on the pinned image: the pack's seven papers, the
