@@ -525,6 +525,35 @@ describe('a copy made under pipeline 20, reopened under 21', () => {
   })
 })
 
+// A copy made under pipeline 22, reopened under 23: 23 writes a display's own stop after its marker and takes off what the
+// reply set for it (mt.mjs serialize's `own`, TRANSLATE_VERSION 5), the units and their hashes as they were. Given the units,
+// the carry test asks whether the unit's wire carries such a stop (mt.mjs displayStopChanges): that unit's translation was
+// made of a sentence that ran on past its display, and it is sent again; every other unit's, a display with no stop of its
+// own among them, is taken as the copy has it
+describe('a copy made under pipeline 22, reopened under 23', () => {
+  const PARAS = [
+    'A paragraph of the paper, with words that run on for a line or two of prose and an end.',
+    'Substituting the first equation yields\n\\begin{equation}\n  p = q + r.\n  \\label{eq:p}\n\\end{equation}\nPrices and shares are allowed to be endogenous here.',
+    'The second display has no stop of its own,\n\\[ x = y \\]\nand the sentence goes on after it to its end.',
+  ]
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('sends the unit whose display ends its sentence, one of three, and takes the other two as the copy has them', async () => {
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\\begin{document}\n${PARAS.join('\n\n')}\n\\end{document}\n`)]])), n = p.units.length
+    expect(n).toBe(3)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ pipeline: '22', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(3)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual(['Substituting the first equation yields @a#. Prices and shares are allowed to be endogenous here.'])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either

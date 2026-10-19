@@ -17,7 +17,7 @@ import { lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mj
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
-import { plainTranslated } from '../translate/mt.mjs'
+import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
 import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
@@ -45,8 +45,8 @@ export const INVISIBLE = new RegExp(String.raw`^(?:~|\\[\\,;:!/\s-]|\\(?:${[...N
 /** a character the scanner keeps as structure, with no ink of its own: an alignment's tab in a table it does not read as
  *  one (aastex's deluxetable between \\startdata and \\enddata), a stray brace, a parameter, a script mark */
 const STRUCTURE = /^[&#^_{}]$/
-/** a displayed formula's source */
-export const DISPLAY = /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
+/** a displayed formula's source: the wire's (mt.mjs), whose own stop it writes after the display's marker */
+export { DISPLAY }
 const MATH = /^(?:\$(?!\$)|\\\(|\\ensuremath(?![A-Za-z@]))/
 const CITE = /^\\(?:[cC]ite[A-Za-z]*|(?:paren|text|auto)cites?)(?![A-Za-z@])/
 const EQREF = /^\\eqref(?![A-Za-z@])/
