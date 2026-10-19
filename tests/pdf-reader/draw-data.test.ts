@@ -50,9 +50,18 @@ describe('drawDataOf', () => {
     expect(why).toBeNull()
     expect(draw!.fonts).toEqual([['CMR10', 'serif', 0, ['a', 'b', 'ﬁ', 'f', 'i']], ['Type3Font', 'sans-serif', 1, null], [null, null, 2, null]])
     expect(draw!.items.map(i => [i[0], i[8]])).toEqual([['hello', 0], ['', 0], ['x', 1], ['y', -1], ['z', 2]])
-    expect(draw!.items[0]).toEqual(['hello', 10, 0, 10, 72, 700, 20, 10, 0])
+    // (no glyphs given: no fill told)
+    expect(draw!.items[0]).toEqual(['hello', 10, 0, 10, 72, 700, 20, 10, 0, -1])
     expect(draw!.links).toEqual([[[1, 2, 3, 4], null, null, 'sec.1', 'x', 0, 1, [0, 255, 0]]])
     expect(drawInputsOf(draw!).annots[0]).toMatchObject({ subtype: 'Link', dest: 'sec.1' })
+  })
+
+  it('tells each item\'s characters\' fills from the glyphs of the page\'s ink: one fill, runs by code point, none told for an item they do not spell', async () => {
+    const page = pageOf({ items: [item('[16]', 'f', { width: 20 }), item('ab', 'f', { transform: [10, 0, 0, 10, 72, 680], width: 10 }), item('cd', 'f', { transform: [10, 0, 0, 10, 72, 660], width: 10 })], styles: { f: { fontFamily: 'serif' } }, fonts: { f: font() } })
+    const g = (u: string, x: number, y: number, fill: number) => ({ u, x0: x, x1: x + 5, y, size: 10, fill })
+    const glyphs = [g('[', 72, 700, 0), g('1', 77, 700, 0xff), g('6', 82, 700, 0xff), g(']', 87, 700, 0), g('a', 72, 680, 0x0c5388), g('b', 77, 680, 0x0c5388), g('c', 72, 660, 0)]
+    const { draw } = await drawDataOf(page, null, null, glyphs)
+    expect(draw!.items.map(i => i[9])).toEqual([[0, 0, 1, 0xff, 3, 0], 0x0c5388, -1])
   })
 
   it('tells a font with no map (null) apart from one with an empty map, an error font as 2, and a font the style table lacks as a font object-less row', async () => {
@@ -109,7 +118,7 @@ describe('drawDataOf', () => {
       annots: [{ subtype: 'Link', rect: [0, 0, 5, 5], quadPoints: new Float32Array(8).fill(2), dest: [{ num: 4, gen: 0 }, { name: 'XYZ' }, 72, 600, null], borderStyle: undefined }],
     })
     const { draw } = await drawDataOf(page)
-    expect(draw!.items[0]).toEqual(['v', 0, 10, 0, 100, 100, 20, 10, -1])
+    expect(draw!.items[0]).toEqual(['v', 0, 10, 0, 100, 100, 20, 10, -1, -1])
     expect(draw!.links[0]![3]).toEqual([0, 4, 0, 'XYZ', 72, 600, null])
     expect(draw!.links[0]![1]).toHaveLength(8)
     expect(drawInputsOf(draw!).annots[0]!.dest).toEqual([{ num: 4, gen: 0 }, { name: 'XYZ' }, 72, 600, null])

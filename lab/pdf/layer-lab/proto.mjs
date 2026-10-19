@@ -62,7 +62,7 @@ export class ProtoRun {
       const run = await V.openProto({
         doc, geometry, units: record.units, target, scale: 1.25, dpr: devicePixelRatio, ...(rules ? { rules } : {}), faces, copy: false,
         ...(texIn ? { tex: texIn } : {}), ...(addon ? { removal: { OPS: pdfjs.OPS, mode: 'draw', doc, manifest: addon.manifest } } : {}),
-        labels: { captions: record.captions ?? null },
+        labels: { captions: record.captions ?? null }, OPS: pdfjs.OPS,
         faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`,
       })
       return new ProtoRun(run, doc, { faces, addon, rules: run.rules, openMs: performance.now() - t0, tex: !!texIn })

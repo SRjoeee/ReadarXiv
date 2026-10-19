@@ -1,9 +1,10 @@
 // A page's draw geometry (the E-C design note, ec-geometry-format.md): what the layer's drawing of a page reads of arXiv's PDF
 // besides its operator list, shipped as data in the page's left part (`draw`) so that the browser reads and draws only the pages whose
-// ink it needs: the text items (string, transform, width, height, font), the page's font table and the Link annotations. The shape
-// is checked by the reader of a left part (checkDraw: bounds and types, plain loops, nothing evaluated) and built from PDF.js's own
+// ink it needs: the text items (string, transform, width, height, font, its characters' fills: layout/fills.mjs), the page's font
+// table and the Link annotations. The shape is checked by the reader of a left part (checkDraw: bounds and types, plain loops, nothing evaluated) and built from PDF.js's own
 // shapes by the writer (wireOf), which SHEDS (null: the browser reads that page itself) for every reason the reader would refuse.
-// `drawInputsOf` gives the rows back in the layer's own input shapes. Imports the layout's number checks alone.
+// `drawInputsOf` gives the rows back in the layer's own input shapes. Imports the layout's number checks and item fills alone.
+import { isItemFills } from '../layout/fills.mjs'
 import { isInteger, isNumber, isObject } from '../layout/json.mjs'
 
 /** items at most a page, a string's code units and all strings' together */
@@ -62,12 +63,14 @@ export function checkDraw(v, path = 'draw') {
   const items = arr(v.items, `${path}.items`, DRAW_ITEMS)
   let chars = 0
   for (let i = 0; i < items.length; i++) {
-    const it = arr(items[i], `${path}.items[${i}]`, 9, 9), at = `${path}.items[${i}]`
+    const it = arr(items[i], `${path}.items[${i}]`, 10, 10), at = `${path}.items[${i}]`
     chars += str(it[0], `${at}[0]`, DRAW_STRING).length
     if (chars > DRAW_STRINGS) throw refuse(`${path}.items`, `more than ${DRAW_STRINGS} code units of text`)
     for (let j = 1; j <= 7; j++) num(it[j], `${at}[${j}]`)
     if (!isInteger(it[8], -1, fonts.length - 1)) throw refuse(`${at}[8]`, `not a font of the table (-1 to ${fonts.length - 1})`)
-    values += 10
+    // (its characters' fills: one for all, or runs by code point within the string, layout/fills.mjs isItemFills)
+    if (!isItemFills(it[9], [...it[0]].length)) throw refuse(`${at}[9]`, 'not the fills of its characters (a fill -1 to 0xFFFFFF, or runs by code point)')
+    values += Array.isArray(it[9]) ? 11 + it[9].length : 11
   }
   const links = arr(v.links, `${path}.links`, DRAW_LINKS)
   for (let i = 0; i < links.length; i++) {
@@ -117,7 +120,7 @@ const list = v => (v == null ? null : Array.from(v))
 
 /**
  * A draw built from PDF.js's own shapes (the caller's `draw`: `{ fonts: [[name, fallback, type3, mapped]], items: [[str, a, b, d,
- * e, f, width, height, font]], links: [[rect, quads, url, dest, overlaid, bw, bs, color]] }`, rects, quads and colours possibly typed
+ * e, f, width, height, font, fills]] (fills not given: -1, none told), links: [[rect, quads, url, dest, overlaid, bw, bs, color]] }`, rects, quads and colours possibly typed
  * arrays, `mapped` an iterable of strings or null), copied to plain values, -0 made 0, a quads list of a length that is not a
  * multiple of 8 made null (the layer falls back to the rect); then checked. Returns the draw, or null for ANY reason the reader would
  * refuse it, and for text past DRAW_BYTES: the writer sheds, never throws
@@ -136,7 +139,7 @@ export function wireText(draw, { plainItems = false } = {}) {
     if (draw === null || draw === undefined) return null
     const out = {
       fonts: draw.fonts.map(f => [f[0] ?? null, f[1] ?? null, f[2], f[3] == null ? null : Array.from(f[3])]),
-      items: plainItems ? draw.items : draw.items.map(it => [it[0], clean(it[1]), clean(it[2]), clean(it[3]), clean(it[4]), clean(it[5]), clean(it[6]), clean(it[7]), it[8]]),
+      items: plainItems ? draw.items : draw.items.map(it => [it[0], clean(it[1]), clean(it[2]), clean(it[3]), clean(it[4]), clean(it[5]), clean(it[6]), clean(it[7]), it[8], Array.isArray(it[9]) ? Array.from(it[9]) : it[9] ?? -1]),
       links: draw.links.map(l => {
         const quads = list(l[1])
         return [list(l[0]).map(clean), quads && quads.length > 0 && quads.length % 8 === 0 ? quads.map(clean) : null, l[2] ?? null, destOf(l[3]), l[4] ?? null, l[5] == null ? null : clean(l[5]), l[6] ?? null, list(l[7])]
@@ -177,20 +180,22 @@ export function drawFontKey(row) {
 
 /**
  * The inputs the layer reads, back from a checked draw: `items` (str, transform [a, b, 0, d, e, f] — c is never read —, width, height,
- * fontName the font's content key or null), `styles` by that key (fontFamily the fallback), `fonts` a Map from the key to { name,
- * fallback, type3 (0, 1, 2), mapped: a Set of strings, or null for none (an empty Set is every char unmapped) }, and `annots`: the
- * Link annotations as getAnnotations gives them (dest as [{num,gen}|index, {name}, ...args] or a name)
+ * fontName the font's content key or null), `fills` each item's characters' fills (layout/fills.mjs), `styles` by that key
+ * (fontFamily the fallback), `fonts` a Map from the key to { name, fallback, type3 (0, 1, 2), mapped: a Set of strings, or null for
+ * none (an empty Set is every char unmapped) }, and `annots`: the Link annotations as getAnnotations gives them (dest as
+ * [{num,gen}|index, {name}, ...args] or a name)
  */
 export function drawInputsOf(draw) {
   const keys = draw.fonts.map(drawFontKey)
   const fonts = new Map(draw.fonts.map((f, i) => [keys[i], { name: f[0], fallback: f[1], type3: f[2], mapped: f[3] === null ? null : new Set(f[3]) }]))
   const styles = Object.fromEntries(draw.fonts.map((f, i) => [keys[i], { fontFamily: f[1] }]))
   const items = draw.items.map(it => ({ str: it[0], transform: [it[1], it[2], 0, it[3], it[4], it[5]], width: it[6], height: it[7], fontName: it[8] < 0 ? null : keys[it[8]] }))
+  const fills = draw.items.map(it => it[9])
   const annots = draw.links.map(l => ({
     subtype: 'Link', rect: l[0], quadPoints: l[1], url: l[2], dest: destBack(l[3]), overlaidText: l[4],
     ...(l[5] === null && l[6] === null ? {} : { borderStyle: { width: l[5], style: l[6] } }), color: l[7],
   }))
-  return { items, styles, fonts, annots }
+  return { items, fills, styles, fonts, annots }
 }
 function destBack(d) {
   if (!Array.isArray(d)) return d

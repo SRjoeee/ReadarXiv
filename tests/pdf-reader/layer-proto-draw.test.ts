@@ -566,6 +566,34 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
     expect(r.live.chars.filter(c => c.nu).map(c => c.ch)).toEqual(['\ud800', 'z', 'Í'])
   })
 
+  it('a page read live tells its characters\' fills as its draw does: one colour, runs, a pattern\'s none, black (the ink off its own list)', async () => {
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { arxivOf } = await import('./helpers/make-world')
+    const { pageInk } = await import('@/pdf-reader/engine/layout/ink.mjs')
+    const { fontReaders, liveFillsOf, pageReadOf } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const runs = [
+      { s: 'Section 3 heading', x: 72, y: 700, fill: '#0c5388' },
+      { s: '[', x: 72, y: 688 }, { s: '16', x: 77, y: 688, fill: '#0000ff' }, { s: '] after', x: 87, y: 688 },
+      { s: 'patterned', x: 72, y: 676, fill: 'pattern' }, { s: 'black words', x: 72, y: 664 },
+    ]
+    const raw = (await arxivOf([{ runs }]).getPage(1)) as Record<string, any>
+    const page: Record<string, any> = { ...raw, commonObjs: { has: raw.commonObjs.has, get: (id: string) => { const f = raw.commonObjs.get(id); return f && typeof f === 'object' && 'name' in f ? { ...f, toUnicode: { _map: [...'abcdefghijklmnopqrstuvwxyz0123456789[]S'] } } : f } }, getAnnotations: async () => [] }
+    const tc = (await page.getTextContent()) as unknown as TextContentLike
+    const L = fontReaders().live(page as never, tc.styles)
+    const fills = await liveFillsOf(OPS, page, tc.items)
+    expect(fills).toEqual([0x0c5388, 0, 0x0000ff, 0, -1, 0])
+    const live = pageReadOf(tc, L.fontOf, L.mapOf, null, fills)
+    const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: 0 })
+    const { draw } = await drawDataOf(page, null, null, ink.glyphs)
+    const x = fontReaders().draw(checkDraw(JSON.parse(JSON.stringify(draw))))
+    const data = pageReadOf(x.tc, x.fontOf, x.mapOf, null, x.fills)
+    expect(data.chars.map(c => [c.ch, c.st?.fill])).toEqual(live.chars.map(c => [c.ch, c.st?.fill]))
+    expect(live.chars.find(c => c.ch === '1')?.st?.fill).toBe(0x0000ff)
+    expect(live.chars.find(c => c.ch === 'p')?.st?.fill).toBeUndefined()
+    // (no OPS: none told)
+    expect(await liveFillsOf(null, page, tc.items)).toBeNull()
+  })
+
   it('a page with a non-embedded CIDFontType2 ships no draw (E1): the browser reads it', async () => {
     const r = await bothOf(pageOf({ items: [item('ab', 'cid')], styles: { cid: { fontFamily: 'sans-serif' } }, fonts: { cid: font({ name: 'ArialUnicodeMS', missingFile: true }) } }))
     expect(r.data).toBeNull()
@@ -574,7 +602,7 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
 
   it('keys a draw\'s font by its content, apart from loaded names; a key read before with another row refuses that draw', async () => {
     const { fontReaders } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
-    const draw = (name: string): Draw => ({ fonts: [[name, 'serif', 0, ['a']]], items: [['a', 10, 0, 10, 72, 700, 6, 10, 0]], links: [] })
+    const draw = (name: string): Draw => ({ fonts: [[name, 'serif', 0, ['a']]], items: [['a', 10, 0, 10, 72, 700, 6, 10, 0, 0]], links: [] })
     const R = fontReaders()
     const x = R.draw(draw('CMR10')), key = x.tc.items[0]!.fontName!
     expect(key).toMatch(/^axt-draw-[0-9a-f]{16}-\d+$/)

@@ -109,7 +109,7 @@ export async function openDoor({ name, target, rules }) {
   doc.getPage = n => { (n <= N ? drawn : extra).add(n); return getPage(n) }
   const ruleSet = await ruleSetOf(rules)
   window.__gateRuns = []
-  const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl })
+  const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS })
   const reported = layer.take(rows).complete
   const run = lastRun()
   const expected = []

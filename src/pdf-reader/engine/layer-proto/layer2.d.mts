@@ -46,8 +46,9 @@ export interface Params {
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
-/** a page character (pageChars2's); `nu`: no Unicode of the file's stands for its glyph (its text is no reading of it) */
-export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean; nu?: boolean }
+/** a page character (pageChars2's); `nu`: no Unicode of the file's stands for its glyph (its text is no reading of it); its
+ *  style's `fill`, its glyph's colour (0xRRGGBB) where the page's reading tells it (layout/fills.mjs), else none */
+export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass & { fill?: number }; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean; nu?: boolean }
 /** a unit of the units file, as the layer reads it */
 export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean; group?: string }
 // ---- the per-unit reading (prepareUnit): the contract the rest of v0 reads
@@ -206,7 +207,15 @@ export declare function mappedOf(toUnicode: unknown): Set<string> | null
 export declare function fontMappedOf(font: unknown): Set<string> | null
 /** whether a page character's text is no reading of its glyph (pageChars2's `nu`) */
 export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
-export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null): Char[]
+export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null, fills?: readonly (number | readonly number[] | null | undefined)[] | null): Char[]
+/** the source's text by what sets its style: for each code point of the unit's plain source text, the attributes the pieces
+ *  around it set (bits: weight 1, slant 2, small capitals 4, family 8, colour 16) and the pieces that set its colour, outermost
+ *  first; null where the unit carries no source pieces or their text is not its `src` */
+export declare function sourceScopes(unit: { src?: string; source?: readonly { t: string; s?: string; src?: string }[] }): { sets: number; chain: number[] }[] | null
+/** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1) */
+export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[] }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+/** a rendering's text in runs of one fill (0xRRGGBB, or -1 untold); null where its characters do not give the text or tell no fill */
+export declare function fillRunsOf(chars: readonly Pick<Char, 'ch' | 'st'>[] | null | undefined, text: string): { text: string; fill: number }[] | null
 /** the kind a mark no line may start with is across scripts ("." and the ideographic full stop: 'stop'; ")" and a closing corner bracket: 'close'), else the mark itself */
 export declare function markKind(ch: string): string
 /** a text without the leading marks that stand for one of `held` (the original's marks after a kept placeholder, in order), each matched with one */
@@ -276,7 +285,11 @@ export declare function nameInTarget(name: { key: string; capitals: boolean }, o
 /** a text's width at size 1 in a face */
 export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */
-export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face }, toPx: (x: number, y: number) => number[], scale: number): string
+export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null }, toPx: (x: number, y: number) => number[], scale: number): string
+/** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */
+export declare function colourOfStyle(st: { fill?: number } | null | undefined): { color?: string }
+/** a run's style from its characters (the first not a formula's), its colour too; its design `serif` where none is told */
+export declare function styleOfChars(cs: readonly Pick<Char, 'st'>[], serif: string): { fam: string; bold: boolean; italic: boolean; caps: boolean; design: string; color?: string }
 /** what an erasing covered that no painted unit accounts for, put back from the original: the restore operation, or null */
 export declare function restoreUnaccounted(erased: readonly number[][], px: ToDev, restore: { items: { chars: Char[]; keys: string[]; box: number[] }[]; accounted: Set<string>; kept: { keys: Set<string>; hulls: number[][] } | null | undefined; ink: InkMap | undefined; cover: Uint8Array | null }, audit: Audit[] | null, id: number | null, page: number): DrawOp | null
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`

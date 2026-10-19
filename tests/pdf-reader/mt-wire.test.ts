@@ -224,6 +224,16 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     expect(serialize(unit({ t: 'text', s: 'Options: ' }, ...pairs(1, '\\emph{', 'fast'), { t: 'text', s: '; and safe.' })).wire).toBe('Options: fast; and safe.')
   })
 
+  it('the boundary rule (E1): a styled pair whose two ends stand where the wire has a marker anyway is kept; one end alone, not', () => {
+    // (2610.19159's u325: after a kept run-in label, to the unit's end)
+    expect(serialize(unit(...pairs(1, '\\textit{', 'Floor (must clear):'), { t: 'text', s: ' ' }, ...pairs(2, '\\textcolor{red}{', 'all of the rest to the end'))).wire).toBe('@a# Floor (must clear):@b# @c# all of the rest to the end @d#')
+    // (2610.21547's u25: a label at the unit's head before a forced break's marker)
+    expect(serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\\\' }, { t: 'text', s: 'We use a model here.' })).wire).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
+    // (after a marker, but ending inside its sentence: flat, as a colour inside a sentence)
+    expect(serialize(unit({ t: 'text', s: 'We use ' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' ' }, ...pairs(1, '\\textbf{', 'bold'), { t: 'text', s: ' words in it.' })).wire).toBe('We use @a# bold words in it.')
+    expect(serialize(unit({ t: 'text', s: 'We see ' }, ...pairs(1, '\\textcolor{red}{', 'red words'), { t: 'text', s: ' in it.' })).wire).toBe('We see red words in it.')
+  })
+
   it('only a pair that sets a style goes flat: any other keeps its two markers, as before (the review of #404, M1)', () => {
     // a cell's wrapper after its rule (2607.24653's tables: `\midrule \multicolumn{7}{@{}l}{\textbf{}}`, Misplaced \omit)
     const cell = { kind: 'cell', pieces: [{ t: 'ph', src: '\\midrule' }, { t: 'open', id: 1, src: '\\multicolumn{7}{@{}l}{' }, ...pairs(2, '\\textbf{', 'Text'), { t: 'close', id: 1, src: '}' }] }

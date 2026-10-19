@@ -179,12 +179,13 @@ function planOf(u, format) {
     }
     return { items, front: [], back: [], styled: false }
   }
-  // (one state for the unit, read by the functions below: none of them is made anew for each unit)
-  const P = { pieces, ink, runs, hasInk, texts: new Array(pieces.length), format }
+  // (one state for the unit, read by the functions below: none of them is made anew for each unit; `keptEdges` the boundary
+  // rule's, null while it is read)
+  const P = { pieces, ink, runs, hasInk, texts: new Array(pieces.length), format, keptEdges: null }
   runsIn(P, root)
   root.info = infoOf(P, root.seq)
   spans(P, root)
-  if (format !== 'tags') flatOf(P, root)
+  if (format !== 'tags') { flatOf(P, root); P.keptEdges = keptEdgesOf(P, root) }
   const unit = { lead: [], end: [], seen: false }
   const W = { P, items: [], stack: [unit], group: unit, sink: null, joint: false }
   walk(W, root.seq)
@@ -307,6 +308,25 @@ function flatOf(P, root) {
 }
 const SOLID = /\S/g
 const nextSolid = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.[0] ?? '' }
+/** the last character before `a` that is no white space, '' for none */
+const solidBefore = (flat, a) => { let i = a - 1; while (i >= 0 && /\s/.test(flat[i])) i--; return i < 0 ? '' : flat[i] }
+/** the places the wire has a marker at anyway, by the sentence rule alone: each kept or enclosing pair's two edges, read before
+ *  the boundary rule (classOf) and never after it, so that one pair's keeping makes no other's */
+function keptEdgesOf(P, root) {
+  const edges = []
+  const visit = seq => {
+    for (const e of seq) {
+      if (!e.seq) continue
+      const c = classOf(P, e)
+      if (c === 'kept' || c === 'enclose') edges.push(...P.ranges.get(e))
+      if (c !== 'flat') visit(e.seq)
+    }
+  }
+  visit(root.seq)
+  return edges
+}
+/** whether `x` stands at a kept pair's edge, white space alone between them */
+const atEdge = (P, x) => P.keptEdges.some(y => /^\s*$/.test(P.flat.text.slice(Math.min(x, y), Math.max(x, y))))
 // (a sentence's end is read in the last words before a place, its start in the first after it)
 const WINDOW = 200
 /** a pair's class on the wire (planOf) */
@@ -323,7 +343,13 @@ function classOf(P, e) {
   // a run-in label at the unit's head ends with a colon, before one, or before a sentence that begins with no stop
   // between (\textbf{Service Auto-Scaling} To accommodate)
   const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
-  return starts && ends ? 'kept' : 'flat'
+  if (starts && ends) return 'kept'
+  // the boundary rule (E1 of the residuals' batch R2): a pair whose two ends both stand where the wire has a marker anyway — a void
+  // beside it (a placeholder's OBJ), a kept or enclosing pair's edge with white space alone between, or the unit's own end —
+  // is kept too: its two markers cut nothing Microsoft does not cut already (2610.19159's "\textit{Floor (must clear):}
+  // \textcolor{red}{… to the end}", whose colour went flat at a colon that starts no sentence)
+  if (P.keptEdges && (starts || solidBefore(flat, a) === OBJ || atEdge(P, a)) && (ends || next === OBJ || atEdge(P, b))) return 'kept'
+  return 'flat'
 }
 // the wire, and where each piece that does not go on it is put back: in its innermost kept group (the unit, a kept
 // pair) after the open where it stands before the group's first content, else before the close; a flat pair's open,

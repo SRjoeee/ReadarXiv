@@ -128,7 +128,7 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     /** drawOf's draw as its JSON (wireText's: what the left part holds, format.mjs writeLeftPart `drawText`), once */
     drawJsonOf(p: number): string | null
     /** the draw reads: pages kept, pages with none and by why, the encoded bytes, the ms */
-    drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }
+    drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** the draws' fills: the items and glyphs read, the items told one fill, those told in runs (layout/fills.mjs) */ fills: { items: number; glyphs: number; told: number; runs: number } }
     /** each marked page's lines [carried, total], once carried */
     pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
     /** the maker a page at a time (after carrying(), the columns' edges and the whole document's frame rule given); with `marked` (markedPages' head, the marks

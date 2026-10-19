@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /** the work counters' keys, as layer-proto/work.mjs names them */
-export const WORK_KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops']
+export const WORK_KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'fills']
 /** the growth of a work counter's total beyond which the check fails */
 export const WORK_TOLERANCE = 0.005
 /** the page step beyond which a page counts as slow (ms) */

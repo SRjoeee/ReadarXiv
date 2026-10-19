@@ -197,6 +197,9 @@ export function unitOf(bundle, row) {
   if (!src || !STATES.has(state)) return null
   const group = groupOf(src)
   const unit = { kind: src.kind, src: plainOf(s, id), state, ...(src.title ? { title: true } : {}), ...(group ? { group } : {}) }
+  // (its source pieces, by identity: what each source word is inside, which the layer reads its base style and its pieces' colours by,
+  // layer2.mjs sourceScopes; never written to a row)
+  Object.defineProperty(unit, 'source', { value: src.pieces, enumerable: false })
   if (state !== 'whole' && state !== 'partial') return unit
   if (!Array.isArray(pieces) || pieces.length > PIECES_MAX) return null
   const out = []

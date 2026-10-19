@@ -177,6 +177,19 @@ describe('makerOf: the draw option', () => {
     expect(on.drawStats.pages).toBe(3)
   })
 
+  it('tells each item\'s characters\' fills from the page\'s ink: a run painted blue, one of no colour (a pattern), the rest black', async () => {
+    const w = worldOf()
+    const runs = w.pages[0]!.runs
+    runs[0] = { ...runs[0]!, fill: '#0000ff' }
+    runs[1] = { ...runs[1]!, fill: 'pattern' }
+    const m = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+    if ('refused' in m) throw new Error('refused')
+    await m.readPage(1)
+    const d = m.drawOf(1) as Draw
+    expect(d.items.slice(0, 3).map(i => i[9])).toEqual([0x0000ff, -1, 0])
+    expect(d.items.slice(3).every(i => i[9] === 0)).toBe(true)
+  })
+
   it('takes each page\'s text as step T read it: no page\'s text asked twice, the draws the same JSON as those read again', async () => {
     const w = worldOf()
     /** the drawable document, each getTextContent counted */
