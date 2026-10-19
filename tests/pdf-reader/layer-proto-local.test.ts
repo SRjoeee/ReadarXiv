@@ -293,7 +293,7 @@ describe('the work counters (work.mjs): integer counts of what a page cost, the 
     { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [Q2, Q3], rects: [[2, 20, 197.85, 70, 206.83], [3, 20, 197.85, 80, 206.83]], from: 'geometry', tr: [text(CJK(8, 0x4e20))] },
     { id: 2, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], from: 'geometry', tr: [text(CJK(8, 0x4e60))] },
   ]
-  const KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'edges']
+  const KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'edges', 'fills']
   const laid = async (order: number[]) => {
     const run = await open(paper(specs, 4))
     for (const p of order) await run.layFor(p)

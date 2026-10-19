@@ -159,7 +159,7 @@ function treeOf(pieces) {
  * and after the translation) and each kept pair's own (`lead`, `end`), as lists of piece indices and blocks.
  * A unit whose pairs do not nest goes as it did before: every piece but its text a marker
  */
-function planOf(u, format) {
+function planOf(u, format, boundary = true) {
   const pieces = u.pieces
   const ink = new Array(pieces.length)
   let hasInk = false, styled = false
@@ -179,16 +179,25 @@ function planOf(u, format) {
     }
     return { items, front: [], back: [], styled: false }
   }
-  // (one state for the unit, read by the functions below: none of them is made anew for each unit)
-  const P = { pieces, ink, runs, hasInk, texts: new Array(pieces.length), format }
+  // (one state for the unit, read by the functions below: none of them is made anew for each unit; `keptEdges` the boundary
+  // rule's, null while it is read)
+  const P = { pieces, ink, runs, hasInk, texts: new Array(pieces.length), format, keptEdges: null }
   runsIn(P, root)
   root.info = infoOf(P, root.seq)
   spans(P, root)
-  if (format !== 'tags') flatOf(P, root)
+  if (format !== 'tags') { flatOf(P, root); P.keptEdges = boundary ? keptEdgesOf(P, root) : null }
   const unit = { lead: [], end: [], seen: false }
   const W = { P, items: [], stack: [unit], group: unit, sink: null, joint: false }
   walk(W, root.seq)
   return { items: W.items, front: unit.lead, back: unit.end, styled: true, texts: P.texts }
+}
+/** whether the boundary rule (classOf; TRANSLATE_VERSION 4) changes what a unit sends: its markers plan, which the wire and the
+ *  runs are written from, with the rule and without it. A unit with no pair has none to keep: the units a copy made before the
+ *  rule is asked again for, and no other (live.mjs PIPELINE_CARRIES) */
+export function boundaryChanges(u) {
+  if (!Array.isArray(u?.pieces) || !u.pieces.some(p => p?.t === 'open')) return false
+  const a = planOf(u, 'markers'), b = planOf(u, 'markers', false)
+  return JSON.stringify([a.items, a.front, a.back]) !== JSON.stringify([b.items, b.front, b.back])
 }
 const textAt = (P, k) => (P.texts[k] ??= utf8(P.pieces[k].s))
 const blankAt = (P, k) => P.pieces[k].t === 'text' && blank(textAt(P, k))
@@ -284,13 +293,18 @@ function spans(P, node) {
 /** where each pair's content lies in the unit's text (formulas and the like one character, OBJ): `P.ranges`, and the
  *  text and its edges (`P.flat`) its class is read in */
 function flatOf(P, root) {
-  const parts = [], ranges = new Map()
+  const parts = [], ranges = new Map(), breaks = new Set()
   let at = 0
   const visit = seq => {
     for (const e of seq) {
       if (e.off !== undefined) continue
-      if (e.run) { parts.push(OBJ); at++; continue }
-      if (e.k !== undefined) { const s = P.pieces[e.k].t === 'text' ? textAt(P, e.k) : P.ink[e.k] ? '' : OBJ; parts.push(s); at += s.length; continue }
+      // (a run is one marker: it breaks the text where any of its pieces does, a forced break joined with a switch beside it)
+      if (e.run) { if (breaksIn(P.pieces, e.run[0], e.run[1])) breaks.add(at); parts.push(OBJ); at++; continue }
+      if (e.k !== undefined) {
+        const s = P.pieces[e.k].t === 'text' ? textAt(P, e.k) : P.ink[e.k] ? '' : OBJ
+        if (s === OBJ && breaksIn(P.pieces, e.k, e.k)) breaks.add(at)
+        parts.push(s); at += s.length; continue
+      }
       if (!e.info.text) { if (e.info.voids) { parts.push(OBJ); at++ } continue }
       const a = at
       visit(e.seq)
@@ -303,10 +317,40 @@ function flatOf(P, root) {
   while (last > 0 && /\s/.test(flat[last - 1])) last--
   while (lastWord > 0 && /[\s￼]/.test(flat[lastWord - 1])) lastWord--
   P.ranges = ranges
+  P.breaks = breaks
   P.flat = { text: flat, first: flat.search(/\S/), word: flat.search(/[^\s￼]/), last, lastWord }
 }
 const SOLID = /\S/g
 const nextSolid = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.[0] ?? '' }
+/** where the next character from `b` that is no white space stands, and the last before `a` (-1 for none) */
+const nextSolidAt = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.index ?? -1 }
+const solidBeforeAt = (flat, a) => { let i = a - 1; while (i >= 0 && /\s/.test(flat[i])) i--; return i }
+/** the placeholders that break the text where they stand: a forced line break, a display, an item. An inline formula does
+ *  not: the translator moves it with the words as one of them (`We fix the $\theta$ \textcolor{red}{matrix …}` kept would
+ *  cut its noun phrase in two; the review of #415, 100 of the 109 units its clause changed over the sweep's papers) */
+/** whether pieces `a` to `b` hold a placeholder that breaks the text (BREAKS) */
+const breaksIn = (pieces, a, b) => { for (let k = a; k <= b; k++) if (pieces[k]?.t === 'ph' && BREAKS.test(pieces[k].src ?? '')) return true; return false }
+const BREAKS = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?|\$\$[\s\S]*|\\\[[\s\S]*|\\begin\s*\{(?:equation|align|gather|multline|eqnarray|displaymath|flalign|alignat)\*?\}[\s\S]*)\s*$/
+/** whether the text breaks at flat offset `i` (BREAKS) */
+const breaksAt = (P, i) => i >= 0 && P.breaks.has(i)
+/** the places the wire has a marker at anyway, by the sentence rule alone: each kept or enclosing pair's two edges, read before
+ *  the boundary rule (classOf) and never after it, so that one pair's keeping makes no other's; inside a pair that goes flat
+ *  too, whose children the wire walks still (a link kept in it keeps its markers) */
+function keptEdgesOf(P, root) {
+  const edges = []
+  const visit = seq => {
+    for (const e of seq) {
+      if (!e.seq) continue
+      const c = classOf(P, e)
+      if (c === 'kept' || c === 'enclose') edges.push(...P.ranges.get(e))
+      if (c === 'kept' || c === 'enclose' || c === 'flat') visit(e.seq)
+    }
+  }
+  visit(root.seq)
+  return edges
+}
+/** whether `x` stands at a kept pair's edge, white space alone between them */
+const atEdge = (P, x) => P.keptEdges.some(y => /^\s*$/.test(P.flat.text.slice(Math.min(x, y), Math.max(x, y))))
 // (a sentence's end is read in the last words before a place, its start in the first after it)
 const WINDOW = 200
 /** a pair's class on the wire (planOf) */
@@ -323,7 +367,14 @@ function classOf(P, e) {
   // a run-in label at the unit's head ends with a colon, before one, or before a sentence that begins with no stop
   // between (\textbf{Service Auto-Scaling} To accommodate)
   const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
-  return starts && ends ? 'kept' : 'flat'
+  if (starts && ends) return 'kept'
+  // the boundary rule (E1 of the residuals' batch R2): a pair whose two ends both stand where the wire is cut anyway — a placeholder
+  // that breaks the text beside it (BREAKS: a forced break, a display, an item; never an inline formula, which the translator
+  // moves as a word), a kept or enclosing pair's edge with white space alone between, or the unit's own end — is kept too: its
+  // two markers cut nothing Microsoft does not cut already (2610.19159's "\textit{Floor (must clear):} \textcolor{red}{… to the
+  // end}", whose colour went flat at a colon that starts no sentence)
+  if (P.keptEdges && (starts || breaksAt(P, solidBeforeAt(flat, a)) || atEdge(P, a)) && (ends || breaksAt(P, nextSolidAt(flat, b)) || atEdge(P, b))) return 'kept'
+  return 'flat'
 }
 // the wire, and where each piece that does not go on it is put back: in its innermost kept group (the unit, a kept
 // pair) after the open where it stands before the group's first content, else before the close; a flat pair's open,

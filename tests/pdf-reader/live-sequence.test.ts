@@ -4,6 +4,7 @@ import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, ranThrough, runLive, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { END_TEX } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
+import { boundaryChanges } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The reader's compiles with the typesetting rule (exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
 // "The compile sequence"; the evaluation's rulings in the F2 brief): the font probe with its width probe; the first
@@ -522,6 +523,39 @@ describe('a copy made under pipeline 20, reopened under 21', () => {
     const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
     expect(sent).toEqual(['A first paragraph of the part, written with CRLF line ends and words.', 'A second paragraph of the part, with words of its own.'])
     expect(r.settled).toBe(true)
+  })
+})
+
+// A copy made under pipeline 21, reopened under 22: 22 keeps a styled pair whose two ends stand where the wire is cut
+// anyway (mt.mjs classOf's boundary rule, TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read
+// back: the unit whose wire the rule changes is sent again, every other unit carried as the copy has it
+describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('sends again the unit whose wire the boundary rule changes, and no other', async () => {
+    // (2610.19159's u325: a run-in label kept, a colour after it to the unit's end)
+    const label = '\\textit{Floor (must clear):} \\textcolor{red}{all of the rest of the line to its end}'
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(sourceOf(PARAS).replace('\\end{document}', `\n${label}\n\n\\end{document}`))]])), n = p.units.length
+    const changed = p.units.filter(u => boundaryChanges(u))
+    expect(changed.length).toBe(1)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '21', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent.length).toBe(1)
+    expect(sent[0]).toContain('Floor (must clear)')
+    expect(r.settled).toBe(true)
+    // (every copy from 15 on, sent the old way, takes the boundary test: the changed unit is not carried, a plain one is)
+    const plain = p.units.find(u => !u.pieces.some(q => (q as { t: string }).t === 'open'))!
+    for (const v of ['15', '16', '17', '18', '19', '20', '21']) {
+      expect(PIPELINE_CARRIES[v]!([], changed[0]!), v).toBe(false)
+      expect(PIPELINE_CARRIES[v]!([{ t: 'text', s: 'words', tr: true }], plain), v).toBe(true)
+    }
+    // (without the unit, a translation that holds no pair is carried, one that holds a pair is not)
+    expect(PIPELINE_CARRIES['21']!([{ t: 'text', s: 'words', tr: true }], null)).toBe(true)
+    expect(PIPELINE_CARRIES['21']!([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'words', tr: true }, { t: 'close', id: 1, src: '}' }], null)).toBe(false)
   })
 })
 

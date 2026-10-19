@@ -10,7 +10,7 @@ import type { UnitWire } from './bundle.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why */
-export declare const BUNDLE5: '6'
+export declare const BUNDLE5: '7'
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
 export declare const UNITS_FORMAT: '1'
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`, named with the 5 beside bundle.mjs's CTAG whatever BUNDLE5's value */

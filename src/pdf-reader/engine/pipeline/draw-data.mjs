@@ -4,8 +4,11 @@
 // defaults (no marked content, no options), `page.getAnnotations()` with its default (display) intent, a font by the loaded name of
 // each style from `page.commonObjs`; the document is opened with fontExtraProperties (its fonts' `toUnicode`) and the engine's cMaps.
 // The result is the draw of layer-proto/draw.mjs, or null (the browser reads the page itself): a page that is not read, a font
-// that cannot be told the same by every host, or a page past a cap. Imports the engine's pure modules alone.
+// that cannot be told the same by every host, or a page past a cap. Each item carries its characters' fills, from the glyphs of the
+// page's ink the maker reads (layout/fills.mjs itemFills: the reader's page read live tells the same). Imports the engine's pure
+// modules alone.
 import { wireText } from '../layer-proto/draw.mjs'
+import { itemFills } from '../layout/fills.mjs'
 import { isMemoryError } from './memory.mjs'
 
 /**
@@ -68,9 +71,10 @@ export function drawTextOf(tc) {
  * fontExtraProperties), 'font' (a font a host would read differently), 'shed' (a cap). A memory-class error is thrown. `annots`: the
  * page's annotations as its reader reads them once for every reader of the page (a function giving the array, or null where they
  * could not be read: the layout maker's, whose link-anchor locator reads the same), else read here. `text`: the page's text as
- * drawTextOf made it of step T's read (the same request, its defaults), else read here
+ * drawTextOf made it of step T's read (the same request, its defaults), else read here. `glyphs`: the page's glyphs as its ink read
+ * them (layout/ink.mjs pageInk's, of a page read whole), whose fills each item's characters take (itemFills); null: none told
  */
-export async function drawDataOf(page, annots = null, text = null) {
+export async function drawDataOf(page, annots = null, text = null, glyphs = null) {
   let tx = text, ann
   try {
     tx ??= drawTextOf(await page.getTextContent())
@@ -109,6 +113,9 @@ export async function drawDataOf(page, annots = null, text = null) {
       rows.push(r)
     }
     if (tx.bad) return { draw: null, why: 'read' }
+    // (each item's characters' fills, from the ink's glyphs: none told, -1, where the page's ink was not read whole)
+    const fills = itemFills(rows.map(r => ({ str: r[0], transform: [r[1], r[2], 0, r[3], r[4], r[5]], width: r[6], height: r[7] })), glyphs)
+    rows.forEach((r, i) => { r[9] = fills[i] })
     const links = []
     for (const a of ann ?? []) {
       if (a?.subtype !== 'Link') continue

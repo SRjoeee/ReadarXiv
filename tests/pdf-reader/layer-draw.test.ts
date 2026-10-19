@@ -12,9 +12,9 @@ import { forged, PAPER, tokenWire } from './helpers/format-paper'
 // layer's own input shapes
 
 const font = (i = 0): Draw['fonts'][number] => [`CMR${i}`, 'serif', 0, ['a', 'b']]
-const item = (s = 'word', f = 0): Draw['items'][number] => [s, 11.9552, 0, 11.9552, 79.37, 759.068, 453.53844480000004, 11.9552, f]
+const item = (s = 'word', f = 0, fills: number | number[] = 0): Draw['items'][number] => [s, 11.9552, 0, 11.9552, 79.37, 759.068, 453.53844480000004, 11.9552, f, fills]
 const link = (): Draw['links'][number] => [[375.043, 348.423, 480.719, 362.371], null, null, 'cite.x', 'Smith', 0, 1, [0, 255, 0]]
-const DRAW: Draw = { fonts: [font()], items: [item(), item('', 0), item('x', -1)], links: [link()] }
+const DRAW: Draw = { fonts: [font()], items: [item(), item('', 0, -1), item('x', -1), item('[16]', 0, [0, 0, 1, 0x0000ff, 3, 0])], links: [link()] }
 const streamOf = () => 0
 
 const left = (draw: unknown, o: { n?: number } = {}) => writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(o.n ?? 3), spans: [], pairs: [], draw: draw as never })
@@ -78,6 +78,9 @@ describe('draw in a left part', () => {
     expect(d.links[2]![3]).toEqual([1, 5, 0, 'Fit'])
     const inputs = drawInputsOf(d)
     expect(inputs.items[0]).toMatchObject({ str: 'hi', transform: [1, 0, 0, 1, 10, 20], width: 5, height: 6 })
+    // (an item given no fills: none told)
+    expect(inputs.fills).toEqual([-1])
+    expect(drawInputsOf(DRAW).fills).toEqual([0, -1, 0, [0, 0, 1, 0x0000ff, 3, 0]])
     expect(inputs.items[0]!.fontName).toBe([...inputs.fonts.keys()][0])
     expect(inputs.styles[inputs.items[0]!.fontName!]).toEqual({ fontFamily: 'serif' })
     expect(inputs.annots[0]).toMatchObject({ subtype: 'Link', dest: [{ num: 12, gen: 3 }, { name: 'XYZ' }, 72, 700, null], color: [1, 2, 3], borderStyle: { width: 1, style: 2 } })
@@ -103,6 +106,11 @@ describe('draw in a left part', () => {
       ['a number not finite', d => { d.items = [[...item().slice(0, 1), null, ...item().slice(2)] as never] }, 'draw.items[0][1]'],
       ['a number past 1e7', d => { d.items = [[...item().slice(0, 1), 2e7, ...item().slice(2)] as never] }, 'draw.items[0][1]'],
       ['a font index past the table', d => { d.items = [item('a', 5)] }, 'draw.items[0][8]'],
+      ['fills that are neither a fill nor runs', d => { d.items = [item('ab', 0, 'red' as never)] }, 'draw.items[0][9]'],
+      ['a fill past 0xFFFFFF', d => { d.items = [item('ab', 0, 0x1000000)] }, 'draw.items[0][9]'],
+      ['runs not from the first character', d => { d.items = [item('ab', 0, [1, 0, 2, 255])] }, 'draw.items[0][9]'],
+      ['runs past the string', d => { d.items = [item('ab', 0, [0, 0, 2, 255])] }, 'draw.items[0][9]'],
+      ['runs of one fill twice', d => { d.items = [item('ab', 0, [0, 255, 1, 255])] }, 'draw.items[0][9]'],
       ['too many fonts', d => { d.fonts = Array.from({ length: DRAW_FONTS + 1 }, (_, i) => font(i)) }, 'draw.fonts'],
       ['a font name past its cap', d => { d.fonts = [['x'.repeat(DRAW_NAME + 1), null, 0, null]] }, 'draw.fonts[0][0]'],
       ['a font type3 of 3', d => { d.fonts = [['x', null, 3 as never, null]] }, 'draw.fonts[0][2]'],
@@ -166,7 +174,7 @@ describe('draw in a left part', () => {
       expect(JSON.stringify({ fonts: [], items: long, links: [] }).length).toBeGreaterThan(DRAW_BYTES)
       expect(wireOf({ fonts: [], items: long, links: [] } as never)).toBeNull()
       // (within every other cap, past the bytes: 6,000 items of exact doubles)
-      const exact = Array.from({ length: DRAW_ITEMS }, (_, i) => ['abcdefghijklmnopqrstuvwxyz', 11.955200000000001 + i / 7, 0.1 + i / 3, 11.9552 + i / 11, 79.37 + i / 13, 759.068 + i / 17, 453.53844480000004 + i / 19, 11.9552 + i / 23, -1])
+      const exact = Array.from({ length: DRAW_ITEMS }, (_, i) => ['abcdefghijklmnopqrstuvwxyz', 11.955200000000001 + i / 7, 0.1 + i / 3, 11.9552 + i / 11, 79.37 + i / 13, 759.068 + i / 17, 453.53844480000004 + i / 19, 11.9552 + i / 23, -1, -1])
       expect(JSON.stringify({ fonts: [], items: exact, links: [] }).length).toBeGreaterThan(DRAW_BYTES)
       expect(() => checkDraw({ fonts: [], items: exact, links: [] })).not.toThrow()
       expect(wireOf({ fonts: [], items: exact, links: [] } as never)).toBeNull()

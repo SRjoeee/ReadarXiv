@@ -35,8 +35,10 @@ import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
 /** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG. 6: a part
  *  with no layout says why (`layout: { refused, why }`, LAYOUT_REFUSED), where 5's held a bare null (R1 of 2026-10-19): a
  *  reader of 5 refuses the new shape, so the contract is named anew; nothing deployed reads 5 (the owner's rule: no
- *  migration), and a bundle of 5 is simply not found under 6's CTAG and is prepared again */
-export const BUNDLE5 = '6'
+ *  migration), and a bundle of 5 is simply not found under 6's CTAG and is prepared again. 7: each text item of a left part's
+ *  draw carries its characters' fills (draw.mjs, the item's tenth value: layout/fills.mjs itemFills, E1 of 2026-10-19), which a
+ *  reader of 6 refuses; a bundle of 6 is not found under 7's CTAG and is prepared again */
+export const BUNDLE5 = '7'
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
