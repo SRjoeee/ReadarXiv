@@ -184,10 +184,10 @@ try {
       check(`DPR ${dpr}: the sample's first page is laid on the right`, laid)
       if (!laid || !hooked) continue
       await page.waitForFunction(() => window.__reader.side()?.probe().ended === true, null, { timeout: 30_000 }).catch(() => undefined)
+      // (the pages near the view laid: two at least, so that every zoom checks the same pages)
+      await page.waitForFunction(() => document.querySelectorAll('#right .axt-place[data-axt-layer] canvas.axt-layer-copy').length >= 2, null, { timeout: 30_000 }).catch(() => undefined)
       if (MEASURING) {
         const median = v => [...v].sort((a, b) => a - b)[v.length >> 1]
-        // (the pages near the view laid: two at least)
-        await page.waitForFunction(() => document.querySelectorAll('#right .axt-place[data-axt-layer] canvas.axt-layer-copy').length >= 2, null, { timeout: 30_000 }).catch(() => undefined)
         for (const z of ['page-width', 1]) {
           const t0 = await page.evaluate(() => performance.now())
           await page.evaluate(z => window.__reader.view.zoomTo(z), z)
