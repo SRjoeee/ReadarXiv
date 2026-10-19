@@ -2034,6 +2034,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       prep.label = { ...prep.label, drawn: prep.label.text }
       for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
     }
+    // (each later page's text where its source sets it: the translation cut at the source's page breaks, E3c)
+    if (prep.pageStarts?.size) tokens = L2.withPageBreaks(tokens, L2.pageCutsOf(tokens, p.unit, prep.pageStarts, P))
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
