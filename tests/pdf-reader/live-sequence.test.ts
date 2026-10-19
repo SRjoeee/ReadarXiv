@@ -4,6 +4,7 @@ import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, ranThrough, runLive, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { END_TEX } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
+import { boundaryChanges } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The reader's compiles with the typesetting rule (exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
 // "The compile sequence"; the evaluation's rulings in the F2 brief): the font probe with its width probe; the first
@@ -455,7 +456,6 @@ describe('a copy made under pipeline 17, reopened under 18', () => {
 describe('a copy made under pipeline 18, reopened under 19', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
   it('takes every unit as the copy has it: nothing is sent again', async () => {
-    expect(PIPELINE_VERSION).toBe('19')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const record = JSON.parse(JSON.stringify({ pipeline: '18', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
@@ -467,6 +467,34 @@ describe('a copy made under pipeline 18, reopened under 19', () => {
     const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
     expect(sent).toEqual([])
     expect(r.settled).toBe(true)
+  })
+})
+
+// A copy made under pipeline 19, reopened under 20: 20 keeps a styled pair whose two ends stand where the wire has a marker
+// anyway (mt.mjs classOf's boundary rule, TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read
+// back: the unit whose wire the rule changes is sent again, every other unit carried as the copy has it
+describe('a copy made under pipeline 19, reopened under 20', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('sends again the unit whose wire the boundary rule changes, and no other', async () => {
+    expect(PIPELINE_VERSION).toBe('20')
+    // (2610.19159's u325: a run-in label kept, a colour after it to the unit's end)
+    const label = '\\textit{Floor (must clear):} \\textcolor{red}{all of the rest of the line to its end}'
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(sourceOf(PARAS).replace('\\end{document}', `\n${label}\n\n\\end{document}`))]])), n = p.units.length
+    const changed = p.units.filter(u => boundaryChanges(u))
+    expect(changed.length).toBe(1)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '19', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent.length).toBe(1)
+    expect(sent[0]).toContain('Floor (must clear)')
+    expect(r.settled).toBe(true)
+    // (without the unit, a translation that holds no pair is carried, one that holds a pair is not)
+    expect(PIPELINE_CARRIES['19']!([{ t: 'text', s: 'words', tr: true }], null)).toBe(true)
+    expect(PIPELINE_CARRIES['19']!([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'words', tr: true }, { t: 'close', id: 1, src: '}' }], null)).toBe(false)
   })
 })
 

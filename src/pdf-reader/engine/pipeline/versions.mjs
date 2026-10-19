@@ -121,7 +121,12 @@
 //     outputs); the units, the wire and its reading back are 18's, and a copy of 18 carries every unit it holds the source
 //     of (live.mjs PIPELINE_CARRIES). Raised so that the bundle of a paper the guard now mends, or now records the refusal
 //     of, is made again under a new key (VTAG)
-export const PIPELINE_VERSION = '19'
+// 20: raised with TRANSLATE_VERSION 4 (the boundary rule: a styled pair whose two ends stand where the wire has a marker
+//     anyway keeps its markers, mt.mjs classOf), so that copies made before it are not taken whole: a copy of 19, and of
+//     every pipeline before it, carries each unit whose wire the rule leaves as it was (mt.mjs boundaryChanges; live.mjs
+//     PIPELINE_CARRIES): over 137 papers' sources 299 of 36,104 units, in 56 papers, are asked again. The units, the
+//     marked original and the layout file are 19's byte for byte
+export const PIPELINE_VERSION = '20'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

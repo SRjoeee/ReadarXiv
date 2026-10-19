@@ -27,7 +27,7 @@ export declare const isInkless: (p: unknown) => boolean
 /** whether a unit's pieces hold a pair, or a placeholder that sets no ink between two stretches of text */
 export declare function holdsStyle(pieces: unknown[]): boolean
 /** whether the boundary rule changes what a unit sends (its markers plan with the rule and without it) */
-export declare function boundaryChanges(u: { pieces: Piece[] } | null | undefined): boolean
+export declare function boundaryChanges(u: { pieces: readonly unknown[] } | null | undefined): boolean
 /** a formula split across inline formulas: each run's first piece's index → its last's */
 export declare function formulaRuns(pieces: Piece[]): Map<number, number>
 /** whether translated pieces hold an inline formula whose delimiters do not balance on its own */
