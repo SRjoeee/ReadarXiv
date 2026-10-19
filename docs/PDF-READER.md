@@ -1198,7 +1198,7 @@ within noise.
   run — whether a sentence began before it or goes on after it — so a unit over a page break lights whole on the pages
   that have come until the others have, then by sentence. A page's left part comes on its first want, so the side asks
   for the left parts of the other pages its running units are on in the task after its own (`layer-side.mjs spreadFrom`;
-  a page so fetched spreads no further, or a paper's paragraphs would fetch every page): before, a paragraph that ran on
+  the nearest `SPREAD_MAX`, 8; a page so fetched spreads no further, or a paper's paragraphs would fetch every page): before, a paragraph that ran on
   to the next page lit whole until the pointer had been there. On the 54 papers, 0.78 more left parts a page wanted (none
   on 43 % of pages, two on 21 %), 43 KB at the mean, 25 KB at the median, 121 KB at the 90th percentile (2026-10-19).
 - **The right, mirrored** (`mirror`): until the layer's pages bring words of their own, the right's shapes are a layout of
