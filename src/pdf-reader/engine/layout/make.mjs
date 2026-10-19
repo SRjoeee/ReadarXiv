@@ -387,7 +387,7 @@ function blank(units) {
   return {
     lines: { carried: 0, total: 0, held: 0 },
     // (and the unit marks no line carried that the unit's own words beside them were looked for, and placed: tolerantOf)
-    units: { located: 0, total: units.length, byKind: {}, unplaced: 0, tolerantTried: 0, tolerant: 0 },
+    units: { located: 0, total: units.length, byKind: {}, unplaced: 0, tolerantTried: 0, tolerant: 0, tolerantWork: 0 },
     ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0], textRuns: 0 },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0, most: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
@@ -681,15 +681,16 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     prepareWanted()
     return null
   }
+  /** a place the carrier gives (carry.mjs carry), kept where it stands on a page of arXiv's with ink, within its view */
+  const onInk = c => {
+    if (!c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages || dark.has(c.page) || !inked[c.page]) return null
+    const v = viewAt(c.page)
+    return c.x >= v[0] - 1 && c.x <= v[2] + 1 && c.y >= v[1] - 1 && c.y <= v[3] + 1 ? c : null
+  }
   /** the carry's functions over the marks as they stand (`at`, `carrier`: the whole marked original's, or what of it is read) */
   function carryOver() {
     /** a position of the marked original on arXiv's PDF: carried by its line, on a page with ink, within its view */
-    carry = (page, x, y) => {
-      const c = carrier.carry(page, x, y)
-      if (!c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages || dark.has(c.page) || !inked[c.page]) return null
-      const v = viewAt(c.page)
-      return c.x >= v[0] - 1 && c.x <= v[2] + 1 && c.y >= v[1] - 1 && c.y <= v[3] + 1 ? c : null
-    }
+    carry = (page, x, y) => onInk(carrier.carry(page, x, y))
     dropped = new Set(marks.dropped)
     markOf = name => { const m = dropped.has(name) ? null : at.get(name); return m ? carry(m.page, m.x, m.y) : null }
     /** a unit's own mark as the anchors take it. The rule today: carried as every mark is, so none onto a page whose ink is not
@@ -728,27 +729,66 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     }
     return true
   }
+  /** our compile's unit marks by page (tolerantOf's bounds), [name, mark, unit, start], made at the first try and added to
+   *  as the marked original's pages are read (noteMark); `carriedBy` each mark's line carry and the token it stands at on
+   *  arXiv's page, the carrier's verdict on a page final once the page is added (carry.mjs carrier), the page's ink and view
+   *  asked again at each try (onInk) */
+  let unitMarksOn = null
+  const carriedBy = new Map()
+  const indexMark = (n, mk) => {
+    const r = UNIT_MARK.exec(n)
+    if (r && mk) (unitMarksOn.get(mk.page) ?? unitMarksOn.set(mk.page, []).get(mk.page)).push([n, mk, Number(r[1]), r[2] === 's'])
+  }
+  const unitMarksAt = page => {
+    if (!unitMarksOn) { unitMarksOn = new Map(); for (const [n, mk] of at) indexMark(n, mk) }
+    return unitMarksOn.get(page) ?? []
+  }
+  /** a mark read (the marked original a page at a time): into the index, once made */
+  const noteMark = n => { if (unitMarksOn) indexMark(n, at.get(n)) }
+  /** a mark of `mk`'s, the unit's own (a start mark's where `start`), as tolerantOf's bound: the token it stands at on arXiv's
+   *  page `w` as carried, or null */
+  const boundAt = (mk, start, w) => {
+    let e = carriedBy.get(mk)
+    if (!e) carriedBy.set(mk, (e = { c: carrier.carry(mk.page, mk.x, mk.y), k: undefined }))
+    const c = onInk(e.c)
+    if (!c || c.page !== w) return null
+    if (e.k === undefined) e.k = tokenAt(doc, docByPage, c, start)
+    return e.k
+  }
+  /** the page frame of arXiv's text (anchors.mjs frameOfTokens: its running heads and feet outside it), made once */
+  const inFrame = () => (tokensFrame ??= frameOfTokens(doc))
   /**
    * Unit i's own mark `k` (`${i}s` or `${i}e`) that no line carried (its line set in other words on arXiv's page: our
    * cleveref's "section B" for arXiv's "appendix B", 2609.26457's unit 28; or broken otherwise from such a name on, its
    * unit 71), placed by the unit's own words beside it, `other` its other mark as carried. Both marks on one page of ours;
    * the unit's words between them in our compile, the TOLERANT_WORDS at the mark's side (tolerant.mjs wordsAt: one of them
    * at most standing for another, a reference's name inside a reference's or a citation's rendering, NAMED); arXiv's words
-   * on the page the other mark is carried to, from it on (back, a start mark's) up to the first start of another unit
-   * carried there after it (the last end before it), of the units whose marks stand on the mark's page of ours or the one
-   * before; the one place the words stand there, the mark's own word ending its line in arXiv's where it does in ours: the
-   * mark at that word's end (a start mark at its start). Null, else. A mark a line carries is never one looked for
+   * inside the page frame (no running head or foot) on the page the other mark is carried to, from it on (back, a start
+   * mark's) up to the first start of another unit carried there after it (the last end before it), of the units whose marks
+   * stand on the mark's page of ours or the one before; the one place the words stand there, the mark's own token ending its
+   * line in arXiv's where it does in ours. The mark then stands as ours does beside its token: an end mark after the rest of
+   * the last word where arXiv gives it in parts (its text-less tokens, as sameWord reads them; as many as ours has where the
+   * word runs on past our mark), a start mark before as many rests of the word before as ours has; at our compile's offset
+   * from that token (besideOf's: a mark after a formula no token holds stands 77.5 pt past 2608.20051's last word "for",
+   * its final period between), arXiv's ink running there from the token, no gap past an em and none on past the mark, where
+   * the offset is past an em; before the next unit's start (after the last end) where it stands on the line. Null, else. A
+   * mark a line carries is never one looked for
    */
   function tolerantOf(i, k, other) {
     const end = k.endsWith('e'), name = nameOf.get(k), oName = nameOf.get(`${i}${end ? 's' : 'e'}`)
     const m = name === undefined || dropped.has(name) ? null : at.get(name), om = oName === undefined ? null : at.get(oName)
-    if (!m || !om || m.page !== om.page || !other || !Number.isInteger(other.page) || dark.has(other.page) || !inked[other.page]) return null
+    if (!m || !om || m.page !== om.page || !other || !Number.isInteger(other.page) || dark.has(other.page) || !inked[other.page] || !ink[other.page]) return null
     // ---- ours: the unit's words between its two marks, the mark's side's
     const oursOn = oursByPage.get(m.page) ?? []
     const kM = tokenAt(ours, oursByPage, m, !end), kO = tokenAt(ours, oursByPage, om, end)
     if (kM === null || kO === null || (end ? kO > kM : kM > kO)) return null
     const span = oursOn.filter(j => j >= Math.min(kM, kO) && j <= Math.max(kM, kO) && ours[j].t)
     const side = end ? span.slice(-TOLERANT_WORDS) : span.slice(0, TOLERANT_WORDS)
+    if (!side.length) return null
+    // (the text-less tokens between the mark's own token and the words: the rests of a word given in parts; and whether
+    // the word at an end mark runs on past it, its rest another unit's)
+    const rests = end ? kM - side.at(-1) : side[0] - kM
+    const runsOn = end && kM + 1 < ours.length && ours[kM + 1].page === m.page && ours[kM + 1].t === ''
     // (the renderings of the unit's references and citations in our compile, between their two marks, by line)
     const spans = []
     units[i].pieces.forEach((piece, pk) => {
@@ -765,22 +805,59 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const w = other.page, list = byPageOf(w), kOther = tokenAt(doc, docByPage, other, end)
     if (kOther === null) return null
     let bound = end ? Infinity : -Infinity
-    for (const [n, mk] of at) {
-      const r = UNIT_MARK.exec(n)
-      if (!r || Number(r[1]) === i || (r[2] === 's') !== end || dropped.has(n) || mk.page < m.page - 1 || mk.page > m.page) continue
-      const c = carry(mk.page, mk.x, mk.y)
-      if (!c || c.page !== w) continue
-      const kc = tokenAt(doc, docByPage, c, end)
-      if (kc === null) continue
-      if (end ? kc > kOther && kc < bound : kc < kOther && kc > bound) bound = kc
+    for (const p of [m.page - 1, m.page]) {
+      for (const [n, mk, unit, start] of unitMarksAt(p)) {
+        stats.units.tolerantWork++
+        if (unit === i || start !== end || at.get(n) !== mk || dropped.has(n)) continue
+        const kc = boundAt(mk, start, w)
+        if (kc !== null && (end ? kc > kOther && kc < bound : kc < kOther && kc > bound)) bound = kc
+      }
     }
-    const window = list.filter(j => (end ? j >= kOther && j < bound : j <= kOther && j > bound) && doc[j].t)
-    // (whether a word begins or ends its line, asked of a place the words stand at alone)
-    const theirs = window.map(j => ({ t: doc[j].t, get first() { return lineEnd(doc, list, j, true) }, get last() { return lineEnd(doc, list, j, false) } }))
+    const framed = inFrame()
+    const window = list.filter(j => (end ? j >= kOther && j < bound : j <= kOther && j > bound) && doc[j].t && framed(doc[j]))
+    // (arXiv's token the mark stands beside where it stands at word j: the rests of an end mark's word after it, all of
+    // them or ours' count where ours runs on, before the bound; a start mark's ours' count of rests before it; or null)
+    const ownOf = j => {
+      let q = j
+      if (end) {
+        while (q + 1 < bound && q + 1 < doc.length && doc[q + 1].page === w && doc[q + 1].t === '' && (!runsOn || q - j < rests)) q++
+        return q - j >= rests || !runsOn ? q : null
+      }
+      for (; q > j - rests; q--) if (q - 1 <= bound || doc[q - 1].page !== w || doc[q - 1].t !== '') return null
+      return q
+    }
+    // (whether its token begins or ends its line, asked of a place the words stand at alone)
+    const theirs = window.map(j => ({
+      t: doc[j].t,
+      get first() { const q = ownOf(j); return q !== null && lineEnd(doc, list, q, true) },
+      get last() { const q = ownOf(j); return q !== null && lineEnd(doc, list, q, false) },
+    }))
     const found = wordsAt(oursWords, theirs, { end, atLineEnd: lineEnd(ours, oursOn, kM, !end) })
     if (found.length !== 1) return null
-    const t = doc[window[found[0].at]], v = viewAt(w), x = end ? t.x + t.w : t.x
-    return x >= v[0] - 1 && x <= v[2] + 1 && t.y >= v[1] - 1 && t.y <= v[3] + 1 ? { page: w, x, y: t.y } : null
+    // ---- the place: beside arXiv's token as ours is beside our own
+    const q = ownOf(window[found[0].at])
+    if (q === null) return null
+    const own = ours[kM], t = doc[q], em = t.h
+    const dx = end ? m.x - (own.x + own.w) : own.x - m.x, x = end ? t.x + t.w + dx : t.x - dx, y = t.y + (m.y - own.y)
+    // (an offset past an em, what stood there in ours, a formula, stands there in arXiv's: its ink on the line from the
+    // token to the mark, no gap past an em, and none running on past the mark)
+    if (dx > em) {
+      const P = ink[w], from = end ? t.x + t.w : x, to = end ? x : t.x, on = []
+      for (let g = 0; g < P.n; g++) {
+        if (Math.abs(P.y[g] - t.y) >= 0.6 * em || P.x1[g] <= from - em || P.x0[g] >= to + em) continue
+        if (end ? P.x1[g] > to + 0.5 : P.x0[g] < from - 0.5) return null
+        if (P.x1[g] > from && P.x0[g] < to) on.push(g)
+      }
+      on.sort((a, b) => P.x0[a] - P.x0[b] || a - b)
+      let edge = from, gap = 0
+      for (const g of on) { gap = Math.max(gap, P.x0[g] - edge); edge = Math.max(edge, P.x1[g]) }
+      if (Math.max(gap, to - edge) > em) return null
+    }
+    // (and on no other unit's side of the bound where that stands on its line)
+    const B = Number.isFinite(bound) ? doc[bound] : null
+    if (B && Math.abs(B.y - t.y) < 0.5 * em && (end ? x > B.x + 0.5 : x < B.x + B.w - 0.5)) return null
+    const v = viewAt(w)
+    return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: w, x, y } : null
   }
   /** unit marks no line carried (`raw`, of the keys `ks`), each by tolerantOf where its other mark was carried: placed into
    *  `raw` together, so that none is placed by another so placed */
@@ -1540,7 +1617,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         seq.forEach((e, n) => { if (before.has(`${e.p}|${e.g}`)) after = n })
         const runs = []
         for (let from = after + 1; from < seq.length && runs.length < 2; from++) {
-          if (!seq[from].free || !seq[from].s || !target.startsWith(seq[from].s)) continue
+          if (!seq[from].s || !target.startsWith(seq[from].s)) continue
           let got = '', to = from, breaks = 0
           while (to < seq.length && got.length < target.length) {
             const e = seq[to]
@@ -3013,7 +3090,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const v of page.view) mViews.push(v)
       for (const w of page.words) mWords.push(w)
       // its marks, in the names' order, each on its page's view (the marks file's)
-      for (const [nm, x, y] of namesOn.get(p) ?? []) if (markAt(mViews, M, p, x, y)) at.set(nm, { page: p, x: r2z(x), y: r2z(y) })
+      for (const [nm, x, y] of namesOn.get(p) ?? []) if (markAt(mViews, M, p, x, y)) { at.set(nm, { page: p, x: r2z(x), y: r2z(y) }); noteMark(nm) }
       // its draft frames, its tokens drawn, carried
       const frames = []
       for (const nm of gOn.get(p) ?? []) { const a = at.get(nm), f = a ? frameAt(nm, a) : null; if (f) frames.push(f) }

@@ -47,8 +47,8 @@ export interface LayoutStats {
   lines: { carried: number; total: number; held: number }
   /** `unplaced`: the units arXiv's text would place whose own marks were not carried there (they stay the original's) */
   /** `tolerantTried`: the unit marks no line carried that the unit's own words were looked for (layout/tolerant.mjs);
-   *  `tolerant`: those so placed */
-  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number; tolerantTried: number; tolerant: number }
+   *  `tolerant`: those so placed; `tolerantWork`: the marks their bounds were looked for among */
+  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number; tolerantTried: number; tolerant: number; tolerantWork: number }
   /** `marked`: the placeholders of the located units the marked original marks (an opening mark at least), by kind
    *  found among them; `unmarked`: those it gives no mark (LOST, beside them); `symbols`: the text symbols it gives no
    *  mark drawn as their character (PH_FLAG.TEXT, beside them); `inferred`: those found whose end is
