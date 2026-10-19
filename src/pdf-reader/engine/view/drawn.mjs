@@ -68,8 +68,11 @@ export function scaleOf(canvas) {
 }
 
 /** page view `pv`'s canvas where PDF.js has drawn it whole, with the device pixels a PDF unit it drew it at
- *  (`{ canvas, k }`); null where it is not drawn, its drawing was not told, or its scale across and down differ (PDF.js's
- *  restricted output scale may round them apart: such a canvas is no copy's source) */
+ *  (`{ canvas, k }`); null where it is not drawn, its drawing was not told, or its scale across and down differ: PDF.js
+ *  approximates the pixel ratio by a fraction of terms at most 8 and floors the width and the height each to its own, so
+ *  they come apart at almost every zoom wherever the ratio is no such fraction (1.1, 0.9, 1.8, 2.2, 2.25, ...: Chrome at
+ *  90 and 110 %, Windows at 225 %) and under its restricted scaling. Such a canvas is no copy's source (docs/PDF-READER.md
+ *  §11.8: the copy is drawn from the document instead) */
 export function drawnCanvas(pv) {
   if (pv?.renderingState !== 3) return null
   const canvas = pv.canvas, k = scaleOf(canvas)

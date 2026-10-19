@@ -14,5 +14,6 @@ export declare function pageBox(vp: { width: number; height: number; rotation?: 
 export declare function drew(canvas: HTMLCanvasElement, k: number): void
 /** the device pixels a PDF unit `canvas` was drawn at (the same across and down, the canvas as it was drawn); null else */
 export declare function scaleOf(canvas: HTMLCanvasElement | null | undefined): number | null
-/** page view `pv`'s canvas drawn whole by PDF.js, with the device pixels a PDF unit it drew it at; null else */
+/** page view `pv`'s canvas drawn whole by PDF.js, with the device pixels a PDF unit it drew it at; null else, and where its
+ *  scale across and down differ (a pixel ratio PDF.js approximates, such as 1.1 or 1.8; its restricted scaling) */
 export declare function drawnCanvas(pv: DrawnPageView | null | undefined): { canvas: HTMLCanvasElement; k: number } | null
