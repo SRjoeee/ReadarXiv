@@ -87,5 +87,11 @@ describe("a unit's lines go down its column", () => {
     const cols = L2.layoutUnit2(words(24) as never, [at([500]), at([476]), at([600, 588], 200, 300)] as never, 10, P('de') as never)
     expect(cols.lines.map(x => x.baseline)).toEqual([500, 476, 600])
   })
+  it('takes a slot on the same baseline as the last line: only a slot above it is skipped (the review of #424)', () => {
+    // a line the file splits into two rows on one baseline, in two frames whose spans overlap (2610.21288 u5: 118 to 479
+    // and 430 to 507, both at 675.17): the second row is not skipped
+    const l = L2.layoutUnit2(words(24) as never, [at([500], 0, 100), at([500], 80, 180), at([488], 0, 100)] as never, 10, P('de') as never)
+    expect(l.lines.map(x => [x.baseline, x.x0])).toEqual([[500, 0], [500, 80], [488, 0]])
+  })
 })
 
