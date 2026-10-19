@@ -3,7 +3,7 @@
 // arXiv's preflight, in simplified form.
 // Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
 // a directory under Node, which the spikes' paper-meta.mjs hands in).
-import { jobName, latin1, normalizePath } from './latex-front.mjs'
+import { jobName, normalizePath, texText } from './latex-front.mjs'
 
 const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
 const basename = p => p.slice(p.lastIndexOf('/') + 1)
@@ -13,7 +13,7 @@ const utf8 = bytes => new TextDecoder().decode(bytes)
 export function analyze(fsys) {
   const files = fsys.list()
   const tex = files.filter(f => /\.(tex|ltx|latex)$/i.test(f))
-  const read = f => { const b = fsys.read(f); return b ? uncomment(latin1(b)) : '' }
+  const read = f => { const b = fsys.read(f); return b ? uncomment(texText(b)) : '' }
   const bodies = Object.fromEntries(tex.map(f => [f, read(f)]))
   const meta = { files: files.length, texFiles: tex.length }
 
@@ -29,7 +29,8 @@ export function analyze(fsys) {
       // how many toplevel sources arXiv compiles (its PDF is theirs in turn; the pipeline reads the first alone: the page
       // pass's several-toplevels rule, pipeline/page-pass.mjs)
       meta.toplevels = Array.isArray(r.sources) ? r.sources.filter(s => s?.usage === 'toplevel').length : 0
-      meta.compiler = r.process?.compiler
+      // (arXiv's long form of `latex`, the one DVI path it runs: "compiler: latex is actually shorthand for latex+dvips_ps2pdf")
+      meta.compiler = r.process?.compiler === 'latex+dvips_ps2pdf' ? 'latex' : r.process?.compiler
       meta.tlVersion = r.texlive_version ?? null
     } catch { meta.readme = 'json-unreadable' }
   } else if (files.find(f => /^00README(\.XXX)?$/i.test(f))) {

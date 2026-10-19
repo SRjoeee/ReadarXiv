@@ -9,13 +9,15 @@
 // On a validation failure the pipeline resends and then falls back to runs (§6.3), so equal counts also cover “the fallback saved it” —
 // what is really being hunted is **content lost**.
 //
-// Usage: pnpm build && pnpm e2e:placeholders ["Google 翻译"] [target language]
+// Usage: pnpm build:staging && AXT_E2E_ONLINE=1 pnpm e2e:placeholders ["Google 翻译"] [target language]
 // Environment: AXT_HEADED=1 watches it run; AXT_LOG=1 prints the extension's log.
 // The LLM path needs a service configured by hand (choose it on the settings page, then pass the engine name); by default only the two free engines run.
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { chooseBuiltIn, chooseLanguage, openOptions, setSwitch } from './options-page.mjs'
+import { goOnline, online } from './lib/online.mjs'
+goOnline('pnpm e2e:placeholders')
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -77,12 +79,12 @@ const PAGE_URL = 'https://arxiv.org/html/2599.99999v9'
 
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(PROFILE, { recursive: true })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   channel: 'chromium',
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1400, height: 1000 },
-})
+}))
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]

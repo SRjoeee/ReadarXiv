@@ -10,8 +10,10 @@
 //   pack/data/fonts/<file>                        the served faces (AXT_DATA=pack/data)
 //   pack/texmf/<tex/generic/...>                  the en and de hyphenation patterns (TEXMF_DIST=pack/texmf)
 //   pack/manifest.json                            { schema, pipeline, layout: { schema, version }, compileImage, made, digest, files: [{ path, sha256, bytes }] }
-// `compileImage` is lab/pdf/compile-image.json (the one place the compile image is pinned, by digest, shared with the web container): a
-// make refuses to run unless the local texlive image (`docker image inspect`) has the pinned digest, so the layouts the pack holds were made on it
+// `compileImage` is the pack's year's entry of lab/pdf/compile-images.json (the one place the compile images are pinned, by digest and
+// TeX Live year, shared with the web container), with `year`: a make refuses to run unless the local texlive image (`docker image
+// inspect`) has that year's pinned digest, so the layouts the pack holds were made on it. One pack a year: gate-pack.json the default
+// year's (made before the year was written, its year implicit), gate-pack.<year>.json each other's (make --year=<year>)
 // `layout` names the layout files' schema and version (their `schema` field, which the reader refuses a file by when it is not its own, and their `layout` field, the maker's version, which the reader reads as a version token and does not compare): a make
 // reads every fixtures/<fx>/layout.json (not refs/<fx>/layout.json, the instrument's kept layout, which no reader parses) and fails unless all of them are the --engine tree's own (file.mjs LAYOUT_SCHEMA and
 // LAYOUT), and tests/scripts/gate-pack.test.ts holds the committed gate-pack.json to the engine, so that a change of the layout
@@ -23,8 +25,9 @@
 // sizes, not the clock) is the same on every make. lab/pdf/gate-pack.json is the committed copy of the manifest with each
 // file's `url` in the bucket, a key of its digest, so that the several outputs of one paper share one object.
 //
-//   node lab/pdf/spikes/gate-pack.mjs make     [--out=<dir>] [--json=<gate-pack.json>] [--record=<layer-gate.json>] [--fixtures=<dir>]
+//   node lab/pdf/spikes/gate-pack.mjs make     [--year=<YYYY>] [--out=<dir>] [--json=<gate-pack.json>] [--record=<layer-gate.json>] [--fixtures=<dir>]
 //                                              [--records=<dir>] [--refs=<dir>] [--geometry=<dir>] [--fonts=<dir>] [--texmf=<dir>] [--engine=<dir>]
+// --year: the pack's TeX Live year (packPathsOf: its json, its folder and its record, the default year's as before); every command takes it
 //   node lab/pdf/spikes/gate-pack.mjs restore  [--pack=<gate-pack.json>] [--out=<dir>]    env READARXIV_CI_TOKEN, CF_ACCOUNT_ID
 //   node lab/pdf/spikes/gate-pack.mjs verify   [--pack=<gate-pack.json>] [--out=<dir>]
 //   node lab/pdf/spikes/gate-pack.mjs digest   [--pack=<gate-pack.json>]
@@ -52,16 +55,23 @@ export const ROLE_WEIGHTS = ['light', 'regular', 'semibold', 'bold']
 
 const here = new URL('.', import.meta.url).pathname
 const REPO = resolve(here, '../../..')
-/** the compile image's pin, by digest: one value for the gate pack's layouts and the web container */
-export const COMPILE_IMAGE_FILE = join(import.meta.dirname, '..', 'compile-image.json')
+/** the compile images' pins, by digest and TeX Live year: one value for the gate packs' layouts and the web container */
+export const COMPILE_IMAGES_FILE = join(import.meta.dirname, '..', 'compile-images.json')
 const ENGINE = 'src/pdf-reader/engine'
 /** the fidelity record a make takes its inputs from */
 const RECORD = 'lab/pdf/records/layer-gate.json'
 /** the inputs a make reads from the record (its `inputs`): the made layout files of the engine at the record, the translations,
  *  the references and the geometry. No digest or run is named in this file: the record names them */
 export const RECORD_INPUTS = ['fixtures', 'records', 'refs', 'geometry']
-/** where the rest is, unless a flag says otherwise */
-const DEFAULTS = { fonts: 'lab/pdf/data/fonts', out: 'lab/pdf/out/gate-pack', json: 'lab/pdf/gate-pack.json', record: RECORD }
+/** where the rest is, unless a flag says otherwise (a year's pack, its folder and its record: packPathsOf) */
+const DEFAULTS = { fonts: 'lab/pdf/data/fonts' }
+/** a year's pack (`json`), its folder (`out`) and the record a make takes its inputs from: the default year's as before the year
+ *  was named, another year's by its year (gate-pack.2023.json, out/gate-pack.2023, records/layer-gate.2023.json) */
+export function packPathsOf(year, defaultYear) {
+  const y = String(year)
+  if (y === String(defaultYear)) return { json: 'lab/pdf/gate-pack.json', out: 'lab/pdf/out/gate-pack', record: RECORD }
+  return { json: `lab/pdf/gate-pack.${y}.json`, out: `lab/pdf/out/gate-pack.${y}`, record: RECORD.replace(/\.json$/, `.${y}.json`) }
+}
 const FIXTURE = /^[A-Za-z0-9._-]+v\d+-[A-Za-z-]+$/
 const SHA = /^[0-9a-f]{64}$/
 
@@ -202,19 +212,44 @@ export function layoutVersionOf(fixtures, names, expected) {
 }
 
 const IMAGE_REF = /^[a-z0-9][a-z0-9./_-]*(?::[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$/
+const isObject = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+/** the keys of one image's pin, in order */
+const PIN_KEYS = ['texlive', 'base', 'node', 'aptSnapshot', 'texFormat']
+/** what one OS refresh moves in every image at once: the same in each */
+const SHARED_KEYS = ['base', 'node', 'aptSnapshot']
 /**
- * The compile image's pin (lab/pdf/compile-image.json): { texlive, base, node, aptSnapshot, texFormat }, the three images as
- * `name[:tag]@sha256:<64 hex>`, `aptSnapshot` the dated apt snapshot the web container installs from, or null where none is pinned, `texFormat` the TeX Live release and the
- * format's tool versions. Throws on a file that is not that
+ * The compile images' pins (lab/pdf/compile-images.json): { default, images }, `images` keyed by TeX Live year ('2025'), each
+ * { texlive, base, node, aptSnapshot, texFormat }: the three images as `name[:tag]@sha256:<64 hex>`, `aptSnapshot` the dated apt
+ * snapshot the web container installs from, or null where none is pinned, `texFormat` the TeX Live release (`texlive`, the
+ * entry's year) and the format's tool versions. `default` names an entry (the year a paper is compiled on unless routed; the
+ * font coverage's). The base, Node and the snapshot are the same in every entry: one OS refresh moves them all. Throws on a file
+ * that is not that
  */
-export function compileImageOf(file = COMPILE_IMAGE_FILE) {
+export function compileImagesOf(file = COMPILE_IMAGES_FILE) {
   const j = readJson(file)
-  const keys = ['texlive', 'base', 'node', 'aptSnapshot', 'texFormat']
-  if (j === null || typeof j !== 'object' || Object.keys(j).join() !== keys.join()) throw new Error(`${file}: the keys must be ${keys.join(', ')}`)
-  for (const k of ['texlive', 'base', 'node']) if (typeof j[k] !== 'string' || !IMAGE_REF.test(j[k])) throw new Error(`${file}: ${k} must be name[:tag]@sha256:<digest>`)
-  if (j.aptSnapshot !== null && (typeof j.aptSnapshot !== 'string' || !/^\d{8}T\d{6}Z$/.test(j.aptSnapshot))) throw new Error(`${file}: aptSnapshot must be null or a snapshot timestamp (YYYYMMDDTHHMMSSZ)`)
-  if (j.texFormat === null || typeof j.texFormat !== 'object' || Array.isArray(j.texFormat)) throw new Error(`${file}: texFormat must be an object`)
+  if (!isObject(j) || Object.keys(j).join() !== 'default,images') throw new Error(`${file}: the keys must be default, images`)
+  if (!isObject(j.images) || !Object.keys(j.images).length) throw new Error(`${file}: images must be an object of the pins by TeX Live year`)
+  for (const [year, pin] of Object.entries(j.images)) {
+    const at = `${file}: images.${year}`
+    if (!/^\d{4}$/.test(year)) throw new Error(`${file}: images are keyed by TeX Live year, not ${JSON.stringify(year)}`)
+    if (!isObject(pin) || Object.keys(pin).join() !== PIN_KEYS.join()) throw new Error(`${at}: the keys must be ${PIN_KEYS.join(', ')}`)
+    for (const k of ['texlive', 'base', 'node']) if (typeof pin[k] !== 'string' || !IMAGE_REF.test(pin[k])) throw new Error(`${at}: ${k} must be name[:tag]@sha256:<digest>`)
+    if (pin.aptSnapshot !== null && (typeof pin.aptSnapshot !== 'string' || !/^\d{8}T\d{6}Z$/.test(pin.aptSnapshot))) throw new Error(`${at}: aptSnapshot must be null or a snapshot timestamp (YYYYMMDDTHHMMSSZ)`)
+    if (!isObject(pin.texFormat)) throw new Error(`${at}: texFormat must be an object`)
+    if (pin.texFormat.texlive !== Number(year)) throw new Error(`${at}: texFormat.texlive must be ${year}, the entry's year`)
+  }
+  if (typeof j.default !== 'string' || !Object.hasOwn(j.images, j.default)) throw new Error(`${file}: default must name one of the images (${Object.keys(j.images).join(', ')})`)
+  for (const k of SHARED_KEYS) if (new Set(Object.values(j.images).map(pin => pin[k])).size > 1) throw new Error(`${file}: ${k} must be the same in every image (one OS refresh moves them all)`)
   return j
+}
+
+/** one TeX Live year's pin (compileImagesOf), the default year's where none is asked: { texlive, base, node, aptSnapshot,
+ *  texFormat }. Throws where the file is not the pins, or no image is pinned for the year */
+export function compileImageOf(year = null, file = COMPILE_IMAGES_FILE) {
+  const j = compileImagesOf(file)
+  const y = year === null || year === undefined ? j.default : String(year)
+  if (!Object.hasOwn(j.images, y)) throw new Error(`${file}: no image is pinned for TeX Live ${y} (${Object.keys(j.images).join(', ')})`)
+  return j.images[y]
 }
 
 /** the repo digests (`sha256:...`) the local docker has for an image reference, [] where there is none; throws where docker cannot be asked */
@@ -227,11 +262,14 @@ export function localImageDigests(ref, run = execFileSync) {
   return Array.isArray(list) ? list.map(x => String(x).slice(String(x).indexOf('@') + 1)) : []
 }
 
-/** throws unless the local image of the pinned texlive reference has the pinned digest */
+/** throws unless the local image of a year's pinned texlive reference (compileImageOf) has the pinned digest, and the lab's
+ *  compiles (COMPILE_IMAGE, COMPILE_YEAR: spikes/compile-image.mjs) name that image where they name one */
 export function checkCompileImage(pinned, digests, env = process.env) {
-  if (env.COMPILE_IMAGE && env.COMPILE_IMAGE !== pinned.texlive) throw new Error(`COMPILE_IMAGE is not the pin (lab/pdf/compile-image.json): a pack is made on the pinned image alone`)
+  const year = String(pinned.texFormat?.texlive ?? '')
+  if (env.COMPILE_IMAGE && env.COMPILE_IMAGE !== pinned.texlive) throw new Error(`COMPILE_IMAGE is not the pin of TeX Live ${year} (lab/pdf/compile-images.json): a pack is made on its year's pinned image alone`)
+  if (env.COMPILE_YEAR && String(env.COMPILE_YEAR) !== year) throw new Error(`COMPILE_YEAR ${env.COMPILE_YEAR} is not the pack's year, ${year}: a pack is made on its year's pinned image alone (make --year)`)
   const want = pinned.texlive.slice(pinned.texlive.indexOf('@') + 1)
-  if (!digests.includes(want)) throw new Error(`the local ${pinned.texlive.slice(0, pinned.texlive.indexOf('@'))} is ${digests.length ? digests.join(', ') : 'not there'}, not the pinned ${want} (lab/pdf/compile-image.json): pull the pinned image, or change the pin for the web container too`)
+  if (!digests.includes(want)) throw new Error(`the local ${pinned.texlive.slice(0, pinned.texlive.indexOf('@'))} is ${digests.length ? digests.join(', ') : 'not there'}, not the pinned ${want} of TeX Live ${year} (lab/pdf/compile-images.json): pull the pinned image, or change the pin for the web container too`)
 }
 
 /** whether a directory holds a pack: a manifest.json of this schema or an earlier one (a make over the pack before a schema
@@ -379,7 +417,9 @@ export function objectsOf(pack, bucket = pack.bucket) {
 // ---------------------------------------------------------------- the command line
 
 const arg = (name, argv = process.argv) => { const a = argv.find(x => x === `--${name}` || x.startsWith(`--${name}=`)); return a === undefined ? null : a.includes('=') ? a.slice(name.length + 3) : true }
-const where = (argv, name) => resolve(REPO, typeof arg(name, argv) === 'string' ? arg(name, argv) : DEFAULTS[name])
+/** the pack's TeX Live year: --year, else the pins' default */
+const yearOf = argv => { const y = arg('year', argv); return typeof y === 'string' ? y : compileImagesOf().default }
+const where = (argv, name) => resolve(REPO, typeof arg(name, argv) === 'string' ? arg(name, argv) : DEFAULTS[name] ?? packPathsOf(yearOf(argv), compileImagesOf().default)[name])
 /** the four folders a make reads: the record's, a flag taking the place of each */
 const recordInputs = argv => {
   const file = where(argv, 'record')
@@ -393,9 +433,11 @@ async function main(argv) {
   const [command] = argv
   const packFile = where(argv, 'json'), packArg = typeof arg('pack', argv) === 'string' ? resolve(arg('pack', argv)) : packFile
   if (command === 'make') {
-    // (the layouts are made on the pinned compile image: refused before anything is read where the local one is another)
-    const compileImage = compileImageOf()
-    checkCompileImage(compileImage, localImageDigests(compileImage.texlive))
+    // (the layouts are made on the year's pinned compile image: refused before anything is read where the local one is another;
+    // the manifest names the year)
+    const year = yearOf(argv), pin = compileImageOf(year)
+    checkCompileImage(pin, localImageDigests(pin.texlive))
+    const compileImage = { year, ...pin }
     const engine = resolve(typeof arg('engine', argv) === 'string' ? arg('engine', argv) : REPO)
     const E = f => import(pathToFileURL(join(engine, ENGINE, f)).href)
     const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])

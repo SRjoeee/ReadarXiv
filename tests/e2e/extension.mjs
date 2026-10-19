@@ -2,12 +2,14 @@
 // drives the settings page and the popup, reads the console and the network, and runs the main flow on a real arXiv page with the free google-web engine.
 // The reader's own browser and API key are not touched; the LLM path is tested only as “wrong key → fallback to the free engine / with the fallback off the whole queue stops”, which costs nothing.
 //
-// Usage: pnpm build && pnpm e2e        (first time: npx playwright install chromium)
+// Usage: pnpm build:staging && AXT_E2E_ONLINE=1 pnpm e2e        (first time: npx playwright install chromium)
 // Environment: AXT_PAPER / AXT_PAPER2 pick the papers; AXT_HEADED=1 watches it run.
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { addService, chooseBuiltIn, chooseLanguage, chooseStyle, chooseUiLanguage, clearKeyAndReconnect, openOptions, openSection, seedService, setPreload, setSwitch } from './options-page.mjs'
+import { goOnline, online } from './lib/online.mjs'
+goOnline('pnpm e2e')
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -45,7 +47,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   // AXT_CHROME: a Chrome binary to run the suite on instead of Playwright's Chromium (a floor-side Chrome, say)
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
@@ -53,7 +55,7 @@ const context = await chromium.launchPersistentContext(PROFILE, {
   // restored page drop its translations, and that is only checkable where GC actually runs
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--js-flags=--expose-gc'],
   viewport: { width: 1440, height: 900 },
-})
+}))
 // Navigation to a real paper gets ample time: Playwright's default is 30 s, and arXiv slows down markedly after dozens of consecutive runs
 // (measured: curl on the same paper took 26 s). No assertion's own wait is loosened; only the “get the page” step is
 context.setDefaultNavigationTimeout(90_000)

@@ -46,10 +46,13 @@ export interface Params {
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
-/** a page character (pageChars2's); `nu`: no Unicode of the file's stands for its glyph (its text is no reading of it) */
-export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean; nu?: boolean }
+/** a page character (pageChars2's); `nu`: no Unicode of the file's stands for its glyph (its text is no reading of it); its
+ *  style's `fill`, its glyph's colour (0xRRGGBB) where the page's reading tells it (layout/fills.mjs), else none */
+export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass & { fill?: number }; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean; nu?: boolean }
 /** a unit of the units file, as the layer reads it */
-export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean; group?: string }
+export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean; group?: string
+  /** the unit's source pieces, where the rows made it (rows.mjs unitOf: not enumerable), that its measured style reads */
+  readonly source?: readonly { t: string; s?: string; src?: string; k?: number }[] }
 // ---- the per-unit reading (prepareUnit): the contract the rest of v0 reads
 //
 // A line's key is `page|x0,y0,x1,y1` of its rectangle (rectKey); a page character's is `page|item|k` (charKey). The
@@ -96,6 +99,9 @@ export interface Prepared extends Map<number, Resolved> {
   matchedKeys: Set<string>
   /** the alignment: the original's style (the majority of the source's words) */
   orig: { key: string; st: FontClass; size: number; runs: { key: string; n: number }[] } | null
+  /** the alignment: the unit's base style and its colour pieces' colours measured on its matched glyphs (measuredStyle; `st`
+   *  null where the unit carries no source pieces, its colour then told only where every glyph whose fill is told holds one) */
+  measured?: { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string } | null; fill: number | null; pieces: Map<number, number> } | null
   /** the alignment: where the first source word starts on the first line */
   firstX0?: number
   /** the lines kept as the original's, by key: the alignment's (no source word), part 4's displays, the finish's */
@@ -183,7 +189,9 @@ export interface UnitParts {
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; kernW?: number; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it; kernW: explicit glue after it (at 100 px), its item's `kern`
 /** a laid line: its slot, and its items at their places */
-export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
+/** a laid line: its slot's fields, its items, and `past`, how many of the unit's kept regions the text passed before its first item
+ *  (breakLines: where the page's word table writes a region's kept lines) */
+export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
  *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
@@ -212,7 +220,16 @@ export declare function mappedOf(toUnicode: unknown): Set<string> | null
 export declare function fontMappedOf(font: unknown): Set<string> | null
 /** whether a page character's text is no reading of its glyph (pageChars2's `nu`) */
 export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
-export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null): Char[]
+export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null, fills?: readonly (number | readonly number[] | null | undefined)[] | null): Char[]
+/** the source's text by what sets its style: for each code point of the unit's plain source text, the attributes the pieces
+ *  around it set (bits: weight 1, slant 2, small capitals 4, family 8, colour 16), the pieces that set its colour, outermost
+ *  first, and the parity of the slant toggles around it (`flip`); null where the unit carries no source pieces or their text is
+ *  not its `src` */
+export declare function sourceScopes(unit: { src?: string; source?: readonly { t: string; s?: string; src?: string }[] }): { sets: number; chain: number[]; flip: number }[] | null
+/** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1) */
+export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[]; flip?: number }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+/** a rendering's text in runs of one fill (0xRRGGBB, or -1 untold); null where its characters do not give the text or tell no fill */
+export declare function fillRunsOf(chars: readonly Pick<Char, 'ch' | 'st'>[] | null | undefined, text: string): { text: string; fill: number }[] | null
 /** the kind a mark no line may start with is across scripts ("." and the ideographic full stop: 'stop'; ")" and a closing corner bracket: 'close'), else the mark itself */
 export declare function markKind(ch: string): string
 /** a text without the leading marks that stand for one of `held` (the original's marks after a kept placeholder, in order), each matched with one */
@@ -282,7 +299,13 @@ export declare function nameInTarget(name: { key: string; capitals: boolean }, o
 /** a text's width at size 1 in a face */
 export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */
-export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face }, toPx: (x: number, y: number) => number[], scale: number): string
+export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null }, toPx: (x: number, y: number) => number[], scale: number): string
+/** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */
+export declare function colourOfStyle(st: { fill?: number } | null | undefined): { color?: string }
+/** a character style's font class, its fill aside (the class itself where no fill was set on it) */
+export declare function fontOfStyle<T>(st: T): T
+/** a run's style from its characters (the first not a formula's), its colour too; its design `serif` where none is told */
+export declare function styleOfChars(cs: readonly Pick<Char, 'st'>[], serif: string): { fam: string; bold: boolean; italic: boolean; caps: boolean; design: string; color?: string }
 /** what an erasing covered that no painted unit accounts for, put back from the original: the restore operation, or null */
 export declare function restoreUnaccounted(erased: readonly number[][], px: ToDev, restore: { items: { chars: Char[]; keys: string[]; box: number[] }[]; accounted: Set<string>; kept: { keys: Set<string>; hulls: number[][] } | null | undefined; ink: InkMap | undefined; cover: Uint8Array | null }, audit: Audit[] | null, id: number | null, page: number): DrawOp | null
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
@@ -362,7 +385,10 @@ export declare function runEdge(run: LineRun, at: number, line: Line, L: Layout,
 /** an open piece whose text is a link's: \href, \hyperref, \hyperlink */
 export declare const LINK_OPEN: RegExp
 /** the unit's lines on a page that stay the original's, with the baseline and size its reading gave each (the page's word table) */
-export declare function keptLines(rects: readonly number[][], prep: { keep?: readonly string[]; lineInfo?: ReadonlyMap<string, { baseline: number; size: number }> } | null | undefined, page: number): { x0: number; x1: number; baseline: number; size: number; top: number; bottom: number }[]
+/** a line the unit keeps as the original's on a page, for the page's word table: its rectangle, baseline and size; a referenced
+ *  region's `region` and its first placeholder piece `k`, else the first block after it in the unit's rectangles (`block`) */
+export interface KeptLine { x0: number; x1: number; baseline: number; size: number; top: number; bottom: number; region?: number; k?: number; block?: number }
+export declare function keptLines(rects: readonly number[][], prep: { keep?: readonly string[]; lineInfo?: ReadonlyMap<string, { baseline: number; size: number }>; regionOf?: ReadonlyMap<string, number>; referenced?: ReadonlySet<number> } | null | undefined, page: number, blocks?: readonly { rects?: readonly number[][] }[] | null): KeptLine[]
 export declare function drawnRuns(tokens: readonly Token[]): { key: string; n: number }[]
 export declare function styleMatch(orig: Prepared['orig'] | undefined, drawn: readonly { key: string; n: number }[], drawnBase?: string): { match: number; total: number; base?: boolean; ob?: string; db?: string }
 /** a line's band between the rules over and under it: its original baseline, and how low and high its em box may reach */

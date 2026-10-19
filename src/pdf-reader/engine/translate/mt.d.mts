@@ -22,10 +22,20 @@ export type RunSlot = { t: 'run'; pieces: Piece[] }
 export type EdgeSlot = { t: 'edge'; pieces: Piece[] }
 /** a kept pair's places in read pieces, by which one that came back empty takes back the text set just outside it */
 export type Refill = { open: Piece; a: Piece; b: Piece; close: Piece }
+/** a display's own stop the wire wrote after its marker or tag: the stop and its offset in the wire */
+export type OwnStop = { stop: string; at: number }
+/** a displayed formula's source */
+export declare const DISPLAY: RegExp
+/** the punctuation a display's source sets at its end, its sentence's, or null */
+export declare function displayStop(src: unknown): string | null
+/** whether a unit's wire carries a display's own stop: the units a copy made before the rule is asked again for */
+export declare function displayStopChanges(u: { pieces: readonly unknown[] } | null | undefined): boolean
 /** whether a piece is a placeholder that sets no ink (a switch, a strut, a skip): it goes on no wire */
 export declare const isInkless: (p: unknown) => boolean
 /** whether a unit's pieces hold a pair, or a placeholder that sets no ink between two stretches of text */
 export declare function holdsStyle(pieces: unknown[]): boolean
+/** whether the boundary rule changes what a unit sends (its markers plan with the rule and without it) */
+export declare function boundaryChanges(u: { pieces: readonly unknown[] } | null | undefined): boolean
 /** a formula split across inline formulas: each run's first piece's index → its last's */
 export declare function formulaRuns(pieces: Piece[]): Map<number, number>
 /** whether translated pieces hold an inline formula whose delimiters do not balance on its own */
@@ -33,7 +43,7 @@ export declare function holdsUnbalanced(pieces: Piece[]): boolean
 /** a unit → the wire text of the markers format, and the table from marker id back to the original piece (a run's
  *  pieces for a run's marker, an edge's for a kept pair's; `hidden`, the characters of a run's text a marker stands for;
  *  `front` and `back`, what went on no wire before and after the translation; `refill`, the kept pairs) */
-export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: (Piece | RunSlot | EdgeSlot)[]; lead: string; trail: string; stops?: Set<number>; numbers?: Set<number>; numbersAfter?: Set<number>; hidden?: Map<string, number>; front?: Piece[]; back?: Piece[]; refill?: Refill[] }
+export declare function serialize(u: { pieces: Piece[] }): { wire: string; slots: (Piece | RunSlot | EdgeSlot)[]; lead: string; trail: string; stops?: Set<number>; numbers?: Set<number>; numbersAfter?: Set<number>; hidden?: Map<string, number>; front?: Piece[]; back?: Piece[]; refill?: Refill[]; own?: Map<number, OwnStop> }
 /** the translation → pieces, or why it cannot be used */
 export declare function rehydrate(text: string, ser: ReturnType<typeof serialize>, tolerant?: boolean): { pieces: Piece[] } | { error: string }
 /** where each sentence after the first begins: offsets of its first word in the plain source and in the plain translation */
@@ -41,7 +51,7 @@ export type Sentences = { src: number[]; tr: number[] }
 /** a unit's sentences from its engine's sentence lengths for the wire it was sent (the segment's `alignment`), or null */
 export declare function sentencesOf(u: { pieces: Piece[] }, ser: { wire: string }, text: string, alignment: { source: number[]; target: number[] } | undefined, pieces: Piece[], tolerant?: boolean, format?: 'markers' | 'tags'): Sentences | null
 /** a unit → the tags wire (an LLM's, Google's): <x id="n"/> for an opaque piece, <t id="n">…</t> around a formatting pair */
-export declare function serializeTags(u: { pieces: Piece[] }): { wire: string; slots: unknown[]; lead: string; trail: string; hidden?: Map<string, number>; front?: Piece[]; back?: Piece[]; refill?: Refill[] }
+export declare function serializeTags(u: { pieces: Piece[] }): { wire: string; slots: unknown[]; lead: string; trail: string; hidden?: Map<string, number>; front?: Piece[]; back?: Piece[]; refill?: Refill[]; own?: Map<number, OwnStop> }
 /** the translation → pieces, or why it cannot be used */
 export declare function rehydrateTags(text: string, ser: ReturnType<typeof serializeTags>): { pieces: Piece[] } | { error: string }
 /** a unit's sentence cuts on its tags wire */

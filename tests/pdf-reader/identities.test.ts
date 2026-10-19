@@ -24,10 +24,27 @@ afterEach(() => {
 const utf8 = (s: string) => new TextEncoder().encode(s)
 const bytesOf = (v: unknown) => utf8(JSON.stringify(v))
 
+describe('the declared literal constants', () => {
+  it('are the values their modules export: a version raised in its .mjs is raised in its .d.mts (the review of #415)', async () => {
+    const { readdirSync, readFileSync, statSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const root = 'src/pdf-reader/engine', found: string[] = []
+    const walk = (dir: string): string[] => readdirSync(dir).flatMap(f => { const p = join(dir, f); return statSync(p).isDirectory() ? walk(p) : p.endsWith('.d.mts') ? [p] : [] })
+    for (const d of walk(root)) {
+      for (const m of readFileSync(d, 'utf8').matchAll(/^export declare const ([A-Za-z0-9_]+): '([^']*)'\s*$/gm)) {
+        const mod = (await import(/* @vite-ignore */ `/${d.replace(/\.d\.mts$/, '.mjs')}`)) as Record<string, unknown>
+        expect(mod[m[1]!], `${d}: ${m[1]}`).toBe(m[2])
+        found.push(m[1]!)
+      }
+    }
+    expect(found).toEqual(expect.arrayContaining(['TRANSLATE_VERSION', 'BUNDLE5', 'BUNDLE', 'LAYOUT', 'REMOVAL']))
+  })
+})
+
 describe('TRANSLATE_VERSION', () => {
   it('is exported by translate/, and mt.mjs re-exports that one constant', async () => {
     const { TRANSLATE_VERSION } = await import('@/pdf-reader/engine/translate/version.mjs')
-    expect(TRANSLATE_VERSION).toBe('3')
+    expect(TRANSLATE_VERSION).toBe('5')
     // (a token of the form the web's identity and a bundle's versions take)
     expect(TRANSLATE_VERSION).toMatch(/^[0-9a-z.]{1,16}$/)
     const mt = await import('@/pdf-reader/engine/translate/mt.mjs')

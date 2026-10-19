@@ -724,7 +724,8 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   2^24 pixels; from the left's canvas where PDF.js drew it within 2 % of that k, else the place's own page view's canvas,
   else the page drawn from the composed document) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
-  600 ms after it, nothing laid again. A page this door laid that leaves the view lets its SVG and its copy go and holds an
+  600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at. A page this
+  door laid that leaves the view lets its SVG and its copy go and holds an
   empty element (retired: the place shows no page, and no page view is made of it); a page the door makes ready while it
   is far is retired at once, and committed directly when it comes near. The one exception: a page that holds the focus (a
   link, or the place a jump gave it to) is kept as it goes far, and let go once the focus has left it (read a task after
@@ -736,8 +737,47 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   keeps its drawing until the new door's page is ready; leaving the view, that drawing goes and the place shows its own
   content again. The window holds a copy for the places near the view alone: their pixels are bounded by the near area at
   any zoom, so no copy of a far page is kept.
+- **One frame a page** (`view/drawn.mjs`). PDF.js draws a page view at its viewport's unrounded scale times its output
+  scale, from the page's top-left corner, on a canvas it floors to whole CSS px (pdfjs-dist 6.3.289 `PDFPageView.draw`:
+  the canvas is `outputScale.sx` times the page's width floored to its rounding, the rest of the page cropped). So the
+  copy's source carries the scale it was drawn at, read as PDF.js begins the drawing (`pagerender`, its canvas sized and
+  its output scale set), checked against the canvas's size, and kept with the canvas once PDF.js tells that drawing done
+  (`pagerendered`, neither a CSS transform nor a detail view): not read at its end, where under restricted scaling PDF.js
+  lets a drawing run on after a zoom has given the page view its next viewport (`update`, `onlyCssZoom`); never the canvas's
+  width over the page's, which is short by up to a CSS px over the page's width (0.14 % at the 87 % fit), and an erase
+  laid at it left the original's ink showing past its rectangles where the floor drops near a pixel (80, 87, 110 and
+  125 %; at 125 % the page's 1020 CSS px floor to 1019 in floating point), deterministically, at any time. `copyAt`
+  hands `copyOf` the scale kept with the canvas, never one derived from a size.
+- **A canvas drawn at two scales is no source.** PDF.js approximates the pixel ratio by a fraction whose terms are at most
+  8 (`approximateFraction`) and floors the canvas's width and height each to its own term, so wherever the ratio is no
+  such fraction the canvas's scale across and its scale down come apart, at almost every zoom: at 1.1 and 0.9 (Chrome at
+  110 and 90 % on a 1× screen), 1.8 and 2.2 (the same on a 2× screen), 2.25 (Windows at 225 %), 2.4, 2.625, 2.75; and
+  under PDF.js's restricted scaling. Their anisotropy at 100 % is 1.4 to 3.7 device px over the page, above the erase's
+  pad, so no tolerance can take such a canvas: the copy is drawn from the composed document instead, at k, correctly.
+  At 1, 1.2, 1.25, 4/3, 1.5, 1.6, 1.75, 2, 2.5 and 3 the two agree to the bit (PDF.js's sizing replayed over zooms of 50
+  to 400 %, the review of 2026-10-19). Measured (`AXT_MEASURE=1 AXT_DPR=…
+  pnpm e2e:registration`, the sample, the fit and 100 %, the median of five): a copy at DPR 1.1 and 1.8 costs 14.3 to
+  17.3 ms (the page drawn 13.7 to 16.4 ms, the copy 0.6 to 0.9) against 0.1 to 0.2 ms from the left's canvas at DPR 1
+  and 2 (its raster left to the GPU), a recopy's long tasks none at any of the four: about a hundred times the cost, on
+  every commit and on each near page's recopy after a zoom, spread over PDF.js's slices of the main thread. The old code copied such a canvas and left the erase 4.4 device
+  px short across and 7.1 down at 100 % and DPR 1.1. Debt: a copy drawn at the canvas's two scales (`copyOf`, `drawCopy`,
+  `renderAt` and `drawOps` taking a scale across and one down) would take PDF.js's canvas at every ratio.
+- **The page drawn from the composed document** is drawn as PDF.js draws a page view: at k on a canvas of the place's box
+  at k's resolution (`places.box`, PDF.js's rounding of the viewport, nothing of the layout read), on the left's page
+  views' own context (opaque; read back by the CPU unless the host opens its documents with `enableHWA`, as PDF.js's
+  `willReadFrequently: !enableHWA` gives it). Where both are the CPU's (the extension) its copy is the left's to the
+  pixel; where the host draws on the GPU's (the web) the two differ by anti-aliasing, and a registration check there needs
+  a tolerance for it. The SVG and the links are laid in the same frame: the page's size at its scale (`--axt-frame-w` and
+  `-h`, `--total-scale-factor` times its size in PDF units), never the place's floored box. Measured by
+  `pnpm e2e:registration` on the sample, at DPR 1 and 2, at the zooms PDF.js floors at least 0.6 of a CSS px off:
+  before, 307 to 8,142 pixels of a page's copy from PDF.js's canvas differed from its copy at the place's k by more than
+  16 in a channel (up to 255; 1 to 1,101 at an aligned zoom, the document's copy then drawn on another context) and the
+  ink left at the erased rectangles reached 889 px against an aligned zoom's 0 to 2; after, 0 pixels differ at any zoom
+  and the ink left is the aligned zoom's. The whole-pixel snap of `drawOps` (`SWAP_PAD × k < 1`, added for 85 % at
+  DPR 1 on 2608.16117, whose page is 693.6 CSS px wide) is still to be measured again under the right registration.
 - **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
-  page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own; the
+  page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own, then
+  the left parts of the other pages its running units are on (a page so fetched brings no more); the
   right's from the laid page's words where its place shows the layer, the left's mirrored elsewhere (`layerShapes`); a
   page's floats from what PDF.js drew the left's page by. The geometry is kept for the near pages and the last 20 wanted.
 - **The contents** (`contents.mjs`): the index's headings through `outline.ts`'s rule, each at its unit's first rectangle
@@ -754,7 +794,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
 
 The extension's run makes the side and tells it (§11.10). The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `layer-side-door.test.ts` (the real door),
 `feed.test.ts`, `contents.test.ts` and `shapes.test.ts` SH5; `pnpm e2e:reader` runs it on the sample cut into BUNDLE 4's
-objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API.
+objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API, and `pnpm e2e:registration` holds the
+frame (the side's `registration(n)`: a laid page's copy drawn from PDF.js's canvas and from the document at the place's k,
+compared pixel by pixel).
 
 ### 11.9 The layer's links
 
@@ -770,8 +812,9 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/ui/link-names.ts`). A record the view
   cannot carry (no box of area, neither or both targets, an address off the allow-list) is left out.
 - **Placed by shares.** The anchor spans the union of its boxes and each box is a span of it, every size a share of the
-  page's box (or the link's) made once from the place's viewport (its rotation, its box's origin): the place's own size
-  scales them at any zoom, nothing is read from the layout and nothing runs on a frame. The anchor takes no pointer, its
+  page's frame (or the link's) made once from the place's viewport (its rotation, its box's origin): the links' element is
+  laid at the page's size at its scale, the copy's frame (§11.8), never the place's box that PDF.js floors to whole CSS
+  px, so CSS scales them at any zoom, nothing is read from the layout and nothing runs on a frame. The anchor takes no pointer, its
   boxes do: the space between two lines of one link is the page's.
 - **Followed.** A link inside the paper is resolved on the left's document (a name by `getDestination`, its page by
   `getPageIndex`) and jumped to on the right, the pane clicked, by the view's own jump (its zoom too, as PDF.js takes one):
@@ -1015,6 +1058,22 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   overfull line sticks out alone, by up to 6 units. Where a unit's shapes cannot hold its words (two lines of text made
   one row by a tall formula, a glyph hanging into another sentence's row) it lights whole: 12 of the 977 units whose
   starts both sides found, on the ten papers.
+- **A token's sentence is the text's** (`highlight.mjs withSentences`, `segsOf`): on the left a token paired with a word
+  of the unit's source is in that word's sentence; on a laid page a word is in its word's, and any other token — a formula's
+  crop, a display's kept line, a lead — in the sentence its place in the translation falls in (the word table's `at`).
+  Token order still makes the rows and the runs, and decides only a left glyph no word is paired with (a formula's, a
+  script the text layer gives late), with the floor: no such glyph on a row below one where a later sentence began is an
+  earlier one's. Until 2026-10-19 every token went by order, and the page's word table wrote a unit's displays after all
+  of its text: each display joined the page's last sentence, the floor gave it every row below, and nothing fell back —
+  on 54 papers of the sweep 527 of 3 796 units lit by sentence (40 papers) lit a sentence short, empty or over others.
+- **Never another sentence's words**: a unit lights whole on both panes where a later sentence begins above an earlier
+  one's last row (the drawing does not keep the text's order: the text a layout runs on above a display, 'flow'), or
+  where a sentence of one of its runs paints over a word of another sentence in another run on the page (a display wider
+  than its column beside the column's text, a label read apart from its line; `runsApart`). On the 54 papers
+  (2026-10-19), against the layer pinned for each paper: by sentence 3 779 units (3 796 before), of them 3 on the right
+  with a word their shapes miss (none lit as another sentence; below) and none on the left (5 before); the 24 that now
+  light whole all lit wrongly before — 16 a display's line made one row with the text line where the next sentence
+  begins (§17.7), 5 runs over each other, 3 the left's pairs putting a later sentence's word above an earlier one's row.
 - **The hit test is the paint**: the same shapes, the smaller unit winning where two overlap (a heading run into its
   paragraph); a float's shape wins over a larger block, a smaller block over the float. On the ten papers 0 holes in
   37.3 M points of painted blocks (7–16 % of points lit nothing or a neighbour before), in 25.3 M of sentence shapes and
@@ -1107,7 +1166,14 @@ within noise.
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
 - Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (12
-  units on the ten papers, with those a hanging glyph makes whole).
+  units on the ten papers, with those a hanging glyph makes whole); so does a display's kept line made one row with the
+  translation's line under it, where the next sentence begins (their boxes overlap by more than half a unit: 16 units on
+  the 54 papers of the sweep, 2026-10-19).
+- A formula or a citation that begins a sentence lights with the sentence before it, on both panes alike: a sentence
+  starts at its first word (`mt.mjs sentencesOf`), and the record keeps no more. Starting it at its first piece changes what
+  the record means (§18.2's `TRANSLATE_VERSION`).
+- A word the layer draws past the column's edge by more than the overhang, or on a page the unit's rectangles are not on,
+  is in no shape and lights with nothing (3 units on the 54 papers).
 - Before our marked original is compiled, units of arXiv's PDF matched under 80 % by their text alone light whole (113
   of 738 on the ten papers; 29181 38 of 90).
 - A copy made before the highlight lights by paragraph until it is translated again; an LLM's sentences are measured
@@ -1130,7 +1196,11 @@ within noise.
   own; a layout made whole reads its arrays through views of them.
 - **A unit's sentences wait for all its pages** (`tokensIn`): a run's sentence shapes read the unit's tokens beyond the
   run — whether a sentence began before it or goes on after it — so a unit over a page break lights whole on the pages
-  that have come until the others have, then by sentence.
+  that have come until the others have, then by sentence. A page's left part comes on its first want, so the side asks
+  for the left parts of the other pages its running units are on in the task after its own (`layer-side.mjs spreadFrom`;
+  the nearest `SPREAD_MAX`, 8; a page so fetched spreads no further, or a paper's paragraphs would fetch every page): before, a paragraph that ran on
+  to the next page lit whole until the pointer had been there. On the 54 papers, 0.78 more left parts a page wanted (none
+  on 43 % of pages, two on 21 %), 43 KB at the mean, 25 KB at the median, 121 KB at the 90th percentile (2026-10-19).
 - **The right, mirrored** (`mirror`): until the layer's pages bring words of their own, the right's shapes are a layout of
   the right's own over copies of the left's tokens and rectangles, following the left as it is told. Its blocks equal
   the left's from run objects of its own: the paint keeps what it drew by the run, and a run shared would move the left's
@@ -1150,8 +1220,11 @@ within noise.
   paint order), its token ids the page's (page · 2^16 + its index), the units it shows as the original's over copies of
   the left's tokens of them, made once the page's left part is in too; elsewhere the left's mirrored. A unit's stream on
   the right is its first token on its first page, told when that page lays. The right's starts of a unit all on laid
-  pages are the tokens carrying its sentences' first words (`words.word` against the row's `sentences.tr`); of a unit on no
-  laid page, the left's; of one on both, none, and it lights whole.
+  pages are the tokens carrying its sentences' first words (`words.word` against the row's `sentences.tr`), each token's
+  sentence its word's or its place's (`words.at`, §17.3); of a unit on no laid page, the left's; of one on both, none, and
+  it lights whole. The page's word table is in the order of its units' text (`words.mjs addUnitWords`): a display's kept
+  lines where the line walk passed its region (`breakLines`' `past`), a kept line no placeholder holds before the block that
+  follows it in the unit's rectangles.
 - **Floats and the view's window**: a page's floats are made of what its drawing gives (its figures and paths,
   `floats`), and again on the page's first use after a part moves the document part — never in the part's task, which
   would make every such page's geometry again at once. A page leaving the window (`forget`) lets its geometry, its
@@ -1194,6 +1267,7 @@ The edge cases, decided:
 - **Cell membership** (`groupOf`, from `tableGrid`) is extraction: the bundle carries each cell's place.
 - **A unit's alignment** (whether its lines are centred) is extraction, and TeX's own: the marked original writes, for a unit's or a heading's end mark, the stretch of `\leftskip`, `\rightskip` and `\parfillskip` its paragraph was broken with, read once the paragraph ended (`AXT-ALIGN`, `layout/marks.mjs` `readAlign`: centred, flush left, flush right or justified; `{\centering text}` and a blank line is justified, its group closed before its paragraph ended), and the layout maker sets `UNIT_FLAG.CENTRED` from it. A unit TeX set in a box (a one-line caption `\@makecaption` centres, `\centerline`) or whose line the log lacks is read from arXiv's lines instead: every line's centre on its column's (the text block's for a full-width row), one line short of it by more than an em; and a one-line paragraph TeX set justified that its own glue centres (`\noindent\hfill X\hfill\null`) is centred where its line is on its column's middle and more than two ems off both edges. The layer draws by the flag. A table cell, which the probe does not read, it decides by the cell's own lines (several centred: a makecell's) or its table's column on the page (a single line: centred where the column's cells' middles are all within 2 pt of each other and their widths are not, so a column whose cells share a start or an end never is; a cell its column cannot decide, alone in it, a header's or of widths alike, as the layout file's flag says); a unit of a part with no layout by its lines and the page's column, as before the file had a flag (2026-10-19: the layer's own guess had centred 1810.04805's "C.1" and "5.3" headings and missed IEEEtran's centred ones).
 - **A placeholder's colour** (its glyphs' fill: hyperref's coloured links and citations, a coloured formula) is extraction: the layout file's placeholder row ends with the colour more than half its inked glyphs are filled with, where that is not black (`0xRRGGBB`; `MIXED_FILL`, -1, where no one colour holds more than half), read from arXiv's operator list (`layout/ink.mjs`, every colour space as PDF.js turns it to RGB; a pattern's fill counts as none).
+- **A character's colour** is an attribute of the original's glyphs, as its font is (E1 of the residuals' batch R2, 2026-10-19). Each text item of a page's draw carries its characters' fills (`layout/fills.mjs` `itemFills`: the glyphs of the page's ink on the item's baseline within its extent, read in order as the item's own text; an item they do not spell exactly — turned, a glyph too many or too few, a combined accent set as two glyphs, a right-to-left run — tells none, nor does a Type 3 glyph whose procedure paints its own colours), and a page read live tells the same from the list PDF.js drew it by, its render's or its early pixel read's, with no second parse: a walk of the glyphs alone, `LIVE_FILLS_MS` at most, past which the page tells none (`run.mjs` `liveFillsOf`, with the host's `OPS`). The reader's character holds it as `st.fill`. The drawing reads it three ways. A unit's base weight, slant, small capitals, family and colour are those most of its matched glyphs hold outside every piece that may set that attribute (a style pair or switch in any spelling, `{\bf …}` too; a colour piece, a link, a paper's own macro), and of all its glyphs only where none lies outside; a tie goes to regular, upright, serif and black, else to the unit's first glyph (`layer2.mjs` `measuredStyle`). A glyph's slant is read as it would be without the `\emph` and `\em` toggles around it, so that a unit wholly inside one is drawn as the original. A piece that may set colour and that no `colours` row tells takes its own glyphs' colour; a row (TeX's, PR-C) wins. A unit read without its source pieces (a lab record, not a reader's) keeps the reading before: the majority, its groups' share taken off (`baseOf`), and a colour only where every glyph whose fill is told holds the same one. A rendering of the page's own characters (a citation, a reference, an equation's number) is drawn in runs of its characters' fills: `[16]` keeps its black brackets and blue digits. The placeholder's row fill above stays only for a character whose fill is not told. Word-level colour inside a sentence stays a limit: no majority paints a unit. On the wire, a styled pair whose two ends stand where the wire is cut anyway (a forced break, a display or an item beside it, never an inline formula, which the translator moves as a word; a kept pair's edge; the unit's end) keeps its markers (`translate/mt.mjs` `classOf`, the boundary rule). The draw's item rows carry the fills as their tenth value (`BUNDLE5` `'7'`); the boundary rule raises `TRANSLATE_VERSION` to `'4'` and `PIPELINE_VERSION` to `'22'`, whose copies carry every unit whose wire it leaves alone (`mt.mjs` `boundaryChanges`): over 137 papers' sources 126 of 36,136 units, in 29 papers, are asked again.
 - **A translator's stutter** (a word of five letters or more written twice in a row where the unit's source sets no word twice: Microsoft's "konformen konformen" in 2608.16117's German abstract, the M1 survey) is layout: `layer-proto/stutter.mjs`, applied where a unit's text becomes tokens (`layer2.mjs tokensOf2`), so every host's rows and every cached translation are drawn with the word once, and the rows, the cache and the plain text the sentence offsets count in keep the translation as it came (the word table keeps each drawn word's place in it). It bumps nothing (§18.3); making it a translation rule would raise `TRANSLATE_VERSION` and translate every unit again for a defect of three units in the 31 outputs measured. Only alphabetic scripts that set words apart by spaces: a CJK or Thai repeat is not this rule's.
 
 ### 18.2 The identities
@@ -1202,9 +1276,9 @@ The edge cases, decided:
 |---|---|---|---|---|
 | `BUNDLE` (web `'1'`, engine `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not yet a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5. The web's pin does not move before `BUNDLE` 4 lands; M1 moves it with `BUNDLE` 4) | reader contract | everything a reader parses: the bundle's shape, the units' tuple, kinds and flags, the layout file's schema, the manifest's schema, the left geometry | the request (§18.4) and the R2 key | readers older than it get `unknown-versions` until they update |
 | `PDFJS` | reader contract | the PDF.js whose reading the layout and the manifest are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
-| `TRANSLATE_VERSION` (`translate/version.mjs`, `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
+| `TRANSLATE_VERSION` (`translate/version.mjs`, `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `4`: `adaptiveFill.band` read against the page's own paragraphs, 1b-C; 3 before) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
@@ -1484,6 +1558,46 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   - *The web host* passes `compileBudgetMs` with CM alone today, and neither `pages` nor `engines`: its budget's answer past
     the budget (a `budget` limit) ends the guard as any limit, and the page check is the page pass's alone until it passes
     arXiv's page count.
+  - *TeX's verdict, for a host with a second TeX Live tree* (the TL2023 plan, 2026-10-19): a refusal after the unmarked
+    original was compiled names its verdict, `own: { ran, short, limit, tree }` (it ran through; it did with fewer pages than
+    arXiv's, where `pages` is given; the host's limit it met; the TeX Live year of its banner, null where TeX never ran or the
+    compile threw). `handoverOf(own, { declared, served, last })` (the pipeline entry) is the host's rule over it: another
+    served tree, once (the declared year where it is one), where TeX failed on the paper's own source and no host's limit
+    stopped it; never on no verdict, ours (it made the pages here), a limit, no year, or the last tree. TeX on a frozen tree is
+    deterministic and no limit enters, so the tree that makes a paper's layout is a function of the source and the served
+    trees. `tried`, the years the host compiled the paper on before, enters TeX's why alone ("declares TeX Live 2023; its own
+    source does not run through on TeX Live 2023 or 2025"), and the refusal is `texlive` only where the paper declares a year
+    none of the trees tried is. The verdict stays in the result and the page pass's `stats.layout`; a part's record is
+    `{ refused, why }` as before, and with no `tried` every why is as before.
+- **A paper arXiv compiles with `latex`** (its 00README's compiler, `latex+dvips_ps2pdf` read as it, or the one guessed for a
+  package of EPS figures alone; R1 item 5 of 2026-10-19). arXiv runs latex, pdfTeX in DVI mode, and makes the DVI a PDF by
+  dvips and ps2pdf; the marked original is that compile, its DVI made a PDF by dvipdfmx (`CompileRequest`'s `engine:
+  'latex'`: latexmk's -pdfdvi with dvipdfmx as its dvipdf, a one-pass compile latex then dvipdfmx, a draft latex
+  -draftmode). pdfLaTeX in its place sets such a paper otherwise (2610.21765's pages 8 to 14 refused for their carry, 83 %;
+  2608.22687's 25 to 35, 88 %); and through dvips and Ghostscript no mark of ours would reach the PDF's content stream.
+  - *The marks*: where pdfTeX writes no PDF itself, MARK_DEF's and LAYOUT_TEX's destination and points are xdvipdfmx's as
+    under XeTeX, a `pdf:dest` special of an XYZ and a `pdf:code` rendering intent, with dvipdfmx told at the first page to
+    keep every destination nothing refers to (`C 0x0010`): `DVI_MARK_DEF` after MARK_DEF, `DVI_LAYOUT_TEX` after
+    LAYOUT_TEX, for such a paper alone and with no line of their own, so that every other engine's compile is byte for byte
+    as before (the compile-files goldens; 52 of the sweep's 53 sources and 128 of the lab corpus's 129 the same in every
+    compile input, the two others the corpus's two `latex` papers). Each sets a whatsit, as XeTeX's do: TeX's own DVI
+    (dvitype, every character and rule to the sp) is the same with them and without, on every document of the native cases
+    and the stream's six (`ONLY=dvi`), every named piece owns its own glyphs, and a cell's mark in a `\resizebox` lies on its glyphs (dvipdfmx reckons a destination's place in dvips's scaled box). dvipdfmx draws a glyph with no special
+    before it by its own reckoning, up to 0.35 pt off TeX's place (a margin note), and the marked original's, a special
+    before it, at TeX's.
+  - *Against arXiv's PDF*: our DVI drawn by dvips and ps2pdf is arXiv's PDF to 0.03 pt (2610.21765, its words' median); by
+    dvipdfmx, every page and word in place to 0.09 pt (the median; 0.42 pt at the 99th percentile), the fonts' boxes aside.
+    Its marked original then makes a layout: 2610.21765 every part kept, 1,574 of 1,600 lines carried, 167 of 175 units
+    located, 606 of 611 placeholders (the guard leaving one unit unmarked, a `\vspace` length the front end cut as one);
+    2608.22687 every part kept, 2,376 of 2,453, 239 of 269. The paper's hyperref is its dvips driver's, whose links dvipdfmx
+    does not read: such a marked original has no links, and the link-anchor tier places none.
+    Text a paper places by PostScript (pstricks' `\rput`) dvipdfmx sets elsewhere than dvips does (64 pt off, measured in
+    review): it is no unit's text, and the carry leaves it unmatched. A `sidewaystable` page arXiv's ps2pdf turns (`/Rotate
+    90`) dvipdfmx leaves upright; the layer lays over no rotated page (ink.mjs `rotated`), so such a page has none, by design.
+  - *Cost*: dvipdfmx once a marked compile, 0.85 s on 2610.21765's 14 pages, against pdfTeX's PDF written at every pass (a
+    latex pass 0.84 s, a pdfLaTeX one 0.95 s): its prepare's compiles 12.4 s either way.
+  - *The web host*'s runner runs no latex today (its answer "unknown engine": refused 'engine', as before) until its
+    sandbox runs the request above; the image holds latex, dvipdfmx and Ghostscript already.
 - **A compile that did not make the paper is a failed compile** (2026-10-19). A marked original
   that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test runLive's compiles and CM's passes use too:
   its last pass stopped short — an emergency stop, a hundred errors, TeX's capacity — or never logged END_TEX's AXT-END)

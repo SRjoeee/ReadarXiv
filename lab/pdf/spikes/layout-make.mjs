@@ -26,7 +26,7 @@ import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
-import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, PLATFORM } from './compile-image.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, latexmkEngine, PLATFORM } from './compile-image.mjs'
 
 // (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
 await checkCompileImage()
@@ -99,7 +99,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     const pdir = join(dir, 'probe')
     rmSync(pdir, { recursive: true, force: true })
     for (const [p, b] of [...files, ...probe]) { const f = join(pdir, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
-    await docker(pdir, [{ xelatex: 'xelatex', lualatex: 'lualatex' }[paper.meta.compiler] ?? 'pdflatex', '-interaction=nonstopmode', main])
+    await docker(pdir, [{ xelatex: 'xelatex', lualatex: 'lualatex', latex: 'latex' }[paper.meta.compiler] ?? 'pdflatex', '-interaction=nonstopmode', main])
     writeFileSync(probeLog, existsSync(join(pdir, `${stem}.log`)) ? readFileSync(join(pdir, `${stem}.log`), 'latin1') : '', 'latin1')
     rmSync(pdir, { recursive: true, force: true })
   }
@@ -118,7 +118,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     rmSync(build, { recursive: true, force: true })
     for (const [p, b] of [...files, ...marked]) { const f = join(build, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
     const t0 = Date.now()
-    await docker(build, ['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[paper.meta.compiler] ?? '-pdf', ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main])
+    await docker(build, ['latexmk', ...latexmkEngine(paper.meta.compiler), ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main])
     compileMs = Date.now() - t0
     const pdf = join(build, `${stem}.pdf`)
     if (existsSync(pdf)) {

@@ -55,7 +55,10 @@ export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string |
  *  (Compiled `files`), and, on a one-pass request, makeindex (-o ./<job>.ind ./<job>.idx) after the bibliography step
  *  where the pass wrote ./<job>.idx. The bibliography step (`bibtex: true`) is biber only where THIS pass wrote ./<job>.bcf (a
  *  shipped or carried copy does not count), else BibTeX on ./<job>. A host that knows neither answers without `files`; the files a compile is given
- *  back come in `overrides`, as every other input does */
+ *  back come in `overrides`, as every other input does. `engine` is the paper's compiler (paper-meta.mjs): pdflatex,
+ *  xelatex, lualatex, or `latex`, arXiv's DVI compiler — pdfTeX in DVI mode, its DVI made a PDF by dvipdfmx (never dvips and
+ *  ps2pdf, arXiv's own: the marks are dvipdfmx's specials, latex-front.mjs DVI_MARK_DEF), every pass by latexmk's -pdfdvi
+ *  with dvipdfmx as its dvipdf, a one-pass compile latex then dvipdfmx, a draft latex -draftmode */
 export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array>; draft?: boolean; files?: boolean }
 /** the compiler a visit uses, opened when first needed and again after a compile the page failed */
 export declare function compilerKeeper(open: () => Promise<{ compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }>): { ready: () => Promise<void>; compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }

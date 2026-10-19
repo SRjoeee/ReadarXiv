@@ -407,8 +407,8 @@ describe('a reader\'s envelope', () => {
   it('refuses a unit chunk\'s old envelope (`bundle` in place of `format`): the chunk\'s format is its own', async () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
-    // (6: a part with no layout says why, `layout: { refused, why }`)
-    expect(BUNDLE5).toBe('6')
+    // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills)
+    expect(BUNDLE5).toBe('7')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1712,7 +1712,7 @@ describe('the catalog', () => {
     const f = forged('head', h)
     const other = await readHead(f.bytes, { ref: f.ref })
     const w = await writeCatalog({ head: other, units: units(), parts: parts(), end: { through: 4 } })
-    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b6-j${PDFJS}-p12-l7-r99`))
+    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b7-j${PDFJS}-p12-l7-r99`))
     expect(w.key).not.toBe(catalogKey(PAPER.id, PAPER.version, VTAG5))
     const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
     expect(c.versions).toMatchObject({ pipeline: '12', layout: '7', removal: '99' })
@@ -1861,7 +1861,7 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b6-j${PDFJS}`)
+    expect(CTAG5).toBe(`b7-j${PDFJS}`)
     expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const key = keyOf('2608.04322', 3, CTAG5, sha)
     expect(key).toBe(`layer/2608.04322v3/${CTAG5}/${sha}.json`)

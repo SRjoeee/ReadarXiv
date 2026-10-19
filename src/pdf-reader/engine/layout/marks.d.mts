@@ -89,6 +89,11 @@ export declare const NAMES_TEX: string
 /** LAYOUT_TEX's last part: a point (`/axt-<name> ri`) beside each destination, around each column's body and each
  *  float's box */
 export declare const POINTS_TEX: string
+/** POINTS_TEX's point under `latex` (latex-front.mjs dviEngine), where pdfTeX writes no PDF: xdvipdfmx's `pdf:code` special */
+export declare const DVI_POINTS_TEX: string
+/** LAYOUT_TEX's destination and points under `latex`, where pdfTeX writes no PDF: xdvipdfmx's specials (DVI_MARK_DEF's
+ *  destination, DVI_POINTS_TEX); after LAYOUT_TEX, for such a paper alone */
+export declare const DVI_LAYOUT_TEX: string
 /** the source pieces of a unit that TeX ligatures and LaTeX's quotes set as other characters, as the glyphs have them */
 export declare const asSet: (s: string) => string
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's

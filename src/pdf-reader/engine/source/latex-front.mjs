@@ -19,6 +19,18 @@ export const normalizePath = p => { const out = []; for (const seg of p.split('/
 export const jobName = main => main.slice(main.lastIndexOf('/') + 1).replace(/\.[^.]*$/, '')
 /** bytes as a string of the same code units (latin1, byte for byte): the scanner's view of a source */
 export const latin1 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
+/**
+ * A source file's bytes as TeX reads its lines: latin1, each line's end an LF. web2c's input_line (texmfmp.c) ends a line
+ * at a CR or an LF and takes the LF of a CRLF with its CR, so a CR, an LF or a CRLF is one line's end, and a blank line
+ * a paragraph's end whatever the editor wrote. Every rule of the front end reads lines by their LF: a CRLF source's
+ * blank lines were none, and 2610.10069v1's introduction (ten paragraphs) and a whole proof (sixteen) were one unit
+ * each. A file the front end writes back (patch: its units' marks and translations) is written from this text, with LF,
+ * which TeX reads the same. Every other file is copied as it is, a class or a package the front end read among them;
+ * the passes live.mjs runs over such a copy (literalNames, stripPdftexOption, localizeNames) give the same text on its
+ * own line ends as on this one (the 12 CR files of 180 papers, 2026-10-20). So do the guard's brace balance and the
+ * probe of the main file, which read through this too
+ */
+export const texText = bytes => latin1(bytes).replace(/\r\n?/g, '\n')
 export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
 const utf8Bytes = s => new TextEncoder().encode(s)
 const bytesOf = (s, enc) => (enc === 'utf8' ? utf8Bytes(s) : latin1Bytes(s))
@@ -681,7 +693,9 @@ class Builder {
   text(s, start, end) { if (!this.cur) { if (!s.trim()) return; this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] } } this.cur.pieces.push({ t: 'text', s }); this.cur.end = end }
   /** `display`: a formula set on lines of its own (displayOutside) */
   ph(src, start, end, display = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'ph', src }; if (display) this.displays.add(p); this.cur.pieces.push(p); this.cur.end = end; return true }
-  open(src, start) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId; this.cur.pieces.push({ t: 'open', id, src }); return id }
+  /** (the unit's range holds the opening: a unit that ends with it, its close in the next unit, is written over it, which
+   *  else stayed in the source after the unit's range and was set twice — a pgffor loop's `{{`, 2610.21377) */
+  open(src, start) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId; this.cur.pieces.push({ t: 'open', id, src }); this.cur.end = Math.max(this.cur.end, start + src.length); return id }
   close(id, src, end) { if (this.cur) { this.cur.pieces.push({ t: 'close', id, src }); this.cur.end = end } }
   /** a letter an accent made (accentLetter): text, its UTF-8 bytes read as the source's are, and `src` the accent as
    *  the source writes it — what is set wherever the unit is set untranslated (patch). Joined with its word at flush */
@@ -1243,8 +1257,12 @@ function walk(s, from, to, b, ctx) {
     let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : args
     // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
     if (args?.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
-    // TeX's own assignment and glue syntax belongs to the command: \looseness=-1, \parindent=0pt, \vskip 3pt plus 1fil, \penalty-100
-    if (e === end && /^[A-Za-z@]+$/.test(name)) { const m = s.slice(e, Math.min(to, e + 120)).match(name === 'hrule' || name === 'vrule' ? RULE_SPEC : ASSIGNMENT); if (m) e += m[0].length }
+    // TeX's own assignment and glue syntax belongs to the command: \looseness=-1, \parindent=0pt, \vskip 3pt plus 1fil,
+    // \penalty-100 — to a register or a primitive that reads a value, never to a declaration that takes no argument
+    // (NO_ARGS) or a command the table knows takes no parameter: `{\bfseries 100}`, `\noindent 38 papers` and `\noindent
+    // = 40` set their digits, which a placeholder took out of the text (2610.19159's tables and lists), and `\S4 in` its
+    // section number and the word after it, read as a length in inches (2608.15334; 2608.30730's `\textyen 45 in`)
+    if (e === end && /^[A-Za-z@]+$/.test(name) && !NO_ARGS.has(name) && !(args?.known && paperParams(name, paper)?.length === 0)) { const m = s.slice(e, Math.min(to, e + 120)).match(name === 'hrule' || name === 'vrule' ? RULE_SPEC : ASSIGNMENT); if (m) e += m[0].length }
     endText(); b.ph(s.slice(i, e), i, e)
     // a command with a letter name eats the following spaces in TeX; keep them with it
     i = e
@@ -1511,7 +1529,7 @@ function storedBodies(calls, { ctx, files, units, own }) {
 /** `fsys`: a file system (inMemory, or node-files.mjs folder under Node) */
 export function loadProject(fsys, main, { tables = false } = {}) {
   // each file's text read once: the package's TeX (.tex, .sty, .cls) is read by several of the passes below
-  const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, latin1(fsys.read(f))).get(f)
+  const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, texText(fsys.read(f))).get(f)
   const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: sourceText(f) }))
   const outer = paper
   paper = paperOf(own.map(x => x.text))
@@ -1523,7 +1541,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
   // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
   // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract
-  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: latin1(bytes) } } return null }
+  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } } return null }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)
@@ -1988,6 +2006,17 @@ export const MARK_DEF = [
   '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
   ...END_MARK,
 ].join('\n') + '\n'
+/** whether a compiler is arXiv's `latex` (its 00README's, or the one guessed for a package of EPS figures alone: paper-meta.mjs):
+ *  pdfTeX in DVI mode, \\pdfoutput 0, whose DVI arXiv makes a PDF by dvips and ps2pdf, and a host by dvipdfmx
+ *  (live.d.mts CompileRequest), which reads the marks' specials (DVI_MARK_DEF) */
+export const dviEngine = engine => engine === 'latex'
+/** MARK_DEF's destination under `latex` (dviEngine), where pdfTeX writes no PDF itself and its \\pdfdest sets nothing: xdvipdfmx's,
+ *  as MARK_DEF sets it under XeTeX, a `pdf:dest` special of an XYZ where it stands (\\axt@dvidest, LAYOUT_TEX's too:
+ *  DVI_LAYOUT_TEX), and the config dvipdfmx is told at the first page, which keeps every destination nothing refers to
+ *  (C 0x0010, "do not optimize PDF destinations": it drops them otherwise). A paper that sets \\pdfoutput 1 is set as pdfLaTeX
+ *  sets it, MARK_DEF's. After MARK_DEF, for such a paper alone (live.mjs originalFiles, probeFiles), so that every other
+ *  engine's files are byte for byte as before; one line, no comment, so that no line of the paper moves */
+export const DVI_MARK_DEF = '\\makeatletter\\def\\axt@dvidest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}\\let\\axt@pdfdest\\axt@dest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\axt@pdfdest{#1}\\else\\axt@dvidest{#1}\\fi}\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\ifnum\\pdfoutput>0 \\else\\special{dvipdfmx:config C 0x0010}\\fi}\\fi\\makeatother'
 /**
  * The end of a unit's own paragraph, which the unit's leading, size and line probe act on (\axt@whenover{id}{at its
  * end}{at each level back}{at its level}). The unit began at a group level; its paragraph is the next to end at that
@@ -2075,14 +2104,14 @@ export const FONT_PROBE = '\\AtEndDocument{\\typeout{AXT-FONTS rm=\\rmdefault;sf
 /** The TeX log of a compile's last pass. The browser's compiler (parked/tex-page/poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
  *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
- *  today). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
+ *  today). bibtex, biber, makeindex, xdvipdfmx and dvipdfmx (latex's driver) are no TeX passes. A native compile's .log is
  *  the last pass's already. Every reader of a compile's log lines takes it (live.mjs lostIn, typeset/tex.mjs readLines,
  *  readForced, typeset/density.mjs readWidthProbe, readSizeProbe): read whole, the echo invents a forced break before a
  *  pass's first unit */
 export const lastTexLog = log => {
   if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
   const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
-  return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
+  return steps.filter(m => !/^(?:bibtex|biber|makeindex|x?dvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
 }
 /** the roles' families from a log written with FONT_PROBE, or null */
 export function readFontProbe(log) {

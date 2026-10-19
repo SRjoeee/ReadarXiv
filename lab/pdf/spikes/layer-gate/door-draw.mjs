@@ -5,8 +5,9 @@
 // whose run is given none (the driver's stand-in of run.mjs takes `drawOf` away where `__gateNoDraw` is set): every page read
 // live, today's path.
 //   inputs  a paper's pages read in this browser as the run reads a page live (getTextContent, the page drawn, getAnnotations,
-//           its fonts from commonObjs), against its draws: the characters (layer2.mjs pageChars2) field by field, numbers by
-//           Object.is (the sign of zero aside: the wire writes -0 as 0, counted), a character's font class by value, and the Link
+//           its fonts from commonObjs, its characters' fills off the list PDF.js drew it by: run.mjs liveFillsOf), against its
+//           draws: the characters (layer2.mjs pageChars2) field by field, numbers by Object.is (the sign of zero aside: the wire
+//           writes -0 as 0, counted), a character's font class and fill by value, and the Link
 //           annotations as the run keeps them (links.mjs annotsOf). The run's own readers (run.mjs fontReaders, pageReadOf)
 //   ref     the door with no drawOf, its parts told as the run waits for one, its pages asked in order; each page's PDF.js drawing
 //           kept as PNG (every copy is drawn over it)
@@ -120,7 +121,7 @@ async function openB({ name, target, rules, at, draw, link = null }) {
     counts.span(`leftPart ${page}`, t, performance.now())
     return b
   }
-  const layer = await R.openLayer({ index, doc, parts: at === 'open' ? parts : [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, leftPart, onRetired: d => { retired.push(d) } })
+  const layer = await R.openLayer({ index, doc, parts: at === 'open' ? parts : [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, leftPart, onRetired: d => { retired.push(d) } })
   const tell = i => layer.addPart(parts[i], ...(tails.has(i) ? [{ doc: tails.get(i) }] : []))
   if (at === 'wait') window.__gateWait = what => { if (what === 'part' && next < parts.length) tell(next++) }
   layer.take(rows)
@@ -145,7 +146,7 @@ window.doorDraw = {
   /** a paper's pages, live against its draws (served at /door/<paper>/draws.json): see the head */
   async inputs({ name, paper }) {
     const R = await import('/engine/layer-proto/reader.mjs')
-    const { fontReaders, pageReadOf } = await import('/engine/layer-proto/run.mjs')
+    const { fontReaders, pageReadOf, liveFillsOf } = await import('/engine/layer-proto/run.mjs')
     const { checkDraw } = await import('/engine/layer-proto/draw.mjs')
     const LK = await import('/engine/layer-proto/links.mjs')
     const D = await json(`/door/${paper}/draws.json`)
@@ -165,7 +166,9 @@ window.doorDraw = {
       const annP = LK.readAnnots(page)
       const tc = await textP
       const L = live.live(page, tc.styles)
-      const a = pageReadOf(tc, L.fontOf, L.mapOf, await annP)
+      // (an engine with no fills reads none)
+      const fills = liveFillsOf ? await liveFillsOf(pdfjs.OPS, page, tc.items) : null
+      const a = pageReadOf(tc, L.fontOf, L.mapOf, await annP, fills)
       out.overlaid.push(overlaidOf(p, a.read))
       page.cleanup()
       c.width = 0
@@ -173,7 +176,7 @@ window.doorDraw = {
       const d = D.pages[p - 1]
       if (!d?.draw) { out.none.push(`${p}:${d?.why ?? 'missing'}`); continue }
       const x = data.draw(checkDraw(d.draw))
-      const b = pageReadOf(x.tc, x.fontOf, x.mapOf, x.raw)
+      const b = pageReadOf(x.tc, x.fontOf, x.mapOf, x.raw, x.fills ?? null)
       out.compared++
       out.chars += a.chars.length
       out.links += a.read?.list.length ?? 0
