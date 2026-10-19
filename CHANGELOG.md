@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## 0.5.0 — 2026-10-19
 
+- Fixed: in the PDF reader, pointing at a sentence of a paragraph with a displayed formula lights that sentence and its translation, formula included. On the translated side a sentence could light only up to the first formula on its page, the sentences between two formulas lit nothing, and the page's last sentence lit from the first formula down to the foot of the page. Where a sentence cannot be told apart from its neighbours, the paragraph lights whole on both sides, never another sentence. A paragraph that runs on to the next page lights by sentence from the first time you point at it.
 - Fixed: in the PDF reader, the paragraphs of some papers ran together as one block, whole sections at a time, and text could move onto the page before. Each paragraph is now translated and placed on its own.
 - Fixed: in the PDF reader, more papers can be prepared: those in some physics journals' style with numbered appendices, and those that repeat a block of figures in a loop or tag parts of their contents. A number set in bold, or at the start of an unindented line, stays in its sentence.
 - PDF papers have a reader of their own: arXiv's PDF on one side, its translation on the other, page for page. Figures and formulas stay as the author drew them, the translated text is set in fonts close to the original's, and the two sides scroll together; point at a sentence and its counterpart lights up.

@@ -737,7 +737,8 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   content again. The window holds a copy for the places near the view alone: their pixels are bounded by the near area at
   any zoom, so no copy of a far page is kept.
 - **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
-  page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own; the
+  page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own, then
+  the left parts of the other pages its running units are on (a page so fetched brings no more); the
   right's from the laid page's words where its place shows the layer, the left's mirrored elsewhere (`layerShapes`); a
   page's floats from what PDF.js drew the left's page by. The geometry is kept for the near pages and the last 20 wanted.
 - **The contents** (`contents.mjs`): the index's headings through `outline.ts`'s rule, each at its unit's first rectangle
@@ -1015,6 +1016,22 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   overfull line sticks out alone, by up to 6 units. Where a unit's shapes cannot hold its words (two lines of text made
   one row by a tall formula, a glyph hanging into another sentence's row) it lights whole: 12 of the 977 units whose
   starts both sides found, on the ten papers.
+- **A token's sentence is the text's** (`highlight.mjs withSentences`, `segsOf`): on the left a token paired with a word
+  of the unit's source is in that word's sentence; on a laid page a word is in its word's, and any other token — a formula's
+  crop, a display's kept line, a lead — in the sentence its place in the translation falls in (the word table's `at`).
+  Token order still makes the rows and the runs, and decides only a left glyph no word is paired with (a formula's, a
+  script the text layer gives late), with the floor: no such glyph on a row below one where a later sentence began is an
+  earlier one's. Until 2026-10-19 every token went by order, and the page's word table wrote a unit's displays after all
+  of its text: each display joined the page's last sentence, the floor gave it every row below, and nothing fell back —
+  on 54 papers of the sweep 527 of 3 796 units lit by sentence (40 papers) lit a sentence short, empty or over others.
+- **Never another sentence's words**: a unit lights whole on both panes where a later sentence begins above an earlier
+  one's last row (the drawing does not keep the text's order: the text a layout runs on above a display, 'flow'), or
+  where a sentence of one of its runs paints over a word of another sentence in another run on the page (a display wider
+  than its column beside the column's text, a label read apart from its line; `runsApart`). On the 54 papers
+  (2026-10-19), against the layer pinned for each paper: by sentence 3 779 units (3 796 before), of them 3 on the right
+  with a word their shapes miss (none lit as another sentence; below) and none on the left (5 before); the 24 that now
+  light whole all lit wrongly before — 16 a display's line made one row with the text line where the next sentence
+  begins (§17.7), 5 runs over each other, 3 the left's pairs putting a later sentence's word above an earlier one's row.
 - **The hit test is the paint**: the same shapes, the smaller unit winning where two overlap (a heading run into its
   paragraph); a float's shape wins over a larger block, a smaller block over the float. On the ten papers 0 holes in
   37.3 M points of painted blocks (7–16 % of points lit nothing or a neighbour before), in 25.3 M of sentence shapes and
@@ -1107,7 +1124,14 @@ within noise.
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
 - Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (12
-  units on the ten papers, with those a hanging glyph makes whole).
+  units on the ten papers, with those a hanging glyph makes whole); so does a display's kept line made one row with the
+  translation's line under it, where the next sentence begins (their boxes overlap by more than half a unit: 16 units on
+  the 54 papers of the sweep, 2026-10-19).
+- A formula or a citation that begins a sentence lights with the sentence before it, on both panes alike: a sentence
+  starts at its first word (`mt.mjs sentencesOf`), and the record keeps no more. Starting it at its first piece changes what
+  the record means (§18.2's `TRANSLATE_VERSION`).
+- A word the layer draws past the column's edge by more than the overhang, or on a page the unit's rectangles are not on,
+  is in no shape and lights with nothing (3 units on the 54 papers).
 - Before our marked original is compiled, units of arXiv's PDF matched under 80 % by their text alone light whole (113
   of 738 on the ten papers; 29181 38 of 90).
 - A copy made before the highlight lights by paragraph until it is translated again; an LLM's sentences are measured
@@ -1130,7 +1154,11 @@ within noise.
   own; a layout made whole reads its arrays through views of them.
 - **A unit's sentences wait for all its pages** (`tokensIn`): a run's sentence shapes read the unit's tokens beyond the
   run — whether a sentence began before it or goes on after it — so a unit over a page break lights whole on the pages
-  that have come until the others have, then by sentence.
+  that have come until the others have, then by sentence. A page's left part comes on its first want, so the side asks
+  for the left parts of the other pages its running units are on in the task after its own (`layer-side.mjs spreadFrom`;
+  a page so fetched spreads no further, or a paper's paragraphs would fetch every page): before, a paragraph that ran on
+  to the next page lit whole until the pointer had been there. On the 54 papers, 0.78 more left parts a page wanted (none
+  on 43 % of pages, two on 21 %), 43 KB at the mean, 25 KB at the median, 121 KB at the 90th percentile (2026-10-19).
 - **The right, mirrored** (`mirror`): until the layer's pages bring words of their own, the right's shapes are a layout of
   the right's own over copies of the left's tokens and rectangles, following the left as it is told. Its blocks equal
   the left's from run objects of its own: the paint keeps what it drew by the run, and a run shared would move the left's
@@ -1150,8 +1178,11 @@ within noise.
   paint order), its token ids the page's (page · 2^16 + its index), the units it shows as the original's over copies of
   the left's tokens of them, made once the page's left part is in too; elsewhere the left's mirrored. A unit's stream on
   the right is its first token on its first page, told when that page lays. The right's starts of a unit all on laid
-  pages are the tokens carrying its sentences' first words (`words.word` against the row's `sentences.tr`); of a unit on no
-  laid page, the left's; of one on both, none, and it lights whole.
+  pages are the tokens carrying its sentences' first words (`words.word` against the row's `sentences.tr`), each token's
+  sentence its word's or its place's (`words.at`, §17.3); of a unit on no laid page, the left's; of one on both, none, and
+  it lights whole. The page's word table is in the order of its units' text (`words.mjs addUnitWords`): a display's kept
+  lines where the line walk passed its region (`breakLines`' `past`), a kept line no placeholder holds before the block that
+  follows it in the unit's rectangles.
 - **Floats and the view's window**: a page's floats are made of what its drawing gives (its figures and paths,
   `floats`), and again on the page's first use after a part moves the document part — never in the part's task, which
   would make every such page's geometry again at once. A page leaving the window (`forget`) lets its geometry, its
