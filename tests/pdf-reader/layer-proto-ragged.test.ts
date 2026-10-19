@@ -19,7 +19,7 @@ const face = { id: 'serif', family: 'F', weight: 400, style: 'normal', size: 1 }
 const word = (n: number) => ({ s: 'x'.repeat(n), cls: 'latin', w100: 50 * n, st: {}, face })
 const space = { space: true, w100: 25 }
 // a CJK character `w100` wide (10.1 pt at size 10: ten of them overrun a 100 pt line unless the fit tracks them in)
-const han = (w100 = 101) => ({ s: '字', cls: 'cjk', w100, st: {}, face })
+const han = (w100 = 101) => ({ s: '\u5b57', cls: 'cjk', w100, st: {}, face })
 /** a block of lines 12 pt apart from `from`, 100 pt wide, at size 10, after `after` kept regions */
 const block = (from: number, n: number, after: number) => {
   const B = Array.from({ length: n }, (_, k) => from - 12 * k)
@@ -39,9 +39,9 @@ describe('a line that TeX ends with a display or a forced break is set ragged', 
     expect(l.clipped).toBe(false)
     expect(l.lines.map(x => x.mode)).toEqual(['just', 'last', 'last'])
     // the first line is spread to the edge; the second keeps its 2.5 pt spaces
-    expect(l.lines[0].used).toBeCloseTo(100, 6)
-    expect(xs(l.lines[1]).slice(0, 3)).toEqual([0, 12.5, 25])
-    expect(l.lines[1].used).toBeCloseTo(97.5, 6)
+    expect(l.lines[0]!.used).toBeCloseTo(100, 6)
+    expect(xs(l.lines[1]!).slice(0, 3)).toEqual([0, 12.5, 25])
+    expect(l.lines[1]!.used).toBeCloseTo(97.5, 6)
   })
 
   it('sets it so where the text runs on past the display (flowPast): the line the display breaks', () => {
@@ -51,7 +51,7 @@ describe('a line that TeX ends with a display or a forced break is set ragged', 
     const l = L2.layoutUnit2(tokens as never, [block(500, 4, 0), block(300, 1, 1)] as never, 10, { ...P('de'), flowPast: true } as never)
     expect(l.clipped).toBe(false)
     expect(l.lines.map(x => x.mode)).toEqual(['last', 'just', 'just', 'last'])
-    expect(l.lines[0].used).toBeCloseTo(97.5, 6)
+    expect(l.lines[0]!.used).toBeCloseTo(97.5, 6)
   })
 
   it('sets the line a forced break ends at its natural width', () => {
@@ -59,7 +59,7 @@ describe('a line that TeX ends with a display or a forced break is set ragged', 
     const l = L2.layoutUnit2(tokens as never, [block(500, 3, 0)] as never, 10, P('de') as never)
     expect(l.clipped).toBe(false)
     expect(l.lines.map(x => x.mode)).toEqual(['just', 'last', 'last'])
-    expect(l.lines[1].used).toBeCloseTo(97.5, 6)
+    expect(l.lines[1]!.used).toBeCloseTo(97.5, 6)
   })
 
   it("keeps the fit's tracking on it: a CJK line before a display drops its justification, not the unit's letter spacing", () => {
@@ -71,6 +71,6 @@ describe('a line that TeX ends with a display or a forced break is set ragged', 
     expect(l.state.track).toBeCloseTo(-0.01, 9)
     expect(l.lines.map(x => x.items.length)).toEqual([10, 9, 10])
     expect(l.lines.map(x => x.mode)).toEqual(['just', 'last', 'last'])
-    expect(xs(l.lines[1])).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80])
+    expect(xs(l.lines[1]!)).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80])
   })
 })

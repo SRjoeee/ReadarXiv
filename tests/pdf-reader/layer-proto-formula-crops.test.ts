@@ -118,19 +118,20 @@ describe('a formula TeX broke over lines is its crops, one a line, never its pag
 describe("its crops in the line: TeX's break between them, a space apart where they stand on one", () => {
   const tokens = () => L2.tokensOf2(u, whole() as never, 'zh', BASE as never, DESIGNS as never, P as never, null, (s: string) => (s === ' ' ? 25 : 0))
   it('one crop token a part, a space between them; only the first carries the formula\'s copy text', () => {
-    const t = tokens().filter(x => x.crop || x.space)
+    type CropTok = { crop?: { crop: number[]; baseline: number; text: string; part?: number }; space?: boolean; cw: number; glue?: boolean }
+    const t = (tokens() as unknown as CropTok[]).filter(x => x.crop || x.space)
     expect(t.map(x => (x.crop ? `crop${x.crop.part}` : 'space'))).toEqual(['space', 'crop0', 'space', 'crop1', 'space'])
     const [a, b] = t.filter(x => x.crop)
-    expect(round(a!.crop.crop)).toEqual(TWO[0]!.crop)
-    expect(round(b!.crop.crop)).toEqual(TWO[1]!.crop)
-    expect([a!.crop.baseline, b!.crop.baseline]).toEqual([500, 488])
+    expect(round(a!.crop!.crop)).toEqual(TWO[0]!.crop)
+    expect(round(b!.crop!.crop)).toEqual(TWO[1]!.crop)
+    expect([a!.crop!.baseline, b!.crop!.baseline]).toEqual([500, 488])
     expect([a!.cw, b!.cw].map(w => Math.round(w * 100) / 100)).toEqual([50.8, 30.8])
-    expect([a!.crop.text, b!.crop.text]).toEqual(["g(z')=\u03a3\u2099 g\u2099", ''])
+    expect([a!.crop!.text, b!.crop!.text]).toEqual(["g(z')=\u03a3\u2099 g\u2099", ''])
     expect([a!.glue, b!.glue]).toEqual([false, false])
   })
   it('breaks the line between them where the two do not fit, and sets them side by side where they do', () => {
     const block = (width: number) => ({ page: 1, rects: [[1, 0, 498, width, 508], [1, 0, 486, width, 496]], x0: 0, x1: width, B: [500, 488], exact: [true, true], sizes: [10, 10], pitch0: 12, free: 0, indent: 0, after: 0, centred: false })
-    const crops = (l: ReturnType<typeof L2.layoutUnit2>) => l.lines.map(line => line.items.filter(it => it.t.crop).map(it => it.t.crop.part))
+    const crops = (l: ReturnType<typeof L2.layoutUnit2>) => l.lines.map(line => line.items.filter(it => it.t.crop).map(it => it.t.crop?.part))
     expect(crops(L2.layoutUnit2(tokens(), [block(60)] as never, 10, P as never))).toEqual([[0], [1]])
     expect(crops(L2.layoutUnit2(tokens(), [block(200)] as never, 10, P as never))).toEqual([[0, 1]])
   })
