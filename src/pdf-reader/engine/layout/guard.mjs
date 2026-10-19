@@ -11,7 +11,7 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path, and no node:
 // specifier: the TeX page's host runs it in a browser.
 import { whyText } from '../layer-proto/format.mjs'
-import { lastTexLog, latin1, latin1Bytes } from '../source/latex-front.mjs'
+import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from '../pipeline/tex-errors.mjs'
 import { END_TEX } from '../pipeline/typeset/tex.mjs'
 
@@ -103,7 +103,9 @@ export function unbalancedUnits(paper, files, lines, skip = 0) {
     const own = paper.fsys.read(path)
     if (!own || !/\.(?:tex|ltx|sty|cls)$/i.test(path)) continue
     const written = latin1(bytes), from = path === project.main ? skip : 0
-    if (braceBalance(written.slice(from)) - braceBalance(latin1(own)) !== (byFile.get(path) ?? 0)) other = true
+    // (the paper's own as the front end read it, its line ends TeX's: the file is written so, and braceBalance's comment
+    // ends at an LF — read raw, a lone-CR file's first % took the rest of it, and its braces were others')
+    if (braceBalance(written.slice(from)) - braceBalance(texText(own)) !== (byFile.get(path) ?? 0)) other = true
   }
   out.delete(undefined)
   return { units: out, other }

@@ -499,6 +499,32 @@ describe('a copy made under pipeline 19, reopened under 20', () => {
   })
 })
 
+// A copy made under pipeline 20, reopened under 21: 21 reads a source's line ends as TeX does (latex-front.mjs texText), the
+// wire and its reading back 20's. A CRLF file's paragraphs, one unit under 20, are units of their own: new units, sent; the
+// units of the paper's LF files are the copy's by their hash, carried as it has them
+describe('a copy made under pipeline 20, reopened under 21', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit of the LF file as the copy has it, and sends the CRLF file\'s paragraphs, now units of their own', async () => {
+    const main = '\\documentclass{article}\n\\begin{document}\nA paragraph of the main file, with words that run on for a line or two of prose and an end.\n\n\\input{part}\n\\end{document}\n'
+    const part = 'A first paragraph of the part, written with CRLF line ends and words.\r\n\r\nA second paragraph of the part, with words of its own.\r\n'
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(main)], ['part.tex', new TextEncoder().encode(part)]])), n = p.units.length
+    expect(n).toBe(3)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const made = unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results)
+    // (the copy 20 made: the main file's unit as now; the part's two paragraphs one unit, its line ends CRLF)
+    const merged = { kind: 'para', src: 'A first paragraph of the part, written with CRLF line ends and words. A second paragraph of the part, with words of its own.', hash: 'f'.repeat(64), pieces: [{ t: 'text', tr: true, s: '\u8bba\u6587' }], state: 'whole', by: 'B', tried: ['B'] }
+    const record = JSON.parse(JSON.stringify({ pipeline: '20', format: 'markers', context: {}, marks: [['0s', {}]], units: [made[0], merged] }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(1)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual(['A first paragraph of the part, written with CRLF line ends and words.', 'A second paragraph of the part, with words of its own.'])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // The TeX page's protocol 2 (parked/tex-page/poc-site/tex-page.mjs; the S3a report, "what the reader must do",
 // and its review's I5): files a compile could not fetch for a network reason make it not the paper's; a failure of the
 // page's own (an error, no log) says nothing of the paper either
