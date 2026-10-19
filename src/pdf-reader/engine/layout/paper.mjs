@@ -23,7 +23,8 @@
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { jobName, lastTexLog, latin1 } from '../source/latex-front.mjs'
 import { listsMissing, notFound, originalFiles, probeFiles, ranThrough } from '../pipeline/live.mjs'
-import { auxUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles } from './guard.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
+import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
@@ -34,7 +35,8 @@ const GUARD_EXTRA = 2
  * last pass's log and the options readMarked reads it with (`engine`, `classes`, the probe's answers; the units and the
  * operator codes are the reader's), with each stage's time, or why there is none ({ refused, why }) with the times of the
  * stages that ran. For a host that reads the marked original elsewhere (the page pass's `marked`, layerOfPaper, a page at a
- * time). Never throws.
+ * time). Never throws: a throw of the guard's own skips its brace check, or after the compile takes the marked original as
+ * before the guard (one that ran through with a PDF, else the compile's refusal); a failed allocation goes on as itself.
  *
  * The marked original must be the paper (the layout guard, layout/guard.mjs; R1 of 2026-10-19). Before its compile, a unit
  * whose writing changes its file's brace balance outside comments and verbatim is left unmarked (unbalancedUnits; our other
@@ -46,15 +48,17 @@ const GUARD_EXTRA = 2
  * evidence blames are left unmarked and the marked original compiled again, at most GUARD_EXTRA compiles in all, the
  * unmarked original's among them, none where `compileBudgetMs` (the host's budget across every compile of the paper, as
  * CM's: its wall less 1.2 times the longest compile so far) cannot hold one:
- *   - TeX that never ran (no engine banner) or a host's limit is no mark's fault: refused at once ('engine', 'compile')
+ *   - TeX that never ran (no engine banner) or a host's limit is no mark's fault: refused at once ('engine' where the host
+ *     names the engine unknown, else 'compile': a host's own failure, its cap on a compile's result)
  *   - errors alone (it ran through to arXiv's pages, nothing out of place): the unmarked original compiled; errors no more
  *     than its are the paper's own and the marked original stands; else the units its other errors stand in unmarked
  *     (errorUnits less ownErrors), or, none, the name marks off
  *   - a mark out of place (strong evidence): those units, and those its errors stand in, unmarked (passing, the latter
- *     marked again where a compile is left: the smaller remedy, kept where it passes); failing, the name marks off too
+ *     marked again where a compile is left: the smaller remedy, kept where it passes with no more errors); failing, the name
+ *     marks off too
  *   - else (it did not run through, or its pages are not arXiv's): the units its errors stand in, and the units at the line
  *     TeX ignored all text after, unmarked with the name marks off; passing, the units marked again with the names off where
- *     a compile is left (the smaller remedy, kept where it passes: 2610.21288's name marks alone); failing, the unmarked
+ *     a compile is left (the smaller remedy, kept where it passes with no more errors: 2610.21288's name marks alone); failing, the unmarked
  *     original compiled, whose failure is TeX's ('texlive' where the paper declares another TeX Live year than the box's,
  *     'engine', 'compile'), else ours ('marks')
  * An attempt that passes is the marked original; where none does, the best that ran through to arXiv's page count or more
@@ -94,16 +98,28 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   const filesOf = (unmarked, named, spans) => originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, ...(unmarked.size ? { unmarked } : {}), ...(named ? {} : { names: false }), spans })
   // (before the compile: each unit's writing against its source's braces; our other edits unbalancing a file, no names)
   const g = { extra: 0, unmarked: new Set(), names: true, failed: [] }
-  let spans = {}, files = filesOf(g.unmarked, true, spans)
-  const balance = unbalancedUnits(paper, files, spans.lines(), spans.skip)
-  if (balance.units.size || balance.other) {
-    g.failed.push('braces')
-    g.unmarked = balance.units
-    g.names = !balance.other
+  // (a throw of the check's own skips it: the marked original as before; the files written in the compile's stage then, whose
+  // throw is the compile's refusal as before the guard)
+  let spans = {}, files = null
+  try {
+    const sp = {}, f = filesOf(g.unmarked, true, sp)
+    const balance = unbalancedUnits(paper, f, sp.lines(), sp.skip)
+    if (balance.units.size || balance.other) {
+      g.failed.push('braces')
+      g.unmarked = balance.units
+      g.names = !balance.other
+      files = filesOf(g.unmarked, g.names, spans)
+    } else { spans = sp; files = f }
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    g.failed = []
+    g.unmarked = new Set()
+    g.names = true
     spans = {}
-    files = filesOf(g.unmarked, g.names, spans)
+    files = null
   }
   const marked = await stage('compile', async () => {
+    files ??= filesOf(g.unmarked, g.names, spans)
     if (cm) return convergeThenMark(paper, asked, files, cm, { wall, budget: compileBudgetMs, bound: filesBound })
     // (runLive's request for the marked original, taken as runLive takes it: one that did not run through is no marked
     // original, whatever PDF it left — 2610.20713's, TL2025's 7 pages of 15 before its hundredth error)
@@ -113,144 +129,159 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   const record = () => ({ extra: g.extra, unmarked: [...g.unmarked].sort((a, b) => a - b), names: g.names, failed: g.failed, ...(g.judged ? { judged: g.judged } : {}) })
   const guarded = r => result(g.failed.length ? { ...r, guard: record() } : r)
   if (!marked) return guarded({ refused: 'compile', why: cm ? 'a marked pass did not run through, or the compile threw' : 'the compile threw', ms })
-  // arXiv's page count, asked once where the host gives it
-  let N = null
-  if (pages !== null && pages !== undefined) {
-    try { const n = typeof pages === 'function' ? await pages() : pages; if (Number.isInteger(n) && n > 0) N = n } catch {}
+  // (a throw of the guard's own after the compile: the marked original taken as before the guard, one that ran through with a
+  // PDF, else the compile's refusal)
+  try { return await checked() } catch (e) {
+    if (isMemoryError(e)) throw e
+    g.judged = whyText(`the layout guard failed: ${e?.message ?? e}`)
+    return ranThrough(marked) && marked.pdf?.length ? guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms }) : guarded({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms })
   }
-  const several = (paper.meta.toplevels ?? 1) > 1
-  /** what a compile shows of the checks: ran through, its pages against arXiv's (`short` fewer, where a paper of one toplevel
-   *  source; `long` more), the units named by marks out of place, its TeX errors */
-  const evidence = (c, f, sp) => {
-    const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
-    return { c, files: f, spans: sp, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, long: ran && N !== null && M !== null && M > N, aux: ran ? auxUnits(c, count, job) : new Set(), errors: c ? errorCount(c.log) : 0 }
-  }
-  /** whether it stands: ran through, arXiv's pages, nothing out of place, and no errors (or no more than the paper's own) */
-  const fits = e => e.ran && !e.short && !e.long && e.aux.size === 0
-  const clean = (e, own) => fits(e) && (e.errors === 0 || (own !== null && e.errors <= own.errors))
-  const failedOf = e => [...(e.ran ? [] : ['ran']), ...(e.short || e.long ? ['pages'] : []), ...(e.aux.size ? ['aux'] : []), ...(e.errors ? ['errors'] : [])]
-  const done = e => guarded({ pdf: e.c.pdf, log: lastTexLog(e.c.log), options, ms })
-  const refuse = r => guarded({ ...r, ms })
-  const e0 = evidence(marked, files, spans)
-  if (clean(e0, null)) return done(e0)
-  g.failed.push(...failedOf(e0))
-  const t0 = performance.now()
-  const timed = r => { ms.guard = Math.round(performance.now() - t0); return r }
-  // a compile TeX never ran, or one a host's limit stopped, is no mark's fault: no compile mends it
-  if (!e0.ran) {
-    const limit = limitOf(marked)
-    if (limit) return refuse({ refused: 'compile', why: `the marked original was stopped by the host's ${limit} limit` })
-    if (!texRan(marked.log)) return refuse({ refused: 'engine', why: `the ${engine} compile ran no TeX${firstLine(marked) ? `: ${firstLine(marked)}` : ''}` })
-  }
-  /** whether the host's budget holds one more compile, within GUARD_EXTRA */
-  const afford = () => g.extra < GUARD_EXTRA && (compileBudgetMs === null || compileBudgetMs === undefined || compileBudgetMs - wall.spent >= 1.2 * wall.longest)
-  /** the marked original again, `unmarked` left the paper's own and the names marked or not: its evidence */
-  const attempt = async (unmarked, named) => {
-    g.extra++
-    const sp = {}, f = filesOf(unmarked, named, sp)
-    let c = null
-    try { c = await asked({ main, engine, rerun: true, bibtex, overrides: f }) } catch {}
-    return { ...evidence(c, f, sp), unmarked, named }
-  }
-  /** the unmarked original (unmarkedFiles), compiled as the marked one is: whether it ran through, its pages, its errors */
-  const original = async () => {
-    g.extra++
-    let c = null
-    try { c = await asked({ main, engine, rerun: true, bibtex, overrides: unmarkedFiles(paper) }) } catch {}
-    const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
-    return { c, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, errors: c ? errorCount(c.log) : 0, own: c ? ownErrors(c.log) : new Set() }
-  }
-  /** the attempt taken: its units and names the guard's record */
-  const take = e => { if (e !== e0) { g.unmarked = e.unmarked; g.names = e.named } return timed(done(e)) }
-  /** of attempts that ran through to arXiv's page count or more, the one that fails the fewest checks, then has the fewest
-   *  errors (the earliest of equals): judged by the page pass and the carry as before */
-  const best = list => { let b = null; for (const e of list) if (e.ran && !e.short && (!b || rank(e) < rank(b))) b = e; return b }
-  const rank = e => (e.aux.size ? 2e9 : 0) + (e.long ? 1e9 : 0) + e.errors
-  const union = (...sets) => { const out = new Set(); for (const s of sets) for (const x of s) out.add(x); return out }
-  const blamedBy = (e, own = null) => (e.c && texRan(e.c.log) ? errorUnits(paper, e.c.log, e.files, e.spans.lines(), own) : new Set())
-  /** TeX's own failure, as the unmarked original shows it: the category and why */
-  const texs = u => {
-    if (!u.c) return { refused: 'compile', why: 'the paper\'s own source: the compile threw' }
-    const limit = limitOf(u.c)
-    if (limit) return { refused: 'compile', why: `the paper's own source was stopped by the host's ${limit} limit` }
-    if (!texRan(u.c.log)) return { refused: 'engine', why: `the ${engine} compile of the paper's own source ran no TeX${firstLine(u.c) ? `: ${firstLine(u.c)}` : ''}` }
-    const what = !u.ran ? 'does not run through' : `has ${u.pages} pages, arXiv's PDF ${N}`, err = firstError(u.c.log)
-    const ours = texLiveOf(u.c.log), declared = paper.meta.tlVersion ?? null, cls = paper.meta.documentclass ? ` (${paper.meta.documentclass})` : ''
-    if (declared && ours && declared !== ours) return { refused: 'texlive', why: `the paper${cls} declares TeX Live ${declared}; on TeX Live ${ours} its own source ${what}${err ? `: ${err}` : ''}` }
-    return { refused: 'compile', why: `the paper's own source${cls} ${what}${ours ? ` on TeX Live ${ours}` : ''}${err ? `: ${err}` : ''}` }
-  }
-  const whatOf = e => (!e.ran ? 'does not run through' : e.short ? `has ${e.pages} pages, arXiv's PDF ${N}` : 'is not the paper')
-  /** the marked original refused as ours ('marks'), or, where nothing told whose fault it is (the unmarked original not
-   *  compiled), as the compile's, as before the guard */
-  const why = (e, more) => { const err = e.c ? firstError(e.c.log) : null; return `the marked original ${whatOf(e)}${err ? ` (${err})` : ''}, ${more}` }
-  const ours = (e, more) => ({ refused: 'marks', why: why(e, more) })
-  const untold = (e, more) => ({ refused: 'compile', why: why(e, `${more}; the paper's own source was not compiled`) })
 
-  if (!afford()) {
-    g.judged = 'no compile left'
-    return e0.ran && !e0.short ? timed(done(e0)) : timed(refuse(untold(e0, 'and no compile was left to mend it')))
-  }
-  // errors alone: the paper's own, or the units they stand in
-  if (fits(e0)) {
-    const u = await original()
-    if (!u.ran || u.short) { g.judged = 'the paper\'s own source does not make arXiv\'s pages here'; return take(e0) }
-    if (e0.errors <= u.errors) { g.judged = 'its errors are the paper\'s own'; return take(e0) }
-    if (!afford()) { g.judged = 'no compile left'; return take(e0) }
-    const blamed = [...blamedBy(e0, u.own)].filter(i => !g.unmarked.has(i))
-    const e1 = await attempt(union(g.unmarked, blamed), blamed.length ? g.names : false)
-    if (clean(e1, u)) return take(e1)
-    return take(best([e0, e1]))
-  }
-  const strong = [...e0.aux].filter(i => !g.unmarked.has(i)), weak = [...blamedBy(e0)].filter(i => !g.unmarked.has(i))
-  /** an attempt that fits, its errors judged against the unmarked original's where it has any and a compile is left */
-  const judged = async (e1, also) => {
-    if (e1.errors === 0) return e1
-    if (!afford()) { g.judged = 'no compile left'; return e1 }
-    const u = await original()
-    if (!u.ran || u.short || e1.errors <= u.errors) return e1
-    return best([e0, e1, ...also])
-  }
-  if (strong.length) {
-    // a mark of ours out of place: those units (and those the errors stand in) unmarked, then the names off too
-    const e1 = await attempt(union(g.unmarked, strong, weak), g.names)
-    if (fits(e1)) {
-      if (e1.errors === 0 && weak.length && afford()) {
-        // (the smaller remedy, where it holds: the units the errors' lines blamed marked again, the marks out of place's not)
-        const e2 = await attempt(union(g.unmarked, strong), g.names)
-        if (fits(e2) && e2.errors === 0) return take(e2)
+  /** the checks after the compile, and the remedies */
+  async function checked() {
+    // arXiv's page count, asked once where the host gives it
+    let N = null
+    if (pages !== null && pages !== undefined) {
+      try { const n = typeof pages === 'function' ? await pages() : pages; if (Number.isInteger(n) && n > 0) N = n } catch {}
+    }
+    const several = (paper.meta.toplevels ?? 1) > 1
+    /** what a compile shows of the checks: ran through, its pages against arXiv's (`short` fewer, where a paper of one toplevel
+     *  source; `long` more), the units named by marks out of place, its TeX errors */
+    const evidence = (c, f, sp) => {
+      const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
+      return { c, files: f, spans: sp, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, long: ran && N !== null && M !== null && M > N, aux: ran ? auxUnits(c, count, job) : new Set(), errors: c ? errorCount(c.log) : 0 }
+    }
+    /** whether it stands: ran through, arXiv's pages, nothing out of place, and no errors (or no more than the paper's own) */
+    const fits = e => e.ran && !e.short && !e.long && e.aux.size === 0
+    const clean = (e, own) => fits(e) && (e.errors === 0 || (own !== null && e.errors <= own.errors))
+    const failedOf = e => [...(e.ran ? [] : ['ran']), ...(e.short || e.long ? ['pages'] : []), ...(e.aux.size ? ['aux'] : []), ...(e.errors ? ['errors'] : [])]
+    const done = e => guarded({ pdf: e.c.pdf, log: lastTexLog(e.c.log), options, ms })
+    // (a why without the log's control characters, within WHY_MAX)
+    const refuse = r => guarded({ ...r, ...(r.why === undefined ? {} : { why: whyText(r.why) }), ms })
+    const e0 = evidence(marked, files, spans)
+    if (clean(e0, null)) return done(e0)
+    g.failed.push(...failedOf(e0))
+    const t0 = performance.now()
+    const timed = r => { ms.guard = Math.round(performance.now() - t0); return r }
+    // a compile TeX never ran, or one a host's limit stopped, is no mark's fault: no compile mends it
+    if (!e0.ran) {
+      const limit = limitOf(marked)
+      if (limit) return refuse({ refused: 'compile', why: `the marked original was stopped by the host's ${limit} limit` })
+      // (`engine` where the host names the engine unknown; any other answer TeX never ran in, a host's own failure or its cap on
+      // a compile's result, the compile's)
+      if (!texRan(marked.log)) return refuse({ refused: engineUnknown(marked) ? 'engine' : 'compile', why: `the ${engine} compile ran no TeX${firstLine(marked) ? `: ${firstLine(marked)}` : ''}` })
+    }
+    /** whether the host's budget holds one more compile, within GUARD_EXTRA */
+    const afford = () => g.extra < GUARD_EXTRA && (compileBudgetMs === null || compileBudgetMs === undefined || compileBudgetMs - wall.spent >= 1.2 * wall.longest)
+    /** the marked original again, `unmarked` left the paper's own and the names marked or not: its evidence */
+    const attempt = async (unmarked, named) => {
+      g.extra++
+      const sp = {}, f = filesOf(unmarked, named, sp)
+      let c = null
+      try { c = await asked({ main, engine, rerun: true, bibtex, overrides: f }) } catch {}
+      return { ...evidence(c, f, sp), unmarked, named }
+    }
+    /** the unmarked original (unmarkedFiles), compiled as the marked one is: whether it ran through, its pages, its errors */
+    const original = async () => {
+      g.extra++
+      let c = null
+      try { c = await asked({ main, engine, rerun: true, bibtex, overrides: unmarkedFiles(paper) }) } catch {}
+      const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
+      return { c, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, errors: c ? errorCount(c.log) : 0, own: c ? ownErrors(c.log) : new Set() }
+    }
+    /** the attempt taken: its units and names the guard's record */
+    const take = e => { if (e !== e0) { g.unmarked = e.unmarked; g.names = e.named } return timed(done(e)) }
+    /** of attempts that ran through to arXiv's page count or more, the one that fails the fewest checks, then has the fewest
+     *  errors (the earliest of equals): judged by the page pass and the carry as before */
+    const best = list => { let b = null; for (const e of list) if (e.ran && !e.short && (!b || rank(e) < rank(b))) b = e; return b }
+    const rank = e => (e.aux.size ? 2e9 : 0) + (e.long ? 1e9 : 0) + e.errors
+    const union = (...sets) => { const out = new Set(); for (const s of sets) for (const x of s) out.add(x); return out }
+    const blamedBy = (e, own = null) => (e.c && texRan(e.c.log) ? errorUnits(paper, e.c.log, e.files, e.spans.lines(), own) : new Set())
+    /** TeX's own failure, as the unmarked original shows it: the category and why */
+    const texs = u => {
+      if (!u.c) return { refused: 'compile', why: 'the paper\'s own source: the compile threw' }
+      const limit = limitOf(u.c)
+      if (limit) return { refused: 'compile', why: `the paper's own source was stopped by the host's ${limit} limit` }
+      if (!texRan(u.c.log)) return { refused: engineUnknown(u.c) ? 'engine' : 'compile', why: `the ${engine} compile of the paper's own source ran no TeX${firstLine(u.c) ? `: ${firstLine(u.c)}` : ''}` }
+      const what = !u.ran ? 'does not run through' : `has ${u.pages} pages, arXiv's PDF ${N}`, err = firstError(u.c.log)
+      const ours = texLiveOf(u.c.log), declared = paper.meta.tlVersion ?? null, cls = paper.meta.documentclass ? ` (${paper.meta.documentclass})` : ''
+      if (declared && ours && declared !== ours) return { refused: 'texlive', why: `the paper${cls} declares TeX Live ${declared}; on TeX Live ${ours} its own source ${what}${err ? `: ${err}` : ''}` }
+      return { refused: 'compile', why: `the paper's own source${cls} ${what}${ours ? ` on TeX Live ${ours}` : ''}${err ? `: ${err}` : ''}` }
+    }
+    const whatOf = e => (!e.ran ? 'does not run through' : e.short ? `has ${e.pages} pages, arXiv's PDF ${N}` : 'is not the paper')
+    /** the marked original refused as ours ('marks'), or, where nothing told whose fault it is (the unmarked original not
+     *  compiled), as the compile's, as before the guard */
+    const why = (e, more) => { const err = e.c ? firstError(e.c.log) : null; return `the marked original ${whatOf(e)}${err ? ` (${err})` : ''}, ${more}` }
+    const ours = (e, more) => ({ refused: 'marks', why: why(e, more) })
+    const untold = (e, more) => ({ refused: 'compile', why: why(e, `${more}; the paper's own source was not compiled`) })
+
+    if (!afford()) {
+      g.judged = 'no compile left'
+      return e0.ran && !e0.short ? timed(done(e0)) : timed(refuse(untold(e0, 'and no compile was left to mend it')))
+    }
+    // errors alone: the paper's own, or the units they stand in
+    if (fits(e0)) {
+      const u = await original()
+      if (!u.ran || u.short) { g.judged = 'the paper\'s own source does not make arXiv\'s pages here'; return take(e0) }
+      if (e0.errors <= u.errors) { g.judged = 'its errors are the paper\'s own'; return take(e0) }
+      if (!afford()) { g.judged = 'no compile left'; return take(e0) }
+      const blamed = [...blamedBy(e0, u.own)].filter(i => !g.unmarked.has(i))
+      const e1 = await attempt(union(g.unmarked, blamed), blamed.length ? g.names : false)
+      if (clean(e1, u)) return take(e1)
+      return take(best([e0, e1]))
+    }
+    const strong = [...e0.aux].filter(i => !g.unmarked.has(i)), weak = [...blamedBy(e0)].filter(i => !g.unmarked.has(i))
+    /** an attempt that fits, its errors judged against the unmarked original's where it has any and a compile is left */
+    const judged = async (e1, also) => {
+      if (e1.errors === 0) return e1
+      if (!afford()) { g.judged = 'no compile left'; return e1 }
+      const u = await original()
+      if (!u.ran || u.short || e1.errors <= u.errors) return e1
+      return best([e0, e1, ...also])
+    }
+    if (strong.length) {
+      // a mark of ours out of place: those units (and those the errors stand in) unmarked, then the names off too
+      const e1 = await attempt(union(g.unmarked, strong, weak), g.names)
+      if (fits(e1)) {
+        if (weak.length && afford()) {
+          // (the smaller remedy, where it holds, its errors no more than the first's: the units the errors' lines blamed marked
+          // again, the marks out of place's not)
+          const e2 = await attempt(union(g.unmarked, strong), g.names)
+          if (fits(e2) && e2.errors <= e1.errors) return take(await judged(e2, [e1]))
+        }
+        return take(await judged(e1, []))
       }
-      return take(await judged(e1, []))
-    }
-    if (afford() && g.names) {
-      const e2 = await attempt(e1.unmarked, false)
-      if (fits(e2)) { if (e2.errors) g.judged = 'no compile left'; return take(e2) }
-      const kept = best([e0, e1, e2])
-      return kept ? take(kept) : timed(refuse(ours(e0, `nor with units ${[...e1.unmarked].join(', ')} unmarked and the name marks off`)))
-    }
-    const kept = best([e0, e1])
-    return kept ? take(kept) : timed(refuse(ours(e0, `nor with units ${[...e1.unmarked].join(', ')} unmarked`)))
-  }
-  // it did not run through, or its pages are not arXiv's: the units its errors stand in and the name marks, both off (none
-  // to take off: the unmarked original tells whose fault it is)
-  const tried = weak.length ? `units ${weak.join(', ')} unmarked and the name marks off` : 'the name marks off'
-  let e1 = null
-  if (weak.length || g.names) {
-    e1 = await attempt(union(g.unmarked, weak), false)
-    if (fits(e1)) {
-      if (e1.errors === 0 && weak.length && afford()) {
-        // (the smaller remedy, where it holds: the units marked again, the names off)
-        const e2 = await attempt(g.unmarked, false)
-        if (fits(e2) && e2.errors === 0) return take(e2)
+      if (afford() && g.names) {
+        const e2 = await attempt(e1.unmarked, false)
+        if (fits(e2)) { if (e2.errors) g.judged = 'no compile left'; return take(e2) }
+        const kept = best([e0, e1, e2])
+        return kept ? take(kept) : timed(refuse(ours(e0, `nor with units ${[...e1.unmarked].join(', ')} unmarked and the name marks off`)))
       }
-      return take(await judged(e1, []))
+      const kept = best([e0, e1])
+      return kept ? take(kept) : timed(refuse(ours(e0, `nor with units ${[...e1.unmarked].join(', ')} unmarked`)))
     }
-    const kept = best([e0, e1])
-    if (kept) return take(kept)
-    if (!afford()) return timed(refuse(untold(e0, `nor with ${tried}`)))
+    // it did not run through, or its pages are not arXiv's: the units its errors stand in and the name marks, both off (none
+    // to take off: the unmarked original tells whose fault it is)
+    const tried = weak.length ? `units ${weak.join(', ')} unmarked and the name marks off` : 'the name marks off'
+    let e1 = null
+    if (weak.length || g.names) {
+      e1 = await attempt(union(g.unmarked, weak), false)
+      if (fits(e1)) {
+        if (weak.length && afford()) {
+          // (the smaller remedy, where it holds, its errors no more than the first's: the units marked again, the names off)
+          const e2 = await attempt(g.unmarked, false)
+          if (fits(e2) && e2.errors <= e1.errors) return take(await judged(e2, [e1]))
+        }
+        return take(await judged(e1, []))
+      }
+      const kept = best([e0, e1])
+      if (kept) return take(kept)
+      if (!afford()) return timed(refuse(untold(e0, `nor with ${tried}`)))
+    }
+    const u = await original()
+    if (!u.ran || u.short) return timed(refuse(texs(u)))
+    return timed(refuse(ours(e0, `${e1 ? `nor with ${tried}, ` : ''}where the paper's own source makes ${u.pages ?? 'its'} pages`)))
   }
-  const u = await original()
-  if (!u.ran || u.short) return timed(refuse(texs(u)))
-  return timed(refuse(ours(e0, `${e1 ? `nor with ${tried}, ` : ''}where the paper's own source makes ${u.pages ?? 'its'} pages`)))
 }
 
 /** a compile's first line of what it said, where TeX said nothing: its error, else its log's */

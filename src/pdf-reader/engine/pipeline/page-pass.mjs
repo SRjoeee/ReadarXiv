@@ -16,7 +16,7 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path.
 import { BundleRefusal } from '../layer-proto/bundle.mjs'
 import { PART_PAGES_MAX, partCutter, wholeCutter, wholeFrontier } from '../layer-proto/cut.mjs'
-import { groupsOfUnits, indexOf, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, WHY_MAX, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
+import { groupsOfUnits, indexOf, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
 import { needBound } from '../layer-proto/need.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
@@ -44,12 +44,13 @@ const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', tex
  */
 export function layoutRecordOf(r) {
   if (!r?.refused) return null
-  const given = typeof r.why === 'string' ? r.why : '', said = (lead, w = given) => `${lead}${w ? `: ${w}` : ''}`.slice(0, WHY_MAX)
+  // (a why given, as a log's or a host's text may hold, without its control characters: whyText)
+  const given = typeof r.why === 'string' ? whyText(r.why) : '', said = (lead, w = given) => whyText(`${lead}${w ? `: ${w}` : ''}`)
   switch (r.refused) {
-    case 'compile': case 'texlive': case 'engine': case 'marks': return { refused: r.refused, why: (given || PLAIN_WHY[r.refused]).slice(0, WHY_MAX) }
+    case 'compile': case 'texlive': case 'engine': case 'marks': return { refused: r.refused, why: given || PLAIN_WHY[r.refused] }
     case 'carry': {
       const [c, t] = Array.isArray(r.lines) ? r.lines : [r.stats?.lines?.carried, r.stats?.lines?.total]
-      return { refused: 'carry', why: (Number.isInteger(c) && Number.isInteger(t) ? `${c} of the ${t} lines of its marked pages found on arXiv's PDF, under ${Math.round(CARRY_MIN * 100)} %` : `the marked original's lines found on arXiv's PDF are under ${Math.round(CARRY_MIN * 100)} %`).slice(0, WHY_MAX) }
+      return { refused: 'carry', why: whyText(Number.isInteger(c) && Number.isInteger(t) ? `${c} of the ${t} lines of its marked pages found on arXiv's PDF, under ${Math.round(CARRY_MIN * 100)} %` : `the marked original's lines found on arXiv's PDF are under ${Math.round(CARRY_MIN * 100)} %`) }
     }
     case 'probe': return { refused: 'marks', why: said('the mark probe gave no log') }
     case 'failed': return { refused: 'marks', why: said('the layout maker failed') }

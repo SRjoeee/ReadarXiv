@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { auxUnits, braceBalance, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
+import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
@@ -88,6 +89,23 @@ describe('unbalancedUnits: before the compile, a unit whose writing changes its 
     expect(dec(fixed.files.get('main.tex'))).not.toContain('\\axtmark{2s}')
     expect(dec(fixed.files.get('main.tex'))).toContain('\\axtmark{1s}')
     expect(unbalancedUnits(paper, fixed.files, fixed.spans.lines?.() ?? [], fixed.spans.skip)).toEqual({ units: new Set(), other: false })
+  })
+
+  it('finds each unit where it is written after a babel name the preamble writes literally is wrapped (nips\'s abstract)', () => {
+    // (the wrap, \axtnma{abstract}…\axtnmb{abstract}, lies before every unit: spans taken after it were its 34 bytes early)
+    const source = '\\documentclass{article}\n\\renewenvironment{abstract}{\\vskip.075in\\centerline{\\large\\bf Abstract}\\vspace{0.5ex}\\begin{quote}}{\\par\\end{quote}\\vskip 1ex}\n\\begin{document}\nA first paragraph of some words here.\n\nAnother paragraph of words.\n\\end{document}\n'
+    const { files, spans, paper } = markedFiles(paperOf(source))
+    const text = dec(files.get('main.tex'))
+    expect(text).toContain('\\axtnma{abstract}Abstract\\axtnmb{abstract}')
+    const lines = spans.lines?.() ?? []
+    expect(lines).toHaveLength(paper.units.length)
+    for (const x of lines) {
+      const i = paper.units.indexOf(x.unit as never)
+      const at = text.slice(x.from, x.to)
+      expect(at, `unit ${i}`).toContain(`\\axtmark{${i}s}`)
+      expect(text.split('\n').slice(x.first - 1, x.last).join('\n'), `unit ${i}`).toContain(at.trim())
+    }
+    expect(unbalancedUnits(paper, files, lines, spans.skip)).toEqual({ units: new Set(), other: false })
   })
 
   it('blames a nested unit by its own range, and a file whose balance moved past its units (our other edits) as `other`', () => {
@@ -232,6 +250,10 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     expect(await markedOfPaper(paperOf(), { compile: both.compile })).toMatchObject({ pdf: PDF2, guard: { extra: 2, unmarked: [], names: false, failed: ['ran', 'errors'] } })
     expect([has(both.asked[2], '\\axtmark{2s}'), has(both.asked[2], NAMES_OFF)]).toEqual([false, true])
     expect([has(both.asked[3], '\\axtmark{2s}'), has(both.asked[3], NAMES_OFF)]).toEqual([true, true])
+    // (with errors of the paper's own left in both: the smaller remedy kept where it has no more than the first's)
+    const own = '! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n'
+    const kept = compiler([PROBE, stopped(`${own}${e.log}`), ran(PDF1, own), ran(PDF2, own)])
+    expect(await markedOfPaper(paperOf(), { compile: kept.compile })).toMatchObject({ pdf: PDF2, guard: { extra: 2, unmarked: [], names: false, judged: 'no compile left' } })
     // (it does not: the first remedy is kept)
     const first = compiler([PROBE, stopped(e.log), ran(PDF1), stopped(e.log)])
     expect(await markedOfPaper(paperOf(), { compile: first.compile })).toMatchObject({ pdf: PDF1, guard: { extra: 2, unmarked: [2], names: false } })
@@ -280,15 +302,37 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const one = compiler([timed(PROBE, 10), timed(ran(PDF, '', 3, { aux }), 100), timed(ran(PDF1, '', 3, { aux }), 100), ran(PDF2)])
     expect(await markedOfPaper(paperOf(), { compile: one.compile, compileBudgetMs: 240 })).toMatchObject({ pdf: PDF, guard: { extra: 1 } })
     expect(one.asked).toHaveLength(3)
-    for (const [answer, refused] of [[{ ok: false, error: 'axt-runner: unknown engine: "latex"', log: 'axt-runner: unknown engine: "latex"\n' }, 'engine'], [{ ok: false, error: 'Compilation timeout (the wall limit)', log: TEX }, 'compile']] as const) {
+    // (TeX never ran: `engine` only where the host names the engine unknown; any other answer with no TeX in it, the web's over-cap
+    // one among them, the compile's)
+    const overCap = 'axt-runner: the compile\'s result is 70000000 bytes, over the 67108864 cap'
+    for (const [answer, refused, why] of [
+      [{ ok: false, error: 'axt-runner: unknown engine: "latex"', log: 'axt-runner: unknown engine: "latex"\n' }, 'engine', 'the pdflatex compile ran no TeX: axt-runner: unknown engine: "latex"'],
+      [{ ok: false, error: 'Compilation timeout (the wall limit)', log: TEX }, 'compile', 'the marked original was stopped by the host\'s time limit'],
+      [{ ok: false, log: `${overCap}\n` }, 'compile', `the pdflatex compile ran no TeX: ${overCap}`],
+    ] as const) {
       const c = compiler([PROBE, answer, ran(PDF1)])
-      expect(await markedOfPaper(paperOf(), { compile: c.compile })).toMatchObject({ refused })
+      expect(await markedOfPaper(paperOf(), { compile: c.compile })).toMatchObject({ refused, why })
       expect(c.asked).toHaveLength(2)
     }
+    // (and the unmarked original's: TeX never ran in it, the host naming no engine unknown)
+    const fail = stopped('! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n')
+    const capped = compiler([PROBE, fail, fail, { ok: false, log: `${overCap}\n` }])
+    expect(await markedOfPaper(paperOf(), { compile: capped.compile })).toMatchObject({ refused: 'compile', why: `the pdflatex compile of the paper's own source ran no TeX: ${overCap}` })
     // (a host that names the compilers it runs: a paper of another is refused before any compile)
     const none = compiler([PROBE, ran(PDF)])
     expect(await markedOfPaper(paperOf(), { compile: none.compile, engines: ['xelatex'] })).toEqual({ refused: 'engine', why: 'the paper is compiled by pdflatex, which the host does not run', ms: {} })
     expect(none.asked).toHaveLength(0)
+  })
+
+  it('writes a refusal\'s why without the log\'s control characters, within WHY_MAX', async () => {
+    const raw = `axt-runner: \u0007bell\u0000 and\u001b[31m colour ${'x'.repeat(400)}`
+    const c = compiler([PROBE, { ok: false, log: `${raw}\n` }])
+    const made = await markedOfPaper(paperOf(), { compile: c.compile })
+    if (!('refused' in made)) throw new Error('not refused')
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters a why is kept without
+    expect(made.why).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/)
+    expect(made.why?.length).toBeLessThanOrEqual(WHY_MAX)
+    expect(made.why).toMatch(/^the pdflatex compile ran no TeX: axt-runner: bell and \[31m colour x+/)
   })
 
   it('a page count not arXiv\'s is a check that fails; with several toplevel sources the first file\'s pages are arXiv\'s first', async () => {

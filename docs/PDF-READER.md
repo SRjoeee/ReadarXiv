@@ -1447,7 +1447,7 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
     `\verb` and verbatim environments (the innermost unit that changes it); such a unit is written as the paper's own bytes
     (latex-front.mjs `patch` `asSource`: no mark, no span), and a file whose balance our other edits move (a style's literal
     babel name wrapped) has the name marks off. Over the corpus's 124 papers and the sweep's 50 it moves one paper's three
-    units (2610.21377), in about 16 ms a paper.
+    units (2610.21377), at a median of 2.2 ms a paper (33 ms at most, 2610.19159's 1,813 units; 177 sources).
   - *After it*: it ran through (`ranThrough`); its page count is arXiv's where the host gives it (`pages`: a number or a
     function asked once; with several toplevel sources, at most arXiv's); no auxiliary file it wrote (the files a host
     returns, else its main aux, which holds every list entry LaTeX writes through `\@writefile`) holds a mark of ours where
@@ -1458,18 +1458,22 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
     gate pack's 32 outputs byte for byte, the sample's bundle but its pipeline token.
   - *Remedies*, at most two compiles more in all, the unmarked original's among them, none past the host's compile budget
     (`compileBudgetMs`: its wall less 1.2 times the longest compile so far): TeX that never ran (no engine banner) or a host's
-    limit is refused at once ('engine', 'compile'); errors alone: the unmarked original compiled, its count the paper's own
+    limit is refused at once (`engine` where the host names the engine unknown, else `compile`: a host's own failure, its cap
+    on a compile's result); errors alone: the unmarked original compiled, its count the paper's own
     (the marked original stands), else the units the other errors stand in left unmarked (tex-errors.mjs `unitsAtErrors`, as
     runLive's remedy places a translation's, less the errors the unmarked original has at the same text); a mark out of
-    place: the units it names and those its errors stand in unmarked (passing, the latter marked again), failing, the names'
-    marks off too; any other failure: the units its errors stand in and
+    place: the units it names and those its errors stand in unmarked (passing, the latter marked again, kept with no more
+    errors), failing, the names' marks off too; any other failure: the units its errors stand in and
     the unit at the line TeX ignored all text after ("Incomplete \iffalse; all text was ignored after line N") unmarked with
-    the names' marks off, then, passing, the units marked again (the smaller remedy, kept where it passes), or, failing, the
+    the names' marks off, then, passing, the units marked again (the smaller remedy, kept where it passes with no more
+    errors), or, failing, the
     unmarked original compiled to tell whose fault it is. An attempt that passes is the marked original; where none does, the
     best that ran through to arXiv's page count or more stands for the page pass and the carry to judge, as before; none that
     ran through is refused with why: TeX's (`compile`; `texlive` where the paper's `texlive_version` is not the box's TeX
     Live year, as 2610.20595's 2023 under the box's 2025; `engine`) where the unmarked original fails too, else ours
-    (`marks`), and `compile` where no compile was left to tell. `guard` records what the guard did (`extra`, `unmarked`,
+    (`marks`), and `compile` where no compile was left to tell. A why holds no control character and WHY_MAX code units at
+    most (`whyText`). A throw of the guard's own is no refusal: the brace check is skipped, or the marked original taken as
+    before the guard. `guard` records what the guard did (`extra`, `unmarked`,
     `names`, `failed`, `judged`). `engines`, where a host names the compilers it runs, refuses a paper of another before any
     compile ('engine').
   - *The front end's own mistakes* (pgffor's `\foreach … in {…}`, etoc's `\etocdepthtag.toc{…}`, a length argument such as
@@ -1498,9 +1502,10 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   work.
 - **Why a part has no layout** (BUNDLE 6, R1 item 4). A part with none carries the reason in place of its layout,
   `layout: { refused, why }` (`format.mjs` LAYOUT_REFUSED, `why` at most WHY_MAX = 300 code units): TeX's — `compile` (the
-  paper's own source does not make arXiv's pages here, a host's limit, or a fault nothing told was ours), `texlive` (as
-  compile, the paper declaring another TeX Live year than the box's), `engine` (a compiler the host does not run, or that ran
-  no TeX) —, ours — `marks` (the marked original is not the paper and the guard could not mend it, or the mark probe, the
+  paper's own source does not make arXiv's pages here, a host's limit; and every cause nobody judged: the page pass's "the
+  marked original has M pages, arXiv's PDF N" where the host gives the guard no page count, no compile left to tell whose
+  fault it is, a compile that threw or ran no TeX), `texlive` (as compile, the paper declaring another TeX Live year than the
+  box's), `engine` (a compiler the host does not run, as `engines` or its answer names it) —, ours — `marks` (the marked original is not the paper and the guard could not mend it, or the mark probe, the
   marks' reading, the maker or a part's own reader failed) —, and `carry` (the marked original's lines found on arXiv's
   pages under `CARRY_MIN`, the paper's or the part's). The page pass maps every refusal to one (`layoutRecordOf`: the
   paper's, the page count's, the maker's throw or carry, a verdict's, a part's bound's). A reader reads such a part as one

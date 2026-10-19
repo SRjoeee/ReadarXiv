@@ -154,14 +154,14 @@ describe('layoutMarksOfPaper', () => {
   })
 
   it('refuses at the compile where the original gave no PDF, or none that can be called one, and asks no compile more where TeX never ran', async () => {
-    // (a host's limit, or a compile TeX never ran — no engine banner: a host that does not run the compiler —, is no mark's
-    // fault, and no compile mends it; a throw is the host's)
+    // (a host's limit, or a compile TeX never ran — no engine banner —, is no mark's fault, and no compile mends it; it is the
+    // compile's but where the host names the engine unknown (the guard's tests); a throw is the host's)
     const ran = { extra: 0, unmarked: [], names: true, failed: ['ran'] }
     const cases: [Compiled | Error, Record<string, unknown>][] = [
       [{ ok: false, error: 'Compilation timeout' }, { refused: 'compile', why: 'the marked original was stopped by the host\'s time limit', guard: ran }],
-      [{ ok: false, pdf: null, log: 'a halted pass' }, { refused: 'engine', why: 'the pdflatex compile ran no TeX: a halted pass', guard: ran }],
-      [{ ok: true, log: 'no PDF either' }, { refused: 'engine', why: 'the pdflatex compile ran no TeX: no PDF either', guard: ran }],
-      [{ ok: true, pdf: new Uint8Array(0), log: '' }, { refused: 'engine', why: 'the pdflatex compile ran no TeX', guard: ran }],
+      [{ ok: false, pdf: null, log: 'a halted pass' }, { refused: 'compile', why: 'the pdflatex compile ran no TeX: a halted pass', guard: ran }],
+      [{ ok: true, log: 'no PDF either' }, { refused: 'compile', why: 'the pdflatex compile ran no TeX: no PDF either', guard: ran }],
+      [{ ok: true, pdf: new Uint8Array(0), log: '' }, { refused: 'compile', why: 'the pdflatex compile ran no TeX', guard: ran }],
       [new Error('the compiler threw'), { refused: 'compile', why: 'the compile threw' }],
     ]
     for (const [second, want] of cases) {

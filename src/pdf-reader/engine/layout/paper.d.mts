@@ -35,9 +35,9 @@ export interface MarkedCompileOptions {
  *  'errors' after), and why a check was left as it stood (`judged`) */
 export interface GuardRecord { extra: number; unmarked: number[]; names: boolean; failed: ('braces' | 'ran' | 'pages' | 'aux' | 'errors')[]; judged?: string }
 /** why a paper's marked original is refused: its probe (no log); TeX's own ('compile': the paper's own source does not make
- *  arXiv's pages here, a host's limit, a compile that threw, or a fault nothing told the guard was ours; 'texlive', as
- *  'compile' with the paper declaring another TeX Live year than the box's; 'engine', a compiler the host does not run or
- *  that ran no TeX); ours ('marks': the unmarked original makes the pages and the marked one, mended as the guard could,
+ *  arXiv's pages here, a host's limit, a compile that threw or ran no TeX, or a fault nothing told the guard was ours;
+ *  'texlive', as 'compile' with the paper declaring another TeX Live year than the box's; 'engine', a compiler the host does
+ *  not run, as `engines` or its answer ("unknown engine") names it); ours ('marks': the unmarked original makes the pages and the marked one, mended as the guard could,
  *  does not) */
 export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
 

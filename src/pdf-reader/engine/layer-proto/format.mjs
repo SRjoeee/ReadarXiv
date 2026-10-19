@@ -81,14 +81,19 @@ export const TOKENS_PAGE = 15_000, SPANNED_PER_TOKEN = 2
 export const TOKEN_SCALE = 1000, TOKEN_LIMIT = 100_000
 /** why a part has no layout, as the part records it in place of its layout (`layout: { refused, why }`, `why` WHY_MAX code
  *  units at most), for a reader to say and a sweep to count, never to draw by: TeX's — `compile` (the paper's own source does
- *  not make arXiv's pages here: a missing package, an error of its own, a compile the host stopped), `texlive` (as compile,
- *  the paper declaring another TeX Live year than the box's), `engine` (a compiler the host does not run, or that ran no
- *  TeX) —; ours — `marks` (the marked original is not the paper and the layout guard could not mend it, or the mark probe,
+ *  not make arXiv's pages here: a missing package, an error of its own, a compile the host stopped; and every cause nobody
+ *  judged: a marked original of fewer pages than arXiv's PDF where the host gave the guard no page count, no compile left to
+ *  tell whose fault it is, a compile that threw), `texlive` (as compile, the paper declaring another TeX Live year than the
+ *  box's), `engine` (a compiler the host does not run, as `engines` or its answer names it) —; ours — `marks` (the marked original is not the paper and the layout guard could not mend it, or the mark probe,
  *  the marks' reading or the maker failed) —; and `carry` (the marked original's lines are not found on arXiv's pages, under
  *  CARRY_MIN, the paper's or the part's). A part with `layout: null` is one whose producer recorded no reason (5's shape,
  *  cutBundle with none given) */
 export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks'])
 export const WHY_MAX = 300
+/** a why as a record holds it: a run of control characters (a TeX log's raw bytes, a terminal's escapes) one space, within
+ *  WHY_MAX */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters a why is kept without
+export const whyText = s => String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/ {2,}/g, ' ').trim().slice(0, WHY_MAX)
 /** whether a part's `layout` as given or on the wire is a refusal's record, not a layout part (which holds no `refused`) */
 export const isLayoutRefusal = v => isObject(v) && Object.hasOwn(v, 'refused')
 /** why the parts end before the paper does (the catalog's `end.refused`), amendment M4: FINAL, the paper's own, which a new

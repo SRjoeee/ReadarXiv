@@ -10,6 +10,7 @@
 //
 // An original module (no port statement). It imports the engine's own modules alone, by relative path, and no node:
 // specifier: the TeX page's host runs it in a browser.
+import { whyText } from '../layer-proto/format.mjs'
 import { lastTexLog, latin1, latin1Bytes } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from '../pipeline/tex-errors.mjs'
 import { END_TEX } from '../pipeline/typeset/tex.mjs'
@@ -195,6 +196,11 @@ export const pagesOfLog = log => { const all = [...unwrapped(lastTexLog(log ?? '
 export const texLiveOf = log => /\(TeX Live (\d{4})\)/.exec(log ?? '')?.[1] ?? null
 /** whether TeX ran at all: its banner in the log (a host that refused the compiler, a jail that ran nothing, has none) */
 export const texRan = log => /^This is \S*TeX\b/m.test(log ?? '')
+/** whether the host says it does not run the compiler asked (the web runner's "unknown engine"): the one answer TeX never ran
+ *  in that is the engine's, not the compile's (a host's own failure, its cap on a compile's result) */
+export const engineUnknown = c => /\bunknown engine\b/i.test(`${c?.error ?? ''}\n${c?.log ?? ''}`)
+/** a why as a refusal holds it (layer-proto/format.mjs whyText): no control character, within WHY_MAX */
+export { whyText }
 /** the host's limit a compile met, where it says one (the web's `limit`, the TeX page's timeout), else null */
 export const limitOf = c => c?.limit ?? (/\b(?:timeout|time limit)\b/i.test(c?.error ?? '') ? 'time' : null)
 /** the first TeX error of a compile's last pass, with the line it names, for a refusal's why */
