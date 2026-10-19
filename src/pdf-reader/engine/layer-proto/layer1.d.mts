@@ -36,9 +36,9 @@ export declare const gapClass: (text: string) => 'cite' | 'num' | 'other'
 export declare const norm: (s: string) => string
 /** a run of characters' words: each { w, start, end } over the characters' indices */
 export declare function wordsOf(chars: readonly { ch: string; sep?: boolean }[], joined?: ReadonlySet<string> | null): { w: string; start: number; end: number; hyphen?: boolean }[]
-/** which of O's words a longest common subsequence with S's takes (1 each) */
 /** which of S's words each of O's is in a longest common subsequence of the two: its index in S, or -1 */
 export declare function lcsPairs(S: readonly string[], O: readonly string[]): Int32Array
+/** which of O's words a longest common subsequence with S's takes (1 each) */
 export declare function lcsMatched(S: readonly string[], O: readonly string[]): Uint8Array
 export declare const CJK: RegExp
 /** the line-break marks of a rule set's `noStart` and `noEnd` lists: whether a token begins with a character no line starts with, or ends with one no line ends with */

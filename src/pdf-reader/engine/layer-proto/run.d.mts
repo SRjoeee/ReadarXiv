@@ -90,9 +90,10 @@ export declare function fontReaders(): {
   live(page: { commonObjs: { get(name: string): unknown } }, styles: TextContentLike['styles'] | undefined): FontReading
   draw(draw: Draw): FontReading & { tc: TextContentLike; raw: ReturnType<typeof import('./draw.mjs').drawInputsOf>['annots']; fills: ReturnType<typeof import('./draw.mjs').drawInputsOf>['fills'] }
 }
-/** the fills a page read live tells, as its draw would (layout/fills.mjs itemFills over its ink, off the list PDF.js drew it by, else
- *  its own operator list): null for no OPS, a page whose ink is not whole or a list that cannot be read */
-export declare function liveFillsOf(OPS: Record<string, number> | null, page: unknown, items: TextContentLike['items'], counted?: { fills: number } | null): Promise<(number | number[])[] | null>
+/** the fills a page read live tells, as its draw would (layout/fills.mjs itemFills over its ink, off the list PDF.js drew it by:
+ *  `list`, held from its early pixel read, or its render's; else its own operator list within DRAW_WAIT_MS): null for no OPS, a
+ *  page whose ink is not whole or a list that cannot be read in time */
+export declare function liveFillsOf(OPS: Record<string, number> | null, page: unknown, items: TextContentLike['items'], counted?: { fills: number } | null, list?: { fnArray: unknown[]; argsArray: unknown[] } | null): Promise<(number | number[])[] | null>
 /** a page's characters and Link annotations (null where they could not be read), the two calls the run makes of a page's reading */
 export declare function pageReadOf(tc: TextContentLike, fontOf: FontReading['fontOf'], mapOf: FontReading['mapOf'], raw: readonly unknown[] | null, fills?: readonly (number | readonly number[])[] | null): {
   chars: Char[]

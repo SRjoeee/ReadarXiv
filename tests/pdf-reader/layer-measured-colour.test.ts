@@ -54,9 +54,13 @@ describe('sourceScopes and measuredStyle', () => {
     expect(sc.map(x => x.sets & 1).join('')).toBe('1111101111000000000')
     const m = unitOf([text('We see '), open('\\trajectoryRole[x]{', 1), open('\\textbf{', 2), text('a'), close(2), text(' b'), close(1)], []) as { src: string }
     const ms = L2.sourceScopes(m as never)!
-    expect(ms.at(-1)).toEqual({ sets: 31, chain: [1] })
-    expect(ms.at(-3)).toEqual({ sets: 31, chain: [1] })
-    expect(ms[0]).toEqual({ sets: 0, chain: [] })
+    expect(ms.at(-1)).toEqual({ sets: 31, chain: [1], flip: 0 })
+    expect(ms.at(-3)).toEqual({ sets: 31, chain: [1], flip: 0 })
+    expect(ms[0]).toEqual({ sets: 0, chain: [], flip: 0 })
+    // (the slant toggles around a code point, pairs or switches: \emph{a {\em b} c}; white space reads none)
+    const e = unitOf([open('\\emph{', 1), text('a '), open('{', 2), ph('\\em'), text(' b'), close(2), text(' c'), close(1)], []) as { src: string }
+    expect(e.src).toBe('a b c')
+    expect(L2.sourceScopes(e as never)!.map(x => x.flip).join('')).toBe('10001')
     // (no source pieces, or a text that is not the unit's: none read)
     expect(L2.sourceScopes({ src: 'x', pieces: [] } as never)).toBeNull()
     const off = unitOf([text('a b')], [])
@@ -90,6 +94,20 @@ describe('the unit\'s base, measured outside its styled pieces', () => {
     const u = unitOf([open('\\textbf{', 1), text('RQ1:'), close(1), text(' '), open('\\textit{', 2), text('Does it work well'), close(2)], [0, 'RQ1\uFF1A', 2, 4, '\u6709\u6548\u5417', 6])
     const { tokens } = tokensOf(u, page)
     expect([tokens.base.bold, tokens.base.italic]).toEqual([false, false])
+  })
+
+  it('a unit wholly inside \\emph: its slant read without the toggle, so that the toggle draws it as the original (the review of E1)', () => {
+    // (italic glyphs inside \emph: the base upright, the translation drawn italic)
+    const it1 = tokensOf(unitOf([open('\\emph{', 1), text('Note that this bound is tight'), close(1)], [0, '\u6CE8\u610F\u8FD9\u4E2A\u754C\u662F\u7D27\u7684', 2]), pageOf([['Note', italic()], ['that', italic()], ['this', italic()], ['bound', italic()], ['is', italic()], ['tight', italic()]]))
+    expect(it1.tokens.base.italic).toBe(false)
+    expect(new Set(it1.drawn.map(t => !!t.st.italic))).toEqual(new Set([true]))
+    // (the same in a switch's spelling, {\em ...})
+    const it2 = tokensOf(unitOf([open('{', 1), ph('\\em'), text(' Note that this bound is tight'), close(1)], [0, 1, '\u6CE8\u610F\u8FD9\u4E2A\u754C\u662F\u7D27\u7684', 3]), pageOf([['Note', italic()], ['that', italic()], ['this', italic()], ['bound', italic()], ['is', italic()], ['tight', italic()]]))
+    expect(new Set(it2.drawn.map(t => !!t.st.italic))).toEqual(new Set([true]))
+    // (inside an italic theorem the toggle set its glyphs upright: the base italic, the translation drawn upright)
+    const up = tokensOf(unitOf([open('\\emph{', 1), text('Note that this bound is tight'), close(1)], [0, '\u6CE8\u610F\u8FD9\u4E2A\u754C\u662F\u7D27\u7684', 2]), pageOf([['Note', plain()], ['that', plain()], ['this', plain()], ['bound', plain()], ['is', plain()], ['tight', plain()]]))
+    expect(up.tokens.base.italic).toBe(true)
+    expect(new Set(up.drawn.map(t => !!t.st.italic))).toEqual(new Set([false]))
   })
 
   it('a unit wholly inside a style pair: of all its glyphs (nothing lies outside)', () => {

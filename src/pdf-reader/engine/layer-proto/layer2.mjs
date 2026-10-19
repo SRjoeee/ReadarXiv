@@ -797,11 +797,11 @@ function originalStyle(uc, O, matched) {
  * here (`st` null: tokensOf2 reads today's, baseOf) and a colour only where every glyph whose fill is told holds the same one
  */
 function measuredOf(unit, uc, O, S, pair) {
-  const scopes = sourceScopes(unit), none = { sets: 0, chain: [] }, chars = []
+  const scopes = sourceScopes(unit), none = { sets: 0, chain: [], flip: 0 }, chars = []
   O.forEach((o, q) => {
     if (!pair || pair[q] < 0) return
     const sc = scopes?.[S[pair[q]]?.start] ?? none
-    for (const c of uc.slice(o.start, o.end + 1)) if (!c.sep && !c.space && c.st && /\S/.test(c.ch) && c.st.fam !== 'math') chars.push({ st: c.st, sets: sc.sets, chain: sc.chain })
+    for (const c of uc.slice(o.start, o.end + 1)) if (!c.sep && !c.space && c.st && /\S/.test(c.ch) && c.st.fam !== 'math') chars.push({ st: c.st, sets: sc.sets, chain: sc.chain, flip: sc.flip })
   })
   if (!chars.length) return null
   if (scopes) return measuredStyle(chars)
@@ -2026,6 +2026,8 @@ const openSets = src => {
   for (const [re, , bits] of STYLE_CMDS) if (re.test(src)) return bits
   return /^\\(?:textcolor|color)(?![A-Za-z])/.test(src) || LINK_OPEN.test(src) ? COLOUR : EVERY
 }
+/** whether a piece toggles the slant (\emph, \em): what it holds is drawn the other way of what holds it */
+const togglesSlant = src => /^\\(?:emph|em)\b/.test(src)
 /** what a placeholder sets over the rest of its group: a style switch's attributes, a colour switch's colour; nothing else */
 const switchSets = src => {
   if (/^\\color(?![A-Za-z])/.test(src)) return COLOUR
@@ -2036,19 +2038,20 @@ const switchSets = src => {
 /**
  * The source's text by what sets its style (E1 of the residuals' batch R2): the unit's plain source text (mt.mjs plainSource, which
  * the alignment reads as `unit.src`) with, for each of its code points, the attributes the pieces around it set (`sets`, the bits
- * of openSets and switchSets, a switch over the rest of its group) and the pieces that set its colour, outermost first (`chain`).
- * Null where the unit carries no source pieces (`unit.source`: rows.mjs unitOf's) or their text is not `unit.src`
+ * of openSets and switchSets, a switch over the rest of its group), the pieces that set its colour, outermost first (`chain`), and
+ * the parity of the slant toggles around it (`flip`: 1 inside an odd number of \emph and \em, pairs or switches). Null where the
+ * unit carries no source pieces (`unit.source`: rows.mjs unitOf's) or their text is not `unit.src`
  */
 export function sourceScopes(unit) {
   const pieces = unit?.source
   if (!Array.isArray(pieces) || typeof unit.src !== 'string') return null
-  const stack = [{ sets: 0, chain: [] }], scopes = []
+  const stack = [{ sets: 0, chain: [], flip: 0 }], scopes = []
   pieces.forEach((p, k) => {
     const top = stack.at(-1)
-    if (p.t === 'open') { const b = openSets(p.src ?? ''); stack.push({ sets: top.sets | b, chain: b & COLOUR ? [...top.chain, k] : top.chain }); return }
+    if (p.t === 'open') { const b = openSets(p.src ?? ''); stack.push({ sets: top.sets | b, chain: b & COLOUR ? [...top.chain, k] : top.chain, flip: top.flip ^ (togglesSlant(p.src ?? '') ? 1 : 0) }); return }
     if (p.t === 'close') { if (stack.length > 1) stack.pop(); return }
-    if (p.t === 'ph') { const b = switchSets(p.src ?? ''); if (b) { top.sets |= b; if (b & COLOUR) top.chain = [...top.chain, k] } return }
-    if (p.t === 'text') scopes[k] = { sets: top.sets, chain: top.chain }
+    if (p.t === 'ph') { const b = switchSets(p.src ?? ''); if (b) { top.sets |= b; if (b & COLOUR) top.chain = [...top.chain, k]; if (togglesSlant(p.src ?? '')) top.flip ^= 1 } return }
+    if (p.t === 'text') scopes[k] = { sets: top.sets, chain: top.chain, flip: top.flip }
   })
   // (the plain text as plainSource makes it: a text piece's characters, a space for any other piece, white space runs one, trimmed)
   const cps = [], owner = []
@@ -2060,7 +2063,7 @@ export function sourceScopes(unit) {
   }
   while (out.length && out.at(-1) === ' ') { out.pop(); of.pop() }
   if (out.join('') !== unit.src) return null
-  const none = { sets: 0, chain: [] }
+  const none = { sets: 0, chain: [], flip: 0 }
   return of.map(k => (k >= 0 ? scopes[k] ?? none : none))
 }
 /** the value most of `xs` hold (`valueOf`), its ties to `base` where it is among them, else to the one met first; undefined for none */
@@ -2076,14 +2079,16 @@ function majorityOf(xs, valueOf, base) {
  * with their source scope ({ st, sets, chain }: sourceScopes'). Each attribute — weight, slant, small capitals, family, colour — is
  * the one most of the glyphs outside every piece that may set it hold (a style pair or switch in any spelling, `{\bf …}` too, a
  * colour's, a link's, a paper's own macro), and only where no glyph lies outside, of them all; a tie goes to regular, upright, no
- * small capitals, serif and black, else to the unit's first glyph's. Colour reads only the glyphs whose fill is told. Each piece
+ * small capitals, serif and black, else to the unit's first glyph's. A glyph's slant is read as it would be without the toggles
+ * around it (`flip`): a unit wholly inside \emph has its upright surroundings as its base, which the toggle turns italic again
+ * (where its glyphs are upright, inside an italic theorem, the base is italic). Colour reads only the glyphs whose fill is told. Each piece
  * that may set colour takes the colour its own glyphs hold (those inside it and no piece within it; where none, all inside it).
  * Returns { st: { bold, italic, caps, fam, design }, fill (0xRRGGBB, or null: none told), pieces: Map(k -> fill) }
  */
 export function measuredStyle(chars) {
   if (!chars.length) return null
   const of = (bit, list = chars) => { const out = list.filter(c => !(c.sets & bit)); return out.length ? out : list }
-  const bold = majorityOf(of(WEIGHT), c => !!c.st.bold, false), italic = majorityOf(of(SLANT), c => !!c.st.italic, false)
+  const bold = majorityOf(of(WEIGHT), c => !!c.st.bold, false), italic = majorityOf(of(SLANT), c => !!c.st.italic !== !!c.flip, false)
   const caps = majorityOf(of(CAPS), c => !!c.st.caps, false)
   const famFrom = of(FAMILY), fam = majorityOf(famFrom, c => c.st.fam, 'serif')
   const design = famFrom.find(c => c.st.fam === fam)?.st.design

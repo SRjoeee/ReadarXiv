@@ -65,6 +65,7 @@ import { drawInputsOf } from './draw.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { itemFills } from '../layout/fills.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
+import { listWithin } from '../layout/oplist.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
@@ -156,16 +157,20 @@ const renderedList = page => {
   for (const st of page?._intentStates?.values?.() ?? []) if (st.displayReadyCapability && st.operatorList?.lastChunk) return st.operatorList
   return null
 }
+/** what a bounded operator list read of the live fills warns as, once a run */
+const LIVE_LIST = { who: 'the reader\'s live fills' }
 /**
  * The fills of a page read live, as its draw tells them (layout/fills.mjs itemFills over pipeline/draw-data.mjs's glyphs): its ink
- * read off the list PDF.js drew it by (renderedList), else off its own operator list, with PDF.js's `OPS`; null (none told) for
- * no OPS, a page whose ink is not whole (past a cap, past the walk's backstop, turned) or a list that cannot be read. Asked only
- * of a page with no usable draw, once its pixels are drawn
+ * read off the list PDF.js drew it by (`list`, held from the page's early pixel read, or renderedList), else off its own operator
+ * list waited for DRAW_WAIT_MS at most (a page whose drawing kept none: no second parse in the reader's flows), with PDF.js's
+ * `OPS`; null (none told) for no OPS, a page whose ink is not whole (past a cap, past the walk's backstop, turned) or a list that
+ * cannot be read in time. Asked only of a page with no usable draw, once its pixels are drawn
  */
-export async function liveFillsOf(OPS, page, items, counted = null) {
+export async function liveFillsOf(OPS, page, items, counted = null, list = null) {
   if (!Number.isInteger(OPS?.showText)) return null
   try {
-    const ops = renderedList(page) ?? (await page.getOperatorList())
+    const ops = list ?? renderedList(page) ?? (await listWithin(page, LIVE_LIST, DRAW_WAIT_MS))
+    if (!ops) return null
     const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     // (its work: the list's operations walked, the glyphs read, the items told)
     if (counted) counted.fills += (ops.fnArray?.length ?? 0) + ink.glyphs.length + items.length
@@ -757,6 +762,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // read from data (`fromData`), each page's pixels read once (`pixelTasks`, `pixelsIn`), the pages whose paint waits for theirs
   const drawAsks = new Map(), askedDraw = new Uint8Array(N + 1), fromData = new Uint8Array(N + 1), pixelsIn = new Uint8Array(N + 1)
   const pixelTasks = new Map(), paintLater = new Set()
+  /** the operator list a page's early pixel read drew it by ({ doc, list }), held until its drawing decides how it is read: a page
+   *  whose draw is then refused or late reads its fills off it (liveFillsOf), not off a second parse; let go with its pixels */
+  const heldLists = new Map()
   /** the pages read from data and live, the draws refused and those that came too late (DRAW_WAIT_MS), each page's pixels by the
    *  step that asked first, the times a step needed a page's pixels it had not (by step), the lays done again, and the draws'
    *  reading, ms */
@@ -1042,6 +1050,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     inks[q] = pageItems[q] = accounted[q] = keptOf[q] = laid[q] = undefined
     // (a reading of its pixels still under way is no longer the page's: its result is dropped as it comes, pixelsOf)
     pixelTasks.delete(q)
+    heldLists.delete(q)
   }
   /** whether a unit on page q is still to be painted on one of its pages (its first page's part there not painted yet,
    *  paintOn): its paint elsewhere may cut a crop from q, on v0's own copy (release), and its own state stays until then */
@@ -2419,10 +2428,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const c = document.createElement('canvas')
       c.width = Math.floor(viewport.width * dpr)
       c.height = Math.floor(viewport.height * dpr)
-      try { await page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise } finally { page.cleanup() }
+      let list = null
+      try {
+        await page.render({ canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
+        // (the list it was drawn by, before the cleanup lets it go: the page's fills, should its draw be refused or late)
+        if (Number.isInteger(OPS?.showText)) list = renderedList(page)
+      } finally { page.cleanup() }
       // (kept only while it is still the page's reading: not where the page was let go (letGoPage) or the ask it was read for
       // given up before the page was drawn (dropPixels), whose result would be held for good)
       if (!disposed && pixelTasks.get(q) === t) {
+        if (list && !drawnPages[q]) heldLists.set(q, { doc: d, list })
         inks[q] = L2.inkMapOf(c)
         workOf(q).inkSteps += inks[q].w * inks[q].h
         pixelsIn[q] = 1
@@ -2474,6 +2489,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         annP = x.raw
         fonts = x
         fills = x.fills
+        heldLists.delete(i)
         tRendered = performance.now()
       } else {
         if (DATA) drawStats.live.push(i)
@@ -2493,9 +2509,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (!prefetched) timesOf(i).render += tRendered - tLive + (asked ? tGot - tPage : 0)
         tc = await textP
         fonts = FR.live(page, tc.styles)
-        // (its characters' fills as its draw would tell them: its ink off the list PDF.js just drew it by)
-        const tFills = performance.now()
-        fills = await liveFillsOf(OPS, page, tc.items, workOf(i))
+        // (its characters' fills as its draw would tell them: its ink off the list PDF.js drew it by, here or in its early pixel read)
+        const tFills = performance.now(), held = heldLists.get(i)
+        heldLists.delete(i)
+        fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null)
         timesOf(i).fills += performance.now() - tFills
       }
       if (i === 1 && lmP) await lmP
@@ -2838,6 +2855,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const dropPixels = q => {
     if (drawnPages[q] || !pixelTasks.has(q)) return
     pixelTasks.delete(q)
+    heldLists.delete(q)
     pixelsIn[q] = 0
     inks[q] = undefined
   }
@@ -3247,6 +3265,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // (the draws asked and not drawn yet, let go: I6)
       drawAsks.clear()
       paintLater.clear()
+      heldLists.clear()
       // (the documents it reads, told to the host once no read holds them)
       retire(D)
       retire(RD)

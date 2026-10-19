@@ -13,8 +13,10 @@ export const DRAW_ITEMS = 6_000, DRAW_STRING = 4_096, DRAW_STRINGS = 262_144
 export const DRAW_FONTS = 256, DRAW_NAME = 128, DRAW_FALLBACK = 64, DRAW_MAPPED = 8_192, DRAW_MAPPED_CHAR = 16
 /** links a page, quads of a link (4 points each of 8 numbers: k), a url, a named dest, a zoom name, a dest's arguments, an overlaid text */
 export const DRAW_LINKS = 4_000, DRAW_QUADS = 64, DRAW_URL = 4_096, DRAW_DEST = 512, DRAW_ZOOM = 16, DRAW_ARGS = 6, DRAW_OVERLAID = 1_024
-/** the values a page's draw holds at most, and (the writer's alone: the reader cannot check it without writing it again) its bytes */
-export const DRAW_VALUES = 80_000, DRAW_BYTES = 768 * 1024
+/** the values a page's draw holds at most, and (the writer's alone: the reader cannot check it without writing it again) its bytes.
+ *  86,000: 80,000 and one more an item at most (DRAW_ITEMS), its fills (BUNDLE5 7), so that a page whose draw fit before fits with
+ *  its items' fills told one value each */
+export const DRAW_VALUES = 86_000, DRAW_BYTES = 768 * 1024
 /** the encoded draws the server holds at once (the pages read and not yet told to a part); a page past it ships no draw */
 export const DRAW_HELD_MAX = 64 * 1024 * 1024
 /** a number of the data is finite and within this either way */

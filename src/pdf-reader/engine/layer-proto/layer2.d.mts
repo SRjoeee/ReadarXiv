@@ -50,7 +50,9 @@ export interface Params {
  *  style's `fill`, its glyph's colour (0xRRGGBB) where the page's reading tells it (layout/fills.mjs), else none */
 export interface Char { ch: string; x0: number; x1: number; yb: number; size: number; item: number; ix: number; k: number; st: FontClass & { fill?: number }; ybEff?: number; page?: number; rect?: number[]; sep?: boolean; space?: boolean; nu?: boolean }
 /** a unit of the units file, as the layer reads it */
-export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean; group?: string }
+export interface Unit { kind: string; src: string; pieces: { t: string; s?: string; src?: string }[]; state?: string; title?: boolean; group?: string
+  /** the unit's source pieces, where the rows made it (rows.mjs unitOf: not enumerable), that its measured style reads */
+  readonly source?: readonly { t: string; s?: string; src?: string; k?: number }[] }
 // ---- the per-unit reading (prepareUnit): the contract the rest of v0 reads
 //
 // A line's key is `page|x0,y0,x1,y1` of its rectangle (rectKey); a page character's is `page|item|k` (charKey). The
@@ -97,6 +99,9 @@ export interface Prepared extends Map<number, Resolved> {
   matchedKeys: Set<string>
   /** the alignment: the original's style (the majority of the source's words) */
   orig: { key: string; st: FontClass; size: number; runs: { key: string; n: number }[] } | null
+  /** the alignment: the unit's base style and its colour pieces' colours measured on its matched glyphs (measuredStyle; `st`
+   *  null where the unit carries no source pieces, its colour then told only where every glyph whose fill is told holds one) */
+  measured?: { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string } | null; fill: number | null; pieces: Map<number, number> } | null
   /** the alignment: where the first source word starts on the first line */
   firstX0?: number
   /** the lines kept as the original's, by key: the alignment's (no source word), part 4's displays, the finish's */
@@ -209,11 +214,12 @@ export declare function fontMappedOf(font: unknown): Set<string> | null
 export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
 export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null, fills?: readonly (number | readonly number[] | null | undefined)[] | null): Char[]
 /** the source's text by what sets its style: for each code point of the unit's plain source text, the attributes the pieces
- *  around it set (bits: weight 1, slant 2, small capitals 4, family 8, colour 16) and the pieces that set its colour, outermost
- *  first; null where the unit carries no source pieces or their text is not its `src` */
-export declare function sourceScopes(unit: { src?: string; source?: readonly { t: string; s?: string; src?: string }[] }): { sets: number; chain: number[] }[] | null
+ *  around it set (bits: weight 1, slant 2, small capitals 4, family 8, colour 16), the pieces that set its colour, outermost
+ *  first, and the parity of the slant toggles around it (`flip`); null where the unit carries no source pieces or their text is
+ *  not its `src` */
+export declare function sourceScopes(unit: { src?: string; source?: readonly { t: string; s?: string; src?: string }[] }): { sets: number; chain: number[]; flip: number }[] | null
 /** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1) */
-export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[] }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[]; flip?: number }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
 /** a rendering's text in runs of one fill (0xRRGGBB, or -1 untold); null where its characters do not give the text or tell no fill */
 export declare function fillRunsOf(chars: readonly Pick<Char, 'ch' | 'st'>[] | null | undefined, text: string): { text: string; fill: number }[] | null
 /** the kind a mark no line may start with is across scripts ("." and the ideographic full stop: 'stop'; ")" and a closing corner bracket: 'close'), else the mark itself */
