@@ -12,7 +12,9 @@ import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, compileIdentity, co
 
 const A = `texlive/texlive:latest@sha256:${'a'.repeat(64)}`
 const B = `texlive/texlive@sha256:${'b'.repeat(64)}`
-const pin = JSON.parse(readFileSync(join(import.meta.dirname, '../../lab/pdf/compile-image.json'), 'utf8'))
+const pins = JSON.parse(readFileSync(join(import.meta.dirname, '../../lab/pdf/compile-images.json'), 'utf8'))
+/** the default year's pin */
+const pin = pins.images[pins.default]
 /** a compile cache key as layout-make.mjs, layer-fixtures.mjs and layout-paper-check.mjs build it: the identity, then the files */
 const keyOf = (identity: string, files: [string, string][]) => {
   const h = createHash('sha256').update(identity)
@@ -21,18 +23,24 @@ const keyOf = (identity: string, files: [string, string][]) => {
 }
 
 describe('which image the lab compiles in', () => {
-  it('is the pin\'s texlive by default, and COMPILE_IMAGE where given', () => {
+  it('is the default year\'s pin by default, a year\'s where asked (COMPILE_YEAR), and COMPILE_IMAGE where given', () => {
     expect(compileImageRef({})).toBe(pin.texlive)
     expect(compileImageRef({ COMPILE_IMAGE: B })).toBe(B)
-    expect(COMPILE_IMAGE).toBe(process.env.COMPILE_IMAGE || pin.texlive)
+    expect(compileImageRef({ COMPILE_YEAR: '2023' })).toBe(pins.images['2023'].texlive)
+    expect(compileImageRef({}, 2023)).toBe(pins.images['2023'].texlive)
+    expect(compileImageRef({ COMPILE_YEAR: '2023' }, '2025')).toBe(pins.images['2025'].texlive)
+    // (an image named by digest is taken over a year's pin)
+    expect(compileImageRef({ COMPILE_IMAGE: B, COMPILE_YEAR: '2023' })).toBe(B)
+    expect(() => compileImageRef({ COMPILE_YEAR: '2019' })).toThrow(/no compile image is pinned for TeX Live 2019/)
+    expect(COMPILE_IMAGE).toBe(compileImageRef(process.env))
   })
 
   it('refuses a reference with no digest, or a pin file that is not one', () => {
     expect(() => compileImageRef({ COMPILE_IMAGE: 'texlive/texlive:latest' })).toThrow(/name\[:tag\]@sha256/)
     expect(() => compileImageRef({ COMPILE_IMAGE: 'texlive/texlive@sha256:abc' })).toThrow(/sha256/)
     const dir = mkdtempSync(join(tmpdir(), 'compile-image-'))
-    writeFileSync(join(dir, 'p.json'), JSON.stringify({ texlive: 'texlive/texlive:latest' }))
-    expect(() => compileImageRef({}, join(dir, 'p.json'))).toThrow(/name\[:tag\]@sha256/)
+    writeFileSync(join(dir, 'p.json'), JSON.stringify({ default: '2025', images: { 2025: { texlive: 'texlive/texlive:latest' } } }))
+    expect(() => compileImageRef({}, null, join(dir, 'p.json'))).toThrow(/name\[:tag\]@sha256/)
   })
 
   it('asks for a platform only when COMPILE_PLATFORM says so', () => {
@@ -131,8 +139,8 @@ describe('a native compile, the platform in the inspection and the key, and --im
   })
 })
 
-describe('the font coverage is of the pinned image', () => {
-  it('names the image the TeX Live faces were measured in: the pin\'s texlive', () => {
-    expect(COVERAGE_SOURCE.release.texlive, 'regenerate scripts/font-roles.py from the pinned image\'s faces, or pin the image they were measured in').toBe(pin.texlive)
+describe('the font coverage is of the default year\'s image', () => {
+  it('names the image the TeX Live faces were measured in: the default year\'s pin', () => {
+    expect(COVERAGE_SOURCE.release.texlive, 'regenerate scripts/font-roles.py from the default image\'s faces, or pin the image they were measured in').toBe(pins.images[pins.default].texlive)
   })
 })
