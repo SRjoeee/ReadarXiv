@@ -462,7 +462,7 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 21: 22 keeps a styled pair whose two ends stand where the wire is cut anyway (mt.mjs classOf's boundary rule,
  *   TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read back: a unit whose wire the rule leaves
  *   as it was (mt.mjs boundaryChanges, given the unit) was sent as 22 sends it, and is carried; without the unit, a
- *   translation that holds no pair. Over 137 papers' sources 122 of 36,136 units are asked again. Every older pipeline's
+ *   translation that holds no pair. Over 137 papers' sources 126 of 36,136 units are asked again. Every older pipeline's
  *   test takes this one with its own (7 to 14 carry no unit that holds a pair already)
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))

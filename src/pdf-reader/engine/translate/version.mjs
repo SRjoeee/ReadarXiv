@@ -40,7 +40,7 @@
 //    never an inline formula, which the translator moves as a word; a kept or enclosing pair's edge with white space alone
 //    between; the unit's own end) keeps its two markers (mt.mjs classOf's boundary rule,
 //    E1 of 2026-10-19): they cut nothing the endpoint does not cut already (2610.19159's `\textit{Floor (must clear):}
-//    \textcolor{red}{...}`, whose colour went flat at a colon that starts no sentence). Over 137 papers' sources 122 of
-//    36,136 units, in 26 papers, change their wire (mt.mjs boundaryChanges tells exactly those); every other unit's is 3's
+//    \textcolor{red}{...}`, whose colour went flat at a colon that starts no sentence). Over 137 papers' sources 126 of
+//    36,136 units, in 29 papers, change their wire (mt.mjs boundaryChanges tells exactly those); every other unit's is 3's
 //    byte for byte, its text answered by the per-text cache
 export const TRANSLATE_VERSION = '4'

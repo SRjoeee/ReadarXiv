@@ -240,6 +240,8 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     const linked = unit({ t: 'text', s: 'We see ' }, { t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'the ' }, ...pairs(2, '\\href{u}{', 'first'), { t: 'text', s: ' ' }, ...pairs(3, '\\textcolor{red}{', 'middle words'), { t: 'text', s: ' ' }, ...pairs(4, '\\href{v}{', 'last'), { t: 'text', s: ' ones' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ' in it.' })
     expect(serialize(linked).wire).toBe('We see the @a# first @b# @c# middle words @d# @e# last @f# ones in it.')
     expect(boundaryChanges(linked)).toBe(true)
+    // (a forced break joined with a switch that sets no ink in one marker still cuts the text (Devin on #415))
+    expect(serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\\\' }, { t: 'ph', src: '\\small' }, { t: 'text', s: ' We use a model here.' })).wire).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
     // (a display cuts the text, as a forced break does)
     expect(serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\[ x = y \\]' }, { t: 'text', s: 'We use a model here.' })).wire).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
   })

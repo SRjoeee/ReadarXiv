@@ -83,6 +83,10 @@ describe('sourceScopes and measuredStyle', () => {
     const nested = L2.measuredStyle([k(0xff0000, [1]), k(0xff0000, [1]), k(0x0000ff, [1, 2]), k(0x0000ff, [1, 2]), k(0x0000ff, [1, 2])])!
     expect([nested.pieces.get(1), nested.pieces.get(2)]).toEqual([0xff0000, 0x0000ff])
     expect(L2.measuredStyle([k(0x0000ff, [1, 2]), k(0x0000ff, [1, 2])])!.pieces.get(1)).toBe(0x0000ff)
+    // (the base's design the one most of its glyphs hold, not the first's: a decorative initial before a Times text (Codex on #415))
+    const d = (design: string) => ({ st: { ...plain(), design } as never, sets: 0, chain: [] as number[] })
+    expect(L2.measuredStyle([d('palatino'), d('times'), d('times'), d('times')])!.st.design).toBe('times')
+    expect(L2.measuredStyle([d('palatino'), d('times')])!.st.design).toBe('palatino')
     // (the same input, the same answer)
     const xs = [c(bold(0x0c5388), 1), c(plain(0x0c5388)), c(italic(0), 2)]
     expect(L2.measuredStyle(xs)).toEqual(L2.measuredStyle(xs))

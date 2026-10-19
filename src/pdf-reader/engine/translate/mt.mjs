@@ -298,10 +298,11 @@ function flatOf(P, root) {
   const visit = seq => {
     for (const e of seq) {
       if (e.off !== undefined) continue
-      if (e.run) { parts.push(OBJ); at++; continue }
+      // (a run is one marker: it breaks the text where any of its pieces does, a forced break joined with a switch beside it)
+      if (e.run) { if (breaksIn(P.pieces, e.run[0], e.run[1])) breaks.add(at); parts.push(OBJ); at++; continue }
       if (e.k !== undefined) {
         const s = P.pieces[e.k].t === 'text' ? textAt(P, e.k) : P.ink[e.k] ? '' : OBJ
-        if (s === OBJ && BREAKS.test(P.pieces[e.k].src ?? '')) breaks.add(at)
+        if (s === OBJ && breaksIn(P.pieces, e.k, e.k)) breaks.add(at)
         parts.push(s); at += s.length; continue
       }
       if (!e.info.text) { if (e.info.voids) { parts.push(OBJ); at++ } continue }
@@ -327,6 +328,8 @@ const solidBeforeAt = (flat, a) => { let i = a - 1; while (i >= 0 && /\s/.test(f
 /** the placeholders that break the text where they stand: a forced line break, a display, an item. An inline formula does
  *  not: the translator moves it with the words as one of them (`We fix the $\theta$ \textcolor{red}{matrix …}` kept would
  *  cut its noun phrase in two; the review of #415, 100 of the 109 units its clause changed over the sweep's papers) */
+/** whether pieces `a` to `b` hold a placeholder that breaks the text (BREAKS) */
+const breaksIn = (pieces, a, b) => { for (let k = a; k <= b; k++) if (pieces[k]?.t === 'ph' && BREAKS.test(pieces[k].src ?? '')) return true; return false }
 const BREAKS = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?|\$\$[\s\S]*|\\\[[\s\S]*|\\begin\s*\{(?:equation|align|gather|multline|eqnarray|displaymath|flalign|alignat)\*?\}[\s\S]*)\s*$/
 /** whether the text breaks at flat offset `i` (BREAKS) */
 const breaksAt = (P, i) => i >= 0 && P.breaks.has(i)

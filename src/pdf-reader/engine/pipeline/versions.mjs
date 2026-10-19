@@ -145,7 +145,7 @@
 // 22: raised with TRANSLATE_VERSION 4 (the boundary rule: a styled pair whose two ends stand where the wire is cut
 //     anyway keeps its markers, mt.mjs classOf), so that copies made before it are not taken whole: a copy of 21, and of
 //     every pipeline before it, carries each unit whose wire the rule leaves as it was (mt.mjs boundaryChanges; live.mjs
-//     PIPELINE_CARRIES): over 137 papers' sources 122 of 36,136 units, in 26 papers, are asked again. The units, the
+//     PIPELINE_CARRIES): over 137 papers' sources 126 of 36,136 units, in 29 papers, are asked again. The units, the
 //     marked original and the layout file are 21's byte for byte
 export const PIPELINE_VERSION = '22'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a

@@ -2121,8 +2121,9 @@ export function measuredStyle(chars) {
   const of = (bit, list = chars) => { const out = list.filter(c => !(c.sets & bit)); return out.length ? out : list }
   const bold = majorityOf(of(WEIGHT), c => !!c.st.bold, false), italic = majorityOf(of(SLANT), c => !!c.st.italic !== !!c.flip, false)
   const caps = majorityOf(of(CAPS), c => !!c.st.caps, false)
+  // (its design the one most of that family's glyphs hold, a tie to the first met: a decorative initial is no base)
   const famFrom = of(FAMILY), fam = majorityOf(famFrom, c => c.st.fam, 'serif')
-  const design = famFrom.find(c => c.st.fam === fam)?.st.design
+  const design = majorityOf(famFrom.filter(c => c.st.fam === fam), c => c.st.design, undefined)
   const told = c => Number.isInteger(c.st.fill) && c.st.fill >= 0
   const outside = chars.filter(c => !(c.sets & COLOUR))
   const fill = majorityOf((outside.length ? outside : chars).filter(told), c => c.st.fill, 0) ?? null
