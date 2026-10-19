@@ -2,6 +2,18 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
+## 0.5.1 — 2026-10-19
+
+- Fixed: in the PDF reader, a sentence whose words change style (bold, italic, colour) is translated whole. It used to come back in pieces, in one paper Chinese words separated by spaces, and a short label such as "Before" could vanish from the translation.
+- The translation keeps colour: a coloured word keeps its colour, and a blue citation stays blue.
+- A heading centred on the original page stays centred in the translation, and a heading that runs into its paragraph stays on the same line.
+- Fixed: in the PDF reader, a piece of code or a web address inside a sentence is drawn from the original's own letters. It used to leave the whole paragraph in English when the original set that piece over two lines. A straight quote, a backslash, a caret or a vertical bar in a paper's text no longer leaves its paragraph in English either: in one paper, 256 paragraphs.
+- Fixed: in the PDF reader, code and command output that a paper sets in a block style of its own are never sent to the translator; they stay as the paper prints them. One paper had 832 such blocks, and their punctuation had been turned full-width.
+- Fixed: in the PDF reader, a paper that puts a box of text straight before a centred passage can be prepared, and the words after a box are translated whole. The first word after a box could lose its first letter, and a figure's internal name could be sent for translation.
+- Fixed: in the PDF reader, a paragraph whose reference arXiv's PDF names otherwise than the copy prepared here ("appendix B" for "section B") is translated, also where the other name moves the paragraph's lines. Two paragraphs of one paper stayed in English. A piece of code broken over two lines in one version only is still drawn.
+- Fixed: in the PDF reader, a paper whose prepared copy stops short of arXiv's pages is no longer drawn from that copy. Its paragraphs of plain text are translated where they are found on arXiv's page; the ones with formulas or citations stay in the original.
+<!-- TODO(owner): CJK italic choice -->
+
 ## 0.5.0 — 2026-10-19
 
 - PDF papers have a reader of their own: arXiv's PDF on one side, its translation on the other, page for page. Figures and formulas stay as the author drew them, the translated text is set in fonts close to the original's, and the two sides scroll together; point at a sentence and its counterpart lights up.
@@ -12,10 +24,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 - The reader's Download opens arXiv's own PDF in a tab of its own, in the browser's viewer.
 - Fixed: in the PDF reader, a translated line after a short last line no longer runs over the formula set on a line of its own below it.
 - Fixed: when arXiv or Read arXiv's website takes a request and then goes silent, the PDF reader and the floating button no longer wait for ever: the reader ends in its failure note with Retry, and the button appears.
-- Fixed: in the PDF reader, a paper that puts a box of text straight before a centred passage can be prepared, and the words after a box are translated whole. The first word after a box could lose its first letter, and a figure's internal name could be sent for translation.
-- Fixed: in the PDF reader, code and command output stay as the paper prints them when the paper sets them out in a block style of its own. They were translated as prose: in one paper, 720 blocks of commands and their output, their punctuation turned full-width.
 - Fixed: in the PDF reader, text printed at an angle (a caption up a landscape page, a figure's label turned on its side) is highlighted where it is printed. One paper with landscape pages could not be opened at all.
-- Fixed: in the PDF reader, a paragraph whose reference arXiv's PDF names otherwise than the copy prepared here ("appendix B" for "section B") is translated, also where the other name moves the paragraph's lines. Two paragraphs of one paper stayed in English.
 - Fixed: in the PDF reader, the section headings some papers write with a plain-text version for the PDF's bookmarks are translated. They stayed in English: 13 of one paper's 14 headings.
 - Fixed: in the PDF reader, a set or a tuple that a paper writes as several formulas side by side — `{Φ0, Φ1, Φ2}` written as three, its brace opened in the first and closed in the last — stays whole in the translation. The translator could move one of its parts away, and the set was drawn broken apart around the translated words.
 - Fixed: the permission to reach a service's address is given back once no service uses it, every time. A service deleted while the settings page closed before its five seconds of Undo were up kept that permission, and pages translating with it went on using it until they reloaded; now they move to the next service and the permission goes. An address you edited away, or asked for in a form you then closed, goes back too — never while a page still translates with it or a form is connecting to it.
