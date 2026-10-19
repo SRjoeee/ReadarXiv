@@ -457,6 +457,41 @@ describe('anchorUnits: a unit\'s own words across a page or column break (fix ro
   })
 })
 
+describe('anchorUnits: two marked units both going on over a page (2610.10069 p8, E4)', () => {
+  const line = (s: string, x: number, y: number) => [item(s, x, y, { width: 200, eol: true })]
+  const pageOf = (n: number, lines: Item[][]) => ({ page: n, items: [item(String(n), 150, 62, { eol: true }), ...lines.flat()], styles: {} })
+  const words = (doc: DocToken[], f: { tokens: number[] } | null | undefined) => f?.tokens.map(k => doc[k]?.t)
+
+  it('a paragraph and its footnote whose ranges cross: each line of the overlap is the unit whose words it holds', () => {
+    // (the stream: the paragraph's lines, the footnote's first at the page's foot, the paragraph's next at the next page's
+    // head, the footnote's last at its foot; the shorter range took every line of the overlap)
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('alpha beta gamma delta', 50, 676), line('note one two three', 50, 120)]),
+      pageOf(2, [line('epsilon zeta eta theta iota', 50, 700), line('note four five six', 50, 120)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'alpha beta gamma delta epsilon zeta eta theta iota' }, { id: 2, text: 'note one two three note four five six' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('alpha'), at('iota')]], ['2', [at('note'), at('six')]]]) })
+    expect(words(doc, found.get(1))).toEqual(['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota'])
+    expect(words(doc, found.get(2))).toEqual(['note', 'one', 'two', 'three', 'note', 'four', 'five', 'six'])
+  })
+
+  it('a formula\'s row of two-letter tokens at the next page\'s head is held between the unit\'s lines, not the walk\'s end', () => {
+    // (the walk up from the unit's first matched word on the next page: `dt ln` holds no word of the unit, the line above it
+    // its word a hyphen cut over the page)
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('we have to gen-', 50, 100)]),
+      pageOf(2, [line('erate', 50, 700), line('dt ln', 50, 688), line('the text again here', 50, 676), line('another paragraph after', 50, 652)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'we have to generate the text again here' }, { id: 2, text: 'another paragraph after' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('we'), at('here')]], ['2', [at('another'), at('after')]]]) })
+    expect(words(doc, found.get(1))).toEqual(['we', 'have', 'to', 'gen', 'erate', 'dt', 'ln', 'the', 'text', 'again', 'here'])
+  })
+})
+
 describe('anchorUnits: a unit\'s display across a page break', () => {
   it('a unit with a display between its words fills the break with the display\'s lines and its own words, not a table\'s row whose words the paragraph uses (the re-review of A1, m2)', () => {
     const b12 = (str: string, x: number, y: number, eol = false, width = str.length * 6) => ({ str, transform: [12, 0, 0, 12, x, y], width, height: 12, hasEOL: eol, fontName: 'f' })

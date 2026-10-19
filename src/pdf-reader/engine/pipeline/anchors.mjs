@@ -709,13 +709,16 @@ function inOrder(doc, words, dir) {
     for (const j of ks) {
       const t = doc[j].t
       if (!t || (!CJK.test(t) && !/\p{L}{2}/u.test(t.replace(/\p{Script=Greek}/gu, ' ')))) continue
-      all++
+      // (a token of two letters the unit's next words do not hold is a formula's — dt, ln, a script — and no word: it does
+      // not vote; a line of no word, a formula's or its scripts' row, is the unit's only between lines that are: HELD)
+      let hit = false
       for (let q = p, n = 0; n < AHEAD && q >= 0 && q < words.length; q += dir, n++) {
         const w = words[q]
-        if (w === t || (!CJK.test(t) && (dir > 0 ? w.startsWith(t) : w.endsWith(t)))) { found++; p = q + dir; break }
+        if (w === t || (!CJK.test(t) && (dir > 0 ? w.startsWith(t) : w.endsWith(t)))) { found++; p = q + dir; hit = true; break }
       }
+      if (hit || CJK.test(t) || /\p{L}{3}/u.test(t.replace(/\p{Script=Greek}/gu, ' '))) all++
     }
-    return edge || (all > 0 && found / all >= OWN)
+    return edge || (all === 0 ? HELD : found / all >= OWN)
   }
 }
 
@@ -1018,6 +1021,27 @@ function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOw
   // is the footnote's); an unmarked unit its matched words
   const ranged = found.map((f, u) => [f?.bounded, u]).filter(([b]) => b).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
   for (const [[a, b], u] of ranged) { owner.fill(u, a, b + 1); ranges.push([a, b]) }
+  // two ranges that cross (neither apart nor one inside the other): a paragraph and a footnote both going on over a page,
+  // the stream's order u's lines, v's first lines (the page's foot), u's next lines (the next page's head), v's last lines.
+  // The overlap [v's start, u's end] holds lines of both: each of its lines is the one's whose matched words it holds
+  // (the other's where it holds only those), as the innermost range had it where it holds neither's
+  const crossed = ranged.map(([[a, b], u]) => [a, b, u]).sort((x, y) => x[0] - y[0] || y[1] - x[1])
+  for (let p = 0; p < crossed.length; p++) {
+    const [a, b, u] = crossed[p]
+    for (let q = p + 1; q < crossed.length && crossed[q][0] <= b; q++) {
+      const [c, d, v] = crossed[q]
+      if (d <= b || c <= a) continue
+      const mu = new Set(found[u].m), mv = new Set(found[v].m)
+      for (let k = c; k <= b;) {
+        const l = line[k]
+        let e = k, nu = 0, nv = 0
+        for (; e <= b && line[e] === l; e++) { if (mu.has(e)) nu++; if (mv.has(e)) nv++ }
+        const w = nu > nv ? u : nv > nu ? v : -1
+        if (w !== -1) for (let j = k; j < e; j++) if (owner[j] === u || owner[j] === v) owner[j] = w
+        k = e
+      }
+    }
+  }
   found.forEach((f, u) => { if (f && !f.bounded) for (const k of f.m) if (owner[k] === -1) { owner[k] = u; wrote.tokens.push(k) } })
   // (the tokens owned, as disjoint intervals rising: the line owners are made of them alone)
   const owned = []
