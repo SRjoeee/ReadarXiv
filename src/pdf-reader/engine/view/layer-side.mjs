@@ -28,6 +28,7 @@ import { createFeed } from './feed.mjs'
 import { figureRegions } from './figures.mjs'
 import { pathsOf, wantsFloats } from './floats.mjs'
 import { internalsOf } from './reader-view.mjs'
+import { bySentence } from './highlight.mjs'
 import { createShapes, layerShapes } from './shapes.mjs'
 
 /** how long a page asked for, once told `laying`, may take to be laid before its place shows the original (the web's D5-R7d) */
@@ -216,6 +217,8 @@ export function createLayerSide(view, o) {
     leftAc.abort()
     leftAc = new AbortController()
     for (const p of leftAsked) if (!left?.has(p)) leftAsked.delete(p)
+    // (a fetch this aborts is asked again: the pages wanted spread again on their next want)
+    spread.clear()
     for (const n of pages.keys()) { abortAsk(n); const P = pages.get(n); if (P.content && !P.content.wrap) unlay(n); P.failed = false; P.stalled = false }
     rearm.clear()
     ready = 0
@@ -585,6 +588,8 @@ export function createLayerSide(view, o) {
   let left = null, right = null, shapedParts = []
   let leftAc = new AbortController()
   const leftAsked = new Set(), wantsBefore = new Set(), floatsAsked = new Set()
+  /** the pages wanted, and those whose running units' other pages' left parts were asked for (spreadFrom) */
+  const wantedOnce = new Set(), spread = new Set()
   /** when each page's left part last failed */
   const leftFailed = new Map()
   const leftStarts = new Map(), rightStarts = new Map()
@@ -611,7 +616,7 @@ export function createLayerSide(view, o) {
       shapedParts = []
       leftStarts.clear(); rightStarts.clear()
       // (the chain's left parts may be others now: a page's failure is no longer a reason to wait)
-      leftAsked.clear(); floatsAsked.clear(); leftFailed.clear()
+      leftAsked.clear(); floatsAsked.clear(); leftFailed.clear(); spread.clear()
       outlineSoon()
     }
     const more = parts.slice(shapedParts.length)
@@ -621,7 +626,8 @@ export function createLayerSide(view, o) {
     if (contents.addParts(more)) outlineSoon()
     shapesChanged()
   }
-  /** a want of page p (the pointer over it, either pane): its left part fetched once, on the first */
+  /** a want of page p (the pointer over it, either pane): its left part fetched once, on the first, and once it is in the
+   *  other pages' of its running units (spreadFrom) */
   function want(p) {
     if (disposed || !left || !Number.isInteger(p)) return
     if (p !== lastWant) {
@@ -632,10 +638,32 @@ export function createLayerSide(view, o) {
       if (wanted.length > WANTED_KEPT) wanted.shift()
       windowed()
     }
+    wantedOnce.add(p)
+    leftOf(p, true)
+    spreadFrom(p)
+  }
+  /**
+   * The left parts of the other pages of page p's running units, once p's own is in: a unit's sentences wait for every page
+   * it is on (shapes.mjs tokensIn), so a paragraph over a page break lit whole on its first page until the pointer had been
+   * over the next. Only from a page wanted (a page fetched so spreads no further: a paper's paragraphs run on page after
+   * page), and in the task that follows its left part's: a unit over a break costs one more left part, the page beside it
+   */
+  function spreadFrom(p) {
+    if (spread.has(p) || !door || !left?.has(p)) return
+    spread.add(p)
+    const L = left.layout
+    for (const id of L.unitsOn[p] ?? []) {
+      if (!bySentence(index.kinds[id] ?? undefined)) continue
+      for (const q of L.pagesOf.get(id) ?? []) if (q !== p && !left.has(q)) leftOf(q, false)
+    }
+  }
+  /** page p's left part fetched once (again on a later want once a failure's wait has passed), added in a task of its own;
+   *  `wanted`: the pointer's, kept for the door where none is open yet */
+  function leftOf(p, wanted) {
     if (leftAsked.has(p)) return
     // a part that failed: asked again once its wait has passed
     if (clock.now() - (leftFailed.get(p) ?? -Infinity) < LEFT_RETRY_MS) return
-    if (!door) { wantsBefore.add(p); return }
+    if (!door) { if (wanted) wantsBefore.add(p); return }
     leftAsked.add(p)
     const my = gen, L0 = left
     door.leftPageOf(p, { signal: leftAc.signal }).then(lp => {
@@ -651,6 +679,7 @@ export function createLayerSide(view, o) {
           startsFor(lp.spans.map(s => s[0]))
           floatsFor(p, null)
         }
+        if (wantedOnce.has(p)) spreadFrom(p)
       }, 0)
     }, e => {
       if (disposed || isAbort(e) || my !== gen) { if (my !== gen) leftAsked.delete(p); return }
