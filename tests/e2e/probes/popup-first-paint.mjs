@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/popup-first-paint.mjs')
 
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
 const OUT = fileURLToPath(new URL('../../../lab/pdf/out/popup-first-paint/', import.meta.url))
@@ -38,12 +40,12 @@ const firstPaint = target => target.evaluate(() => new Promise(resolve => {
 const profile = mkdtempSync(join(tmpdir(), 'popup-first-paint-'))
 // the profile goes when the process ends, a failure's throw included (a profile a run once filled the disk)
 process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
-const context = await chromium.launchPersistentContext(profile, {
+const context = await chromium.launchPersistentContext(profile, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: true,
   viewport: { width: 1280, height: 800 },
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
 const id = new URL(worker.url()).host

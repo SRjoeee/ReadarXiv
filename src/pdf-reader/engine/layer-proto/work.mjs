@@ -10,14 +10,15 @@
  *  function (w100, cache hits too), `breaks` the line-breaking passes (breakLines), `linkTests` the link matching's
  *  work units (the budget it spent: links.mjs ownersOf, matchUnit, placeUnit), `inkSteps` the cells of the ink maps read
  *  (inkMapOf), `ops` the drawing operations a page's units made, `edges` the page characters a unit's edges read (run.mjs
- *  edgesOf: those within the band of a baseline it reads, and the page's characters as its index of them is made) */
-export const WORK_KEYS = Object.freeze(['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'edges'])
+ *  edgesOf: those within the band of a baseline it reads, and the page's characters as its index of them is made), `fills`
+ *  what a page read live reads for its characters' fills (run.mjs liveFillsOf: its list's operations, its glyphs and items) */
+export const WORK_KEYS = Object.freeze(['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'edges', 'fills'])
 
 /** the running totals of this module; incremented in place by the engine */
-export const work = { fit: 0, measures: 0, breaks: 0, linkTests: 0, inkSteps: 0, ops: 0, edges: 0 }
+export const work = { fit: 0, measures: 0, breaks: 0, linkTests: 0, inkSteps: 0, ops: 0, edges: 0, fills: 0 }
 
 /** a copy of the running totals, to take the difference from */
 export const markWork = () => ({ ...work })
 
 /** a zeroed record of the counters */
-export const newWork = () => ({ fit: 0, measures: 0, breaks: 0, linkTests: 0, inkSteps: 0, ops: 0, edges: 0 })
+export const newWork = () => ({ fit: 0, measures: 0, breaks: 0, linkTests: 0, inkSteps: 0, ops: 0, edges: 0, fills: 0 })

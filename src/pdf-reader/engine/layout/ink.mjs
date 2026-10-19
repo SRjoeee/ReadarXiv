@@ -219,8 +219,11 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * (outlineTable's, made where PDF.js gives the outlines: in Node), for a glyph whose outline this reading has not (the
  * browser draws a font as a font face, and gives no outline): its box is then the server's, exactly. `collect`: a Map
  * this reading's outline boxes are added to, by outlineKey
+ * `glyphsOnly` (the reader's live fills, layer-proto/run.mjs liveFillsOf): the glyphs alone, as a whole walk places them (their
+ * text, place, size and fill: layout/fills.mjs reads no more), with no box, path, image or outline read: `boxes` empty, a
+ * glyph's outline its line's
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS, glyphsOnly = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
@@ -279,7 +282,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     shadingFill: SHADING, paintImageXObject: IMAGE, paintInlineImageXObject: INLINE_IMAGE, paintImageMaskXObject: MASK,
     paintSolidColorImageMask: SOLID_MASK, paintImageXObjectRepeat: IMAGE_REPEAT, paintImageMaskXObjectRepeat: MASK_REPEAT,
     paintImageMaskXObjectGroup: MASK_GROUP, paintInlineImageXObjectGroup: INLINE_GROUP, setRenderingIntent: INTENT,
-    setFillRGBColor: FILL_RGB, setFillTransparent: FILL_NONE, setFillColorN: FILL_N,
+    setFillRGBColor: FILL_RGB, setFillTransparent: FILL_NONE, setFillColorN: FILL_N, setCharWidthAndBounds: D1,
   } = OPS
   const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
@@ -350,18 +353,34 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     }
     return outlines.get(key)
   }
+  /** whether a Type 3 glyph paints colours of its own: a coloured glyph (d0, not d1) whose procedure sets a fill (PDF 9.6.4: a
+   *  d1 glyph is a stencil painted in the current fill, whatever its procedure sets); once a font and glyph */
+  const ownColours = new WeakMap()
+  const paintsOwn = (font, id) => {
+    if (font?.isType3Font !== true || id === undefined) return false
+    let m = ownColours.get(font)
+    if (!m) ownColours.set(font, (m = new Map()))
+    if (!m.has(id)) {
+      const procs = font.charProcOperatorList, proc = procs instanceof Map ? procs.get(id) : procs?.[id]
+      const fns = proc?.fnArray ?? []
+      m.set(id, fns.length > 0 && fns[0] !== D1 && [...fns].some(fn => fn === FILL_RGB || fn === FILL_N || fn === FILL_NONE))
+    }
+    return m.get(id)
+  }
   const emit = (g, M, hs, xa, xb, ascent, descent) => {
     const u = g.unicode
     if (typeof u !== 'string' || !known() || (s.tr & 3) === 3) return
     const ty = s.y + s.rise, size = s.size
     const level = M[0] * hs > 0 && M[3] > 0 && Math.abs(M[1]) <= LEVEL * Math.abs(M[0])
-    if (!level) { addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4); return }
+    if (!level) { if (!glyphsOnly) addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4); return }
     const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4]
     const sz = size * M[3]
     const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
     // (its fill where its rendering mode paints one: 0, 2, 4 and 6 fill; 1 and 5 stroke alone; 3 and 7 paint nothing, above)
     const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name, ix0: Math.min(ox, ex), ix1: Math.max(ox, ex), fill: s.tr & 1 ? NO_FILL : s.fill }
-    const box = outlineOf(g)
+    // (a Type 3 glyph whose procedure paints its own colours: `fill` is only the fill it was shown in, no reading of its ink)
+    if (paintsOwn(s.font, g.operatorListId)) glyph.ownColour = true
+    const box = glyphsOnly ? null : outlineOf(g)
     if (box?.length === 4) {
       // the outline across from the origin (its x in em × size, the horizontal scale and the direction), and up
       const a = M[0] * (xa + box[0] * size * hs) + M[2] * ty + M[4], b = M[0] * (xa + box[2] * size * hs) + M[2] * ty + M[4]
@@ -498,7 +517,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       }
       case ANNOTATION_END: inAnnotation = Math.max(0, inAnnotation - 1); pop(); break
       case CLIP: case EO_CLIP: s.pendingClip = true; break
+      // (glyphsOnly: the glyphs and the state they are placed by alone; paths, shadings and images place no glyph)
       case PATH: {
+        if (glyphsOnly) { s.pendingClip = false; break }
         const op = a[0], mm = a[2]
         if (!inAnnotation) pathAt++
         const ok = mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1]
@@ -511,11 +532,13 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         break
       }
       case SHADING:
+        if (glyphsOnly) break
         // painted over the clip in force; with none, the page's background, left out (a clip not known: the page capped)
         if (known() && s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) put(s.clip[0], s.clip[1], s.clip[2], s.clip[3], -2)
         break
-      case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: addBox(s.ctm, 0, 0, 1, 1, -3); break
+      case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: if (!glyphsOnly) addBox(s.ctm, 0, 0, 1, 1, -3); break
       case IMAGE_REPEAT: case MASK_REPEAT: {
+        if (glyphsOnly) break
         // [id, scaleX, scaleY, positions]; a mask's [mask, scaleX, skewX, skewY, scaleY, positions]
         const mask = fn === MASK_REPEAT
         const [sa, sb, sc, sd] = mask ? [a[1], a[2], a[3], a[4]] : [a[1], 0, 0, a[2]]
@@ -525,6 +548,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         break
       }
       case MASK_GROUP: case INLINE_GROUP: {
+        if (glyphsOnly) break
         const group = fn === MASK_GROUP ? a[0] : a[1]
         for (const img of Array.isArray(group) ? group : []) { if (stop) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3) }
         break

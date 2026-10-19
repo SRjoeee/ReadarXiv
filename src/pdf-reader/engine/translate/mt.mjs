@@ -159,7 +159,7 @@ function treeOf(pieces) {
  * and after the translation) and each kept pair's own (`lead`, `end`), as lists of piece indices and blocks.
  * A unit whose pairs do not nest goes as it did before: every piece but its text a marker
  */
-function planOf(u, format) {
+function planOf(u, format, boundary = true) {
   const pieces = u.pieces
   const ink = new Array(pieces.length)
   let hasInk = false, styled = false
@@ -179,16 +179,25 @@ function planOf(u, format) {
     }
     return { items, front: [], back: [], styled: false }
   }
-  // (one state for the unit, read by the functions below: none of them is made anew for each unit)
-  const P = { pieces, ink, runs, hasInk, texts: new Array(pieces.length), format }
+  // (one state for the unit, read by the functions below: none of them is made anew for each unit; `keptEdges` the boundary
+  // rule's, null while it is read)
+  const P = { pieces, ink, runs, hasInk, texts: new Array(pieces.length), format, keptEdges: null }
   runsIn(P, root)
   root.info = infoOf(P, root.seq)
   spans(P, root)
-  if (format !== 'tags') flatOf(P, root)
+  if (format !== 'tags') { flatOf(P, root); P.keptEdges = boundary ? keptEdgesOf(P, root) : null }
   const unit = { lead: [], end: [], seen: false }
   const W = { P, items: [], stack: [unit], group: unit, sink: null, joint: false }
   walk(W, root.seq)
   return { items: W.items, front: unit.lead, back: unit.end, styled: true, texts: P.texts }
+}
+/** whether the boundary rule (classOf; TRANSLATE_VERSION 4) changes what a unit sends: its markers plan, which the wire and the
+ *  runs are written from, with the rule and without it. A unit with no pair has none to keep: the units a copy made before the
+ *  rule is asked again for, and no other (live.mjs PIPELINE_CARRIES) */
+export function boundaryChanges(u) {
+  if (!Array.isArray(u?.pieces) || !u.pieces.some(p => p?.t === 'open')) return false
+  const a = planOf(u, 'markers'), b = planOf(u, 'markers', false)
+  return JSON.stringify([a.items, a.front, a.back]) !== JSON.stringify([b.items, b.front, b.back])
 }
 const textAt = (P, k) => (P.texts[k] ??= utf8(P.pieces[k].s))
 const blankAt = (P, k) => P.pieces[k].t === 'text' && blank(textAt(P, k))
@@ -284,13 +293,18 @@ function spans(P, node) {
 /** where each pair's content lies in the unit's text (formulas and the like one character, OBJ): `P.ranges`, and the
  *  text and its edges (`P.flat`) its class is read in */
 function flatOf(P, root) {
-  const parts = [], ranges = new Map()
+  const parts = [], ranges = new Map(), breaks = new Set()
   let at = 0
   const visit = seq => {
     for (const e of seq) {
       if (e.off !== undefined) continue
-      if (e.run) { parts.push(OBJ); at++; continue }
-      if (e.k !== undefined) { const s = P.pieces[e.k].t === 'text' ? textAt(P, e.k) : P.ink[e.k] ? '' : OBJ; parts.push(s); at += s.length; continue }
+      // (a run is one marker: it breaks the text where any of its pieces does, a forced break joined with a switch beside it)
+      if (e.run) { if (breaksIn(P.pieces, e.run[0], e.run[1])) breaks.add(at); parts.push(OBJ); at++; continue }
+      if (e.k !== undefined) {
+        const s = P.pieces[e.k].t === 'text' ? textAt(P, e.k) : P.ink[e.k] ? '' : OBJ
+        if (s === OBJ && breaksIn(P.pieces, e.k, e.k)) breaks.add(at)
+        parts.push(s); at += s.length; continue
+      }
       if (!e.info.text) { if (e.info.voids) { parts.push(OBJ); at++ } continue }
       const a = at
       visit(e.seq)
@@ -303,10 +317,40 @@ function flatOf(P, root) {
   while (last > 0 && /\s/.test(flat[last - 1])) last--
   while (lastWord > 0 && /[\s￼]/.test(flat[lastWord - 1])) lastWord--
   P.ranges = ranges
+  P.breaks = breaks
   P.flat = { text: flat, first: flat.search(/\S/), word: flat.search(/[^\s￼]/), last, lastWord }
 }
 const SOLID = /\S/g
 const nextSolid = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.[0] ?? '' }
+/** where the next character from `b` that is no white space stands, and the last before `a` (-1 for none) */
+const nextSolidAt = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.index ?? -1 }
+const solidBeforeAt = (flat, a) => { let i = a - 1; while (i >= 0 && /\s/.test(flat[i])) i--; return i }
+/** the placeholders that break the text where they stand: a forced line break, a display, an item. An inline formula does
+ *  not: the translator moves it with the words as one of them (`We fix the $\theta$ \textcolor{red}{matrix …}` kept would
+ *  cut its noun phrase in two; the review of #415, 100 of the 109 units its clause changed over the sweep's papers) */
+/** whether pieces `a` to `b` hold a placeholder that breaks the text (BREAKS) */
+const breaksIn = (pieces, a, b) => { for (let k = a; k <= b; k++) if (pieces[k]?.t === 'ph' && BREAKS.test(pieces[k].src ?? '')) return true; return false }
+const BREAKS = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?|\$\$[\s\S]*|\\\[[\s\S]*|\\begin\s*\{(?:equation|align|gather|multline|eqnarray|displaymath|flalign|alignat)\*?\}[\s\S]*)\s*$/
+/** whether the text breaks at flat offset `i` (BREAKS) */
+const breaksAt = (P, i) => i >= 0 && P.breaks.has(i)
+/** the places the wire has a marker at anyway, by the sentence rule alone: each kept or enclosing pair's two edges, read before
+ *  the boundary rule (classOf) and never after it, so that one pair's keeping makes no other's; inside a pair that goes flat
+ *  too, whose children the wire walks still (a link kept in it keeps its markers) */
+function keptEdgesOf(P, root) {
+  const edges = []
+  const visit = seq => {
+    for (const e of seq) {
+      if (!e.seq) continue
+      const c = classOf(P, e)
+      if (c === 'kept' || c === 'enclose') edges.push(...P.ranges.get(e))
+      if (c === 'kept' || c === 'enclose' || c === 'flat') visit(e.seq)
+    }
+  }
+  visit(root.seq)
+  return edges
+}
+/** whether `x` stands at a kept pair's edge, white space alone between them */
+const atEdge = (P, x) => P.keptEdges.some(y => /^\s*$/.test(P.flat.text.slice(Math.min(x, y), Math.max(x, y))))
 // (a sentence's end is read in the last words before a place, its start in the first after it)
 const WINDOW = 200
 /** a pair's class on the wire (planOf) */
@@ -323,7 +367,14 @@ function classOf(P, e) {
   // a run-in label at the unit's head ends with a colon, before one, or before a sentence that begins with no stop
   // between (\textbf{Service Auto-Scaling} To accommodate)
   const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
-  return starts && ends ? 'kept' : 'flat'
+  if (starts && ends) return 'kept'
+  // the boundary rule (E1 of the residuals' batch R2): a pair whose two ends both stand where the wire is cut anyway — a placeholder
+  // that breaks the text beside it (BREAKS: a forced break, a display, an item; never an inline formula, which the translator
+  // moves as a word), a kept or enclosing pair's edge with white space alone between, or the unit's own end — is kept too: its
+  // two markers cut nothing Microsoft does not cut already (2610.19159's "\textit{Floor (must clear):} \textcolor{red}{… to the
+  // end}", whose colour went flat at a colon that starts no sentence)
+  if (P.keptEdges && (starts || breaksAt(P, solidBeforeAt(flat, a)) || atEdge(P, a)) && (ends || breaksAt(P, nextSolidAt(flat, b)) || atEdge(P, b))) return 'kept'
+  return 'flat'
 }
 // the wire, and where each piece that does not go on it is put back: in its innermost kept group (the unit, a kept
 // pair) after the open where it stands before the group's first content, else before the close; a flat pair's open,
@@ -369,6 +420,73 @@ function walk(W, seq) {
     W.items.push({ t: 'close', g }); W.stack.pop(); W.group = group; W.sink = sink; W.joint = false
   }
 }
+// ---------------------------------------------------------------- a display's own stop
+/** a displayed formula's source: the layer draws it as one crop (layout/marks.mjs classOf, which reads it here) */
+export const DISPLAY = /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
+/** the math environments a display holds, which end inside it before its own end: a display's, an alignment's, a case
+ *  split's, an array's or a matrix's. No other (a picture, `\end{tikzpicture}`, whose `;` is its own syntax) */
+const MATH_INNER = String.raw`(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations|split|aligned|alignedat|gathered|multlined|cases|dcases|rcases|array|subarray|[pbBvV]?matrix|smallmatrix)\*?`
+/** one thing at a display's end that sets none of its sentence's punctuation, read from the end: white space, a comment,
+ *  the display's close and an inner math environment's, a label, a tag, a number's switch, `\qedhere`, a line break, a
+ *  space or a fill of TeX's, an empty group, plain TeX's \eqno and what it numbers */
+const DISPLAY_TAIL = new RegExp(String.raw`(?:[ \t\n\f\r]+|(?<!\\)%[^\n]*|\\\]|\$\$|\\end\s*\{${MATH_INNER}\}|\\(?:label|tag\*?)\s*\{[^{}]*\}|\\(?:nonumber|notag|qedhere|displaybreak|allowbreak|hfill|q?quad|enspace|thinspace)(?![A-Za-z@])(?:\[[^\]]*\])?|\\\\\*?(?:\[[^\]]*\])?|\\[,;:!> ]|~|\{\}|\\l?eqno(?![A-Za-z@])[\s\S]*)$`)
+/** the punctuation at that end: a stop, a comma, a semicolon or a colon, bare or alone in a group that sets it (`\text{.}`,
+ *  never a phantom's); never an empty delimiter (`\right.`) or an escaped character (`\;` is a space) */
+const DISPLAY_STOP = /\\(?:text|mbox|textrm|textnormal|mathrm|hbox)\s*\{\s*([.,;:])\s*\}$|(?<!\\(?:right|middle|left|[bB]igg?[lrm]?)\s*)(?<!\\)([.,;:])$/
+/** the punctuation a display's source sets at its end, which is its sentence's (`x = y.\label{e}\end{equation}`), or null;
+ *  read in its last 2,000 characters, where a display's end lies whatever its length */
+export function displayStop(src) {
+  if (typeof src !== 'string' || !DISPLAY.test(src)) return null
+  let s = src.length > 2000 ? src.slice(-2000) : src
+  for (let n = 0; n < 64; n++) {
+    const m = DISPLAY_TAIL.exec(s)
+    if (!m) break
+    s = s.slice(0, m.index)
+  }
+  const m = DISPLAY_STOP.exec(s)
+  return m ? (m[1] ?? m[2]) : null
+}
+/** what a reply may write for a display's own stop: any script's stop, comma, semicolon or colon */
+const OWN_MARKS = '.,;:\u3002\uff0e\uff0c\u3001\uff1b\uff1a\u0964\u06d4\u060c\u061b'
+/** the marks the reply set right after the display's marker (white space and the sentences' sentinel, sentencesOf's, kept) */
+const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
+/** a piece's own stop, read once for each piece (both wires and the carry test ask it again) */
+const STOP_OF = new WeakMap()
+const stopOfPiece = p => { let s = STOP_OF.get(p); if (s === undefined) STOP_OF.set(p, (s = displayStop(p.src))); return s }
+/** text that begins with punctuation */
+const LEAD_PUNCT = /^\s*[.,;:!?\u3002\uff0e\uff0c\u3001\uff1b\uff1a\uff01\uff1f]/
+/** the display's own stop a void's marker carries (the display its last piece with ink: the one piece, or a run's or a
+ *  group's last), or null; none where the text after it (`after`) begins with punctuation of its own
+ *  (`x = y.\end{equation}, where`), which the wire sends as it is */
+function ownStopOf(slot, pieces, items, i) {
+  let p = slot
+  if (slot.t === 'run' || slot.t === 'edge') {
+    p = null
+    const ps = slot.pieces
+    for (let j = ps.length - 1; j >= 0 && !p; j--) if (!((ps[j].t === 'text' && blank(utf8(ps[j].s))) || ps[j].t === 'open' || ps[j].t === 'close' || isInkless(ps[j]))) p = ps[j]
+  }
+  if (p?.t !== 'ph' || !DISPLAY.test(p.src ?? '')) return null
+  const stop = stopOfPiece(p)
+  return stop && !LEAD_PUNCT.test(textAfter(pieces, items, i)) ? stop : null
+}
+/** the text the wire writes after item `i`, as far as its next marker */
+const textAfter = (pieces, items, i) => (items[i + 1]?.t === 'text' ? items[i + 1].ks.map(k => utf8(pieces[k].s)).join('') : '')
+/** a reply's text after a display's marker that carried its own stop: every mark right after it taken off, the display
+ *  setting its own. A mark right before the marker is the reply's: in Microsoft's 4,825 recorded Chinese answers with a
+ *  marker the wire set before a mark, none moved that mark before it, and each of the 16 marks before such a marker (with
+ *  none after it) was the reply's own — a clause's comma where it set the marker inside its sentence, the previous
+ *  sentence's stop where it set the marker at the next one's start */
+const ownAfter = s => s.replace(OWN_LEAD, '$1')
+/**
+ * Whether a unit's wire carries a display's own stop (serialize's and serializeTags' `own`): the units whose wire and
+ * reading back TRANSLATE_VERSION 5 changed, which a copy made before it is asked again for, and no other (live.mjs
+ * PIPELINE_CARRIES)
+ */
+export function displayStopChanges(u) {
+  if (!Array.isArray(u?.pieces) || !u.pieces.some(p => p?.t === 'ph' && DISPLAY.test(p.src ?? '') && stopOfPiece(p))) return false
+  return !!serialize(u).own || !!serializeTags(u).own
+}
+
 /** a plan's list of piece indices and blocks as the pieces, in order */
 const placed = (pieces, list, out = []) => { for (const x of list) if (Array.isArray(x)) placed(pieces, x, out); else out.push(pieces[x]); return out }
 /** a kept pair's open or close as its slot: the piece, or an edge where pieces ride beside it (its open's: what stands
@@ -424,9 +542,11 @@ function runPieces(u, { parts, front, back }, trOf) {
  *  before them (`numbers`) and from one after them (`numbersAfter`), whose spaces rehydrate takes off again. What does
  *  not go on the wire (planOf): `front` and `back`, the pieces before and after the translation; `refill`, the kept
  *  pairs rehydrate refills. Each only where the unit has one: a unit with no pair and no placeholder that sets no ink
- *  is serialised as it was */
+ *  is serialised as it was. `own`, the markers of displays whose own stop the wire wrote after them (marker id → the
+ *  stop and its offset in the wire, `at`), after which rehydrate takes the reply's marks off again, and which
+ *  sentencesOf counts nowhere */
 export function serialize(u) {
-  const slots = [], stops = new Set(), numbers = new Set(), numbersAfter = new Set(), hidden = new Map(), kept = new Map()
+  const slots = [], stops = new Set(), numbers = new Set(), numbersAfter = new Set(), hidden = new Map(), kept = new Map(), own = new Map()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
@@ -451,14 +571,18 @@ export function serialize(u) {
     const next = items[i + 1], nextText = next?.t === 'text' ? utf8(u.pieces[next.ks[0]].s) : ''
     const after = /^[\p{L}\p{N}\p{M}]/u.test(nextText) ? ' ' : ''
     if (/^\p{N}/u.test(nextText)) numbersAfter.add(slots.length)
-    wire += before + m + after
+    // a display's own stop, its sentence's end inside it, right after its marker: `yields @a#. Prices` — sent as
+    // `yields @a# Prices`, 2610.10069's sentence ran on into the next one, and "yields" came back as a noun
+    const stop = it.t === 'void' ? ownStopOf(slot, u.pieces, items, i) : null
+    if (stop) own.set(slots.length, { stop, at: wire.length + before.length + m.length })
+    wire += before + m + (stop ?? '') + after
   })
   // (a styled unit's wire trimmed whole, its ends' pieces off it; any other as it was)
-  if (styled) wire = wire.trim()
+  if (styled) { const cut = wire.length - wire.trimStart().length; wire = wire.trim(); if (cut) for (const o of own.values()) o.at -= cut }
   const f = placed(u.pieces, front), b = placed(u.pieces, back), refill = refillOf(u.pieces, [...kept.values()])
-  // (`hidden` where a run went out: a unit without one is serialised as it was before runs; `front`, `back` and `refill`
-  // likewise)
-  return { wire, slots, lead, trail, stops, numbers, numbersAfter, ...(hidden.size ? { hidden } : {}), ...(f.length ? { front: f } : {}), ...(b.length ? { back: b } : {}), ...(refill.length ? { refill } : {}) }
+  // (`hidden` where a run went out: a unit without one is serialised as it was before runs; `front`, `back`, `refill` and
+  // `own` likewise)
+  return { wire, slots, lead, trail, stops, numbers, numbersAfter, ...(hidden.size ? { hidden } : {}), ...(f.length ? { front: f } : {}), ...(b.length ? { back: b } : {}), ...(refill.length ? { refill } : {}), ...(own.size ? { own } : {}) }
 }
 
 /** the pieces of a kept pair whose content came back empty (none of its text: the translator set it outside, 2610.19159's
@@ -533,13 +657,17 @@ export const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspac
  *  `auto-regressive @f#, consuming` back as `... @f#(#)...`, its marker read and `(#)` set as text) */
 const STRAY = /(?<!&)#+/g
 const STRAY_PAIR = /[ \t]*[([\uff08\u3010]\s*(?<!&)#+\s*[)\]\uff09\u3011]/g
-export function rehydrate(text, { wire, slots, lead, trail, stops, numbers, numbersAfter, front, back, refill }, tolerant = false) {
+export function rehydrate(text, { wire, slots, lead, trail, stops, numbers, numbersAfter, front, back, refill, own }, tolerant = false) {
   const pieces = [], seen = new Map()
-  let last = 0, afterNumber = false
-  // a text between two markers, the wire's spaces off it: after the one before it, before the one after it (`before`)
+  let last = 0, afterNumber = false, afterOwn = false
+  // a text between two markers, the wire's spaces off it: after the one before it, before the one after it (`before`);
+  // after a display's that carried its own stop, what the reply set for it (ownAfter) — once the wire's space after a
+  // stop is off, which a marker right after the display's own (`@r#. @s#`) has from it
   const pushText = (s, before = null) => {
     s = s.replace(STRAY_PAIR, '').replace(STRAY, '')
     if (before) s = s.replace(before, '')
+    // (the flag is the last marker's: each marker sets it)
+    if (afterOwn) s = ownAfter(s)
     s = decode(s)
     if (afterNumber) s = s.replace(NUMBER_LEAD, '')
     if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) })
@@ -565,6 +693,7 @@ export function rehydrate(text, { wire, slots, lead, trail, stops, numbers, numb
     // (a run's marker: the run's pieces, in their order, or none of them: a marker moved, lost or doubled is read as any is)
     seen.set(id, pieces.length); pieces.push(...piecesOf(slots[id - 1]))
     afterNumber = !!numbersAfter?.has(id)
+    afterOwn = !!own?.has(id)
   }
   buf += text.slice(last); pushText(buf)
   if (seen.size !== slots.length) return { error: 'lost marker' }
@@ -605,15 +734,17 @@ const cumulative = ls => { const out = []; let at = 0; for (const n of ls.slice(
 /** how many characters that are not white space the source wire writes before `c`: an escaped @ or an entity one, a
  *  marker or a tag none — the placeholder is a space in the plain text —, but a run's (serialize `hidden`), which stands
  *  for the text between its formulas too */
-function shownBefore(wire, c, re = ATOM, hidden = null) {
+function shownBefore(wire, c, re = ATOM, hidden = null, owned = null) {
   let n = 0, i = 0
+  // (a display's own stop the wire wrote after its marker, `owned` its offsets: the display's, which the plain source has not)
+  const solid = k => !/\s/.test(wire[k]) && !owned?.has(k)
   for (const m of wire.slice(0, c).matchAll(re)) {
-    for (; i < m.index; i++) if (!/\s/.test(wire[i])) n++
+    for (; i < m.index; i++) if (solid(i)) n++
     if (m[0] === '@@' || m[0][0] === '&') n++
     n += hidden?.get(m[0]) ?? 0
     i = m.index + m[0].length
   }
-  for (; i < c; i++) if (!/\s/.test(wire[i])) n++
+  for (; i < c; i++) if (solid(i)) n++
   return n
 }
 /** the offset in a plain text where its `n`-th character that is no white space has been passed, and its first letter
@@ -657,7 +788,9 @@ export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false, f
   if (!W || !source?.length || source.length !== target?.length) return null
   if (source.reduce((a, b) => a + b, 0) !== ser.wire.length || target.reduce((a, b) => a + b, 0) !== text.length) return null
   const plain = plainSource(u), translated = plainTranslated(pieces)
-  if (shownBefore(ser.wire, ser.wire.length, W.atoms, ser.hidden) !== nonSpace(plain)) return null
+  // (a display's own stop after its marker counts nowhere: a boundary before it or after it names the same place)
+  const owned = ser.own ? new Set([...ser.own.values()].map(o => o.at)) : null
+  if (shownBefore(ser.wire, ser.wire.length, W.atoms, ser.hidden, owned) !== nonSpace(plain)) return null
   const wireAtoms = atomsOf(ser.wire, W.atoms), textAtoms = atomsOf(text, W.atoms)
   const cs = cumulative(source).map(c => outOf(wireAtoms, c)), ct = cumulative(target).map(c => outOf(textAtoms, c))
   // the reply with a sentinel where each sentence begins, read back as the pieces were: the sentinels' places in its
@@ -676,7 +809,7 @@ export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false, f
   const out = { src: [], tr: [] }
   let before = [0, 0]
   cs.forEach((c, j) => {
-    const at = [wordAfter(plain, shownBefore(ser.wire, c, W.atoms, ser.hidden)), wordAfter(translated, tn[j])]
+    const at = [wordAfter(plain, shownBefore(ser.wire, c, W.atoms, ser.hidden, owned)), wordAfter(translated, tn[j])]
     const k = [words(plain.slice(0, at[0])), words(translated.slice(0, at[1]))]
     if (k[0] <= before[0] || k[1] <= before[1] || k[0] >= total[0] || k[1] >= total[1]) return
     out.src.push(at[0]); out.tr.push(at[1]); before = k
@@ -701,13 +834,13 @@ const escapeTags = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/
  *  same-style neighbours one pair, what sets no ink off the wire (planOf: `head` and `tail` what rides inside a pair's
  *  open and close, `front`, `back` and `refill` as serialize's) */
 export function serializeTags(u) {
-  const slots = [], hidden = new Map(), kept = []
+  const slots = [], hidden = new Map(), kept = [], own = new Map()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
   const trail = u.pieces.at(-1)?.t === 'text' ? u.pieces.at(-1).s.match(/\s*$/)[0] : ''
   const { items, front, back, styled, texts } = planOf(u, 'tags')
   const pairSlot = new Map()
-  for (const it of items) {
+  for (const [i, it] of items.entries()) {
     if (it.t === 'text') { wire += wireText(u.pieces, it, wire, escapeTags, texts); continue }
     if (it.t === 'open') { slots.push({ open: u.pieces[it.g.open] }); pairSlot.set(it.g, slots.length); wire += `<t id="${slots.length}">`; continue }
     if (it.t === 'close') {
@@ -723,23 +856,27 @@ export function serializeTags(u) {
     slots.push({ void: it.slot })
     const x = `<x id="${slots.length}"/>`
     if (it.hide) hidden.set(x, runShown(it.slot))
-    wire += x
+    // (a display's own stop after its tag, as serialize writes it after its marker)
+    const stop = ownStopOf(it.slot, u.pieces, items, i)
+    if (stop) own.set(slots.length, { stop, at: wire.length + x.length })
+    wire += x + (stop ?? '')
   }
-  if (styled) wire = wire.trim()
+  if (styled) { const cut = wire.length - wire.trimStart().length; wire = wire.trim(); if (cut) for (const o of own.values()) o.at -= cut }
   const f = placed(u.pieces, front), b = placed(u.pieces, back), refill = refillOf(u.pieces, kept)
-  return { wire, slots, lead, trail, ...(hidden.size ? { hidden } : {}), ...(f.length ? { front: f } : {}), ...(b.length ? { back: b } : {}), ...(refill.length ? { refill } : {}) }
+  return { wire, slots, lead, trail, ...(hidden.size ? { hidden } : {}), ...(f.length ? { front: f } : {}), ...(b.length ? { back: b } : {}), ...(refill.length ? { refill } : {}), ...(own.size ? { own } : {}) }
 }
 /** the translation → pieces, or why it cannot be used; the model's common spellings of a tag are read as the extension reads them */
-export function rehydrateTags(text, { wire, slots, lead, trail, front, back, refill }) {
+export function rehydrateTags(text, { wire, slots, lead, trail, front, back, refill, own }) {
   const pieces = [], seenVoid = new Set(), seenPair = new Set(), stack = []
   // the tags as the background's tokenizer reads them (src/core/protector/tokens.ts): `<x id="1"></x >` is one void
   const re = new RegExp(TAG_RE.source, 'g')
-  let last = 0, m
-  const pushText = s => { const d = decode(s); if (d) pieces.push({ t: 'text', tr: true, s: texEscape(d) }) }
+  let last = 0, m, afterOwn = false
+  // (after a display's tag that carried its own stop, what the reply set for it is taken off, as rehydrate takes it)
+  const pushText = s => { if (afterOwn) { s = ownAfter(s); afterOwn = false } const d = decode(s); if (d) pieces.push({ t: 'text', tr: true, s: texEscape(d) }) }
   while ((m = re.exec(text))) {
-    pushText(text.slice(last, m.index)); last = re.lastIndex
     const x = m[1] ?? m[2] ?? m[3], t = m[4] ?? m[5] ?? m[6]
-    if (x) { const n = Number(x), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(...piecesOf(slot.void)) }
+    pushText(text.slice(last, m.index)); last = re.lastIndex
+    if (x) { const n = Number(x), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(...piecesOf(slot.void)); afterOwn = !!own?.has(n) }
     else if (t) { const n = Number(t), slot = slots[n - 1]; if (!slot?.open || !slot.close || seenPair.has(n)) return { error: 'bad pair' }; seenPair.add(n); stack.push(n); pieces.push(slot.open, ...(slot.head ?? [])) }
     else { const n = stack.pop(); if (!n) return { error: 'bad pair' }; pieces.push(...(slots[n - 1].tail ?? []), slots[n - 1].close) }
   }

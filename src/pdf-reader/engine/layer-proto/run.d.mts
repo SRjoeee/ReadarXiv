@@ -73,6 +73,8 @@ export interface Rec {
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
 /** the longest a page's drawing waits for its draw (openProto `drawOf`) once it begins, ms; then the page is read live */
 export declare const DRAW_WAIT_MS: number
+/** the longest the live fills' glyph walk runs, ms: past it a page tells no fill */
+export declare const LIVE_FILLS_MS: number
 /** what an ink read of a page read from its draw throws while its pixels are not read: the page, and the step that reads them */
 export declare class NeedPixels extends Error {
   constructor(page: number, why: string)
@@ -88,10 +90,14 @@ export interface TextContentLike { items: readonly { str: string; transform: rea
  *  from a draw (its rows, by content key; a key read before with another row throws a RangeError) */
 export declare function fontReaders(): {
   live(page: { commonObjs: { get(name: string): unknown } }, styles: TextContentLike['styles'] | undefined): FontReading
-  draw(draw: Draw): FontReading & { tc: TextContentLike; raw: ReturnType<typeof import('./draw.mjs').drawInputsOf>['annots'] }
+  draw(draw: Draw): FontReading & { tc: TextContentLike; raw: ReturnType<typeof import('./draw.mjs').drawInputsOf>['annots']; fills: ReturnType<typeof import('./draw.mjs').drawInputsOf>['fills'] }
 }
+/** the fills a page read live tells, as its draw would (layout/fills.mjs itemFills over its ink, off the list PDF.js drew it by:
+ *  `list`, held from its early pixel read, or its render's; else its own operator list within DRAW_WAIT_MS): null for no OPS, a
+ *  page whose ink is not whole or a list that cannot be read in time */
+export declare function liveFillsOf(OPS: Record<string, number> | null, page: unknown, items: TextContentLike['items'], counted?: { fills: number } | null, list?: { fnArray: unknown[]; argsArray: unknown[] } | null): Promise<(number | number[])[] | null>
 /** a page's characters and Link annotations (null where they could not be read), the two calls the run makes of a page's reading */
-export declare function pageReadOf(tc: TextContentLike, fontOf: FontReading['fontOf'], mapOf: FontReading['mapOf'], raw: readonly unknown[] | null): {
+export declare function pageReadOf(tc: TextContentLike, fontOf: FontReading['fontOf'], mapOf: FontReading['mapOf'], raw: readonly unknown[] | null, fills?: readonly (number | readonly number[])[] | null): {
   chars: Char[]
   read: ReturnType<typeof import('./links.mjs').annotsOf> | null
 }
@@ -103,6 +109,8 @@ export interface DrawStats {
   pixels: Record<number, 'asked' | 'freeFor' | 'paperTo' | 'crop' | 'names' | 'paint'>
   need: Partial<Record<'freeFor' | 'paperTo' | 'crop' | 'names' | 'paint', number>>
   retries: number; ms: number
+  /** the operator lists held now for pages whose early pixel read may yet be read live (heldLists) */
+  lists: number
 }
 /** the most of its own work v0 runs in one task, ms: units are laid back to back under it, then it yields */
 export declare const SLICE_MS: number
@@ -344,4 +352,7 @@ export declare function openProto(o: {
   /** the paper's parts may carry draws (the door's Layer.drawsComing, the head's `draw: 1`): the page asked is read for its pixels at
    *  its ask (once a part covers it), before its draw or page 1's is in; default false, once its draw is in */
   drawsComing?: boolean
+  /** PDF.js's operator codes (the host's): a page read live reads its characters' fills off the list PDF.js drew it by, as its
+   *  draw tells them (liveFillsOf); none, such a page tells no fill */
+  OPS?: Record<string, number> | null
 }): Promise<ProtoRun>
