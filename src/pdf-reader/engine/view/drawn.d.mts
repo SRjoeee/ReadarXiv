@@ -6,7 +6,9 @@ export interface DrawnPageView {
   outputScale?: { sx: number; sy: number } | null
   renderingState?: number
 }
-/** PDF.js has told that page view `pv` drew its canvas whole: the scale it drew it at kept with that canvas */
+/** PDF.js has told that page view `pv` begins a drawing (`pagerender`): the scale it draws at, kept until it is done */
+export declare function drawing(pv: DrawnPageView | null | undefined): void
+/** PDF.js has told that page view `pv` drew its canvas whole (`pagerendered`): its drawing's scale kept with the canvas */
 export declare function drawn(pv: DrawnPageView | null | undefined): void
 /** a page's box in CSS px as PDF.js lays it out for viewport `vp` (its size floored to the rounding across and down) */
 export declare function pageBox(vp: { width: number; height: number; rotation?: number }, roundX?: number, roundY?: number): { width: number; height: number }

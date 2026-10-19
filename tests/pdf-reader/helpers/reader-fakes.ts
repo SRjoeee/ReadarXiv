@@ -282,15 +282,28 @@ export class FakePDFViewer {
   update() { this.updates++ }
   scrollPageIntoView({ pageNumber }: { pageNumber: number }) { const pv = this._pages[pageNumber - 1]; if (pv) this.container.scrollTop = pageTopIn(pv.div) }
   _getVisiblePages() { return { first: this._pages[0], views: [] } }
-  /** PDF.js drew page `n` (the test's: a canvas in its div, then `pagerendered`). `as`: its canvas and its output scale as
-   *  PDF.js sizes them at its viewport; else a canvas of 100 px and no output scale, which is no copy's source */
+  /** PDF.js drew page `n` (the test's: a canvas in its div, `pagerender` as its drawing starts, then `pagerendered`).
+   *  `as`: its canvas and its output scale as PDF.js sizes them at its viewport; else a canvas of 100 px and no output
+   *  scale, which is no copy's source */
   render(n: number, error: unknown = null, as: DrawnAs | null = null) {
+    this.startRender(n, as)
+    this.finishRender(n, error)
+  }
+  /** page `n`'s drawing begun: its canvas sized (as render's `as`), `pagerender` told */
+  startRender(n: number, as: DrawnAs | null = null) {
     const pv = this._pages[n - 1]
     if (!pv) return
     pv.canvas ??= document.createElement('canvas')
     pv.canvas.width = as?.width ?? 100
     if (as) { pv.canvas.height = as.height; pv.outputScale = { sx: as.sx, sy: as.sy } }
     pv.div.prepend(pv.canvas)
+    pv.renderingState = 1
+    this.eventBus.dispatch('pagerender', { source: pv, pageNumber: n })
+  }
+  /** page `n`'s drawing done: `pagerendered` told */
+  finishRender(n: number, error: unknown = null) {
+    const pv = this._pages[n - 1]
+    if (!pv) return
     pv.renderingState = 3
     this.eventBus.dispatch('pagerendered', { source: pv, pageNumber: n, error, cssTransform: false, isDetailView: false })
   }
@@ -346,6 +359,7 @@ export class FakePDFPageView {
     this.options.layerProperties?.linkService?.addLinkAttributes(a, 'https://example.invalid/out')
     links.append(a)
     this.div.append(this.canvas, text, links)
+    this.options.eventBus?.dispatch('pagerender', { source: this, pageNumber: this.id })
     this.renderingState = 3
     this.options.eventBus?.dispatch('pagerendered', { source: this, pageNumber: this.id, error: null })
   }

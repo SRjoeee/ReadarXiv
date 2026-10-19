@@ -202,6 +202,27 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     expect(one?.[2]).not.toBe(711 / 612)
   })
 
+  it('a drawing PDF.js lets finish after a zoom gave its page view the next viewport is kept at the scale it was begun at', async () => {
+    const s = await setup()
+    s.view.zoomTo(FIT)
+    await settle(s, 4)
+    await nearOn(s, [1])
+    const pv = pageView(1), begun = pv.viewport.scale
+    leftViewer().startRender(1, { width: 711, height: 921, sx: 1, sy: 1 })
+    // a zoom to 87.5 % while it draws (as under PDF.js's restricted scaling, which lets the drawing run on): the page view's
+    // next viewport is 714 × 924 CSS px, the old canvas's 711 × 921 within the 8 px of PDF.js's rounding both ways
+    s.view.zoomTo(0.875)
+    await flush()
+    expect(pv.viewport.scale).not.toBe(begun)
+    leftViewer().finishRender(1)
+    s.side.tell(await ALL())
+    await settle(s)
+    const one = copyOf(s, 1)
+    expect(one?.[1]).toBe(pv.canvas)
+    expect(one?.[2]).toBe(begun)
+    expect(one?.[2]).not.toBe(pv.viewport.scale)
+  })
+
   it('the page drawn from the document is drawn on the context of the left\'s page views: the CPU\'s, or the GPU\'s where the host opens its documents with enableHWA', async () => {
     for (const [assets, cpu] of [[undefined, true], [{ cMapUrl: 'cmaps/', enableHWA: true }, false]] as const) {
       const asked: unknown[] = []

@@ -740,8 +740,10 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
 - **One frame a page** (`view/drawn.mjs`). PDF.js draws a page view at its viewport's unrounded scale times its output
   scale, from the page's top-left corner, on a canvas it floors to whole CSS px (pdfjs-dist 6.3.289 `PDFPageView.draw`:
   the canvas is `outputScale.sx` times the page's width floored to its rounding, the rest of the page cropped). So the
-  copy's source carries the scale it was drawn at, read when PDF.js tells that it drew the canvas (`pagerendered`, neither
-  a CSS transform nor a detail view), checked against the canvas's size and kept with that canvas: never the canvas's
+  copy's source carries the scale it was drawn at, read as PDF.js begins the drawing (`pagerender`, its canvas sized and
+  its output scale set), checked against the canvas's size, and kept with the canvas once PDF.js tells that drawing done
+  (`pagerendered`, neither a CSS transform nor a detail view): not read at its end, where under restricted scaling PDF.js
+  lets a drawing run on after a zoom has given the page view its next viewport (`update`, `onlyCssZoom`); never the canvas's
   width over the page's, which is short by up to a CSS px over the page's width (0.14 % at the 87 % fit), and an erase
   laid at it left the original's ink showing past its rectangles where the floor drops near a pixel (80, 87, 110 and
   125 %; at 125 % the page's 1020 CSS px floor to 1019 in floating point), deterministically, at any time. `copyAt`

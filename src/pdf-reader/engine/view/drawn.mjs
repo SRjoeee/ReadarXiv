@@ -3,14 +3,20 @@
 // to whole CSS px (pdf_viewer.mjs PDFPageView.draw: the canvas `outputScale.sx × pageWidth`, pageWidth the viewport's width
 // floored to a multiple of --scale-round-x, the remainder of the page cropped). The scale is therefore never the canvas's
 // width over the page's: that ratio is short by up to a CSS px over the page's width (0.14 % at 87 %), and an erase laid at
-// it leaves the original's ink showing past it at the page's far corner. Nor is it the page view's scale read later: a zoom's
-// steps give the page view its next viewport and output scale at once and keep the canvas drawn at the last until PDF.js
-// draws again (a CSS transform meanwhile). So the scale is read when PDF.js tells that it has drawn the canvas whole
-// (`pagerendered`, neither a CSS transform nor a detail view), checked against the canvas's own size, and kept with that
-// canvas; a canvas drawn here (the layer side's, from the composed document) is kept with the scale it was drawn at.
+// it leaves the original's ink showing past it at the page's far corner. Nor is it the page view's scale read later: a zoom
+// gives the page view its next viewport and output scale at once, keeps the canvas drawn at the last until PDF.js draws
+// again (a CSS transform meanwhile), and under PDF.js's restricted scaling lets a drawing under way run on to its end
+// (PDFPageView.update: no cancel where `onlyCssZoom`), so that what the page view holds when the drawing is told done is
+// another drawing's. So the scale is read as the drawing begins (`pagerender`, told at the end of PDFPageView.draw, its
+// canvas sized and its output scale set), checked against the canvas's size, and kept with the canvas once PDF.js tells
+// that drawing done (`pagerendered`, neither a CSS transform nor a detail view; the canvas the same size: PDF.js may have
+// put a copy of it in its place); a drawing cancelled tells no `pagerendered`, and the next one begun replaces it. A canvas
+// drawn here (the layer side's, from the composed document) is kept with the scale it was drawn at.
 
 /** each canvas drawn whole: the device pixels a PDF unit it was drawn at across and down, and its size then */
 const drawnAt = new WeakMap()
+/** each page view's drawing under way: its scale and its canvas's size as it began, until PDF.js tells it done */
+const begun = new WeakMap()
 /** the most CSS px PDF.js floors a page's width or height by (approximateFraction's denominator limit, its --scale-round-x) */
 const ROUND_MAX = 8
 const EPS = 1e-6
@@ -23,16 +29,27 @@ function floored(c, s, size) {
 }
 
 /**
- * PDF.js has told that page view `pv` drew its canvas whole: the scale it drew it at kept with that canvas (`viewport.scale`
- * times `outputScale.sx` across and `.sy` down, the device pixels a PDF unit, `outputScale` as PDF.js left it after sizing
- * the canvas: the canvas's width over the floored page's). A canvas whose size is not the one PDF.js gives that viewport
- * and output scale (the page view given another before its drawing was told) is kept with nothing
+ * PDF.js has told that page view `pv` begins a drawing (`pagerender`): the scale it draws at (`viewport.scale` times
+ * `outputScale.sx` across and `.sy` down, the device pixels a PDF unit, `outputScale` as PDF.js left it after sizing the
+ * canvas: the canvas's width over the floored page's), kept until the drawing is told done. A canvas whose size is not the
+ * one PDF.js gives that viewport and output scale is kept with nothing
  */
-export function drawn(pv) {
+export function drawing(pv) {
   const c = pv?.canvas, vp = pv?.viewport, os = pv?.outputScale
+  begun.delete(pv)
   if (!c?.width || !c.height || !(vp?.scale > 0) || !(os?.sx > 0) || !(os.sy > 0)) return
-  if (!floored(c.width, os.sx, vp.width) || !floored(c.height, os.sy, vp.height)) { drawnAt.delete(c); return }
-  drawnAt.set(c, { kx: vp.scale * os.sx, ky: vp.scale * os.sy, w: c.width, h: c.height })
+  if (!floored(c.width, os.sx, vp.width) || !floored(c.height, os.sy, vp.height)) return
+  begun.set(pv, { kx: vp.scale * os.sx, ky: vp.scale * os.sy, w: c.width, h: c.height })
+}
+
+/** PDF.js has told that page view `pv` drew its canvas whole (`pagerendered`): the scale its drawing began at kept with its
+ *  canvas, where the canvas is the size it began at; nothing else (a drawing whose beginning was not told) */
+export function drawn(pv) {
+  const c = pv?.canvas, at = begun.get(pv)
+  begun.delete(pv)
+  if (!c) return
+  if (!at || c.width !== at.w || c.height !== at.h) { drawnAt.delete(c); return }
+  drawnAt.set(c, at)
 }
 
 /** PDF.js's rounding of a page's CSS size before its floor (pdf_viewer.mjs calcRound): float32 where the browser's CSS
