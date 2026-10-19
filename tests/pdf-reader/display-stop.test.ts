@@ -5,7 +5,7 @@ import { cutsOf, displayStopChanges, plainSource, plainTranslated, rehydrate, re
 
 // A display's own punctuation, the stop or comma its sentence ends or pauses with, is set inside the display, where the
 // layer draws it with the formula's crop. On the wire the display is one marker, and the sentence lost its end: 2610.10069's
-// "Substituting (1) yields @q# Prices and shares are ..." read to Microsoft as one run of nouns (yields, 收益率). The wire
+// "Substituting (1) yields @q# Prices and shares are ..." read to Microsoft as one run of nouns, "yields" a financial yield. The wire
 // now writes the display's own stop right after its marker (`yields @a#. Prices`), and the reading back takes off what the
 // reply set there for it, the display drawing its own
 
