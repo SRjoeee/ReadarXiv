@@ -2473,7 +2473,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     // blue digits, cleveref's black "Figure" before its linked "1"; a character whose fill is not told in the colour above)
     // (runs drawn alike, a character whose fill is not told beside one of the colour it falls back to, are one: no token more
     // than the colours need)
-    const fills = r.mode === 'orig-text' && !r.math ? fillRunsOf(r.gap?.chars, r.text) : null
+    // (not inside a run a colours row tells: TeX's colour wins, as it does over the row's fill above)
+    const fills = r.mode === 'orig-text' && !r.math && !own.colourRun ? fillRunsOf(r.gap?.chars, r.text) : null
     const runs = fills ? [] : null
     for (const run of fills ?? []) {
       const rs = run.fill === UNKNOWN ? st : { ...own, color: run.fill > 0 ? hexOf(run.fill) : undefined }

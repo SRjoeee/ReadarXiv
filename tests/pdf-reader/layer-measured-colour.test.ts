@@ -159,6 +159,13 @@ describe('the unit\'s base, measured outside its styled pieces', () => {
     expect(new Set(colour('\u5DE5'))).toEqual(new Set(['#243447']))
   })
 
+  it('a rendering inside a run a colours row tells is drawn in the row\'s colour, not its glyphs\' (Codex on #415)', () => {
+    const page = pageOf([['see', plain(0xff0000)], ['[16]', k => plain(k === 1 || k === 2 ? 0x0000ff : 0xff0000)], ['here', plain(0xff0000)]])
+    const u = unitOf([open('\\textcolor{red}{', 1), text('see '), ph('\\cite{k}'), text(' here'), close(1)], [0, '\u89C1 ', 2, ' \u8FD9\u91CC', 4])
+    const { drawn } = tokensOf(u, page, { colourOf: (k: number) => (k === 0 ? 0x123456 : null) })
+    expect(new Set(drawn.filter(t => t.k === 2).map(t => t.st.color))).toEqual(new Set(['#123456']))
+  })
+
   it('a colours row (TeX\'s) wins over the measured colour of its piece', () => {
     const page = pageOf([['the', plain(0xff0000)], ['words', plain(0xff0000)]])
     const u = unitOf([open('\\textcolor{red}{', 1), text('the words'), close(1)], [0, '\u8FD9\u4E9B\u8BCD', 2])

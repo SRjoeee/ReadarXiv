@@ -331,7 +331,8 @@ const BREAKS = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-
 /** whether the text breaks at flat offset `i` (BREAKS) */
 const breaksAt = (P, i) => i >= 0 && P.breaks.has(i)
 /** the places the wire has a marker at anyway, by the sentence rule alone: each kept or enclosing pair's two edges, read before
- *  the boundary rule (classOf) and never after it, so that one pair's keeping makes no other's */
+ *  the boundary rule (classOf) and never after it, so that one pair's keeping makes no other's; inside a pair that goes flat
+ *  too, whose children the wire walks still (a link kept in it keeps its markers) */
 function keptEdgesOf(P, root) {
   const edges = []
   const visit = seq => {
@@ -339,7 +340,7 @@ function keptEdgesOf(P, root) {
       if (!e.seq) continue
       const c = classOf(P, e)
       if (c === 'kept' || c === 'enclose') edges.push(...P.ranges.get(e))
-      if (c !== 'flat') visit(e.seq)
+      if (c === 'kept' || c === 'enclose' || c === 'flat') visit(e.seq)
     }
   }
   visit(root.seq)
