@@ -112,3 +112,41 @@ describe('a sentence lights the words the text puts in it, on both panes', () =>
     expect(right.shapes.fits(0, rs, true)).toBe(false)
   })
 })
+
+describe('a sentence of one run painted over another run\'s word of another sentence', () => {
+  // A page of two columns (units 1 and 2 hold four long lines in each); unit 0 in the left column, its display wider than the
+  // column (across the middle: a run of its own, the page's full width), its two lines on either side of the line where the
+  // second sentence begins. The display's run paints its sentence across its rows, over that line
+  const items = [
+    ...words('Aaa bbb.', 740), item('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 200, 728, true), item('yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy', 200, 704, true),
+    ...words('Ccc ddd', 716), ...words('eee fff.', 692),
+    ...[0, 1, 2, 3].map(i => item('left column text of another unit here', 50, 600 - 12 * i, true)),
+    ...[0, 1, 2, 3].map(i => item('right column text of another unit here', 310, 600 - 12 * i, true)),
+  ]
+  const d2: DocToken[] = tokenizeDocument([{ page: 1, items, styles: {} }])
+  const u0 = d2.flatMap((t, k) => (t.y > 650 ? [k] : [])), u1 = d2.flatMap((t, k) => (t.y < 650 && t.x < 300 ? [k] : [])), u2 = d2.flatMap((t, k) => (t.y < 650 && t.x > 300 ? [k] : []))
+  const glyphs = new Set(d2.flatMap((t, k) => (/^[xy]+$/.test(t.t) ? [k] : [])))
+  const src = 'Aaa bbb. Ccc ddd eee fff.', offsets = [src.indexOf('Ccc')]
+  const a2 = new Map<number, Anchor | null>([
+    [0, { tokens: u0, rects: lineRects(d2, u0), coverage: 1, bounded: true, pairs: new Map(u0.filter(k => !glyphs.has(k)).map((k, w) => [w, k])) }],
+    [1, { tokens: u1, rects: lineRects(d2, u1), coverage: 1, bounded: true }],
+    [2, { tokens: u2, rects: lineRects(d2, u2), coverage: 1, bounded: true }],
+  ])
+
+  it('lights the unit whole: its runs\' sentences each hold their own words, but not apart from each other', () => {
+    const w2 = layoutOf(d2, views, a2, () => 'para')
+    const { parts, lefts } = cutSide(w2, a2, views)
+    const left = createShapes({ kindOf: () => 'para' })
+    left.addParts(parts)
+    left.addPage(lefts[1]!)
+    const ls = left.starts(0, src, offsets)!
+    expect(ls).not.toBeNull()
+    const runs = left.shapes.runs(0)
+    expect(new Set(runs.map(r => r.col))).toEqual(new Set(['L', 'F']))
+    // the display's run (the page's width) paints the first sentence over "Ccc", the second's first word, in its own run
+    const display = runs.find(r => r.col === 'F')!, ccc = d2.find(t => t.t === 'ccc')!
+    const at = { x: ccc.x + ccc.w / 2, y: (ccc.top + ccc.bottom) / 2 }
+    expect(left.shapes.sentence(display, ls, 0, 0).some(r => at.x > r.x0 && at.x < r.x1 && at.y > r.y0 && at.y < r.y1)).toBe(true)
+    expect(left.shapes.fits(0, ls, true)).toBe(false)
+  })
+})

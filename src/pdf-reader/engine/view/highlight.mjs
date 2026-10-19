@@ -718,7 +718,7 @@ function segsOf(L, run, starts) {
   const s0 = sentenceOf(t0), s1 = sentenceOf(t1), at0 = lowerBound(ts, t0)
   const prev = at0 > 0 ? ts[at0 - 1] : undefined, next = ts[lowerBound(ts, t1 + 1)]
   const from = prev !== undefined && sentenceOf(prev) === s0 ? s0 : -1, on = next !== undefined && sentenceOf(next) === s1 ? s1 : -1
-  const out = { starts, rows, first, last, from, on, fits: true }
+  const out = { starts, rows, first, last, from, on, of, fits: true }
   segsMade.set(run, out)
   // whether the shapes hold their words: each sentence's rows one after the other — a later sentence never begins above
   // an earlier one's last row: a row it spans paints across the run, and every row holds a token, so a row inside a
@@ -752,14 +752,46 @@ function segsOf(L, run, starts) {
 /** how far a word's ink's centre may stand past its sentence's span (PDF units) */
 const FIT = 0.5
 /** whether a unit is lit by sentence on a side: running text (headings, captions, cells and a figure's text light
- *  whole), its tokens all in (a layout made page by page: tokensIn), and every run's shapes hold their words. `made`:
- *  from the pages whose geometry is made alone, undefined where one of the unit's is not yet — the caller makes them in
- *  a task of its own, never in the pointer's frame (a unit over two pages, its other page's geometry and every run's
- *  sentences made there: 3.6 ms, 2608.29181) */
+ *  whole), its tokens all in (a layout made page by page: tokensIn), every run's shapes hold their words, and no run's
+ *  sentence paints over another run's word of another sentence (runsApart). `made`: from the pages whose geometry is made
+ *  alone, undefined where one of the unit's is not yet — the caller makes them in a task of its own, never in the pointer's
+ *  frame (a unit over two pages, its other page's geometry and every run's sentences made there: 3.6 ms, 2608.29181) */
 export function sentencesFit(L, id, starts, made = false) {
   if (NOT_RUNNING.has(L.kindOf(id)) || !tokensIn(L, id)) return false
   if (made && (L.pagesOf.get(id) ?? []).some(p => !L.cache.has(p))) return undefined
-  return runsOf(L, id).every(run => segsOf(L, run, starts).fits)
+  const runs = runsOf(L, id)
+  return runs.every(run => segsOf(L, run, starts).fits) && runsApart(L, runs, starts)
+}
+/** how far inside a sentence's shape another run's word's ink's centre stands where it is painted over (PDF units) */
+const OVER = 0.3
+/**
+ * Whether a unit's runs on a page keep their sentences off each other's words: a run's rows reach the column's text edge
+ * where a sentence goes on, and two runs of one unit may stand side by side or over each other where its lines are read in
+ * two columns (a line read across both beside lines read as the left one's: 2610.19282, 2610.22195; a label read apart from
+ * its line: 2610.17024). Where a sentence of one run paints over a word of another sentence of another, its unit lights
+ * whole. Runs whose painted extents do not meet are not looked into
+ */
+function runsApart(L, runs, starts) {
+  for (const a of runs) {
+    let ext = null
+    for (const b of runs) {
+      if (b === a || b.page !== a.page) continue
+      const bb = blockOf(b, 0)
+      ext ??= { ...blockOf(a, 0), x0: Math.min(a.x0, a.sx0), x1: Math.max(a.x1, a.sx1) }
+      if (bb.x0 > ext.x1 || bb.x1 < ext.x0 || bb.y0 > ext.y1 || bb.y1 < ext.y0) continue
+      const T = L.pt[b.page], gb = segsOf(L, b, starts), ga = segsOf(L, a, starts)
+      for (let s = 0; s < ga.first.length; s++) {
+        if (ga.first[s] === undefined) continue
+        const rects = sentenceOf(L, a, starts, s, 0)
+        for (let n = 0; n < b.toks.length; n++) {
+          if (gb.of[n] === s) continue
+          const k = b.toks[n] - T.k0, x = (T.l[k] + T.r[k]) / 2, y = (T.top[k] + T.bottom[k]) / 2
+          if (rects.some(r => x > r.x0 + OVER && x < r.x1 - OVER && y > r.y0 + OVER && y < r.y1 - OVER)) return false
+        }
+      }
+    }
+  }
+  return true
 }
 /** a page's sentences worked out — each run's on it whose unit's starts `startsOf` gives —, as the page is first drawn
  *  or its unit's starts found: the pointer's frame then reads them made */
