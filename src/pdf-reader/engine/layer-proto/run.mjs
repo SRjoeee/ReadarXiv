@@ -2034,8 +2034,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       prep.label = { ...prep.label, drawn: prep.label.text }
       for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
     }
-    // (each later page's text where its source sets it: the translation cut at the source's page breaks, E3c)
-    if (prep.pageStarts?.size) tokens = L2.withPageBreaks(tokens, L2.pageCutsOf(tokens, p.unit, prep.pageStarts, P))
+    // (each later page's text where its source sets it: the translation cut at the source's page breaks, E3c; laid so where that
+    // costs the unit no state of the fit's, below)
+    const cuts = prep.pageStarts?.size ? L2.pageCutsOf(tokens, p.unit, prep.pageStarts, P) : []
+    const broken = cuts.length ? L2.withPageBreaks(tokens, cuts) : null
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
@@ -2058,7 +2060,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       p.P.leadBase = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
       p.P.growTo = 0
     }
-    p.layout = L2.layoutUnit2(tokens, p.blocks, s, p.P)
+    p.layout = L2.layoutUnit2(broken ?? tokens, p.blocks, s, p.P)
+    if (broken) {
+      // (where the cut asks the fit for a later state than the unit takes without it (a smaller size, a closer leading), or
+      // nothing fits with it, the unit is laid as it was, and so are its further steps and passes: a page break of the
+      // source's never costs a unit its fit)
+      const plain = p.layout.clipped || p.layout.tried > 1 ? L2.layoutUnit2(tokens, p.blocks, s, p.P) : null
+      if (plain && (p.layout.clipped || plain.tried < p.layout.tried)) p.layout = plain
+      else p.tokens = broken
+    }
     // a numbered heading set in fewer lines than the original's: laid again on the original's last lines with its number as
     // its first line's start, the number's own ink copied there (a crop: its face, its colour, the space its class set after
     // it, as the original's) and erased where it was. Where that does not fit, or moves it nowhere, as it was
