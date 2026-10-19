@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { compareTrees, readFound, treeFaces } from '../../lab/pdf/spikes/face-identity.mjs'
+import { compareTrees, readFound, treeFaces, yearsOf } from '../../lab/pdf/spikes/face-identity.mjs'
 import { METRICS } from '../../src/pdf-reader/engine/rules/font-coverage.mjs'
 import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
 
@@ -25,6 +25,18 @@ describe('the faces a tree holds, and a container\'s answer read back', () => {
   })
 })
 
+describe('the trees asked', () => {
+  const pins = { default: '2025', images: { 2025: {}, 2023: {} } }
+
+  it('are every pinned year by default, the default first, and those --years names; never none, nor one not pinned', () => {
+    expect(yearsOf([], pins)).toEqual(['2025', '2023'])
+    expect(yearsOf(['--years=2023'], pins)).toEqual(['2023'])
+    expect(() => yearsOf(['--years='], pins)).toThrow(/no TeX Live year/)
+    expect(() => yearsOf(['--years=,'], pins)).toThrow(/no TeX Live year/)
+    expect(() => yearsOf(['--years=2019'], pins)).toThrow(/2019 is not pinned/)
+  })
+})
+
 describe('each face told against the hosted bytes in every tree', () => {
   const faces: [string, string][] = [['x-regular', 'x.otf'], ['y-regular', 'y.otf'], ['z-regular', 'z.otf']]
   const metrics = { 'x-regular': { sha256: A }, 'y-regular': { sha256: A }, 'z-regular': { sha256: A } }
@@ -35,6 +47,10 @@ describe('each face told against the hosted bytes in every tree', () => {
       2023: new Map([['x.otf', { sha256: A, bytes: 1 }], ['y.otf', { sha256: B, bytes: 2 }], ['z.otf', null]]),
     }
     expect(compareTrees(byYear, faces, metrics as never)).toEqual({ same: ['x-regular'], differ: [{ id: 'y-regular', file: 'y.otf', years: ['2023'] }], missing: [{ id: 'z-regular', file: 'z.otf', years: ['2023'] }] })
+  })
+
+  it('tells nothing for no tree: a comparison of none is refused', () => {
+    expect(() => compareTrees({}, faces, metrics as never)).toThrow(/no tree/)
   })
 
   it('holds a face whose hosted digest is not recorded as differing in every tree', () => {

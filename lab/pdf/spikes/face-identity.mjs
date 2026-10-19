@@ -45,6 +45,8 @@ export function readFound(stdout) {
 export function compareTrees(byYear, faces = treeFaces(), metrics = METRICS) {
   const same = [], differ = [], missing = []
   const years = Object.keys(byYear)
+  // (a comparison of no tree would call every face the same)
+  if (!years.length) throw new Error('no tree to compare the faces in')
   for (const [id, file] of faces) {
     const hosted = metrics[id]?.sha256 ?? null
     const gone = years.filter(y => !byYear[y].get(file)), other = years.filter(y => byYear[y].get(file) && byYear[y].get(file).sha256 !== hosted)
@@ -53,6 +55,16 @@ export function compareTrees(byYear, faces = treeFaces(), metrics = METRICS) {
     if (!gone.length && !other.length) same.push(id)
   }
   return { same, differ, missing }
+}
+
+/** the trees a run asks: those `--years=<y>,…` names, else every pinned year, the default first; never none, and none not pinned */
+export function yearsOf(argv, pins) {
+  const a = argv.find(x => x.startsWith('--years='))
+  const all = [pins.default, ...Object.keys(pins.images).filter(y => y !== pins.default).sort().reverse()]
+  const years = a === undefined ? all : [...new Set(a.slice(8).split(',').map(y => y.trim()).filter(Boolean))]
+  if (!years.length) throw new Error('--years names no TeX Live year')
+  for (const y of years) if (!Object.hasOwn(pins.images, y)) throw new Error(`--years: ${y} is not pinned (lab/pdf/compile-images.json: ${Object.keys(pins.images).join(', ')})`)
+  return years
 }
 
 /** one year's image asked: its tree's file of each face, hashed in the image (the image checked to be the pinned digest first) */
@@ -65,8 +77,7 @@ export async function facesInImage(year, files, { env = process.env, ask = args 
 
 async function main(argv) {
   const pins = JSON.parse(readFileSync(new URL('../compile-images.json', import.meta.url), 'utf8'))
-  const yearsArg = argv.find(a => a.startsWith('--years='))
-  const years = yearsArg ? yearsArg.slice(8).split(',').filter(Boolean) : Object.keys(pins.images).sort().reverse()
+  const years = yearsOf(argv, pins)
   const faces = treeFaces(), files = [...new Set(faces.map(([, f]) => f))]
   const byYear = {}
   for (const y of years) byYear[y] = await facesInImage(y, files)

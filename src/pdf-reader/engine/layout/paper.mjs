@@ -342,11 +342,11 @@ export function handoverOf(own, { declared = null, served = [], last = false } =
  * A paper's layout marks (paper.d.mts): markedOfPaper's marked original, then read once (stage 3), with each stage's time, or
  * the stage that failed with the times of those that ran. Never throws: a compiler that throws, a PDF that does not open and
  * a reading that refuses are each their stage's refusal, but a failed allocation, which goes on as itself. `converge`: the marked original made by convergeThenMark, its passes
- * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them; `pages` and `engines` the guard's, as
- * markedOfPaper's
+ * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them; `pages` and `engines` the guard's, and `tried`
+ * TeX's why's, as markedOfPaper's
  */
-export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null }) {
-  const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound, pages, engines })
+export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null }) {
+  const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound, pages, engines, tried })
   if (made.refused) return made
   const ms = { ...made.ms }
   /** the result, with CM's record and the guard's where they ran */
