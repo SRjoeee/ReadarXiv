@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-20",
+  "by": "the maintainer",
+  "quote": "E3b\u63a5\u53d7",
+  "english": "E3b accepted, 2026-10-20, relayed by the coordinator",
+  "on": "E3b (pull request 424): a formula TeX broke over lines is drawn as its crops, one a line, never as its page text",
+  "measures": [
+    "fullSize"
+  ],
+  "targets": [
+    "fr"
+  ],
+  "scope": "fr, 2608.04322 page 5 only: full size 24.0 to 23.7 percent; one unit, whose inline formula is now drawn as crops, fits at 0.962 of the size where its page text fitted at 0.988; no other output moves for this measure",
+  "why": "formulas are drawn as the author set them (crops of their ink, never page text that loses their scripts); a crop is as wide as TeX set the formula, where the page text squeezed into less room"
+}

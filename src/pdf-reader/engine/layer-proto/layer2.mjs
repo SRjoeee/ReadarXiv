@@ -63,6 +63,7 @@ import { shown } from '../layer/pieces.mjs'
 import { escapeMap, plainTracker, transformMap } from './words.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { fillOfColour } from '../layout/colour.mjs'
+import { textPieceOf } from '../rules/text-piece.mjs'
 import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
 
 /** a source text piece's characters (mt.mjs utf8: its bytes, read latin1, as UTF-8), here so that the drawing loads no wire module:
@@ -1554,8 +1555,11 @@ function drawnTextOf(res, charsByPage) {
   for (const r of res.values()) {
     if (!r) continue
     if (r.mode === 'crop') {
-      const [x0, y0, x1, y1] = r.crop
-      parts.push(normU((charsByPage[r.page - 1] ?? []).filter(c => (c.x0 + c.x1) / 2 >= x0 && (c.x0 + c.x1) / 2 <= x1 && c.yb >= y0 && c.yb <= y1).sort((a, b) => a.x0 - b.x0).map(c => c.ch).join('')))
+      // (each of its parts' page characters, a formula TeX broke over lines: cropPartsOf)
+      for (const q of cropPartsOf(r)) {
+        const [x0, y0, x1, y1] = q.crop
+        parts.push(normU((charsByPage[q.page - 1] ?? []).filter(c => (c.x0 + c.x1) / 2 >= x0 && (c.x0 + c.x1) / 2 <= x1 && c.yb >= y0 && c.yb <= y1).sort((a, b) => a.x0 - b.x0).map(c => c.ch).join('')))
+      }
       parts.push(normU(r.text))
     } else if (r.text) parts.push(normU(r.text))
   }
@@ -1622,6 +1626,14 @@ function drawnAs(p, g, cls, sup, lineInfo = null) {
   const broken = box ? box.lines > 1 : lines.size > 1 && !oneLine
   const textMacro = p.cls === 'macro' || p.cls === 'umacro'
   const scripted = textMacro && !broken && oneLine && scriptedOf(real)
+  // a formula broken over lines whose segments the rendering knows (a layout file's, g.box's) is its crops, one a line, never
+  // its page text, which sets every glyph on one baseline (E3b: 2610.10069's sigma^{-1}(s_t) drawn "sigma -1 (s t)"); its own
+  // brackets left out where the translation sets its own (unbracketed: the first part cut after its opening one, the last
+  // before its closing one)
+  if (broken && box?.segs && formulaOf(p)) {
+    const parts = cropPartsOfSegments(box.segs)
+    if (parts) return { ...cropFields(g.unbracketed && g.of ? unbracketedParts(parts, g.of) : parts), text: texToText2(p.src) || '' }
+  }
   if (cls !== 'other' || broken || (textMacro && !scripted)) return { mode: 'orig-text', text: g.text, sup: sup || (cls === 'num' && real.length && real.every(c => c.size < lineSize * 0.85)), st: gst }
   // (a text macro's crop reads as its page text where its source has none: copied and found as the page shows it)
   const text = texToText2(p.src) || (scripted ? g.text : '')
@@ -1666,6 +1678,82 @@ export function resolutionFrom(r, g, unit, lineInfo = null) {
 export function cropOfBox(box) {
   return { crop: [box.x0 - 0.4, box.bottom - 0.3, box.x1 + 0.4, box.top + 0.3], baseline: box.baseline }
 }
+
+/**
+ * A placeholder's ink as crops, one a line of TeX's (E3b, 2026-10-19): its row's segments (stride 6: page, x0, baseline,
+ * x1, top, bottom) of one line on one page, transitively: two that meet across on its baseline, or that stand stacked in
+ * it, one over the other by more than half the smaller one's height (a \\qed box's top rule given the line above, a formula's
+ * tall operator or a cases' rows). Two lines' segments are two crops however their scripts reach into each other (2610.20484
+ * page 5: a subscript 0.2 into the next line's arrow made one crop two lines tall). Each group's union is cut as a layout
+ * file's segment is (cropOfBox), on the baseline of the segment inside it nearest its middle (a tall formula's own line), in
+ * TeX's order (each group's first segment's): [{ page, crop, baseline, seg }], seg the union as a segment (its `lines` 1).
+ * Null where it has none
+ */
+/** two segments' baselines this near (PDF units) are one line's */
+const LINE_OF = 0.5
+/** whether two segments are of one line: on one page, meeting across, on one baseline or stacked (cropPartsOfSegments) */
+const oneLine = (a, b) => {
+  if (a.page !== b.page) return false
+  const over = Math.min(a.top, b.top) - Math.max(a.bottom, b.bottom)
+  return over > 0 && (Math.abs(a.base - b.base) <= LINE_OF || over > 0.5 * Math.min(a.top - a.bottom, b.top - b.bottom))
+}
+export function cropPartsOfSegments(segs) {
+  const S = []
+  for (let s = 0; s + 5 < (segs?.length ?? 0); s += 6) S.push({ page: segs[s], x0: segs[s + 1], base: segs[s + 2], x1: segs[s + 3], top: segs[s + 4], bottom: segs[s + 5] })
+  if (!S.length) return null
+  const left = new Set(S), out = []
+  for (const s0 of S) {
+    if (!left.has(s0)) continue
+    left.delete(s0)
+    const box = { x0: s0.x0, x1: s0.x1, top: s0.top, bottom: s0.bottom }, inside = [s0]
+    for (let grew = true; grew;) {
+      grew = false
+      for (const s of left) if (inside.some(g => oneLine(g, s))) {
+        left.delete(s)
+        inside.push(s)
+        Object.assign(box, { x0: Math.min(box.x0, s.x0), x1: Math.max(box.x1, s.x1), top: Math.max(box.top, s.top), bottom: Math.min(box.bottom, s.bottom) })
+        grew = true
+      }
+    }
+    const mid = (box.top + box.bottom) / 2
+    const on = inside.filter(s => s.base >= box.bottom - 0.05 && s.base <= box.top + 0.05)
+    const baseline = (on.length ? on : inside).reduce((a, s) => (Math.abs(s.base - mid) < Math.abs(a.base - mid) ? s : a)).base
+    const seg = { ...box, baseline, lines: 1 }
+    out.push({ page: s0.page, ...cropOfBox(seg), seg })
+  }
+  return out
+}
+/** a formula's parts (cropPartsOfSegments') without its own brackets (`of`: its rendering with them, unbracketed's): the
+ *  first part cut after its opening bracket, the last before its closing one, where each stands in it */
+function unbracketedParts(parts, of) {
+  const real = (of.chars ?? []).filter(c => !c.sep && !c.space && /\S/.test(c.ch))
+  const open = real[0], close = real.at(-1)
+  const cut = (q, x0, x1) => (x1 > x0 ? { ...q, ...cropOfBox({ ...q.seg, x0, x1 }), seg: { ...q.seg, x0, x1 } } : q)
+  const inside = (q, c) => c && c.page === q.page && c.x0 >= q.seg.x0 - 0.5 && c.x1 <= q.seg.x1 + 0.5 && c.yb >= q.seg.bottom - 1 && c.yb <= q.seg.top + 1
+  const out = parts.slice()
+  if (inside(out[0], open)) out[0] = cut(out[0], Math.max(out[0].seg.x0, open.x1), out[0].seg.x1)
+  const n = out.length - 1
+  if (inside(out[n], close)) out[n] = cut(out[n], out[n].seg.x0, Math.min(out[n].seg.x1, close.x0))
+  return out
+}
+/** a crop resolution's own fields from its parts (cropPartsOfSegments'): the first one's page, rectangle and baseline, and
+ *  the parts themselves where there are more than one (`parts`: a formula TeX broke over lines) */
+export const cropFields = parts => ({ mode: 'crop', page: parts[0].page, crop: parts[0].crop, baseline: parts[0].baseline, ...(parts.length > 1 ? { parts } : {}) })
+/**
+ * A crop resolution as its readers take it, one a part (E3b): itself where it has no parts; else each part as a crop of its
+ * own, its placeholder's (`k`, `src`, `cls`) with that part's page, rectangle and baseline, its segment its `gap.box` (the
+ * extent a line reads: cropExtent), its index `part`, and the formula's copy text on the first alone. The tokens (one a
+ * part: tokensOf2), the drawer's audit, the checker, the word table, the links and the removal read crops so
+ */
+export function cropPartsOf(r) {
+  if (!r.parts) return [r]
+  return r.parts.map((q, i) => ({ ...r, page: q.page, crop: q.crop, baseline: q.baseline, text: i ? '' : r.text, gap: { ...r.gap, box: q.seg }, part: i, parts: undefined }))
+}
+/** whether a placeholder (its resolution's or its piece's `cls` and `src`) is a formula: v0's 'other' (math, or a command
+ *  whose rendering holds a letter or a digit; a symbol the proof reads so, phClassProven) that is no text piece
+ *  (rules/text-piece.mjs: a code or URL mark, a plain-text source). It is drawn only as crops of its ink, never as its page
+ *  text (E3b): a citation, a reference, a text macro and a text piece may be */
+export const formulaOf = p => p.cls === 'other' && !textPieceOf(p.src)
 
 const YEAR = /\b(?:19|20)\d\d[a-z]?\b/
 /** gapClass, with a textual author-year citation a citation ("Vaswani et al. (2017)", "Parmar et al. (2018)": iteration
@@ -1802,7 +1890,8 @@ function splitCites(g) {
   return [g]
 }
 
-/** whether growCrop grows a crop, and so reads its page's ink: a crop with a box, not one cut from a layout file's segment */
+/** whether growCrop grows a crop, and so reads its page's ink: a crop with a box, not one cut from a layout file's segment
+ *  (nor so a formula's parts, cropPartsOf: each its segments', its resolution's box its first's) */
 export const cropGrows = r => !!r?.crop && !r.gap?.box
 /**
  * A crop's box grown over the ink it touches on the original page: a radical's tail, a fraction's bar, a big operator's
@@ -2580,8 +2669,13 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     // (anything else drawn ends the segment's head: a crop, a rendering's text; nothing drawn and a space do not)
     if (r.mode !== 'none' && r.text !== ' ' && !(r.mode === 'kept' && r.cls === 'display')) after = null
     if (r.mode === 'crop') {
-      const glue = tokens.length > 0 && !lastIsSpace()
-      tokens.push({ crop: r, cw: r.crop[2] - r.crop[0], glue, w100: 0 })
+      // (a formula TeX broke over lines, its crops one after another, a space between them: the line breaks only there, at
+      // TeX's own break, and where they stand on one line they are the glue TeX dropped at the break apart, a space's width)
+      for (const [n, q] of cropPartsOf(r).entries()) {
+        if (n) pushText(' ', style())
+        const glue = tokens.length > 0 && !lastIsSpace()
+        tokens.push({ crop: q, cw: q.crop[2] - q.crop[0], glue, w100: 0 })
+      }
       return
     }
     if (!r.text) return
@@ -3075,10 +3169,21 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // iteration 3: the kept regions the text has passed (a break token each); the text may not run on into a block below
   // a region before its break (strict), or it reads before the formula it follows in the translation
   let consumed = 0, stop = false, spilled = false
+  // (a slot over the last line laid, beside it in its column, is no line of the text's: a paragraph's lines go down. The
+  // file's lines of a paragraph that sets a tall inline formula may come out of that order, its rows' lines after the line
+  // under them: 2610.21026 page 8, unit 91, whose line laid at 694.1 after the one at 684.8 ran over the formula's crop.
+  // Only a slot above it: a row the file splits from a line on its own baseline is that line's, 2610.21288 u5)
+  const overLast = sl => {
+    let k = lines.length - 1
+    while (k >= 0 && !lines[k].items.length) k--
+    const prev = lines[k]
+    return !!prev && prev.page === sl.page && sl.baseline > prev.baseline + 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
+  }
   const advance = () => {
     settle()
     if (stop) return
     li++
+    while (li < slots.length && overLast(slots[li])) li++
     if (li >= slots.length) return
     if ((slots[li].after ?? 0) > consumed) {
       if (strict === true) { stop = true; return }
@@ -3149,7 +3254,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     if (tokens[i].newline !== undefined) {
       const room = tokens[i].room ?? 0
       i++
-      if (line.items.length) { trim(line); advance() }
+      // (the line TeX's \\ ends, \hfil\break: ragged, placeItems)
+      if (line.items.length) { trim(line); line.ends = true; advance() }
       if (stop || li >= slots.length || !(room > 0)) continue
       let k = lines.length - 2
       while (k >= 0 && !lines[k].items.length) k--
@@ -3173,7 +3279,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       if (!line.items.length) line.past = consumed
       if (flow) {
         // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
-        if (fresh && line.items.length) { trim(line); advance() }
+        if (fresh && line.items.length) { trim(line); line.ends = true; advance() }
         if ((slots[li]?.after ?? 0) < consumed) spilled = true
         i++
         continue
@@ -3186,6 +3292,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
           // it; the slot below the display is of another flow, which settle never moves)
           const to = slots[q]
           trim(line)
+          // (the part of the paragraph before a display ends with TeX's \parfillskip: its last line ragged, placeItems)
+          line.ends = true
           settle()
           if (stop) break
           li = slots.indexOf(to)
@@ -3289,7 +3397,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
 }
 
 /** each line's items placed: justified where the slack is within the caps (CJK per gap, spaces per space), else left
- *  aligned; the unit's last line left aligned; a centred block centred */
+ *  aligned; the unit's last line left aligned, and so a line TeX's own break ends (breakLines' `ends`: the part of a
+ *  paragraph before a display, which TeX ends with \parfillskip, and a forced break, \\'s \hfil\break), its spacing the
+ *  fit's state (its tracking), never spread to the edge; a centred block centred */
 function placeItems(lines, f, P) {
   const last = lines.at(-1)
   for (const line of lines) {
@@ -3304,7 +3414,7 @@ function placeItems(lines, f, P) {
     const cjkItems = line.items.filter(it => it.t.cls === 'cjk').length
     const latinish = spaces.length > 0 && (P.keepAll || cjkItems < line.items.length / 2)
     let perSpace = 0, perGap = 0
-    line.mode = line.centred ? 'centred' : line === last ? 'last' : 'just'
+    line.mode = line.centred ? 'centred' : line === last || line.ends ? 'last' : 'just'
     if (slack < 0 && spaces.length) perSpace = slack / spaces.length // shrunk spaces (never past spaceMin by the breaking)
     else if (line.mode === 'just' && slack > 0) {
       if (latinish) {
@@ -3536,6 +3646,8 @@ export function keepsShare(share, lines) {
  *   within the erased boxes (clip);
  * - { op: 'crop', page, src: [x, y, w, h], dst: [x, y, w, h] }: that page's pixels in src laid on dst, darkened in.
  */
+/** a crop's part in its audit entry (`part`, cropPartsOf's), where its formula has parts: the checker counts each part's */
+const partOf = c => (c.part !== undefined ? { part: c.part } : {})
 export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audit = null, id = null, restore = null }) {
   const ops = []
   const erased = []
@@ -3573,7 +3685,7 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
       ops.push({ op: 'crop', page: it.t.crop.page, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k] })
-      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k] })
+      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, ...partOf(it.t.crop), srcPage: it.t.crop.page, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k] })
     }
   }
   return ops
@@ -3608,11 +3720,12 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
       // (cut from the original through its own glyphs' and rules' outline boxes, where it has them: a crop's box may
-      // reach another line's ink, its glyphs' boxes do not)
-      const cut = clips?.get(it.t.crop.k) ?? null, clip = cut?.rects ?? null
+      // reach another line's ink, its glyphs' boxes do not. The clips are this page's segments in this page's pixels: a
+      // crop, or a part of one, from another page has none)
+      const cut = it.t.crop.page === page ? clips?.get(it.t.crop.k) ?? null : null, clip = cut?.rects ?? null
       const plane = 'O'
       ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip } : {}) })
-      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip, own: cut.own } : {}) })
+      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, ...partOf(it.t.crop), srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip, own: cut.own } : {}) })
     }
   }
   return ops

@@ -243,9 +243,11 @@ describe("a placeholder's rendering by its segments", () => {
     return [...above.slice(0, 1), sum, ...above.slice(1), sep, ...f, ...after] as never
   }
   it("takes the unit's characters inside them on their line, and the breaks between them, never the line above's spaces", () => {
-    const g = T.renderingOf(Float64Array.from([1, 19.5, 100, 40.5, 108, 97]), uc(), false)
+    const segs = Float64Array.from([1, 19.5, 100, 40.5, 108, 97])
+    const g = T.renderingOf(segs, uc(), false)
     expect(g?.chars.map(c => c.ch).join('')).toBe('Pq=k')
-    expect(g?.box).toEqual({ x0: 19.5, x1: 40.5, top: 108, bottom: 97, baseline: 100, lines: 1 })
+    // (its box, and the segments it holds: a formula broken over lines is cropped by them)
+    expect(g?.box).toEqual({ x0: 19.5, x1: 40.5, top: 108, bottom: 97, baseline: 100, lines: 1, segs })
   })
   it('a display anywhere in its rows; none found is none, but for a display, whose rows the unit may not hold', () => {
     expect(T.renderingOf(Float64Array.from([1, 70, 100, 80, 108, 97]), uc(), false)).toBeNull()
@@ -523,19 +525,19 @@ describe("page text no Unicode stands for, and a held line's own mark (the LOST 
     expect(L2.fontMappedOf('Error: a font that did not load')).toBeNull()
     expect(L2.fontMappedOf(null)).toBeNull()
   })
-  it('page text of a placeholder with a character no Unicode stands for is no proof: a unit the file locates whole crops it on one line', () => {
-    // a formula TeX broke over two lines (two segments: drawn as its page text), its sum sign read by its code
+  it('page text of a placeholder with a character no Unicode stands for is no proof: a unit the file locates whole crops it', () => {
+    // a formula TeX broke over two lines, its sum sign read by its code where `nu`: drawn as its crops, one a line, mapped or
+    // not (E3b: never as its page text; layer-proto-formula-crops.test.ts)
     const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph("$g(z')=\\sum_n g_n$"), text(' \u4E59')] } as never
     const lu = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 200, 507, 498, 1, 10, 488, 40, 495, 486]]]) as never
     const t = T.texRects(lu)
     const page = (sum: { nu?: boolean }) => [...item('a b', 10, 500, 10, 0), ...item('g=', 150, 500, 10, 1, math), ...item('\u00CD', 10, 488, 10, 2, math).map(c => ({ ...c, ...sum })), ...item('gn', 20, 488, 10, 3, math), ...item('c d', 50, 488, 10, 4)]
     const read = (sum: { nu?: boolean }) => L2.prepareUnit(u, t.rects as never, [page(sum) as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
-    expect(read({}).get(1)?.mode).toBe('orig-text')
-    expect(read({}).unproven).toBeUndefined()
-    // over two lines: one crop cannot show it (a placeholder is shown by one rendering), so no proof yet
-    expect(read({ nu: true }).unproven).toBe(1)
-    // and v0's page text proven by the segments alike
-    expect(L2.prepareUnit(u, t.rects as never, [page({ nu: true }) as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, 1, -1]) } as never).unproven).toBe(1)
+    for (const sum of [{}, { nu: true }]) {
+      expect(read(sum).get(1)).toMatchObject({ mode: 'crop', page: 1, baseline: 500 })
+      expect(read(sum).get(1)?.parts?.map(q => q.baseline)).toEqual([500, 488])
+      expect(read(sum).unproven).toBeUndefined()
+    }
     // on one line (its segments meet across: a formula with a tall operator, its rows as two segments), a crop of their
     // union on the baseline inside it: its ink is TeX's, only its page text cannot be drawn
     const one = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 200, 507, 498, 1, 160, 496, 190, 503, 494]]]) as never

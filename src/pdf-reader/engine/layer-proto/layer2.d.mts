@@ -71,7 +71,9 @@ export interface Gap {
   held?: string[]
 }
 /** a rendering's ink as its source knows it: its extent across, the baseline of the line it sits on, its lines */
-export interface RenderingBox { x0: number; x1: number; top?: number; bottom?: number; baseline: number; lines: number }
+export interface RenderingBox { x0: number; x1: number; top?: number; bottom?: number; baseline: number; lines: number; segs?: ArrayLike<number> }   // segs: a layout file's segments (stride 6), a formula broken over lines cropped by them
+/** a crop of one line of a formula's segments (cropPartsOfSegments): its page, its rectangle and baseline, the union as a segment */
+export interface CropPart { page: number; crop: number[]; baseline: number; seg: RenderingBox & { top: number; bottom: number } }
 /** a placeholder of the unit by its piece index `k` (placeholdersOf): its source, its class (phClass2), whether it is a
  *  paper's own macro, a nested footnote's mark; a citation's keys */
 export interface Placeholder { k: number; src: string; cls: string; unknown?: boolean; nested?: boolean; keys?: string[] }
@@ -85,7 +87,7 @@ export interface LineInfo { baseline: number; size: number; top?: number; bottom
 export type Extent = number[] | number[][]
 /** a placeholder's resolution: how it is drawn ('none', 'symbol', 'kept', 'crop', 'orig-text', 'cite-map', 'source'),
  *  with its placeholder (k, src, cls) and the rendering it took (gap) */
-export interface Resolved { mode: string; text?: string; k?: number; src?: string; cls?: string; page?: number; crop?: number[]; baseline?: number; sup?: boolean; math?: boolean; gap?: Gap | null; region?: number; second?: boolean; [more: string]: unknown }
+export interface Resolved { mode: string; text?: string; k?: number; src?: string; cls?: string; page?: number; crop?: number[]; baseline?: number; sup?: boolean; math?: boolean; gap?: Gap | null; region?: number; second?: boolean; parts?: CropPart[]; part?: number; [more: string]: unknown }   // parts: a crop's, one a line of a formula TeX broke over lines (its first part's page, crop and baseline its own); part: a part's index, cropPartsOf's
 /** prepareUnit's answer: each placeholder's resolution by its piece's index, with the unit's reading of the page */
 export interface Prepared extends Map<number, Resolved> {
   /** part 1, frames and lines: the unit's page characters line by line (each with its line, `rect`), a space between
@@ -322,6 +324,14 @@ export declare function resolutionFrom(r: Resolved, g: Gap & { proof?: boolean }
 /** a crop from a layout file's segment (its piece's own ink): the box, a fraction of a point around, on its line's
  *  baseline */
 export declare function cropOfBox(box: { x0: number; x1: number; top: number; bottom: number; baseline: number }): { crop: number[]; baseline: number }
+/** a placeholder's ink as crops, one a line of TeX's: its row's segments (stride 6) that meet across on one page, in TeX's order; null where it has none */
+export declare function cropPartsOfSegments(segs: ArrayLike<number> | null | undefined): CropPart[] | null
+/** a crop resolution's own fields from its parts: the first's page, rectangle and baseline, and the parts where there are more than one */
+export declare function cropFields(parts: CropPart[]): { mode: 'crop'; page: number; crop: number[]; baseline: number; parts?: CropPart[] }
+/** a crop resolution as its readers take it, one a part: itself, or each part as a crop of its own (its index `part`, the copy text on the first alone) */
+export declare function cropPartsOf(r: Resolved): Resolved[]
+/** whether a placeholder is a formula, drawn only as crops of its ink: v0's 'other' that is no text piece */
+export declare function formulaOf(p: { cls?: string; src?: string }): boolean
 /** a crop's baseline with no segment (v0's): its glyphs' at its line's text size, else its line's measured baseline, else
  *  its largest glyphs' */
 export declare function cropBaselineOf(real: readonly Char[], lineInfo: Prepared['lineInfo'] | null, main: readonly Char[]): number
