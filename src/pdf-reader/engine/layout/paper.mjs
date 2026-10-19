@@ -129,11 +129,13 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   const record = () => ({ extra: g.extra, unmarked: [...g.unmarked].sort((a, b) => a - b), names: g.names, failed: g.failed, ...(g.judged ? { judged: g.judged } : {}) })
   const guarded = r => result(g.failed.length ? { ...r, guard: record() } : r)
   if (!marked) return guarded({ refused: 'compile', why: cm ? 'a marked pass did not run through, or the compile threw' : 'the compile threw', ms })
-  // (a throw of the guard's own after the compile: the marked original taken as before the guard, one that ran through with a
-  // PDF, else the compile's refusal)
+  // (a throw of the guard's own after the compile: the last remedy that passed the checks stands, else the marked original as
+  // before the guard, one that ran through with a PDF, else the compile's refusal)
+  let standing = null
   try { return await checked() } catch (e) {
     if (isMemoryError(e)) throw e
     g.judged = whyText(`the layout guard failed: ${e?.message ?? e}`)
+    if (standing) { g.unmarked = standing.unmarked; g.names = standing.named; return guarded({ pdf: standing.c.pdf, log: lastTexLog(standing.c.log), options, ms }) }
     return ranThrough(marked) && marked.pdf?.length ? guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms }) : guarded({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms })
   }
 
@@ -173,21 +175,29 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     }
     /** whether the host's budget holds one more compile, within GUARD_EXTRA */
     const afford = () => g.extra < GUARD_EXTRA && (compileBudgetMs === null || compileBudgetMs === undefined || compileBudgetMs - wall.spent >= 1.2 * wall.longest)
+    /** the unmarked original's compile, once it ran through to arXiv's pages: what an attempt's errors are judged against */
+    let own = null
     /** the marked original again, `unmarked` left the paper's own and the names marked or not: its evidence */
     const attempt = async (unmarked, named) => {
       g.extra++
       const sp = {}, f = filesOf(unmarked, named, sp)
       let c = null
-      try { c = await asked({ main, engine, rerun: true, bibtex, overrides: f }) } catch {}
-      return { ...evidence(c, f, sp), unmarked, named }
+      // (a failed allocation is the run's, never the paper's refusal)
+      try { c = await asked({ main, engine, rerun: true, bibtex, overrides: f }) } catch (e) { if (isMemoryError(e)) throw e }
+      const r = { ...evidence(c, f, sp), unmarked, named }
+      // (one that passes the checks stands if a later step of the guard throws)
+      if (clean(r, own)) standing = r
+      return r
     }
     /** the unmarked original (unmarkedFiles), compiled as the marked one is: whether it ran through, its pages, its errors */
     const original = async () => {
       g.extra++
       let c = null
-      try { c = await asked({ main, engine, rerun: true, bibtex, overrides: unmarkedFiles(paper) }) } catch {}
+      try { c = await asked({ main, engine, rerun: true, bibtex, overrides: unmarkedFiles(paper) }) } catch (e) { if (isMemoryError(e)) throw e }
       const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
-      return { c, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, errors: c ? errorCount(c.log) : 0, own: c ? ownErrors(c.log) : new Set() }
+      const u = { c, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, errors: c ? errorCount(c.log) : 0, own: c ? ownErrors(c.log) : new Set() }
+      if (u.ran && !u.short) own = u
+      return u
     }
     /** the attempt taken: its units and names the guard's record */
     const take = e => { if (e !== e0) { g.unmarked = e.unmarked; g.names = e.named } return timed(done(e)) }
