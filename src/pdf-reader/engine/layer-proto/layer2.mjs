@@ -492,21 +492,22 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * digits, operators: "(z) =" at a line's end), and a line that is not its block's last, being justified, out to its
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
  * no placeholder held them. `first`: the unit's first line (`rects` may be its lines on one page alone: run.mjs grows a
- * unit page by page). `measured`: the rectangles are the layout file's lines, TeX's, each set to a measure: a line grows
- * to the right only up to its own, its run's (measuresOf), not its block's widest edge (E3d: beside a float wrapped on the
- * right, a narrow line grew over the caption's label "Table 6: A", which no unit's rectangle held, and the grown line
- * set the measure of every narrow line of its run, 2602.23285 page 18). v0's anchors fall short of their ink, which
- * this growth repairs: theirs grow to their block's edge as before. Mutates the rectangles.
+ * unit page by page). `measured`: the rectangles are the layout file's lines, TeX's, each set to a measure: a justified
+ * line grows over what is not math only up to its own measure, its run's (measuresOf), not its block's widest edge (E3d:
+ * beside a float wrapped on the right, a narrow line grew over the caption's label "Table 6: A", which no unit's
+ * rectangle held, and the grown line set the measure of every narrow line of its run, 2602.23285 page 18); a formula's
+ * tail still grows it to its block's edge. v0's anchors, which fall short of their ink, grow as before. Mutates the
+ * rectangles.
  */
 export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0], measured = false) {
   let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars, first)
   const blocks = blocksOf(rects, pageViews)
   const lastOf = new Set(blocks.map(b => b.rects.at(-1).join()))
-  const edgeOf = new Map()
+  const edgeOf = new Map(), justOf = new Map()
   const blockX0 = new Map()
   for (const b of blocks) {
     const m = measured ? measuresOf(b.rects) : null
-    for (const r of b.rects) { edgeOf.set(r.join(), m?.get(rectKey(r))?.[1] ?? b.x1); blockX0.set(r.join(), b.x0) }
+    for (const r of b.rects) { edgeOf.set(r.join(), b.x1); justOf.set(r.join(), m?.get(rectKey(r))?.[1] ?? b.x1); blockX0.set(r.join(), b.x0) }
   }
   for (const r of rects) {
     const page = charsByPage[r[0] - 1] ?? []
@@ -518,7 +519,7 @@ export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn,
     const foreign = c => (others[r[0]] ?? []).some(o => c.x0 >= o[1] - 0.5 && c.x1 <= o[3] + 0.5 && c.yb >= o[2] - 0.2 && c.yb <= o[4])
     const mathy = c => c.st?.fam === 'math' || /^[()[\]{}=+−\-×·<>≤≥|,.;:0-9∗*′]$/.test(c.ch)
     const key = r.join()
-    const edge = !lastOf.has(key) ? edgeOf.get(key) : null
+    const edge = !lastOf.has(key) ? justOf.get(key) : null
     // never out of the unit's own block (a column's paragraph took the next column's equation number "(4)")
     const bx0 = blockX0.get(key) ?? -Infinity, bx1 = edgeOf.get(key) ?? Infinity
     // an item the line holds the start of and that ends less than 8 pt past it is the line's to its end (an item's
@@ -539,7 +540,8 @@ export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn,
       }
       x = Math.max(x, cs[last].x1)
     }
-    // to the right: math always; anything while the line is a justified one, up to its block's edge
+    // to the right: math always; anything while the line is a justified one, up to its block's edge (a file line: up to its
+    // own measure, `measured`)
     let to = x
     for (const c of line.filter(c => c.x0 >= x - 0.1)) {
       if (c.x0 - to > 1.2 * size || foreign(c) || c.x1 > bx1 + 3) break

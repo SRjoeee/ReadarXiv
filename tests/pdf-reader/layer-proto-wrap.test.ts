@@ -21,16 +21,16 @@ beforeAll(async () => {
 const item = (text: string, x: number, yb: number, n: number) => [...text].map((ch, k) => ({ ch, x0: x + 5 * k, x1: x + 5 * (k + 1), yb, size: 10, item: n, ix: x, k, st: { fam: 'serif' } }))
 /** four narrow lines beside the float (20 to 150) and two under it (20 to 280), 12 pt apart from 700, each its own item's
  *  words filling it; the caption's label 5 pt past the second line's end, on its baseline, no unit's */
-const scene = () => {
+const scene = (beside = 'Table 6: A') => {
   const B = [700, 688, 676, 664, 652, 640]
   const x1 = [150, 150, 150, 150, 280, 280]
   const rects = B.map((b, j) => [1, 20, b - 2, x1[j]!, b + 8])
   const chars = B.flatMap((b, j) => item('x'.repeat((x1[j]! - 20) / 5), 20, b, j))
-  const label = item('Table 6: A', 155, 688, 9)
+  const label = item(beside, 155, 688, 9)
   return { rects, page: [...chars, ...label] }
 }
-const grow = (measured: boolean) => {
-  const { rects, page } = scene()
+const grow = (measured: boolean, beside?: string) => {
+  const { rects, page } = scene(beside)
   L2.extendRects2(rects as never, [page] as never, [] as never, 'x', L1.wordsOf, L1.norm, [[0, 0, 612, 792]] as never, [page] as never, rects[0] as never, measured)
   return rects
 }
@@ -42,6 +42,9 @@ describe("a file line grows only up to its own measure", () => {
     const blocks = L2.blocksOf2(rects as never, [[0, 0, 612, 792]] as never)
     expect(blocks.length).toBe(1)
     expect(blocks[0]!.measures?.get(`1|${rects[1]!.slice(1).join()}`)).toEqual([20, 150])
+  })
+  it("a formula's tail past its measure is still the line's (math always grows it, up to its block's edge)", () => {
+    expect(grow(true, '=(1)')[1]![3]).toBeCloseTo(175.01, 2)
   })
   it("v0's anchors grow as before: the justified line out over what stands beside it", () => {
     expect(grow(false)[1]![3]).toBeGreaterThan(200)
