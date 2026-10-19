@@ -3,7 +3,7 @@
 // arXiv's preflight, in simplified form.
 // Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
 // a directory under Node, which the spikes' paper-meta.mjs hands in).
-import { jobName, latin1, normalizePath } from './latex-front.mjs'
+import { jobName, latin1, normalizePath, texText } from './latex-front.mjs'
 
 const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
 const basename = p => p.slice(p.lastIndexOf('/') + 1)
@@ -13,7 +13,7 @@ const utf8 = bytes => new TextDecoder().decode(bytes)
 export function analyze(fsys) {
   const files = fsys.list()
   const tex = files.filter(f => /\.(tex|ltx|latex)$/i.test(f))
-  const read = f => { const b = fsys.read(f); return b ? uncomment(latin1(b)) : '' }
+  const read = f => { const b = fsys.read(f); return b ? uncomment(texText(b)) : '' }
   const bodies = Object.fromEntries(tex.map(f => [f, read(f)]))
   const meta = { files: files.length, texFiles: tex.length }
 

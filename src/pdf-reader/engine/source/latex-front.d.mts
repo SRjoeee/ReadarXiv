@@ -39,6 +39,8 @@ export declare const dviEngine: (engine: string | null | undefined) => boolean
  *  (dvipdfmx's C 0x0010 at the first page); after MARK_DEF, for such a paper alone */
 export declare const DVI_MARK_DEF: string
 /** a string's code units as bytes, each its low eight bits (source text is read byte for byte) */
+/** a source file's bytes as TeX reads its lines: latin1, each line's end (CR, LF or CRLF) an LF */
+export declare const texText: (bytes: Uint8Array) => string
 export declare const latin1Bytes: (s: string) => Uint8Array
 /** a/./b/../c → a/c: a file as the package holds it and as TeX's file system has it, whatever spelling named it */
 export declare const normalizePath: (p: string) => string
