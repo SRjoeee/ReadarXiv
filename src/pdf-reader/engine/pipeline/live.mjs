@@ -444,10 +444,13 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   paper's own, the name marks off, a page count compared) and records why a part has none, not what a unit is, what is
  *   sent for one or how a reply is read back: every unit whose source a copy holds is carried, and older pipelines keep
  *   their own tests
- * - 19: 20 keeps a styled pair whose two ends stand where the wire has a marker anyway (mt.mjs classOf's boundary rule,
+ * - 19: 20 changes what a unit is (none of what TeX reads as syntax, a declaration's digits its text: arg-roles.mjs
+ *   readArgs and DELIMITED, latex-front.mjs), not what is sent for one or how a reply is read back (the wire keeps its own
+ *   inkless list, mt.mjs INKLESS): every unit whose source a copy holds is carried, and older pipelines keep their own tests
+ * - 20: 21 keeps a styled pair whose two ends stand where the wire has a marker anyway (mt.mjs classOf's boundary rule,
  *   TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read back: a unit whose wire the rule leaves
- *   as it was (mt.mjs boundaryChanges, given the unit) was sent as 20 sends it, and is carried; without the unit, a
- *   translation that holds no pair. Over 137 papers' sources 299 of 36,104 units are asked again. Every older pipeline's
+ *   as it was (mt.mjs boundaryChanges, given the unit) was sent as 21 sends it, and is carried; without the unit, a
+ *   translation that holds no pair. Over 137 papers' sources 295 of 36,104 units are asked again. Every older pipeline's
  *   test takes this one with its own (7 to 14 carry no unit that holds a pair already)
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
@@ -458,7 +461,7 @@ const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
 const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
 const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
 const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'open' || p?.t === 'close'))
-export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: NO_BOUNDARY, 16: NO_BOUNDARY, 17: NO_BOUNDARY, 18: NO_BOUNDARY, 19: NO_BOUNDARY }
+export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: NO_BOUNDARY, 16: NO_BOUNDARY, 17: NO_BOUNDARY, 18: NO_BOUNDARY, 19: NO_BOUNDARY, 20: NO_BOUNDARY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

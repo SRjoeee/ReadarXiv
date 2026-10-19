@@ -39,7 +39,7 @@
 // 4: a styled pair whose two ends both stand where the wire has a marker anyway (a void beside it, a kept or enclosing
 //    pair's edge with white space alone between, the unit's own end) keeps its two markers (mt.mjs classOf's boundary rule,
 //    E1 of 2026-10-19): they cut nothing the endpoint does not cut already (2610.19159's `\textit{Floor (must clear):}
-//    \textcolor{red}{...}`, whose colour went flat at a colon that starts no sentence). Over 137 papers' sources 299 of
+//    \textcolor{red}{...}`, whose colour went flat at a colon that starts no sentence). Over 137 papers' sources 295 of
 //    36,104 units, in 56 papers, change their wire (mt.mjs boundaryChanges tells exactly those); every other unit's is 3's
 //    byte for byte, its text answered by the per-text cache
 export const TRANSLATE_VERSION = '4'
