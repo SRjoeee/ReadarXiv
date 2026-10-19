@@ -1609,11 +1609,22 @@ export function cropOfBox(box) {
 
 /**
  * A placeholder's ink as crops, one a line of TeX's (E3b, 2026-10-19): its row's segments (stride 6: page, x0, baseline,
- * x1, top, bottom) that meet across on one page, transitively (a \\qed box's top rule given the line above, a formula's
- * tall operator or a cases' rows: one line's), each such group's union cut as a layout file's segment is (cropOfBox), on
- * the baseline of the segment inside it nearest its middle (a tall formula's own line), in TeX's order (each group's first
- * segment's): [{ page, crop, baseline, seg }], seg the union as a segment (its `lines` 1). Null where it has none
+ * x1, top, bottom) of one line on one page, transitively: two that meet across on its baseline, or that stand stacked in
+ * it, one over the other by more than half the smaller one's height (a \\qed box's top rule given the line above, a formula's
+ * tall operator or a cases' rows). Two lines' segments are two crops however their scripts reach into each other (2610.20484
+ * page 5: a subscript 0.2 into the next line's arrow made one crop two lines tall). Each group's union is cut as a layout
+ * file's segment is (cropOfBox), on the baseline of the segment inside it nearest its middle (a tall formula's own line), in
+ * TeX's order (each group's first segment's): [{ page, crop, baseline, seg }], seg the union as a segment (its `lines` 1).
+ * Null where it has none
  */
+/** two segments' baselines this near (PDF units) are one line's */
+const LINE_OF = 0.5
+/** whether two segments are of one line: on one page, meeting across, on one baseline or stacked (cropPartsOfSegments) */
+const oneLine = (a, b) => {
+  if (a.page !== b.page) return false
+  const over = Math.min(a.top, b.top) - Math.max(a.bottom, b.bottom)
+  return over > 0 && (Math.abs(a.base - b.base) <= LINE_OF || over > 0.5 * Math.min(a.top - a.bottom, b.top - b.bottom))
+}
 export function cropPartsOfSegments(segs) {
   const S = []
   for (let s = 0; s + 5 < (segs?.length ?? 0); s += 6) S.push({ page: segs[s], x0: segs[s + 1], base: segs[s + 2], x1: segs[s + 3], top: segs[s + 4], bottom: segs[s + 5] })
@@ -1625,7 +1636,7 @@ export function cropPartsOfSegments(segs) {
     const box = { x0: s0.x0, x1: s0.x1, top: s0.top, bottom: s0.bottom }, inside = [s0]
     for (let grew = true; grew;) {
       grew = false
-      for (const s of left) if (s.page === s0.page && Math.min(box.top, s.top) > Math.max(box.bottom, s.bottom)) {
+      for (const s of left) if (inside.some(g => oneLine(g, s))) {
         left.delete(s)
         inside.push(s)
         Object.assign(box, { x0: Math.min(box.x0, s.x0), x1: Math.max(box.x1, s.x1), top: Math.max(box.top, s.top), bottom: Math.min(box.bottom, s.bottom) })

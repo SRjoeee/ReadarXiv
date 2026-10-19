@@ -115,6 +115,23 @@ describe('a formula TeX broke over lines is its crops, one a line, never its pag
   })
 })
 
+describe("a formula's lines: its segments on one line of TeX's, by their baseline, or stacked in it", () => {
+  const groups = (segs: number[]) => L2.cropPartsOfSegments(segs)?.map(q => [q.page, q.baseline, round(q.crop)])
+  it("keeps two lines apart where a script of one reaches the other's ink by a hair", () => {
+    // 2610.20484 page 5, unit 49: "y_i^max =" at the end of the line at 592.98, its subscript 0.2 under the top of "r_0^up" at
+    // the start of the next line, its arrow's tip: one crop of their union was two lines tall, laid on one line and drawn over
+    // the next unit's first line
+    expect(groups([5, 495, 592.98, 540, 601, 590.4, 5, 312, 580.69, 330, 590.6, 577])).toEqual([
+      [5, 592.98, [494.6, 590.1, 540.4, 601.3]], [5, 580.69, [311.6, 576.7, 330.4, 590.9]],
+    ])
+  })
+  it('joins the segments of one line, and those stacked in it (a tall operator, a \\qed box under its rule)', () => {
+    expect(groups([1, 150, 500, 200, 507, 498, 1, 210, 500, 240, 505, 499])?.length).toBe(1)
+    expect(groups([1, 150, 500, 200, 507, 498, 1, 160, 496, 190, 503, 494])).toEqual([[1, 500, [149.6, 493.7, 200.4, 507.3]]])
+    expect(groups([1, 180, 500, 186, 495.4, 495, 1, 180, 488, 186, 495.6, 488])?.length).toBe(1)
+  })
+})
+
 describe("its crops in the line: TeX's break between them, a space apart where they stand on one", () => {
   const tokens = () => L2.tokensOf2(u, whole() as never, 'zh', BASE as never, DESIGNS as never, P as never, null, (s: string) => (s === ' ' ? 25 : 0))
   it('one crop token a part, a space between them; only the first carries the formula\'s copy text', () => {
