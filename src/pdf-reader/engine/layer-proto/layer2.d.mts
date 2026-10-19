@@ -246,8 +246,8 @@ export declare function textSymbol(src: string): boolean
 export declare function phClassProven(src: string): { cls: string; unknown?: boolean }
 /** the unit's characters by its rectangles; `exact`: each rectangle's baseline and size where a layout file gives them */
 export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents?: Map<Rect, number[]>, exact?: ReadonlyMap<Rect, { baseline: number; size: number }> | null): Char[]
-/** `first`: the unit's first line (default rects[0]; `rects` may be its lines on one page alone) */
-export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
+/** `first`: the unit's first line (default rects[0]; `rects` may be its lines on one page alone); `measured`: the rects are the layout file's lines, each grown to the right only up to its run's measure (E3d) */
+export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect, measured?: boolean): number
 export declare function extendFirstLines(rects: Rect[], pageViews: readonly number[][], others: readonly (readonly Rect[] | undefined)[]): void
 /** a block's lines by the measure TeX set each to, where it changed within the paragraph (a wrapped figure, \parshape,
  *  \hangindent): each line's key to its measure's [x0, x1], or null where the block is one measure */

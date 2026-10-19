@@ -492,15 +492,22 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * digits, operators: "(z) =" at a line's end), and a line that is not its block's last, being justified, out to its
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
  * no placeholder held them. `first`: the unit's first line (`rects` may be its lines on one page alone: run.mjs grows a
- * unit page by page). Mutates the rectangles.
+ * unit page by page). `measured`: the rectangles are the layout file's lines, TeX's, each set to a measure: a line grows
+ * to the right only up to its own, its run's (measuresOf), not its block's widest edge (E3d: beside a float wrapped on the
+ * right, a narrow line grew over the caption's label "Table 6: A", which no unit's rectangle held, and the grown line
+ * set the measure of every narrow line of its run, 2602.23285 page 18). v0's anchors fall short of their ink, which
+ * this growth repairs: theirs grow to their block's edge as before. Mutates the rectangles.
  */
-export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0]) {
+export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0], measured = false) {
   let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars, first)
   const blocks = blocksOf(rects, pageViews)
   const lastOf = new Set(blocks.map(b => b.rects.at(-1).join()))
   const edgeOf = new Map()
   const blockX0 = new Map()
-  for (const b of blocks) for (const r of b.rects) { edgeOf.set(r.join(), b.x1); blockX0.set(r.join(), b.x0) }
+  for (const b of blocks) {
+    const m = measured ? measuresOf(b.rects) : null
+    for (const r of b.rects) { edgeOf.set(r.join(), m?.get(rectKey(r))?.[1] ?? b.x1); blockX0.set(r.join(), b.x0) }
+  }
   for (const r of rects) {
     const page = charsByPage[r[0] - 1] ?? []
     // by their centres: a character's place in its item is an estimate, off by a point or two at an item's end
