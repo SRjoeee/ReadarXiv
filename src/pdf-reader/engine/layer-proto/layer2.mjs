@@ -2912,7 +2912,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     if (tokens[i].newline !== undefined) {
       const room = tokens[i].room ?? 0
       i++
-      if (line.items.length) { trim(line); advance() }
+      // (the line TeX's \\ ends, \hfil\break: ragged, placeItems)
+      if (line.items.length) { trim(line); line.ends = true; advance() }
       if (stop || li >= slots.length || !(room > 0)) continue
       let k = lines.length - 2
       while (k >= 0 && !lines[k].items.length) k--
@@ -2935,7 +2936,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       consumed = Math.max(consumed, tokens[i].blockTo + 1)
       if (flow) {
         // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
-        if (fresh && line.items.length) { trim(line); advance() }
+        if (fresh && line.items.length) { trim(line); line.ends = true; advance() }
         if ((slots[li]?.after ?? 0) < consumed) spilled = true
         i++
         continue
@@ -2948,6 +2949,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
           // it; the slot below the display is of another flow, which settle never moves)
           const to = slots[q]
           trim(line)
+          // (the part of the paragraph before a display ends with TeX's \parfillskip: its last line ragged, placeItems)
+          line.ends = true
           settle()
           if (stop) break
           li = slots.indexOf(to)
@@ -3051,7 +3054,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
 }
 
 /** each line's items placed: justified where the slack is within the caps (CJK per gap, spaces per space), else left
- *  aligned; the unit's last line left aligned; a centred block centred */
+ *  aligned; the unit's last line left aligned, and so a line TeX's own break ends (breakLines' `ends`: the part of a
+ *  paragraph before a display, which TeX ends with \parfillskip, and a forced break, \\'s \hfil\break), its spacing the
+ *  fit's state (its tracking), never spread to the edge; a centred block centred */
 function placeItems(lines, f, P) {
   const last = lines.at(-1)
   for (const line of lines) {
@@ -3066,7 +3071,7 @@ function placeItems(lines, f, P) {
     const cjkItems = line.items.filter(it => it.t.cls === 'cjk').length
     const latinish = spaces.length > 0 && (P.keepAll || cjkItems < line.items.length / 2)
     let perSpace = 0, perGap = 0
-    line.mode = line.centred ? 'centred' : line === last ? 'last' : 'just'
+    line.mode = line.centred ? 'centred' : line === last || line.ends ? 'last' : 'just'
     if (slack < 0 && spaces.length) perSpace = slack / spaces.length // shrunk spaces (never past spaceMin by the breaking)
     else if (line.mode === 'just' && slack > 0) {
       if (latinish) {
