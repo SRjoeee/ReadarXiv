@@ -601,10 +601,13 @@ export const POINTS_TEX = [
  *   switch babel makes once it has (its afterextras hook): each name macro the document defines, as a macro of no
  *   parameter, not \protected and not blank (a class may test a name for emptiness: REVTeX's jcp style sets no heading
  *   over an empty \refname, and a wrapped one would make it set an empty heading's room), set to
- *   \axtnma{<key>}<its own text>\axtnmb{<key>}; the macro as it was kept
+ *   \relax\axtnma{<key>}<its own text>\axtnmb{<key>}; the macro as it was kept
  *   (\axt@nmt@<key>, the probe's: nameSection) and the macro wrapped (\axt@nmd@<key>), so that one wrapped already is
  *   left as it is. Local, as babel's own captions are. polyglossia's switches are not followed (no paper of the corpus's
- *   five sets names through it)
+ *   five sets names through it). The \relax first: a class that tests a name's first token in an \if expands the name
+ *   there (REVTeX's \@if@empty\@svsec, `\if!#1!`, over the section number "Appendix A"), and reads a token that sets
+ *   nothing, never the marks' assignments, which ended the test in the middle of their macro: "Incomplete \iffalse", every
+ *   revtex4-2 paper with a numbered appendix stopped (2610.21288, 2610.20595); typeset, the \relax does nothing
  */
 export const NAMES_TEX = [
   '\\gdef\\axt@nmn{0}\\global\\let\\axt@nmopen\\@empty\\global\\let\\axt@nmwait\\@empty\\newif\\ifaxt@nmon\\newif\\ifaxt@nmgo\\def\\axt@nmfigure{figure}\\def\\axt@nmtable{table}',
@@ -616,7 +619,7 @@ export const NAMES_TEX = [
   '\\def\\axtnma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nma\\else\\protect\\axtnma\\fi}',
   '\\def\\axtnmb{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nmb\\else\\protect\\axtnmb\\fi}',
   '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn',
-  '\\cs_new_protected:Npn\\axt@nmw#1#2{\\cs_if_eq:NcF#1{axt@nmd@#2}{\\bool_lazy_all:nT{{\\token_if_macro_p:N#1}{!\\token_if_protected_macro_p:N#1}{!\\token_if_protected_long_macro_p:N#1}{\\str_if_eq_p:ee{\\cs_parameter_spec:N#1}{}}{!\\tl_if_blank_p:o{#1}}}{\\cs_set_eq:cN{axt@nmt@#2}#1\\cs_set:Npx#1{\\exp_not:N\\axtnma{#2}\\exp_not:o{#1}\\exp_not:N\\axtnmb{#2}}\\cs_set_eq:cN{axt@nmd@#2}#1}}}',
+  '\\cs_new_protected:Npn\\axt@nmw#1#2{\\cs_if_eq:NcF#1{axt@nmd@#2}{\\bool_lazy_all:nT{{\\token_if_macro_p:N#1}{!\\token_if_protected_macro_p:N#1}{!\\token_if_protected_long_macro_p:N#1}{\\str_if_eq_p:ee{\\cs_parameter_spec:N#1}{}}{!\\tl_if_blank_p:o{#1}}}{\\cs_set_eq:cN{axt@nmt@#2}#1\\cs_set:Npx#1{\\exp_not:N\\relax\\exp_not:N\\axtnma{#2}\\exp_not:o{#1}\\exp_not:N\\axtnmb{#2}}\\cs_set_eq:cN{axt@nmd@#2}#1}}}',
   '\\cs_new_protected:Npn\\axt@nmwrap#1#2{\\cs_if_exist:cT{#2}{\\exp_args:Nc\\axt@nmw{#2}{#1}}}',
   '\\ExplSyntaxOff',
   `\\def\\axt@nmall{\\ifaxt@nmon${NAME_KEYS.map(k => `\\axt@nmwrap{${k}}{${NAME_MACROS[k]}}`).join('')}\\fi}`,

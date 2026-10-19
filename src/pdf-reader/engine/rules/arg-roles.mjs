@@ -32,6 +32,21 @@ const MAY_BE_TEXT = new Set(['t', 'c', 'a', 'v', 'm'])
  * xcolor, hyperref, booktabs, caption, multirow, makecell, adjustbox, enumitem, url). Not tabu's environment, whose
  * `to <width>` before its columns no parameter here reads
  */
+/**
+ * Commands whose parameters are delimited by tokens only their package's definition names, which neither LaTeXML's
+ * bindings nor a paper's files hold: nothing in the source tells `\\foreach \\ii in {0,...,3} {…}` from prose, so the
+ * forms are written out here, one by one (the 50-paper sweep, 2026-10-19). The rule they serve is the role table's own:
+ * an argument of role x, s or n is never walked as text, and never takes a mark.
+ * - pgffor's \\foreach <variables> [<options>] in {<list>} {<body>}: the variables, options and `in` up to the list's
+ *   brace (b, code), the list (code), the body (content: walked, a paragraph in it a unit of its own). 2610.21377's
+ *   three loops were units of `in 0,...,3`, and the body's brace was written twice
+ * - etoc's \\etocdepthtag.toc{<tag>}: `.toc` up to the tag's brace (b, literal), the tag (a name). 2610.21201's
+ *   \\etocdepthtag.toc{main} took a mark, which etoc wrote into the contents file, inside its \\csname
+ */
+const DELIMITED = {
+  foreach: 'bx{x{c',
+  etocdepthtag: 'bs{n',
+}
 const CURATED = {
   // boxes and colours: the last argument the text they set
   mbox: '{c', makebox: '[d[n{c', framebox: '[d[n{c', fbox: '{c', parbox: '[n[d[n{d{c', raisebox: '{d[d[d{c',
@@ -51,7 +66,7 @@ const CURATED = {
   bibliography: '{n', addbibresource: '[k{n', hypersetup: '{k', captionsetup: '[n{k', setlist: '[n{k', sisetup: '{k',
   lstset: '{k', tcbset: '{k', tikzset: '{k', pgfplotsset: '{k', geometry: '{k', setstretch: '{d',
   // references, links, files: their names stay; a link's text is text
-  label: '{n', ref: '*s{n', eqref: '{n', pageref: '*s{n', autoref: '*s{n', cref: '*s{n', Cref: '*s{n', nameref: '*s{n',
+  label: '[n{n', ref: '*s{n', eqref: '{n', pageref: '*s{n', autoref: '*s{n', cref: '*s{n', Cref: '*s{n', nameref: '*s{n',
   hyperref: '[n{t', hyperlink: '{n{t', hypertarget: '{n{t', href: '[k{n{t', url: '{v', nolinkurl: '{v', includegraphics: '*s[k[k{n',
   IfFileExists: '{n{c{c', InputIfFileExists: '{n{c{c', email: '[n{v', orcid: '[n{v', orcidlink: '{n', thanksref: '{n', inst: '{v',
   // definitions: a name, an arity, a default and a body, none of them typeset where they stand
@@ -70,6 +85,9 @@ const CURATED = {
   ac: '*s{n', acp: '*s{n', acs: '*s{n', acsp: '*s{n', acl: '*s{n', aclp: '*s{n', acf: '*s{n', acfp: '*s{n', acfi: '*s{n',
   acsu: '*s{n', aclu: '*s{n', iac: '*s{n', Iac: '*s{n', Ac: '*s{n', Acp: '*s{n', Acs: '*s{n', Acl: '*s{n', Aclp: '*s{n',
   Acf: '*s{n', Acfp: '*s{n', acused: '{n',
+  // a package's setting that sets no ink: soul's highlight colour
+  sethlcolor: '{n',
+  ...DELIMITED,
 }
 /** environments as the front end reads them, where LaTeXML's form is missing or says less: a table's position and
  *  columns (its cells are walked), a box's width, a list's options (enumitem's keys), a theorem's title */
@@ -251,9 +269,14 @@ export function readArgs(s, i, params, to = s.length) {
     // TeX's scanner reads a number or a dimension, never a group: \\hbox{…}'s group is its content, not its specification
     // (taken for one, the token after the box became its content: `\\vbox{…}\\begin` then `{center}` walked as text, its
     // lead written inside \\begin's name; `\\hbox{abc} more` sent `ore`)
+    // Nor a command that reads arguments of its own, a group among them: a register (\\baselineskip) or an internal
+    // quantity (\\fontdimen2\\font) is a value, \\vspace is not — \\hrule\n\\vspace{0.5mm} took \\vspace for the rule's
+    // dimension, and its {0.5mm} was walked as text, a mark written inside it (2610.21765)
     if (shape === '_' && role === 'd') {
       const m = TEX_VALUE.exec(s.slice(at, Math.min(to, at + 200)))
-      if (m && /\S/.test(m[0])) { args.push({ shape, role, param, start: at, end: at + m[0].length }); at += m[0].length }
+      const call = m && [...m[0].matchAll(/\\([A-Za-z@]+)/g)].find(c => commandParams(c[1])?.some(p => p.shape === '{'))
+      const value = m ? (call ? m[0].slice(0, call.index) : m[0]) : ''
+      if (/\S/.test(value)) { args.push({ shape, role, param, start: at, end: at + value.length }); at += value.length }
       continue
     }
     if (shape === 'b') { let e = at; while (e < to && s[e] !== '{' && s[e] !== '%') e++; if (e >= to || s[e] !== '{') return { args, end: at, complete: false }; if (e > at) args.push({ shape, role, param, start: at, end: e }); at = e; continue }
@@ -329,7 +352,13 @@ const TEXTLESS = new Set([
   'fontsize', 'linespread', 'setstretch', 'tablewidth', 'phantom', 'hphantom', 'vphantom',
   'newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand', 'def', 'gdef', 'edef', 'xdef', 'let', 'newif', 'newenvironment', 'renewenvironment', 'newcolumntype', 'DeclareMathOperator',
   'hypersetup', 'captionsetup', 'setlist', 'sisetup', 'lstset', 'tcbset', 'tikzset', 'pgfplotsset', 'definecolor', 'colorlet',
+  // a label (cleveref's type with it: \\label[proposition]{…}), a bibliography's style, soul's highlight colour: the
+  // maker writes no row for them (layout/marks.mjs INVISIBLE, or no ink), so the layer's zero must read them so too
+  'label', 'bibliographystyle', 'sethlcolor',
 ])
+/** control symbols that set no letters: a discretionary hyphen (its hyphen, where a line breaks there, is the line's
+ *  break, which the layer sets anew) */
+const TEXTLESS_SYMBOLS = new Set(['\\-'])
 /**
  * Whether a placeholder can never be a text rendering: its source one command of TEXTLESS, its arguments all there as
  * the table reads them and nothing after them, or a register's assignment (\\looseness=-1, \\parindent 0pt). What it sets, if anything (a rule's bar), is the page's own drawing,
@@ -339,6 +368,7 @@ const TEXTLESS = new Set([
 export function textless(src, paper = null) {
   // booktabs' trim, (lr), before \\cmidrule's columns: what the front end passes over too
   const s = src.trim().replace(/^(\\cmidrule\s*(?:\[[^\]]*\]\s*)?)\([^()]*\)/, '$1')
+  if (TEXTLESS_SYMBOLS.has(s)) return true
   if (!/^\\[A-Za-z@]+/.test(s)) return false
   const { name, end } = commandAt(s, 0)
   if ((!TEXTLESS.has(name) && name !== 'noalign' && paperParams(name, paper) !== REGISTER) || paper?.own.has(name)) return false
