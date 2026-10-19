@@ -63,7 +63,16 @@ import { escapeMap, plainTracker, transformMap } from './words.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { fillOfColour } from '../layout/colour.mjs'
 import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
-import { utf8 } from '../translate/mt.mjs'
+
+/** a source text piece's characters (mt.mjs utf8: its bytes, read latin1, as UTF-8), here so that the drawing loads no wire module:
+ *  sourceScopes holds what it reads to plainSource's text, and reads none where the two differ */
+const SOURCE_DECODER = new TextDecoder(), ASCII_TEXT = /^[\t\n\r -~]*$/
+const utf8 = s => {
+  if (ASCII_TEXT.test(s)) return s
+  const b = new Uint8Array(s.length)
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff
+  return SOURCE_DECODER.decode(b)
+}
 
 // (the fit's parameters, per script and language, are the layout rules': rules/layout.mjs resolveRules gives a run its P)
 

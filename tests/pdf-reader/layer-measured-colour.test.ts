@@ -61,6 +61,10 @@ describe('sourceScopes and measuredStyle', () => {
     const e = unitOf([open('\\emph{', 1), text('a '), open('{', 2), ph('\\em'), text(' b'), close(2), text(' c'), close(1)], []) as { src: string }
     expect(e.src).toBe('a b c')
     expect(L2.sourceScopes(e as never)!.map(x => x.flip).join('')).toBe('10001')
+    // (a source's bytes read as UTF-8, as plainSource reads them: "M\u00fcnster" written in its two bytes)
+    const utf = unitOf([text('M\u00c3\u00bcnster '), open('\\textbf{', 1), text('et al.'), close(1)], []) as { src: string }
+    expect(utf.src).toBe('M\u00fcnster et al.')
+    expect(L2.sourceScopes(utf as never)!.map(x => x.sets & 1).join('')).toBe('00000000110111')
     // (no source pieces, or a text that is not the unit's: none read)
     expect(L2.sourceScopes({ src: 'x', pieces: [] } as never)).toBeNull()
     const off = unitOf([text('a b')], [])
