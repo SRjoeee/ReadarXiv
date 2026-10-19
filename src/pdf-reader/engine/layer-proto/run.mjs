@@ -1446,11 +1446,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       placedByPage.get(r[0]).push([id, r.slice()])
     }
   }
-  /** a unit's rectangles in place of those it was added with (addUnits'), on every page */
-  const replaceRects = (id, rects) => {
-    for (const m of [rectsByPage, placedByPage]) for (const [pg, list] of m) if (list.some(([o]) => o === id)) m.set(pg, list.filter(([o]) => o !== id))
-    addRects(id, rects)
-  }
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
   /** the text area of page pg as unit p reads it: as the page's growth step left it once p's own lines there grew (growOn),
    *  the units ranked before it on the page grown and those after it not yet, whenever p is laid */
@@ -2651,11 +2646,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     planned = false
     for (const pg of p.pages) expected[pg]++
     if (!c.rects) addRects(p.id, p.rects)
-    // (a unit placed by the file's lines is read by the others by those lines, not by the left's rectangles, which can point at
-    // another occurrence of its words: 2610.19274's unit 140, its rectangle over an italic "Results" 30 pt above the heading TeX
-    // set, which took that line from the unit it is. Decided before any page it is on is laid: a page waits on the rows of
-    // every unit whose rectangles or lines it holds, needsOf)
-    else if (p.tex?.lines) replaceRects(p.id, p.rects)
     toGrow(p)
     for (const pg of p.pages) { (firstsOn[pg] ??= new Set()).add(p.pages[0]); (unitsOn[pg] ??= []).push(p) }
   }
