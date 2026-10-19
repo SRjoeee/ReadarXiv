@@ -55,7 +55,7 @@ import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/p
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { attribute, boxDiff, causesOf, classOfMark, compareReadings, fileStates, joinRuns, lineAt, linesOf, lostLines, pageBoxes, regressions, strictMoves, switchOffOf, traced, verdictOf, withFitr } from './layout-marks-compare.mjs'
-import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, imageIdOf, PLATFORM } from './compile-image.mjs'
+import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, imageIdOf, latexmkEngine, PLATFORM } from './compile-image.mjs'
 
 const run = promisify(execFile)
 const here = new URL('..', import.meta.url).pathname
@@ -112,7 +112,7 @@ async function compile(id, files, { main, engine, bbl, kind, marking = {} }) {
   // the trace's lines whole for pdfTeX alone: BibTeX reads max_print_line too, and with it at a million writes no
   // bibliography (2608.30640's trace was 30 pages, its compile 34)
   const pdftex = kind === 'trace' ? [`-pdflatex=env max_print_line=1000000 ${engine} %O %S`] : []
-  const cmd = kind === 'probe' ? [engine, '-interaction=nonstopmode', main] : ['latexmk', { xelatex: '-xelatex', lualatex: '-lualatex' }[engine] ?? '-pdf', ...pdftex, ...(bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
+  const cmd = kind === 'probe' ? [engine, '-interaction=nonstopmode', main] : ['latexmk', ...latexmkEngine(engine), ...pdftex, ...(bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
   const hash = createHash('sha256').update(JSON.stringify([FORMAT, READ_HASH, image, COMPILE_IDENTITY, id, main, engine, !!bbl, kind, cmd, EPOCH]))
   for (const [p, b] of [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) hash.update(p).update(b)
   const key = join(CACHE, hash.digest('hex').slice(0, 32))

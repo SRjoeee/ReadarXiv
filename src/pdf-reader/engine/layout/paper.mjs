@@ -66,8 +66,13 @@ const GUARD_EXTRA = 2
  * through: refused, with why. `engines`, where the host gives the compilers it runs: a paper of another is refused before
  * any compile ('engine'). `guard` records what the guard did, where it did anything: { extra, unmarked, names, failed,
  * judged? }
+ *
+ * A refusal after the unmarked original was compiled names its verdict, `own` (ownVerdict): what the host's handover to
+ * another TeX Live tree is decided by (handoverOf). `tried`, where the host gives it: the TeX Live years the paper's own
+ * source was compiled on before this box's tree, in order; TeX's refusal names them before the box's ("on TeX Live 2023 or
+ * 2025"), and is 'texlive' only where the paper declares a year none of them is (none given: the box's year alone, as before)
  */
-export async function markedOfPaper(paper, { compile, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null }) {
+export async function markedOfPaper(paper, { compile, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null }) {
   const ms = {}
   /** a stage, timed; null where it fails or throws, but a failed allocation, which goes on as itself (the run's, never the paper's) */
   const stage = async (name, run) => {
@@ -129,6 +134,9 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   const record = () => ({ extra: g.extra, unmarked: [...g.unmarked].sort((a, b) => a - b), names: g.names, failed: g.failed, ...(g.judged ? { judged: g.judged } : {}) })
   const guarded = r => result(g.failed.length ? { ...r, guard: record() } : r)
   if (!marked) return guarded({ refused: 'compile', why: cm ? 'a marked pass did not run through, or the compile threw' : 'the compile threw', ms })
+  /** the unmarked original's verdict, once it was compiled (ownVerdict): a refusal names it, as `own` */
+  let verdict = null
+  const owned = r => (verdict ? { ...r, own: verdict } : r)
   // (a throw of the guard's own after the compile: the last remedy that passed the checks stands, else the marked original as
   // before the guard, one that ran through with a PDF, else the compile's refusal)
   let standing = null
@@ -136,7 +144,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     if (isMemoryError(e)) throw e
     g.judged = whyText(`the layout guard failed: ${e?.message ?? e}`)
     if (standing) { g.unmarked = standing.unmarked; g.names = standing.named; return guarded({ pdf: standing.c.pdf, log: lastTexLog(standing.c.log), options, ms }) }
-    return ranThrough(marked) && marked.pdf?.length ? guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms }) : guarded({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms })
+    return ranThrough(marked) && marked.pdf?.length ? guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms }) : guarded(owned({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms }))
   }
 
   /** the checks after the compile, and the remedies */
@@ -160,7 +168,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const failedOf = e => [...(e.ran ? [] : ['ran']), ...(e.short || e.long ? ['pages'] : []), ...(e.aux.size ? ['aux'] : []), ...(e.errors ? ['errors'] : [])]
     const done = e => guarded({ pdf: e.c.pdf, log: lastTexLog(e.c.log), options, ms })
     // (a why without the log's control characters, within WHY_MAX)
-    const refuse = r => guarded({ ...r, ...(r.why === undefined ? {} : { why: whyText(r.why) }), ms })
+    const refuse = r => guarded(owned({ ...r, ...(r.why === undefined ? {} : { why: whyText(r.why) }), ms }))
     const e0 = evidence(marked, files, spans)
     if (clean(e0, null)) return done(e0)
     g.failed.push(...failedOf(e0))
@@ -198,6 +206,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
       const u = { c, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, errors: c ? errorCount(c.log) : 0, own: c ? ownErrors(c.log) : new Set() }
       if (u.ran && !u.short) own = u
+      verdict = ownVerdict(u)
       return u
     }
     /** the attempt taken: its units and names the guard's record */
@@ -208,16 +217,19 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const rank = e => (e.aux.size ? 2e9 : 0) + (e.long ? 1e9 : 0) + e.errors
     const union = (...sets) => { const out = new Set(); for (const s of sets) for (const x of s) out.add(x); return out }
     const blamedBy = (e, own = null) => (e.c && texRan(e.c.log) ? errorUnits(paper, e.c.log, e.files, e.spans.lines(), own) : new Set())
-    /** TeX's own failure, as the unmarked original shows it: the category and why */
+    /** TeX's own failure, as the unmarked original shows it: the category and why, every tree tried named (the host's
+     *  `tried`, then the box's); 'texlive' where the paper declares a year none of them is */
     const texs = u => {
       if (!u.c) return { refused: 'compile', why: 'the paper\'s own source: the compile threw' }
       const limit = limitOf(u.c)
       if (limit) return { refused: 'compile', why: `the paper's own source was stopped by the host's ${limit} limit` }
       if (!texRan(u.c.log)) return { refused: engineUnknown(u.c) ? 'engine' : 'compile', why: `the ${engine} compile of the paper's own source ran no TeX${firstLine(u.c) ? `: ${firstLine(u.c)}` : ''}` }
-      const what = !u.ran ? 'does not run through' : `has ${u.pages} pages, arXiv's PDF ${N}`, err = firstError(u.c.log)
+      const what = !u.ran ? 'does not run through' : `has ${u.pages} pages, arXiv's PDF ${N}`, err = firstError(u.c.log), said = err ? `: ${err}` : ''
       const ours = texLiveOf(u.c.log), declared = paper.meta.tlVersion ?? null, cls = paper.meta.documentclass ? ` (${paper.meta.documentclass})` : ''
-      if (declared && ours && declared !== ours) return { refused: 'texlive', why: `the paper${cls} declares TeX Live ${declared}; on TeX Live ${ours} its own source ${what}${err ? `: ${err}` : ''}` }
-      return { refused: 'compile', why: `the paper's own source${cls} ${what}${ours ? ` on TeX Live ${ours}` : ''}${err ? `: ${err}` : ''}` }
+      const trees = treesOf(tried, ours), on = trees.join(' or ')
+      if (declared && ours && !trees.includes(String(declared))) return { refused: 'texlive', why: `the paper${cls} declares TeX Live ${declared}; on TeX Live ${on} its own source ${what}${said}` }
+      if (declared && trees.length > 1) return { refused: 'compile', why: `the paper${cls} declares TeX Live ${declared}; its own source ${what} on TeX Live ${on}${said}` }
+      return { refused: 'compile', why: `the paper's own source${cls} ${what}${on ? ` on TeX Live ${on}` : ''}${said}` }
     }
     const whatOf = e => (!e.ran ? 'does not run through' : e.short ? `has ${e.pages} pages, arXiv's PDF ${N}` : 'is not the paper')
     /** the marked original refused as ours ('marks'), or, where nothing told whose fault it is (the unmarked original not
@@ -273,7 +285,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     }
     // it did not run through, or its pages are not arXiv's: the units its errors stand in and the name marks, both off (none
     // to take off: the unmarked original tells whose fault it is)
-    const tried = weak.length ? `units ${weak.join(', ')} unmarked and the name marks off` : 'the name marks off'
+    const remedy = weak.length ? `units ${weak.join(', ')} unmarked and the name marks off` : 'the name marks off'
     let e1 = null
     if (weak.length || g.names) {
       e1 = await attempt(union(g.unmarked, weak), false)
@@ -287,26 +299,54 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       }
       const kept = best([e0, e1])
       if (kept) return take(kept)
-      if (!afford()) return timed(refuse(untold(e0, `nor with ${tried}`)))
+      if (!afford()) return timed(refuse(untold(e0, `nor with ${remedy}`)))
     }
     const u = await original()
     if (!u.ran || u.short) return timed(refuse(texs(u)))
-    return timed(refuse(ours(e0, `${e1 ? `nor with ${tried}, ` : ''}where the paper's own source makes ${u.pages ?? 'its'} pages`)))
+    return timed(refuse(ours(e0, `${e1 ? `nor with ${remedy}, ` : ''}where the paper's own source makes ${u.pages ?? 'its'} pages`)))
   }
 }
 
 /** a compile's first line of what it said, where TeX said nothing: its error, else its log's */
 const firstLine = c => String(c?.error ?? c?.log ?? '').split('\n').find(l => l.trim())?.trim().slice(0, 120) ?? ''
 
+/** a TeX Live year as a refusal and the handover name it ('2023'), else null */
+const yearOf = y => (y === null || y === undefined ? null : /^\d{4}$/.test(String(y)) ? String(y) : null)
+/** the TeX Live years a refusal of TeX's names: the host's `tried`, in order, then the box's, each once */
+const treesOf = (tried, ours) => [...new Set([...(Array.isArray(tried) ? tried : []), ours].map(yearOf).filter(y => y !== null))]
+/** the unmarked original's verdict (paper.d.mts OwnVerdict), as a host's handover reads it (handoverOf): whether it ran
+ *  through (live.mjs ranThrough, with a PDF), whether it did with fewer pages than arXiv's (`pages` given, one toplevel
+ *  source), the host's limit it met (limitOf), and the TeX Live year its engine's banner names (null where TeX never ran or
+ *  the compile threw) */
+const ownVerdict = u => ({ ran: u.ran, short: u.short, limit: (u.c ? limitOf(u.c) : null) ?? null, tree: u.c && texRan(u.c.log) ? texLiveOf(u.c.log) : null })
+
+/**
+ * The host's handover to another TeX Live tree (the TL2023 plan §2.3), over a refusal's `own` (markedOfPaper): the year of
+ * the tree to compile the paper on next, or null. Where TeX failed on the paper's own source here (it did not run through,
+ * or ran through with fewer pages than arXiv's) and no host's limit stopped it: another of the `served` trees (the paper's
+ * `declared` year where it is one of them, else the first), unless this tree is the host's `last`. Never on no verdict (the
+ * unmarked original not compiled), ours (it made the pages here), a host's limit, or a verdict with no year (TeX that never
+ * ran, a compile that threw: the host's own failure, tried again on the same tree). The tree that makes a paper's layout is
+ * then a function of the source and the served trees alone (TeX on a frozen tree is deterministic; no limit enters)
+ */
+export function handoverOf(own, { declared = null, served = [], last = false } = {}) {
+  if (!own || last || own.limit || (own.ran && !own.short)) return null
+  const here = yearOf(own.tree)
+  if (here === null) return null
+  const others = treesOf(served, null).filter(y => y !== here), want = yearOf(declared)
+  if (!others.length) return null
+  return want !== null && others.includes(want) ? want : others[0]
+}
+
 /**
  * A paper's layout marks (paper.d.mts): markedOfPaper's marked original, then read once (stage 3), with each stage's time, or
  * the stage that failed with the times of those that ran. Never throws: a compiler that throws, a PDF that does not open and
  * a reading that refuses are each their stage's refusal, but a failed allocation, which goes on as itself. `converge`: the marked original made by convergeThenMark, its passes
- * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them; `pages` and `engines` the guard's, as
- * markedOfPaper's
+ * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them; `pages` and `engines` the guard's, and `tried`
+ * TeX's why's, as markedOfPaper's
  */
-export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null }) {
-  const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound, pages, engines })
+export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null }) {
+  const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound, pages, engines, tried })
   if (made.refused) return made
   const ms = { ...made.ms }
   /** the result, with CM's record and the guard's where they ran */

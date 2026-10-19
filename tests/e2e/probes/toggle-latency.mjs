@@ -5,6 +5,8 @@
 // Usage: pnpm build && node tests/e2e/probes/toggle-latency.mjs [paper ...]
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/toggle-latency.mjs')
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -12,12 +14,12 @@ const PROFILE = `${E2E}.profile-hl`
 const PAPERS = process.argv.slice(2).length ? process.argv.slice(2) : ['2410.00260', '2401.00418', '2312.17141']
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1440, height: 900 },
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 
 for (const id of PAPERS) {

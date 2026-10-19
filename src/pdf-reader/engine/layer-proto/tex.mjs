@@ -16,7 +16,7 @@
 import { PH_FLAG } from '../layout/file.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropFields, cropOfBox, cropPartsOfSegments, displayTouched, formulaOf, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, resolutionFrom, scriptedOf, SHORT_SKIP, texToText2 } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropFields, cropOfBox, cropPartsOfSegments, displayTouched, fontOfStyle, formulaOf, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, resolutionFrom, scriptedOf, SHORT_SKIP, texToText2 } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -547,7 +547,7 @@ function textRunsOf(lu, kOf, res, unit) {
     if (last < 0) return w.r.k
     const chars = uc.slice(first, last + 1)
     const tally = new Map()
-    for (const c of chars) if (real(c) && c.st) tally.set(c.st, (tally.get(c.st) ?? 0) + 1)
+    for (const c of chars) if (real(c) && c.st) { const f = fontOfStyle(c.st); tally.set(f, (tally.get(f) ?? 0) + 1) }
     const st = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0]
     const { k, src, cls } = w.r
     res.set(k, { mode: 'orig-text', text: w.text, sup: false, st, k, src, cls, gap: { text: w.text, chars, proof: true }, proof: true })

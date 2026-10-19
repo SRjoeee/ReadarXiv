@@ -121,7 +121,38 @@
 //     outputs); the units, the wire and its reading back are 18's, and a copy of 18 carries every unit it holds the source
 //     of (live.mjs PIPELINE_CARRIES). Raised so that the bundle of a paper the guard now mends, or now records the refusal
 //     of, is made again under a new key (VTAG)
-export const PIPELINE_VERSION = '19'
+// 20: no unit, and no mark, inside an argument TeX reads as syntax (E2 of 2026-10-19): a TeX value never takes a command
+//     that reads arguments of its own (arg-roles.mjs readArgs: 2610.21765's \hrule then \vspace{0.5mm}, its length a unit
+//     marked inside), the delimited forms only a package defines (arg-roles.mjs DELIMITED: pgffor's \foreach header in
+//     2610.21377, etoc's \etocdepthtag.toc tag in 2610.21201), a unit's range holding the opening brace it ends with
+//     (Builder.open), no assignment after a declaration that takes no argument or a command the table knows takes no
+//     parameter (`{\bfseries 100}`'s digits text again: 2610.19159, 2608.11884, 2608.25210; `\S4 in` its section number
+//     and word: 2608.15334, 2608.10073, 2608.16190, 2608.04242, 2608.08876, 2608.29558), a package's delimited form only
+//     where its groups are (a \foreach over a macro's list read as before), and the commands that set no ink textless
+//     (\label with cleveref's type, \bibliographystyle, \sethlcolor, \-; LAYOUT 10). Of 185 sources the units of those
+//     twelve papers change (54 cut anew, 5 gone, 48 the same but for their pairs' numbers, found again by seedFrom); every
+//     other paper's units, the wire and its reading back are 19's, the pack's 32 outputs among them: a copy of 19 carries
+//     every unit it holds the source of (live.mjs PIPELINE_CARRIES)
+// 21: a source's line ends read as TeX reads them (latex-front.mjs texText: web2c's input_line ends a line at a CR or an
+//     LF, the LF of a CRLF with its CR), wherever the front end turns a file into TeX text, the guard's brace balance and
+//     the probe's main file. A CRLF source's blank lines were no paragraph's end: 2610.10069v1's introduction (ten
+//     paragraphs) and a whole proof (sixteen) were one unit each, its p23 drawn on p22. Of 180 papers 12 have a CR in a
+//     source, and the units of four change: 2610.10069 (110 -> 193), 2608.10322 (70 -> 88), 2608.12096 (297 -> 304),
+//     2608.02991 (278 -> 285, sn-jnl.cls's CRLF hid its author macros); 2608.12502's marked original alone, written with
+//     LF. Every other paper's units and marked original, the wire and its reading back are 20's, the pack's 32 outputs
+//     among them: a copy of 20 carries every unit it holds the source of (live.mjs PIPELINE_CARRIES), and a unit cut
+//     anew, a CRLF file's paragraphs, is asked again
+// 22: raised with TRANSLATE_VERSION 4 (the boundary rule: a styled pair whose two ends stand where the wire is cut
+//     anyway keeps its markers, mt.mjs classOf), so that copies made before it are not taken whole: a copy of 21, and of
+//     every pipeline before it, carries each unit whose wire the rule leaves as it was (mt.mjs boundaryChanges; live.mjs
+//     PIPELINE_CARRIES): over 137 papers' sources 126 of 36,136 units, in 29 papers, are asked again. The units, the
+//     marked original and the layout file are 21's byte for byte
+// 23: raised with TRANSLATE_VERSION 5 (a display's own stop on the wire right after its marker, mt.mjs serialize's and
+//     serializeTags' `own`), so that copies made before it are not taken whole: a copy of 22, and of every pipeline before
+//     it, carries each unit whose wire the rule leaves as it was (mt.mjs displayStopChanges; live.mjs PIPELINE_CARRIES):
+//     over 180 papers' sources 4,215 of 44,825 units, in 153 papers, are asked again. The units, the marked
+//     original and the layout file are 22's byte for byte
+export const PIPELINE_VERSION = '23'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

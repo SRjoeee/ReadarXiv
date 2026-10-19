@@ -8,11 +8,13 @@
 // the button is another process's frame (the press shield in core/floating/button.ts exists because of what this
 // suite measured).
 //
-// Usage: pnpm build && pnpm e2e:floating     (first time: npx playwright install chromium)
+// Usage: pnpm build:staging && AXT_E2E_ONLINE=1 pnpm e2e:floating     (first time: npx playwright install chromium)
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { goOnline, online } from './lib/online.mjs'
+goOnline('pnpm e2e:floating')
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -30,12 +32,12 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1280, height: 860 },
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 const page = context.pages()[0] ?? await context.newPage()
 const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]

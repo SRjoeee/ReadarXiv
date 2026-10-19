@@ -212,6 +212,15 @@ describe('layerOfPaper: the page pass', () => {
     expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'probe' }, plans: null, addon: null } })
   })
 
+  it('with TeX\'s refusal, the record keeps the unmarked original\'s verdict; each part\'s says why alone', async () => {
+    const w = worldOf()
+    const own = { ran: false, short: false, limit: null, tree: '2025' }
+    const why = 'the paper (revtex4-2) declares TeX Live 2023; on TeX Live 2025 its own source does not run through'
+    const got = await passOf(w, { marks: { refused: 'texlive', why, own } as never })
+    expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'texlive', why, own } } })
+    for (const p of got.parts) expect((JSON.parse(new TextDecoder().decode(p.bytes)) as { layout: unknown }).layout).toEqual({ refused: 'texlive', why })
+  })
+
   it('a throw of the maker\'s is the layout\'s: the layer is made with none, the why recorded', async () => {
     const w = worldOf()
     const got = await passOf(w, { marks: { marks: {}, unitMarks: null } as never })

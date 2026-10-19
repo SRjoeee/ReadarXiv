@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { auxUnits, braceBalance, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
 import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
+import { handoverOf, layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
@@ -280,7 +280,7 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     expect(await markedOfPaper(paperOf(), { compile: ours.compile })).toMatchObject({ refused: 'marks', why: expect.stringContaining('where the paper\'s own source makes 3 pages'), guard: { extra: 2 } })
     expect(ours.asked).toHaveLength(4)
     const texs = compiler([PROBE, fail, fail, fail, ran(PDF2)])
-    expect(await markedOfPaper(paperOf(), { compile: texs.compile })).toEqual({ refused: 'compile', why: 'the paper\'s own source (article) does not run through on TeX Live 2025: ! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})', ms: expect.any(Object), guard: expect.objectContaining({ extra: 2 }) })
+    expect(await markedOfPaper(paperOf(), { compile: texs.compile })).toEqual({ refused: 'compile', why: 'the paper\'s own source (article) does not run through on TeX Live 2025: ! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})', own: { ran: false, short: false, limit: null, tree: '2025' }, ms: expect.any(Object), guard: expect.objectContaining({ extra: 2 }) })
     expect(texs.asked).toHaveLength(4)
     // (a paper that declares another TeX Live year than the box's: TeX Live's)
     const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], texlive_version: '2023', process: { compiler: 'pdflatex' } })
@@ -348,5 +348,83 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const two = compiler([PROBE, ran(PDF, '', 3)])
     expect(await markedOfPaper(paper, { compile: two.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(two.asked).toHaveLength(2)
+  })
+})
+
+describe('the refusal names the unmarked original\'s verdict and the trees tried; handoverOf, the host\'s rule over it', () => {
+  const fail = stopped('! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n')
+  const ERR = '! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})'
+  const TEX23 = 'This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)\n'
+  const fail23: Compiled = { ok: true, pdf: PDF, log: `${TEX23}! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n! Emergency stop.\n` }
+  const declaring = (year: string) => paperOf(SOURCE, [['00README.json', JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], texlive_version: year, process: { compiler: 'pdflatex' } })]])
+
+  it('names it where the unmarked original was compiled: TeX\'s failure, a short one, a host\'s limit, a throw, and ours', async () => {
+    const texs = compiler([PROBE, fail, fail, fail])
+    expect(await markedOfPaper(paperOf(), { compile: texs.compile })).toMatchObject({ refused: 'compile', own: { ran: false, short: false, limit: null, tree: '2025' } })
+    // (it ran through, with fewer pages than arXiv's: TeX's too)
+    const short = compiler([PROBE, ran(PDF, '', 3), ran(PDF1, '', 3), ran(UNMARKED, '', 3)])
+    expect(await markedOfPaper(paperOf(), { compile: short.compile, pages: 4 })).toMatchObject({ refused: 'compile', why: 'the paper\'s own source (article) has 3 pages, arXiv\'s PDF 4 on TeX Live 2025', own: { ran: true, short: true, limit: null, tree: '2025' } })
+    // (stopped by a host's limit; a compile that threw, in which TeX told nothing)
+    const limited = compiler([PROBE, fail, fail, { ok: false, error: 'Compilation timeout (the wall limit)', log: TEX }])
+    expect(await markedOfPaper(paperOf(), { compile: limited.compile })).toMatchObject({ refused: 'compile', why: 'the paper\'s own source was stopped by the host\'s time limit', own: { ran: false, short: false, limit: 'time', tree: '2025' } })
+    const threw = compiler([PROBE, fail, fail, new Error('the box went away')])
+    expect(await markedOfPaper(paperOf(), { compile: threw.compile })).toMatchObject({ refused: 'compile', own: { ran: false, short: false, limit: null, tree: null } })
+    // (the unmarked original makes the pages: ours)
+    const ours = compiler([PROBE, fail, fail, ran(UNMARKED)])
+    expect(await markedOfPaper(paperOf(), { compile: ours.compile })).toMatchObject({ refused: 'marks', own: { ran: true, short: false, limit: null, tree: '2025' } })
+  })
+
+  it('names none where the unmarked original was not compiled', async () => {
+    const limited = compiler([PROBE, { ok: false, error: 'Compilation timeout (the wall limit)', log: TEX }])
+    expect(await markedOfPaper(paperOf(), { compile: limited.compile })).not.toHaveProperty('own')
+    const timed = (c: Compiled, ms: number): Compiled => ({ ...c, ms })
+    const untold = compiler([timed(PROBE, 10), timed(fail, 100)])
+    expect(await markedOfPaper(paperOf(), { compile: untold.compile, compileBudgetMs: 160 })).not.toHaveProperty('own')
+    expect(await markedOfPaper(paperOf(), { compile: compiler([]).compile, engines: ['xelatex'] })).not.toHaveProperty('own')
+    // (a marked original that stands carries no verdict)
+    const errors = compiler([PROBE, ran(PDF, errorAt(2, 'paragraph').log), ran(UNMARKED, errorAt(2, 'paragraph').log)])
+    expect(await markedOfPaper(paperOf(), { compile: errors.compile })).not.toHaveProperty('own')
+  })
+
+  it('takes the host\'s `tried` for its why: every tree tried, then the box\'s; texlive where the paper declares a year none of them is', async () => {
+    // (undeclared: the compile's, on both trees)
+    const plain = compiler([PROBE, fail, fail, fail])
+    expect(await markedOfPaper(paperOf(), { compile: plain.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper's own source (article) does not run through on TeX Live 2023 or 2025: ${ERR}` })
+    // (declares 2023, tried there first and then here: its own year was tried, so the compile's)
+    const routed = compiler([PROBE, fail, fail, fail])
+    expect(await markedOfPaper(declaring('2023'), { compile: routed.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
+    // (and through layoutMarksOfPaper, which takes the same options: refused before anything is opened)
+    const whole = compiler([PROBE, fail, fail, fail])
+    const open = async () => { throw new Error('nothing to open') }
+    expect(await layoutMarksOfPaper(declaring('2023'), { compile: whole.compile, open, OPS: {}, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
+    // (declares a year no tree tried is: TeX Live's, every tree named)
+    const other = compiler([PROBE, fail23, fail23, fail23])
+    expect(await markedOfPaper(declaring('2022'), { compile: other.compile, tried: ['2025'] })).toMatchObject({ refused: 'texlive', why: `the paper (article) declares TeX Live 2022; on TeX Live 2025 or 2023 its own source does not run through: ${ERR}`, own: { tree: '2023' } })
+    // (none tried, or the box's own year among them, or no year: today's whys)
+    for (const tried of [[], ['2025'], null, ['x', 2025]]) {
+      const c = compiler([PROBE, fail, fail, fail])
+      expect(await markedOfPaper(declaring('2023'), { compile: c.compile, tried: tried as string[] | null })).toMatchObject({ refused: 'texlive', why: `the paper (article) declares TeX Live 2023; on TeX Live 2025 its own source does not run through: ${ERR}` })
+    }
+  })
+
+  it('handoverOf: the other served tree, once, where TeX failed on the paper\'s own source and no host\'s limit stopped it', () => {
+    const served = ['2025', '2023']
+    const failed = { ran: false, short: false, limit: null, tree: '2025' }
+    expect(handoverOf(failed, { declared: null, served, last: false })).toBe('2023')
+    expect(handoverOf({ ...failed, tree: '2023' }, { declared: '2023', served, last: false })).toBe('2025')
+    expect(handoverOf({ ...failed, ran: true, short: true }, { declared: '2025', served, last: false })).toBe('2023')
+    // (the declared year first where several trees are left)
+    expect(handoverOf(failed, { declared: '2022', served: ['2025', '2023', '2022'], last: false })).toBe('2022')
+    expect(handoverOf(failed, { declared: '2021', served: ['2025', '2023', '2022'], last: false })).toBe('2023')
+    // (never: it made the pages here, a host's limit, TeX that never ran or a compile that threw, the last tree, one tree served,
+    // no verdict)
+    for (const [own, o] of [
+      [{ ...failed, ran: true }, { served, last: false }],
+      [{ ...failed, limit: 'time' }, { served, last: false }],
+      [{ ...failed, tree: null }, { served, last: false }],
+      [failed, { served, last: true }],
+      [failed, { served: ['2025'], last: false }],
+      [undefined, { served, last: false }],
+    ] as const) expect(handoverOf(own, { declared: null, ...o })).toBeNull()
   })
 })

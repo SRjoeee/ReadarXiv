@@ -2,12 +2,14 @@
 // so column widths, floated margin notes, list marker slots and flex-figure pairing can only be measured in Chromium. The same launch as extension.mjs,
 // the google-web engine, no touching the reader's browser or key.
 //
-// Usage: pnpm build && pnpm e2e:layout        (first time: npx playwright install chromium)
+// Usage: pnpm build:staging && AXT_E2E_ONLINE=1 pnpm e2e:layout        (first time: npx playwright install chromium)
 // Environment: AXT_HEADED=1 watches it run.
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { chooseBuiltIn, openOptions, setSwitch } from './options-page.mjs'
+import { goOnline, online } from './lib/online.mjs'
+goOnline('pnpm e2e:layout')
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
@@ -25,12 +27,12 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(SHOTS, { recursive: true })
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   channel: 'chromium',
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1440, height: 900 },
-})
+}))
 
 // Navigation to a real paper gets ample time: Playwright's default is 30 s, and arXiv slows down markedly after dozens of consecutive runs
 // (measured: curl on the same paper took 26 s). No assertion's own wait is loosened; only the “get the page” step is

@@ -79,12 +79,14 @@ const SPEC: PaperSpec = {
 const LONG = new Map([[1, 80]])
 
 const FONT = { name: 'NimbusRomNo9L-Regu', isType3Font: false, missingFile: false, toUnicode: { _map: [...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'] } }
-type Counts = Record<'text' | 'annots' | 'render', number[]>
+type Counts = Record<'text' | 'annots' | 'render' | 'lists', number[]>
 /** the paper's documents (one: no tails), each page's PDF.js calls counted; a page's text items and Link annotations as docsOf
  *  makes them, its font a Times with its map */
 function docsOf(spec: PaperSpec, o: { textHold?: (n: number) => Promise<void> | null; renderHold?: (n: number) => Promise<void> | null; pageHold?: (n: number) => Promise<void> | null } = {}) {
   const N = spec.pages
-  const counts: Counts = { text: Array(N + 1).fill(0), annots: Array(N + 1).fill(0), render: Array(N + 1).fill(0) }
+  const counts: Counts = { text: Array(N + 1).fill(0), annots: Array(N + 1).fill(0), render: Array(N + 1).fill(0), lists: Array(N + 1).fill(0) }
+  // (each page's operator list, as PDF.js keeps the one a render drew it by until the page's cleanup; and asked anew, counted)
+  const listOf = () => ({ fnArray: [], argsArray: [], lastChunk: true })
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const items = (p: number) => spec.units.flatMap(u => u.lines.filter(l => l[0] === p).map(([, x0, x1, b]) => ({ str: u.text, transform: [10, 0, 0, 10, x0, b], width: x1 - x0, height: 10, fontName: 'g_d0_f1', dir: 'ltr', hasEOL: false })))
   const annotationsOf = (p: number) => {
@@ -98,13 +100,17 @@ function docsOf(spec: PaperSpec, o: { textHold?: (n: number) => Promise<void> | 
     out.push({ subtype: 'Link', rect: [270, 2, 290, 12], url: `https://example.org/p${p}`, overlaidText: '', borderStyle: { width: 0, style: 1 }, color: null })
     return out
   }
-  const pageOf = (n: number) => ({
-    view: VIEW, rotate: 0, getViewport: ({ scale }: { scale: number }) => viewportOf(scale),
-    getTextContent: async () => { counts.text[n]!++; await o.textHold?.(n); return { items: items(n), styles: { g_d0_f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } } },
-    render: () => { counts.render[n]!++; return { promise: Promise.resolve(o.renderHold?.(n) ?? undefined) } },
-    commonObjs: { get: (name: string) => { if (name !== 'g_d0_f1') throw new Error(`${name} not resolved`); return FONT } },
-    cleanup() {}, getAnnotations: async () => { counts.annots[n]!++; return annotationsOf(n) },
-  })
+  const pageOf = (n: number) => {
+    const page = {
+      view: VIEW, rotate: 0, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), _intentStates: new Map<string, unknown>(),
+      getTextContent: async () => { counts.text[n]!++; await o.textHold?.(n); return { items: items(n), styles: { g_d0_f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } } },
+      render: () => { counts.render[n]!++; page._intentStates.set('display', { displayReadyCapability: {}, operatorList: listOf() }); return { promise: Promise.resolve(o.renderHold?.(n) ?? undefined) } },
+      getOperatorList: async () => { counts.lists[n]!++; return listOf() },
+      commonObjs: { get: (name: string) => { if (name !== 'g_d0_f1') throw new Error(`${name} not resolved`); return FONT } },
+      cleanup() { page._intentStates.clear() }, getAnnotations: async () => { counts.annots[n]!++; return annotationsOf(n) },
+    }
+    return page
+  }
   const doc = { numPages: N, getPage: async (n: number) => { await o.pageHold?.(n); return pageOf(n) } }
   /** each page's draw, as the server reads it (pipeline/draw-data.mjs) and a left part carries it (checked JSON) */
   const draws = async () => {
@@ -132,7 +138,7 @@ const drawing = (run: Run) => ({
 
 /** the run over the paper, every part told at the open, its rows taken and ended, the pages asked for in `order` (each laid by
  *  its closure, layFor): with `drawOf`, each page's draw handed over once a page */
-async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, order: number[], drawOf?: (page: number) => Promise<Draw | null>, o: { copy?: boolean; drawsComing?: boolean; rules?: unknown; spec?: PaperSpec } = {}) {
+async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, order: number[], drawOf?: (page: number) => Promise<Draw | null>, o: { copy?: boolean; drawsComing?: boolean; rules?: unknown; spec?: PaperSpec; OPS?: unknown } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const facade = layoutFacade(P.index.head)
   const N = (o.spec ?? SPEC).pages
@@ -141,7 +147,7 @@ async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, 
     parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: N, scale: 1, dpr: 1, copy: o.copy ?? false, free: true, records: true, labels: LABELS as never,
     tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page: {} } as never },
-    ...(drawOf ? { drawOf: (p: number) => { asked.push(p); return drawOf(p) } } : {}), ...(o.drawsComing ? { drawsComing: true } : {}), ...(o.rules ? { rules: o.rules } : {}),
+    ...(drawOf ? { drawOf: (p: number) => { asked.push(p); return drawOf(p) } } : {}), ...(o.drawsComing ? { drawsComing: true } : {}), ...(o.rules ? { rules: o.rules } : {}), ...(o.OPS ? { OPS: o.OPS } : {}),
   } as never)
   for (const part of P.parts) { facade.add(part); run.grow(part) }
   run.endParts()
@@ -188,11 +194,15 @@ describe('a page drawn from its draw geometry', () => {
     const P = await paper()
     const data = docsOf(SPEC)
     const D = await docsOf(SPEC).draws()
-    const { run } = await runOf(P, data.doc, [2], async p => D[p - 1]!)
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { run } = await runOf(P, data.doc, [2], async p => D[p - 1]!, { OPS })
     expect(run.ready(2)).toBe(true)
     const st = run.drawStats!
     // (page 2 asked; page 1's ink read by the long paragraph's lay, which borrows below its lines there: laid again once read)
     expect(st.pixels).toEqual({ 1: 'freeFor', 2: 'asked' })
+    // (pages read from their draws hold no operator list of their pixels' reading: a list is held only for a page that may yet
+    // be read live (the review of #415))
+    expect(st.lists).toBe(0)
     expect(st.retries).toBeGreaterThan(0)
     expect(data.counts.render.slice(1)).toEqual([1, 1, 0])
     // (page 3's part of the paragraph running on to it is not painted until page 3 is laid: no pixels of it read)
@@ -236,6 +246,47 @@ describe('a page drawn from its draw geometry', () => {
     expect(run.drawStats!.late).toEqual([2])
     expect(run.drawStats!.live).toEqual([2])
     expect(data.counts.text.slice(1)).toEqual([0, 1, 0])
+  })
+
+  it('a page whose pixels were read before its draw came late reads its fills off the list they were drawn by: no second parse', async () => {
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const P = await paper()
+    const data = docsOf(SPEC)
+    const D = await docsOf(SPEC).draws()
+    // (the parts carry draws, so page 2, asked first, has its pixels read at once; its draw then never comes)
+    const { run } = await runOf(P, data.doc, [2], p => (p === 2 ? new Promise<Draw | null>(() => {}) : Promise.resolve(D[p - 1]!)), { drawsComing: true, OPS })
+    expect(run.drawStats!.pixels[2]).toBe('asked')
+    expect(run.drawStats!.live).toEqual([2])
+    expect(data.counts.render[2]).toBe(1)
+    // (its fills read, off the list its pixels' render kept: no operator list asked of PDF.js for it)
+    expect(run.pageWork[2]!.fills).toBeGreaterThan(0)
+    expect(data.counts.lists[2]).toBe(0)
+  })
+
+  it('a page read from its draw holds no list of its pixels\' reading, which may end after the draw was read (the review of #415)', async () => {
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const P = await paper()
+    const D = await docsOf(SPEC).draws()
+    // (page 2's pixels, asked at its draw's arrival, rendered only once the draw is read (a read of its fields, not the promise's
+    // look for a `then`): they come while the page is still being drawn, after it was read from its draw)
+    let release = () => {}
+    const held = new Promise<void>(ok => { release = ok })
+    const data = docsOf(SPEC, { renderHold: n => (n === 2 ? held : null) })
+    const readThen = (d: Draw) => { let once = false; return new Proxy(d, { get: (o, k) => { if (!once && k !== 'then') { once = true; queueMicrotask(release) } return (o as unknown as Record<string | symbol, unknown>)[k] } }) }
+    const { run } = await runOf(P, data.doc, [2], async p => (p === 2 ? readThen(D[1]!) : D[p - 1]!), { OPS })
+    expect(run.ready(2)).toBe(true)
+    expect(run.drawStats!.data).toContain(2)
+    expect(run.drawStats!.pixels[2]).toBeDefined()
+    expect(run.drawStats!.lists).toBe(0)
+  })
+
+  it('a page read live with no draw at all reads its fills off the list its render kept: no operator list asked (the review of #415)', async () => {
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const P = await paper()
+    const live = docsOf(SPEC)
+    const { run } = await runOf(P, live.doc, [1, 2, 3], undefined, { OPS })
+    expect(run.pageWork.slice(1).every(w => (w?.fills ?? 0) > 0)).toBe(true)
+    expect(live.counts.lists.slice(1)).toEqual([0, 0, 0])
   })
 
   it('without drawOf, and with the checker\'s copy, reads every page as today', async () => {
@@ -566,6 +617,52 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
     expect(r.live.chars.filter(c => c.nu).map(c => c.ch)).toEqual(['\ud800', 'z', 'Í'])
   })
 
+  it('a page read live tells its characters\' fills as its draw does: one colour, runs, a pattern\'s none, black (the ink off its own list)', async () => {
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { arxivOf } = await import('./helpers/make-world')
+    const { pageInk } = await import('@/pdf-reader/engine/layout/ink.mjs')
+    const { fontReaders, liveFillsOf, pageReadOf } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const runs = [
+      { s: 'Section 3 heading', x: 72, y: 700, fill: '#0c5388' },
+      { s: '[', x: 72, y: 688 }, { s: '16', x: 77, y: 688, fill: '#0000ff' }, { s: '] after', x: 87, y: 688 },
+      { s: 'patterned', x: 72, y: 676, fill: 'pattern' }, { s: 'black words', x: 72, y: 664 },
+    ]
+    const raw = (await arxivOf([{ runs }]).getPage(1)) as Record<string, any>
+    const page: Record<string, any> = { ...raw, commonObjs: { has: raw.commonObjs.has, get: (id: string) => { const f = raw.commonObjs.get(id); return f && typeof f === 'object' && 'name' in f ? { ...f, toUnicode: { _map: [...'abcdefghijklmnopqrstuvwxyz0123456789[]S'] } } : f } }, getAnnotations: async () => [] }
+    const tc = (await page.getTextContent()) as unknown as TextContentLike
+    const L = fontReaders().live(page as never, tc.styles)
+    const fills = await liveFillsOf(OPS, page, tc.items)
+    expect(fills).toEqual([0x0c5388, 0, 0x0000ff, 0, -1, 0])
+    const live = pageReadOf(tc, L.fontOf, L.mapOf, null, fills)
+    const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: 0 })
+    const { draw } = await drawDataOf(page, null, null, ink.glyphs)
+    const x = fontReaders().draw(checkDraw(JSON.parse(JSON.stringify(draw))))
+    const data = pageReadOf(x.tc, x.fontOf, x.mapOf, null, x.fills)
+    expect(data.chars.map(c => [c.ch, c.st?.fill])).toEqual(live.chars.map(c => [c.ch, c.st?.fill]))
+    expect(live.chars.find(c => c.ch === '1')?.st?.fill).toBe(0x0000ff)
+    expect(live.chars.find(c => c.ch === 'p')?.st?.fill).toBeUndefined()
+    // (no OPS: none told; a turned page, its ink no reading of its items: none told, never a page of unknowns)
+    expect(await liveFillsOf(null, page, tc.items)).toBeNull()
+    expect(await liveFillsOf(OPS, { ...page, rotate: 90 }, tc.items)).toBeNull()
+    // (a list given, the one the page's pixels were drawn by: read, and none asked of PDF.js)
+    const list = await page.getOperatorList()
+    let asked = 0
+    const counting = { ...page, _intentStates: new Map(), getOperatorList: async () => { asked++; return list } }
+    expect(await liveFillsOf(OPS, counting, tc.items, null, list)).toEqual(fills)
+    expect(asked).toBe(0)
+    // (a list that does not come within DRAW_WAIT_MS: none told, the parse given up)
+    const { DRAW_WAIT_MS } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    let gaveUp = 0
+    const stuck = { ...page, _intentStates: new Map([['display', {}]]), _abortOperatorList: () => { gaveUp++ }, cleanup() {}, getOperatorList: () => new Promise(() => {}) }
+    vi.useFakeTimers()
+    try {
+      const told = liveFillsOf(OPS, stuck, tc.items)
+      await vi.advanceTimersByTimeAsync(DRAW_WAIT_MS)
+      expect(await told).toBeNull()
+      expect(gaveUp).toBe(1)
+    } finally { vi.useRealTimers() }
+  })
+
   it('a page with a non-embedded CIDFontType2 ships no draw (E1): the browser reads it', async () => {
     const r = await bothOf(pageOf({ items: [item('ab', 'cid')], styles: { cid: { fontFamily: 'sans-serif' } }, fonts: { cid: font({ name: 'ArialUnicodeMS', missingFile: true }) } }))
     expect(r.data).toBeNull()
@@ -574,7 +671,7 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
 
   it('keys a draw\'s font by its content, apart from loaded names; a key read before with another row refuses that draw', async () => {
     const { fontReaders } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
-    const draw = (name: string): Draw => ({ fonts: [[name, 'serif', 0, ['a']]], items: [['a', 10, 0, 10, 72, 700, 6, 10, 0]], links: [] })
+    const draw = (name: string): Draw => ({ fonts: [[name, 'serif', 0, ['a']]], items: [['a', 10, 0, 10, 72, 700, 6, 10, 0, 0]], links: [] })
     const R = fontReaders()
     const x = R.draw(draw('CMR10')), key = x.tc.items[0]!.fontName!
     expect(key).toMatch(/^axt-draw-[0-9a-f]{16}-\d+$/)

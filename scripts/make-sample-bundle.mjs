@@ -42,7 +42,7 @@ import { marksFile } from '../src/pdf-reader/engine/layout/marks.mjs'
 import { layoutMarksOfPaper } from '../src/pdf-reader/engine/layout/paper.mjs'
 import { displayEdges, unitText } from '../src/pdf-reader/engine/translate/mt.mjs'
 import { PDFJS } from '../src/pdf-reader/engine/pipeline/versions.mjs'
-import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from '../lab/pdf/spikes/compile-image.mjs'
+import { checkCompileImage, COMPILE_IMAGE, latexmkEngine, PLATFORM } from '../lab/pdf/spikes/compile-image.mjs'
 
 await checkCompileImage()
 
@@ -87,8 +87,8 @@ async function compile(sources, { once = false } = {}) {
       mkdirSync(dirname(file), { recursive: true })
       writeFileSync(file, bytes)
     }
-    const flag = { xelatex: '-xelatex', lualatex: '-lualatex' }[paper.meta.compiler] ?? '-pdf'
-    const args = ['run', '--rm', '--init', '--pull', 'never', ...PLATFORM, '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', 'latexmk', flag, ...(once ? ['-e', '$max_repeat=1'] : []), ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
+    const engine = latexmkEngine(paper.meta.compiler)
+    const args = ['run', '--rm', '--init', '--pull', 'never', ...PLATFORM, '--network', 'none', '--cpus', '2', '--memory', '3g', '-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${EPOCH}`, '-v', `${dir}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', 'latexmk', ...engine, ...(once ? ['-e', '$max_repeat=1'] : []), ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
     // (latexmk -f exits non-zero on a TeX error and still leaves what it made: judged by its files. Docker's own failures are
     // not that: no docker, no daemon, no image on this machine — the image is never pulled — each is said as itself)
     await run('docker', args, { maxBuffer: 1 << 26 }).catch(e => {

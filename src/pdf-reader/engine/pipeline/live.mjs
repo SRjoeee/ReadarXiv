@@ -19,14 +19,14 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
-import { inkSamples, LAYOUT_TEX, layoutMarking, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
-import { BALANCE_DEF, documentBounds, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../source/latex-front.mjs'
+import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
+import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { decideGroups, groupOf } from '../translate/groups.mjs'
-import { batchOf, FIRST_BATCH, formulaRuns, holdsStyle, holdsUnbalanced, NEXT_BATCH, nameCells, plainSource, textsShown, translateUnits, utf8 } from '../translate/mt.mjs'
+import { batchOf, boundaryChanges, displayStop, displayStopChanges, FIRST_BATCH, formulaRuns, holdsStyle, holdsUnbalanced, NEXT_BATCH, nameCells, plainSource, textsShown, translateUnits, utf8 } from '../translate/mt.mjs'
 import { kOfSource, trPiecesOf } from '../layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
@@ -235,11 +235,16 @@ export function openPaper(files) {
  *  with `marks`, the layout marks' TeX (MARK_DEF, LAYOUT_TEX) first and, after the width probe, the mark probe
  *  (layout/marks.mjs markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
  *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units)`) are the paper's own switch, and what
- *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`). Without it, the bytes as before */
-export function probeFiles({ fsys, project }, { width = false, marks = false } = {}) {
-  const text = latin1(fsys.read(project.main))
+ *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`); under `latex` (latex-front.mjs dviEngine), each
+ *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
+ *  compile sets. Without it, the bytes as before */
+export function probeFiles({ fsys, project, meta }, { width = false, marks = false } = {}) {
+  // (the main file as the front end reads it, its line ends TeX's: read raw, a lone-CR preamble's first comment hid its
+  // \begin{document}, and the probe was the whole document and a second one)
+  const text = texText(fsys.read(project.main))
   const at = beginDocument(text)
-  const head = marks ? MARK_DEF + LAYOUT_TEX : '', probe = marks ? markProbeTex(probeSamples(project.units), inkSamples(project.units)) : ''
+  const dvi = dviEngine(meta?.compiler)
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units), inkSamples(project.units)) : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
 }
 
@@ -256,8 +261,10 @@ export function probeFiles({ fsys, project }, { width = false, marks = false } =
  *  before. With `layout`, the layout guard's two remedies (layout/guard.mjs): `unmarked`, unit indices each written as
  *  the paper's own bytes (patch `asSource`: no mark, no layout mark, no span), and `names` false, no babel name marked
  *  (none wrapped literally, LAYOUT_TEX's \axt@nmall made \relax on LAYOUT_TEX's own line: NAMES_OFF).
- *  Neither given: the bytes as before */
-export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null, inkless = null, unmarked = null, names = true } = {}) {
+ *  Neither given: the bytes as before. Under `latex` (latex-front.mjs dviEngine: arXiv's DVI compiler), MARK_DEF and
+ *  LAYOUT_TEX each followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX: xdvipdfmx's specials where pdfTeX
+ *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before */
+export function originalFiles({ fsys, project, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, unmarked = null, names = true } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
   let out, patched = null
@@ -283,7 +290,8 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null, 
     out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
     patched = spans ? new Map(out) : null
   }
-  const head = DRAFT + MARK_DEF + (layout ? LAYOUT_TEX + (names ? '' : NAMES_OFF) : '') + END_TEX + (lines ? LINES_TEX : '')
+  const dvi = dviEngine(meta?.compiler)
+  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (names ? '' : NAMES_OFF) : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   // (`skip`: the main file's head of ours, before the paper's first byte)
   if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
@@ -322,7 +330,8 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   if (inputenc) main = main.slice(0, inputenc.start) + main.slice(inputenc.start, inputenc.end).replace(/\[([^\]]*)\]/, (m, opts) => `[${opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',')}]`) + main.slice(inputenc.end)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
-  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + CAPTIONS_PROBE + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
+  // (a translation set by latex, arXiv's DVI compiler, carries the DVI marks as its original does: its engine's, not the paper's)
+  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + (dviEngine(strategy.engine) ? DVI_MARK_DEF : '') + END_TEX + CAPTIONS_PROBE + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
   main = head + (shim ? stripPdftexOption(main) : main)
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }
@@ -444,6 +453,22 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   paper's own, the name marks off, a page count compared) and records why a part has none, not what a unit is, what is
  *   sent for one or how a reply is read back: every unit whose source a copy holds is carried, and older pipelines keep
  *   their own tests
+ * - 19: 20 changes what a unit is (none of what TeX reads as syntax, a declaration's digits its text: arg-roles.mjs
+ *   readArgs and DELIMITED, latex-front.mjs), not what is sent for one or how a reply is read back (the wire keeps its own
+ *   inkless list, mt.mjs INKLESS): every unit whose source a copy holds is carried, and older pipelines keep their own tests
+ * - 20: 21 reads a source's line ends as TeX does (latex-front.mjs texText), which changes the units of a CR source alone,
+ *   not what is sent for a unit or how a reply is read back: every unit whose source a copy holds is carried, matched by
+ *   sourceHash, and one cut anew (a CRLF file's paragraphs, merged under 20) is asked again
+ * - 21: 22 keeps a styled pair whose two ends stand where the wire is cut anyway (mt.mjs classOf's boundary rule,
+ *   TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read back: a unit whose wire the rule leaves
+ *   as it was (mt.mjs boundaryChanges, given the unit) was sent as 22 sends it, and is carried; without the unit, a
+ *   translation that holds no pair. Over 137 papers' sources 126 of 36,136 units are asked again. Every older pipeline's
+ *   test takes this one with its own (7 to 14 carry no unit that holds a pair already)
+ * - 22: 23 writes a display's own stop after its marker and takes off what the reply set for it (mt.mjs serialize's and
+ *   serializeTags' `own`, TRANSLATE_VERSION 5), and changes nothing else a unit is or how a reply is read back: a unit whose
+ *   wire the rule leaves as it was (mt.mjs displayStopChanges, given the unit) was sent as 23 sends it, and is carried;
+ *   without the unit, a translation that holds no display with a stop of its own. Over 180 papers' sources 4,215 of
+ *   44,825 units are asked again. Every older pipeline's test takes this one with its own
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -452,8 +477,11 @@ const holding = re => pieces => pieces.some(p => p?.t === 'text' && typeof p.s =
 const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
 const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
 const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
-const EVERY = () => true
-export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY, 17: EVERY, 18: EVERY }
+const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'open' || p?.t === 'close'))
+const NO_DISPLAY_STOP = (pieces, unit = null) => (unit ? !displayStopChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'ph' && displayStop(p.src)))
+const andStop = test => (pieces, unit = null) => test(pieces, unit) && NO_DISPLAY_STOP(pieces, unit)
+const BOUNDARY_AND_STOP = andStop(NO_BOUNDARY)
+export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

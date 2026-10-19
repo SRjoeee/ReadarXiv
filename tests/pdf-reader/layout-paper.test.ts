@@ -288,7 +288,8 @@ describe('markedOfPaper: the probe and the marked compile, the reading left to t
     const unmarked: Compiled = { ok: true, pdf: PDF, log: `${TEX}${END}Output written on main.pdf (3 pages, 1000 bytes).\n` }
     for (const [why, log, first] of short) {
       const answer: Compiled = { ok: true, pdf: PDF, log }
-      const refused = { refused: 'marks', why: `the marked original does not run through (${first}), nor with the name marks off, where the paper's own source makes 3 pages`, ms, guard: { extra: 2, unmarked: [], names: true, failed: ['ran', 'errors'] } }
+      // (the unmarked original's verdict with it: it ran through, so no host hands the paper to another tree)
+      const refused = { refused: 'marks', why: `the marked original does not run through (${first}), nor with the name marks off, where the paper's own source makes 3 pages`, own: { ran: true, short: false, limit: null, tree: '2025' }, ms, guard: { extra: 2, unmarked: [], names: true, failed: ['ran', 'errors'] } }
       const c = compiler([PROBE, answer, answer, unmarked])
       expect(await markedOfPaper(paperOf(), { compile: c.compile }), why).toEqual(refused)
       expect(c.asked.map(r => [r.rerun, given(r)['main.tex']?.includes('\\let\\axt@nmall\\relax'), given(r)['main.tex']?.includes('\\axtmark')]), why).toEqual([[false, false, true], [true, false, true], [true, true, true], [true, false, false]])

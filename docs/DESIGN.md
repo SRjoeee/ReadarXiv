@@ -922,7 +922,18 @@ only how it meets the rest of the extension.
   white space and punctuation between them; `core/protector/math-runs.ts`) goes out as one marker, and its reply is read
   back as the run's own pieces in their order (`mt.mjs` `formulaRuns`, TRANSLATE_VERSION 2): sent apart, Microsoft's
   Chinese moved the set's first part away from the others (2307.16209, page 31). The unit keeps its parts, so each is
-  drawn as its own crop, as TeX may break the line between them (11 of the corpus's 16 runs take two lines).
+  drawn as its own crop, as TeX may break the line between them (11 of the corpus's 16 runs take two lines). A
+  display's own punctuation — the stop, comma, semicolon or colon its sentence has inside it, before `\end{equation}`
+  or `\]` and past a label, a tag, `\nonumber` or a space of TeX's — is written on the wire right after the display's
+  marker or tag (`yields @a#. Prices`), unless the text after the display begins with punctuation of its own; the
+  reply's marks right after the marker are taken off on reading back, since the display's crop draws its own, and a
+  mark right before it is the reply's (`mt.mjs` `displayStop`, `own`, TRANSLATE_VERSION 5). Only math environments
+  end inside a display before its own end (a picture's `;` is its syntax), and a mark in a group counts only in one
+  that sets it (`\text{.}`, never `\phantom{.}`). Sent as `yields @a# Prices`, 2610.10069's sentence ran on into the
+  next one, and Microsoft read "yields" as a noun; 7,986 of the corpus's 9,089 displays inside a unit end with such a
+  mark. In Microsoft's recorded Chinese answers no display that ends its sentence had the sentence cut after it (0 of
+  444 before a capital), a marker before `. ` and a capital is cut every time (1,357 of 1,357), and no mark the wire
+  set after a marker came back moved before it (0 of 4,825).
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a

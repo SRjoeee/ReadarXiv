@@ -121,6 +121,35 @@ describe('pageInk', () => {
     expect(only(glyphs, 'y').x0).toBeCloseTo(77, 9)
   })
 
+  it('glyphsOnly: the same glyphs (place, size, text, fill) with no boxes, paths or outlines read (the live fills walk)', () => {
+    const ops: Op[] = [
+      [OPS.setFillRGBColor, ['#0000ff']],
+      [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([10, 10, 100, 100])]],
+      [OPS.save, []], [OPS.transform, [2, 0, 0, 2, 0, 0]], ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A', 722), g('b', 556))), [OPS.restore, []],
+      [OPS.paintImageXObject, ['img', 10, 10]],
+      ...text('t3', 10, [1, 0, 0, 1, 72, 600], show(g('x', 50))),
+      ...text('f1', 10, [0.7, 0.7, -0.7, 0.7, 300, 300], show(g('T', 600))),
+    ]
+    const full = ink(ops), only = pageInk(OPS, list(ops), commonObjs, { rotate: 0, glyphsOnly: true })
+    const key = (x: Glyph) => [x.u, x.x0, x.x1, x.y, x.size, x.fill, !!x.ownColour]
+    expect(only.glyphs.map(key)).toEqual(full.glyphs.map(key))
+    expect(only.glyphs.length).toBeGreaterThan(0)
+    expect(full.boxes.length).toBeGreaterThan(0)
+    expect(only.boxes).toEqual([])
+    expect([only.capped, only.timedOut]).toEqual([false, false])
+  })
+
+  it('a Type 3 glyph that paints its own colours (d0, a colour in its procedure) is marked so; one painted in the fill (d1) is not', () => {
+    // (2608.04322's figure fonts: 69 coloured glyphs among 2,308; matplotlib's d1 glyphs take the current fill, as PDF says)
+    const procs = new Map([['own', { fnArray: [OPS.setCharWidth, OPS.setFillRGBColor, OPS.constructPath], argsArray: [[], ['#d2555a'], []] }], ['plain', { fnArray: [OPS.setCharWidth, OPS.constructPath], argsArray: [[], []] }], ['stencil', { fnArray: [OPS.setCharWidthAndBounds, OPS.setFillRGBColor, OPS.constructPath], argsArray: [[], ['#d2555a'], []] }]])
+    FONTS.t3c = { name: 'T3Coloured', fontMatrix: [0.01, 0, 0, 0.01, 0, 0], isType3Font: true, vertical: false, charProcOperatorList: procs }
+    try {
+      const t = (u: string, id: string) => ({ ...g(u, 50), operatorListId: id })
+      const { glyphs } = ink([[OPS.setFillRGBColor, ['#0000ff']], ...text('t3c', 10, [1, 0, 0, 1, 72, 700], show(t('a', 'own'), t('b', 'plain'), t('c', 'stencil')))])
+      expect(glyphs.map(x => [x.u, x.fill, !!x.ownColour])).toEqual([['a', 0x0000ff, true], ['b', 0x0000ff, false], ['c', 0x0000ff, false]])
+    } finally { delete FONTS.t3c }
+  })
+
   it('a font with no ascent or descent takes 0.75 and −0.22 of its size', () => {
     FONTS.bare = { name: 'Bare', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0, descent: 0 }
     const x = only(ink(text('bare', 10, [1, 0, 0, 1, 0, 100], show(g('x')))).glyphs, 'x')
