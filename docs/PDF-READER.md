@@ -1434,8 +1434,54 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
 - **The marked original for a host that reads it itself.** `markedOfPaper` (layout/paper.mjs, in the pipeline entry) is
   `layoutMarksOfPaper` without its reading: the mark probe and the marked compile, and the marked PDF, its last pass's log and
   readMarked's options, which a host passes as `marked: { doc, log, options }` so that the pass reads the marked original a
-  page at a time beside arXiv's; its refusals are the same ('probe', 'compile'), and `layoutMarksOfPaper` is it followed by
-  one `readMarked`, its marks the same bytes.
+  page at a time beside arXiv's; its refusals are the same (`{ refused, why }`: 'probe', 'compile', 'texlive', 'engine',
+  'marks', below), and `layoutMarksOfPaper` is it followed by one `readMarked`, its marks the same bytes.
+- **The marked original must be the paper: the layout guard** (`layout/guard.mjs`, applied by `markedOfPaper`; R1 of
+  2026-10-19). Our marks are TeX inserted into the paper's own source, and a construct the front end reads wrongly made three
+  of the 50-paper sweep's marked originals another document than arXiv's, so that each paper lost its whole layout through a
+  fault of ours (343 rows): 2610.21377's pgffor loop headers written back with their body's brace doubled, 2610.21201's
+  etoc depth tag whose end mark TeX wrote into the contents inside a `\csname` (ten errors, 36 pages to arXiv's 34),
+  2610.21288's `\appendixname` wrapped by the babel names' marks under revtex4-2 and the appendix package (the job aborted).
+  Each check holds for any paper:
+  - *Before the compile*: each unit's writing in the marked file against its source, by its brace balance outside comments,
+    `\verb` and verbatim environments (the innermost unit that changes it); such a unit is written as the paper's own bytes
+    (latex-front.mjs `patch` `asSource`: no mark, no span), and a file whose balance our other edits move (a style's literal
+    babel name wrapped) has the name marks off. Over the corpus's 124 papers and the sweep's 50 it moves one paper's three
+    units (2610.21377), at a median of 2.2 ms a paper (33 ms at most, 2610.19159's 1,813 units; 177 sources).
+  - *After it*: it ran through (`ranThrough`); its page count is arXiv's where the host gives it (`pages`: a number or a
+    function asked once; with several toplevel sources, at most arXiv's); no auxiliary file it wrote (the files a host
+    returns, else its main aux, which holds every list entry LaTeX writes through `\@writefile`) holds a mark of ours where
+    no text is set: anywhere but a list entry's text (`\contentsline`'s second argument) and nameref's title (`\newlabel`'s
+    third group), where LaTeX writes a caption's or a heading's text by design; its TeX errors are no more than the unmarked
+    original's (the paper's own files, graphicx's draft and END_TEX alone), which is compiled only where the marked one has
+    any. A paper whose marked original passes costs no compile more and its marked original and layout are as before: the
+    gate pack's 32 outputs byte for byte, the sample's bundle but its pipeline token.
+  - *Remedies*, at most two compiles more in all, the unmarked original's among them, none past the host's compile budget
+    (`compileBudgetMs`: its wall less 1.2 times the longest compile so far): TeX that never ran (no engine banner) or a host's
+    limit is refused at once (`engine` where the host names the engine unknown, else `compile`: a host's own failure, its cap
+    on a compile's result); errors alone: the unmarked original compiled, its count the paper's own
+    (the marked original stands), else the units the other errors stand in left unmarked (tex-errors.mjs `unitsAtErrors`, as
+    runLive's remedy places a translation's, less the errors the unmarked original has at the same text); a mark out of
+    place: the units it names and those its errors stand in unmarked (passing, the latter marked again, kept with no more
+    errors), failing, the names' marks off too; any other failure: the units its errors stand in and
+    the unit at the line TeX ignored all text after ("Incomplete \iffalse; all text was ignored after line N") unmarked with
+    the names' marks off, then, passing, the units marked again (the smaller remedy, kept where it passes with no more
+    errors), or, failing, the
+    unmarked original compiled to tell whose fault it is. An attempt that passes is the marked original; where none does, the
+    best that ran through to arXiv's page count or more stands for the page pass and the carry to judge, as before; none that
+    ran through is refused with why: TeX's (`compile`; `texlive` where the paper's `texlive_version` is not the box's TeX
+    Live year, as 2610.20595's 2023 under the box's 2025; `engine`) where the unmarked original fails too, else ours
+    (`marks`), and `compile` where no compile was left to tell. A why holds no control character and WHY_MAX code units at
+    most (`whyText`). A throw of the guard's own is no refusal: the brace check is skipped, or the marked original taken as
+    before the guard. `guard` records what the guard did (`extra`, `unmarked`,
+    `names`, `failed`, `judged`). `engines`, where a host names the compilers it runs, refuses a paper of another before any
+    compile ('engine').
+  - *The front end's own mistakes* (pgffor's `\foreach … in {…}`, etoc's `\etocdepthtag.toc{…}`, a length argument such as
+    `\vspace{0.5mm}`, the `\appendixname` wrap) are the front end's to fix at their source; the guard is what keeps the next
+    unknown one from costing a whole paper.
+  - *The web host* passes `compileBudgetMs` with CM alone today, and neither `pages` nor `engines`: its budget's answer past
+    the budget (a `budget` limit) ends the guard as any limit, and the page check is the page pass's alone until it passes
+    arXiv's page count.
 - **A compile that did not make the paper is a failed compile** (2026-10-19). A marked original
   that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test runLive's compiles and CM's passes use too:
   its last pass stopped short — an emergency stop, a hundred errors, TeX's capacity — or never logged END_TEX's AXT-END)
@@ -1446,9 +1492,30 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   (`CARRY_MIN`, the marked original's lines found on arXiv's) took both and drew their pages from a layout arXiv never
   set. Of 141 compiles counted against arXiv's PDF (the corpus's 113, the TL2025/TL2023 survey's 28) the other 139 have
   arXiv's count and none has more: fewer by any page is refused, more is left to the carry. Such a paper's layer is that
-  of a paper with no layout: a part's `layout: null`, every unit read under the proof with no file, so a unit the left
-  locates by its text and that holds no placeholder but a space, a text symbol or TeX's nothing is drawn translated, and
-  every other unit is left the original's; no unit is placed by the short original's lines.
+  of a paper with no layout: a part with no layout (its record, below), every unit read under the proof with no file, so a
+  unit the left locates by its text and that holds no placeholder but a space, a text symbol or TeX's nothing is drawn
+  translated, and every other unit is left the original's; no unit is placed by the short original's lines. A paper of
+  several toplevel sources (00README's, `meta.toplevels`) is not refused so: arXiv compiles each and joins their PDFs, the
+  pipeline the first alone, so its marked original's pages are compared with arXiv's first (2610.20030: 8 of 12, the carry
+  judging them; 18's rule refused it outright, 39 rows), `stats.toplevels` { files, pages }. The further files' units are not
+  read at all (their pages left the original's, with no unit): their own compiles and units, the pages offset, are later
+  work.
+- **Why a part has no layout** (BUNDLE 6, R1 item 4). A part with none carries the reason in place of its layout,
+  `layout: { refused, why }` (`format.mjs` LAYOUT_REFUSED, `why` at most WHY_MAX = 300 code units): TeX's — `compile` (the
+  paper's own source does not make arXiv's pages here, a host's limit; and every cause nobody judged: the page pass's "the
+  marked original has M pages, arXiv's PDF N" where the host gives the guard no page count, no compile left to tell whose
+  fault it is, a compile that threw or ran no TeX), `texlive` (as compile, the paper declaring another TeX Live year than the
+  box's), `engine` (a compiler the host does not run, as `engines` or its answer names it) —, ours — `marks` (the marked original is not the paper and the guard could not mend it, or the mark probe, the
+  marks' reading, the maker or a part's own reader failed) —, and `carry` (the marked original's lines found on arXiv's
+  pages under `CARRY_MIN`, the paper's or the part's). The page pass maps every refusal to one (`layoutRecordOf`: the
+  paper's, the page count's, the maker's throw or carry, a verdict's, a part's bound's). A reader reads such a part as one
+  with no layout: `readPart` gives `layout: null`, as a reader that only tests it takes it, and the record as `noLayout`
+  (null where the part has a layout, or where its producer recorded none: 5's bare null, `cutBundle` given none). The parts
+  merged (`mergeParts`) stay the whole's reading. The record is data alone: the reader's notice that would say it is the
+  owner's decision, and no reader draws by it. A sweep reads one row a layoutless part, its `refused` and `why`, in place of
+  each of its units' rows. The shape is new, so the format is raised (BUNDLE5 '6', its CTAG and VTAG with it): a reader of 5
+  refuses a record, and nothing deployed reads 5 (no migration: a bundle of 5 is not found under 6's names and is made
+  again).
 - **The page stream, the default (rules 1, 3 and 4).** Every predicate a part reads is had a page at a time with no whole run
   before it: the pages' frame and the far push's columns of arXiv's text alone (rules 1 and 4, made once at step T), the
   maker's columns' edges of the pages before a page and its own (rule 3). The maker is made a page at a time and the marked

@@ -9,11 +9,11 @@ export type { UnitWire } from './bundle.mjs'
 import type { UnitWire } from './bundle.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
-/** the format: raised with any change to the shape of a head, part, left part or catalog */
-export declare const BUNDLE5: '5'
+/** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why */
+export declare const BUNDLE5: '6'
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
 export declare const UNITS_FORMAT: '1'
-/** the reader's contract, `b5-j<PDFJS>` (until the pin moves, next's extension asks for BUNDLE 3's) */
+/** the reader's contract, `b<BUNDLE5>-j<PDFJS>`, named with the 5 beside bundle.mjs's CTAG whatever BUNDLE5's value */
 export declare const CTAG5: string
 /** the content's, `<CTAG5>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a key's directory, the catalog's name */
 export declare const VTAG5: string
@@ -139,10 +139,22 @@ export interface PartChain {
   /** the removed pages told */
   readonly r: number
 }
+/** why a part has no layout, as its wire records it in place of one: TeX's (`compile`, `texlive`, `engine`), ours (`marks`),
+ *  or the carry's (`carry`) */
+export declare const LAYOUT_REFUSED: readonly ['compile', 'carry', 'engine', 'texlive', 'marks']
+export type LayoutRefused = (typeof LAYOUT_REFUSED)[number]
+/** a record's `why`, in code units at most */
+export declare const WHY_MAX: 300
+export interface LayoutRefusalRecord { refused: LayoutRefused; why: string }
+/** whether a part's `layout` is a refusal's record, not a layout part */
+export declare const isLayoutRefusal: (v: unknown) => v is LayoutRefusalRecord
 export interface ReadPart {
   kind: 'part'; sha256: string; bytes: number; head: string; prev: string | null
   pages: [from: number, to: number]; reach: number; views: readonly number[]
+  /** `layout` null where the part has none, whatever its wire held there (a refusal's record, or null) */
   left: UnitWire[]; fileOnly: [id: number, after: number][]; layout: LayoutPart | null
+  /** why the part has no layout, as its wire recorded it; null where it has one, or where none was recorded */
+  noLayout: Readonly<LayoutRefusalRecord> | null
   /** null where the layout is, and where the part has no add-on for its pages (M20: its pages drawn by erase and restore) */
   addon: { manifest: RemovalManifest; tail: Uint8Array | null; r: number } | null
   leftParts: (Ref & { page: number })[]
@@ -257,7 +269,7 @@ export declare function writeLeftPart(o: {
 }): Promise<Written & { page: number; emptied: boolean; drawShed: boolean }>
 export declare function writePart(o: {
   paper: { id: string; version: number }; head: string; prev: string | null; pages: readonly [number, number]; views: readonly number[]
-  left: readonly UnitWire[]; fileOnly: readonly (readonly [number, number])[]; layout: LayoutPart | null
+  left: readonly UnitWire[]; fileOnly: readonly (readonly [number, number])[]; layout: LayoutPart | LayoutRefusalRecord | null
   addon: { manifest: RemovalManifest; tail: Uint8Array | null } | null; leftParts: readonly (Written & { page: number })[]
 }): Promise<Written & { from: number; to: number }>
 /** the catalog, written by the Worker from the refs it committed (only sha256, bytes, from and to of each are read) */
