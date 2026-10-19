@@ -10,12 +10,14 @@
 // Compiled `files`, `passes`), as the web's container sandbox answers them (container/src/sandbox.ts texCommand,
 // bibCommand, runCompile): a one-pass compile is `<engine> -no-shell-escape -interaction=nonstopmode ./<main>`, XeLaTeX's
 // through `xdvipdfmx -q -E -z 3`; `draft` adds -draftmode (pdfLaTeX), -no-pdf with no driver (XeLaTeX), --draftmode
-// (LuaLaTeX); `bibtex: true` runs biber where the pass wrote a .bcf, else BibTeX, on ./<job> after it; `files` (the web's
+// (LuaLaTeX), -draftmode (latex, arXiv's DVI compiler, whose one-pass compile is made a PDF by `dvipdfmx -q` after its pass);
+// `bibtex: true` runs biber where the pass wrote a .bcf, else BibTeX, on ./<job> after it; `files` (the web's
 // jail.sh in files mode) stamps every seeded file with a fixed old time and the marker a minute later, runs `makeindex -o
 // ./<job>.ind ./<job>.idx` after the bibliography step where the pass wrote ./<job>.idx, and, with `ok`, returns every
 // regular file (no link) newer than the marker — written, a rewrite of the same bytes too — but the outputs and the tools'
 // logs, absent past 256 files or 8 MiB (the web's bound; the count and bytes are recorded whatever it); `rerun` is
-// `latexmk -norc -pdf|-xelatex|-lualatex [-bibtex-] -no-shell-escape -interaction=nonstopmode -f ./<main>`. `passes`
+// `latexmk -norc -pdf|-xelatex|-lualatex|-pdfdvi -e $dvipdf=… [-bibtex-] -no-shell-escape -interaction=nonstopmode -f ./<main>`
+// (compile-image.mjs latexmkEngine). `passes`
 // counts TeX passes alone. The project is written fresh for every compile, into one folder, so that no path differs
 // between L and CM; a shipped <job>.pdf and .log are removed first, as the sandbox does.
 //
@@ -42,6 +44,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, st
 import { basename, dirname, join, resolve } from 'node:path'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { LITE } from './lite-pdfjs.mjs'
+import { latexmkEngine } from './compile-image.mjs'
 import { encodeLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
 import { marksFile, parseLayoutMarks } from '../../../src/pdf-reader/engine/layout/marks.mjs'
@@ -71,8 +74,9 @@ const TEX_ENV = {
   TEXMFLOCAL: LOCAL, texmf_casefold_search: '0', FORCE_SOURCE_DATE: '1', SOURCE_DATE_EPOCH: '1767225600',
   ...(process.env.NATIVE_TEXMFVAR ? { TEXMFVAR: process.env.NATIVE_TEXMFVAR } : {}),
 }
-/** each engine's binary, latexmk's flag and its draft flag (an engine the host does not know is pdfLaTeX's, as the lab's compiles take it) */
-const ENGINES = { pdflatex: ['pdflatex', '-pdf', '-draftmode'], xelatex: ['xelatex', '-xelatex', '-no-pdf'], lualatex: ['lualatex', '-lualatex', '--draftmode'] }
+/** each engine's binary and its draft flag (an engine the host does not know is pdfLaTeX's, as the lab's compiles take it); latexmk's
+ *  arguments are latexmkEngine's: a latex paper is never checked with pdfLaTeX */
+const ENGINES = { pdflatex: ['pdflatex', '-draftmode'], xelatex: ['xelatex', '-no-pdf'], lualatex: ['lualatex', '--draftmode'], latex: ['latex', '-draftmode'] }
 /** the sandbox's one-pass XeLaTeX driver (sandbox.ts DRAFT_DRIVER) */
 const DRIVER = 'xdvipdfmx -q -E -z 3'
 /** what `files` leaves out: the compile's outputs and the tools' logs */
@@ -117,7 +121,7 @@ const written = (stamps, p) => stamps.has(p) && stamps.get(p) > MARKER
  */
 function nativeCompile(source, req, records) {
   if (free(OUT) < FREE_MIN) throw new Error(`less than 15 GiB free on ${OUT}`)
-  const [bin, flag, draftFlag] = ENGINES[req.engine] ?? ENGINES.pdflatex
+  const [bin, draftFlag] = ENGINES[req.engine] ?? ENGINES.pdflatex
   const job = jobName(req.main), main = `./${req.main}`
   rmSync(BUILD, { recursive: true, force: true })
   for (const [p, b] of [...source, ...req.overrides]) { const f = join(BUILD, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
@@ -131,7 +135,7 @@ function nativeCompile(source, req, records) {
   let passes = 0, killed = false
   const step = (tool, argv) => { const t = timed(argv, out); steps.push({ tool, us: t.us, real: t.real }); killed ||= t.killed; return t }
   if (req.rerun) {
-    step('latexmk', ['latexmk', '-norc', flag, ...(req.bibtex === false ? ['-bibtex-'] : []), '-no-shell-escape', '-interaction=nonstopmode', '-f', main])
+    step('latexmk', ['latexmk', '-norc', ...latexmkEngine(bin), ...(req.bibtex === false ? ['-bibtex-'] : []), '-no-shell-escape', '-interaction=nonstopmode', '-f', main])
     const said = existsSync(out) ? readFileSync(out, 'latin1') : ''
     passes = (said.match(/^Run number \d+ of rule '(?:pdf|xe|lua)?latex'/gm) ?? []).length
     for (const tool of ['bibtex', 'biber', 'makeindex']) { const n = (said.match(new RegExp(`^Run number \\d+ of rule '${tool}`, 'gm')) ?? []).length; if (n) steps.push({ tool, runs: n }) }
@@ -139,6 +143,8 @@ function nativeCompile(source, req, records) {
     const mode = req.draft ? [draftFlag] : bin === 'xelatex' ? [`-output-driver=${DRIVER}`] : []
     step(bin, [bin, '-no-shell-escape', '-interaction=nonstopmode', ...mode, main])
     passes = 1
+    // (latex's DVI made a PDF by dvipdfmx, a step of the compile's own, as the sandbox's one-pass latex)
+    if (!killed && !req.draft && bin === 'latex') step('dvipdfmx', ['dvipdfmx', '-q', '-o', `./${job}.pdf`, `./${job}.dvi`])
     if (!killed && req.bibtex === true) {
       // (a .bcf this pass wrote — in files mode, newer than the marker —, not one the source archive shipped)
       const bcf = join(BUILD, `${job}.bcf`), biber = req.files ? written(walk(), `${job}.bcf`) : existsSync(bcf), tool = biber ? 'biber' : 'bibtex'

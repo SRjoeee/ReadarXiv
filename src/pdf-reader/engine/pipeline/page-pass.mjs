@@ -82,7 +82,7 @@ function fitted(text) {
 /**
  * A paper's layer made and told part by part. `paper` { id, version }; `source` openPaper's paper (its units, ids their
  * indices); `marks` layout/paper.mjs layoutMarksOfPaper's result ({ marks, unitMarks }, or { refused }: no layout, the left by
- * the units' text alone); `arxiv` { doc, text? }: a PDF.js document of arXiv's PDF (the caller's to open and destroy) and its
+ * the units' text alone; a refusal's `own`, the unmarked original's verdict, kept in `stats.layout` and in no part); `arxiv` { doc, text? }: a PDF.js document of arXiv's PDF (the caller's to open and destroy) and its
  * text as readArxivText read it (step T: with `{ draw }` as this pass's, so that the draw reads no page's text again), else read
  * here; `OPS` PDF.js's operator codes; `pdfjs` its version; `base` { bytes,
  * sha256, xref } of arXiv's PDF (the head's); `image` the compiler image's name; `remove({ from, to, plans })` the remover's
@@ -215,7 +215,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       made = { refused: 'failed', why: why(e) }
       maker = null
     }
-  } else made = { refused: marks?.refused ?? 'marks', ...(marks?.why ? { why: marks.why } : {}) }
+  } else made = { refused: marks?.refused ?? 'marks', ...(marks?.why ? { why: marks.why } : {}), ...(marks?.own ? { own: marks.own } : {}) }
 
   const ctx = { paper, N, base, image, remove, pdfjs, onHead, onLeft, onPart, verdicts, side, bundle, made, maker, several }
   if (maker && streams) {

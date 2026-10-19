@@ -5,6 +5,7 @@ import type { ArxivText } from '../layout/arxiv.mjs'
 import type { AddonChainState, RemoverAnswer } from '../layout/chain.mjs'
 import type { LayoutStats, PageStreamRules } from '../layout/make.mjs'
 import type { LayoutMarks, MarkedOptions, UnitMarks } from '../layout/marks.mjs'
+import type { OwnVerdict } from '../layout/paper.mjs'
 import type { ColumnRule } from '../view/highlight.mjs'
 import type { FrameRule } from './anchors.mjs'
 import type { LeftSide } from './left-side.mjs'
@@ -18,8 +19,9 @@ export interface LayerOptions {
    *  with several, a marked original of fewer pages than arXiv's PDF is compared with arXiv's first pages, not refused */
   source: { units: readonly { kind: string; pieces: unknown[] }[]; kept: ReadonlySet<unknown>; inFloat?: readonly number[]; meta?: { toplevels?: number } }
   /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none (or `marked`); marks of fewer pages than
-   *  arXiv's PDF are none, the compile's refusal (`stats.layout` { refused: 'compile', why }), their unit marks with them */
-  marks?: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string; why?: string } | null
+   *  arXiv's PDF are none, the compile's refusal (`stats.layout` { refused: 'compile', why }), their unit marks with them. A
+   *  refusal's `own` (the unmarked original's verdict) is kept in `stats.layout`, never in a part */
+  marks?: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string; why?: string; own?: OwnVerdict } | null
   /** the marked original to be read here instead (a PDF.js document of it, the caller's to open and destroy, its last pass's log,
    *  and readMarked's options but the units and the operator codes, this pass's): a page at a time beside arXiv's in the page
    *  stream (the default rules, or an oracle), else whole first (readMarked); its refusal is the marks' ('marks'), and one of
@@ -71,6 +73,6 @@ export declare function layoutRecordOf(r: { refused?: string; why?: string; line
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`); `toplevels` where the paper has
  *  several toplevel sources (its marked original's pages against arXiv's) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
-  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][]; toplevels?: { files: number; pages: [marked: number | null, arxiv: number] } } }
+  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; own?: OwnVerdict; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][]; toplevels?: { files: number; pages: [marked: number | null, arxiv: number] } } }
   | { refused: 'anchors'; why: string }
 >
