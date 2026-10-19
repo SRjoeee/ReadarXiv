@@ -1247,9 +1247,10 @@ function walk(s, from, to, b, ctx) {
     if (args?.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
     // TeX's own assignment and glue syntax belongs to the command: \looseness=-1, \parindent=0pt, \vskip 3pt plus 1fil,
     // \penalty-100 — to a register or a primitive that reads a value, never to a declaration that takes no argument
-    // (NO_ARGS): `{\bfseries 100}`, `\noindent 38 papers` and `\noindent = 40` set their digits, which a placeholder took
-    // out of the text (2610.19159's tables and lists)
-    if (e === end && /^[A-Za-z@]+$/.test(name) && !NO_ARGS.has(name)) { const m = s.slice(e, Math.min(to, e + 120)).match(name === 'hrule' || name === 'vrule' ? RULE_SPEC : ASSIGNMENT); if (m) e += m[0].length }
+    // (NO_ARGS) or a command the table knows takes no parameter: `{\bfseries 100}`, `\noindent 38 papers` and `\noindent
+    // = 40` set their digits, which a placeholder took out of the text (2610.19159's tables and lists), and `\S4 in` its
+    // section number and the word after it, read as a length in inches (2608.15334; 2608.30730's `\textyen 45 in`)
+    if (e === end && /^[A-Za-z@]+$/.test(name) && !NO_ARGS.has(name) && !(args?.known && paperParams(name, paper)?.length === 0)) { const m = s.slice(e, Math.min(to, e + 120)).match(name === 'hrule' || name === 'vrule' ? RULE_SPEC : ASSIGNMENT); if (m) e += m[0].length }
     endText(); b.ph(s.slice(i, e), i, e)
     // a command with a letter name eats the following spaces in TeX; keep them with it
     i = e

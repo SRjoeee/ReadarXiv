@@ -366,9 +366,10 @@ function optionalEnd(t, i) {
 /**
  * A babel name a style writes literally, in the definition of the very construct the name's macro would name (nips's
  * abstract environment, `{\large\bf Abstract}`; cvpr's and naacl's \abstract; naacl's thebibliography, `References`):
- * each such literal, where it equals the name's English value (NAME_ENGLISH), wrapped as the macro's own text is
- * (\axtnma{<key>}…\axtnmb{<key>}), in the definition's bodies, but in a command's arguments that are no text set on the
- * page (NOT_TEXT). The identity is the definition's, never the page's; what TeX prints is unchanged, so the carry is.
+ * each such literal, where it equals the name's English value (NAME_ENGLISH), wrapped in the name's marks
+ * (\axtnma{<key>}…\axtnmb{<key>}), in the definition's bodies — with no \relax before them, as a name's macro has
+ * (NAMES_TEX): a literal is the construct's own text, set where it stands, never a name a class expands in an \if —,
+ * but in a command's arguments that are no text set on the page (NOT_TEXT). The identity is the definition's, never the page's; what TeX prints is unchanged, so the carry is.
  * Returns the text, the same where it holds none
  */
 export function literalNames(text) {

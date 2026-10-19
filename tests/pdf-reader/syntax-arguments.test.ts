@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { NAMES_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
+import { LAYOUT_CLASSES, NAMES_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
 import { paperParams, readArgs, textless } from '@/pdf-reader/engine/rules/arg-roles.mjs'
 
 // A unit, and a mark, are made only of text TeX typesets where it stands: an argument TeX reads as syntax — a length or
@@ -35,6 +35,16 @@ describe('a value in TeX\'s own syntax is never a command that reads arguments o
     expect(read('\\baselineskip', 'vskip')).toEqual(['\\baselineskip'])
     expect(read(' 3pt plus 1fil', 'vskip')).toEqual(['3pt plus 1fil'])
   })
+  it('nor any command the table reads parameters for (\\vskip, \\kern, \\hskip, \\section): each is a call of its own', () => {
+    expect(read('\\vskip 4pt Words', 'hrule')).toEqual([])
+    expect(read('\\kern 2pt', 'hrule')).toEqual([])
+    expect(read('\\hskip 1em', 'vrule')).toEqual([])
+    expect(read('\n\\section{Introduction}', 'hrule')).toEqual([])
+    expect(texts(doc('\\hrule\\vskip 4pt Words after the rule.'))).toEqual(['Words after the rule.'])
+    const tex = doc('Words before.\n\n\\hrule\n\\section{Introduction}\nWords of the section.')
+    expect(texts(tex)).toEqual(['Words before.', 'Introduction', 'Words of the section.'])
+    expect(marked(tex)).not.toMatch(/\\vskip 4\\leavevmode|\\section\{[^}]*\\(?:axt|leavevmode)/)
+  })
   it('its group is no unit, and nothing of the reader\'s goes inside it', () => {
     // (as 2610.21765 has it: the rules after a list, the unit that follows beginning at them)
     const tex = doc('\\begin{itemize}\n  \\item[] Ext - a randomness extractor.\n\\end{itemize}\n\\hrule\n\\vspace{0.5mm}\n\\hrule\n\\vspace{0.2cm}\n{\\bf Protocol for the cycle}\n\\vspace{0.2cm}\n\nWords after the rules.')
@@ -51,8 +61,13 @@ describe('a package\'s delimited syntax the role table knows is syntax: pgffor\'
     expect(got).toContain('Words of the loop\'s body, a paragraph of its own.')
     expect(balance(body(marked(tex)))).toBe(balance(body(tex)))
   })
-  it('a sentence of prose with `in` and braces is prose', () => {
-    expect(texts(doc('We count the cells in {\\em every} row of the grid, as in {[}3{]}.'))).toEqual(['We count the cells in every row of the grid, as in [3].'])
+  it('a sentence of prose with `in` and braces beside a loop is prose; the loop\'s header is none', () => {
+    const got = texts(doc('We count the cells in {\\em every} row of the grid, as in {[}3{]}.\n\n\\foreach \\ii in {0,...,3} {\\ii, }\n\nWords after the loop.'))
+    expect(got).toEqual(['We count the cells in every row of the grid, as in [3].', 'Words after the loop.'])
+  })
+  it('a \\foreach over a macro\'s list is not read by the form (its list no brace): no letter of the words after it is taken', () => {
+    expect(texts(doc('\\foreach \\x in \\mylist {\\x, }and more words here.'))).toEqual(['in and more words here.'])
+    expect(texts(doc('\\foreach \\x in \\mylist {\\x, }\nNext words of the paragraph.')).at(-1)).toMatch(/Next words of the paragraph\.$/)
   })
   it('\\etocdepthtag.toc{<tag>}: no unit, no mark in the tag (2610.21201)', () => {
     const tex = doc('\\etocdepthtag.toc{main}\n\nA first paragraph of the paper.')
@@ -74,6 +89,10 @@ describe('a declaration that takes no argument takes no value: the digits after 
     expect(texts(doc('\\noindent 38 papers were read.'))).toEqual(['38 papers were read.'])
     expect(texts(doc('\\noindent = 40 by the count.'))).toEqual(['= 40 by the count.'])
   })
+  it('nor a command the table knows to take no parameter: \\S4 in (2608.15334); one it does not know may be a register, and keeps it', () => {
+    expect(texts(doc('As in \\S4 in the paper, and \\S6.1 in the appendix.'))).toEqual(['As in 4 in the paper, and 6.1 in the appendix.'])
+    expect(paper(doc('\\mylength 2pt Words of the paragraph.')).units.map(u => (u as unknown as Unit).pieces[0])).toEqual([{ t: 'ph', src: '\\mylength 2pt' }])
+  })
   it('a register or a primitive that reads a value keeps it', () => {
     for (const src of ['\\looseness=-1', '\\parindent 0pt', '\\penalty-100']) {
       const units = paper(doc(`${src} Words of the paragraph after it.`)).units as unknown as Unit[]
@@ -94,7 +113,12 @@ describe('commands that set no ink are textless (the maker\'s and the layer\'s z
 
 describe('a wrapped babel name begins with a token that sets nothing', () => {
   it('a class\'s \\if over the name\'s first token reads \\relax, never the marks\' assignments (REVTeX\'s \\@if@empty\\@svsec over "Appendix A")', () => {
-    expect(NAMES_TEX).toContain('\\cs_set:Npx#1{\\exp_not:N\\relax\\exp_not:N\\axtnma{#2}\\exp_not:o{#1}\\exp_not:N\\axtnmb{#2}}')
+    // the marked original the maker compiles: the name's new text, as \\cs_set:Npx sets it, begins with \\relax
+    const head = new TextDecoder().decode(originalFiles(paper(doc('Words.')), { lines: true, layout: [...LAYOUT_CLASSES] }).get('main.tex'))
+    const at = head.indexOf('\\cs_set:Npx#1{')
+    expect(at).toBeGreaterThan(0)
+    const first = /^\\exp_not:N(\\[A-Za-z@:_]+)/.exec(head.slice(at + '\\cs_set:Npx#1{'.length))
+    expect(first?.[1]).toBe('\\relax')
     for (const [key, macro] of [['appendix', 'appendixname'], ['ref', 'refname'], ['abstract', 'abstractname']]) expect(NAMES_TEX).toContain(`\\axt@nmwrap{${key}}{${macro}}`)
   })
 })

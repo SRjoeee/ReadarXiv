@@ -7,7 +7,9 @@
 //   shapes  `{` a brace group or one token, as TeX takes an undelimited argument; `[` an optional argument in brackets;
 //           `*` an optional star; `?` an optional `=`; `=` a literal `=` TeX skips; `_` TeX's own syntax for the role (a
 //           number, a dimension, glue with plus and minus, one token or a group); `u` tokens up to a delimiter the
-//           table does not name (read as not known); `b` tokens up to a brace (\def's parameter text)
+//           table does not name (read as not known); `b` tokens up to a brace (\def's parameter text); `g` a brace
+//           group and nothing else, where a package's delimited form needs one (DELIMITED): no group there, and the
+//           form is not known
 //   roles   `t` text, `c` typeset content (a box's, a branch's), `a` an argument LaTeXML leaves untyped (text or a name),
 //           `d` a dimension, glue or number, `k` keys and values, `n` a name (a label, a file, a colour, a counter),
 //           `v` a name set as it is written (a URL, an e-mail address), `r` a register or a control sequence, `x` code (a
@@ -38,14 +40,15 @@ const MAY_BE_TEXT = new Set(['t', 'c', 'a', 'v', 'm'])
  * forms are written out here, one by one (the 50-paper sweep, 2026-10-19). The rule they serve is the role table's own:
  * an argument of role x, s or n is never walked as text, and never takes a mark.
  * - pgffor's \\foreach <variables> [<options>] in {<list>} {<body>}: the variables, options and `in` up to the list's
- *   brace (b, code), the list (code), the body (content: walked, a paragraph in it a unit of its own). 2610.21377's
- *   three loops were units of `in 0,...,3`, and the body's brace was written twice
- * - etoc's \\etocdepthtag.toc{<tag>}: `.toc` up to the tag's brace (b, literal), the tag (a name). 2610.21201's
+ *   brace (b, code), the list (a group: code), the body (a group: content, walked, a paragraph in it a unit of its own).
+ *   2610.21377's three loops were units of `in 0,...,3`, and the body's brace was written twice. A list that is a macro
+ *   (`in \\mylist {…}`) has no group where the body is due: not known, read as a command the table does not know is
+ * - etoc's \\etocdepthtag.toc{<tag>}: `.toc` up to the tag's brace (b, literal), the tag (a group: a name). 2610.21201's
  *   \\etocdepthtag.toc{main} took a mark, which etoc wrote into the contents file, inside its \\csname
  */
 const DELIMITED = {
-  foreach: 'bx{x{c',
-  etocdepthtag: 'bs{n',
+  foreach: 'bxgxgc',
+  etocdepthtag: 'bsgn',
 }
 const CURATED = {
   // boxes and colours: the last argument the text they set
@@ -269,16 +272,18 @@ export function readArgs(s, i, params, to = s.length) {
     // TeX's scanner reads a number or a dimension, never a group: \\hbox{…}'s group is its content, not its specification
     // (taken for one, the token after the box became its content: `\\vbox{…}\\begin` then `{center}` walked as text, its
     // lead written inside \\begin's name; `\\hbox{abc} more` sent `ore`)
-    // Nor a command that reads arguments of its own, a group among them: a register (\\baselineskip) or an internal
-    // quantity (\\fontdimen2\\font) is a value, \\vspace is not — \\hrule\n\\vspace{0.5mm} took \\vspace for the rule's
-    // dimension, and its {0.5mm} was walked as text, a mark written inside it (2610.21765)
+    // Nor a command the table reads parameters for: a register (\\baselineskip) or an internal quantity the table does not
+    // know (\\fontdimen2\\font) is a value, \\vspace, \\vskip, \\kern or \\section is a call of its own. \\hrule\n\\vspace{0.5mm}
+    // took \\vspace for the rule's dimension, and its {0.5mm} was walked as text, a mark written inside it (2610.21765);
+    // \\hrule\\vskip 4pt took `\\vskip 4` and left `pt` the text's, its mark between the 4 and its unit
     if (shape === '_' && role === 'd') {
       const m = TEX_VALUE.exec(s.slice(at, Math.min(to, at + 200)))
-      const call = m && [...m[0].matchAll(/\\([A-Za-z@]+)/g)].find(c => commandParams(c[1])?.some(p => p.shape === '{'))
+      const call = m && [...m[0].matchAll(/\\([A-Za-z@]+)/g)].find(c => { const pp = commandParams(c[1]); return !!pp?.length && pp !== REGISTER })
       const value = m ? (call ? m[0].slice(0, call.index) : m[0]) : ''
       if (/\S/.test(value)) { args.push({ shape, role, param, start: at, end: at + value.length }); at += value.length }
       continue
     }
+    if (shape === 'g') { if (s[k] !== '{') return { args, end: at, complete: false }; const e = groupEnd(s, k); if (e < 0 || e > to) return { args, end: at, complete: false }; args.push({ shape: '{', role, param, start: k, end: e }); at = e; continue }
     if (shape === 'b') { let e = at; while (e < to && s[e] !== '{' && s[e] !== '%') e++; if (e >= to || s[e] !== '{') return { args, end: at, complete: false }; if (e > at) args.push({ shape, role, param, start: at, end: e }); at = e; continue }
     if (shape !== '{' && shape !== '_') return { args, end: at, complete: false }
     // a bracket where a required argument is due is an optional one the table does not know of (a package's): not known
