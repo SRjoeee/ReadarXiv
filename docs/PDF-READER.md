@@ -724,7 +724,27 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   2^24 pixels; from the left's canvas where PDF.js drew it within 2 % of that k, else the place's own page view's canvas,
   else the page drawn from the composed document) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
-  600 ms after it, nothing laid again. A page this door laid that leaves the view lets its SVG and its copy go and holds an
+  600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at.
+- **One frame a page** (`view/drawn.mjs`). PDF.js draws a page view at its viewport's unrounded scale times its output
+  scale, from the page's top-left corner, on a canvas it floors to whole CSS px (pdfjs-dist 6.3.289 `PDFPageView.draw`:
+  the canvas is `outputScale.sx` times the page's width floored to its rounding, the rest of the page cropped). So the
+  copy's source carries the scale it was drawn at, read when PDF.js tells that it drew the canvas (`pagerendered`, neither
+  a CSS transform nor a detail view), checked against the canvas's size and kept with that canvas: never the canvas's
+  width over the page's, which is short by up to a CSS px over the page's width (0.14 % at the 87 % fit), and an erase
+  laid at it left the original's ink showing past its rectangles where the floor drops near a pixel (80, 87, 110 and
+  125 %; at 125 % the page's 1020 CSS px floor to 1019 in floating point), deterministically, at any time. A canvas whose
+  output scale differs across and down (PDF.js's restricted scale may round them apart) is no source; `copyAt` refuses a
+  copy at any scale but its source's. The page drawn from the composed document is drawn as PDF.js draws a page view: at k
+  on a canvas of the place's box at k's resolution (`places.box`, PDF.js's rounding of the viewport, nothing of the layout
+  read), on the context of a page view of a document opened without `enableHWA` (opaque, read back by the CPU), so that
+  its copy is the left's to the pixel. The SVG and the links are laid in the same frame: the page's size at its scale
+  (`--axt-frame-w` and `-h`, `--total-scale-factor` times its size in PDF units), never the place's floored box. Measured
+  by `pnpm e2e:registration` on the sample, at DPR 1 and 2, at the zooms PDF.js floors at least 0.6 of a CSS px off:
+  before, 307 to 8,142 pixels of a page's copy from PDF.js's canvas differed from its copy at the place's k by more than
+  16 in a channel (up to 255; 1 to 1,101 at an aligned zoom, the document's copy then drawn on another context) and the
+  ink left at the erased rectangles reached 889 px against an aligned zoom's 0 to 2; after, 0 pixels differ at any zoom
+  and the ink left is the aligned zoom's. The whole-pixel snap of `drawOps` (`SWAP_PAD × k < 1`, added for 85 % at
+  DPR 1 on 2608.16117, whose page is 693.6 CSS px wide) is still to be measured again under the right registration. A page this door laid that leaves the view lets its SVG and its copy go and holds an
   empty element (retired: the place shows no page, and no page view is made of it); a page the door makes ready while it
   is far is retired at once, and committed directly when it comes near. The one exception: a page that holds the focus (a
   link, or the place a jump gave it to) is kept as it goes far, and let go once the focus has left it (read a task after
@@ -754,7 +774,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
 
 The extension's run makes the side and tells it (§11.10). The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `layer-side-door.test.ts` (the real door),
 `feed.test.ts`, `contents.test.ts` and `shapes.test.ts` SH5; `pnpm e2e:reader` runs it on the sample cut into BUNDLE 4's
-objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API.
+objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API, and `pnpm e2e:registration` holds the
+frame (the side's `registration(n)`: a laid page's copy drawn from PDF.js's canvas and from the document at the place's k,
+compared pixel by pixel).
 
 ### 11.9 The layer's links
 
@@ -770,8 +792,9 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/ui/link-names.ts`). A record the view
   cannot carry (no box of area, neither or both targets, an address off the allow-list) is left out.
 - **Placed by shares.** The anchor spans the union of its boxes and each box is a span of it, every size a share of the
-  page's box (or the link's) made once from the place's viewport (its rotation, its box's origin): the place's own size
-  scales them at any zoom, nothing is read from the layout and nothing runs on a frame. The anchor takes no pointer, its
+  page's frame (or the link's) made once from the place's viewport (its rotation, its box's origin): the links' element is
+  laid at the page's size at its scale, the copy's frame (§11.8), never the place's box that PDF.js floors to whole CSS
+  px, so CSS scales them at any zoom, nothing is read from the layout and nothing runs on a frame. The anchor takes no pointer, its
   boxes do: the space between two lines of one link is the page's.
 - **Followed.** A link inside the paper is resolved on the left's document (a name by `getDestination`, its page by
   `getPageIndex`) and jumped to on the right, the pane clicked, by the view's own jump (its zoom too, as PDF.js takes one):

@@ -53,6 +53,8 @@ export interface LayerSide {
    *  takes (PDF.js's canvas of the left's or the place's page) and from the page drawn at the place's k (exact by
    *  construction), the two compared pixel by pixel over their common size. Null where page `n` is not laid near the view */
   registration(n: number, o?: { tolerance?: number; canvases?: boolean }): Promise<Registration | null>
+  /** the door and every composed task let go; each place back to its pre-layer content; 'layer' not emitted after */
+  dispose(): void
 }
 /** what registration() found: the place's k and the source's, the device pixels of the page's width PDF.js left off the
  *  source (`lost`: k × width − the source's width), and, where the source is a canvas of PDF.js's (`from` 'left' or
@@ -72,8 +74,6 @@ export interface Registration {
   maxDiff?: number
   /** with `canvases`: the two copies, which the caller lets go */
   copies?: { source: HTMLCanvasElement; doc: HTMLCanvasElement }
-  /** the door and every composed task let go; each place back to its pre-layer content; 'layer' not emitted after */
-  dispose(): void
 }
 /** sync; opens nothing until it can. One side per view: a second while one lives throws */
 export declare function createLayerSide(view: ReaderView, o: LayerSideOptions): LayerSide
