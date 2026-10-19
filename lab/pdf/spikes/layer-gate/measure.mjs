@@ -398,8 +398,9 @@ export function displayRowsOf(page) {
  * shown exactly once. A rendering drawn elsewhere shows it only where it is its own (its `unit` and its piece's source
  * index `k` the placeholder's, or a piece of the same source, `src`: two \eqref of one label are one rendering) and is
  * drawn from its ink or source; ink left where it stands shows it whoever kept it. A showing is
- * - its crop of its ink: each of its crops cut from this page (`crops`: { unit, k, src, box }, `box` its source
- *   rectangle) that holds the centre of one of its segments;
+ * - its crops of its ink: its crops cut from this page (`crops`: { unit, k, src, box }, `box` its source rectangle) that
+ *   hold the centre of one of its segments, one showing however many of its segments they hold between them (a formula TeX
+ *   broke over lines is drawn as its crops, one a line: E3b, 2026-10-19), as often as the most that hold one segment's;
  * - its rendering drawn from its source (a symbol, a citation as the page wrote it, its source's text: `texts`,
  *   { unit, k, src }, one for each translated piece drawn so: a piece the translation repeats is shown twice), by its own
  *   k alone (with no place to tell them apart, two renderings of one source are each their own);
@@ -419,7 +420,8 @@ export function contentOf({ phs, crops = [], texts = [], pageTexts = [], kept = 
     const centres = ph.segs.map(centreOf)
     const own = r => r.unit === ph.unit && (r.k === ph.k || (typeof r.src === 'string' && r.src === ph.src))
     const inPlace = kept.some(r => holds(ph, r.chars)) || centres.some(pt => keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)))
-    const n = crops.filter(c => own(c) && centres.some(pt => inBox(pt, c.box))).length + texts.filter(r => r.unit === ph.unit && r.k === ph.k).length + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length + (inPlace ? 1 : 0)
+    const mine = crops.filter(own)
+    const n = Math.max(0, ...centres.map(pt => mine.filter(c => inBox(pt, c.box)).length)) + texts.filter(r => r.unit === ph.unit && r.k === ph.k).length + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length + (inPlace ? 1 : 0)
     if (n !== 1) out.push([ph.unit, ph.k, n])
   }
   return { contentLost: out.length, contentWhere: out }

@@ -1896,7 +1896,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       p.lead = ld
       Object.assign(ld.rec, { drawn: true, why: null, size: r1(ld.nm.size), x: r1(ld.nm.x0), chars: ld.chars })
     }
-    // iteration 3: each crop over the ink it touches (its page's ink map)
+    // iteration 3: each crop over the ink it touches (its page's ink map); a formula's parts (a formula TeX broke over lines,
+    // layer2.mjs cropPartsOf), each cut from its segments, never grow (cropGrows), nor does a crop of a segment
     for (const r of prep.values()) {
       if (r?.mode !== 'crop') continue
       // (cut from a page read from its draw, and grown over its ink: its pixels read now; a crop of a layout file's segment is not)

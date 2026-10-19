@@ -630,29 +630,35 @@ function placeText(to, annots, lines, edge, band, records, tried, budget) {
 }
 
 function placeCrop(to, annots, lines, scale, records, tried) {
-  let at = null
-  lines.forEach(({ line }, li) => { line.items.forEach((it, n) => { if (!at && it.t.crop?.k === to.k) at = { line, li, it, n } }) })
+  // (each drawn crop of its placeholder: one, or one a part of a formula TeX broke over lines, in the drawing's order)
+  const at = []
+  lines.forEach(({ line }, li) => { line.items.forEach((it, n) => { if (it.t.crop?.k === to.k) at.push({ line, li, it, n }) }) })
   for (const c of annots) {
-    const r = at?.it.t.crop
-    if (!r || c.q !== r.page) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
-    const { line, it } = at, cr = r.crop
-    // (its image's own width: the kern after it is no part of it, words.mjs inkWidth)
-    const w = inkWidth(it)
-    const sx = w / (cr[2] - cr[0])
-    const X = x => it.x + (x - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * scale
-    const drawn = [it.x, Y(cr[1]), it.x + w, Y(cr[3])]
-    // (each of the annotation's boxes (its quads', else its rectangle) by the crop's map, cut to the drawn box: a link over two
-    // lines of a crop is two boxes, never the rectangle round both)
+    // (each of the annotation's boxes (its quads', else its rectangle) by the map of each part of its page, cut to that part's
+    // drawn box: a link over two lines of a crop is two boxes, never the rectangle round both; those of the first drawn page
+    // any part of it is placed on, as a record's are)
+    let first = null
     const box = []
-    for (const ar of c.a.boxes?.length ? c.a.boxes : [c.a.rect]) {
-      const b = [Math.max(drawn[0], X(ar[0])), Math.max(drawn[1], Y(ar[1])), Math.min(drawn[2], X(ar[2])), Math.min(drawn[3], Y(ar[3]))]
-      if (sound4(b) && b.every(Number.isFinite)) box.push(...b)
+    for (const x of at) {
+      const { line, it } = x, r = it.t.crop, cr = r.crop
+      if (c.q !== r.page || (first && line.page !== first.line.page)) continue
+      // (its image's own width: the kern after it is no part of it, words.mjs inkWidth)
+      const w = inkWidth(it)
+      const sx = w / (cr[2] - cr[0])
+      const X = v => it.x + (v - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * scale
+      const drawn = [it.x, Y(cr[1]), it.x + w, Y(cr[3])]
+      const had = box.length
+      for (const ar of c.a.boxes?.length ? c.a.boxes : [c.a.rect]) {
+        const b = [Math.max(drawn[0], X(ar[0])), Math.max(drawn[1], Y(ar[1])), Math.min(drawn[2], X(ar[2])), Math.min(drawn[3], Y(ar[3]))]
+        if (sound4(b) && b.every(Number.isFinite)) box.push(...b)
+      }
+      if (box.length > had && !first) first = x
     }
-    if (!box.length) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
+    if (!first) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
     // (named by what the crop shows under it: the original's text there, PDF.js's overlaid text; the crop's copy text names the
     // whole crop, which two links over one crop would share, and may not be what it shows)
-    const name = collapse(c.a.ov || (annots.length === 1 ? r.text : '') || c.a.g2.ch.join(''))
-    records.push({ page: line.page, li: at.li, x: box[0], rec: recordOf(c.a, box, name), sources: { annots: [[c.q, c.a.i]], tier: c.tier } })
+    const name = collapse(c.a.ov || (annots.length === 1 ? at[0].it.t.crop.text : '') || c.a.g2.ch.join(''))
+    records.push({ page: first.line.page, li: first.li, x: box[0], rec: recordOf(c.a, box, name), sources: { annots: [[c.q, c.a.i]], tier: c.tier } })
   }
 }
 

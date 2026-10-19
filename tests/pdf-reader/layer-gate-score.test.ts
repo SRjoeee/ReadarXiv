@@ -600,6 +600,12 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(contentOf({ phs: [ph], erased, crops: [crop([99.6, 697.7, 106, 707.3])] }).contentWhere).toEqual([[3, 1, 0]])
     // both its crop and its text: shown twice
     expect(contentOf({ phs: [ph], erased, crops: [crop([99.6, 697.7, 120.4, 707.3])], texts: text() }).contentWhere).toEqual([[3, 1, 2]])
+    // a formula TeX broke over two lines, cropped once a line (E3b): its two crops, each holding its own segment, show it once;
+    // one of them drawn twice shows it twice
+    const two = { ...ph, segs: [[300, 698, 340, 707], [72, 686, 90, 695]] }, erased2 = [[70, 683, 475, 710]]
+    const lines = [crop([299.6, 697.7, 340.4, 707.3]), crop([71.6, 685.7, 90.4, 695.3])]
+    expect(contentOf({ phs: [two], erased: erased2, crops: lines }).contentLost).toBe(0)
+    expect(contentOf({ phs: [two], erased: erased2, crops: [...lines, lines[1]!] }).contentWhere).toEqual([[3, 1, 2]])
     // its ink in place: never erased, on a line the drawing keeps, or a kept rendering's characters in it, once however often
     expect(contentOf({ phs: [ph] }).contentLost).toBe(0)
     expect(contentOf({ phs: [ph], erased, keptLines: [[72, 697.5, 472, 707]], kept: [{ unit: 3, k: 1, chars: [[110, 701]] }] }).contentLost).toBe(0)

@@ -233,9 +233,13 @@ export function fileOwnership(index, page, ink) {
   return { owner, ph, paths, linePaths }
 }
 
+/** a crop resolution's parts, each { page, crop }: itself, or one a line of a formula TeX broke over lines (layer2.mjs
+ *  cropPartsOf, which this module does not import: the layout maker reads it, and layer2 measures with a canvas) */
+const partsOf = r => r.parts ?? [r]
+
 /**
  * What a drawn unit replaces on a page: { glyphs, paths } (indices into the page's ink) and, for each of its crops whose
- * source is this page, the crop's glyphs and rules (`crops`: { k, glyphs, paths }, the placeholders-only page's). `tex`:
+ * source is this page (a part of it there: partsOf), the crop's glyphs and rules (`crops`: { k, glyphs, paths }, the placeholders-only page's). `tex`:
  * { lu, kOf } for a unit the file locates whole (the hybrid's), null for v0's own; `prep` its reading; `own` the page's
  * fileOwnership; `charMap` glyphsOfChars'; `unmapped` the page's glyphs no character is carried to; `claimed` (glyph ->
  * unit id) the glyphs units painted before took, which this one adds its own to; `fileDrawn` the ids the hybrid draws by
@@ -297,7 +301,7 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
     // page holds and the removed page lacks; nothing else inside its box, whoever's (a crop grown over the ink beside it,
     // a big bracket below a table cell's formula, took that ink away with it: 1512.03385's Table 1)
     for (const r of resolutions) {
-      if (r.mode !== 'crop' || r.page !== page || !r.crop) continue
+      if (r.mode !== 'crop' || !partsOf(r).some(q => q.page === page) || !r.crop) continue
       const k = kOf[r.k]
       const cg = [], cp = []
       for (let g = 0; g < G.length; g++) if (G[g].n >= 0 && own.ph[g] === k && own.owner[g] === id && mine(g)) { glyphs.add(g); cg.push(g) }
@@ -328,8 +332,10 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
       if (covered.some(r => bx[0] >= r[0] && bx[2] <= r[2] && bx[1] >= r[1] && bx[3] <= r[3])) paths.add(b)
     })
     for (const r of resolutions) {
-      if (r.mode !== 'crop' || r.page !== page || !r.crop) continue
-      const [x0, y0, x1, y1] = r.crop
+      // (its boxes on the page: each of its parts' there, a formula TeX broke over lines)
+      const boxes = r.mode === 'crop' && r.crop ? partsOf(r).filter(q => q.page === page).map(q => q.crop) : []
+      if (!boxes.length) continue
+      const inBoxes = (x, y) => boxes.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)
       const cg = []
       for (const c of r.gap?.chars ?? []) {
         if (c.page !== page || !real(c)) continue
@@ -339,13 +345,13 @@ export function unitRemoval({ id, page, prep, tex, own, charMap, unmapped, ink, 
       // the glyphs inside the crop no character stands for (a big bracket), and its rules
       for (const g of unmapped) {
         const x = G[g], mid = (x.x0 + x.x1) / 2, cy = (x.top + x.bottom) / 2
-        if (mid >= x0 && mid <= x1 && cy >= y0 && cy <= y1 && !fileTaken(g) && mine(g)) { glyphs.add(g); cg.push(g) }
+        if (inBoxes(mid, cy) && !fileTaken(g) && mine(g)) { glyphs.add(g); cg.push(g) }
       }
       const cp = []
       ink.paths.forEach((m, b) => {
         if (m < 0) return
         const bx = ink.boxes.slice(4 * b, 4 * b + 4)
-        if (bx[0] >= x0 - 0.3 && bx[2] <= x1 + 0.3 && bx[1] >= y0 - 0.3 && bx[3] <= y1 + 0.3 && !own.paths.has(b) && !own.linePaths.has(b)) { paths.add(b); cp.push(b) }
+        if (boxes.some(([x0, y0, x1, y1]) => bx[0] >= x0 - 0.3 && bx[2] <= x1 + 0.3 && bx[1] >= y0 - 0.3 && bx[3] <= y1 + 0.3) && !own.paths.has(b) && !own.linePaths.has(b)) { paths.add(b); cp.push(b) }
       })
       crops.push({ k: r.k, glyphs: cg, paths: cp })
     }
@@ -555,7 +561,7 @@ export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], 
   // each crop through its placeholder's segments
   const clips = new Map()
   for (const r of resolutions) {
-    if (r.mode !== 'crop' || r.page !== page) continue
+    if (r.mode !== 'crop' || !partsOf(r).some(q => q.page === page)) continue
     const row = lu.ph.get(kOf[r.k])
     if (!row) continue
     const own = []
