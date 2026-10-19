@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { createLayerSide, LEFT_RETRY_MS, PAGE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { createLayerSide, LEFT_RETRY_MS, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, partInputs, TAILS } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
@@ -541,6 +541,16 @@ describe('H1, H2, H4, H5, H6: the highlight\'s data on both panes', () => {
     // (unit 2, a paragraph, runs on to page 2: its sentences wait for both pages; nothing of pages 3 and 4)
     expect(s.fetched.filter(x => lefts.includes(x))).toEqual([m.lefts[1]!.sha256, m.lefts[2]!.sha256])
     expect(s.side.probe().leftParts).toBe(2)
+  })
+
+  it('H8: a unit over many pages brings at most SPREAD_MAX of them with a wanted page, the nearest first, each once', () => {
+    const long = Array.from({ length: 20 }, (_, i) => i + 1)
+    const pagesOf = (id: number) => (id === 1 ? long : id === 2 ? [10, 11] : undefined)
+    expect(SPREAD_MAX).toBe(8)
+    expect(spreadPages(10, [1, 2, 3], pagesOf, () => false)).toEqual([9, 11, 8, 12, 7, 13, 6, 14])
+    // (the pages in already, and the page itself, are none of them)
+    expect(spreadPages(10, [2, 1], pagesOf, q => q < 10, 3)).toEqual([11, 12, 13])
+    expect(spreadPages(10, [3], pagesOf, () => false)).toEqual([])
   })
 
   it('H7: a paragraph over a page break lights by sentence on its first page\'s first hover: the other page\'s left part comes after the page\'s own', async () => {
