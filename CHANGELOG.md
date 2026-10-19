@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## 0.5.0 — 2026-10-19
 
+- Fixed: in the PDF reader, translated pages no longer show faint traces of the original's letters at some zoom levels, among them the usual fit on a laptop's screen. The translation and its links now sit exactly over the page at every zoom.
 - Fixed: in the PDF reader, the paragraphs of some papers ran together as one block, whole sections at a time, and text could move onto the page before. Each paragraph is now translated and placed on its own.
 - Fixed: in the PDF reader, more papers can be prepared: those in some physics journals' style with numbered appendices, and those that repeat a block of figures in a loop or tag parts of their contents. A number set in bold, or at the start of an unindented line, stays in its sentence.
 - PDF papers have a reader of their own: arXiv's PDF on one side, its translation on the other, page for page. Figures and formulas stay as the author drew them, the translated text is set in fonts close to the original's, and the two sides scroll together; point at a sentence and its counterpart lights up.

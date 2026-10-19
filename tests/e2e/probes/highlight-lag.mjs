@@ -11,6 +11,8 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { openOptions, openSection, setSwitch } from '../options-page.mjs'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/highlight-lag.mjs')
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -29,12 +31,12 @@ const r1 = x => x === null || x === undefined ? null : Math.round(x * 10) / 10
 
 rmSync(PROFILE, { recursive: true, force: true })
 mkdirSync(OUT, { recursive: true })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1440, height: 900 },
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')

@@ -5,9 +5,10 @@
 // layer's drawing and under the highlight's layer.
 //
 // One `<a>` a record, sized to the union of its boxes, each box a span inside it: a link the layer breaks over two lines is one
-// link with two boxes, as PDF.js draws one with QuadPoints. Every size is a share of the page's box (or of the link's), made
-// once from the place's viewport (its rotation and its box's origin in it): the place's own CSS size scales them at any zoom,
-// so nothing is read from the layout and nothing is done on a frame. The anchor itself takes no pointer: its boxes do, so the
+// link with two boxes, as PDF.js draws one with QuadPoints. Every size is a share of the page's frame (or of the link's), made
+// once from the place's viewport (its rotation and its box's origin in it): the element is laid at the page's size at its
+// scale (engine.css, the copy's frame: never the place's box, which PDF.js floors to whole CSS px), so CSS scales them at any
+// zoom, nothing is read from the layout and nothing is done on a frame. The anchor itself takes no pointer: its boxes do, so the
 // space between two lines of one link is the page's.
 //
 // What a record names is text from the PDF, which may hold control and bidirectional characters: it is set as an attribute's
