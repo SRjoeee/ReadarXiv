@@ -606,6 +606,10 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     const lines = [crop([299.6, 697.7, 340.4, 707.3]), crop([71.6, 685.7, 90.4, 695.3])]
     expect(contentOf({ phs: [two], erased: erased2, crops: lines }).contentLost).toBe(0)
     expect(contentOf({ phs: [two], erased: erased2, crops: [...lines, lines[1]!] }).contentWhere).toEqual([[3, 1, 2]])
+    // one of its two crops alone: its other line shown nowhere, it is lost (the review of #424); its other line's ink left in
+    // place instead: each line shown once
+    expect(contentOf({ phs: [two], erased: erased2, crops: [lines[0]!] }).contentWhere).toEqual([[3, 1, 0]])
+    expect(contentOf({ phs: [two], erased: [[290, 695, 475, 710]], crops: [lines[0]!] }).contentLost).toBe(0)
     // its ink in place: never erased, on a line the drawing keeps, or a kept rendering's characters in it, once however often
     expect(contentOf({ phs: [ph] }).contentLost).toBe(0)
     expect(contentOf({ phs: [ph], erased, keptLines: [[72, 697.5, 472, 707]], kept: [{ unit: 3, k: 1, chars: [[110, 701]] }] }).contentLost).toBe(0)

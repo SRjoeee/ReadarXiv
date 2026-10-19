@@ -3173,12 +3173,13 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   let consumed = 0, stop = false, spilled = false
   // (a slot over the last line laid, beside it in its column, is no line of the text's: a paragraph's lines go down. The
   // file's lines of a paragraph that sets a tall inline formula may come out of that order, its rows' lines after the line
-  // under them: 2610.21026 page 8, unit 91, whose line laid at 694.1 after the one at 684.8 ran over the formula's crop)
+  // under them: 2610.21026 page 8, unit 91, whose line laid at 694.1 after the one at 684.8 ran over the formula's crop.
+  // Only a slot above it: a row the file splits from a line on its own baseline is that line's, 2610.21288 u5)
   const overLast = sl => {
     let k = lines.length - 1
     while (k >= 0 && !lines[k].items.length) k--
     const prev = lines[k]
-    return !!prev && prev.page === sl.page && sl.baseline > prev.baseline - 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
+    return !!prev && prev.page === sl.page && sl.baseline > prev.baseline + 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
   }
   const advance = () => {
     settle()
@@ -3813,8 +3814,9 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
       // (cut from the original through its own glyphs' and rules' outline boxes, where it has them: a crop's box may
-      // reach another line's ink, its glyphs' boxes do not)
-      const cut = clips?.get(it.t.crop.k) ?? null, clip = cut?.rects ?? null
+      // reach another line's ink, its glyphs' boxes do not. The clips are this page's segments in this page's pixels: a
+      // crop, or a part of one, from another page has none)
+      const cut = it.t.crop.page === page ? clips?.get(it.t.crop.k) ?? null : null, clip = cut?.rects ?? null
       const plane = 'O'
       ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip } : {}) })
       audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, ...partOf(it.t.crop), srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip, own: cut.own } : {}) })

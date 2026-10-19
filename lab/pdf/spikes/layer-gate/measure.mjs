@@ -405,6 +405,8 @@ export function displayRowsOf(page) {
  * - its crops of its ink: its crops cut from this page (`crops`: { unit, k, src, box }, `box` its source rectangle) that
  *   hold the centre of one of its segments, one showing however many of its segments they hold between them (a formula TeX
  *   broke over lines is drawn as its crops, one a line: E3b, 2026-10-19), as often as the most that hold one segment's;
+ *   a segment that nothing shows (none of its crops, nor its ink in place, nor what shows it whole) loses it, though its
+ *   other segments' crops are drawn (a part of a broken formula not drawn);
  * - its rendering drawn from its source (a symbol, a citation as the page wrote it, its source's text: `texts`,
  *   { unit, k, src }, one for each translated piece drawn so: a piece the translation repeats is shown twice), by its own
  *   k alone (with no place to tell them apart, two renderings of one source are each their own);
@@ -423,9 +425,15 @@ export function contentOf({ phs, crops = [], texts = [], pageTexts = [], kept = 
   for (const ph of phs) {
     const centres = ph.segs.map(centreOf)
     const own = r => r.unit === ph.unit && (r.k === ph.k || (typeof r.src === 'string' && r.src === ph.src))
-    const inPlace = kept.some(r => holds(ph, r.chars)) || centres.some(pt => keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)))
+    const keptHere = kept.some(r => holds(ph, r.chars))
     const mine = crops.filter(own)
-    const n = Math.max(0, ...centres.map(pt => mine.filter(c => inBox(pt, c.box)).length)) + texts.filter(r => r.unit === ph.unit && r.k === ph.k).length + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length + (inPlace ? 1 : 0)
+    // (what shows it whole: its source drawn, its characters drawn, a kept rendering's ink in it)
+    const whole = texts.filter(r => r.unit === ph.unit && r.k === ph.k).length + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length
+    // (each segment's showings: its own crops that hold its centre, its ink in place, and what shows it whole. A segment
+    // shown nowhere loses it, as a formula TeX broke over lines one of whose crops is not drawn (check.mjs's rule), else
+    // the most of any segment)
+    const per = centres.map(pt => mine.filter(c => inBox(pt, c.box)).length + whole + (keptHere || keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)) ? 1 : 0))
+    const n = !per.length ? whole + (keptHere ? 1 : 0) : Math.min(...per) === 0 ? 0 : Math.max(...per)
     if (n !== 1) out.push([ph.unit, ph.k, n])
   }
   return { contentLost: out.length, contentWhere: out }
