@@ -60,7 +60,7 @@ import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass,
 import { faceOf, fontString, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
 import { shown } from '../layer/pieces.mjs'
-import { escapeMap, inkWidth, plainTracker, transformMap } from './words.mjs'
+import { escapeMap, plainTracker, transformMap } from './words.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { fillOfColour } from '../layout/colour.mjs'
 
@@ -2162,7 +2162,7 @@ const spacelessEdge = (t, end) => {
 const headOfCut = (t, extra) => {
   if (!t.kernW) return { ...t, ...extra }
   const { kernW: _w, kernEnd: _end, ...rest } = t
-  return { ...rest, kern: false, ...extra }
+  return { ...rest, ...extra }
 }
 
 /**
@@ -2189,7 +2189,8 @@ const headOfCut = (t, extra) => {
 export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, measure = w100, tagWords = false) {
   const tokens = []
   // (`tagWords`, the page's word table: each token of a text piece carries `at` and `end`, its range in plainTranslated(pieces),
-  // words.mjs; no other field of a token changes, and a token of a lead, a label or a placeholder's rendering has no range)
+  // words.mjs, and a lead's last token `kernEm`, the glue after it; no other field of a token changes, and a token of a lead, a
+  // label or a placeholder's rendering has no range)
   const plain = tagWords ? plainTracker() : null
   const base = baseOf(unit, baseIn)
   const stack = [{ ...base }]
@@ -2293,8 +2294,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     else if (tokens.length) {
       const t = tokens[tokens.length - 1]
       t.leadEnd = true
-      // (`leadGap`: the glue its width holds after its ink, em of the unit's size: the word table's box and the copy read it)
-      if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true; t.leadGap = lead.gap }
+      if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true; if (plain) t.kernEm = lead.gap }
     }
   }
   // a displayed formula the text after it starts below (or one before the unit's lines): the translation's text that
@@ -2333,8 +2333,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     while (tokens.at(-1)?.space) tokens.pop()
     const t = tokens.at(-1)
     if (!t || t.newline !== undefined || t.blockTo !== undefined) return
+    // (the item laid of it holds the kern apart from its own width, breakLines' `kern`: what it draws, a crop's image, its word
+    // box, stays its own)
     t.kernW = (t.kernW ?? 0) + 100 * em
-    t.kern = true
     t.kernEnd = true
     if (!g.brk) noBreakNext = true
   }
@@ -2752,11 +2753,15 @@ export function lineExtent(line, f, scale) {
   return { a: Math.max(a, ta), d: Math.max(d, td), text: { a: ta, d: td } }
 }
 
+/** the explicit glue after a token at size f (tokensOf2 kernOn's `kernW`, at 100 px), an advance its laid item holds apart from
+ *  its width (`kern`) */
+const kernOf = (t, f) => ((t.kernW ?? 0) * f) / 100
+
+/** a token's own width at size f: no kern after it (tokensOf2 kernOn's `kernW`), which its item holds apart (kernOf) */
 const tokW = (t, f, st, scale) => {
-  // (a kern after it, explicit glue's: tokensOf2 kernOn)
-  if (t.crop) return t.cw * scale + ((t.kernW ?? 0) * f) / 100
+  if (t.crop) return t.cw * scale
   if (t.space) return (t.w100 * f) / 100
-  let w = ((t.w100 + (t.kernW ?? 0)) * f) / 100
+  let w = (t.w100 * f) / 100
   if (t.cls === 'cjk') w += st.track * f * [...t.s].length
   else if (st.trackLatin) w += st.trackLatin * f * [...t.s].length
   return w
@@ -2893,10 +2898,11 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
         }
       }
       const asp = t.asp && (line.items.length || items.length) ? P.autospace * f : 0
-      // (`kern`: the kern after its ink its width holds, explicit glue's, which trim drops at a line's end: no part of what it
-      // draws, a crop's image, a word's box)
-      items.push({ t, w: tw, shift, asp, ...(t.kernW ? { kern: (t.kernW * f) / 100 } : {}) })
-      w += tw + asp
+      // (`kern`: the explicit glue after it, an advance of its own beside its width, which trim drops at a line's end: no part of
+      // what it draws, a crop's image, a word's box)
+      const kern = kernOf(t, f)
+      items.push({ t, w: tw, shift, asp, ...(kern ? { kern } : {}) })
+      w += tw + asp + kern
       prev = t
     }
     // a closing mark at the line's end hangs its blank half
@@ -2910,7 +2916,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   const trim = l => {
     while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w }
     const end = l.items.at(-1)
-    if (end?.kern) { end.w -= end.kern; l.x -= end.kern; end.kern = 0 }
+    if (end?.kern) { l.x -= end.kern; end.kern = 0 }
   }
   if (slots.length) open()
   while (i < tokens.length && li < slots.length && !stop) {
@@ -3067,7 +3073,7 @@ function placeItems(lines, f, P) {
   const last = lines.at(-1)
   for (const line of lines) {
     const cap = line.x1 - line.x0
-    const natural = line.items.reduce((s, it) => s + it.w + (it.asp ?? 0), 0)
+    const natural = line.items.reduce((s, it) => s + it.w + (it.asp ?? 0) + (it.kern ?? 0), 0)
     // a closing mark at the line's end may stand in the margin by its blank half
     const end = line.items.at(-1)
     const hang = end?.t.punct === 'close' && !end.cut && P._compress < 2 ? 0.5 * f : 0
@@ -3095,7 +3101,7 @@ function placeItems(lines, f, P) {
     line.items.forEach((it, n) => {
       x += it.asp ?? 0
       it.x = x + (it.shift ?? 0)
-      x += it.w + (it.t.space ? perSpace : 0) + (n < line.items.length - 1 ? perGap : 0)
+      x += it.w + (it.kern ?? 0) + (it.t.space ? perSpace : 0) + (n < line.items.length - 1 ? perGap : 0)
     })
     line.used = x - line.x0
     line.cap = cap
@@ -3345,9 +3351,8 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
       const sc = L.scale
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
-      const w = inkWidth(it)
-      ops.push({ op: 'crop', page: it.t.crop.page, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, w * k, (c[3] - c[1]) * sc * k] })
-      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, src: c, dst: [dx, dy, dx + w * k, dy + (c[3] - c[1]) * sc * k] })
+      ops.push({ op: 'crop', page: it.t.crop.page, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k] })
+      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k] })
     }
   }
   return ops
@@ -3385,9 +3390,8 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
       // reach another line's ink, its glyphs' boxes do not)
       const cut = clips?.get(it.t.crop.k) ?? null, clip = cut?.rects ?? null
       const plane = 'O'
-      const w = inkWidth(it)
-      ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, w * k, (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip } : {}) })
-      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + w * k, dy + (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip, own: cut.own } : {}) })
+      ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip } : {}) })
+      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip, own: cut.own } : {}) })
     }
   }
   return ops
@@ -3676,7 +3680,7 @@ export function lineRuns(line, L) {
       // a word (Latin, or a Hangul word) flows in its face from its own place; words glued to it with no space
       // between flow on in the same run
       // (not after a lead's kern, whose width the run would not keep: TeX's \labelsep after a run-in name's joint)
-      const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && !line.items[n - 1]?.t.kern && line.items[n - 1]?.t.cls === t.cls && !t.brk
+      const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && !line.items[n - 1]?.t.kern && !line.items[n - 1]?.kern && line.items[n - 1]?.t.cls === t.cls && !t.brk
       if (!glued) {
         flush()
         run = { face: t.face, chars: false, sup: !!t.sup, color: t.st?.color, text: '', xs: [it.x], track: t.sup ? 0 : t.cls === 'cjk' ? L.state.track : L.state.trackLatin, items: [] }
@@ -3684,11 +3688,10 @@ export function lineRuns(line, L) {
       run.items.push([n, run.text.length])
       run.text += t.s
     }
-    // the line's last word: a space after it for the copy, where it is not hyphenated; and a word a kern of a space's width or
-    // more follows on the line (explicit glue's, a lead's: \\enspace, \\quad, amsthm's \\labelsep), which the run after it
-    // starts on its own
+    // the line's last word: a space after it for the copy, where it is not hyphenated; and a word explicit glue of a space's
+    // width or more follows on the line (\\enspace, \\quad: its item's kern), which the run after it starts on its own
     if (n === line.items.length - 1 && t.cls === 'latin' && !t.hyphenated) run.text += ' '
-    else if (n < line.items.length - 1 && !run.chars && (t.kernW ?? 0) / 100 + (t.leadGap ?? 0) >= COPY_SPACE_EM) run.text += ' '
+    else if (n < line.items.length - 1 && !run.chars && (it.kern ?? 0) >= COPY_SPACE_EM * L.f) run.text += ' '
   })
   flush()
   return out

@@ -181,9 +181,9 @@ export interface UnitParts {
   colourOf?: (k: number) => number | null
 }
 /** a token of a unit's translation */
-export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; leadGap?: number; [more: string]: unknown }   // kern: glue after it (explicit glue's kernW, or a lead's); leadEnd: a lead's last, no space after it; leadGap: a lead's last, the em of the original's glue after it its width holds
+export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; kernW?: number; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it; kernW: explicit glue after it (at 100 px), its item's `kern`
 /** a laid line: its slot, and its items at their places */
-export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; [more: string]: unknown }   // an item's kern: the explicit glue after its ink its advance `w` holds, none once a line's end drops it
+export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
  *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */

@@ -147,10 +147,6 @@ export function tokenBand(t, L, by) {
   return { y, h, top: y + (cjk ? CJK_ASC : ASC) * h, bottom: y + (cjk ? CJK_DESC : DESC) * h }
 }
 
-/** a laid item's own width: its advance less the kern after its ink it still holds (`kern`, layer2.mjs breakLines': explicit
- *  glue's, which a line's end drops), what a crop's image, a word's box and a link over a crop take */
-export const inkWidth = it => it.w - (it.kern ?? 0)
-
 /** a page's table as it is built: one growable column a field, in drawing order */
 export function newWords() {
   return { n: 0, cap: 256, l: new Float32Array(256), r: new Float32Array(256), y: new Float32Array(256), h: new Float32Array(256), top: new Float32Array(256), bottom: new Float32Array(256), word: new Int32Array(256), spans: [] }
@@ -191,13 +187,12 @@ export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () =
       if (t.crop) {
         if (!drawnCrop(t.crop)) continue
         const c = t.crop.crop, h = (c[3] - c[1]) * L.scale, top = by + (c[3] - t.crop.baseline) * L.scale
-        push(W, l, l + inkWidth(it), by, h, top, top - h, -1)
+        push(W, l, l + it.w, by, h, top, top - h, -1)
         continue
       }
       if (typeof t.s !== 'string') continue
       const { y, h, top, bottom } = tokenBand(t, L, by)
-      // (its own width: less the kern after it the item still holds, and a lead's glue its width holds)
-      push(W, l, l + inkWidth(it) - (t.leadGap ?? 0) * L.f, y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end))
+      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * L.f : 0), y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end))
     }
   }
   for (const k of kept) push(W, k.x0, k.x1, k.baseline, k.size, k.top, k.bottom, -1)

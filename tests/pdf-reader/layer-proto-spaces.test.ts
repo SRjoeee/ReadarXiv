@@ -142,14 +142,29 @@ describe("the source's explicit glue: a kern at TeX's width, never a space", () 
     const svg = L2.svgOfUnit(L as never, 1, (x: number, y: number) => [x, 792 - y], 1, 0)
     expect(svg).toContain('>\u6b65\u5de5<')
   })
+  it('takes its room in the line: a line breaks where the kern leaves the next word no room, and justifies with it counted', () => {
+    const P = paramsFor('de')
+    const block = (n: number) => ({ page: 1, rects: Array.from({ length: n }, (_, k) => [1, 0, 98 - 12 * k, 100, 106 - 12 * k]), x0: 0, x1: 100, B: Array.from({ length: n }, (_, k) => 100 - 12 * k), exact: Array(n).fill(true), sizes: Array(n).fill(10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false })
+    const lay = (pieces: unknown[], n: number) => L2.layoutUnit2(tokensOf(pieces, 'de') as never, [block(n)] as never, 10, { ...P, order: [] } as never)
+    // (40 + an em + 50 is the line's 100; two ems leave the last word no room)
+    expect(lay([text('aaaaaaaa'), ph('\\quad'), text('bbbbbbbbbb')], 2).lines.length).toBe(1)
+    expect(lay([text('aaaaaaaa'), ph('\\qquad'), text('bbbbbbbbbb')], 2).lines.length).toBe(2)
+    // a justified line: 20 + an em + 20 + 2.5 + 20 + 2.5 + 20 is 95, its 5 of slack over its two spaces, to the column's edge
+    const j = lay([text('aaaa'), ph('\\quad'), text('bbbb cccc dddd eeee')], 2)
+    expect(j.lines[0]!.mode).toBe('just')
+    expect(j.lines[0]!.used).toBeCloseTo(100, 6)
+  })
   it('a kern at the end of a laid line is dropped from its width', () => {
     const P = paramsFor('de')
     const tokens = tokensOf([text('aa'), ph('\\quad'), text('bbbbbbbbbbbbbbbbbbbbbbbbbbbb')], 'de') as never
     const block = { page: 1, rects: [[1, 10, 97.85, 30, 106.83], [1, 10, 85.85, 300, 94.83]], x0: 10, x1: 300, B: [100, 88], exact: [true, true], sizes: [10, 10], pitch0: 12, free: 0, indent: 0, after: 0, centred: false }
     const L = L2.layoutUnit2(tokens, [{ ...block, x1: 30 }] as never, 10, P as never) as unknown as { f: number; lines: { used: number; items: { w: number }[] }[] }
-    // ("aa" alone, at the size the fit chose: its two characters' half ems, no em of glue after them)
+    // ("aa" alone, at the size the fit chose: its two characters' half ems, no em of glue after them; the item's width its own,
+    // its kern an advance apart, dropped)
     expect(L.lines.length).toBeGreaterThan(1)
     expect(L.lines[0]!.items.at(-1)!.w).toBeCloseTo(L.f, 6)
+    expect((L.lines[0]!.items.at(-1) as { kern?: number }).kern ?? 0).toBe(0)
+    expect(L.lines[0]!.used).toBeCloseTo(L.f, 6)
     // and its word box is its two characters, the kern taken off once (the word table: words.mjs)
     const tagged = L2.tokensOf2({ kind: 'para', src: '', pieces: [{ ...text('aa'), tr: true }, ph('\\quad'), { ...text('bbbbbbbbbbbbbbbbbbbbbbbbbbbb'), tr: true }] } as never, new Map() as never, 'de', BASE as never, DESIGNS as never, P as never, null, measure as never, true)
     const LT = L2.layoutUnit2(tagged, [{ ...block, x1: 30 }] as never, 10, P as never)
@@ -186,11 +201,15 @@ describe("the source's explicit glue: a kern at TeX's width, never a space", () 
   it('is a space in the text copied: a word before it and the word after it are two words', () => {
     const P = paramsFor('de')
     const block = { page: 1, rects: [[1, 10, 97.85, 300, 106.83]], x0: 10, x1: 300, B: [100], exact: [true], sizes: [10], pitch0: 12, free: 0, indent: 0, after: 0, centred: false }
-    const copied = (pieces: unknown[], to: string) => {
+    const svgOf = (pieces: unknown[], to: string) => {
       const L = L2.layoutUnit2(tokensOf(pieces, to) as never, [block] as never, 10, (to === 'de' ? P : paramsFor(to)) as never)
-      return L2.svgOfUnit(L as never, 1, (x: number, y: number) => [x, 792 - y], 1, 0).replace(/<[^>]+>/g, '')
+      return L2.svgOfUnit(L as never, 1, (x: number, y: number) => [x, 792 - y], 1, 0)
     }
+    const copied = (pieces: unknown[], to: string) => svgOf(pieces, to).replace(/<[^>]+>/g, '')
     expect(copied([text('Step 2149'), ph('\\enspace'), text(' Tool Output')], 'de')).toBe('Step 2149 Tool Output ')
+    // (the word after it drawn from its own place, a run of its own: the kern is in the drawing as in the layout)
+    const runs = [...svgOf([text('Step 2149'), ph('\\enspace'), text(' Tool Output')], 'de').matchAll(/<tspan[^>]*>([^<]*)</g)].map(m => m[1])
+    expect(runs.find(r => r?.includes('Tool'))?.startsWith('Tool')).toBe(true)
     expect(copied([text('Acknowledgements'), ph('\\quad'), text(' We thank')], 'de')).toBe('Acknowledgements We thank ')
     expect(copied([text('GPT'), ph('\\quad'), text(' BERT')], 'zh')).toBe('GPT BERT ')
   })
