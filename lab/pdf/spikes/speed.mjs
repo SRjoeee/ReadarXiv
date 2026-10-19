@@ -21,7 +21,8 @@
 // log), L/<stem>.pdf and L/<stem>.log (the marked original's compile, its passes' log), as layout-paper's harness keeps them.
 // A paper needs its source and its marked compile: arXiv's PDF alone (a stand-in) gives the pass no unit. Heavy: run it on a
 // quiet machine only. Prints a table a paper and a side: the medians and the spread (min to max) of the total, the first part
-// and its page, the marked read, the peak RSS, and `SLOWER` where a side's median total is past base's spread.
+// and its page, the marked read, the peak RSS, and `SLOWER` where a side's median total is past base's spread. Each run's line
+// in --out also holds the draw's counters (`draw`: its pages, bytes, and the items' fills told and the glyphs read for them).
 import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -102,6 +103,8 @@ async function child() {
     side, id: meta.id, pages: arxiv.numPages, parts, refused: r.refused ?? r.stats?.layout?.refused ?? null,
     ms: { ...ms, ops: Math.round(maker.ops ?? 0), carry: Math.round(maker.carry ?? 0), anchor: Math.round(maker.anchor ?? 0), rows: Math.round(maker.rows ?? 0), rest: Math.round(ms.pass - makerMs), draw: Math.round(r.stats?.draw?.ms ?? 0), total },
     first: { ms: first?.ms ?? null, page: firstPage, ...(MEM ? { live: first?.live ?? null } : {}) },
+    // (the draw's counters, the same for the same input: its pages and bytes, and its items' fills, the glyphs they were read from)
+    draw: r.stats?.draw ? { pages: r.stats.draw.pages, bytes: r.stats.draw.bytes, fills: r.stats.draw.fills ?? null } : null,
     maxRssMiB: r1(process.resourceUsage().maxRSS / 1024), ...(MEM ? { liveEnd: liveSet() } : {}),
   }
   process.stdout.write(`${JSON.stringify(out)}\n`)

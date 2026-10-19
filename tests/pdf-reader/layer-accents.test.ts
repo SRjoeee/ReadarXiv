@@ -53,6 +53,18 @@ describe("a spacing accent TeX's \\accent set apart", () => {
     expect(join('S', '˛', 'e')).toBe('Sęck')
   })
 
+  it("is joined whatever the two items' fills tell: one item's told, the other's not, or a link's colour on the accent", () => {
+    const items = [item('integrity (Picu, 2011; M\u00a8', 79.37, 186.32, 394.23), item('unster et al.,', 467.42, 186.32, 65.5)]
+    const fontOf = () => ST as never
+    for (const fills of [[0, -1], [-1, 0], [[0, 0, 23, 0x0000ff], 0x0000ff]]) {
+      const cs = L2.pageChars2({ items } as never, fontOf, null, fills)
+      expect(textOf(cs)).toBe('integrity (Picu, 2011; M\u00fcnster et al.,')
+    }
+    // (the letter keeps its own fill)
+    const cs = L2.pageChars2({ items } as never, fontOf, null, [-1, 0x0000ff])
+    expect((cs.find(c => c.ch === '\u00fc')!.st as { fill?: number }).fill).toBe(0x0000ff)
+  })
+
   it('is joined in an accent-after-letter font: the accent begins its item, over the letter that ended the one before', () => {
     const cs = charsOf([item('Zu', 100, 500, 12), item('¨rich', 108.5, 500, 24)])
     expect(textOf(cs)).toBe('Zürich')

@@ -55,13 +55,24 @@ import { noStart } from './no-start.mjs'
 import { work } from './work.mjs'
 import { sourceRepeats, stutterCuts } from './stutter.mjs'
 import { SWAP_PAD } from '../layer/swap.mjs'
-import { blocksOf, CITE, gapClass, kinsokuOf, lcsMatched, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
+import { blocksOf, CITE, gapClass, kinsokuOf, lcsPairs, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, OBLIQUE_DEG, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
 import { shown } from '../layer/pieces.mjs'
 import { escapeMap, plainTracker, transformMap } from './words.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { fillOfColour } from '../layout/colour.mjs'
+import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
+
+/** a source text piece's characters (mt.mjs utf8: its bytes, read latin1, as UTF-8), here so that the drawing loads no wire module:
+ *  sourceScopes holds what it reads to plainSource's text, and reads none where the two differ */
+const SOURCE_DECODER = new TextDecoder(), ASCII_TEXT = /^[\t\n\r -~]*$/
+const utf8 = s => {
+  if (ASCII_TEXT.test(s)) return s
+  const b = new Uint8Array(s.length)
+  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff
+  return SOURCE_DECODER.decode(b)
+}
 
 // (the fit's parameters, per script and language, are the layout rules': rules/layout.mjs resolveRules gives a run its P)
 
@@ -123,14 +134,30 @@ const NO_UNICODE = /[\p{Co}\p{Cc}\uFFFD]/u
 /** whether a page character's text is no reading of its glyph (pageChars2's `nu`): one no Unicode stands for, or one
  *  its font's own map (`mapped`, mappedOf's; null: none to read) gives none of its glyphs */
 export const unmapped = (ch, mapped) => /\S/.test(ch) && (NO_UNICODE.test(ch) || (mapped != null && !mapped.has(ch)))
+/** a font class with a character's fill (layout/fills.mjs): one object a class and fill, so that characters of one font and
+ *  colour share their style as those of one font did; its font class itself, `font` (not enumerable), for what asks whether two
+ *  characters are of one font whatever their colours (fontOfStyle) */
+const filled = new WeakMap()
+const withFill = (st, fill) => {
+  if (!st || typeof st !== 'object' || fill === UNKNOWN) return st
+  let m = filled.get(st)
+  if (!m) filled.set(st, (m = new Map()))
+  let out = m.get(fill)
+  if (!out) m.set(fill, (out = Object.defineProperty({ ...st, fill }, 'font', { value: st })))
+  return out
+}
+/** a character style's font class, its fill aside: what a tally of fonts counts, so that colour splits no font's characters */
+export const fontOfStyle = st => st?.font ?? st
 /**
  * A page's text content as characters: each item's width shared by its design's widths (what is left over, a justified
  * line's stretch, by its spaces where it has any), and the item's font class (`st`, from fontOf(fontName)) on every
- * character. `mapOf(fontName)` (mappedOf's set, or null): a character the item's font maps none of its glyphs to is
- * marked `nu`, no Unicode of the file's. PDF.js reads such a glyph by its code (2307.16209's newtx summation sign in
- * txexs, read "Í"), so its text is not what the page shows; so is a private-use, replacement or control character.
+ * character, with its fill where `fills` (each item's, layout/fills.mjs: the draw's, or the page's ink read live) tells it
+ * (`st.fill`, 0xRRGGBB; none where it is not told). `mapOf(fontName)` (mappedOf's set, or null): a character the item's font
+ * maps none of its glyphs to is marked `nu`, no Unicode of the file's. PDF.js reads such a glyph by its code (2307.16209's
+ * newtx summation sign in txexs, read "Í"), so its text is not what the page shows; so is a private-use, replacement or
+ * control character.
  */
-export function pageChars2(textContent, fontOf, mapOf = null) {
+export function pageChars2(textContent, fontOf, mapOf = null, fills = null) {
   const out = []
   for (const [item, it] of textContent.items.entries()) {
     if (!it.str || !it.transform) continue
@@ -140,6 +167,7 @@ export function pageChars2(textContent, fontOf, mapOf = null) {
     const st = fontOf(it.fontName)
     const mapped = mapOf?.(it.fontName) ?? null
     const chars = [...it.str]
+    const fill = fills ? fillsByChar(fills[item], chars.length) : null
     const nat = chars.map(ch => (ACCENT.test(ch) && chars.length > 1 ? 0 : wDesign(ch, st) || 50))
     const sum = nat.reduce((s, v) => s + v, 0) || 1
     const scale = size / 100
@@ -152,7 +180,7 @@ export function pageChars2(textContent, fontOf, mapOf = null) {
       // a radical hangs from its baseline (CMSY10's √: 0.04 em high, 0.96 em deep): its line is the one below
       const hang = ch === '√' && st?.fam === 'math' ? { ybEff: y - 0.75 * size } : null
       const nu = unmapped(ch, mapped) ? { nu: true } : null
-      out.push({ ch, x0: cx, x1: cx + w, yb: y, size, item, ix: x, k, st, ...hang, ...nu })
+      out.push({ ch, x0: cx, x1: cx + w, yb: y, size, item, ix: x, k, st: fill ? withFill(st, fill[k]) : st, ...hang, ...nu })
       cx += w
     })
   }
@@ -204,7 +232,7 @@ function joinAccents(chars, items) {
       const o = i === r.last ? runs[n + 1] : runs[n - 1]
       if (!o) continue
       const L = chars[i === r.last ? o.first : o.last]
-      if (!isLetter(L) || L.nu || L.st !== c.st || Math.abs(L.yb - c.yb) > tol) continue
+      if (!isLetter(L) || L.nu || fontOfStyle(L.st) !== fontOfStyle(c.st) || Math.abs(L.yb - c.yb) > tol) continue
       // (the accent glyph's centre on the letter: only the move back over it puts it there)
       const mid = i === r.last ? end - w / 2 : it.transform[4] + w / 2
       if (mid >= L.x0 - tol && mid <= L.x1 + tol && join(L, mark)) gone.add(i)
@@ -707,7 +735,8 @@ function gapsOfOnce(unitChars, src, merge = false, deny = null) {
   }
   const O = wordsOf(unitChars, new Set(S.map(x => x.w)))
   const lineOf = o => `${unitChars[o.start].page}|${unitChars[o.start].rect.join()}`
-  const matched = lcsMatched(S.map(x => x.w), O.map((x, q) => (deny?.has(lineOf(x)) ? `\u0000${q}` : x.w)))
+  const pair = lcsPairs(S.map(x => x.w), O.map((x, q) => (deny?.has(lineOf(x)) ? `\u0000${q}` : x.w)))
+  const matched = Uint8Array.from(pair, x => (x >= 0 ? 1 : 0))
   // the lines on which no word of the source stands: what they hold is a placeholder's rendering (a displayed
   // formula), never the unit's text
   const words = new Map(), sourced = new Set()
@@ -717,8 +746,9 @@ function gapsOfOnce(unitChars, src, merge = false, deny = null) {
     if (matched[q]) sourced.add(key)
   })
   gapsOfOnce.unsourced = [...words.keys()].filter(k => !sourced.has(k))
-  // iteration 2 reads the alignment itself: the page's words and which of them are the source's text
-  gapsOfOnce.last = { O, matched }
+  // iteration 2 reads the alignment itself: the page's words and which of them are the source's text (`pair`: each one's source
+  // word, of S, whose `start` is its place in the source's plain text)
+  gapsOfOnce.last = { O, matched, S, pair }
   const gaps = []
   let run = null
   for (let q = 0; q < O.length; q++) {
@@ -768,6 +798,46 @@ function originalStyle(uc, O, matched) {
   if (!runs.length) return null
   const key = [...tally].sort((a, b) => b[1] - a[1])[0][0]
   return { key, st: runs.find(r => r.key === key).st, size: median(sizes), runs: runs.map(r => ({ key: r.key, n: r.n })) }
+}
+
+/**
+ * The unit's measured style (measuredStyle) over its matched words' characters, each by the source character it is: a page word
+ * and the source word the alignment pairs it with (`pair` into S, a word the source spells in two or three pieces among them)
+ * spell one string of letters and digits (layer1.mjs norm), so that each page letter is read in its own source letter's scope (a
+ * style boundary inside a word, `\textbf{B}idirectional`, gives `B` the pair's and the rest the text's); a character that is
+ * no letter or digit, or that does not align, is not read. A unit with no source pieces to read (sourceScopes null) has no base
+ * measured here (`st` null: tokensOf2 reads today's, baseOf) and a colour only where every glyph whose fill is told holds the
+ * same one
+ */
+function measuredOf(unit, uc, O, S, pair) {
+  const scopes = sourceScopes(unit), none = { sets: 0, chain: [], flip: 0 }, chars = []
+  const src = scopes ? [...unit.src] : null
+  const measured = c => !c.sep && !c.space && c.st && /\S/.test(c.ch) && c.st.fam !== 'math'
+  O.forEach((o, q) => {
+    if (!pair || pair[q] < 0) return
+    const word = uc.slice(o.start, o.end + 1)
+    if (!src) { for (const c of word) if (measured(c)) chars.push({ st: c.st, ...none }); return }
+    const w = S[pair[q]]
+    let at = w?.start ?? 0
+    const end = w?.end ?? -1
+    for (const c of word) {
+      if (c.sep || c.space) continue
+      const key = norm(c.ch)
+      if (!key) continue
+      // (the source's next letters that spell this character's: one, or a ligature's two or three)
+      let k = at, first = -1, got = ''
+      while (k <= end && got.length < key.length) { const n = norm(src[k]); if (n) { if (first < 0) first = k; got += n } k++ }
+      if (got !== key) continue
+      at = k
+      if (!measured(c)) continue
+      const sc = scopes[first] ?? none
+      chars.push({ st: c.st, sets: sc.sets, chain: sc.chain, flip: sc.flip })
+    }
+  })
+  if (!chars.length) return null
+  if (scopes) return measuredStyle(chars)
+  const told = chars.filter(c => Number.isInteger(c.st.fill) && c.st.fill >= 0)
+  return { st: null, fill: told.length && told.every(c => c.st.fill === told[0].st.fill) ? told[0].st.fill : null, pieces: new Map() }
 }
 
 /** the original's style for a unit with no aligned words: the majority of the characters in its rectangles */
@@ -888,6 +958,8 @@ function alignUnit(out, unit, rects, deny, fileLines = false) {
     const { O, matched } = gapsOf2.last
     O.forEach((o, q) => { if (matched[q]) for (const c of uc.slice(o.start, o.end + 1)) if (!c.sep) out.matchedKeys.add(charKey(c)) })
     out.orig = originalStyle(uc, O, matched) ?? rectStyle(uc)
+    // (its base style and its pieces' colours as its glyphs hold them, where its source pieces tell what each word is inside: E1)
+    out.measured = measuredOf(unit, uc, O, gapsOf2.last.S, gapsOf2.last.pair)
     // where the unit's first word starts on the page: its line is erased from there (the anchors share an item's
     // width evenly between its characters, so a line's rectangle may start inside its first glyph: "1. Introduction")
     const q0 = matched.findIndex(m => m)
@@ -1505,7 +1577,7 @@ function drawnAs(p, g, cls, sup, lineInfo = null) {
   const lines = new Set(real.map(c => c.rect.join()))
   const lineSize = median(real.map(c => c.size))
   const tally = new Map()
-  for (const c of real) if (c.st && /\S/.test(c.ch)) tally.set(c.st, (tally.get(c.st) ?? 0) + 1)
+  for (const c of real) if (c.st && /\S/.test(c.ch)) { const f = fontOfStyle(c.st); tally.set(f, (tally.get(f) ?? 0) + 1) }
   const gst = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0]
   // one visual line (its baselines within 0.75 em: a fraction's numerator another rectangle holds is on it) is cropped;
   // a rendering broken over lines is drawn as the page's text
@@ -1960,21 +2032,108 @@ const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“�
  *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it. `quotes` (the rules' cjkQuotes): whether the
  *  curly quotes, dashes, ellipsis and middle dot are CJK's too */
 const cjkClassRe = quotes => (!quotes ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u{20000}-\u{3FFFF}]/u : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F“”‘’—…·\u{20000}-\u{3FFFF}]/u)
+/** the attributes a piece may set over what it holds, a bit each: weight, slant, small capitals, family, colour */
+const WEIGHT = 1, SLANT = 2, CAPS = 4, FAMILY = 8, COLOUR = 16, EVERY = 31
 const STYLE_CMDS = [
-  [/^\\(?:textbf|bf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true })],
-  [/^\\(?:textmd|mdseries)\b/, s => ({ ...s, bold: false })],
-  [/^\\(?:emph|em)\b/, s => ({ ...s, italic: !s.italic })],
-  [/^\\(?:textit|it|itshape|textsl|sl|slshape|mathit)\b/, s => ({ ...s, italic: true })],
-  [/^\\(?:textup|upshape)\b/, s => ({ ...s, italic: false })],
-  [/^\\(?:textsc|sc|scshape)\b/, s => ({ ...s, caps: true })],
-  [/^\\(?:texttt|tt|ttfamily|url|path|code|lstinline)\b/, (s, d) => ({ ...s, fam: 'mono', design: d.mono })],
-  [/^\\(?:textsf|sf|sffamily)\b/, (s, d) => ({ ...s, fam: 'sans', design: d.sans })],
-  [/^\\(?:textrm|rm|rmfamily)\b/, (s, d) => ({ ...s, fam: 'serif', design: d.serif })],
-  [/^\\(?:textnormal|normalfont)\b/, (s, d) => ({ ...s, fam: 'serif', bold: false, italic: false, caps: false, design: d.serif })],
+  [/^\\(?:textbf|bf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true }), WEIGHT],
+  [/^\\(?:textmd|mdseries)\b/, s => ({ ...s, bold: false }), WEIGHT],
+  [/^\\(?:emph|em)\b/, s => ({ ...s, italic: !s.italic }), SLANT],
+  [/^\\(?:textit|it|itshape|textsl|sl|slshape|mathit)\b/, s => ({ ...s, italic: true }), SLANT],
+  [/^\\(?:textup|upshape)\b/, s => ({ ...s, italic: false }), SLANT],
+  [/^\\(?:textsc|sc|scshape)\b/, s => ({ ...s, caps: true }), CAPS],
+  [/^\\(?:texttt|tt|ttfamily|url|path|code|lstinline)\b/, (s, d) => ({ ...s, fam: 'mono', design: d.mono }), FAMILY],
+  [/^\\(?:textsf|sf|sffamily)\b/, (s, d) => ({ ...s, fam: 'sans', design: d.sans }), FAMILY],
+  [/^\\(?:textrm|rm|rmfamily)\b/, (s, d) => ({ ...s, fam: 'serif', design: d.serif }), FAMILY],
+  [/^\\(?:textnormal|normalfont)\b/, (s, d) => ({ ...s, fam: 'serif', bold: false, italic: false, caps: false, design: d.serif }), WEIGHT | SLANT | CAPS | FAMILY],
 ]
 const applyCmd = (src, s, d) => {
   for (const [re, f] of STYLE_CMDS) if (re.test(src)) return f(s, d)
   return null
+}
+/** what an open piece sets over what it holds: a style command's attributes, a colour's or a link's colour (hyperref colours
+ *  its links), nothing for a bare group, and anything for any other (a paper's own macro may set any of them) */
+const openSets = src => {
+  if (src === '{') return 0
+  for (const [re, , bits] of STYLE_CMDS) if (re.test(src)) return bits
+  return /^\\(?:textcolor|color)(?![A-Za-z])/.test(src) || LINK_OPEN.test(src) ? COLOUR : EVERY
+}
+/** whether a piece toggles the slant (\emph, \em): what it holds is drawn the other way of what holds it */
+const togglesSlant = src => /^\\(?:emph|em)\b/.test(src)
+/** what a placeholder sets over the rest of its group: a style switch's attributes, a colour switch's colour; nothing else */
+const switchSets = src => {
+  if (/^\\color(?![A-Za-z])/.test(src)) return COLOUR
+  if (!/^\\[A-Za-z]+$/.test(src)) return 0
+  for (const [re, , bits] of STYLE_CMDS) if (re.test(src)) return bits
+  return 0
+}
+/**
+ * The source's text by what sets its style (E1 of the residuals' batch R2): the unit's plain source text (mt.mjs plainSource, which
+ * the alignment reads as `unit.src`) with, for each of its code points, the attributes the pieces around it set (`sets`, the bits
+ * of openSets and switchSets, a switch over the rest of its group), the pieces that set its colour, outermost first (`chain`), and
+ * the parity of the slant toggles around it (`flip`: 1 inside an odd number of \emph and \em, pairs or switches). Null where the
+ * unit carries no source pieces (`unit.source`: rows.mjs unitOf's) or their text is not `unit.src`
+ */
+export function sourceScopes(unit) {
+  const pieces = unit?.source
+  if (!Array.isArray(pieces) || typeof unit.src !== 'string') return null
+  const stack = [{ sets: 0, chain: [], flip: 0 }], scopes = []
+  pieces.forEach((p, k) => {
+    const top = stack.at(-1)
+    if (p.t === 'open') { const b = openSets(p.src ?? ''); stack.push({ sets: top.sets | b, chain: b & COLOUR ? [...top.chain, k] : top.chain, flip: top.flip ^ (togglesSlant(p.src ?? '') ? 1 : 0) }); return }
+    if (p.t === 'close') { if (stack.length > 1) stack.pop(); return }
+    if (p.t === 'ph') { const b = switchSets(p.src ?? ''); if (b) { top.sets |= b; if (b & COLOUR) top.chain = [...top.chain, k]; if (togglesSlant(p.src ?? '')) top.flip ^= 1 } return }
+    if (p.t === 'text') scopes[k] = { sets: top.sets, chain: top.chain, flip: top.flip }
+  })
+  // (the plain text as plainSource makes it: a text piece's characters, a space for any other piece, white space runs one, trimmed)
+  const cps = [], owner = []
+  pieces.forEach((p, k) => { for (const ch of p.t === 'text' ? utf8(p.s ?? '') : ' ') { cps.push(ch); owner.push(p.t === 'text' ? k : -1) } })
+  const out = [], of = []
+  for (let i = 0; i < cps.length; i++) {
+    if (/\s/.test(cps[i])) { if (out.length && out.at(-1) !== ' ') { out.push(' '); of.push(-1) } continue }
+    out.push(cps[i]); of.push(owner[i])
+  }
+  while (out.length && out.at(-1) === ' ') { out.pop(); of.pop() }
+  if (out.join('') !== unit.src) return null
+  const none = { sets: 0, chain: [], flip: 0 }
+  return of.map(k => (k >= 0 ? scopes[k] ?? none : none))
+}
+/** the value most of `xs` hold (`valueOf`), its ties to `base` where it is among them, else to the one met first; undefined for none */
+function majorityOf(xs, valueOf, base) {
+  const count = new Map(), first = new Map()
+  xs.forEach((x, i) => { const v = valueOf(x); if (v === undefined) return; count.set(v, (count.get(v) ?? 0) + 1); if (!first.has(v)) first.set(v, i) })
+  let best, n = -1
+  for (const [v, c] of count) if (c > n || (c === n && (v === base || (best !== base && first.get(v) < first.get(best))))) { best = v; n = c }
+  return best
+}
+/**
+ * The unit's base style and its pieces' colours, measured on its original glyphs (E1): `chars`, the matched words' characters
+ * with their source scope ({ st, sets, chain }: sourceScopes'). Each attribute — weight, slant, small capitals, family, colour — is
+ * the one most of the glyphs outside every piece that may set it hold (a style pair or switch in any spelling, `{\bf …}` too, a
+ * colour's, a link's, a paper's own macro), and only where no glyph lies outside, of them all; a tie goes to regular, upright, no
+ * small capitals, serif and black, else to the unit's first glyph's. A glyph's slant is read as it would be without the toggles
+ * around it (`flip`): a unit wholly inside \emph has its upright surroundings as its base, which the toggle turns italic again
+ * (where its glyphs are upright, inside an italic theorem, the base is italic). Colour reads only the glyphs whose fill is told. Each piece
+ * that may set colour takes the colour its own glyphs hold (those inside it and no piece within it; where none, all inside it).
+ * Returns { st: { bold, italic, caps, fam, design }, fill (0xRRGGBB, or null: none told), pieces: Map(k -> fill) }
+ */
+export function measuredStyle(chars) {
+  if (!chars.length) return null
+  const of = (bit, list = chars) => { const out = list.filter(c => !(c.sets & bit)); return out.length ? out : list }
+  const bold = majorityOf(of(WEIGHT), c => !!c.st.bold, false), italic = majorityOf(of(SLANT), c => !!c.st.italic !== !!c.flip, false)
+  const caps = majorityOf(of(CAPS), c => !!c.st.caps, false)
+  // (its design the one most of that family's glyphs hold, a tie to the first met: a decorative initial is no base)
+  const famFrom = of(FAMILY), fam = majorityOf(famFrom, c => c.st.fam, 'serif')
+  const design = majorityOf(famFrom.filter(c => c.st.fam === fam), c => c.st.design, undefined)
+  const told = c => Number.isInteger(c.st.fill) && c.st.fill >= 0
+  const outside = chars.filter(c => !(c.sets & COLOUR))
+  const fill = majorityOf((outside.length ? outside : chars).filter(told), c => c.st.fill, 0) ?? null
+  const pieces = new Map(), keys = new Set(chars.flatMap(c => c.chain))
+  for (const k of keys) {
+    const own = chars.filter(c => c.chain.at(-1) === k && told(c))
+    const v = majorityOf(own.length ? own : chars.filter(c => c.chain.includes(k) && told(c)), c => c.st.fill, 0)
+    if (v !== undefined) pieces.set(k, v)
+  }
+  return { st: { bold, italic, caps, fam, ...(design !== undefined ? { design } : {}) }, fill, pieces }
 }
 /** an open piece whose text is a link's (hyperref's \href, \hyperref, \hyperlink, starred or not) */
 export const LINK_OPEN = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
@@ -2103,7 +2262,12 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // words.mjs, and a lead's last token `kernEm`, the glue after it; no other field of a token changes, and a token of a lead, a
   // label or a placeholder's rendering has no range)
   const plain = tagWords ? plainTracker() : null
-  const base = baseOf(unit, baseIn)
+  // (the unit's base as its glyphs outside its styled pieces hold it, E1; else today's reading. A colour is drawn only where it is
+  // measured so, never the fill of the style the majority's character happens to carry)
+  const measured = resolved.measured ?? null
+  const { fill: _fill, ...given } = baseIn
+  const base = measured?.st ? { ...given, ...measured.st } : baseOf(unit, given)
+  if (Number.isInteger(measured?.fill) && measured.fill > 0) base.color = hexOf(measured.fill)
   const stack = [{ ...base }]
   const style = () => stack.at(-1)
   // (a colour piece's run, a \textcolor's or a \color switch's: drawn in the fill TeX set it in, the file's `colours` row,
@@ -2111,10 +2275,14 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // A unit no layout holds (none for the paper: its source does not compile; or none for the unit) has no colour measured at
   // all: there a base colour xcolor names is drawn as xcolor defines it (BASE_COLOURS), and another name keeps the colour
   // around it, as a piece the file holds and has no row for does (#407)
-  const colourRun = (k, src, named) => {
+  // A piece that may set colour and that no row tells (a paper's own macro, a link, a colour piece of a unit no layout holds) takes
+  // the colour its own glyphs hold (measuredStyle's `pieces`, by the source piece's own index `p.k`), black the run's ink (E1)
+  const colourRun = (k, p, named) => {
     const rgb = resolved.colourOf?.(k)
     if (Number.isInteger(rgb)) return { color: hexOf(rgb), colourRun: true }
-    const base = resolved.colourOf ? undefined : BASE_COLOURS.get(named.exec(src)?.[1] ?? '')
+    const own = Number.isInteger(p.k) ? measured?.pieces?.get(p.k) : undefined
+    if (Number.isInteger(own)) return { color: own > 0 ? hexOf(own) : undefined, colourRun: true }
+    const base = resolved.colourOf ? undefined : BASE_COLOURS.get(named.exec(p.src ?? '')?.[1] ?? '')
     return base !== undefined ? { color: hexOf(base), colourRun: true } : {}
   }
   // (the layout rules': whether lines break only at spaces, which quotes are CJK's, centred punctuation, the Latin words'
@@ -2245,7 +2413,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // (a link's text, \href's, \hyperref's or \hyperlink's: each token of it tells its pair by `link`, the open's id, which the
       // engine's links read (links.mjs) and no drawing does)
       const link = LINK_OPEN.test(p.src) && p.id !== undefined ? { link: p.id } : {}
-      stack.push({ ...(next ?? style()), ...colourRun(k, p.src, NAMED_OPEN), ...link })
+      stack.push({ ...(next ?? style()), ...colourRun(k, p, NAMED_OPEN), ...link })
       return
     }
     if (p.t === 'close') {
@@ -2256,8 +2424,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // a switch: the rest of its group
       const sw = applyCmd(p.src, style(), designs)
       if (sw && /^\\[A-Za-z]+$/.test(p.src)) { stack[stack.length - 1] = sw; return }
-      const run = colourRun(k, p.src, NAMED_SWITCH)
-      if (run.color) stack[stack.length - 1] = { ...style(), ...run }
+      const run = colourRun(k, p, NAMED_SWITCH)
+      if (run.colourRun) stack[stack.length - 1] = { ...style(), ...run }
     }
     const r = resolved.get(k)
     if (!r) return
@@ -2302,15 +2470,64 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     // does not name; mixed or black, its run's. A run the source colours, which the file's `colours` row gives, wins)
     const fill = resolved.fillOf?.(k)
     const st = !own.colourRun && Number.isInteger(fill) && fill >= 0 ? { ...own, color: hexOf(fill) } : own
+    // (a rendering of the page's own characters in their own fills, each run of one fill its own colour: "[16]"'s black brackets and
+    // blue digits, cleveref's black "Figure" before its linked "1"; a character whose fill is not told in the colour above)
+    // (runs drawn alike, a character whose fill is not told beside one of the colour it falls back to, are one: no token more
+    // than the colours need)
+    // (not inside a run a colours row tells: TeX's colour wins, as it does over the row's fill above)
+    const fills = r.mode === 'orig-text' && !r.math && !own.colourRun ? fillRunsOf(r.gap?.chars, r.text) : null
+    const runs = fills ? [] : null
+    for (const run of fills ?? []) {
+      const rs = run.fill === UNKNOWN ? st : { ...own, color: run.fill > 0 ? hexOf(run.fill) : undefined }
+      const last = runs.at(-1)
+      if (last && (last.st.color ?? null) === (rs.color ?? null)) last.text += run.text
+      else runs.push({ text: run.text, st: rs })
+    }
     if (r.sup) {
-      const face = faceOf(st, 'latin', to)
-      tokens.push({ s: r.text, st, face, cls: 'latin', w100: measure(r.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
-    } else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true } : {}) })
+      // (a raised rendering in its runs too, each glued to the one before: a superscript citation's black brackets, its blue digits)
+      for (const run of runs ?? [{ text: r.text, st }]) {
+        const face = faceOf(run.st, 'latin', to)
+        tokens.push({ s: run.text, st: run.st, face, cls: 'latin', w100: measure(run.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
+      }
+    } else if (runs) for (const run of runs) pushText(run.text, run.st, { ph: r.mode, k })
+    else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true } : {}) })
   })
   while (tokens.at(-1)?.space) tokens.pop()
   void prevNonSpace
   tokens.base = base
   return tokens
+}
+
+/** a character style's colour as a run takes it (E1): its fill where told, black the run's ink (`color` undefined, set so that it
+ *  wins over a colour around it), nothing where its fill is not told */
+export const colourOfStyle = st => (Number.isInteger(st?.fill) && st.fill >= 0 ? { color: st.fill > 0 ? hexOf(st.fill) : undefined } : {})
+/** a run's style from its characters (the first not a formula's): a class's bold or italic heading, small capitals, its colour;
+ *  its design the paper's (`serif`, where the character's font tells none) */
+export function styleOfChars(cs, serif) {
+  const s0 = cs.find(c => c.st?.fam !== 'math')?.st ?? cs[0]?.st ?? {}
+  return { fam: s0.fam === 'math' || !s0.fam ? 'serif' : s0.fam, bold: !!s0.bold, italic: !!s0.italic, caps: !!s0.caps, design: s0.design ?? serif, ...colourOfStyle(s0) }
+}
+
+/** a rendering's text (`text`, its characters' as gapsOfOnce joins them: white space one space, trimmed) in runs of one fill
+ *  ({ text, fill }: 0xRRGGBB, or UNKNOWN), each white space the fill of the character before it; null where its characters do not
+ *  give that text, or no character's fill is told */
+export function fillRunsOf(chars, text) {
+  if (!Array.isArray(chars) || !chars.length || typeof text !== 'string') return null
+  const cps = []
+  for (const c of chars) {
+    const f = Number.isInteger(c.st?.fill) && c.st.fill >= 0 ? c.st.fill : UNKNOWN
+    for (const ch of c.ch) cps.push({ ch, f })
+  }
+  const out = []
+  for (const x of cps) {
+    if (/\s/.test(x.ch)) { if (out.length && out.at(-1).ch !== ' ') out.push({ ch: ' ', f: out.at(-1).f }); continue }
+    out.push(x)
+  }
+  while (out.length && out.at(-1).ch === ' ') out.pop()
+  if (out.map(x => x.ch).join('') !== text || out.every(x => x.f === UNKNOWN)) return null
+  const runs = []
+  for (const x of out) { if (runs.at(-1)?.fill === x.f) runs.at(-1).text += x.ch; else runs.push({ text: x.ch, fill: x.f }) }
+  return runs
 }
 
 /** the faces a target will most likely need, each measured once in a task of its own (a system CJK face loads on
@@ -3563,9 +3780,10 @@ export function keptLines(rects, prep, page) {
  * PDF units), its word in `face` at `size`, the face's own size correction applied, an oblique face skewed about its
  * baseline as a unit's run is (svgOfUnit). `toPx(x, y)`: PDF to the SVG's CSS pixels; `scale`: CSS pixels per PDF unit
  */
-export function svgOfName({ occurrence, text, x, baseline, size, face }, toPx, scale) {
+export function svgOfName({ occurrence, text, x, baseline, size, face, color = null }, toPx, scale) {
   const [px, py] = toPx(x, baseline)
-  const span = `<tspan class="${faceClass(face)}" x="${n2(px)}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1))}">${esc(text)}</tspan>`
+  const fill = color ? ` fill="${fillAttr(color)}"` : ''
+  const span = `<tspan class="${faceClass(face)}" x="${n2(px)}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1))}"${fill}>${esc(text)}</tspan>`
   const line = face.oblique ? `<text transform="translate(${n2(px)} ${n2(py)}) skewX(${-OBLIQUE_DEG}) translate(${-n2(px)} ${-n2(py)})">${span}</text>` : `<text y="${n2(py)}">${span}</text>`
   return `<g data-n="${occurrence}">${line}</g>`
 }

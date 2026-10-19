@@ -176,6 +176,9 @@ export interface OpenLayerOptions {
   onRetired(doc: LayerDocument): void
   /** the draws held for the run at most, in their left parts' bytes (DRAWS_HELD by default): past it the oldest are let go */
   drawsHeld?: number
+  /** PDF.js's operator codes (the host's PDF.js): a page read live reads its characters' fills as its draw tells them (run.mjs
+   *  openProto `OPS`); none, such a page tells no fill */
+  OPS?: Record<string, number> | null
 }
 /** the draws of left parts the door holds for the run at most (their left parts' bytes) */
 export declare const DRAWS_HELD: number
@@ -189,6 +192,8 @@ export interface OpenBundleLayerOptions {
   rules?: FrozenRuleSet
   /** the document no longer read, once at dispose (optional) */
   onRetired?: (doc: LayerDocument) => void
+  /** PDF.js's operator codes, as OpenLayerOptions' */
+  OPS?: Record<string, number> | null
 }
 /** the layer of one paper and target, as either reader shows it: v0 opened over the composed document with the paper's left,
  *  layout and add-on, the target's caption names on every float (L7), the served faces and hyphenation, at scale 2.5 and dpr 1

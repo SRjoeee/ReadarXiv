@@ -36,4 +36,11 @@
 //    marker 640 -> 5; the corpus's 124 papers: 1,753 -> 222 (70
 //    cuts at run-in labels, the rest at pairs that keep their markers as under 2). A unit with no pair and no such
 //    placeholder is sent as under 2, byte for byte
-export const TRANSLATE_VERSION = '3'
+// 4: a styled pair whose two ends both stand where the wire is cut anyway (a forced break, a display or an item beside it,
+//    never an inline formula, which the translator moves as a word; a kept or enclosing pair's edge with white space alone
+//    between; the unit's own end) keeps its two markers (mt.mjs classOf's boundary rule,
+//    E1 of 2026-10-19): they cut nothing the endpoint does not cut already (2610.19159's `\textit{Floor (must clear):}
+//    \textcolor{red}{...}`, whose colour went flat at a colon that starts no sentence). Over 137 papers' sources 126 of
+//    36,136 units, in 29 papers, change their wire (mt.mjs boundaryChanges tells exactly those); every other unit's is 3's
+//    byte for byte, its text answered by the per-text cache
+export const TRANSLATE_VERSION = '4'
