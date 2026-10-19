@@ -112,12 +112,15 @@ export interface Prepared extends Map<number, Resolved> {
   breaks?: Map<number, { next: number; room: number | null; pitch: number | null }> | null
   /** the finish: a forced break whose next line opens another frame, its region (no lines of its own) by the key of that
    *  line, which its pieces hold (their resolutions' `region`, with `brk`) */
-  breakAt?: Map<string, number>
+  breakAt?: Map<string, number>   // (and a found display none of whose rows is a line of the unit's: its region before the line after its ink)
   /** the finish: a forced break inside a frame, its frame's pitch by the key of the line after it (its pieces hold TeX's
    *  room after it: their resolutions' `room`, with `brk`): the rows on both sides one block, its gap closed to the pitch */
   joinAt?: Map<string, number>
   /** the finish: what became of each of the unit's page characters, by its key */
   cat: Map<string, 'acc' | 'keep' | 'orphan' | 'undrawn'>
+  /** the finish: the class's own marks after the unit's text, which its source does not write (a theorem's note's ")."),
+   *  each with its character's style: drawn after the translation (tokensOf2) */
+  tail?: { ch: string; st: Style | null }[] | null
   /** the finish: the lines a located display holds */
   displayLines?: Set<string>
   /** part 5: the piece index of a placeholder whose rendering no source proves (tex.mjs proofOf: the unit is left the
@@ -148,10 +151,13 @@ export interface RenderingsContext {
 /** part 4's answer: the gaps as it leaves them, and each placeholder's rendering (called once a placeholder, in the
  *  unit's order, for those the rules look for: 'cite', 'num', 'other'), or none found */
 export interface Renderings {
-  gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other'): Gap | null | undefined
+  gaps: Gap[]; gapFor(p: Placeholder, cls: 'cite' | 'num' | 'other' | 'space'): Gap | null | undefined
   /** how a placeholder is drawn where the source knows it without the page (a layout file's macro that sets no ink: none;
    *  its text symbol: the character), else null */
   fixed?(p: Placeholder): { mode: 'none' | 'source'; text: string; proof?: boolean } | null
+  /** whether the source knows the ink of a placeholder the rules would draw as a space (a layout file's found row): it is
+   *  then looked for (gapFor) and drawn as that ink */
+  inked?(p: Placeholder): boolean
 }
 /** the parts of a unit another source gives in place of v0's; a part not given is v0's */
 export interface UnitParts {

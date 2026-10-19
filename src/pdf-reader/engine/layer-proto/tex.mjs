@@ -16,7 +16,7 @@
 import { PH_FLAG } from '../layout/file.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropOfBox, displayTouched, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, resolutionFrom, scriptedOf, SHORT_SKIP } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropOfBox, displayTouched, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, resolutionFrom, scriptedOf, SHORT_SKIP, texToText2 } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -456,7 +456,7 @@ export function renderingOf(segs, uc, display) {
   const inside = c => insideOf(S, c, display)
   const at = []
   uc.forEach((c, i) => { if (real(c) && inside(c)) at.push(i) })
-  const box = { x0: Math.min(...S.map(s => s.x0)), x1: Math.max(...S.map(s => s.x1)), top: Math.max(...S.map(s => s.top)), bottom: Math.min(...S.map(s => s.bottom)), baseline: S[0].base, lines: S.length }
+  const box = { x0: Math.min(...S.map(s => s.x0)), x1: Math.max(...S.map(s => s.x1)), top: Math.max(...S.map(s => s.top)), bottom: Math.min(...S.map(s => s.bottom)), baseline: S[0].base, lines: S.length, page: S[0].page }
   if (!at.length) return display ? { text: '', chars: [], box } : null
   // between them, a space of the text layer inside a segment, and a break between two items or lines with one of the
   // rendering's characters either side (in v0's reading a formula's big operator may stand on the line above, and all
@@ -556,6 +556,34 @@ function textRunsOf(lu, kOf, res, unit) {
 }
 
 /**
+ * A placeholder's ink as one crop where its found row's segments are one line's (stride 6, page first): the segments of one
+ * page that meet across, transitively (a \\qed box's top rule given the line above, a formula's tall operator or a cases'
+ * rows), their union cut as a layout file's segment is (layer2.mjs cropOfBox), on the baseline of the segment inside it
+ * nearest its middle (a tall formula's own line). Null where they are more than one such line (a formula TeX broke over
+ * lines): one crop cannot show it, and two renderings of one placeholder are no showing of it
+ */
+export function cropOfSegments(segs) {
+  const S = segmentsOf(segs)
+  if (!S.length || S.some(s => s.page !== S[0].page)) return null
+  const box = { x0: S[0].x0, x1: S[0].x1, top: S[0].top, bottom: S[0].bottom }
+  const inside = new Set([S[0]])
+  for (let grew = true; grew;) {
+    grew = false
+    for (const s of S) if (!inside.has(s) && Math.min(box.top, s.top) > Math.max(box.bottom, s.bottom)) {
+      inside.add(s)
+      Object.assign(box, { x0: Math.min(box.x0, s.x0), x1: Math.max(box.x1, s.x1), top: Math.max(box.top, s.top), bottom: Math.min(box.bottom, s.bottom) })
+      grew = true
+    }
+  }
+  if (inside.size < S.length) return null
+  const mid = (box.top + box.bottom) / 2
+  const on = S.filter(s => s.base >= box.bottom - 0.05 && s.base <= box.top + 0.05)
+  const baseline = (on.length ? on : S).reduce((a, s) => (Math.abs(s.base - mid) < Math.abs(a.base - mid) ? s : a)).base
+  const seg = { ...box, baseline, lines: 1 }
+  return { page: S[0].page, ...cropOfBox(seg), seg }
+}
+
+/**
  * Part 5, the proof (layer2.mjs prepareUnit), for any unit the hybrid draws: the one place the hybrid's safe rule is held
  * (the math round's `unproven`, from its crops to every rendering; the maintainer's ruling of 2026-10-15). A placeholder
  * is drawn only from what proves it: TeX's own (one that sets nothing, a space; a rendering the file gives: a placeholder's segments, a display's held run or its group, a text symbol's TEXT row, one
@@ -584,6 +612,10 @@ function textRunsOf(lu, kOf, res, unit) {
  * pageChars2's `nu`, a glyph its font's ToUnicode does not map, which PDF.js reads by its code, or a private-use,
  * replacement or control character. The reader would see another character than the page's: 2307.16209 page 133, unit
  * 442, drew "g(z′) = Í n g n (z′) n" for g(z') = Σ_n g_n(z')^n (newtx's display sum, in txexs, which no ToUnicode maps).
+ * A unit the file locates whole (`whole`: texParts') is drawn where its rendering cannot be the page's text but TeX's file
+ * holds its ink: page text with a character no Unicode stands for, or a rendering with no character of the unit in its
+ * segments at all (a \\qed box drawn of rules), or one v0 read off its segments, is a crop of its segments where they are
+ * one line's (cropOfSegments; E3, 2026-10-19). Its k is still the answer where they are more than one line's.
  * The one exemption (the controller's rulings of 2026-10-15): a LaTeX text symbol v0 draws from its source (\%,
  * $\times$, $^\dagger$: layer2.mjs textSymbol, a 'symbol' whose drawn text is one grapheme with no `_`, `^`, `/` or `√(`).
  * Its source is its rendering's content, a character LaTeX's own definition sets, and its glyph is its line's, erased
@@ -591,18 +623,27 @@ function textRunsOf(lu, kOf, res, unit) {
  * letter or digit ($\sum_{\alpha}^{\beta}$, drawn "Σ_α^β" from its source) is no text symbol: a unit under the proof
  * reads it as 'other' (phClassProven), and it is proven as any formula is.
  */
-export function proofOf(lu, kOf, shown = Infinity, { textRuns = false } = {}) {
+export function proofOf(lu, kOf, shown = Infinity, { textRuns = false, whole = false } = {}) {
   return (res, unit = null) => {
     // (with the file's lines, `textRuns`: a LOST text piece is proven by its run of the unit's characters, textRunsOf)
     if (textRuns && lu && kOf && unit) { const k = textRunsOf(lu, kOf, res, unit); if (k >= 0) return k }
+    /** a found row's segments, all on pages shown, as one crop of its placeholder, in a unit the file locates whole */
+    const cropped = (r, S) => {
+      if (!whole || r.cls === 'display' || !S.length) return false
+      for (let s = 0; s + 5 < S.length; s += 6) if (S[s] > shown) return false
+      const c = cropOfSegments(S)
+      if (!c) return false
+      res.set(r.k, { mode: 'crop', page: c.page, crop: c.crop, baseline: c.baseline, text: texToText2(r.src ?? '') || '', sup: false, k: r.k, src: r.src, cls: r.cls, gap: { text: r.gap?.text ?? '', chars: r.gap?.chars ?? [], box: c.seg, proof: true }, proof: true, ...(r.second ? { second: true } : {}) })
+      return true
+    }
     for (const r of res.values()) {
       if (!r) continue
-      // (whatever proves where its ink is: page text is drawn as its characters read, and one no Unicode of the file's
-      // stands for, pageChars2's `nu`, reads as no glyph the page shows)
-      if (r.mode === 'orig-text' && (r.gap?.chars ?? []).some(c => c.nu)) return r.k
-      if (r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
       const row = lu && kOf ? lu.ph.get(kOf[r.k]) : null
       const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED)) ? row.segs : []
+      // (whatever proves where its ink is: page text is drawn as its characters read, and one no Unicode of the file's
+      // stands for, pageChars2's `nu`, reads as no glyph the page shows; its segments cropped, where they can be)
+      if (r.mode === 'orig-text' && (r.gap?.chars ?? []).some(c => c.nu)) { if (cropped(r, S)) continue; return r.k }
+      if (r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
       let past = S.length > 0, anyPast = false
       for (let s = 0; s + 5 < S.length; s += 6) if (S[s] <= shown) past = false; else anyPast = true
       if (past) {
@@ -618,7 +659,7 @@ export function proofOf(lu, kOf, shown = Infinity, { textRuns = false } = {}) {
       // A rendering v0 took that the segments do not hold stays no proof (the rule against a rendering handed along)
       if (S.length && !anyPast && unit && !r.gap && (r.mode === 'source' || r.mode === 'cite-map') && r.cls !== 'display') {
         const g = renderingOf(S, res.uc ?? [], false)
-        if (!g || g.chars.some(c => c.nu)) return r.k
+        if (!g || g.chars.some(c => c.nu)) { if (cropped(r, S)) continue; return r.k }
         res.set(r.k, { ...resolutionFrom(r, { ...g, proof: true }, unit, res.lineInfo), ...(r.second ? { second: true } : {}) })
         continue
       }
@@ -640,7 +681,7 @@ export function proofOf(lu, kOf, shown = Infinity, { textRuns = false } = {}) {
           const box = { x0: S[s + 1], x1: S[s + 3], top: S[s + 4], bottom: S[s + 5], baseline: S[s + 2], lines: 1 }
           if (Math.min(box.x1, r.crop[2]) > Math.max(box.x0, r.crop[0]) && Math.min(box.top, r.crop[3]) > Math.max(box.bottom, r.crop[1])) seg = box
         }
-        if (!seg) return r.k
+        if (!seg) { if (!anyPast && cropped(r, S)) continue; return r.k }
         Object.assign(r, cropOfBox(seg))
         r.gap = { ...r.gap, box: seg }
         continue
@@ -648,6 +689,7 @@ export function proofOf(lu, kOf, shown = Infinity, { textRuns = false } = {}) {
       const real = (r.gap?.chars ?? []).filter(c => !c.sep && !c.space && /\S/.test(c.ch))
       const segs = segmentsOf(S)
       if ((r.mode === 'orig-text' || r.mode === 'kept') && real.length && segs.length && real.every(c => insideOf(segs, c, r.cls === 'display'))) continue
+      if (!anyPast && cropped(r, S)) continue
       return r.k
     }
     return -1
@@ -667,15 +709,18 @@ export function proofOf(lu, kOf, shown = Infinity, { textRuns = false } = {}) {
  */
 export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = Infinity, lineskip = null }) {
   const parts = {
-    proof: proofOf(lu, kOf, shown, { textRuns: use === 'lines' }),
+    proof: proofOf(lu, kOf, shown, { textRuns: use === 'lines', whole: true }),
     fillOf: fillOf(lu, kOf),
     colourOf: colourOf(lu, kOf),
     renderings({ unit, phs, uc, gaps, citeMap }) {
       const found = new Map(), joined = []
       let cover
       for (const p of phs) {
-        if (p.cls === 'zero' || p.cls === 'space' || p.cls === 'symbol') continue
+        if (p.cls === 'zero' || p.cls === 'symbol') continue
         const row = lu.ph.get(kOf[p.k])
+        // (a space TeX set ink for, its row found: a class's separator, llncs's \\and in \\keywords " \u00b7 ", drawn as that ink;
+        // any other is a space, as before)
+        if (p.cls === 'space' && (!row || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED) || !row.segs.length)) continue
         // (a later display of a display group: its group's rendering, below)
         if (p.cls === 'display' && row && row.flags & PH_FLAG.JOINED) { joined.push(p); continue }
         // (a display the held lines cover, LOST or with no segments: its run's lines, kept where they stand, and a break
@@ -712,7 +757,7 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = I
         if (row && row.flags & PH_FLAG.OUTSIDE && lines?.lineOf) return { mode: 'none', text: '', proof: true, inPlace: true }
         return row && row.flags & PH_FLAG.TEXT && row.text && p.cls !== 'symbol' ? { mode: 'source', text: row.text, proof: true } : null
       }
-      return { gaps, gapFor: p => found.get(p) ?? null, fixed }
+      return { gaps, gapFor: p => found.get(p) ?? null, fixed, inked: p => found.has(p) }
     },
   }
   if (use !== 'lines') return parts

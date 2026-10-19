@@ -1446,13 +1446,24 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       placedByPage.get(r[0]).push([id, r.slice()])
     }
   }
+  /** a unit's rectangles in place of those it was added with (addUnits'), on every page */
+  const replaceRects = (id, rects) => {
+    for (const m of [rectsByPage, placedByPage]) for (const [pg, list] of m) if (list.some(([o]) => o === id)) m.set(pg, list.filter(([o]) => o !== id))
+    addRects(id, rects)
+  }
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
   /** the text area of page pg as unit p reads it: as the page's growth step left it once p's own lines there grew (growOn),
    *  the units ranked before it on the page grown and those after it not yet, whenever p is laid */
   const areaOf = (p, pg) => p.area?.get(pg) ?? textArea(pg)
   const columnOf = (b, p, size) => {
     const mid = (b.x0 + b.x1) / 2
-    const own = (cols[b.page] ?? []).filter(([a, z]) => a <= mid && z >= mid)
+    // (its page's paragraph lines over its middle; on a page that has too few (a page of figures, whose captions' own ink was
+    // their measure: 2610.16663's supplement), those of the nearest page before it that has them, as the layout maker takes a
+    // page's column edges (make.mjs earlierEdges, rule 3): never a later page's, so that a page lays the same whichever pages
+    // were laid before it)
+    const over = q => (cols[q] ?? []).filter(([a, z]) => a <= mid && z >= mid)
+    let own = over(b.page)
+    for (let q = b.page - 1; own.length < 3 && q >= 1; q--) { const o = over(q); if (o.length >= 3) own = o }
     if (own.length < 3) return areaOf(p, b.page)
     // (its right edge the furthest of its lines reach, but a line TeX set overfull: one past the furthest end two lines share
     // by less than an em is no edge; a single line widened to it ran 3.4 pt into the margin, 2608.16117's page 11)
@@ -2640,6 +2651,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     planned = false
     for (const pg of p.pages) expected[pg]++
     if (!c.rects) addRects(p.id, p.rects)
+    // (a unit placed by the file's lines is read by the others by those lines, not by the left's rectangles, which can point at
+    // another occurrence of its words: 2610.19274's unit 140, its rectangle over an italic "Results" 30 pt above the heading TeX
+    // set, which took that line from the unit it is. Decided before any page it is on is laid: a page waits on the rows of
+    // every unit whose rectangles or lines it holds, needsOf)
+    else if (p.tex?.lines) replaceRects(p.id, p.rects)
     toGrow(p)
     for (const pg of p.pages) { (firstsOn[pg] ??= new Set()).add(p.pages[0]); (unitsOn[pg] ??= []).push(p) }
   }

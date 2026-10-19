@@ -245,7 +245,7 @@ describe("a placeholder's rendering by its segments", () => {
   it("takes the unit's characters inside them on their line, and the breaks between them, never the line above's spaces", () => {
     const g = T.renderingOf(Float64Array.from([1, 19.5, 100, 40.5, 108, 97]), uc(), false)
     expect(g?.chars.map(c => c.ch).join('')).toBe('Pq=k')
-    expect(g?.box).toEqual({ x0: 19.5, x1: 40.5, top: 108, bottom: 97, baseline: 100, lines: 1 })
+    expect(g?.box).toEqual({ x0: 19.5, x1: 40.5, top: 108, bottom: 97, baseline: 100, lines: 1, page: 1 })
   })
   it('a display anywhere in its rows; none found is none, but for a display, whose rows the unit may not hold', () => {
     expect(T.renderingOf(Float64Array.from([1, 70, 100, 80, 108, 97]), uc(), false)).toBeNull()
@@ -523,7 +523,7 @@ describe("page text no Unicode stands for, and a held line's own mark (the LOST 
     expect(L2.fontMappedOf('Error: a font that did not load')).toBeNull()
     expect(L2.fontMappedOf(null)).toBeNull()
   })
-  it('page text of a placeholder with a character no Unicode stands for is no proof, its segments the file\'s own or not', () => {
+  it('page text of a placeholder with a character no Unicode stands for is no proof: a unit the file locates whole crops it on one line', () => {
     // a formula TeX broke over two lines (two segments: drawn as its page text), its sum sign read by its code
     const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph("$g(z')=\\sum_n g_n$"), text(' \u4E59')] } as never
     const lu = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 200, 507, 498, 1, 10, 488, 40, 495, 486]]]) as never
@@ -532,9 +532,35 @@ describe("page text no Unicode stands for, and a held line's own mark (the LOST 
     const read = (sum: { nu?: boolean }) => L2.prepareUnit(u, t.rects as never, [page(sum) as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
     expect(read({}).get(1)?.mode).toBe('orig-text')
     expect(read({}).unproven).toBeUndefined()
+    // over two lines: one crop cannot show it (a placeholder is shown by one rendering), so no proof yet
     expect(read({ nu: true }).unproven).toBe(1)
     // and v0's page text proven by the segments alike
     expect(L2.prepareUnit(u, t.rects as never, [page({ nu: true }) as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, 1, -1]) } as never).unproven).toBe(1)
+    // on one line (its segments meet across: a formula with a tall operator, its rows as two segments), a crop of their
+    // union on the baseline inside it: its ink is TeX's, only its page text cannot be drawn
+    const one = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 200, 507, 498, 1, 160, 496, 190, 503, 494]]]) as never
+    const t1 = T.texRects(one)
+    const pg1 = [...item('a b', 10, 500, 10, 0), ...item('g=', 150, 500, 10, 1, math), ...item('\u00CD', 170, 496, 10, 2, math).map(c => ({ ...c, nu: true })), ...item('c d', 10, 488, 10, 4)]
+    const r = L2.prepareUnit(u, t1.rects as never, [pg1 as never], new Map() as never, null, T.texParts(one, [-1, 1, -1], { use: 'lines', lines: t1 }) as never)
+    expect(r.unproven).toBeUndefined()
+    expect(r.get(1)).toMatchObject({ mode: 'crop', page: 1, baseline: 500 })
+    for (const [n, v] of [149.6, 493.7, 200.4, 507.3].entries()) expect(r.get(1)?.crop?.[n]).toBeCloseTo(v, 6)
+    // (cut from its segments, never grown over the ink beside it)
+    expect(L2.cropGrows(r.get(1) as never)).toBe(false)
+  })
+  it("a \\qed box of rules, no character in its segments, is a crop of its ink where the file locates its unit whole", () => {
+    // 2610.21176's proofs: the box's top rule a segment on the line above, its body on its own line's baseline
+    const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph('\\qed')] } as never
+    const lu = unitOf([L(500), L(488)], [[1, 0, [1, 180, 500, 186, 495.4, 495, 1, 180, 488, 186, 495.6, 488]]]) as never
+    const t = T.texRects(lu)
+    const pg = [...item('a b', 10, 500, 10, 0), ...item('c d', 10, 488, 10, 1)]
+    const r = L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu, [-1, 1], { use: 'lines', lines: t }) as never)
+    expect(r.unproven).toBeUndefined()
+    // (one crop: its segments meet across, the rule and the box one ink, on the baseline inside it)
+    expect(r.get(1)).toMatchObject({ mode: 'crop', page: 1, baseline: 488 })
+    for (const [n, v] of [179.6, 487.7, 186.4, 495.9].entries()) expect(r.get(1)?.crop?.[n]).toBeCloseTo(v, 6)
+    // the filed reading of a unit not located whole: unproven, as before
+    expect(L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, 1]) } as never).unproven).toBe(1)
   })
   it("a mark after a placeholder kept on its held line, where that line shows the original's own, is not drawn again", () => {
     // footnote 1 of 1512.03385: "… and \url{…}." with the URL's line kept (held), its full stop with it
@@ -1194,5 +1220,87 @@ describe("LaTeX's text symbols: one table for the maker and the layer (rules/tex
       expect([ch, ''], cmd).toContain(L2.texToText2(`$${cmd}$`))
     }
     expect([S.symbolText('\\textbar{}x'), S.symbolText('\\ours'), S.symbolText(undefined)]).toEqual([null, null, null])
+  })
+})
+
+describe("a display whose rows are no line of its unit's (the maker's lines leave them out, 2610.16663's unit 89)", () => {
+  // two text lines, the display under them (its segments found, no line of the unit holds them), the text after it on the
+  // unit's next line in the file: the text after the display starts there, not on the line before it
+  const L = (y: number) => [1, 10, 200, y, y + 7, y - 2, 10, 0]
+  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
+  const D = '\\begin{equation}x=1\\end{equation}'
+  const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph(D), text(' \u4e59')] } as never
+  const fileUnit = (after: number[]) => {
+    const lu = unitOf([L(500), L(488), after], [[1, 0, [1, 60, 466, 140, 476, 462]]]) as { ph: Map<number, { kind: string }> }
+    const row = lu.ph.get(1)
+    if (row) row.kind = 'display'
+    return lu as never
+  }
+  const read = (lu: never, page: unknown[]) => {
+    const t = T.texRects(lu)
+    return { t, prep: L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never) }
+  }
+  it('is kept, and a region of no lines just before the line after it, which the text after it starts on', () => {
+    const page = [...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 466, 10, 2, math), ...item('d', 10, 440, 10, 4)]
+    const { t, prep } = read(fileUnit(L(440)), page)
+    const r = prep.get(1)
+    expect(prep.unproven).toBeUndefined()
+    expect(r?.mode).toBe('kept')
+    expect(prep.referenced.has(r?.region as number)).toBe(true)
+    const blocks = L2.blocks2(t.rects as never, [[0, 0, 612, 792]], new Set(prep.keep), prep.lineInfo, prep.regionOf, prep.referenced, null, prep.breakAt)
+    expect(blocks.map(b => [b.B, b.after])).toEqual([[[500, 488], 0], [[440], 1]])
+    const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+    const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+    const tokens = L2.tokensOf2(u, prep as never, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 0)
+    expect(tokens.filter(x => !x.space).map(x => x.s ?? `|${x.blockTo}`)).toEqual(['\u7532', `|${r?.region}`, '\u4e59'])
+  })
+  it('on the next page: the line after it opens there; at the unit\'s end, none', () => {
+    // the display at the foot of page 1, the text after it on page 2's first line
+    const page2 = [1, 10, 200, 700, 707, 698, 10, 0].map((v, i) => (i === 0 ? 2 : v))
+    const lu = fileUnit(page2)
+    const t = T.texRects(lu)
+    const pages = [[...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 466, 10, 2, math)], item('d', 10, 700, 10, 4).map(c => ({ ...c, page: 2 }))]
+    const prep = L2.prepareUnit(u, t.rects as never, pages as never, new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    const r = prep.get(1)
+    expect(prep.referenced.has(r?.region as number)).toBe(true)
+    // (the region is the line's on page 2: its key's page)
+    expect([...prep.breakAt!].map(([k, v]) => [k.split('|')[0], v])).toEqual([['2', r?.region]])
+    // (a display at the unit's end, no line after it: no region, nothing to start)
+    const last = { kind: 'para', src: 'a b c', pieces: [text('\u7532 '), ph(D)] } as never
+    const one = unitOf([L(500), L(488)], [[1, 0, [1, 60, 466, 140, 476, 462]]]) as { ph: Map<number, { kind: string }> }
+    const row = one.ph.get(1)
+    if (row) row.kind = 'display'
+    const t1 = T.texRects(one as never)
+    const p1 = L2.prepareUnit(last, t1.rects as never, [[...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 466, 10, 2, math)]] as never, new Map() as never, null, T.texParts(one as never, [-1, 1], { use: 'lines', lines: t1 }) as never)
+    expect(p1.get(1)?.region).toBeUndefined()
+  })
+})
+
+describe("the class's own marks after a unit's text: a theorem's note (2610.21084's \"Definition 4.5 (Latent transition error).\")", () => {
+  // the note's unit, "Latent transition error"; its line in the file holds amsthm's ")." after the source's last word, its
+  // label "Definition 4.5 (" before it
+  const L = [1, 50, 101, 500, 507, 498, 10, 0]
+  const lu = unitOf([L], [], [0, 1, 10, 500, 48, 507, 498])
+  const bold = { fam: 'serif', bold: true, italic: false, caps: false, known: true } as never
+  const page = [...item('Def (', 10, 500, 10, 0, bold), ...item('Latent transition error', 50, 500, 4, 1), ...item(')', 96, 500, 4, 2), ...item('.', 98, 500, 4, 3, bold)]
+  const unit = (s: string, src = 'Latent transition error') => ({ kind: 'para', src, pieces: [{ t: 'text', tr: true, s }] }) as never
+  const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
+  const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
+  const drawn = (u: never) => {
+    const t = T.texRects(lu)
+    const prep = L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1], { use: 'lines', lines: t }) as never)
+    return L2.tokensOf2(u, prep as never, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 0).filter(x => typeof x.s === 'string')
+  }
+  it('are drawn after the translation, each in its own style', () => {
+    const tokens = drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee'))
+    expect(tokens.map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee).')
+    expect(tokens.slice(-2).map(x => !!(x.st as { bold?: boolean }).bold)).toEqual([false, true])
+  })
+  it("in place of the translation's own marks of the same kind at its end, never twice", () => {
+    expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee).')
+    expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff09\u3002')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee).')
+  })
+  it('none where the source writes its own end mark: the line\'s marks are its translation\'s', () => {
+    expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002', 'Latent transition error.')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002')
   })
 })
