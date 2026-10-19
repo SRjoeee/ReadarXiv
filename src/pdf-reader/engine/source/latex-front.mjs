@@ -19,6 +19,18 @@ export const normalizePath = p => { const out = []; for (const seg of p.split('/
 export const jobName = main => main.slice(main.lastIndexOf('/') + 1).replace(/\.[^.]*$/, '')
 /** bytes as a string of the same code units (latin1, byte for byte): the scanner's view of a source */
 export const latin1 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
+/**
+ * A source file's bytes as TeX reads its lines: latin1, each line's end an LF. web2c's input_line (texmfmp.c) ends a line
+ * at a CR or an LF and takes the LF of a CRLF with its CR, so a CR, an LF or a CRLF is one line's end, and a blank line
+ * a paragraph's end whatever the editor wrote. Every rule of the front end reads lines by their LF: a CRLF source's
+ * blank lines were none, and 2610.10069v1's introduction (ten paragraphs) and a whole proof (sixteen) were one unit
+ * each. A file the front end writes back (patch: its units' marks and translations) is written from this text, with LF,
+ * which TeX reads the same. Every other file is copied as it is, a class or a package the front end read among them;
+ * the passes live.mjs runs over such a copy (literalNames, stripPdftexOption, localizeNames) give the same text on its
+ * own line ends as on this one (the 12 CR files of 180 papers, 2026-10-20). So do the guard's brace balance and the
+ * probe of the main file, which read through this too
+ */
+export const texText = bytes => latin1(bytes).replace(/\r\n?/g, '\n')
 export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
 const utf8Bytes = s => new TextEncoder().encode(s)
 const bytesOf = (s, enc) => (enc === 'utf8' ? utf8Bytes(s) : latin1Bytes(s))
@@ -1517,7 +1529,7 @@ function storedBodies(calls, { ctx, files, units, own }) {
 /** `fsys`: a file system (inMemory, or node-files.mjs folder under Node) */
 export function loadProject(fsys, main, { tables = false } = {}) {
   // each file's text read once: the package's TeX (.tex, .sty, .cls) is read by several of the passes below
-  const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, latin1(fsys.read(f))).get(f)
+  const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, texText(fsys.read(f))).get(f)
   const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: sourceText(f) }))
   const outer = paper
   paper = paperOf(own.map(x => x.text))
@@ -1529,7 +1541,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
   // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
   // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract
-  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: latin1(bytes) } } return null }
+  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } } return null }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)

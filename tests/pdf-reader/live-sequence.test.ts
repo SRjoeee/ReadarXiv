@@ -500,20 +500,46 @@ describe('a copy made under pipeline 19, reopened under 20', () => {
   })
 })
 
-// A copy made under pipeline 20, reopened under 21: 21 keeps a styled pair whose two ends stand where the wire has a marker
-// anyway (mt.mjs classOf's boundary rule, TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read
-// back: the unit whose wire the rule changes is sent again, every other unit carried as the copy has it
+// A copy made under pipeline 20, reopened under 21: 21 reads a source's line ends as TeX does (latex-front.mjs texText), the
+// wire and its reading back 20's. A CRLF file's paragraphs, one unit under 20, are units of their own: new units, sent; the
+// units of the paper's LF files are the copy's by their hash, carried as it has them
 describe('a copy made under pipeline 20, reopened under 21', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit of the LF file as the copy has it, and sends the CRLF file\'s paragraphs, now units of their own', async () => {
+    const main = '\\documentclass{article}\n\\begin{document}\nA paragraph of the main file, with words that run on for a line or two of prose and an end.\n\n\\input{part}\n\\end{document}\n'
+    const part = 'A first paragraph of the part, written with CRLF line ends and words.\r\n\r\nA second paragraph of the part, with words of its own.\r\n'
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(main)], ['part.tex', new TextEncoder().encode(part)]])), n = p.units.length
+    expect(n).toBe(3)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const made = unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results)
+    // (the copy 20 made: the main file's unit as now; the part's two paragraphs one unit, its line ends CRLF)
+    const merged = { kind: 'para', src: 'A first paragraph of the part, written with CRLF line ends and words. A second paragraph of the part, with words of its own.', hash: 'f'.repeat(64), pieces: [{ t: 'text', tr: true, s: '\u8bba\u6587' }], state: 'whole', by: 'B', tried: ['B'] }
+    const record = JSON.parse(JSON.stringify({ pipeline: '20', format: 'markers', context: {}, marks: [['0s', {}]], units: [made[0], merged] }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(1)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual(['A first paragraph of the part, written with CRLF line ends and words.', 'A second paragraph of the part, with words of its own.'])
+    expect(r.settled).toBe(true)
+  })
+})
+
+// A copy made under pipeline 21, reopened under 22: 22 keeps a styled pair whose two ends stand where the wire is cut
+// anyway (mt.mjs classOf's boundary rule, TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read
+// back: the unit whose wire the rule changes is sent again, every other unit carried as the copy has it
+describe('a copy made under pipeline 21, reopened under 22', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
   it('sends again the unit whose wire the boundary rule changes, and no other', async () => {
-    expect(PIPELINE_VERSION).toBe('21')
+    expect(PIPELINE_VERSION).toBe('22')
     // (2610.19159's u325: a run-in label kept, a colour after it to the unit's end)
     const label = '\\textit{Floor (must clear):} \\textcolor{red}{all of the rest of the line to its end}'
     const p = openPaper(new Map([['main.tex', new TextEncoder().encode(sourceOf(PARAS).replace('\\end{document}', `\n${label}\n\n\\end{document}`))]])), n = p.units.length
     const changed = p.units.filter(u => boundaryChanges(u))
     expect(changed.length).toBe(1)
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
-    const record = JSON.parse(JSON.stringify({ pipeline: '20', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const record = JSON.parse(JSON.stringify({ pipeline: '21', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
     const { seed } = await seedFrom(record, p.units)
     const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
     expect(reuse.copyWire).toBe(false)
@@ -524,13 +550,13 @@ describe('a copy made under pipeline 20, reopened under 21', () => {
     expect(r.settled).toBe(true)
     // (every copy from 15 on, sent the old way, takes the boundary test: the changed unit is not carried, a plain one is)
     const plain = p.units.find(u => !u.pieces.some(q => (q as { t: string }).t === 'open'))!
-    for (const v of ['15', '16', '17', '18', '19', '20']) {
+    for (const v of ['15', '16', '17', '18', '19', '20', '21']) {
       expect(PIPELINE_CARRIES[v]!([], changed[0]!), v).toBe(false)
       expect(PIPELINE_CARRIES[v]!([{ t: 'text', s: 'words', tr: true }], plain), v).toBe(true)
     }
     // (without the unit, a translation that holds no pair is carried, one that holds a pair is not)
-    expect(PIPELINE_CARRIES['20']!([{ t: 'text', s: 'words', tr: true }], null)).toBe(true)
-    expect(PIPELINE_CARRIES['20']!([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'words', tr: true }, { t: 'close', id: 1, src: '}' }], null)).toBe(false)
+    expect(PIPELINE_CARRIES['21']!([{ t: 'text', s: 'words', tr: true }], null)).toBe(true)
+    expect(PIPELINE_CARRIES['21']!([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'words', tr: true }, { t: 'close', id: 1, src: '}' }], null)).toBe(false)
   })
 })
 
