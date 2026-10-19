@@ -1358,27 +1358,10 @@ function finishUnit(out, unit, rects, charsByPage) {
   out.joinAt = new Map()
   const breakNext = new Set(), joinNext = new Map(), breakOf = new Map(), joined = new Set()
   for (const { next, room, pitch } of out.breaks?.values() ?? []) { if (room === null) breakNext.add(next); else joinNext.set(next, pitch) }
-  // (a found display none of whose rows is a line of the unit's, its ink below the lines before it: the maker's lines leave
-  // such a display out, 2610.16663's unit 89. Its region is one of no lines just before the unit's first line after its
-  // box, as a forced break's whose next line opens another frame: the text after it starts there, never beside the text
-  // before it. `afterBox`, by the key of that line)
-  const afterBox = new Map()
-  for (const r of out.values()) {
-    const box = r?.mode === 'kept' && r.cls === 'display' ? r.gap?.box : null
-    if (!box || box.page === undefined || r.gap.chars.some(c => !c.sep && !c.space) || r.gap.held?.length) continue
-    // (a line before it: on an earlier page, or on its page above its ink across from it, or in a column left of it)
-    const before = q => q[0] < box.page || (q[0] === box.page && ((q[1] < box.x1 && q[3] > box.x0 && q[2] >= box.top - 0.5) || q[3] <= box.x0))
-    let last = -1
-    rects.forEach((q, i) => { if (before(q)) last = i })
-    const next = rects[last + 1]
-    if (last >= 0 && next && !keepSet.has(rectKey(next))) afterBox.set(r, rectKey(next))
-  }
-  const boxBreaks = new Set(afterBox.values()), boxRegion = new Map()
   let region = -1, inRun = false
   for (const r of rects) {
     const k = rectKey(r)
     const j = breakNext.size || joinNext.size ? out.lineInfo.get(k)?.j : undefined
-    if (boxBreaks.has(k) && !out.breakAt.has(k)) { region++; inRun = false; out.breakAt.set(k, region); boxRegion.set(k, region); if (j !== undefined && breakNext.has(j)) breakOf.set(j, region) }
     if (j !== undefined && breakNext.has(j) && !keepSet.has(k) && !breakOf.has(j)) { region++; inRun = false; out.breakAt.set(k, region); breakOf.set(j, region) }
     if (j !== undefined && joinNext.has(j) && !keepSet.has(k) && !joined.has(j)) { out.joinAt.set(k, joinNext.get(j)); joined.add(j) }
     if (keepSet.has(k)) { if (!inRun) region++; inRun = true; out.regionOf.set(k, region) }
@@ -1390,7 +1373,6 @@ function finishUnit(out, unit, rects, charsByPage) {
     // (and the lines a display's rendering is, a held run's, where they hold none of its characters: tex.mjs)
     const regs = [...r.gap.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`), ...(r.gap.held ?? [])].map(k => out.regionOf.get(k)).filter(g => g !== undefined)
     if (regs.length) { r.region = Math.max(...regs); out.referenced.add(r.region) }
-    else if (afterBox.has(r)) { r.region = boxRegion.get(afterBox.get(r)); out.referenced.add(r.region) }
   }
   for (const [i, { next, room }] of out.breaks ?? []) {
     const r = out.get(i)
@@ -1410,8 +1392,6 @@ function finishUnit(out, unit, rects, charsByPage) {
     if (r?.cls !== 'display') continue
     if (r.mode === 'none' && r.inPlace) { r.origAfter = uc.find(real)?.ch ?? null; continue }
     if (r.mode !== 'kept' || r.region === undefined) continue
-    // (a display of no lines of its own: the first character of the line its region opens)
-    if (afterBox.has(r)) { r.origAfter = uc.find(c => real(c) && `${c.page}|${c.rect.join()}` === afterBox.get(r))?.ch ?? null; continue }
     let last = -1
     uc.forEach((c, i) => { if (out.regionOf.get(`${c.page}|${c.rect.join()}`) === r.region) last = i })
     const next = uc.slice(last + 1).find(c => real(c) && !keepSet.has(`${c.page}|${c.rect.join()}`))

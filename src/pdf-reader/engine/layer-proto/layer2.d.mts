@@ -112,7 +112,7 @@ export interface Prepared extends Map<number, Resolved> {
   breaks?: Map<number, { next: number; room: number | null; pitch: number | null }> | null
   /** the finish: a forced break whose next line opens another frame, its region (no lines of its own) by the key of that
    *  line, which its pieces hold (their resolutions' `region`, with `brk`) */
-  breakAt?: Map<string, number>   // (and a found display none of whose rows is a line of the unit's: its region before the line after its ink)
+  breakAt?: Map<string, number>
   /** the finish: a forced break inside a frame, its frame's pitch by the key of the line after it (its pieces hold TeX's
    *  room after it: their resolutions' `room`, with `brk`): the rows on both sides one block, its gap closed to the pitch */
   joinAt?: Map<string, number>

@@ -456,7 +456,7 @@ export function renderingOf(segs, uc, display) {
   const inside = c => insideOf(S, c, display)
   const at = []
   uc.forEach((c, i) => { if (real(c) && inside(c)) at.push(i) })
-  const box = { x0: Math.min(...S.map(s => s.x0)), x1: Math.max(...S.map(s => s.x1)), top: Math.max(...S.map(s => s.top)), bottom: Math.min(...S.map(s => s.bottom)), baseline: S[0].base, lines: S.length, page: S[0].page }
+  const box = { x0: Math.min(...S.map(s => s.x0)), x1: Math.max(...S.map(s => s.x1)), top: Math.max(...S.map(s => s.top)), bottom: Math.min(...S.map(s => s.bottom)), baseline: S[0].base, lines: S.length }
   if (!at.length) return display ? { text: '', chars: [], box } : null
   // between them, a space of the text layer inside a segment, and a break between two items or lines with one of the
   // rendering's characters either side (in v0's reading a formula's big operator may stand on the line above, and all

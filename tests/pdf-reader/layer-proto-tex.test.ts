@@ -245,7 +245,7 @@ describe("a placeholder's rendering by its segments", () => {
   it("takes the unit's characters inside them on their line, and the breaks between them, never the line above's spaces", () => {
     const g = T.renderingOf(Float64Array.from([1, 19.5, 100, 40.5, 108, 97]), uc(), false)
     expect(g?.chars.map(c => c.ch).join('')).toBe('Pq=k')
-    expect(g?.box).toEqual({ x0: 19.5, x1: 40.5, top: 108, bottom: 97, baseline: 100, lines: 1, page: 1 })
+    expect(g?.box).toEqual({ x0: 19.5, x1: 40.5, top: 108, bottom: 97, baseline: 100, lines: 1 })
   })
   it('a display anywhere in its rows; none found is none, but for a display, whose rows the unit may not hold', () => {
     expect(T.renderingOf(Float64Array.from([1, 70, 100, 80, 108, 97]), uc(), false)).toBeNull()
@@ -1220,59 +1220,6 @@ describe("LaTeX's text symbols: one table for the maker and the layer (rules/tex
       expect([ch, ''], cmd).toContain(L2.texToText2(`$${cmd}$`))
     }
     expect([S.symbolText('\\textbar{}x'), S.symbolText('\\ours'), S.symbolText(undefined)]).toEqual([null, null, null])
-  })
-})
-
-describe("a display whose rows are no line of its unit's (the maker's lines leave them out, 2610.16663's unit 89)", () => {
-  // two text lines, the display under them (its segments found, no line of the unit holds them), the text after it on the
-  // unit's next line in the file: the text after the display starts there, not on the line before it
-  const L = (y: number) => [1, 10, 200, y, y + 7, y - 2, 10, 0]
-  const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
-  const D = '\\begin{equation}x=1\\end{equation}'
-  const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph(D), text(' \u4e59')] } as never
-  const fileUnit = (after: number[]) => {
-    const lu = unitOf([L(500), L(488), after], [[1, 0, [1, 60, 466, 140, 476, 462]]]) as { ph: Map<number, { kind: string }> }
-    const row = lu.ph.get(1)
-    if (row) row.kind = 'display'
-    return lu as never
-  }
-  const read = (lu: never, page: unknown[]) => {
-    const t = T.texRects(lu)
-    return { t, prep: L2.prepareUnit(u, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never) }
-  }
-  it('is kept, and a region of no lines just before the line after it, which the text after it starts on', () => {
-    const page = [...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 466, 10, 2, math), ...item('d', 10, 440, 10, 4)]
-    const { t, prep } = read(fileUnit(L(440)), page)
-    const r = prep.get(1)
-    expect(prep.unproven).toBeUndefined()
-    expect(r?.mode).toBe('kept')
-    expect(prep.referenced.has(r?.region as number)).toBe(true)
-    const blocks = L2.blocks2(t.rects as never, [[0, 0, 612, 792]], new Set(prep.keep), prep.lineInfo, prep.regionOf, prep.referenced, null, prep.breakAt)
-    expect(blocks.map(b => [b.B, b.after])).toEqual([[[500, 488], 0], [[440], 1]])
-    const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
-    const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
-    const tokens = L2.tokensOf2(u, prep as never, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 0)
-    expect(tokens.filter(x => !x.space).map(x => x.s ?? `|${x.blockTo}`)).toEqual(['\u7532', `|${r?.region}`, '\u4e59'])
-  })
-  it('on the next page: the line after it opens there; at the unit\'s end, none', () => {
-    // the display at the foot of page 1, the text after it on page 2's first line
-    const page2 = [1, 10, 200, 700, 707, 698, 10, 0].map((v, i) => (i === 0 ? 2 : v))
-    const lu = fileUnit(page2)
-    const t = T.texRects(lu)
-    const pages = [[...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 466, 10, 2, math)], item('d', 10, 700, 10, 4).map(c => ({ ...c, page: 2 }))]
-    const prep = L2.prepareUnit(u, t.rects as never, pages as never, new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never)
-    const r = prep.get(1)
-    expect(prep.referenced.has(r?.region as number)).toBe(true)
-    // (the region is the line's on page 2: its key's page)
-    expect([...prep.breakAt!].map(([k, v]) => [k.split('|')[0], v])).toEqual([['2', r?.region]])
-    // (a display at the unit's end, no line after it: no region, nothing to start)
-    const last = { kind: 'para', src: 'a b c', pieces: [text('\u7532 '), ph(D)] } as never
-    const one = unitOf([L(500), L(488)], [[1, 0, [1, 60, 466, 140, 476, 462]]]) as { ph: Map<number, { kind: string }> }
-    const row = one.ph.get(1)
-    if (row) row.kind = 'display'
-    const t1 = T.texRects(one as never)
-    const p1 = L2.prepareUnit(last, t1.rects as never, [[...item('a b', 10, 500, 10, 0), ...item('c', 10, 488, 10, 1), ...item('x=1', 60, 466, 10, 2, math)]] as never, new Map() as never, null, T.texParts(one as never, [-1, 1], { use: 'lines', lines: t1 }) as never)
-    expect(p1.get(1)?.region).toBeUndefined()
   })
 })
 
