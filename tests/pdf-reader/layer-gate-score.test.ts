@@ -617,6 +617,14 @@ describe("TeX's file against the drawing (the 2608.16117 survey and the p59 find
     expect(contentOf({ phs: [ph], erased, keptLines: [[72, 697.5, 472, 707]], texts: text() }).contentWhere).toEqual([[3, 1, 2]])
   })
 
+  it("a drawn crop's audit entry: its placeholder's, and its part's where a formula TeX broke over lines is one crop a line", async () => {
+    const { cropAuditOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
+    const audit = [{ what: 'crop', k: 1, src: [0, 0, 1, 1] }, { what: 'crop', k: 2, part: 0, src: [2, 2, 3, 3] }, { what: 'crop', k: 2, part: 1, src: [4, 4, 5, 5] }]
+    expect(cropAuditOf(audit, { k: 1 })?.src).toEqual([0, 0, 1, 1])
+    expect(cropAuditOf(audit, { k: 2, part: 0 })?.src).toEqual([2, 2, 3, 3])
+    expect(cropAuditOf(audit, { k: 2, part: 1 })?.src).toEqual([4, 4, 5, 5])
+  })
+
   it("content: a rendering handed out one off shows every placeholder it passes as lost; one of the same source is its own", async () => {
     const { contentOf } = await import('../../lab/pdf/spikes/layer-gate/measure.mjs')
     // k 1's rendering took k 9's ink ("(2.4)"); k 9's own rendering took nothing: neither is shown

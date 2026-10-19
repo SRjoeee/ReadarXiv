@@ -212,6 +212,10 @@ export function modelPage({ units, ref, items, translated, cut = [], placement =
  * `lines`: { key, x0, x1, baseline, a, d }; `crops`: { unit, line (its line's key), box: [x0, y0, x1, y1] as drawn,
  * srcTop, tex, sc (its drawn scale) }. With the units each count is of (`where`)
  */
+/** the audit's entry of a drawn crop (its item's token's `crop`): its placeholder's (`k`) and, where its formula TeX broke over
+ *  lines is drawn as one crop a line, its part's (`part`, layer2.mjs cropPartsOf: each part an entry of its own) */
+export const cropAuditOf = (audit, crop) => audit.find(x => x.k === crop.k && (x.part ?? 0) === (crop.part ?? 0))
+
 export function cropPlacementOf({ lines, crops }) {
   const where = { cropTextOverlap: [], cropBaselineOff: [], cropNoTex: [] }
   crops.forEach((c, i) => {
