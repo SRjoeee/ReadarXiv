@@ -28,8 +28,12 @@ export { LayoutRefusal } from './json.mjs'
  *  (the file's schema 5); and each colour piece's fill as TeX set its run (`colours`, marks.mjs readColours: a key of the
  *  file's only where a unit has one); 9: a unit's own mark no line carried placed by the unit's words beside it, one of them
  *  at most a reference's other name (layout/tolerant.mjs: 2609.26457's "section B" for arXiv's "appendix B"), and a text
- *  piece the matcher missed found by its characters on the unit's lines (TeX broke it over two lines in one PDF alone) */
-export const LAYOUT = '9'
+ *  piece the matcher missed found by its characters on the unit's lines (TeX broke it over two lines in one PDF alone); 10:
+ *  no row and no mark for a placeholder that sets no ink (arg-roles.mjs textless: \label with cleveref's type,
+ *  \bibliographystyle, soul's \sethlcolor, \-), and a babel name's marks after a \relax (marks.mjs NAMES_TEX), so that a
+ *  class's \if over the name reads it and REVTeX's numbered appendices are set with their names marked (the file's schema
+ *  is 5 still; the gate pack's 32 outputs' marks are 9's, each destination where it was) */
+export const LAYOUT = '10'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */

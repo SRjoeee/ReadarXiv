@@ -444,6 +444,9 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   paper's own, the name marks off, a page count compared) and records why a part has none, not what a unit is, what is
  *   sent for one or how a reply is read back: every unit whose source a copy holds is carried, and older pipelines keep
  *   their own tests
+ * - 19: 20 changes what a unit is (none of what TeX reads as syntax, a declaration's digits its text: arg-roles.mjs
+ *   readArgs and DELIMITED, latex-front.mjs), not what is sent for one or how a reply is read back (the wire keeps its own
+ *   inkless list, mt.mjs INKLESS): every unit whose source a copy holds is carried, and older pipelines keep their own tests
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -453,7 +456,7 @@ const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
 const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
 const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
 const EVERY = () => true
-export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY, 17: EVERY, 18: EVERY }
+export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY, 17: EVERY, 18: EVERY, 19: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
