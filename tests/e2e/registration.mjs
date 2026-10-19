@@ -22,7 +22,9 @@
 // on the context PDF.js draws a page view on, so the two copies agree to the pixel where the frame is right: 0 differ.
 //
 // Usage: pnpm build && pnpm e2e:registration     (first time: npx playwright install chromium)
-// Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1 or 2 runs one ratio alone.
+// Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1.1,1.8 runs those ratios alone.
+// AXT_MEASURE=1 checks nothing and measures the commit's path instead, at the fit and at 100 %: its source and its copy (ms,
+// the median of five) and the long tasks of the browser's own recopy after the zoom, a line a page (PDF-READER.md §11.8).
 import { readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
@@ -39,7 +41,8 @@ const BUILD = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/ch
 const EXT = `${HERE}.ext-registration`
 /** the window: a laptop's (the owner's fit, 87 %, at a pixel ratio of 2) */
 const WINDOW = { width: 1512, height: 848 }
-const RATIOS = process.env.AXT_DPR ? [Number(process.env.AXT_DPR)] : [2, 1]
+const RATIOS = process.env.AXT_DPR ? process.env.AXT_DPR.split(',').map(Number) : [2, 1]
+const MEASURING = process.env.AXT_MEASURE === '1'
 /** the zooms tried: the fit and the menu's steps around it; those PDF.js floors at least FLOORED of a CSS px off are checked */
 const ZOOMS = ['page-width', 0.75, 0.8, 0.9, 1, 1.1, 1.2, 1.25, 1.5]
 const FLOORED = 0.6
@@ -91,6 +94,8 @@ const RECORDER = `(() => {
   const draw = P.drawImage
   P.drawImage = function (...a) { keep(this, ['drawImage', a.length, ...(a.length === 9 ? a.slice(5) : [])]); return draw.apply(this, a) }
   window.__axtOps = c => ops.get(c) ?? null
+  window.__axtLong = []
+  new PerformanceObserver(l => { for (const e of l.getEntries()) window.__axtLong.push([e.startTime, e.duration]) }).observe({ type: 'longtask' })
 })()`
 
 /** in the page: the registration of every page laid near the view, with the residue of its copy from PDF.js's canvas */
@@ -179,6 +184,27 @@ try {
       check(`DPR ${dpr}: the sample's first page is laid on the right`, laid)
       if (!laid || !hooked) continue
       await page.waitForFunction(() => window.__reader.side()?.probe().ended === true, null, { timeout: 30_000 }).catch(() => undefined)
+      if (MEASURING) {
+        const median = v => [...v].sort((a, b) => a - b)[v.length >> 1]
+        // (the pages near the view laid: two at least)
+        await page.waitForFunction(() => document.querySelectorAll('#right .axt-place[data-axt-layer] canvas.axt-layer-copy').length >= 2, null, { timeout: 30_000 }).catch(() => undefined)
+        for (const z of ['page-width', 1]) {
+          const t0 = await page.evaluate(() => performance.now())
+          await page.evaluate(z => window.__reader.view.zoomTo(z), z)
+          await page.waitForFunction(settled, null, { timeout: 20_000 }).catch(() => undefined)
+          await sleep(1500)
+          await page.waitForFunction(settled, null, { timeout: 20_000 }).catch(() => undefined)
+          const long = await page.evaluate(t0 => window.__axtLong.filter(([at]) => at >= t0).map(([, d]) => Math.round(d)), t0)
+          const runs = []
+          for (let i = 0; i < 5; i++) runs.push(await page.evaluate(measureAll))
+          for (const p of runs[0].pages) {
+            const of = runs.map(r => r.pages.find(q => q.page === p.page)?.ms).filter(Boolean)
+            console.log(`MEASURE DPR ${dpr}, zoom ${z} (scale ${runs[0].scale.toFixed(4)}), page ${p.page}: from ${p.from}, source ${median(of.map(m => m.source)).toFixed(1)} ms, copy ${median(of.map(m => m.copy)).toFixed(1)} ms; the zoom's recopy: ${long.length} long task(s), longest ${Math.max(0, ...long)} ms, ${long.reduce((a, b) => a + b, 0)} ms in all`)
+          }
+        }
+        await page.close()
+        continue
+      }
 
       // ------------------------------------------------------------------ the time's half: retired, then laid again
       await page.waitForFunction(settled, null, { timeout: 15_000 }).catch(() => undefined)

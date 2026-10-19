@@ -152,7 +152,8 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.view.zoomTo(FIT)
     await settle(s, 4)
     await nearOn(s, [1])
-    // (a restricted output scale rounded apart: 1422 px over 711 across, 1841 over 920 down)
+    // (an output scale rounded apart across and down, as PDF.js's fraction of a pixel ratio such as 1.1 or 1.8 gives it at
+    // almost every zoom: 1422 px over 711 across, 1841 over 920 down)
     leftViewer().render(1, null, { width: 1422, height: 1841, sx: 2, sy: 1841 / 920 })
     s.side.tell(await ALL())
     await settle(s)
@@ -165,25 +166,30 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
   it('a canvas PDF.js drew at a restricted output scale near the place\'s k is a source, copied at the scale it drew', async () => {
     vi.stubGlobal('devicePixelRatio', 2)
     const s = await setup()
-    // at 400 % the place's k is held to COPY_PIXELS (5.883); PDF.js under its own cap drew at an output scale of 1.1
-    // (approximateFraction's 11/10: 3586 px over 3260 across, 4642 over 4220 down), 5.867 device pixels a unit
-    s.view.zoomTo(4)
+    // at 353 % the place's k is held to COPY_PIXELS (5.883); PDF.js under a cap of its own drew at an output scale of 5/4 (a
+    // fraction approximateFraction can give, its terms at most 8: 3600 px over 2880 across, 4655 over 3724 down), 5.883 device
+    // pixels a unit. (With the viewer's detail canvas on, as by default, PDF.js draws a restricted base canvas at half or a
+    // quarter of that, which no K_SLACK takes: this is the case with it off)
+    s.view.zoomTo(3.53)
     await settle(s, 4)
     await nearOn(s, [1])
-    leftViewer().render(1, null, { width: 3586, height: 4642, sx: 3586 / 3260, sy: 4642 / 4220 })
+    leftViewer().render(1, null, { width: 3600, height: 4655, sx: 1.25, sy: 1.25 })
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
     expect(one?.[1]).toBe(pageView(1).canvas)
-    expect(one?.[2]).toBe(pageView(1).viewport.scale * (3586 / 3260))
-    expect(one?.[2]).not.toBe(3586 / 612)
+    expect(one?.[2]).toBe(pageView(1).viewport.scale * 1.25)
+    expect(one?.[2]).not.toBe(3600 / 612)
   })
 
   it('a canvas left as drawn through a zoom\'s steps is copied at the scale it was drawn at, not the page view\'s next', async () => {
     const s = await setup()
+    // drawn at the fit, its page 711.99 CSS px floored to 711 (so neither 711 / 612 nor the page view's next scale is it)
+    s.view.zoomTo(FIT)
+    await settle(s, 4)
     await nearOn(s, [1])
     const pv = pageView(1), drawnAt = pv.viewport.scale
-    leftViewer().render(1, null, { width: Math.floor(pv.viewport.width), height: Math.floor(pv.viewport.height), sx: 1, sy: 1 })
+    leftViewer().render(1, null, { width: 711, height: 921, sx: 1, sy: 1 })
     // a step of 1 %: PDF.js gives the page view its next viewport at once, and keeps the canvas until it draws again
     s.view.zoomBy(1.01)
     await flush()
@@ -193,6 +199,28 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     const one = copyOf(s, 1)
     expect(one?.[1]).toBe(pv.canvas)
     expect(one?.[2]).toBe(drawnAt)
+    expect(one?.[2]).not.toBe(711 / 612)
+  })
+
+  it('the page drawn from the document is drawn on the context of the left\'s page views: the CPU\'s, or the GPU\'s where the host opens its documents with enableHWA', async () => {
+    for (const [assets, cpu] of [[undefined, true], [{ cMapUrl: 'cmaps/', enableHWA: true }, false]] as const) {
+      const asked: unknown[] = []
+      const get = HTMLCanvasElement.prototype.getContext
+      const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement, ...a: Parameters<typeof get>) {
+        if ((a[1] as { alpha?: boolean } | undefined)?.alpha === false) asked.push(a[1])
+        return get.apply(this, a)
+      })
+      const s = await setup(assets ? { assets } : {})
+      await nearOn(s, [2])
+      s.side.tell(await ALL())
+      await settle(s)
+      spy.mockRestore()
+      // (page 2's left page never drawn: its copy's source the page drawn from the document)
+      expect(copyOf(s, 2)).toBeDefined()
+      expect(asked.length).toBeGreaterThan(0)
+      expect(asked.every(o => (o as { willReadFrequently: boolean }).willReadFrequently === cpu), JSON.stringify(asked)).toBe(true)
+      s.view.dispose()
+    }
   })
 
   it('the SVG and the links are laid in the page\'s frame: its size in PDF units times --total-scale-factor', async () => {

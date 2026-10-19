@@ -78,6 +78,8 @@ export interface Options {
   composedFailAt?: readonly number[]
   /** the door refuses to open, as openLayer refuses a document of another page count */
   openFails?: boolean
+  /** the host's getDocument options (the kit's assets) in place of the fakes' */
+  assets?: Record<string, unknown>
   /** the fake door's links of a laid page (the door's own gives none); `n` the page, `door` its index (0 the first opened) */
   links?: (n: number, door: number) => LinkRecord[]
 }
@@ -91,7 +93,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const lookers = new Set<(p: ViewPrefs) => void>()
   const opened: string[] = []
   const host: ReaderHost = {
-    panes, pdfjs: { ...fakeKit(), lib: { AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2 }, OPS: {} } }, clock, scrollEnd: 'native',
+    panes, pdfjs: { ...fakeKit(), ...(o.assets ? { assets: o.assets } : {}), lib: { AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2 }, OPS: {} } }, clock, scrollEnd: 'native',
     words: { pageName: (s, n) => `${s} ${n}`, sideName: s => s },
     prefs: { get: () => look, subscribe: l => { lookers.add(l); return () => { lookers.delete(l) } } }, links: { openExternal: u => { opened.push(u) } }, emit: e => events.push(e),
   }

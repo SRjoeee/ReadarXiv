@@ -68,6 +68,8 @@ export interface Registration {
   kSource: number
   lost: number
   source: [number, number]
+  /** the commit's own path timed (ms): its source got (a canvas PDF.js drew, or the page drawn from the document), its copy drawn */
+  ms: { source: number; copy: number }
   doc?: [number, number]
   compared?: number
   differing?: number
