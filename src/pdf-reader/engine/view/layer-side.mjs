@@ -786,6 +786,42 @@ export function createLayerSide(view, o) {
         shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
       }
     },
+    /** the harness's registration check (layer-side.d.mts Registration): page n's copy drawn from the source a commit takes
+     *  and from the page drawn here at the place's k, the two compared pixel by pixel */
+    async registration(n, { tolerance = 16, canvases = false } = {}) {
+      if (disposed || !door || !V.places.near(n)) return null
+      const c = pages.get(n)?.content, vp = V.places.view(n)?.viewport, k = kOf(n), d = door
+      if (!c?.wrap || c.gen !== gen || !vp?.scale || k === null) return null
+      const w = vp.width / vp.scale
+      const mine = [], drawnHere = []
+      const letGo = s => { if (s?.from === 'doc') { release(s.canvas); s.page?.cleanup?.() } }
+      try {
+        const src = await sourceOf(n, k)
+        drawnHere.push(src)
+        const out = { page: n, size: [w, vp.height / vp.scale], from: src.from, k, kSource: src.k, lost: k * w - src.canvas.width, source: [src.canvas.width, src.canvas.height] }
+        if (src.from === 'doc') return out
+        const doc = await sourceOf(n, k, true)
+        drawnHere.push(doc)
+        const a = await d.copyOf(n, src.canvas, src.k)
+        mine.push(a)
+        const b = await d.copyOf(n, doc.canvas, doc.k)
+        mine.push(b)
+        const W = Math.min(a.width, b.width), H = Math.min(a.height, b.height)
+        const pa = a.getContext('2d').getImageData(0, 0, W, H).data, pb = b.getContext('2d').getImageData(0, 0, W, H).data
+        let differing = 0, maxDiff = 0
+        for (let i = 0; i < pa.length; i += 4) {
+          const m = Math.max(Math.abs(pa[i] - pb[i]), Math.abs(pa[i + 1] - pb[i + 1]), Math.abs(pa[i + 2] - pb[i + 2]))
+          if (m > maxDiff) maxDiff = m
+          if (m > tolerance) differing++
+        }
+        Object.assign(out, { doc: [doc.canvas.width, doc.canvas.height], compared: W * H, differing, maxDiff })
+        if (canvases) { out.copies = { source: a, doc: b }; mine.length = 0 }
+        return out
+      } finally {
+        for (const s of drawnHere) letGo(s)
+        for (const m of mine) release(m)
+      }
+    },
     dispose() {
       if (disposed) return
       disposed = true
