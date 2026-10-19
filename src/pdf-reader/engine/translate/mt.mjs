@@ -159,7 +159,7 @@ function treeOf(pieces) {
  * and after the translation) and each kept pair's own (`lead`, `end`), as lists of piece indices and blocks.
  * A unit whose pairs do not nest goes as it did before: every piece but its text a marker
  */
-function planOf(u, format) {
+function planOf(u, format, boundary = true) {
   const pieces = u.pieces
   const ink = new Array(pieces.length)
   let hasInk = false, styled = false
@@ -185,11 +185,19 @@ function planOf(u, format) {
   runsIn(P, root)
   root.info = infoOf(P, root.seq)
   spans(P, root)
-  if (format !== 'tags') { flatOf(P, root); P.keptEdges = keptEdgesOf(P, root) }
+  if (format !== 'tags') { flatOf(P, root); P.keptEdges = boundary ? keptEdgesOf(P, root) : null }
   const unit = { lead: [], end: [], seen: false }
   const W = { P, items: [], stack: [unit], group: unit, sink: null, joint: false }
   walk(W, root.seq)
   return { items: W.items, front: unit.lead, back: unit.end, styled: true, texts: P.texts }
+}
+/** whether the boundary rule (classOf; TRANSLATE_VERSION 4) changes what a unit sends: its markers plan, which the wire and the
+ *  runs are written from, with the rule and without it. A unit with no pair has none to keep: the units a copy made before the
+ *  rule is asked again for, and no other (live.mjs PIPELINE_CARRIES) */
+export function boundaryChanges(u) {
+  if (!Array.isArray(u?.pieces) || !u.pieces.some(p => p?.t === 'open')) return false
+  const a = planOf(u, 'markers'), b = planOf(u, 'markers', false)
+  return JSON.stringify([a.items, a.front, a.back]) !== JSON.stringify([b.items, b.front, b.back])
 }
 const textAt = (P, k) => (P.texts[k] ??= utf8(P.pieces[k].s))
 const blankAt = (P, k) => P.pieces[k].t === 'text' && blank(textAt(P, k))

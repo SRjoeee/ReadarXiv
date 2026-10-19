@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PIPELINE_CARRIES } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
+import { boundaryChanges, plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The markers wire the PDF reader sends a machine translator (mt.mjs): what an engine reads as part of a word
 
@@ -232,6 +232,18 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     // (after a marker, but ending inside its sentence: flat, as a colour inside a sentence)
     expect(serialize(unit({ t: 'text', s: 'We use ' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' ' }, ...pairs(1, '\\textbf{', 'bold'), { t: 'text', s: ' words in it.' })).wire).toBe('We use @a# bold words in it.')
     expect(serialize(unit({ t: 'text', s: 'We see ' }, ...pairs(1, '\\textcolor{red}{', 'red words'), { t: 'text', s: ' in it.' })).wire).toBe('We see red words in it.')
+  })
+
+  it('boundaryChanges tells the units whose wire the boundary rule changes, and no other (a copy made before it is asked again for those)', () => {
+    // (the rule keeps a pair: the two above)
+    expect(boundaryChanges(unit(...pairs(1, '\\textit{', 'Floor (must clear):'), { t: 'text', s: ' ' }, ...pairs(2, '\\textcolor{red}{', 'all of the rest to the end')))).toBe(true)
+    expect(boundaryChanges(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\\\' }, { t: 'text', s: 'We use a model here.' }))).toBe(true)
+    // (a pair the sentence rule keeps or flattens alike, one that encloses the unit, a link, and no pair at all)
+    expect(boundaryChanges(unit(...pairs(1, '\\emph{', 'Note'), { t: 'text', s: '. It holds.' }))).toBe(false)
+    expect(boundaryChanges(unit({ t: 'text', s: 'We see ' }, ...pairs(1, '\\textcolor{red}{', 'red words'), { t: 'text', s: ' in it.' }))).toBe(false)
+    expect(boundaryChanges(unit(...pairs(1, '\\textbf{', 'All of it.')))).toBe(false)
+    expect(boundaryChanges(unit({ t: 'text', s: 'See ' }, ...pairs(1, '\\href{u}{', 'this'), { t: 'text', s: ' page.' }))).toBe(false)
+    expect(boundaryChanges(unit({ t: 'text', s: 'Plain words ' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' here.' }))).toBe(false)
   })
 
   it('only a pair that sets a style goes flat: any other keeps its two markers, as before (the review of #404, M1)', () => {

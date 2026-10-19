@@ -165,3 +165,17 @@ describe('a label or a lead in its glyphs\' colour', () => {
     expect('color' in L2.styleOfChars([{ st: plain() }] as never, 'times')).toBe(false)
   })
 })
+
+describe('a font is one whatever its characters\' fills', () => {
+  it('pageChars2 gives the characters of one font and fill one style, and every fill of a font one font class (fontOfStyle)', () => {
+    const it0 = { str: 'see [16]', transform: [10, 0, 0, 10, 10, 100], width: 40, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }
+    const cs = L2.pageChars2({ items: [it0] } as never, () => BASE as never, null, [[0, 0, 5, 0x0000ff, 7, 0]])
+    const [s, b, one] = [cs[0]!, cs[4]!, cs[5]!]
+    expect([s.st === b.st, (s.st as St).fill, (one.st as St).fill]).toEqual([true, 0, 0x0000ff])
+    // (a tally of fonts counts them as one: colour splits no font's characters)
+    expect(L2.fontOfStyle(s.st)).toBe(BASE)
+    expect(L2.fontOfStyle(one.st)).toBe(BASE)
+    // (a style no fill was set on is its own class)
+    expect(L2.fontOfStyle(BASE)).toBe(BASE)
+  })
+})

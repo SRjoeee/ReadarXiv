@@ -126,16 +126,19 @@ const NO_UNICODE = /[\p{Co}\p{Cc}\uFFFD]/u
  *  its font's own map (`mapped`, mappedOf's; null: none to read) gives none of its glyphs */
 export const unmapped = (ch, mapped) => /\S/.test(ch) && (NO_UNICODE.test(ch) || (mapped != null && !mapped.has(ch)))
 /** a font class with a character's fill (layout/fills.mjs): one object a class and fill, so that characters of one font and
- *  colour share their style as those of one font did */
+ *  colour share their style as those of one font did; its font class itself, `font` (not enumerable), for what asks whether two
+ *  characters are of one font whatever their colours (fontOfStyle) */
 const filled = new WeakMap()
 const withFill = (st, fill) => {
   if (!st || typeof st !== 'object' || fill === UNKNOWN) return st
   let m = filled.get(st)
   if (!m) filled.set(st, (m = new Map()))
   let out = m.get(fill)
-  if (!out) m.set(fill, (out = { ...st, fill }))
+  if (!out) m.set(fill, (out = Object.defineProperty({ ...st, fill }, 'font', { value: st })))
   return out
 }
+/** a character style's font class, its fill aside: what a tally of fonts counts, so that colour splits no font's characters */
+export const fontOfStyle = st => st?.font ?? st
 /**
  * A page's text content as characters: each item's width shared by its design's widths (what is left over, a justified
  * line's stretch, by its spaces where it has any), and the item's font class (`st`, from fontOf(fontName)) on every
@@ -220,7 +223,7 @@ function joinAccents(chars, items) {
       const o = i === r.last ? runs[n + 1] : runs[n - 1]
       if (!o) continue
       const L = chars[i === r.last ? o.first : o.last]
-      if (!isLetter(L) || L.nu || L.st !== c.st || Math.abs(L.yb - c.yb) > tol) continue
+      if (!isLetter(L) || L.nu || fontOfStyle(L.st) !== fontOfStyle(c.st) || Math.abs(L.yb - c.yb) > tol) continue
       // (the accent glyph's centre on the letter: only the move back over it puts it there)
       const mid = i === r.last ? end - w / 2 : it.transform[4] + w / 2
       if (mid >= L.x0 - tol && mid <= L.x1 + tol && join(L, mark)) gone.add(i)
@@ -1543,7 +1546,7 @@ function drawnAs(p, g, cls, sup, lineInfo = null) {
   const lines = new Set(real.map(c => c.rect.join()))
   const lineSize = median(real.map(c => c.size))
   const tally = new Map()
-  for (const c of real) if (c.st && /\S/.test(c.ch)) tally.set(c.st, (tally.get(c.st) ?? 0) + 1)
+  for (const c of real) if (c.st && /\S/.test(c.ch)) { const f = fontOfStyle(c.st); tally.set(f, (tally.get(f) ?? 0) + 1) }
   const gst = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0]
   // one visual line (its baselines within 0.75 em: a fraction's numerator another rectangle holds is on it) is cropped;
   // a rendering broken over lines is drawn as the page's text

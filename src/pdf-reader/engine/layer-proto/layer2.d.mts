@@ -288,6 +288,8 @@ export declare const widthOf: (s: string, face: Face) => number
 export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null }, toPx: (x: number, y: number) => number[], scale: number): string
 /** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */
 export declare function colourOfStyle(st: { fill?: number } | null | undefined): { color?: string }
+/** a character style's font class, its fill aside (the class itself where no fill was set on it) */
+export declare function fontOfStyle<T>(st: T): T
 /** a run's style from its characters (the first not a formula's), its colour too; its design `serif` where none is told */
 export declare function styleOfChars(cs: readonly Pick<Char, 'st'>[], serif: string): { fam: string; bold: boolean; italic: boolean; caps: boolean; design: string; color?: string }
 /** what an erasing covered that no painted unit accounts for, put back from the original: the restore operation, or null */
