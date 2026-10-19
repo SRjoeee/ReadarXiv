@@ -23,7 +23,6 @@
 // freeze spends at most WORK_MAX point-against-operation comparisons, dropping what is left as `unplaced`.
 
 import { isMemoryError } from '../pipeline/memory.mjs'
-import { inkWidth } from './words.mjs'
 
 /** the schemes a record's `url` may have (the contract's allow-list: PDF.js also lets ftp: and tel: through) */
 export const LINK_SCHEMES = ['http:', 'https:', 'mailto:']
@@ -642,11 +641,9 @@ function placeCrop(to, annots, lines, scale, records, tried) {
     for (const x of at) {
       const { line, it } = x, r = it.t.crop, cr = r.crop
       if (c.q !== r.page || (first && line.page !== first.line.page)) continue
-      // (its image's own width: the kern after it is no part of it, words.mjs inkWidth)
-      const w = inkWidth(it)
-      const sx = w / (cr[2] - cr[0])
+      const sx = it.w / (cr[2] - cr[0])
       const X = v => it.x + (v - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * scale
-      const drawn = [it.x, Y(cr[1]), it.x + w, Y(cr[3])]
+      const drawn = [it.x, Y(cr[1]), it.x + it.w, Y(cr[3])]
       const had = box.length
       for (const ar of c.a.boxes?.length ? c.a.boxes : [c.a.rect]) {
         const b = [Math.max(drawn[0], X(ar[0])), Math.max(drawn[1], Y(ar[1])), Math.min(drawn[2], X(ar[2])), Math.min(drawn[3], Y(ar[3]))]

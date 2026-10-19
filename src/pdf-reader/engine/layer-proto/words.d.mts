@@ -39,8 +39,6 @@ export declare function wordIndexer(plain: string): (at: number, end: number) =>
 export declare function plainOfPieces(pieces: readonly { t: string; s?: string; tr?: boolean }[]): string
 /** the page's table as it is built */
 export interface OpenWords { n: number; cap: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array; word: Int32Array; spans: [number, number[]][] }
-/** a laid item's own width: its advance less the kern after its ink it still holds (layer2.mjs breakLines' `kern`) */
-export declare function inkWidth(it: { w: number; kern?: number }): number
 export declare function newWords(): OpenWords
 /** a text token's band on a line whose baseline is `by`: the baseline it is drawn on, the size drawn, its face's ascent and descent over and under it */
 export declare function tokenBand(t: Token, L: Layout, by: number): { y: number; h: number; top: number; bottom: number }
