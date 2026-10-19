@@ -1493,6 +1493,35 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
     source does not run through on TeX Live 2023 or 2025"), and the refusal is `texlive` only where the paper declares a year
     none of the trees tried is. The verdict stays in the result and the page pass's `stats.layout`; a part's record is
     `{ refused, why }` as before, and with no `tried` every why is as before.
+- **A paper arXiv compiles with `latex`** (its 00README's compiler, `latex+dvips_ps2pdf` read as it, or the one guessed for a
+  package of EPS figures alone; R1 item 5 of 2026-10-19). arXiv runs latex, pdfTeX in DVI mode, and makes the DVI a PDF by
+  dvips and ps2pdf; the marked original is that compile, its DVI made a PDF by dvipdfmx (`CompileRequest`'s `engine:
+  'latex'`: latexmk's -pdfdvi with dvipdfmx as its dvipdf, a one-pass compile latex then dvipdfmx, a draft latex
+  -draftmode). pdfLaTeX in its place sets such a paper otherwise (2610.21765's pages 8 to 14 refused for their carry, 83 %;
+  2608.22687's 25 to 35, 88 %); and through dvips and Ghostscript no mark of ours would reach the PDF's content stream.
+  - *The marks*: where pdfTeX writes no PDF itself, MARK_DEF's and LAYOUT_TEX's destination and points are xdvipdfmx's as
+    under XeTeX, a `pdf:dest` special of an XYZ and a `pdf:code` rendering intent, with dvipdfmx told at the first page to
+    keep every destination nothing refers to (`C 0x0010`): `DVI_MARK_DEF` after MARK_DEF, `DVI_LAYOUT_TEX` after
+    LAYOUT_TEX, for such a paper alone and with no line of their own, so that every other engine's compile is byte for byte
+    as before (the compile-files goldens; 52 of the sweep's 53 sources and 128 of the lab corpus's 129 the same in every
+    compile input, the two others the corpus's two `latex` papers). Each sets a whatsit, as XeTeX's do: TeX's own DVI
+    (dvitype, every character and rule to the sp) is the same with them and without, on every document of the native cases
+    and the stream's six (`ONLY=dvi`), every named piece owns its own glyphs, and a cell's mark in a `\resizebox` lies on its glyphs (dvipdfmx reckons a destination's place in dvips's scaled box). dvipdfmx draws a glyph with no special
+    before it by its own reckoning, up to 0.35 pt off TeX's place (a margin note), and the marked original's, a special
+    before it, at TeX's.
+  - *Against arXiv's PDF*: our DVI drawn by dvips and ps2pdf is arXiv's PDF to 0.03 pt (2610.21765, its words' median); by
+    dvipdfmx, every page and word in place to 0.09 pt (the median; 0.42 pt at the 99th percentile), the fonts' boxes aside.
+    Its marked original then makes a layout: 2610.21765 every part kept, 1,574 of 1,600 lines carried, 167 of 175 units
+    located, 606 of 611 placeholders (the guard leaving one unit unmarked, a `\vspace` length the front end cut as one);
+    2608.22687 every part kept, 2,376 of 2,453, 239 of 269. The paper's hyperref is its dvips driver's, whose links dvipdfmx
+    does not read: such a marked original has no links, and the link-anchor tier places none.
+    Text a paper places by PostScript (pstricks' `\rput`) dvipdfmx sets elsewhere than dvips does (64 pt off, measured in
+    review): it is no unit's text, and the carry leaves it unmatched. A `sidewaystable` page arXiv's ps2pdf turns (`/Rotate
+    90`) dvipdfmx leaves upright; the layer lays over no rotated page (ink.mjs `rotated`), so such a page has none, by design.
+  - *Cost*: dvipdfmx once a marked compile, 0.85 s on 2610.21765's 14 pages, against pdfTeX's PDF written at every pass (a
+    latex pass 0.84 s, a pdfLaTeX one 0.95 s): its prepare's compiles 12.4 s either way.
+  - *The web host*'s runner runs no latex today (its answer "unknown engine": refused 'engine', as before) until its
+    sandbox runs the request above; the image holds latex, dvipdfmx and Ghostscript already.
 - **A compile that did not make the paper is a failed compile** (2026-10-19). A marked original
   that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test runLive's compiles and CM's passes use too:
   its last pass stopped short — an emergency stop, a hundred errors, TeX's capacity — or never logged END_TEX's AXT-END)

@@ -33,6 +33,11 @@ export declare const lastTexLog: (log: string | null | undefined) => string
 export declare const NO_ARG_COMMANDS: ReadonlySet<string>
 /** TeX for the unit marks (\axtmark, \axtend) and each page's columns as named destinations */
 export declare const MARK_DEF: string
+/** whether a compiler is arXiv's `latex` (pdfTeX in DVI mode, the DVI made a PDF by dvipdfmx), whose marks are DVI_MARK_DEF's */
+export declare const dviEngine: (engine: string | null | undefined) => boolean
+/** MARK_DEF's destination under `latex`, where pdfTeX writes no PDF: xdvipdfmx's `pdf:dest` special, every destination kept
+ *  (dvipdfmx's C 0x0010 at the first page); after MARK_DEF, for such a paper alone */
+export declare const DVI_MARK_DEF: string
 /** a string's code units as bytes, each its low eight bits (source text is read byte for byte) */
 export declare const latin1Bytes: (s: string) => Uint8Array
 /** a/./b/../c → a/c: a file as the package holds it and as TeX's file system has it, whatever spelling named it */

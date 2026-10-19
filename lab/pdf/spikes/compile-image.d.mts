@@ -3,6 +3,8 @@ export declare function platformArgs(env?: Record<string, string | undefined>): 
 export declare function identityOf(ref: string, platform?: readonly string[]): string
 export declare function compileIdentity(env?: Record<string, string | undefined>, ref?: string, platform?: readonly string[]): string
 export declare function imageFromArg(value: string | null | undefined, env?: Record<string, string | undefined>): string
+/** latexmk's arguments for a paper's compiler: -pdf, -xelatex, -lualatex, and for `latex` -pdfdvi with dvipdfmx as its dvipdf */
+export declare function latexmkEngine(engine: string | null | undefined): string[]
 export declare const COMPILE_IMAGE: string
 export declare const PLATFORM: string[]
 export declare const COMPILE_IDENTITY: string

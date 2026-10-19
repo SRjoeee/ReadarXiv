@@ -1994,6 +1994,17 @@ export const MARK_DEF = [
   '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
   ...END_MARK,
 ].join('\n') + '\n'
+/** whether a compiler is arXiv's `latex` (its 00README's, or the one guessed for a package of EPS figures alone: paper-meta.mjs):
+ *  pdfTeX in DVI mode, \\pdfoutput 0, whose DVI arXiv makes a PDF by dvips and ps2pdf, and a host by dvipdfmx
+ *  (live.d.mts CompileRequest), which reads the marks' specials (DVI_MARK_DEF) */
+export const dviEngine = engine => engine === 'latex'
+/** MARK_DEF's destination under `latex` (dviEngine), where pdfTeX writes no PDF itself and its \\pdfdest sets nothing: xdvipdfmx's,
+ *  as MARK_DEF sets it under XeTeX, a `pdf:dest` special of an XYZ where it stands (\\axt@dvidest, LAYOUT_TEX's too:
+ *  DVI_LAYOUT_TEX), and the config dvipdfmx is told at the first page, which keeps every destination nothing refers to
+ *  (C 0x0010, "do not optimize PDF destinations": it drops them otherwise). A paper that sets \\pdfoutput 1 is set as pdfLaTeX
+ *  sets it, MARK_DEF's. After MARK_DEF, for such a paper alone (live.mjs originalFiles, probeFiles), so that every other
+ *  engine's files are byte for byte as before; one line, no comment, so that no line of the paper moves */
+export const DVI_MARK_DEF = '\\makeatletter\\def\\axt@dvidest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}\\let\\axt@pdfdest\\axt@dest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\axt@pdfdest{#1}\\else\\axt@dvidest{#1}\\fi}\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\ifnum\\pdfoutput>0 \\else\\special{dvipdfmx:config C 0x0010}\\fi}\\fi\\makeatother'
 /**
  * The end of a unit's own paragraph, which the unit's leading, size and line probe act on (\axt@whenover{id}{at its
  * end}{at each level back}{at its level}). The unit began at a group level; its paragraph is the next to end at that
@@ -2081,14 +2092,14 @@ export const FONT_PROBE = '\\AtEndDocument{\\typeout{AXT-FONTS rm=\\rmdefault;sf
 /** The TeX log of a compile's last pass. The browser's compiler (parked/tex-page/poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
  *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
- *  today). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
+ *  today). bibtex, biber, makeindex, xdvipdfmx and dvipdfmx (latex's driver) are no TeX passes. A native compile's .log is
  *  the last pass's already. Every reader of a compile's log lines takes it (live.mjs lostIn, typeset/tex.mjs readLines,
  *  readForced, typeset/density.mjs readWidthProbe, readSizeProbe): read whole, the echo invents a forced break before a
  *  pass's first unit */
 export const lastTexLog = log => {
   if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
   const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
-  return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
+  return steps.filter(m => !/^(?:bibtex|biber|makeindex|x?dvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
 }
 /** the roles' families from a log written with FONT_PROBE, or null */
 export function readFontProbe(log) {
