@@ -177,7 +177,9 @@ export interface UnitParts {
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it
 /** a laid line: its slot, and its items at their places */
-export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number }[]; [more: string]: unknown }
+/** a laid line: its slot's fields, its items, and `past`, how many of the unit's kept regions the text passed before its first item
+ *  (breakLines: where the page's word table writes a region's kept lines) */
+export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number }[]; past?: number; after?: number; [more: string]: unknown }
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
  *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
@@ -356,7 +358,10 @@ export declare function runEdge(run: LineRun, at: number, line: Line, L: Layout,
 /** an open piece whose text is a link's: \href, \hyperref, \hyperlink */
 export declare const LINK_OPEN: RegExp
 /** the unit's lines on a page that stay the original's, with the baseline and size its reading gave each (the page's word table) */
-export declare function keptLines(rects: readonly number[][], prep: { keep?: readonly string[]; lineInfo?: ReadonlyMap<string, { baseline: number; size: number }> } | null | undefined, page: number): { x0: number; x1: number; baseline: number; size: number; top: number; bottom: number }[]
+/** a line the unit keeps as the original's on a page, for the page's word table: its rectangle, baseline and size; a referenced
+ *  region's `region` and its first placeholder piece `k`, else the first block after it in the unit's rectangles (`block`) */
+export interface KeptLine { x0: number; x1: number; baseline: number; size: number; top: number; bottom: number; region?: number; k?: number; block?: number }
+export declare function keptLines(rects: readonly number[][], prep: { keep?: readonly string[]; lineInfo?: ReadonlyMap<string, { baseline: number; size: number }>; regionOf?: ReadonlyMap<string, number>; referenced?: ReadonlySet<number> } | null | undefined, page: number, blocks?: readonly { rects?: readonly number[][] }[] | null): KeptLine[]
 export declare function drawnRuns(tokens: readonly Token[]): { key: string; n: number }[]
 export declare function styleMatch(orig: Prepared['orig'] | undefined, drawn: readonly { key: string; n: number }[], drawnBase?: string): { match: number; total: number; base?: boolean; ob?: string; db?: string }
 /** a line's band between the rules over and under it: its original baseline, and how low and high its em box may reach */

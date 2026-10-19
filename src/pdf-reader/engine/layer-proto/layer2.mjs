@@ -2634,8 +2634,11 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   const barredChar = ch => noStart(ch) || kinsoku.starts(ch)
   const barred = t => !t.space && typeof t.s === 'string' && t.s !== '' && barredChar(t.s)
   let line = null
+  // (`past`: how many of the unit's kept regions the text has passed before the line's first item, the walk's own count
+  // (`consumed`, below): where the page's word table writes a region's kept lines, words.mjs, in the text's order whatever
+  // slot the text after a display stands on)
   const open = () => {
-    line = { ...slots[li], items: [], x: 0, spaces: 0, from: i }
+    line = { ...slots[li], items: [], x: 0, spaces: 0, from: i, past: consumed }
     lines.push(line)
   }
   // TeX's rule between two consecutive lines (its \lineskip and \lineskiplimit, P.lineskip, the paper's own: the layout
@@ -2784,6 +2787,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     if (tokens[i].blockTo !== undefined) {
       const fresh = tokens[i].blockTo + 1 > consumed
       consumed = Math.max(consumed, tokens[i].blockTo + 1)
+      if (!line.items.length) line.past = consumed
       if (flow) {
         // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
         if (fresh && line.items.length) { trim(line); advance() }
@@ -3543,18 +3547,38 @@ export function runEdge(run, at, line, L, measure = w100) {
 
 /**
  * The unit's lines on one page that stay the original's (a displayed formula's, and any line the unit keeps): their rectangles
- * with the baseline and size the unit's reading gave each (`prep.lineInfo`), for the page's word table (words.mjs). `rects`: the
- * unit's rectangles [page, x0, bottom, x1, top]; none where it keeps none
+ * with the baseline and size the unit's reading gave each (`prep.lineInfo`), in the unit's order, for the page's word table
+ * (words.mjs), which writes each where the text's flow passes it: a line of a region a kept placeholder holds, where the text
+ * breaks (finishUnit's `regionOf` and `referenced`: tokensOf2's `blockTo`), with its region (`region`) and the first of the
+ * unit's pieces that holds it (`k`, its place in the translation); any other with the first of the unit's blocks (`blocks`,
+ * blocks2's: their lines) that follows it in `rects` (`block`; the blocks' count where none does, none without blocks).
+ * `rects`: the unit's rectangles [page, x0, bottom, x1, top]; none where it keeps none
  */
-export function keptLines(rects, prep, page) {
+export function keptLines(rects, prep, page, blocks = null) {
   const keep = prep?.keep?.length ? new Set(prep.keep) : null
   if (!keep) return []
-  const out = []
-  for (const r of rects) {
-    if (r[0] !== page || !keep.has(rectKey(r))) continue
-    const info = prep.lineInfo?.get(rectKey(r))
-    out.push({ x0: r[1], x1: r[3], baseline: info?.baseline ?? r[2], size: info?.size ?? r[4] - r[2], top: r[4], bottom: r[2] })
+  // (each referenced region's first placeholder; each block by the index of its first line in rects)
+  const firstK = new Map()
+  for (const [k, r] of prep instanceof Map ? prep : []) {
+    if (r?.mode !== 'kept' || r.region === undefined || !prep.referenced?.has(r.region)) continue
+    const was = firstK.get(r.region)
+    if (was === undefined || k < was) firstK.set(r.region, k)
   }
+  let starts = null
+  if (blocks?.length) {
+    const index = new Map(rects.map((r, i) => [rectKey(r), i]))
+    starts = blocks.map(b => (b.rects?.length ? index.get(rectKey(b.rects[0])) : undefined) ?? -1)
+  }
+  const out = []
+  rects.forEach((r, i) => {
+    if (r[0] !== page || !keep.has(rectKey(r))) return
+    const info = prep.lineInfo?.get(rectKey(r))
+    const line = { x0: r[1], x1: r[3], baseline: info?.baseline ?? r[2], size: info?.size ?? r[4] - r[2], top: r[4], bottom: r[2] }
+    const g = prep.regionOf?.get(rectKey(r))
+    if (g !== undefined && firstK.has(g)) Object.assign(line, { region: g, k: firstK.get(g) })
+    else if (starts) { const b = starts.findIndex(s => s > i); line.block = b < 0 ? blocks.length : b }
+    out.push(line)
+  })
   return out
 }
 

@@ -1,5 +1,5 @@
 // words.mjs's types: the page's word table (1b-E; the 1b design §4, reader-interface-note §5)
-import type { Layout, Token } from './layer2.mjs'
+import type { KeptLine, Layout, Token } from './layer2.mjs'
 
 /** the page's drawn tokens in drawing order, in PDF units of the page (the identity map) and the frame of a left part's table
  *  (`ReadLeftPart.table`): `l`, `r` the token's slot, the layout's x and x + width (an opening mark a compressed line shifts is
@@ -19,6 +19,12 @@ export interface PageWords {
    *  begins a token: on the 30 outputs 0 of 7,472 sentence starts (the records' `sentences.tr`) lack a token carrying their index,
    *  though 0.3% to 2% of the words (62% of Korean's) do (the lab's `--door` counts both) */
   word: Int32Array
+  /** per token: its place in plainTranslated(row.pieces), which a sentence's offsets count in (`row.sentences.tr`): a text
+   *  token's own; a crop's (every part of a formula TeX broke over lines alike), a placeholder's rendering's and a kept line's
+   *  the place of its placeholder's piece, the space it becomes (words.mjs pieceOffsets); a lead's, a label's, and that of a
+   *  token the layer cannot place, the place of the unit's token before it, else of the one after it; -1 where the unit has
+   *  none. The view reads a token's sentence from it where the token has no word (view/highlight.mjs) */
+  at: Int32Array
   /** each unit painted on the page: [id, ranges], ranges [first, count] pairs into the tokens as a left part's spans are, rising,
    *  but the spans themselves in PAINT order, not by id, and with empty ranges for a unit painted on the page with no line on it
    *  (unlike the left's, which are rising by id with at least one range each) */
@@ -28,7 +34,7 @@ export interface PageWords {
   original: number[]
 }
 /** the offsets of a unit's text in plainTranslated(pieces) */
-export declare function plainTracker(): { gap(): void; text(s: string): Int32Array }
+export declare function plainTracker(): { gap(): void; text(s: string): Int32Array; space(): number; next(): number }
 /** the shown-string index of each character of a translated piece's raw text, or null where the shown string is not `expected` */
 export declare function escapeMap(raw: string, expected: string): Int32Array | null
 /** the map of a text piece to its transformed string (tokensOf2's), or null where `out` is not `expected` */
@@ -37,13 +43,16 @@ export declare function transformMap(s: string, expected: string): { from: numbe
 export declare function wordIndexer(plain: string): (at: number, end: number) => number
 /** a unit's plain translated text (plainTranslated's) */
 export declare function plainOfPieces(pieces: readonly { t: string; s?: string; tr?: boolean }[]): string
+/** each piece's place in plainTranslated(pieces): a text piece's first character that is no blank, any other the space it becomes */
+export declare function pieceOffsets(pieces: readonly { t: string; s?: string; tr?: boolean }[]): Int32Array
 /** the page's table as it is built */
-export interface OpenWords { n: number; cap: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array; word: Int32Array; spans: [number, number[]][] }
+export interface OpenWords { n: number; cap: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array; word: Int32Array; at: Int32Array; spans: [number, number[]][] }
 export declare function newWords(): OpenWords
 /** a text token's band on a line whose baseline is `by`: the baseline it is drawn on, the size drawn, its face's ascent and descent over and under it */
 export declare function tokenBand(t: Token, L: Layout, by: number): { y: number; h: number; top: number; bottom: number }
-/** a unit's tokens on a page appended to the table, as one span; `kept`: the original's lines it keeps (layer2.mjs keptLines) */
-export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: number, wordOf: ((at: number, end: number) => number) | null, kept?: readonly { x0: number; x1: number; baseline: number; size: number; top: number; bottom: number }[], drawnCrop?: (crop: { page: number }) => boolean): void
+/** a unit's tokens on a page appended to the table in its text's order, as one span; `kept`: the original's lines it keeps
+ *  (layer2.mjs keptLines), each written where the text passes it; `pieceAt`: each piece's place in the translation (pieceOffsets) */
+export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: number, wordOf: ((at: number, end: number) => number) | null, kept?: readonly KeptLine[], drawnCrop?: (crop: { page: number }) => boolean, pieceAt?: ArrayLike<number> | null): void
 /** the record a page keeps */
 export declare function freezeWords(W: OpenWords | null, original: Iterable<number>): PageWords
 /** a copy of a kept record */
