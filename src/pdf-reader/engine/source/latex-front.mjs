@@ -2086,14 +2086,14 @@ export const FONT_PROBE = '\\AtEndDocument{\\typeout{AXT-FONTS rm=\\rmdefault;sf
 /** The TeX log of a compile's last pass. The browser's compiler (parked/tex-page/poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
  *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
- *  today). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
+ *  today). bibtex, biber, makeindex, xdvipdfmx and dvipdfmx (latex's driver) are no TeX passes. A native compile's .log is
  *  the last pass's already. Every reader of a compile's log lines takes it (live.mjs lostIn, typeset/tex.mjs readLines,
  *  readForced, typeset/density.mjs readWidthProbe, readSizeProbe): read whole, the echo invents a forced break before a
  *  pass's first unit */
 export const lastTexLog = log => {
   if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
   const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
-  return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
+  return steps.filter(m => !/^(?:bibtex|biber|makeindex|x?dvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
 }
 /** the roles' families from a log written with FONT_PROBE, or null */
 export function readFontProbe(log) {

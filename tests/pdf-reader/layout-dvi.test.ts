@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { DVI_MARK_DEF, MARK_DEF, dviEngine } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { DVI_MARK_DEF, lastTexLog, MARK_DEF, dviEngine } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { DVI_LAYOUT_TEX, DVI_POINTS_TEX, LAYOUT_CLASSES, LAYOUT_TEX, POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
-import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import type { Compiled, CompileRequest } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
@@ -93,6 +94,26 @@ describe('the DVI marks', () => {
     expect(withoutDvi(main(originalFiles(dvi, { lines: true })))).toBe(main(originalFiles(plain, { lines: true })))
     expect(main(originalFiles(dvi))).toContain(DVI_MARK_DEF)
     expect(withoutDvi(main(originalFiles(dvi)))).toBe(main(originalFiles(plain)))
+  })
+
+  it('a translation set by latex has the DVI marks after MARK_DEF; one set by XeLaTeX, or a pdflatex paper\'s, has none', () => {
+    const FONTS = { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }
+    const tex = (p: ReturnType<typeof paperOf>, strategy: unknown) => main(translationFiles(p, new Map(), { strategy: strategy as never, fonts: FONTS }))
+    const dvi = paperOf('latex'), [own, xe] = strategiesFor(dvi.meta, 'de')
+    // (a latex paper in German: its own engine, latex, first; XeLaTeX after it)
+    expect([own?.engine, xe?.engine]).toEqual(['latex', 'xelatex'])
+    expect(tex(dvi, own)).toContain(MARK_DEF + DVI_MARK_DEF)
+    // (XeTeX has no \pdfoutput: its marks are MARK_DEF's own)
+    expect(tex(dvi, xe)).not.toContain(DVI_MARK_DEF)
+    const plain = paperOf('pdflatex'), [mine] = strategiesFor(plain.meta, 'de')
+    expect(withoutDvi(tex(dvi, own))).toBe(tex(plain, mine))
+  })
+
+  it('a compile\'s last TeX pass: neither xdvipdfmx\'s step nor dvipdfmx\'s, which follow it, is one', () => {
+    const step = (cmd: string, log: string) => `$ ${cmd}\nLOG:\n${log}\n==\nSTDOUT:\nout\n`
+    const joined = (driver: string) => step('latex -interaction=nonstopmode main.tex', 'This is pdfTeX\nOutput written on main.dvi (1 page).') + step(`${driver} main.dvi`, 'main.dvi -> main.pdf')
+    expect(lastTexLog(joined('dvipdfmx'))).toBe('This is pdfTeX\nOutput written on main.dvi (1 page).')
+    expect(lastTexLog(joined('xdvipdfmx'))).toBe('This is pdfTeX\nOutput written on main.dvi (1 page).')
   })
 
   it('every unit on the lines it stood on: the DVI marks add no line', () => {

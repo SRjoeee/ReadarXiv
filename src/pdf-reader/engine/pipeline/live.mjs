@@ -328,7 +328,8 @@ export function translationFiles({ fsys, project, meta }, translated, { strategy
   if (inputenc) main = main.slice(0, inputenc.start) + main.slice(inputenc.start, inputenc.end).replace(/\[([^\]]*)\]/, (m, opts) => `[${opts.split(',').map(o => (o.trim() === project.inputenc ? 'utf8' : o)).join(',')}]`) + main.slice(inputenc.end)
   const shim = xe && strategy.engine !== meta.compiler ? XETEX_SHIM + XETEX_SHIM_R1 : ''
   // what the strategy puts before \documentclass (scripts.mjs: a paper's own CJK packages kept from loading under xeCJK)
-  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + END_TEX + CAPTIONS_PROBE + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
+  // (a translation set by latex, arXiv's DVI compiler, carries the DVI marks as its original does: its engine's, not the paper's)
+  const head = (strategy.front ?? '') + (draft ? DRAFT : '') + MARK_DEF + (dviEngine(strategy.engine) ? DVI_MARK_DEF : '') + END_TEX + CAPTIONS_PROBE + FIT_DEF + BALANCE_DEF + (strategy.leading ? unitLeadTex(`${strategy.leading}\\baselineskip`) : '') + (typeset?.head ?? '') + shim
   main = head + (shim ? stripPdftexOption(main) : main)
   out.set(project.main, latin1Bytes(main))
   if (xe && strategy.engine !== meta.compiler) for (const f of fsys.list()) if (/\.(tex|sty|cls)$/i.test(f) && f !== project.main) { const t = latin1(out.get(f) ?? fsys.read(f)), u = stripPdftexOption(t); if (u !== t) out.set(f, latin1Bytes(u)) }

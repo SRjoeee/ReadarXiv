@@ -1504,6 +1504,9 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
     located, 606 of 611 placeholders (the guard leaving one unit unmarked, a `\vspace` length the front end cut as one);
     2608.22687 every part kept, 2,376 of 2,453, 239 of 269. The paper's hyperref is its dvips driver's, whose links dvipdfmx
     does not read: such a marked original has no links, and the link-anchor tier places none.
+    Text a paper places by PostScript (pstricks' `\rput`) dvipdfmx sets elsewhere than dvips does (64 pt off, measured in
+    review): it is no unit's text, and the carry leaves it unmatched. A `sidewaystable` page arXiv's ps2pdf turns (`/Rotate
+    90`) dvipdfmx leaves upright; the layer lays over no rotated page (ink.mjs `rotated`), so such a page has none, by design.
   - *Cost*: dvipdfmx once a marked compile, 0.85 s on 2610.21765's 14 pages, against pdfTeX's PDF written at every pass (a
     latex pass 0.84 s, a pdfLaTeX one 0.95 s): its prepare's compiles 12.4 s either way.
   - *The web host*'s runner runs no latex today (its answer "unknown engine": refused 'engine', as before) until its
