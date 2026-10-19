@@ -6,9 +6,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { createLayerSide, LEFT_RETRY_MS, PAGE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { createLayerSide, LEFT_RETRY_MS, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
-import { N, partInputs, TAILS } from './helpers/format-paper'
+import { made, N, partInputs, TAILS } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
@@ -673,7 +673,7 @@ describe('H1, H2, H4, H5, H6: the highlight\'s data on both panes', () => {
     await s.clock.advance(40)
     expect(s.view.probe().lit).toBe(0)
   })
-  it('H2 (trap 2): nothing is fetched of the left before a want; the first move over the right fetches the page\'s left part once', async () => {
+  it('H2 (trap 2): nothing is fetched of the left before a want; the first move over the right fetches the page\'s left part once, then the page its paragraph runs on to', async () => {
     const s = await setup()
     const m = await M()
     await nearOn(s, [1])
@@ -684,8 +684,92 @@ describe('H1, H2, H4, H5, H6: the highlight\'s data on both panes', () => {
     const at = clientOf(s.panes.right, 1, 100, 700)
     for (let i = 0; i < 3; i++) { s.panes.right.dispatchEvent(new MouseEvent('mousemove', { clientX: at.clientX, clientY: at.clientY + i, bubbles: true })); await s.clock.advance(20) }
     await settle(s)
-    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([m.lefts[1]!.sha256])
-    expect(s.side.probe().leftParts).toBe(1)
+    // (unit 2, a paragraph, runs on to page 2: its sentences wait for both pages; nothing of pages 3 and 4)
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([m.lefts[1]!.sha256, m.lefts[2]!.sha256])
+    expect(s.side.probe().leftParts).toBe(2)
+  })
+
+  it('H8: a unit over many pages brings at most SPREAD_MAX of them with a wanted page, the nearest first, each once', () => {
+    const long = Array.from({ length: 20 }, (_, i) => i + 1)
+    const pagesOf = (id: number) => (id === 1 ? long : id === 2 ? [10, 11] : undefined)
+    expect(SPREAD_MAX).toBe(8)
+    expect(spreadPages(10, [1, 2, 3], pagesOf, () => false)).toEqual([9, 11, 8, 12, 7, 13, 6, 14])
+    // (the page itself is none of them; of the nearest, those in already none: never more pages as the near ones come)
+    expect(spreadPages(10, [2, 1], pagesOf, q => q < 10, 3)).toEqual([11])
+    expect(spreadPages(10, [1], pagesOf, q => Math.abs(q - 10) <= 4)).toEqual([])
+    expect(spreadPages(10, [3], pagesOf, () => false)).toEqual([])
+  })
+
+  it('H7: a paragraph over a page break lights by sentence on its first page\'s first hover: the other page\'s left part comes after the page\'s own', async () => {
+    // unit 2 paired on both of its pages (its four words: three on page 1, one on page 2), its second sentence beginning on
+    // page 2; no page laid, so that the right is the left's mirrored
+    const v = await made({ pairs: { 1: [[0, [0, 0, 2]], [2, [0, 12, 3]]], 2: [[2, [3, 0, 1]], [3, [0, 5, 2]]] } })
+    const s = await setup({ paper: { objects: [...v.chunks, v.head, ...v.parts, ...Object.values(v.lefts)], pages: N } })
+    s.side.tell({ head: v.head.ref, units: v.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(v, i)), end: { through: N } })
+    await settle(s)
+    const { unitOf } = await import('@/pdf-reader/engine/layer-proto/rows.mjs')
+    const { tokens } = await import('@/pdf-reader/engine/pipeline/anchors.mjs')
+    const text = 'Aaa bbb ccc. Ddd eee.', src = unitOf(v.index, rowOf(2, text))!.src
+    const words = tokens(src)
+    expect(words.length).toBe(4)
+    s.side.take([rowOf(2, text, { src: [words[3]!.at], tr: [text.indexOf('Ddd')] })])
+    leftViewer().render(1)
+    // (the paper's tokens stand on one line, each 28 wide and 0.1 right of the one before: the title's block and unit 2's
+    // over each other, but for the 1.3 past the title's end. The point: past the title's padded block, in unit 2's, where a
+    // unit lit by sentence reaches, and a unit lit whole does not)
+    const { createShapes } = await import('@/pdf-reader/engine/view/shapes.mjs')
+    const h = createShapes({ kindOf: i => v.index.kinds[i] ?? undefined })
+    h.addParts(v.readParts)
+    h.addPage(v.readLefts[0]!)
+    const b = h.shapes.block(h.shapes.runs(2).find(r => r.page === 1)!, 0), title = h.shapes.block(h.shapes.runs(0)[0]!, 0)
+    const pad = 3 / (clientOf(s.panes.left, 1, 1, 0).clientX - clientOf(s.panes.left, 1, 0, 0).clientX)
+    const x = title.x1 + pad + 0.4
+    expect(x).toBeLessThan(b.x1 + pad - 0.4)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
+    const lefts = Object.values(v.lefts).map(l => l.sha256)
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256])
+    expect(s.view.probe().lit).toBe(2)
+    expect(s.view.probe().litSentence).toBe(0)
+  })
+
+  it('H9: the other page\'s left part that fails is asked again on a later hover once its wait has passed, and the paragraph then lights by sentence', async () => {
+    // unit 2 paired on both of its pages (its four words: three on page 1, one on page 2), its second sentence beginning on
+    // page 2; no page laid, so that the right is the left's mirrored
+    const v = await made({ pairs: { 1: [[0, [0, 0, 2]], [2, [0, 12, 3]]], 2: [[2, [3, 0, 1]], [3, [0, 5, 2]]] } })
+    const s = await setup({ paper: { objects: [...v.chunks, v.head, ...v.parts, ...Object.values(v.lefts)], pages: N } })
+    s.refuse.add(v.lefts[2]!.sha256)
+    s.side.tell({ head: v.head.ref, units: v.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(v, i)), end: { through: N } })
+    await settle(s)
+    const { unitOf } = await import('@/pdf-reader/engine/layer-proto/rows.mjs')
+    const { tokens } = await import('@/pdf-reader/engine/pipeline/anchors.mjs')
+    const text = 'Aaa bbb ccc. Ddd eee.', src = unitOf(v.index, rowOf(2, text))!.src
+    const words = tokens(src)
+    expect(words.length).toBe(4)
+    s.side.take([rowOf(2, text, { src: [words[3]!.at], tr: [text.indexOf('Ddd')] })])
+    leftViewer().render(1)
+    // (the paper's tokens stand on one line, each 28 wide and 0.1 right of the one before: the title's block and unit 2's
+    // over each other, but for the 1.3 past the title's end. The point: past the title's padded block, in unit 2's, where a
+    // unit lit by sentence reaches, and a unit lit whole does not)
+    const { createShapes } = await import('@/pdf-reader/engine/view/shapes.mjs')
+    const h = createShapes({ kindOf: i => v.index.kinds[i] ?? undefined })
+    h.addParts(v.readParts)
+    h.addPage(v.readLefts[0]!)
+    const b = h.shapes.block(h.shapes.runs(2).find(r => r.page === 1)!, 0), title = h.shapes.block(h.shapes.runs(0)[0]!, 0)
+    const pad = 3 / (clientOf(s.panes.left, 1, 1, 0).clientX - clientOf(s.panes.left, 1, 0, 0).clientX)
+    const x = title.x1 + pad + 0.4
+    expect(x).toBeLessThan(b.x1 + pad - 0.4)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
+    // (page 2's fails: the paragraph lights whole meanwhile; asked again only once the wait has passed)
+    expect([s.view.probe().lit, s.view.probe().litSentence]).toEqual([2, -1])
+    s.refuse.delete(v.lefts[2]!.sha256)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 + 0.5 })
+    const lefts = Object.values(v.lefts).map(l => l.sha256)
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256])
+    await s.clock.advance(LEFT_RETRY_MS + 10)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256, v.lefts[2]!.sha256])
+    expect(s.view.probe().lit).toBe(2)
+    expect(s.view.probe().litSentence).toBe(0)
   })
 
   it('H6: leftPageOf once a page, from either pane; H5: a refused left part gives no shapes and one warning, sync on', async () => {
@@ -938,7 +1022,8 @@ describe('the PR\'s review, third round (#379)', () => {
     await settle(s)
     expect(content(s, 1)).toBe('original')
     await want(s, 1)
-    expect(s.side.probe().leftParts).toBe(1)
+    // (and page 2's: unit 2 runs on to it)
+    expect(s.side.probe().leftParts).toBe(2)
     expect(s.side.probe().shapesLaid).toBe(0)
     // laid again on the next scroll: the layer's shapes there with it
     s.panes.right.scrollTop = 30

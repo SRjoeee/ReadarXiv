@@ -9,7 +9,8 @@
 // - wordIndexer: the index of the anchors.mjs `tokens()` entry that covers such a range, the word a side finds a sentence's
 //   start by (sentenceStarts reads `row.sentences.tr` as counts of these entries);
 // - the page's table: addUnitWords walks a unit's lines as svgOfUnit does (its line, then its item) and appends one token for
-//   each drawn word, crop and kept line; freezeWords makes the record a page keeps.
+//   each drawn word, crop and kept line, each kept line where the text's flow passes it; freezeWords makes the record a page
+//   keeps. Each token has its place in plainTranslated (`at`), from which the view reads its sentence (view/highlight.mjs).
 import { shown } from '../layer/pieces.mjs'
 import { tokens as wordsIn } from '../pipeline/anchors.mjs'
 
@@ -20,13 +21,17 @@ const BLANK = /\s/
  * The offsets of a unit's text in plainTranslated(pieces): every non-text piece a space, white space collapsed to one, the
  * whole trimmed. Fed in the pieces' order: `gap()` for a piece that is no text, `text(s)` for a text piece's shown string,
  * which answers an Int32Array giving, for each UTF-16 index of `s`, the offset of that character in the plain text (a blank
- * has the offset of the single space it collapses into, or of what follows when it is trimmed)
+ * has the offset of the single space it collapses into, or of what follows when it is trimmed). `space()`: the offset of the
+ * space the text so far ends in, which a piece that is no text becomes (0 while the text is empty: trimmed); `next()`: the
+ * offset the next character would have
  */
 export function plainTracker() {
   // (`space`: the plain text so far is empty or ends in a space: a blank adds nothing, which trims its start)
   let len = 0, space = true
   return {
     gap() { if (!space) { len++; space = true } },
+    space: () => Math.max(0, len - 1),
+    next: () => len,
     text(s) {
       const at = new Int32Array(s.length)
       for (let i = 0; i < s.length; i++) {
@@ -133,6 +138,22 @@ export function plainOfPieces(pieces) {
   return pieces.map(p => (p.t === 'text' ? shown(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * Each piece's place in plainTranslated(pieces), as plainTracker counts it (tokensOf2's walk): a text piece's first character
+ * that is no blank (where it has none, where the text goes on), any other piece the space it becomes (the one before it where
+ * the text so far ends in one; 0 at the text's start, which is trimmed). A placeholder's rendering, its crop and a display's
+ * kept lines are at their piece's place: a sentence of the translation holds them where it holds that space
+ */
+export function pieceOffsets(pieces) {
+  const tracker = plainTracker(), out = new Int32Array(pieces.length)
+  pieces.forEach((p, k) => {
+    if (p.t !== 'text') { tracker.gap(); out[k] = tracker.space(); return }
+    const s = shown(p), at = tracker.text(s), i = s.search(/\S/)
+    out[k] = i >= 0 ? at[i] : tracker.next()
+  })
+  return out
+}
+
 // ---------------------------------------------------------------- the page's table
 /** the face's ascent and descent in em: a Times-like face's (the left's default), and a CJK face's em box (Noto CJK's ideographic box) */
 const ASC = 0.75, DESC = -0.22, CJK_ASC = 0.88, CJK_DESC = -0.12
@@ -149,36 +170,53 @@ export function tokenBand(t, L, by) {
 
 /** a page's table as it is built: one growable column a field, in drawing order */
 export function newWords() {
-  return { n: 0, cap: 256, l: new Float32Array(256), r: new Float32Array(256), y: new Float32Array(256), h: new Float32Array(256), top: new Float32Array(256), bottom: new Float32Array(256), word: new Int32Array(256), spans: [] }
+  return { n: 0, cap: 256, l: new Float32Array(256), r: new Float32Array(256), y: new Float32Array(256), h: new Float32Array(256), top: new Float32Array(256), bottom: new Float32Array(256), word: new Int32Array(256), at: new Int32Array(256), spans: [] }
 }
-function push(W, l, r, y, h, top, bottom, word) {
+function push(W, l, r, y, h, top, bottom, word, at) {
   if (W.n === W.cap) {
     W.cap *= 2
     for (const f of FIELDS) { const a = new Float32Array(W.cap); a.set(W[f]); W[f] = a }
-    const w = new Int32Array(W.cap)
-    w.set(W.word)
-    W.word = w
+    for (const f of ['word', 'at']) { const a = new Int32Array(W.cap); a.set(W[f]); W[f] = a }
   }
   const i = W.n++
-  W.l[i] = l; W.r[i] = r; W.y[i] = y; W.h[i] = h; W.top[i] = top; W.bottom[i] = bottom; W.word[i] = word
+  W.l[i] = l; W.r[i] = r; W.y[i] = y; W.h[i] = h; W.top[i] = top; W.bottom[i] = bottom; W.word[i] = word; W.at[i] = at
 }
 
 /**
- * The tokens of one unit on one page, appended to the page's table: its lines in their order, each line's items in theirs (the
- * walk svgOfUnit makes), then the original's lines it keeps in place. A text token is the item's slot, [x, x + the layout's width]
- * (an opening mark a compressed line shifts left of its slot is still in it: the ink the slot holds, so that neighbours tile; a
- * lead's last token without the original's glue after it), on the line's baseline (a superscript on the baseline it is drawn on);
- * `h` is the size drawn, and `top`, `bottom` the ascent and descent of a Times-like face, or of a CJK face's em box. A crop is its
- * drawn box (at the line's baseline, its height the crop's times the layout's scale), none where `drawnCrop` says it is not drawn;
- * a kept line the unit's original rectangle. `word` is the token's word in the unit's translation (`wordOf(at, end)` over what
- * tokensOf2 tagged: -1 for a lead, a label, a placeholder's rendering, a crop, a kept line and a mark alone, which have none). A
- * space is no token. The unit's tokens are one run of the table, recorded as its span (empty ranges where the unit is painted on
- * the page with no line on it: a paragraph that ran on to a page its text did not reach)
+ * The tokens of one unit on one page, appended to the page's table in the order of the unit's text: its lines in their order,
+ * each line's items in theirs (the walk svgOfUnit makes), and each of the original's lines it keeps in place (`kept`,
+ * layer2.mjs keptLines) where its text passes that line — a displayed formula between the text before it and the text after it,
+ * which the view reads as the unit's reading order (view/highlight.mjs). A kept line of a region the text breaks at (`region`)
+ * goes before the first line laid after the text passed the region (a line's `past`: breakLines', where the walk consumed it,
+ * also where the text ran on above the display, 'flow'; a slot's `after` for a line laid with none); any other (`block`) before
+ * the first line of the first block that follows it in the unit's rectangles; a region the page has no later line for, after
+ * the lines.
+ * A text token is the item's slot, [x, x + the layout's width] (an opening mark a compressed line shifts left of its slot is
+ * still in it: the ink the slot holds, so that neighbours tile; a lead's last token without the original's glue after it), on
+ * the line's baseline (a superscript on the baseline it is drawn on); `h` is the size drawn, and `top`, `bottom` the ascent and
+ * descent of a Times-like face, or of a CJK face's em box. A crop is its drawn box (at the line's baseline, its height the
+ * crop's times the layout's scale; each part of a formula TeX broke over lines its own, `crop.part`), none where `drawnCrop`
+ * says it is not drawn; a kept line the unit's original rectangle. `word` is the token's word in the unit's translation
+ * (`wordOf(at, end)` over what tokensOf2 tagged: -1 for a lead, a label, a placeholder's rendering, a crop, a kept line and a
+ * mark alone, which have none). `at` is its place in plainTranslated(pieces): a text token's own (tokensOf2's), a crop's, a
+ * rendering's and a kept line's its placeholder's piece's (`pieceAt`, pieceOffsets; every part of a crop its piece's), and a
+ * token with none of its own (a lead, a label, a text the layer cannot place, a kept line no placeholder holds) the place of
+ * the token before it in the unit's table, else of the one after it; -1 where the unit has none. A space is no token. The unit's
+ * tokens are one run of the table, recorded as its span (empty ranges where the unit is painted on the page with no line on
+ * it: a paragraph that ran on to a page its text did not reach)
  */
-export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () => true) {
+export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () => true, pieceAt = null) {
   const first = W.n
-  for (const line of L.lines) {
-    if (line.page !== page) continue
+  const lines = L.lines.filter(line => line.page === page)
+  const placeOf = k => (pieceAt && Number.isInteger(k) && k >= 0 && k < pieceAt.length ? pieceAt[k] : -1)
+  // (each kept line by the laid line it is written before: lines.length after them all)
+  const before = kept.map(k => {
+    const j = k.region !== undefined ? lines.findIndex(line => (line.past ?? line.after ?? 0) > k.region) : k.block !== undefined ? lines.findIndex(line => (line.block ?? 0) >= k.block) : -1
+    return j < 0 ? lines.length : j
+  })
+  const keptBefore = j => { kept.forEach((k, q) => { if (before[q] === j) push(W, k.x0, k.x1, k.baseline, k.size, k.top, k.bottom, -1, placeOf(k.k)) }) }
+  lines.forEach((line, j) => {
+    keptBefore(j)
     const by = line.baseline
     for (const it of line.items) {
       const t = it.t
@@ -187,15 +225,18 @@ export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () =
       if (t.crop) {
         if (!drawnCrop(t.crop)) continue
         const c = t.crop.crop, h = (c[3] - c[1]) * L.scale, top = by + (c[3] - t.crop.baseline) * L.scale
-        push(W, l, l + it.w, by, h, top, top - h, -1)
+        push(W, l, l + it.w, by, h, top, top - h, -1, placeOf(t.crop.k))
         continue
       }
       if (typeof t.s !== 'string') continue
       const { y, h, top, bottom } = tokenBand(t, L, by)
-      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * L.f : 0), y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end))
+      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * L.f : 0), y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end), t.at ?? placeOf(t.k))
     }
-  }
-  for (const k of kept) push(W, k.x0, k.x1, k.baseline, k.size, k.top, k.bottom, -1)
+  })
+  keptBefore(lines.length)
+  // (a token with no place of its own: the one before it, else the one after it)
+  for (let i = first + 1; i < W.n; i++) if (W.at[i] < 0) W.at[i] = W.at[i - 1]
+  for (let i = W.n - 2; i >= first; i--) if (W.at[i] < 0) W.at[i] = W.at[i + 1]
   W.spans.push([id, W.n > first ? [first, W.n - first] : []])
 }
 
@@ -206,6 +247,7 @@ export function freezeWords(W, original) {
   return {
     tokens: { n, l: col('l', Float32Array), r: col('r', Float32Array), y: col('y', Float32Array), h: col('h', Float32Array), top: col('top', Float32Array), bottom: col('bottom', Float32Array) },
     word: col('word', Int32Array),
+    at: col('at', Int32Array),
     spans: W ? W.spans : [],
     original: [...original].sort((a, b) => a - b),
   }
@@ -217,6 +259,7 @@ export function copyWords(w) {
   return {
     tokens: { n: t.n, l: t.l.slice(), r: t.r.slice(), y: t.y.slice(), h: t.h.slice(), top: t.top.slice(), bottom: t.bottom.slice() },
     word: w.word.slice(),
+    at: w.at.slice(),
     spans: w.spans.map(([id, ranges]) => [id, ranges.slice()]),
     original: w.original.slice(),
   }

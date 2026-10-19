@@ -83,3 +83,7 @@ export declare const PAGE_MS: number
 export declare const COPY_PIXELS: number
 export declare const RECOPY_MS: number
 export declare const LEFT_RETRY_MS: number
+/** the most other pages a wanted page's running units bring their left parts from, the nearest first */
+export declare const SPREAD_MAX: number
+/** the pages whose left parts page p's running units bring: their other pages not in yet, each once, nearest first, at most `max` */
+export declare function spreadPages(p: number, ids: readonly number[], pagesOf: (id: number) => readonly number[] | undefined, isIn: (page: number) => boolean, max?: number): number[]
