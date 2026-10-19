@@ -1482,6 +1482,17 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   - *The web host* passes `compileBudgetMs` with CM alone today, and neither `pages` nor `engines`: its budget's answer past
     the budget (a `budget` limit) ends the guard as any limit, and the page check is the page pass's alone until it passes
     arXiv's page count.
+  - *TeX's verdict, for a host with a second TeX Live tree* (the TL2023 plan, 2026-10-19): a refusal after the unmarked
+    original was compiled names its verdict, `own: { ran, short, limit, tree }` (it ran through; it did with fewer pages than
+    arXiv's, where `pages` is given; the host's limit it met; the TeX Live year of its banner, null where TeX never ran or the
+    compile threw). `handoverOf(own, { declared, served, last })` (the pipeline entry) is the host's rule over it: another
+    served tree, once (the declared year where it is one), where TeX failed on the paper's own source and no host's limit
+    stopped it; never on no verdict, ours (it made the pages here), a limit, no year, or the last tree. TeX on a frozen tree is
+    deterministic and no limit enters, so the tree that makes a paper's layout is a function of the source and the served
+    trees. `tried`, the years the host compiled the paper on before, enters TeX's why alone ("declares TeX Live 2023; its own
+    source does not run through on TeX Live 2023 or 2025"), and the refusal is `texlive` only where the paper declares a year
+    none of the trees tried is. The verdict stays in the result and the page pass's `stats.layout`; a part's record is
+    `{ refused, why }` as before, and with no `tried` every why is as before.
 - **A paper arXiv compiles with `latex`** (its 00README's compiler, `latex+dvips_ps2pdf` read as it, or the one guessed for a
   package of EPS figures alone; R1 item 5 of 2026-10-19). arXiv runs latex, pdfTeX in DVI mode, and makes the DVI a PDF by
   dvips and ps2pdf; the marked original is that compile, its DVI made a PDF by dvipdfmx (`CompileRequest`'s `engine:

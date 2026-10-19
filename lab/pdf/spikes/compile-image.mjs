@@ -3,8 +3,10 @@
 // what it compiles (layout-make.mjs, layer-fixtures.mjs, layout-paper-check.mjs, layout-marks-gate.mjs) is the same bytes only
 // on the same TeX Live: two images give two LaTeX releases, two amsmath, two formats, and the files alone cannot tell them apart.
 //
-//   COMPILE_IMAGE     a full image reference with a digest (name[:tag]@sha256:<64 hex>); default: the `texlive` of
-//                     lab/pdf/compile-image.json, which the web container and the gate pack are pinned to
+//   COMPILE_IMAGE     a full image reference with a digest (name[:tag]@sha256:<64 hex>); default: the `texlive` of the year's
+//                     entry of lab/pdf/compile-images.json, which the web container and the gate packs are pinned to
+//   COMPILE_YEAR      the TeX Live year whose pinned image a compile uses (2023); default: the pins' `default` (2025). An image
+//                     named by COMPILE_IMAGE is taken over it
 //   COMPILE_PLATFORM  docker's --platform (linux/amd64 to emulate on an arm64 host); default: unset, the host's
 //   NATIVE_TEX=1      the compile is made by this machine's TeX Live through lab/pdf/spikes/native-tex/ (a `docker` stand-in first
 //                     on PATH), not by an image: no image is checked and the identity is `native`, so that such a compile never
@@ -18,13 +20,20 @@ import { readFileSync } from 'node:fs'
 import { promisify } from 'node:util'
 
 const run = promisify(execFile)
-const PIN = new URL('../compile-image.json', import.meta.url)
+const PINS = new URL('../compile-images.json', import.meta.url)
 const REF = /^[a-z0-9][a-z0-9./_-]*(?::[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$/
 
-/** the image reference a compile uses: `env.COMPILE_IMAGE`, else the pin's texlive; throws unless it names a digest */
-export function compileImageRef(env = process.env, pin = PIN) {
-  const ref = env.COMPILE_IMAGE || JSON.parse(readFileSync(pin, 'utf8')).texlive
-  if (typeof ref !== 'string' || !REF.test(ref)) throw new Error(`the compile image must be name[:tag]@sha256:<digest>, not ${JSON.stringify(ref)} (COMPILE_IMAGE, lab/pdf/compile-image.json)`)
+/** the image reference a compile uses: `env.COMPILE_IMAGE`, else the texlive of `year`'s pin (`env.COMPILE_YEAR`, else the pins'
+ *  default); throws unless it names a digest, or where no image is pinned for the year */
+export function compileImageRef(env = process.env, year = env.COMPILE_YEAR || null, pins = PINS) {
+  let ref = env.COMPILE_IMAGE
+  if (!ref) {
+    const j = JSON.parse(readFileSync(pins, 'utf8'))
+    const y = year === null || year === undefined || year === '' ? j?.default : String(year)
+    if (!j?.images || !Object.hasOwn(j.images, y)) throw new Error(`no compile image is pinned for TeX Live ${y} (COMPILE_YEAR, lab/pdf/compile-images.json)`)
+    ref = j.images[y]?.texlive
+  }
+  if (typeof ref !== 'string' || !REF.test(ref)) throw new Error(`the compile image must be name[:tag]@sha256:<digest>, not ${JSON.stringify(ref)} (COMPILE_IMAGE, lab/pdf/compile-images.json)`)
   return ref
 }
 /** docker's `--platform <p>` arguments for `env.COMPILE_PLATFORM`, none where unset */

@@ -1,4 +1,4 @@
-export declare function compileImageRef(env?: Record<string, string | undefined>, pin?: URL | string): string
+export declare function compileImageRef(env?: Record<string, string | undefined>, year?: string | number | null, pins?: URL | string): string
 export declare function platformArgs(env?: Record<string, string | undefined>): string[]
 export declare function identityOf(ref: string, platform?: readonly string[]): string
 export declare function compileIdentity(env?: Record<string, string | undefined>, ref?: string, platform?: readonly string[]): string
