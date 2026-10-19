@@ -74,7 +74,8 @@ export function summarizeRun(run) {
   const withWork = pages.filter(p => p.work)
   let work = null
   if (withWork.length) {
-    const totals = Object.fromEntries(WORK_KEYS.map(k => [k, withWork.reduce((a, p) => a + (p.work[k] ?? 0), 0)]))
+    // (a counter no page of the run holds is not measured on it, never 0: a base that predates a counter leaves it INCOMPARABLE)
+    const totals = Object.fromEntries(WORK_KEYS.filter(k => withWork.some(p => k in p.work)).map(k => [k, withWork.reduce((a, p) => a + (p.work[k] ?? 0), 0)]))
     const perPage = Object.fromEntries(WORK_KEYS.map(k => [k, { p50: median(withWork.map(p => p.work[k] ?? 0)), p95: percentile(withWork.map(p => p.work[k] ?? 0), 95) }]))
     work = { totals, perPage, pages: withWork.length }
   }
@@ -99,6 +100,8 @@ export function verdictOf(head, base) {
   let comparable = true
   for (const k of WORK_KEYS) {
     const h = head.map(r => r.work?.totals[k]), b = base.map(r => r.work?.totals[k])
+    // (a counter neither side holds is measured nowhere: no verdict of its own)
+    if ([...h, ...b].every(x => x === undefined)) { work[k] = { head: undefined, base: undefined, missing: true, fail: false }; continue }
     if (h.some(x => x === undefined) || b.some(x => x === undefined)) { comparable = false; work[k] = { head: h[0], base: b[0], missing: true, fail: false }; continue }
     const unstable = new Set(h).size > 1 || new Set(b).size > 1
     const grew = b[0] > 0 ? (h[0] - b[0]) / b[0] > WORK_TOLERANCE : h[0] > 0

@@ -801,16 +801,38 @@ function originalStyle(uc, O, matched) {
 }
 
 /**
- * The unit's measured style (measuredStyle) over its matched words' characters, each by the source word it is (the alignment's
- * `pair` into S, whose `start` sourceScopes reads). A unit with no source pieces to read (sourceScopes null) has no base measured
- * here (`st` null: tokensOf2 reads today's, baseOf) and a colour only where every glyph whose fill is told holds the same one
+ * The unit's measured style (measuredStyle) over its matched words' characters, each by the source character it is: a page word
+ * and the source word the alignment pairs it with (`pair` into S, a word the source spells in two or three pieces among them)
+ * spell one string of letters and digits (layer1.mjs norm), so that each page letter is read in its own source letter's scope (a
+ * style boundary inside a word, `\textbf{B}idirectional`, gives `B` the pair's and the rest the text's); a character that is
+ * no letter or digit, or that does not align, is not read. A unit with no source pieces to read (sourceScopes null) has no base
+ * measured here (`st` null: tokensOf2 reads today's, baseOf) and a colour only where every glyph whose fill is told holds the
+ * same one
  */
 function measuredOf(unit, uc, O, S, pair) {
   const scopes = sourceScopes(unit), none = { sets: 0, chain: [], flip: 0 }, chars = []
+  const src = scopes ? [...unit.src] : null
+  const measured = c => !c.sep && !c.space && c.st && /\S/.test(c.ch) && c.st.fam !== 'math'
   O.forEach((o, q) => {
     if (!pair || pair[q] < 0) return
-    const sc = scopes?.[S[pair[q]]?.start] ?? none
-    for (const c of uc.slice(o.start, o.end + 1)) if (!c.sep && !c.space && c.st && /\S/.test(c.ch) && c.st.fam !== 'math') chars.push({ st: c.st, sets: sc.sets, chain: sc.chain, flip: sc.flip })
+    const word = uc.slice(o.start, o.end + 1)
+    if (!src) { for (const c of word) if (measured(c)) chars.push({ st: c.st, ...none }); return }
+    const w = S[pair[q]]
+    let at = w?.start ?? 0
+    const end = w?.end ?? -1
+    for (const c of word) {
+      if (c.sep || c.space) continue
+      const key = norm(c.ch)
+      if (!key) continue
+      // (the source's next letters that spell this character's: one, or a ligature's two or three)
+      let k = at, first = -1, got = ''
+      while (k <= end && got.length < key.length) { const n = norm(src[k]); if (n) { if (first < 0) first = k; got += n } k++ }
+      if (got !== key) continue
+      at = k
+      if (!measured(c)) continue
+      const sc = scopes[first] ?? none
+      chars.push({ st: c.st, sets: sc.sets, chain: sc.chain, flip: sc.flip })
+    }
   })
   if (!chars.length) return null
   if (scopes) return measuredStyle(chars)

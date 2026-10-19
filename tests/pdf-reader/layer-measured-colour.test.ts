@@ -114,6 +114,15 @@ describe('the unit\'s base, measured outside its styled pieces', () => {
     expect(new Set(up.drawn.map(t => !!t.st.italic))).toEqual(new Set([false]))
   })
 
+  it('a style boundary inside a word: each page letter in its own source letter\'s scope (the reviews of #415)', () => {
+    // (\textbf{Prefixing}Suffix, one page word the source spells in two: its regular "Suffix" lies outside the pair, so the base is regular)
+    const page = pageOf([['PrefixingSuffix', k => (k < 9 ? bold() : plain())]])
+    const u = unitOf([open('\\textbf{', 1), text('Prefixing'), close(1), text('Suffix')], [0, '\u524D\u7F00', 2, '\u540E\u7F00'])
+    const { tokens, drawn } = tokensOf(u, page)
+    expect(tokens.base.bold).toBe(false)
+    expect(drawn.map(t => [t.s, !!t.st.bold])).toEqual([['\u524D', true], ['\u7F00', true], ['\u540E', false], ['\u7F00', false]])
+  })
+
   it('a unit wholly inside a style pair: of all its glyphs (nothing lies outside)', () => {
     const page = pageOf([['Introduction', bold()]])
     const u = unitOf([open('\\textbf{', 1), text('Introduction'), close(1)], [0, '\u5F15\u8A00', 2], 'heading')
