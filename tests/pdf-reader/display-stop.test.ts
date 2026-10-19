@@ -44,6 +44,8 @@ describe('serialize: a display\'s own stop goes on the wire right after its mark
     expect(stopOf('\\[ x = y \\text{.} \\]')).toBe('.')
     expect(stopOf('$$ x = y; \\qedhere $$')).toBe(';')
     expect(stopOf('\\begin{equation*} x = y : \\end{equation*}')).toBe(':')
+    expect(stopOf('\\begin{align} x &= y, \\\\ z &= w.\\\\\\end{align}')).toBe('.')
+    expect(stopOf('\\[ x = y \\mbox{,} \\]')).toBe(',')
   })
   it('a display with no stop of its own adds nothing', () => {
     const wire = (src: string) => serialize(unit(text('It reads '), display(src), text(' then it ends.'))).wire
@@ -53,10 +55,29 @@ describe('serialize: a display\'s own stop goes on the wire right after its mark
     expect(wire('\\[ x = y \\; \\]')).toBe('It reads @a# then it ends.')
     expect(wire('\\[ 50 \\% \\]')).toBe('It reads @a# then it ends.')
     expect(wire('\\[ \\text{as follows:} \\]')).toBe('It reads @a# then it ends.')
+    expect(wire('\\[ x = y \\. \\]')).toBe('It reads @a# then it ends.')
+    // (an environment that is no math: a picture's own terminator is none of the sentence's)
+    expect(wire('\\[ \\begin{tikzpicture} \\draw (0,0) -- (1,1); \\end{tikzpicture} \\]')).toBe('It reads @a# then it ends.')
+    // (a group that sets no ink: a phantom's mark is no stop)
+    expect(wire('\\[ x = y \\hphantom{.} \\]')).toBe('It reads @a# then it ends.')
+    expect(wire('\\[ x = y \\phantom{,} \\]')).toBe('It reads @a# then it ends.')
   })
   it('nor where the text after it begins with punctuation of its own, nor after an inline formula', () => {
     expect(serialize(unit(text('It reads '), display('\\[ x = y. \\]'), text(', then it ends.'))).wire).toBe('It reads @a#, then it ends.')
     expect(serialize(unit(text('It reads '), { t: 'ph', src: '$x = y.$' }, text(' then it ends.'))).wire).toBe('It reads @a# then it ends.')
+  })
+  it('a display that goes out with what sets no ink after it, one marker for them (`x.\\end{equation}\\n\\noindent`)', () => {
+    const s = serialize(unit(text('It reads '), display('\\[ x = y. \\]'), text('\n'), { t: 'ph', src: '\\noindent' }, text(' Then it ends.')))
+    expect(s.wire).toBe('It reads @a#. Then it ends.')
+    expect((s.slots[0] as { t: string }).t).toBe('run')
+  })
+  it('the stop\'s offset in a wire trimmed at its start (a styled unit)', () => {
+    const v = unit({ t: 'ph', src: '\\noindent' }, text(' We then have '), display('\\[ x = y. \\]'), text(' Then it ends.'))
+    for (const s of [serialize(v), serializeTags(v)]) {
+      expect(s.wire.startsWith('We then have')).toBe(true)
+      const o = [...(s.own?.values() ?? [])][0]
+      expect(s.wire[o?.at ?? -1]).toBe('.')
+    }
   })
   it('on the tags wire too', () => {
     expect(serializeTags(unitOf(YIELDS)).wire).toBe('Substituting (1) yields <x id="1"/>. Prices and shares are allowed to be endogenous.')
@@ -77,9 +98,27 @@ describe('rehydrate: what the reply set for the display\'s own stop is taken off
   it('one the reply set twice', () => {
     expect(back('代入 (1) 得到 @a#。。价格和份额允许是内生的。')).toBe('代入 (1) 得到 [EQ]价格和份额允许是内生的。')
   })
-  it('one the reply moved before the marker, with one after it or without', () => {
-    expect(back('代入 (1) 得到。@a#价格和份额允许是内生的。')).toBe('代入 (1) 得到[EQ]价格和份额允许是内生的。')
-    expect(back('代入 (1) 得到。 @a#。价格和份额允许是内生的。')).toBe('代入 (1) 得到 [EQ]价格和份额允许是内生的。')
+  it('a mark right before the marker is the reply\'s own, kept, with a mark after the marker or none', () => {
+    // (Microsoft's recorded Chinese answers: none moved a marker's mark before it, 0 of 4,825; every mark before one was its
+    // own — a clause's comma where it set the marker inside its sentence, the previous sentence's stop where it set the
+    // marker at the next one's start —, and an abbreviation's stop is no sentence's)
+    expect(back('代入 (1) 得到。@a#价格和份额允许是内生的。')).toBe('代入 (1) 得到。[EQ]价格和份额允许是内生的。')
+    expect(back('代入 (1) 得到。 @a#。价格和份额允许是内生的。')).toBe('代入 (1) 得到。 [EQ]价格和份额允许是内生的。')
+    const w = serialize(unitOf(WHERE))
+    expect(back('我们把份额写成，@a#，其中 @b# 是市场的需求系统。', w)).toBe('我们把份额写成，[D]其中 $\\sigma$ 是市场的需求系统。')
+    expect(back('Einsetzen ergibt, d. h. @a#. Preise und Anteile sind endogen.')).toBe('Einsetzen ergibt, d. h. [EQ] Preise und Anteile sind endogen.')
+    expect(back('Einsetzen ergibt, d. h. @a# Preise und Anteile sind endogen.')).toBe('Einsetzen ergibt, d. h. [EQ] Preise und Anteile sind endogen.')
+  })
+  it('a mark after a later marker, no display\'s, is the reply\'s own', () => {
+    const w = serialize(unitOf(WHERE))
+    expect(back('我们把份额写成 @a#，其中 @b#，是市场的需求系统。', w)).toBe('我们把份额写成 [D]其中 $\\sigma$，是市场的需求系统。')
+  })
+  it('on the tags wire, a mark after a later tag, no display\'s, is the reply\'s own', () => {
+    const v = unit(text('It reads '), display('\\[ x = y. \\]'), text(' '), { t: 'open', id: 1, src: '\\textbf{' }, text('Prices'), { t: 'close', id: 1, src: '}' }, text(', and shares go up.'))
+    const t = serializeTags(v)
+    expect(t.wire).toBe('It reads <x id="1"/>. <t id="2">Prices</t>, and shares go up.')
+    const r = rehydrateTags('它读取 <x id="1"/>。<t id="2">价格</t>，以及份额上涨。', t)
+    expect('pieces' in r ? joined(r.pieces as Piece[]).replace(/\\\[[\s\S]*?\\\]/, '[D]') : r.error).toBe('它读取 [D]\\textbf{价格}，以及份额上涨。')
   })
   it('a reply that dropped it is read as it is', () => {
     expect(back('代入 (1) 得到 @a# 价格和份额允许是内生的。')).toBe('代入 (1) 得到 [EQ] 价格和份额允许是内生的。')
@@ -105,7 +144,8 @@ describe('rehydrate: what the reply set for the display\'s own stop is taken off
     const t = serializeTags(u)
     const tags = (reply: string) => { const r = rehydrateTags(reply, t); return 'pieces' in r ? joined(r.pieces as Piece[]).replace(EQ, '[EQ]') : r.error }
     expect(tags('代入 (1) 得到 <x id="1"/>。价格和份额允许是内生的。')).toBe('代入 (1) 得到 [EQ]价格和份额允许是内生的。')
-    expect(tags('代入 (1) 得到。<x id="1"/>。。价格和份额允许是内生的。')).toBe('代入 (1) 得到[EQ]价格和份额允许是内生的。')
+    expect(tags('代入 (1) 得到。<x id="1"/>价格和份额允许是内生的。')).toBe('代入 (1) 得到。[EQ]价格和份额允许是内生的。')
+    expect(tags('代入 (1) 得到。<x id="1"/>。。价格和份额允许是内生的。')).toBe('代入 (1) 得到。[EQ]价格和份额允许是内生的。')
     expect(tags('代入 (1) 得到 <x id="1"/> 价格和份额允许是内生的。')).toBe('代入 (1) 得到 [EQ] 价格和份额允许是内生的。')
   })
 })

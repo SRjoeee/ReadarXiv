@@ -22,9 +22,8 @@ export type RunSlot = { t: 'run'; pieces: Piece[] }
 export type EdgeSlot = { t: 'edge'; pieces: Piece[] }
 /** a kept pair's places in read pieces, by which one that came back empty takes back the text set just outside it */
 export type Refill = { open: Piece; a: Piece; b: Piece; close: Piece }
-/** a display's own stop the wire wrote after its marker or tag: the stop, its offset in the wire, and whether the source's
- *  text before the display ends with no punctuation (a stop the reply sets right before the marker is then the display's, moved) */
-export type OwnStop = { stop: string; at: number; before: boolean }
+/** a display's own stop the wire wrote after its marker or tag: the stop and its offset in the wire */
+export type OwnStop = { stop: string; at: number }
 /** a displayed formula's source */
 export declare const DISPLAY: RegExp
 /** the punctuation a display's source sets at its end, its sentence's, or null */

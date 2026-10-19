@@ -423,13 +423,16 @@ function walk(W, seq) {
 // ---------------------------------------------------------------- a display's own stop
 /** a displayed formula's source: the layer draws it as one crop (layout/marks.mjs classOf, which reads it here) */
 export const DISPLAY = /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
+/** the math environments a display holds, which end inside it before its own end: a display's, an alignment's, a case
+ *  split's, an array's or a matrix's. No other (a picture, `\end{tikzpicture}`, whose `;` is its own syntax) */
+const MATH_INNER = String.raw`(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations|split|aligned|alignedat|gathered|multlined|cases|dcases|rcases|array|subarray|[pbBvV]?matrix|smallmatrix)\*?`
 /** one thing at a display's end that sets none of its sentence's punctuation, read from the end: white space, a comment,
- *  the display's close and an inner environment's, a label, a tag, a number's switch, `\qedhere`, a line break, a space
- *  or a fill of TeX's, an empty group, plain TeX's \eqno and what it numbers */
-const DISPLAY_TAIL = /(?:[ \t\n\f\r]+|(?<!\\)%[^\n]*|\\\]|\$\$|\\end\s*\{[^{}]*\}|\\(?:label|tag\*?)\s*\{[^{}]*\}|\\(?:nonumber|notag|qedhere|displaybreak|allowbreak|hfill|q?quad|enspace|thinspace)(?![A-Za-z@])(?:\[[^\]]*\])?|\\\\\*?(?:\[[^\]]*\])?|\\[,;:!> ]|~|\{\}|\\l?eqno(?![A-Za-z@])[\s\S]*)$/
-/** the punctuation at that end: a stop, a comma, a semicolon or a colon, alone in a text group or bare; never an empty
- *  delimiter (`\right.`) or an escaped character (`\;` is a space) */
-const DISPLAY_STOP = /(?:\\(?:text|mbox|textrm|mathrm|hbox)\s*)?\{\s*([.,;:])\s*\}$|(?<!\\(?:right|middle|left|[bB]igg?[lrm]?)\s*)(?<!\\)([.,;:])$/
+ *  the display's close and an inner math environment's, a label, a tag, a number's switch, `\qedhere`, a line break, a
+ *  space or a fill of TeX's, an empty group, plain TeX's \eqno and what it numbers */
+const DISPLAY_TAIL = new RegExp(String.raw`(?:[ \t\n\f\r]+|(?<!\\)%[^\n]*|\\\]|\$\$|\\end\s*\{${MATH_INNER}\}|\\(?:label|tag\*?)\s*\{[^{}]*\}|\\(?:nonumber|notag|qedhere|displaybreak|allowbreak|hfill|q?quad|enspace|thinspace)(?![A-Za-z@])(?:\[[^\]]*\])?|\\\\\*?(?:\[[^\]]*\])?|\\[,;:!> ]|~|\{\}|\\l?eqno(?![A-Za-z@])[\s\S]*)$`)
+/** the punctuation at that end: a stop, a comma, a semicolon or a colon, bare or alone in a group that sets it (`\text{.}`,
+ *  never a phantom's); never an empty delimiter (`\right.`) or an escaped character (`\;` is a space) */
+const DISPLAY_STOP = /\\(?:text|mbox|textrm|textnormal|mathrm|hbox)\s*\{\s*([.,;:])\s*\}$|(?<!\\(?:right|middle|left|[bB]igg?[lrm]?)\s*)(?<!\\)([.,;:])$/
 /** the punctuation a display's source sets at its end, which is its sentence's (`x = y.\label{e}\end{equation}`), or null;
  *  read in its last 2,000 characters, where a display's end lies whatever its length */
 export function displayStop(src) {
@@ -445,14 +448,8 @@ export function displayStop(src) {
 }
 /** what a reply may write for a display's own stop: any script's stop, comma, semicolon or colon */
 const OWN_MARKS = '.,;:\u3002\uff0e\uff0c\u3001\uff1b\uff1a\u0964\u06d4\u060c\u061b'
-/** each kind's marks, where the reply moved the display's stop before its marker */
-const OWN_KIND = { '.': '.\u3002\uff0e\u0964\u06d4', ',': ',\uff0c\u3001\u060c', ';': ';\uff1b\u061b', ':': ':\uff1a' }
 /** the marks the reply set right after the display's marker (white space and the sentences' sentinel, sentencesOf's, kept) */
 const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
-/** one of the display's kind of mark right before its marker */
-const OWN_BEFORE = Object.fromEntries(Object.entries(OWN_KIND).map(([k, v]) => [k, new RegExp(`[${v}]([ \\t\\n\\f\\r\\ue000]*)$`)]))
-/** the source's text before the display ends with punctuation: a stop the reply sets there is its own */
-const PUNCT_END = /[.,;:!?\u3002\uff0e\uff0c\u3001\uff1b\uff1a\uff01\uff1f]["'\u201d\u2019)\]]*\s*$/
 /** a piece's own stop, read once for each piece (both wires and the carry test ask it again) */
 const STOP_OF = new WeakMap()
 const stopOfPiece = p => { let s = STOP_OF.get(p); if (s === undefined) STOP_OF.set(p, (s = displayStop(p.src))); return s }
@@ -474,10 +471,11 @@ function ownStopOf(slot, pieces, items, i) {
 }
 /** the text the wire writes after item `i`, as far as its next marker */
 const textAfter = (pieces, items, i) => (items[i + 1]?.t === 'text' ? items[i + 1].ks.map(k => utf8(pieces[k].s)).join('') : '')
-/** a reply's text before and after a display's marker that carried its own stop (`o`: the stop, and whether the source's
- *  text before the display ends with no punctuation): one of its kind right before the marker taken off where the source
- *  had none there — the reply moved it —, and every mark right after it, the display setting its own */
-const ownBefore = (s, o) => (o?.before ? s.replace(OWN_BEFORE[o.stop], '$1') : s)
+/** a reply's text after a display's marker that carried its own stop: every mark right after it taken off, the display
+ *  setting its own. A mark right before the marker is the reply's: in Microsoft's 4,825 recorded Chinese answers with a
+ *  marker the wire set before a mark, none moved that mark before it, and each of the 16 marks before such a marker (with
+ *  none after it) was the reply's own — a clause's comma where it set the marker inside its sentence, the previous
+ *  sentence's stop where it set the marker at the next one's start */
 const ownAfter = s => s.replace(OWN_LEAD, '$1')
 /**
  * Whether a unit's wire carries a display's own stop (serialize's and serializeTags' `own`): the units whose wire and
@@ -545,8 +543,8 @@ function runPieces(u, { parts, front, back }, trOf) {
  *  not go on the wire (planOf): `front` and `back`, the pieces before and after the translation; `refill`, the kept
  *  pairs rehydrate refills. Each only where the unit has one: a unit with no pair and no placeholder that sets no ink
  *  is serialised as it was. `own`, the markers of displays whose own stop the wire wrote after them (marker id → the
- *  stop, its offset in the wire `at`, and `before`: whether the source's text before the display ends with no
- *  punctuation), which rehydrate takes off again and sentencesOf counts nowhere */
+ *  stop and its offset in the wire, `at`), after which rehydrate takes the reply's marks off again, and which
+ *  sentencesOf counts nowhere */
 export function serialize(u) {
   const slots = [], stops = new Set(), numbers = new Set(), numbersAfter = new Set(), hidden = new Map(), kept = new Map(), own = new Map()
   let wire = ''
@@ -576,7 +574,7 @@ export function serialize(u) {
     // a display's own stop, its sentence's end inside it, right after its marker: `yields @a#. Prices` — sent as
     // `yields @a# Prices`, 2610.10069's sentence ran on into the next one, and "yields" came back as a noun
     const stop = it.t === 'void' ? ownStopOf(slot, u.pieces, items, i) : null
-    if (stop) own.set(slots.length, { stop, at: wire.length + before.length + m.length, before: /\S/.test(wire) && !PUNCT_END.test(wire) })
+    if (stop) own.set(slots.length, { stop, at: wire.length + before.length + m.length })
     wire += before + m + (stop ?? '') + after
   })
   // (a styled unit's wire trimmed whole, its ends' pieces off it; any other as it was)
@@ -668,7 +666,8 @@ export function rehydrate(text, { wire, slots, lead, trail, stops, numbers, numb
   const pushText = (s, before = null) => {
     s = s.replace(STRAY_PAIR, '').replace(STRAY, '')
     if (before) s = s.replace(before, '')
-    if (afterOwn) { s = ownAfter(s); afterOwn = false }
+    // (the flag is the last marker's: each marker sets it)
+    if (afterOwn) s = ownAfter(s)
     s = decode(s)
     if (afterNumber) s = s.replace(NUMBER_LEAD, '')
     if (s) pieces.push({ t: 'text', tr: true, s: texEscape(s) })
@@ -690,7 +689,7 @@ export function rehydrate(text, { wire, slots, lead, trail, stops, numbers, numb
     if (!slots[id - 1]) return { error: 'unknown marker' }
     if (seen.has(id)) return { error: 'duplicated marker' }
     const wires = stops?.has(id) ? STOP_SPACE : numbers?.has(id) ? NUMBER_SPACE : null
-    pushText(ownBefore(buf, own?.get(id)), wires && (SPACING.test(srcOf(slots[id - 1]) ?? '') ? SPACE : wires)); buf = ''
+    pushText(buf, wires && (SPACING.test(srcOf(slots[id - 1]) ?? '') ? SPACE : wires)); buf = ''
     // (a run's marker: the run's pieces, in their order, or none of them: a marker moved, lost or doubled is read as any is)
     seen.set(id, pieces.length); pieces.push(...piecesOf(slots[id - 1]))
     afterNumber = !!numbersAfter?.has(id)
@@ -789,10 +788,10 @@ export function sentencesOf(u, ser, text, alignment, pieces, tolerant = false, f
   if (!W || !source?.length || source.length !== target?.length) return null
   if (source.reduce((a, b) => a + b, 0) !== ser.wire.length || target.reduce((a, b) => a + b, 0) !== text.length) return null
   const plain = plainSource(u), translated = plainTranslated(pieces)
-  // (a display's own stop after its marker is one with it: a boundary between them goes past it)
+  // (a display's own stop after its marker counts nowhere: a boundary before it or after it names the same place)
   const owned = ser.own ? new Set([...ser.own.values()].map(o => o.at)) : null
   if (shownBefore(ser.wire, ser.wire.length, W.atoms, ser.hidden, owned) !== nonSpace(plain)) return null
-  const wireAtoms = atomsOf(ser.wire, W.atoms).map(([a, b]) => (owned?.has(b) ? [a, b + 1] : [a, b])), textAtoms = atomsOf(text, W.atoms)
+  const wireAtoms = atomsOf(ser.wire, W.atoms), textAtoms = atomsOf(text, W.atoms)
   const cs = cumulative(source).map(c => outOf(wireAtoms, c)), ct = cumulative(target).map(c => outOf(textAtoms, c))
   // the reply with a sentinel where each sentence begins, read back as the pieces were: the sentinels' places in its
   // plain text are the boundaries'
@@ -859,7 +858,7 @@ export function serializeTags(u) {
     if (it.hide) hidden.set(x, runShown(it.slot))
     // (a display's own stop after its tag, as serialize writes it after its marker)
     const stop = ownStopOf(it.slot, u.pieces, items, i)
-    if (stop) own.set(slots.length, { stop, at: wire.length + x.length, before: /\S/.test(wire) && !PUNCT_END.test(wire) })
+    if (stop) own.set(slots.length, { stop, at: wire.length + x.length })
     wire += x + (stop ?? '')
   }
   if (styled) { const cut = wire.length - wire.trimStart().length; wire = wire.trim(); if (cut) for (const o of own.values()) o.at -= cut }
@@ -876,7 +875,7 @@ export function rehydrateTags(text, { wire, slots, lead, trail, front, back, ref
   const pushText = s => { if (afterOwn) { s = ownAfter(s); afterOwn = false } const d = decode(s); if (d) pieces.push({ t: 'text', tr: true, s: texEscape(d) }) }
   while ((m = re.exec(text))) {
     const x = m[1] ?? m[2] ?? m[3], t = m[4] ?? m[5] ?? m[6]
-    pushText(x ? ownBefore(text.slice(last, m.index), own?.get(Number(x))) : text.slice(last, m.index)); last = re.lastIndex
+    pushText(text.slice(last, m.index)); last = re.lastIndex
     if (x) { const n = Number(x), slot = slots[n - 1]; if (!slot?.void || seenVoid.has(n)) return { error: slot?.void ? 'duplicated placeholder' : 'unknown placeholder' }; seenVoid.add(n); pieces.push(...piecesOf(slot.void)); afterOwn = !!own?.has(n) }
     else if (t) { const n = Number(t), slot = slots[n - 1]; if (!slot?.open || !slot.close || seenPair.has(n)) return { error: 'bad pair' }; seenPair.add(n); stack.push(n); pieces.push(slot.open, ...(slot.head ?? [])) }
     else { const n = stack.pop(); if (!n) return { error: 'bad pair' }; pieces.push(...(slots[n - 1].tail ?? []), slots[n - 1].close) }
