@@ -169,6 +169,10 @@ describe('a rendering of the page\'s characters, in their own fills', () => {
     const { prep, drawn } = tokensOf(u, page)
     expect((prep.get(1) as { mode?: string } | undefined)?.mode).toBe('orig-text')
     expect(drawn.filter(t => t.k === 1).map(t => [t.s, t.st.color ?? null])).toEqual([['[', null], ['16', '#0000ff'], [']', null]])
+    // (raised, a superscript citation: its runs raised each, glued, in their own fills (the review of #415))
+    ;(prep.get(1) as { sup?: boolean }).sup = true
+    const raised = (L2.tokensOf2(u, prep as never, 'zh', BASE as never, DESIGNS as never, P() as never, null, () => 0) as unknown as { s?: string; sup?: boolean; glue?: boolean; k?: number; st: { color?: string } }[]).filter(t => t.k === 1)
+    expect(raised.map(t => [t.s, t.st.color ?? null, !!t.sup, !!t.glue])).toEqual([['[', null, true, true], ['16', '#0000ff', true, true], [']', null, true, true]])
   })
 
   it('cleveref\'s number in its link\'s green; "[1, 2]" its brackets and comma black, its numbers blue', () => {

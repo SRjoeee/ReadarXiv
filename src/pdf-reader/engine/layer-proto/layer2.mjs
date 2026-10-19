@@ -2473,10 +2473,12 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     // blue digits, cleveref's black "Figure" before its linked "1"; a character whose fill is not told in the colour above)
     const runs = r.mode === 'orig-text' && !r.math ? fillRunsOf(r.gap?.chars, r.text) : null
     if (r.sup) {
-      const one = runs?.length === 1 ? runs[0].fill : UNKNOWN
-      const sst = one === UNKNOWN ? st : { ...own, color: one > 0 ? hexOf(one) : undefined }
-      const face = faceOf(sst, 'latin', to)
-      tokens.push({ s: r.text, st: sst, face, cls: 'latin', w100: measure(r.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
+      // (a raised rendering in its runs too, each glued to the one before: a superscript citation's black brackets, its blue digits)
+      for (const run of runs ?? [{ text: r.text, fill: UNKNOWN }]) {
+        const sst = run.fill === UNKNOWN ? st : { ...own, color: run.fill > 0 ? hexOf(run.fill) : undefined }
+        const face = faceOf(sst, 'latin', to)
+        tokens.push({ s: run.text, st: sst, face, cls: 'latin', w100: measure(run.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
+      }
     } else if (runs) for (const run of runs) pushText(run.text, run.fill === UNKNOWN ? st : { ...own, color: run.fill > 0 ? hexOf(run.fill) : undefined }, { ph: r.mode, k })
     else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true } : {}) })
   })

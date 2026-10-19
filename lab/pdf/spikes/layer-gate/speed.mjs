@@ -100,8 +100,9 @@ export function verdictOf(head, base) {
   let comparable = true
   for (const k of WORK_KEYS) {
     const h = head.map(r => r.work?.totals[k]), b = base.map(r => r.work?.totals[k])
-    // (a counter neither side holds is measured nowhere: no verdict of its own)
-    if ([...h, ...b].every(x => x === undefined)) { work[k] = { head: undefined, base: undefined, missing: true, fail: false }; continue }
+    // (a counter neither side holds, where both measured their work, is measured nowhere: no verdict of its own; a run with no
+    // work measured at all leaves every counter INCOMPARABLE)
+    if ([...head, ...base].every(r => r.work) && [...h, ...b].every(x => x === undefined)) { work[k] = { head: undefined, base: undefined, missing: true, fail: false }; continue }
     if (h.some(x => x === undefined) || b.some(x => x === undefined)) { comparable = false; work[k] = { head: h[0], base: b[0], missing: true, fail: false }; continue }
     const unstable = new Set(h).size > 1 || new Set(b).size > 1
     const grew = b[0] > 0 ? (h[0] - b[0]) / b[0] > WORK_TOLERANCE : h[0] > 0

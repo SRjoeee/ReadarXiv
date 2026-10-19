@@ -83,6 +83,8 @@ describe('the verdict', () => {
     expect(newer.work.fills).toMatchObject({ head: 12 * 5000, base: undefined, missing: true, fail: false })
     expect(newer.work.fit).toMatchObject({ fail: false })
     expect(newer.work.fit?.missing).toBeUndefined()
+    // (two runs with no work measured at all: incomparable, never a pass of counters skipped on both sides (the review of #415))
+    expect(verdictOf(reps(() => run({ w: null })), reps(() => run({ w: null }))).verdict).toBe('INCOMPARABLE')
     // (but a time that got worse is a FAIL even where the counters cannot be compared)
     expect(verdictOf(reps(() => run({ w: work(1000), lay: 99 })), reps(() => run({ w: null }))).verdict).toBe('FAIL')
   })
