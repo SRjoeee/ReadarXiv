@@ -467,7 +467,7 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 22: 23 writes a display's own stop after its marker and takes off what the reply set for it (mt.mjs serialize's and
  *   serializeTags' `own`, TRANSLATE_VERSION 5), and changes nothing else a unit is or how a reply is read back: a unit whose
  *   wire the rule leaves as it was (mt.mjs displayStopChanges, given the unit) was sent as 23 sends it, and is carried;
- *   without the unit, a translation that holds no display with a stop of its own. Over 180 papers' sources MINE_UNITS of
+ *   without the unit, a translation that holds no display with a stop of its own. Over 180 papers' sources 4,215 of
  *   44,825 units are asked again. Every older pipeline's test takes this one with its own
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))

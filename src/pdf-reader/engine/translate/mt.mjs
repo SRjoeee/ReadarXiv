@@ -481,7 +481,7 @@ const ownBefore = (s, o) => (o?.before ? s.replace(OWN_BEFORE[o.stop], '$1') : s
 const ownAfter = s => s.replace(OWN_LEAD, '$1')
 /**
  * Whether a unit's wire carries a display's own stop (serialize's and serializeTags' `own`): the units whose wire and
- * reading back TRANSLATE_VERSION 4 changed, which a copy made before it is asked again for, and no other (live.mjs
+ * reading back TRANSLATE_VERSION 5 changed, which a copy made before it is asked again for, and no other (live.mjs
  * PIPELINE_CARRIES)
  */
 export function displayStopChanges(u) {

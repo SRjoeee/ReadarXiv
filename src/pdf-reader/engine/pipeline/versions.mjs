@@ -147,7 +147,12 @@
 //     every pipeline before it, carries each unit whose wire the rule leaves as it was (mt.mjs boundaryChanges; live.mjs
 //     PIPELINE_CARRIES): over 137 papers' sources 126 of 36,136 units, in 29 papers, are asked again. The units, the
 //     marked original and the layout file are 21's byte for byte
-export const PIPELINE_VERSION = '22'
+// 23: raised with TRANSLATE_VERSION 5 (a display's own stop on the wire right after its marker, mt.mjs serialize's and
+//     serializeTags' `own`), so that copies made before it are not taken whole: a copy of 22, and of every pipeline before
+//     it, carries each unit whose wire the rule leaves as it was (mt.mjs displayStopChanges; live.mjs PIPELINE_CARRIES):
+//     over 180 papers' sources 4,215 of 44,825 units, in 153 papers, are asked again. The units, the marked
+//     original and the layout file are 22's byte for byte
+export const PIPELINE_VERSION = '23'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
