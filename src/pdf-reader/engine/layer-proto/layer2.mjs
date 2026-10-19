@@ -493,11 +493,11 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
  * no placeholder held them. `first`: the unit's first line (`rects` may be its lines on one page alone: run.mjs grows a
  * unit page by page). `measured`: the rectangles are the layout file's lines, TeX's, each set to a measure: a justified
- * line grows over what is not math only up to its own measure, its run's (measuresOf), not its block's widest edge (E3d:
- * beside a float wrapped on the right, a narrow line grew over the caption's label "Table 6: A", which no unit's
- * rectangle held, and the grown line set the measure of every narrow line of its run, 2602.23285 page 18); a formula's
- * tail still grows it to its block's edge. v0's anchors, which fall short of their ink, grow as before. Mutates the
- * rectangles.
+ * line grows over what is not math only up to its own measure, its run's (measuresOf), not its block's widest edge, and
+ * past it only over a formula's tail that goes on from it, never across a float's gap (E3d: beside a float wrapped on the
+ * right, narrow lines grew over the caption's label "Table 6: A" and its digits, which no unit's rectangle held, and the
+ * grown lines set the measure of every narrow line of their run, 2602.23285 page 18). v0's anchors, which fall short of
+ * their ink, grow as before. Mutates the rectangles.
  */
 export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0], measured = false) {
   let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars, first)
@@ -540,11 +540,13 @@ export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn,
       }
       x = Math.max(x, cs[last].x1)
     }
-    // to the right: math always; anything while the line is a justified one, up to its block's edge (a file line: up to its
-    // own measure, `measured`)
+    // to the right: math always; anything while the line is a justified one, up to its block's edge. A file line (`measured`):
+    // anything up to its own measure, and past it only a formula's tail that goes on from it (within 0.6 em, as to the left),
+    // never across the gap a float wrapped beside it leaves (\columnsep)
+    const just = justOf.get(key)
     let to = x
     for (const c of line.filter(c => c.x0 >= x - 0.1)) {
-      if (c.x0 - to > 1.2 * size || foreign(c) || c.x1 > bx1 + 3) break
+      if (c.x0 - to > (measured && c.x1 > just + 1 ? 0.6 : 1.2) * size || foreign(c) || c.x1 > bx1 + 3) break
       if (!(mathy(c) || (edge !== null && c.x1 <= edge + 1))) break
       to = c.x1
     }
