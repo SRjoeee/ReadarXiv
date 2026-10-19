@@ -163,6 +163,7 @@
     "folder",
     "fontName",
     "gunzip",
+    "handoverOf",
     "headEnd",
     "inMemory",
     "inView",

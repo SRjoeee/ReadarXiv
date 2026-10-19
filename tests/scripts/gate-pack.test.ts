@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LAYOUT, LAYOUT_SCHEMA } from '../../src/pdf-reader/engine/layout/file.mjs'
 import { signV4 } from '../../scripts/r2-read.mjs'
-import { checkCompileImage, COMPILE_IMAGE_FILE, compileImageOf, localImageDigests, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { checkCompileImage, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -385,47 +385,75 @@ describe('the pack names its layout files\' version, and the engine\'s own holds
   })
 })
 
-describe('the compile image is pinned by digest, one value for the pack and the web container', () => {
-  const pin = () => JSON.parse(readFileSync(COMPILE_IMAGE_FILE, 'utf8'))
-  const withPin = (mutate: (j: Record<string, unknown>) => void) => {
-    const dir = mkdtempSync(join(tmpdir(), 'compile-image-'))
-    const j = pin()
+describe('the compile images are pinned by digest, a TeX Live year each, one value for the packs and the web container', () => {
+  const pins = () => JSON.parse(readFileSync(COMPILE_IMAGES_FILE, 'utf8'))
+  const withPins = (mutate: (j: { default: string; images: { 2025: Record<string, unknown>; 2023: Record<string, unknown>; [year: string]: Record<string, unknown> } }) => void) => {
+    const dir = mkdtempSync(join(tmpdir(), 'compile-images-'))
+    const j = pins()
     mutate(j)
-    writeFileSync(join(dir, 'compile-image.json'), JSON.stringify(j))
-    return join(dir, 'compile-image.json')
+    writeFileSync(join(dir, 'compile-images.json'), JSON.stringify(j))
+    return join(dir, 'compile-images.json')
   }
+  const PACKS = join(import.meta.dirname, '../../lab/pdf')
 
-  it('holds the committed gate-pack.json\'s compileImage to lab/pdf/compile-image.json', () => {
-    const pack = JSON.parse(readFileSync(join(import.meta.dirname, '../../lab/pdf/gate-pack.json'), 'utf8'))
-    expect(pack.compileImage, 'the pack was made on another compile image than the pinned one: re-make the pack (gate-pack.mjs make)').toEqual(compileImageOf())
+  it('holds each committed pack\'s compileImage to its year\'s pin (gate-pack.json the default year\'s, its year implicit)', () => {
+    const files = readdirSync(PACKS).filter(n => /^gate-pack(?:\.\d{4})?\.json$/.test(n))
+    expect(files).toContain('gate-pack.json')
+    for (const n of files) {
+      const pack = JSON.parse(readFileSync(join(PACKS, n), 'utf8'))
+      const year = /^gate-pack\.(\d{4})\.json$/.exec(n)?.[1] ?? compileImagesOf().default
+      const { year: named = compileImagesOf().default, ...pin } = pack.compileImage
+      expect(named, `${n}: the pack names another TeX Live year than its file`).toBe(year)
+      expect(pin, `${n}: the pack was made on another compile image than its year's pin: re-make the pack (gate-pack.mjs make --year=${year})`).toEqual(compileImageOf(year))
+    }
   })
 
-  it('is three images by digest, a snapshot that is null or dated, and the TeX format', () => {
-    const c = compileImageOf()
-    for (const k of ['texlive', 'base', 'node'] as const) expect(c[k]).toMatch(/^[a-z0-9./_-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$/)
-    expect(c.aptSnapshot === null || /^\d{8}T\d{6}Z$/.test(c.aptSnapshot)).toBe(true)
-    expect(c.texFormat).toMatchObject({ texlive: 2025, pdftex: '1.40.28' })
+  it('is three images by digest, a snapshot that is null or dated, and the TeX format, for each year; the default by default', () => {
+    const all = compileImagesOf()
+    expect(all.default).toBe('2025')
+    expect(Object.keys(all.images).sort()).toEqual(['2023', '2025'])
+    expect(compileImageOf()).toEqual(all.images['2025'])
+    expect(compileImageOf(2023)).toEqual(all.images['2023'])
+    for (const c of [compileImageOf(), compileImageOf('2023')]) {
+      for (const k of ['texlive', 'base', 'node'] as const) expect(c[k]).toMatch(/^[a-z0-9./_-]+(:[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}$/)
+      expect(c.aptSnapshot === null || /^\d{8}T\d{6}Z$/.test(c.aptSnapshot)).toBe(true)
+    }
+    expect(compileImageOf().texFormat).toMatchObject({ texlive: 2025, pdftex: '1.40.28' })
+    expect(compileImageOf('2023')).toMatchObject({ texlive: 'texlive/texlive@sha256:2f2c860f230355ecd0c94ddf4398b315648c6c547b92086db2c02e26c3d98392', texFormat: { texlive: 2023, banner: 'TeX Live 2023', pdftex: '1.40.25' } })
+    expect(() => compileImageOf('2019')).toThrow(/no image is pinned for TeX Live 2019/)
   })
 
-  it('refuses a file that is not that: a tag with no digest, a short digest, another key, a bad snapshot', () => {
-    expect(() => compileImageOf(withPin(j => { j.node = 'node:22-trixie-slim' }))).toThrow(/node must be name\[:tag\]@sha256/)
-    expect(() => compileImageOf(withPin(j => { j.base = 'debian:trixie-slim@sha256:7792b1f7' }))).toThrow(/base must be/)
-    expect(() => compileImageOf(withPin(j => { j.extra = 1 }))).toThrow(/the keys must be/)
-    expect(() => compileImageOf(withPin(j => { j.aptSnapshot = 'yesterday' }))).toThrow(/aptSnapshot/)
-    expect(() => compileImageOf(withPin(j => { j.texFormat = 3 }))).toThrow(/texFormat/)
+  it('refuses a file that is not that: a tag with no digest, a short digest, another key, a bad snapshot, a year not its own, an OS of its own', () => {
+    expect(() => compileImageOf(null, withPins(j => { j.images['2025'].node = 'node:22-trixie-slim' }))).toThrow(/2025: node must be name\[:tag\]@sha256/)
+    expect(() => compileImageOf(null, withPins(j => { j.images['2023'].texlive = 'texlive/texlive@sha256:7792b1f7' }))).toThrow(/2023: texlive must be/)
+    expect(() => compileImageOf(null, withPins(j => { j.images['2025'].extra = 1 }))).toThrow(/2025: the keys must be/)
+    expect(() => compileImageOf(null, withPins(j => { j.images['2025'].aptSnapshot = 'yesterday' }))).toThrow(/aptSnapshot/)
+    expect(() => compileImageOf(null, withPins(j => { j.images['2025'].texFormat = 3 }))).toThrow(/texFormat/)
+    expect(() => compileImageOf(null, withPins(j => { (j.images['2023'].texFormat as { texlive: number }).texlive = 2025 }))).toThrow(/2023: texFormat\.texlive must be 2023/)
+    expect(() => compileImageOf(null, withPins(j => { j.images.latest = j.images['2025'] }))).toThrow(/keyed by TeX Live year/)
+    expect(() => compileImageOf(null, withPins(j => { j.default = '2024' }))).toThrow(/default must name one of the images/)
+    expect(() => compileImageOf(null, withPins(j => { (j as Record<string, unknown>).extra = 1 }))).toThrow(/the keys must be default, images/)
+    // (one OS refresh moves every image: the base, Node and the snapshot are the same in each)
+    expect(() => compileImageOf(null, withPins(j => { j.images['2023'].aptSnapshot = '20261001T000000Z' }))).toThrow(/aptSnapshot must be the same in every image/)
+    expect(() => compileImageOf(null, withPins(j => { j.images['2023'].base = `debian:trixie-slim@sha256:${'0'.repeat(64)}` }))).toThrow(/base must be the same in every image/)
   })
 
-  it('checks the local image\'s repo digests against the pin, and says what it found', () => {
+  it('checks the local image\'s repo digests against the year\'s pin, and says what it found', () => {
     const c = compileImageOf(), want = c.texlive.slice(c.texlive.indexOf('@') + 1)
     expect(() => checkCompileImage(c, ['sha256:' + '0'.repeat(64), want])).not.toThrow()
-    expect(() => checkCompileImage(c, ['sha256:' + '0'.repeat(64)])).toThrow(/not the pinned sha256:7056390e/)
+    expect(() => checkCompileImage(c, ['sha256:' + '0'.repeat(64)])).toThrow(/not the pinned sha256:7056390e.*TeX Live 2025/)
     expect(() => checkCompileImage(c, [])).toThrow(/not there/)
+    const old = compileImageOf('2023'), oldWant = old.texlive.slice(old.texlive.indexOf('@') + 1)
+    expect(() => checkCompileImage(old, [oldWant])).not.toThrow()
+    expect(() => checkCompileImage(old, [want])).toThrow(/not the pinned sha256:2f2c860f.*TeX Live 2023/)
   })
 
-  it('refuses a make when COMPILE_IMAGE names another image than the pin', () => {
+  it('refuses a make when COMPILE_IMAGE names another image than the year\'s pin, or COMPILE_YEAR another year', () => {
     const c = compileImageOf(), want = c.texlive.slice(c.texlive.indexOf('@') + 1)
     expect(() => checkCompileImage(c, [want], { COMPILE_IMAGE: `texlive/texlive@sha256:${'e'.repeat(64)}` })).toThrow(/not the pin/)
     expect(() => checkCompileImage(c, [want], { COMPILE_IMAGE: c.texlive })).not.toThrow()
+    expect(() => checkCompileImage(c, [want], { COMPILE_YEAR: '2023' })).toThrow(/COMPILE_YEAR 2023 is not the pack's year, 2025/)
+    expect(() => checkCompileImage(c, [want], { COMPILE_YEAR: '2025' })).not.toThrow()
   })
 
   it('asks docker for the repo digests of the reference, and refuses where docker cannot answer', () => {
@@ -437,15 +465,20 @@ describe('the compile image is pinned by digest, one value for the pack and the 
     expect(() => localImageDigests('x:y', (() => { throw Object.assign(new Error('boom'), { stderr: 'Error: No such image: x:y\n' }) }) as never)).toThrow(/cannot ask docker for x:y \(Error: No such image: x:y\)/)
   })
 
-  it('writes the pin into the manifest and its committed copy, and leaves the listing digest as it was', () => {
+  it('writes the pin with its year into the manifest and its committed copy, and leaves the listing digest as it was', () => {
     const i = inputs()
-    const c = compileImageOf()
+    const c = { year: '2023', ...compileImageOf('2023') }
     const plain = makePack({ entries: entriesOf(i), out: join(i.root, 'plain'), pipeline: '10', layout: LAYOUT_V, made: '2026-10-08T01:00:00.000Z' })
     const pinned = makePack({ entries: entriesOf(i), out: join(i.root, 'pinned'), pipeline: '10', layout: LAYOUT_V, compileImage: c, made: '2026-10-08T01:00:00.000Z' })
     expect(plain.compileImage).toBeUndefined()
     expect(pinned.compileImage).toEqual(c)
     expect(packJsonOf(pinned).compileImage).toEqual(c)
     expect(pinned.digest).toBe(plain.digest)
+  })
+
+  it('names a year\'s pack, its folder and its record: the default year\'s as before, another year\'s by its year', () => {
+    expect(packPathsOf('2025', '2025')).toEqual({ json: 'lab/pdf/gate-pack.json', out: 'lab/pdf/out/gate-pack', record: 'lab/pdf/records/layer-gate.json' })
+    expect(packPathsOf('2023', '2025')).toEqual({ json: 'lab/pdf/gate-pack.2023.json', out: 'lab/pdf/out/gate-pack.2023', record: 'lab/pdf/records/layer-gate.2023.json' })
   })
 })
 
