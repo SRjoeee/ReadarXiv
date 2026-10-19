@@ -37,6 +37,9 @@ import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { alignOf } from './remove.mjs'
 import { asSet, classOf, colourPieceOf, destRect, followsOf, headEnd, layoutMarking, LINKS_MAX, linkablePiece, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { matcherOf } from './match.mjs'
+import { isReferenceWord } from '../rules/reference-words.mjs'
+import { textPieceOf } from '../rules/text-piece.mjs'
+import { TOLERANT_WORDS, wordsAt } from './tolerant.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { annotsOf, linkKindOf, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 
@@ -107,14 +110,6 @@ const LINKS_PIECE = 8, PREFIX_EM = 6, GAP_EM = 1.2, SUFFIX_MAX = 8
 /** a piece's glyph the matcher would find: a glyph of its character on arXiv's page within NEAR_X across and NEAR_Y up or
  *  down of where it is carried (the matcher's first glyph is looked for within 8 pt, the next at its neighbour's offset) */
 const NEAR_X = 12, NEAR_Y = 3
-/** the words a reference's name prints before its number (cleveref's default names, hyperref's \autoref's, the theorem
- *  names papers give them, and their abbreviations), case folded: the word arXiv's PDF sets where ours sets another
- *  ("Section C" for our "Appendix C") is one of them, or the piece stays LOST */
-const VOCAB = new Set(('section sections sec. secs. subsection subsections subsubsection paragraph chapter chapters ch. chap. part parts '
-  + 'appendix appendices app. apps. appx. figure figures fig. figs. subfigure table tables tab. tabs. equation equations eq. eqs. eqn. eqns. '
-  + 'theorem theorems thm. thms. lemma lemmas lem. corollary corollaries cor. proposition propositions prop. definition definitions def. defn. '
-  + 'example examples ex. remark remarks rem. algorithm algorithms alg. algs. line lines listing listings item items footnote footnotes page pages '
-  + 'claim claims conjecture conjectures assumption assumptions step steps').split(' '))
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS)
 const LINES_UNIT = 2000, PIECES_MAX = 10_000, SIZE_MAX = 200, SRC_MAX = 4000, FONTS_MAX = 512, FONT_MAX = 128
 /** a box covering most of a page (a background, a frame round it) is no ink below a frame */
@@ -263,6 +258,8 @@ function baselineOf(P, gs, near) {
 /** the glyphs within BODY of `size`, or all of them where none is */
 const bodyOf = (P, gs, size) => { const b = gs.filter(i => Math.abs(P.size[i] - size) <= BODY * size); return b.length ? b : gs }
 const charsOf = s => s.normalize('NFKC').toLowerCase()
+/** a glyph's characters as two PDFs are compared by them: NFKC, no white space, no variation selector (match.mjs's) */
+const NF = s => (typeof s === 'string' ? s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '') : '')
 
 /** tokens → line rectangles as anchors.mjs lineRects makes them, each with its tokens */
 function rectsOf(doc, idx) {
@@ -389,8 +386,9 @@ function sameWord(doc, byPage, c, start, ours) {
 function blank(units) {
   return {
     lines: { carried: 0, total: 0, held: 0 },
-    units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
-    ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
+    // (and the unit marks no line carried that the unit's own words beside them were looked for, and placed: tolerantOf)
+    units: { located: 0, total: units.length, byKind: {}, unplaced: 0, tolerantTried: 0, tolerant: 0, tolerantWork: 0 },
+    ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0], textRuns: 0 },
     match: { same: 0, recoded: 0, loose: 0, vote: 0, rejected: 0, work: 0, over: 0, most: 0 },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
@@ -479,6 +477,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // (the pages whose ink is never read: dark by their text alone; and those whose ink was read, whether or not it is held still)
   const unread = new Set(dark), inked = new Uint8Array(pages + 1)
   const doc = read.tokens
+  /** arXiv's tokens by page (tolerantOf's) */
+  const docByPage = pageIndex(doc), byPageOf = p => docByPage.get(p) ?? []
   // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of arXiv's text, made once; the whole
   // run's (pageFrame) the whole paper's alone, none for the page stream (its ranges are placed from their own units)
   let tokensFrame = null
@@ -681,15 +681,17 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     prepareWanted()
     return null
   }
+  /** a place the carrier gives (carry.mjs carry), kept where it stands on a page of arXiv's with ink, within its view */
+  const onInk = c => {
+    if (!c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages || dark.has(c.page) || !inked[c.page]) return null
+    const v = viewAt(c.page)
+    return c.x >= v[0] - 1 && c.x <= v[2] + 1 && c.y >= v[1] - 1 && c.y <= v[3] + 1 ? c : null
+  }
   /** the carry's functions over the marks as they stand (`at`, `carrier`: the whole marked original's, or what of it is read) */
   function carryOver() {
+    unitMarksAnew()
     /** a position of the marked original on arXiv's PDF: carried by its line, on a page with ink, within its view */
-    carry = (page, x, y) => {
-      const c = carrier.carry(page, x, y)
-      if (!c || !Number.isInteger(c.page) || c.page < 1 || c.page > pages || dark.has(c.page) || !inked[c.page]) return null
-      const v = viewAt(c.page)
-      return c.x >= v[0] - 1 && c.x <= v[2] + 1 && c.y >= v[1] - 1 && c.y <= v[3] + 1 ? c : null
-    }
+    carry = (page, x, y) => onInk(carrier.carry(page, x, y))
     dropped = new Set(marks.dropped)
     markOf = name => { const m = dropped.has(name) ? null : at.get(name); return m ? carry(m.page, m.x, m.y) : null }
     /** a unit's own mark as the anchors take it. The rule today: carried as every mark is, so none onto a page whose ink is not
@@ -706,6 +708,190 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: carried.page, x, y, whole: true } : null
     }
     matcher = matcherOf({ ink, carry })
+  }
+
+  // ---------------------------------------------------------------- a unit's own mark the line carry leaves (tolerant.mjs)
+  /** a unit's own mark's name: [th]?<id>[se] */
+  const UNIT_MARK = /^[th]?(\d+)([se])$/
+  /** the classes whose rendering prints a reference's name: where the one word of a unit's that may differ stands */
+  const NAMED = new Set(['ref', 'cite', 'eqref'])
+  /** our compile's tokens by page (the whole marked original's, or what of it is read): tolerantOf's */
+  let oursByPage = null
+  /** whether token k of `list` (a page's tokens, in order) begins (`first`) or ends its line: no other within LINE_EM of
+   *  its height before (after) it on its baseline (the other column's lie farther) */
+  const LINE_EM = 1.2
+  const lineEnd = (toks, list, k, first) => {
+    const t = toks[k]
+    for (const j of list) {
+      if (j === k) continue
+      const o = toks[j]
+      if (!o.t || Math.abs(o.y - t.y) > 0.5 * Math.min(o.h, t.h)) continue
+      if (first ? o.x + o.w <= t.x + 0.05 && t.x - (o.x + o.w) < LINE_EM * t.h : o.x >= t.x + t.w - 0.05 && o.x - (t.x + t.w) < LINE_EM * t.h) return false
+    }
+    return true
+  }
+  /** our compile's unit marks by page (tolerantOf's bounds), [name, mark, unit, start], made at the first try and added to
+   *  as the marked original's pages are read (noteMark); `carriedBy` each mark's line carry and the token it stands at on
+   *  arXiv's page, the carrier's verdict on a page final once the page is added (carry.mjs carrier), the page's ink and view
+   *  asked again at each try (onInk) */
+  let unitMarksOn = null, carriedBy = new Map()
+  const indexMark = (n, mk) => {
+    const r = UNIT_MARK.exec(n)
+    if (r && mk) (unitMarksOn.get(mk.page) ?? unitMarksOn.set(mk.page, []).get(mk.page)).push([n, mk, Number(r[1]), r[2] === 's'])
+  }
+  const unitMarksAt = page => {
+    if (!unitMarksOn) { unitMarksOn = new Map(); for (const [n, mk] of at) indexMark(n, mk) }
+    return unitMarksOn.get(page) ?? []
+  }
+  /** a mark read (the marked original a page at a time): into the index, once made */
+  const noteMark = n => { if (unitMarksOn) indexMark(n, at.get(n)) }
+  /** the marks made anew (carryOver: a maker's whole() or byStream(), each from the marks file or the marked stream): the
+   *  index and the carries made again from them, never kept from a run before */
+  function unitMarksAnew() { unitMarksOn = null; carriedBy = new Map() }
+  /** a word of `toks` the text layer gives in parts (anchors.mjs tokenizeDocument: its rests, of no text, right after its
+   *  head), from its part k: [its head, its last part], on k's page */
+  const partsOf = (toks, k) => {
+    let h = k, l = k
+    while (h > 0 && toks[h].t === '' && toks[h - 1].page === toks[k].page) h--
+    while (l + 1 < toks.length && toks[l + 1].page === toks[k].page && toks[l + 1].t === '') l++
+    return [h, l]
+  }
+  /** a mark of `mk`'s, the unit's own (a start mark's where `start`), as tolerantOf's bound: the token it stands at on arXiv's
+   *  page `w` as carried, or null */
+  const boundAt = (mk, start, w) => {
+    let e = carriedBy.get(mk)
+    if (!e) carriedBy.set(mk, (e = { c: carrier.carry(mk.page, mk.x, mk.y), k: undefined }))
+    const c = onInk(e.c)
+    if (!c || c.page !== w) return null
+    if (e.k === undefined) e.k = tokenAt(doc, docByPage, c, start)
+    return e.k
+  }
+  /** the page frame of arXiv's text (anchors.mjs frameOfTokens: its running heads and feet outside it), made once */
+  const inFrame = () => (tokensFrame ??= frameOfTokens(doc))
+  /**
+   * Unit i's own mark `k` (`${i}s` or `${i}e`) that no line carried (its line set in other words on arXiv's page: our
+   * cleveref's "section B" for arXiv's "appendix B", 2609.26457's unit 28; or broken otherwise from such a name on, its
+   * unit 71), placed by the unit's own words beside it, `other` its other mark as carried. Both marks on one page of ours;
+   * the unit's words between them in our compile, the TOLERANT_WORDS at the mark's side (tolerant.mjs wordsAt: one of them
+   * at most standing for another, a reference's name inside a reference's or a citation's rendering, NAMED); arXiv's words
+   * inside the page frame (no running head or foot) on the page the other mark is carried to, from it on (back, a start
+   * mark's) up to the first start of another unit carried there after it (the last end before it), of the units whose marks
+   * stand on the mark's page of ours or the one before; the one place the words stand there, the mark's own token ending its
+   * line in arXiv's where it does in ours. The mark then stands as ours does beside its token, a word the text layer gives in
+   * parts (partsOf) read by its parts: an end mark after the word's last part where ours ends the word before it (its parts
+   * after the mark's own token on the mark's line, begun before it: 1706.03762's T_0, whose subscript is the rest of "t0"),
+   * arXiv's word in as many parts or not; where ours' word runs on past the mark (its rest the next unit's: "3-" and "I"),
+   * after the same part of arXiv's word, in as many parts as ours; a start mark where the unit's first part is the rest of
+   * the word before (2005.14165's poems), before the same part of arXiv's word, in as many parts. At our compile's offset
+   * from that token (besideOf's: a mark after a formula no token holds stands 77.5 pt past 2608.20051's last word "for",
+   * its final period between), arXiv's ink running there from the token, no gap past an em and none on past the mark, where
+   * the offset is past an em; never past the next unit's carried start (before the last end) on its line, nor outside the
+   * page's view. Null, else. A mark a line carries is never one looked for
+   */
+  function tolerantOf(i, k, other) {
+    const end = k.endsWith('e'), name = nameOf.get(k), oName = nameOf.get(`${i}${end ? 's' : 'e'}`)
+    const m = name === undefined || dropped.has(name) ? null : at.get(name), om = oName === undefined ? null : at.get(oName)
+    if (!m || !om || m.page !== om.page || !other || !Number.isInteger(other.page) || dark.has(other.page) || !inked[other.page] || !ink[other.page]) return null
+    // ---- ours: the unit's words between its two marks, the mark's side's
+    const oursOn = oursByPage.get(m.page) ?? []
+    const kM = tokenAt(ours, oursByPage, m, !end), kO = tokenAt(ours, oursByPage, om, end)
+    if (kM === null || kO === null || (end ? kO > kM : kM > kO)) return null
+    const span = oursOn.filter(j => j >= Math.min(kM, kO) && j <= Math.max(kM, kO) && ours[j].t)
+    const side = end ? span.slice(-TOLERANT_WORDS) : span.slice(0, TOLERANT_WORDS)
+    if (!side.length) return null
+    // (ours' word at the mark's own token in parts: the token the mark stands beside, an end mark's the last part set before
+    // it on its line; and whether the word runs on past the mark, an end mark's into the next unit's text, a start mark's
+    // from the unit before)
+    const [hO, lO] = partsOf(ours, kM)
+    let kOwn = kM
+    if (end) while (kOwn < lO && Math.abs(ours[kOwn + 1].y - m.y) < 0.5 * ours[kOwn + 1].h && ours[kOwn + 1].x < m.x + 1) kOwn++
+    const runsOn = end ? kOwn < lO : kM > hO
+    // (the renderings of the unit's references and citations in our compile, between their two marks, by line)
+    const spans = []
+    units[i].pieces.forEach((piece, pk) => {
+      if (!NAMED.has(classOf(piece))) return
+      const a = at.get(`p${i}.${pk}a`), b = at.get(`p${i}.${pk}b`)
+      if (a && b && a.page === m.page && b.page === m.page) spans.push([a, b])
+    })
+    const inRendering = tk => spans.some(([a, b]) => {
+      const onA = Math.abs(tk.y - a.y) < 0.5 * tk.h, onB = Math.abs(tk.y - b.y) < 0.5 * tk.h
+      return (onA && tk.x >= a.x - 0.5 && (!onB || tk.x + tk.w <= b.x + 0.5)) || (!onA && onB && tk.x + tk.w <= b.x + 0.5)
+    })
+    const oursWords = side.map(j => ({ t: ours[j].t, ref: inRendering(ours[j]) }))
+    // ---- arXiv's: the page the other mark is carried to, from it to the next unit's start carried there (an end mark's)
+    const w = other.page, list = byPageOf(w), kOther = tokenAt(doc, docByPage, other, end)
+    if (kOther === null) return null
+    let bound = end ? Infinity : -Infinity
+    for (const p of [m.page - 1, m.page]) {
+      for (const [n, mk, unit, start] of unitMarksAt(p)) {
+        stats.units.tolerantWork++
+        if (unit === i || start !== end || at.get(n) !== mk || dropped.has(n)) continue
+        const kc = boundAt(mk, start, w)
+        if (kc !== null && (end ? kc > kOther && kc < bound : kc < kOther && kc > bound)) bound = kc
+      }
+    }
+    const framed = inFrame()
+    const window = list.filter(j => (end ? j >= kOther && j < bound : j <= kOther && j > bound) && doc[j].t && framed(doc[j]))
+    // (arXiv's token the mark stands beside where it stands at word j: an end mark's, the word's last part, or where ours
+    // runs on, its part as ours', the word in as many parts; a start mark's, the part of the word before as ours', in as many
+    // parts; or null. A part past the bound would be another unit's start, which the text, the same in the two, excludes:
+    // the place is held to the bound on its line below)
+    const ownOf = j => {
+      if (end) {
+        const [hT, lT] = partsOf(doc, j)
+        return !runsOn ? lT : lT - hT === lO - hO ? hT + (kOwn - hO) : null
+      }
+      if (!runsOn) return j
+      if (j < 1 || doc[j - 1].t !== '' || doc[j - 1].page !== w) return null
+      const [hT, lT] = partsOf(doc, j - 1), q = hT + (kM - hO)
+      return lT - hT === lO - hO ? q : null
+    }
+    // (whether its token begins or ends its line, asked of a place the words stand at alone)
+    const theirs = window.map(j => ({
+      t: doc[j].t,
+      get first() { const q = ownOf(j); return q !== null && lineEnd(doc, list, q, true) },
+      get last() { const q = ownOf(j); return q !== null && lineEnd(doc, list, q, false) },
+    }))
+    const found = wordsAt(oursWords, theirs, { end, atLineEnd: lineEnd(ours, oursOn, kOwn, !end) })
+    if (found.length !== 1) return null
+    // ---- the place: beside arXiv's token as ours is beside our own
+    const q = ownOf(window[found[0].at])
+    if (q === null) return null
+    const own = ours[kOwn], t = doc[q], em = t.h
+    const dx = end ? m.x - (own.x + own.w) : own.x - m.x, x = end ? t.x + t.w + dx : t.x - dx, y = t.y + (m.y - own.y)
+    // (an offset past an em, what stood there in ours, a formula, stands there in arXiv's: its ink on the line from the
+    // token to the mark, no gap past an em, and none running on past the mark)
+    if (dx > em) {
+      const P = ink[w], from = end ? t.x + t.w : x, to = end ? x : t.x, on = []
+      for (let g = 0; g < P.n; g++) {
+        if (Math.abs(P.y[g] - t.y) >= 0.6 * em || P.x1[g] <= from - em || P.x0[g] >= to + em) continue
+        if (end ? P.x1[g] > to + 0.5 : P.x0[g] < from - 0.5) return null
+        if (P.x1[g] > from && P.x0[g] < to) on.push(g)
+      }
+      on.sort((a, b) => P.x0[a] - P.x0[b] || a - b)
+      let edge = from, gap = 0
+      for (const g of on) { gap = Math.max(gap, P.x0[g] - edge); edge = Math.max(edge, P.x1[g]) }
+      if (Math.max(gap, to - edge) > em) return null
+    }
+    // (and on no other unit's side of the bound where that stands on its line)
+    const B = Number.isFinite(bound) ? doc[bound] : null
+    if (B && Math.abs(B.y - t.y) < 0.5 * em && (end ? x > B.x + 0.5 : x < B.x + B.w - 0.5)) return null
+    const v = viewAt(w)
+    return x >= v[0] - 1 && x <= v[2] + 1 && y >= v[1] - 1 && y <= v[3] + 1 ? { page: w, x, y } : null
+  }
+  /** unit marks no line carried (`raw`, of the keys `ks`), each by tolerantOf where its other mark was carried: placed into
+   *  `raw` together, so that none is placed by another so placed */
+  const tolerate = (ks, raw) => {
+    const placed = []
+    for (const k of ks) {
+      if (raw.get(k)) continue
+      const i = Number(k.slice(0, -1)), c = raw.get(`${i}${k.endsWith('s') ? 'e' : 's'}`)
+      if (!c) continue
+      stats.units.tolerantTried++
+      const t = tolerantOf(i, k, c)
+      if (t) placed.push([k, t])
+    }
+    for (const [k, t] of placed) { raw.set(k, t); stats.units.tolerant++ }
   }
 
   // ---------------------------------------------------------------- the units located on arXiv's tokens
@@ -751,6 +937,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const other = `${k.slice(0, -1)}${k.endsWith('s') ? 'e' : 's'}`
       if (nameOf.has(other)) raw.set(k, besideOf(nameOf.get(other), raw.get(other), nameOf.get(k)))
     }
+    oursByPage = pageIndex(ours)
+    tolerate([...withWords.keys()], raw)
     for (const [k, m] of withWords) {
       const c = raw.get(k)
       if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), m.t) })
@@ -1237,7 +1425,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
      * to right, their text ours (or ours after one reference word each), exactly our characters between them and after the
      * last; before the first, from the last exactly matched glyph on the line's baseline (a letter or digit of a word the
      * anchor paired, a found piece's) or the line's start: the last characters of our text before the piece (the anchor need
-     * not have paired them), then the reference's word, ours or one word of VOCAB where ours is one (never a word of our
+     * not have paired them), then the reference's word, ours or one reference word (rules/reference-words.mjs) where ours is one (never a word of our
      * text), at most PREFIX_EM of its size wide and GAP_EM from the link, then exactly our characters. Every glyph of the
      * run on that line's baseline and none off it inside the run, the unit's or no unit's, taken by no piece
      * (the matcher's own partial take of this piece, `took`, set aside), no letter or digit of a paired word. Its glyphs in x order
@@ -1287,7 +1475,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
      * word each), exactly our characters between them and after the last; before the first, from the last exactly matched
      * glyph on the line's baseline (a letter or digit of a word the anchor paired, a found piece's) or the line's start: the
      * last characters of our text before the piece (the anchor need not have paired them), then the reference's word, ours or
-     * one word of VOCAB where ours is one (never a word of our text), at most PREFIX_EM of its size wide and GAP_EM from the
+     * one reference word (rules/reference-words.mjs) where ours is one (never a word of our text), at most PREFIX_EM of its size wide and GAP_EM from the
      * link, then exactly our characters. Every glyph of the run on that line's baseline and none off it inside the run, the
      * unit's or no unit's, taken by no piece (the matcher's own partial take of this piece, `took`, set aside), no letter or
      * digit of a paired word. Its glyphs in x order (taken by phOf once the piece is found on its line), or null (LOST, as
@@ -1339,7 +1527,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         const all = runs.flat()
         const r = rows[partners[0].row]
         if (!all.every(free)) return no('link: a glyph not free')
-        const reWord = s => { for (let n = Math.min(s.length, 16); n >= 2; n--) if (VOCAB.has(s.slice(0, n).toLowerCase())) return s.slice(n); return null }
+        const reWord = s => { for (let n = Math.min(s.length, 16); n >= 2; n--) if (isReferenceWord(s.slice(0, n))) return s.slice(n); return null }
         const sameText = (ours, theirs) => ours === theirs || (reWord(ours) !== null && reWord(ours) !== '' && reWord(ours) === reWord(theirs))
         for (let m = 0; m < runs.length; m++) if (!sameText(norm(ourLinks[mine[m].j][9]), norm(runs[m].map(g => P.u[g]).join('')))) return no('link: its text not ours')
         // ---- 4. in our order, left to right, our gaps' characters between them; the run's glyphs on the line's baseline
@@ -1356,7 +1544,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
           gaps.push(...gs)
         }
         // ---- 5. before the first link, from the last exactly matched glyph on the line (or its start): our text's last
-        // characters, then the reference's word (ours, or one of VOCAB for ours), then exactly our characters after it
+        // characters, then the reference's word (ours, or a reference word for ours), then exactly our characters after it
         const first = runs[0][0]
         const before = onLine.filter(g => mid(P, g) < mid(P, first) && !runs[0].includes(g))
         let lx = -Infinity
@@ -1368,7 +1556,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (got !== rest) return no('prefix: its rest not ours')
         let m = n
         if (ownWord) {
-          if (!VOCAB.has(ownWord.toLowerCase())) return no('prefix: ours no reference word')
+          if (!isReferenceWord(ownWord)) return no('prefix: ours no reference word')
           // its letters back to a word's gap (a stop after them its own), right before the rest
           if (m > 0 && norm(P.u[lead[m - 1]]) === '.') m--
           while (m > 0 && /^\p{L}+$/u.test(norm(P.u[lead[m - 1]])) && (m === n || P.x0[lead[m]] - P.x1[lead[m - 1]] < TEXT_SPACE * size)) m--
@@ -1385,7 +1573,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         T = norm(asSet(T))
         if (!T.endsWith(chars(text)) || text.some(g => P.owner[g] !== -1 && P.owner[g] !== i)) return no('prefix: not our text before it')
         if (ownWord) {
-          if (!word.length || !/^\p{L}+\.?$/u.test(theirs) || (theirs !== ownWord && !VOCAB.has(theirs.toLowerCase()))) return no('prefix: theirs no reference word')
+          if (!word.length || !/^\p{L}+\.?$/u.test(theirs) || (theirs !== ownWord && !isReferenceWord(theirs))) return no('prefix: theirs no reference word')
           // (a word of our own text before the piece is never its rendering)
           if (T.endsWith(chars(text) + theirs)) return no('prefix: a word of our text')
           if (P.x1[word.at(-1)] - P.x0[word[0]] > PREFIX_EM * size) return no('prefix: too wide')
@@ -1415,6 +1603,52 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (window.some(g => !run.includes(g) && mid(P, g) > rx0 && mid(P, g) < rx1)) return no('run: a glyph off the line inside it')
         // (taken once the piece is found on its line: phOf)
         return run.sort((a, b) => P.x0[a] - P.x0[b] || a - b).map(g => [q, g])
+      } finally {
+        for (const [p, g] of back) ink[p].taken[g] = 1
+      }
+    }
+    /**
+     * A text piece (rules/text-piece.mjs) the matcher did not find, by its own characters on the unit's lines (the tolerant
+     * match): TeX broke it over two lines in one PDF and set it on one in the other (2609.26457's \texttt{gemini 3 flash},
+     * which our compile breaks after "gemini"), so that no carry puts its glyphs where arXiv's stand. Its characters
+     * (`items`', NFKC, white space aside) are one run of arXiv's glyphs on the unit's lines, in each line's x order and
+     * from one line's end on to the next line's start at most once, every glyph no other unit's and no other piece's (the
+     * matcher's own partial take of this piece set aside, then given back), after every glyph of the unit's pieces found
+     * before it (`k`'s: in the source's order); the one such run, its glyphs (arXiv's, never one made up), or null where
+     * there is none or more than one
+     */
+    const textRunOf = (k, items, took) => {
+      const target = NF(items.map(it => it.u).join(''))
+      if (!target) return null
+      const back = took.filter(([p, g]) => ink[p]?.taken[g])
+      for (const [p, g] of back) ink[p].taken[g] = 0
+      try {
+        const seq = []
+        rows.forEach((r, line) => {
+          const P = ink[r.page]
+          for (const g of [...new Set([...r.gl, ...(r.extra ?? [])])].sort((a, b) => P.x0[a] - P.x0[b] || a - b)) {
+            seq.push({ p: r.page, g, s: NF(P.u[g]), free: (P.owner[g] === -1 || P.owner[g] === i) && !P.taken[g], line })
+          }
+        })
+        // (after the unit's pieces found before it)
+        const before = new Set()
+        for (let q = 0; q < k; q++) for (const [p, g] of matchedBy.get(`${i}.${q}`) ?? []) before.add(`${p}|${g}`)
+        let after = -1
+        seq.forEach((e, n) => { if (before.has(`${e.p}|${e.g}`)) after = n })
+        const runs = []
+        for (let from = after + 1; from < seq.length && runs.length < 2; from++) {
+          if (!seq[from].s || !target.startsWith(seq[from].s)) continue
+          let got = '', to = from, breaks = 0
+          while (to < seq.length && got.length < target.length) {
+            const e = seq[to]
+            if (!e.free || (to > from && e.line !== seq[to - 1].line && ++breaks > 1)) break
+            if (e.s && !target.startsWith(got + e.s)) break
+            got += e.s
+            to++
+          }
+          if (got === target) runs.push(seq.slice(from, to).filter(e => e.s).map(e => [e.p, e.g]))
+        }
+        return runs.length === 1 ? runs[0] : null
       } finally {
         for (const [p, g] of back) ink[p].taken[g] = 1
       }
@@ -1485,6 +1719,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (got.why && got.took && linking && !rules.length && linkablePiece(piece)) {
         const run = linked(k, piece, items, got.took)
         if (run) { got = { glyphs: run, boxes: [] }; byLinks = true }
+      }
+      // (a text piece set over two lines in one PDF and on one in the other: by its characters on the unit's lines)
+      let byText = false
+      if (got.why && got.took && !rules.length && textPieceOf(piece.src)) {
+        const run = textRunOf(k, items, got.took)
+        if (run) { got = { glyphs: run, boxes: [] }; byText = true; stats.ph.textRuns++ }
       }
       if (got.why) { lost(got.why); continue }
       const gs = got.glyphs, bs = got.boxes
@@ -1567,7 +1807,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         }
         one.boxes = (one.boxes ?? []).concat(segs.flatMap(sg => sg.boxes.map(b => [sg.row, b])))
       }
-      for (const [p, g] of gs) { ink[p].owner[g] = i; if (byLinks) ink[p].taken[g] = 1; if (cls !== 'display' && inWord(p, g)) stats.ph.textTaken++ }
+      for (const [p, g] of gs) { ink[p].owner[g] = i; if (byLinks || byText) ink[p].taken[g] = 1; if (cls !== 'display' && inWord(p, g)) stats.ph.textTaken++ }
       const row = [i, k, kind, flags]
       for (const s of segs) {
         const [x0, bottom, x1, top] = solid(viewAt(s.page), s.x0, s.bottom, s.x1, s.top)
@@ -1582,7 +1822,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const [p, g] of gs) foundGs.add(`${p}|${g}`)
       // (the bars of the own ink are the matcher's: a piece placed by its links is counted there alone)
       if (byLinks) { const w = stats.links.placed.findIndex(([a, b]) => a > i || (a === i && b > k)); stats.links.placed.splice(w < 0 ? stats.links.placed.length : w, 0, [i, k]) }
-      else {
+      // (and one found by its characters is counted in textRuns alone: the matcher's bars stay its own)
+      else if (!byText) {
         stats.ph.owned += items.length + rules.length
         stats.ph.matched += gs.length + bs.length
       }
@@ -2405,6 +2646,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
     carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours); anchors = new Map()
     const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours)
+    oursByPage = oursOn
     const byName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
     const listed = mh ? mh.named.filter(([, page]) => Number.isInteger(page) && page >= 1 && page <= M).sort(byName) : [...at].map(([nm, m]) => [nm, m.page, m.x, m.y])
     const pageOfName = new Map(), namesOn = new Map(), gOn = new Map(), keyNames = new Map(), keysOn = new Map(), nameList = []
@@ -2512,6 +2754,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         const other = `${i}${k.endsWith('s') ? 'e' : 's'}`
         if (nameOf.has(other)) raw.set(k, besideOf(nameOf.get(other), raw.get(other), nameOf.get(k)))
       }
+      tolerate(ks, raw)
       for (const k of ks) { const c = raw.get(k); if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), withWords.get(k).t) }) }
       const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage).get(String(i))
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
@@ -2867,7 +3110,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const v of page.view) mViews.push(v)
       for (const w of page.words) mWords.push(w)
       // its marks, in the names' order, each on its page's view (the marks file's)
-      for (const [nm, x, y] of namesOn.get(p) ?? []) if (markAt(mViews, M, p, x, y)) at.set(nm, { page: p, x: r2z(x), y: r2z(y) })
+      for (const [nm, x, y] of namesOn.get(p) ?? []) if (markAt(mViews, M, p, x, y)) { at.set(nm, { page: p, x: r2z(x), y: r2z(y) }); noteMark(nm) }
       // its draft frames, its tokens drawn, carried
       const frames = []
       for (const nm of gOn.get(p) ?? []) { const a = at.get(nm), f = a ? frameAt(nm, a) : null; if (f) frames.push(f) }

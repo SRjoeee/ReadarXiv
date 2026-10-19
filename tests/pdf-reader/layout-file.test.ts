@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countValues } from '@/pdf-reader/engine/layout/json.mjs'
 import {
@@ -167,7 +169,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null, fill: null })
-    expect(LAYOUT).toBe('8')
+    expect(LAYOUT).toBe('9')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
@@ -181,6 +183,12 @@ describe('a valid file', () => {
     expect(index.names(3).map(n => [n.key, n.capitals, n.centred, n.unit, n.glue, n.cx1])).toEqual([['ref', true, false, -1, 0, 300], ['proof', false, false, 7, 2.5, 540]])
     expect(index.names(2)).toEqual([])
     expect(index.names(9)).toEqual([])
+  })
+
+  it("the maker's version and the schema the types declare are the module's (file.d.mts, raised with file.mjs)", () => {
+    const declared = readFileSync(join(__dirname, '../../src/pdf-reader/engine/layout/file.d.mts'), 'utf8')
+    expect(/export declare const LAYOUT: '([^']*)'/.exec(declared)?.[1]).toBe(LAYOUT)
+    expect(Number(/export declare const LAYOUT_SCHEMA: (\d+)/.exec(declared)?.[1])).toBe(LAYOUT_SCHEMA)
   })
 
   it('strings come back as they are: a heading with markup is text, never markup', () => {

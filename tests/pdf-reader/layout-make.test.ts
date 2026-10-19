@@ -2416,3 +2416,484 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
     await expect(makerOf({ ...(await input({ float: 'forward' })), arxiv: arxivOf(w.pages) })).rejects.toThrow(TypeError)
   })
 })
+
+describe('makeLayout, the tolerant match: a unit mark the carry leaves and a text piece the matcher misses (PR-D2, 2609.26457)', () => {
+  // (a paragraph of many lines below, the same in both PDFs: the carry's share)
+  const N = 24
+  const fillerAt = (y: number): Run[] => Array.from({ length: N }, (_, j) => ({ s: words(200 + 10 * j, 10), x: 72, y: y - 12 * j }))
+  const fillerMarks = (f: Run[]): Mark[] => [['1s', 1, 72, (f[0] as Run).y], ['1e', 1, endOf(f[N - 1] as Run), (f[N - 1] as Run).y]]
+  const filler = unit('para', [text(words(200, 10 * N))])
+  /** a link over a run's characters [from, to) on its baseline, hyperref's 1 pt margin round them */
+  const over = (r: Run, from: number, to: number, dest: string): Annot => ({ rect: [xAt(r, from) - 1, r.y - 3, xAt(r, to) + 1, r.y + 9], dest })
+  const at = (r: Run, s: string) => xAt(r, r.s.indexOf(s))
+  const unitOf = (f: LayoutFile, id: number) => f.units.find(u => u[0] === id) ?? null
+
+  // unit 28's shape: the paragraph's last line our cleveref names otherwise, "section B" for arXiv's "appendix B"
+  const L1: Run = { s: words(0, 9), x: 72, y: 700 }
+  const O2: Run = { s: 'tasks (see section B).', x: 72, y: 688 }
+  const nameAt = (ours: Run, theirs: Run, o: { pieces?: unknown[]; theirsAfter?: Run[] } = {}): World => {
+    const f = fillerAt(664 - 12 * (o.theirsAfter?.length ?? 0))
+    const B = (r: Run) => r.s.indexOf(' B') + 1
+    return {
+      marked: [{ runs: [L1, ours, ...fillerAt(664 - 12 * (o.theirsAfter?.length ?? 0))], annots: [over(ours, B(ours), B(ours) + 1, 'appendix.B')] }],
+      pages: [{ runs: [L1, theirs, ...(o.theirsAfter ?? []), ...f], annots: [over(theirs, B(theirs), B(theirs) + 1, 'appendix.B')] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(ours), 688], ['p0.1a', 1, at(ours, 'section'), 688], ['p0.1b', 1, at(ours, ').'), 688], ...fillerMarks(f)],
+      units: [unit('para', o.pieces ?? [text(`${L1.s} tasks (see `), ph('\\cref{app:fml}'), text(').')]), filler],
+    }
+  }
+
+  it("unit 28: the end mark of a line set in another reference's name is placed by the unit's last words, the name the one word apart", async () => {
+    const T2: Run = { s: 'tasks (see appendix B).', x: 72, y: 688 }
+    const { file, stats } = await made(nameAt(O2, T2))
+    expect(unitOf(file, 0)).not.toBeNull()
+    const lines = chunk(rowsOf(file, 0, 'lines'), 8)
+    expect(lines.map(l => l[3])).toEqual([700, 688])
+    expect(lines[1]?.[2]).toBe(endOf(T2))
+    expect(stats.units.tolerant).toBe(1)
+    // (and its reference found by the link-anchor locator on the line now located: arXiv's own name)
+    expect(phOf(file, 0, 1)[3]).toBe(0)
+    expect(file.pageText).toContainEqual([0, 1, 'appendix B'])
+  })
+
+  it('unit 71: a paragraph TeX broke otherwise from such a name on (three lines in ours, four on arXiv\'s): its last words across the new breaks', async () => {
+    const O2b: Run = { s: 'a0 a1 see section C a2 a3 a4', x: 72, y: 688 }, O3: Run = { s: 'b0 b1 b2 b3 b4 done.', x: 72, y: 676 }
+    const T2b: Run = { s: 'a0 a1 see appendix C a2', x: 72, y: 688 }, T3: Run = { s: 'a3 a4 b0 b1 b2', x: 72, y: 676 }, T4: Run = { s: 'b3 b4 done.', x: 72, y: 664 }
+    const C = (r: Run) => r.s.indexOf(' C') + 1
+    const f = fillerAt(640)
+    const w: World = {
+      marked: [{ runs: [L1, O2b, O3, ...f], annots: [over(O2b, C(O2b), C(O2b) + 1, 'appendix.C')] }],
+      pages: [{ runs: [L1, T2b, T3, T4, ...f], annots: [over(T2b, C(T2b), C(T2b) + 1, 'appendix.C')] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(O3), 676], ['p0.1a', 1, at(O2b, 'section'), 688], ['p0.1b', 1, at(O2b, ' a2'), 688], ...fillerMarks(f)],
+      units: [unit('para', [text(`${L1.s} a0 a1 see `), ph('\\cref{app:c}'), text(' a2 a3 a4 b0 b1 b2 b3 b4 done.')]), filler],
+    }
+    const { file, stats } = await made(w)
+    expect(unitOf(file, 0)).not.toBeNull()
+    const lines = chunk(rowsOf(file, 0, 'lines'), 8)
+    expect(lines.map(l => l[3])).toEqual([700, 688, 676, 664])
+    expect(lines[3]?.[2]).toBe(endOf(T4))
+    expect(stats.units.tolerant).toBe(1)
+  })
+
+  it('the limits of the tolerant mark: two places, past the next unit\'s start, two names apart, a word not a reference\'s, a word unlisted', async () => {
+    const T2: Run = { s: 'tasks (see appendix B).', x: 72, y: 688 }
+    const placed = async (w: World) => { const { file, stats } = await made(w); return { held: unitOf(file, 0) !== null, tried: stats.units.tolerantTried, tolerant: stats.units.tolerant } }
+    // (the right one, for the record)
+    expect(await placed(nameAt(O2, T2))).toEqual({ held: true, tried: 1, tolerant: 1 })
+    // two places the words stand in the unit's span: neither taken
+    const twice: Run = { s: 'w5 w6 w7 w8 tasks (see appendix B).', x: 72, y: 676 }
+    expect(await placed(nameAt(O2, T2, { theirsAfter: [twice] }))).toEqual({ held: false, tried: 1, tolerant: 0 })
+    // the words only past the next unit's start (arXiv's after the paragraph below): none in the span
+    {
+      const w = nameAt(O2, { s: 'tasks (see appendix X).', x: 72, y: 688 })
+      const page = w.pages[0] as Page
+      page.runs.push({ s: 'w5 w6 w7 w8 tasks (see appendix B).', x: 72, y: 300 })
+      expect(await placed(w)).toEqual({ held: false, tried: 1, tolerant: 0 })
+    }
+    // two names apart: two references, each set otherwise
+    {
+      const ours: Run = { s: 'tasks (see section B, section C).', x: 72, y: 688 }, theirs: Run = { s: 'tasks (see appendix B, appendix C).', x: 72, y: 688 }
+      const w = nameAt(ours, theirs, { pieces: [text(`${L1.s} tasks (see `), ph('\\cref{app:b}'), text(', '), ph('\\cref{app:c}'), text(').')] })
+      w.marks = [['0s', 1, 72, 700], ['0e', 1, endOf(ours), 688], ['p0.1a', 1, at(ours, 'section B'), 688], ['p0.1b', 1, at(ours, ', '), 688], ['p0.3a', 1, at(ours, 'section C'), 688], ['p0.3b', 1, at(ours, ').'), 688], ...w.marks.slice(4)]
+      expect(await placed(w)).toEqual({ held: false, tried: 1, tolerant: 0 })
+    }
+    // a reference word of the unit's own text, not of a reference's rendering (\ref prints the letter alone)
+    {
+      const w = nameAt(O2, T2, { pieces: [text(`${L1.s} tasks (see section `), ph('\\ref{app:b}'), text(').')] })
+      w.marks = [['0s', 1, 72, 700], ['0e', 1, endOf(O2), 688], ['p0.1a', 1, at(O2, 'B).'), 688], ['p0.1b', 1, at(O2, ').'), 688], ...w.marks.slice(4)]
+      expect(await placed(w)).toEqual({ held: false, tried: 1, tolerant: 0 })
+    }
+    // arXiv's word no reference word ("annex"): not taken for another
+    expect(await placed(nameAt(O2, { s: 'tasks (see annex B).', x: 72, y: 688 }))).toEqual({ held: false, tried: 1, tolerant: 0 })
+    // and a mark its line carries is never looked for: the same line in both PDFs
+    expect(await placed(nameAt(O2, O2))).toEqual({ held: true, tried: 0, tolerant: 0 })
+  })
+
+  it("unit 24's k35: a code piece our compile broke over two lines and arXiv's set on one, found by its characters on the unit's lines", async () => {
+    const Q1: Run = { s: 'w0 w1 w2 with gemini', x: 72, y: 700 }, Q2: Run = { s: '3 flash then w3 w4 w5', x: 72, y: 688 }
+    const R1: Run = { s: 'w0 w1 w2 with', x: 72, y: 700 }, R2: Run = { s: 'gemini 3 flash then w3 w4 w5', x: 72, y: 688 }
+    const f = fillerAt(664)
+    const w: World = {
+      marked: [{ runs: [Q1, Q2, ...f] }],
+      pages: [{ runs: [R1, R2, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(Q2), 688], ['p0.1a', 1, at(Q1, 'gemini'), 700], ['p0.1b', 1, at(Q2, ' then'), 688], ...fillerMarks(f)],
+      units: [unit('para', [text('w0 w1 w2 with '), ph('\\texttt{gemini 3 flash}'), text(' then w3 w4 w5')]), filler],
+    }
+    const { file, stats } = await made(w)
+    const row = phOf(file, 0, 1)
+    expect(row.slice(0, 4)).toEqual([0, 1, PH_KINDS.indexOf('code'), 0])
+    // (one segment, arXiv's "gemini 3 flash" at the start of its second line)
+    expect(row.slice(4, 8)).toEqual([1, 72, 688, at(R2, ' then')])
+    expect(stats.ph.textRuns).toBe(1)
+  })
+
+  it("unit 24's own shape: the same code twice, the first found where it is carried, the second by its characters after it", async () => {
+    const Q1: Run = { s: 'w0 with gemini 3 flash and w1 gemini', x: 72, y: 700 }, Q2: Run = { s: '3 flash then w3 w4 w5', x: 72, y: 688 }
+    const R1: Run = { s: 'w0 with gemini 3 flash and w1', x: 72, y: 700 }, R2: Run = { s: 'gemini 3 flash then w3 w4 w5', x: 72, y: 688 }
+    const f = fillerAt(664)
+    const second = Q1.s.lastIndexOf('gemini')
+    const w: World = {
+      marked: [{ runs: [Q1, Q2, ...f] }],
+      pages: [{ runs: [R1, R2, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(Q2), 688], ['p0.1a', 1, at(Q1, 'gemini'), 700], ['p0.1b', 1, at(Q1, ' and'), 700],
+        ['p0.3a', 1, xAt(Q1, second), 700], ['p0.3b', 1, at(Q2, ' then'), 688], ...fillerMarks(f)],
+      units: [unit('para', [text('w0 with '), ph('\\texttt{gemini 3 flash}'), text(' and w1 '), ph('\\texttt{gemini 3 flash}'), text(' then w3 w4 w5')]), filler],
+    }
+    const { file, stats } = await made(w)
+    expect(phOf(file, 0, 1).slice(3, 8)).toEqual([0, 1, at(R1, 'gemini'), 700, at(R1, ' and')])
+    expect(phOf(file, 0, 3).slice(3, 8)).toEqual([0, 1, 72, 688, at(R2, ' then')])
+    expect(stats.ph.textRuns).toBe(1)
+  })
+
+  it("the limits of the text piece's run: two places on the unit's lines, or characters arXiv's sets otherwise, stay LOST", async () => {
+    const f = fillerAt(664)
+    const world = (Q2: Run, R2: Run, after: string): World => ({
+      marked: [{ runs: [{ s: 'w0 w1 w2 with gemini', x: 72, y: 700 }, Q2, ...f] }],
+      pages: [{ runs: [{ s: 'w0 w1 w2 with', x: 72, y: 700 }, R2, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(Q2), 688], ['p0.1a', 1, at({ s: 'w0 w1 w2 with gemini', x: 72, y: 700 }, 'gemini'), 700], ['p0.1b', 1, at(Q2, ' then'), 688], ...fillerMarks(f)],
+      units: [unit('para', [text('w0 w1 w2 with '), ph('\\texttt{gemini 3 flash}'), text(after)]), filler],
+    })
+    // the unit's own text holds its characters again, free: two runs
+    const two = await made(world({ s: '3 flash then gemini 3 flash w4', x: 72, y: 688 }, { s: 'gemini 3 flash then gemini 3 flash w4', x: 72, y: 688 }, ' then gemini 3 flash w4'))
+    expect(phOf(two.file, 0, 1)[3]).toBe(PH_FLAG.LOST)
+    expect(two.stats.ph.textRuns).toBe(0)
+    // a character arXiv's sets otherwise: none
+    const other = await made(world({ s: '3 flash then w3 w4 w5', x: 72, y: 688 }, { s: 'gemlni 3 flash then w3 w4 w5', x: 72, y: 688 }, ' then w3 w4 w5'))
+    expect(phOf(other.file, 0, 1)[3]).toBe(PH_FLAG.LOST)
+    expect(other.stats.ph.textRuns).toBe(0)
+  })
+
+  // ---- where the mark stands beside arXiv's word (PR-D2's review)
+  /** unit 0 of L1 and a line our cleveref names otherwise, its reference's rendering from "section" (ours) to `close`, then
+   *  the filler; `theirs` arXiv's lines after L1, `ours` ours', `lead` the unit's words before the reference after L1's */
+  const endWorld = (ours: Run[], theirs: Run[], close: string, after: string, lead = 'tasks (see '): World => {
+    const last = ours.at(-1) as Run, O = ours[0] as Run
+    const f = fillerAt(Math.min(...[...ours, ...theirs].map(r => r.y)) - 24)
+    return {
+      marked: [{ runs: [L1, ...ours, ...f] }],
+      pages: [{ runs: [L1, ...theirs, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(last), last.y], ['p0.1a', 1, at(O, 'section'), O.y], ['p0.1b', 1, at(O, close), O.y], ...fillerMarks(f)],
+      units: [unit('para', [text(`${L1.s} ${lead}`), ph('\\cref{app:b}'), text(after)]), filler],
+    }
+  }
+  /** unit 0's lines and erased rectangles */
+  const rowsOf0 = (f: LayoutFile) => ({ lines: rowsOf(f, 0, 'lines'), erase: rowsOf(f, 0, 'erase') })
+  const held = async (w: World) => { const { file, stats } = await made(w); return { held: unitOf(file, 0) !== null, tried: stats.units.tolerantTried, tolerant: stats.units.tolerant } }
+
+  it("a mark after a formula no word holds (2608.20051's unit 250): our compile's offset from the last word, the final period inside the line", async () => {
+    const O: Run = { s: 'tasks (see section B) <=>+<=>+<=>+.', x: 72, y: 688 }, T: Run = { s: 'tasks (see appendix B) <=>+<=>+<=>+.', x: 72, y: 688 }
+    const { file, stats } = await made(endWorld([O], [T], ') <', ') <=>+<=>+<=>+.'))
+    expect(stats.units.tolerant).toBe(1)
+    const lines = chunk(rowsOf(file, 0, 'lines'), 8)
+    expect(lines.map(l => l[3])).toEqual([700, 688])
+    // (the line to its full stop, and erased to it: the mark 80 pt past the reference's last letter, as in ours)
+    expect(lines[1]?.[2]).toBe(endOf(T))
+    expect(Math.max(...chunk(rowsOf(file, 0, 'erase'), 5).filter(e => e[0] === 1 && (e[2] as number) < 690 && (e[4] as number) > 686).map(e => e[3] as number))).toBeGreaterThanOrEqual(endOf(T))
+    // the formula set on arXiv's next line (no ink from the word to the mark), or wider there (ink on past it): not placed
+    const next = endWorld([O], [{ s: 'tasks (see appendix B)', x: 72, y: 688 }, { s: '<=>+<=>+<=>+.', x: 72, y: 676 }], ') <', ') <=>+<=>+<=>+.')
+    expect(await held(next)).toEqual({ held: false, tried: 1, tolerant: 0 })
+    const wider = endWorld([O], [{ s: 'tasks (see appendix B) <=>+<=>+<=>+<=>+.', x: 72, y: 688 }], ') <', ') <=>+<=>+<=>+.')
+    expect(await held(wider)).toEqual({ held: false, tried: 1, tolerant: 0 })
+  })
+
+  it("a last word given in parts, a hyphen at its line's end (2609.26457's cells): the mark after its rest, on the line below", async () => {
+    // (the line of the word's first part three words of four the same: no line carries the rest, nor the mark after it)
+    const O2: Run = { s: '(see section B) es-', x: 72, y: 688, eol: true }, O3: Run = { s: 'calation.', x: 72, y: 676 }
+    const T2: Run = { s: '(see appendix B) es-', x: 72, y: 688, eol: true }, T3: Run = { s: 'calation.', x: 72, y: 676 }
+    const { file, stats } = await made(endWorld([O2, O3], [T2, T3], ') es', ') escalation.', '(see '))
+    expect(stats.units.tolerant).toBe(1)
+    const lines = chunk(rowsOf(file, 0, 'lines'), 8)
+    expect(lines.map(l => l[3])).toEqual([700, 688, 676])
+    expect(lines[2]?.[2]).toBe(endOf(T3))
+    // (as where the line is carried: ours set as arXiv's)
+    const carried = await made(endWorld([T2, T3], [T2, T3], ') es', ') escalation.', '(see '))
+    expect(carried.stats.units.tolerantTried).toBe(0)
+    expect(rowsOf0(file)).toEqual(rowsOf0(carried.file))
+  })
+
+  it("a first word after the rest of the word before (2005.14165's poems): the start mark before that rest, as in ours", async () => {
+    // (unit 0's last word "3-" and unit 1's first "I", one word to the text layer: unit 1's own token the rest)
+    const P: Run = { s: 'w0 w1 w2 w3 poem 3-', x: 72, y: 700, eol: true }
+    const O1: Run = { s: 'I must (see section B)', x: 72, y: 688 }, T1: Run = { s: 'I must (see appendix B)', x: 72, y: 688 }
+    const O2: Run = { s: 'w10 w11 w12 w13 w14 w15 w16 w17', x: 72, y: 676 }
+    const f = fillerAt(652)
+    const world = (ours: Run): World => ({
+      marked: [{ runs: [P, ours, O2, ...f] }],
+      pages: [{ runs: [P, T1, O2, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(P), 700], ['1s', 1, 72, 688], ['1e', 1, endOf(O2), 676], ['p1.1a', 1, at(ours, ours.s.includes('section') ? 'section' : 'appendix'), 688], ['p1.1b', 1, at(ours, ')'), 688],
+        ['2s', 1, 72, (f[0] as Run).y], ['2e', 1, endOf(f[N - 1] as Run), (f[N - 1] as Run).y]],
+      units: [unit('para', [text('w0 w1 w2 w3 poem 3')]), unit('para', [text('I must (see '), ph('\\cref{app:b}'), text(`) ${O2.s}`)]), filler],
+    })
+    const { file, stats } = await made(world(O1))
+    expect(stats.units.tolerant).toBe(1)
+    expect(chunk(rowsOf(file, 1, 'lines'), 8).map(l => l[3])).toEqual([688, 676])
+    // (its rows those of the mark its line carries, ours set as arXiv's: at the rest, not at "must", which is no word of
+    // ours there, and the unit is held)
+    const carried = await made(world(T1))
+    expect(carried.stats.units.tolerantTried).toBe(0)
+    expect({ lines: rowsOf(file, 1, 'lines'), erase: rowsOf(file, 1, 'erase') }).toEqual({ lines: rowsOf(carried.file, 1, 'lines'), erase: rowsOf(carried.file, 1, 'erase') })
+  })
+
+  it("a last word that runs on into the next unit's first (\"3-\" and \"I\", one word to the text layer): the end mark before that rest", async () => {
+    // (both units' lines set otherwise on arXiv's, so that no carried start of unit 1 bounds unit 0's end)
+    const O2: Run = { s: '(see section B) 3-', x: 72, y: 688, eol: true }, T2: Run = { s: '(see appendix B) 3-', x: 72, y: 688, eol: true }
+    const O3: Run = { s: 'I must (see section C)', x: 72, y: 676 }, T3: Run = { s: 'I must (see appendix C)', x: 72, y: 676 }
+    const O4: Run = { s: 'w10 w11 w12 w13 w14 w15 w16 w17', x: 72, y: 664 }
+    const f = fillerAt(640)
+    const { file, stats } = await made({
+      marked: [{ runs: [L1, O2, O3, O4, ...f] }],
+      pages: [{ runs: [L1, T2, T3, O4, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(O2), 688], ['p0.1a', 1, at(O2, 'section'), 688], ['p0.1b', 1, at(O2, ')'), 688],
+        ['1s', 1, 72, 676], ['1e', 1, endOf(O4), 664], ['p1.1a', 1, at(O3, 'section'), 676], ['p1.1b', 1, at(O3, ')'), 676],
+        ['2s', 1, 72, (f[0] as Run).y], ['2e', 1, endOf(f[N - 1] as Run), (f[N - 1] as Run).y]],
+      units: [unit('para', [text(`${L1.s} (see `), ph('\\cref{app:b}'), text(') 3')]), unit('para', [text('I must (see '), ph('\\cref{app:c}'), text(`) ${O4.s}`)]), filler],
+    })
+    expect(stats.units.tolerant).toBe(2)
+    const lines = chunk(rowsOf(file, 0, 'lines'), 8)
+    expect(lines.map(l => l[3])).toEqual([700, 688])
+    expect(lines[1]?.[2]).toBe(endOf(T2))
+    expect(chunk(rowsOf(file, 1, 'lines'), 8).map(l => l[3])).toEqual([676, 664])
+  })
+
+  it("a subscript the text layer gives as the rest of its letter's word (1706.03762's T_0): the mark after the word's last part, as where the line is carried", async () => {
+    // (the last line "(see section B) T_0." in ours: "t0" a word of two parts, the "0" 1.8 pt below; a glyph past the full
+    // stop, no unit's, which a mark placed past the period takes in)
+    const line = (ref: string, sub: boolean): Run[] => {
+      const a: Run = { s: `(see ${ref} B) ${sub ? 'T' : 'T0'}`, x: 72, y: 688 }
+      const z: Run = { s: '0', x: endOf(a), y: 686.2, size: 7 }
+      const dot: Run = { s: '.', x: sub ? endOf(z) : endOf(a), y: 688 }
+      return [...(sub ? [a, z] : [a]), dot, { s: '*', x: endOf(dot) + 0.5, y: 688, w: 0.3 }]
+    }
+    const f = fillerAt(664)
+    const world = (ours: Run[], theirs: Run[]): World => {
+      const O = ours[0] as Run, dot = ours.at(-2) as Run
+      return {
+        marked: [{ runs: [L1, ...ours, ...f] }],
+        pages: [{ runs: [L1, ...theirs, ...f] }],
+        marks: [['0s', 1, 72, 700], ['0e', 1, endOf(dot), 688], ['p0.1a', 1, at(O, O.s.includes('section') ? 'section' : 'appendix'), 688], ['p0.1b', 1, at(O, ')'), 688], ...fillerMarks(f)],
+        units: [unit('para', [text(`${L1.s} (see `), ph('\\cref{app:b}'), text(') T0.')]), filler],
+      }
+    }
+    // the same parts in both PDFs, and arXiv's "T0" in one part: each as where ours is set as arXiv's and the line carried
+    for (const theirs of [line('appendix', true), line('appendix', false)]) {
+      const { file, stats } = await made(world(line('section', true), theirs))
+      expect(stats.units.tolerant).toBe(1)
+      const carried = await made(world(theirs, theirs))
+      expect(carried.stats.units.tolerantTried).toBe(0)
+      expect(rowsOf0(file)).toEqual(rowsOf0(carried.file))
+      expect(chunk(rowsOf(file, 0, 'lines'), 8)[1]?.[2]).toBe(endOf(theirs.at(-2) as Run))
+    }
+  })
+
+  it("a word the two PDFs give in other parts around the mark (\"es\" \"ca\" \"la\" | \"t\" against \"es\" \"c\" \"al\" \"a\" \"t\"): neither unit's mark is placed", async () => {
+    // (unit 0 ends after ours' "la", unit 1 begins at its "t", 1.1 pt on: one word to the text layer, in four parts in ours)
+    const O = [{ s: '(section B) es', x: 72, y: 688 }] as Run[]
+    O.push({ s: 'ca', x: endOf(O[0] as Run), y: 688 }, { s: 'la', x: endOf(O[0] as Run) + 10, y: 688 })
+    const end0 = endOf(O[2] as Run)
+    O.push({ s: 't w9', x: end0 + 1.1, y: 688 })
+    const T = [{ s: '(appendix B) es', x: 72, y: 688 }] as Run[]
+    for (const s of ['c', 'al', 'a', 't w9']) T.push({ s, x: endOf(T.at(-1) as Run), y: 688 })
+    const O3: Run = { s: 'w12 w13 w14 w15 w16 w17', x: 72, y: 676 }
+    const f = fillerAt(652)
+    const w: World = {
+      marked: [{ runs: [L1, ...O, O3, ...f] }],
+      pages: [{ runs: [L1, ...T, O3, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, end0, 688], ['p0.1a', 1, at(O[0] as Run, 'section'), 688], ['p0.1b', 1, at(O[0] as Run, ')'), 688],
+        ['1s', 1, end0 + 1.1, 688], ['1e', 1, endOf(O3), 676], ['2s', 1, 72, (f[0] as Run).y], ['2e', 1, endOf(f[N - 1] as Run), (f[N - 1] as Run).y]],
+      units: [unit('para', [text(`${L1.s} (`), ph('\\cref{app:b}'), text(') escala')]), unit('para', [text(`t w9 ${O3.s}`)]), filler],
+    }
+    const { file, stats } = await made(w)
+    expect([stats.units.tolerantTried, stats.units.tolerant]).toEqual([2, 0])
+    expect([unitOf(file, 0), unitOf(file, 1)]).toEqual([null, null])
+  })
+
+  it("a word arXiv's alone hyphenates, the next unit after its rest on that line: the mark after the rest, before the next unit", async () => {
+    const O2: Run = { s: '(see section B) escalation.', x: 72, y: 688 }, O3: Run = { s: 'z0 z1 z2 z3 z4', x: 72, y: 676 }
+    const T2: Run = { s: '(see appendix B) es-', x: 72, y: 688, eol: true }, T3: Run = { s: 'calation.', x: 72, y: 676 }, T3c: Run = { ...O3, x: endOf(T3) + 10 }
+    const f = fillerAt(652)
+    const { file, stats } = await made({
+      marked: [{ runs: [L1, O2, O3, ...f] }],
+      pages: [{ runs: [L1, T2, T3, T3c, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(O2), 688], ['p0.1a', 1, at(O2, 'section'), 688], ['p0.1b', 1, at(O2, ')'), 688],
+        ['1s', 1, 72, 676], ['1e', 1, endOf(O3), 676], ['2s', 1, 72, (f[0] as Run).y], ['2e', 1, endOf(f[N - 1] as Run), (f[N - 1] as Run).y]],
+      units: [unit('para', [text(`${L1.s} (see `), ph('\\cref{app:b}'), text(') escalation.')]), unit('para', [text(O3.s)]), filler],
+    })
+    expect(stats.units.tolerant).toBe(1)
+    const lines = chunk(rowsOf(file, 0, 'lines'), 8)
+    expect(lines.map(l => [l[3], l[2]])).toEqual([[700, endOf(L1)], [688, endOf(T2)], [676, endOf(T3)]])
+    expect(chunk(rowsOf(file, 1, 'lines'), 8).map(l => [l[1], l[2], l[3]])).toEqual([[T3c.x, endOf(T3c), 676]])
+  })
+
+  it("never past the next unit's carried start on the mark's line, though the token there is the mark's own word", async () => {
+    // (our last line's formula, 90 pt from "B" to the mark; arXiv's sets the next unit there, from its line our page sets
+    // below, ending with the same word "b": the place's token the mark's own word, the next unit's start before it)
+    const O2: Run = { s: 'tasks (see section B) <=>+<=>+<=>+<=>.', x: 72, y: 688 }, O3: Run = { s: 'z0 z1 z2 z33 b', x: 72, y: 676 }
+    const T2: Run = { s: 'tasks (see appendix', x: 72, y: 688 }, T3: Run = { s: 'B)', x: 72, y: 676 }, T3c: Run = { ...O3, x: 90 }
+    const f = fillerAt(652)
+    const { file, stats } = await made({
+      marked: [{ runs: [L1, O2, O3, ...f] }],
+      pages: [{ runs: [L1, T2, T3, T3c, ...f] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(O2), 688], ['p0.1a', 1, at(O2, 'section'), 688], ['p0.1b', 1, at(O2, ') <'), 688],
+        ['1s', 1, 72, 676], ['1e', 1, endOf(O3), 676], ['2s', 1, 72, (f[0] as Run).y], ['2e', 1, endOf(f[N - 1] as Run), (f[N - 1] as Run).y]],
+      units: [unit('para', [text(`${L1.s} tasks (see `), ph('\\cref{app:b}'), text(') <=>+<=>+<=>+<=>.')]), unit('para', [text(O3.s)]), filler],
+    })
+    expect([stats.units.tolerantTried, stats.units.tolerant]).toEqual([1, 0])
+    expect(unitOf(file, 0)).toBeNull()
+    expect(chunk(rowsOf(file, 1, 'lines'), 8).map(l => [l[1], l[2], l[3]])).toEqual([[90, endOf(T3c), 676]])
+  })
+
+  it("one maker's whole() then byStream(): the marks' index made anew with the marks, the same rows as a maker of its own", async () => {
+    // (a world whose bound decides: arXiv's own line otherwise, the words again only after the next unit's start)
+    const w = nameAt(O2, { s: 'tasks (see appendix X).', x: 72, y: 688 })
+    ;(w.pages[0] as Page).runs.push({ s: 'w5 w6 w7 w8 tasks (see appendix B).', x: 72, y: 300 })
+    const input = { units: w.units, marks: await marksOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const one = await makerOf({ ...input, arxiv: arxivOf(w.pages) }), own = await makerOf({ ...input, arxiv: arxivOf(w.pages) })
+    if ('refused' in one || 'refused' in own) throw new Error('refused')
+    for (let p = 1; p <= one.pages; p++) await one.readPage(p)
+    const whole = await one.whole(), again = await one.byStream(), fresh = await own.byStream()
+    if (!('file' in whole) || 'refused' in again || 'refused' in fresh) throw new Error('refused')
+    const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+    expect(rows(mergeLayout([again.layout() as never]) as never)).toEqual(rows(mergeLayout([fresh.layout() as never]) as never))
+    expect(unitOf(whole.file, 0)).toBeNull()
+  })
+
+  it("arXiv's running head is no place of the unit's words (2307.16209's headings): the page frame's tokens alone", async () => {
+    // (a start mark with no unit's end before it on its page, its words those of the head the page repeats)
+    const head: Run = { s: 'tasks see appendix B done now', x: 72, y: 760 }
+    const O1: Run = { s: 'tasks (see section B)', x: 72, y: 700 }, T1: Run = { s: 'tasks (see appendix B)', x: 72, y: 700 }, O2: Run = { s: 'done now', x: 72, y: 688 }
+    const f = fillerAt(700)
+    const w: World = {
+      marked: [{ runs: [head, ...f] }, { runs: [head, O1, O2] }],
+      pages: [{ runs: [head, ...f] }, { runs: [head, T1, O2] }],
+      marks: [...fillerMarks(f).map(([n, , x, y]): Mark => [n.replace('1', '0'), 1, x, y]), ['1s', 2, 72, 700], ['1e', 2, endOf(O2), 688], ['p1.1a', 2, at(O1, 'section'), 700], ['p1.1b', 2, at(O1, ')'), 700]],
+      units: [filler, unit('para', [text('tasks (see '), ph('\\cref{app:b}'), text(') done now')])],
+    }
+    const { file, stats } = await made(w)
+    expect(stats.units.tolerant).toBe(1)
+    expect(chunk(rowsOf(file, 1, 'lines'), 8).map(l => [l[0], l[1], l[3]])).toEqual([[2, 72, 700], [2, 72, 688]])
+  })
+
+  it("the mark's own word ends its line in arXiv's where it does in ours: the same words mid-line are no place", async () => {
+    const T2: Run = { s: 'tasks (see appendix B).', x: 72, y: 688 }
+    expect(await held(nameAt(O2, T2, { theirsAfter: [{ s: 'w5 w6 w7 w8 tasks (see appendix B) and more.', x: 72, y: 676 }] }))).toEqual({ held: true, tried: 1, tolerant: 1 })
+  })
+
+  it("a mark past arXiv's page view is not placed", async () => {
+    // (arXiv's line set to the view's right edge: our compile's ")." past the reference puts the mark 10 pt past it)
+    const T2: Run = { s: 'tasks (see appendix B).', x: 320 - 105, y: 688 }
+    const w = nameAt(O2, T2)
+    ;(w.pages[0] as Page).view = [0, 0, 320, 792]
+    expect(await held(w)).toEqual({ held: false, tried: 1, tolerant: 0 })
+  })
+
+  it("two pages: a unit our compile sets over two pages is not looked for; one on our next page carried to arXiv's page before, bounded by the page before's ends", async () => {
+    // our page break inside the unit, arXiv's after it: its end mark on our page 2, its start on page 1
+    {
+      const top = fillerAt(400)
+      const L: Run = { ...L1, y: 100 }, O: Run = { s: 'tasks (see section B).', x: 72, y: 700 }, T: Run = { s: 'tasks (see appendix B).', x: 72, y: 88 }
+      const f = fillerAt(676)
+      const w: World = {
+        marked: [{ runs: [...top, L] }, { runs: [O, ...f] }],
+        pages: [{ runs: [...top, L, T] }, { runs: [...f] }],
+        marks: [['0s', 1, 72, 100], ['0e', 2, endOf(O), 700], ['p0.1a', 2, at(O, 'section'), 700], ['p0.1b', 2, at(O, ').'), 700],
+          ['1s', 1, 72, (top[0] as Run).y], ['1e', 1, endOf(top[N - 1] as Run), (top[N - 1] as Run).y], ['2s', 2, 72, (f[0] as Run).y], ['2e', 2, endOf(f[N - 1] as Run), (f[N - 1] as Run).y]],
+        units: [unit('para', [text(`${L1.s} tasks (see `), ph('\\cref{app:b}'), text(').')]), filler, filler],
+      }
+      expect(await held(w)).toEqual({ held: false, tried: 1, tolerant: 0 })
+    }
+    // unit 1 on our page 2, wholly on arXiv's page 1: its start bounded by unit 0's end, whose marks stand on our page 1 (the
+    // words before that end are unit 1's first words again); the marked original read a page at a time too (made)
+    {
+      const top = fillerAt(700)
+      const C1: Run = { s: 'tasks (see appendix B)', x: 72, y: 412 }, C2: Run = { s: 'w0 w1 w2 w3', x: 72, y: 400 }
+      const O1: Run = { s: 'tasks (see section B)', x: 72, y: 700 }, O2b: Run = { s: 'w0 w1 w2 w3 w4 w5', x: 72, y: 688 }
+      const T1: Run = { ...O1, s: 'tasks (see appendix B)', y: 388 }, T2: Run = { ...O2b, y: 376 }
+      const X: Run = { s: 'x0 x1 x2 x3 x4', x: 72, y: 664 }, X2: Run = { ...X, y: 700 }
+      const w: World = {
+        marked: [{ runs: [...top, C1, C2] }, { runs: [O1, O2b, X] }],
+        pages: [{ runs: [...top, C1, C2, T1, T2] }, { runs: [X2] }],
+        marks: [['0s', 1, 72, 700], ['0e', 1, endOf(C2), 400], ['1s', 2, 72, 700], ['1e', 2, endOf(O2b), 688], ['p1.1a', 2, at(O1, 'section'), 700], ['p1.1b', 2, at(O1, ')'), 700],
+          ['2s', 2, 72, 664], ['2e', 2, endOf(X), 664]],
+        units: [unit('para', [text(`${words(200, 10 * N)} tasks (see appendix B) w0 w1 w2 w3`)]), unit('para', [text('tasks (see '), ph('\\cref{app:b}'), text(') w0 w1 w2 w3 w4 w5')]), unit('para', [text(X.s)])],
+      }
+      const { file, stats } = await made(w)
+      expect(stats.units.tolerant).toBe(1)
+      expect(chunk(rowsOf(file, 1, 'lines'), 8).map(l => [l[0], l[1], l[3]])).toEqual([[1, 72, 388], [1, 72, 376]])
+    }
+    // the same bound from a unit of our page 2 (read after a mark of page 1 was looked for, the marks' index made then):
+    // unit 2 before unit 3 on our page 2, both on arXiv's page 1
+    {
+      const Q1: Run = { s: 'tasks (see section D)', x: 72, y: 700 }, Q1t: Run = { ...Q1, s: 'tasks (see appendix D)' }, Q2: Run = { s: 'q0 q1 q2 q3 q4', x: 72, y: 688 }
+      const top = fillerAt(664)
+      const C1: Run = { s: 'tasks (see appendix B)', x: 72, y: 700 }, C2: Run = { s: 'w0 w1 w2 w3', x: 72, y: 688 }
+      const O1: Run = { s: 'tasks (see section B)', x: 72, y: 676 }, O2b: Run = { s: 'w0 w1 w2 w3 w4 w5', x: 72, y: 664 }
+      const X: Run = { s: 'x0 x1 x2 x3 x4', x: 72, y: 640 }
+      const down = (r: Run, y: number): Run => ({ ...r, y })
+      const w: World = {
+        marked: [{ runs: [Q1, Q2, ...top] }, { runs: [C1, C2, O1, O2b, X] }],
+        pages: [{ runs: [Q1t, Q2, ...top, down(C1, 376), down(C2, 364), { ...O1, s: 'tasks (see appendix B)', y: 352 }, down(O2b, 340)] }, { runs: [down(X, 700)] }],
+        marks: [['0s', 1, 72, 700], ['0e', 1, endOf(Q2), 688], ['p0.1a', 1, at(Q1, 'section'), 700], ['p0.1b', 1, at(Q1, ')'), 700],
+          ['1s', 1, 72, (top[0] as Run).y], ['1e', 1, endOf(top[N - 1] as Run), (top[N - 1] as Run).y],
+          ['2s', 2, 72, 700], ['2e', 2, endOf(C2), 688], ['3s', 2, 72, 676], ['3e', 2, endOf(O2b), 664], ['p3.1a', 2, at(O1, 'section'), 676], ['p3.1b', 2, at(O1, ')'), 676],
+          ['4s', 2, 72, 640], ['4e', 2, endOf(X), 640]],
+        units: [unit('para', [text('tasks (see '), ph('\\cref{app:d}'), text(') q0 q1 q2 q3 q4')]), filler, unit('para', [text('tasks (see appendix B) w0 w1 w2 w3')]),
+          unit('para', [text('tasks (see '), ph('\\cref{app:b}'), text(') w0 w1 w2 w3 w4 w5')]), unit('para', [text(X.s)])],
+      }
+      const { file, stats } = await made(w)
+      expect(stats.units.tolerant).toBe(2)
+      expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => [l[0], l[3]])).toEqual([[1, 700], [1, 688]])
+      expect(chunk(rowsOf(file, 3, 'lines'), 8).map(l => [l[0], l[1], l[3]])).toEqual([[1, 72, 352], [1, 72, 340]])
+    }
+  })
+
+  it("the limits of the text piece's run: across two of arXiv's line breaks, or before the unit's pieces found before it, none", async () => {
+    // our compile's "gemini 3 flash" on one line, arXiv's over three
+    {
+      const Q1: Run = { s: 'w0 w1 w2 with', x: 72, y: 700 }, Q2: Run = { s: 'gemini 3 flash then w3 w4 w5', x: 72, y: 688 }
+      const R1: Run = { s: 'w0 w1 w2 with gemini', x: 72, y: 700 }, R2: Run = { s: '3', x: 72, y: 688 }, R3: Run = { s: 'flash then w3 w4 w5', x: 72, y: 676 }
+      const f = fillerAt(652)
+      const { file, stats } = await made({
+        marked: [{ runs: [Q1, Q2, ...f] }],
+        pages: [{ runs: [R1, R2, R3, ...f] }],
+        marks: [['0s', 1, 72, 700], ['0e', 1, endOf(Q2), 688], ['p0.1a', 1, 72, 688], ['p0.1b', 1, at(Q2, ' then'), 688], ...fillerMarks(f)],
+        units: [unit('para', [text('w0 w1 w2 with '), ph('\\texttt{gemini 3 flash}'), text(' then w3 w4 w5')]), filler],
+      })
+      expect(phOf(file, 0, 1)[3]).toBe(PH_FLAG.LOST)
+      expect(stats.ph.textRuns).toBe(0)
+    }
+    // the unit's own text "gemini 3 flash" before its first piece, found where carried: the second piece's run after that one
+    {
+      const Q1: Run = { s: 'gemini 3 flash with gemini 3 flash and w1 gemini', x: 72, y: 700 }, Q2: Run = { s: '3 flash then w3 w4 w5', x: 72, y: 688 }
+      const R1: Run = { s: 'gemini 3 flash with gemini 3 flash and w1', x: 72, y: 700 }, R2: Run = { s: 'gemini 3 flash then w3 w4 w5', x: 72, y: 688 }
+      const f = fillerAt(664)
+      const first = Q1.s.indexOf('gemini', 1), second = Q1.s.lastIndexOf('gemini')
+      const { file, stats } = await made({
+        marked: [{ runs: [Q1, Q2, ...f] }],
+        pages: [{ runs: [R1, R2, ...f] }],
+        marks: [['0s', 1, 72, 700], ['0e', 1, endOf(Q2), 688], ['p0.1a', 1, xAt(Q1, first), 700], ['p0.1b', 1, at(Q1, ' and'), 700],
+          ['p0.3a', 1, xAt(Q1, second), 700], ['p0.3b', 1, at(Q2, ' then'), 688], ...fillerMarks(f)],
+        units: [unit('para', [text('gemini 3 flash with '), ph('\\texttt{gemini 3 flash}'), text(' and w1 '), ph('\\texttt{gemini 3 flash}'), text(' then w3 w4 w5')]), filler],
+      })
+      expect(phOf(file, 0, 1).slice(3, 8)).toEqual([0, 1, xAt(R1, first), 700, at(R1, ' and')])
+      expect(phOf(file, 0, 3).slice(3, 8)).toEqual([0, 1, 72, 688, at(R2, ' then')])
+      expect(stats.ph.textRuns).toBe(1)
+    }
+    // the characters again where a piece not found took arXiv's glyphs all the same (its last letter ours' alone): no run
+    // there, the one free run taken
+    {
+      const head = 'w0 w1 w2 w3 w4 w5 w6 w7'
+      const Q1: Run = { s: `${head} gemini 3 flashy w8 with gemini`, x: 72, y: 700 }, Q2: Run = { s: '3 flash then w9 w10 w11', x: 72, y: 688 }
+      const R1: Run = { s: `${head} gemini 3 flash w8 with`, x: 72, y: 700 }, R2: Run = { s: 'gemini 3 flash then w9 w10 w11', x: 72, y: 688 }
+      const f = fillerAt(664)
+      const { file, stats } = await made({
+        marked: [{ runs: [Q1, Q2, ...f] }],
+        pages: [{ runs: [R1, R2, ...f] }],
+        marks: [['0s', 1, 72, 700], ['0e', 1, endOf(Q2), 688], ['p0.1a', 1, at(Q1, 'gemini'), 700], ['p0.1b', 1, at(Q1, ' w8'), 700],
+          ['p0.3a', 1, xAt(Q1, Q1.s.lastIndexOf('gemini')), 700], ['p0.3b', 1, at(Q2, ' then'), 688], ...fillerMarks(f)],
+        units: [unit('para', [text(`${head} `), ph('\\texttt{gemini 3 flashy}'), text(' w8 with '), ph('\\texttt{gemini 3 flash}'), text(' then w9 w10 w11')]), filler],
+      })
+      expect(phOf(file, 0, 1)[3]).toBe(PH_FLAG.LOST)
+      expect(phOf(file, 0, 3).slice(3, 8)).toEqual([0, 1, 72, 688, at(R2, ' then')])
+      expect(stats.ph.textRuns).toBe(1)
+    }
+  })
+})

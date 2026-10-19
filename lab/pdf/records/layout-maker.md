@@ -310,3 +310,86 @@ on 2307 is 2.3 million glyph visits of its 50 million bound.
   nothing. So the packing reads the layout of TeX's node memory, which any node the marks add moves; it needs the
   citations resolved and the body before it, and both kinds of points (with either kind off, it is gone). Not the
   points' doing, and not to be fixed in them: left failing for a ruling.
+
+## The tolerant match (PR-D2, 2026-10-19): a unit mark no line carries, a text piece broken in one PDF alone
+
+**Causes** (2609.26457, the pack's paper whose units the maker left out):
+- Unit 28: its end mark is carried nowhere. Our last line reads "tasks (see section B)." and arXiv's "tasks (see appendix
+  B).": `\cref{app:fml}` is named "section" by our compile and "appendix" by arXiv's. The carry moves a position with its
+  line's words, the same words or a common run of 80 % of them, here two of four: the mark carries to null, the unit is not
+  located, the layer reads it by v0's text and leaves it English (unproven).
+- Unit 71: the same naming in the middle of the paragraph ("section C" for "appendix C"). The longer word makes TeX break
+  the paragraph otherwise from its ninth line on, 13 lines in ours and 14 on arXiv's page, and our last line ("dataset. ...
+  to evaluate solutions.") matches no line of arXiv's ("... GPUs to" / "evaluate solutions."): its end mark carries to null.
+- Unit 24, piece 35 (`\texttt{gemini 3 flash}`): LOST, its glyphs not all matched. Our compile breaks it after "gemini",
+  arXiv's sets it whole at the start of the next line; no carry puts the glyphs of either part where arXiv's stand. (The
+  layer drew the unit already, by the run of its characters: PR #405; that rule stays as the backstop.)
+
+**The rule.**
+- (A) A unit's own mark that no line carries (`tolerantOf`; never one that a line carries, which never moves) is placed by
+  the unit's own words beside it, where its other mark was carried, both on one page of ours. The last eight words before an
+  end mark (the first eight after a start mark), four at least, as our compile sets them, are found among arXiv's words in
+  order, the line breaks aside, on the page the other mark is carried to: from that mark on, up to the first start of
+  another unit carried there (the last end before it, for a start mark). Each word compares by its text; one at most may
+  differ, only where ours stands inside a reference's or a citation's own rendering (between the piece's two marks) and
+  both words are reference words (`rules/reference-words.mjs`, the one table the link-anchor locator reads too); the mark's
+  own word never differs, and where it ends its line in ours (begins it) arXiv's must end (begin) its own. The words must
+  stand in one place alone: two places, and the mark stays carried to nowhere. Unit 71: its last eight words ("and
+  KernelBench use NVIDIA A100 GPUs to evaluate solutions.") stand on two of arXiv's lines, in order, once, and "solutions."
+  ends its line in both; had another run of the same eight words stood in the span, the mark would not be placed. arXiv's
+  words are those inside the page frame (`frameOfTokens`): a running head that repeats a heading's words is no place
+  (2307.16209's headings 262 and 438, whose start marks have no unit's end before them on their page).
+- Where the mark then stands: beside arXiv's token as ours stands beside our own, at our compile's offset from it (as
+  `besideOf` carries a mark by its partner's). A word the text layer gives in parts (its text-less tokens, as `sameWord`
+  reads them: a hyphen at the line's end, a change of font inside the word, a subscript after its letter) is read by its
+  parts. Where ours ends the word before an end mark (every part after the mark's own token set on the mark's line before
+  it: 1706.03762's T_0, whose subscript is the rest of "t0", 1.8 pt below), the mark stands after the last part of arXiv's
+  word, in as many parts or not (a word hyphenated in one PDF alone). Where ours' word runs on past the mark (its rest the
+  next unit's: unit 0's "3-" and unit 1's "I" read as one word), it stands after the same part of arXiv's word, which must
+  be in as many parts; a start mark whose unit begins with the rest of the word before (2005.14165's poems, whose "I" is
+  the rest of the cell before's "3") stands before the same part, in as many parts. A word split otherwise around the mark
+  is no place: as first written (174da293), a word of four parts in ours and five in arXiv's put the next unit's start at
+  arXiv's "c", four letters early, and left the unit before without its last line. An offset past an em is a formula no token holds: 2608.20051's unit 250
+  ends 77.5 pt past "for", 2307.16209's footnote 203 80.5 pt past "g". It stands only where arXiv's ink runs on the line
+  from the token to the mark with no gap past an em and none on past it within an em; and no mark stands on the other side
+  of the bound's own token on its line (a part past the bound would be another unit's start, which the same text excludes),
+  nor outside the page's view. Placed at the word's box alone (the rule as first
+  written), those two marks left the paragraph's final period out of the line and of the erase (177.5 pt against an erase
+  ending at 177.52; 332.8 against 331.89), and 2203.02155's units 144 and 561 their last characters ("s)." and "l.").
+- (B) A text piece (`rules/text-piece.mjs`, the layer's rule of #405, now shared) that the matcher refuses is found by its
+  own characters: one run of arXiv's glyphs on the unit's lines, in each line's x order, crossing one line break at most,
+  each glyph the unit's or no unit's and no piece's, after the glyphs of the unit's pieces found before it. One run alone:
+  none or two leave it LOST. Its glyphs are arXiv's; nothing is drawn that is not there.
+- What it never tolerates: a second place, a place past the next unit's start (before the last end), two words apart, a
+  word apart that is not a reference's name or not in the table ("annex"), a mark's own word apart, marks on two pages of
+  ours, a running head's or foot's words, a formula's offset where arXiv's ink does not run there, a glyph another unit or
+  piece holds. LAYOUT 9 (the maker writes other files), the schema 5 still.
+- Its cost: the bounds are looked for among the unit marks of the mark's page of ours and the one before, indexed by page
+  at the first try (`tolerantWork` counts the marks so read) and added to as the marked original's pages are read, made
+  anew with the marks (a maker's `whole()` then `byStream()`); each mark's line carry read once. 2307.16209 (8,046 marks): 32,184 marks walked for its six tries before (every mark at each
+  of the four that reach the bounds), 56 now; the 34 papers' 49 tries 1,637. 2503.06072 tries none, before and now.
+
+**Counts** (next 94309439 against this branch, the same marked compiles on the pinned image: the pack's seven papers, the
+colour corpus's sixteen with 2610.19159, and thirteen more of the drift study's 25; 36 sources, 34 made, 2608.08481 refused by the
+carry and 2608.12255 by its compile on both sides):
+- 49 unit marks looked for, 12 placed; 11 units freed (2609.26457 28 and 71; 2201.11903 43 and 555; 2203.02155 144, 262, 561
+  and 932; 2307.16209 203; 2608.03994 70; 2608.20051 250); 4 placeholders freed by their characters (2609.26457 24.35,
+  2302.13971 198.2, 198.4 and 198.6). No unit lost, no placeholder found before lost.
+- Every other row of the 34 files the same but two: 2608.20051's fonts table in another order (the freed unit's font comes
+  first), its six units' lines the same by font name; and 2201.11903's caption 40, whose label ("Figure 4:") took the other
+  column's line on its baseline while unit 43 held it not (x0 108, 235 pt wide), and now takes its own glyphs alone.
+- The freed units' regions on arXiv's page against their source words (by characters, the anchor's tokens): 12 of 13 every
+  character in order and nothing past their ends; the thirteenth, 2307.16209's footnote 203, begins with the number arXiv
+  glues to its first word ("8For"), which the check's tokens drop: read on the page, its line is the note's, "For a general
+  function f and g, {f,g} = ...". By arXiv's glyphs, every one of the 13 regions' last lines ends with the source's last
+  character inside it and no glyph of the line within an em past it (the final period of 2608.20051's unit 250 and of
+  2307.16209's note 203 among them).
+- The rules gate (model tier, the pack of 32 outputs, these layout files in it): passed; zh text units left English 16 to
+  14, placeholders the content measure cannot place 0.023 to 0.019, no measure worse; three pages moved (2609.26457 4 and 5,
+  2307.16209 60); completeness and ink whole on all 32.
+- The matcher's work on the pack's seven papers 1.4 % more, all of it the freed units' own pieces (2609.26457 +56,056,
+  2307.16209 +556); the five others the same. The words are looked for 8 times on the pack (2307.16209 6, 2609.26457 2).
+- The prepare (`lab/pdf/spikes/speed.mjs`'s child runs, next 94309439 against this branch in one configuration, next's
+  rules with the marked original read whole and no draw, five runs a paper and the engines interleaved, a quiet machine):
+  1706.03762 1,755 and 1,752 ms, 2609.26457 1,850 and 1,851, 2307.16209 4,990 (4,959 to 5,133) and 5,066 (4,891 to
+  5,335): within next's spread on each.
