@@ -23,6 +23,7 @@
 // freeze spends at most WORK_MAX point-against-operation comparisons, dropping what is left as `unplaced`.
 
 import { isMemoryError } from '../pipeline/memory.mjs'
+import { inkWidth } from './words.mjs'
 
 /** the schemes a record's `url` may have (the contract's allow-list: PDF.js also lets ftp: and tel: through) */
 export const LINK_SCHEMES = ['http:', 'https:', 'mailto:']
@@ -635,9 +636,11 @@ function placeCrop(to, annots, lines, scale, records, tried) {
     const r = at?.it.t.crop
     if (!r || c.q !== r.page) { tried.push({ q: c.q, i: c.a.i, why: 'unplaced' }); continue }
     const { line, it } = at, cr = r.crop
-    const sx = it.w / (cr[2] - cr[0])
+    // (its image's own width: the kern after it is no part of it, words.mjs inkWidth)
+    const w = inkWidth(it)
+    const sx = w / (cr[2] - cr[0])
     const X = x => it.x + (x - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * scale
-    const drawn = [it.x, Y(cr[1]), it.x + it.w, Y(cr[3])]
+    const drawn = [it.x, Y(cr[1]), it.x + w, Y(cr[3])]
     // (each of the annotation's boxes (its quads', else its rectangle) by the crop's map, cut to the drawn box: a link over two
     // lines of a crop is two boxes, never the rectangle round both)
     const box = []

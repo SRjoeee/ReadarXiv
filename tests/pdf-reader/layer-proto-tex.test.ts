@@ -1246,6 +1246,9 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
   it("in place of the translation's own marks of the same kind at its end, never twice", () => {
     expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee).')
     expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff09\u3002')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee).')
+    // as many of a kind as the class's own marks hold: the translation's closing quote before its bracket stays, its
+    // opening quote's pair (")" and a closing quote are one kind, markKind's)
+    expect(drawn(unit('\u6240\u8c13\u7684\u201c\u8d2a\u5fc3\u89c4\u5219\u201d\uff09\u3002')).map(x => x.s).join('')).toBe('\u6240\u8c13\u7684\u201c\u8d2a\u5fc3\u89c4\u5219\u201d).')
   })
   it("none in a math font: a formula's delimiter beside a cell is its formula's ink (1512.03385's Table 1)", () => {
     const pg = [...item('Def (', 10, 500, 10, 0, bold), ...item('Latent transition error', 50, 500, 4, 1), ...item(']', 96, 500, 4, 2, math)]

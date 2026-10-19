@@ -1488,8 +1488,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  from its last baseline down to the next line of its column (`below`: the median baseline of the highest characters
    *  under it, a superscript's aside; Infinity where none is), which the page fill keeps its last line a leading over. None
    *  for a table cell, whose lines keep their own rules (cellBands). Read from the page's characters, within the span of its
-   *  frame's own lines (not columnOf's, which is the page's text area where v0's geometry holds no paragraph there, and took
-   *  the other column's line on the same baseline for one beside it: 1512.03385 page 12) */
+   *  frame's own lines (not columnOf's, which is an earlier page's paragraph lines or the page's text area where v0's geometry
+   *  holds no paragraph there, and took the other column's line on the same baseline for one beside it: 1512.03385 page 12) */
   const edgesOf = (p, prep) => {
     if (p.unit.kind === 'cell' || !p.blocks.length) return null
     const spanOf = b => [Math.min(...b.rects.map(q => q[1])), Math.max(...b.rects.map(q => q[3]))]
