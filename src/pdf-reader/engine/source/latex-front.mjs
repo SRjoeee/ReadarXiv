@@ -24,8 +24,11 @@ export const latin1 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i
  * at a CR or an LF and takes the LF of a CRLF with its CR, so a CR, an LF or a CRLF is one line's end, and a blank line
  * a paragraph's end whatever the editor wrote. Every rule of the front end reads lines by their LF: a CRLF source's
  * blank lines were none, and 2610.10069v1's introduction (ten paragraphs) and a whole proof (sixteen) were one unit
- * each. The files the front end reads are written back from this text (patch), with LF, which TeX reads the same; the
- * files it does not read as TeX are copied as they are
+ * each. A file the front end writes back (patch: its units' marks and translations) is written from this text, with LF,
+ * which TeX reads the same. Every other file is copied as it is, a class or a package the front end read among them;
+ * the passes live.mjs runs over such a copy (literalNames, stripPdftexOption, localizeNames) give the same text on its
+ * own line ends as on this one (the 12 CR files of 180 papers, 2026-10-20). So do the guard's brace balance and the
+ * probe of the main file, which read through this too
  */
 export const texText = bytes => latin1(bytes).replace(/\r\n?/g, '\n')
 export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }

@@ -20,7 +20,7 @@
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
 import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
-import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1 } from '../source/latex-front.mjs'
+import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
@@ -239,7 +239,9 @@ export function openPaper(files) {
  *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
 export function probeFiles({ fsys, project, meta }, { width = false, marks = false } = {}) {
-  const text = latin1(fsys.read(project.main))
+  // (the main file as the front end reads it, its line ends TeX's: read raw, a lone-CR preamble's first comment hid its
+  // \begin{document}, and the probe was the whole document and a second one)
+  const text = texText(fsys.read(project.main))
   const at = beginDocument(text)
   const dvi = dviEngine(meta?.compiler)
   const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units), inkSamples(project.units)) : ''

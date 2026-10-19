@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { unbalancedUnits } from '@/pdf-reader/engine/layout/guard.mjs'
+import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
+import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { inMemory } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { analyze } from '@/pdf-reader/engine/source/paper-meta.mjs'
@@ -65,5 +69,32 @@ describe('a source\'s line ends are read as TeX reads them: CRLF and a lone CR a
   it('a paragraph of each blank line in a CRLF file a paper inputs (2610.10069v1\'s shape: an introduction, a proof)', () => {
     const p = openPaper(new Map([['main.tex', enc('\\documentclass{article}\r\n\\begin{document}\r\n\\input{intro}\r\n\\end{document}\r\n')], ['intro.tex', enc('First paragraph.\r\n\r\nSecond paragraph.\r\n  \r\nThird paragraph.\r\n')]]))
     expect((p.units as unknown as Unit[]).map(textOf)).toEqual(['First paragraph.', 'Second paragraph.', 'Third paragraph.'])
+  })
+
+  it('a class the paper ships with lone CRs defines its author block\'s macros as TeX reads them (2608.02991\'s sn-jnl.cls)', () => {
+    // (its first line a comment: read to an LF, it took the whole class, its definitions with it)
+    const cls = ['%% a journal class', '\\LoadClass{article}', '\\newcommand{\\fnm}[1]{#1}', '\\newcommand{\\sur}[1]{#1}', '\\newcommand{\\affil}[2][]{#2}', ''].join('\r')
+    const main = ['\\documentclass{myj}', '\\title{A title of the paper}', '\\author[1]{\\fnm{Zhang} \\sur{Gongyue}}', '\\affil[1]{An institute of somewhere}', '\\begin{document}', '\\maketitle', 'A paragraph of words in the body.', '\\end{document}', ''].join('\n')
+    const p = openPaper(new Map([['main.tex', enc(main)], ['myj.cls', enc(cls)]]))
+    expect((p.units as unknown as Unit[]).map(u => u.kind)).toEqual(['heading', 'author', 'author', 'para'])
+  })
+  it('the main file chosen among candidates by its length as TeX reads it, not by its line ends\' bytes', () => {
+    const body = (n: number) => `\\documentclass{article}\n\\begin{document}\n${'Words of the paper. '.repeat(n)}\n\\end{document}\n`
+    // (b's words broken over lines with CRLF: more bytes than a's, fewer characters as TeX reads them)
+    const longer = body(11), crlf = body(10).replace(/\n/g, '\r\n').replace(/ /g, '\r\n')
+    expect(crlf.length).toBeGreaterThan(longer.length)
+    expect(analyze(inMemory(new Map([['a.tex', enc(longer)], ['b.tex', enc(crlf)]]))).main).toBe('a.tex')
+  })
+  it('the guard reads a lone-CR file as the marked one is written: its braces balance (a comment ends at the line\'s CR)', () => {
+    const tex = '\\documentclass{article}\r\\begin{document}\r\\textbf{Bold % c\r} A first paragraph of the paper.\r\rA second paragraph of the paper.\r\\end{document}\r'
+    const p = paper(tex), spans: { lines?: () => UnitLines<SourceUnit>[]; skip?: number } = {}
+    const files = originalFiles(p, { lines: true, layout: LAYOUT_CLASSES, spans })
+    expect(unbalancedUnits(p, files, spans.lines?.() ?? [], spans.skip)).toEqual({ units: new Set(), other: false })
+  })
+  it('the probe of a lone-CR main file finds its \\begin{document}: the preamble, one document', () => {
+    // (a comment in the preamble: read to its LF, it took the rest of a lone-CR file, \\begin{document} with it)
+    const probe = new TextDecoder().decode(probeFiles(paper(LF.replace('\\documentclass{article}', '\\documentclass{article} % the class').replace(/\n/g, '\r'))).get('main.tex'))
+    expect(probe.match(/\\begin\{document\}/g)).toHaveLength(1)
+    expect(probe).not.toContain('A first paragraph')
   })
 })

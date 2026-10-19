@@ -3,7 +3,7 @@
 // arXiv's preflight, in simplified form.
 // Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
 // a directory under Node, which the spikes' paper-meta.mjs hands in).
-import { jobName, latin1, normalizePath, texText } from './latex-front.mjs'
+import { jobName, normalizePath, texText } from './latex-front.mjs'
 
 const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
 const basename = p => p.slice(p.lastIndexOf('/') + 1)
