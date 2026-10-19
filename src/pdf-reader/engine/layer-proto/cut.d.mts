@@ -2,7 +2,7 @@
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
 import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { Box, UnitWire } from './bundle.mjs'
-import type { TableGroups, TokenWire, Written } from './format.mjs'
+import type { LayoutRefusalRecord, TableGroups, TokenWire, Written } from './format.mjs'
 import type { NeedEntry } from './need.mjs'
 import type { BundleUnit } from './units.mjs'
 
@@ -67,6 +67,10 @@ export interface CutOptions {
   draw?: boolean
   /** the producer's verdict on each part as cut with its layout (partCutter's) */
   verdict?: PartVerdict | null
+  /** the record of a part a verdict or a part's bound refused its layout (partCutter's) */
+  recordOf?: ((refused: PartRefusal) => LayoutRefusalRecord | null) | null
+  /** the record a part of a whole with no layout carries */
+  noLayout?: LayoutRefusalRecord | null
 }
 /** a part's layout refused, and why ({ refused, ...the why's numbers }), or kept (null) */
 export type PartRefusal = { refused: string; [why: string]: unknown }
@@ -78,6 +82,8 @@ export interface CutKnown {
   F: readonly number[]
   NB?: ArrayLike<number> | null
   layout?: Pick<LayoutFile, 'fonts' | 'units' | 'lines' | 'frames' | 'erase' | 'ph' | 'labels' | 'headings' | 'pageText' | 'held' | 'names'> | null
+  /** the record of a part cut with no layout file (`layout` null): why there is none (the wire's `layout: { refused, why }`); null, none recorded */
+  noLayout?: LayoutRefusalRecord | null
 }
 export type CutPart = Written & { from: number; to: number; leftParts: (Written & { page: number })[] }
 /** the cut a part at a time: cutBundle's, fed what is known when each part is cut */
@@ -100,6 +106,8 @@ export declare function partCutter(o: {
   target?: CutOptions['target'] | null; partPagesMax?: number; verdict?: PartVerdict | null
   /** false: no part nor left part kept once given (`parts` and `left` hold nulls): a stream's */
   retain?: boolean
+  /** the record of a part a verdict or a part's bound refused its layout (`verdicts[i]`), written in place of its layout */
+  recordOf?: ((refused: PartRefusal) => LayoutRefusalRecord | null) | null
 }): PartCutter
 export interface Cut {
   units: (Written & { from: number; to: number })[]
