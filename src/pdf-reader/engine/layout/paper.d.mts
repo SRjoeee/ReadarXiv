@@ -27,7 +27,17 @@ export interface MarkedCompileOptions {
   pages?: number | (() => number | null | Promise<number | null>) | null
   /** the guard's: the compilers the host runs; a paper of another is refused before any compile ('engine') */
   engines?: readonly string[] | null
+  /** the TeX Live years the host compiled the paper's own source on before this box's tree, in order ('2023'); TeX's refusal
+   *  names each before the box's year ("on TeX Live 2023 or 2025") and is 'texlive' only where the paper declares a year none
+   *  of them is. Absent, null or empty: the box's year alone, the whys as before */
+  tried?: readonly string[] | null
 }
+
+/** the unmarked original's verdict, which a refusal after its compile names (`own`): whether it ran through (live.mjs
+ *  ranThrough, with a PDF); whether it did with fewer pages than arXiv's (`pages` given, a paper of one toplevel source);
+ *  the host's limit it met ('time', 'memory': the web's `limit`), else null; the TeX Live year its engine's banner names
+ *  ('2025'), null where TeX never ran or the compile threw. What handoverOf reads */
+export interface OwnVerdict { ran: boolean; short: boolean; limit: string | null; tree: string | null }
 
 /** the layout guard's record (layout/guard.mjs, markedOfPaper), where it did anything: the compiles it asked past the marked
  *  original's (`extra`, GUARD_EXTRA at most, the unmarked original's among them), the units left the paper's own, whether
@@ -46,14 +56,26 @@ export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
  * that reads it elsewhere (layerOfPaper's `marked: { doc, log, options }`, a page at a time): the marked compile's PDF, its
  * last pass's log (lastTexLog), and readMarked's options but the units and the operator codes. `ms` times the probe and the
  * compile (and the guard's compiles, `guard`, where it asked any); a stage that fails gives { refused, why } (MarkedRefusal;
- * `why` with every refusal but the probe's), with `cm` where CM ran and `guard` where the guard did anything. The marked
- * original must be the paper (paper.mjs markedOfPaper's comment, layout/guard.mjs). Never throws, but a failed allocation
- * (pipeline/memory.mjs isMemoryError: the run's, never the paper's), which goes on as itself
+ * `why` with every refusal but the probe's), with `cm` where CM ran, `guard` where the guard did anything, and `own` where
+ * the unmarked original was compiled (OwnVerdict). The marked original must be the paper (paper.mjs markedOfPaper's comment,
+ * layout/guard.mjs). Never throws, but a failed allocation (pipeline/memory.mjs isMemoryError: the run's, never the
+ * paper's), which goes on as itself
  */
 export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Promise<
   | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord }
-  | { refused: MarkedRefusal; why?: string; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
+  | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
 >
+
+/**
+ * The host's handover to another TeX Live tree, over a refusal's `own` (the TL2023 plan §2.3): the year of the tree to
+ * compile the paper on next, or null. Where TeX failed on the paper's own source (it did not run through, or ran through
+ * with fewer pages than arXiv's: `pages` must be given for that) and no host's limit stopped it: another of `served` (the
+ * paper's `declared` year where it is one of them, else the first in `served`'s order), unless this tree is the host's
+ * `last`. Never on no verdict (the unmarked original not compiled: a refusal before it, or ours with nothing told), ours
+ * (it made the pages here), a host's limit, or a verdict with no year (TeX never ran, the compile threw: the host's own
+ * failure, retried on the same tree)
+ */
+export declare function handoverOf(own: OwnVerdict | null | undefined, o: { declared?: string | null; served: readonly string[]; last?: boolean }): string | null
 
 /**
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read
@@ -76,4 +98,4 @@ export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Pr
 export declare function layoutMarksOfPaper(paper: Paper, o: MarkedCompileOptions & {
   open(pdf: Uint8Array): Promise<{ doc: unknown; close(): Promise<void> }>
   OPS: Record<string, number>
-}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord } | { refused: MarkedRefusal; why?: string; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>
+}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord } | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>
