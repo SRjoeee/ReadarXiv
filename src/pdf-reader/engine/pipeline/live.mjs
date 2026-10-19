@@ -253,19 +253,25 @@ export function probeFiles({ fsys, project }, { width = false, marks = false } =
  *  marks taken off where TeX said they change what follows, and where it gave no answer; without `switches`, the marks
  *  as before; `inkless`, the paper's macros TeX said set no ink (readInkProbe), given no mark; and a babel name a style
  *  writes literally wrapped as the macro's text is (layout/marks.mjs literalNames). Without `layout`, the bytes as
- *  before */
-export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null, inkless = null } = {}) {
+ *  before. With `layout`, the layout guard's two remedies (layout/guard.mjs): `unmarked`, unit indices each written as
+ *  the paper's own bytes (patch `asSource`: no mark, no layout mark, no span), and `names` false, no babel name marked
+ *  (none wrapped literally, LAYOUT_TEX's \axt@nmall made \relax on LAYOUT_TEX's own line: NAMES_OFF).
+ *  Neither given: the bytes as before */
+export function originalFiles({ fsys, project }, { lines = false, spans = null, layout = null, switches = null, inkless = null, unmarked = null, names = true } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
-  let out
+  let out, patched = null
   if (layout) {
     const marked = layoutMarking(project.units, layout, { lines, switches, inkless }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
-    out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw })
+    const asSource = unmarked ? new Set([...unmarked].map(i => marked.units[i]).filter(Boolean)) : null
+    out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
+    // (the files as patch wrote them, the units' bytes in them, before the names' wraps below move what follows a wrap)
+    patched = spans ? new Map(out) : null
     // a babel name a style writes literally in the construct its macro names (marks.mjs literalNames), in any of the
     // package's style, class and source files (the main file's preamble), wrapped as the macro's own text is: no line
     // of any file gains or loses a line
-    for (const path of fsys.list()) {
+    if (names) for (const path of fsys.list()) {
       if (!/\.(?:sty|cls|tex|ltx)$/i.test(path)) continue
       const bytes = out.get(path) ?? fsys.read(path)
       if (!bytes) continue
@@ -273,13 +279,19 @@ export function originalFiles({ fsys, project }, { lines = false, spans = null, 
       const wrapped = literalNames(text.slice(0, at))
       if (wrapped !== text.slice(0, at)) out.set(path, latin1Bytes(wrapped + text.slice(at)))
     }
-  } else out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
-  const patched = spans ? new Map(out) : null
-  const head = DRAFT + MARK_DEF + (layout ? LAYOUT_TEX : '') + END_TEX + (lines ? LINES_TEX : '')
+  } else {
+    out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
+    patched = spans ? new Map(out) : null
+  }
+  const head = DRAFT + MARK_DEF + (layout ? LAYOUT_TEX + (names ? '' : NAMES_OFF) : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
-  if (spans) { let found = null; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
+  // (`skip`: the main file's head of ours, before the paper's first byte)
+  if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
   return out
 }
+/** the babel names' marks off (originalFiles `names` false): NAMES_TEX's wrapper (\axt@nmall, which begindocument/end and
+ *  babel's afterextras call) made \relax, so that no name macro is wrapped. On LAYOUT_TEX's line: no line of the paper moves */
+const NAMES_OFF = '\\makeatletter\\let\\axt@nmall\\relax\\makeatother'
 
 /** the translation so far, with unit marks, set by one of strategiesFor (scripts.mjs); a strategy's `leading` sets the
  *  translated units' own paragraphs, and those alone, at that factor of the paper's spacing (latex-front unitLeadTex).
@@ -428,6 +440,10 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 17: 18 changes which papers get a layout (a marked original that did not run through, or of fewer pages than arXiv's
  *   PDF, gives none: ranThrough, page-pass.mjs), not what a unit is, what is sent for one or how a reply is read back:
  *   every unit whose source a copy holds is carried, and older pipelines keep their own tests
+ * - 18: 19 changes which marked original a paper's layout is read from (the layout guard, layout/guard.mjs: units left the
+ *   paper's own, the name marks off, a page count compared) and records why a part has none, not what a unit is, what is
+ *   sent for one or how a reply is read back: every unit whose source a copy holds is carried, and older pipelines keep
+ *   their own tests
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -437,7 +453,7 @@ const lettered = holding(/\p{L}/u), says = holding(/[\p{L}\p{N}]/u)
 const NO_STYLE = (pieces, unit = null) => (unit ? !holdsStyle(unit.pieces) && (says(pieces) || !lettered(unit.pieces)) : Array.isArray(pieces) && !holdsStyle(pieces) && says(pieces))
 const andStyle = test => (pieces, unit = null) => test(pieces, unit) && NO_STYLE(pieces, unit)
 const EVERY = () => true
-export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY, 17: EVERY }
+export const PIPELINE_CARRIES = { 7: andStyle(NO_MARKER_HASH_OR_RUN), 8: andStyle(NO_MARKER_HASH_OR_RUN), 9: andStyle(NO_MARKER_HASH_OR_RUN), 10: andStyle(NO_RUN), 11: andStyle(NO_RUN), 12: NO_STYLE, 13: NO_STYLE, 14: NO_STYLE, 15: EVERY, 16: EVERY, 17: EVERY, 18: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

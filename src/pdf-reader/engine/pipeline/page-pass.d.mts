@@ -1,6 +1,6 @@
 // page-pass.mjs's types: a paper's layer made and told a part at a time, for the container's prepare
 import type { PartRefusal } from '../layer-proto/cut.mjs'
-import type { Written } from '../layer-proto/format.mjs'
+import type { LayoutRefusalRecord, Written } from '../layer-proto/format.mjs'
 import type { ArxivText } from '../layout/arxiv.mjs'
 import type { AddonChainState, RemoverAnswer } from '../layout/chain.mjs'
 import type { LayoutStats, PageStreamRules } from '../layout/make.mjs'
@@ -14,8 +14,9 @@ import type { LeftSide } from './left-side.mjs'
 export interface PartNote { pages: [number, number]; layout: 'kept' | 'none' | PartRefusal; lines: [carried: number, total: number] }
 export interface LayerOptions {
   paper: { id: string; version: number }
-  /** openPaper's paper: its units (ids their indices) and those it keeps */
-  source: { units: readonly { kind: string; pieces: unknown[] }[]; kept: ReadonlySet<unknown>; inFloat?: readonly number[] }
+  /** openPaper's paper: its units (ids their indices) and those it keeps; `meta.toplevels`, its toplevel sources (00README's):
+   *  with several, a marked original of fewer pages than arXiv's PDF is compared with arXiv's first pages, not refused */
+  source: { units: readonly { kind: string; pieces: unknown[] }[]; kept: ReadonlySet<unknown>; inFloat?: readonly number[]; meta?: { toplevels?: number } }
   /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none (or `marked`); marks of fewer pages than
    *  arXiv's PDF are none, the compile's refusal (`stats.layout` { refused: 'compile', why }), their unit marks with them */
   marks?: { marks: LayoutMarks; unitMarks: UnitMarks | null } | { refused: string; why?: string } | null
@@ -64,8 +65,12 @@ export interface LayerOptions {
 /** a whole run's rules (`capture`'s): the maker's frame predicate and columns' edges, and the left's frame predicate and its
  *  pages' columns (those two for the marked original read a page at a time) */
 export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<string, [number, number]>; leftFrame?: (t: unknown) => boolean; columns?: unknown }
-/** a paper's layer made and told part by part, or refused before anything is told (`anchors`) */
+/** why a part has no layout, as its record says it: the paper's refusal (the marked original's, the page count's, the maker's)
+ *  or the part's own (a verdict's, a part's bound's), TeX's and the carry's as such, every fault of the engine's own `marks` */
+export declare function layoutRecordOf(r: { refused?: string; why?: string; lines?: [number, number]; stats?: { lines?: { carried: number; total: number } } } | null | undefined): LayoutRefusalRecord | null
+/** a paper's layer made and told part by part, or refused before anything is told (`anchors`); `toplevels` where the paper has
+ *  several toplevel sources (its marked original's pages against arXiv's) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
-  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][] } }
+  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][]; toplevels?: { files: number; pages: [marked: number | null, arxiv: number] } } }
   | { refused: 'anchors'; why: string }
 >

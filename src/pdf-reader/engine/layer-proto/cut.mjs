@@ -139,7 +139,8 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * layout, in order, when its range is final (a chained writer keeps its state there). A tail past TAIL_CAP shortens the part like
  * any size refusal; a page whose tail alone passes it ships with no layout. Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
  * its tail: clean pages as they are, removed pages TAIL_NOT_CARRIED, refused pages refused; with no add-on in the whole, no
- * add-on for any part (`addon: null`, M20: drawn by erase and restore). `o.verdict`: partCutter's. Throws BundleRefusal for a
+ * add-on for any part (`addon: null`, M20: drawn by erase and restore). `o.verdict`, `o.recordOf`: partCutter's; `o.noLayout`
+ * the record a part of a whole with no layout carries (partCutter's `known.noLayout`). Throws BundleRefusal for a
  * whole that cannot be written (a dropped unit, a unit past the chunk caps) and `bound` for a page that no part can hold. The
  * cut is partCutter's, fed the whole paper: a producer that feeds it a part at a time cuts the same parts
  */
@@ -176,10 +177,10 @@ export async function wholeCutter(whole, o) {
   const { K, F } = wholeFrontier(whole, frontier)
   const cutter = partCutter({
     paper, N, head, views: whole.left.pages, leftPages: o.leftPages, addon: whole.addon ?? null, chainAddon: o.chainAddon ?? null, acceptAddon: o.acceptAddon ?? null,
-    target: o.target ?? null, partPagesMax: o.partPagesMax, verdict: o.verdict ?? null,
+    target: o.target ?? null, partPagesMax: o.partPagesMax, verdict: o.verdict ?? null, recordOf: o.recordOf ?? null,
   })
   // each page's need bound (need.mjs: the last page whose part laying it reads), over the whole K, once
-  const known = { K, F, NB: o.extend !== false && !o.target ? needBound(K, N) : null, layout: whole.layout ?? null }
+  const known = { K, F, NB: o.extend !== false && !o.target ? needBound(K, N) : null, layout: whole.layout ?? null, noLayout: o.noLayout ?? null }
   return { units, head, cutter, known, N }
 }
 
@@ -215,9 +216,13 @@ export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOf
  * holds (not a size: a row its part's check refuses) is the longest run of its pages that fits with none, { refused: 'part',
  * why }, where cutBundle without one throws. Each part's verdict is `verdicts[i]`: null, the hook's refusal, the writer's,
  * or { refused: 'part' } for a first page that alone passes a part's bounds with its layout (a part of one page, with none).
- * `retain` false: no part nor left part is kept once given (`parts` holds a null for each, `left` too): a stream's
+ * `retain` false: no part nor left part is kept once given (`parts` holds a null for each, `left` too): a stream's.
+ * Why a part has no layout, as it records it in place of one (format.mjs LAYOUT_REFUSED): `known.noLayout`, the record of a
+ * part cut with no layout file (the paper's refusal, or the maker's failure or the carry's from then on), and
+ * `recordOf(refused)`, the record of a part a verdict or a part's bound refused its layout (`verdicts[i]`); null for either,
+ * `layout: null` (no reason recorded: 5's shape)
  */
-export function partCutter({ paper, N, head, views, leftPages, addon = null, chainAddon = null, acceptAddon = null, target: targetOf = null, partPagesMax, verdict = null, retain = true }) {
+export function partCutter({ paper, N, head, views, leftPages, addon = null, chainAddon = null, acceptAddon = null, target: targetOf = null, partPagesMax, verdict = null, retain = true, recordOf = null }) {
   if (typeof leftPages !== 'function') throw new TypeError('leftPages: a function of the page')
   const maxPages = partPagesMax === undefined ? PART_PAGES_MAX : partPagesMax
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new RangeError(`partPagesMax: ${String(maxPages)} is not a positive whole number of pages`)
@@ -239,8 +244,10 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
   }
 
   let prev = null, taken = -1, a = 1
-  async function next({ K, F, NB = null, layout = null }) {
+  async function next({ K, F, NB = null, layout = null, noLayout = null }) {
     if (a > N) return null
+    // (the record a part with no layout carries: the paper's, until a refusal of this part's own replaces it)
+    let absent = noLayout
     const fonts = layout?.fonts ?? []
     let target = targetOf ? targetOf(a, N) : partTarget(a, N)
     if (!Number.isInteger(target) || target < a || target > N) throw new RangeError(`target: ${target} is not a last page from ${a} to ${N}`)
@@ -314,7 +321,7 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
       await leftTo(b)
       const x = input(b, withLayout)
       const ad = withLayout && layout && chainAddon ? await chainAddon(parts.length, { pages: [a, b], layout: x.part }) : null
-      const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part, addon: addonOf(b, withLayout, ad), leftParts: lefts.slice(a - 1, b) })
+      const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part ?? absent, addon: addonOf(b, withLayout, ad), leftParts: lefts.slice(a - 1, b) })
       return { w, x }
     }
     // a size refusal is the cut's to answer (a shorter part), any other is a defect; but under a verdict, the writer's refusal of
@@ -322,7 +329,7 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
     // is: the same pages with none (`bad`)
     const tried = new Map()
     const fits = async (b, withLayout) => {
-      const key = `${b}${withLayout ? 'L' : ''}`
+      const key = `${b}${withLayout && layout ? 'L' : `:${absent ? `${absent.refused}|${absent.why}` : ''}`}`
       if (!tried.has(key)) {
         try { tried.set(key, await write(b, withLayout)) } catch (e) {
           const refusal = e instanceof BundleRefusal && e.kind === 'part'
@@ -355,6 +362,7 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
       // the longest run without it
       withLayout = false
       if (layout) refused = got === null ? { refused: 'part' } : { refused: 'part', why: got.bad.slice(0, 200) }
+      if (refused) absent = recordOf?.(refused) ?? absent
       got = got === null ? { b: a, at: await fits(a, false) } : await longest(false)
       if (got === null || got.at === null) throw refuse('part', 'pages', `page ${a} alone passes the bounds of a part, with no layout`, { bound: 'part', page: a })
     }
@@ -366,6 +374,7 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
       if (v) {
         refused = v
         withLayout = false
+        absent = recordOf?.(v) ?? absent
         at = await fits(b, false)
         if (at === null) throw refuse('part', 'pages', `pages ${a} to ${b} pass the bounds of a part with no layout`, { bound: 'part', page: a })
       }
