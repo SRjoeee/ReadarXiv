@@ -402,15 +402,24 @@ const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 const OWN_BEFORE = Object.fromEntries(Object.entries(OWN_KIND).map(([k, v]) => [k, new RegExp(`[${v}]([ \\t\\n\\f\\r\\ue000]*)$`)]))
 /** the source's text before the display ends with punctuation: a stop the reply sets there is its own */
 const PUNCT_END = /[.,;:!?\u3002\uff0e\uff0c\u3001\uff1b\uff1a\uff01\uff1f]["'\u201d\u2019)\]]*\s*$/
-/** the display's own stop a slot's marker carries (the display its last piece with ink), or null: none where the text after
- *  it begins with punctuation of its own (`x = y.\end{equation}, where`), which the wire sends as it is */
-function ownStopOf(slot, after) {
-  const ps = piecesOf(slot)
-  let p = null
-  for (let j = ps.length - 1; j >= 0 && !p; j--) if (!((ps[j].t === 'text' && blank(utf8(ps[j].s))) || ps[j].t === 'open' || ps[j].t === 'close' || isInkless(ps[j]))) p = ps[j]
-  if (p?.t !== 'ph') return null
-  const stop = displayStop(p.src)
-  return stop && !/^\s*[.,;:!?\u3002\uff0e\uff0c\u3001\uff1b\uff1a\uff01\uff1f]/.test(after()) ? stop : null
+/** a piece's own stop, read once for each piece (both wires and the carry test ask it again) */
+const STOP_OF = new WeakMap()
+const stopOfPiece = p => { let s = STOP_OF.get(p); if (s === undefined) STOP_OF.set(p, (s = displayStop(p.src))); return s }
+/** text that begins with punctuation */
+const LEAD_PUNCT = /^\s*[.,;:!?\u3002\uff0e\uff0c\u3001\uff1b\uff1a\uff01\uff1f]/
+/** the display's own stop a void's marker carries (the display its last piece with ink: the one piece, or a run's or a
+ *  group's last), or null; none where the text after it (`after`) begins with punctuation of its own
+ *  (`x = y.\end{equation}, where`), which the wire sends as it is */
+function ownStopOf(slot, pieces, items, i) {
+  let p = slot
+  if (slot.t === 'run' || slot.t === 'edge') {
+    p = null
+    const ps = slot.pieces
+    for (let j = ps.length - 1; j >= 0 && !p; j--) if (!((ps[j].t === 'text' && blank(utf8(ps[j].s))) || ps[j].t === 'open' || ps[j].t === 'close' || isInkless(ps[j]))) p = ps[j]
+  }
+  if (p?.t !== 'ph' || !DISPLAY.test(p.src ?? '')) return null
+  const stop = stopOfPiece(p)
+  return stop && !LEAD_PUNCT.test(textAfter(pieces, items, i)) ? stop : null
 }
 /** the text the wire writes after item `i`, as far as its next marker */
 const textAfter = (pieces, items, i) => (items[i + 1]?.t === 'text' ? items[i + 1].ks.map(k => utf8(pieces[k].s)).join('') : '')
@@ -425,12 +434,12 @@ const ownAfter = s => s.replace(OWN_LEAD, '$1')
  * PIPELINE_CARRIES)
  */
 export function displayStopChanges(u) {
-  if (!Array.isArray(u?.pieces) || !u.pieces.some(p => p?.t === 'ph' && displayStop(p.src))) return false
+  if (!Array.isArray(u?.pieces) || !u.pieces.some(p => p?.t === 'ph' && DISPLAY.test(p.src ?? '') && stopOfPiece(p))) return false
   return !!serialize(u).own || !!serializeTags(u).own
 }
 
 /** a plan's list of piece indices and blocks as the pieces, in order */
-const placed =(pieces, list, out = []) => { for (const x of list) if (Array.isArray(x)) placed(pieces, x, out); else out.push(pieces[x]); return out }
+const placed = (pieces, list, out = []) => { for (const x of list) if (Array.isArray(x)) placed(pieces, x, out); else out.push(pieces[x]); return out }
 /** a kept pair's open or close as its slot: the piece, or an edge where pieces ride beside it (its open's: what stands
  *  before its first word; its close's: what came after, merged pairs' ends among them) */
 function edgeOf(pieces, it) {
@@ -514,8 +523,8 @@ export function serialize(u) {
     const after = /^[\p{L}\p{N}\p{M}]/u.test(nextText) ? ' ' : ''
     if (/^\p{N}/u.test(nextText)) numbersAfter.add(slots.length)
     // a display's own stop, its sentence's end inside it, right after its marker: `yields @a#. Prices` — sent as
-    // `yields @a# Prices`, 2610.10069's sentence ran on into the next one's nouns, and "yields" came back as a noun, a financial yield
-    const stop = it.t === 'void' ? ownStopOf(slot, () => textAfter(u.pieces, items, i)) : null
+    // `yields @a# Prices`, 2610.10069's sentence ran on into the next one, and "yields" came back as a noun
+    const stop = it.t === 'void' ? ownStopOf(slot, u.pieces, items, i) : null
     if (stop) own.set(slots.length, { stop, at: wire.length + before.length + m.length, before: /\S/.test(wire) && !PUNCT_END.test(wire) })
     wire += before + m + (stop ?? '') + after
   })
@@ -798,7 +807,7 @@ export function serializeTags(u) {
     const x = `<x id="${slots.length}"/>`
     if (it.hide) hidden.set(x, runShown(it.slot))
     // (a display's own stop after its tag, as serialize writes it after its marker)
-    const stop = ownStopOf(it.slot, () => textAfter(u.pieces, items, i))
+    const stop = ownStopOf(it.slot, u.pieces, items, i)
     if (stop) own.set(slots.length, { stop, at: wire.length + x.length, before: /\S/.test(wire) && !PUNCT_END.test(wire) })
     wire += x + (stop ?? '')
   }
