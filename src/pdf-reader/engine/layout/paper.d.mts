@@ -47,7 +47,8 @@ export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
  * last pass's log (lastTexLog), and readMarked's options but the units and the operator codes. `ms` times the probe and the
  * compile (and the guard's compiles, `guard`, where it asked any); a stage that fails gives { refused, why } (MarkedRefusal;
  * `why` with every refusal but the probe's), with `cm` where CM ran and `guard` where the guard did anything. The marked
- * original must be the paper (paper.mjs markedOfPaper's comment, layout/guard.mjs). Never throws
+ * original must be the paper (paper.mjs markedOfPaper's comment, layout/guard.mjs). Never throws, but a failed allocation
+ * (pipeline/memory.mjs isMemoryError: the run's, never the paper's), which goes on as itself
  */
 export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Promise<
   | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord }
@@ -64,7 +65,7 @@ export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Pr
  * compile where the original's gave no PDF or did not run through (live.mjs ranThrough: stopped short, or its last pass
  * short of AXT-END; today's compile and CM's fallback alike), the marks where `open` or the reading failed. `open` is called once, on the
  * original's PDF, and its `close` is called whatever the reading did. The compile and the PDF opening are the caller's
- * (a native TeX Live and PDF.js in Node, the TeX page and a worker in a browser): this module imports neither. Never throws.
+ * (a native TeX Live and PDF.js in Node, the TeX page and a worker in a browser): this module imports neither. Never throws but a failed allocation, as markedOfPaper.
  * Without `converge` (the default), the original is one compile with every pass (`rerun`). With it (CM), the unmarked
  * original (originalFiles(paper, { lines: true })) is compiled in one or two drafts (`draft`, `files`), then the marked
  * original one pass at a time (`files`) in the files the passes before returned (in place of the paper's own, never of

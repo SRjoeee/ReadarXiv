@@ -69,10 +69,10 @@ const GUARD_EXTRA = 2
  */
 export async function markedOfPaper(paper, { compile, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null }) {
   const ms = {}
-  /** a stage, timed; null where it fails or throws */
+  /** a stage, timed; null where it fails or throws, but a failed allocation, which goes on as itself (the run's, never the paper's) */
   const stage = async (name, run) => {
     const t0 = performance.now()
-    try { return await run() } catch { return null } finally { ms[name] = Math.round(performance.now() - t0) }
+    try { return await run() } catch (e) { if (isMemoryError(e)) throw e; return null } finally { ms[name] = Math.round(performance.now() - t0) }
   }
   const { main } = paper.project, engine = paper.meta.compiler
   if (Array.isArray(engines) && !engines.includes(engine)) return { refused: 'engine', why: `the paper is compiled by ${engine ?? 'no named engine'}, which the host does not run`, ms }
@@ -144,7 +144,8 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     // arXiv's page count, asked once where the host gives it
     let N = null
     if (pages !== null && pages !== undefined) {
-      try { const n = typeof pages === 'function' ? await pages() : pages; if (Number.isInteger(n) && n > 0) N = n } catch {}
+      // (any failure of the host's but a failed allocation leaves the page check out: N null)
+      try { const n = typeof pages === 'function' ? await pages() : pages; if (Number.isInteger(n) && n > 0) N = n } catch (e) { if (isMemoryError(e)) throw e }
     }
     const several = (paper.meta.toplevels ?? 1) > 1
     /** what a compile shows of the checks: ran through, its pages against arXiv's (`short` fewer, where a paper of one toplevel
@@ -300,7 +301,7 @@ const firstLine = c => String(c?.error ?? c?.log ?? '').split('\n').find(l => l.
 /**
  * A paper's layout marks (paper.d.mts): markedOfPaper's marked original, then read once (stage 3), with each stage's time, or
  * the stage that failed with the times of those that ran. Never throws: a compiler that throws, a PDF that does not open and
- * a reading that refuses are each their stage's refusal. `converge`: the marked original made by convergeThenMark, its passes
+ * a reading that refuses are each their stage's refusal, but a failed allocation, which goes on as itself. `converge`: the marked original made by convergeThenMark, its passes
  * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them; `pages` and `engines` the guard's, as
  * markedOfPaper's
  */
@@ -314,15 +315,14 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
   let read = null
   try {
     const opened = await open(made.pdf)
-    try {
-      // (read once, a page at a time: the marks in memory, handed to the maker as they are, and the unit marks the left is
-      // anchored by, from the same pages)
-      read = await readMarked(opened.doc, made.log, { ...made.options, units: paper.units, OPS })
-    } finally {
-      // (a failing close loses nothing: the marks are read)
-      try { await opened.close() } catch {}
-    }
-  } catch { read = null } finally { ms.marks = Math.round(performance.now() - t0) }
+    let failed = null
+    // (read once, a page at a time: the marks in memory, handed to the maker as they are, and the unit marks the left is
+    // anchored by, from the same pages)
+    try { read = await readMarked(opened.doc, made.log, { ...made.options, units: paper.units, OPS }) } catch (e) { failed = e }
+    // (closed whatever the reading did; a failing close loses nothing, the marks are read, but a failed allocation)
+    try { await opened.close() } catch (e) { if (isMemoryError(e)) failed = e }
+    if (failed) throw failed
+  } catch (e) { if (isMemoryError(e)) throw e; read = null } finally { ms.marks = Math.round(performance.now() - t0) }
   if (!read) return result({ refused: 'marks', ms })
   return result({ marks: read.marks, unitMarks: read.unitMarks, ms })
 }

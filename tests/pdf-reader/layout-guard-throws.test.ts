@@ -98,4 +98,24 @@ describe('markedOfPaper: a throw of the guard\'s own is no refusal', () => {
     await expect(markedOfPaper(paperOf(), { compile: unmarked.compile })).rejects.toBe(memory)
     expect(new TextDecoder().decode(unmarked.asked[2]?.overrides.get('main.tex'))).not.toContain('\\axtmark')
   })
+
+  it('lets a failed allocation of the host\'s page count go on; any other failure of it leaves the page check out', async () => {
+    const memory = failedAllocation()
+    await expect(markedOfPaper(paperOf(), { compile: compiler([PROBE, ran]).compile, pages: async () => { throw memory } })).rejects.toBe(memory)
+    const c = compiler([PROBE, ran])
+    expect(await markedOfPaper(paperOf(), { compile: c.compile, pages: async () => { throw new Error('arXiv\'s PDF is not here') } })).toMatchObject({ pdf: PDF })
+    expect(c.asked).toHaveLength(2)
+  })
+
+  it('lets a failed allocation of the probe\'s, the marked compile\'s, or the marked PDF\'s reading go on, never a stage\'s refusal', async () => {
+    const memory = failedAllocation()
+    await expect(markedOfPaper(paperOf(), { compile: asking(() => memory as Error).compile })).rejects.toBe(memory)
+    await expect(markedOfPaper(paperOf(), { compile: asking((_, n) => (n === 0 ? PROBE : memory as Error)).compile })).rejects.toBe(memory)
+    const { layoutMarksOfPaper } = await import('@/pdf-reader/engine/layout/paper.mjs')
+    const OPS = {}
+    await expect(layoutMarksOfPaper(paperOf(), { compile: compiler([PROBE, ran]).compile, OPS, open: async () => { throw memory } })).rejects.toBe(memory)
+    await expect(layoutMarksOfPaper(paperOf(), { compile: compiler([PROBE, ran]).compile, OPS, open: async () => ({ doc: { numPages: 0 }, close: async () => { throw memory } }) })).rejects.toBe(memory)
+    // (any other failure is the stage's refusal, as before)
+    expect(await markedOfPaper(paperOf(), { compile: asking((_, n) => (n === 0 ? PROBE : new Error('the compiler threw'))).compile })).toMatchObject({ refused: 'compile' })
+  })
 })
