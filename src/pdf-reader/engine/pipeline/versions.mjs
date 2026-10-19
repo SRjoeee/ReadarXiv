@@ -108,7 +108,20 @@
 //     under a new key (VTAG). Of 141 compiles counted against arXiv's PDF the other 139 have its count: every other
 //     paper's units, marked original, layout file, wire and reading back are 17's byte for byte, and a copy of 17 carries
 //     every unit it holds the source of (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '18'
+// 19: the marked original must be the paper (the layout guard: layout/guard.mjs, layout/paper.mjs markedOfPaper; R1 of
+//     2026-10-19). Before its compile a unit whose writing changes its file's brace balance is written as the paper's own
+//     (2610.21377's three pgffor loop headers, written back with their body's brace doubled); after it a compile that did not
+//     run through, whose page count is not arXiv's (where the host gives it), with a mark of ours where no text is set in a
+//     file it wrote (2610.21201's etoc depth tags inside a \csname of its contents) or with more TeX errors than the unmarked
+//     original's is compiled again with the units the evidence blames left the paper's own, or the babel names' marks off
+//     (2610.21288's \appendixname under revtex4-2 and the appendix package), two compiles more at most; a paper of several
+//     toplevel sources has its marked original compared with arXiv's first pages (2610.20030, which 18's page rule refused
+//     outright); each part with no layout says why (BUNDLE 6, `layout: { refused, why }`). A paper whose marked original
+//     passes every check is compiled as before, its marked original and layout file 18's byte for byte (the gate pack's 32
+//     outputs); the units, the wire and its reading back are 18's, and a copy of 18 carries every unit it holds the source
+//     of (live.mjs PIPELINE_CARRIES). Raised so that the bundle of a paper the guard now mends, or now records the refusal
+//     of, is made again under a new key (VTAG)
+export const PIPELINE_VERSION = '19'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

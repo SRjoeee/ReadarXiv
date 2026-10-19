@@ -1676,9 +1676,14 @@ export function pseudoTranslate(u, lang) {
  *  Both sit in running text on purpose: after a display (\\]) a mark would open a line of its own, and after an
  *  environment it would stand in the vertical list, where \\addvspace no longer sees the skip before it. The start
  *  mark comes with \\leavevmode, which starts the paragraph just as the word would; after the word it would come
- *  between the word and its comma, and a lost kern there respaces the whole line. */
-export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null } = {}) {
+ *  between the word and its comma, and a lost kern there respaces the whole line.
+ *  `asSource`, a Set of units: each written as the paper's own bytes, its range as the file holds it (a top-level unit's
+ *  range copied as the text around it is, a nested one's piece as its source between the outer unit's text), with no
+ *  mark and no span: the layout guard's unit left unmarked (layout/guard.mjs), whose pieces or marks would not be the
+ *  paper (2610.21377's pgffor loop header written back with its body's brace doubled). Empty or absent: as before */
+export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null, asSource = null } = {}) {
   const out = new Map()
+  const sourced = asSource?.size ? asSource : null
   // `inner`, where asked for: each unit nested in this one, at any depth, its range in the bytes this gives and the
   // length of what closes it after it (its piece's `post`)
   const render = (u, inner = null) => {
@@ -1742,6 +1747,8 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       const p = pieces[k]
       if (m?.before && k === beforeAt && beforeCut === -1) parts.push(utf8Bytes(m.before))
       if (p.t === 'nested') {
+        // (a nested unit written as the paper's own: its bytes between the outer unit's, no span of its own)
+        if (sourced?.has(p.unit)) { parts.push(bytesOf(p.pre + (project.files?.get(p.unit.file) ?? '').slice(p.unit.start, p.unit.end) + p.post, srcEnc)); continue }
         const sub = inner && []
         parts.push(bytesOf(p.pre, srcEnc))
         nested?.push([parts.length, p.unit, sub])
@@ -1777,7 +1784,8 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     return concat(parts)
   }
   const byFile = new Map()
-  for (const u of project.units) if (!u.nested) (byFile.get(u.file) ?? byFile.set(u.file, []).get(u.file)).push(u)
+  // (a top-level unit written as the paper's own is no unit here: its range is copied with the text around it)
+  for (const u of project.units) if (!u.nested && !sourced?.has(u)) (byFile.get(u.file) ?? byFile.set(u.file, []).get(u.file)).push(u)
   for (const [file, text] of project.files) {
     const us = (byFile.get(file) ?? []).sort((a, b) => a.start - b.start)
     const parts = []

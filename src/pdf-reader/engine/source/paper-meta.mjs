@@ -26,6 +26,9 @@ export function analyze(fsys) {
       const main = r.sources?.find(s => s.usage === 'toplevel')?.filename
       // the file the package holds (latex-front.mjs normalizePath), whatever spelling named it
       meta.main = main && normalizePath(main)
+      // how many toplevel sources arXiv compiles (its PDF is theirs in turn; the pipeline reads the first alone: the page
+      // pass's several-toplevels rule, pipeline/page-pass.mjs)
+      meta.toplevels = Array.isArray(r.sources) ? r.sources.filter(s => s?.usage === 'toplevel').length : 0
       meta.compiler = r.process?.compiler
       meta.tlVersion = r.texlive_version ?? null
     } catch { meta.readme = 'json-unreadable' }
@@ -34,6 +37,7 @@ export function analyze(fsys) {
     const r = utf8(fsys.read(files.find(f => /^00README(\.XXX)?$/i.test(f))))
     const main = r.match(/^(\S+)\s+toplevelfile/m)?.[1]
     meta.main = main && normalizePath(main)
+    meta.toplevels = (r.match(/^\S+\s+toplevelfile/gm) ?? []).length
   }
   const withClass = tex.filter(f => /\\document(class|style)\b/.test(bodies[f]))
   if (!meta.main || !files.includes(meta.main)) {
