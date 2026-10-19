@@ -2949,10 +2949,20 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // iteration 3: the kept regions the text has passed (a break token each); the text may not run on into a block below
   // a region before its break (strict), or it reads before the formula it follows in the translation
   let consumed = 0, stop = false, spilled = false
+  // (a slot over the last line laid, beside it in its column, is no line of the text's: a paragraph's lines go down. The
+  // file's lines of a paragraph that sets a tall inline formula may come out of that order, its rows' lines after the line
+  // under them: 2610.21026 page 8, unit 91, whose line laid at 694.1 after the one at 684.8 ran over the formula's crop)
+  const overLast = sl => {
+    let k = lines.length - 1
+    while (k >= 0 && !lines[k].items.length) k--
+    const prev = lines[k]
+    return !!prev && prev.page === sl.page && sl.baseline > prev.baseline - 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
+  }
   const advance = () => {
     settle()
     if (stop) return
     li++
+    while (li < slots.length && overLast(slots[li])) li++
     if (li >= slots.length) return
     if ((slots[li].after ?? 0) > consumed) {
       if (strict === true) { stop = true; return }

@@ -74,3 +74,18 @@ describe('a line that TeX ends with a display or a forced break is set ragged', 
     expect(xs(l.lines[1]!)).toEqual([0, 10, 20, 30, 40, 50, 60, 70, 80])
   })
 })
+
+describe("a unit's lines go down its column", () => {
+  // 2610.21026 pages 8 and 18, units 91 and 141: the file's lines of a paragraph that sets a tall inline formula (cases) come
+  // as 684.8 and then 694.1 (that formula's rows); a line laid on the higher slot after the lower one ran over the formula's
+  // crop. A line of TeX's paragraph is always under the one before it in its column
+  const at = (B: number[], x0 = 0, x1 = 100) => ({ ...block(B[0]!, B.length, 0), B, rects: B.map(b => [1, x0, b - 2, x1, b + 8]), x0, x1 })
+  it('skips a slot over the line laid last beside it, and takes one of another column, however high', () => {
+    const tokens = words(56)
+    const l = L2.layoutUnit2(tokens as never, [at([500]), at([476]), at([488, 464]), at([452, 440, 428, 416])] as never, 10, P('de') as never)
+    expect(l.lines.map(x => x.baseline)).toEqual([500, 476, 464, 452, 440, 428, 416])
+    const cols = L2.layoutUnit2(words(24) as never, [at([500]), at([476]), at([600, 588], 200, 300)] as never, 10, P('de') as never)
+    expect(cols.lines.map(x => x.baseline)).toEqual([500, 476, 600])
+  })
+})
+
