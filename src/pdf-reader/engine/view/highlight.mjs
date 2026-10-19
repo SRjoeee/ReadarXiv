@@ -769,7 +769,8 @@ const OVER = 0.3
  * where a sentence goes on, and two runs of one unit may stand side by side or over each other where its lines are read in
  * two columns (a line read across both beside lines read as the left one's: 2610.19282, 2610.22195; a label read apart from
  * its line: 2610.17024). Where a sentence of one run paints over a word of another sentence of another, its unit lights
- * whole. Runs whose painted extents do not meet are not looked into
+ * whole. Runs whose painted extents do not meet are not looked into; the shapes are read without the page's floats, as each
+ * run's own fit reads them
  */
 function runsApart(L, runs, starts) {
   for (const a of runs) {
@@ -782,7 +783,9 @@ function runsApart(L, runs, starts) {
       const T = L.pt[b.page], gb = segsOf(L, b, starts), ga = segsOf(L, a, starts)
       for (let s = 0; s < ga.first.length; s++) {
         if (ga.first[s] === undefined) continue
-        const rects = sentenceOf(L, a, starts, s, 0)
+        // (with no float: the page's floats come late, and the reader keeps a unit's fit by its starts; a float only shortens a
+        // row's reach, so shapes apart without them are apart with them)
+        const rects = shapeOf(L, a, starts, s, 0, null)
         for (let n = 0; n < b.toks.length; n++) {
           if (gb.of[n] === s) continue
           const k = b.toks[n] - T.k0, x = (T.l[k] + T.r[k]) / 2, y = (T.top[k] + T.bottom[k]) / 2
@@ -865,11 +868,15 @@ function sentenceAt(L, g, run, i, x, padX) {
  * where the sentence is not in the run. `starts` as hitOf's
  */
 export function sentenceOf(L, run, starts, s, padX) {
+  return shapeOf(L, run, starts, s, padX, L)
+}
+/** sentenceOf's rectangles, its rows' reach kept from under the floats of `F` (a layout, or null: none, the fit's) */
+function shapeOf(L, run, starts, s, padX, F) {
   const g = segsOf(L, run, starts), fa = g.first[s], la = g.last[s]
   if (fa === undefined) return []
   const ys = edgesOf(run, padX), out = []
   for (let i = fa; i <= la; i++) {
-    const span = spansOf(L, g, run, i, padX).find(q => q.s === s) ?? { x0: run.x0 - padX, x1: run.x1 + padX }
+    const span = spansOf(F, g, run, i, padX).find(q => q.s === s) ?? { x0: run.x0 - padX, x1: run.x1 + padX }
     const prev = out.at(-1)
     if (prev && Math.abs(prev.x0 - span.x0) < 0.01 && Math.abs(prev.x1 - span.x1) < 0.01) prev.y0 = ys[i + 1]
     else out.push({ page: run.page, x0: span.x0, x1: span.x1, y0: ys[i + 1], y1: ys[i] })

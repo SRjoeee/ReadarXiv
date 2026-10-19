@@ -508,7 +508,7 @@ describe('SH4: an empty or refused left part', () => {
 
 describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', () => {
   /** page 3's words as the layer gives them: the units `painted` drawn from their left tokens moved down `dy` (the translation's
-   *  lines), each token its word's index in the unit; the rest of the page's units shown as the original's (`original`) */
+   *  lines), each token its word's index in the unit and its place; the rest of the page's units shown as the original's (`original`) */
   function wordsOf(page: number, painted: number[], dy = 3) {
     const l = nth(cutSide(whole, anchors, views).lefts, page)
     const ks: number[] = [], spans: [number, number[]][] = [], word: number[] = []
@@ -522,7 +522,8 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     const T = l.table
     return {
       tokens: { n: ks.length, l: f(T.l), r: f(T.r), y: f(T.y, -dy), h: f(T.h), top: f(T.top, -dy), bottom: f(T.bottom, -dy) },
-      word: Int32Array.from(word), spans: spans.reverse(), original: l.spans.map(s => s[0]).filter(id => !painted.includes(id)),
+      // (each token's place in its unit's text, 'text text …': its word's)
+      word: Int32Array.from(word), at: Int32Array.from(word, w => 5 * w), spans: spans.reverse(), original: l.spans.map(s => s[0]).filter(id => !painted.includes(id)),
     }
   }
   const BASE = 2 ** 16

@@ -55,7 +55,8 @@ export interface MirroredShapes { readonly layout: Layout; readonly shapes: Shap
 export interface LaidWords {
   tokens: PageTable
   word: Int32Array
-  /** each token's place in the translation (the door's PageWords.at): a token with no word takes its sentence from it */
+  /** each token's place in the translation (the door's PageWords.at): a token with no word takes its sentence from it; a
+   *  table without it gives its units no starts (they light whole) */
   at?: Int32Array
   spans: readonly (readonly [number, readonly number[]])[]
   original: readonly number[]

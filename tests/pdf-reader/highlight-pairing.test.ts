@@ -148,5 +148,56 @@ describe('a sentence of one run painted over another run\'s word of another sent
     const at = { x: ccc.x + ccc.w / 2, y: (ccc.top + ccc.bottom) / 2 }
     expect(left.shapes.sentence(display, ls, 0, 0).some(r => at.x > r.x0 && at.x < r.x1 && at.y > r.y0 && at.y < r.y1)).toBe(true)
     expect(left.shapes.fits(0, ls, true)).toBe(false)
+    // (4315272541) the same fit whatever floats the page's drawing gives later: the reader keeps a unit's fit by its starts
+    // array, which a float's coming does not change. A float left of the display, where its sentence reaches the text's edge
+    ;(left.layout as { floats?: Map<number, object[]> }).floats = new Map([[1, [{ page: 1, id: -1, kind: 'table', lead: 0, region: { x0: 52, x1: 190, y0: 700, y1: 735 } }]]])
+    expect(left.shapes.fits(0, ls, true)).toBe(false)
+  })
+})
+
+describe('the review of #423', () => {
+  it('a token paired with two words lights with the sentence it begins where the later one begins it (4315272513)', () => {
+    // "bbb.Ccc" one token of the page's text, the source's "bbb." and "Ccc" both paired with it, the second sentence beginning
+    // at "Ccc": sentenceStarts puts that sentence's start on the token, and the token is that sentence's
+    const items = [...words('Aaa bbb.Ccc ddd eee', 740), ...words('fff ggg hhh.', 728)]
+    const d3: DocToken[] = tokenizeDocument([{ page: 1, items, styles: {} }])
+    const ks = d3.map((_, k) => k), joined = d3.findIndex(t => t.t.startsWith('bbb'))
+    const src = 'Aaa bbb. Ccc ddd eee fff ggg hhh.', offsets = [src.indexOf('Ccc')]
+    // words: aaa 0, bbb 1, ccc 2, ddd 3, …; the tokens: aaa, bbb.ccc, ddd, …
+    const pairs3 = new Map<number, number>([[0, 0], [1, joined], [2, joined], ...ks.slice(joined + 1).map((k, i) => [3 + i, k] as [number, number])])
+    const a3 = new Map<number, Anchor | null>([[0, { tokens: ks, rects: lineRects(d3, ks), coverage: 1, bounded: true, pairs: pairs3 }]])
+    const w3 = layoutOf(d3, views, a3, () => 'para')
+    const { parts, lefts } = cutSide(w3, a3, views)
+    const left = createShapes({ kindOf: () => 'para' })
+    left.addParts(parts)
+    left.addPage(lefts[1]!)
+    const ls = left.starts(0, src, offsets)!
+    expect([...ls]).toEqual([joined])
+    expect(left.shapes.fits(0, ls, true)).toBe(true)
+    const t = d3[joined]!, at = { x: t.x + t.w / 2, y: (t.top + t.bottom) / 2 }
+    const holds = (s: number) => left.shapes.runs(0).flatMap(run => left.shapes.sentence(run, ls, s, 0)).some(r => at.x > r.x0 && at.x < r.x1 && at.y > r.y0 && at.y < r.y1)
+    expect([holds(0), holds(1)]).toEqual([false, true])
+  })
+
+  it('a laid page\'s table with no places lights its units whole: a display written after the text would go by the order (4315272553)', () => {
+    // "Aaa bbb [display]. Ccc ddd.": the display the first sentence's, written after the text; by the order the second's, and the
+    // rows would still be in order
+    const tr = 'Aaa bbb. Ccc ddd.', trOffsets = [tr.indexOf('Ccc')]
+    const toks: Tok[] = [
+      ...'Aaa bbb.'.split(' ').map((s, i) => ({ s, x: 50 + 30 * i, y: 730, word: i, at: tr.indexOf(s) })),
+      ...'Ccc ddd.'.split(' ').map((s, i) => ({ s, x: 50 + 30 * i, y: 682, word: 2 + i, at: tr.indexOf(s) })),
+      { s: 'x', x: 280, y: 706, word: -1, at: tr.indexOf(' Ccc') },
+    ]
+    const { left, right } = sides()
+    const { at: _, ...noPlaces } = laid(toks)
+    right.lay(1, noPlaces)
+    expect(right.starts(0, tr, trOffsets, left.starts(0, SRC, SRC_OFFSETS.slice(0, 1)))).toBeNull()
+    // with its places, by sentence, the display in the first
+    const again = sides()
+    again.right.lay(1, laid(toks))
+    const rs = again.right.starts(0, tr, trOffsets, null)!
+    expect(again.right.shapes.fits(0, rs, true)).toBe(true)
+    const d = { x: 282.5, y: 708.65 }
+    expect(again.right.shapes.runs(0).flatMap(run => again.right.shapes.sentence(run, rs, 0, 0)).some(r => d.x > r.x0 && d.x < r.x1 && d.y > r.y0 && d.y < r.y1)).toBe(true)
   })
 })

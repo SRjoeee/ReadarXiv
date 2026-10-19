@@ -37,9 +37,12 @@ export function startsOfPairs(anchor, text, offsets) {
   const st = sentenceStarts(anchor, text, offsets)
   if (!st) return st
   const pairs = anchor.pairs, words = offsets.map(o => wordsOfText(text.slice(0, o)).length)
-  // (each paired token's word, its first where two name it, made on the first token asked)
+  // (each paired token's word, its first where two name it, made on the first token asked; a start's token is the sentence
+  // it begins, sentenceStarts', where it is paired with a word of the sentence before it too)
   let wordOf = null
+  const begins = new Map(Array.from(st, (k, j) => [k, j + 1]))
   return withSentences(st, k => {
+    if (begins.has(k)) return begins.get(k)
     if (!wordOf) {
       wordOf = new Map()
       for (const [w, t] of pairs) { const was = wordOf.get(t); if (was === undefined || w < was) wordOf.set(t, w) }
@@ -261,7 +264,7 @@ export function layerShapes(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
-  let L, words, made, wordAt, placeAt, hidden
+  let L, words, made, wordAt, placeAt, noPlaces, hidden
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
   const tellParts = parts => layoutParts(L, parts.map(part => ({
     pages: [...part.pages], views: [...part.views],
@@ -269,7 +272,7 @@ export function layerShapes(source) {
   })))
   function reset() {
     L = pageLayout(state.kindOf)
-    words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); hidden = new Set()
+    words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set()
     if (state.parts.length) tellParts(state.parts)
   }
   /** page p's part of the laid layout, where its words and its left part are in */
@@ -286,6 +289,7 @@ export function layerShapes(source) {
     const word = new Int32Array(n).fill(-1), place = new Int32Array(n).fill(-1)
     word.set(w.word.subarray(0, n0))
     if (w.at) place.set(w.at.subarray(0, n0))
+    else noPlaces.add(p)
     const base = BASE * p, spans = []
     for (const [id, ranges] of w.spans) {
       const ks = []
@@ -343,7 +347,8 @@ export function layerShapes(source) {
     starts(id, text, offsets, left) {
       const m = mode(id)
       if (m === 'mirror') return left ?? null
-      if (m === 'mixed' || !tokensIn(L, id)) return null
+      // (a table with no places, `at`: its formulas and displays would go by the order, which the table need not keep)
+      if (m === 'mixed' || !tokensIn(L, id) || pagesOf(id).some(p => noPlaces.has(p))) return null
       if (typeof text !== 'string' || !Array.isArray(offsets) || !offsets.every((o, j) => Number.isInteger(o) && o > (j ? offsets[j - 1] : 0) && o < text.length)) return null
       const ts = L.anchors.get(id)?.tokens ?? [], out = new Int32Array(offsets.length), ws = []
       for (let j = 0, from = 0; j < offsets.length; j++) {
