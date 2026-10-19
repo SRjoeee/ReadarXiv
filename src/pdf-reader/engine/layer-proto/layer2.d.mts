@@ -334,6 +334,8 @@ export declare function cropFields(parts: CropPart[]): { mode: 'crop'; page: num
 export declare function pageStartsOf(uc: readonly Char[], O: readonly { start: number }[], S: readonly { start: number }[], pair: ArrayLike<number>, src: string): Map<number, number>
 /** the translation's cut at each later page's start: the token the page's text begins with */
 export declare function pageCutsOf(tokens: readonly Token[], unit: { src?: string; pieces?: readonly unknown[]; sentences?: { src: number[]; tr: number[] } | null }, starts: ReadonlyMap<number, number> | null | undefined, P: { noStart?: string; noEnd?: string }): { page: number; at: number }[]
+/** a unit laid with its page cuts: as without them, and once more with them at that layout's state where it sets a cut's token on an earlier page, kept where it fits there */
+export declare function layoutCut(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; at: number }[], blocks: readonly Block2[], s: number, P: Params): { layout: Layout; tokens: Token[] & { base?: unknown } }
 /** the tokens with a page-break token before each cut's token */
 export declare function withPageBreaks(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; at: number }[]): Token[] & { base?: unknown }
 /** a crop resolution as its readers take it, one a part: itself, or each part as a crop of its own (its index `part`, the copy text on the first alone) */

@@ -3275,25 +3275,24 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       open()
       continue
     }
-    // a page break of the source's (withPageBreaks): reached on an earlier page, the line ends there, ragged, and the text goes
-    // on on the page's first slot; reached on that page or later (the earlier page already full), nothing
+    // a page break of the source's (withPageBreaks): reached on an earlier page, the line ends there and the text goes on on
+    // the page's first slot. The line is set as any other (placeItems: justified where it is full enough, else ragged by
+    // its spacing caps): the source's line before a page break is justified, its paragraph goes on. Reached on that page or
+    // later (the earlier page already full), or where that page's first slot lies after a display the text has not passed
+    // (the source sets the text before the display: the display's own break places it), nothing
     if (tokens[i].pageBreak !== undefined) {
       const pg = tokens[i].pageBreak
       i++
       if (!(line.page < pg)) continue
       let q = li + 1
       while (q < slots.length && slots[q].page < pg) q++
-      if (q >= slots.length) continue
+      if (q >= slots.length || (slots[q].after ?? 0) > consumed) continue
       const to = slots[q]
-      if (line.items.length) { trim(line); line.ends = true }
+      if (line.items.length) trim(line)
       settle()
       if (stop) break
       li = slots.indexOf(to)
       if (li < 0) { stop = true; break }
-      if ((slots[li].after ?? 0) > consumed) {
-        if (strict === true) { stop = true; break }
-        spilled = true
-      }
       open()
       continue
     }
@@ -3426,18 +3425,21 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
  * Where each later page of a unit begins in its source: the plain source's UTF-16 offset of the first source word the
  * alignment takes on that page (gapsOf2's `last`: the page's words `O`, by their first character in the unit's characters
  * `uc`, each one's source word in `S` by `pair`, -1 for none; S's `start` a code point of `src`), by page. A page none of
- * whose words the alignment takes, or whose first taken word is no later in the source than the page before's, has none.
+ * whose words the alignment takes, or whose first taken word is no later in the source than the page before's, has none;
+ * nor has any page while the unit's first page has no word the alignment takes (its start there would be the unit's).
  * Returns a Map page -> offset
  */
 export function pageStartsOf(uc, O, S, pair, src) {
   const cps = [...(src ?? '')], u16 = new Int32Array(cps.length + 1)
   for (let i = 0; i < cps.length; i++) u16[i + 1] = u16[i] + cps[i].length
   const out = new Map()
-  let first = null, last = -1
+  let first = null, last = -1, anchored = false
   O.forEach((o, q) => {
     const page = uc[o.start]?.page
     if (first === null) first = page
-    if (page === first || out.has(page) || !(pair[q] >= 0)) return
+    if (!(pair[q] >= 0)) return
+    if (page === first) { anchored = true; return }
+    if (!anchored || out.has(page)) return
     const at = u16[Math.min(S[pair[q]].start, cps.length)]
     if (at > last) { out.set(page, at); last = at }
   })
@@ -3473,9 +3475,34 @@ export function pageCutsOf(tokens, unit, starts, P) {
       if (!t.space && at >= cut - 1e-9) break
     }
     while (i < tokens.length && (barred(tokens[i]) || tokens[i].glue)) i++
-    if (i < tokens.length && !(out.length && out.at(-1).at >= i)) out.push({ page, at: i })
+    // (never at the first token: a break there would move none of the text and leave page A empty)
+    if (i > 0 && i < tokens.length && !(out.length && out.at(-1).at >= i)) out.push({ page, at: i })
   }
   return out
+}
+
+/**
+ * A unit laid with its page cuts (pageCutsOf's `cuts`): as without them, the fit's states searched once; where that layout
+ * sets a cut's token on a page before the cut's (its page B text on page A), laid once more with the page breaks
+ * (withPageBreaks) at that layout's own state, and kept where it fits there. Else as without them: a cut never costs a
+ * unit its fit, nor a second search of the fit's states. Returns { layout, tokens }, the tokens it was laid from
+ */
+export function layoutCut(tokens, cuts, blocks, s, P) {
+  const plain = layoutUnit2(tokens, blocks, s, P)
+  if (!cuts.length || plain.clipped || plain.spilled || !cutsReached(plain.lines, cuts)) return { layout: plain, tokens }
+  const broken = withPageBreaks(tokens, cuts)
+  const cut = layoutAt(broken, blocks, s, P, plain.state)
+  if (cut.clipped) return { layout: plain, tokens }
+  cut.tried = plain.tried
+  return { layout: cut, tokens: broken }
+}
+/** whether a layout's lines (breakLines', each with its first token `from`) set a cut's token on a page before the cut's */
+function cutsReached(lines, cuts) {
+  return cuts.some(c => {
+    let l = null
+    for (const x of lines) { if (x.from > c.at) break; l = x }
+    return !!l && l.page < c.page
+  })
 }
 
 /** the tokens with a page-break token (`{ pageBreak: page }`, breakLines') before each cut's token (pageCutsOf's) */
