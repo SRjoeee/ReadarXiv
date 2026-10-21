@@ -268,7 +268,9 @@ describe('a shared row painted with the unit before it first, wherever their par
   const late: Paper = {
     name: 'S-F the unit before painted late', pages: 3, specs: [
       { id: 0, kind: 'para', lines: [line(1, 270, 'Alpha beta gamma'), line(1, 258, 'delta epsilon zeta'), line(3, 270, 'eta theta iota'), line(3, 258, 'kappa lambda mu')], chars: 60, at: 0x4e00 },
-      { id: 1, kind: 'para', lines: [line(1, 234, 'nu xi omicron'), line(1, 222, 'pi rho sigma'), line(2, 270, 'tau upsilon phi'), line(2, 258, 'chi psi. The', 20, 150)], chars: 82, at: 0x5200 },
+      // (most of its source on page 1, its translation's share there more than page 1's two lines hold: E3c's page cut, reached on
+      // page 2, changes nothing)
+      { id: 1, kind: 'para', lines: [line(1, 234, 'nu xi omicron pi rho sigma'), line(1, 222, 'tau upsilon phi chi psi omega'), line(2, 270, 'alpha'), line(2, 258, 'beta. The', 20, 150)], chars: 82, at: 0x5200 },
       { id: 2, kind: 'para', lines: [line(2, 258, 'omega alpha', 160, 280), line(2, 246, 'beta gamma delta'), line(2, 234, 'epsilon zeta eta')], chars: 30, at: 0x5600 },
     ],
   }
