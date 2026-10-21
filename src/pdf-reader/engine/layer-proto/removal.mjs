@@ -568,8 +568,14 @@ export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], 
   // cut, not ink to keep: a rule a dvips and Ghostscript PDF paints as an inline image (1007.0072v1's fraction bars, 56 on
   // the paper, no path among them), which the remover never takes. Paper goes over it; the removed page would bring it
   // back. A figure's rule is inside no line's erase rectangle and no inline placeholder's segment; another unit's
-  // rectangles are not this unit's)
-  const ownRule = d => Math.min(d[2] - d[0], d[3] - d[1]) <= RULE_THIN && mine.some(b => d[0] >= b[0] - 0.3 && d[2] <= b[2] + 0.3 && d[1] >= b[1] - 0.3 && d[3] <= b[3] + 0.3)
+  // rectangles are not this unit's. Thin, it is no glyph: a glyph's kept box is its outline's, an em tall. A thin path
+  // wholly inside one of them the plan removes already (fileOwnership's paths and linePaths); the path it keeps there is
+  // one that meets a rectangle kept clear (a display's rows, a label: fileOwnership leaves it), so a box that meets any
+  // rectangle the swap keeps clear, this unit's kept ones or the others', is swapped as before. Where the add-on refused
+  // the page, a thin path of a rectangle the swap does not know could still be filled over: the manifest names no kinds
+  // (carrying them, and cutting the images, is the add-on's: REMOVAL)
+  const keptClear = [...kept, ...others]
+  const ownRule = d => Math.min(d[2] - d[0], d[3] - d[1]) <= RULE_THIN && mine.some(b => d[0] >= b[0] - 0.3 && d[2] <= b[2] + 0.3 && d[1] >= b[1] - 0.3 && d[3] <= b[3] + 0.3) && !keptClear.some(r => meets(r, d))
   const kept2 = dirty.filter(d => !ownRule(d))
   const swap = [], fill = []
   for (const r of rects) (kept2.some(d => meets(r, d)) ? swap : fill).push(r)

@@ -170,6 +170,14 @@ describe("a unit's drawing from the layout file's rectangles", () => {
     const strip = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), dirty: [[40, 80, 41, 120]] })
     expect(inside(strip.swap, 40.5, 103)).toBe(true)
   })
+  it('swaps for a thin box inside its own rectangle that meets a rectangle kept clear (a kept path the plan left)', () => {
+    // the first line's erase rectangle holds it; it meets the placeholder the reading keeps (k 3, x 30-40)
+    const keptPh = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], [3]), dirty: [[25, 103, 35, 103.4]] })
+    expect(inside(keptPh.swap, 27, 103.2)).toBe(true)
+    // and one meeting another unit's display rows, given as a rectangle kept clear
+    const display = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), others: [[44, 88, 50, 94]], dirty: [[20, 90, 46, 90.5]] })
+    expect(inside(display.swap, 30, 90.2)).toBe(true)
+  })
   it("swaps for a thin box inside another unit's rectangle that its own meets", () => {
     // another unit's placeholder segment at x 55-70 over this one's first line's end, its rule there; this unit's own
     // rectangles keep clear of it (`others`) and the rule is not this unit's: the removed page is swapped in
