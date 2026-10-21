@@ -4,6 +4,7 @@ import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { type BatchReport, citationLines, type Compiled, compilerKeeper, keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, ranThrough, runLive, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { Marks } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { END_TEX } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
+import { boundaryChanges } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The reader's compiles with the typesetting rule (exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-01-flow-typesetting-handoff.md,
 // "The compile sequence"; the evaluation's rulings in the F2 brief): the font probe with its width probe; the first
@@ -445,6 +446,165 @@ describe('a copy made under pipeline 17, reopened under 18', () => {
     const sent: string[] = []
     const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
     expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
+// A copy made under pipeline 18, reopened under 19: 19 changes which marked original a paper's layout is read from (the layout
+// guard: units left the paper's own, the names' marks off) and records why a part has none, not a unit, the wire or its
+// reading back: every unit is the copy's by its hash, carried as it has it, and nothing is sent
+describe('a copy made under pipeline 18, reopened under 19 (and on)', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit as the copy has it: nothing is sent again', async () => {
+    expect(Number(PIPELINE_VERSION)).toBeGreaterThanOrEqual(19)
+    const p = paper(), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '18', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(n - keptFor(p, 'zh').size)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
+// A copy made under pipeline 19, reopened under 20: 20 makes no unit of what TeX reads as syntax (arg-roles.mjs's
+// DELIMITED forms and `_d` values, latex-front.mjs's declarations), the wire and its reading back 19's. 2610.21201's
+// \\etocdepthtag.toc{main} was a unit; no unit now, and the pair it spent no longer moves the later pairs' numbers: the
+// paragraph after it keeps its text and changes its hash, found again by seedFrom. Every unit is carried, nothing is sent
+describe('a copy made under pipeline 19, reopened under 20', () => {
+  const BODY = (tag: string) => [`\\${tag}.toc{main}`, 'A paragraph whose \\textbf{compute resources} are set in bold, after the tag.', 'A last paragraph of the paper, with words that run on for a line or two of prose and an end.'].join('\n\n')
+  const paperWith = (tag: string) => openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\n\\usepackage{etoc}\n\\begin{document}\n${BODY(tag)}\n\\end{document}\n`)]]))
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit as the copy has it, the renumbered one too: nothing is sent again', async () => {
+    // the units 19 cut: the tag a unit, as a command the role table does not know still cuts it
+    const before = paperWith('etocdepthtagX'), n0 = before.units.length
+    expect(n0).toBe(3)
+    const r0 = await runLive(before, { lang: 'zh', compile: compiler(n0).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n0) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '19', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(before.units, keptFor(before, 'zh'), await Promise.all(before.units.map(u => sourceHash(u))), r0.results) }))
+    const p = paperWith('etocdepthtag'), n = p.units.length
+    expect(n).toBe(2)
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u))), recorded = new Set(record.units.map((u: { hash: string }) => u.hash))
+    expect(hashes.filter(h => !recorded.has(h))).toHaveLength(1)
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(2)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
+// A copy made under pipeline 20, reopened under 21: 21 reads a source's line ends as TeX does (latex-front.mjs texText), the
+// wire and its reading back 20's. A CRLF file's paragraphs, one unit under 20, are units of their own: new units, sent; the
+// units of the paper's LF files are the copy's by their hash, carried as it has them
+describe('a copy made under pipeline 20, reopened under 21', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit of the LF file as the copy has it, and sends the CRLF file\'s paragraphs, now units of their own', async () => {
+    const main = '\\documentclass{article}\n\\begin{document}\nA paragraph of the main file, with words that run on for a line or two of prose and an end.\n\n\\input{part}\n\\end{document}\n'
+    const part = 'A first paragraph of the part, written with CRLF line ends and words.\r\n\r\nA second paragraph of the part, with words of its own.\r\n'
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(main)], ['part.tex', new TextEncoder().encode(part)]])), n = p.units.length
+    expect(n).toBe(3)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const made = unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results)
+    // (the copy 20 made: the main file's unit as now; the part's two paragraphs one unit, its line ends CRLF)
+    const merged = { kind: 'para', src: 'A first paragraph of the part, written with CRLF line ends and words. A second paragraph of the part, with words of its own.', hash: 'f'.repeat(64), pieces: [{ t: 'text', tr: true, s: '\u8bba\u6587' }], state: 'whole', by: 'B', tried: ['B'] }
+    const record = JSON.parse(JSON.stringify({ pipeline: '20', format: 'markers', context: {}, marks: [['0s', {}]], units: [made[0], merged] }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(1)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual(['A first paragraph of the part, written with CRLF line ends and words.', 'A second paragraph of the part, with words of its own.'])
+    expect(r.settled).toBe(true)
+  })
+})
+
+// A copy made under pipeline 21, reopened under 22: 22 keeps a styled pair whose two ends stand where the wire is cut
+// anyway (mt.mjs classOf's boundary rule, TRANSLATE_VERSION 4), and changes nothing else a unit is or how a reply is read
+// back: the unit whose wire the rule changes is sent again, every other unit carried as the copy has it
+describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('sends again the unit whose wire the boundary rule changes, and no other', async () => {
+    // (2610.19159's u325: a run-in label kept, a colour after it to the unit's end)
+    const label = '\\textit{Floor (must clear):} \\textcolor{red}{all of the rest of the line to its end}'
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(sourceOf(PARAS).replace('\\end{document}', `\n${label}\n\n\\end{document}`))]])), n = p.units.length
+    const changed = p.units.filter(u => boundaryChanges(u))
+    expect(changed.length).toBe(1)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '21', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent.length).toBe(1)
+    expect(sent[0]).toContain('Floor (must clear)')
+    expect(r.settled).toBe(true)
+    // (every copy from 15 on, sent the old way, takes the boundary test: the changed unit is not carried, a plain one is)
+    const plain = p.units.find(u => !u.pieces.some(q => (q as { t: string }).t === 'open'))!
+    for (const v of ['15', '16', '17', '18', '19', '20', '21']) {
+      expect(PIPELINE_CARRIES[v]!([], changed[0]!), v).toBe(false)
+      expect(PIPELINE_CARRIES[v]!([{ t: 'text', s: 'words', tr: true }], plain), v).toBe(true)
+    }
+    // (without the unit, a translation that holds no pair is carried, one that holds a pair is not)
+    expect(PIPELINE_CARRIES['21']!([{ t: 'text', s: 'words', tr: true }], null)).toBe(true)
+    expect(PIPELINE_CARRIES['21']!([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'words', tr: true }, { t: 'close', id: 1, src: '}' }], null)).toBe(false)
+  })
+})
+
+// A copy made under pipeline 23 or 24, reopened under 25: 24 changes a unit's lines at a page break (anchors.mjs), the left
+// side alone, and 25 guesses a package's toplevel sources where it has no 00README (paper-meta.mjs): neither a unit, the
+// wire or its reading back: every unit is the copy's by its hash, carried as it has it, and nothing is sent
+describe('a copy made under pipeline 23 or 24, reopened under 25', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it.each(['23', '24'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('25')
+    const p = paper(), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(n - keptFor(p, 'zh').size)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
+// A copy made under pipeline 22, reopened under 23: 23 writes a display's own stop after its marker and takes off what the
+// reply set for it (mt.mjs serialize's `own`, TRANSLATE_VERSION 5), the units and their hashes as they were. Given the units,
+// the carry test asks whether the unit's wire carries such a stop (mt.mjs displayStopChanges): that unit's translation was
+// made of a sentence that ran on past its display, and it is sent again; every other unit's, a display with no stop of its
+// own among them, is taken as the copy has it
+describe('a copy made under pipeline 22, reopened under 23', () => {
+  const PARAS = [
+    'A paragraph of the paper, with words that run on for a line or two of prose and an end.',
+    'Substituting the first equation yields\n\\begin{equation}\n  p = q + r.\n  \\label{eq:p}\n\\end{equation}\nPrices and shares are allowed to be endogenous here.',
+    'The second display has no stop of its own,\n\\[ x = y \\]\nand the sentence goes on after it to its end.',
+  ]
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('sends the unit whose display ends its sentence, one of three, and takes the other two as the copy has them', async () => {
+    const p = openPaper(new Map([['main.tex', new TextEncoder().encode(`\\documentclass{article}\\begin{document}\n${PARAS.join('\n\n')}\n\\end{document}\n`)]])), n = p.units.length
+    expect(n).toBe(3)
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const hashes = await Promise.all(p.units.map(u => sourceHash(u)))
+    const record = JSON.parse(JSON.stringify({ pipeline: '22', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), hashes, r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(3)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual(['Substituting the first equation yields @a#. Prices and shares are allowed to be endogenous here.'])
     expect(r.settled).toBe(true)
   })
 })

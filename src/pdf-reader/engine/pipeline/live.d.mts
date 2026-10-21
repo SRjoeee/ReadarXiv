@@ -25,8 +25,10 @@ export declare function probeFiles(paper: Paper, options?: { width?: boolean; ma
  *  given, gets `lines()`: each unit's lines and bytes in the files as written. `layout` null or absent: the bytes as at
  *  3cb5a733; else the units marked by layoutMarking (layout/marks.mjs) with those classes, and LAYOUT_TEX after MARK_DEF;
  *  `switches` (with `layout` only), the paper's own switch (readMarkProbe): marks off where TeX said they change what
- *  follows; `inkless` (with `layout` only), the macros TeX said set no ink (readInkProbe): no mark */
-export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[] } | null; layout?: readonly import('../layout/marks.mjs').MarkClass[] | null; switches?: import('../layout/marks.mjs').Switches | null; inkless?: readonly string[] | null }): Map<string, Uint8Array>
+ *  follows; `inkless` (with `layout` only), the macros TeX said set no ink (readInkProbe): no mark. The layout guard's
+ *  remedies (with `layout` only, layout/guard.mjs): `unmarked`, unit indices each written as the paper's own bytes, with no
+ *  mark; `names` false, no babel name marked. `spans` gets `skip` too: the main file's head of ours, in bytes */
+export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[]; skip?: number } | null; layout?: readonly import('../layout/marks.mjs').MarkClass[] | null; switches?: import('../layout/marks.mjs').Switches | null; inkless?: readonly string[] | null; unmarked?: Iterable<number> | null; names?: boolean }): Map<string, Uint8Array>
 /** the units a translation into `lang` leaves as they are */
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a
@@ -53,7 +55,10 @@ export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string |
  *  (Compiled `files`), and, on a one-pass request, makeindex (-o ./<job>.ind ./<job>.idx) after the bibliography step
  *  where the pass wrote ./<job>.idx. The bibliography step (`bibtex: true`) is biber only where THIS pass wrote ./<job>.bcf (a
  *  shipped or carried copy does not count), else BibTeX on ./<job>. A host that knows neither answers without `files`; the files a compile is given
- *  back come in `overrides`, as every other input does */
+ *  back come in `overrides`, as every other input does. `engine` is the paper's compiler (paper-meta.mjs): pdflatex,
+ *  xelatex, lualatex, or `latex`, arXiv's DVI compiler — pdfTeX in DVI mode, its DVI made a PDF by dvipdfmx (never dvips and
+ *  ps2pdf, arXiv's own: the marks are dvipdfmx's specials, latex-front.mjs DVI_MARK_DEF), every pass by latexmk's -pdfdvi
+ *  with dvipdfmx as its dvipdf, a one-pass compile latex then dvipdfmx, a draft latex -draftmode */
 export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array>; draft?: boolean; files?: boolean }
 /** the compiler a visit uses, opened when first needed and again after a compile the page failed */
 export declare function compilerKeeper(open: () => Promise<{ compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }>): { ready: () => Promise<void>; compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }

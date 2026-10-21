@@ -212,6 +212,10 @@ export function modelPage({ units, ref, items, translated, cut = [], placement =
  * `lines`: { key, x0, x1, baseline, a, d }; `crops`: { unit, line (its line's key), box: [x0, y0, x1, y1] as drawn,
  * srcTop, tex, sc (its drawn scale) }. With the units each count is of (`where`)
  */
+/** the audit's entry of a drawn crop (its item's token's `crop`): its placeholder's (`k`) and, where its formula TeX broke over
+ *  lines is drawn as one crop a line, its part's (`part`, layer2.mjs cropPartsOf: each part an entry of its own) */
+export const cropAuditOf = (audit, crop) => audit.find(x => x.k === crop.k && (x.part ?? 0) === (crop.part ?? 0))
+
 export function cropPlacementOf({ lines, crops }) {
   const where = { cropTextOverlap: [], cropBaselineOff: [], cropNoTex: [] }
   crops.forEach((c, i) => {
@@ -398,8 +402,11 @@ export function displayRowsOf(page) {
  * shown exactly once. A rendering drawn elsewhere shows it only where it is its own (its `unit` and its piece's source
  * index `k` the placeholder's, or a piece of the same source, `src`: two \eqref of one label are one rendering) and is
  * drawn from its ink or source; ink left where it stands shows it whoever kept it. A showing is
- * - its crop of its ink: each of its crops cut from this page (`crops`: { unit, k, src, box }, `box` its source
- *   rectangle) that holds the centre of one of its segments;
+ * - its crops of its ink: its crops cut from this page (`crops`: { unit, k, src, box }, `box` its source rectangle) that
+ *   hold the centre of one of its segments, one showing however many of its segments they hold between them (a formula TeX
+ *   broke over lines is drawn as its crops, one a line: E3b, 2026-10-19), as often as the most that hold one segment's;
+ *   a segment that nothing shows (none of its crops, nor its ink in place, nor what shows it whole) loses it, though its
+ *   other segments' crops are drawn (a part of a broken formula not drawn);
  * - its rendering drawn from its source (a symbol, a citation as the page wrote it, its source's text: `texts`,
  *   { unit, k, src }, one for each translated piece drawn so: a piece the translation repeats is shown twice), by its own
  *   k alone (with no place to tell them apart, two renderings of one source are each their own);
@@ -418,8 +425,15 @@ export function contentOf({ phs, crops = [], texts = [], pageTexts = [], kept = 
   for (const ph of phs) {
     const centres = ph.segs.map(centreOf)
     const own = r => r.unit === ph.unit && (r.k === ph.k || (typeof r.src === 'string' && r.src === ph.src))
-    const inPlace = kept.some(r => holds(ph, r.chars)) || centres.some(pt => keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)))
-    const n = crops.filter(c => own(c) && centres.some(pt => inBox(pt, c.box))).length + texts.filter(r => r.unit === ph.unit && r.k === ph.k).length + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length + (inPlace ? 1 : 0)
+    const keptHere = kept.some(r => holds(ph, r.chars))
+    const mine = crops.filter(own)
+    // (what shows it whole: its source drawn, its characters drawn, a kept rendering's ink in it)
+    const whole = texts.filter(r => r.unit === ph.unit && r.k === ph.k).length + pageTexts.filter(r => own(r) && holds(ph, r.chars)).length
+    // (each segment's showings: its own crops that hold its centre, its ink in place, and what shows it whole. A segment
+    // shown nowhere loses it, as a formula TeX broke over lines one of whose crops is not drawn (check.mjs's rule), else
+    // the most of any segment)
+    const per = centres.map(pt => mine.filter(c => inBox(pt, c.box)).length + whole + (keptHere || keptLines.some(r => inBox(pt, r)) || !erased.some(e => inBox(pt, e)) ? 1 : 0))
+    const n = !per.length ? whole + (keptHere ? 1 : 0) : Math.min(...per) === 0 ? 0 : Math.max(...per)
     if (n !== 1) out.push([ph.unit, ph.k, n])
   }
   return { contentLost: out.length, contentWhere: out }

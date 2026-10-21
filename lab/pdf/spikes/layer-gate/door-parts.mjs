@@ -118,7 +118,7 @@ window.doorParts = {
     const doc = await pdfjs.getDocument({ data, ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     const ruleSet = await ruleSetOf(rules)
     window.__gateRuns = []
-    const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl })
+    const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS })
     layer.take(rows)
     layer.end()
     const sourceOf = async p => {
@@ -157,7 +157,7 @@ window.doorParts = {
     const log = []
     let next = 0
     const retired = []
-    const layer = await R.openLayer({ index, doc, parts: [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, leftPart: async () => new Uint8Array(), onRetired: d => { retired.push(d) } })
+    const layer = await R.openLayer({ index, doc, parts: [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, leftPart: async () => new Uint8Array(), onRetired: d => { retired.push(d) } })
     layer.onPage((p, state) => log.push(`${state}:${p}`))
     const tell = i => { const part = parts[i]; log.push(`part:${part.pages.join('-')}`); layer.addPart(part, ...(composed.has(i) ? [{ doc: composed.get(i) }] : [])) }
     window.__gateWait = what => {

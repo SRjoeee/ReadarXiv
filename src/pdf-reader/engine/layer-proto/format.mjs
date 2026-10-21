@@ -32,13 +32,18 @@ import { sourceUnitsOf } from './rows.mjs'
 import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
-/** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG */
-export const BUNDLE5 = '5'
+/** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG. 6: a part
+ *  with no layout says why (`layout: { refused, why }`, LAYOUT_REFUSED), where 5's held a bare null (R1 of 2026-10-19): a
+ *  reader of 5 refuses the new shape, so the contract is named anew; nothing deployed reads 5 (the owner's rule: no
+ *  migration), and a bundle of 5 is simply not found under 6's CTAG and is prepared again. 7: each text item of a left part's
+ *  draw carries its characters' fills (draw.mjs, the item's tenth value: layout/fills.mjs itemFills, E1 of 2026-10-19), which a
+ *  reader of 6 refuses; a bundle of 6 is not found under 7's CTAG and is prepared again */
+export const BUNDLE5 = '7'
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
-/** the reader's contract, `b5-j<PDFJS>`: what a reader asks by. Until the pin moves (next's extension asks for BUNDLE 3's) it
- *  is named with the 5 */
+/** the reader's contract, `b<BUNDLE5>-j<PDFJS>`: what a reader asks by. Named with the 5 beside bundle.mjs's CTAG (BUNDLE
+ *  3's) whatever BUNDLE5's value: the web's service and readers import BUNDLE5, CTAG5 and VTAG5 by these names */
 export const CTAG5 = `b${BUNDLE5}-j${PDFJS}`
 /** the content's: the contract, then the pipeline, the layout maker and the remover the server made it with; a key's
  *  directory (and the catalog's name). A reader reads objects of a newer maker: those three are named, never compared */
@@ -76,6 +81,23 @@ export const TOKENS_PAGE = 15_000, SPANNED_PER_TOKEN = 2
 /** the tokens' wire: integers of TOKEN_SCALE (thousandths of a PDF unit), delta-coded, a decoded value past ±TOKEN_LIMIT
  *  PDF units no PDF's */
 export const TOKEN_SCALE = 1000, TOKEN_LIMIT = 100_000
+/** why a part has no layout, as the part records it in place of its layout (`layout: { refused, why }`, `why` WHY_MAX code
+ *  units at most), for a reader to say and a sweep to count, never to draw by: TeX's — `compile` (the paper's own source does
+ *  not make arXiv's pages here: a missing package, an error of its own, a compile the host stopped; and every cause nobody
+ *  judged: a marked original of fewer pages than arXiv's PDF where the host gave the guard no page count, no compile left to
+ *  tell whose fault it is, a compile that threw), `texlive` (as compile, the paper declaring another TeX Live year than the
+ *  box's), `engine` (a compiler the host does not run, as `engines` or its answer names it) —; ours — `marks` (the marked original is not the paper and the layout guard could not mend it, or the mark probe,
+ *  the marks' reading or the maker failed) —; and `carry` (the marked original's lines are not found on arXiv's pages, under
+ *  CARRY_MIN, the paper's or the part's). A part with `layout: null` is one whose producer recorded no reason (5's shape,
+ *  cutBundle with none given) */
+export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks'])
+export const WHY_MAX = 300
+/** a why as a record holds it: a run of control characters (a TeX log's raw bytes, a terminal's escapes) one space, within
+ *  WHY_MAX */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters a why is kept without
+export const whyText = s => String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/ {2,}/g, ' ').trim().slice(0, WHY_MAX)
+/** whether a part's `layout` as given or on the wire is a refusal's record, not a layout part (which holds no `refused`) */
+export const isLayoutRefusal = v => isObject(v) && Object.hasOwn(v, 'refused')
 /** why the parts end before the paper does (the catalog's `end.refused`), amendment M4: FINAL, the paper's own, which a new
  *  build does not change (a writer's bound, a refused part); BUILD-SCOPED, of the build's resources, which another build may
  *  not meet (memory, an engine failure, the deadline) */
@@ -777,9 +799,15 @@ function partShape(v, { N, unitCount, atFrom }) {
     if (!isInteger(e[1], -1, ID_MAX)) throw refuse(K, `${path}[1]`, 'not a stream, or -1')
   }
 
-  // layout
-  let layout = null
-  if (v.layout !== null) {
+  // layout: a layout part, or why there is none (a refusal's record), or null (no reason recorded)
+  let layout = null, noLayout = null
+  if (isLayoutRefusal(v.layout)) {
+    const r = exactKeys(K, v.layout, ['refused', 'why'], 'layout')
+    if (!LAYOUT_REFUSED.includes(r.refused)) throw refuse(K, 'layout.refused', `not one of ${LAYOUT_REFUSED.join(', ')} (${kindOf(r.refused)})`)
+    if (typeof r.why !== 'string' || r.why.length > WHY_MAX) throw refuse(K, 'layout.why', `not a string of ${WHY_MAX} code units at most (${kindOf(r.why)})`)
+    noLayout = Object.freeze({ refused: r.refused, why: r.why })
+    if (fileOnly.length) throw refuse(K, 'fileOnly', 'units with no layout')
+  } else if (v.layout !== null) {
     layout = inside(K, 'layout', () => checkLayoutPart(v.layout, { pages: N, views, lo: a, hi: reach }))
     const placed = new Set(fileOnly.map(e => e[0])), seen = new Set()
     for (let i = 0; i < layout.units.length; i++) {
@@ -825,7 +853,7 @@ function partShape(v, { N, unitCount, atFrom }) {
     const r = refOf(K, lp[i], `leftParts[${i}]`, 'left', 'page', LEFT_CAP)
     if (r.page !== a + i) throw refuse(K, `leftParts[${i}].page`, `not page ${a + i}, in page order`)
   }
-  return { a, b, reach, views, left, fileOnly, layout, addon, leftParts: lp }
+  return { a, b, reach, views, left, fileOnly, layout, noLayout, addon, leftParts: lp }
 }
 
 /** the chain before any part */
@@ -927,7 +955,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   })
   return {
     kind: 'part', sha256, bytes: bytes.length, head: v.head, prev: v.prev, pages: [s.a, s.b], reach: s.reach, views: Object.freeze(s.views),
-    left: s.left, fileOnly: s.fileOnly, layout: s.layout, addon: s.addon === null ? null : { manifest: s.addon.manifest, tail: s.addon.tail, r: s.addon.r }, leftParts: s.leftParts, chain: after,
+    left: s.left, fileOnly: s.fileOnly, layout: s.layout, noLayout: s.noLayout, addon: s.addon === null ? null : { manifest: s.addon.manifest, tail: s.addon.tail, r: s.addon.r }, leftParts: s.leftParts, chain: after,
   }
 }
 
@@ -945,7 +973,8 @@ function manifestText(m) {
 
 /**
  * The part written: `head` and `prev` digests, `pages` [a, b], the views of pages a … reach, the left units, the file-only
- * ones, the layout part (or null), the add-on { manifest, tail } (null where the layout is null; `tail` null where the remover
+ * ones, the layout part, or why there is none ({ refused, why }: LAYOUT_REFUSED, written as given), or null (no reason given),
+ * the add-on { manifest, tail } (null where the layout is none; `tail` null where the remover
  * gave none), and the left parts `writeLeftPart` gave, one for each page. Rectangles and views to a thousandth, layout rows
  * as the layout file writes them. Throws BundleRefusal for a part its reader would refuse for itself: past PART_CAP or
  * PART_VALUES, its content past CONTENT_MAX, a tail past TAIL_CAP, a shape the part alone shows wrong
@@ -959,7 +988,7 @@ export async function writePart({ paper, head, prev, pages, views, left, fileOnl
     views: views.map(r3),
     left: left.map(([id, stream, rects]) => [id, stream, rects.map(([p, x0, y0, x1, y1]) => [p, r3(x0), r3(y0), r3(x1), r3(y1)])]),
     fileOnly: fileOnly.map(([id, after]) => [id, after]),
-    layout: layout === null ? null : layoutPartRows(layout),
+    layout: layout === null ? null : isLayoutRefusal(layout) ? { refused: layout.refused, why: layout.why } : layoutPartRows(layout),
     addon: addon === null ? null : { manifest: manifestText(addon.manifest), tail: addon.tail === null ? null : toBase64(addon.tail) },
     leftParts: leftParts.map(l => ({ kind: 'left', page: l.page, sha256: l.sha256, bytes: l.bytes.length })),
   }

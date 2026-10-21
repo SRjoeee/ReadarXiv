@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { plainTranslated } from '@/pdf-reader/engine/translate/mt.mjs'
 import { tokens as wordsIn } from '@/pdf-reader/engine/pipeline/anchors.mjs'
-import { addUnitWords, copyWords, escapeMap, freezeWords, newWords, plainOfPieces, plainTracker, transformMap, wordIndexer } from '@/pdf-reader/engine/layer-proto/words.mjs'
+import { addUnitWords, copyWords, escapeMap, freezeWords, newWords, pieceOffsets, plainOfPieces, plainTracker, transformMap, wordIndexer } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // 1b-E: the page's word table (words.mjs; the 1b design §4). W1: a text token's box lies within its drawn run and its baseline is
@@ -175,6 +175,8 @@ describe('W1: a token lies within its drawn run, on its line\'s baseline', () =>
     const W = newWords()
     addUnitWords(W, layout, 1, 7, wordIndexer(plainOfPieces(unit.pieces as never)))
     expect([...W.word.slice(0, W.n)]).toEqual([-1, 0, 1])
+    // (the lead has no place of its own in the translation: the text's after it)
+    expect([...W.at.slice(0, W.n)]).toEqual([0, 0, 6])
     // the lead's last token is the text alone: not the original's glue after it (0.5 em of the unit's size)
     const items = layout.lines[0]!.items.filter(it => !it.t.space)
     expect(items[0]!.t.kern).toBe(true)
@@ -247,7 +249,7 @@ describe('W1 extended: the boxes of marks, tracking, superscripts, crops and kep
     expect(all.word[at]).toBe(-1)
   })
 
-  it('appends the unit\'s kept lines at their original rectangles, after its drawn ones, in its span', () => {
+  it('appends a kept line with no place in the text\'s flow at its original rectangle, after the drawn lines, in its span', () => {
     const l = lay([text('Alpha beta')], 'de', block(1), { hyphen: 0 })
     const W = newWords()
     addUnitWords(W, l.layout, 1, 7, wordIndexer(l.plain), [{ x0: 10, x1: 90, baseline: 300, size: 10, top: 308, bottom: 298 }])
@@ -255,6 +257,119 @@ describe('W1 extended: the boxes of marks, tracking, superscripts, crops and kep
     expect([W.l[2], W.r[2], W.y[2], W.top[2], W.bottom[2], W.word[2]]).toEqual([10, 90, 300, 308, 298, -1])
     expect(W.spans).toEqual([[7, [0, 3]]])
     expect(L2.keptLines([[1, 10, 298, 90, 308], [2, 10, 298, 90, 308]], { keep: ['1|10,298,90,308'], lineInfo: new Map([['1|10,298,90,308', { baseline: 300, size: 10 }]]) } as never, 1)).toEqual([{ x0: 10, x1: 90, baseline: 300, size: 10, top: 308, bottom: 298 }])
+  })
+})
+
+/** a block of `n` lines from baseline `y0` down, 100 wide at size 10, `after` the unit's kept regions before it */
+const blockAt = (y0: number, n: number, after: number) => {
+  const B = Array.from({ length: n }, (_, k) => y0 - 12 * k)
+  return { page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after, centred: false }
+}
+/** a displayed formula's kept line at baseline y, and its key */
+const keptRect = (y: number) => [1, 20, y - 2, 80, y + 8]
+const keyOf = (r: number[]) => `${r[0]}|${r.slice(1).join()}`
+/**
+ * A unit laid with its displays kept between its blocks, as prepareUnit's finish leaves them: each display a kept placeholder
+ * whose region is its kept line's (`regionOf`, `referenced`), the text after it starting below it (tokensOf2's `blockTo`)
+ */
+function layDisplays(pieces: Piece[], blocks: ReturnType<typeof blockAt>[], displays: { k: number; y: number; region: number }[], P: Record<string, unknown> = {}) {
+  const prep = new Map<number, object>(displays.map(d => [d.k, { mode: 'kept', cls: 'display', region: d.region, text: '' }])) as Map<number, object> & Record<string, unknown>
+  const rects = displays.map(d => keptRect(d.y))
+  Object.assign(prep, {
+    keep: rects.map(keyOf), referenced: new Set(displays.map(d => d.region)),
+    regionOf: new Map(rects.map((r, i) => [keyOf(r), displays[i]!.region])), lineInfo: new Map(rects.map((r, i) => [keyOf(r), { baseline: displays[i]!.y, size: 10 }])),
+  })
+  const params = { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0, ...P }
+  const unit = { kind: 'para', pieces }
+  const tokens = L2.tokensOf2(unit as never, prep as never, 'de', BASE as never, DESIGNS, params as never, null, undefined, true)
+  const layout = L2.layoutUnit2(tokens, blocks as never, 10, params as never)
+  // the unit's rectangles in its order: each block's lines, a display's kept line where it stands between them
+  const all = [...blocks.flatMap(b => b.rects), ...rects].sort((a, b) => b[4]! - a[4]!)
+  const W = newWords()
+  addUnitWords(W, layout, 1, 7, wordIndexer(plainOfPieces(pieces as never)), L2.keptLines(all, prep as never, 1, blocks), () => true, pieceOffsets(pieces as never))
+  const plain = plainOfPieces(pieces as never)
+  // each token: its text (a kept line's its baseline), its word and its place
+  const drawn = layout.lines.flatMap(line => line.items.filter(it => !it.t.space).map(it => it.t.s as string))
+  let d = 0
+  const rows = Array.from({ length: W.n }, (_, i) => [W.word[i]! >= 0 || W.y[i]! > 0 && displays.every(x => x.y !== W.y[i]) ? drawn[d++]! : `kept ${W.y[i]}`, W.word[i], W.at[i]] as const)
+  return { layout, W, plain, rows }
+}
+
+describe('the table in the text\'s order, each token with its place in the translation', () => {
+  it('writes a display between the text before it and the text after it: "A. B $$x$$ C. D."', () => {
+    const pieces: Piece[] = [text('A. B '), { t: 'ph', src: '$$x$$' }, text(' C. D.')]
+    const { layout, plain, rows } = layDisplays(pieces, [blockAt(500, 1, 0), blockAt(456, 1, 1)], [{ k: 1, y: 470, region: 0 }])
+    expect(layout.clipped).toBe(false)
+    expect(layout.lines.map(l => l.past)).toEqual([0, 1])
+    expect(plain).toBe('A. B C. D.')
+    // the display's place is the space its piece becomes: in the sentence of the text around it
+    expect(rows).toEqual([['A.', 0, 0], ['B', 1, 3], ['kept 470', -1, 4], ['C.', 2, 5], ['D.', 3, 8]])
+  })
+
+  it('writes each of several displays where its text passes it', () => {
+    const pieces: Piece[] = [text('Aaa '), { t: 'ph', src: '$$x$$' }, text(' bbb. Ccc '), { t: 'ph', src: '$$y$$' }, text(' ddd.')]
+    const { rows } = layDisplays(pieces, [blockAt(500, 1, 0), blockAt(456, 1, 1), blockAt(412, 1, 2)], [{ k: 1, y: 470, region: 0 }, { k: 3, y: 426, region: 1 }])
+    expect(rows).toEqual([['Aaa', 0, 0], ['kept 470', -1, 3], ['bbb.', 1, 4], ['Ccc', 2, 9], ['kept 426', -1, 12], ['ddd.', 3, 13]])
+  })
+
+  it('writes a display the text runs on above (\'flow\') where the walk passed it, not by the slots\' order', () => {
+    // three lines above the display, one below it: the text after it does not fit below, and runs on above it
+    const pieces: Piece[] = [text('Aaa '), { t: 'ph', src: '$$x$$' }, text(' bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn')]
+    const { layout, rows } = layDisplays(pieces, [blockAt(500, 3, 0), blockAt(440, 1, 1)], [{ k: 1, y: 464, region: 0 }], { flowPast: true })
+    expect(layout.clipped).toBe(false)
+    expect(layout.spilled).toBe(true)
+    // the lines after the display stand on the slots above it (block 0) and on the one below it (block 1)
+    expect(layout.lines.map(l => [l.block, l.past])).toEqual([[0, 0], [0, 1], [0, 1], [1, 1]])
+    expect(rows.map(r => r[0]).slice(0, 3)).toEqual(['Aaa', 'kept 464', 'bbb'])
+    expect(rows.map(r => r[2])).toEqual([...rows.map(r => r[2])].sort((a, b) => a! - b!))
+  })
+
+  it('writes a kept line no placeholder holds before the first line of the block that follows it in the unit\'s lines', () => {
+    const blocks = [blockAt(500, 1, 0), blockAt(476, 1, 0)]
+    const l = L2.layoutUnit2(L2.tokensOf2({ kind: 'para', pieces: [text('Aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm')] } as never, new Map() as never, 'de', BASE as never, DESIGNS, { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0 } as never, null, undefined, true), blocks as never, 10, { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0 } as never)
+    expect(l.lines.map(x => x.block)).toEqual([0, 1])
+    const own = keptRect(488)
+    const rects = [blocks[0]!.rects[0]!, own, blocks[1]!.rects[0]!]
+    const kept = L2.keptLines(rects, { keep: [keyOf(own)], lineInfo: new Map([[keyOf(own), { baseline: 488, size: 10 }]]) } as never, 1, blocks)
+    expect(kept).toEqual([{ x0: 20, x1: 80, baseline: 488, size: 10, top: 496, bottom: 486, block: 1 }])
+    const W = newWords()
+    addUnitWords(W, l as never, 1, 7, wordIndexer('Aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm'), kept)
+    const ys = [...W.y.slice(0, W.n)]
+    const first = l.lines[0]!.items.filter(it => !it.t.space).length
+    expect(ys[first]).toBe(488)
+    // its place: the text's before it (it is no placeholder's)
+    expect(W.at[first]).toBe(W.at[first - 1])
+  })
+
+  it('gives every part of a formula TeX broke over lines its placeholder\'s place, each part its own token in line order', () => {
+    // (the engine lane's E3 shape: one crop token a part, `crop.part`, the same `k`; a laid item's width its own, its kern apart)
+    const pieces: Piece[] = [text('Aaa '), { t: 'ph', src: '$a+b+c$' }, text(' bbb')]
+    const face = { size: 1 }, st = BASE
+    const crop = (part: number, x0: number) => ({ mode: 'crop', k: 1, src: '$a+b+c$', cls: 'inline', page: 1, crop: [x0, 490, x0 + 30, 510], baseline: 500, part, text: part ? '' : 'a+b+c' })
+    const L = {
+      f: 10, scale: 1,
+      lines: [
+        { page: 1, block: 0, baseline: 500, past: 0, items: [{ t: { s: 'Aaa', st, face, cls: 'latin', at: 0, end: 3, kernW: 20 }, x: 0, w: 15, kern: 2 }, { t: { space: true }, x: 17, w: 3 }, { t: { crop: crop(0, 70), cw: 30, glue: false, w100: 0 }, x: 20, w: 30 }] },
+        { page: 1, block: 0, baseline: 488, past: 0, items: [{ t: { crop: crop(1, 10), cw: 30, glue: false, w100: 0 }, x: 0, w: 30 }, { t: { space: true }, x: 30, w: 3 }, { t: { s: 'bbb', st, face, cls: 'latin', at: 4, end: 7 }, x: 33, w: 15 }] },
+      ],
+    }
+    const W = newWords()
+    addUnitWords(W, L as never, 1, 7, wordIndexer(plainOfPieces(pieces as never)), [], () => true, pieceOffsets(pieces as never))
+    expect(W.n).toBe(4)
+    expect([...W.at.slice(0, 4)]).toEqual([0, 3, 3, 4])
+    expect([...W.word.slice(0, 4)]).toEqual([0, -1, -1, 1])
+    expect([...W.y.slice(0, 4)]).toEqual([500, 500, 488, 488])
+    // a token's slot is its own width: the kern after it is no part of it
+    expect([W.l[0], W.r[0]]).toEqual([0, 15])
+  })
+
+  it('places each piece in the plain text: a text piece by its first character, any other by the space it becomes', () => {
+    const pieces: Piece[] = [{ t: 'ph', src: '$x$' }, text('  Alpha. '), { t: 'ph', src: '\\cite{a}' }, { t: 'open', src: '\\textbf{' }, text('Beta'), { t: 'close' }, text(' '), { t: 'ph', src: '$y$' }]
+    const plain = plainOfPieces(pieces as never)
+    expect(plain).toBe('Alpha. Beta')
+    // (the close and the placeholder after the last word: the space after it, which the plain text trims; a blank piece: where
+    // the text goes on)
+    expect([...pieceOffsets(pieces as never)]).toEqual([0, 0, 6, 6, 7, 11, 12, 11])
   })
 })
 
@@ -341,6 +456,8 @@ describe('the record', () => {
     expect(copy.word).not.toBe(rec.word)
     expect(copy.spans[0]![1]).not.toBe(rec.spans[0]![1])
     const empty = freezeWords(null, [])
-    expect(empty).toEqual({ tokens: { n: 0, l: new Float32Array(0), r: new Float32Array(0), y: new Float32Array(0), h: new Float32Array(0), top: new Float32Array(0), bottom: new Float32Array(0) }, word: new Int32Array(0), spans: [], original: [] })
+    expect(copy.at).not.toBe(rec.at)
+    expect([...rec.at]).toEqual([0, 4, 8])
+    expect(empty).toEqual({ tokens: { n: 0, l: new Float32Array(0), r: new Float32Array(0), y: new Float32Array(0), h: new Float32Array(0), top: new Float32Array(0), bottom: new Float32Array(0) }, word: new Int32Array(0), at: new Int32Array(0), spans: [], original: [] })
   })
 })

@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-20",
+  "by": "the maintainer",
+  "quote": "E3b\u63a5\u53d7",
+  "english": "E3b accepted, 2026-10-20, relayed by the coordinator",
+  "on": "E3b (pull request 424): a formula TeX broke over lines is drawn as its crops, one a line, never as its page text",
+  "measures": [
+    "paraGapTight"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "zh, 2307.16209 pages 133 to 135, unit 442 only: paragraph gaps tighter than the lines beside them 0.177 to 0.18; the unit was left English (unproven) and is now translated, its formulas drawn as crops",
+  "why": "formulas are drawn as the author set them (crops, never page text), and one more unit is translated: a unit left English counted in no paragraph gap; drawn, it carries its own"
+}

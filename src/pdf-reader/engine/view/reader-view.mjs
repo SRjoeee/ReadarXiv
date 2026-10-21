@@ -19,8 +19,11 @@ import { createFollower } from './sync.mjs'
 import { createPlaces } from './places.mjs'
 import { createLighting } from './lighting.mjs'
 import { linkLayer } from './links.mjs'
+import { drawing, drawn, drawnCanvas } from './drawn.mjs'
 
 const DISPLAYS = ['original', 'bilingual', 'translation']
+/** arXiv's margin stamp, which its dvips and Ghostscript PDFs carry as their Info Title: `arXiv:1007.0072v1  [quant-ph]  1 Jul 2010` */
+const ARXIV_STAMP = /^arXiv:\S+\s+\[[^\]]+\]\s+\d{1,2}\s+\w{3}\s+\d{4}$/
 /** CSS px a PDF unit at scale 1 (PDF.js's PixelsPerInch.PDF_TO_CSS_UNITS) */
 const PDF_TO_CSS = 96 / 72
 /** CSS px: the widest a page is fitted in a single display (the reader's design, §3) */
@@ -368,7 +371,11 @@ export function createReaderView(host) {
     tellScale(scale)
     if (laid) tell(listeners.scale, scale, stepDelay)
   })
-  on(L.bus, 'pagerendered', ({ pageNumber, error }) => {
+  // the scale PDF.js draws a page's canvas at, read as its drawing begins and kept with the canvas once it is done (a copy's
+  // source: drawn.mjs); a place's own page view's too
+  for (const bus of [L.bus, R.bus]) on(bus, 'pagerender', ({ source }) => drawing(source))
+  on(L.bus, 'pagerendered', ({ source, pageNumber, error, cssTransform, isDetailView }) => {
+    if (!cssTransform && !isDetailView && !error) drawn(source ?? L.viewer.getPageView(pageNumber - 1))
     if (!laid) return
     // the page's rounding is set as it is drawn: the place takes it
     places.size(pageNumber)
@@ -376,7 +383,8 @@ export function createReaderView(host) {
     tell(listeners.drawn, 'left', pageNumber, error ?? null)
   })
   on(L.bus, 'pagechanging', () => tellLeftPage())
-  on(R.bus, 'pagerendered', ({ pageNumber, error }) => {
+  on(R.bus, 'pagerendered', ({ source, pageNumber, error, cssTransform, isDetailView }) => {
+    if (!cssTransform && !isDetailView && !error) drawn(source)
     lighting.paint(R)
     tell(listeners.drawn, 'right', pageNumber, error ?? null)
   })
@@ -421,6 +429,8 @@ export function createReaderView(host) {
   async function reportPaper(doc) {
     const meta = await doc.getMetadata().catch(() => null)
     let title = String(meta?.info?.Title ?? '').trim()
+    // (arXiv's margin stamp as the Info Title of a paper it typeset with dvips and Ghostscript: no title of the paper's)
+    if (ARXIV_STAMP.test(title)) title = ''
     if (!title && host.titleFallback) title = String((await host.titleFallback().catch(() => '')) ?? '').trim()
     if (current?.doc === doc) emit({ type: 'paper', title })
   }
@@ -853,12 +863,13 @@ export function createReaderView(host) {
       count: () => places.count(), page: n => places.page(n), view: n => places.views().get(n), near: n => places.near(n),
       contentOf: n => places.contentOf(n),
       canvas: n => places.canvas(n),
+      box: n => places.box(n),
       swap(n, content, o) { const ok = places.swap(n, content, o); if (ok) tellRightPage(); return ok },
       restore(n) { places.restore(n); tellRightPage() },
     },
     left: {
       doc: () => current?.doc ?? null, scale: () => L.viewer.currentScale,
-      canvas(n) { const pv = L.viewer.getPageView(n - 1); return pv?.renderingState === 3 && pv.canvas?.width ? pv.canvas : null },
+      canvas: n => drawnCanvas(L.viewer.getPageView(n - 1)),
       pdfPage: n => (laid ? L.viewer.getPageView(n - 1)?.pdfPage ?? null : null),
     },
     lib: kit.lib,

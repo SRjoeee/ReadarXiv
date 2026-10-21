@@ -281,7 +281,7 @@ class FakeLayer implements Layer {
     const text = document.createElementNS(SVG_NS, 'text')
     text.textContent = `page ${page}`
     svg.append(text)
-    return { svg, w, h, words: { tokens: { n: 0, l: new Float32Array(0), r: new Float32Array(0), y: new Float32Array(0), h: new Float32Array(0), top: new Float32Array(0), bottom: new Float32Array(0) }, word: new Int32Array(0), spans: [], original: [] }, links: [] }
+    return { svg, w, h, words: { tokens: { n: 0, l: new Float32Array(0), r: new Float32Array(0), y: new Float32Array(0), h: new Float32Array(0), top: new Float32Array(0), bottom: new Float32Array(0) }, word: new Int32Array(0), at: new Int32Array(0), spans: [], original: [] }, links: [] }
   }
 
   pageOf(page: number, o: { lang: string; signal?: AbortSignal }): Promise<LaidPage> {

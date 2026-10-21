@@ -24,7 +24,7 @@ import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, marksFile
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
-import { checkCompileImage, compileIdentity, imageFromArg, PLATFORM } from './compile-image.mjs'
+import { checkCompileImage, compileIdentity, imageFromArg, latexmkEngine, PLATFORM } from './compile-image.mjs'
 
 
 const run = promisify(execFile)
@@ -63,11 +63,11 @@ async function dockerCompile(dir, name, files, paper, { once, bibtex }) {
   rmSync(build, { recursive: true, force: true })
   try {
     for (const [p, b] of files) { const f = join(build, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
-    const flag = { xelatex: '-xelatex', lualatex: '-lualatex' }[paper.meta.compiler] ?? '-pdf'
+    const engine = latexmkEngine(paper.meta.compiler)
     // (containers other than this one running at the start: what else the machine is compiling, which the seconds depend on)
     const others = (await run('docker', ['ps', '-q']).catch(() => ({ stdout: '' }))).stdout.split('\n').filter(Boolean).length
     const t0 = Date.now()
-    await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', IMAGE, 'timeout', String(TIMEOUT), 'latexmk', flag, ...(once ? ['-e', '$max_repeat=1'] : []), ...(bibtex ? [] : ['-bibtex-']), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
+    await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', IMAGE, 'timeout', String(TIMEOUT), 'latexmk', ...engine, ...(once ? ['-e', '$max_repeat=1'] : []), ...(bibtex ? [] : ['-bibtex-']), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
     const seconds = (Date.now() - t0) / 1000
     const pdf = join(build, `${stem}.pdf`), log = join(build, `${stem}.log`)
     return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1'), seconds, others } : null

@@ -22,19 +22,60 @@ export interface MarkedCompileOptions {
   filesBound?: { count: number; bytes: number } | null
   /** not read here (readMarked's, the host's): taken so that layoutMarksOfPaper's options may be passed as they are */
   OPS?: Record<string, number>
+  /** the layout guard's: arXiv's page count, or a function asked once for it (a promise of it too); absent, null or not a
+   *  page count: the page check is the page pass's alone */
+  pages?: number | (() => number | null | Promise<number | null>) | null
+  /** the guard's: the compilers the host runs; a paper of another is refused before any compile ('engine') */
+  engines?: readonly string[] | null
+  /** the TeX Live years the host compiled the paper's own source on before this box's tree, in order ('2023'); TeX's refusal
+   *  names each before the box's year ("on TeX Live 2023 or 2025") and is 'texlive' only where the paper declares a year none
+   *  of them is. Absent, null or empty: the box's year alone, the whys as before */
+  tried?: readonly string[] | null
 }
+
+/** the unmarked original's verdict, which a refusal after its compile names (`own`): whether it ran through (live.mjs
+ *  ranThrough, with a PDF); whether it did with fewer pages than arXiv's (`pages` given, a paper of one toplevel source);
+ *  the host's limit it met ('time', 'memory': the web's `limit`), else null; the TeX Live year its engine's banner names
+ *  ('2025'), null where TeX never ran or the compile threw. What handoverOf reads */
+export interface OwnVerdict { ran: boolean; short: boolean; limit: string | null; tree: string | null }
+
+/** the layout guard's record (layout/guard.mjs, markedOfPaper), where it did anything: the compiles it asked past the marked
+ *  original's (`extra`, GUARD_EXTRA at most, the unmarked original's among them), the units left the paper's own, whether
+ *  the babel names stayed marked, the checks the marked original failed ('braces' before its compile; 'ran', 'pages', 'aux',
+ *  'errors' after), and why a check was left as it stood (`judged`) */
+export interface GuardRecord { extra: number; unmarked: number[]; names: boolean; failed: ('braces' | 'ran' | 'pages' | 'aux' | 'errors')[]; judged?: string }
+/** why a paper's marked original is refused: its probe (no log); TeX's own ('compile': the paper's own source does not make
+ *  arXiv's pages here, a host's limit, a compile that threw or ran no TeX, or a fault nothing told the guard was ours;
+ *  'texlive', as 'compile' with the paper declaring another TeX Live year than the box's; 'engine', a compiler the host does
+ *  not run, as `engines` or its answer ("unknown engine") names it); ours ('marks': the unmarked original makes the pages and the marked one, mended as the guard could,
+ *  does not) */
+export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
 
 /**
  * a paper's marked original: layoutMarksOfPaper's probe and marked compile without the reading (stages 1 and 2), for a host
  * that reads it elsewhere (layerOfPaper's `marked: { doc, log, options }`, a page at a time): the marked compile's PDF, its
  * last pass's log (lastTexLog), and readMarked's options but the units and the operator codes. `ms` times the probe and the
- * compile; a stage that fails gives { refused } naming it ('probe', 'compile'), as layoutMarksOfPaper's, with `cm` where
- * CM ran. Never throws
+ * compile (and the guard's compiles, `guard`, where it asked any); a stage that fails gives { refused, why } (MarkedRefusal;
+ * `why` with every refusal but the probe's), with `cm` where CM ran, `guard` where the guard did anything, and `own` where
+ * the unmarked original was compiled (OwnVerdict). The marked original must be the paper (paper.mjs markedOfPaper's comment,
+ * layout/guard.mjs). Never throws, but a failed allocation (pipeline/memory.mjs isMemoryError: the run's, never the
+ * paper's), which goes on as itself
  */
 export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Promise<
-  | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number }; cm?: ConvergeRecord }
-  | { refused: 'probe' | 'compile'; ms: Record<string, number>; cm?: ConvergeRecord }
+  | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord }
+  | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
 >
+
+/**
+ * The host's handover to another TeX Live tree, over a refusal's `own` (the TL2023 plan §2.3): the year of the tree to
+ * compile the paper on next, or null. Where TeX failed on the paper's own source (it did not run through, or ran through
+ * with fewer pages than arXiv's: `pages` must be given for that) and no host's limit stopped it: another of `served` (the
+ * paper's `declared` year where it is one of them, else the first in `served`'s order), unless this tree is the host's
+ * `last`. Never on no verdict (the unmarked original not compiled: a refusal before it, or ours with nothing told), ours
+ * (it made the pages here), a host's limit, or a verdict with no year (TeX never ran, the compile threw: the host's own
+ * failure, retried on the same tree)
+ */
+export declare function handoverOf(own: OwnVerdict | null | undefined, o: { declared?: string | null; served: readonly string[]; last?: boolean }): string | null
 
 /**
  * a paper's layout marks: the mark probe compiled (probeFiles(paper, { marks: true }), one pass) and its answers read
@@ -46,7 +87,7 @@ export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Pr
  * compile where the original's gave no PDF or did not run through (live.mjs ranThrough: stopped short, or its last pass
  * short of AXT-END; today's compile and CM's fallback alike), the marks where `open` or the reading failed. `open` is called once, on the
  * original's PDF, and its `close` is called whatever the reading did. The compile and the PDF opening are the caller's
- * (a native TeX Live and PDF.js in Node, the TeX page and a worker in a browser): this module imports neither. Never throws.
+ * (a native TeX Live and PDF.js in Node, the TeX page and a worker in a browser): this module imports neither. Never throws but a failed allocation, as markedOfPaper.
  * Without `converge` (the default), the original is one compile with every pass (`rerun`). With it (CM), the unmarked
  * original (originalFiles(paper, { lines: true })) is compiled in one or two drafts (`draft`, `files`), then the marked
  * original one pass at a time (`files`) in the files the passes before returned (in place of the paper's own, never of
@@ -57,4 +98,4 @@ export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Pr
 export declare function layoutMarksOfPaper(paper: Paper, o: MarkedCompileOptions & {
   open(pdf: Uint8Array): Promise<{ doc: unknown; close(): Promise<void> }>
   OPS: Record<string, number>
-}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number }; cm?: ConvergeRecord } | { refused: 'probe' | 'compile' | 'marks'; ms: Record<string, number>; cm?: ConvergeRecord }>
+}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord } | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>

@@ -12,6 +12,8 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/reflow-shots.mjs')
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -27,12 +29,12 @@ mkdirSync(OUT, { recursive: true })
 rmSync(PROFILE, { recursive: true, force: true })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: true,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: WIDTH, height: HEIGHT },
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 const page = context.pages()[0] ?? (await context.newPage())
 /** The paper's window as the browser draws it. Playwright clips a page's shot by the scroll offset in CSS pixels, which

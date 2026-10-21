@@ -20,6 +20,8 @@ export interface Placement {
   crops: { unit: number; line: string; box: number[]; srcTop: number; tex: number | null; sc: number }[]
 }
 export interface PlacementCounts { cropTextOverlap: number; cropBaselineOff: number; cropNoTex: number; cropWhere: Record<'cropTextOverlap' | 'cropBaselineOff' | 'cropNoTex', number[]> }
+/** the audit's entry of a drawn crop: its placeholder's (`k`) and its part's (`part`, a formula TeX broke over lines drawn as one crop a line) */
+export declare function cropAuditOf<A extends { k?: number; part?: number }>(audit: readonly A[], crop: { k?: number; part?: number }): A | undefined
 export declare function cropPlacementOf(o: Placement): PlacementCounts
 export declare function modelPage(o: { units: UnitIn[]; ref: RefUnit[]; items: Item[]; translated: Set<number>; cut?: CutCrop[]; placement?: Placement | null }): {
   units: { textOn: number; textDrawn: number; cellsOn: number; cellsDrawn: number; left: Record<string, number> }

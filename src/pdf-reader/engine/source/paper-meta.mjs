@@ -3,7 +3,7 @@
 // arXiv's preflight, in simplified form.
 // Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
 // a directory under Node, which the spikes' paper-meta.mjs hands in).
-import { jobName, latin1, normalizePath } from './latex-front.mjs'
+import { jobName, normalizePath, texText } from './latex-front.mjs'
 
 const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
 const basename = p => p.slice(p.lastIndexOf('/') + 1)
@@ -13,7 +13,7 @@ const utf8 = bytes => new TextDecoder().decode(bytes)
 export function analyze(fsys) {
   const files = fsys.list()
   const tex = files.filter(f => /\.(tex|ltx|latex)$/i.test(f))
-  const read = f => { const b = fsys.read(f); return b ? uncomment(latin1(b)) : '' }
+  const read = f => { const b = fsys.read(f); return b ? uncomment(texText(b)) : '' }
   const bodies = Object.fromEntries(tex.map(f => [f, read(f)]))
   const meta = { files: files.length, texFiles: tex.length }
 
@@ -26,7 +26,11 @@ export function analyze(fsys) {
       const main = r.sources?.find(s => s.usage === 'toplevel')?.filename
       // the file the package holds (latex-front.mjs normalizePath), whatever spelling named it
       meta.main = main && normalizePath(main)
-      meta.compiler = r.process?.compiler
+      // how many toplevel sources arXiv compiles (its PDF is theirs in turn; the pipeline reads the first alone: the page
+      // pass's several-toplevels rule, pipeline/page-pass.mjs)
+      meta.toplevels = Array.isArray(r.sources) ? r.sources.filter(s => s?.usage === 'toplevel').length : 0
+      // (arXiv's long form of `latex`, the one DVI path it runs: "compiler: latex is actually shorthand for latex+dvips_ps2pdf")
+      meta.compiler = r.process?.compiler === 'latex+dvips_ps2pdf' ? 'latex' : r.process?.compiler
       meta.tlVersion = r.texlive_version ?? null
     } catch { meta.readme = 'json-unreadable' }
   } else if (files.find(f => /^00README(\.XXX)?$/i.test(f))) {
@@ -34,6 +38,7 @@ export function analyze(fsys) {
     const r = utf8(fsys.read(files.find(f => /^00README(\.XXX)?$/i.test(f))))
     const main = r.match(/^(\S+)\s+toplevelfile/m)?.[1]
     meta.main = main && normalizePath(main)
+    meta.toplevels = (r.match(/^\S+\s+toplevelfile/gm) ?? []).length
   }
   const withClass = tex.filter(f => /\\document(class|style)\b/.test(bodies[f]))
   if (!meta.main || !files.includes(meta.main)) {
@@ -42,11 +47,27 @@ export function analyze(fsys) {
     // a part is no main: each file named by \input, \include or \subfile, or import.sty's {dir}{file}, by the name the
     // package holds it under (\subfile{./chapters/ch1}: chapters/ch1.tex, a subfile's own \documentclass and all)
     for (const f of tex) for (const m of bodies[f].matchAll(/\\(input|include|subfile|(?:sub)?(?:import|inputfrom|includefrom))\s*\*?\s*\{([^}]+)\}(?:\s*\{([^}]+)\})?/g)) { const n = normalizePath(/^(input|include|subfile)$/.test(m[1]) || m[3] === undefined ? m[2].trim() : `${m[2].trim()}/${m[3].trim()}`); included.add(n); included.add(`${n}.tex`) }
-    let cands = withClass.filter(f => !included.has(f) && !included.has(f.replace(/\.tex$/, '')))
-    if (!cands.length) cands = withClass
-    cands.sort((a, b) => (/^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(b)) - /^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(a))) || bodies[b].length - bodies[a].length)
+    const uncited = withClass.filter(f => !included.has(f) && !included.has(f.replace(/\.tex$/, '')))
+    // Each uncited document is a toplevel source: arXiv's AutoTeX compiles every one and joins their PDFs, in the order of
+    // their paths as far as observed (one paper, 1008.0072v1: Femtoscope_resubmission_Final_1.tex's 5 pages, then
+    // Supplementary_Final_1.tex's 3). Counted
+    // conservatively: a file whose path or basename is that of any included name is a part (\subfile{child} in chapters/
+    // records child.tex, the file chapters/child.tex), since a count too high lifts the page rule from a paper of one source
+    // and one too low only keeps it. A source is a document: it begins one, and its class is no part's (subfiles) or picture's
+    // (standalone: a figure's own file); a letter to the editor is a document of its own
+    const names = new Set([...included].flatMap(n => [n, basename(n)]))
+    const documentOf = f => /\\begin\s*\{document\}/.test(bodies[f]) && !/\\documentclass\s*(?:\[[^\]]*\])?\s*\{\s*(standalone|subfiles)\s*\}/.test(bodies[f])
+    const sources = uncited.filter(f => !names.has(f) && !names.has(basename(f)) && !names.has(basename(f).replace(/\.tex$/, '')) && documentOf(f))
+    const preferred = f => /^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(f))
+    // The main file: with several sources the first path in code-unit order, taken for the one whose pages come first in
+    // arXiv's PDF, which the page pass compares with arXiv's first pages (a wrong pick is the carry's to refuse); else a file
+    // of the preferred name, else the longer body as TeX reads it, among the uncited (each file included by another: all)
+    const cands = sources.length >= 2 ? sources.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+      : (uncited.length ? uncited : withClass).sort((a, b) => preferred(b) - preferred(a) || bodies[b].length - bodies[a].length)
     meta.main = cands[0] ?? null
     meta.mainCandidates = withClass.length
+    // (a count a 00README gave stands, its main file merely missing from the package)
+    meta.toplevels ??= sources.length
   }
   if (!meta.main) return { ...meta, verdict: 'no-main' }
 

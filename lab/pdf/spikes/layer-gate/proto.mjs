@@ -25,7 +25,7 @@
 // fixture's layout file (its rows read by the instrument itself, fileIndexOf), whether or not the hybrid is given it.
 import * as pdfjs from 'pdfjs-dist'
 import { lostInk } from '/engine/layer/check.mjs'
-import { contentOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, hangFromOf, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
+import { contentOf, cropAuditOf, cropForeignPx, displayRowsOf, fileIndexOf, footprintOf, forcedBreakRoom, forcedBreaksIn, glyphAccounted, hangFromOf, keptSegsOf, kOfPiecesOf, lineStartsOf, markerResidueOf, markupResidueOf, MATH_FONT, modelPage, noStart, overDisplayOf, pixelPage, removalPage, replacedFoot, slotsSkippedOf } from '/gate/measure.mjs'
 
 import { annotationsOf, cropsShown, drawnCharsOf, erasedOf, glyphPointsOf, glyphsOfLink, linksPage, pairsOf, referenceOf, textUnder } from '/gate/links.mjs'
 
@@ -444,7 +444,7 @@ async function placementOf(p, recs, boxPdf, drawnLines) {
       for (const it of l.items) {
         const c = it.t.crop
         if (!c) continue
-        const a = audit.find(x => x.k === c.k)
+        const a = cropAuditOf(audit, c)
         if (!a) continue
         const box = boxPdf(a.dst), sc = (box[3] - box[1]) / (a.src[3] - a.src[1])
         const row = lu && kOf ? lu.ph.get(kOf[c.k]) : null, S6 = row?.segs ?? []
@@ -646,7 +646,7 @@ window.gate = {
     // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution. And the run lets
     // go of what it has laid as the reader's does, the 1b design §3, so that a page or a unit let go too early moves a measure:
     // what it lets go is kept for the measures on the gate's shelf, `records`, read through laidOf)
-    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, ...(ruleSet ? { rules: ruleSet } : {}), order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}), free: true, records: true }
+    const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, ...(ruleSet ? { rules: ruleSet } : {}), order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}), free: true, records: true, OPS: pdfjs.OPS }
     let rm = null
     if (one) {
       rm = { mode: removal, manifest: addon.manifest, plan: { pages: {} }, rdoc: doc, cdoc: null }

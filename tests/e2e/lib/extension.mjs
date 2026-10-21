@@ -20,7 +20,7 @@ const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfile
 
 /**
  * { context, worker, id, readerUrl(query) }: `profile` names the temporary profile's directory, `extension` another
- * build, `args` more of the browser's switches, `languages` the browser's (its accept-languages, which the extension's first
+ * build, `args` more of the browser's switches, `deviceScaleFactor` the pixel ratio its pages run at (the context's own: 1 by default), `languages` the browser's (its accept-languages, which the extension's first
  * target follows: `--lang` is ignored on macOS); the browser partitions storage as Chrome does. `demos`: the precompiled demo papers (lab/pdf/poc-reader/papers, made on this machine by lab/pdf/spikes/reader-papers.mjs) staged into
  * a temporary copy of the build, for the spikes that open them — a build never holds them, since arXiv's papers may not
  * be redistributed (Codex on #296).
@@ -29,7 +29,7 @@ const PLAYWRIGHT_OFF = ['AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfile
  * filled the disk (25 GiB). `context.close()` removes them once the browser has exited; a context that closes on its
  * own (the browser crashing, a headed window shut) removes them from its `close` event
  */
-export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, headless = true, viewport = { width: 1600, height: 1000 }, args = [], languages = null } = {}) {
+export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null } = {}) {
   if (!existsSync(join(extension, 'pdf-reader.html'))) throw new Error(`no reader in ${extension}: \`pnpm build\` at the repository root`)
   const temporary = []
   const removeTemporary = () => {
@@ -54,7 +54,7 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   }
   let context
   try {
-    context = await chromium.launchPersistentContext(profileDir, { channel: 'chromium', headless, viewport, args: [`--disable-features=${PLAYWRIGHT_OFF.join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
+    context = await chromium.launchPersistentContext(profileDir, { channel: 'chromium', headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-features=${PLAYWRIGHT_OFF.join(',')}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] })
   } catch (e) {
     removeTemporary()
     throw e

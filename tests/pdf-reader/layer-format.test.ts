@@ -7,8 +7,8 @@ import { readBundle, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.
 import type { PartChain, ReadUnitsChunk, ReadUnitsChunkLight } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import {
   BUILD_END_WHYS, BUNDLE5, DEPTH_NONE, KIND_NONE, RECORD_FLAG, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG5, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
-  isFinalEnd, keyOf, keyParts, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
-  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG5, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
+  isFinalEnd, keyOf, keyParts, LAYOUT_REFUSED, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
+  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG5, WHY_MAX, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { authorsTranslated } from '@/pdf-reader/engine/translate/kept.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -407,7 +407,8 @@ describe('a reader\'s envelope', () => {
   it('refuses a unit chunk\'s old envelope (`bundle` in place of `format`): the chunk\'s format is its own', async () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
-    expect(BUNDLE5).toBe('5')
+    // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills)
+    expect(BUNDLE5).toBe('7')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1205,6 +1206,54 @@ describe('a part against the index', () => {
   })
 })
 
+// ---------------------------------------------------------------- a part's record of why it has no layout (BUNDLE 6)
+describe('a part with no layout says why (`layout: { refused, why }`, LAYOUT_REFUSED)', () => {
+  // biome-ignore lint/suspicious/noExplicitAny: a test sets the part's wire as it likes
+  const none = (r: unknown) => (p: any) => { p.layout = r; p.fileOnly = []; p.addon = null }
+  it('is read as a part with no layout (`layout: null`, as a reader that tests it takes it), the record beside it', async () => {
+    for (const refused of LAYOUT_REFUSED) {
+      const r = await partWith(0, none({ refused, why: 'the reason' }))
+      expect(r.layout).toBeNull()
+      expect(r.addon).toBeNull()
+      expect(r.noLayout).toEqual({ refused, why: 'the reason' })
+    }
+    // (no reason recorded: null, as a part of 5's shape and cutBundle with none given write it)
+    expect((await partWith(0, none(null))).noLayout).toBeNull()
+    expect(M.readParts.map(p => p.noLayout)).toEqual([null, null, null])
+    // (the chain after it is as after the same part with no layout and no reason, but for the part's own digest)
+    const chainOf = async (r: unknown) => ({ ...(await partWith(0, none(r))).chain, last: null })
+    expect(await chainOf({ refused: 'carry', why: 'x' })).toEqual(await chainOf(null))
+  })
+
+  it('refuses a word not LAYOUT_REFUSED\'s, a why past WHY_MAX or not a string, another key, and a record beside file-only units or an add-on', async () => {
+    expect(LAYOUT_REFUSED).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks'])
+    const refused = async (edit: (p: never) => void, path: string) => {
+      const e = await refusal(partWith(0, edit as never))
+      expect(e?.kind, path).toBe('part')
+      expect(e?.path, path).toBe(path)
+    }
+    await refused(none({ refused: 'probe', why: '' }), 'layout.refused')
+    await refused(none({ refused: 7, why: '' }), 'layout.refused')
+    await refused(none({ refused: 'compile', why: 'x'.repeat(WHY_MAX + 1) }), 'layout.why')
+    await refused(none({ refused: 'compile', why: null }), 'layout.why')
+    await refused(none({ refused: 'compile' }), 'layout.why')
+    await refused(none({ refused: 'compile', why: '', more: 1 }), 'layout.more')
+    // biome-ignore lint/suspicious/noExplicitAny: as above
+    await refused((p: any) => { none({ refused: 'marks', why: '' })(p); p.fileOnly = [[5, 41]] }, 'fileOnly')
+    // biome-ignore lint/suspicious/noExplicitAny: as above
+    await refused((p: any) => { const addon = p.addon; none({ refused: 'marks', why: '' })(p); p.addon = addon }, 'addon')
+    expect((await refusal(partWith(0, none({ refused: 'compile', why: 'x'.repeat(WHY_MAX) }))))).toBeNull()
+  })
+
+  it('is written as given, and a writer given what its reader refuses throws', async () => {
+    const input = partInputs(M.head.sha256, M.lefts as never)[0]!
+    const w = await writePart({ ...input, fileOnly: [], layout: { refused: 'texlive', why: 'the paper declares TeX Live 2023' } as never, addon: null })
+    expect(parsed(w).layout).toEqual({ refused: 'texlive', why: 'the paper declares TeX Live 2023' })
+    expect((await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })).noLayout).toEqual({ refused: 'texlive', why: 'the paper declares TeX Live 2023' })
+    await expect(writePart({ ...input, fileOnly: [], layout: { refused: 'nope', why: '' } as never, addon: null })).rejects.toBeInstanceOf(BundleRefusal)
+  })
+})
+
 // ---------------------------------------------------------------- 9. parts, against the chain
 describe('a part against the chain', () => {
   const refused = async (i: number, edit: (p: never) => void, path: string | RegExp, chain?: PartChain | null) => {
@@ -1663,7 +1712,7 @@ describe('the catalog', () => {
     const f = forged('head', h)
     const other = await readHead(f.bytes, { ref: f.ref })
     const w = await writeCatalog({ head: other, units: units(), parts: parts(), end: { through: 4 } })
-    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b5-j${PDFJS}-p12-l7-r99`))
+    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b7-j${PDFJS}-p12-l7-r99`))
     expect(w.key).not.toBe(catalogKey(PAPER.id, PAPER.version, VTAG5))
     const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
     expect(c.versions).toMatchObject({ pipeline: '12', layout: '7', removal: '99' })
@@ -1812,7 +1861,7 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b5-j${PDFJS}`)
+    expect(CTAG5).toBe(`b7-j${PDFJS}`)
     expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const key = keyOf('2608.04322', 3, CTAG5, sha)
     expect(key).toBe(`layer/2608.04322v3/${CTAG5}/${sha}.json`)

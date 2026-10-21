@@ -71,6 +71,15 @@ describe("the layout file's ownership", () => {
     expect([...own.ph]).toEqual([-1, 2, -1, -1, -1])
     expect([...own.paths]).toEqual([[0, { id: 1, k: 2 }]])
   })
+  it("an image no thicker than a rule inside a placeholder's segment or a line's erase rectangle is held apart, its own; a thick one or a strip outside is not", () => {
+    // (a dvips and Ghostscript PDF's rules are inline image masks: 1007.0072v1's fraction bars; the box kind -3)
+    const imgs = inkOf(ink.glyphs, [[[30, 104, 40, 104.4], -3], [[45, 103, 55, 103.5], -3], [[32, 99, 38, 106], -3], [[0, 50, 300, 50.8], -3]])
+    const own = fileOwnership(index, 5, imgs)
+    expect([...own.images]).toEqual([[0, { id: 1, k: 2 }], [1, { id: 1, k: -1 }]])
+    // none of them a path: the remover is handed none
+    expect([...own.paths]).toEqual([])
+    expect([...own.linePaths]).toEqual([])
+  })
   it('a merged box (a degraded page\'s, ink.mjs MERGED) is no rule: never owned nor removed, and kept ink where it meets a unit', () => {
     // the placeholder's rule of the case above, merged by cell past the box budget: the same box, no path's index
     const merged = inkOf(ink.glyphs, [[[30, 104, 40, 104.4], MERGED], [[0, 0, 300, 1], 1]])
@@ -146,6 +155,34 @@ describe("a unit's drawing from the layout file's rectangles", () => {
     const b = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), dirty: [[50, 89, 52, 91]] })
     expect(inside(b.swap, 51, 90)).toBe(true)
     expect(inside(b.fill, 20, 103)).toBe(true)
+  })
+  it("fills paper over a rule of its own the add-on kept (an image), and swaps for any other kept ink", () => {
+    // the bar inside its placeholder's segment (x 30-40), and inside the second line's erase rectangle: its own
+    const bar = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), dirty: [[32, 104, 38, 104.4], [20, 90, 50, 90.5]] })
+    expect(bar.swap).toEqual([])
+    expect(inside(bar.fill, 35, 104.2) && inside(bar.fill, 30, 90.2)).toBe(true)
+    // thick (a glyph the plan kept), or a thin box crossing out of its rectangle: swapped as before
+    const thick = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), dirty: [[32, 101, 38, 105]] })
+    expect(inside(thick.swap, 35, 103)).toBe(true)
+    const across = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), dirty: [[50, 90, 70, 90.5]] })
+    expect(inside(across.swap, 55, 90.2)).toBe(true)
+    // a figure's 1-pt strip that meets the line but lies inside none of its rectangles: swapped
+    const strip = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), dirty: [[40, 80, 41, 120]] })
+    expect(inside(strip.swap, 40.5, 103)).toBe(true)
+  })
+  it('swaps for a thin box inside its own rectangle that meets a rectangle kept clear (a kept path the plan left)', () => {
+    // the first line's erase rectangle holds it; it meets the placeholder the reading keeps (k 3, x 30-40)
+    const keptPh = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], [3]), dirty: [[25, 103, 35, 103.4]] })
+    expect(inside(keptPh.swap, 27, 103.2)).toBe(true)
+    // and one meeting another unit's display rows, given as a rectangle kept clear
+    const display = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), others: [[44, 88, 50, 94]], dirty: [[20, 90, 46, 90.5]] })
+    expect(inside(display.swap, 30, 90.2)).toBe(true)
+  })
+  it("swaps for a thin box inside another unit's rectangle that its own meets", () => {
+    // another unit's placeholder segment at x 55-70 over this one's first line's end, its rule there; this unit's own
+    // rectangles keep clear of it (`others`) and the rule is not this unit's: the removed page is swapped in
+    const other = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf([], []), others: [[58, 98, 70, 107]], dirty: [[57, 103, 66, 103.4]] })
+    expect(inside(other.swap, 57.5, 103.2)).toBe(true)
   })
   it('keeps clear of a placeholder and a line its reading keeps, and of the units the file draws otherwise', () => {
     const c = fileSwap({ page: 1, lu, kOf: [-1, -1, -1, 3], lines, prep: prepOf(['1|10,85.85,60,94.83'], [3]), others: [[55, 104, 70, 110]] })

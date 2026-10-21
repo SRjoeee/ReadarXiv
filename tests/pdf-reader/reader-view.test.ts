@@ -969,6 +969,18 @@ describe('V12: the web\'s fixes as plain behaviour', () => {
     expect(last(u.events, 'paper')).toEqual({ type: 'paper', title: 'Its own' })
   })
 
+  it("a PDF whose title is arXiv's margin stamp tells the host's title instead", async () => {
+    const t = setup({ titleFallback: async () => 'From the host' })
+    await opened(t, 2, { title: 'arXiv:1007.0072v1  [quant-ph]  1 Jul 2010' })
+    await flush(10)
+    expect(last(t.events, 'paper')).toEqual({ type: 'paper', title: 'From the host' })
+    // a title that only starts so is the paper's
+    const u = setup({ titleFallback: async () => 'never asked' })
+    await opened(u, 2, { title: 'arXiv:1007.0072 revisited' })
+    await flush(10)
+    expect(last(u.events, 'paper')).toEqual({ type: 'paper', title: 'arXiv:1007.0072 revisited' })
+  })
+
   it('the layer side hears of the scale as the places follow it, a step\'s with its drawing delay', async () => {
     const s = setup()
     await opened(s, 3)

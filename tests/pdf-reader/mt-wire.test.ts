@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PIPELINE_CARRIES } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
+import { boundaryChanges, plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The markers wire the PDF reader sends a machine translator (mt.mjs): what an engine reads as part of a word
 
@@ -222,6 +222,40 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     expect(serialize(unit({ t: 'text', s: 'Many, e.g. ' }, ...pairs(1, '\\emph{', 'this one.'), { t: 'text', s: ' Then more.' })).wire).toBe('Many, e.g. this one. Then more.')
     // a colon or a semicolon inside a sentence is a clause's end, not a sentence's
     expect(serialize(unit({ t: 'text', s: 'Options: ' }, ...pairs(1, '\\emph{', 'fast'), { t: 'text', s: '; and safe.' })).wire).toBe('Options: fast; and safe.')
+  })
+
+  it('the boundary rule (E1): a styled pair whose two ends stand where the wire has a marker anyway is kept; one end alone, not', () => {
+    // (2610.19159's u325: after a kept run-in label, to the unit's end)
+    expect(serialize(unit(...pairs(1, '\\textit{', 'Floor (must clear):'), { t: 'text', s: ' ' }, ...pairs(2, '\\textcolor{red}{', 'all of the rest to the end'))).wire).toBe('@a# Floor (must clear):@b# @c# all of the rest to the end @d#')
+    // (2610.21547's u25: a label at the unit's head before a forced break's marker)
+    expect(serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\\\' }, { t: 'text', s: 'We use a model here.' })).wire).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
+    // (after a marker, but ending inside its sentence: flat, as a colour inside a sentence)
+    expect(serialize(unit({ t: 'text', s: 'We use ' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' ' }, ...pairs(1, '\\textbf{', 'bold'), { t: 'text', s: ' words in it.' })).wire).toBe('We use @a# bold words in it.')
+    expect(serialize(unit({ t: 'text', s: 'We see ' }, ...pairs(1, '\\textcolor{red}{', 'red words'), { t: 'text', s: ' in it.' })).wire).toBe('We see red words in it.')
+    // (an inline formula beside a pair is no cut: the translator moves it as a word, so the pair goes flat (the review of #415))
+    expect(serialize(unit({ t: 'text', s: 'We fix the ' }, { t: 'ph', src: '$\\theta$' }, { t: 'text', s: ' ' }, ...pairs(1, '\\textcolor{red}{', 'matrix described below'), { t: 'text', s: '.' })).wire).toBe('We fix the @a# matrix described below.')
+    expect(serialize(unit(...pairs(1, '\\textcolor{red}{', 'We define the loss'), { t: 'text', s: ' ' }, { t: 'ph', src: '$L$' }, { t: 'text', s: ' as the sum of the terms.' })).wire).toBe('We define the loss @a# as the sum of the terms.')
+    // (a kept link inside a pair that goes flat still has its markers on the wire: a colour pair between two such links keeps
+    // its own, its two ends at theirs (Codex on #415))
+    const linked = unit({ t: 'text', s: 'We see ' }, { t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'the ' }, ...pairs(2, '\\href{u}{', 'first'), { t: 'text', s: ' ' }, ...pairs(3, '\\textcolor{red}{', 'middle words'), { t: 'text', s: ' ' }, ...pairs(4, '\\href{v}{', 'last'), { t: 'text', s: ' ones' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ' in it.' })
+    expect(serialize(linked).wire).toBe('We see the @a# first @b# @c# middle words @d# @e# last @f# ones in it.')
+    expect(boundaryChanges(linked)).toBe(true)
+    // (a forced break joined with a switch that sets no ink in one marker still cuts the text (Devin on #415))
+    expect(serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\\\' }, { t: 'ph', src: '\\small' }, { t: 'text', s: ' We use a model here.' })).wire).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
+    // (a display cuts the text, as a forced break does)
+    expect(serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\[ x = y \\]' }, { t: 'text', s: 'We use a model here.' })).wire).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
+  })
+
+  it('boundaryChanges tells the units whose wire the boundary rule changes, and no other (a copy made before it is asked again for those)', () => {
+    // (the rule keeps a pair: the two above)
+    expect(boundaryChanges(unit(...pairs(1, '\\textit{', 'Floor (must clear):'), { t: 'text', s: ' ' }, ...pairs(2, '\\textcolor{red}{', 'all of the rest to the end')))).toBe(true)
+    expect(boundaryChanges(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), { t: 'ph', src: '\\\\' }, { t: 'text', s: 'We use a model here.' }))).toBe(true)
+    // (a pair the sentence rule keeps or flattens alike, one that encloses the unit, a link, and no pair at all)
+    expect(boundaryChanges(unit(...pairs(1, '\\emph{', 'Note'), { t: 'text', s: '. It holds.' }))).toBe(false)
+    expect(boundaryChanges(unit({ t: 'text', s: 'We see ' }, ...pairs(1, '\\textcolor{red}{', 'red words'), { t: 'text', s: ' in it.' }))).toBe(false)
+    expect(boundaryChanges(unit(...pairs(1, '\\textbf{', 'All of it.')))).toBe(false)
+    expect(boundaryChanges(unit({ t: 'text', s: 'See ' }, ...pairs(1, '\\href{u}{', 'this'), { t: 'text', s: ' page.' }))).toBe(false)
+    expect(boundaryChanges(unit({ t: 'text', s: 'Plain words ' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' here.' }))).toBe(false)
   })
 
   it('only a pair that sets a style goes flat: any other keeps its two markers, as before (the review of #404, M1)', () => {

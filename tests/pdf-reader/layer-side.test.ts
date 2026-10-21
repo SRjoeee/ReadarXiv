@@ -6,9 +6,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { createLayerSide, LEFT_RETRY_MS, PAGE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { createLayerSide, LEFT_RETRY_MS, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
-import { N, partInputs, TAILS } from './helpers/format-paper'
+import { made, N, partInputs, TAILS } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
@@ -77,20 +77,19 @@ describe('L11: laid in place', () => {
     await flush()
     const box = (n: number) => [places(s)[n - 1]?.style.width, places(s)[n - 1]?.style.height]
     const before = [box(1), box(2)], scrolled = s.panes.right.scrollTop, docs = leftViewer().log.filter(l => l.startsWith('setDocument')).length
-    // the left's page 1 drawn at the place's k (its page box's CSS px a unit times the pixel ratio)
-    leftViewer().render(1)
+    // the left's page 1 drawn at the place's k (its page box's CSS px a unit times the pixel ratio), as PDF.js sizes it
     const pv = leftViewer().getPageView(0) as NonNullable<ReturnType<FakePDFViewer['getPageView']>>
+    leftViewer().render(1, null, { width: Math.floor(pv.viewport.width), height: Math.floor(pv.viewport.height), sx: 1, sy: 1 })
     const canvas = pv.canvas as HTMLCanvasElement
-    canvas.width = Math.round(612 * pv.viewport.scale)
-    canvas.height = Math.round(792 * pv.viewport.scale)
     s.side.tell(await ALL())
     await settle(s)
     expect([box(1), box(2)]).toEqual(before)
     expect(s.panes.right.scrollTop).toBe(scrolled)
     expect(leftViewer().log.filter(l => l.startsWith('setDocument')).length).toBe(docs)
-    // page 1's copy over the left's canvas at its own k; page 2's, whose left page PDF.js has not drawn, from elsewhere
+    // page 1's copy over the left's canvas at the scale PDF.js drew it at; page 2's, whose left page PDF.js has not drawn,
+    // from elsewhere
     const copies = s.doors[0]?.copies ?? []
-    expect(copies.find(c => c[0] === 1)?.slice(1)).toEqual([canvas, canvas.width / 612])
+    expect(copies.find(c => c[0] === 1)?.slice(1)).toEqual([canvas, pv.viewport.scale])
     expect(copies.find(c => c[0] === 2)?.[1]).not.toBe(canvas)
     expect(content(s, 1)).toBe('layer')
   })
@@ -106,6 +105,153 @@ describe('L11: laid in place', () => {
     for (const n of [1, 2]) expect(content(s, n)).toBe('original')
     for (const c of copies) expect(c.width).toBe(0)
     expect(s.panes.right.querySelectorAll('.axt-layer').length).toBe(0)
+  })
+})
+
+describe('one frame a page: the copy at the scale its source was drawn at (docs/PDF-READER.md §11.8)', () => {
+  /** the owner's fit, 87.25 %, at a pixel ratio of 2: the page 711.9999… CSS px wide, PDF.js's canvas floored to 1422 px */
+  const FIT = 0.8725490196078431
+  const pageView = (n: number) => leftViewer().getPageView(n - 1) as NonNullable<ReturnType<FakePDFViewer['getPageView']>>
+  const copyOf = (s: Setup, n: number) => s.doors[0]?.copies.find(c => c[0] === n) as [number, HTMLCanvasElement, number] | undefined
+
+  it('the copy from the left\'s canvas is drawn at the scale PDF.js drew it at, never its floored width over the page\'s', async () => {
+    vi.stubGlobal('devicePixelRatio', 2)
+    const s = await setup()
+    s.view.zoomTo(FIT)
+    await settle(s, 4)
+    await nearOn(s, [1, 2])
+    expect(pageView(1).viewport.scale).toBe(1.1633986928104574)
+    leftViewer().render(1, null, { width: 1422, height: 1842, sx: 2, sy: 2 })
+    s.side.tell(await ALL())
+    await settle(s)
+    const one = copyOf(s, 1)
+    expect(one?.[1]).toBe(pageView(1).canvas)
+    expect(one?.[2]).toBe(1.1633986928104574 * 2)
+    expect(one?.[2]).not.toBe(1422 / 612)
+    expect(content(s, 1)).toBe('layer')
+  })
+
+  it('a copy drawn from the document is on a canvas of the place\'s box times the pixel ratio, at the place\'s k', async () => {
+    vi.stubGlobal('devicePixelRatio', 2)
+    const s = await setup()
+    s.view.zoomTo(FIT)
+    await settle(s, 4)
+    await nearOn(s, [2])
+    s.side.tell(await ALL())
+    await settle(s)
+    // page 2's left page not drawn: its source the page drawn from the composed document, 711 × 921 CSS px at 2
+    const two = copyOf(s, 2)
+    expect(two?.[1]).not.toBe(pageView(2).canvas)
+    expect(s.doors[0]?.sized.find(c => c[0] === 2)).toEqual([2, 1422, 1842])
+    expect(two?.[2]).toBe(1.1633986928104574 * 2)
+  })
+
+  it('a canvas PDF.js drew at an output scale that differs across and down is no source: the page drawn from the document', async () => {
+    vi.stubGlobal('devicePixelRatio', 2)
+    const s = await setup()
+    s.view.zoomTo(FIT)
+    await settle(s, 4)
+    await nearOn(s, [1])
+    // (an output scale rounded apart across and down, as PDF.js's fraction of a pixel ratio such as 1.1 or 1.8 gives it at
+    // almost every zoom: 1422 px over 711 across, 1841 over 920 down)
+    leftViewer().render(1, null, { width: 1422, height: 1841, sx: 2, sy: 1841 / 920 })
+    s.side.tell(await ALL())
+    await settle(s)
+    const one = copyOf(s, 1)
+    expect(one?.[1]).not.toBe(pageView(1).canvas)
+    expect(s.doors[0]?.sized.find(c => c[0] === 1)).toEqual([1, 1422, 1842])
+    expect(one?.[2]).toBe(1.1633986928104574 * 2)
+  })
+
+  it('a canvas PDF.js drew at a restricted output scale near the place\'s k is a source, copied at the scale it drew', async () => {
+    vi.stubGlobal('devicePixelRatio', 2)
+    const s = await setup()
+    // at 353 % the place's k is held to COPY_PIXELS (5.883); PDF.js under a cap of its own drew at an output scale of 5/4 (a
+    // fraction approximateFraction can give, its terms at most 8: 3600 px over 2880 across, 4655 over 3724 down), 5.883 device
+    // pixels a unit. (With the viewer's detail canvas on, as by default, PDF.js draws a restricted base canvas at half or a
+    // quarter of that, which no K_SLACK takes: this is the case with it off)
+    s.view.zoomTo(3.53)
+    await settle(s, 4)
+    await nearOn(s, [1])
+    leftViewer().render(1, null, { width: 3600, height: 4655, sx: 1.25, sy: 1.25 })
+    s.side.tell(await ALL())
+    await settle(s)
+    const one = copyOf(s, 1)
+    expect(one?.[1]).toBe(pageView(1).canvas)
+    expect(one?.[2]).toBe(pageView(1).viewport.scale * 1.25)
+    expect(one?.[2]).not.toBe(3600 / 612)
+  })
+
+  it('a canvas left as drawn through a zoom\'s steps is copied at the scale it was drawn at, not the page view\'s next', async () => {
+    const s = await setup()
+    // drawn at the fit, its page 711.99 CSS px floored to 711 (so neither 711 / 612 nor the page view's next scale is it)
+    s.view.zoomTo(FIT)
+    await settle(s, 4)
+    await nearOn(s, [1])
+    const pv = pageView(1), drawnAt = pv.viewport.scale
+    leftViewer().render(1, null, { width: 711, height: 921, sx: 1, sy: 1 })
+    // a step of 1 %: PDF.js gives the page view its next viewport at once, and keeps the canvas until it draws again
+    s.view.zoomBy(1.01)
+    await flush()
+    expect(pv.viewport.scale).not.toBe(drawnAt)
+    s.side.tell(await ALL())
+    await settle(s)
+    const one = copyOf(s, 1)
+    expect(one?.[1]).toBe(pv.canvas)
+    expect(one?.[2]).toBe(drawnAt)
+    expect(one?.[2]).not.toBe(711 / 612)
+  })
+
+  it('a drawing PDF.js lets finish after a zoom gave its page view the next viewport is kept at the scale it was begun at', async () => {
+    const s = await setup()
+    s.view.zoomTo(FIT)
+    await settle(s, 4)
+    await nearOn(s, [1])
+    const pv = pageView(1), begun = pv.viewport.scale
+    leftViewer().startRender(1, { width: 711, height: 921, sx: 1, sy: 1 })
+    // a zoom to 87.5 % while it draws (as under PDF.js's restricted scaling, which lets the drawing run on): the page view's
+    // next viewport is 714 × 924 CSS px, the old canvas's 711 × 921 within the 8 px of PDF.js's rounding both ways
+    s.view.zoomTo(0.875)
+    await flush()
+    expect(pv.viewport.scale).not.toBe(begun)
+    leftViewer().finishRender(1)
+    s.side.tell(await ALL())
+    await settle(s)
+    const one = copyOf(s, 1)
+    expect(one?.[1]).toBe(pv.canvas)
+    expect(one?.[2]).toBe(begun)
+    expect(one?.[2]).not.toBe(pv.viewport.scale)
+  })
+
+  it('the page drawn from the document is drawn on the context of the left\'s page views: the CPU\'s, or the GPU\'s where the host opens its documents with enableHWA', async () => {
+    for (const [assets, cpu] of [[undefined, true], [{ cMapUrl: 'cmaps/', enableHWA: true }, false]] as const) {
+      const asked: unknown[] = []
+      const get = HTMLCanvasElement.prototype.getContext
+      const spy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement, ...a: Parameters<typeof get>) {
+        if ((a[1] as { alpha?: boolean } | undefined)?.alpha === false) asked.push(a[1])
+        return get.apply(this, a)
+      })
+      const s = await setup(assets ? { assets } : {})
+      await nearOn(s, [2])
+      s.side.tell(await ALL())
+      await settle(s)
+      spy.mockRestore()
+      // (page 2's left page never drawn: its copy's source the page drawn from the document)
+      expect(copyOf(s, 2)).toBeDefined()
+      expect(asked.length).toBeGreaterThan(0)
+      expect(asked.every(o => (o as { willReadFrequently: boolean }).willReadFrequently === cpu), JSON.stringify(asked)).toBe(true)
+      s.view.dispose()
+    }
+  })
+
+  it('the SVG and the links are laid in the page\'s frame: its size in PDF units times --total-scale-factor', async () => {
+    const s = await setup()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s)
+    const wrap = layerOf(s, 1) as HTMLElement
+    expect(wrap.style.getPropertyValue('--axt-frame-w')).toBe('calc(var(--total-scale-factor) * 612px)')
+    expect(wrap.style.getPropertyValue('--axt-frame-h')).toBe('calc(var(--total-scale-factor) * 792px)')
   })
 })
 
@@ -527,7 +673,7 @@ describe('H1, H2, H4, H5, H6: the highlight\'s data on both panes', () => {
     await s.clock.advance(40)
     expect(s.view.probe().lit).toBe(0)
   })
-  it('H2 (trap 2): nothing is fetched of the left before a want; the first move over the right fetches the page\'s left part once', async () => {
+  it('H2 (trap 2): nothing is fetched of the left before a want; the first move over the right fetches the page\'s left part once, then the page its paragraph runs on to', async () => {
     const s = await setup()
     const m = await M()
     await nearOn(s, [1])
@@ -538,8 +684,92 @@ describe('H1, H2, H4, H5, H6: the highlight\'s data on both panes', () => {
     const at = clientOf(s.panes.right, 1, 100, 700)
     for (let i = 0; i < 3; i++) { s.panes.right.dispatchEvent(new MouseEvent('mousemove', { clientX: at.clientX, clientY: at.clientY + i, bubbles: true })); await s.clock.advance(20) }
     await settle(s)
-    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([m.lefts[1]!.sha256])
-    expect(s.side.probe().leftParts).toBe(1)
+    // (unit 2, a paragraph, runs on to page 2: its sentences wait for both pages; nothing of pages 3 and 4)
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([m.lefts[1]!.sha256, m.lefts[2]!.sha256])
+    expect(s.side.probe().leftParts).toBe(2)
+  })
+
+  it('H8: a unit over many pages brings at most SPREAD_MAX of them with a wanted page, the nearest first, each once', () => {
+    const long = Array.from({ length: 20 }, (_, i) => i + 1)
+    const pagesOf = (id: number) => (id === 1 ? long : id === 2 ? [10, 11] : undefined)
+    expect(SPREAD_MAX).toBe(8)
+    expect(spreadPages(10, [1, 2, 3], pagesOf, () => false)).toEqual([9, 11, 8, 12, 7, 13, 6, 14])
+    // (the page itself is none of them; of the nearest, those in already none: never more pages as the near ones come)
+    expect(spreadPages(10, [2, 1], pagesOf, q => q < 10, 3)).toEqual([11])
+    expect(spreadPages(10, [1], pagesOf, q => Math.abs(q - 10) <= 4)).toEqual([])
+    expect(spreadPages(10, [3], pagesOf, () => false)).toEqual([])
+  })
+
+  it('H7: a paragraph over a page break lights by sentence on its first page\'s first hover: the other page\'s left part comes after the page\'s own', async () => {
+    // unit 2 paired on both of its pages (its four words: three on page 1, one on page 2), its second sentence beginning on
+    // page 2; no page laid, so that the right is the left's mirrored
+    const v = await made({ pairs: { 1: [[0, [0, 0, 2]], [2, [0, 12, 3]]], 2: [[2, [3, 0, 1]], [3, [0, 5, 2]]] } })
+    const s = await setup({ paper: { objects: [...v.chunks, v.head, ...v.parts, ...Object.values(v.lefts)], pages: N } })
+    s.side.tell({ head: v.head.ref, units: v.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(v, i)), end: { through: N } })
+    await settle(s)
+    const { unitOf } = await import('@/pdf-reader/engine/layer-proto/rows.mjs')
+    const { tokens } = await import('@/pdf-reader/engine/pipeline/anchors.mjs')
+    const text = 'Aaa bbb ccc. Ddd eee.', src = unitOf(v.index, rowOf(2, text))!.src
+    const words = tokens(src)
+    expect(words.length).toBe(4)
+    s.side.take([rowOf(2, text, { src: [words[3]!.at], tr: [text.indexOf('Ddd')] })])
+    leftViewer().render(1)
+    // (the paper's tokens stand on one line, each 28 wide and 0.1 right of the one before: the title's block and unit 2's
+    // over each other, but for the 1.3 past the title's end. The point: past the title's padded block, in unit 2's, where a
+    // unit lit by sentence reaches, and a unit lit whole does not)
+    const { createShapes } = await import('@/pdf-reader/engine/view/shapes.mjs')
+    const h = createShapes({ kindOf: i => v.index.kinds[i] ?? undefined })
+    h.addParts(v.readParts)
+    h.addPage(v.readLefts[0]!)
+    const b = h.shapes.block(h.shapes.runs(2).find(r => r.page === 1)!, 0), title = h.shapes.block(h.shapes.runs(0)[0]!, 0)
+    const pad = 3 / (clientOf(s.panes.left, 1, 1, 0).clientX - clientOf(s.panes.left, 1, 0, 0).clientX)
+    const x = title.x1 + pad + 0.4
+    expect(x).toBeLessThan(b.x1 + pad - 0.4)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
+    const lefts = Object.values(v.lefts).map(l => l.sha256)
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256])
+    expect(s.view.probe().lit).toBe(2)
+    expect(s.view.probe().litSentence).toBe(0)
+  })
+
+  it('H9: the other page\'s left part that fails is asked again on a later hover once its wait has passed, and the paragraph then lights by sentence', async () => {
+    // unit 2 paired on both of its pages (its four words: three on page 1, one on page 2), its second sentence beginning on
+    // page 2; no page laid, so that the right is the left's mirrored
+    const v = await made({ pairs: { 1: [[0, [0, 0, 2]], [2, [0, 12, 3]]], 2: [[2, [3, 0, 1]], [3, [0, 5, 2]]] } })
+    const s = await setup({ paper: { objects: [...v.chunks, v.head, ...v.parts, ...Object.values(v.lefts)], pages: N } })
+    s.refuse.add(v.lefts[2]!.sha256)
+    s.side.tell({ head: v.head.ref, units: v.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(v, i)), end: { through: N } })
+    await settle(s)
+    const { unitOf } = await import('@/pdf-reader/engine/layer-proto/rows.mjs')
+    const { tokens } = await import('@/pdf-reader/engine/pipeline/anchors.mjs')
+    const text = 'Aaa bbb ccc. Ddd eee.', src = unitOf(v.index, rowOf(2, text))!.src
+    const words = tokens(src)
+    expect(words.length).toBe(4)
+    s.side.take([rowOf(2, text, { src: [words[3]!.at], tr: [text.indexOf('Ddd')] })])
+    leftViewer().render(1)
+    // (the paper's tokens stand on one line, each 28 wide and 0.1 right of the one before: the title's block and unit 2's
+    // over each other, but for the 1.3 past the title's end. The point: past the title's padded block, in unit 2's, where a
+    // unit lit by sentence reaches, and a unit lit whole does not)
+    const { createShapes } = await import('@/pdf-reader/engine/view/shapes.mjs')
+    const h = createShapes({ kindOf: i => v.index.kinds[i] ?? undefined })
+    h.addParts(v.readParts)
+    h.addPage(v.readLefts[0]!)
+    const b = h.shapes.block(h.shapes.runs(2).find(r => r.page === 1)!, 0), title = h.shapes.block(h.shapes.runs(0)[0]!, 0)
+    const pad = 3 / (clientOf(s.panes.left, 1, 1, 0).clientX - clientOf(s.panes.left, 1, 0, 0).clientX)
+    const x = title.x1 + pad + 0.4
+    expect(x).toBeLessThan(b.x1 + pad - 0.4)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
+    // (page 2's fails: the paragraph lights whole meanwhile; asked again only once the wait has passed)
+    expect([s.view.probe().lit, s.view.probe().litSentence]).toEqual([2, -1])
+    s.refuse.delete(v.lefts[2]!.sha256)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 + 0.5 })
+    const lefts = Object.values(v.lefts).map(l => l.sha256)
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256])
+    await s.clock.advance(LEFT_RETRY_MS + 10)
+    await moveTo(s, s.panes.left, 1, { x, y: (b.y0 + b.y1) / 2 })
+    expect(s.fetched.filter(x => lefts.includes(x))).toEqual([v.lefts[1]!.sha256, v.lefts[2]!.sha256, v.lefts[2]!.sha256])
+    expect(s.view.probe().lit).toBe(2)
+    expect(s.view.probe().litSentence).toBe(0)
   })
 
   it('H6: leftPageOf once a page, from either pane; H5: a refused left part gives no shapes and one warning, sync on', async () => {
@@ -792,7 +1022,8 @@ describe('the PR\'s review, third round (#379)', () => {
     await settle(s)
     expect(content(s, 1)).toBe('original')
     await want(s, 1)
-    expect(s.side.probe().leftParts).toBe(1)
+    // (and page 2's: unit 2 runs on to it)
+    expect(s.side.probe().leftParts).toBe(2)
     expect(s.side.probe().shapesLaid).toBe(0)
     // laid again on the next scroll: the layer's shapes there with it
     s.panes.right.scrollTop = 30

@@ -172,19 +172,23 @@ function joins(chars, i, cur, joined) {
   for (let q = i + 2; q < chars.length && norm(chars[q].ch); q++) next += norm(chars[q].ch)
   return joined.has(cur.w + next)
 }
-/** which of O's words a longest common subsequence with S's takes */
-export function lcsMatched(S, O) {
+/** which of S's words each of O's is in a longest common subsequence of the two: its index in S, or -1 */
+export function lcsPairs(S, O) {
   const n = S.length, m = O.length, W = m + 1
   const L = new Uint16Array((n + 1) * W)
   for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++) L[i * W + j] = S[i - 1] === O[j - 1] ? L[(i - 1) * W + j - 1] + 1 : Math.max(L[(i - 1) * W + j], L[i * W + j - 1])
-  const matched = new Uint8Array(m)
+  const pair = new Int32Array(m).fill(-1)
   let i = n, j = m
   while (i > 0 && j > 0) {
-    if (S[i - 1] === O[j - 1] && L[i * W + j] === L[(i - 1) * W + j - 1] + 1) { matched[j - 1] = 1; i--; j-- }
+    if (S[i - 1] === O[j - 1] && L[i * W + j] === L[(i - 1) * W + j - 1] + 1) { pair[j - 1] = i - 1; i--; j-- }
     else if (L[i * W + j - 1] >= L[(i - 1) * W + j]) j--
     else i--
   }
-  return matched
+  return pair
+}
+/** which of O's words a longest common subsequence with S's takes */
+export function lcsMatched(S, O) {
+  return Uint8Array.from(lcsPairs(S, O), s => (s >= 0 ? 1 : 0))
 }
 
 // ---- the line-break marks

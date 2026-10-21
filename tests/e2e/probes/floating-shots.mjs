@@ -14,6 +14,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/floating-shots.mjs')
 
 const label = process.argv[2]
 if (label !== 'before' && label !== 'after') throw new Error('usage: node tests/e2e/probes/floating-shots.mjs <before|after>')
@@ -30,13 +32,13 @@ mkdirSync(dir, { recursive: true })
 rmSync(PROFILE, { recursive: true, force: true })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: true,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: WIDTH, height: HEIGHT },
   deviceScaleFactor: 2,
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 const page = context.pages()[0] ?? (await context.newPage())
 const [worker] = context.serviceWorkers().length ? context.serviceWorkers() : [await context.waitForEvent('serviceworker')]

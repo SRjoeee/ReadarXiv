@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /** the work counters' keys, as layer-proto/work.mjs names them */
-export const WORK_KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops']
+export const WORK_KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'fills']
 /** the growth of a work counter's total beyond which the check fails */
 export const WORK_TOLERANCE = 0.005
 /** the page step beyond which a page counts as slow (ms) */
@@ -74,7 +74,8 @@ export function summarizeRun(run) {
   const withWork = pages.filter(p => p.work)
   let work = null
   if (withWork.length) {
-    const totals = Object.fromEntries(WORK_KEYS.map(k => [k, withWork.reduce((a, p) => a + (p.work[k] ?? 0), 0)]))
+    // (a counter no page of the run holds is not measured on it, never 0: a base that predates a counter leaves it INCOMPARABLE)
+    const totals = Object.fromEntries(WORK_KEYS.filter(k => withWork.some(p => k in p.work)).map(k => [k, withWork.reduce((a, p) => a + (p.work[k] ?? 0), 0)]))
     const perPage = Object.fromEntries(WORK_KEYS.map(k => [k, { p50: median(withWork.map(p => p.work[k] ?? 0)), p95: percentile(withWork.map(p => p.work[k] ?? 0), 95) }]))
     work = { totals, perPage, pages: withWork.length }
   }
@@ -99,6 +100,9 @@ export function verdictOf(head, base) {
   let comparable = true
   for (const k of WORK_KEYS) {
     const h = head.map(r => r.work?.totals[k]), b = base.map(r => r.work?.totals[k])
+    // (a counter neither side holds, where both measured their work, is measured nowhere: no verdict of its own; a run with no
+    // work measured at all leaves every counter INCOMPARABLE)
+    if ([...head, ...base].every(r => r.work) && [...h, ...b].every(x => x === undefined)) { work[k] = { head: undefined, base: undefined, missing: true, fail: false }; continue }
     if (h.some(x => x === undefined) || b.some(x => x === undefined)) { comparable = false; work[k] = { head: h[0], base: b[0], missing: true, fail: false }; continue }
     const unstable = new Set(h).size > 1 || new Set(b).size > 1
     const grew = b[0] > 0 ? (h[0] - b[0]) / b[0] > WORK_TOLERANCE : h[0] > 0

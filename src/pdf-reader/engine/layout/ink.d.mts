@@ -6,6 +6,8 @@ export interface Glyph {
   u: string; x0: number; x1: number; y: number; top: number; bottom: number; size: number; font: string; ix0: number; ix1: number
   /** its fill colour, 0xRRGGBB (black 0), or NO_FILL for none (a pattern's, a transparent one); none given, NO_FILL */
   fill?: number
+  /** a Type 3 glyph whose procedure paints its own colours (d0, a fill in it): `fill` no reading of its ink */
+  ownColour?: boolean
   /** with `indices`: its text-showing operation's place among the page's own (-1 in an annotation's appearance), its
    *  place among that operation's glyphs, and whether its Unicode is blank */
   n?: number; k?: number; blank?: boolean
@@ -39,7 +41,7 @@ export interface InkPoint { name: string; glyph: number; box: number }
  *  when the walk stopped at OPS_CAP, `stepsMax`, a state lost past STACK_MAX, `glyphsMax` or BOXES_CAP, `timedOut` when it stopped past `msMax`
  *  (INK_MS); `degraded` when the boxes past `boxesMax` were merged by the grid's cells (after the others, from `mergedAt`,
  *  each MERGED in `paths`); `rotated` when the page's /Rotate is not 0 (then nothing is returned) */
-export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; glyphsMax?: number; boxesMax?: number; stepsMax?: number; msMax?: number }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paths?: number[]; shows?: number; capped: boolean; timedOut: boolean; degraded: boolean; mergedAt: number | null; rotated: boolean }
+export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; glyphsMax?: number; boxesMax?: number; stepsMax?: number; msMax?: number; glyphsOnly?: boolean }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paths?: number[]; shows?: number; capped: boolean; timedOut: boolean; degraded: boolean; mergedAt: number | null; rotated: boolean }
 /** why a page's ink is not read whole: nothing read, past a cap, past the walk's backstop; null where it is read whole */
 export type Unread = 'rotated' | 'capped' | 'timedOut'
 export declare function unreadOf(ink: { rotated?: boolean; capped?: boolean; timedOut?: boolean } | null | undefined): Unread | null

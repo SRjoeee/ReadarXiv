@@ -97,3 +97,32 @@ describe('a unit of a part with no layout is centred by the page\'s column', () 
     expect(lines.map(l => l[4])).toEqual(['centred'])
   })
 })
+
+describe("a centred line on a page with no paragraph is laid in its column's measure (2610.16663's figure pages)", () => {
+  // (page 1: a paragraph over 20 to 280; page 2: a figure's caption alone, centred, one line of ink 100 to 200 about 150, its
+  // translation 250 wide: on page 2 the page's own lines give no column, and the caption's own ink was its measure, so the
+  // caption went on two lines)
+  const paper: Paper = {
+    name: 'figure page', pages: 2,
+    specs: [para(0, [[1, 270, 4]], 30), { id: 1, kind: 'caption', lines: [line(2, 150, 'Figure S1: BIST', 100, 200)], chars: 25, at: 0x4e00 + 64 }],
+  }
+  const built = () => {
+    const P = build(paper)
+    for (const l of paper.specs[0]!.lines) l.x1 = 280
+    const layout = P.layout as unknown as { units: number[][]; lines: [number, number[]][] }
+    layout.units = layout.units.map(u => (u[0] === 1 ? [u[0], u[1], u[2], UNIT_FLAG.CENTRED, u[4]] : u)) as never
+    layout.lines = layout.lines.map(([id, rows]) => [id, id === 0 ? rows.map((v, i) => (i % 8 === 2 ? 280 : v)) : rows]) as never
+    P.index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(P.layout))))
+    const g = P.geometry as { left: { units: unknown[] } }
+    g.left.units = paper.specs.map(s => [s.id, s.id, s.lines.map(l => [l.page, l.x0, l.b - 2, l.x1, l.b + 7])])
+    return P
+  }
+  it('on one line about its own centre, as wide as the column there allows', async () => {
+    const run = await openRun(built())
+    await run.layFor(2)
+    const lines = (run.stats.find(x => x.id === 1)?.lines ?? []) as unknown as Line[]
+    expect(lines.map(l => l[4])).toEqual(['centred'])
+    // (its slot about the caption's own centre, 150, from the column's edge to its mirror: 20 to 280)
+    expect(lines[0]![6]).toBe(20)
+  })
+})

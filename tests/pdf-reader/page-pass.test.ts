@@ -195,7 +195,10 @@ describe('layerOfPaper: the page pass', () => {
     const got = await passOf(w)
     expect(got.notes).toEqual([{ pages: [1, 1], layout: { refused: 'carry', lines: [7, 10] }, lines: [7, 10] }, { pages: [2, 3], layout: 'kept', lines: [20, 20] }])
     const wire = got.parts.map(p => JSON.parse(new TextDecoder().decode(p.bytes)) as { layout: unknown; addon: unknown })
-    expect(wire.map(p => p.layout === null)).toEqual([true, false])
+    // (the part refused says why on the wire: the carry's, in place of its layout)
+    expect(wire[0]?.layout).toEqual({ refused: 'carry', why: '7 of the 10 lines of its marked pages found on arXiv\'s PDF, under 90 %' })
+    expect(wire[1]?.layout).not.toBeNull()
+    expect(wire[1]?.layout).not.toHaveProperty('refused')
     // off, the same paper's parts both have their layout
     const off = await passOf(w, { verdicts: false })
     expect(off.parts.map(p => (JSON.parse(new TextDecoder().decode(p.bytes)) as { layout: unknown }).layout === null)).toEqual([false, false])
@@ -207,6 +210,15 @@ describe('layerOfPaper: the page pass', () => {
     const got = await passOf(w, { marks: { refused: 'probe' } as never })
     expect(got.notes).toEqual([{ pages: [1, 1], layout: 'none', lines: [0, 0] }, { pages: [2, 3], layout: 'none', lines: [0, 0] }])
     expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'probe' }, plans: null, addon: null } })
+  })
+
+  it('with TeX\'s refusal, the record keeps the unmarked original\'s verdict; each part\'s says why alone', async () => {
+    const w = worldOf()
+    const own = { ran: false, short: false, limit: null, tree: '2025' }
+    const why = 'the paper (revtex4-2) declares TeX Live 2023; on TeX Live 2025 its own source does not run through'
+    const got = await passOf(w, { marks: { refused: 'texlive', why, own } as never })
+    expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'texlive', why, own } } })
+    for (const p of got.parts) expect((JSON.parse(new TextDecoder().decode(p.bytes)) as { layout: unknown }).layout).toEqual({ refused: 'texlive', why })
   })
 
   it('a throw of the maker\'s is the layout\'s: the layer is made with none, the why recorded', async () => {
@@ -345,7 +357,7 @@ describe('layerOfPaper: a marked original of fewer pages than arXiv\'s PDF', () 
 
   it('is no layout, the compile\'s refusal: the layer of a paper whose compile was refused, the marks given or read here', async () => {
     const w = shortWorld()
-    const none = await passOf(w, { marks: { refused: 'compile' } as never })
+    const none = await passOf(w, { marks: { refused: 'compile', why: 'the marked original has 2 pages, arXiv\'s PDF 3' } as never })
     expect(layouts(none.notes)).toEqual(['none', 'none'])
     for (const input of [{}, { whole: true }, { marks: null, marked: markedIn(w) }, { marks: null, marked: markedIn(w), whole: true }]) {
       const got = await passOf(w, input as never)
@@ -358,6 +370,20 @@ describe('layerOfPaper: a marked original of fewer pages than arXiv\'s PDF', () 
     }
   })
 
+  it('of a paper of several toplevel sources (00README\'s) is compared with arXiv\'s first pages, the carry judging them (R1 item 3)', async () => {
+    // (2610.20030: arXiv's PDF the manuscript's 8 pages and the supplement's 4, the marked original the manuscript's alone)
+    const w = shortWorld()
+    for (const input of [{}, { marks: null, marked: markedIn(w) }]) {
+      const got = await passOf(w, { ...input, source: { ...(source(w) as object), meta: { toplevels: 2 } } } as never)
+      const at = JSON.stringify(input)
+      expect(layouts(got.notes), at).toEqual(['kept', 'kept'])
+      expect(got.r, at).toMatchObject({ stats: { toplevels: { files: 2, pages: [2, 3] } } })
+      expect((got.r as { stats: { layout: unknown } }).stats.layout, at).not.toHaveProperty('refused')
+    }
+    // (one toplevel source, or none named: refused as before)
+    for (const meta of [{ toplevels: 1 }, { toplevels: 0 }, {}]) expect((await passOf(w, { source: { ...(source(w) as object), meta } } as never)).r).toMatchObject({ stats: { layout: { refused: 'compile' } } })
+  })
+
   it('as many pages or more is the carry\'s to judge, as before', async () => {
     const w = worldOf()
     const longer = { ...w, marked: [...w.pages, { runs: [] }] }
@@ -367,6 +393,53 @@ describe('layerOfPaper: a marked original of fewer pages than arXiv\'s PDF', () 
         expect(layouts(got.notes)).toEqual(['kept', 'kept'])
       }
     }
+  })
+})
+
+describe('layerOfPaper: each part with no layout says why, on the wire (BUNDLE 6, R1 item 4)', () => {
+  /** each part as a reader reads it: its layout (null) and its record */
+  async function readBack(got: Awaited<ReturnType<typeof passOf>>) {
+    const rh = await readHead(got.head!.bytes, { ref: got.head!.ref })
+    const chunks: ReadUnitsChunk[] = []
+    for (const u of got.units) chunks.push(await readUnitsChunk(u.bytes, { ref: u.ref, before: chunks.at(-1) ?? null }))
+    const index = indexOf(rh, chunks), parts: ReadPart[] = []
+    let chain: PartChain | null = null
+    for (const p of got.parts) { const r = await readPart(p.bytes, { ref: p.ref, index, chain }); parts.push(r); chain = r.chain }
+    return parts.map(p => ({ layout: p.layout, noLayout: p.noLayout }))
+  }
+  it('the paper\'s refusal on every part: TeX\'s as the marked original says it, every fault of the engine\'s own as `marks`', async () => {
+    const w = worldOf()
+    const tl = 'the paper (revtex4-2) declares TeX Live 2023; on TeX Live 2025 its own source does not run through: ! Extra \\or. (l.944 \\end{tabularx})'
+    const cases: [Record<string, unknown>, { refused: string; why: string }][] = [
+      [{ refused: 'probe' }, { refused: 'marks', why: 'the mark probe gave no log' }],
+      [{ refused: 'marks' }, { refused: 'marks', why: 'the marked original could not be read' }],
+      [{ refused: 'marks', why: 'the marked original does not run through, nor with the name marks off' }, { refused: 'marks', why: 'the marked original does not run through, nor with the name marks off' }],
+      [{ refused: 'texlive', why: tl }, { refused: 'texlive', why: tl }],
+      [{ refused: 'engine', why: 'the paper is compiled by latex, which the host does not run' }, { refused: 'engine', why: 'the paper is compiled by latex, which the host does not run' }],
+      [{ refused: 'compile' }, { refused: 'compile', why: 'the marked compile was refused' }],
+      [{ refused: 'compile', why: 'y'.repeat(400) }, { refused: 'compile', why: 'y'.repeat(300) }],
+    ]
+    for (const [marks, record] of cases) {
+      const got = await passOf(w, { marks } as never)
+      expect(await readBack(got), JSON.stringify(marks)).toEqual([{ layout: null, noLayout: record }, { layout: null, noLayout: record }])
+    }
+  })
+
+  it('the maker\'s throw, the page count\'s refusal, and a part the carry refused beside one that keeps its layout', async () => {
+    const thrown = await readBack(await passOf(worldOf(), { marks: { marks: {}, unitMarks: null } as never }))
+    expect(thrown.map(p => p.noLayout?.refused)).toEqual(['marks', 'marks'])
+    expect(thrown[0]?.noLayout?.why).toMatch(/^the layout maker failed: /)
+    const w = worldOf()
+    const short = { ...w, marked: w.pages.slice(0, 2), marks: w.marks.filter(m => m[1] <= 2) }
+    expect(await readBack(await passOf(short))).toEqual(Array(2).fill({ layout: null, noLayout: { refused: 'compile', why: 'the marked original has 2 pages, arXiv\'s PDF 3' } }))
+    const carried = await readBack(await passOf(worldOf((p, j) => p === 1 && j >= 7)))
+    expect(carried[0]).toEqual({ layout: null, noLayout: { refused: 'carry', why: '7 of the 10 lines of its marked pages found on arXiv\'s PDF, under 90 %' } })
+    expect(carried[1]?.layout).not.toBeNull()
+    expect(carried[1]?.noLayout).toBeNull()
+    // (the whole carry refused at the marked original's end: every part, the paper's lines)
+    const none = { ...worldOf(), marked: [1, 2, 3].map(() => ({ runs: [] })) }
+    const all = await readBack(await passOf(none, { marks: null, marked: markedIn(none) } as never))
+    expect(all.map(p => p.noLayout?.refused)).toEqual(['carry', 'carry'])
   })
 })
 

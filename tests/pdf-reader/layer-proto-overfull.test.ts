@@ -9,13 +9,14 @@ import { build, installStubs, line, openRun, type Paper, para } from './helpers/
 beforeAll(() => { installStubs() })
 
 /** page 1: paragraph 0's six lines on the measure 20 to 280, its third `third` wide; paragraph 1's line of 100 on it, then
- *  three lines on page 2, its translation long enough to fill that line and run on */
+ *  three lines on page 2, its translation long enough to fill that line and run on (most of its source on page 1, so that
+ *  the share of its translation page 1 holds, E3c's page cut, fills the widened line) */
 const paperOf = (third: number): Paper => {
   const p0 = para(0, [[1, 270, 6]], 30)
   p0.lines = p0.lines.map((l, j) => line(1, l.b, `Alpha beta gamma delta ${j}`, 20, j === 2 ? third : 280))
   return {
     name: 'overfull', pages: 2,
-    specs: [p0, { id: 1, kind: 'para', lines: [line(1, 150, 'Alpha beta', 20, 120), line(2, 270, 'Alpha beta 20', 20, 280), line(2, 258, 'Alpha beta 21', 20, 280), line(2, 246, 'Alpha beta 22', 20, 280)], chars: 60, at: 0x4e00 + 64 }],
+    specs: [p0, { id: 1, kind: 'para', lines: [line(1, 150, 'Alpha beta', 20, 120), line(2, 270, '20', 20, 280), line(2, 258, '21', 20, 280), line(2, 246, '22', 20, 280)], chars: 60, at: 0x4e00 + 64 }],
   }
 }
 const firstLine = async (third: number) => {
