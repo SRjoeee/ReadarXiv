@@ -168,7 +168,9 @@ export function glyphsOfChars(chars, ink, page) {
  * line's glyph inside one of its unit's inline placeholders' segments on that line is that placeholder's; a rule (a
  * painted path) inside an inline placeholder's segment is its. Returns { owner (glyph -> unit id, -1), ph (glyph -> the
  * placeholder's source index k, -1), paths: Map(box index -> { id, k }), linePaths: Map(box index -> unit id) }: a rule
- * wholly inside a line's erase rectangle and no placeholder's is the line's unit's.
+ * wholly inside a line's erase rectangle and no placeholder's is the line's unit's; `images`: Map(box index -> { id, k }, k -1
+ * for a line's), an image box no thicker than RULE_THIN wholly inside a placeholder's segment or a line's erase rectangle
+ * (a rule painted as an inline image), held apart from `paths`: the remover has no path of it to cut.
  */
 export function fileOwnership(index, page, ink) {
   const G = ink.glyphs, n = G.length
@@ -218,8 +220,20 @@ export function fileOwnership(index, page, ink) {
     owner[g] = L.id
     for (const s of segs) if (s.id === L.id && Math.abs(s.base - L.base) < 0.5 && inBox(mid, cy, s.x0, s.bottom, s.x1, s.top, x.blank ? 0.3 : 0.1)) { ph[g] = s.k; break }
   }
-  const paths = new Map(), linePaths = new Map()
+  const paths = new Map(), linePaths = new Map(), images = new Map()
   ink.paths.forEach((m, b) => {
+    // (an image no thicker than a rule, wholly inside an inline placeholder's segment or a line's erase rectangle: a rule
+    // a dvips and Ghostscript PDF paints as an inline image mask, the placeholder's or the line's unit's as a path would
+    // be; held apart, the remover having no path of it to cut)
+    if (m === -3) {
+      const [x0, y0, x1, y1] = ink.boxes.slice(4 * b, 4 * b + 4)
+      if (Math.min(x1 - x0, y1 - y0) > RULE_THIN) return
+      const s = segs.find(s => x0 >= s.x0 - 0.3 && x1 <= s.x1 + 0.3 && y0 >= s.bottom - 0.3 && y1 <= s.top + 0.3)
+      if (s) { images.set(b, { id: s.id, k: s.k }); return }
+      const L = lines.find(L => { const e = L.erase; for (let q = 0; q + 3 < e.length; q += 4) if (x0 >= e[q] - 0.3 && x1 <= e[q + 2] + 0.3 && y0 >= e[q + 1] - 0.3 && y1 <= e[q + 3] + 0.3) return true; return false })
+      if (L) images.set(b, { id: L.id, k: -1 })
+      return
+    }
     if (m < 0) return
     const [x0, y0, x1, y1] = ink.boxes.slice(4 * b, 4 * b + 4)
     const s = segs.find(s => x0 >= s.x0 - 0.3 && x1 <= s.x1 + 0.3 && y0 >= s.bottom - 0.3 && y1 <= s.top + 0.3)
@@ -230,7 +244,7 @@ export function fileOwnership(index, page, ink) {
     const L = lines.find(L => { const e = L.erase; for (let q = 0; q + 3 < e.length; q += 4) if (x0 >= e[q] - 0.3 && x1 <= e[q + 2] + 0.3 && y0 >= e[q + 1] - 0.3 && y1 <= e[q + 3] + 0.3) return true; return false })
     if (L) linePaths.set(b, L.id)
   })
-  return { owner, ph, paths, linePaths }
+  return { owner, ph, paths, linePaths, images }
 }
 
 /** a crop resolution's parts, each { page, crop }: itself, or one a line of a formula TeX broke over lines (layer2.mjs
@@ -495,6 +509,9 @@ export function protection(index) {
  * grown, `own` as they are). Every box [x0, y0, x1, y1], PDF units, y up; `lines`: the rectangles replaced less what the reading keeps (a
  * label, a kept formula: never this unit's residue), for the audit.
  */
+/** the thickest a rule is across (fileOwnership's images, fileSwap's own rules): a fraction's bar, a radical's vinculum, an
+ *  overline, under a point at any body size */
+export const RULE_THIN = 1
 export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], also = [], pad = SWAP_PAD }) {
   const keepKeys = new Set(prep.keep ?? [])
   const resolutions = [...prep.values()].filter(r => r && r.k !== undefined)
@@ -547,8 +564,15 @@ export function fileSwap({ page, lu, kOf, lines, prep, others = [], dirty = [], 
   }
   const rects = swapRects(mine, avoid, pad)
   const meets = (r, b) => b[0] < r[2] && b[2] > r[0] && b[1] < r[3] && b[3] > r[1]
+  // (a thin box of kept ink wholly inside one of the rectangles this unit replaces is its own rule the add-on could not
+  // cut, not ink to keep: a rule a dvips and Ghostscript PDF paints as an inline image (1007.0072v1's fraction bars, 56 on
+  // the paper, no path among them), which the remover never takes. Paper goes over it; the removed page would bring it
+  // back. A figure's rule is inside no line's erase rectangle and no inline placeholder's segment; another unit's
+  // rectangles are not this unit's)
+  const ownRule = d => Math.min(d[2] - d[0], d[3] - d[1]) <= RULE_THIN && mine.some(b => d[0] >= b[0] - 0.3 && d[2] <= b[2] + 0.3 && d[1] >= b[1] - 0.3 && d[3] <= b[3] + 0.3)
+  const kept2 = dirty.filter(d => !ownRule(d))
   const swap = [], fill = []
-  for (const r of rects) (dirty.some(d => meets(r, d)) ? swap : fill).push(r)
+  for (const r of rects) (kept2.some(d => meets(r, d)) ? swap : fill).push(r)
   // what it accounts for that no rectangle of the file's covers, on one of its lines' own baselines
   const inMine = c => { const x = (c.x0 + c.x1) / 2, y = c.yb + 0.3 * c.size; return mine.some(b => x >= b[0] - pad && x <= b[2] + pad && y >= b[1] - pad && y <= b[3] + pad) }
   const extra = []
