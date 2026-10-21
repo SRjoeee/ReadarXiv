@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## 0.5.0 — 2026-10-19
 
+- Fixed: in the PDF reader, the translated pages of older arXiv papers no longer keep the original's fraction bars and overlines under the translation, and their title bar shows the paper's title instead of arXiv's margin stamp.
 - Fixed: in the PDF reader, a paragraph that goes on over a page is translated where a formula's row at the next page's head, or a footnote going on over the same page break, used to keep it in English: its lines on the next page are found by its own words.
 - Fixed: in the PDF reader, pointing at a sentence of a paragraph with a displayed formula lights that sentence and its translation, formula included. On the translated side a sentence could light only up to the first formula on its page, the sentences between two formulas lit nothing, and the page's last sentence lit from the first formula down to the foot of the page. Where a sentence cannot be told apart from its neighbours, the paragraph lights whole on both sides, never another sentence. A paragraph that runs on to the next page lights by sentence from the first time you point at it.
 - Fixed: in the PDF reader, translated pages no longer show faint traces of the original's letters at some zoom levels, among them the usual fit on a laptop's screen. The translation and its links now sit exactly over the page at every zoom.
