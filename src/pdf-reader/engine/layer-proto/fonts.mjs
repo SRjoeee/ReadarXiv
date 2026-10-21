@@ -12,18 +12,19 @@
 //   name (PDF.js's commonObjs after the page is drawn). The text content's own `fontFamily` is no help: it is PDF.js's
 //   fallback guess, and gives "sans-serif" for Nimbus Roman (Times) on every paper measured. The name is what TeX and
 //   the class chose: NimbusRomNo9L-Medi (Times bold), CMTI10 (Computer Modern text italic), SFBX1200, LMRoman10-Bold…
-// - facesFor: per target, the faces a translated run takes by its class, weight and slant. CJK faces follow the
-//   public repo's TeX path (src/pdf-reader/engine/pipeline/scripts.mjs CJK): a Song/Ming serif, its bold, Kai for italic in
-//   Chinese (FandolKai, bkai00mp: ctex's own \itshape); Japanese and Korean have no italic face there, and take an
-//   oblique of their serif here (see the report). Latin and Cyrillic runs keep the original's family where the browser
-//   has one (Times, Latin Modern from TinyTeX's OpenType files served by serve.mjs, Palatino, Charter, Helvetica).
+// - facesFor: per target, the faces a translated run takes by its class, weight and slant. The prototype's CJK faces
+//   (`faces: 'prototype'`, the floor's measurement, below) follow the public repo's TeX path (src/pdf-reader/engine/
+//   pipeline/scripts.mjs CJK): a Song/Ming serif, its bold, Kai for italic in Chinese (FandolKai, bkai00mp: ctex's own
+//   \itshape); Japanese and Korean have no italic face there, and take an oblique of their serif here (see the report).
+//   Latin and Cyrillic runs keep the original's family where the browser has one (Times, Latin Modern from TinyTeX's
+//   OpenType files served by serve.mjs, Palatino, Charter, Helvetica).
 //
 // v0's changes: loadWebFaces takes the faces' URLs from its host; and the role table's faces (font-roles.mjs, the
 // maintainer's ruling of 2026-10-06: Source Han Serif for CJK, Nimbus Roman and Sans, FreeMono, CMU and Domitian for the
 // paper's families, every face a file we serve) in place of the prototype's system faces once setRoleFaces is called:
 // faceOf then names the face faceFor gives, with its fallbacks (and, for a Latin run of a CJK target, the target's
-// body, as the prototype's tail), at its own weight and its size correction (a Hangul face's), Japanese and Korean
-// emphasis upright, and roleFaceSet serves the files: each face as its host gives it (slices, each a FontFace over a file
+// body, as the prototype's tail), at its own weight and its size correction (a Hangul face's), a CJK italic run that
+// face sheared CJK_SLANT_DEG (the owner's ruling of 2026-10-19), and roleFaceSet serves the files: each face as its host gives it (slices, each a FontFace over a file
 // restricted to its code points, or the whole file), a unit drawn only in what is served of its runs' faces, never in a
 // face the reader's device holds: no source of a face but its URL, no font rule written here, no generic family. A
 // character no served slice holds keeps its unit the original's.
@@ -70,14 +71,22 @@ let ROLES = null
  *  prototype's faces */
 export function setRoleFaces(target, family, cjkFaces) { ROLES = target ? rolesFor(target, family, cjkFaces) : null }
 export const roleFaces = () => ROLES
-/** the role table's face of a run: faceFor's, as faceOf's object, with the ids of its faces and fallbacks (`ids`) */
+/**
+ * The slant of a CJK italic run, in degrees: the owner's ruling of 2026-10-19 (Q17's row 3, docs/PDF-READER.md §18.1, the
+ * font roles), in zh, zh-Hant, ja and ko alike. The run is drawn in the body's own face (a bold italic one in the bold's), its
+ * places, size and weight the upright's, sheared about its baseline as it is drawn (layer2.mjs svgOfUnit, svgOfName): no
+ * other file is fetched and no face is made. The one number to change to slant it otherwise (10 was the other the owner saw)
+ */
+export const CJK_SLANT_DEG = 13
+/** the role table's face of a run: faceFor's, as faceOf's object, with the ids of its faces and fallbacks (`ids`); a CJK
+ *  italic run's sheared CJK_SLANT_DEG (`oblique`) */
 function roleFaceOf(st, cls) {
   const roles = ROLES
   const id = faceFor(roles, { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps })
   const F = FACES[id]
   const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : [])])].filter(f => FACES[f])
-  const kai = cls === 'cjk' && !!roles.cjk?.italic && id === roles.cjk.italic
-  return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: 0, stand: st.italic ? (cls === 'cjk' ? (kai ? 'kai' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk', size: F.size ?? 1, id, ids }
+  const slant = cls === 'cjk' && !!st.italic && !!roles.cjk
+  return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: slant ? CJK_SLANT_DEG : 0, stand: st.italic ? (cls === 'cjk' ? (slant ? 'oblique' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk', size: F.size ?? 1, id, ids }
 }
 // ---- the role table's faces as the host serves them
 
@@ -308,7 +317,8 @@ const CJK_FACES = {
   ja: { serif: '"Hiragino Mincho ProN"', sans: '"Hiragino Sans", "Hiragino Kaku Gothic ProN"', kai: null, italic: 'oblique' },
   ko: { serif: '"Nanum Myeongjo", NanumMyeongjo, AppleMyungjo', sans: '"Apple SD Gothic Neo", NanumGothic', kai: null, italic: 'oblique' },
 }
-/** the slant of an oblique CJK run, in degrees (Times Italic's is 15.5; a CJK face slanted as far reads as broken) */
+/** the slant of an oblique CJK run in the prototype's own faces, in degrees (Times Italic's is 15.5; a CJK face slanted as
+ *  far reads as broken): the floor's measurement, frozen; the role table's faces slant CJK_SLANT_DEG */
 export const OBLIQUE_DEG = 10
 
 /** the prototype's own face of a run (faces: 'prototype'): the system families it was approved in */
@@ -330,7 +340,8 @@ function prototypeFaceOf(st, cls, to) {
 
 /**
  * The face a run is drawn in: { family (CSS list), weight, style ('normal'|'italic'), oblique (degrees, a skew the SVG
- * applies), stand (what the run's slant became: 'italic', 'kai', 'oblique', '') }. `cls`: 'cjk' for a run of CJK
+ * applies about the run's baseline), stand (what the run's slant became: 'italic', 'oblique', '', and 'kai' in the
+ * prototype's faces) }. `cls`: 'cjk' for a run of CJK
  * characters, 'latin' for the rest. `st`: { fam, bold, italic, design, caps }. `to`: the target, read only by the
  * prototype's own faces
  */

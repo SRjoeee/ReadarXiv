@@ -9,6 +9,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { goOnline, online } from './lib/online.mjs'
+goOnline('pnpm e2e:popup')
 
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
 const SHOTS = fileURLToPath(new URL('./.shots/popup/', import.meta.url))
@@ -30,12 +32,12 @@ const near = (a, b) => Math.abs(a - b) <= 0.5
 const profile = mkdtempSync(join(tmpdir(), 'popup-e2e-'))
 // the profile goes when the process ends, a failure's throw included (a profile a run once filled the disk)
 process.on('exit', () => rmSync(profile, { recursive: true, force: true }))
-const context = await chromium.launchPersistentContext(profile, {
+const context = await chromium.launchPersistentContext(profile, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1280, height: 800 },
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
 const extId = new URL(worker.url()).host

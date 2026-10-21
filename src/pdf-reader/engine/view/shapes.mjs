@@ -18,7 +18,39 @@
 // has come; the right has none until its pages bring their words, and every unit lights whole meanwhile — on the one path.
 import { sentenceStarts, tokens as wordsOfText } from '../pipeline/anchors.mjs'
 import { floatHitOf, floatOf, floatShapes, pageFloats } from './floats.mjs'
-import { blockOf, clickOf, hitOf, layoutPage, layoutParts, layoutStream, pageGeometry, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn } from './highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutPage, layoutParts, layoutStream, pageGeometry, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn, withSentences } from './highlight.mjs'
+
+/** how many of a rising list are at most v: the sentence of a word or a place by its sentences' starts there */
+function atMost(xs, v) {
+  let lo = 0, hi = xs.length
+  while (lo < hi) { const m = (lo + hi) >> 1; if (xs[m] <= v) lo = m + 1; else hi = m }
+  return lo
+}
+
+/**
+ * A unit's sentence starts from its text match's pairs (anchors.mjs sentenceStarts: `anchor` its tokens and `pairs`, a word's
+ * place in its text → the page token), knowing each paired token's sentence by its word (highlight.mjs withSentences): a glyph
+ * no word is paired with by the order. The left's on the layer (createShapes) and a layout made whole alike (the highlight
+ * gate's reference), so that the two agree; null where sentenceStarts finds none
+ */
+export function startsOfPairs(anchor, text, offsets) {
+  const st = sentenceStarts(anchor, text, offsets)
+  if (!st) return st
+  const pairs = anchor.pairs, words = offsets.map(o => wordsOfText(text.slice(0, o)).length)
+  // (each paired token's word, its first where two name it, made on the first token asked; a start's token is the sentence
+  // it begins, sentenceStarts', where it is paired with a word of the sentence before it too)
+  let wordOf = null
+  const begins = new Map(Array.from(st, (k, j) => [k, j + 1]))
+  return withSentences(st, k => {
+    if (begins.has(k)) return begins.get(k)
+    if (!wordOf) {
+      wordOf = new Map()
+      for (const [w, t] of pairs) { const was = wordOf.get(t); if (was === undefined || w < was) wordOf.set(t, w) }
+    }
+    const w = wordOf.get(k)
+    return w === undefined ? -1 : atMost(words, w)
+  })
+}
 
 /** a PDF side's shapes, of its layout: highlight.mjs and floats.mjs, as the extension paints them */
 export function pdfShapes(L) {
@@ -136,7 +168,8 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
      * `offsets` the row's `sentences.src`): anchors.mjs sentenceStarts over its tokens and its pairs, once every page
      * the unit is on has come; null before, without pairs, or where a start is not found (the unit lights whole). The
      * pairs are the producer's to ship where the reader reads them (a unit located by its marks, or by its text over
-     * 80 % of it, sentenceStarts' TEXT_ONLY): what is shipped is read
+     * 80 % of it, sentenceStarts' TEXT_ONLY): what is shipped is read. The starts know each paired token's sentence by its
+     * word (startsOfPairs): a glyph no word is paired with (a formula's, a script the text layer gives late) by the order
      */
     starts(id, text, offsets) {
       if (!L.told.has(id) || !tokensIn(L, id)) return null
@@ -150,7 +183,7 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
         }
         pairsOf.set(id, pairs)
       }
-      return pairs && sentenceStarts({ tokens: L.anchors.get(id).tokens, pairs, bounded: true, coverage: 1 }, text, offsets)
+      return pairs && startsOfPairs({ tokens: L.anchors.get(id).tokens, pairs, bounded: true, coverage: 1 }, text, offsets)
     },
     /** a page's floats (floats.mjs pageFloats) from what its drawing gave: its figures' regions and its paths; made now
      *  where its part is in, else on its first use after it comes, and again on its first use after the document part
@@ -221,15 +254,17 @@ const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
  *
  * `lay(page, words)` a page laid (once a door: a ready page is final); `laid(page)` whether its part is in; `starts(id, text,
  * offsets, left)` a unit's starts on the right: of a unit all on laid pages, its words' (the token carrying each start's word,
- * `text` its plainTranslated and `offsets` its row's `sentences.tr`); of a unit on no laid page, the left's (`left`: the same
- * tokens, mirrored); of one on both, none (it lights whole); `reset()` every page back to the mirror (a door opened again);
+ * `text` its plainTranslated and `offsets` its row's `sentences.tr`), each token's sentence read from the text — a word's by
+ * its word, any other's by its place in the translation (`words.at`: a formula's, a display's kept line's) —; of a unit on no
+ * laid page, the left's (`left`: the same tokens, mirrored); of one on both, none (it lights whole); `reset()` every page
+ * back to the mirror (a door opened again);
  * `forget(page)` its geometry let go; `dispose()` stops following the source
  */
 export function layerShapes(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
-  let L, words, made, wordAt, hidden
+  let L, words, made, wordAt, placeAt, noPlaces, hidden
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
   const tellParts = parts => layoutParts(L, parts.map(part => ({
     pages: [...part.pages], views: [...part.views],
@@ -237,7 +272,7 @@ export function layerShapes(source) {
   })))
   function reset() {
     L = pageLayout(state.kindOf)
-    words = new Map(); made = new Set(); wordAt = new Map(); hidden = new Set()
+    words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set()
     if (state.parts.length) tellParts(state.parts)
   }
   /** page p's part of the laid layout, where its words and its left part are in */
@@ -251,8 +286,10 @@ export function layerShapes(source) {
     for (const [, ts] of copied) n += ts.length
     const T = { n }
     for (const f of FIELDS) { T[f] = new Float32Array(n); T[f].set(w.tokens[f].subarray(0, n0)) }
-    const word = new Int32Array(n).fill(-1)
+    const word = new Int32Array(n).fill(-1), place = new Int32Array(n).fill(-1)
     word.set(w.word.subarray(0, n0))
+    if (w.at) place.set(w.at.subarray(0, n0))
+    else noPlaces.add(p)
     const base = BASE * p, spans = []
     for (const [id, ranges] of w.spans) {
       const ks = []
@@ -274,6 +311,7 @@ export function layerShapes(source) {
     for (const [id, ks] of spans) if (ks.length && L.pagesOf.get(id)?.[0] === p) layoutStream(L, id, ks[0])
     made.add(p)
     wordAt.set(p, word)
+    placeAt.set(p, place)
     // (the words are in the page's table now: let go, the page kept as given)
     words.set(p, null)
     return true
@@ -309,17 +347,27 @@ export function layerShapes(source) {
     starts(id, text, offsets, left) {
       const m = mode(id)
       if (m === 'mirror') return left ?? null
-      if (m === 'mixed' || !tokensIn(L, id)) return null
+      // (a table with no places, `at`: its formulas and displays would go by the order, which the table need not keep)
+      if (m === 'mixed' || !tokensIn(L, id) || pagesOf(id).some(p => noPlaces.has(p))) return null
       if (typeof text !== 'string' || !Array.isArray(offsets) || !offsets.every((o, j) => Number.isInteger(o) && o > (j ? offsets[j - 1] : 0) && o < text.length)) return null
-      const ts = L.anchors.get(id)?.tokens ?? [], out = new Int32Array(offsets.length)
+      const ts = L.anchors.get(id)?.tokens ?? [], out = new Int32Array(offsets.length), ws = []
       for (let j = 0, from = 0; j < offsets.length; j++) {
         const w = wordsOfText(text.slice(0, offsets[j])).length
         let k = -1
         for (; from < ts.length && k < 0; from++) { const t = ts[from], p = Math.floor(t / BASE); if (wordAt.get(p)?.[t - BASE * p] === w) k = t }
         if (k < 0 || k <= (j ? out[j - 1] : ts[0])) return null
         out[j] = k
+        ws.push(w)
       }
-      return out
+      // (each token's sentence by the text: a word's by its word, any other token's by its place in the translation — a
+      // formula's, a display's kept line's —; a copy of the left's, none: the order)
+      const offs = offsets.slice()
+      return withSentences(out, t => {
+        const p = Math.floor(t / BASE), i = t - BASE * p, w = wordAt.get(p)?.[i]
+        if (w !== undefined && w >= 0) return atMost(ws, w)
+        const a = placeAt.get(p)?.[i]
+        return a !== undefined && a >= 0 ? atMost(offs, a) : -1
+      })
     },
     reset,
     forget: p => { L.cache.delete(p); M.forget(p) },

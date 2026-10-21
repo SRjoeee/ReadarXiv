@@ -17,6 +17,8 @@ import { rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { chooseBuiltIn, openOptions, setSwitch } from '../options-page.mjs'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/reading-position.mjs')
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -29,12 +31,12 @@ const NUDGE = Number(process.env.AXT_NUDGE ?? 0)
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 rmSync(PROFILE, { recursive: true, force: true })
-const context = await chromium.launchPersistentContext(PROFILE, {
+const context = await chromium.launchPersistentContext(PROFILE, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1440, height: 900 },
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')

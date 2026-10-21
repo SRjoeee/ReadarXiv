@@ -58,7 +58,7 @@ import { SWAP_PAD, swapRects } from '../layer/swap.mjs'
 import * as LK from './links.mjs'
 import { colourOf, fillOf, kOfPieces, locatedWhole, proofOf, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
-import { addUnitWords, copyWords, freezeWords, newWords, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
+import { addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { drawInputsOf } from './draw.mjs'
@@ -1067,7 +1067,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const q of unswept) if (!reads[q] && readyOf(q) && !awaitsPaint(q)) letGoPage(q)
   }
   /** what a unit holds for its lay, its passes and its paint alone (and the file's lines it is laid by: `tex.lines`) */
-  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf']
+  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf', 'pieceAt']
   /** a unit nothing reads again: painted on every page it is on, or left the original's (refused, or withheld with its
    *  group), its table group settled, and each of its pages passed (with a page pass: a pass reads the units running on to
    *  its page) */
@@ -1315,8 +1315,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const tSvg = performance.now()
     r.markup.push(L2.svgOfUnit(p.layout, pg, cssOf(pg), scale, p.id))
     const tWords = performance.now()
-    // (the page's word table, beside the markup: the unit's words in the order they are drawn; a page whose table is frozen is final)
-    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg), crop => hasSource(crop.page))
+    // (the page's word table, beside the markup: the unit's words in its text's order, its kept lines where the text passes them,
+    // each token's place in its translation; a page whose table is frozen is final)
+    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg, p.blocks), crop => hasSource(crop.page), p.pieceAt ??= pieceOffsets(p.unit.pieces))
     workOf(pg).ops += ops.length
     const T = timesOf(pg)
     T.ops += tCompose - tOps
@@ -1491,7 +1492,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const areaOf = (p, pg) => p.area?.get(pg) ?? textArea(pg)
   const columnOf = (b, p, size) => {
     const mid = (b.x0 + b.x1) / 2
-    const own = (cols[b.page] ?? []).filter(([a, z]) => a <= mid && z >= mid)
+    // (its page's paragraph lines over its middle; on a page that has too few (a page of figures, whose captions' own ink was
+    // their measure: 2610.16663's supplement), those of the nearest page before it that has them, as the layout maker takes a
+    // page's column edges (make.mjs earlierEdges, rule 3): never a later page's, so that a page lays the same whichever pages
+    // were laid before it)
+    const over = q => (cols[q] ?? []).filter(([a, z]) => a <= mid && z >= mid)
+    let own = over(b.page)
+    for (let q = b.page - 1; own.length < 3 && q >= 1; q--) { const o = over(q); if (o.length >= 3) own = o }
     if (own.length < 3) return areaOf(p, b.page)
     // (its right edge the furthest of its lines reach, but a line TeX set overfull: one past the furthest end two lines share
     // by less than an em is no edge; a single line widened to it ran 3.4 pt into the margin, 2608.16117's page 11)
@@ -1521,8 +1528,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  from its last baseline down to the next line of its column (`below`: the median baseline of the highest characters
    *  under it, a superscript's aside; Infinity where none is), which the page fill keeps its last line a leading over. None
    *  for a table cell, whose lines keep their own rules (cellBands). Read from the page's characters, within the span of its
-   *  frame's own lines (not columnOf's, which is the page's text area where v0's geometry holds no paragraph there, and took
-   *  the other column's line on the same baseline for one beside it: 1512.03385 page 12) */
+   *  frame's own lines (not columnOf's, which is an earlier page's paragraph lines or the page's text area where v0's geometry
+   *  holds no paragraph there, and took the other column's line on the same baseline for one beside it: 1512.03385 page 12) */
   const edgesOf = (p, prep) => {
     if (p.unit.kind === 'cell' || !p.blocks.length) return null
     const spanOf = b => [Math.min(...b.rects.map(q => q[1])), Math.max(...b.rects.map(q => q[3]))]
@@ -1929,7 +1936,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       p.lead = ld
       Object.assign(ld.rec, { drawn: true, why: null, size: r1(ld.nm.size), x: r1(ld.nm.x0), chars: ld.chars })
     }
-    // iteration 3: each crop over the ink it touches (its page's ink map)
+    // iteration 3: each crop over the ink it touches (its page's ink map); a formula's parts (a formula TeX broke over lines,
+    // layer2.mjs cropPartsOf), each cut from its segments, never grow (cropGrows), nor does a crop of a segment
     for (const r of prep.values()) {
       if (r?.mode !== 'crop') continue
       // (cut from a page read from its draw, and grown over its ink: its pixels read now; a crop of a layout file's segment is not)

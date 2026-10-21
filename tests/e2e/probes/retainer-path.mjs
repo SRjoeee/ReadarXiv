@@ -5,13 +5,15 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { chromium } from 'playwright'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/retainer-path.mjs')
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = resolve(process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url)))
 const PAPER = process.argv[2] ?? '2410.00260'
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-const context = await chromium.launchPersistentContext(`${E2E}.profile-hl`, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`], viewport: { width: 1440, height: 900 } })
+const context = await chromium.launchPersistentContext(`${E2E}.profile-hl`, online({ channel: 'chromium', headless: true, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`], viewport: { width: 1440, height: 900 } }))
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')
 const toTab = message => worker.evaluate(async m => { const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); return chrome.tabs.sendMessage(tab.id, m) }, message)

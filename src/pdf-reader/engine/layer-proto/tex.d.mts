@@ -48,7 +48,9 @@ export declare function renderingOf(segs: Float64Array, uc: readonly Char[], dis
  *  ink inside its segments, and one v0 found none for read from its row's segments: `unit` given; with `textRuns`, the
  *  file's lines, a LOST text piece by the run of the unit's leftover characters that spells it); the k of one nothing
  *  proves (its unit stays the original's), else -1 */
-export declare function proofOf(lu: LayoutUnit | null, kOf: readonly number[] | null, shown?: number, o?: { textRuns?: boolean }): (out: Prepared, unit?: Unit | null) => number
+export declare function proofOf(lu: LayoutUnit | null, kOf: readonly number[] | null, shown?: number, o?: { textRuns?: boolean; whole?: boolean }): (out: Prepared, unit?: Unit | null) => number
+/** a placeholder's segments (stride 6) as one crop where they are one line's: { page, crop, baseline, seg }, else null */
+export declare function cropOfSegments(segs: ArrayLike<number>): { page: number; crop: [number, number, number, number]; baseline: number; seg: { x0: number; x1: number; top: number; bottom: number; baseline: number; lines: number } } | null
 /** a text piece: a placeholder whose plain text is its whole rendering (a code or URL mark, or a plain-text source, its
  *  argument literal): its plain text as written, or null */
 export declare function textPieceOf(src: string | undefined | null): { text: string } | null

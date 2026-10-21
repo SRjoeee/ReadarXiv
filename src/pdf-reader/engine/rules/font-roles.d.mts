@@ -24,10 +24,11 @@ export declare const FACES: Readonly<Record<FaceId, Face>>
 /** what a target draws in, for a paper's English family */
 export interface RoleSet {
   target: string; family: EnglishFamily
-  cjk: { body: FaceId; bold: FaceId; italic: FaceId | null } | null   // italic null: upright; bold italic is the bold
+  cjk: { body: FaceId; bold: FaceId } | null   // an italic run is its weight's face sheared (layer-proto/fonts.mjs CJK_SLANT_DEG)
   fallbacks: Readonly<Record<FaceId, readonly FaceId[]>>
 }
-/** a script's CJK faces: its group, its Kai (null: emphasis upright), the English designs beside which it is light */
+/** a script's CJK faces: its group, its Kai (kept in the rule set for engines before 2026-10-19, read by none since: an
+ *  italic run is the body sheared), the English designs beside which it is light */
 export interface CjkFaces { group: string; kai: string | null; light: readonly string[] }
 /** the English families a paper's body is set in; a rule may name them as the ones a CJK face is light beside */
 export declare const ENGLISH_FAMILIES: readonly EnglishFamily[]
