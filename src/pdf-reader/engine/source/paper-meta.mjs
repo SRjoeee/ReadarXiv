@@ -48,15 +48,18 @@ export function analyze(fsys) {
     // package holds it under (\subfile{./chapters/ch1}: chapters/ch1.tex, a subfile's own \documentclass and all)
     for (const f of tex) for (const m of bodies[f].matchAll(/\\(input|include|subfile|(?:sub)?(?:import|inputfrom|includefrom))\s*\*?\s*\{([^}]+)\}(?:\s*\{([^}]+)\})?/g)) { const n = normalizePath(/^(input|include|subfile)$/.test(m[1]) || m[3] === undefined ? m[2].trim() : `${m[2].trim()}/${m[3].trim()}`); included.add(n); included.add(`${n}.tex`) }
     const uncited = withClass.filter(f => !included.has(f) && !included.has(f.replace(/\.tex$/, '')))
-    // Each uncited file is a toplevel source: arXiv's AutoTeX compiles every one and joins their PDFs in the order of their
-    // paths (1008.0072v1: Femtoscope_resubmission_Final_1.tex's 5 pages, then Supplementary_Final_1.tex's 3). Counted
+    // Each uncited document is a toplevel source: arXiv's AutoTeX compiles every one and joins their PDFs, in the order of
+    // their paths as far as observed (one paper, 1008.0072v1: Femtoscope_resubmission_Final_1.tex's 5 pages, then
+    // Supplementary_Final_1.tex's 3). Counted
     // conservatively: a file whose path or basename is that of any included name is a part (\subfile{child} in chapters/
     // records child.tex, the file chapters/child.tex), since a count too high lifts the page rule from a paper of one source
-    // and one too low only keeps it
+    // and one too low only keeps it. A source is a document: it begins one, and its class is no part's (subfiles) or picture's
+    // (standalone: a figure's own file); a letter to the editor is a document of its own
     const names = new Set([...included].flatMap(n => [n, basename(n)]))
-    const sources = uncited.filter(f => !names.has(f) && !names.has(basename(f)) && !names.has(basename(f).replace(/\.tex$/, '')))
+    const documentOf = f => /\\begin\s*\{document\}/.test(bodies[f]) && !/\\documentclass\s*(?:\[[^\]]*\])?\s*\{\s*(standalone|subfiles)\s*\}/.test(bodies[f])
+    const sources = uncited.filter(f => !names.has(f) && !names.has(basename(f)) && !names.has(basename(f).replace(/\.tex$/, '')) && documentOf(f))
     const preferred = f => /^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(f))
-    // The main file: with several sources the first path in code-unit order (Perl's sort), the one whose pages come first in
+    // The main file: with several sources the first path in code-unit order, taken for the one whose pages come first in
     // arXiv's PDF, which the page pass compares with arXiv's first pages (a wrong pick is the carry's to refuse); else a file
     // of the preferred name, else the longer body as TeX reads it, among the uncited (each file included by another: all)
     const cands = sources.length >= 2 ? sources.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))

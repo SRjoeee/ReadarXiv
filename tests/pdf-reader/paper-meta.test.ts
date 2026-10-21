@@ -31,6 +31,18 @@ describe('analyze: the toplevel sources', () => {
     ])
     expect(m).toMatchObject({ main: 'main.tex', toplevels: 1 })
   })
+  it('a standalone figure, a subfiles part or a stub of a class alone is no toplevel source: the paper the main, as before', () => {
+    const paper = doc('The paper. '.repeat(40))
+    const fig = '\\documentclass{standalone}\n\\begin{document}\nA figure.\n\\end{document}\n'
+    const part = '\\documentclass[../x.tex]{subfiles}\n\\begin{document}\nA part.\n\\end{document}\n'
+    for (const [name, other] of [['fig/a.tex', fig], ['chapter.tex', part], ['a-stub.tex', '\\documentclass{article}\n']]) {
+      expect(meta([['zpaper.tex', paper], [name, other]]), name).toMatchObject({ main: 'zpaper.tex', toplevels: 1 })
+    }
+  })
+  it('a letter beside the paper is a document of its own: two toplevel sources, the first path the main', () => {
+    const letter = '\\documentclass{letter}\n\\begin{document}\nDear editor.\n\\end{document}\n'
+    expect(meta([['paper.tex', doc('The paper. '.repeat(40))], ['letter.tex', letter]])).toMatchObject({ main: 'letter.tex', toplevels: 2 })
+  })
   it('with no 00README, a \\documentclass file another file \\inputs is a part: one toplevel source', () => {
     const m = meta([['paper.tex', doc('The paper.\n\\input{supplement}')], ['supplement.tex', doc('A supplement. '.repeat(40))]])
     expect(m).toMatchObject({ main: 'paper.tex', toplevels: 1 })

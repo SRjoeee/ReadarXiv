@@ -1616,12 +1616,14 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   judging them; 18's rule refused it outright, 39 rows), `stats.toplevels` { files, pages }. The count is 00README's
   where the package has one (00README.json's toplevel sources, a legacy 00README's `toplevelfile` lines, standing even
   where its main file is missing from the package); with none it is guessed (`source/paper-meta.mjs`, PIPELINE 24): every
-  `\documentclass` or `\documentstyle` file no other file includes, which arXiv's AutoTeX compiles and joins in the order
-  of their paths. The count is conservative: a file whose path or basename is that of any included name is a part
+  `\documentclass` or `\documentstyle` file no other file includes that begins a document and whose class is not
+  `standalone` (a figure's own file) or `subfiles` (a part); a letter counts. arXiv's AutoTeX compiles each and joins
+  them, in the order of their paths as observed on one paper (1008.0072v1); the order is not otherwise established.
+  The count is conservative: a file whose path or basename is that of any included name is a part
   (`\subfile{child}` inside chapters/ names child.tex, the file chapters/child.tex), since a count too high lifts the
-  page rule from a paper of one source. With several, the main file is the first path in code-unit order, the file whose
-  pages come first in arXiv's PDF, which the carry compares, a preferred name (main, ms, paper, manuscript, arxiv)
-  notwithstanding: a wrong pick ends in the carry's refusal, no worse than the page rule's (1008.0072v1: no 00README,
+  page rule from a paper of one source. With several, the main file is the first path in code-unit order, taken for the
+  file whose pages come first in arXiv's PDF, which the carry compares, a preferred name (main, ms, paper, manuscript,
+  arxiv) notwithstanding: the carry is the safety net, a wrong pick ending in its refusal, no worse than the page rule's (1008.0072v1: no 00README,
   Femtoscope_resubmission_Final_1.tex's 5 pages and Supplementary_Final_1.tex's 3, refused for 5 pages of 8 before; of
   283 packages scanned it is the one with two such files and no 00README, its page 1 the first path's). With one, or none
   uncited (each file included by another), the main is chosen as before: a preferred name, else the longer body. The further files' units are not
