@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-21",
+  "by": "the maintainer",
+  "quote": "E3c\u63a5\u53d7",
+  "english": "E3c accepted, 2026-10-21, relayed by the coordinator",
+  "on": "E3c (pull request 425): a unit over a page break holds on each page the text its source sets there",
+  "measures": [
+    "overRight"
+  ],
+  "targets": [
+    "es"
+  ],
+  "scope": "es, 1810.04805 page 8, unit 138: frames past the right edge 0.03 to 0.033; its one line on page 8, the paragraph's last, holds the share of the translation its source sets there and runs past the English last line's end, inside the column",
+  "why": "each sentence is drawn on the page its source is on: page B holds its share of a continued paragraph"
+}
