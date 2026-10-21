@@ -559,15 +559,16 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
   })
 })
 
-// A copy made under pipeline 23, reopened under 24: 24 changes a unit's lines at a page break (anchors.mjs), the left side alone,
-// not a unit, the wire or its reading back: every unit is the copy's by its hash, carried as it has it, and nothing is sent
-describe('a copy made under pipeline 23, reopened under 24', () => {
+// A copy made under pipeline 23 or 24, reopened under 25: 24 changes a unit's lines at a page break (anchors.mjs), the left
+// side alone, and 25 guesses a package's toplevel sources where it has no 00README (paper-meta.mjs): neither a unit, the
+// wire or its reading back: every unit is the copy's by its hash, carried as it has it, and nothing is sent
+describe('a copy made under pipeline 23 or 24, reopened under 25', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
-  it('takes every unit as the copy has it: nothing is sent again', async () => {
-    expect(PIPELINE_VERSION).toBe('24')
+  it.each(['23', '24'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('25')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
-    const record = JSON.parse(JSON.stringify({ pipeline: '23', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
     const { seed } = await seedFrom(record, p.units)
     expect(seed.size).toBe(n - keptFor(p, 'zh').size)
     const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })

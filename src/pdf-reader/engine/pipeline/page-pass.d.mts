@@ -15,7 +15,7 @@ import type { LeftSide } from './left-side.mjs'
 export interface PartNote { pages: [number, number]; layout: 'kept' | 'none' | PartRefusal; lines: [carried: number, total: number] }
 export interface LayerOptions {
   paper: { id: string; version: number }
-  /** openPaper's paper: its units (ids their indices) and those it keeps; `meta.toplevels`, its toplevel sources (00README's):
+  /** openPaper's paper: its units (ids their indices) and those it keeps; `meta.toplevels`, its toplevel sources (00README's, else guessed):
    *  with several, a marked original of fewer pages than arXiv's PDF is compared with arXiv's first pages, not refused */
   source: { units: readonly { kind: string; pieces: unknown[] }[]; kept: ReadonlySet<unknown>; inFloat?: readonly number[]; meta?: { toplevels?: number } }
   /** layoutMarksOfPaper's result: the marks and the unit marks, or why there are none (or `marked`); marks of fewer pages than

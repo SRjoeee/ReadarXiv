@@ -348,6 +348,12 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const two = compiler([PROBE, ran(PDF, '', 3)])
     expect(await markedOfPaper(paper, { compile: two.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(two.asked).toHaveLength(2)
+    // (no 00README, two uncited \documentclass files, 1008.0072v1's case: the toplevel sources guessed, the same rule)
+    const guessed = paperOf(SOURCE, [['supplement.tex', '\\documentclass{article}\\begin{document}S\\end{document}\n']])
+    expect(guessed.meta).toMatchObject({ main: 'main.tex', mainGuessed: true, toplevels: 2 })
+    const both = compiler([PROBE, ran(PDF, '', 3)])
+    expect(await markedOfPaper(guessed, { compile: both.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(both.asked).toHaveLength(2)
   })
 })
 

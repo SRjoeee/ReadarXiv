@@ -158,7 +158,18 @@
 //     and the left side's places read (LAYOUT 11): over 57 papers 10 LOST rows found and none lost, 5 units' lines changed
 //     in 4 papers and 5 of 1,637 pages' left parts. The units, the wire and its reading back are 23's, the gate pack's 32
 //     outputs' layouts among them: a copy of 23 carries every unit it holds the source of (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '24'
+// 25: a package with no 00README has its toplevel sources guessed (source/paper-meta.mjs): every \documentclass file no
+//     other file includes, that begins a document and whose class is not standalone or subfiles, is one (a file whose path
+//     or basename an inclusion names is none). arXiv's AutoTeX compiles each and joins them, in the order of their paths as
+//     observed on one paper (1008.0072v1), so with several the main file is the first path (no longer a preferred name or
+//     the longer body), and its marked original is compared with arXiv's first pages (page-pass.mjs, layout/paper.mjs:
+//     2610.20030's rule); a wrong order ends in the carry's refusal, as the page rule's before. 1008.0072v1,
+//     a revtex4 paper and its supplement joined in arXiv's PDF (5 + 3 of 8 pages), had no layout, refused for 5 pages of 8.
+//     Of 283 packages scanned one has two such files and no 00README (1008.0072v1), its main file the same under both
+//     orders: the units, the wire and its reading back are 24's, and a copy of 24 carries every unit it holds the source
+//     of (live.mjs PIPELINE_CARRIES). Raised so that such a paper's bundle, now with a layout, is made again under a new
+//     key (VTAG)
+export const PIPELINE_VERSION = '25'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

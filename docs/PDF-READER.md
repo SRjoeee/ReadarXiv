@@ -1611,9 +1611,22 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   of a paper with no layout: a part with no layout (its record, below), every unit read under the proof with no file, so a
   unit the left locates by its text and that holds no placeholder but a space, a text symbol or TeX's nothing is drawn
   translated, and every other unit is left the original's; no unit is placed by the short original's lines. A paper of
-  several toplevel sources (00README's, `meta.toplevels`) is not refused so: arXiv compiles each and joins their PDFs, the
+  several toplevel sources (`meta.toplevels`) is not refused so: arXiv compiles each and joins their PDFs, the
   pipeline the first alone, so its marked original's pages are compared with arXiv's first (2610.20030: 8 of 12, the carry
-  judging them; 18's rule refused it outright, 39 rows), `stats.toplevels` { files, pages }. The further files' units are not
+  judging them; 18's rule refused it outright, 39 rows), `stats.toplevels` { files, pages }. The count is 00README's
+  where the package has one (00README.json's toplevel sources, a legacy 00README's `toplevelfile` lines, standing even
+  where its main file is missing from the package); with none it is guessed (`source/paper-meta.mjs`, PIPELINE 25): every
+  `\documentclass` or `\documentstyle` file no other file includes that begins a document and whose class is not
+  `standalone` (a figure's own file) or `subfiles` (a part); a letter counts. arXiv's AutoTeX compiles each and joins
+  them, in the order of their paths as observed on one paper (1008.0072v1); the order is not otherwise established.
+  The count is conservative: a file whose path or basename is that of any included name is a part
+  (`\subfile{child}` inside chapters/ names child.tex, the file chapters/child.tex), since a count too high lifts the
+  page rule from a paper of one source. With several, the main file is the first path in code-unit order, taken for the
+  file whose pages come first in arXiv's PDF, which the carry compares, a preferred name (main, ms, paper, manuscript,
+  arxiv) notwithstanding: the carry is the safety net, a wrong pick ending in its refusal, no worse than the page rule's (1008.0072v1: no 00README,
+  Femtoscope_resubmission_Final_1.tex's 5 pages and Supplementary_Final_1.tex's 3, refused for 5 pages of 8 before; of
+  283 packages scanned it is the one with two such files and no 00README, its page 1 the first path's). With one, or none
+  uncited (each file included by another), the main is chosen as before: a preferred name, else the longer body. The further files' units are not
   read at all (their pages left the original's, with no unit): their own compiles and units, the pages offset, are later
   work.
 - **Why a part has no layout** (BUNDLE 6, R1 item 4). A part with none carries the reason in place of its layout,

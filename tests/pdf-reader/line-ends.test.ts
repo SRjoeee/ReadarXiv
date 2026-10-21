@@ -79,11 +79,12 @@ describe('a source\'s line ends are read as TeX reads them: CRLF and a lone CR a
     expect((p.units as unknown as Unit[]).map(u => u.kind)).toEqual(['heading', 'author', 'author', 'para'])
   })
   it('the main file chosen among candidates by its length as TeX reads it, not by its line ends\' bytes', () => {
-    const body = (n: number) => `\\documentclass{article}\n\\begin{document}\n${'Words of the paper. '.repeat(n)}\n\\end{document}\n`
-    // (b's words broken over lines with CRLF: more bytes than a's, fewer characters as TeX reads them)
-    const longer = body(11), crlf = body(10).replace(/\n/g, '\r\n').replace(/ /g, '\r\n')
+    // (each file included by the other: no uncited candidate, the longer body chosen)
+    const body = (n: number, other: string) => `\\documentclass{article}\n\\begin{document}\n${'Words of the paper. '.repeat(n)}\n\\input{${other}}\n\\end{document}\n`
+    // (a's words broken over lines with CRLF: more bytes than b's, fewer characters as TeX reads them)
+    const longer = body(11, 'a'), crlf = body(10, 'b').replace(/\n/g, '\r\n').replace(/ /g, '\r\n')
     expect(crlf.length).toBeGreaterThan(longer.length)
-    expect(analyze(inMemory(new Map([['a.tex', enc(longer)], ['b.tex', enc(crlf)]]))).main).toBe('a.tex')
+    expect(analyze(inMemory(new Map([['a.tex', enc(crlf)], ['b.tex', enc(longer)]]))).main).toBe('b.tex')
   })
   it('the guard reads a lone-CR file as the marked one is written: its braces balance (a comment ends at the line\'s CR)', () => {
     const tex = '\\documentclass{article}\r\\begin{document}\r\\textbf{Bold % c\r} A first paragraph of the paper.\r\rA second paragraph of the paper.\r\\end{document}\r'

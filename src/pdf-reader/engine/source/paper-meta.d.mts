@@ -5,7 +5,8 @@ export declare function analyze(fsys: ReturnType<typeof inMemory>): {
   main: string | null; mainGuessed?: boolean; compiler?: string; bbl?: boolean
   /** the TeX Live year 00README.json declares (`texlive_version`), else null; absent with no such README */
   tlVersion?: string | null
-  /** the toplevel sources 00README names (arXiv compiles each and joins their PDFs; the pipeline reads `main`, the first) */
+  /** the toplevel sources 00README names, else the guessed ones: the \documentclass files no other file includes (arXiv
+   *  compiles each and joins their PDFs; the pipeline reads `main`, the first) */
   toplevels?: number
   documentclass?: string | null
 }
