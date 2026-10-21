@@ -152,7 +152,13 @@
 //     it, carries each unit whose wire the rule leaves as it was (mt.mjs displayStopChanges; live.mjs PIPELINE_CARRIES):
 //     over 180 papers' sources 4,215 of 44,825 units, in 153 papers, are asked again. The units, the marked
 //     original and the layout file are 22's byte for byte
-export const PIPELINE_VERSION = '23'
+// 24 (23 is the display stop's, #421): a unit's lines at a page break read by its own words (anchors.mjs placeWith: a
+//     paragraph and its footnote whose marked ranges cross each keep the lines their matched words are on; inOrder: a
+//     formula's row of no word of the unit's is held between its lines, not the walk's end), which the layout file's lines
+//     and the left side's places read (LAYOUT 11): over 57 papers 10 LOST rows found and none lost, 5 units' lines changed
+//     in 4 papers and 5 of 1,637 pages' left parts. The units, the wire and its reading back are 23's, the gate pack's 32
+//     outputs' layouts among them: a copy of 23 carries every unit it holds the source of (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '24'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
