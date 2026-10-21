@@ -12,7 +12,7 @@ export declare function inkOfPage(OPS: Record<string, number>, page: unknown, ou
 /** the text layer's characters on a page carried to its glyphs, by `page|item|k` */
 export declare function glyphsOfChars(chars: readonly Char[], ink: RemovalInk, page: number): Map<string, number>
 /** the layout file's ownership of a page's glyphs (unit id or -1), their placeholders (source k or -1), and rules */
-export interface FileOwnership { owner: Int32Array; ph: Int32Array; paths: Map<number, { id: number; k: number }>; linePaths: Map<number, number> }
+export interface FileOwnership { owner: Int32Array; ph: Int32Array; paths: Map<number, { id: number; k: number }>; linePaths: Map<number, number>; images: Map<number, { id: number; k: number }> }
 export declare function fileOwnership(index: LayoutIndex, page: number, ink: RemovalInk): FileOwnership
 /** what a drawn unit replaces on a page (indices into its ink), its crops' glyphs and rules there */
 export declare function unitRemoval(o: {
@@ -39,6 +39,8 @@ export declare function pageRules(index: LayoutIndex, page: number, ink: Removal
 export declare function protection(index: LayoutIndex): { accept(id: number | string, page: number, kept?: number[][]): void; others(page: number, self?: number | string | null): number[][] }
 /** a unit's drawing over the text-removed PDF from the layout file's rectangles: swapped, filled with paper, erased extra,
  *  its crops' clips; PDF units */
+/** the thickest a rule is across: a fraction's bar, a radical's vinculum, an overline */
+export declare const RULE_THIN: number
 export declare function fileSwap(o: {
   page: number; lu: LayoutUnit; kOf: readonly number[]; lines: { rects: number[][]; lineOf: Map<number[], number>; jOf?: number[] }; prep: Prepared
   others?: number[][]; dirty?: number[][]

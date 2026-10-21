@@ -22,6 +22,8 @@ import { linkLayer } from './links.mjs'
 import { drawing, drawn, drawnCanvas } from './drawn.mjs'
 
 const DISPLAYS = ['original', 'bilingual', 'translation']
+/** arXiv's margin stamp, which its dvips and Ghostscript PDFs carry as their Info Title: `arXiv:1007.0072v1  [quant-ph]  1 Jul 2010` */
+const ARXIV_STAMP = /^arXiv:\S+\s+\[[^\]]+\]\s+\d{1,2}\s+\w{3}\s+\d{4}$/
 /** CSS px a PDF unit at scale 1 (PDF.js's PixelsPerInch.PDF_TO_CSS_UNITS) */
 const PDF_TO_CSS = 96 / 72
 /** CSS px: the widest a page is fitted in a single display (the reader's design, §3) */
@@ -427,6 +429,8 @@ export function createReaderView(host) {
   async function reportPaper(doc) {
     const meta = await doc.getMetadata().catch(() => null)
     let title = String(meta?.info?.Title ?? '').trim()
+    // (arXiv's margin stamp as the Info Title of a paper it typeset with dvips and Ghostscript: no title of the paper's)
+    if (ARXIV_STAMP.test(title)) title = ''
     if (!title && host.titleFallback) title = String((await host.titleFallback().catch(() => '')) ?? '').trim()
     if (current?.doc === doc) emit({ type: 'paper', title })
   }
