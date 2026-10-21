@@ -705,17 +705,24 @@ const byLetters = (doc, letters) => (ks, edge) => {
 function inOrder(doc, words, dir) {
   let p = dir > 0 ? 0 : words.length - 1
   return (ks, edge) => {
-    let found = 0, all = 0
+    let found = 0, all = 0, real = 0
     for (const j of ks) {
       const t = doc[j].t
       if (!t || (!CJK.test(t) && !/\p{L}{2}/u.test(t.replace(/\p{Script=Greek}/gu, ' ')))) continue
-      all++
+      // (a token of two letters the unit's next words do not hold is a formula's — dt, ln, a script — and no word: it does
+      // not vote; a line of no word, a formula's or its scripts' row, is the unit's only between lines that are: HELD)
+      let hit = false
       for (let q = p, n = 0; n < AHEAD && q >= 0 && q < words.length; q += dir, n++) {
         const w = words[q]
-        if (w === t || (!CJK.test(t) && (dir > 0 ? w.startsWith(t) : w.endsWith(t)))) { found++; p = q + dir; break }
+        if (w === t || (!CJK.test(t) && (dir > 0 ? w.startsWith(t) : w.endsWith(t)))) { found++; p = q + dir; hit = true; break }
       }
+      const word = CJK.test(t) || /\p{L}{3}/u.test(t.replace(/\p{Script=Greek}/gu, ' '))
+      if (hit || word) all++
+      if (word) real++
     }
-    return edge || (all > 0 && found / all >= OWN)
+    // (a line with no word of three letters or more, nor a CJK one, is held whatever its two-letter tokens hit — `in` as the
+    // start of `information`, a table's `No`, `et al`: held lines are released only by a line with a word that votes)
+    return edge || (real === 0 ? HELD : found / all >= OWN)
   }
 }
 
@@ -1018,6 +1025,30 @@ function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOw
   // is the footnote's); an unmarked unit its matched words
   const ranged = found.map((f, u) => [f?.bounded, u]).filter(([b]) => b).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
   for (const [[a, b], u] of ranged) { owner.fill(u, a, b + 1); ranges.push([a, b]) }
+  // two ranges that cross (neither apart nor one inside the other): a paragraph and a footnote both going on over a page,
+  // the stream's order u's lines, v's first lines (the page's foot), u's next lines (the next page's head), v's last lines.
+  // The overlap [v's start, u's end] holds lines of both: a line that holds the matched words of one of them alone is that
+  // one's; a line that holds both's, or neither's, stays as the innermost range had it
+  const crossed = ranged.map(([[a, b], u]) => [a, b, u]).sort((x, y) => x[0] - y[0] || y[1] - x[1])
+  for (let p = 0; p < crossed.length; p++) {
+    const [a, b, u] = crossed[p]
+    for (let q = p + 1; q < crossed.length && crossed[q][0] <= b; q++) {
+      const [c, d, v] = crossed[q]
+      if (d <= b || c <= a) continue
+      const mu = new Set(found[u].m), mv = new Set(found[v].m)
+      for (let k = c; k <= b;) {
+        const l = line[k]
+        let e = k, nu = 0, nv = 0
+        for (; e <= b && line[e] === l; e++) { if (mu.has(e)) nu++; if (mv.has(e)) nv++ }
+        // (the line of v's first word is v's and that of u's last is u's, as their marks bound them; any other goes only from
+        // a unit with no matched word on it: a footnote of few words its matcher found, a URL's, keeps its first line,
+        // though the paragraph's matcher found the words it goes on with there)
+        const w = l === line[c] ? v : l === line[b] ? u : nu > nv && nv === 0 ? u : nv > nu && nu === 0 ? v : -1
+        if (w !== -1) for (let j = k; j < e; j++) if (owner[j] === u || owner[j] === v) owner[j] = w
+        k = e
+      }
+    }
+  }
   found.forEach((f, u) => { if (f && !f.bounded) for (const k of f.m) if (owner[k] === -1) { owner[k] = u; wrote.tokens.push(k) } })
   // (the tokens owned, as disjoint intervals rising: the line owners are made of them alone)
   const owned = []
