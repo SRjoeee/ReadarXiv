@@ -559,6 +559,27 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
   })
 })
 
+// A copy made under pipeline 23, reopened under 24: 24 guesses a package's toplevel sources where it has no 00README
+// (paper-meta.mjs), not a unit, the wire or its reading back: every unit is the copy's by its hash, carried as it has it, and
+// nothing is sent
+describe('a copy made under pipeline 23, reopened under 24', () => {
+  const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
+  it('takes every unit as the copy has it: nothing is sent again', async () => {
+    expect(PIPELINE_VERSION).toBe('24')
+    const p = paper(), n = p.units.length
+    const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
+    const record = JSON.parse(JSON.stringify({ pipeline: '23', format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
+    const { seed } = await seedFrom(record, p.units)
+    expect(seed.size).toBe(n - keptFor(p, 'zh').size)
+    const reuse = copyReuse(record, { pipeline: PIPELINE_VERSION, format: 'markers', context: {}, carries: PIPELINE_CARRIES })
+    expect(reuse.copyWire).toBe(false)
+    const sent: string[] = []
+    const r = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate(sent), format: 'markers', marks: null, identity: 'B', seed: reusable(seed, { identity: 'B', ...reuse, units: p.units }), pipelineCurrent: false, readMarks: async () => MARKS(n) })
+    expect(sent).toEqual([])
+    expect(r.settled).toBe(true)
+  })
+})
+
 // A copy made under pipeline 22, reopened under 23: 23 writes a display's own stop after its marker and takes off what the
 // reply set for it (mt.mjs serialize's `own`, TRANSLATE_VERSION 5), the units and their hashes as they were. Given the units,
 // the carry test asks whether the unit's wire carries such a stop (mt.mjs displayStopChanges): that unit's translation was

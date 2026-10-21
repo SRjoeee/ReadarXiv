@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest'
+import { inMemory } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { analyze } from '@/pdf-reader/engine/source/paper-meta.mjs'
+
+// How many toplevel sources arXiv compiled, and which one is the main file: from 00README where the package has one,
+// else guessed from the files no other file includes (1008.0072v1: a revtex4 paper and its supplement, no 00README; arXiv's
+// legacy AutoTeX compiled both and joined them, the paper's pages first)
+
+const enc = (s: string) => new TextEncoder().encode(s)
+const doc = (body: string) => `\\documentclass{revtex4}\n\\begin{document}\n${body}\n\\end{document}\n`
+const meta = (files: [string, string][]) => analyze(inMemory(new Map(files.map(([p, t]): [string, Uint8Array] => [p, enc(t)]))))
+
+describe('analyze: the toplevel sources', () => {
+  it('with no 00README, counts the \\documentclass files no other file includes, the main file the one arXiv joins first', () => {
+    // (the supplement longer than the paper, in either order in the package: the main is the paper all the same)
+    const paper = doc('The paper. '.repeat(10)), supp = doc('A longer supplement. '.repeat(40))
+    for (const files of [[['Paper_Final.tex', paper], ['Supplementary_Final.tex', supp]], [['Supplementary_Final.tex', supp], ['Paper_Final.tex', paper]]] as [string, string][][]) {
+      const m = meta(files)
+      expect(m).toMatchObject({ main: 'Paper_Final.tex', mainGuessed: true, toplevels: 2 })
+    }
+  })
+  it('with no 00README, a file of the preferred name is the main among the uncited, before the alphabetical order', () => {
+    expect(meta([['appendix.tex', doc('An appendix.')], ['main.tex', doc('The paper.')]])).toMatchObject({ main: 'main.tex', toplevels: 2 })
+  })
+  it('with no 00README, a \\documentclass file another file \\inputs is a part: one toplevel source', () => {
+    const m = meta([['paper.tex', doc('The paper.\n\\input{supplement}')], ['supplement.tex', doc('A supplement. '.repeat(40))]])
+    expect(m).toMatchObject({ main: 'paper.tex', toplevels: 1 })
+  })
+  it('00README.json\'s toplevel sources are the count, as before', () => {
+    const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'ms.tex' }, { usage: 'include', filename: 'supp.tex' }], process: { compiler: 'pdflatex' } })
+    const m = meta([['00README.json', readme], ['ms.tex', doc('The paper.')], ['supp.tex', doc('A supplement.')]])
+    expect(m).toMatchObject({ readme: 'json', main: 'ms.tex', toplevels: 1 })
+    expect(m.mainGuessed).toBeUndefined()
+  })
+  it('a legacy 00README\'s toplevelfile lines are the count, as before', () => {
+    const m = meta([['00README.XXX', 'b.tex toplevelfile\na.tex toplevelfile\n'], ['a.tex', doc('A.')], ['b.tex', doc('B.')], ['c.tex', doc('C.')]])
+    expect(m).toMatchObject({ readme: 'legacy', main: 'b.tex', toplevels: 2 })
+    expect(m.mainGuessed).toBeUndefined()
+  })
+  it('a 00README whose toplevel file the package lacks: the main is guessed, the count stays the 00README\'s', () => {
+    const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'gone.tex' }], process: { compiler: 'pdflatex' } })
+    const m = meta([['00README.json', readme], ['a.tex', doc('A.')], ['b.tex', doc('B.')]])
+    expect(m).toMatchObject({ main: 'a.tex', mainGuessed: true, toplevels: 1 })
+  })
+})

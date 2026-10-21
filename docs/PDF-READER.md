@@ -1611,9 +1611,17 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   of a paper with no layout: a part with no layout (its record, below), every unit read under the proof with no file, so a
   unit the left locates by its text and that holds no placeholder but a space, a text symbol or TeX's nothing is drawn
   translated, and every other unit is left the original's; no unit is placed by the short original's lines. A paper of
-  several toplevel sources (00README's, `meta.toplevels`) is not refused so: arXiv compiles each and joins their PDFs, the
+  several toplevel sources (`meta.toplevels`) is not refused so: arXiv compiles each and joins their PDFs, the
   pipeline the first alone, so its marked original's pages are compared with arXiv's first (2610.20030: 8 of 12, the carry
-  judging them; 18's rule refused it outright, 39 rows), `stats.toplevels` { files, pages }. The further files' units are not
+  judging them; 18's rule refused it outright, 39 rows), `stats.toplevels` { files, pages }. The count is 00README's
+  where the package has one (00README.json's toplevel sources, a legacy 00README's `toplevelfile` lines, standing even
+  where its main file is missing from the package); with none it is guessed (`source/paper-meta.mjs`, PIPELINE 24): every
+  `\documentclass` or `\documentstyle` file no other file includes, which arXiv's AutoTeX compiles and joins in the order
+  of their paths. The main file is then a file of the preferred name (main, ms, paper, manuscript, arxiv), else the first
+  path in code-unit order: the file whose pages come first in arXiv's PDF, which the carry compares (1008.0072v1: no
+  00README, Femtoscope_resubmission_Final_1.tex's 5 pages and Supplementary_Final_1.tex's 3, refused for 5 pages of 8
+  before; of 283 packages scanned it is the one with two such files and no 00README). With none uncited (each file
+  included by another) the main is the longer body, as before. The further files' units are not
   read at all (their pages left the original's, with no unit): their own compiles and units, the pages offset, are later
   work.
 - **Why a part has no layout** (BUNDLE 6, R1 item 4). A part with none carries the reason in place of its layout,

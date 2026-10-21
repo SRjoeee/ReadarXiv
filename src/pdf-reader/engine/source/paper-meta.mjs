@@ -47,11 +47,19 @@ export function analyze(fsys) {
     // a part is no main: each file named by \input, \include or \subfile, or import.sty's {dir}{file}, by the name the
     // package holds it under (\subfile{./chapters/ch1}: chapters/ch1.tex, a subfile's own \documentclass and all)
     for (const f of tex) for (const m of bodies[f].matchAll(/\\(input|include|subfile|(?:sub)?(?:import|inputfrom|includefrom))\s*\*?\s*\{([^}]+)\}(?:\s*\{([^}]+)\})?/g)) { const n = normalizePath(/^(input|include|subfile)$/.test(m[1]) || m[3] === undefined ? m[2].trim() : `${m[2].trim()}/${m[3].trim()}`); included.add(n); included.add(`${n}.tex`) }
-    let cands = withClass.filter(f => !included.has(f) && !included.has(f.replace(/\.tex$/, '')))
-    if (!cands.length) cands = withClass
-    cands.sort((a, b) => (/^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(b)) - /^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(a))) || bodies[b].length - bodies[a].length)
+    const uncited = withClass.filter(f => !included.has(f) && !included.has(f.replace(/\.tex$/, '')))
+    const preferred = f => /^(main|ms|paper|manuscript|arxiv)\.tex$/i.test(basename(f))
+    // Each uncited file is a toplevel source: arXiv's AutoTeX compiles every one and joins their PDFs in the order of their
+    // paths (1008.0072v1: Femtoscope_resubmission_Final_1.tex's 5 pages, then Supplementary_Final_1.tex's 3). The main file is
+    // the one whose pages come first, which the page pass compares with arXiv's first pages: a file of the preferred name,
+    // else the first path in code-unit order (Perl's sort). With none uncited (each file included by another), the longer
+    // body as TeX reads it.
+    const cands = uncited.length ? uncited.sort((a, b) => preferred(b) - preferred(a) || (a < b ? -1 : a > b ? 1 : 0))
+      : withClass.sort((a, b) => preferred(b) - preferred(a) || bodies[b].length - bodies[a].length)
     meta.main = cands[0] ?? null
     meta.mainCandidates = withClass.length
+    // (a count a 00README gave stands, its main file merely missing from the package)
+    meta.toplevels ??= uncited.length
   }
   if (!meta.main) return { ...meta, verdict: 'no-main' }
 

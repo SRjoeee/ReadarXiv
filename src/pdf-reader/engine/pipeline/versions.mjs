@@ -152,7 +152,16 @@
 //     it, carries each unit whose wire the rule leaves as it was (mt.mjs displayStopChanges; live.mjs PIPELINE_CARRIES):
 //     over 180 papers' sources 4,215 of 44,825 units, in 153 papers, are asked again. The units, the marked
 //     original and the layout file are 22's byte for byte
-export const PIPELINE_VERSION = '23'
+// 24: a package with no 00README has its toplevel sources guessed (source/paper-meta.mjs): every \documentclass file no
+//     other file includes is one, which arXiv's AutoTeX compiles and joins in the order of their paths, so the main file
+//     is a file of the preferred name, else the first path (no longer the longer body), and a paper of several has its
+//     marked original compared with arXiv's first pages (page-pass.mjs, layout/paper.mjs: 2610.20030's rule). 1008.0072v1,
+//     a revtex4 paper and its supplement joined in arXiv's PDF (5 + 3 of 8 pages), had no layout, refused for 5 pages of 8.
+//     Of 283 packages scanned one has two such files and no 00README (1008.0072v1), its main file the same under both
+//     orders: the units, the wire and its reading back are 23's, and a copy of 23 carries every unit it holds the source
+//     of (live.mjs PIPELINE_CARRIES). Raised so that such a paper's bundle, now with a layout, is made again under a new
+//     key (VTAG)
+export const PIPELINE_VERSION = '24'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

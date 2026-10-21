@@ -148,7 +148,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // past, 97 % carried). Of 141 compiles of an original counted against arXiv's PDF (2026-10-19: the corpus's 113, the
   // survey's 28 on TL2025 and TL2023) the other 139 have arXiv's count, none more: so fewer by any page is refused, more is
   // the carry's to judge. The count is the open document's (`marked`) or the marks' own (`marks`): nothing more is read for it.
-  // A paper of several toplevel sources (00README's, `meta.toplevels`: 2610.20030's manuscript and supplement) is compiled by
+  // A paper of several toplevel sources (00README's or guessed, `meta.toplevels`: 2610.20030's manuscript and supplement) is compiled by
   // arXiv one after the other into one PDF, and by the pipeline from the first alone (its units): its marked original's M
   // pages are compared with arXiv's first M, the carry judging them, the pages past them laid with no unit marks of theirs.
   // That the further files' units are not read at all (their pages left the original's, unlocated, with no unit to place)

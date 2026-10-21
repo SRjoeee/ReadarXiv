@@ -197,7 +197,8 @@ describe('the units whose wire the rule changes (displayStopChanges), which a co
     const stop = unitOf(YIELDS), none = unitOf('It reads\n\\[ x = y \\]\nthen it ends with words.')
     const tr = (u: { pieces: Piece[] }) => u.pieces.map(p => (p.t === 'text' ? { ...p, tr: true, s: '\u8bba\u6587' } : p))
     for (const [v, carry] of Object.entries(PIPELINE_CARRIES) as [string, (pieces: unknown[], unit?: unknown) => boolean][]) {
-      if (Number(v) < 15) continue
+      // (23 sent it with its stop already: its copies are carried whole, as 24 changes no unit's wire)
+      if (Number(v) < 15 || Number(v) >= 23) continue
       expect(carry(tr(stop), stop), v).toBe(false)
       expect(carry(tr(none), none), v).toBe(true)
       expect(carry(tr(stop), null), v).toBe(false)
