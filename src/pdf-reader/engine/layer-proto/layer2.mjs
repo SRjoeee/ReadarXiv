@@ -492,15 +492,32 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * digits, operators: "(z) =" at a line's end), and a line that is not its block's last, being justified, out to its
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
  * no placeholder held them. `first`: the unit's first line (`rects` may be its lines on one page alone: run.mjs grows a
- * unit page by page). Mutates the rectangles.
+ * unit page by page). `measured`: the rectangles are the layout file's lines, TeX's, each set to a measure: a justified
+ * line grows over what is not math only up to its own measure, its run's (measuresOf), not its block's widest edge, and
+ * past it only over a formula's tail that goes on from it, never across a float's gap (E3d: beside a float wrapped on the
+ * right, narrow lines grew over the caption's label "Table 6: A" and its digits, which no unit's rectangle held, and the
+ * grown lines set the measure of every narrow line of their run, 2602.23285 page 18). v0's anchors, which fall short of
+ * their ink, grow as before. Mutates the rectangles.
  */
-export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0]) {
+export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0], measured = false) {
+  // (a file line's measure, read from the lines as the file gives them, before any growth: the growth over the source's own
+  // words below, extendRects, would take a caption's label beside it that holds one, "Fig. 6: A", and the measure with it)
+  const measureOf = new Map()
+  if (measured) for (const b of blocksOf(rects, pageViews)) {
+    const m = measuresOf(b.rects)
+    if (m) for (const q of b.rects) { const r = rects.find(x => x.join() === q.join()); if (r) measureOf.set(r, { x1: m.get(rectKey(q))[1], was: r[3] }) }
+  }
   let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars, first)
+  // (and that growth never past it: the line as it was, or its measure, whichever is further)
+  for (const [r, m] of measureOf) if (r[3] > m.x1 + 1) r[3] = Math.max(m.was, m.x1)
   const blocks = blocksOf(rects, pageViews)
   const lastOf = new Set(blocks.map(b => b.rects.at(-1).join()))
-  const edgeOf = new Map()
+  const edgeOf = new Map(), justOf = new Map()
   const blockX0 = new Map()
-  for (const b of blocks) for (const r of b.rects) { edgeOf.set(r.join(), b.x1); blockX0.set(r.join(), b.x0) }
+  for (const b of blocks) for (const q of b.rects) {
+    const r = rects.find(x => x.join() === q.join())
+    edgeOf.set(q.join(), b.x1); justOf.set(q.join(), measureOf.get(r)?.x1 ?? b.x1); blockX0.set(q.join(), b.x0)
+  }
   for (const r of rects) {
     const page = charsByPage[r[0] - 1] ?? []
     // by their centres: a character's place in its item is an estimate, off by a point or two at an item's end
@@ -511,7 +528,7 @@ export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn,
     const foreign = c => (others[r[0]] ?? []).some(o => c.x0 >= o[1] - 0.5 && c.x1 <= o[3] + 0.5 && c.yb >= o[2] - 0.2 && c.yb <= o[4])
     const mathy = c => c.st?.fam === 'math' || /^[()[\]{}=+−\-×·<>≤≥|,.;:0-9∗*′]$/.test(c.ch)
     const key = r.join()
-    const edge = !lastOf.has(key) ? edgeOf.get(key) : null
+    const edge = !lastOf.has(key) ? justOf.get(key) : null
     // never out of the unit's own block (a column's paragraph took the next column's equation number "(4)")
     const bx0 = blockX0.get(key) ?? -Infinity, bx1 = edgeOf.get(key) ?? Infinity
     // an item the line holds the start of and that ends less than 8 pt past it is the line's to its end (an item's
@@ -532,10 +549,13 @@ export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn,
       }
       x = Math.max(x, cs[last].x1)
     }
-    // to the right: math always; anything while the line is a justified one, up to its block's edge
+    // to the right: math always; anything while the line is a justified one, up to its block's edge. A file line (`measured`):
+    // anything up to its own measure, and past it only a formula's tail that goes on from it (within 0.6 em, as to the left),
+    // never across the gap a float wrapped beside it leaves (\columnsep)
+    const just = justOf.get(key)
     let to = x
     for (const c of line.filter(c => c.x0 >= x - 0.1)) {
-      if (c.x0 - to > 1.2 * size || foreign(c) || c.x1 > bx1 + 3) break
+      if (c.x0 - to > (measured && c.x1 > just + 1 ? 0.6 : 1.2) * size || foreign(c) || c.x1 > bx1 + 3) break
       if (!(mathy(c) || (edge !== null && c.x1 <= edge + 1))) break
       to = c.x1
     }
