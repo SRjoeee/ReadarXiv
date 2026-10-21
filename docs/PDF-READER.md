@@ -1615,7 +1615,7 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   pipeline the first alone, so its marked original's pages are compared with arXiv's first (2610.20030: 8 of 12, the carry
   judging them; 18's rule refused it outright, 39 rows), `stats.toplevels` { files, pages }. The count is 00README's
   where the package has one (00README.json's toplevel sources, a legacy 00README's `toplevelfile` lines, standing even
-  where its main file is missing from the package); with none it is guessed (`source/paper-meta.mjs`, PIPELINE 24): every
+  where its main file is missing from the package); with none it is guessed (`source/paper-meta.mjs`, PIPELINE 25): every
   `\documentclass` or `\documentstyle` file no other file includes that begins a document and whose class is not
   `standalone` (a figure's own file) or `subfiles` (a part); a letter counts. arXiv's AutoTeX compiles each and joins
   them, in the order of their paths as observed on one paper (1008.0072v1); the order is not otherwise established.

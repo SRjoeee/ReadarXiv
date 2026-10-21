@@ -32,8 +32,12 @@ export { LayoutRefusal } from './json.mjs'
  *  no row and no mark for a placeholder that sets no ink (arg-roles.mjs textless: \label with cleveref's type,
  *  \bibliographystyle, soul's \sethlcolor, \-), and a babel name's marks after a \relax (marks.mjs NAMES_TEX), so that a
  *  class's \if over the name reads it and REVTeX's numbered appendices are set with their names marked (the file's schema
- *  is 5 still; the gate pack's 32 outputs' marks are 9's, each destination where it was) */
-export const LAYOUT = '10'
+ *  is 5 still; the gate pack's 32 outputs' marks are 9's, each destination where it was); 11: a unit's lines at a page
+ *  break read by its own words (pipeline/anchors.mjs: a paragraph and its footnote both going on over a page each keep the
+ *  lines their matched words are on, and a formula's row of no word of the unit's is held between its lines, not the walk's
+ *  end): over 57 papers 10 LOST rows found and none lost, 5 units' lines changed in 4 papers, the gate pack's 32 outputs
+ *  unchanged (the file's schema is 5 still) */
+export const LAYOUT = '11'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */

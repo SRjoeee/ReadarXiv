@@ -35,7 +35,7 @@ describe('analyze: the toplevel sources', () => {
     const paper = doc('The paper. '.repeat(40))
     const fig = '\\documentclass{standalone}\n\\begin{document}\nA figure.\n\\end{document}\n'
     const part = '\\documentclass[../x.tex]{subfiles}\n\\begin{document}\nA part.\n\\end{document}\n'
-    for (const [name, other] of [['fig/a.tex', fig], ['chapter.tex', part], ['a-stub.tex', '\\documentclass{article}\n']]) {
+    for (const [name, other] of [['fig/a.tex', fig], ['chapter.tex', part], ['a-stub.tex', '\\documentclass{article}\n']] as [string, string][]) {
       expect(meta([['zpaper.tex', paper], [name, other]]), name).toMatchObject({ main: 'zpaper.tex', toplevels: 1 })
     }
   })
