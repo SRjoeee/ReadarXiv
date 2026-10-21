@@ -19,8 +19,17 @@ describe('analyze: the toplevel sources', () => {
       expect(m).toMatchObject({ main: 'Paper_Final.tex', mainGuessed: true, toplevels: 2 })
     }
   })
-  it('with no 00README, a file of the preferred name is the main among the uncited, before the alphabetical order', () => {
-    expect(meta([['appendix.tex', doc('An appendix.')], ['main.tex', doc('The paper.')]])).toMatchObject({ main: 'main.tex', toplevels: 2 })
+  it('with no 00README and several uncited files, the main is the first path even where a later one has the preferred name', () => {
+    // (arXiv joins a.tex's pages first: main.tex would be compared with a.tex's pages)
+    expect(meta([['main.tex', doc('The paper. '.repeat(40))], ['a.tex', doc('A cover page.')]])).toMatchObject({ main: 'a.tex', toplevels: 2 })
+  })
+  it('a subfile named from a file in a directory (\\subfile{child} in chapters/) is a part, counted once with its main', () => {
+    const m = meta([
+      ['main.tex', doc('The paper.\n\\input{chapters/index}')],
+      ['chapters/index.tex', '\\subfile{child}\n'],
+      ['chapters/child.tex', `\\documentclass[../main.tex]{subfiles}\n\\begin{document}\n${'A long chapter. '.repeat(40)}\n\\end{document}\n`],
+    ])
+    expect(m).toMatchObject({ main: 'main.tex', toplevels: 1 })
   })
   it('with no 00README, a \\documentclass file another file \\inputs is a part: one toplevel source', () => {
     const m = meta([['paper.tex', doc('The paper.\n\\input{supplement}')], ['supplement.tex', doc('A supplement. '.repeat(40))]])

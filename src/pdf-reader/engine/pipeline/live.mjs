@@ -470,7 +470,7 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   without the unit, a translation that holds no display with a stop of its own. Over 180 papers' sources 4,215 of
  *   44,825 units are asked again. Every older pipeline's test takes this one with its own
  * - 23: 24 guesses a package's toplevel sources where it has no 00README (source/paper-meta.mjs), which changes which
- *   papers get a layout and, among several uncited files, which one is the main, not what is sent for a unit or how a reply
+ *   papers get a layout and, among several toplevel files, which one is the main, not what is sent for a unit or how a reply
  *   is read back: every unit whose source a copy holds is carried, and older pipelines keep their own tests
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
