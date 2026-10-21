@@ -477,6 +477,46 @@ describe('anchorUnits: two marked units both going on over a page (2610.10069 p8
     expect(words(doc, found.get(2))).toEqual(['note', 'one', 'two', 'three', 'note', 'four', 'five', 'six'])
   })
 
+  it('a footnote whose matcher found few of its words keeps its first line, where the paragraph\'s matcher found its next words', () => {
+    // (a URL's words: the paragraph goes on at the next page with words the note's first line holds too)
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('alpha beta gamma delta', 50, 676), line('code at github com the model data', 50, 120)]),
+      pageOf(2, [line('the model data is good here', 50, 700), line('see repo', 50, 120)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'alpha beta gamma delta the model data is good here' }, { id: 2, text: 'code at see repo' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('alpha'), at('here')]], ['2', [at('code'), at('repo')]]]) })
+    expect(words(doc, found.get(1))).toEqual(['alpha', 'beta', 'gamma', 'delta', 'the', 'model', 'data', 'is', 'good', 'here'])
+    expect(words(doc, found.get(2))).toEqual(['code', 'at', 'github', 'com', 'the', 'model', 'data', 'see', 'repo'])
+  })
+
+  it('a line of the overlap that holds matched words of both stays the innermost range\'s, whichever holds more', () => {
+    // (the note's range the shorter, the paragraph opening a line earlier; its second line holds two of its words and the
+    // three the paragraph's matcher found there first)
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('omega psi chi phi', 50, 688), line('alpha beta gamma delta', 50, 676), line('note one two three', 50, 132), line('four five the model data', 50, 120)]),
+      pageOf(2, [line('the model data is good here', 50, 700), line('note six seven eight', 50, 120)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'omega psi chi phi alpha beta gamma delta the model data is good here' }, { id: 2, text: 'note one two three four five note six seven eight' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('omega'), at('here')]], ['2', [at('note'), at('eight')]]]) })
+    expect(words(doc, found.get(2))?.slice(0, 9)).toEqual(['note', 'one', 'two', 'three', 'four', 'five', 'the', 'model', 'data'])
+  })
+
+  it('rows of digits at the page\'s foot stay held when a row of two-letter tokens follows, though `In` begins the unit\'s next word', () => {
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('we have the', 50, 400), line('12 34 56', 50, 388), line('78 90 11', 50, 376), line('No In 0.5', 50, 364)]),
+      pageOf(2, [line('theory here', 50, 700), line('another paragraph after', 50, 676)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'we have the information theory here' }, { id: 2, text: 'another paragraph after' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('we'), at('here')]], ['2', [at('another'), at('after')]]]) })
+    expect(words(doc, found.get(1))).toEqual(['we', 'have', 'the', 'theory', 'here'])
+  })
+
   it('a formula\'s row of two-letter tokens at the next page\'s head is held between the unit\'s lines, not the walk\'s end', () => {
     // (the walk up from the unit's first matched word on the next page: `dt ln` holds no word of the unit, the line above it
     // its word a hyphen cut over the page)
