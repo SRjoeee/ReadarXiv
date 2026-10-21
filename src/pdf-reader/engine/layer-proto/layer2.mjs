@@ -500,14 +500,23 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * their ink, grow as before. Mutates the rectangles.
  */
 export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0], measured = false) {
+  // (a file line's measure, read from the lines as the file gives them, before any growth: the growth over the source's own
+  // words below, extendRects, would take a caption's label beside it that holds one, "Fig. 6: A", and the measure with it)
+  const measureOf = new Map()
+  if (measured) for (const b of blocksOf(rects, pageViews)) {
+    const m = measuresOf(b.rects)
+    if (m) for (const q of b.rects) { const r = rects.find(x => x.join() === q.join()); if (r) measureOf.set(r, { x1: m.get(rectKey(q))[1], was: r[3] }) }
+  }
   let grown = extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, wordChars, first)
+  // (and that growth never past it: the line as it was, or its measure, whichever is further)
+  for (const [r, m] of measureOf) if (r[3] > m.x1 + 1) r[3] = Math.max(m.was, m.x1)
   const blocks = blocksOf(rects, pageViews)
   const lastOf = new Set(blocks.map(b => b.rects.at(-1).join()))
   const edgeOf = new Map(), justOf = new Map()
   const blockX0 = new Map()
-  for (const b of blocks) {
-    const m = measured ? measuresOf(b.rects) : null
-    for (const r of b.rects) { edgeOf.set(r.join(), b.x1); justOf.set(r.join(), m?.get(rectKey(r))?.[1] ?? b.x1); blockX0.set(r.join(), b.x0) }
+  for (const b of blocks) for (const q of b.rects) {
+    const r = rects.find(x => x.join() === q.join())
+    edgeOf.set(q.join(), b.x1); justOf.set(q.join(), measureOf.get(r)?.x1 ?? b.x1); blockX0.set(q.join(), b.x0)
   }
   for (const r of rects) {
     const page = charsByPage[r[0] - 1] ?? []
