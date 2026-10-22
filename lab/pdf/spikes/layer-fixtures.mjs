@@ -314,12 +314,12 @@ async function compiledNow(dir, name, files, paper, { passes = null, once = fals
   try {
     for (const [p, b] of files) { const f = join(build, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
     const date = Number.isSafeInteger(sourceDate) ? ['-e', `SOURCE_DATE_EPOCH=${sourceDate}`, '-e', 'FORCE_SOURCE_DATE=1'] : []
-    const engine = latexmkEngine(paper.meta.compiler)
+    const texEngine = latexmkEngine(paper.meta.compiler)
     const one = passes === 1 ? ['-e', '$max_repeat=1'] : []
     const compiler = paper.meta.compiler ?? 'pdflatex'
     const cmd = once
       ? ['sh', '-c', `${compiler === 'latex' ? 'latex' : compiler} -interaction=nonstopmode ./${main}${compiler === 'latex' ? `; dvipdfmx -o ${stem}.pdf ${stem}.dvi` : ''}; true`]
-      : ['latexmk', ...engine, ...one, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
+      : ['latexmk', ...texEngine, ...one, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
     const said = await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...date, '-v', `${build}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).then(r => `${r.stdout}${r.stderr}`, e => `${e?.stdout ?? ''}${e?.stderr ?? ''}`)
     const pdf = join(build, `${stem}.pdf`), log = join(build, `${stem}.log`)
     if (!existsSync(log)) return null
