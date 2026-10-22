@@ -50,7 +50,7 @@ describe('markedOfPaper: a throw of the guard\'s own is no refusal', () => {
     fault.error = new Error('the check broke')
     try {
       const c = compiler([PROBE, ran])
-      expect(await markedOfPaper(paperOf(), { compile: c.compile })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: { probe: expect.any(Number), compile: expect.any(Number) } })
+      expect(await markedOfPaper(paperOf(), { final: false, compile: c.compile })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: { probe: expect.any(Number), compile: expect.any(Number) } })
       expect(c.asked).toHaveLength(2)
       expect(new TextDecoder().decode(c.asked[1]?.overrides.get('main.tex'))).toContain('\\axtmark{0s}')
     } finally { fault.at = null }

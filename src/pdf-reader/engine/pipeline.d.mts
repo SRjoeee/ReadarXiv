@@ -1,7 +1,7 @@
 // pipeline.mjs's types
 
 // the paper, its marked original and the readings of a compile
-export { PIPELINE_VERSION, citationLines, keptFor, openPaper, originalFiles, probeFiles, readingsOf, stoppedShort } from './pipeline/live.mjs'
+export { DRAFT_OPTION, PIPELINE_VERSION, citationLines, keptFor, openPaper, originalFiles, probeFiles, readingsOf, stoppedShort } from './pipeline/live.mjs'
 // the versions a reader checks a bundle against
 export { PDFJS } from './pipeline/versions.mjs'
 // the front end, without the compile path's TeX (translate has the units' plain text, mt.mjs unitText)
@@ -25,7 +25,10 @@ export { CARRY_MIN, DEFAULT_RULES, OPS_MS, WHOLE_RULES, fontName, makeLayout } f
 export { GLYPHS_PAGE, OPS_CAP } from './layout/ink.mjs'
 export { readArxivText } from './layout/arxiv.mjs'
 export { handoverOf, layoutMarksOfPaper, markedOfPaper } from './layout/paper.mjs'
-export type { OwnVerdict } from './layout/paper.mjs'
+export type { FinalPass, OwnVerdict } from './layout/paper.mjs'
+// our compile as the base page (BUNDLE 8): the checks the final pass and our pages pass, and arXiv's date the compiles take
+export { BOX_TOL, MARK_TOL, boxesCheck, boxesOfPdf, creationEpochOf, finalCheck, hasMarkText, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf } from './layout/base.mjs'
+export type { PdfLike } from './layout/base.mjs'
 export { LINK_TEXT_PIXELS, LITE_PDFJS, NO_IMAGE_PIXELS, liteWorkerSource } from './layout/pdf-lite.mjs'
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, REFUSED_MAX, REMOVAL, checkAddonManifest, checkBoxes, parseAddonManifest } from './layout/addon-manifest.mjs'
 export { pagePlanOf, pagePlansOf, paperAddon } from './layout/addon.mjs'
@@ -40,7 +43,7 @@ export type { AddonChainState, RemoverAnswer } from './layout/chain.mjs'
 // the bundle's writer (the reader's parsers are the layer entry's)
 export { bundleUnitsOf, writeBundle } from './layer-proto/bundle.mjs'
 // BUNDLE 4: the writers of a paper's objects, the keys and the bounds (the readers are the layer entry's), and the memory-class errors every catch lets through
-export { BUILD_END_WHYS, BUNDLE5, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG5, DEPTH_NONE, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG5, catalogKey, isFinalEnd, keyOf, keyParts, KIND_NONE, RECORD_FLAG, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks, isLayoutRefusal, LAYOUT_REFUSED, WHY_MAX } from './layer-proto/format.mjs'
+export { BUILD_END_WHYS, BUNDLE5, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG5, DEPTH_NONE, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG5, catalogKey, isFinalEnd, keyOf, keyParts, KIND_NONE, RECORD_FLAG, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks, isLayoutRefusal, LAYOUT_REFUSED, WHY_MAX, BASE_SOURCES, BASE_WHYS, BUNDLES_READ, baseKey, catalogBase } from './layer-proto/format.mjs'
 export { BundleRefusal } from './layer-proto/bundle.mjs'
 // the cut: a paper made whole, in BUNDLE 4's objects
 export { cutBundle, needFrontier, partCutter, wholeCutter, wholeFrontier } from './layer-proto/cut.mjs'

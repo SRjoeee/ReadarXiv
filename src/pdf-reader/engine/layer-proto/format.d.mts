@@ -9,8 +9,17 @@ export type { UnitWire } from './bundle.mjs'
 import type { UnitWire } from './bundle.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
-/** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why */
-export declare const BUNDLE5: '7'
+/** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why;
+ *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
+ *  and `orig` names arXiv's beside ours, the catalog names the base */
+export declare const BUNDLE5: '8'
+/** the formats a reader takes: its own and 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv') */
+export declare const BUNDLES_READ: readonly ['7', '8']
+/** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
+export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
+export type BaseSource = (typeof BASE_SOURCES)[number]
+/** why a head of 8's base is arXiv's (`base.why`): LAYOUT_REFUSED's codes, which each part with no layout says too */
+export declare const BASE_WHYS: typeof LAYOUT_REFUSED
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
 export declare const UNITS_FORMAT: '1'
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`, named with the 5 beside bundle.mjs's CTAG whatever BUNDLE5's value */
@@ -90,9 +99,25 @@ export interface ReadUnitsChunkLight extends Omit<ReadUnitsChunk, 'units'> {
   /** each unit's piece count, 0 for a unit that does not stand (amendment M24) */
   pieces: Uint32Array
 }
+/** the page-and-line check a base of ours passed: our page count and arXiv's (both the paper's), every page box equal to
+ *  arXiv's, the share of our lines found on arXiv's PDF (0 to 1, to a ten-thousandth) */
+export interface BaseCheck { pages: [ours: number, arxiv: number]; boxes: 'equal'; carried: number }
+/** the PDF a layer is drawn over (the head's `base`): ours, the final pass of our marked compile, with its page count, the
+ *  TeX Live year it was compiled on ('2025') and its check; or arXiv's, with why ours was refused where a head of 8 says it
+ *  (absent: a head of 7, or a producer that made no base of its own). `xref`: the PDF's last cross-reference section's
+ *  offset, which the remover's tails continue */
+export type HeadBase =
+  | { source: 'ours'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck }
+  | { source: 'arxiv'; bytes: number; sha256: string; xref: number; why?: LayoutRefused }
 export interface ReadHead {
   kind: 'head'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }
-  base: { bytes: number; sha256: string; xref: number }; versions: HeadVersions
+  /** the head's format (BUNDLES_READ) */
+  bundle: '7' | '8'
+  /** the PDF the layer is drawn over */
+  base: HeadBase
+  /** arXiv's PDF, where the base is ours; null where the base is arXiv's */
+  orig: { bytes: number; sha256: string } | null
+  versions: HeadVersions
   units: (Ref & { from: number; to: number })[]; lineskip: [number, number] | null
   /** 1: the parts may carry the draw of their pages' left parts (a page can still have none); 0 (absent in the bytes): not made with them */
   draw: 0 | 1
@@ -140,8 +165,9 @@ export interface PartChain {
   readonly r: number
 }
 /** why a part has no layout, as its wire records it in place of one: TeX's (`compile`, `texlive`, `engine`), ours (`marks`),
- *  or the carry's (`carry`) */
-export declare const LAYOUT_REFUSED: readonly ['compile', 'carry', 'engine', 'texlive', 'marks']
+ *  the carry's (`carry`), and BUNDLE 8's where our compile is no base page (`final`: the final pass failed, moved a mark or had
+ *  no budget; `boxes`: a page of ours not arXiv's size, or other page counts) */
+export declare const LAYOUT_REFUSED: readonly ['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes']
 export type LayoutRefused = (typeof LAYOUT_REFUSED)[number]
 /** a record's `why`, in code units at most */
 export declare const WHY_MAX: 300
@@ -168,9 +194,14 @@ export interface ReadLeftPart {
   /** the page's draw geometry (E-C), checked; null: the browser reads the page itself */
   draw: Draw | null
 }
+/** the base a catalog of 8 names (catalogBase): ours by its name (baseKey), digest and bytes; arXiv's by its digest and bytes */
+export type CatalogBase = { source: 'ours'; key: string; sha256: string; bytes: number } | { source: 'arxiv'; sha256: string; bytes: number }
 export interface ReadCatalog {
-  kind: 'catalog'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }; versions: HeadVersions
-  head: Ref; units: (Ref & { from: number; to: number })[]; parts: (Ref & { from: number; to: number })[]
+  kind: 'catalog'; bundle: '7' | '8'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }; versions: HeadVersions
+  head: Ref
+  /** the base, in a catalog of 8; null in one of 7 */
+  base: CatalogBase | null
+  units: (Ref & { from: number; to: number })[]; parts: (Ref & { from: number; to: number })[]
   end: { through: number; refused?: EndWhy }
 }
 
@@ -254,7 +285,12 @@ export interface Written {
  *  chunks past CHUNKS_MAX, UNITS_TOTAL_BYTES or UNITS_TOTAL_VALUES `units-too-large` (its `data` { what, bound, size }) */
 export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly BundleUnit[] }): Promise<(Written & { from: number; to: number })[]>
 export declare function writeHead(o: {
-  paper: { id: string; version: number; pages: number }; base: { bytes: number; sha256: string; xref: number }; image: string
+  paper: { id: string; version: number; pages: number }
+  /** the PDF the layer is drawn over; one given with no `source` is arXiv's (as every base was before BUNDLE 8) */
+  base: HeadBase | { bytes: number; sha256: string; xref: number; source?: undefined }
+  /** arXiv's PDF: written where the base is ours (and required there), ignored else */
+  orig?: { bytes: number; sha256: string } | null
+  image: string
   units: readonly (Written & { from: number; to: number })[]; lineskip: readonly [number, number] | null
   /** the parts may carry draws: the head says `draw: 1` (omitted when false) */
   draw?: boolean
@@ -285,6 +321,10 @@ export declare function writeCatalog(o: {
 export declare function keyOf(paper: string, version: number, ctag: string, sha256: string): string
 /** the catalog's name, `layer/<id>v<n>/<vtag>.json`; throws a RangeError on what is not one */
 export declare function catalogKey(paper: string, version: number, vtag: string): string
+/** a base page of ours' name, `base/<id>v<n>/<sha256>.pdf` (R2's key, immutable); throws a RangeError on what is not one */
+export declare function baseKey(paper: string, version: number, sha256: string): string
+/** the base a catalog names, of its head as read */
+export declare function catalogBase(head: ReadHead): CatalogBase
 /** a key taken apart: an object's { paper, version, ctag, sha256 }, a catalog's { paper, version, vtag }; null for what keyOf
  *  and catalogKey would not write */
 export declare function keyParts(key: string): { paper: string; version: number; ctag: string; sha256: string } | { paper: string; version: number; vtag: string; ctag?: undefined } | null

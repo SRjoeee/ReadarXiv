@@ -37,8 +37,15 @@ import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
  *  reader of 5 refuses the new shape, so the contract is named anew; nothing deployed reads 5 (the owner's rule: no
  *  migration), and a bundle of 5 is simply not found under 6's CTAG and is prepared again. 7: each text item of a left part's
  *  draw carries its characters' fills (draw.mjs, the item's tenth value: layout/fills.mjs itemFills, E1 of 2026-10-19), which a
- *  reader of 6 refuses; a bundle of 6 is not found under 7's CTAG and is prepared again */
-export const BUNDLE5 = '7'
+ *  reader of 6 refuses; a bundle of 6 is not found under 7's CTAG and is prepared again. 8 (layer route step 2, our compile
+ *  the base page): the head's `base` says whose PDF the layer is drawn over (`source`: 'ours', the final pass of our marked
+ *  compile, with its check, or 'arxiv', with why our base was refused) and `orig` names arXiv's PDF beside ours; the catalog
+ *  names the base object (`base`); a part with no layout may say `final` or `boxes` too (LAYOUT_REFUSED). A reader of 7
+ *  refuses the new keys. This reader reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF */
+export const BUNDLE5 = '8'
+/** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 8 reads unchanged: its
+ *  head is read as `base.source` 'arxiv', with no `orig`). Every object of a bundle is of its head's format */
+export const BUNDLES_READ = Object.freeze(['7', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
@@ -59,9 +66,9 @@ const UNITS_DEPTH = 5
 export const CHUNKS_MAX = 20, UNITS_TOTAL_BYTES = 32 * 2 ** 20, UNITS_TOTAL_VALUES = 3_500_000
 /** the last unit id a paper the guard accepts can hold (every unit is at least one value), and the most ids a service forwards as `dropped` (amendments M19, M21) */
 export const UNIT_ID_MAX = UNITS_TOTAL_VALUES, DROPPED_MAX = 148_000
-/** the head's: the object, `units` and a ref in it */
+/** the head's: the object, `units` and a ref in it, or `base`, its `check` and its page counts */
 export const HEAD_CAP = 1024 * 1024, HEAD_VALUES = 64_000
-const HEAD_DEPTH = 3
+const HEAD_DEPTH = 4
 /** a part's: the object, `addon`, the manifest, its `page`, a page's entry, its `units`, a unit's boxes */
 export const PART_CAP = 6 * 2 ** 20, PART_VALUES = 1_000_000
 const PART_DEPTH = 7
@@ -88,9 +95,16 @@ export const TOKEN_SCALE = 1000, TOKEN_LIMIT = 100_000
  *  tell whose fault it is, a compile that threw), `texlive` (as compile, the paper declaring another TeX Live year than the
  *  box's), `engine` (a compiler the host does not run, as `engines` or its answer names it) —; ours — `marks` (the marked original is not the paper and the layout guard could not mend it, or the mark probe,
  *  the marks' reading or the maker failed) —; and `carry` (the marked original's lines are not found on arXiv's pages, under
- *  CARRY_MIN, the paper's or the part's). A part with `layout: null` is one whose producer recorded no reason (5's shape,
- *  cutBundle with none given) */
-export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks'])
+ *  CARRY_MIN, the paper's or the part's); BUNDLE 8's, where our compile is no base page — `final` (the final pass of the
+ *  marked original failed, or did not place every mark where the draft did, or the compile budget held none), `boxes` (a page
+ *  of ours is not arXiv's size, or the page counts differ). A part with `layout: null` is one whose producer recorded no
+ *  reason (5's shape, cutBundle with none given) */
+export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes'])
+/** whose PDF a layer is drawn over (the head's `base.source`): our compile's final pass, or arXiv's (a fallback, or a bundle of 7) */
+export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
+/** why a head's base is arXiv's in a bundle of 8 (`base.why`): the paper's refusal, a code of LAYOUT_REFUSED, which every part
+ *  with no layout says too */
+export const BASE_WHYS = LAYOUT_REFUSED
 export const WHY_MAX = 300
 /** a why as a record holds it: a run of control characters (a TeX log's raw bytes, a terminal's escapes) one space, within
  *  WHY_MAX */
@@ -144,12 +158,13 @@ function exactKeys(kind, v, keys, path) {
   return v
 }
 
-/** the object's first two keys: the format (`bundle`, a units chunk's own `format`) and the kind it is; refused for what it is
- *  before its other keys are looked at; `optional`: keys that may be there besides `keys` */
-function envelope(kind, v, keys, optional = []) {
-  const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? UNITS_FORMAT : BUNDLE5
+/** the object's first two keys: the format (`bundle`, one of BUNDLES_READ; a units chunk's own `format`) and the kind it is;
+ *  refused for what it is before its other keys are looked at; `optional`: keys that may be there besides `keys`. `of`: the
+ *  format the object must be of (its head's), where it is known */
+function envelope(kind, v, keys, optional = [], of = null) {
+  const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? [UNITS_FORMAT] : of === null ? BUNDLES_READ : [of]
   if (!isObject(v)) throw refuse(kind, '', `not an object (${kindOf(v)})`)
-  if (v[tag] !== want) throw refuse(kind, tag, `not this reader's '${want}' (${typeof v[tag] === 'string' ? told(v[tag]) : kindOf(v[tag])})`)
+  if (!want.includes(v[tag])) throw refuse(kind, tag, `not this reader's ${want.map(w => `'${w}'`).join(' or ')} (${typeof v[tag] === 'string' ? told(v[tag]) : kindOf(v[tag])})`)
   if (v.kind !== kind) throw refuse(kind, 'kind', `not a ${kind} (${typeof v.kind === 'string' ? told(v.kind) : kindOf(v.kind)})`)
   exactKeys(kind, v, optional.length ? [...keys, ...optional.filter(k => Object.hasOwn(v, k))] : keys, '')
 }
@@ -271,8 +286,9 @@ async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null
 }
 const written = (kind, obj, def, paper, pos, contentOf = null, vtag = null) => finish(kind, JSON.stringify(obj), def, paper, pos, contentOf, vtag)
 
-/** the VTAG the versions of a head or a catalog make: what names the catalog, for its writer and for its reader */
-const vtagOf = v => `b${BUNDLE5}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}`
+/** the VTAG the versions of a head or a catalog make, of its format (this writer's, or the catalog's as read): what names the
+ *  catalog, for its writer and for its reader */
+const vtagOf = (v, bundle = BUNDLE5) => `b${bundle}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}`
 
 // ---------------------------------------------------------------- keys
 const CTAG_FORM = /^b[0-9]+-j[0-9A-Za-z.]+$/
@@ -302,6 +318,15 @@ export function catalogKey(paper, version, vtag) {
   const seg = segOf(paper, version)
   if (typeof vtag !== 'string' || !VTAG_FORM.test(vtag)) throw new RangeError(`not a VTAG (${told(vtag)})`)
   return `layer/${seg}/${vtag}.json`
+}
+
+/** the name of a base page of ours (BUNDLE 8: the final pass of the marked original, which the layer is drawn over):
+ *  `base/<seg>/<sha256>.pdf`, named by its whole digest, immutable, as R2 holds it (the catalog's `base.key`). Throws a
+ *  RangeError on an identifier, a version or a digest that is not one */
+export function baseKey(paper, version, sha256) {
+  const seg = segOf(paper, version)
+  if (!isDigest(sha256)) throw new RangeError('not a digest')
+  return `base/${seg}/${sha256}.pdf`
 }
 
 /** a key taken apart: `{ paper, version, ctag, sha256 }` for an object, `{ paper, version, vtag }` for a catalog; null for
@@ -637,19 +662,72 @@ export function droppedOf(chunks) {
 
 // ---------------------------------------------------------------- the head
 const HEAD_KEYS = ['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip']
-/** the head's optional key (BUNDLE 5): `draw` 1 says the parts MAY carry the draw of their pages' left parts (a page can still have none); absent
- *  (0 is read too, never written) for a paper made without them */
-const HEAD_OPTIONAL = ['draw']
+/** the head's optional keys: `draw` (BUNDLE 5) 1 says the parts MAY carry the draw of their pages' left parts (a page can still
+ *  have none); absent (0 is read too, never written) for a paper made without them. `orig` (BUNDLE 8): arXiv's PDF, where the
+ *  base is ours */
+const HEAD_OPTIONAL = ['draw', 'orig']
 const HEAD_DEF = { cap: HEAD_CAP, values: HEAD_VALUES, depth: HEAD_DEPTH }
+/** a base's keys, in the wire's order: 7's (arXiv's PDF); 8's of ours (the final pass of our marked compile, with the
+ *  page-and-line check it passed) and of arXiv's (`why` our compile is no base page, a BASE_WHYS code: absent for a bundle drawn
+ *  over arXiv's PDF by a producer that made no base of its own, read as 7's) */
+const BASE_7 = ['bytes', 'sha256', 'xref']
+const BASE_OURS = ['source', 'bytes', 'sha256', 'xref', 'pages', 'tree', 'check']
+const BASE_ARXIV = ['source', 'bytes', 'sha256', 'xref']
+const CHECK_KEYS = ['pages', 'boxes', 'carried']
+/** the TeX Live year our base was compiled on, as the compile's banner names it */
+const TREE = /^\d{4}$/
+/** a share as a head holds it: to a ten-thousandth */
+const r4 = v => Math.round(v * 10_000) / 10_000
+
+/** a PDF's bytes, digest and, `withXref`, its last cross-reference section's offset, checked at `path` */
+function pdfRef(K, b, path, withXref) {
+  if (!isInteger(b.bytes, 1, BASE_MAX)) throw refuse(K, sub(path, 'bytes'), `not an integer 1 to ${BASE_MAX}`)
+  digestField(K, b.sha256, sub(path, 'sha256'))
+  if (withXref && !isInteger(b.xref, 0, b.bytes - 1)) throw refuse(K, sub(path, 'xref'), `not an offset in the ${b.bytes} bytes`)
+}
+
+/**
+ * The head's base, checked and as a reader takes it ({ source, bytes, sha256, xref } and, of ours, { pages, tree, check }, of
+ * arXiv's, `why` where it says one): in a head of 7, arXiv's PDF, 7's three keys; in one of 8, `source` first. A base of ours
+ * passed the page-and-line check: its pages are the paper's, its check says arXiv's PDF has as many, of the same boxes
+ * ('equal'), and the share of our lines found on arXiv's (`carried`, 0 to 1). `orig`, arXiv's PDF { bytes, sha256 }, is there
+ * exactly where the base is ours
+ */
+function baseShape(K, v, bundle, N) {
+  if (bundle === '7') {
+    const b = exactKeys(K, v.base, BASE_7, 'base')
+    pdfRef(K, b, 'base', true)
+    if (Object.hasOwn(v, 'orig')) throw refuse(K, 'orig', 'not a key of a head of 7')
+    return { base: { source: 'arxiv', bytes: b.bytes, sha256: b.sha256, xref: b.xref }, orig: null }
+  }
+  const s = isObject(v.base) ? v.base.source : undefined
+  if (!BASE_SOURCES.includes(s)) throw refuse(K, 'base.source', `not one of ${BASE_SOURCES.join(', ')} (${typeof s === 'string' ? told(s) : kindOf(s)})`)
+  if (s === 'arxiv') {
+    const b = exactKeys(K, v.base, Object.hasOwn(v.base, 'why') ? [...BASE_ARXIV, 'why'] : BASE_ARXIV, 'base')
+    pdfRef(K, b, 'base', true)
+    if (Object.hasOwn(b, 'why') && !BASE_WHYS.includes(b.why)) throw refuse(K, 'base.why', `not one of ${BASE_WHYS.join(', ')} (${typeof b.why === 'string' ? told(b.why) : kindOf(b.why)})`)
+    if (Object.hasOwn(v, 'orig')) throw refuse(K, 'orig', 'there, where the base is arXiv\'s PDF')
+    return { base: { source: 'arxiv', bytes: b.bytes, sha256: b.sha256, xref: b.xref, ...(Object.hasOwn(b, 'why') ? { why: b.why } : {}) }, orig: null }
+  }
+  const b = exactKeys(K, v.base, BASE_OURS, 'base')
+  pdfRef(K, b, 'base', true)
+  if (b.pages !== N) throw refuse(K, 'base.pages', `not the paper's ${N} pages (${kindOf(b.pages)})`)
+  if (typeof b.tree !== 'string' || !TREE.test(b.tree)) throw refuse(K, 'base.tree', `not a TeX Live year (${kindOf(b.tree)})`)
+  const c = exactKeys(K, b.check, CHECK_KEYS, 'base.check')
+  if (!Array.isArray(c.pages) || c.pages.length !== 2 || c.pages[0] !== N || c.pages[1] !== N) throw refuse(K, 'base.check.pages', `not [${N}, ${N}]: our pages and arXiv's, the paper's`)
+  if (c.boxes !== 'equal') throw refuse(K, 'base.check.boxes', `not 'equal' (${typeof c.boxes === 'string' ? told(c.boxes) : kindOf(c.boxes)}): a base of ours has arXiv's page boxes`)
+  if (!isNumber(c.carried) || c.carried < 0 || c.carried > 1) throw refuse(K, 'base.check.carried', `not a share 0 to 1 (${kindOf(c.carried)})`)
+  if (!Object.hasOwn(v, 'orig')) throw refuse(K, 'orig', 'missing, where the base is ours')
+  const o = exactKeys(K, v.orig, ['bytes', 'sha256'], 'orig')
+  pdfRef(K, o, 'orig', false)
+  return { base: { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: { pages: [c.pages[0], c.pages[1]], boxes: c.boxes, carried: c.carried } }, orig: { bytes: o.bytes, sha256: o.sha256 } }
+}
 
 /** the head's fields, checked: what a reader and a writer share */
 function headShape(v) {
   const K = 'head'
   const paper = paperOf(K, v.paper, 'paper', true)
-  const base = exactKeys(K, v.base, ['bytes', 'sha256', 'xref'], 'base')
-  if (!isInteger(base.bytes, 1, BASE_MAX)) throw refuse(K, 'base.bytes', `not an integer 1 to ${BASE_MAX}`)
-  digestField(K, base.sha256, 'base.sha256')
-  if (!isInteger(base.xref, 0, base.bytes - 1)) throw refuse(K, 'base.xref', `not an offset in the ${base.bytes} bytes`)
+  const { base, orig } = baseShape(K, v, v.bundle, paper.pages)
   const versions = versionsOf(K, v.versions, 'versions')
   rangesOf(K, v.units, 'units', { refKind: 'units', lo: 0, hi: CHUNKS_MAX, first: 0, last: ID_MAX, max: UNITS_CAP })
   let total = 0
@@ -657,30 +735,39 @@ function headShape(v) {
   if (total > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, total)
   inside(K, '', () => checkLineskip(v.lineskip, 'lineskip'))
   if ('draw' in v && v.draw !== 0 && v.draw !== 1) throw refuse(K, 'draw', `not 0 or 1, but ${kindOf(v.draw)}`)
-  return { paper, base, versions, units: v.units, lineskip: v.lineskip, draw: v.draw === 1 ? 1 : 0 }
+  return { paper, base, orig, versions, units: v.units, lineskip: v.lineskip, draw: v.draw === 1 ? 1 : 0 }
 }
 
 /**
- * The head as received: within its caps and its ref, the envelope and shape. `paper.pages` is the original's page count;
- * `base` the original (its bytes and digest, and the `startxref` the remover reads; our copy's route is derived, as BUNDLE 3's
- * reader derives it); the versions (the PDF.js this reader's, the rest read as tokens); the units chunks it names, 1 to
- * CHUNKS_MAX of at most UNITS_TOTAL_BYTES in all, contiguous from unit 0, by digest; the probe's `lineskip`, null or within
- * its bounds. Throws BundleRefusal
+ * The head as received: within its caps and its ref, the envelope (BUNDLES_READ) and shape. `bundle` its format; `paper.pages`
+ * the paper's page count; `base` the PDF the layer is drawn over (baseShape: `source` 'ours' or 'arxiv', a head of 7's
+ * 'arxiv'; its bytes and digest, and the `startxref` the remover's tails continue; of ours, its pages, TeX Live year and check;
+ * of arXiv's in 8, why ours was refused where it says), `orig` arXiv's PDF where the base is ours, else null; the versions
+ * (the PDF.js this reader's, the rest read as tokens); the units chunks it names, 1 to CHUNKS_MAX of at most
+ * UNITS_TOTAL_BYTES in all, contiguous from unit 0, by digest; the probe's `lineskip`, null or within its bounds. Throws
+ * BundleRefusal
  */
 export async function readHead(bytes, { ref, caps }) {
   const { value: v, sha256 } = await opened('head', bytes, ref, HEAD_DEF, caps)
   envelope('head', v, HEAD_KEYS, HEAD_OPTIONAL)
   const h = headShape(v)
-  return { kind: 'head', sha256, bytes: bytes.length, paper: h.paper, base: h.base, versions: h.versions, units: h.units, lineskip: h.lineskip, draw: h.draw }
+  return { kind: 'head', bundle: v.bundle, sha256, bytes: bytes.length, paper: h.paper, base: h.base, orig: h.orig, versions: h.versions, units: h.units, lineskip: h.lineskip, draw: h.draw }
 }
 
-/** the head written: the paper, the original, the versions this engine writes (with the compiler image's name) and the
- *  chunks `writeUnitChunks` gave, in order */
-export async function writeHead({ paper, base, image, units, lineskip, draw = false }) {
+/** a base as the head writes it: of ours, with its pages, year and check (the share to a ten-thousandth); of arXiv's, `why` where
+ *  given (a base given with no `source` is arXiv's, as every base was before BUNDLE 8) */
+const baseWire = b => (b.source === 'ours'
+  ? { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: { pages: [b.check?.pages?.[0], b.check?.pages?.[1]], boxes: b.check?.boxes, carried: isNumber(b.check?.carried) ? r4(b.check.carried) : b.check?.carried } }
+  : { source: 'arxiv', bytes: b.bytes, sha256: b.sha256, xref: b.xref, ...(b.why === undefined || b.why === null ? {} : { why: b.why }) })
+
+/** the head written: the paper, the base (baseShape's: ours with `orig`, arXiv's PDF; or arXiv's), the versions this engine
+ *  writes (with the compiler image's name) and the chunks `writeUnitChunks` gave, in order */
+export async function writeHead({ paper, base, orig = null, image, units, lineskip, draw = false }) {
   const obj = {
     bundle: BUNDLE5, kind: 'head',
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
-    base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref },
+    base: baseWire(base),
+    ...(base.source === 'ours' && orig ? { orig: { bytes: orig.bytes, sha256: orig.sha256 } } : {}),
     versions: { pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image },
     units: units.map(u => ({ kind: 'units', from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes.length })),
     lineskip: lineskip === null ? null : lineskip.map(r2),
@@ -714,6 +801,9 @@ export function indexOf(head, chunks, o = {}) {
   const cat = o.catalog
   if (cat !== undefined) {
     if (cat.head.sha256 !== head.sha256 || cat.head.bytes !== head.bytes) throw refuse(K, 'catalog.head', 'not the head the index is made of')
+    // (a catalog of the head's format, naming the head's base: catalogBase's of it, or none in a catalog of 7)
+    if (cat.bundle !== undefined && head.bundle !== undefined && cat.bundle !== head.bundle) throw refuse(K, 'catalog.bundle', 'not the head\'s format')
+    if (cat.base !== undefined && cat.base !== null && JSON.stringify(cat.base) !== JSON.stringify(catalogBase(head))) throw refuse(K, 'catalog.base', 'not the head\'s base')
     if (cat.paper.id !== head.paper.id || cat.paper.version !== head.paper.version || cat.paper.pages !== head.paper.pages) throw refuse(K, 'catalog.paper', 'not the head\'s')
     for (const k of VERSION_KEYS) if (cat.versions[k] !== head.versions[k]) throw refuse(K, `catalog.versions.${k}`, 'not the head\'s')
     if (cat.units.length !== head.units.length) throw refuse(K, 'catalog.units', 'not the head\'s chunks')
@@ -877,7 +967,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   const head = index.head, N = head.paper.pages
   const was = chain ?? initialChain(index)
   const { value: v, sha256 } = await opened(K, bytes, ref, PART_DEF, caps)
-  envelope(K, v, PART_KEYS_WIRE)
+  envelope(K, v, PART_KEYS_WIRE, [], head.bundle ?? null)
   // (what the chain says of where the part begins and what it follows, before the shape that needs the chain's counts)
   if (v.head !== index.sha256) throw refuse(K, 'head', 'not the head of the index')
   if (v.head !== was.head) throw refuse(K, 'head', 'not the head of the parts told')
@@ -1166,13 +1256,31 @@ export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, 
 
 // ---------------------------------------------------------------- the catalog
 const CATALOG_KEYS = ['bundle', 'kind', 'paper', 'versions', 'head', 'units', 'parts', 'end']
+/** BUNDLE 8's: the base the layer is drawn over (catalogBase), which a catalog of 7 holds none of */
+const CATALOG_KEYS_8 = ['bundle', 'kind', 'paper', 'versions', 'head', 'base', 'units', 'parts', 'end']
 const CATALOG_DEF = { cap: CATALOG_CAP, values: CATALOG_VALUES, depth: CATALOG_DEPTH }
+
+/** the base a catalog names, of its head as read (readHead's): ours, the object a reader asks for by its name (baseKey) with its
+ *  digest and bytes, { source: 'ours', key, sha256, bytes }; arXiv's, { source: 'arxiv', sha256, bytes } (the host's copy of arXiv's
+ *  PDF, which it names itself) */
+export function catalogBase(head) {
+  const b = head.base
+  return b.source === 'ours' ? { source: 'ours', key: baseKey(head.paper.id, head.paper.version, b.sha256), sha256: b.sha256, bytes: b.bytes } : { source: 'arxiv', sha256: b.sha256, bytes: b.bytes }
+}
 
 function catalogShape(v) {
   const K = 'catalog'
   const paper = paperOf(K, v.paper, 'paper', true), N = paper.pages
   const versions = versionsOf(K, v.versions, 'versions')
   refOf(K, v.head, 'head', 'head', 'plain', HEAD_CAP)
+  let base = null
+  if (v.bundle !== '7') {
+    const s = isObject(v.base) ? v.base.source : undefined
+    if (!BASE_SOURCES.includes(s)) throw refuse(K, 'base.source', `not one of ${BASE_SOURCES.join(', ')} (${typeof s === 'string' ? told(s) : kindOf(s)})`)
+    base = exactKeys(K, v.base, s === 'ours' ? ['source', 'key', 'sha256', 'bytes'] : ['source', 'sha256', 'bytes'], 'base')
+    pdfRef(K, base, 'base', false)
+    if (s === 'ours' && base.key !== baseKey(paper.id, paper.version, base.sha256)) throw refuse(K, 'base.key', 'not the name of the base\'s digest (baseKey)')
+  }
   rangesOf(K, v.units, 'units', { refKind: 'units', lo: 0, hi: CHUNKS_MAX, first: 0, last: ID_MAX, max: UNITS_CAP })
   // parts: contiguous from page 1, each within the paper
   const parts = v.parts
@@ -1186,12 +1294,13 @@ function catalogShape(v) {
     if (!END_WHYS.includes(end.refused)) throw refuse(K, 'end.refused', `not one of ${END_WHYS.join(', ')}`)
     if (through >= N) throw refuse(K, 'end.refused', `a refusal, and the parts reach the last page ${N}`)
   } else if (through !== N) throw refuse(K, 'end.through', `not the paper's ${N}, and no refusal`)
-  return { paper, versions, head: v.head, units: v.units, parts, end }
+  return { paper, versions, head: v.head, base, units: v.units, parts, end }
 }
 
 /**
  * The catalog as fetched by name (it has no ref: its digest is computed and given), within its caps; its envelope and
- * shape. `parts` are contiguous from page 1 to `end.through` (each part names its own left parts), `end` { through: N }
+ * shape (BUNDLES_READ: `bundle` its format; `base` the base a catalog of 8 names, catalogBase's shape, null in one of 7).
+ * `parts` are contiguous from page 1 to `end.through` (each part names its own left parts), `end` { through: N }
  * complete or { through, refused } with through below N and the reason one of END_WHYS. With `o.paper`, the catalog is of
  * that paper version; with `o.key`, it is the key of a catalog of this paper, and its VTAG the one its versions make. Throws
  * BundleRefusal
@@ -1199,23 +1308,24 @@ function catalogShape(v) {
 export async function readCatalog(bytes, o = {}) {
   const K = 'catalog'
   const { value: v, sha256 } = await opened(K, bytes, null, CATALOG_DEF, o.caps)
-  envelope(K, v, CATALOG_KEYS)
+  envelope(K, v, isObject(v) && v.bundle === '7' ? CATALOG_KEYS : CATALOG_KEYS_8)
   const c = catalogShape(v)
   if (o.paper !== undefined && (c.paper.id !== o.paper.id || c.paper.version !== o.paper.version)) throw refuse(K, 'paper', 'not the paper version asked for')
   if (o.key !== undefined) {
     const k = keyParts(o.key)
     if (k === null || k.vtag === undefined) throw refuse(K, 'key', 'not the key of a catalog')
     if (k.paper !== c.paper.id || k.version !== c.paper.version) throw refuse(K, 'paper', 'not the paper version of its key')
-    const vtag = vtagOf(c.versions)
+    const vtag = vtagOf(c.versions, v.bundle)
     if (k.vtag !== vtag) throw refuse(K, 'versions', `not the key's ${k.vtag}`)
   }
-  return { kind: 'catalog', sha256, bytes: bytes.length, paper: c.paper, versions: c.versions, head: c.head, units: c.units, parts: c.parts, end: c.end }
+  return { kind: 'catalog', bundle: v.bundle, sha256, bytes: bytes.length, paper: c.paper, versions: c.versions, head: c.head, base: c.base, units: c.units, parts: c.parts, end: c.end }
 }
 
 /**
- * The catalog written, by the Worker from the refs it committed (amendment M4), in order: the head (its paper and versions are
- * the catalog's), the chunks (the head's) and the parts, and how far they go (`end`: { through }, or { through, refused } with
- * the reason one of END_WHYS). Throws BundleRefusal for a catalog its reader would refuse
+ * The catalog written, by the Worker from the refs it committed (amendment M4), in order: the head as read (its paper and
+ * versions are the catalog's, its base the catalog's `base`: catalogBase), the chunks (the head's) and the parts, and how far
+ * they go (`end`: { through }, or { through, refused } with the reason one of END_WHYS). Throws BundleRefusal for a catalog
+ * its reader would refuse
  */
 export async function writeCatalog({ head, units, parts, end }) {
   const refs = (list, kind) => list.map(u => ({ kind, from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes }))
@@ -1225,6 +1335,7 @@ export async function writeCatalog({ head, units, parts, end }) {
     paper: { id: head.paper.id, version: head.paper.version, pages: head.paper.pages },
     versions: Object.fromEntries(VERSION_KEYS.map(k => [k, head.versions[k]])),
     head: { kind: 'head', sha256: head.sha256, bytes: head.bytes },
+    base: catalogBase(head),
     units: refs(units, 'units'),
     parts: refs(parts, 'part'),
     end: end.refused === undefined ? { through: end.through } : { through: end.through, refused: end.refused },

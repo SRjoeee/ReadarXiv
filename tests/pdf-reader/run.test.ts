@@ -4,7 +4,7 @@
 // asks of them (the side's own rows are layer-side.test.ts's); the server is a fetch answering by address
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LayerStore } from '@/cache/layer-store'
-import { writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { CTAG5, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { ENDS_AFTER_MS, POLL_SLOW_AFTER_MS, POLL_SLOW_MS, PREPARE_DEADLINE_MS, type RunEvent, type RunHost, startRun, WAIT_MIN } from '@/pdf-reader/session/run'
@@ -44,7 +44,7 @@ function server(looks: (() => Response)[], o: { prepare?: () => Response; origin
     if (url.includes('/original/')) return o.original ? (o.tag ? ranges(o.original, init, o.tag) : new Response(o.original as BodyInit)) : new Response('', { status: 404 })
     return (looks[Math.min(i++, looks.length - 1)] as () => Response)()
   })
-  return { f: f as unknown as typeof fetch, calls, layerLooks: () => calls.filter(c => c.url === `${API}/api/v1/layer/${SEG}/b7-j6.3.289`).length }
+  return { f: f as unknown as typeof fetch, calls, layerLooks: () => calls.filter(c => c.url === `${API}/api/v1/layer/${SEG}/${CTAG5}`).length }
 }
 /** the side as the run drives it */
 function fakeSide() {

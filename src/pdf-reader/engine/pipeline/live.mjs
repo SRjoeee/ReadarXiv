@@ -73,13 +73,16 @@ export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceed
 export const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
 /** a compile that did not run through is one that failed, as the TeX page's is: its PDF not taken */
 const finished = r => (r.ok && !ranThrough(r) ? { ...r, ok: false, pdf: null } : r)
+/** DRAFT's first line, graphicx's draft option alone: the final pass of the marked original (layout/paper.mjs markedOfPaper
+ *  `base`) is its files with this line made empty, so that no line of them moves */
+export const DRAFT_OPTION = '\\PassOptionsToPackage{draft}{graphicx}'
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
  *  \resizebox around it, angle=) turns or scales its frame and not the marks, whose rectangle then has the size of no
  *  figure on the left, and the reader leaves that frame as it is */
 const DRAFT = [
-  '\\PassOptionsToPackage{draft}{graphicx}',
+  DRAFT_OPTION,
   '\\makeatletter\\AddToHook{package/graphics/after}{\\newcount\\axt@g\\let\\axt@setfile\\Gin@setfile%',
   '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',

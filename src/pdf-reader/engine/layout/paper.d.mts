@@ -31,7 +31,21 @@ export interface MarkedCompileOptions {
    *  names each before the box's year ("on TeX Live 2023 or 2025") and is 'texlive' only where the paper declares a year none
    *  of them is. Absent, null or empty: the box's year alone, the whys as before */
   tried?: readonly string[] | null
+  /** the base page (layer route step 2, default true): every marked compile asks for the files it wrote (`files`), and once
+   *  one stands the final pass is made over them (the result's `base`). false: no final pass, and no `base` */
+  final?: boolean
+  /** the day every compile after the probe is made on, seconds since the epoch (CompileRequest `sourceDate`; arXiv's PDF's
+   *  /CreationDate: base.mjs creationEpochOf), or a function asked once for it after the probe. Absent, null, or not such a
+   *  number: the host's clock */
+  sourceDate?: number | (() => number | null | Promise<number | null>) | null
+  /** each page's text of a compile's PDF (its text items' strings joined: base.mjs pageTextOf), or null where it cannot be
+   *  read: no mark of ours may stand as text on a marked original's pages (design §3.3.2, the guard's 'text'). Absent: not
+   *  checked here (the page pass checks the base page's own text) */
+  textOf?: ((pdf: Uint8Array) => Promise<string[] | null>) | null
 }
+/** the final pass of the marked original (markedOfPaper `base`): its PDF and its log (lastTexLog), or why there is none
+ *  ('final': no files of the compile that stands, no compile left in the budget, a pass that did not run through) */
+export type FinalPass = { pdf: Uint8Array; log: string } | { refused: 'final'; why: string }
 
 /** the unmarked original's verdict, which a refusal after its compile names (`own`): whether it ran through (live.mjs
  *  ranThrough, with a PDF); whether it did with fewer pages than arXiv's (`pages` given, a paper of one toplevel source);
@@ -43,7 +57,7 @@ export interface OwnVerdict { ran: boolean; short: boolean; limit: string | null
  *  original's (`extra`, GUARD_EXTRA at most, the unmarked original's among them), the units left the paper's own, whether
  *  the babel names stayed marked, the checks the marked original failed ('braces' before its compile; 'ran', 'pages', 'aux',
  *  'errors' after), and why a check was left as it stood (`judged`) */
-export interface GuardRecord { extra: number; unmarked: number[]; names: boolean; failed: ('braces' | 'ran' | 'pages' | 'aux' | 'errors')[]; judged?: string }
+export interface GuardRecord { extra: number; unmarked: number[]; names: boolean; failed: ('braces' | 'ran' | 'pages' | 'aux' | 'text' | 'errors')[]; judged?: string }
 /** why a paper's marked original is refused: its probe (no log); TeX's own ('compile': the paper's own source does not make
  *  arXiv's pages here, a host's limit, a compile that threw or ran no TeX, or a fault nothing told the guard was ours;
  *  'texlive', as 'compile' with the paper declaring another TeX Live year than the box's; 'engine', a compiler the host does
@@ -62,7 +76,7 @@ export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
  * paper's), which goes on as itself
  */
 export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Promise<
-  | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord }
+  | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number; guard?: number; final?: number }; cm?: ConvergeRecord; guard?: GuardRecord; base?: FinalPass }
   | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
 >
 
@@ -98,4 +112,4 @@ export declare function handoverOf(own: OwnVerdict | null | undefined, o: { decl
 export declare function layoutMarksOfPaper(paper: Paper, o: MarkedCompileOptions & {
   open(pdf: Uint8Array): Promise<{ doc: unknown; close(): Promise<void> }>
   OPS: Record<string, number>
-}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number }; cm?: ConvergeRecord; guard?: GuardRecord } | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>
+}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number; final?: number }; cm?: ConvergeRecord; guard?: GuardRecord; base?: { pdf: Uint8Array; log: string; check: { marks: number } } | { refused: 'final'; why: string } } | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>
