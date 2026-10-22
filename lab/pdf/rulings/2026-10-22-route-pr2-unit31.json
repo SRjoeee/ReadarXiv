@@ -5,12 +5,11 @@
   "english": "decision 3 accepted, 2026-10-22, relayed by the coordinator: units without TeX positions stay untranslated",
   "on": "route PR 2 (pull request 430): the layer draws only from the layout file",
   "measures": [
-    "text units left English",
-    "paragraph gaps tighter than the lines beside them"
+    "text units left English"
   ],
   "targets": [
     "zh"
   ],
-  "scope": "zh, 2307.16209v1-zh, unit 31 on page 18, where the evidence is that page: the original beside the drawing before and after. Text units left English 9 to 10 (pooled over the zh outputs) and paragraph gaps tighter than the lines beside them 0.181 to 0.182 (the page has one gap fewer to count). Page 18 alone moves, and on it only the unit's three lines differ (the rest of the page is pixel-identical); no other page and no other output",
-  "why": "before: the unit was drawn from v0's reading of its rectangles, the maker having located no row for it; its translation was right but the drawing was approximate (two lines, the second flush left, for a right-aligned block of three). After: the unit stays the original page's own text, exactly as arXiv set it, so the page is faithful to the original there; the translation is left in English, which is decision 3's accepted cost (coverage lost, fidelity kept). The two measures move because a unit leaves the translated count, not because the page got further from the original"
+  "scope": "zh, 2307.16209v1-zh, unit 31 on page 18, where the evidence is that page: the original beside the drawing before and after. Text units left English 9 to 10 (pooled over the zh outputs, the one measure that regresses on the gate pack d25b354b). Page 18 alone moves, and on it only the unit's three lines differ (the rest of the page is pixel-identical); no other page and no other output",
+  "why": "before: the unit was drawn from v0's reading of its rectangles, the maker having located no row for it; its translation was right but the drawing was approximate (two lines, the second flush left, for a right-aligned block of three). After: the unit stays the original page's own text, exactly as arXiv set it, so the page is faithful to the original there; the translation is left in English, which is decision 3's accepted cost (coverage lost, fidelity kept). The measure moves because a unit leaves the translated count, not because the page got further from the original"
 }
