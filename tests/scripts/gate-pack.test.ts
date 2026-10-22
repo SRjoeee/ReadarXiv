@@ -171,6 +171,14 @@ describe('our base pages the layout files were made over', () => {
     const i = inputs()
     const record = withBase(i)
     expect(baseRecordOf(join(i.fixtures, n))).toEqual(record)
+    // (the image named: its tree's pin, each base page made on the year production compiles its paper on)
+    for (const tree of ['2025', '2023']) {
+      const j = inputs()
+      const pinned = withBase(j, 'our base page', { image: compileImagesOf().images[tree]?.texlive })
+      ;(pinned.base as { tree: string }).tree = tree
+      put(join(j.fixtures, n, 'base.json'), JSON.stringify(pinned))
+      expect(baseRecordOf(join(j.fixtures, n)), tree).toMatchObject({ image: compileImagesOf().images[tree]?.texlive })
+    }
     expect(baseRecordOf(join(i.fixtures, '0001.00001v1-de'))).toBeNull()
     const paths = entriesOf(i).map(e => e.path)
     expect(paths).toContain(`fixtures/${n}/base.pdf`)
@@ -189,6 +197,8 @@ describe('our base pages the layout files were made over', () => {
       ['no head', i => { withBase(i, 'our base page', { base: { bytes: 13, sha256: sha256('our base page') } }) }, /not a head's base of ours/],
       ['no source', i => { withBase(i, 'our base page', { source: 'theirs' }) }, /names no source/],
       ['another schema', i => { withBase(i, 'our base page', { schema: 2 }) }, /not of schema 1/],
+      ['another year\'s image', i => { withBase(i, 'our base page', { image: compileImagesOf().images['2023']?.texlive }) }, /not the pinned image of TeX Live 2025/],
+      ['no image', i => { withBase(i, 'our base page', { image: 'texlive/texlive:latest' }) }, /not the pinned image of TeX Live 2025/],
     ]
     for (const [what, make, why] of cases) {
       const i = inputs()

@@ -10,10 +10,11 @@
 //                stage of the marks fails (`refused`: probe, compile, marks or the maker's own; the reader then runs as
 //                Plan 5's there); with an engine of BUNDLE 8 made over our base page, not arXiv's PDF:
 //   base.pdf     our base page (design note §3.1): the final pass of the marked original, made as production makes it (on the
-//                pinned image, SOURCE_DATE_EPOCH arXiv's /CreationDate) once it passes the page pass's checks (§3.3,
+//                pinned image, SOURCE_DATE_EPOCH arXiv's day, creationEpochOf) once it passes the page pass's checks (§3.3,
 //                page-pass.mjs checkOurBase), which the layer draws over;
 //   base.json    what the gate pack checks it by (gate-pack.mjs baseRecordOf): { schema, source: 'ours', base (the head's: bytes,
-//                sha256, xref, pages, tree, check), layout ({ sha256, bytes } of layout.json, made over it) }; or, the paper
+//                sha256, xref, pages, tree, check), image (the compile image it was made on: its tree's pin, COMPILE_YEAR's),
+//                layout ({ sha256, bytes } of layout.json, made over it) }; or, the paper
 //                refused a base page of ours (production's fallback, no layout), { schema, source: 'arxiv', why, detail,
 //                layout: null } and no base.pdf, its refusal.json saying the same;
 //   units.json   the translation as the layer takes it: `units`, each unit with a translation, its pieces as TrPiece by
@@ -375,7 +376,7 @@ async function layoutOf(id, paper, dir) {
     const { layoutMarksOfPaper } = await engine('layout/paper.mjs')
     let fault = null, calls = 0
     // (an engine of BUNDLE 8, our compile as the base page: the final pass asked of the compile, its files, the day; production's
-    // compile request, arXiv's page count for the guard, arXiv's /CreationDate for every compile after the probe)
+    // compile request, arXiv's page count for the guard, arXiv's day (its /CreationDate, else its XMP's) for every compile after the probe)
     const base8 = await base8Of()
     const compile = async req => {
       try {
@@ -566,7 +567,7 @@ for (const [id, target] of asked) {
     if (layout.base?.source === 'ours') {
       write(join(out, 'base.pdf'), layout.base.pdf)
       const { source, ...base } = layout.base.head
-      write(join(out, 'base.json'), `${JSON.stringify({ schema: BASE_RECORD_SCHEMA, source, base, layout: layout.text ? { sha256: sha256(Buffer.from(layout.text)), bytes: Buffer.byteLength(layout.text) } : null }, null, 1)}\n`)
+      write(join(out, 'base.json'), `${JSON.stringify({ schema: BASE_RECORD_SCHEMA, source, base, image: COMPILE_IMAGE, layout: layout.text ? { sha256: sha256(Buffer.from(layout.text)), bytes: Buffer.byteLength(layout.text) } : null }, null, 1)}\n`)
     } else if (layout.base) write(join(out, 'base.json'), `${JSON.stringify({ schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: layout.base.why, detail: layout.base.detail, layout: null }, null, 1)}\n`)
     // the translation: the record made before, where it is of this cut of the units; else staging's; else Microsoft's
     const recordFile = join(out, 'record.json'), unitsFile = join(out, 'units.json')

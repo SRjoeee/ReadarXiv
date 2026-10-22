@@ -171,8 +171,9 @@ const isFile = (file, want) => { const b = readFileSync(file); return b.length =
 /**
  * A fixture's base page (BUNDLE 8, design note §3.1) as its record says (`dir` the fixture's folder): null where it has neither
  * base.json nor base.pdf (a fixture of before, the layer drawn over arxiv.pdf), else base.json, checked. `source` 'ours': base.pdf
- * is the record's `base` (its sha256 and bytes, with the head's xref, pages, tree and check) and layout.json the record's `layout`,
- * the file made over it; 'arxiv': the paper refused a base page of ours (`why` the head's code, `detail` the refusal), no base.pdf,
+ * is the record's `base` (its sha256 and bytes, with the head's xref, pages, tree and check), `image` (where named) the pinned
+ * image of its tree's year (a pack's base pages are each made on the tree production compiles the paper on: the year it
+ * declares, else that of arXiv's build), and layout.json the record's `layout`, the file made over it; 'arxiv': the paper refused a base page of ours (`why` the head's code, `detail` the refusal), no base.pdf,
  * and `layout` the layout file the pack keeps in its place, made over arXiv's PDF before (production has none). Throws naming
  * what does not hold: a base page with no record, a record of other bytes, a layout file not the one the record names
  */
@@ -190,6 +191,11 @@ export function baseRecordOf(dir) {
   if (r.source === 'ours') {
     const b = file('base', r.base)
     if (!isSize(b.xref) || b.xref >= b.bytes || !isSize(b.pages) || !/^\d{4}$/.test(String(b.tree ?? '')) || !isObject(b.check)) throw new Error('base.json\'s base is not a head\'s base of ours (xref, pages, tree, check)')
+    // (the image it was made on, where the record names it: the pin of the TeX Live year it was made on, compile-images.json's)
+    if (r.image !== undefined) {
+      const pin = (() => { try { return compileImagesOf().images[b.tree]?.texlive ?? null } catch { return null } })()
+      if (typeof r.image !== 'string' || !IMAGE_REF.test(r.image) || r.image !== pin) throw new Error(`base.json's image is not the pinned image of TeX Live ${b.tree} (compile-images.json)`)
+    }
     if (!existsSync(pdf)) throw new Error('base.json names our base page, and there is no base.pdf')
     if (!isFile(pdf, b)) throw new Error('base.pdf is not the page base.json names (sha256, bytes)')
     if (r.layout !== null && !(existsSync(layout) && isFile(layout, file('layout', r.layout)))) throw new Error('layout.json is not the layout base.json names, made over base.pdf')
