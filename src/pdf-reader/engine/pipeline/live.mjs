@@ -274,7 +274,7 @@ export function originalFiles({ fsys, project, meta }, { lines = false, spans = 
   if (layout) {
     const marked = layoutMarking(project.units, layout, { lines, switches, inkless }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     const asSource = unmarked ? new Set([...unmarked].map(i => marked.units[i]).filter(Boolean)) : null
-    out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource })
+    out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource, pastBegin: true })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
     // (the files as patch wrote them, the units' bytes in them, before the names' wraps below move what follows a wrap)
     patched = spans ? new Map(out) : null
@@ -290,7 +290,7 @@ export function originalFiles({ fsys, project, meta }, { lines = false, spans = 
       if (wrapped !== text.slice(0, at)) out.set(path, latin1Bytes(wrapped + text.slice(at)))
     }
   } else {
-    out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
+    out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw, pastBegin: true })
     patched = spans ? new Map(out) : null
   }
   const dvi = dviEngine(meta?.compiler)

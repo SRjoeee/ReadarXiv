@@ -20,7 +20,7 @@ export declare function inputencOf(text: string, options?: { lineEnvs?: Set<stri
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null
 /** `spans`, where given, gets each top-level unit's byte range in the file as written, and each nested unit's inside it
  *  with the top-level unit it is written in (`outer`) and the length of what closes it there (`post`) */
-export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark; spans?: { file: string; unit: SourceUnit; from: number; to: number; post?: number; outer?: SourceUnit }[] | null }): Map<string, Uint8Array>
+export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark; spans?: { file: string; unit: SourceUnit; from: number; to: number; post?: number; outer?: SourceUnit }[] | null; pastBegin?: boolean }): Map<string, Uint8Array>
 export declare function markUnits(units: SourceUnit[], translated?: Map<SourceUnit, unknown[]> | null): (unit: SourceUnit) => UnitMark
 /** a style's abstract heading written out, made to go by \\abstractname */
 export declare function localizeNames(text: string): string
