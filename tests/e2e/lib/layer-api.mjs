@@ -18,10 +18,14 @@
 //                                               preparation's progress passes their share | 404, 429, faults as above
 //   GET  /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>  200 an object of the layer, by its whole digest (immutable) | 404
 //                                               { why: 'not-prepared' } for a digest it does not hold
+//   GET  /api/v1/base/<id>v<n>/<sha256>         our base page a head of ours names (BUNDLE 8, `layer4`: layer-cut.mjs cutSample's
+//                                               `base`), by its digest, no suffix: 200 application/pdf, 206 a range, 416 a range
+//                                               it does not hold, a strong ETag, immutable | 404 { why: 'no-base' } for another
 //
-// BUNDLE 4's catalog and objects name the original the layer is bound to, `X-Axt-Base-Etag`, and the original answers with
-// that entity-tag (`ETag`, the MD5 of its bytes, as R2 tags an object written in one put), so that the reader may read it by
-// ranges held to it (the web's worker/src/layer/base.ts); `bound: false` names none, as an older server would.
+// The sample's layer is one over our own compile (a head of ours), which the Worker binds by the base's digest and names no
+// original beside (no `X-Axt-Base-Etag`, design §3.2: only a layer over arXiv's PDF names one); `bound: true` names our copy's
+// entity-tag beside the catalog and every object all the same, as a layer over arXiv's PDF had it. The original answers with that
+// entity-tag (`ETag`, the MD5 of its bytes, as R2 tags an object written in one put), and so does our base page.
 //
 // Every answer carries `Access-Control-Allow-Origin: *` (never credentials) and `X-Content-Type-Options: nosniff`; JSON
 // answers carry `Content-Security-Policy: sandbox`; a miss is JSON, never an HTML page. The <vtag> is the engine's own
@@ -92,6 +96,8 @@ function checked(m) {
  *  segment, the version tag, and `/prepare` where the request is one) */
 const LAYER_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+?)(\/prepare)?$/
 const ORIGINAL_ROUTE = /^\/api\/v1\/original\/([^/]+)$/
+/** our base page by its digest (the capture groups: the segment, the digest; no suffix: the Worker's route) */
+const BASE_ROUTE = /^\/api\/v1\/base\/([^/]+)\/([0-9a-f]{64})$/
 /** an object of BUNDLE 4's layer by its digest (the capture groups: the segment, the ctag, the digest) */
 const OBJECT_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+)\/o\/([0-9a-f]{64})$/
 /** the served faces' table and its files (`/static-fonts/index.json`, `/static-fonts/<group>.json`, a slice's
@@ -102,7 +108,7 @@ const HYPH_ROUTE = /^\/hyph\/[a-z-]+\.json$/
 /** the one group the stand-in serves every face in, and its one slice's file */
 export const FACE_GROUP = 'e2e', FACE_FILE = '0123456789abcdef'
 /** whether a path is one of the stand-in's routes: what a route table gives it, and answers no other path with it */
-export const serves = path => LAYER_ROUTE.test(path) || ORIGINAL_ROUTE.test(path) || OBJECT_ROUTE.test(path) || FACES_ROUTE.test(path) || FACE_FILE_ROUTE.test(path) || HYPH_ROUTE.test(path)
+export const serves = path => LAYER_ROUTE.test(path) || ORIGINAL_ROUTE.test(path) || BASE_ROUTE.test(path) || OBJECT_ROUTE.test(path) || FACES_ROUTE.test(path) || FACE_FILE_ROUTE.test(path) || HYPH_ROUTE.test(path)
 /** a request's body kept in the record: its text at most this long (the length is kept whole) */
 const BODY_TEXT_MAX = 200
 const NO_STORE = 'no-store'
@@ -130,8 +136,8 @@ function rangeOf(header, size) {
  * a preparing answer asks to wait before the next GET, `now` the clock. `layer4`: the sample's BUNDLE 4 objects
  * (layer-cut.mjs cutSample: `objects` by digest, `refs` as a job tells them, `catalog` its bytes), held under CTAG5
  */
-export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now, layer4 = null, faces = null, bound = true } = {}) {
-  let layer = checked('ready'), original = checked('ready')
+export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now = Date.now, layer4 = null, faces = null, bound = false } = {}) {
+  let layer = checked('ready'), original = checked('ready'), base = checked('ready')
   /** the original's entity-tag, and the header that names it beside BUNDLE 4's answers */
   const etag = `"${createHash('md5').update(sample.pdf).digest('hex')}"`
   const baseTag = bound ? { 'x-axt-base-etag': etag } : {}
@@ -142,13 +148,14 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
   const pending = new Set()
   const beginAt = () => { if (layer.kind === 'preparing' && layer.begun) since = now() }
   const state = {
-    /** the mode of the layer routes and of the original route (either alone, the other as it was) */
-    set({ layer: next, original: nextOriginal } = {}) {
+    /** the mode of the layer routes, of the original route and of our base page's (each alone, the others as they were) */
+    set({ layer: next, original: nextOriginal, base: nextBase } = {}) {
       if (next !== undefined) { layer = checked(next); since = null; beginAt() }
       if (nextOriginal !== undefined) original = checked(nextOriginal)
+      if (nextBase !== undefined) base = checked(nextBase)
       return state
     },
-    get mode() { return { layer, original } },
+    get mode() { return { layer, original, base } },
     /** every request answered, in order, each kept whole (the header comment): its method, path, query string, headers and
      *  body beside its answer (the status, or the fault) */
     requests,
@@ -200,14 +207,23 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     if (!bytes) return missing('not-prepared')
     return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...baseTag }, body: bytes }
   }
+  /** a PDF's bytes answered whole or by a range, tagged `etag` */
+  function pdfAnswer(headers, pdf, extra = {}) {
+    const size = pdf.length
+    const range = rangeOf(headers.range, size)
+    const h = { ...COMMON, 'content-type': 'application/pdf', 'accept-ranges': 'bytes', etag, 'access-control-expose-headers': 'Content-Length, Content-Range, Accept-Ranges, ETag', ...extra }
+    if (range === 'unsatisfiable') return { status: 416, headers: { ...h, 'content-range': `bytes */${size}` }, body: new Uint8Array() }
+    if (range === null) return { status: 200, headers: h, body: pdf }
+    return { status: 206, headers: { ...h, 'content-range': `bytes ${range[0]}-${range[1]}/${size}` }, body: pdf.subarray(range[0], range[1] + 1) }
+  }
   function originalAnswer({ headers }, segment) {
     if (segment !== sample.segment || original.kind === 'none') return missing('no-pdf')
-    const size = sample.pdf.length
-    const range = rangeOf(headers.range, size)
-    const base = { ...COMMON, 'content-type': 'application/pdf', 'accept-ranges': 'bytes', etag, 'access-control-expose-headers': 'Content-Length, Content-Range, Accept-Ranges, ETag' }
-    if (range === 'unsatisfiable') return { status: 416, headers: { ...base, 'content-range': `bytes */${size}` }, body: new Uint8Array() }
-    if (range === null) return { status: 200, headers: base, body: sample.pdf }
-    return { status: 206, headers: { ...base, 'content-range': `bytes ${range[0]}-${range[1]}/${size}` }, body: sample.pdf.subarray(range[0], range[1] + 1) }
+    return pdfAnswer(headers, sample.pdf)
+  }
+  /** our base page a head of ours names: the cut's base, the stand-in PDF's bytes; another digest, or no cut, none */
+  function baseAnswer({ headers }, segment, sha) {
+    if (!layer4?.base || segment !== sample.segment || sha !== layer4.base.sha256 || base.kind === 'none') return missing('no-base')
+    return pdfAnswer(headers, sample.pdf, { 'cache-control': IMMUTABLE })
   }
 
   /**
@@ -231,8 +247,8 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     if (FACES_ROUTE.test(path) || FACE_FILE_ROUTE.test(path) || HYPH_ROUTE.test(path)) return method === 'GET' ? facesAnswer(path) : json(405, { why: 'method-not-allowed' }, NO_STORE, { allow: 'GET' })
     const objectRoute = OBJECT_ROUTE.exec(path)
     const layerRoute = objectRoute ? null : LAYER_ROUTE.exec(path)
-    const originalRoute = ORIGINAL_ROUTE.exec(path)
-    const target = layerRoute || objectRoute ? layer : originalRoute ? original : null
+    const originalRoute = ORIGINAL_ROUTE.exec(path), baseRoute = BASE_ROUTE.exec(path)
+    const target = layerRoute || objectRoute ? layer : originalRoute ? original : baseRoute ? base : null
     // (a route's faults come before anything of the request is read: a server that is down is down for every request)
     if (target?.kind === 'reset' || target?.kind === 'hang') return { fault: target.kind }
     if (target?.kind === 'error') return json(target.status, { why: 'unavailable' }, NO_STORE)
@@ -249,6 +265,10 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     if (originalRoute) {
       if (method !== 'GET') return json(405, { why: 'method-not-allowed' }, NO_STORE, { allow: 'GET' })
       return originalAnswer(request, originalRoute[1])
+    }
+    if (baseRoute) {
+      if (method !== 'GET') return json(405, { why: 'method-not-allowed' }, NO_STORE, { allow: 'GET' })
+      return baseAnswer(request, baseRoute[1], baseRoute[2])
     }
     return missing('not-found')
   }
