@@ -9,8 +9,6 @@ export declare function linesOf(tokens: readonly DocToken[], from?: number, to?:
 /** the marked original's lines matched to arXiv's: each by the same words at one offset, else between the same words,
  *  else (80 % of its words in order) between the words matched */
 export interface Carrier {
-  /** a position of the marked original on arXiv's PDF, or null where its line was not carried */
-  carry(page: number, x: number, y: number): { page: number; x: number; y: number; whole: boolean } | null
   readonly lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number }
   /** each marked page added: its lines carried and its lines */
   readonly pageLines: ReadonlyMap<number, readonly [carried: number, total: number]>

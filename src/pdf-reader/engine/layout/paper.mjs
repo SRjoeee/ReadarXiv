@@ -94,6 +94,8 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   // (each compile's wall as the host counts it, its `ms`, else as long as it took here — what the host's compile budget is
   // spent by: CM's bets and the guard's compiles —, and the last one's)
   const wall = { spent: 0, last: 0, longest: 0 }
+  /** whether the host's budget holds one more compile as long as the longest so far, and a fifth (none given: always) */
+  const budgetLeft = () => compileBudgetMs === null || compileBudgetMs === undefined || compileBudgetMs - wall.spent >= 1.2 * wall.longest
   // (the day every compile after the probe is made on, asked once before the marked original's: `sourceDate`; and each answer's
   // request, which the final pass is made of)
   let date = null
@@ -195,11 +197,11 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   async function finalPass(e) {
     const t0 = performance.now()
     const out = r => { ms.final = Math.round(performance.now() - t0); return r }
-    const no = why => out({ refused: 'final', why: whyText(why) })
+    const no = (why, limit = null) => out({ refused: 'final', why: whyText(why), ...(limit ? { limit } : {}) })
     const req = e?.c ? requestOf.get(e.c) : null
     if (!req || !(e.files instanceof Map)) return no('the marked original\'s compile is not known')
     if (!(e.c.files instanceof Map)) return no('the marked compile returned no files to make the final pass over')
-    if (compileBudgetMs !== null && compileBudgetMs !== undefined && compileBudgetMs - wall.spent < 1.2 * wall.longest) return no('no compile left within the compile budget')
+    if (!budgetLeft()) return no('no compile left within the compile budget', 'budget')
     const bytes = e.files.get(main)
     const text = bytes ? latin1(bytes) : ''
     if (!text.startsWith(`${DRAFT_OPTION}\n`)) return no('the marked original\'s main file does not begin with graphicx\'s draft option')
@@ -213,7 +215,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     }
     if (ranThrough(c) && c.pdf?.length) return out({ pdf: c.pdf, log: lastTexLog(c.log) })
     const limit = c ? limitOf(c) : null
-    if (limit) return no(`the final pass was stopped by the host's ${limit} limit`)
+    if (limit) return no(`the final pass was stopped by the host's ${limit} limit`, limit)
     if (!c || !texRan(c.log)) return no(`the final pass ran no TeX${firstLine(c) ? `: ${firstLine(c)}` : ''}`)
     const err = firstError(c.log)
     return no(`the final pass did not run through${err ? `: ${err}` : ''}`)
@@ -252,13 +254,13 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     // a compile TeX never ran, or one a host's limit stopped, is no mark's fault: no compile mends it
     if (!e0.ran) {
       const limit = limitOf(marked)
-      if (limit) return refuse({ refused: 'compile', why: `the marked original was stopped by the host's ${limit} limit` })
+      if (limit) return refuse({ refused: 'compile', why: `the marked original was stopped by the host's ${limit} limit`, limit })
       // (`engine` where the host names the engine unknown; any other answer TeX never ran in, a host's own failure or its cap on
       // a compile's result, the compile's)
       if (!texRan(marked.log)) return refuse({ refused: engineUnknown(marked) ? 'engine' : 'compile', why: `the ${engine} compile ran no TeX${firstLine(marked) ? `: ${firstLine(marked)}` : ''}` })
     }
     /** whether the host's budget holds one more compile, within GUARD_EXTRA */
-    const afford = () => g.extra < GUARD_EXTRA && (compileBudgetMs === null || compileBudgetMs === undefined || compileBudgetMs - wall.spent >= 1.2 * wall.longest)
+    const afford = () => g.extra < GUARD_EXTRA && budgetLeft()
     /** the unmarked original's compile, once it ran through to arXiv's pages: what an attempt's errors are judged against */
     let own = null
     /** the marked original again, `unmarked` left the paper's own and the names marked or not: its evidence */
@@ -297,7 +299,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const texs = u => {
       if (!u.c) return { refused: 'compile', why: 'the paper\'s own source: the compile threw' }
       const limit = limitOf(u.c)
-      if (limit) return { refused: 'compile', why: `the paper's own source was stopped by the host's ${limit} limit` }
+      if (limit) return { refused: 'compile', why: `the paper's own source was stopped by the host's ${limit} limit`, limit }
       if (!texRan(u.c.log)) return { refused: engineUnknown(u.c) ? 'engine' : 'compile', why: `the ${engine} compile of the paper's own source ran no TeX${firstLine(u.c) ? `: ${firstLine(u.c)}` : ''}` }
       const what = !u.ran ? 'does not run through' : `has ${u.pages} pages, arXiv's PDF ${N}`, err = firstError(u.c.log), said = err ? `: ${err}` : ''
       const ours = texLiveOf(u.c.log), declared = paper.meta.tlVersion ?? null, cls = paper.meta.documentclass ? ` (${paper.meta.documentclass})` : ''
@@ -311,7 +313,8 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
      *  compiled), as the compile's, as before the guard */
     const why = (e, more) => { const err = e.c ? firstError(e.c.log) : null; return `the marked original ${whatOf(e)}${err ? ` (${err})` : ''}, ${more}` }
     const ours = (e, more) => ({ refused: 'marks', why: why(e, more) })
-    const untold = (e, more) => ({ refused: 'compile', why: why(e, `${more}; the paper's own source was not compiled`) })
+    // (asked where no compile is left: the budget's, where it is the budget that holds none, rather than the guard's own count)
+    const untold = (e, more) => ({ refused: 'compile', why: why(e, `${more}; the paper's own source was not compiled`), ...(budgetLeft() ? {} : { limit: 'budget' }) })
 
     if (!afford()) {
       g.judged = 'no compile left'
@@ -441,10 +444,10 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
     // anchored by, from the same pages)
     try { read = await readMarked(opened.doc, made.log, { ...made.options, units: paper.units, OPS }) } catch (e) { failed = e }
     // (the final pass's marks against the draft's, both open: base.mjs finalCheck; its failure, or a final pass that does not
-    // open, no base page)
+    // open, no base page. Opened from a copy: the base page's bytes are the result's, and PDF.js takes the buffer it is given)
     if (!failed && base?.pdf) {
       try {
-        const fin = await open(base.pdf)
+        const fin = await open(base.pdf.slice())
         try {
           const check = await finalCheck(opened.doc, fin.doc)
           base = check.ok ? { ...base, check: { marks: check.marks } } : { refused: 'final', why: whyText(`the final pass is not the draft's page: ${check.why}`) }

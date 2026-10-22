@@ -11,14 +11,18 @@ export interface MakeInput {
   units: readonly SourceUnit[]
   /** of the marked original, made with the classes the marks file was made with */
   marks: LayoutMarks
-  /** a PDF.js document of arXiv's PDF; the caller opens and destroys it */
+  /** a PDF.js document of the base page: our compile's final pass (layout/paper.mjs markedOfPaper `base`), whose coordinates the
+   *  file holds; the caller opens and destroys it */
   arxiv: unknown
   OPS: Record<string, number>
   paper: { id: string; version: number }
   left: string
   pdfjs: string
-  /** arXiv's text as layout/arxiv.mjs readArxivText read it from `arxiv` (step T), else read by the maker */
+  /** the base page's text as layout/arxiv.mjs readArxivText read it from `arxiv` (step T), else read by the maker */
   text?: ArxivText | null
+  /** the line check: our base page's lines found on arXiv's PDF (carry.mjs carrierOf of the base page's tokens over arXiv's),
+   *  the file's share (`stats.lines`, CARRY_MIN) and each page's (`lines`, `pageLines()`); none: no line checked */
+  lineCheck?: { lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number }; pageLines: ReadonlyMap<number, readonly [number, number]> } | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
   /** the pages' frame's rule the maker's anchors are placed under, given (a whole run's); else the rule set's: frameOfTokens
@@ -45,33 +49,26 @@ export interface MakeInput {
 }
 export interface LayoutStats {
   lines: { carried: number; total: number; held: number }
-  /** `unplaced`: the units arXiv's text would place whose own marks were not carried there (they stay the original's) */
-  /** `tolerantTried`: the unit marks no line carried that the unit's own words were looked for (layout/tolerant.mjs);
-   *  `tolerant`: those so placed; `tolerantWork`: the marks their bounds were looked for among */
-  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number; tolerantTried: number; tolerant: number; tolerantWork: number }
+  /** `unplaced`: the units the text would place whose own marks stand on no page with ink, or not on their words (they stay
+   *  the original's) */
+  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number }
   /** `marked`: the placeholders of the located units the marked original marks (an opening mark at least), by kind
    *  found among them; `unmarked`: those it gives no mark (LOST, beside them); `symbols`: the text symbols it gives no
    *  mark drawn as their character (PH_FLAG.TEXT, beside them); `inferred`: those found whose end is
    *  inferred, having no closing mark; `why`: the LOST among them by cause; `textTaken`: glyphs a placeholder took that are
    *  letters of the unit's own words as the anchor paired them (running text), to be none. The bars of the own ink:
-   *  `owned` and `matched`, the glyphs and rules of the found pieces in the marks file and on arXiv's page, `unmatched`
-   *  their difference, and `twice`, arXiv's glyphs matched by two found pieces, each to be none (each holds by the
-   *  matcher's rule); `foreign`, arXiv's glyphs half inside a found inline piece's segments (its crop) by their own ink
+   *  `owned` and `matched`, the glyphs and rules of the found pieces in the marks file and on the base page, `unmatched`
+   *  their difference, and `twice`, the page's glyphs owned by two found pieces, each to be none (ownedOn takes each once
+   *  and finds all or none); `foreign`, the page's glyphs half inside a found inline piece's segments (its crop) by their own ink
    *  that are not its own, and `shared`, those inside two found pieces' segments, each to be none; `texts`, the page
    *  texts written (the TEXT symbols' too); `heads`, the unmarked pieces before a unit's start mark or after its end mark
    *  (besideMarks) found by the text the probe showed them set, and EMPTY, having set nothing on the line beside the mark;
    *  `joined`, the later displays of a display group (PH_FLAG.JOINED, their ink the group's first display's); `outside`,
    *  the LOST pieces outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) */
-  ph: { marked: number; found: number; empty: number; lost: number; joined: number; outside: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number; heads: [found: number, empty: number]; textRuns: number }
-  /** the matcher's matches by kind (the same character, another Unicode at the place, loosely on the line, by a vote),
-   *  those it rejected off their run, its work, the pieces past its bound, and the most work a page cost (`most`) */
-  match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number; most: number }
+  ph: { marked: number; found: number; empty: number; lost: number; joined: number; outside: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number; heads: [found: number, empty: number] }
   /** babel's names: the occurrences the marked original marks, those the file locates (and of them those leading a unit:
    *  RUN_IN), and why each other is not */
   names: { marked: number; located: number; runIn: number; why: Record<string, number> }
-  /** the link-anchor locator: the references and citations the matcher did not find that it tried, those it placed by
-   *  their links ([unit, k], rising), and why each other stays LOST (its step) */
-  links: { tried: number; placed: [unit: number, k: number][]; why: Record<string, number> }
   /** the colour pieces of the units the file holds, and those whose run's fill TeX wrote (the file's `colours` rows) */
   colours: { pieces: number; evaluated: number }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */
@@ -87,8 +84,6 @@ export interface LayoutStats {
   inkTimedOut: number[]
   /** pages past BOXES_PAGE boxes (ink.mjs), and in no list above: their ink kept, the boxes past it merged by cell */
   degraded: number[]
-  /** pages whose lines cost the carry more than its bound (carry.mjs `over`): no ink */
-  over: number[]
   bytes: { raw: number; gzip: number }
   ms: { text: number; ops: number; carry: number; anchor: number; rows: number }
   /** the marked original read a page at a time (the page stream): pieces found after their unit's own ink was taken (dropped),
@@ -118,7 +113,8 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
   | {
     refused?: undefined; pages: number; stats: LayoutStats; readPage(p: number): Promise<void>; whole(): Promise<Made>; byTasks(pick?: (ready: readonly MakerTask[]) => number): Promise<Made>
     edges(): Map<string, [number, number]> | null
-    /** the marks carried to arXiv's PDF (whole()'s first step): null, or 'carry' where no line is */
+    /** the marks as they stand and the line check's share (whole()'s first step): null, or 'carry' (too few lines found, or none
+     *  checked for parts) */
     carrying(): 'carry' | null
     /** whether the draws are read (the `draw` option): the head of the layer made says so */
     draw: boolean
@@ -129,7 +125,7 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     drawJsonOf(p: number): string | null
     /** the draw reads: pages kept, pages with none and by why, the encoded bytes, the ms */
     drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** the draws' fills: the items and glyphs read, the items told one fill, those told in runs (layout/fills.mjs) */ fills: { items: number; glyphs: number; told: number; runs: number } }
-    /** each marked page's lines [carried, total], once carried */
+    /** each page's lines [found, total], the line check's (none where none is given) */
     pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
     /** the maker a page at a time (after carrying(), the columns' edges and the whole document's frame rule given); with `marked` (markedPages' head, the marks
      *  marksOfHead's), the marked original's pages given a page at a time too (`markedPage`, `markedEnd`), carrying() not run */
@@ -145,13 +141,8 @@ export interface MakerStream {
   /** the marked original's page (markedPages' page event's), pages in order; its end after its last */
   markedPage(page: MarkedPage): void
   markedEnd(end: Extract<MarkedEvent, { end: unknown }>['end']): void
-  /** whether the carry's refusal is known (the marked original read whole or to its end, or for parts a line carried) */
-  carryKnown(): boolean
-  /** the carry's refusal, once the marked original's end is given */
+  /** the line check's refusal, known from the start */
   carryRefusal(): 'carry' | null
-  /** the link-anchor locator's wanted pages' links read, up to arXiv's page read last: where no page of arXiv's is read after a
-   *  marked page, and before finish() */
-  readLinks(): Promise<void>
   finish(): void
   /** each page's plan, made as the page is let go (null without `plans`) */
   plans: Map<number, PagePlan> | null

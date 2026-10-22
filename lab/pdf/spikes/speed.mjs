@@ -17,7 +17,7 @@
 // perturbs the times: those runs are left out of the time table).
 //   node lab/pdf/spikes/speed.mjs --base=<engine root> --papers=<dir>[,<dir>…] [--head=<engine root>] [--n=5]
 //       [--sides=base,off,on] [--mem] [--out=<file.jsonl>]
-// A paper's dir: meta.json ({ id, stem, source, arxiv }: the source's .tar.gz and arXiv's PDF), P/<stem>.log (the mark probe's
+// A paper's dir: meta.json ({ id, stem, source, arxiv, base? }: the source's .tar.gz, arXiv's PDF and our base page's), P/<stem>.log (the mark probe's
 // log), L/<stem>.pdf and L/<stem>.log (the marked original's compile, its passes' log), as layout-paper's harness keeps them.
 // A paper needs its source and its marked compile: arXiv's PDF alone (a stand-in) gives the pass no unit. Heavy: run it on a
 // quiet machine only. Prints a table a paper and a side: the medians and the spread (min to max) of the total, the first part
@@ -85,11 +85,15 @@ async function child() {
   let marks = null
   if (!RULES[side]) { t = at(); marks = await mk.readMarked(mdoc, log, { ...options, units: source.units, OPS }); ms.marks = at() - t }
   const base = { bytes: arxivBytes.length, sha256: createHash('sha256').update(arxivBytes).digest('hex'), xref: tail.startxrefOf(arxivBytes) }
-  const remover = remove.removerOf({ bytes: arxivBytes, PL, inflate, deflate })
+  // (our base page, the final pass of the marked original, where the paper dir names one (`meta.base`): this engine's sides make the
+  // layout over it and the remover edits it; base's engine, and a dir with none, take arXiv's PDF as before)
+  const oursBytes = meta.base && side !== 'base' ? new Uint8Array(readFileSync(meta.base)) : null
+  const ours = oursBytes ? { doc: await open(oursBytes, LITE_DRAW), bytes: oursBytes.length, sha256: createHash('sha256').update(oursBytes).digest('hex'), xref: tail.startxrefOf(oursBytes), check: { marks: 0 } } : null
+  const remover = remove.removerOf({ bytes: oursBytes ?? arxivBytes, PL, inflate, deflate })
   let first = null, parts = 0
   t = at()
   const r = await pass.layerOfPaper({
-    paper, source, ...(marks ? { marks, ...(side === 'off' ? { rules: OFF_RULES } : {}) } : { marked: { doc: mdoc, log, options }, rules: RULES[side] }), arxiv: { doc: arxiv, text }, OPS, pdfjs: versions.PDFJS, base, image: '1',
+    paper, source, ...(marks ? { marks, ...(side === 'off' ? { rules: OFF_RULES } : {}) } : { marked: { doc: mdoc, log, options }, rules: RULES[side] }), arxiv: { doc: arxiv, text }, ...(ours ? { ours, orig: base, tree: '2025' } : { base }), OPS, pdfjs: versions.PDFJS, image: '1',
     remove: ({ plans }) => remover.remove(plans),
     onHead: () => {}, onLeft: () => {},
     onPart: () => { parts++; if (!first) first = { ms: at(), ...(MEM ? { live: liveSet() } : {}) } },

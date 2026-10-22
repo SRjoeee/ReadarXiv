@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import {
-  BASE_SOURCES, BASE_WHYS, BUNDLE5, BUNDLES_READ, baseKey, catalogBase, indexOf, LAYOUT_REFUSED, readCatalog, readHead, readPart, readUnitsChunk, writeCatalog, writeHead, writePart, writeUnitChunks,
+  BASE_SOURCES, BASE_WHYS, BUNDLE5, BUNDLES_READ, baseKey, catalogBase, indexOf, layerDraws, LAYOUT_REFUSED, readCatalog, readHead, readPart, readUnitsChunk, writeCatalog, writeHead, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { BASE, forged, IMAGE, type Made, made, N, PAPER, parsed, partInputs, UNITS } from './helpers/format-paper'
 
@@ -112,6 +112,20 @@ describe('the head of BUNDLE 8', () => {
     // (the same part, of 8, is read)
     const same = forged('part', parsed(M.parts[0] as never), { from: p.pages[0], to: p.pages[1] })
     expect(await refusal(readPart(same.bytes, { ref: same.ref, index: M.index, chain: null }))).toBeNull()
+  })
+})
+
+describe('layerDraws: the one predicate of whether a head\'s layer draws', () => {
+  it('is true for a base of ours alone: a head of 7, and every head over arXiv\'s PDF, with a why or none, draw nothing', async () => {
+    expect(layerDraws((await headOf(OURS, ORIG)).read.base)).toBe(true)
+    expect(layerDraws((await headOf({ source: 'arxiv', ...BASE, why: 'final' })).read.base)).toBe(false)
+    expect(layerDraws((await headOf(BASE)).read.base)).toBe(false)
+    const seven = parsed(M.head)
+    seven.bundle = '7'
+    seven.base = { ...BASE }
+    const f = forged('head', seven)
+    expect(layerDraws((await readHead(f.bytes, { ref: f.ref })).base)).toBe(false)
+    for (const b of [null, undefined, {}, { source: 'Ours' }, 'ours']) expect(layerDraws(b as never), JSON.stringify(b)).toBe(false)
   })
 })
 

@@ -2,17 +2,17 @@
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
 import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { Box, UnitWire } from './bundle.mjs'
-import type { HeadBase, LayoutRefusalRecord, TableGroups, TokenWire, Written } from './format.mjs'
+import type { LayoutRefusalRecord, TableGroups, TokenWire, Written } from './format.mjs'
 import type { NeedEntry } from './need.mjs'
 import type { BundleUnit } from './units.mjs'
 
 /** the paper made whole: BUNDLE 3's reading (readBundle) or the object the producer holds */
 export interface WholePaper {
   paper: { id: string; version: number; pages: number }
-  /** `xref`: the original's startxref, which BUNDLE 3 does not carry (`CutOptions.base` may supply it); BUNDLE 8's `source` and,
-   *  of a base of ours, its pages, tree and check (format.mjs HeadBase) */
-  base: HeadBase | { bytes: number; sha256: string; xref?: number; source?: undefined }
-  /** arXiv's PDF, where the base is ours (format.mjs writeHead) */
+  /** `xref`: the original's startxref, which BUNDLE 3 does not carry (`CutOptions.base` may supply it); BUNDLE 8's base of ours
+   *  with its `source` and check (format.mjs writeHead) */
+  base: { bytes: number; sha256: string; xref?: number } | import('./format.mjs').HeadBase
+  /** arXiv's PDF beside a base of ours (the head's `orig`) */
   orig?: { bytes: number; sha256: string } | null
   versions?: { image: string }
   /** the paper's units, none dropped (a null is refused: the chunks hold what stands) */
@@ -63,9 +63,8 @@ export interface CutOptions {
   chainAddon?(index: number, part: { pages: [number, number]; layout: LayoutPart }): Promise<{ manifest: RemovalManifest; tail: Uint8Array | null } | null> | { manifest: RemovalManifest; tail: Uint8Array | null } | null
   /** called once for each part that has a layout, in order, with the range that was kept: the hook's state advances here */
   acceptAddon?(index: number, part: { pages: [number, number] }): Promise<void> | void
-  /** the base to write, as the whole's (`WholePaper.base`) is; given, it wins */
-  base?: HeadBase | { bytes: number; sha256: string; xref?: number; source?: undefined }
-  /** arXiv's PDF beside a base of ours (`WholePaper.orig`); given, it wins */
+  base?: { bytes: number; sha256: string; xref: number } | import('./format.mjs').HeadBase
+  /** arXiv's PDF beside a base of ours (the head's `orig`) */
   orig?: { bytes: number; sha256: string } | null
   image?: string
   lineskip?: [number, number] | null

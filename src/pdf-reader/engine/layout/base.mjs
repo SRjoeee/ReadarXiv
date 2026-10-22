@@ -9,8 +9,9 @@
 //    arXiv's PDF, and the right, ours);
 //  - markTextOf: no mark of ours is printed as text (a mark macro inside \url sets its own name as characters: 2610.19860's
 //    `\axt@pma{p176.4a}`), which a reader would see on the base page; the units its names name
-//  - creationEpochOf / pdfDateEpoch: arXiv's PDF's /CreationDate as SOURCE_DATE_EPOCH, so that \today in our compiles is
-//    the day arXiv's was made.
+//  - creationEpochOf / pdfDateEpoch / xmpDateEpoch: arXiv's PDF's day as SOURCE_DATE_EPOCH, so that \today in our compiles is
+//    the day arXiv's was made: its /CreationDate, else its XMP's (arXiv's PDFs of 2026, rewritten by pikepdf, carry no Info
+//    date, their XMP the time of the rewrite).
 // An original module (no port statement). It imports the memory-class test alone: a host's PDF.js documents are read through
 // their own methods.
 import { isMemoryError } from '../pipeline/memory.mjs'
@@ -165,9 +166,45 @@ export function pdfDateEpoch(s) {
   return Number.isSafeInteger(sec) && sec >= 0 ? sec : null
 }
 
-/** a PDF.js document's /CreationDate (its Info dictionary's) as seconds since the epoch (pdfDateEpoch), null where it has none */
+/**
+ * An XMP date (ISO 8601 as XMP writes it: YYYY, YYYY-MM, YYYY-MM-DD, then THH:MM, :SS and a fraction, and Z or ±HH:MM) as
+ * seconds since the epoch, the offset applied and a fraction of a second dropped; null where it is not one
+ */
+export function xmpDateEpoch(s) {
+  if (typeof s !== 'string') return null
+  const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$/.exec(s.trim())
+  if (!m) return null
+  const n = [m[1], m[2] ?? '01', m[3] ?? '01', m[4] ?? '00', m[5] ?? '00', m[6] ?? '00'].map(Number)
+  if (n[1] < 1 || n[1] > 12 || n[2] < 1 || n[2] > 31 || n[3] > 23 || n[4] > 59 || n[5] > 59) return null
+  let t = Date.UTC(n[0], n[1] - 1, n[2], n[3], n[4], n[5])
+  if (m[7] && m[7] !== 'Z') t -= (m[7][0] === '+' ? 1 : -1) * (Number(m[7].slice(1, 3)) * 60 + Number(m[7].slice(4, 6))) * 60_000
+  const sec = Math.floor(t / 1000)
+  return Number.isSafeInteger(sec) && sec >= 0 ? sec : null
+}
+
+/** an XMP packet's xmp:CreateDate and xmp:MetadataDate (xap, the old prefix, too), each as an attribute or an element, as
+ *  seconds since the epoch (xmpDateEpoch); null each where the packet has none */
+export function xmpDatesOf(raw) {
+  const of = name => {
+    if (typeof raw !== 'string') return null
+    const m = new RegExp(`\\b(?:xmp|xap):${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')|<(?:xmp|xap):${name}>([^<]*)</(?:xmp|xap):${name}>`).exec(raw)
+    return m ? xmpDateEpoch(m[1] ?? m[2] ?? m[3]) : null
+  }
+  return { create: of('CreateDate'), metadata: of('MetadataDate') }
+}
+
+/**
+ * A PDF.js document's day, as seconds since the epoch: its Info dictionary's /CreationDate (pdfDateEpoch), else its XMP
+ * packet's xmp:CreateDate, else its xmp:MetadataDate (arXiv's PDFs of 2026, rewritten by pikepdf, carry neither of the first
+ * two: the rewrite's time, the compile's day); null where it has none of them
+ */
 export async function creationEpochOf(doc) {
-  let info = null
-  try { info = (await doc.getMetadata())?.info ?? null } catch (e) { if (isMemoryError(e)) throw e; info = null }
-  return pdfDateEpoch(info?.CreationDate ?? null)
+  let meta = null
+  try { meta = await doc.getMetadata() } catch (e) { if (isMemoryError(e)) throw e; meta = null }
+  const info = pdfDateEpoch(meta?.info?.CreationDate ?? null)
+  if (info !== null) return info
+  let raw = null
+  try { raw = meta?.metadata?.getRaw?.() ?? null } catch (e) { if (isMemoryError(e)) throw e; raw = null }
+  const xmp = xmpDatesOf(raw)
+  return xmp.create ?? xmp.metadata
 }

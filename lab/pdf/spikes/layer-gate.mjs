@@ -1045,7 +1045,7 @@ function q1Of(log) {
   }
   return out
 }
-/** the base the door's cuts are made over. The layer is drawn over a base of ours only (facade.mjs drawsFrom), and the fixtures' layout
+/** the base the door's cuts are made over. The layer is drawn over a base of ours only (format.mjs layerDraws), and the fixtures' layout
  *  files are made over their arXiv PDF, which stands here as the paper's base page, and as arXiv's PDF beside it (`orig`) */
 function doorBaseOf(arxiv, xref, pages) {
   const pdf = { bytes: arxiv.length, sha256: sha256(arxiv) }

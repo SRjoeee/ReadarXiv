@@ -45,7 +45,10 @@ export interface MarkedCompileOptions {
 }
 /** the final pass of the marked original (markedOfPaper `base`): its PDF and its log (lastTexLog), or why there is none
  *  ('final': no files of the compile that stands, no compile left in the budget, a pass that did not run through) */
-export type FinalPass = { pdf: Uint8Array; log: string } | { refused: 'final'; why: string }
+/** the host's limit or the compile budget a refusal was caused by (limitOf's name, or 'budget'): the one kind of refusal that
+ *  may be transient (format.mjs baseRefusalRetryable); absent on every other */
+export type RefusalLimit = string
+export type FinalPass = { pdf: Uint8Array; log: string } | { refused: 'final'; why: string; limit?: RefusalLimit }
 
 /** the unmarked original's verdict, which a refusal after its compile names (`own`): whether it ran through (live.mjs
  *  ranThrough, with a PDF); whether it did with fewer pages than arXiv's (`pages` given, a paper of one toplevel source);
@@ -77,7 +80,7 @@ export type MarkedRefusal = 'probe' | 'compile' | 'texlive' | 'engine' | 'marks'
  */
 export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Promise<
   | { pdf: Uint8Array; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'>; ms: { probe: number; compile: number; guard?: number; final?: number }; cm?: ConvergeRecord; guard?: GuardRecord; base?: FinalPass }
-  | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
+  | { refused: MarkedRefusal; why?: string; limit?: RefusalLimit; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
 >
 
 /**
@@ -112,4 +115,4 @@ export declare function handoverOf(own: OwnVerdict | null | undefined, o: { decl
 export declare function layoutMarksOfPaper(paper: Paper, o: MarkedCompileOptions & {
   open(pdf: Uint8Array): Promise<{ doc: unknown; close(): Promise<void> }>
   OPS: Record<string, number>
-}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number; final?: number }; cm?: ConvergeRecord; guard?: GuardRecord; base?: { pdf: Uint8Array; log: string; check: { marks: number } } | { refused: 'final'; why: string } } | { refused: MarkedRefusal; why?: string; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>
+}): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; ms: { probe: number; compile: number; marks: number; guard?: number; final?: number }; cm?: ConvergeRecord; guard?: GuardRecord; base?: { pdf: Uint8Array; log: string; check: { marks: number } } | { refused: 'final'; why: string; limit?: RefusalLimit } } | { refused: MarkedRefusal; why?: string; limit?: RefusalLimit; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }>
