@@ -1725,6 +1725,11 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   arXiv's PDF's day, `creationEpochOf` — its `/CreationDate`, else its XMP's `xmp:CreateDate`, else `xmp:MetadataDate`. arXiv's
   PDFs of 2026, rewritten by pikepdf, carry only the last (the rewrite's time, within a day of the compile): 2609.26457 prints
   `\today` in its header, 2026-09-23 on arXiv's page and on ours.
+- **No space of ours on the page.** The marks are invisible but where they stop a skip: LaTeX's `\begin` ends in
+  `\ignorespaces`, and a unit's line probe written first after it set the space it skips (IEEEtran's abstract and keywords,
+  run in after their dash: "Abstract — This", the abstract a line longer and 2608.19431's first two pages re-broken, 0.694 of
+  its lines in place). The marked original's probe goes past those spaces (`latex-front.mjs` `patch`, `pastBegin`), as it
+  went past a line environment's line end before; the translation's compile is left as it was.
 - **No mark printed as text** (the guard's `text` evidence): a host's `textOf` reads each marked compile's text; a page that
   holds `\axt` or `axt@` (`markTextOf`) leaves the units its marks name unmarked and the paper is compiled again within
   GUARD_EXTRA, as a mark out of place in an aux is (2610.19860: `\axt@pma{p176.4a}` inside a `\url`).
