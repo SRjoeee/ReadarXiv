@@ -13,6 +13,8 @@ import { latin1Bytes, type SourceUnit } from '@/pdf-reader/engine/source/latex-f
 const enc = (s: string) => new TextEncoder().encode(s)
 /** a file's bytes past ASCII, in order */
 const high = (b: Uint8Array | undefined) => [...(b ?? [])].filter(x => x >= 0x80)
+/** the files the front end transcodes (latex-front.mjs readProject: a declared Latin-1 family file that is not UTF-8) */
+const transcoded = (p: ReturnType<typeof openPaper>) => (p.project as { transcode?: Set<string> }).transcode ?? new Set<string>()
 const PROBE: Compiled = { ok: true, log: ['This is pdfTeX', 'LAYOUT-PROBE 1 lineskip 1.0pt 0.0pt', ''].join('\n') }
 function compiler(answers: Compiled[]) {
   const asked: CompileRequest[] = []
@@ -26,7 +28,7 @@ describe('a Latin-1 source (2610.20581): the layout compile\'s files are the pap
 
   it('is the marked original\'s, its inputenc the paper\'s; the live path\'s original is UTF-8 as before', () => {
     const p = paper()
-    expect(p.project.transcode.has('main.tex')).toBe(true)
+    expect(transcoded(p).has('main.tex')).toBe(true)
     const marked = originalFiles(p, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex')
     expect(high(marked)).toEqual([0xe9, 0xa0])
     expect(new TextDecoder('latin1').decode(marked)).toContain('\\usepackage[latin1]{inputenc}')
@@ -47,7 +49,7 @@ describe('a Latin-1 source (2610.20581): the layout compile\'s files are the pap
 
   it('changes no byte of a source that is not transcoded', () => {
     const p = openPaper(new Map([['main.tex', enc('\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n\\begin{document}\nMathématiques here.\n\\end{document}\n')]]))
-    expect(p.project.transcode.size).toBe(0)
+    expect(transcoded(p).size).toBe(0)
     for (const layout of [null, LAYOUT_CLASSES]) expect(originalFiles(p, { lines: true, layout, transcode: false })).toEqual(originalFiles(p, { lines: true, layout, transcode: true }))
   })
 })
@@ -60,7 +62,7 @@ describe('an argument TeX reads verbatim (2610.19860): no mark of ours inside it
   const close = (id = 1): Piece => ({ t: 'close', id, src: '}' })
   const unit = (pieces: Piece[]) => ({ kind: 'para', file: 'main.tex', start: 0, end: 0, pieces }) as SourceUnit
   const srcs = (u: SourceUnit | undefined) => ((u?.pieces ?? []) as Piece[]).map(p => (p.t === 'text' ? p.t : p.t === 'ph' ? `ph ${p.src}` : `${p.t} ${p.src}`))
-  const marked = (pieces: Piece[]) => srcs(layoutMarking([unit(pieces)], LAYOUT_CLASSES).units[0])
+  const marked = (pieces: Piece[]) => srcs(layoutMarking([unit(pieces)], LAYOUT_CLASSES, { lines: false }).units[0])
 
   it('a \\url read as a group: its argument has none, the unit\'s other placeholders keep theirs', () => {
     // (llncs.cls' \\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}} read as \\url's definition: its argument a group,
@@ -95,7 +97,7 @@ describe('a class\'s fallback definition (2610.19860\'s llncs.cls): not the comm
   it('llncs.cls\' \\@ifundefined{url}{\\def\\url#1{#1}}{} in an \\AtBeginDocument: each \\url one placeholder, marked around it alone', () => {
     const CLS = '\\NeedsTeXFormat{LaTeX2e}\\ProvidesClass{llncs}\\LoadClass{article}\n\\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}}\n'
     const p = openPaper(new Map([['main.tex', enc(`\\documentclass{llncs}\n\\usepackage{hyperref}\n\\begin{document}\nThe code is available at\\newline\n\\url{https://github.com/a/b-c} with $x$.\n\\end{document}\n`)], ['llncs.cls', enc(CLS)]]))
-    const marked = layoutMarking(p.units, LAYOUT_CLASSES).units[0]?.pieces.map(q => q.src ?? q.t)
+    const marked = (layoutMarking(p.units, LAYOUT_CLASSES, { lines: false }).units[0]?.pieces as { t: string; src?: string }[]).map(q => q.src ?? q.t)
     expect(marked).toEqual(['text', '\\newline', 'text', '\\axtpma{p0.3a}', '\\url{https://github.com/a/b-c}', '\\axtpm{p0.3b}', 'text', '\\axtpmm{p0.5a}', '$x$', '\\axtpm{p0.5b}', 'text'])
   })
   it('each guard of the name being undefined, and \\providecommand', () => {
