@@ -7,7 +7,8 @@ import { latin1Bytes, type SourceUnit } from '@/pdf-reader/engine/source/latex-f
 
 // The whole-paper fallbacks of the layer route's release sweep (2026-10-22), each by its general rule: a Latin-1 source's
 // marked original keeps the paper's own bytes (2610.20581); no mark of ours stands inside an argument TeX reads verbatim, and
-// a class's fallback for a command the role table knows is not read as the command's definition (2610.19860)
+// a class's fallback for a command the role table knows is not read as the command's definition (2610.19860); and, the base
+// page asked, the guard takes no marked original of more pages than arXiv's, the unmarked original telling whose fault it is
 
 const enc = (s: string) => new TextEncoder().encode(s)
 /** a file's bytes past ASCII, in order */
@@ -138,5 +139,44 @@ describe('a class\'s fallback definition (2610.19860\'s llncs.cls): not the comm
     // (a test too far before the definition is none)
     const far = `\\ifx\\url\\undefined${' '.repeat(500)}\\def\\url#1{#1}\\fi`
     expect(fallbackDefinition(far, at(far), 'url', 'def')).toBe(false)
+  })
+})
+
+describe('the guard, the base page asked: no marked original of more pages than arXiv\'s stands', () => {
+  const TEX = 'This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex)\n'
+  const ran = (pdf: Uint8Array, pages: number, ms?: number): Compiled => ({ ok: true, pdf, log: `${TEX}AXT-END\nOutput written on main.pdf (${pages} pages, 9999 bytes).\n`, ...(ms === undefined ? {} : { ms }) })
+  const MARKED = enc('%PDF-1.7 the marked original'), AGAIN = enc('%PDF-1.7 the marked original again'), OWN = enc('%PDF-1.7 the paper alone')
+  const paper = () => openPaper(new Map([['main.tex', enc('\\documentclass{article}\n\\begin{document}\nA paragraph of words with $x$ here.\n\nAnother paragraph of words.\n\\end{document}\n')]]))
+  /** the marked original of 5 pages, again so with the name marks off, then the unmarked original of `own` pages */
+  const answers = (own: number) => [PROBE, ran(MARKED, 5), ran(AGAIN, 5), ran(OWN, own)]
+
+  it('the paper\'s own source of more pages too: TeX\'s, the page counts named, and no final pass asked', async () => {
+    const c = compiler(answers(5))
+    const made = await markedOfPaper(paper(), { compile: c.compile, pages: 4 })
+    expect(made).toMatchObject({ refused: 'compile', why: 'the paper\'s own source (article) has 5 pages, arXiv\'s PDF 4 on TeX Live 2025', own: { ran: true, short: false, limit: null, tree: '2025' }, guard: { extra: 2, failed: ['pages'] } })
+    expect(made).not.toHaveProperty('base')
+    expect(c.asked).toHaveLength(4)
+  })
+  it('the paper\'s own source of arXiv\'s pages: ours (\'marks\', 2610.20581\'s case before its Latin-1 rule), the page counts named', async () => {
+    const c = compiler(answers(4))
+    expect(await markedOfPaper(paper(), { compile: c.compile, pages: 4 })).toMatchObject({ refused: 'marks', why: 'the marked original has 5 pages, arXiv\'s PDF 4, nor with the name marks off, where the paper\'s own source makes 4 pages', own: { ran: true, short: false } })
+    expect(c.asked).toHaveLength(4)
+  })
+  it('no compile left: refused as the compile\'s, with the budget\'s limit, rather than a final pass over it', async () => {
+    // (the marked compile 1 s of a 1.5 s budget: less than 1.2 times the longest compile left)
+    const made = await markedOfPaper(paper(), { compile: compiler([PROBE, ran(MARKED, 5, 1000)]).compile, pages: 4, compileBudgetMs: 1500 })
+    expect(made).toMatchObject({ refused: 'compile', why: 'the marked original has 5 pages, arXiv\'s PDF 4, and no compile was left to mend it; the paper\'s own source was not compiled', limit: 'budget', guard: { judged: 'no compile left' } })
+  })
+  it('without the base page (`final` false), as before: the marked original of more pages stands for the carry to judge', async () => {
+    const c = compiler(answers(5))
+    expect(await markedOfPaper(paper(), { final: false, compile: c.compile, pages: 4 })).toMatchObject({ pdf: MARKED, guard: { extra: 1, failed: ['pages'] } })
+    expect(c.asked).toHaveLength(3)
+    expect(await markedOfPaper(paper(), { final: false, compile: compiler([PROBE, ran(MARKED, 5, 1000)]).compile, pages: 4, compileBudgetMs: 1500 })).toMatchObject({ pdf: MARKED, guard: { judged: 'no compile left' } })
+  })
+  it('a marked original of arXiv\'s pages mended by the guard stands, the base page asked or not', async () => {
+    for (const final of [true, false]) {
+      const c = compiler([PROBE, ran(MARKED, 5), ran(AGAIN, 4)])
+      expect(await markedOfPaper(paper(), { final, compile: c.compile, pages: 4 }), String(final)).toMatchObject({ pdf: AGAIN, guard: { extra: 1, names: false, failed: ['pages'] } })
+    }
   })
 })
