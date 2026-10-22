@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { baseRefusalRetryable } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { baseRefusalRetryable, RETRY_LIMITS } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { type Compiled, type CompileRequest, DRAFT_OPTION, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
@@ -179,9 +179,12 @@ describe('a refusal a host\'s limit or the compile budget caused names it, and i
     expect(baseRefusalRetryable(own)).toBe(false)
   })
 
-  it('reads no other code as retryable, nor what is no refusal', () => {
+  it('retries the wall clock and the budget alone (the host\'s rule: once); a cpu, file-size or disk limit, any other code, none', () => {
+    expect(RETRY_LIMITS).toEqual(['wall', 'budget'])
+    for (const limit of ['wall', 'budget']) for (const refused of ['compile', 'final']) expect(baseRefusalRetryable({ refused, why: 'x', limit }), `${refused} ${limit}`).toBe(true)
+    // (the same paper meets a cpu, file-size or disk limit on the same box again; 'time', another host's timeout, is no box's wall)
+    for (const limit of ['cpu', 'fsize', 'disk', 'time']) expect(baseRefusalRetryable({ refused: 'compile', limit }), limit).toBe(false)
     for (const r of [{ refused: 'carry', why: 'x' }, { refused: 'marks' }, { refused: 'boxes' }, { refused: 'engine' }, { refused: 'texlive' }, { refused: 'final', why: 'the final pass is not the draft\'s page' }, { refused: 'final', limit: '' }, { refused: 'final', limit: null }, null, undefined, 'budget', {}]) expect(baseRefusalRetryable(r as never), JSON.stringify(r)).toBe(false)
-    expect(baseRefusalRetryable({ refused: 'compile', limit: 'time' })).toBe(true)
   })
 })
 

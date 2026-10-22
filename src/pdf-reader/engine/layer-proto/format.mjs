@@ -111,20 +111,25 @@ export const BASE_WHYS = LAYOUT_REFUSED
  * and every head over arXiv's PDF, with a why or none, draw nothing (design note §3.5, §3.6)
  */
 export const layerDraws = base => base !== null && typeof base === 'object' && base.source === 'ours'
+/** the limits a refusal may name that another try may not meet again (`limit`): the box's wall clock and the compile budget;
+ *  its cpu, file-size and disk limits meet the same paper on the same box again */
+export const RETRY_LIMITS = Object.freeze(['wall', 'budget'])
 /**
  * Whether a refusal of our base page (markedOfPaper's or layoutMarksOfPaper's paper refusal, or its `base` refusal) may be
- * transient, so that the host retries the paper rather than commit a fallback head for good: exactly where it names the host's
- * limit or the compile budget that caused it (`limit`: limitOf's name — the box's own, 'time' for a timeout — or 'budget').
+ * transient, so that the host retries the paper (once, the host's rule) rather than commit a fallback head for good: exactly
+ * where it names the box's wall clock or the compile budget as what stopped it (`limit` 'wall' or 'budget', RETRY_LIMITS; the
+ * name is limitOf's: the box's own, 'time' for another host's timeout, or 'budget').
  *   code      retryable where                                               for good where
  *   compile   the marked original or the paper's own source was stopped by  the paper's own source fails as itself (TeX's
- *             a host's limit; no compile left in the budget to tell whose   error, its pages), or TeX never ran in it
- *             fault it is (the paper's own source not compiled)
- *   final     the final pass was stopped by a host's limit, or the budget   a check failed: a mark moved, another page count or
- *             held no compile for it                                        box, the pass did not run through, or it threw
+ *             the wall clock; no compile left in the budget to tell whose   error, its pages), TeX never ran in it, or a cpu,
+ *             fault it is (the paper's own source not compiled)             file-size or disk limit stopped it
+ *   final     the final pass was stopped by the wall clock, or the budget   a check failed (a mark moved, another page count
+ *             held no compile for it                                        or box), the pass did not run through or threw,
+ *                                                                           or a cpu, file-size or disk limit stopped it
  *   carry, marks, boxes, engine, texlive   never                            always (texlive after every served tree)
  * A fault of the host's machinery (a failed allocation, a jail that fails) is no refusal: it is thrown, and retried as before
  */
-export const baseRefusalRetryable = r => r !== null && typeof r === 'object' && typeof r.limit === 'string' && r.limit.length > 0
+export const baseRefusalRetryable = r => r !== null && typeof r === 'object' && RETRY_LIMITS.includes(r.limit)
 export const WHY_MAX = 300
 /** a why as a record holds it: a run of control characters (a TeX log's raw bytes, a terminal's escapes) one space, within
  *  WHY_MAX */
