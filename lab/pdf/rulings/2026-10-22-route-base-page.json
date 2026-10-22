@@ -2,7 +2,7 @@
   "date": "2026-10-22",
   "by": "the maintainer",
   "quote": "3 \u63a5\u53d7",
-  "english": "PENDING the maintainer's own words: decision 3 accepted, as the coordinator relays it for the layer route's step 2 (our compile as the base page), 2026-10-22",
+  "english": "decision 3 accepted, 2026-10-22, relayed by the coordinator: a part that fails the check shows arXiv's PDF untranslated, and units without TeX positions stay untranslated",
   "on": "the layer route's step 2 (pull request of feat/route-base-compile): the layer drawn over our compile's final pass, its layout made over that page with no matching; a base page of ours only where at least 90 % of its lines are in place on arXiv's PDF (within 0.5 pt on their page), each paper compiled on the tree of arXiv's build",
   "measures": [
     "pitchSpread",
@@ -13,6 +13,130 @@
   "targets": [
     "zh"
   ],
-  "scope": "zh, 2307.16209v1-zh alone: pitch spread 0.426 to 0.527, full size 96.6 to 96.2 %, frames past the right edge 6.8 to 7.3 %, paragraph gaps a pitch or more wider 20.6 to 21.3 %; with the thesis's pages under 0.9 in place excluded (our TeX Live 2023 is not arXiv's build there: production's per-part verdicts leave them the original's) and its five pages where units are newly drawn (47, 62, 63, 134, 137) excluded, every one of the four is equal on both sides; drawn units 4,417 to 4,420 of 4,437, text units left English on zh 12 to 9, every defect equal",
-  "why": "the layer is drawn over a page of our own, which another build of TeX Live sets otherwise in places: the pages it re-breaks are refused in production, and the rest moves only where the maker over our page draws units it left English before"
+  "scope": "zh, 2307.16209v1-zh alone: pitch spread 0.426 to 0.527, full size 96.6 to 96.2 %, frames past the right edge 6.8 to 7.3 %, paragraph gaps a pitch or more wider 20.6 to 21.3 %; with the thesis's pages under 0.9 in place excluded on both sides (the pages where our TeX Live 2023 sets text otherwise than arXiv's build; production judges the share per part, and leaves a failing part the original's) and its five pages where units are newly drawn (47, 62, 63, 134, 137) excluded, every one of the four is equal on both sides, same frames and same aggregation; drawn units 4,417 to 4,420 of 4,437, text units left English on zh 12 to 9, every defect invariant equal",
+  "why": "the standard is the original page, not the last build: the gate's 0-worse-than-the-merge-base rule is a safety net, and a measure that moves because the drawing is closer to the original is no regression. Here the old pack drew pages that production refuses (our TeX Live 2023 sets them otherwise than arXiv's build: a part whose lines are less than 90 % in place within 0.5 pt on arXiv's PDF stays the original's), and the maker over arXiv's page left English the units that the maker over our own page locates (coverage first, then fidelity: a unit drawn small is better than a unit left English). Nothing else moves: with those pages excluded on both sides, every one of the four measures is equal",
+  "evidence": {
+    "what": "2307.16209v1-zh, base a7bc7c0f on pack 287c6d4e against this branch on pack d25b354b (layer-gate.mjs, model tier; same frames, same aggregation, pooled)",
+    "inPlaceUnder0.9": [
+      27,
+      31,
+      41,
+      50,
+      56,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      82
+    ],
+    "newlyDrawn": [
+      47,
+      62,
+      63,
+      134,
+      137
+    ],
+    "table": [
+      {
+        "pages": "every page",
+        "pitchSpread": [
+          0.51,
+          0.694
+        ],
+        "fullSize": [
+          0.9907,
+          0.9834
+        ],
+        "overRight": [
+          0.0926,
+          0.1026
+        ],
+        "paraGapWide": [
+          0.2877,
+          0.3033
+        ]
+      },
+      {
+        "pages": "under 0.9 in place excluded",
+        "pitchSpread": [
+          0.368,
+          0.4
+        ],
+        "fullSize": [
+          0.9912,
+          0.9828
+        ],
+        "overRight": [
+          0.0883,
+          0.0998
+        ],
+        "paraGapWide": [
+          0.2947,
+          0.3085
+        ]
+      },
+      {
+        "pages": "under 0.9 in place and newly drawn excluded",
+        "pitchSpread": [
+          0.368,
+          0.368
+        ],
+        "fullSize": [
+          0.9909,
+          0.9909
+        ],
+        "overRight": [
+          0.0874,
+          0.0874
+        ],
+        "paraGapWide": [
+          0.2941,
+          0.2941
+        ]
+      },
+      {
+        "pages": "zh pooled, every page",
+        "pitchSpread": [
+          0.426,
+          0.527
+        ],
+        "fullSize": [
+          0.966,
+          0.962
+        ],
+        "overRight": [
+          0.068,
+          0.073
+        ],
+        "paraGapWide": [
+          0.206,
+          0.213
+        ]
+      },
+      {
+        "pages": "zh pooled, under 0.9 and newly drawn excluded",
+        "pitchSpread": [
+          0.347,
+          0.347
+        ],
+        "fullSize": [
+          0.964,
+          0.964
+        ],
+        "overRight": [
+          0.063,
+          0.063
+        ],
+        "paraGapWide": [
+          0.204,
+          0.204
+        ]
+      }
+    ]
+  }
 }
