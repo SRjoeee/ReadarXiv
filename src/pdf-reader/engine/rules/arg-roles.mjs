@@ -161,11 +161,52 @@ export function commandParams(name, bindings = null) {
 const OWN_COMMANDS = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|newtoks|DeclareMathOperator\*?)\s*\{?\s*\\([A-Za-z@]+)/g
 /** a paper as the table reads it: the bindings its files load (bindingsOf) and the commands they define (`own`), whose
  *  arguments the table cannot know (llncs.cls' \newtoks\titlerunning among them) — not a command defined anew only
- *  inside its own call's argument, which is the kernel's where it is called (inOwnCall) */
+ *  inside its own call's argument, which is the kernel's where it is called (inOwnCall), nor one a fallback defines that
+ *  the table knows (knownFallback: llncs.cls' \@ifundefined{url}{\def\url#1{#1}}{}) */
 export function paperOf(texts) {
-  const own = new Set(), plain = texts.map(uncommented)
-  for (const text of plain) for (const m of text.matchAll(OWN_COMMANDS)) if (!own.has(m[1]) && !inOwnCall(text, m.index, m[1])) own.add(m[1])
-  return { bindings: bindingsOfText(plain), own }
+  const own = new Set(), plain = texts.map(uncommented), bindings = bindingsOfText(plain)
+  for (const text of plain) {
+    for (const m of text.matchAll(OWN_COMMANDS)) {
+      if (own.has(m[1]) || inOwnCall(text, m.index, m[1]) || knownFallback(text, m.index, m[1], /^\\([A-Za-z]+)/.exec(m[0])?.[1] ?? '', bindings)) continue
+      own.add(m[1])
+    }
+  }
+  return { bindings, own }
+}
+/** how far before a definition the test of its name being undefined is looked for */
+const FALLBACK_WINDOW = 400
+/** the definers that define only a command not defined yet */
+const PROVIDERS = /^(?:providecommand|Provide(?:Expandable)?DocumentCommand|providerobustcmd)$/
+/**
+ * Whether the definition of \name at t[at], made by the command `how` (providecommand, def, newcommand…), is a fallback: one TeX
+ * makes only where \name is undefined. \providecommand's kind; or one in the branch TeX takes then of a test of \name: the first
+ * argument of \@ifundefined{name}, \ifcsundef{name} or \ifundef{\name} (in an \AtBeginDocument too: llncs.cls'
+ * \AtBeginDocument{\@ifundefined{url}{\def\url#1{#1}}{}}); or what follows \ifx\name\undefined (\@undefined), \ifx\undefined\name,
+ * \expandafter\ifx\csname name\endcsname\relax, \ifdefined\name\else or \ifcsname name\endcsname\else, with no conditional, \else,
+ * \or or \fi between it and the definition. A test in a comment, of another name, or nested deeper is none: the definition
+ * stands, as before
+ */
+export function fallbackDefinition(t, at, name, how) {
+  if (PROVIDERS.test(how)) return true
+  const from = Math.max(0, at - FALLBACK_WINDOW), before = t.slice(from, at)
+  const commented = k => /(?:^|[^\\])%/.test(t.slice(t.lastIndexOf('\n', k - 1) + 1, k))
+  // (a name is letters and @, none of them special in a pattern)
+  for (const m of before.matchAll(new RegExp(String.raw`\\(?:@ifundefined|ifcsundef)\s*\{\s*${name}\s*\}|\\ifundef\s*(?:\{\s*\\${name}\s*\}|\\${name}(?![A-Za-z@]))`, 'g'))) {
+    const k = skipSpaces(t, from + m.index + m[0].length), e = t[k] === '{' ? groupEnd(t, k) : -1
+    if (e > at && !commented(from + m.index)) return true
+  }
+  const tests = [...before.matchAll(new RegExp(String.raw`\\ifx\s*(?:\\${name}\s*\\@?undefined|\\@?undefined\s*\\${name})(?![A-Za-z@])|\\expandafter\s*\\ifx\s*\\csname\s*${name}\s*\\endcsname\s*\\relax(?![A-Za-z@])|\\ifdefined\s*\\${name}\s*\\else(?![A-Za-z@])|\\ifcsname\s*${name}\s*\\endcsname\s*\\else(?![A-Za-z@])`, 'g'))]
+  const last = tests.at(-1)
+  if (!last || commented(from + last.index)) return false
+  return !/\\(?:if[A-Za-z@]*|unless|else|or|fi)(?![A-Za-z@])/.test(before.slice(last.index + last[0].length))
+}
+/** whether a definition is a fallback (fallbackDefinition) of a command the table knows for the paper (`bindings`): the
+ *  kernel's, one written out here, or one of a package or class the paper loads. Either that command's own definition is
+ *  in force where it is called, or the fallback stands in for it; no definition of the paper's: the table reads its calls
+ *  (2610.19860: llncs.cls' fallback \def\url#1{#1} read as \url's own made its argument a group, and hyperref's \url, in
+ *  force, printed the mark set inside it) */
+export function knownFallback(t, at, name, how, bindings) {
+  return commandParams(name, bindings) !== null && fallbackDefinition(t, at, name, how)
 }
 const OWN_CALL_WINDOW = 4000
 /**
