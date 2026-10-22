@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LAYOUT, LAYOUT_SCHEMA } from '../../src/pdf-reader/engine/layout/file.mjs'
 import { signV4 } from '../../scripts/r2-read.mjs'
-import { checkCompileImage, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { BASE_RECORD_SCHEMA, baseRecordOf, checkCompileImage, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -149,6 +149,71 @@ describe('the pack\'s outputs are the frozen references', () => {
     expect(outputsOf(i.refs)).toEqual(['0001.00001v1-de', '0001.00001v1-zh', '0002.00002v1-zh'])
     expect(entriesOf(i).some(e => e.path.includes('0003.00003v1'))).toBe(false)
     expect(() => entriesOf({ ...i, refs: i.records })).toThrow(/no frozen reference/)
+  })
+})
+
+// BUNDLE 8 (design note §3.1): a fixture's layout made over our base page, the final pass of the marked original, holds that page
+// beside arXiv's PDF and its record, base.json, which names the page's digest and the layout file's: a make checks the three
+// against each other, so that a layout file is never packed beside another page than the one it was made over
+describe('our base pages the layout files were made over', () => {
+  const n = '0001.00001v1-zh'
+  /** a fixture's base page of ours and its record, over its layout file as it is */
+  function withBase(i: ReturnType<typeof inputs>, page = 'our base page', more: Record<string, unknown> = {}) {
+    const layout = readFileSync(join(i.fixtures, n, 'layout.json'))
+    put(join(i.fixtures, n, 'base.pdf'), page)
+    const record = { schema: BASE_RECORD_SCHEMA, source: 'ours', base: { bytes: page.length, sha256: sha256(page), xref: 3, pages: 1, tree: '2025', check: { pages: [1, 1], boxes: 'equal', carried: 1 } }, layout: { sha256: sha256(layout), bytes: layout.length }, ...more }
+    put(join(i.fixtures, n, 'base.json'), JSON.stringify(record))
+    return record
+  }
+  const message = (i: ReturnType<typeof inputs>) => { try { entriesOf(i); return '' } catch (e) { return (e as Error).message } }
+
+  it('packs base.pdf and base.json beside arxiv.pdf where the fixture has them, and none where it has not', () => {
+    const i = inputs()
+    const record = withBase(i)
+    expect(baseRecordOf(join(i.fixtures, n))).toEqual(record)
+    expect(baseRecordOf(join(i.fixtures, '0001.00001v1-de'))).toBeNull()
+    const paths = entriesOf(i).map(e => e.path)
+    expect(paths).toContain(`fixtures/${n}/base.pdf`)
+    expect(paths).toContain(`fixtures/${n}/base.json`)
+    expect(paths.filter(p => /\/base\.(?:pdf|json)$/.test(p))).toHaveLength(2)
+    const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'out'), pipeline: '10', layout: LAYOUT_V })
+    expect(manifest.files.find(f => f.path === `fixtures/${n}/base.pdf`)).toMatchObject({ sha256: sha256('our base page') })
+  })
+
+  it('refuses a base page that is not its record\'s, a layout file not made over it, a page with no record, a record of no page', () => {
+    const cases: [string, (i: ReturnType<typeof inputs>) => void, RegExp][] = [
+      ['other bytes', i => { withBase(i); put(join(i.fixtures, n, 'base.pdf'), 'another page') }, /base\.pdf is not the page base\.json names/],
+      ['another layout', i => { withBase(i); put(join(i.fixtures, n, 'layout.json'), layoutText('other')) }, /layout\.json is not the layout base\.json names, made over base\.pdf/],
+      ['no record', i => { put(join(i.fixtures, n, 'base.pdf'), 'our base page') }, /base\.pdf with no base\.json/],
+      ['no page', i => { withBase(i); rmSync(join(i.fixtures, n, 'base.pdf')) }, /there is no base\.pdf/],
+      ['no head', i => { withBase(i, 'our base page', { base: { bytes: 13, sha256: sha256('our base page') } }) }, /not a head's base of ours/],
+      ['no source', i => { withBase(i, 'our base page', { source: 'theirs' }) }, /names no source/],
+      ['another schema', i => { withBase(i, 'our base page', { schema: 2 }) }, /not of schema 1/],
+    ]
+    for (const [what, make, why] of cases) {
+      const i = inputs()
+      make(i)
+      expect(message(i), what).toMatch(why)
+      expect(message(i), what).toContain(`${n}: `)
+    }
+  })
+
+  it('keeps the layout file of a paper whose base page of ours was refused, made over arXiv\'s PDF before, outside the version check', () => {
+    const i = inputs()
+    put(join(i.fixtures, n, 'layout.json'), layoutText(n, LAYOUT_V.schema, '3'))
+    const kept = readFileSync(join(i.fixtures, n, 'layout.json'))
+    put(join(i.fixtures, n, 'base.json'), JSON.stringify({ schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: 'carry', detail: '80 of our 100 lines found on arXiv\'s PDF, under 90 %', layout: { sha256: sha256(kept), bytes: kept.length } }))
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ source: 'arxiv', why: 'carry' })
+    expect(entriesOf(i).map(e => e.path)).toContain(`fixtures/${n}/base.json`)
+    expect(entriesOf(i).map(e => e.path)).not.toContain(`fixtures/${n}/base.pdf`)
+    expect(layoutVersionOf(i.fixtures, ['0001.00001v1-zh', '0001.00001v1-de', '0002.00002v1-zh'], LAYOUT_V)).toEqual(LAYOUT_V)
+    // (a refusal that keeps no layout, or keeps another, or comes with a page of ours, is no fixture)
+    for (const [record, page, why] of [[{ layout: null }, null, /no layout file is kept/], [{ layout: { sha256: sha256('x'), bytes: 1 } }, null, /not the kept layout/], [{}, 'a page', /there is a base\.pdf/], [{ why: '' }, null, /no why/]] as const) {
+      const j = inputs()
+      put(join(j.fixtures, n, 'base.json'), JSON.stringify({ schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: 'carry', layout: { sha256: sha256(readFileSync(join(j.fixtures, n, 'layout.json'))), bytes: readFileSync(join(j.fixtures, n, 'layout.json')).length }, ...record }))
+      if (page) put(join(j.fixtures, n, 'base.pdf'), page)
+      expect(message(j)).toMatch(why)
+    }
   })
 })
 

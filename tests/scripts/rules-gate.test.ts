@@ -613,9 +613,10 @@ describe('the runs are the production configuration', () => {
 // are one instrument when the packs differ in the made layout files alone: the run names what the pack holds, not where it is.
 describe('the instrument of a pack', () => {
   const file = (path: string, sha: string) => ({ path, sha256: sha.repeat(64).slice(0, 64), bytes: 1 })
-  const pack = (layout: string, over: Record<string, string> = {}) => ({
+  const pack = (layout: string, over: Record<string, string> = {}, base: string | null = null) => ({
     files: [
       file('fixtures/0001.00001v1-zh/arxiv.pdf', over.pdf ?? 'a'), file('fixtures/0001.00001v1-zh/units.json', 'b'), file('fixtures/0001.00001v1-zh/layout.json', layout),
+      ...(base ? [file('fixtures/0001.00001v1-zh/base.pdf', base), file('fixtures/0001.00001v1-zh/base.json', base)] : []),
       file('refs/0001.00001v1-zh/ref.json', over.ref ?? 'c'), file('refs/0001.00001v1-zh/layout.json', 'd'), file('geometry/0001.00001-zh-geometry.json', over.geometry ?? 'e'),
       file('data/fonts/x.woff2', over.font ?? 'f'), file('texmf/tex/generic/hyph-en.tex', over.texmf ?? '7'),
     ],
@@ -623,6 +624,11 @@ describe('the instrument of a pack', () => {
 
   it('is the same for packs whose made layout files differ alone', () => {
     expect(instrumentOfPack(pack('1'))).toEqual(instrumentOfPack(pack('2')))
+  })
+
+  it('is the same with or without our base pages and their records, which an engine makes beside the layout files', () => {
+    expect(instrumentOfPack(pack('1'))).toEqual(instrumentOfPack(pack('2', {}, '8')))
+    expect(instrumentOfPack(pack('1', {}, '8'))).toEqual(instrumentOfPack(pack('1', {}, '9')))
   })
 
   it('differs for another PDF, reference, geometry, face or pattern, each in its own part alone', () => {

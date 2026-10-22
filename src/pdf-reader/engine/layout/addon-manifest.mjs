@@ -18,10 +18,11 @@ import { boundedJson, COORD_MAX, isInteger, isNumber, isObject, isVersionToken, 
  *  PDF.js reads it, and a page refused past its budgets: what it holds by kind, what it decodes; 5: the glyphs of the
  *  babel names the layout file locates removed, and their boxes counted for the kept ink under them; 6: a part's add-on
  *  its own tail, an update chained after the parts before it (layout/chain.mjs), each page aligned by PDF.js's facts
- *  shipped with its plan, the boxes' share spent over the parts). Defined here,
+ *  shipped with its plan, the boxes' share spent over the parts; 7: the remover runs over our base page, the final pass of
+ *  the marked original, its plans of the glyphs each unit owns there, its tails appended to our PDF's bytes). Defined here,
  *  beside the manifest that names it, so that a reader checks a manifest without loading the remover (which re-exports
  *  it) */
-export const REMOVAL = '6'
+export const REMOVAL = '7'
 /** the add-on's bytes at most (the bytes after arXiv's: 32 KB for the 147-page thesis), its manifest's bytes and
  *  values */
 export const ADDON_CAP = 4 * 2 ** 20

@@ -4,6 +4,8 @@
 // PDFs, the layout files made from them and the PIPELINE translations are under arXiv's licence. The pack is those inputs
 // and nothing else, made on the maintainer's machine, kept in a private bucket, and restored by digest:
 //   pack/fixtures/<fx>/arxiv.pdf, layout.json     the made layout files (--fixtures)
+//   pack/fixtures/<fx>/base.pdf, base.json        our base page the layout file was made over, where it was (BUNDLE 8: the final
+//                                                 pass of the marked original, layer-fixtures.mjs), and its record (baseRecordOf)
 //   pack/fixtures/<fx>/units.json, record.json    the PIPELINE translations, which the gate reads beside them (--records' files)
 //   pack/refs/<fx>/ref.json, layout.json          the frozen reference text area and the instrument's kept layout (LAYER_REFS)
 //   pack/geometry/<paper>-<target>-geometry.json  the geometry the gate resolves for each output (LAYER_GEOMETRY)
@@ -141,6 +143,11 @@ export function entriesOf(o) {
   for (const n of names) {
     add(`fixtures/${n}/arxiv.pdf`, join(o.fixtures, n, 'arxiv.pdf'))
     add(`fixtures/${n}/layout.json`, join(o.fixtures, n, 'layout.json'))
+    // (our base page and its record, where the fixture has them: checked against each other and the layout file)
+    let base = null
+    try { base = baseRecordOf(join(o.fixtures, n)) } catch (e) { missing.push(`${n}: ${e.message}`) }
+    if (base) add(`fixtures/${n}/base.json`, join(o.fixtures, n, 'base.json'))
+    if (base?.source === 'ours') add(`fixtures/${n}/base.pdf`, join(o.fixtures, n, 'base.pdf'))
     add(`fixtures/${n}/units.json`, join(o.records, n, 'units.json'))
     add(`fixtures/${n}/record.json`, join(o.records, n, 'record.json'))
     add(`refs/${n}/ref.json`, join(o.refs, n, 'ref.json'))
@@ -153,6 +160,49 @@ export function entriesOf(o) {
   for (const rel of Object.values(o.patterns)) add(`texmf/${rel}`, join(o.texmf, rel))
   if (missing.length) throw new Error(`the pack is missing ${missing.length} input${missing.length === 1 ? '' : 's'}:\n  ${missing.slice(0, 40).join('\n  ')}${missing.length > 40 ? '\n  …' : ''}`)
   return [...out].map(([path, from]) => ({ path, from })).sort(byPath)
+}
+
+/** base.json's schema (layer-fixtures.mjs BASE_RECORD_SCHEMA) */
+export const BASE_RECORD_SCHEMA = 1
+const SHA256 = /^[0-9a-f]{64}$/
+const isSize = v => Number.isSafeInteger(v) && v > 0
+/** whether a file is `want` ({ sha256, bytes }) */
+const isFile = (file, want) => { const b = readFileSync(file); return b.length === want.bytes && sha256(b) === want.sha256 }
+/**
+ * A fixture's base page (BUNDLE 8, design note §3.1) as its record says (`dir` the fixture's folder): null where it has neither
+ * base.json nor base.pdf (a fixture of before, the layer drawn over arxiv.pdf), else base.json, checked. `source` 'ours': base.pdf
+ * is the record's `base` (its sha256 and bytes, with the head's xref, pages, tree and check) and layout.json the record's `layout`,
+ * the file made over it; 'arxiv': the paper refused a base page of ours (`why` the head's code, `detail` the refusal), no base.pdf,
+ * and `layout` the layout file the pack keeps in its place, made over arXiv's PDF before (production has none). Throws naming
+ * what does not hold: a base page with no record, a record of other bytes, a layout file not the one the record names
+ */
+export function baseRecordOf(dir) {
+  const json = join(dir, 'base.json'), pdf = join(dir, 'base.pdf')
+  if (!existsSync(json)) {
+    if (existsSync(pdf)) throw new Error('base.pdf with no base.json: the record of what it is')
+    return null
+  }
+  let r = null
+  try { r = readJson(json) } catch { throw new Error('base.json is not JSON') }
+  if (!isObject(r) || r.schema !== BASE_RECORD_SCHEMA) throw new Error(`base.json is not of schema ${BASE_RECORD_SCHEMA}`)
+  const file = (what, f) => isObject(f) && SHA256.test(f.sha256) && isSize(f.bytes) ? f : (() => { throw new Error(`base.json's ${what} names no file (sha256, bytes)`) })()
+  const layout = join(dir, 'layout.json')
+  if (r.source === 'ours') {
+    const b = file('base', r.base)
+    if (!isSize(b.xref) || b.xref >= b.bytes || !isSize(b.pages) || !/^\d{4}$/.test(String(b.tree ?? '')) || !isObject(b.check)) throw new Error('base.json\'s base is not a head\'s base of ours (xref, pages, tree, check)')
+    if (!existsSync(pdf)) throw new Error('base.json names our base page, and there is no base.pdf')
+    if (!isFile(pdf, b)) throw new Error('base.pdf is not the page base.json names (sha256, bytes)')
+    if (r.layout !== null && !(existsSync(layout) && isFile(layout, file('layout', r.layout)))) throw new Error('layout.json is not the layout base.json names, made over base.pdf')
+    return r
+  }
+  if (r.source === 'arxiv') {
+    if (typeof r.why !== 'string' || !/^[a-z]+$/.test(r.why)) throw new Error('base.json says arXiv\'s PDF with no why')
+    if (existsSync(pdf)) throw new Error('base.json says arXiv\'s PDF, and there is a base.pdf')
+    if (r.layout === null) throw new Error(`our base page was refused (${r.why}) and no layout file is kept in its place: base.json's layout`)
+    if (!(existsSync(layout) && isFile(layout, file('layout', r.layout)))) throw new Error('layout.json is not the kept layout base.json names')
+    return r
+  }
+  throw new Error('base.json names no source (ours, arxiv)')
 }
 
 /** the PIPELINE the translations of the outputs were made under: the one `pipeline` every units.json names */
@@ -194,14 +244,20 @@ export const layoutOfEngine = async engine => {
   return { schema: LAYOUT_SCHEMA, version: LAYOUT }
 }
 
+/** whether a fixture's layout file is one kept where its base page of ours was refused (its base.json says arXiv's) */
+const keptLayout = dir => { try { return readJson(join(dir, 'base.json')).source === 'arxiv' } catch { return false } }
+
 /**
- * The layout files' version: the `schema` and `layout` fields every fixtures/<fx>/layout.json of the outputs names (the reader
+ * The layout files' version: the `schema` and `layout` fields every fixtures/<fx>/layout.json of the outputs names (but a layout
+ * kept where our base page was refused: baseRecordOf) (the reader
  * refuses a file whose schema is not its own, and takes `layout` as a version token only), which must all be `expected` (the engine's own). Throws naming each output that is not, with
  * what its file says; a pack made of layout files of two makers, or of another maker than the engine's, is never made.
  */
 export function layoutVersionOf(fixtures, names, expected) {
   const bad = []
   for (const n of names) {
+    // (a layout kept where our base page was refused, base.json's: made over arXiv's PDF by the maker of before, whose version it names)
+    if (keptLayout(join(fixtures, n))) continue
     let j = null
     try { j = readJson(join(fixtures, n, 'layout.json')) } catch { /* named below */ }
     const schema = j?.schema, version = j?.layout

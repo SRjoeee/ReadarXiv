@@ -105,7 +105,7 @@ async function openB({ name, target, rules, at, draw, link = null }) {
   const net = link ? linkOf(link, counts.span) : null
   const open = async path => counts.wrap(net ? await net.open(await bytes(path), R) : await pdfjs.getDocument({ data: await bytes(path), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise)
   const opened = []
-  const doc = await open(at === 'open' && composed ? composed : `/fixtures/${name}/arxiv.pdf`)
+  const doc = await open(at === 'open' && composed ? composed : `/fixtures/${name}/base.pdf`)
   opened.push(doc)
   const tails = new Map()
   if (at === 'wait') for (const [i, path] of Object.entries(docs)) { const d = await open(path); tails.set(Number(i), d); opened.push(d) }
@@ -150,7 +150,7 @@ window.doorDraw = {
     const { checkDraw } = await import('/engine/layer-proto/draw.mjs')
     const LK = await import('/engine/layer-proto/links.mjs')
     const D = await json(`/door/${paper}/draws.json`)
-    const doc = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/arxiv.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
+    const doc = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/base.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     // (one reader each, as a run keeps its caches: pages in order)
     const live = fontReaders(), data = fontReaders()
     const out = { pages: doc.numPages, compared: 0, equal: 0, none: [], zeroSign: 0, differ: [], chars: 0, links: 0, nu: 0, overlaid: [], overlaidLost: 0 }
@@ -194,7 +194,7 @@ window.doorDraw = {
     const d = await openB({ name, target, rules, at: 'wait', draw: false })
     const out = []
     const R = await import('/engine/layer-proto/reader.mjs')
-    const plain = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/arxiv.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
+    const plain = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/base.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     for (let p = 1; p <= Math.min(pages, d.N); p++) {
       const got = await d.layer.pageOf(p, { lang: target })
       const page = await plain.getPage(p)
