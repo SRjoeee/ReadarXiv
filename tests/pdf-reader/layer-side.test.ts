@@ -534,7 +534,7 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     expect(copyOf(b, 4)).toEqual([])
   })
 
-  it('a part that gains no layout mid-run (a fork told after its pages were laid): its pages come back as the original\'s, the pages of the others stay the layer\'s', async () => {
+  it('a part that gains no layout mid-run (a fork told after its pages were laid): the page only it holds comes back as the original\'s, the pages of the others (and the one a unit of the first runs on onto) stay the layer\'s', async () => {
     const m = await M(true)
     const input = partInputs(m.head.sha256, m.lefts)[1]!
     const refused = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], addon: null })
@@ -547,16 +547,68 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     s.side.tell({ parts: [{ ...(refused.ref as Ref), prev: m.parts[0]!.sha256 }] })
     await settle(s)
     expect(s.side.probe().forks).toBe(1)
-    expect(content(s, 1)).toBe('layer')
-    for (const n of [2, 3]) {
-      expect(content(s, n), `page ${n}`).toBe('original')
-      expect(layerOf(s, n), `page ${n}`).toBeNull()
-    }
+    // (page 2 stays laid: the first part\'s unit runs on onto it, its layout drawn there; page 3 is only the refused part\'s)
+    for (const n of [1, 2]) expect(content(s, n), `page ${n}`).toBe('layer')
+    expect(content(s, 3)).toBe('original')
+    expect(layerOf(s, 3)).toBeNull()
   })
 
-  it('noLayoutPage: a page is the original\'s only when some part holds it and every part that holds it has no layout', () => {
-    const part = (a: number, b: number, layout: unknown) => ({ pages: [a, b], layout }) as never
-    const rows = {}
+  it('a unit that runs on from a page of a part with a layout onto a page of a part with none (the part\'s reach): that page is laid, with the continuation drawn, in either order the two records come; the page held by the layoutless part alone stays the original\'s', async () => {
+    const m = await M()
+    // part A (the fixture\'s first) has pages [1, 1] and a layout whose lines run on to page 2; part B owns pages 2 and 3 with NO layout
+    expect(m.readParts[0]?.pages).toEqual([1, 1])
+    expect(m.readParts[0]?.reach).toBe(2)
+    const input = partInputs(m.head.sha256, m.lefts)[1]!
+    const b = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], addon: null })
+    const refB = { ...(b.ref as Ref), prev: m.parts[0]!.sha256 }
+    const head = { head: m.head.ref, units: m.chunks.map(c => c.ref) }
+    const check = async (s: Setup, what: string) => {
+      await settle(s)
+      // page 2: part A\'s reach holds it with a layout, part B owns it with none: laid (A\'s continuation is drawn there)
+      expect(content(s, 2), `${what}: page 2`).toBe('layer')
+      expect(layerOf(s, 2), `${what}: page 2`).not.toBeNull()
+      // page 3: only part B holds it (its pages 2 to 3), with no layout: the original\'s
+      expect(content(s, 3), `${what}: page 3`).toBe('original')
+      expect(layerOf(s, 3), `${what}: page 3`).toBeNull()
+      expect(s.door.layer?.pageState(1), what).toBe('ready')
+      expect(s.side.coverage(), what).toMatchObject({ laid: 2 })
+    }
+    // the reaching part\'s record first, then the layoutless part\'s
+    const first = await oursSetup({ extra: [b] })
+    await nearOn(first, [1, 2, 3])
+    first.side.tell({ ...head, parts: [jobRef(m, 0)] })
+    await settle(first)
+    first.side.tell({ parts: [refB] })
+    await check(first, 'A then B')
+    // the layoutless part\'s record first (it waits for its predecessor), then the reaching part\'s
+    const second = await oursSetup({ extra: [b] })
+    await nearOn(second, [1, 2, 3])
+    second.side.tell({ ...head, parts: [refB] })
+    await settle(second)
+    second.side.tell({ parts: [jobRef(m, 0)] })
+    await check(second, 'B then A')
+    // both in one tell, the pages asked after
+    const third = await oursSetup({ extra: [b] })
+    third.side.tell({ ...head, parts: [jobRef(m, 0), refB] })
+    await settle(third)
+    await nearOn(third, [1, 2, 3])
+    await check(third, 'both, the pages near afterwards')
+  })
+
+  it('noLayoutPage: a page is the original\'s only when a part owns it by its pages and no part that holds it, by its pages or its reach, has a layout', () => {
+    const part = (a: number, b: number, layout: unknown, reach = b) => ({ pages: [a, b], reach, layout }) as never
+    /** a layout whose lines run on the pages given (a row of eight numbers a group, the page first) */
+    const rows = (...pages: number[]) => ({ lines: [[0, pages.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] })
+    // (a unit running on from page 1 onto page 2: part A\'s reach 2, its layout lines there; part B owns page 2 with none)
+    expect(noLayoutPage([part(1, 1, rows(1, 2), 2), part(2, 3, null)], 2)).toBe(false)
+    expect(noLayoutPage([part(1, 1, rows(1, 2), 2), part(2, 3, null)], 3)).toBe(true)
+    expect(noLayoutPage([part(1, 1, null, 2), part(2, 3, null)], 2)).toBe(true)
+    // (a part whose views reach a page its layout draws nothing on does not hold it: the fixture\'s second part reaches page 4)
+    expect(noLayoutPage([part(1, 1, rows(1), 2), part(2, 3, null)], 2)).toBe(true)
+    expect(noLayoutPage([part(2, 3, rows(2, 3), 4), part(4, 4, null)], 4)).toBe(true)
+    // (a part reaching a page no part owns yet is not an owner: the page waits for its part)
+    expect(noLayoutPage([part(1, 1, null, 2)], 2)).toBe(false)
+    expect(noLayoutPage([part(1, 1, rows(1, 2), 2)], 2)).toBe(false)
     // (a unit running on from the page before can put one page in two parts\' ranges)
     expect(noLayoutPage([part(1, 2, rows), part(2, 3, null)], 2)).toBe(false)
     expect(noLayoutPage([part(1, 2, null), part(2, 3, null)], 2)).toBe(true)

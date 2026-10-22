@@ -89,7 +89,7 @@ export declare const RECOPY_MS: number
 export declare const LEFT_RETRY_MS: number
 /** the most other pages a wanted page's running units bring their left parts from, the nearest first */
 export declare const SPREAD_MAX: number
-/** whether page `n` is laid by no layout: some part holds it and every part that holds it records none (`layout` null) */
-export declare function noLayoutPage(parts: readonly { readonly pages: readonly [number, number]; readonly layout: unknown }[], n: number): boolean
+/** whether page `n` is laid by no layout: some part owns it by its pages and no part that holds it, by its pages or its reach, has a layout */
+export declare function noLayoutPage(parts: readonly { readonly pages: readonly [number, number]; readonly reach?: number; readonly layout: unknown }[], n: number): boolean
 /** the pages whose left parts page p's running units bring: their other pages not in yet, each once, nearest first, at most `max` */
 export declare function spreadPages(p: number, ids: readonly number[], pagesOf: (id: number) => readonly number[] | undefined, isIn: (page: number) => boolean, max?: number): number[]

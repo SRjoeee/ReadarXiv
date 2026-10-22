@@ -70,17 +70,26 @@ const coded = (e, code) => { const out = e instanceof Error ? e : new Error(Stri
 const release = c => { if (c) { c.width = 0; c.height = 0; c.remove() } }
 const isPrefix = (a, b) => a.length <= b.length && a.every((p, i) => p.sha256 === b[i].sha256)
 
-/** whether page `n` is laid by no layout: some part holds the page and every part that holds it has none (`layout` null: its check
- *  refused it, or its producer recorded none). A page can lie in two parts' ranges (a unit running on from the page before), so one
- *  part with a layout makes it a laid page; a page no part holds yet (its part not told) is not this, the door waits for it */
+/** whether a layout part has lines on page `n` (its `lines`: per unit, rows of 8 numbers, the first the page) */
+const linesOn = (layout, n) => (layout.lines ?? []).some(([, rows]) => { for (let i = 0; i < rows.length; i += 8) if (rows[i] === n) return true; return false })
+
+/** whether page `n` is laid by no layout: some part owns the page (by its `pages`) and no part that holds it has a layout. A part
+ *  holds a page by its pages, and also by its reach (`reach`: the last page its views and its layout run to) where its layout has
+ *  lines there: a unit that runs on from a page of one part onto the next page is drawn there by the first part's layout, whose pages
+ *  end before it, so such a part makes the page a laid one whatever the part that owns it records (a part whose views reach a page
+ *  its layout draws nothing on does not). `layout` null: the engine's check refused the part, or its producer recorded none. A page
+ *  no part owns yet (its part not told) is not this, the door waits for it: a part that only reaches it does not make it the
+ *  original's, since the part that owns it may come with a layout. The parts are in page order, so every part that can reach a page
+ *  is read before the one that owns it */
 export function noLayoutPage(parts, n) {
-  let held = false
+  let owned = false
   for (const p of parts) {
-    if (n < p.pages[0] || n > p.pages[1]) continue
-    if (p.layout !== null) return false
-    held = true
+    if (n < p.pages[0] || n > Math.max(p.pages[1], p.reach ?? 0)) continue
+    const own = n <= p.pages[1]
+    if (p.layout !== null && (own || linesOn(p.layout, n))) return false
+    if (own) owned = true
   }
-  return held
+  return owned
 }
 
 /** the operator list PDF.js drew a page by, where its drawing is whole (the floats' inputs); null else */
