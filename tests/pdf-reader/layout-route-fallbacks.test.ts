@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import { LAYOUT_CLASSES, layoutMarking } from '@/pdf-reader/engine/layout/marks.mjs'
 import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { latin1Bytes } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { latin1Bytes, type SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 
 // The whole-paper fallbacks of the layer route's release sweep (2026-10-22), each by its general rule: a Latin-1 source's
-// marked original keeps the paper's own bytes (2610.20581)
+// marked original keeps the paper's own bytes (2610.20581); no mark of ours stands inside an argument TeX reads verbatim
+// (2610.19860)
 
 const enc = (s: string) => new TextEncoder().encode(s)
 /** a file's bytes past ASCII, in order */
@@ -46,5 +47,38 @@ describe('a Latin-1 source (2610.20581): the layout compile\'s files are the pap
     const p = openPaper(new Map([['main.tex', enc('\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n\\begin{document}\nMathématiques here.\n\\end{document}\n')]]))
     expect(p.project.transcode.size).toBe(0)
     for (const layout of [null, LAYOUT_CLASSES]) expect(originalFiles(p, { lines: true, layout, transcode: false })).toEqual(originalFiles(p, { lines: true, layout, transcode: true }))
+  })
+})
+
+describe('an argument TeX reads verbatim (2610.19860): no mark of ours inside it', () => {
+  type Piece = { t: string; s?: string; src?: string; id?: number }
+  const text = (s: string): Piece => ({ t: 'text', s })
+  const ph = (src: string): Piece => ({ t: 'ph', src })
+  const open = (src: string, id = 1): Piece => ({ t: 'open', id, src })
+  const close = (id = 1): Piece => ({ t: 'close', id, src: '}' })
+  const unit = (pieces: Piece[]) => ({ kind: 'para', file: 'main.tex', start: 0, end: 0, pieces }) as SourceUnit
+  const srcs = (u: SourceUnit | undefined) => ((u?.pieces ?? []) as Piece[]).map(p => (p.t === 'text' ? p.t : p.t === 'ph' ? `ph ${p.src}` : `${p.t} ${p.src}`))
+  const marked = (pieces: Piece[]) => srcs(layoutMarking([unit(pieces)], LAYOUT_CLASSES).units[0])
+
+  it('a \\url read as a group: its argument has none, the unit\'s other placeholders keep theirs', () => {
+    // (llncs.cls' \\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}} read as \\url's definition: its argument a group,
+    // the address in it a placeholder of its own, which hyperref's \\url, in force, would print with its marks)
+    expect(marked([text('The code is at '), open('\\url{'), ph('https://github.com/a/b-c'), close(), text(' with '), ph('$x$'), text(' and '), ph('\\cite{k}'), text('.')])).toEqual([
+      'text', 'open \\url{', 'ph https://github.com/a/b-c', 'close }', 'text', 'ph \\axtpmm{p0.5a}', 'ph $x$', 'ph \\axtpm{p0.5b}', 'text', 'ph \\axtpma{p0.7a}', 'ph \\cite{k}', 'ph \\axtpm{p0.7b}', 'text'])
+    // (as a placeholder, the whole \\url its own marks, around it)
+    expect(marked([text('At '), ph('\\url{https://a.b}'), text('.')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\url{https://a.b}', 'ph \\axtpm{p0.1b}', 'text'])
+  })
+  it('\\href: none in its first argument, options or not; its second, the link\'s text, keeps them', () => {
+    expect(marked([text('See '), open('\\href{'), ph('https://a.b'), close(), text(' and '), ph('$y$')])).toEqual(['text', 'open \\href{', 'ph https://a.b', 'close }', 'text', 'ph \\axtpmm{p0.5a}', 'ph $y$', 'ph \\axtpm{p0.5b}'])
+    expect(marked([text('See '), open('\\href[pdfnewwindow]{'), ph('https://a.b'), close()])).toEqual(['text', 'open \\href[pdfnewwindow]{', 'ph https://a.b', 'close }'])
+    expect(marked([text('See '), open('\\href{https://a.b}{'), text('the '), ph('$z$'), text(' site'), close()])).toEqual(['text', 'open \\href{https://a.b}{', 'text', 'ph \\axtpmm{p0.3a}', 'ph $z$', 'ph \\axtpm{p0.3b}', 'text', 'close }'])
+  })
+  it('\\nolinkurl, \\path and \\burl the same, a group inside too; a command of another name is no such one', () => {
+    for (const cmd of ['\\nolinkurl{', '\\path{', '\\burl{', '\\protect\\url{', '\\url {']) {
+      expect(marked([text('At '), open(cmd), open('{', 2), ph('$v$'), close(2), ph('a@b.c'), close(), text('.')]), cmd).toEqual(['text', `open ${cmd}`, 'open {', 'ph $v$', 'close }', 'ph a@b.c', 'close }', 'text'])
+    }
+    for (const cmd of ['\\myurl{', '\\urlx{', '\\textbf{', '{']) {
+      expect(marked([text('At '), open(cmd), ph('$v$'), close(), text('.')]), cmd).toEqual(['text', `open ${cmd}`, 'ph \\axtpmm{p0.2a}', 'ph $v$', 'ph \\axtpm{p0.2b}', 'close }', 'text'])
+    }
   })
 })
