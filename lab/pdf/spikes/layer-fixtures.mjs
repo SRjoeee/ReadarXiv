@@ -326,9 +326,11 @@ async function compiledNow(dir, name, files, paper, { passes = null, once = fals
     // (the files it wrote: new, or other bytes than it was given)
     const wrote = keep ? new Map() : null
     if (wrote) for (const p of filesUnder(build)) { const key = p.split(sep).join('/'), b = new Uint8Array(readFileSync(join(build, p))), had = files.get(key); if (!had || Buffer.compare(Buffer.from(had), Buffer.from(b)) !== 0) wrote.set(key, b) }
-    // (one pass of `latex`: dvipdfmx's terminal after TeX's log, as a host joins a compile's steps, so that what the driver could not
-    // draw is read: base.mjs driverLostInk)
-    const driver = once && compiler === 'latex' ? `\n${said}` : ''
+    // (one pass of `latex`: dvipdfmx's terminal after TeX's log, behind the host's line (base.mjs DRIVER_OUTPUT_MARK; an engine of
+    // before names none), as the box gives it, so that what the driver could not draw is read: base.mjs driverLostInk. No bound
+    // here cuts it: the lab writes no DRIVER_OUTPUT_TRUNCATED)
+    const mark = (await engine('layout/base.mjs').catch(() => ({}))).DRIVER_OUTPUT_MARK
+    const driver = once && compiler === 'latex' ? `\n${mark ? `${mark}\n` : ''}${said}` : ''
     return { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') + driver, ...(wrote ? { files: wrote } : {}) }
   } finally { rmSync(build, { recursive: true, force: true }) }
 }

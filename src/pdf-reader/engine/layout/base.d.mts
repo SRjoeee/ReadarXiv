@@ -29,6 +29,14 @@ export declare const pageTextOf: (tc: { items?: { str?: string }[] } | null | un
 export declare function markTextBeyond(ours: readonly (string | null | undefined)[] | null | undefined, theirs: readonly (string | null | undefined)[] | null | undefined): { pages: number[]; units: Set<number>; samples: [page: number, text: string][] }
 /** page p's text of a document, as markTextOf reads it; '' where it cannot be read */
 export declare function pageTextAt(doc: PdfLike, p: number): Promise<string>
+/** the line, of its own, behind which a host gives a latex compile's dvipdfmx output after TeX's log */
+export declare const DRIVER_OUTPUT_MARK: 'axt-runner: dvipdfmx output'
+/** the line, of its own, a host writes after that output where its bound cut it */
+export declare const DRIVER_OUTPUT_TRUNCATED: 'axt-runner: dvipdfmx output truncated'
+/** whether a log holds the driver's output: a line that is DRIVER_OUTPUT_MARK */
+export declare const driverOutputGiven: (log: string | null | undefined) => boolean
+/** whether that output was cut by the host: a line that is DRIVER_OUTPUT_TRUNCATED after the mark's */
+export declare function driverOutputTruncated(log: string | null | undefined): boolean
 /** what dvipdfmx said it could not draw in a log holding its terminal: the specials but hyperref's, the images */
 export declare function driverLostInk(log: string | null | undefined): { count: number; samples: [page: number | null, text: string][] }
 /** every page's text of a document, as markTextOf reads it */

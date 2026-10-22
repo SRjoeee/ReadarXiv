@@ -154,6 +154,22 @@ export async function pageTextAt(doc, p) {
   try { return pageTextOf(await (await doc.getPage(p)).getTextContent()) } catch (e) { if (isMemoryError(e)) throw e; return '' }
 }
 
+/**
+ * The host's contract for a `latex` compile's driver (dvipdfmx, a step of the compile's own): after TeX's log, a line that is
+ * DRIVER_OUTPUT_MARK alone, then the driver's terminal output; where the host's bound (generous: 4 MiB) cuts it, a line that is
+ * DRIVER_OUTPUT_TRUNCATED alone after what it kept. Each a whole line, matched as one
+ */
+export const DRIVER_OUTPUT_MARK = 'axt-runner: dvipdfmx output'
+export const DRIVER_OUTPUT_TRUNCATED = 'axt-runner: dvipdfmx output truncated'
+const linesOf = log => (typeof log === 'string' ? log.split(/\r?\n/) : [])
+/** whether a log holds the driver's output: a line that is DRIVER_OUTPUT_MARK */
+export const driverOutputGiven = log => linesOf(log).includes(DRIVER_OUTPUT_MARK)
+/** whether the driver's output a log holds was cut by the host: a line that is DRIVER_OUTPUT_TRUNCATED after the mark's */
+export function driverOutputTruncated(log) {
+  const lines = linesOf(log), at = lines.indexOf(DRIVER_OUTPUT_MARK)
+  return at >= 0 && lines.indexOf(DRIVER_OUTPUT_TRUNCATED, at + 1) > at
+}
+
 /** what dvipdfmx says of a special it could not interpret: the failure, then where and what (`>> at page=…`, `>> xxx "…"`) */
 const DRIVER_FAILED = /^dvipdfmx:warning: Interpreting special command .* failed\.\s*$/
 const DRIVER_AT = /^dvipdfmx:warning: >> at page="(\d+)"/

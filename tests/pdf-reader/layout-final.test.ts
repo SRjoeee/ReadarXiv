@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { baseRefusalRetryable, RETRY_LIMITS } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, driverOutputGiven, driverOutputTruncated } from '@/pdf-reader/engine/layout/base.mjs'
 import { type Compiled, type CompileRequest, DRAFT_OPTION, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
@@ -84,7 +85,7 @@ describe('the final pass', () => {
     for (const compiler_ of ['xelatex', 'latex']) {
       const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: compiler_ } })
       const paper = openPaper(new Map([['main.tex', enc(SOURCE)], ['00README.json', enc(readme)]]))
-      const c = compiler([PROBE, marked(), finalAnswer()])
+      const c = compiler([PROBE, marked(), compiler_ === 'latex' ? { ...finalAnswer(), log: `${log()}${DRIVER_OUTPUT_MARK}\nmain.dvi -> main.pdf\n[1][2][3]\n` } : finalAnswer()])
       expect(await markedOfPaper(paper, { compile: c.compile })).toMatchObject({ base: { pdf: FINAL } })
       expect(c.asked[2]).toMatchObject({ engine: paper.meta.compiler, rerun: false, bibtex: false })
     }
@@ -93,15 +94,27 @@ describe('the final pass', () => {
   it('under `latex`, is none (`final`) where dvipdfmx could not draw a special of the page (PSTricks): arXiv\'s dvips and ps2pdf draw it', async () => {
     const readme = (compiler_: string) => JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: compiler_ } })
     const paperIn = (compiler_: string) => openPaper(new Map([['main.tex', enc(SOURCE)], ['00README.json', enc(readme(compiler_))]]))
-    const final = (driver: string): Compiled => ({ ok: true, pdf: FINAL, log: `${log()}${driver}`, ms: 200 })
+    // (the host's own line, then dvipdfmx's terminal: the box gives it after TeX's log)
+    const final = (driver: string, mark = true): Compiled => ({ ok: true, pdf: FINAL, log: `${log()}${mark ? `${DRIVER_OUTPUT_MARK}\n` : ''}${driver}`, ms: 200 })
+    expect([DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED]).toEqual(['axt-runner: dvipdfmx output', 'axt-runner: dvipdfmx output truncated'])
+    // (each a whole line of its own: the truncated line is not the mark, nor a line that holds either)
+    expect([`${log()}${DRIVER_OUTPUT_MARK}\n`, `${log()}${DRIVER_OUTPUT_MARK}\r\nx`, `${log()}${DRIVER_OUTPUT_MARK} (1,204 bytes)\nx`, `${log()}${DRIVER_OUTPUT_TRUNCATED}\n`, log(), `x ${DRIVER_OUTPUT_MARK}`, null].map(l => driverOutputGiven(l as never))).toEqual([true, true, false, false, false, false, false])
+    expect([`${DRIVER_OUTPUT_MARK}\nx\n${DRIVER_OUTPUT_TRUNCATED}\n`, `${DRIVER_OUTPUT_MARK}\nx\n`, `${DRIVER_OUTPUT_TRUNCATED}\n${DRIVER_OUTPUT_MARK}\nx`, `${DRIVER_OUTPUT_MARK}\n${DRIVER_OUTPUT_TRUNCATED} at 4 MiB`].map(driverOutputTruncated)).toEqual([true, false, false, false])
     const got = await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final(PSTRICKS_FAILED)]).compile })
     expect(baseOf(got)).toMatchObject({ refused: 'final', why: expect.stringMatching(/^the final pass's dvipdfmx could not draw 2 specials of the page \(page 1: ps: \/pssetRGBcolor/) })
     expect(baseOf(got)).not.toHaveProperty('limit')
     // (hyperref's dvips driver's specials, its links and outlines, set no ink: dvipdfmx failing them loses nothing)
     expect(baseOf(await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final(HYPERREF_FAILED)]).compile }))).toMatchObject({ pdf: FINAL })
-    expect(baseOf(await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final('')]).compile }))).toMatchObject({ pdf: FINAL })
-    // (pdfTeX and XeTeX: arXiv's PDF is made by the same driver as ours, whatever it said)
-    for (const compiler_ of ['pdflatex', 'xelatex']) expect(baseOf(await markedOfPaper(paperIn(compiler_), { compile: compiler([PROBE, marked(), final(PSTRICKS_FAILED)]).compile })), compiler_).toMatchObject({ pdf: FINAL })
+    expect(baseOf(await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final('main.dvi -> main.pdf\n[1]\n')]).compile }))).toMatchObject({ pdf: FINAL })
+    // (the output cut by the host's bound: what it could not draw past the cut is not known, hyperref's alone before it or not)
+    for (const driver of [`${HYPERREF_FAILED}${DRIVER_OUTPUT_TRUNCATED}\n`, `main.dvi -> main.pdf\n${DRIVER_OUTPUT_TRUNCATED}\n`]) expect(baseOf(await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final(driver)]).compile }))).toEqual({ refused: 'final', why: 'the host\'s dvipdfmx output was cut: its special failures cannot be checked' })
+    // (no driver's output given: what it could not draw is not known, so it fails closed)
+    expect(baseOf(await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final('', false)]).compile }))).toEqual({ refused: 'final', why: 'the host gave no output of the final pass\'s dvipdfmx: its log lacks the line `axt-runner: dvipdfmx output`' })
+    // (pdfTeX, XeTeX and LuaTeX: arXiv's PDF is made by the same driver as ours, whatever it said, and no mark is asked)
+    for (const compiler_ of ['pdflatex', 'xelatex', 'lualatex']) {
+      expect(baseOf(await markedOfPaper(paperIn(compiler_), { compile: compiler([PROBE, marked(), final(PSTRICKS_FAILED)]).compile })), compiler_).toMatchObject({ pdf: FINAL })
+      expect(baseOf(await markedOfPaper(paperIn(compiler_), { compile: compiler([PROBE, marked(), final('', false)]).compile })), compiler_).toMatchObject({ pdf: FINAL })
+    }
   })
 
   it('carries a converged compile\'s files: CM\'s carried files with its last pass\'s, its own beside', async () => {

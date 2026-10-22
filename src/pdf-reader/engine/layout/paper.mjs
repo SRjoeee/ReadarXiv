@@ -25,7 +25,7 @@ import { jobName, lastTexLog, latin1, latin1Bytes } from '../source/latex-front.
 import { DRAFT_OPTION, listsMissing, notFound, originalFiles, probeFiles, ranThrough } from '../pipeline/live.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
-import { driverLostInk, finalCheck, markTextOf } from './base.mjs'
+import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
@@ -215,8 +215,11 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     }
     if (ranThrough(c) && c.pdf?.length) {
       // (under `latex` the DVI is drawn by dvipdfmx, and arXiv's by dvips and ps2pdf: a special dvipdfmx could not draw, a
-      // PSTricks picture's, is ink our page lacks and arXiv's has. The log a host gives a latex compile holds the driver's
-      // terminal after TeX's, as every host joins a compile's steps)
+      // PSTricks picture's, is ink our page lacks and arXiv's has. The host gives the driver's terminal after TeX's log, behind
+      // its own line (base.mjs DRIVER_OUTPUT_MARK); where it gives none, or cut it, what the driver could not draw is not known:
+      // no base page of ours)
+      if (engine === 'latex' && !driverOutputGiven(c.log)) return no(`the host gave no output of the final pass's dvipdfmx: its log lacks the line \`${DRIVER_OUTPUT_MARK}\``)
+      if (engine === 'latex' && driverOutputTruncated(c.log)) return no('the host\'s dvipdfmx output was cut: its special failures cannot be checked')
       const lost = engine === 'latex' ? driverLostInk(c.log) : null
       if (lost?.count) {
         const [page, what] = lost.samples[0]

@@ -1738,9 +1738,13 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   arXiv's same page also holds for the paper's own text (`markTextBeyond`).
 - **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
   picture, or any PostScript of the page's, dvipdfmx cannot interpret is missing from our page alone, and the marks and boxes
-  would pass. The final pass is refused (`final`) where its log, which holds the driver's terminal after TeX's (every host's
-  compile joins its steps), says dvipdfmx failed a special or an image (`base.mjs` `driverLostInk`), but hyperref's own
-  (`ps:SDict begin …`: its links, anchors, outlines and info, no ink; 2608.22687 has 2,784 of them).
+  would pass. The final pass is refused (`final`) where its log says dvipdfmx failed a special or an image (`base.mjs`
+  `driverLostInk`), but hyperref's own (`ps:SDict begin …`: its links, anchors, outlines and info, no ink; 2608.22687 has
+  2,784 of them, about 0.6 MB of warnings). The host's contract: after TeX's log it appends a line that is
+  `axt-runner: dvipdfmx output` alone, then the driver's terminal output, bounded generously (4 MiB); where the bound cuts it,
+  a line that is `axt-runner: dvipdfmx output truncated` alone after what it kept, the only legal way to cut it. It fails
+  closed: a `latex` final pass whose log lacks the first line, or holds the second, is refused `final` (`DRIVER_OUTPUT_MARK`,
+  `DRIVER_OUTPUT_TRUNCATED`, `driverOutputGiven`, `driverOutputTruncated`, in the pipeline entry).
 - **The page and line check** (`pipeline/page-pass.mjs` `checkOurBase`, which the page pass runs before its head and the lab's
   makers run as production does), the first that fails the paper's fallback: our page count arXiv's (`boxes`); no mark of ours
   printed as text on our page (`marks`); the final pass the draft's page (`final`); every page box and rotation arXiv's, to
