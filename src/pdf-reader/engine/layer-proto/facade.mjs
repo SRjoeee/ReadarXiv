@@ -17,9 +17,16 @@ import { indexLayout, LAYOUT_SCHEMA, mergeLayout } from '../layout/file.mjs'
  * (`base.source` 'arxiv': a paper whose own compile was no base page, or a bundle of 7, drawn over arXiv's PDF) adds no layout
  * of its parts, so that its layer draws nothing and the host shows arXiv's PDF untranslated.
  */
+/**
+ * Whether the layer is drawn over this base (a head's `base`, or a whole bundle's): over ours only, the final pass of our compile,
+ * for the layout file's coordinates are that page's. The one question the door's and the whole's opens both ask (a head always
+ * says whose page; readHead's reading of a head of 7 says arXiv's), so that they answer alike for a paper.
+ */
+export const drawsFrom = base => base?.source === 'ours'
+
 export function layoutFacade(head) {
   const { id, version, pages } = head.paper
-  const ours = head.base?.source === 'ours'
+  const ours = drawsFrom(head.base)
   const layouts = [], views = []
   const fileOf = () => ({
     schema: LAYOUT_SCHEMA, layout: head.versions.layout, pdfjs: head.versions.pdfjs, paper: { id, version, pages }, left: '',

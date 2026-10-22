@@ -1406,7 +1406,7 @@ export function mergeParts(index, parts) {
   return {
     schema: 1,
     paper: { id: head.paper.id, version: head.paper.version, pages: N },
-    base: { bytes: head.base.bytes, sha256: head.base.sha256, url: originalUrl(head.paper.id, head.paper.version) },
+    base: { bytes: head.base.bytes, sha256: head.base.sha256, url: originalUrl(head.paper.id, head.paper.version), source: head.base.source },
     versions: { bundle: BUNDLE5, ...head.versions },
     units: [...index.units],
     left: { kinds: index.kinds.map(k => k ?? ''), pages: boxes, units },

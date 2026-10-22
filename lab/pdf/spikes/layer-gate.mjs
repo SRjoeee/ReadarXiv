@@ -71,8 +71,9 @@
 //   --proto-tex  the layout file as the layer's only source of a unit (layer-proto/tex.mjs; route step 2): each unit the
 //                fixture's layout file locates whole takes its lines, label and placeholders from it, and the units it
 //                locates that the left's geometry does not hold too (but table cells); any other unit is the original's. The
-//                engine of this checkout requires it; the merge base's engine, which drew such a unit by v0's own reading, is
-//                measured without it as before. --proto-symbols=strict: a symbol drawn as text must be found too for a unit to
+//                layer draws only from the file, so --engine-kind=proto needs it (refused at the arguments otherwise); the merge
+//                base's engine, which drew such a unit by v0's own reading, is measured with it too: its hybrid, against this
+//                checkout's file-only layer. --proto-symbols=strict: a symbol drawn as text must be found too for a unit to
 //                be located whole; --proto-extents=tex: the file's erase rectangles. Recorded apart (<tier>-proto-tex-lines,
 //                and each further choice)
 //   --against    --check against another of the record's runs than this run's own (a hybrid against v0's, pixel-proto):
@@ -208,7 +209,7 @@ const PERF = !!arg('perf')
 const TIER = PERF ? 'model' : arg('tier') ?? 'model'
 if (TIER !== 'model' && TIER !== 'pixel') throw new Error(`--tier=${TIER}: model or pixel`)
 const ENGINE = resolve(typeof arg('engine') === 'string' ? arg('engine') : REPO)
-/** the layer measured: its v0 with no layout file (proto.mjs), the default, or the first layer over one where the engine still has it */
+/** the layer measured: the drawn layer over the layout file (proto.mjs), the default, or the first layer over one where the engine still has it */
 const KIND = engineKindOf(arg('engine-kind'), ENGINE)
 const PROTO = KIND === 'proto'
 const PROTO_UNITS = arg('proto-units') ?? 'fixture'
@@ -222,6 +223,7 @@ const PROTO_TEX = typeof arg('proto-tex') === 'string' ? arg('proto-tex') : null
 if (PROTO_TEX && PROTO_TEX !== 'lines') throw new Error(`--proto-tex=${PROTO_TEX}: lines`)
 const TEX = PROTO_TEX ? { use: PROTO_TEX, texOnly: true, symbols: typeof arg('proto-symbols') === 'string' ? arg('proto-symbols') : 'text', extents: typeof arg('proto-extents') === 'string' ? arg('proto-extents') : 'v0' } : null
 if (TEX && (!['strict', 'text'].includes(TEX.symbols) || !['v0', 'tex'].includes(TEX.extents))) throw new Error('--proto-symbols=text|strict, --proto-extents=v0|tex')
+if (PROTO && !TEX) throw new Error('--engine-kind=proto: --proto-tex=lines is needed (the layer draws only from the layout file; there is no layer without one)')
 const TEX_KEY = TEX ? `-tex-${TEX.use}${TEX.symbols === 'strict' ? '-strict' : ''}${TEX.extents === 'tex' ? '-erase' : ''}` : ''
 const AGAINST = typeof arg('against') === 'string' ? arg('against') : null
 /** --removal=draw|measure: the text-removed PDF (layout/remove.mjs, layer-proto/removal.mjs), v0 only: the paper's add-on,
@@ -311,10 +313,9 @@ const RECORDS = typeof arg('records') === 'string' ? resolve(arg('records')) : p
 const trFile = (dir, file) => join(RECORDS ?? FIXTURES, dir, file)
 /** an engine before Task 6 has no layout maker: its layer is given the fixtures' own layout files */
 const HAS_MAKER = existsSync(join(ENGINE, 'src/pdf-reader/engine/layout/make.mjs'))
-// v0 is given no layout file: the fixtures' own serve the instrument (the kept renderings), as they served the parity run's.
-// The hybrid (--proto-tex) reads one, the engine's own maker's by default (made), as the layer does: a change of the maker
-// is measured end to end through the hybrid too. The instrument stays the fixtures' own layout files either way
-const LAYOUTS = GIVEN ? 'given' : PROTO && !TEX ? 'fixed' : arg('layouts') ?? (HAS_MAKER ? 'made' : 'fixed')
+// The layer (--proto-tex) reads one, the engine's own maker's by default (made), as the layer does: a change of the maker
+// is measured end to end through it too. The instrument stays the fixtures' own layout files either way
+const LAYOUTS = GIVEN ? 'given' : arg('layouts') ?? (HAS_MAKER ? 'made' : 'fixed')
 if ((!PROTO || TEX) && !GIVEN && !arg('layouts') && !HAS_MAKER) console.log('the engine has no layout maker (layout/make.mjs): its layer is given the fixtures\' own layout files (--layouts=fixed)')
 /** the record's entry this run is: its tier, and the layout files it was given where they are not the engine's own */
 const KEY = PROTO ? `${TIER}-proto${PROTO_UNITS === 'p7' ? '-p7' : ''}${PROTO_FACES === 'prototype' ? '-pf' : ''}${TEX_KEY}${REMOVAL ? `-removal-${REMOVAL}` : ''}` : LAYOUTS === 'made' ? TIER : `${TIER}-${LAYOUTS}`
@@ -900,11 +901,11 @@ function drawCutOf(name) {
       const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf')))
       const read3 = readBundle(new Uint8Array(made.bytes))
       if (D.pages.length !== read3.paper.pages) throw new Error(`${name}: ${D.pages.length} pages of draws, the paper's ${read3.paper.pages}`)
-      const base = { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }
+      const { base, orig } = doorBaseOf(arxiv, startxrefOf(arxiv), read3.paper.pages)
       const hooks = await chainedHooksOf(arxiv, read3, base)
       const EMPTY = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
       // (the head says the parts carry draws, as the prepare's does: the door's drawsComing)
-      const cut = await cutBundle(read3, { leftPages: p => ({ first: 0, tokens: EMPTY, spans: [], pairs: [], draw: D.pages[p - 1].draw }), base, draw: true, chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon })
+      const cut = await cutBundle(read3, { leftPages: p => ({ first: 0, tokens: EMPTY, spans: [], pairs: [], draw: D.pages[p - 1].draw }), base, orig, draw: true, chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon })
       const at = `/door/${name}`
       cut.units.forEach((u, i) => DOOR_FILES.set(`${at}/u${i}.json`, Buffer.from(u.bytes)))
       DOOR_FILES.set(`${at}/head.json`, Buffer.from(cut.head.bytes))
@@ -1044,6 +1045,13 @@ function q1Of(log) {
   }
   return out
 }
+/** the base the door's cuts are made over. The layer is drawn over a base of ours only (facade.mjs drawsFrom), and the fixtures' layout
+ *  files are made over their arXiv PDF, which stands here as the paper's base page, and as arXiv's PDF beside it (`orig`) */
+function doorBaseOf(arxiv, xref, pages) {
+  const pdf = { bytes: arxiv.length, sha256: sha256(arxiv) }
+  return { base: { source: 'ours', ...pdf, xref, pages, tree: '2025', check: { pages: [pages, pages], boxes: 'equal', carried: 1 } }, orig: pdf }
+}
+
 /**
  * --door-parts: a fixture's bundle made as --door makes it, cut at the schedule (cut.mjs cutBundle, the chained add-on's hooks
  * by default), its objects served for the page to read as a host does (layer-gate/door-parts.mjs), with arXiv's PDF composed
@@ -1062,9 +1070,9 @@ async function doorPartsFixture(page, name, errors) {
   const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf')))
   const cutTo = targetOf(DOOR_PARTS), none = DOOR_PARTS_ADDON === 'none', chained = DOOR_PARTS_ADDON === 'chained'
   const read3 = readBundle(new Uint8Array(made.bytes))
-  const base = { bytes: arxiv.length, sha256: sha256(arxiv), xref: startxrefOf(arxiv) }
+  const { base, orig } = doorBaseOf(arxiv, startxrefOf(arxiv), read3.paper.pages)
   const hooks = chained ? await chainedHooksOf(arxiv, read3, base) : null
-  const cut = await cutBundle(none ? { ...read3, addon: null } : read3, { leftPages: () => null, base, ...(cutTo ? { target: cutTo } : {}), ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}) })
+  const cut = await cutBundle(none ? { ...read3, addon: null } : read3, { leftPages: () => null, base, orig, ...(cutTo ? { target: cutTo } : {}), ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}) })
   const at = `/door/${name}`, served = []
   const serve = (path, body) => { DOOR_FILES.set(path, body); served.push(path) }
   // (door C: BUNDLE 3's bundle itself, its add-on taken off in the page; door S: the same with its single tail)

@@ -11,7 +11,7 @@ import { groupOf } from '../translate/groups.mjs'
 import { rolesFor } from '../rules/font-roles.mjs'
 import { indexLayout } from '../layout/file.mjs'
 import { BundleRefusal } from './bundle.mjs'
-import { layoutFacade } from './facade.mjs'
+import { drawsFrom, layoutFacade } from './facade.mjs'
 import { OPEN_FAMILY } from './fonts.mjs'
 import { readLeftPart } from './format.mjs'
 import { sourceUnitsOf, toTranslate, unitOf } from './rows.mjs'
@@ -205,8 +205,9 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     : {
         ...common, doc, pages: Number.POSITIVE_INFINITY, onRetired: onRetired ?? null,
         geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } },
-        // (a bundle with no layout: a file of no unit, so that every unit is the original's)
-        tex: { ...FILE, index: bundle.layout ? indexLayout(bundle.layout) : layoutFacade({ ...bundle, lineskip: null }).index, pieces: new Map() },
+        // (a bundle with no layout, or one over arXiv's page: a file of no unit, so that every unit is the original's. A whole bundle that
+        // tells no `source` is its caller's own file, the harness's, and is read as ours; one merged from a head tells it: mergeParts)
+        tex: { ...FILE, index: bundle.layout && drawsFrom({ source: bundle.base?.source ?? 'ours' }) ? indexLayout(bundle.layout) : layoutFacade({ ...bundle, lineskip: null }).index, pieces: new Map() },
         removal: bundle.addon ? { mode: 'draw', doc, manifest: bundle.addon.manifest } : null,
       })
   const N = run.N

@@ -570,11 +570,15 @@ describe('the door: three opens, the same pages', () => {
     }
   })
 
-  it('draws nothing of a part whose layout is refused ({ refused, why }), nor of a head whose base is arXiv\'s though its parts carry layouts', async () => {
+  // (the two opens of one paper agree: the parts' (the door's) and the whole's (BUNDLE 3's, mergeParts))
+  it.each(['parts', 'whole'] as const)('draws nothing of a part whose layout is refused ({ refused, why }), nor of a head whose base is arXiv\'s though its parts carry layouts: the %s open', async open => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const placedOf = async (o: Parameters<typeof cutSpec>[2]) => {
       const c = await cutSpec(SPEC, [1], o)
-      const layer = await openLayer({ index: c.index, doc: (docsOf(SPEC) as unknown as (r: number) => LayerDocument)(0), parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+      const doc = (docsOf(SPEC) as unknown as (r: number) => LayerDocument)(0)
+      const layer = open === 'parts'
+        ? await openLayer({ index: c.index, doc, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+        : await openLayer({ bundle: mergeParts(c.index, c.parts), doc, target: 'zh', faceSources, hyphUrl })
       layer.take(rowsOfIndex(c.index))
       layer.end()
       layer.endParts()

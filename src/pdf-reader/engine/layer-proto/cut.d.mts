@@ -63,7 +63,10 @@ export interface CutOptions {
   chainAddon?(index: number, part: { pages: [number, number]; layout: LayoutPart }): Promise<{ manifest: RemovalManifest; tail: Uint8Array | null } | null> | { manifest: RemovalManifest; tail: Uint8Array | null } | null
   /** called once for each part that has a layout, in order, with the range that was kept: the hook's state advances here */
   acceptAddon?(index: number, part: { pages: [number, number] }): Promise<void> | void
-  base?: { bytes: number; sha256: string; xref: number }
+  /** the base to write, as the whole's (`WholePaper.base`) is; given, it wins */
+  base?: HeadBase | { bytes: number; sha256: string; xref?: number; source?: undefined }
+  /** arXiv's PDF beside a base of ours (`WholePaper.orig`); given, it wins */
+  orig?: { bytes: number; sha256: string } | null
   image?: string
   lineskip?: [number, number] | null
   /** the parts' left parts may carry draws (the head says so): set where the caller's `leftPages` give them */

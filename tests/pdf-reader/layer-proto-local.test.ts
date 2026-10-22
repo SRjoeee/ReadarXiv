@@ -154,6 +154,35 @@ describe('L2: a unit is laid once every page it reads is drawn, its placeholders
   })
 })
 
+describe('L4: units chained across pages are drawn alike whichever page is laid first', () => {
+  // q (unit 1) is on pages 2 and 3, u (unit 3) from page 3 to 4 and v (unit 4) from 4 to 5, each drawn from the file's lines, one
+  // unit (2) on q's page 2 beside it. Page 5's closure lays v and u, which reach back to page 3 where q's page-3 line stands: each
+  // page is read from its own lines, so that the pages are drawn alike laid in order, page 5 first, reversed, or each alone
+  const Q2 = line(2, 200, [20, 'Alpha beta']), Q3 = line(3, 200, [20, 'gamma delta'])
+  const specs: Spec[] = [
+    { id: 0, kind: 'para', src: 'Kappa lambda', lines: [line(1, 200, [20, 'Kappa lambda'])], tr: [text(CJK(5))] },
+    { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [Q2, Q3], tr: [text(CJK(8, 0x4e20))] },
+    { id: 2, kind: 'para', src: 'Other words', lines: [line(2, 120, [20, 'Other words'])], tr: [text(CJK(4, 0x4e40))] },
+    { id: 3, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], tr: [text(CJK(8, 0x4e60))] },
+    { id: 4, kind: 'para', src: 'Pi rho sigma tau', lines: [line(4, 60, [20, 'Pi rho']), line(5, 270, [20, 'sigma tau'])], tr: [text(CJK(8, 0x4e80))] },
+  ]
+  PAPERS.push(['L4, chained units', specs, 5, [null]])
+  const pageOf = (run: Run, q: number) => ({ markup: run.rows[q - 1]!.markup, ops: JSON.stringify(run.rows[q - 1]!.ops) })
+  it('draws every page alike laid in order, page 5 first, reversed, or each page alone', async () => {
+    const want = await open(paper(specs, 5))
+    await want.until(5)
+    // (every unit drawn from its file lines: q on its two pages)
+    expect(placedOf(want, 1).rects.map(r => r[0])).toEqual([2, 3])
+    for (const first of [[5], [5, 4, 3, 2, 1], [3], [4]]) {
+      const run = await open(paper(specs, 5))
+      for (const p of first) await run.layFor(p)
+      await run.until(5)
+      for (let q = 1; q <= 5; q++) expect(pageOf(run, q), `${first} first, page ${q}`).toEqual(pageOf(want, q))
+      expect(placedOf(run, 1).rects, `${first} first`).toEqual(placedOf(want, 1).rects)
+    }
+  })
+})
+
 describe('the work counters (work.mjs): integer counts of what a page cost, the same for the same input', () => {
   const Q2 = line(2, 200, [20, 'Alpha beta']), Q3 = line(3, 200, [20, 'gamma delta'])
   const specs: Spec[] = [

@@ -33,7 +33,8 @@ export interface LayerBundle {
   schema: 1
   paper: { id: string; version: number; pages: number }
   /** arXiv's PDF the bundle was made over: its fingerprint, and our copy of those bytes, `/api/v1/original/<id>v<n>` */
-  base: { bytes: number; sha256: string; url: string }
+  /** `source`: whose page the layout is over ('ours', or 'arxiv'); a bundle merged from a head tells it (mergeParts), a read BUNDLE 3 file does not */
+  base: { bytes: number; sha256: string; url: string; source?: 'ours' | 'arxiv' }
   versions: BundleVersions
   /** the paper's units (openPaper's), ids their indices, language-independent */
   units: BundleUnit[]

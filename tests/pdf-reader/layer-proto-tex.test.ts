@@ -133,7 +133,6 @@ describe("the unit's reading with the file's renderings", () => {
   // "Each value ² is squared here": a superscript alone, raised 3.6 pt over the line's baseline
   const page = [...item('Each value', 10, 100, 10, 0), ...item('2', 62, 103.6, 7, 1), ...item('is squared here', 70, 100, 10, 2)]
   const unit = { kind: 'para', src: 'Each value is squared here', pieces: [{ t: 'text', s: '\u6BCF\u4E2A\u503C ' }, { t: 'ph', src: '$^{2}$' }, { t: 'text', s: ' \u5E73\u65B9' }] } as never
-  const rect = [1, 10, 97.85, 145, 106.83]
   it("crops a formula across its ink and on its line's baseline, so that its raise is kept, and within its glyphs' boxes", () => {
     const lu = unitOf([[1, 10, 145, 100, 108, 97, 10, 0]], [[1, 0, [1, 61.8, 100, 65.6, 107.5, 101]]])
     const t = T.texRects(lu)
@@ -183,7 +182,6 @@ describe("the unit's reading with the file's renderings", () => {
 describe("each crop the layer draws cut from its placeholder's own ink", () => {
   const page = [...item('Each value', 10, 100, 10, 0), ...item('2', 62, 103.6, 7, 1), ...item('is squared here', 70, 100, 10, 2)]
   const unit = { kind: 'para', src: 'Each value is squared here', pieces: [{ t: 'text', s: '\u6BCF\u4E2A\u503C ' }, { t: 'ph', src: '$^{2}$' }, { t: 'text', s: ' \u5E73\u65B9' }] } as never
-  const rect = [1, 10, 97.85, 145, 106.83]
   const read = (lu: never) => {
     const t = T.texRects(lu)
     return L2.prepareUnit(unit, t.rects as never, [page as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { lines: t }) as never)
