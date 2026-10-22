@@ -97,7 +97,7 @@ describe('a class\'s fallback definition (2610.19860\'s llncs.cls): not the comm
   it('llncs.cls\' \\@ifundefined{url}{\\def\\url#1{#1}}{} in an \\AtBeginDocument: each \\url one placeholder, marked around it alone', () => {
     const CLS = '\\NeedsTeXFormat{LaTeX2e}\\ProvidesClass{llncs}\\LoadClass{article}\n\\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}}\n'
     const p = openPaper(new Map([['main.tex', enc(`\\documentclass{llncs}\n\\usepackage{hyperref}\n\\begin{document}\nThe code is available at\\newline\n\\url{https://github.com/a/b-c} with $x$.\n\\end{document}\n`)], ['llncs.cls', enc(CLS)]]))
-    const marked = (layoutMarking(p.units, LAYOUT_CLASSES, { lines: false }).units[0]?.pieces as { t: string; src?: string }[]).map(q => q.src ?? q.t)
+    const marked = ((layoutMarking(p.units, LAYOUT_CLASSES, { lines: false }).units[0]?.pieces ?? []) as { t: string; src?: string }[]).map(q => q.src ?? q.t)
     expect(marked).toEqual(['text', '\\newline', 'text', '\\axtpma{p0.3a}', '\\url{https://github.com/a/b-c}', '\\axtpm{p0.3b}', 'text', '\\axtpmm{p0.5a}', '$x$', '\\axtpm{p0.5b}', 'text'])
   })
   it('each guard of the name being undefined, and \\providecommand', () => {
