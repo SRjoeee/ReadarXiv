@@ -14,10 +14,10 @@
 // (before its start mark, a display after its end mark) OUTSIDE; a citation's or a reference's own text with it, for the
 // layer to set in the page's face. What cannot be placed is left out, and the layer leaves that unit as the original's: a
 // unit on a page whose ink is not whole (its operator list too long, too slow, its walk too deep or too long), a placeholder
-// whose own ink is not all on the page. The line check (`lineCheck`: our base page's lines in place on arXiv's PDF, carry.mjs
-// lineCheckOf, the host's) is no source of positions: the file is refused where too few of its lines are in place (a paper made
-// whole; for parts, each part's verdict), where the page count is out of bounds, and where its own parser refuses it: a
-// file the parser refuses is never returned.
+// whose own ink is not all on the page, a unit not in place on arXiv's PDF. The line check (`lineCheck`: our base page's lines
+// in place on arXiv's PDF, carry.mjs lineCheckOf, the host's) is no source of positions: a unit is laid only where every line it
+// owns is in place (inPlace), the rest left the original's, and the file is refused ('carry') where no unit is; and where the
+// page count is out of bounds, and where its own parser refuses it: a file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes, but for a page that passes a
 // clock, its operator list not given within OPS_MS (`stats.timedOut`) or its ink's walk past its backstop (ink.mjs INK_MS,
 // `stats.inkTimedOut`). No real page comes near either (the walk's own bound is counted, STEPS_MAX), and a page past one is
@@ -44,8 +44,6 @@ const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
 /** an ownership whose two points were both read (stream.mjs): the one in which nothing between them is no ink */
 const CLOSED = OWNED_HOW.indexOf('closed')
 
-/** the share of the marked original's lines carried, at least, for a file (the researched papers carry 97.5–99.4 %) */
-export const CARRY_MIN = 0.9
 /** a page's operator list waited for at most (oplist.mjs OPS_MS: past it the page has no ink, that page alone) */
 export { OPS_MS }
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
@@ -378,7 +376,9 @@ function blank(units) {
   return {
     // (the line check's: our base page's lines found on arXiv's PDF, of all; and the lines no unit's held)
     lines: { carried: 0, total: 0, held: 0 },
-    units: { located: 0, total: units.length, byKind: {}, unplaced: 0 },
+    // (`unverified`: the units placed but not in place on arXiv's PDF, every line they own: the line check's, left the original's;
+    // `unread` those of them of no row the check reads)
+    units: { located: 0, total: units.length, byKind: {}, unplaced: 0, unverified: 0, unread: 0 },
     ph: { marked: 0, found: 0, empty: 0, lost: 0, joined: 0, outside: 0, byKind: {}, unmarked: 0, symbols: 0, inferred: 0, why: {}, textTaken: 0, owned: 0, matched: 0, unmatched: 0, twice: 0, foreign: 0, shared: 0, texts: 0, heads: [0, 0] },
     labels: {}, frames: { units: 0, split: 0, lineCountChecked: 0, lineCountEqual: 0 }, baselines: { first: [], last: [] },
     names: { marked: 0, located: 0, runIn: 0, why: {} },
@@ -406,10 +406,11 @@ async function gzipSize(bytes) {
  * compile: layout/paper.mjs markedOfPaper `base`, its coordinates the file's), which the caller opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
  * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
  * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: the base page's text as layout/arxiv.mjs
- * readArxivText read it from this document (the prepare's step T), else read here. `lineCheck`: the line check
- * ({ lines, pageLines }: carry.mjs lineCheckOf of the base page's tokens over arXiv's), whose share of the lines in place is the
- * file's (`stats.lines`, CARRY_MIN: 'carry' where too small and the file is made whole) and each marked page's (`lines` in the
- * result, the parts' verdicts); none: no line is checked;
+ * readArxivText read it from this document (the prepare's step T), else read here. `lineCheck`: the line check (carry.mjs
+ * lineCheckOf of the base page's own tokens, this document's, over arXiv's): a unit is laid only where every line it owns is in
+ * place on arXiv's PDF (inPlace), the rest counted (`stats.units.unverified`) and left the original's, and the file is refused
+ * ('carry') where no unit is; its counts information alone (`stats.lines`, and each marked page's in `lines` in the result);
+ * none: no line is checked, every unit placed laid;
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
  * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule), given; else the rule set's (`rules`, DEFAULT_RULES'
  * where not given: rule 1's frameOfTokens; pageFrame under rules.frame 'units', the whole paper alone: the page stream, which
@@ -418,9 +419,9 @@ async function gzipSize(bytes) {
  * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again (null where they
  * fail, `plansFailed` why: the add-on's loss, never the file's). A page whose ink
  * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone. `parts`: the file is cut into parts (layer-proto/
- * cut.mjs partCutter), which hold the bounds of what a part holds and the carry's share, each part's: the file is made
- * whatever share of the lines is carried (some), and checked without the bounds a part holds of its own (file.mjs
- * parseLayout `sized`); `lines` in the result, each page's lines [found, total] (the line check's pageLines)
+ * cut.mjs partCutter), which hold the bounds of what a part holds: the file is checked without the bounds a part holds of
+ * its own (file.mjs parseLayout `sized`); `lines` in the result, each page's lines [in place, total] (the line check's
+ * pageLines, information)
  */
 export async function makeLayout(o) {
   const m = await makerOf(o)
@@ -431,8 +432,8 @@ export async function makeLayout(o) {
 
 /**
  * The maker of a paper's layout file (makeLayout's), its work a page and a unit at a time: `readPage(p)` reads the base page
- * p's ink (pages in order: a font's id is its first appearance's); `carrying()`, the marks where they stand and the line
- * check's share; `anchoring()`, the units located on the base page's tokens; then, a unit at a time and pass by pass, `place(i)` (its lines), the names (`nameAt`),
+ * p's ink (pages in order: a font's id is its first appearance's); `carrying()`, the marks where they stand;
+ * `anchoring()`, the units located on the base page's tokens; then, a unit at a time and pass by pass, `place(i)` (its lines), the names (`nameAt`),
  * `phOf`, `heldOf`, `outsideOf`, `labelOf`, `rowsOf`; `bars()` and `assemble()` the file. `whole()` runs them in their order
  * over every unit. Each pass reads and writes the ink of its own pages alone. `columnEdges`: the columns' text edges (Map
  * `page|column`, `twoCols|parity|column` or `twoCols|column` to [x0, x1]) the names, the displays' numbers and the centred
@@ -469,6 +470,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // (the pages whose ink is never read: dark by their text alone; and those whose ink was read, whether or not it is held still)
   const unread = new Set(dark), inked = new Uint8Array(pages + 1)
   const doc = read.tokens
+  // (the line check, of this document's own tokens: each token's line, each line in place or not, each rest of a word)
+  if (lineCheck && !(ArrayBuffer.isView(lineCheck.tokenLine) && lineCheck.tokenLine.length === doc.length && ArrayBuffer.isView(lineCheck.rests) && lineCheck.rests.length === doc.length && ArrayBuffer.isView(lineCheck.inPlace) && Array.isArray(lineCheck.over))) throw new TypeError('lineCheck: carry.mjs lineCheckOf of the base page\'s own tokens')
+  const overPages = new Set(lineCheck?.over ?? [])
   // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of the base page's text, made once; the whole
   // run's (pageFrame) the whole paper's alone, none for the page stream (its ranges are placed from their own units)
   let tokensFrame = null
@@ -598,30 +602,25 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     return b && top && b.page === a.page && top.page === a.page ? [a.page, Math.min(a.x, b.x) - 1, Math.min(a.y, top.y) - 1, Math.max(a.x, b.x, top.x) + 1, Math.max(a.y, top.y) + 1] : null
   }
   const drawnOf = frames => tk => !frames.some(([p, x0, y0, x1, y1]) => tk.page === p && tk.x + tk.w / 2 >= x0 && tk.x + tk.w / 2 <= x1 && tk.y >= y0 && tk.y <= y1)
-  /** the line check's share (`lineCheck`: our base page's lines found on arXiv's PDF): the file refused ('carry') where it is
-   *  too small, or where no line is checked at all, but for parts (each part's verdict is its own pages'), else null; nothing
-   *  is checked where no line check is given */
-  const shareOf = () => {
-    if (!lineCheck) return null
-    const L = lineCheck.lines
-    stats.lines.total = L.total
-    // (the lines in place, lineCheckOf's; a line check of the carrier's counts alone, every line found)
-    stats.lines.carried = L.placed ?? L.same + L.moved + L.respaced + L.fuzzy
-    return L.total > 0 && (parts || stats.lines.carried >= CARRY_MIN * L.total) ? null : 'carry'
+  /** the line check's counts (`lineCheck`: our base page's lines in place on arXiv's PDF), information alone */
+  const noteLines = () => {
+    if (!lineCheck) return
+    stats.lines.total = lineCheck.lines.total
+    stats.lines.carried = lineCheck.lines.placed
   }
-  /** the marks as they stand, and the line check's share: null, or 'carry' where too few of the base page's lines are found
-   *  on arXiv's PDF */
+  /** the file's refusal where a line check is given and no unit is laid, none in place on arXiv's PDF ('carry': the paper
+   *  falls back to arXiv's, untranslated), else null */
+  const noneInPlace = () => (lineCheck && units.length > 0 && stats.units.located === 0 ? 'carry' : null)
+  /** the marks as they stand */
   function carrying() {
     const t = now()
     at = new Map(marks.marks.map(([n, page, x, y]) => [n, { page, x, y }]))
     const frames = []
     for (const [n, a] of at) { const f = frameAt(n, a); if (f) frames.push(f) }
     ours = tokensOfMarks(marks).filter(drawnOf(frames))
-    const refused = shareOf()
+    noteLines()
     stats.ms.carry = now() - t
-    if (refused) return refused
     carryOver()
-    return null
   }
   /** a place of the marks, kept where it stands on a page of the base page's with ink, within its view */
   const onInk = c => {
@@ -1783,13 +1782,45 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
 
   /**
+   * Whether unit `one` is in place on arXiv's PDF (the line check's, `lineCheck`): every row of its own that the check reads is,
+   * and one at least. A row is read by its tokens' own lines (carry.mjs `tokenLine`, whatever the baseline the row's ink gives:
+   * a row of tall math stands 1.6 to 3 pt off its words', a word on a baseline of its own is its line's), each of them in place
+   * (`inPlace`: on its page, the median of its words' offsets within LINE_PLACE, or a twin's); a row holding only the rest of
+   * a word given in parts (a token of no text, on no line) by that rest's own place (`rests`: arXiv's rest within LINE_PLACE).
+   * A row the check reads nothing of (a placeholder's run wrapped onto a line of no token: wrapOf) is no evidence either way,
+   * and a unit of no row read is not in place (null). A unit on a page past the check's work (`over`) is not. A unit on several
+   * pages is read on every one; a line shared with another unit is read for both. True where no line check is given
+   */
+  function inPlace(one) {
+    if (!lineCheck) return true
+    const { tokenLine, inPlace: placed, rests } = lineCheck
+    let read = 0
+    for (const r of one.rows) {
+      if (overPages.has(r.page)) return false
+      let lines = 0, rest = false
+      for (const k of r.ks) {
+        const l = tokenLine[k]
+        if (l >= 0) { lines++; if (placed[l] !== 1) return false } else if (doc[k]?.t === '') rest = true
+      }
+      if (lines) read++
+      else if (rest) {
+        read++
+        for (const k of r.ks) if (doc[k]?.t === '' && rests[k] !== 1) return false
+      }
+    }
+    return read > 0 ? true : null
+  }
+  /**
    * Unit i's rows into the file, in the file's order of units (rowsOf's, where it made them): its lines' fonts given the
-   * file's index of each; a unit whose faces would take the file past FONTS_MAX names stays the original's (a count never
-   * gets it refused)
+   * file's index of each; a unit not in place on arXiv's PDF (inPlace), or whose faces would take the file past FONTS_MAX
+   * names, stays the original's (a count never gets it refused)
    */
   function admit(one) {
     const { id: i, u, rows, S, E, out } = one
-    if (!out || fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) return false
+    if (!out) return false
+    const placed = inPlace(one)
+    if (placed !== true) { stats.units.unverified++; if (placed === null) stats.units.unread++; return false }
+    if (fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) return false
     const { lines, frames, erase } = out
     for (let j = 7; j < lines.length; j += 8) lines[j] = fontOf(lines[j])
     outUnits.push(out.unit)
@@ -1902,8 +1933,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
 
   /** the paper's file: every pass in its order over every unit (makeLayout's) */
   async function whole() {
-    const refused = carrying()
-    if (refused) return { refused, stats }
+    carrying()
     anchoring()
     const t = now()
     for (let i = 0; i < units.length; i++) place(i)
@@ -1916,7 +1946,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     for (const one of placed) labelOf(one)
     for (const one of placed) { rowsOf(one); admit(one) }
     stats.ms.rows = now() - t
-    return assemble()
+    const refused = noneInPlace()
+    return refused ? { refused, stats } : assemble()
   }
 
   // ---------------------------------------------------------------- the passes as tasks, in any order the whole order allows
@@ -1986,15 +2017,15 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /** the paper's file, its passes run as tasks in the order `pick` makes of those the whole order allows (runInOrder): the
    *  file whole() makes, the same bytes, where no bound of the paper's (FONTS_MAX) binds */
   async function byTasks(pick) {
-    const refused = carrying()
-    if (refused) return { refused, stats }
+    carrying()
     anchoring()
     const t = now()
     runInOrder(tasks().map(x => ({ ...x, run: confined(x) })), pick)
     stats.ph.unmatched = stats.ph.owned - stats.ph.matched
     for (const one of [...placed].sort((x, y) => x.id - y.id)) admit(one)
     stats.ms.rows = now() - t
-    return assemble()
+    const refused = noneInPlace()
+    return refused ? { refused, stats } : assemble()
   }
 
   // ---------------------------------------------------------------- the page stream (E2b; stage 2: the marked original too)
@@ -2013,8 +2044,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * every task before it in the whole order on them has run; a page is let go (its ink and facts dropped) once its tasks have
    * run, its names are taken in and its plan is made (`plans`). A unit's rows are the file's (`layout()`, a unit's as the whole
    * file's parse holds them) once they are made. `finish()` after the last page of each. `released()` the pages from 1 let go;
-   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed). The line check's refusal is known
-   * before the first page, the host's line check given (`carryRefusal()`: the file's, never a part's); with `marked`, a piece
+   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed); `laid()` the units the file holds
+   * so far. The line check's refusal ('carry', no unit laid: none in place on arXiv's PDF) is known once finished (`carryRefusal()`:
+   * the file's, never a part's); with `marked`, a piece
    * found after its unit's own ink was taken, or a point read twice after its unit's placeholders were matched, is too late
    * (`stats.late`, rows and vetoes: the whole run's file but there)
    */
@@ -2035,11 +2067,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const n = units.length
     // ---- the marked original: whole (carrying() done), or as its pages come, its names first (the head's)
     const M = mh ? mh.pages : 0
-    let markedTo = mh ? 0 : Infinity, ended = !mh, refusal = null, foundTo = 1
+    let markedTo = mh ? 0 : Infinity, ended = !mh, finished = false, foundTo = 1
     const mViews = [], mWords = [], twiceSeen = new Set()
     const follows = mh ? followsOf(units, mh.set) : null
-    // (the marks read a page at a time: none yet; the line check's refusal known from the start, the host's)
-    if (mh) { at = new Map(); ours = []; carryOver(); refusal = shareOf() }
+    // (the marks read a page at a time: none yet)
+    if (mh) { at = new Map(); ours = []; carryOver(); noteLines() }
     let X = 0
     /** the last page from 1 read on both sides: the base page's, and the marked original's that tells its marks (a page past
      *  the marked original's last has none of it) */
@@ -2411,7 +2443,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
      *  `anchor` false, the ranges left to the step of the base page read next (a marked page's, read before it: what the two
      *  steps anchor is the same, the second's at once) */
     const step = (anchor = true) => {
-      if (refusal) return
       wake()
       if (anchor) R.run(onAnchor, decide)
       advance()
@@ -2492,7 +2523,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     /** every page read (and the marked original's end): the rest anchored, every task run, every page let go */
     function finish() {
       if (!ended) throw new Error('the marked original\'s end was not given')
-      if (refusal) throw new Error(`the layout is refused: ${refusal}`)
       X = pages
       for (let i = 0; i < n; i++) if (!R.isMarked(i)) markUnit(i)
       R.run(onAnchor, decide)
@@ -2525,11 +2555,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       stats.ph.texts = [...unitRows.values()].reduce((m, r) => m + r.pageText.length, 0)
       for (const i of inFile) countColours(i)
+      finished = true
     }
     return {
       pageRead, markedPage, markedEnd, finish, plans, plansFailed: () => plansFailed,
-      /** the line check's refusal ('carry'), known from the start (the host's check: `lineCheck`); null else */
-      carryRefusal: () => refusal,
+      /** the line check's refusal ('carry': no unit laid, none in place on arXiv's PDF), once finished; null else */
+      carryRefusal: () => (finished ? noneInPlace() : null),
+      /** the units the file holds so far */
+      laid: () => stats.units.located,
       /** the file's rows of the units settled so far (`ids`, rising: those of them it holds) and the names taken in */
       layout: (ids = [...unitRows.keys()].sort((x, y) => x - y)) => partOf(ids.filter(i => unitRows.has(i)), [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
       released: () => releasedTo,
@@ -2555,10 +2588,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * each page, then the end), its page p read before the base page p; else it was read whole (the marks given), carried first
    */
   async function byStream(marked = null) {
-    if (!marked) {
-      const refused = carrying()
-      if (refused) return { refused, stats }
-    }
+    if (!marked) carrying()
     const t = now()
     const st = stream(marked ? { marked: marked.head } : {})
     st.trace = []
@@ -2573,11 +2603,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const x = await it.next()
       if (x.done || !x.value.end) throw new Error('the marked original gave no end')
       st.markedEnd(x.value.end)
-      if (st.carryRefusal()) return { refused: st.carryRefusal(), stats }
     }
     st.finish()
     stats.ms.rows = now() - t
-    return st
+    const refused = st.carryRefusal()
+    return refused ? { refused, stats } : st
   }
   return { pages, stats, readPage, whole, byTasks, stream, byStream, carrying, edges: () => edges, pageLines: () => lineCheck?.pageLines ?? new Map(), drawOf, drawJsonOf, drawStats, draw: wantDraw }
 }

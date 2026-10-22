@@ -2,8 +2,7 @@
 // original's marks and arXiv's PDF, and told a part at a time to its host: the left (anchorUnits under the unit marks, leftSideOf),
 // the layout file (makeLayout, its operator lists read once for the add-on's plans too), the add-on chained over the parts
 // (layout/chain.mjs chainedAddon over the host's remover), and the cut (layer-proto/cut.mjs partCutter, cutBundle's own), each
-// part judged as it is cut: the carry's share of the lines of its marked pages (CARRY_MIN) and its own reader's reading of it
-// (readPart), a part refused either way the same pages with no layout. Under the page stream's rules 1, 3 and 4, the default
+// part judged as it is cut by its own reader's reading of it (readPart), a part refused the same pages with no layout. Under the page stream's rules 1, 3 and 4, the default
 // (layout/make.mjs DEFAULT_RULES), the frame, the column edges and the far-push columns are each had a page at a time, and the
 // pass is a page stream (the marked original read beside arXiv's): each part cut as soon as what it reads is final, the same
 // parts as the whole path's under those rules. Under the whole run's rules (WHOLE_RULES, next's before the stream) they read
@@ -21,10 +20,10 @@ import { needBound } from '../layer-proto/need.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, textOfPdf } from '../layout/base.mjs'
-import { LINE_PLACE, lineCheckOf } from '../layout/carry.mjs'
+import { lineCheckOf } from '../layout/carry.mjs'
 import { chainedAddon } from '../layout/chain.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
-import { CARRY_MIN, makerOf, rulesOf } from '../layout/make.mjs'
+import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
 import { displayEdges, unitText } from '../translate/mt.mjs'
 import { columnsOfTokens, pageColumns } from '../view/highlight.mjs'
@@ -41,9 +40,9 @@ const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', tex
 /**
  * Why a part has no layout, as its record says it (layer-proto/format.mjs LAYOUT_REFUSED: `{ refused, why }`, `why` within
  * WHY_MAX): the paper's refusal — the marked original's (layout/paper.mjs markedOfPaper's 'compile', 'texlive', 'engine',
- * 'marks', and the probe's), the page count's, the maker's ('carry', its throw 'failed', a refusal of its own) — or the part's
- * own (a verdict's 'carry' or 'read', a part's bound's 'part'). TeX's and the carry's say so; every fault of the engine's own
- * (the probe, the reading, the maker, a part's reader) is `marks`. Null for none
+ * 'marks', and the probe's), the page count's, the maker's ('carry': no unit laid, none in place on arXiv's PDF; its throw
+ * 'failed', a refusal of its own) — or the part's own (a verdict's 'read', a part's bound's 'part'). TeX's and the carry's say
+ * so; every fault of the engine's own (the probe, the reading, the maker, a part's reader) is `marks`. Null for none
  */
 export function layoutRecordOf(r) {
   if (!r?.refused) return null
@@ -52,8 +51,8 @@ export function layoutRecordOf(r) {
   switch (r.refused) {
     case 'compile': case 'texlive': case 'engine': case 'marks': case 'final': case 'boxes': return { refused: r.refused, why: given || PLAIN_WHY[r.refused] }
     case 'carry': {
-      const [c, t] = Array.isArray(r.lines) ? r.lines : [r.stats?.lines?.carried, r.stats?.lines?.total]
-      return { refused: 'carry', why: whyText(Number.isInteger(c) && Number.isInteger(t) ? `${c} of the ${t} lines of its pages in place on arXiv's PDF, under ${Math.round(CARRY_MIN * 100)} %` : `our lines in place on arXiv's PDF are under ${Math.round(CARRY_MIN * 100)} %`) }
+      const n = r.stats?.units?.total
+      return { refused: 'carry', why: whyText(Number.isInteger(n) ? `0 of the ${n} units verified in place on arXiv's PDF` : 'no unit verified in place on arXiv\'s PDF') }
     }
     case 'probe': return { refused: 'marks', why: said('the mark probe gave no log') }
     case 'failed': return { refused: 'marks', why: said('the layout maker failed') }
@@ -88,11 +87,12 @@ function fitted(text) {
  * destinations the final pass's must be: base.mjs finalCheck; null where the host checked it, `ours.check`), `arxiv` { doc, text }
  * arXiv's PDF and its text, `tree` the TeX Live year our compile was made on. In turn: the base page's text read (ours.text, else
  * readArxivText with `draw`), its page count arXiv's ('boxes'), no mark of ours printed as text on it ('marks'), the final pass
- * the draft's page ('final'), every page box arXiv's ('boxes': boxesCheck), the year known ('final'), and the share of its lines
- * in place on arXiv's PDF at least CARRY_MIN ('carry': carry.mjs lineCheckOf of the two texts' tokens, a line in place found on
- * its own page within LINE_PLACE: our page is to be arXiv's, not re-broken by another TeX Live). { text, lineCheck: { lines,
- * pageLines }, head } (the head's base of ours, BUNDLE 8), or the first failing reason { refused, why, lines? }. What the page pass
- * checks before its head, and the lab's makers with it (the gate pack's base pages). Never throws but a failed allocation
+ * the draft's page ('final'), every page box arXiv's ('boxes': boxesCheck), and the year known ('final'); then the line check
+ * (carry.mjs lineCheckOf of the two texts' tokens: each of our lines in place on arXiv's PDF or not), which the maker lays each
+ * unit by (layout/make.mjs inPlace: every line it owns in place), its share of our lines in place the head's `carried`,
+ * information alone. { text, lineCheck, head } (the head's base of ours, BUNDLE 8), or the first failing reason { refused, why }.
+ * What the page pass checks before its head, and the lab's makers with it (the gate pack's base pages). Never throws but a
+ * failed allocation
  */
 export async function checkOurBase({ ours, draft = null, arxiv, tree = null, draw = true }) {
   const no = (refused, why, extra = {}) => ({ refused, why: whyText(why), ...extra })
@@ -123,12 +123,10 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
   }
   if (!bc.equal) return no('boxes', bc.why)
   if (typeof tree !== 'string' || !/^\d{4}$/.test(tree)) return no('final', 'the TeX Live year our compile was made on is not known')
-  // the line check: our base page's lines in place on arXiv's PDF (carry.mjs lineCheckOf over the two texts' tokens: found on their
-  // own page within LINE_PLACE), the paper's share
-  // here and each part's in its verdict; no position is carried
-  const lineCheck = lineCheckOf(baseText.tokens, text.tokens), L = lineCheck.lines, carried = L.placed
-  if (!(L.total > 0 && carried >= CARRY_MIN * L.total)) return no('carry', `${carried} of our ${L.total} lines in place on arXiv's PDF (within ${LINE_PLACE} pt on their page), under ${Math.round(CARRY_MIN * 100)} %`, { lines: [carried, L.total] })
-  return { text: baseText, lineCheck, head: { source: 'ours', bytes: ours.bytes, sha256: ours.sha256, xref: ours.xref, pages: N, tree, check: { pages: [N, N], boxes: 'equal', carried: carried / L.total } } }
+  // the line check: each of our base page's lines in place on arXiv's PDF or not (carry.mjs lineCheckOf over the two texts'
+  // tokens), the maker's to lay each unit by; the paper's share information alone; no position is carried
+  const lineCheck = lineCheckOf(baseText.tokens, text.tokens), L = lineCheck.lines
+  return { text: baseText, lineCheck, head: { source: 'ours', bytes: ours.bytes, sha256: ours.sha256, xref: ours.xref, pages: N, tree, check: { pages: [N, N], boxes: 'equal', carried: L.total > 0 ? L.placed / L.total : 0 } } }
 }
 
 /**
@@ -147,8 +145,7 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
  * view/highlight.mjs columnsOfTokens), `floatSearch` 'forward' both anchorings' floats searched from the page of their last
  * body neighbour on (rule 5: `source.inFloat`, the units written inside a float, given); a rule given there is taken over
  * `frame` and `columns`.
- * `verdicts` (default on): each part judged as it is cut, the carry's share of its marked pages' lines at least CARRY_MIN
- * (the last part's to the marked original's end) and its reader taking it; off, the parts are cutBundle's of the same whole.
+ * `verdicts` (default on): each part judged as it is cut, its reader taking it; off, the parts are cutBundle's of the same whole.
  *
  * `marked` { doc, log, options } in place of `marks`: the marked original to be read here (a PDF.js document of it, the
  * caller's to open and destroy, its last pass's log, markedPages' options but the units and the operator codes): read whole
@@ -189,13 +186,14 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
  * here or given), the left on arXiv's text, once ours passes the page-and-line check, each in turn, before the head: the guard
  * (a marked original refused or of other pages: its refusal), no mark printed as text on our pages ('marks': arxiv.mjs
  * `markText`), the final pass placing every mark where the draft does ('final': base.mjs finalCheck against `marked.doc`,
- * else `ours.check`, a host's check of it), every page box arXiv's ('boxes': boxesCheck), and the share of our lines in place
- * on arXiv's PDF at least CARRY_MIN for the paper ('carry': carry.mjs lineCheckOf of our text's tokens over arXiv's, the line
- * check alone; and for each part, its pages' lines in place, the verdicts): checkOurBase. The head's base is then ours ({ source: 'ours', …, check
- * }, `orig` arXiv's PDF) and the remover's tails continue it. A paper that fails, or that has no base of ours (`ours` null,
- * or { refused, why }: no final pass, 'final'), falls back: its head's base arXiv's PDF ({ source: 'arxiv', …, why }) and every
- * part with no layout, its record the same why. The layout is never made over arXiv's PDF: a host that gives no base of ours
- * (BUNDLE 7's, arXiv's PDF alone as `base`) has every paper fall back ('final')
+ * else `ours.check`, a host's check of it), and every page box arXiv's ('boxes': boxesCheck): checkOurBase, whose line check
+ * (carry.mjs lineCheckOf of our text's tokens over arXiv's) the maker lays each unit by, every line it owns in place on arXiv's
+ * PDF, the others left the original's. The head's base is then ours ({ source: 'ours', …, check }, `orig` arXiv's PDF) and the
+ * remover's tails continue it. A paper that fails, that has no base of ours (`ours` null, or { refused, why }: no final pass,
+ * 'final'), or none of whose units is in place on arXiv's PDF (no unit laid, the maker's 'carry': in the page stream the head
+ * waits for the first unit laid, so that nothing is told before), falls back: its head's base arXiv's PDF ({ source: 'arxiv', …, why
+ * }) and every part with no layout, its record the same why. The layout is never made over arXiv's PDF: a host that gives no
+ * base of ours (BUNDLE 7's, arXiv's PDF alone as `base`) has every paper fall back ('final')
  */
 export async function layerOfPaper({ paper, source, marks = null, marked = null, arxiv, ours = null, orig = null, base: given0 = null, tree: treeGiven = null, OPS, pdfjs, image, remove = null, onHead = null, onLeft, onPart, verdicts = true, frame: frameGiven = pageFrame, columns: columnsGiven = undefined, rules: rulesGiven = null, oracle = null, capture = null, whole: wholeAsked = false, draw = true }) {
   const rules = rulesOf(rulesGiven)
@@ -243,7 +241,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   if (!(marks && !('marks' in marks))) {
     const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
     const checked = await checkOurBase({ ours, draft: marked?.doc ?? null, arxiv: { doc, text }, tree, draw })
-    if ('refused' in checked) { marks = { refused: checked.refused, why: checked.why, ...(checked.lines ? { lines: checked.lines } : {}) }; marked = null }
+    if ('refused' in checked) { marks = { refused: checked.refused, why: checked.why }; marked = null }
     else { ({ text: baseText, lineCheck, head: oursHead } = checked); baseDoc = oursDoc }
   }
 
@@ -301,16 +299,15 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       made = { refused: 'failed', why: why(e) }
       maker = null
     }
-  } else made = { refused: marks?.refused ?? 'marks', ...(marks?.why ? { why: marks.why } : {}), ...(marks?.own ? { own: marks.own } : {}), ...(marks?.lines ? { lines: marks.lines } : {}) }
+  } else made = { refused: marks?.refused ?? 'marks', ...(marks?.why ? { why: marks.why } : {}), ...(marks?.own ? { own: marks.own } : {}) }
 
   const ctx = { paper, N, bases: { ours: oursHead, orig: origRef }, lines: lineCheck?.pageLines ?? null, image, remove, pdfjs, onHead, onLeft, onPart, verdicts, side, bundle, made, maker, several }
   if (maker && streams) {
     // (the maker's throws are the layout's, its own calls' alone: a sink's, the reader's or the cutter's go on as themselves)
     let st = null
     try {
-      const refused = maker.carrying()
-      if (refused) ctx.made = { refused, stats: maker.stats }
-      else st = maker.stream()
+      maker.carrying()
+      st = maker.stream()
     } catch (e) {
       if (isMemoryError(e)) throw e
       ctx.made = { refused: 'failed', why: why(e) }
@@ -335,19 +332,18 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   return cutWhole(ctx, r && 'file' in r ? r : null)
 }
 
-/** the carry's share of the lines of marked pages a to b of N (to the marked original's end with the paper's last) */
+/** our lines in place on arXiv's PDF of marked pages a to b of N (to the marked original's end with the paper's last), and
+ *  all of them: a part's note, information */
 function linesOf(lines, N, a, b) {
   let carried = 0, total = 0
   for (const [p, [c, t]] of lines) if (p >= a && (b === N || p <= b)) { carried += c; total += t }
   return [carried, total]
 }
 
-/** each part judged as it is cut (verdicts): its marked pages' carried share, then its reader reading it after the parts
- *  before (`state.chain`) against the head and chunks told (`state.index`); the reading kept (`state.read`) */
-function verdictOf(state, lines, N) {
-  return async ({ pages: [a, b], written }) => {
-    const [carried, total] = linesOf(lines, N, a, b)
-    if (total > 0 && carried < CARRY_MIN * total) return { refused: 'carry', lines: [carried, total] }
+/** each part judged as it is cut (verdicts): its reader reading it after the parts before (`state.chain`) against the head
+ *  and chunks told (`state.index`); the reading kept (`state.read`) */
+function verdictOf(state) {
+  return async ({ written }) => {
     try { state.read = await readPart(written.bytes, { ref: written.ref, index: state.index, chain: state.chain }) } catch (e) {
       if (isMemoryError(e) || !(e instanceof BundleRefusal)) throw e
       return { refused: 'read', why: why(e) }
@@ -396,7 +392,7 @@ async function cutWhole(ctx, r) {
   const hooks = layout && remove ? chainedAddon({ N, views: side.pages, base: { bytes: tail.bytes, xref: tail.xref }, planOf: p => plans?.get(p) ?? null, pdfjs, remove }) : null
   const state = { index: null, chain: null, read: null }
   const whole = { paper: { ...paper, pages: N }, base, orig, versions: { image }, units: bundle, left: { pages: side.pages, units: side.units }, layout }
-  const { units: chunks, head, cutter, known } = await wholeCutter(whole, { draw: drawsOurs(base, ctx.maker), leftPages: drawsOurs(base, ctx.maker) ? drawn(side.leftPages, ctx.maker) : side.leftPages, base, orig, image, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null, recordOf: layoutRecordOf, ...(layout ? {} : { noLayout: layoutRecordOf(ctx.made) }) })
+  const { units: chunks, head, cutter, known } = await wholeCutter(whole, { draw: drawsOurs(base, ctx.maker), leftPages: drawsOurs(base, ctx.maker) ? drawn(side.leftPages, ctx.maker) : side.leftPages, base, orig, image, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state) : null, recordOf: layoutRecordOf, ...(layout ? {} : { noLayout: layoutRecordOf(ctx.made) }) })
   if (ctx.verdicts) state.index = await indexOfHead(head, chunks)
   if (ctx.onHead) await ctx.onHead(head, chunks)
   for (;;) {
@@ -435,8 +431,8 @@ const wholeLeft = side => {
  * still to come) may get a slot up to the last entry the part takes or any entry on its pages (a left anchor not final: its
  * stream at least the left's first token still to be anchored, or the last stream of a smaller id's and a half), and no
  * layout-only entry there takes its slot after a unit whose left anchor is not final (it may still change); (3) every member
- * of the table groups of those entries is in K for good; and (4) the carry's refusal is known (the marked original read a page
- * at a time: for parts, once a line is carried). K, F and the need bounds are then those of the whole paper on what the part
+ * of the table groups of those entries is in K for good; and (4) a unit is laid (the head waits for it: a paper none of whose
+ * units placed is in place on arXiv's PDF falls back to arXiv's, told whole at the end, as a paper with no layout is). K, F and the need bounds are then those of the whole paper on what the part
  * reads (cutBundle's). The head is told once a unit is located on the left (else the paper is refused, telling nothing, as
  * the whole run refuses it). `drive({ making, close, read })` reads the pages: the maker's calls in `making` (a throw of its
  * own is the layout's), `close()` after each step, `read(p)` with the base page p read
@@ -449,11 +445,14 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   const head = await writeHead({ paper: { ...paper, pages: N }, base, orig, image, units, lineskip, draw: drawsOurs(base, maker) })
   const hooks = remove && st ? chainedAddon({ N, views: left.pages, base: { bytes: tail.bytes, xref: tail.xref }, planOf: p => st.plans?.get(p) ?? null, pdfjs, remove }) : null
   const state = { index: ctx.verdicts ? await indexOfHead(head, units) : null, chain: null, read: null }
-  const cutter = partCutter({ paper, N, head, views: left.pages, leftPages: drawsOurs(base, maker) ? drawn(left.leftPages, maker) : left.leftPages, addon: null, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null, retain: false, recordOf: layoutRecordOf })
+  const cutter = partCutter({ paper, N, head, views: left.pages, leftPages: drawsOurs(base, maker) ? drawn(left.leftPages, maker) : left.leftPages, addon: null, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state) : null, retain: false, recordOf: layoutRecordOf })
   let headTold = false
-  const tellHead = async () => {
+  /** the head told, once a unit is located on the left and, where a layout is made, one is laid (`now`: at the end, whatever is
+   *  laid): a paper of no unit laid falls back to arXiv's PDF, nothing told before */
+  const tellHead = async (now = false) => {
     if (headTold) return true
     if (!left.units().length) return false
+    if (!now && st && st.laid() === 0) return false
     if (ctx.onHead) await ctx.onHead(head, units)
     headTold = true
     return true
@@ -513,8 +512,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
     for (;;) {
       const a = cutter.from
       if (a > N) return
-      if (!(await tellHead())) return
-      if (!final && st && st.carryRefusal()) return
+      if (!(await tellHead(final))) return
       const H = final ? N : frontier()
       if (!final && Math.min(partTarget(a, N), a + PART_PAGES_MAX - 1) > H) return
       const now = leftNow()
@@ -578,19 +576,24 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
     }
   }
   await drive({ making, close: () => (failed ? null : close(false)), read: p => { X = p }, failed: () => failed })
-  // (the carry refused at the marked original's end: nothing was told with a layout, every part is cut with none)
+  if (st && !failed) await making(async () => { st.finish() })
+  // (no unit laid, none in place on arXiv's PDF: nothing was told, the head waiting for a unit laid; the paper falls back to
+  // arXiv's PDF, cut whole as a paper with no layout is)
   const carry = st && !failed ? st.carryRefusal() : null
-  if (st && !failed && !carry) await making(async () => { st.finish() })
-  if (st && !failed && !carry) await close(true)
+  if (carry) {
+    if (!left.units().length) return { refused: 'anchors', why: 'the anchors located no unit on arXiv\'s PDF' }
+    return cutWhole({ ...ctx, maker: null, made: { refused: carry, stats: maker.stats }, side: { pages: left.pages, units: left.units(), leftPages: left.leftPages, stats: left.stats } }, null)
+  }
+  if (st && !failed) await close(true)
   else {
     // (K as the units in it for good and the left give it: the prefix told stands, the rest is left entries and units settled;
     // with no layout at all, the left's alone)
-    if (!(await tellHead())) return { refused: 'anchors', why: 'the anchors located no unit on arXiv\'s PDF' }
+    if (!(await tellHead(true))) return { refused: 'anchors', why: 'the anchors located no unit on arXiv\'s PDF' }
     const layout = st && failed ? st.layout(kIds()) : null
     const whole = { paper: { ...paper, pages: N }, units: bundle, left: { pages: left.pages, units: left.units() }, layout }
     const { K, F } = wholeFrontier(whole, undefined, grouped)
-    // (why the parts left have none: the maker's failure, the carry's refusal, or the paper's)
-    const noLayout = layoutRecordOf(failed ? { refused: 'failed', why: failed } : carry ? { refused: carry, stats: maker.stats } : ctx.made)
+    // (why the parts left have none: the maker's failure, or the paper's)
+    const noLayout = layoutRecordOf(failed ? { refused: 'failed', why: failed } : ctx.made)
     const known = { K, F, NB: needBound(K, N), layout: null, noLayout }
     for (;;) {
       state.read = null
@@ -601,7 +604,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
     }
   }
   if (!headTold) return { refused: 'anchors', why: 'the anchors located no unit on arXiv\'s PDF' }
-  const layoutStats = failed ? { refused: 'failed', why: failed, ...(maker ? { stats: maker.stats } : {}) } : carry ? { refused: carry, stats: maker.stats } : st ? { stats: maker.stats, ...(st.plansFailed() ? { plansFailed: st.plansFailed() } : {}) } : ctx.made
+  const layoutStats = failed ? { refused: 'failed', why: failed, ...(maker ? { stats: maker.stats } : {}) } : st ? { stats: maker.stats, ...(st.plansFailed() ? { plansFailed: st.plansFailed() } : {}) } : ctx.made
   return { through: N, count: cutter.parts.length, stats: { left: left.stats, layout: layoutStats, plans: st?.plans ? { pages: planned.pages + st.plans.size, dirty: planned.dirty + [...st.plans.values()].filter(q => q.remove).length } : null, addon: hooks ? hooks.state() : null, ...(maker ? { draw: { ...maker.drawStats, shed: ctx.drawShed ?? 0 } } : {}), closed, ...(ctx.several ? { toplevels: ctx.several } : {}) } }
 }
 

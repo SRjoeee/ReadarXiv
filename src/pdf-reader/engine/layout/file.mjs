@@ -39,8 +39,11 @@ export { LayoutRefusal } from './json.mjs'
  *  unchanged (the file's schema is 5 still); 12 (layer route step 2): the file's coordinates are our base page's, the final
  *  pass of the marked original (its marks where the draft has them), no longer arXiv's PDF's: a placeholder's segments are its
  *  own glyphs and rules between its two marks, looked up on that page with no matching, and the carry is the line check alone
- *  (the file's schema is 5 still) */
-export const LAYOUT = '12'
+ *  (the file's schema is 5 still); 14 (13 the engine lane's): a unit is laid only where every line it owns is in place on
+ *  arXiv's PDF (make.mjs inPlace: the median of its words' offsets within LINE_PLACE on its own page, or a twin of the same
+ *  words but for their characters outside ASCII), the others left the original's, in place of the share of the paper's and
+ *  each part's lines (CARRY_MIN, gone) (the file's schema is 5 still) */
+export const LAYOUT = '14'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */

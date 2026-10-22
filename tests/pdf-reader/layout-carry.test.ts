@@ -193,20 +193,22 @@ describe('carrierOf', () => {
   })
 })
 
-// The page-and-line check counts the lines in place (the layer route's step 2): our base page is to be arXiv's page, so a line
-// found elsewhere (another TeX Live re-breaking the paper: 2307.16209's thesis, 48 % of its lines moved on TeX Live 2025) is
-// found but not in place; within LINE_PLACE on its own page, of any kind (dvipdfmx's DVI against arXiv's dvips sets words up to
-// 0.42 pt apart: respaced, in place)
+// The page-and-line check judges each line in place or not (the layer route's step 2): our base page is to be arXiv's page, so a
+// line found elsewhere (another TeX Live re-breaking the paper: 2307.16209's thesis, 48 % of its lines moved on TeX Live 2025)
+// is found but not in place; in place, the median of its words' offsets within LINE_PLACE on its own page, of any kind
+// (dvipdfmx's DVI against arXiv's dvips sets words up to 0.42 pt apart: respaced, in place). The maker lays a unit by them
 describe('lineCheckOf: the lines in place', () => {
   it('counts a line found on its page within LINE_PLACE, whole or respaced; one moved further, or onto another page, is found and not in place', () => {
     expect(LINE_PLACE).toBe(0.5)
     const A = ['alpha', 'beta', 'gamma'], B = ['delta', 'eps', 'zeta'], C = ['eta', 'theta', 'iota'], D = ['kappa', 'lambda', 'mu']
     const ours = [...words(A, 1, 72, 700), ...words(B, 1, 72, 680), ...words(C, 1, 72, 660), ...words(D, 1, 72, 640)]
-    // (A in place; B 0.4 pt off and respaced; C moved 12 pt; D onto page 2)
-    const arxiv = [...words(A, 1, 72, 700), ...words(B, 1, 72.4, 680, [3.3, 3]), ...words(C, 1, 72, 648), ...words(D, 2, 72, 640)]
+    // (A in place; B 0.4 pt off at its first word, 0.2 at the others, respaced; C moved 12 pt; D onto page 2)
+    const arxiv = [...words(A, 1, 72, 700), ...words(B, 1, 72.4, 680, [2.8, 3]), ...words(C, 1, 72, 648), ...words(D, 2, 72, 640)]
     const got = lineCheckOf(ours, arxiv)
     expect(got.lines).toMatchObject({ total: 4, same: 1, respaced: 1, moved: 2, placed: 2 })
     expect(got.pageLines.get(1)).toEqual([2, 4])
+    expect([...got.inPlace]).toEqual([1, 1, 0, 0])
+    expect(got.lineAt.map(p => p && [p.page, Math.round(p.dx * 100) / 100, Math.round(p.dy * 100) / 100])).toEqual([[1, 0, 0], [1, 0.2, 0], [1, 0, -12], [2, 0, 0]])
     // (the carrier's own counts, every line found, as before)
     expect(carrierOf(ours, arxiv).pageLines.get(1)).toEqual([4, 4])
     expect(lineCheckOf(ours, ours).lines).toMatchObject({ total: 4, same: 4, placed: 4 })
@@ -220,6 +222,74 @@ describe('lineCheckOf: the lines in place', () => {
     c.add(TEN.length, ours.length)
     expect([...c.pagePlaced]).toEqual([...lineCheckOf(ours, arxiv).pageLines])
     expect(c.placed).toBe(1)
+  })
+
+  it('a line is in place by the median of its words\' offsets: a label set apart alone is no line moved; words that drift across it are', () => {
+    // 2610.19159's list: the item's label 0.6 pt left, the rest of its line where it was (first word's offset 0.6: not in place)
+    const item = ['12.', 'the', 'model', 'is', 'trained', 'here']
+    const ours = words(item, 1, 72, 700), label = words(item, 1, 72, 700).map((t, j) => (j === 0 ? { ...t, x: t.x - 0.6 } : t))
+    expect([...lineCheckOf(ours, label).inPlace]).toEqual([1])
+    expect(lineCheckOf(ours, label).lineAt[0]).toMatchObject({ page: 1, dx: 0, dy: 0, whole: false, fuzzy: false, pairs: null })
+    // 2608.16117's line of glyphs set wider: its words 3.2 pt left at its start, none at its end (median 1.6: not in place)
+    const drift = words(item, 1, 72, 700).map((t, j) => ({ ...t, x: t.x - 3.2 * (1 - j / (item.length - 1)) }))
+    expect([...lineCheckOf(ours, drift).inPlace]).toEqual([0])
+    expect(lineCheckOf(ours, drift).lineAt[0]?.dx).toBeCloseTo(-1.6, 5)
+    // a line moved whole 0.6 pt: not in place, by its median as by its first word
+    expect([...lineCheckOf(ours, words(item, 1, 72.6, 700)).inPlace]).toEqual([0])
+    // the median of the words matched, for a fuzzy partner: the one word told otherwise is not counted
+    const fuzzy = words(item.map((w, j) => (j === 3 ? '1is' : w)), 1, 72, 700.2)
+    expect(lineCheckOf(ours, fuzzy).lineAt[0]).toMatchObject({ fuzzy: true, dy: expect.closeTo(0.2, 5) })
+    expect([...lineCheckOf(ours, fuzzy).inPlace]).toEqual([1])
+  })
+
+  it('a line of no partner of the same words is in place where its twin stands: the same words but for their characters outside ASCII, at its baseline and both ends', () => {
+    // 2610.21765: arXiv's text layer gives ε as "ǫ" (U+01EB), ours as ε: a line of one such word has a fuzzy partner (most of
+    // its words), in place; a line of two of six has none, and its twin
+    const one = lineCheckOf(words(['for', 'every', 'ε', 'the', 'bound', 'holds'], 1, 72, 700), words(['for', 'every', 'ǫ', 'the', 'bound', 'holds'], 1, 72, 700))
+    expect(one.lineAt[0]).toMatchObject({ fuzzy: true })
+    expect(one.lineAt[0]?.twin).toBeUndefined()
+    expect([...one.inPlace]).toEqual([1])
+    const ours = words(['let', 'ε', 'and', 'δε', 'be', 'small'], 1, 72, 700)
+    const theirs = words(['let', 'ǫ', 'and', 'δǫ', 'be', 'small'], 1, 72, 700.3)
+    const got = lineCheckOf(ours, theirs)
+    expect([...got.inPlace]).toEqual([1])
+    expect(got.lineAt[0]).toMatchObject({ page: 1, twin: true, fuzzy: true, dx: 0, dy: expect.closeTo(0.3, 5), pairs: null })
+    expect(got.lines).toMatchObject({ total: 1, fuzzy: 1, placed: 1 })
+    // a symbol alone too: "ǫ" and ε, both nothing within ASCII, at the same place
+    expect([...lineCheckOf(words(['ε'], 1, 300, 650), words(['ǫ'], 1, 300, 650)).inPlace]).toEqual([1])
+    // but not 0.6 pt off, at one end or at its baseline, or of other words within ASCII
+    expect([...lineCheckOf(ours, words(['let', 'ǫ', 'and', 'δǫ', 'be', 'small'], 1, 72, 700.6)).inPlace]).toEqual([0])
+    expect([...lineCheckOf(ours, words(['let', 'ǫ', 'and', 'δǫ', 'be', 'small'], 1, 72, 700, [3, 3, 3, 3, 3.6])).inPlace]).toEqual([0])
+    expect([...lineCheckOf(ours, words(['let', 'ǫ', 'and', 'δǫ', 'be', 'smal'], 1, 72, 700, [3, 3, 3, 3, 8])).inPlace]).toEqual([0])
+    // a line re-broken by another TeX Live keeps its ends (justified) but its words shift by one: never its twin
+    const A = ['we', 'train', 'the', 'model', 'on', 'eight', 'gpus']
+    const before = words(A.slice(0, 6), 1, 72, 700), after = words(A.slice(1, 7), 1, 72, 700)
+    // (both lines justified to one measure)
+    const right = (ts: DocToken[]) => end(ts.at(-1)), justify = (ts: DocToken[], to: number) => { const d = (to - right(ts)) / (ts.length - 1); return ts.map((t, j) => ({ ...t, x: t.x + d * j })) }
+    const rebroken = justify(after, right(before))
+    expect(Math.abs(end(rebroken.at(-1)) - end(before.at(-1)))).toBeLessThan(0.01)
+    expect([...lineCheckOf(before, rebroken).inPlace]).toEqual([0])
+    expect(lineCheckOf(before, rebroken).lineAt[0]?.twin).toBeUndefined()
+  })
+
+  it('each of our tokens on its line, the rest of a word given in parts on none; each rest in place where arXiv\'s stands within LINE_PLACE of it', () => {
+    // a line with a raised footnote number (off its baseline, on the line), then a line holding the rest of a word alone
+    const ours = [...words(['the', 'robustness', 'of', 'mod'], 1, 72, 700), tok('1', 1, 160, 703, 3, 7), tok('', 1, 72, 688, 20)]
+    const got = lineCheckOf(ours, [...words(['the', 'robustness', 'of', 'mod'], 1, 72, 700), tok('1', 1, 160, 703, 3, 7), tok('', 1, 72.3, 688.4, 20)])
+    expect([...got.tokenLine]).toEqual([0, 0, 0, 0, 0, -1])
+    expect([...got.rests]).toEqual([0, 0, 0, 0, 0, 1])
+    expect([...lineCheckOf(ours, [...words(['the', 'robustness', 'of', 'mod'], 1, 72, 700), tok('', 1, 73, 688, 20)]).rests]).toEqual([0, 0, 0, 0, 0, 0])
+    expect([...lineCheckOf(ours, words(['the', 'robustness', 'of', 'mod'], 1, 72, 700)).rests]).toEqual([0, 0, 0, 0, 0, 0])
+  })
+
+  it('a page past its work is listed, none of its lines in place nor its rests', () => {
+    const many = Array.from({ length: 8000 }, (_, i) => tok('x', 1, 72, 790 - i * 0.09, 3, 0.1))
+    const other = words(['attention', 'is', 'all', 'you', 'need'], 2, 72, 700)
+    const got = lineCheckOf([...many, tok('', 1, 300, 300, 4), ...other], [...many, tok('', 1, 300, 300, 4), ...other])
+    expect(got.over).toEqual([1])
+    expect(got.inPlace.slice(0, 8000).every(v => v === 0)).toBe(true)
+    expect(got.inPlace[8000]).toBe(1)
+    expect(got.rests[8000]).toBe(0)
   })
 })
 
@@ -316,6 +386,11 @@ function sameCarry(marked: DocToken[], arxiv: DocToken[]) {
   expect(paged.lines).toEqual(whole.lines)
   expect(paged.over).toEqual(whole.over)
   expect([...paged.pageLines]).toEqual([...whole.pageLines])
+  // (each line's partner and verdict, each token's line, each rest's verdict)
+  expect(paged.lineAt).toEqual(whole.lineAt)
+  expect(paged.inPlace).toEqual(whole.inPlace)
+  expect(paged.tokenLine).toEqual(whole.tokenLine)
+  expect([...paged.rests]).toEqual([...whole.rests])
   return whole.pageLines.size
 }
 

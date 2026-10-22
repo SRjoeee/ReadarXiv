@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, MIXED_FILL, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, PH_KINDS, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
-import { CARRY_MIN, fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
+import { fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -362,7 +362,9 @@ describe('makeLayout', () => {
     expect(both.stats.ph).toMatchObject({ found: 2, twice: 0, unmatched: 0, owned: 2, matched: 2 })
     // the base page holds one X: the first piece's; the second is LOST, never found on the first's glyph (no search: each
     // owned glyph at its own place, ownedOn)
-    const one = await made({ ...w, marked: [{ runs: ours }], base: [{ runs: [{ s: 'say X now and later', x: 72, y: 700 }] }] })
+    // (arXiv's page the base page's: its line in place)
+    const base = [{ runs: [{ s: 'say X now and later', x: 72, y: 700 }] }]
+    const one = await made({ ...w, pages: base, marked: [{ runs: ours }], base })
     expect(phOf(one.file, 0, 1).slice(5, 8)).toEqual([at(4), 700, at(5)])
     expect(phOf(one.file, 0, 2)).toEqual([0, 2, 0, PH_FLAG.LOST])
     expect(one.stats.ph.why).toEqual({ 'a glyph of its own not on the base page': 1 })
@@ -472,23 +474,62 @@ describe('makeLayout', () => {
     expect(file.units.map(u => (u[3] ?? 0) & UNIT_FLAG.CENTRED)).toEqual([UNIT_FLAG.CENTRED, 0, 0, 0])
   })
 
-  it('below CARRY_MIN the paper is refused, with the stats', async () => {
+  it('a unit is laid only where every line it owns is in place on arXiv\'s PDF; none laid, the paper is refused, with the stats', async () => {
+    // two paragraphs of five lines; arXiv's sets the second's fourth line otherwise
     const lines = Array.from({ length: 10 }, (_, j): Run => ({ s: words(10 * j, 10), x: 72, y: 700 - 12 * j }))
-    // two of the marked original's ten lines are set otherwise on arXiv's
-    const theirs = lines.map((r, j) => (j >= 8 ? { ...r, s: words(500 + 10 * j, 10) } : r))
-    const w: World = { pages: [{ runs: theirs }], marked: [{ runs: lines }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(lines[9] as Run), 592]], units: [unit('para', [text(words(0, 100))])] }
-    const out = await make(w)
-    expect(out).toMatchObject({ refused: 'carry', stats: { lines: { carried: 8, total: 10 } } })
-    expect(CARRY_MIN).toBe(0.9)
-    // nine of ten: a file
-    const nine = await make({ ...w, pages: [{ runs: lines.map((r, j) => (j === 9 ? theirs[9] as Run : r)) }] })
-    expect('file' in nine).toBe(true)
-    // for parts, the share is each part's (the cut's verdict): a file whatever share is carried, each marked page's lines told
-    const marks = await marksOf(w)
-    const cut = await makeLayout({ units: w.units, marks, arxiv: baseOf(w), lineCheck: await lineCheckOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', parts: true })
-    if (!('file' in cut)) throw new Error('refused')
-    expect(cut.lines && [...cut.lines]).toEqual([[1, [8, 10]]])
-    expect(cut.stats.lines).toMatchObject({ carried: 8, total: 10 })
+    const theirs = lines.map((r, j) => (j === 8 ? { ...r, s: words(500 + 10 * j, 10) } : r))
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, endOf(lines[4] as Run), 652], ['1s', 1, 72, 640], ['1e', 1, endOf(lines[9] as Run), 592]]
+    const w: World = { pages: [{ runs: theirs }], marked: [{ runs: lines }], marks, units: [unit('para', [text(words(0, 50))]), unit('para', [text(words(50, 50))])] }
+    const { file, stats } = await made(w)
+    expect(file.units.map(u => u[0])).toEqual([0])
+    expect(stats.units).toMatchObject({ located: 1, unverified: 1 })
+    expect(stats.lines).toMatchObject({ carried: 9, total: 10 })
+    // a line 0.6 pt off (a TeX Live re-setting it), or onto the next page: the same
+    const off = await make({ ...w, pages: [{ runs: lines.map((r, j) => (j === 8 ? { ...r, y: r.y - 0.6 } : r)) }] })
+    if (!('file' in off)) throw new Error('refused')
+    expect(off.file.units.map(u => u[0])).toEqual([0])
+    // 0.4 pt off: in place, both laid
+    const near = await make({ ...w, pages: [{ runs: lines.map((r, j) => (j === 8 ? { ...r, y: r.y - 0.4 } : r)) }] })
+    if (!('file' in near)) throw new Error('refused')
+    expect(near.file.units.map(u => u[0])).toEqual([0, 1])
+    expect(near.stats.units.unverified).toBe(0)
+    // every line otherwise: no unit laid, the file refused ('carry'), the stats told; for parts too
+    const none = { ...w, pages: [{ runs: lines.map((r, j) => ({ ...r, s: words(500 + 10 * j, 10) })) }] }
+    expect(await make(none)).toMatchObject({ refused: 'carry', stats: { units: { located: 0, unverified: 2 }, lines: { carried: 0, total: 10 } } })
+    const cut = await makeLayout({ units: w.units, marks: await marksOf(none), arxiv: baseOf(none), lineCheck: await lineCheckOf(none), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', parts: true })
+    expect(cut).toMatchObject({ refused: 'carry' })
+    // with no line check, every unit placed is laid
+    const unchecked = await makeLayout({ units: w.units, marks: await marksOf(w), arxiv: baseOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+    if (!('file' in unchecked)) throw new Error('refused')
+    expect(unchecked.file.units.map(u => u[0])).toEqual([0, 1])
+    // a unit of no row the check reads (no token of it on a line, no rest of a word): not in place, counted
+    const check = await lineCheckOf(w)
+    const unread = await makeLayout({ units: w.units, marks: await marksOf(w), arxiv: baseOf(w), lineCheck: { ...check, tokenLine: new Int32Array(check.tokenLine.length).fill(-1) }, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
+    expect(unread).toMatchObject({ refused: 'carry', stats: { units: { located: 0, unverified: 2, unread: 2 } } })
+    // a line check of other tokens than the base page's is refused
+    await expect(makeLayout({ units: w.units, marks: await marksOf(w), arxiv: baseOf(w), lineCheck: { ...(await lineCheckOf(w)), tokenLine: new Int32Array(3) }, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })).rejects.toThrow(TypeError)
+  })
+
+  it('a unit over two pages is laid only where its lines on both are in place; a row holding only the rest of a word is read by that rest', async () => {
+    const p1 = Array.from({ length: 3 }, (_, j): Run => ({ s: words(10 * j, 10), x: 72, y: 100 - 12 * j }))
+    const p2 = Array.from({ length: 3 }, (_, j): Run => ({ s: words(30 + 10 * j, 10), x: 72, y: 700 - 12 * j }))
+    const marks: Mark[] = [['0s', 1, 72, 100], ['0e', 2, endOf(p2[2] as Run), 676]]
+    const units = [unit('para', [text(words(0, 60))])]
+    const w: World = { pages: [{ runs: p1 }, { runs: p2 }], marked: [{ runs: p1 }, { runs: p2 }], marks, units }
+    expect((await made(w)).file.units.map(u => u[0])).toEqual([0])
+    // its last line, on page 2, 1 pt off on arXiv's: not laid
+    const moved = await make({ ...w, pages: [{ runs: p1 }, { runs: p2.map((r, j) => (j === 2 ? { ...r, y: r.y - 1 } : r)) }] })
+    expect(moved).toMatchObject({ refused: 'carry', stats: { units: { unverified: 1 } } })
+    // 1810.04805's "… of text generation mod-" / "els.": the last row holds the rest alone, read by its place
+    const runs: Run[] = [{ s: 'the robustness of text generation mod-', x: 72, y: 700, eol: true }, { s: 'els.', x: 72, y: 688 }]
+    const rest: World = { pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 688]], units: [unit('para', [text('the robustness of text generation models.')])] }
+    expect((await made(rest)).file.units.map(u => u[0])).toEqual([0])
+    const check = await lineCheckOf(rest)
+    expect([...check.tokenLine].filter(l => l < 0)).toHaveLength(1)
+    expect([...check.rests].filter(r => r === 1)).toHaveLength(1)
+    // arXiv's rest 1 pt lower (its first line in place): not laid
+    const low = await make({ ...rest, marked: [{ runs }], pages: [{ runs: [runs[0] as Run, { ...(runs[1] as Run), y: 687 }] }] })
+    expect(low).toMatchObject({ refused: 'carry', stats: { units: { unverified: 1 } } })
   })
 
   it("arXiv's page count out of bounds is refused before anything is read", async () => {
@@ -655,7 +696,7 @@ describe('makeLayout', () => {
     expect(chunk(rowsOf(file, 0, 'erase'), 5).some(e => (e[1] as number) <= 89.35 && (e[3] as number) >= 94.35)).toBe(true)
   })
 
-  it('a unit set otherwise on arXiv\'s is placed on our base page, the line check counting its line not found there', async () => {
+  it('a unit set otherwise on arXiv\'s is not laid, its line not in place there; the unit in place is', async () => {
     const body = Array.from({ length: 10 }, (_, j): Run => ({ s: words(10 * j, 10), x: 72, y: 600 - 12 * j }))
     const ours: Run = { s: 'alpha beta gamma delta', x: 72, y: 700 }
     // set otherwise on arXiv's: its words over two lines (no carrying: its own marks are where it stands on our page)
@@ -665,8 +706,8 @@ describe('makeLayout', () => {
       marks: [['0s', 1, 72, 700], ['0e', 1, endOf(ours), 700], ['1s', 1, 72, 600], ['1e', 1, endOf(body[9] as Run), 492]],
       units: [unit('para', [text('alpha beta gamma delta')]), unit('para', [text(words(0, 100))])],
     })
-    expect(file.units.map(u => u[0])).toEqual([0, 1])
-    expect(rowsOf(file, 0, 'lines').slice(0, 4)).toEqual([1, 72, endOf(ours), 700])
+    expect(file.units.map(u => u[0])).toEqual([1])
+    expect(stats.units).toMatchObject({ located: 1, unverified: 1 })
     expect(stats.lines).toEqual({ carried: 10, total: 11, held: 0 })
   })
 

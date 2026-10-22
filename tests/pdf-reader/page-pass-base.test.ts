@@ -64,14 +64,13 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
     }
   })
 
-  it('each failing reason its own code: a mark printed as text, a final pass not checked, other boxes, other page counts, too few lines on arXiv\'s', async () => {
+  it('each failing reason its own code: a mark printed as text, a final pass not checked, other boxes, other page counts', async () => {
     const w = worldOf()
     const shown = { ...w, marked: (w.marked as Page[]).map((p, i) => (i === 1 ? { runs: [...p.runs, { s: '\\axt@pma{p1.0a}', x: 72, y: 100 }] } : p)) }
     const cases: [string, World, Record<string, unknown>, RegExp][] = [
       ['marks', shown, { ours: oursOf(shown) }, /mark of ours stands as text on page 2/],
       ['final', w, { ours: oursOf(w, { check: null }) }, /not checked against the draft/],
       ['boxes', worldOf(() => false, { oursView: [0, 0, 595.28, 841.89] }), {}, /page 1's box/],
-      ['carry', worldOf((p, j) => j < 3 || p === 2), {}, /^14 of the 30 lines .* in place on arXiv's PDF, under 90 %$/],
     ]
     for (const [code, world, o, why] of cases) {
       const got = await passOf(world, { orig: ORIG, ours: oursOf(world), ...o })
@@ -89,14 +88,28 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
     expect(noTree.head.base).toMatchObject({ source: 'arxiv', why: 'final' })
   })
 
-  it('a base of ours whose lines are all found but not in place (another TeX Live re-breaking the paper) falls back, `carry`', async () => {
+  it('a base of ours re-broken from page 2 on (another TeX Live): the unit in place laid, the others left the original\'s; none in place, it falls back, `carry`', async () => {
     // (every line of arXiv's pages 2 and 3 a line lower than ours: found, moved whole, 12 pt off; page 1 in place, 10 of 30)
     const w = worldOf()
     const lower = { ...w, pages: (w.pages as Page[]).map((p, i) => (i === 0 ? p : { runs: p.runs.map(r => ({ ...r, y: r.y - 12 })) })) }
-    const got = await passOf(lower, { orig: ORIG, ours: oursOf(lower) })
-    expect(got.head.base).toMatchObject({ source: 'arxiv', why: 'carry' })
-    expect(got.parts[0]?.noLayout?.why).toBe('10 of the 30 lines of its pages in place on arXiv\'s PDF, under 90 %')
-    expect(got.r).toMatchObject({ stats: { layout: { refused: 'carry', why: '10 of our 30 lines in place on arXiv\'s PDF (within 0.5 pt on their page), under 90 %' } } })
+    const units = (got: Awaited<ReturnType<typeof passOf>>) => got.parts.map(p => p.layout?.units.map(u => u[0]) ?? null)
+    for (const whole of [false, true]) {
+      const got = await passOf(lower, { orig: ORIG, ours: oursOf(lower), whole })
+      expect(got.head.base, String(whole)).toMatchObject({ source: 'ours', check: { carried: 0.3333 } })
+      expect(units(got)).toEqual([[0], []])
+      expect(got.notes.map(n => (n as { lines: unknown }).lines)).toEqual([[10, 10], [0, 20]])
+      expect(got.r).toMatchObject({ stats: { layout: { stats: { units: { located: 1, unverified: 2 } } } } })
+    }
+    // (every page a line lower: no unit laid, arXiv's PDF the base, every part with no layout, in the stream as made whole)
+    const all = { ...w, pages: (w.pages as Page[]).map(p => ({ runs: p.runs.map(r => ({ ...r, y: r.y - 12 })) })) }
+    const why = '0 of the 3 units verified in place on arXiv\'s PDF'
+    for (const whole of [false, true]) {
+      const got = await passOf(all, { orig: ORIG, ours: oursOf(all), whole })
+      expect(got.head.base, String(whole)).toEqual({ source: 'arxiv', ...ORIG, why: 'carry' })
+      expect(got.head.orig).toBeNull()
+      expect(got.parts.map(p => p.noLayout)).toEqual([{ refused: 'carry', why }, { refused: 'carry', why }])
+      expect(got.r).toMatchObject({ stats: { layout: { refused: 'carry', stats: { units: { located: 0, unverified: 3 } } } } })
+    }
     // (half a point off is still in place)
     const near = { ...w, pages: (w.pages as Page[]).map(p => ({ runs: p.runs.map(r => ({ ...r, y: r.y - 0.4 })) })) }
     expect((await passOf(near, { orig: ORIG, ours: oursOf(near) })).head.base).toMatchObject({ source: 'ours', check: { carried: 1 } })
@@ -127,12 +140,13 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
     expect(got.parts[0]?.noLayout).toEqual({ refused: 'texlive', why: 'the paper declares TeX Live 2023' })
   })
 
-  it('a part whose lines are under 90 % on arXiv\'s is refused alone, its share our base page\'s lines\'', async () => {
-    // (page 1: 2 of its 10 lines set otherwise on arXiv's page, 28 of 30 for the paper)
+  it('a unit with a line not in place on arXiv\'s is left the original\'s alone: every part keeps its layout, its note its lines in place', async () => {
+    // (page 1: 2 of its 10 lines set otherwise on arXiv's page, 28 of 30 for the paper, the head's share information alone)
     const w = worldOf((p, j) => p === 1 && j < 2)
     const got = await passOf(w, { orig: ORIG, ours: oursOf(w) })
     expect(got.head.base).toMatchObject({ source: 'ours', check: { carried: 0.9333 } })
-    expect(got.parts.map(p => p.noLayout?.refused ?? 'kept')).toEqual(['carry', 'kept'])
+    expect(got.parts.map(p => p.noLayout?.refused ?? 'kept')).toEqual(['kept', 'kept'])
+    expect(got.parts.map(p => p.layout?.units.map(u => u[0]))).toEqual([[], [1, 2]])
     expect(got.notes.map(n => (n as { lines: unknown }).lines)).toEqual([[8, 10], [20, 20]])
   })
 
