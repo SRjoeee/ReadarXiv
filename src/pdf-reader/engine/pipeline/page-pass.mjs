@@ -16,7 +16,7 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path.
 import { BundleRefusal } from '../layer-proto/bundle.mjs'
 import { PART_PAGES_MAX, partCutter, wholeCutter, wholeFrontier } from '../layer-proto/cut.mjs'
-import { groupsOfUnits, indexOf, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
+import { groupsOfUnits, indexOf, layerDraws, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
 import { needBound } from '../layer-proto/need.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
@@ -389,7 +389,7 @@ async function cutWhole(ctx, r) {
   const hooks = layout && remove ? chainedAddon({ N, views: side.pages, base: { bytes: tail.bytes, xref: tail.xref }, planOf: p => plans?.get(p) ?? null, pdfjs, remove }) : null
   const state = { index: null, chain: null, read: null }
   const whole = { paper: { ...paper, pages: N }, base, orig, versions: { image }, units: bundle, left: { pages: side.pages, units: side.units }, layout }
-  const { units: chunks, head, cutter, known } = await wholeCutter(whole, { draw: ctx.maker?.draw === true, leftPages: drawn(side.leftPages, ctx.maker), base, orig, image, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null, recordOf: layoutRecordOf, ...(layout ? {} : { noLayout: layoutRecordOf(ctx.made) }) })
+  const { units: chunks, head, cutter, known } = await wholeCutter(whole, { draw: drawsOurs(base, ctx.maker), leftPages: drawsOurs(base, ctx.maker) ? drawn(side.leftPages, ctx.maker) : side.leftPages, base, orig, image, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null, recordOf: layoutRecordOf, ...(layout ? {} : { noLayout: layoutRecordOf(ctx.made) }) })
   if (ctx.verdicts) state.index = await indexOfHead(head, chunks)
   if (ctx.onHead) await ctx.onHead(head, chunks)
   for (;;) {
@@ -401,6 +401,9 @@ async function cutWhole(ctx, r) {
   return { through: N, count: cutter.parts.length, stats: { left: side.stats, layout: ctx.made, plans: plans ? { pages: plans.size, dirty: [...plans.values()].filter(p => p.remove).length } : null, addon: hooks ? hooks.state() : null, ...(ctx.maker ? { draw: { ...ctx.maker.drawStats, shed: ctx.drawShed ?? 0 } } : {}), ...(ctx.several ? { toplevels: ctx.several } : {}) } }
 }
 
+/** whether the left parts carry the maker's draws: they are our base page's, so only under a head whose base is ours (format.mjs
+ *  layerDraws); a fallback's head is over arXiv's PDF, whose draws a reader reads itself, as for a bundle of before, and says none */
+const drawsOurs = (base, maker) => maker?.draw === true && layerDraws(base)
 /** the left's page input with the maker's draw geometry for the page (E-C), taken once as the left part is written; a page with no tokens
  *  has no left part input of its own, and ships its draw all the same (C1.5: a page read and empty has a draw) */
 const drawn = (leftPages, maker) => (maker ? async p => {
@@ -436,10 +439,10 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   const lines = ctx.lines ?? (maker ? maker.pageLines() : new Map())
   const units = await writeUnitChunks({ paper, units: bundle })
   const { base, orig, tail } = headBaseOf(ctx, !!st)
-  const head = await writeHead({ paper: { ...paper, pages: N }, base, orig, image, units, lineskip, draw: maker?.draw === true })
+  const head = await writeHead({ paper: { ...paper, pages: N }, base, orig, image, units, lineskip, draw: drawsOurs(base, maker) })
   const hooks = remove && st ? chainedAddon({ N, views: left.pages, base: { bytes: tail.bytes, xref: tail.xref }, planOf: p => st.plans?.get(p) ?? null, pdfjs, remove }) : null
   const state = { index: ctx.verdicts ? await indexOfHead(head, units) : null, chain: null, read: null }
-  const cutter = partCutter({ paper, N, head, views: left.pages, leftPages: drawn(left.leftPages, maker), addon: null, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null, retain: false, recordOf: layoutRecordOf })
+  const cutter = partCutter({ paper, N, head, views: left.pages, leftPages: drawsOurs(base, maker) ? drawn(left.leftPages, maker) : left.leftPages, addon: null, ...(hooks ? { chainAddon: hooks.chainAddon, acceptAddon: hooks.acceptAddon } : {}), verdict: ctx.verdicts ? verdictOf(state, lines, N) : null, retain: false, recordOf: layoutRecordOf })
   let headTold = false
   const tellHead = async () => {
     if (headTold) return true
