@@ -16,9 +16,15 @@
 //    whole copy first, else our copy by ranges, else read whole and checked against the base's digest), so that both panes
 //    and the layer are of one document; none to be had is no layer, the original staying. Ends alike, the proof still comes:
 //    arXiv's bytes then other show our copy on the left and lay the pages again.
+//    A layer over our own compile (the layer route, design §3.2: the head's base says `ours`) has no such proof to make: our base
+//    page is not arXiv's bytes by design, and the box that made it has already proved that its pages, their boxes and the lines
+//    it carries are arXiv's (the head's `check`). The run takes that check instead (bindOurs): the left stays the tab's own PDF,
+//    the layer's document is our base page by ranges. A head over arXiv's PDF that says why our compile was refused (its fallback)
+//    is no layer: the original staying.
 // 5. The composed document: the left's bytes followed by the tails told, opened by PDF.js with the side's options; or, where
 //    the ends decided, our copy by ranges, every answer held to the base's length and our server's tag (ranges.ts openRanged),
-//    which is the layer's document whatever arXiv's bytes are.
+//    which is the layer's document whatever arXiv's bytes are; or, for a base of ours, that base page by ranges, held to its
+//    length and to the tag of the first answer (its address is the digest of its bytes).
 // 6. The rows: runRows over the index (the engine's one translation run without compiles), the units nearest the reading place
 //    first (the page in view's closure, from the side's rowsFor), each batch's rows taken as they come, then the end. A retry
 //    is again(), every row held taken again at once, and the run again: the background's cache answers what was translated.
@@ -32,8 +38,8 @@ import { TARGETS } from '../engine/rules.mjs'
 import { createLayerSide, type DocumentTask, type LayerSide, type LayerSideOptions, type ReaderView } from '../engine/view.mjs'
 import { servedFaces } from './faces'
 import type { Unavailable } from './events'
-import { type Bound, boundFrom, endsAlike, openRanged, type RangedPdfJs } from './ranges'
-import { askPrepare, fetchObject, fetchOriginal, LayerUnreachable, lookLayer, originalPath, type Paper, paperSegment, sha256Of } from './server'
+import { type Bound, boundFrom, endsAlike, lengthBound, openRanged, type RangedPdfJs } from './ranges'
+import { askPrepare, basePath, fetchObject, fetchOriginal, LayerUnreachable, lookLayer, originalPath, type Paper, paperSegment, sha256Of } from './server'
 
 /** what the run tells the reader's controller */
 export type RunEvent =
@@ -52,7 +58,8 @@ export type RunEvent =
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
   /** the service cannot translate: its error kind */
   | { type: 'fail'; kind: ProviderErrorKind }
-  /** the original shown is our copy, arXiv's bytes not being the layer's */
+  /** the original shown is our copy, arXiv's bytes not being the layer's (never told for a layer over our base page: the left
+   *  is the tab's own PDF there, and `ours` keeps this meaning) */
   | { type: 'original'; ours: boolean }
 
 /** the service the run translates with, as translate.mjs openEngine gives it */
@@ -173,16 +180,17 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   // ---------------------------------------------------------------- the side's transport
   /** the original the layer's answers name it bound to (server.ts boundOf): the catalog's, else the first object's */
   let tag: string | null = null
-  /** what the composed document is read over: the left's bytes (arXiv's, proven the base, or our copy shown there), or our
-   *  copy by ranges, held to the base's length and `tag` (ranges.ts) */
-  let basis: { kind: 'left' } | { kind: 'ranged'; bound: Bound } = { kind: 'left' }
+  /** what the composed document is read over: the left's bytes (arXiv's, proven the base, or our copy shown there), or a copy
+   *  by ranges at `url` (our copy of arXiv's PDF, held to the base's length and `tag`; or, for a layer over our own compile,
+   *  our base page, held to its length and the first answer's tag: ranges.ts) */
+  let basis: { kind: 'left' } | { kind: 'ranged'; bound: Bound; url: string } = { kind: 'left' }
   const ourUrl = () => originalPath(host.api, paper)
-  /** a document over our copy by ranges: the composed one (a range that fails twice leaves its page the original's, the
-   *  side's stall), or the left's (`left`: read for as long as it is shown) */
-  const ranged = (bound: Bound, tail: Uint8Array | null, o: Readonly<Record<string, unknown>>, left = false) =>
+  /** a document over a copy by ranges (our copy of arXiv's PDF unless `url` says another): the composed one (a range that
+   *  fails twice leaves its page the original's, the side's stall), or the left's (`left`: read for as long as it is shown) */
+  const ranged = (bound: Bound, tail: Uint8Array | null, o: Readonly<Record<string, unknown>>, left = false, url = ourUrl()) =>
     // (the left's lives as long as the run, through its retries: its document stays shown, and the view lets it go; a
     // composed one, the beginning's)
-    openRanged(host.pdfjs as RangedPdfJs, ourUrl(), { bound, tail, options: o, fetch: f, signal: left ? ac.signal : begun.signal, keepReading: left, refused: e => console.warn('[reader]', e.message) })
+    openRanged(host.pdfjs as RangedPdfJs, url, { bound, tail, options: o, fetch: f, signal: left ? ac.signal : begun.signal, keepReading: left, refused: e => console.warn('[reader]', e.message) })
   /** the left's bytes, once they are all in as its document loads them of itself (originalData's own read would ask arXiv
    *  for every byte its stream is still bringing: the rest of the file twice), the base or not */
   const proof = async (base: { bytes: number; sha256: string }): Promise<'same' | 'other'> => {
@@ -209,9 +217,33 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     const bytes = copy
     const shown = await view.showOriginal(o => (bytes ? host.openPdf(bytes.slice(), o) : ranged(bound as Bound, null, { ...o, disableAutoFetch: true }, true)))
     if (shown !== 'opened' || disposed) return false
-    basis = bytes ? { kind: 'left' } : { kind: 'ranged', bound: bound as Bound }
+    basis = bytes ? { kind: 'left' } : { kind: 'ranged', bound: bound as Bound, url: ourUrl() }
     ours = true
     emit({ type: 'original', ours: true })
+    return true
+  }
+  /**
+   * The base of a layer over our own compile (the head's `base.source` `ours`: the layer route, design §3.2). The box proved it
+   * before the head was committed: our base page has arXiv's page count and every page's box, and carries the lines it was
+   * checked on; the head names that check (`check`). The run takes it for what it says and compares nothing of arXiv's (our bytes
+   * are not arXiv's by design: no ends, no proof), so the layer is drawn over our base page read by ranges at its digest's address,
+   * every answer held to its length and the first one's tag, while the left stays the tab's own PDF, whose pages and boxes are
+   * the places the layer is laid in. A check that does not say pages and boxes alike, a digest or a length no address is made of,
+   * or no PDF.js to read a base by ranges: no layer, the original staying
+   */
+  function bindOurs(base: { bytes: number; sha256: string; check?: unknown }): boolean {
+    const check = base.check as { pages?: unknown; boxes?: unknown } | null | undefined
+    const pages = check?.pages
+    const proved = typeof check === 'object' && check !== null && check.boxes === 'equal' && Array.isArray(pages) && pages.length === 2 && Number.isSafeInteger(pages[0]) && pages[0] === pages[1]
+    const bound = lengthBound(base.bytes)
+    if (!proved || !bound || !host.pdfjs) return false
+    let url: string
+    try {
+      url = basePath(host.api, paper, base.sha256)
+    } catch {
+      return false
+    }
+    basis = { kind: 'ranged', bound, url }
     return true
   }
   const options = (): Pick<LayerSideOptions, 'fetchObject' | 'bind' | 'composed'> => ({
@@ -238,6 +270,11 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
      * our server out of reach): the proof alone, as before
      */
     async bind(base) {
+      // a layer over our own compile: the head's check is the proof, nothing of arXiv's is compared (bindOurs); a layer over
+      // arXiv's PDF that says why our compile was refused (its fallback) is none: the original staying
+      const head = base as typeof base & { source?: unknown; why?: unknown; check?: unknown }
+      if (head.source === 'ours') return bindOurs(head)
+      if (head.source === 'arxiv' && typeof head.why === 'string' && head.why !== '') return false
       const bound = host.pdfjs && host.originalUrl ? boundFrom(base.bytes, tag) : null
       // a side made again over our copy shown on the left already: by ranges, it is the base where it is bound alike; whole,
       // the proof alone (the left's bytes are in)
@@ -259,7 +296,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       const proved = 'proof' in first ? first.proof : first.ends === null ? await proven : null
       if (proved === 'same') { basis = { kind: 'left' }; return true }
       if ('ends' in first && first.ends === 'alike') {
-        basis = { kind: 'ranged', bound }
+        basis = { kind: 'ranged', bound, url: ourUrl() }
         const my = gen
         void proven.then(v => {
           // (a run begun again meanwhile checks its own base)
@@ -272,7 +309,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       return showOurs(base, bound)
     },
     composed(tail, o) {
-      if (basis.kind === 'ranged') return ranged(basis.bound, tail, o)
+      if (basis.kind === 'ranged') return ranged(basis.bound, tail, o, false, basis.url)
       let inner: DocumentTask | null = null, gone = false
       const promise = (async () => {
         const source = await view.originalData()

@@ -3,7 +3,7 @@
 // bounds and by its status's shape, only the paper's id and version leaving the machine
 import { describe, expect, it, vi } from 'vitest'
 import { CATALOG_CAP, CTAG5, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { askPrepare, bodyWithin, fetchObject, fetchOriginal, LayerUnreachable, layerPath, lookLayer, OBJECT_MARGIN, paperSegment, REQUEST_MS, RETRY_MS, sha256Of } from '@/pdf-reader/session/server'
+import { askPrepare, basePath, bodyWithin, fetchObject, fetchOriginal, LayerUnreachable, layerPath, lookLayer, OBJECT_MARGIN, paperSegment, REQUEST_MS, RETRY_MS, sha256Of } from '@/pdf-reader/session/server'
 import { made, N, PAPER } from './helpers/format-paper'
 
 const API = 'https://readarxiv.com'
@@ -49,6 +49,14 @@ describe('B2: only the paper\'s id and version leave the machine', () => {
     expect(calls.filter(c => c.init.body !== undefined).map(c => [c.init.method, c.init.body, c.init.headers])).toEqual([['POST', '{}', { 'content-type': 'application/json' }]])
     expect(calls.filter(c => c.init.method !== 'POST').every(c => c.init.headers === undefined)).toBe(true)
     expect(m.index.units.length).toBeGreaterThan(0)
+  })
+
+  it('our base page (the layer route, design §3.2): the paper version as one segment, then the digest that names its bytes; no address is made of a digest that is not one', () => {
+    const sha = 'a1b2c3d4'.repeat(8)
+    expect(basePath(API, PAPER, sha)).toBe(`${API}/api/v1/base/${PAPER.id}v${PAPER.version}/${sha}`)
+    expect(basePath(API, { id: 'hep-th/9711200', version: 2 }, sha)).toBe(`${API}/api/v1/base/hep-th_9711200v2/${sha}`)
+    for (const bad of ['', sha.slice(1), `${sha}0`, sha.toUpperCase(), '../x', `${sha.slice(2)}/x`]) expect(() => basePath(API, PAPER, bad), bad).toThrow(TypeError)
+    expect(() => basePath(API, { id: '../x', version: 1 }, sha)).toThrow(TypeError)
   })
 
   it('a paper version of either style as one segment; anything else no request', () => {

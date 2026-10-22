@@ -33,7 +33,7 @@ function ranges(file: Uint8Array, init: RequestInit, tag: string) {
   const begin = Number(m[1]), end = Math.min(Number(m[2]) + 1, file.length)
   return new Response(file.slice(begin, end) as BodyInit, { status: 206, headers: { 'content-range': `bytes ${begin}-${end - 1}/${file.length}`, etag: tag } })
 }
-function server(looks: (() => Response)[], o: { prepare?: () => Response; original?: Uint8Array; objects?: Map<string, Uint8Array>; tag?: string; arxiv?: Uint8Array | 'whole' } = {}) {
+function server(looks: (() => Response)[], o: { prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; tag?: string; arxiv?: Uint8Array | 'whole' } = {}) {
   const calls: { url: string; init: RequestInit }[] = []
   let i = 0
   const f = vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -41,6 +41,8 @@ function server(looks: (() => Response)[], o: { prepare?: () => Response; origin
     if (url === ARXIV) return o.arxiv === 'whole' || !o.arxiv ? new Response((o.arxiv === 'whole' ? o.original : null) as BodyInit) : ranges(o.arxiv, init, '"sha256:arxiv-s"')
     if (url.endsWith('/prepare')) return (o.prepare ?? (() => json(202, { position: 1, stage: null, progress: 0, retryAfterMs: 0 })))()
     if (url.includes('/o/')) { const b = o.objects?.get(url.slice(-64)); return b ? new Response(b as BodyInit, { headers: o.tag ? { 'x-axt-base-etag': o.tag } : {} }) : new Response('', { status: 404 }) }
+    // our base page (the layer route): by ranges, its own tag (the run is bound to its length alone)
+    if (url.includes('/api/v1/base/')) return o.base ? ranges(o.base, init, '"base-tag"') : new Response('', { status: 404 })
     if (url.includes('/original/')) return o.original ? (o.tag ? ranges(o.original, init, o.tag) : new Response(o.original as BodyInit)) : new Response('', { status: 404 })
     return (looks[Math.min(i++, looks.length - 1)] as () => Response)()
   })
@@ -78,7 +80,7 @@ function pdfjs() {
   const getDocument = vi.fn((p: Record<string, unknown>) => { docs.push(p); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } })
   return { lib: { getDocument, PDFDataRangeTransport } as never, docs }
 }
-function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
+function run(o: { looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
   const s = server(o.looks, o), side = fakeSide(), v = o.view ?? view(), events: RunEvent[] = []
   const engine = o.engine ?? echo()
   const opened: Uint8Array[] = []
@@ -426,6 +428,96 @@ describe('the bind: arXiv\'s whole file not waited for (DESIGN §16)', () => {
     const a = run({ looks: [tagged], objects: new Map([['c'.repeat(64), part]]), tag: '"another"' })
     await settle()
     await expect(a.side.options().fetchObject({ kind: 'part', sha256: 'c'.repeat(64), bytes: 10 }, new AbortController().signal)).rejects.toThrow(/bound to the original/)
+  })
+})
+
+describe('the layer over our base page (the layer route, design §3.2): the head says `ours` and carries the check the box proved', () => {
+  /** our base page: other bytes than arXiv's, which the left shows (the tab's own PDF) */
+  const ours = Uint8Array.from({ length: 300 }, (_, i) => (i * 3) % 251)
+  const tab = Uint8Array.from({ length: 320 }, (_, i) => (i * 5) % 251)
+  const check = { pages: [N, N], boxes: 'equal', carried: 0.99 }
+  const never = new Promise<void>(() => {})
+  /** the head's base as the side hands it to bind: `ours`, with the page-and-line check the box passed */
+  const head = async (over: Record<string, unknown> = {}) => ({ source: 'ours', bytes: ours.length, sha256: await sha256Of(ours), xref: 250, pages: N, tree: '2025', check, ...over })
+  const baseAt = async () => `${API}/api/v1/base/${SEG}/${await sha256Of(ours)}`
+  const asked = (a: { s: { calls: { url: string; init: RequestInit }[] } }, url: string) => a.s.calls.filter(c => c.url === url).map(c => (c.init.headers as Record<string, string> | undefined)?.range ?? null)
+  const bindOf = (a: ReturnType<typeof run>) => a.side.options().bind as unknown as (b: unknown) => Promise<boolean>
+
+  it('binds on the head\'s check alone: arXiv\'s tab is not compared (no range of arXiv\'s, none of our copy of it, none of the left\'s bytes read or hashed), and the left stays the tab\'s own', async () => {
+    const a = run({ looks: [() => new Response(catalog)], view: view(tab, never), base: ours, ranged: true })
+    await settle()
+    expect(await bindOf(a)(await head())).toBe(true)
+    expect(a.s.calls.filter(c => c.url === ARXIV || c.url.includes('/original/'))).toEqual([])
+    expect(a.v.originalLoaded).not.toHaveBeenCalled()
+    expect(a.v.originalData).not.toHaveBeenCalled()
+    expect(a.v.showOriginal).not.toHaveBeenCalled()
+    // the left is the tab's own PDF: the run never says the original shown is our copy
+    expect(a.events.some(e => e.type === 'original')).toBe(false)
+    expect(a.r.probe()).toMatchObject({ basis: 'ranged', ours: false })
+  })
+
+  it('the composed document is our base page by ranges at /api/v1/base/…, held to the base\'s length, the tails after its last byte', async () => {
+    const a = run({ looks: [() => new Response(catalog)], view: view(tab, never), base: ours, ranged: true })
+    await settle()
+    expect(await bindOf(a)(await head())).toBe(true)
+    await a.side.options().composed(new Uint8Array([7, 7]), { x: 1 }).promise
+    const doc = a.docs[0] as { range: { length: number; initialData: Uint8Array }; x: number }
+    expect(doc.range.length).toBe(302)
+    expect([...doc.range.initialData]).toEqual([...ours, 7, 7])
+    expect(doc.x).toBe(1)
+    expect(asked(a, await baseAt())).toEqual(['bytes=0-299'])
+    // no credentials, no referrer: the paper's id and version and the digest in the address, and a range
+    for (const c of a.s.calls) expect([c.init.credentials, c.init.referrerPolicy], c.url).toEqual(['omit', 'no-referrer'])
+    expect(a.opened).toEqual([])
+  })
+
+  it('a check that says otherwise is no layer: boxes that differ, page counts that differ, a check missing or malformed: bound false, the original staying, nothing asked', async () => {
+    for (const [what, over] of [
+      ['boxes differ', { check: { ...check, boxes: 'differ' } }], ['boxes missing', { check: { pages: [N, N], carried: 0.99 } }],
+      ['our pages are not arXiv\'s', { check: { ...check, pages: [N, N + 1] } }], ['pages not a pair', { check: { ...check, pages: [N] } }],
+      ['no check', { check: undefined }], ['a check that is no object', { check: 'equal' }],
+    ] as const) {
+      const a = run({ looks: [() => new Response(catalog)], view: view(tab, never), base: ours, ranged: true })
+      await settle()
+      expect(await bindOf(a)(await head(over)), what).toBe(false)
+      expect(a.s.calls.filter(c => c.url !== `${API}/api/v1/layer/${SEG}/b7-j6.3.289`), what).toEqual([])
+      expect(a.v.showOriginal, what).not.toHaveBeenCalled()
+      expect(a.v.originalData, what).not.toHaveBeenCalled()
+    }
+  })
+
+  it('a base the address cannot be made of, or that cannot be read by ranges, is no layer: a digest that is none, a length that is none, no PDF.js for ranges', async () => {
+    for (const [what, over] of [['a digest that is none', { sha256: 'not-a-digest' }], ['an upper-case digest', { sha256: 'AB'.repeat(32) }], ['no bytes', { bytes: 0 }], ['bytes a fraction', { bytes: 1.5 }]] as const) {
+      const a = run({ looks: [() => new Response(catalog)], view: view(tab, never), base: ours, ranged: true })
+      await settle()
+      expect(await bindOf(a)(await head(over)), what).toBe(false)
+    }
+    const none = run({ looks: [() => new Response(catalog)], view: view(tab, never), base: ours })
+    await settle()
+    expect(await bindOf(none)(await head())).toBe(false)
+  })
+
+  it('a head over arXiv\'s PDF (`arxiv`, or no source: every bundle before the route) is checked exactly as before: the two ends, then the left\'s bytes proven', async () => {
+    const same = Uint8Array.from({ length: 300 }, (_, i) => i % 251)
+    for (const source of [{ source: 'arxiv' }, {}]) {
+      const a = run({ looks: [() => new Response(catalog, { headers: { 'x-axt-base-etag': TAG } })], view: view(same, never), original: same, tag: TAG, arxiv: same.slice(), ranged: true })
+      await settle()
+      expect(await bindOf(a)({ bytes: same.length, sha256: await sha256Of(same), xref: 250, ...source })).toBe(true)
+      expect(asked(a, ARXIV)).toEqual(['bytes=250-299'])
+      expect(asked(a, `${API}/api/v1/original/${SEG}`)).toEqual(['bytes=250-299'])
+      expect(a.r.probe()).toMatchObject({ basis: 'ranged', bound: true })
+    }
+  })
+
+  it('a head over arXiv\'s PDF that says why our compile was refused (the fallback, §3.5) is no layer: nothing asked, the original staying', async () => {
+    const same = Uint8Array.from({ length: 300 }, (_, i) => i % 251)
+    for (const why of ['boxes', 'carry', 'final']) {
+      const a = run({ looks: [() => new Response(catalog, { headers: { 'x-axt-base-etag': TAG } })], view: view(same, never), original: same, tag: TAG, arxiv: same.slice(), ranged: true })
+      await settle()
+      expect(await bindOf(a)({ source: 'arxiv', bytes: same.length, sha256: await sha256Of(same), xref: 250, why }), why).toBe(false)
+      expect(a.s.calls.filter(c => c.url === ARXIV || c.url.includes('/original/')), why).toEqual([])
+      expect(a.v.showOriginal, why).not.toHaveBeenCalled()
+    }
   })
 })
 

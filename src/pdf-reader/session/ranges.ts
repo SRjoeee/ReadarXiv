@@ -29,8 +29,9 @@ export const RANGE_TRIES = 2
 export const RETRY_MS = 1000
 export const RETRY_MAX_MS = 30_000
 
-/** what every answer of the source is held to: the object's length and its entity-tag */
-export interface Bound { total: number; etag: string }
+/** what every answer of the source is held to: the object's length and its entity-tag. A tag not known beforehand (`etag` null:
+ *  a base page of ours, named by the digest of its bytes, whose bound is its length alone) is the first answer's, and held from it */
+export interface Bound { total: number; etag: string | null }
 /** why a source is refused: its answers not the object (`bytes`), the network failing a read twice (`network`), or the
  *  source let go by its owner (`gone`, never told) */
 export type RefusalKind = 'bytes' | 'network' | 'gone'
@@ -62,6 +63,9 @@ export interface RangeSourceOptions {
 /** a bound as a layer gives it: the base's bytes and the entity-tag its route names; null where either is none */
 export const boundFrom = (bytes: unknown, etag: string | null): Bound | null =>
   Number.isSafeInteger(bytes) && (bytes as number) > 0 && etag !== null && STRONG_ETAG.test(etag) ? { total: bytes as number, etag } : null
+/** a bound by the base's length alone, for a base page of ours (no route names its tag: its address is its digest); null where
+ *  the length is none */
+export const lengthBound = (bytes: unknown): Bound | null => (Number.isSafeInteger(bytes) && (bytes as number) > 0 ? { total: bytes as number, etag: null } : null)
 
 const CONTENT_RANGE = /^bytes (\d+)-(\d+)\/(\d+)$/
 const messageOf = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 200)
@@ -74,6 +78,8 @@ const pause = (ms: number, signal: AbortSignal) => new Promise<void>(resolve => 
 /** the object at `url` read by ranges, every answer held to `bound` (see the head of this file) */
 export function rangeSource(url: string, bound: Bound, o: RangeSourceOptions = {}): RangeSource {
   const f = o.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a))
+  /** the tag every answer is held to: the bound's, else the first answer's (a base of ours is bound by its length alone) */
+  let held = bound.etag
   let dead: RangeRefusal | null = null
   const ac = new AbortController()
   const letGo = () => { if (!dead) { dead = new RangeRefusal('gone', 'let go'); ac.abort(dead) } }
@@ -119,10 +125,13 @@ export function rangeSource(url: string, bound: Bound, o: RangeSourceOptions = {
       if (r.status >= 500) { drop(); throw new Error(`the server answered ${r.status}`) }
       if (r.status !== 206) { drop(); throw refuse('bytes', `the server answered ${r.status} to a range`) }
       const m = CONTENT_RANGE.exec(r.headers.get('content-range') ?? ''), etag = r.headers.get('etag')
-      if (!m || Number(m[1]) !== begin || Number(m[2]) !== end - 1 || Number(m[3]) !== bound.total || etag !== bound.etag) {
+      // (no tag known yet: the first answer's, if it is a strong one, is the one every answer after is held to)
+      const tagOk = held === null ? etag !== null && STRONG_ETAG.test(etag) : etag === held
+      if (!m || Number(m[1]) !== begin || Number(m[2]) !== end - 1 || Number(m[3]) !== bound.total || !tagOk) {
         drop()
-        throw refuse('bytes', `an answer of ${(r.headers.get('content-range') ?? 'no range').slice(0, 60)} tagged ${(etag ?? 'nothing').slice(0, 80)}, not the bytes ${begin} to ${end - 1} of ${bound.total} tagged ${bound.etag}`)
+        throw refuse('bytes', `an answer of ${(r.headers.get('content-range') ?? 'no range').slice(0, 60)} tagged ${(etag ?? 'nothing').slice(0, 80)}, not the bytes ${begin} to ${end - 1} of ${bound.total}${held === null ? ' tagged strongly' : ` tagged ${held}`}`)
       }
+      held ??= etag
       return await bodyOf(r, end - begin, heard)
     } catch (e) {
       if (dead) throw dead

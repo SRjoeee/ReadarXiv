@@ -2,7 +2,7 @@
 // the entity-tag our server bound the layer to, a range across the seam split there, no read waiting for ever, PDF.js given the
 // bytes through its range transport; and the base check's two ends, arXiv's and ours
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { composedRange, endsAlike, endsFrom, ENDS_MAX, openRanged, RangeRefusal, rangeSource, RANGE_CHUNK, RETRY_MS, STALL_MS } from '@/pdf-reader/session/ranges'
+import { boundFrom, composedRange, endsAlike, endsFrom, ENDS_MAX, lengthBound, openRanged, RangeRefusal, rangeSource, RANGE_CHUNK, RETRY_MS, STALL_MS } from '@/pdf-reader/session/ranges'
 
 const URL_OURS = 'https://readarxiv.com/api/v1/original/2608.04322v1'
 const URL_ARXIV = 'https://arxiv.org/pdf/2608.04322v1'
@@ -36,6 +36,77 @@ function serving(file: Uint8Array = FILE, o: { tag?: string; answer?: (begin: nu
   return { f: f as unknown as typeof fetch, calls }
 }
 const ranged = (begin: number, end: number, total: number, tag: string, body: Uint8Array = FILE.slice(begin, end)) => new Response(body as BodyInit, { status: 206, headers: { 'content-range': `bytes ${begin}-${end - 1}/${total}`, etag: tag } })
+
+describe('a range source bound by a length alone (a base of ours: the address names the digest of its bytes, no route names a tag)', () => {
+  it('lengthBound: the base\'s bytes as a bound with no tag, none for a length that is none; boundFrom still needs both', () => {
+    expect(lengthBound(300)).toEqual({ total: 300, etag: null })
+    for (const bytes of [0, -1, 1.5, Number.NaN, '300', null, undefined]) expect(lengthBound(bytes), String(bytes)).toBeNull()
+    expect(boundFrom(300, null)).toBeNull()
+    expect(boundFrom(300, TAG)).toEqual({ total: 300, etag: TAG })
+  })
+
+  it('the first answer\'s strong tag is learnt and held for every answer after; the length is held from the first', async () => {
+    const s = serving()
+    const src = rangeSource(URL_OURS, lengthBound(FILE.length) as never, { fetch: s.f })
+    expect([...(await src.read(0, 10))]).toEqual([...FILE.slice(0, 10)])
+    expect([...(await src.read(10, 20))]).toEqual([...FILE.slice(10, 20)])
+    expect(s.calls).toHaveLength(2)
+    // a later answer of another tag, or another length: the source is refused whole, every read after it unasked
+    for (const [what, answer] of [['another tag', () => ranged(20, 30, FILE.length, '"other"')], ['another length', () => ranged(20, 30, FILE.length + 1, TAG)]] as const) {
+      const t = serving(FILE, { answer: (_b, _e, n) => (n >= 2 ? answer() : null) })
+      const held = rangeSource(URL_OURS, lengthBound(FILE.length) as never, { fetch: t.f })
+      await held.read(0, 10)
+      const e = await held.read(20, 30).catch(x => x)
+      expect([e instanceof RangeRefusal, (e as RangeRefusal).kind], what).toEqual([true, 'bytes'])
+      const asked = t.calls.length
+      await expect(held.read(0, 5), what).rejects.toBeInstanceOf(RangeRefusal)
+      expect(t.calls, what).toHaveLength(asked)
+    }
+  })
+
+  it('a first answer with no tag, or a weak one, refuses the source: there would be nothing to hold the rest to', async () => {
+    for (const tag of ['W/"w"', 'nothing-quoted']) {
+      const s = serving(FILE, { tag })
+      const src = rangeSource(URL_OURS, lengthBound(FILE.length) as never, { fetch: s.f })
+      const e = await src.read(0, 10).catch(x => x)
+      expect([e instanceof RangeRefusal, (e as RangeRefusal).kind], tag).toEqual([true, 'bytes'])
+    }
+  })
+
+  it('a range past the base\'s length is no range of it, and nothing is asked', async () => {
+    const s = serving()
+    const src = rangeSource(URL_OURS, lengthBound(FILE.length) as never, { fetch: s.f })
+    await expect(src.read(290, 301)).rejects.toBeInstanceOf(RangeRefusal)
+    expect(s.calls).toHaveLength(0)
+  })
+
+  it('PDF.js opens the base over its length alone, the tail after its last byte; a later range of another tag is never given to it', async () => {
+    const big = Uint8Array.from({ length: RANGE_CHUNK + 100 }, (_, i) => i % 7)
+    const s = serving(big, { answer: (b, e, n) => (n >= 3 ? ranged(b, e, big.length, '"other"', big.slice(b, e)) : null) })
+    const given: [number, Uint8Array][] = []
+    class PDFDataRangeTransport {
+      constructor(readonly length: number, readonly initialData: Uint8Array) {}
+      requestDataRange(_b: number, _e: number) {}
+      onDataRange(b: number, chunk: Uint8Array) { given.push([b, chunk]) }
+      abort() {}
+    }
+    const params: Record<string, unknown>[] = []
+    const getDocument = vi.fn((p: Record<string, unknown>) => { params.push(p); return { promise: Promise.resolve({ numPages: 1 }), destroy: vi.fn(async () => {}), onProgress: null } })
+    const tail = Uint8Array.from([1, 2, 3])
+    const task = openRanged({ getDocument, PDFDataRangeTransport } as never, URL_OURS, { bound: lengthBound(big.length) as never, tail, options: {}, fetch: s.f })
+    await task.promise
+    const p = params[0] as { range: PDFDataRangeTransport & { requestDataRange(b: number, e: number): void } }
+    expect(p.range.length).toBe(big.length + 3)
+    expect([...p.range.initialData]).toEqual([...big.slice(0, RANGE_CHUNK)])
+    p.range.requestDataRange(RANGE_CHUNK, big.length + 3)
+    await vi.waitFor(() => expect(given).toHaveLength(1))
+    expect([...(given[0]?.[1] ?? [])]).toEqual([...big.slice(RANGE_CHUNK), 1, 2, 3])
+    // the third answer names another tag: refused, and the document is given nothing of it
+    p.range.requestDataRange(0, 100)
+    await new Promise(r => setTimeout(r, 50))
+    expect(given).toHaveLength(1)
+  })
+})
 
 describe('a range source: every answer held to the base', () => {
   it('reads exactly the bytes asked; a request carries a range alone, no credentials, no referrer', async () => {
