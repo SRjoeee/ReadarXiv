@@ -328,7 +328,7 @@ three against each other (`gate-pack.mjs` `baseRecordOf`), so a layout file is n
 was made over. The layer gate draws every output over its `base.pdf` (its add-on, its draws and its bundle's base are made
 over it too), arXiv's PDF where a fixture has none, and `arxiv.pdf` stays the left's. A paper production would refuse a base
 page of ours would keep the layout file the pack held before, made over arXiv's PDF, its `base.json` saying why
-(`source: 'arxiv'`, outside the version check); in the pack of 2026-10-22 (`d25b354b`) every one of the 7 papers has ours, each made on the tree production compiles it on (`base.json`'s `image`: the year its 00README declares, else that of arXiv's build; 2307.16209, 2608.16117 and 2609.26457 on TeX Live 2023).
+(`source: 'arxiv'`, outside the version check); in the pack of 2026-10-23 (`514c8841`, LAYOUT 14: each unit laid only where every line it owns is in place on arXiv's PDF) every one of the 7 papers has ours, each made on the tree production compiles it on (`base.json`'s `image`: the year its 00README declares, else that of arXiv's build; 2307.16209, 2608.16117 and 2609.26457 on TeX Live 2023).
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 
 Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, the layout file moves,
