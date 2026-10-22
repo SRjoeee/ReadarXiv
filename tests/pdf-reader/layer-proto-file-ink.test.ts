@@ -32,7 +32,6 @@ const unitOf = (lines: number[][], ph: [number, number, number[]][] = []) => {
   return { lines: Float64Array.from(lines.flat()), frames: Float64Array.from(frames), erase: lines.map(() => new Float64Array(0)), ph: new Map(ph.map(([k, flags, segs]) => [k, { kind: 'math', flags, segs: Float64Array.from(segs) }])), labels: new Float64Array(0) } as never
 }
 const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
-const rect = [1, 10, 97.85, 230, 106.83]
 const fileLine = [1, 10, 230, 100, 108, 97, 10, 0]
 
 describe('a text macro that sets a raised script is cropped from its ink, never set on one baseline (F4)', () => {

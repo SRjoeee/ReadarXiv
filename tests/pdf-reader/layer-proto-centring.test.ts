@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { indexLayout, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
-import { build, type Built, installStubs, line, openRun, type Paper, para, type Spec } from './helpers/order-paper'
+import { build, installStubs, line, openRun, type Paper, para, type Spec } from './helpers/order-paper'
 
 // Where the layout file's centring is no unit's (run.mjs): a table cell, which TeX's probe does not read (a cell's marks carry
 // none) and the page's column does not decide either, is centred by its own lines (several whose middles agree and whose

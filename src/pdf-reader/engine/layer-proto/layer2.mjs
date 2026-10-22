@@ -375,34 +375,20 @@ export function clearLines(lines, bands, f) {
 }
 
 /**
- * charsOfUnit (layer.js), with each character owned by the rectangle whose line it most likely stands on. A line's
- * baseline is 0.22 em above its rectangle's foot or 0.69 em below its top, whichever of the two the character is
- * nearer: a line with Computer Modern's symbols (CMSY10's descent is 0.96 em) has a rectangle reaching almost a line
- * lower, and by its foot alone it took the next line's characters (1512.03385 page 3: "becomes" and the next line's
- * "F(x)+x" read as one word, so neither was found). Also: the lines one rectangle holds are kept apart by a space; a
- * size change alone is no word break (small capitals: "A" "N" for "AN", 0.8 pt apart); a tall rectangle is erased only
- * to its own characters' depth.
- * `exact` (a layout file's lines, tex.mjs): each rectangle's baseline and size, known; a line then holds the characters
- * within its ink's extent (a point either side, a character's place in its item being an estimate) that stand on its
- * baseline, scripts and all (within a script's window of it, as the layout maker takes a line's glyphs), each the line's
- * whose baseline is nearest.
+ * charsOfUnit (layer.js), with each character owned by the rectangle whose line it stands on. Also: the lines one
+ * rectangle holds are kept apart by a space; a size change alone is no word break (small capitals: "A" "N" for "AN", 0.8 pt
+ * apart); a tall rectangle is erased only to its own characters' depth.
+ * `exact` (a layout file's lines, tex.mjs): each rectangle's baseline and size; a line holds the characters within its
+ * ink's extent (a point either side, a character's place in its item being an estimate) that stand on its baseline,
+ * scripts and all (within a script's window of it, as the layout maker takes a line's glyphs), each the line's whose
+ * baseline is nearest.
  */
-export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
+export function charsOfUnit2(rects, charsByPage, extents, exact) {
   const out = []
   const yOf = c => c.ybEff ?? c.yb
-  const holds = exact
-    ? (r, c) => { const cx = (c.x0 + c.x1) / 2; return cx >= r[1] - 1 && cx <= r[3] + 1 && Math.abs(yOf(c) - exact.get(r).baseline) < 0.6 * Math.max(c.size, 5) + 1.5 }
-    : (r, c) => {
-        const cx = (c.x0 + c.x1) / 2, cy = yOf(c) + c.size * 0.3
-        return cx >= r[1] - (r === rects[0] ? 0.5 : 6) && cx <= r[3] + 6 && cy >= r[2] - 1 && cy <= r[4] + 1
-      }
-  const sizeOf = new Map()
-  for (const r of rects) {
-    if (exact) { sizeOf.set(r, exact.get(r).size); continue }
-    const cs = (charsByPage[r[0] - 1] ?? []).filter(c => /\S/.test(c.ch) && holds(r, c))
-    sizeOf.set(r, cs.length ? median(cs.map(c => c.size)) : (r[4] - r[2]) / 0.894)
-  }
-  const dist = exact ? (r, c) => Math.abs(yOf(c) - exact.get(r).baseline) : (r, c) => { const z = sizeOf.get(r); return Math.min(Math.abs(yOf(c) - (r[2] + 0.22 * z)), Math.abs(yOf(c) - (r[4] - 0.69 * z))) }
+  const holds = (r, c) => { const cx = (c.x0 + c.x1) / 2; return cx >= r[1] - 1 && cx <= r[3] + 1 && Math.abs(yOf(c) - exact.get(r).baseline) < 0.6 * Math.max(c.size, 5) + 1.5 }
+  const sizeOf = new Map(rects.map(r => [r, exact.get(r).size]))
+  const dist = (r, c) => Math.abs(yOf(c) - exact.get(r).baseline)
   const owner = new Map()
   for (const r of rects) for (const c of charsByPage[r[0] - 1] ?? []) {
     if (!holds(r, c)) continue
@@ -449,18 +435,17 @@ export function charsOfUnit2(rects, charsByPage, extents, exact = null) {
  * digits, operators: "(z) =" at a line's end), and a line that is not its block's last, being justified, out to its
  * block's right edge. Before, those characters were erased with the line (its erasing reaches the block's edge) though
  * no placeholder held them. `first`: the unit's first line (`rects` may be its lines on one page alone: run.mjs grows a
- * unit page by page). `measured`: the rectangles are the layout file's lines, TeX's, each set to a measure: a justified
- * line grows over what is not math only up to its own measure, its run's (measuresOf), not its block's widest edge, and
- * past it only over a formula's tail that goes on from it, never across a float's gap (E3d: beside a float wrapped on the
- * right, narrow lines grew over the caption's label "Table 6: A" and its digits, which no unit's rectangle held, and the
- * grown lines set the measure of every narrow line of their run, 2602.23285 page 18). v0's anchors, which fall short of
- * their ink, grow as before. Mutates the rectangles.
+ * unit page by page). The rectangles are the layout file's lines, TeX's, each set to a measure: a justified line grows over
+ * what is not math only up to its own measure, its run's (measuresOf), not its block's widest edge, and past it only over a
+ * formula's tail that goes on from it, never across a float's gap (E3d: beside a float wrapped on the right, narrow lines
+ * grew over the caption's label "Table 6: A" and its digits, which no unit's rectangle held, and the grown lines set the
+ * measure of every narrow line of their run, 2602.23285 page 18). Mutates the rectangles.
  */
-export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0], measured = false) {
+export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn, pageViews, wordChars = charsByPage, first = rects[0]) {
   // (a file line's measure, read from the lines as the file gives them, before any growth: the growth over the source's own
   // words below, extendRects, would take a caption's label beside it that holds one, "Fig. 6: A", and the measure with it)
   const measureOf = new Map()
-  if (measured) for (const b of blocksOf(rects, pageViews)) {
+  for (const b of blocksOf(rects, pageViews)) {
     const m = measuresOf(b.rects)
     if (m) for (const q of b.rects) { const r = rects.find(x => x.join() === q.join()); if (r) measureOf.set(r, { x1: m.get(rectKey(q))[1], was: r[3] }) }
   }
@@ -506,13 +491,13 @@ export function extendRects2(rects, charsByPage, others, src, wordsOfFn, normFn,
       }
       x = Math.max(x, cs[last].x1)
     }
-    // to the right: math always; anything while the line is a justified one, up to its block's edge. A file line (`measured`):
+    // to the right: math always; anything while the line is a justified one, up to its block's edge. A file line:
     // anything up to its own measure, and past it only a formula's tail that goes on from it (within 0.6 em, as to the left),
     // never across the gap a float wrapped beside it leaves (\columnsep)
     const just = justOf.get(key)
     let to = x
     for (const c of line.filter(c => c.x0 >= x - 0.1)) {
-      if (c.x0 - to > (measured && c.x1 > just + 1 ? 0.6 : 1.2) * size || foreign(c) || c.x1 > bx1 + 3) break
+      if (c.x0 - to > (c.x1 > just + 1 ? 0.6 : 1.2) * size || foreign(c) || c.x1 > bx1 + 3) break
       if (!(mathy(c) || (edge !== null && c.x1 <= edge + 1))) break
       to = c.x1
     }

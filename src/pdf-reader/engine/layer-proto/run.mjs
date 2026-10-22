@@ -1755,7 +1755,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // whose lines were all another's included (L4). Its lines as they stand would make a page's growth read whether the
     // unit's earlier page had grown yet, which a page laid by its closure need not have)
     const first = p.rects[0]?.[0] === p.firstPage ? p.rects[0] : null
-    const grown = L2.extendRects2(rs, p.local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands, first, true)
+    const grown = L2.extendRects2(rs, p.local, others, p.unit.src, wordsOf, norm, geometry.left.pages, bands, first)
     p.grown += grown
     // (and the unit's part of the page again where its lines grew past it: what they grew over is the unit's to read and
     // to account for, or its characters there were put back under the translation)

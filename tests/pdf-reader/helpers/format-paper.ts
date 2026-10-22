@@ -17,6 +17,10 @@ export const PAPER = { id: '2608.04322', version: 1 }
 export const N = 4
 export const BASE = { bytes: 10_000, sha256: '0123456789abcdef'.repeat(4), xref: 9_000 }
 export const IMAGE = '1'
+/** the PDF the layer is drawn over where it is ours (BUNDLE 8): our compile's final pass, of arXiv's size and page count, the same
+ *  object the tails continue; and arXiv's, beside it */
+export const OURS = { source: 'ours' as const, ...BASE, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: 1 } }
+export const ORIG = { bytes: 30_000, sha256: 'fedcba9876543210'.repeat(4) }
 
 const H = UNIT_KINDS.indexOf('heading'), P = UNIT_KINDS.indexOf('para'), C = UNIT_KINDS.indexOf('cell'), MATH = PH_KINDS.indexOf('math')
 
@@ -129,10 +133,11 @@ export interface Made {
 
 /** the paper written, then read back by the readers in the order the service reads it */
 /** `draws`: the draw geometry each page's left part carries (by page), none by default; `draw`: the head says the parts may carry them;
- *  `pairs`: the pairs a page's left part carries, in place of LEFT_OF's (by page) */
-export async function made(o: { draws?: Record<number, unknown>; draw?: boolean; pairs?: Record<number, [number, number[]][]> } = {}): Promise<Made> {
+ *  `pairs`: the pairs a page's left part carries, in place of LEFT_OF's (by page); `ours`: the base of the head is ours, over which
+ *  the layer draws (else arXiv's: it draws nothing) */
+export async function made(o: { draws?: Record<number, unknown>; draw?: boolean; pairs?: Record<number, [number, number[]][]>; ours?: boolean } = {}): Promise<Made> {
   const chunks = await writeUnitChunks({ paper: PAPER, units: UNITS })
-  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: [1, 0], ...(o.draw ? { draw: true } : {}) })
+  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: o.ours ? OURS : BASE, ...(o.ours ? { orig: ORIG } : {}), image: IMAGE, units: chunks, lineskip: [1, 0], ...(o.draw ? { draw: true } : {}) })
   const rh = await readHead(head.bytes, { ref: head.ref })
   const readChunks: ReadUnitsChunk[] = []
   for (const c of chunks) readChunks.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: readChunks.at(-1) ?? null }))

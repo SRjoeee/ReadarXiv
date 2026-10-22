@@ -235,7 +235,7 @@ describe('the run in parts draws every page as the open over the whole paper doe
   })
 
   it('a paper whose parts carry tails, and a part with no layout: every interleaving draws as the warm door', async () => {
-    const M = await made()
+    const M = await made({ ours: true })
     // (the format test's paper: the text layer from the left's rectangles)
     const units = M.index.units.map((_, id) => ({ text: `unit ${id}`, lines: M.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], r[3], r[2] + 2.15]))) }))
     const P: Paper = { N: 4, index: M.index, parts: M.readParts, docFor: docsOf({ pages: 4, units }) }

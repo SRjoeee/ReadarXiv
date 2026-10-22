@@ -2,15 +2,18 @@
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
 import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { Box, UnitWire } from './bundle.mjs'
-import type { LayoutRefusalRecord, TableGroups, TokenWire, Written } from './format.mjs'
+import type { HeadBase, LayoutRefusalRecord, TableGroups, TokenWire, Written } from './format.mjs'
 import type { NeedEntry } from './need.mjs'
 import type { BundleUnit } from './units.mjs'
 
 /** the paper made whole: BUNDLE 3's reading (readBundle) or the object the producer holds */
 export interface WholePaper {
   paper: { id: string; version: number; pages: number }
-  /** `xref`: the original's startxref, which BUNDLE 3 does not carry (`CutOptions.base` may supply it) */
-  base: { bytes: number; sha256: string; xref?: number }
+  /** `xref`: the original's startxref, which BUNDLE 3 does not carry (`CutOptions.base` may supply it); BUNDLE 8's `source` and,
+   *  of a base of ours, its pages, tree and check (format.mjs HeadBase) */
+  base: HeadBase | { bytes: number; sha256: string; xref?: number; source?: undefined }
+  /** arXiv's PDF, where the base is ours (format.mjs writeHead) */
+  orig?: { bytes: number; sha256: string } | null
   versions?: { image: string }
   /** the paper's units, none dropped (a null is refused: the chunks hold what stands) */
   units: readonly (BundleUnit | null)[]

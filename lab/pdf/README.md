@@ -69,6 +69,19 @@ missing or drawn twice, and the fidelity measures against the original page, no 
 
 Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `lab/pdf/records/layer-perf.md`.
 
+**The layer draws only from the layout file (route step 2, 2026-10-22).** A unit the file does not locate whole (not held, or a
+visible piece it has no position for: a placeholder LOST or with no row, but a text symbol, a macro that sets no ink, a space)
+is the original's: no reading of the page's text stands in for a position the file lacks, and no proof checks one. Gone with
+it: v0's own reading of such a unit (the lines from the anchors' rectangles, the placeholders' renderings found by aligning
+gaps with the source, their second chance, the first line's repairs), the held lines' cover of a LOST display
+(`displayCover`), the run of leftover characters that drew a LOST text piece (`textRunsOf`), the proof of v0's renderings
+(`proofOf`; what stays of it is `tex.mjs cropsOf`: a rendering page text cannot be, a character no Unicode stands for or none
+of the unit's in the row's segments, is the segments' crops, else the unit stays the original's), and the gate's options
+`--proto-tex=ph` and `--proto-tex-only=no` (`--proto-tex=lines` is the layer, and the gate requires it). A run's `sources` is
+`{ tex, why, texOnly }`: the units placed, why the others are the original's (`unanchored, <why of locatedWhole>`), how many of
+the placed only the file holds. The sections below describe how those rounds were made; where they name what is removed, it is
+the history of the readings the file now gives.
+
 The gate measures the drawn layer, v0 (`--engine-kind=proto`, its default; the records' mode is `--proto-tex=lines --removal=draw`; `--door` is the reader's door; `--door-parts[=doubling|splits:<n>|seed:<s>]` the door in parts against the door over the same cut made whole, BUNDLE 4's equality proof, never recorded: each part's tail chained after the parts before it, and the cut made whole against BUNDLE 3's open over the single tail; `--door-parts-addon=carried|none` the cut without a tail, or without an add-on). The first layer (`layer/layer.mjs`, with the fit and the line breaker under `layer/`) is parked (`parked/README.md`): `--engine-kind=layer` is refused with a message that says so, for an older worktree given by `--engine=<it>` that still has the entry it measures it as it was, and the layer lab's first view reports that the entry is not there. The checker `layer/check.mjs` stays, since the gate's instrument imports it by its address.
 
 **TeX's file against the drawing** (the 2608.16117 survey and the p59 finding, 2026-10-15). Seven measures read the

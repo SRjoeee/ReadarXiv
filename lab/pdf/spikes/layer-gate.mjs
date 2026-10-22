@@ -27,7 +27,7 @@
 //       [--composite=source-over|darken] [--no-progress] [--panel-width=<px>] [--freeze[=force]]
 //       [--engine-kind=proto|layer] [--proto-units=fixture|p7] [--progress=<name|path>] [--previous=<name|path>] [--panels-only] [--proto-panels=<dir>]
 //       [--proto-faces=roles|prototype] [--proto-place=<file>] [--proto-order=<file>] [--dump=<dir>] [--write-floor]
-//       [--proto-tex=ph|lines] [--proto-tex-only=no] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
+//       [--proto-tex=lines] [--proto-symbols=text|strict] [--proto-extents=v0|tex]
 //       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
 //       [--door-memory[=<pages>]] [--door-parts[=doubling|splits:<n>|seed:<s>]] [--door-parts-addon=chained|carried|none]
 //       [--door-order=reverse|seed:<s>|burst:<s>] [--door-jump[=all|<fixture>:<page>,…]]
@@ -68,12 +68,13 @@
 //                --proto-units=p7 --proto-faces=prototype --tier=pixel, the ten shared outputs; v0 at its port,
 //                exp/layer-proto f654c05c, whose drawing is the live prototype's); the committed floor kept beside it as
 //                "old", every earlier one in "history"
-//   --proto-tex  the hybrid (layer-proto/tex.mjs): v0 with each unit the fixture's layout file locates whole taking the
-//                file's geometry, every other unit v0's own: ph, each placeholder's ink by its segments; lines, the unit's
-//                lines and label too, and the units the file locates whole that v0's geometry does not hold but table cells
-//                (--proto-tex-only=no: those not); --proto-symbols=strict: a symbol v0 draws as text must be found too for a
-//                unit to be located whole; --proto-extents=tex (with lines): the file's erase rectangles. Recorded
-//                apart (<tier>-proto-tex-<ph|lines>, and each further choice)
+//   --proto-tex  the layout file as the layer's only source of a unit (layer-proto/tex.mjs; route step 2): each unit the
+//                fixture's layout file locates whole takes its lines, label and placeholders from it, and the units it
+//                locates that the left's geometry does not hold too (but table cells); any other unit is the original's. The
+//                engine of this checkout requires it; the merge base's engine, which drew such a unit by v0's own reading, is
+//                measured without it as before. --proto-symbols=strict: a symbol drawn as text must be found too for a unit to
+//                be located whole; --proto-extents=tex: the file's erase rectangles. Recorded apart (<tier>-proto-tex-lines,
+//                and each further choice)
 //   --against    --check against another of the record's runs than this run's own (a hybrid against v0's, pixel-proto):
 //                the inputs that make it another run (tex) are not compared
 //   --engine-kind  proto (the default): the layer's v0, the approved prototype ported into the engine (layer-proto/run.mjs),
@@ -215,12 +216,13 @@ if (!['fixture', 'p7'].includes(PROTO_UNITS)) throw new Error(`--proto-units=${P
 /** --proto-faces=roles|prototype: the faces v0 draws in (its own default, the role table's, where not given) */
 const PROTO_FACES = typeof arg('proto-faces') === 'string' ? arg('proto-faces') : null
 if (PROTO_FACES && !['roles', 'prototype'].includes(PROTO_FACES)) throw new Error(`--proto-faces=${PROTO_FACES}: roles or prototype`)
-/** --proto-tex=ph|lines: the hybrid, and its further choices */
+/** --proto-tex=lines: the layout file as the layer's source, and its further choices (`use` and `texOnly` are the options of the
+ *  engines before route step 2, which the merge base's engine is measured with; this checkout's engine ignores them) */
 const PROTO_TEX = typeof arg('proto-tex') === 'string' ? arg('proto-tex') : null
-if (PROTO_TEX && !['ph', 'lines'].includes(PROTO_TEX)) throw new Error(`--proto-tex=${PROTO_TEX}: ph or lines`)
-const TEX = PROTO_TEX ? { use: PROTO_TEX, texOnly: PROTO_TEX === 'lines' && arg('proto-tex-only') !== 'no', symbols: typeof arg('proto-symbols') === 'string' ? arg('proto-symbols') : 'text', extents: typeof arg('proto-extents') === 'string' ? arg('proto-extents') : 'v0' } : null
+if (PROTO_TEX && PROTO_TEX !== 'lines') throw new Error(`--proto-tex=${PROTO_TEX}: lines`)
+const TEX = PROTO_TEX ? { use: PROTO_TEX, texOnly: true, symbols: typeof arg('proto-symbols') === 'string' ? arg('proto-symbols') : 'text', extents: typeof arg('proto-extents') === 'string' ? arg('proto-extents') : 'v0' } : null
 if (TEX && (!['strict', 'text'].includes(TEX.symbols) || !['v0', 'tex'].includes(TEX.extents))) throw new Error('--proto-symbols=text|strict, --proto-extents=v0|tex')
-const TEX_KEY = TEX ? `-tex-${TEX.use}${TEX.use === 'lines' && !TEX.texOnly ? '-geometry' : ''}${TEX.symbols === 'strict' ? '-strict' : ''}${TEX.extents === 'tex' ? '-erase' : ''}` : ''
+const TEX_KEY = TEX ? `-tex-${TEX.use}${TEX.symbols === 'strict' ? '-strict' : ''}${TEX.extents === 'tex' ? '-erase' : ''}` : ''
 const AGAINST = typeof arg('against') === 'string' ? arg('against') : null
 /** --removal=draw|measure: the text-removed PDF (layout/remove.mjs, layer-proto/removal.mjs), v0 only: the paper's add-on,
  *  one a paper whatever the target, its plan made from the layout file alone (removal.mjs pagePlan, in Node; cached by
@@ -644,10 +646,9 @@ async function runFixture(page, name, errors) {
       summary.removal.pixelMs = px.ms
     }
   }
-  // (reported beside the measures: the units v0 draws alone, those it places and draws, not those it leaves the original's;
-  // the lines TeX's rule opened or would have; the run's own counts)
+  // (reported beside the measures: the lines TeX's rule opened or would have; the run's own counts)
   const totals = fixtureTotals(pages, frames, TIER)
-  Object.assign(totals, { aloneUnits: summary.sources ? summary.sources.v0Drawn : null, linesOpened: summary.linesOpened ?? null, linesUnopened: summary.linesUnopened ?? null })
+  Object.assign(totals, { linesOpened: summary.linesOpened ?? null, linesUnopened: summary.linesUnopened ?? null })
   return { name, ready: true, info, meta, pages, totals, summary }
 }
 
@@ -1724,7 +1725,7 @@ function fidelityMd(record) {
   const keys = [...known.filter(k => record.tiers[k]), ...Object.keys(record.tiers).filter(k => !known.includes(k)).sort()]
   const run = record.tiers[keys[0]]
   const ms = MEASURES.filter(m => run.tier === 'pixel' || m[1] === 'model')
-  const hybridOf = r => { const t = r.inputs.tex && r.inputs.tex !== 'none' ? JSON.parse(r.inputs.tex) : null; return t ? `; the hybrid: each unit the fixture's layout file locates whole takes ${t.use === 'lines' ? 'its lines, label and placeholders' : 'its placeholders'} from the file${t.texOnly ? ', with the units only the file holds (but cells)' : ''}${t.symbols === 'strict' ? ', a symbol drawn as text asked to be found too' : ''}${t.extents === 'tex' ? ', the file\'s erase rectangles' : ''}` : '' }
+  const hybridOf = r => { const t = r.inputs.tex && r.inputs.tex !== 'none' ? JSON.parse(r.inputs.tex) : null; return t ? `; the layout file the layer's only source: each unit it locates whole takes its lines, label and placeholders from it, with the units only the file holds (but cells)${t.symbols === 'strict' ? ', a symbol drawn as text asked to be found too' : ''}${t.extents === 'tex' ? ', the file\'s erase rectangles' : ''}` : '' }
   // (and where the run was given its inputs from elsewhere: the references, the prototype's geometry, the translations,
   // as a front end's new cut of the units carries them, spikes/layer-cut.mjs)
   const givenOf = r => [r.inputs.layouts === 'made' && r.inputs.kind === 'proto' ? `the layout files made by the engine's maker (${r.inputs.fixtures})` : null, r.inputs.refs ? `the references of ${r.inputs.refs}` : null, r.inputs.geometry ? `the prototype's geometry of ${r.inputs.geometry}` : null, r.inputs.records ? `the translations of ${r.inputs.records}` : null].filter(Boolean)
