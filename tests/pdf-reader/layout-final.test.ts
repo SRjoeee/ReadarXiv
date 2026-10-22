@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
+import { baseRefusalRetryable } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { type Compiled, type CompileRequest, DRAFT_OPTION, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
@@ -89,7 +90,7 @@ describe('the final pass', () => {
     expect(noFiles.asked).toHaveLength(2)
     // (a budget that holds no compile as long as the longest so far and a fifth)
     const tight = compiler([PROBE, { ...marked(), ms: 1000 }])
-    expect(baseOf(await markedOfPaper(paperOf(), { compile: tight.compile, compileBudgetMs: 2000 }))).toEqual({ refused: 'final', why: 'no compile left within the compile budget' })
+    expect(baseOf(await markedOfPaper(paperOf(), { compile: tight.compile, compileBudgetMs: 2000 }))).toEqual({ refused: 'final', why: 'no compile left within the compile budget', limit: 'budget' })
     expect(tight.asked).toHaveLength(2)
     const roomy = compiler([PROBE, { ...marked(), ms: 1000 }, finalAnswer()])
     expect(baseOf(await markedOfPaper(paperOf(), { compile: roomy.compile, compileBudgetMs: 2300 }))).toMatchObject({ pdf: FINAL })
@@ -145,6 +146,45 @@ describe('no mark of ours printed as text (design §3.3.2, the guard\'s `text`)'
   })
 })
 
+// A fallback is a layer for good (its head is committed); a refusal a host's limit or its compile budget caused may not be the
+// paper's at all, so the host retries it instead (the box's call): such a refusal names the limit (`limit`, limitOf's name, or
+// 'budget'), and baseRefusalRetryable is that and nothing else
+describe('a refusal a host\'s limit or the compile budget caused names it, and is the one kind retried', () => {
+  const STOPPED = { ok: false, log: TEX, limit: 'wall', error: 'the compile passed its wall limit' } as never
+  it('the final pass: out of budget or stopped by the host, retryable; a pass that failed or threw, not', async () => {
+    const tight = compiler([PROBE, { ...marked(), ms: 1000 }])
+    const budget = baseOf(await markedOfPaper(paperOf(), { compile: tight.compile, compileBudgetMs: 2000 }))
+    expect(budget).toEqual({ refused: 'final', why: 'no compile left within the compile budget', limit: 'budget' })
+    const stopped = baseOf(await markedOfPaper(paperOf(), { compile: compiler([PROBE, marked(), STOPPED]).compile }))
+    expect(stopped).toEqual({ refused: 'final', why: 'the final pass was stopped by the host\'s wall limit', limit: 'wall' })
+    expect([budget, stopped].map(baseRefusalRetryable)).toEqual([true, true])
+    const halted = baseOf(await markedOfPaper(paperOf(), { compile: compiler([PROBE, marked(), { ok: true, pdf: FINAL, log: `${TEX}! Emergency stop.\n` }]).compile }))
+    const threw = baseOf(await markedOfPaper(paperOf(), { compile: compiler([PROBE, marked(), new Error('the jail broke')]).compile }))
+    for (const r of [halted, threw]) { expect(r).not.toHaveProperty('limit'); expect(baseRefusalRetryable(r)).toBe(false) }
+  })
+
+  it('the guard: the marked original or the paper\'s own source stopped by the host, or no compile left to tell whose fault, retryable', async () => {
+    const markedStopped = await markedOfPaper(paperOf(), { compile: compiler([PROBE, STOPPED]).compile })
+    expect(markedStopped).toMatchObject({ refused: 'compile', why: 'the marked original was stopped by the host\'s wall limit', limit: 'wall' })
+    const fail: Compiled = { ok: true, pdf: DRAFT, log: `${TEX}! Undefined control sequence.\nl.3 \\foo\n! Emergency stop.\n` }
+    const ownStopped = await markedOfPaper(paperOf(), { compile: compiler([PROBE, fail, fail, STOPPED]).compile })
+    expect(ownStopped).toMatchObject({ refused: 'compile', why: 'the paper\'s own source was stopped by the host\'s wall limit', limit: 'wall' })
+    const untold = await markedOfPaper(paperOf(), { compile: compiler([PROBE, { ...fail, ms: 100 }]).compile, compileBudgetMs: 150 })
+    expect(untold).toMatchObject({ refused: 'compile', why: expect.stringContaining('the paper\'s own source was not compiled'), limit: 'budget' })
+    expect([markedStopped, ownStopped, untold].map(baseRefusalRetryable)).toEqual([true, true, true])
+    // (the paper's own source failing as itself is the paper's: no limit, for good)
+    const own = await markedOfPaper(paperOf(), { compile: compiler([PROBE, fail, fail, fail]).compile })
+    expect(own).toMatchObject({ refused: 'compile' })
+    expect(own).not.toHaveProperty('limit')
+    expect(baseRefusalRetryable(own)).toBe(false)
+  })
+
+  it('reads no other code as retryable, nor what is no refusal', () => {
+    for (const r of [{ refused: 'carry', why: 'x' }, { refused: 'marks' }, { refused: 'boxes' }, { refused: 'engine' }, { refused: 'texlive' }, { refused: 'final', why: 'the final pass is not the draft\'s page' }, { refused: 'final', limit: '' }, { refused: 'final', limit: null }, null, undefined, 'budget', {}]) expect(baseRefusalRetryable(r as never), JSON.stringify(r)).toBe(false)
+    expect(baseRefusalRetryable({ refused: 'compile', limit: 'time' })).toBe(true)
+  })
+})
+
 describe('layoutMarksOfPaper: the base page checked against the draft', () => {
   /** a document of `marks` (name → [page, x, y]) and its pages, PDF.js's shapes */
   const docOf = (marks: Record<string, [number, number, number]>, pages = 3) => ({
@@ -164,5 +204,16 @@ describe('layoutMarksOfPaper: the base page checked against the draft', () => {
     expect(opened).toEqual([dec(DRAFT), dec(FINAL)])
     const moved = await layoutMarksOfPaper(paperOf(), { compile: compiler([PROBE, marked(), finalAnswer()]).compile, open: open({ 'axt-0s': [1, 72.5, 700] }), OPS: {} })
     expect(moved).toMatchObject({ base: { refused: 'final', why: expect.stringMatching(/^the final pass is not the draft's page: the mark 0s moved/) } })
+  })
+
+  it('keeps the base page\'s bytes whole where opening a PDF takes its buffer (PDF.js transfers it to its worker)', async () => {
+    const open = async (pdf: Uint8Array) => {
+      const text = dec(pdf)
+      structuredClone(pdf.buffer, { transfer: [pdf.buffer] })
+      return { doc: docOf({ 'axt-0s': [1, 72, 700] }), close: async () => { void text } }
+    }
+    const got = await layoutMarksOfPaper(paperOf(), { compile: compiler([PROBE, marked(enc('%PDF-1.7 the marked original')), finalAnswer(enc('%PDF-1.7 the final pass'))]).compile, open, OPS: {} })
+    expect(got).toMatchObject({ base: { check: { marks: 1 } } })
+    expect(dec((got as { base: { pdf: Uint8Array } }).base.pdf)).toBe('%PDF-1.7 the final pass')
   })
 })

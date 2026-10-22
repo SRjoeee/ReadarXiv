@@ -83,6 +83,46 @@ function fitted(text) {
 }
 
 /**
+ * Our base page's checks (design §3.3, the page-and-line check, after the guard): `ours` { doc, bytes, sha256, xref, text?, check? }
+ * (or { refused, why } / null: no base of ours), `draft` a PDF.js document of the marked original the marks were read from (its
+ * destinations the final pass's must be: base.mjs finalCheck; null where the host checked it, `ours.check`), `arxiv` { doc, text }
+ * arXiv's PDF and its text, `tree` the TeX Live year our compile was made on. In turn: the base page's text read (ours.text, else
+ * readArxivText with `draw`), its page count arXiv's ('boxes'), no mark of ours printed as text on it ('marks'), the final pass
+ * the draft's page ('final'), every page box arXiv's ('boxes': boxesCheck), the year known ('final'), and the share of its lines
+ * found on arXiv's PDF at least CARRY_MIN ('carry': carry.mjs carrierOf of the two texts' tokens). { text, lineCheck: { lines,
+ * pageLines }, head } (the head's base of ours, BUNDLE 8), or the first failing reason { refused, why, lines? }. What the page pass
+ * checks before its head, and the lab's makers with it (the gate pack's base pages). Never throws but a failed allocation
+ */
+export async function checkOurBase({ ours, draft = null, arxiv, tree = null, draw = true }) {
+  const no = (refused, why, extra = {}) => ({ refused, why: whyText(why), ...extra })
+  const oursDoc = ours?.doc ?? null
+  if (!oursDoc) return no('final', typeof ours?.why === 'string' && ours.why ? ours.why : PLAIN_WHY.final)
+  const { doc, text } = arxiv, N = doc.numPages
+  const baseText = ours.text ?? await readArxivText(oursDoc, { draw })
+  const shown = baseText.markText ?? null
+  if (baseText.pages !== N) return no('boxes', `our base page has ${baseText.pages} pages, arXiv's PDF ${N}`)
+  if (shown?.pages?.length) return no('marks', `a mark of ours stands as text on page ${shown.pages[0]} of our base page${shown.samples?.[0] ? ` (${shown.samples[0][1]})` : ''}`)
+  let fc = null
+  try { fc = draft ? await finalCheck(draft, oursDoc) : ours.check ? { ok: true } : { ok: false, why: 'it was not checked against the draft' } } catch (e) {
+    if (isMemoryError(e)) throw e
+    fc = { ok: false, why: `it could not be read: ${why(e)}` }
+  }
+  if (!fc.ok) return no('final', `the final pass is not the draft's page: ${fc.why}`)
+  let bc = null
+  try { bc = await boxesCheck(oursDoc, doc) } catch (e) {
+    if (isMemoryError(e)) throw e
+    bc = { equal: false, why: `a page box could not be read: ${why(e)}` }
+  }
+  if (!bc.equal) return no('boxes', bc.why)
+  if (typeof tree !== 'string' || !/^\d{4}$/.test(tree)) return no('final', 'the TeX Live year our compile was made on is not known')
+  // the line check: our base page's lines found on arXiv's PDF (carry.mjs carrierOf over the two texts' tokens), the paper's share
+  // here and each part's in its verdict; no position is carried
+  const c = carrierOf(baseText.tokens, text.tokens), L = c.lines, carried = L.same + L.moved + L.respaced + L.fuzzy
+  if (!(L.total > 0 && carried >= CARRY_MIN * L.total)) return no('carry', `${carried} of our ${L.total} lines found on arXiv's PDF, under ${Math.round(CARRY_MIN * 100)} %`, { lines: [carried, L.total] })
+  return { text: baseText, lineCheck: { lines: L, pageLines: c.pageLines }, head: { source: 'ours', bytes: ours.bytes, sha256: ours.sha256, xref: ours.xref, pages: N, tree, check: { pages: [N, N], boxes: 'equal', carried: carried / L.total } } }
+}
+
+/**
  * A paper's layer made and told part by part. `paper` { id, version }; `source` openPaper's paper (its units, ids their
  * indices); `marks` layout/paper.mjs layoutMarksOfPaper's result ({ marks, unitMarks }, or { refused }: no layout, the left by
  * the units' text alone; a refusal's `own`, the unmarked original's verdict, kept in `stats.layout` and in no part); `arxiv` { doc, text? }: a PDF.js document of arXiv's PDF (the caller's to open and destroy) and its
@@ -192,43 +232,10 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // fallback, the marks' refusal with its why (no maker, every part with no layout), its head's base arXiv's PDF
   let baseDoc = null, baseText = null, lineCheck = null, oursHead = null
   if (!(marks && !('marks' in marks))) {
-    const no = (refused, why, extra = {}) => { marks = { refused, why: whyText(why), ...extra }; marked = null }
-    if (!oursDoc) no('final', typeof ours?.why === 'string' && ours.why ? ours.why : PLAIN_WHY.final)
-    else {
-      baseText = ours.text ?? await readArxivText(oursDoc, { draw })
-      const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
-      const shown = baseText.markText ?? null
-      if (baseText.pages !== N) no('boxes', `our base page has ${baseText.pages} pages, arXiv's PDF ${N}`)
-      else if (shown?.pages?.length) no('marks', `a mark of ours stands as text on page ${shown.pages[0]} of our base page${shown.samples?.[0] ? ` (${shown.samples[0][1]})` : ''}`)
-      else {
-        let fc = null
-        try { fc = marked ? await finalCheck(marked.doc, oursDoc) : ours.check ? { ok: true } : { ok: false, why: 'it was not checked against the draft' } } catch (e) {
-          if (isMemoryError(e)) throw e
-          fc = { ok: false, why: `it could not be read: ${why(e)}` }
-        }
-        let bc = null
-        if (fc.ok) {
-          try { bc = await boxesCheck(oursDoc, doc) } catch (e) {
-            if (isMemoryError(e)) throw e
-            bc = { equal: false, why: `a page box could not be read: ${why(e)}` }
-          }
-        }
-        if (!fc.ok) no('final', `the final pass is not the draft's page: ${fc.why}`)
-        else if (!bc.equal) no('boxes', bc.why)
-        else if (typeof tree !== 'string' || !/^\d{4}$/.test(tree)) no('final', 'the TeX Live year our compile was made on is not known')
-        else {
-          // the line check: our base page's lines found on arXiv's PDF (carry.mjs carrierOf over the two texts' tokens), the
-          // paper's share here and each part's in its verdict; no position is carried
-          const c = carrierOf(baseText.tokens, text.tokens), L = c.lines, carried = L.same + L.moved + L.respaced + L.fuzzy
-          if (!(L.total > 0 && carried >= CARRY_MIN * L.total)) no('carry', `${carried} of our ${L.total} lines found on arXiv's PDF, under ${Math.round(CARRY_MIN * 100)} %`, { lines: [carried, L.total] })
-          else {
-            lineCheck = { lines: L, pageLines: c.pageLines }
-            oursHead = { source: 'ours', bytes: ours.bytes, sha256: ours.sha256, xref: ours.xref, pages: N, tree, check: { pages: [N, N], boxes: 'equal', carried: carried / L.total } }
-            baseDoc = oursDoc
-          }
-        }
-      }
-    }
+    const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
+    const checked = await checkOurBase({ ours, draft: marked?.doc ?? null, arxiv: { doc, text }, tree, draw })
+    if ('refused' in checked) { marks = { refused: checked.refused, why: checked.why, ...(checked.lines ? { lines: checked.lines } : {}) }; marked = null }
+    else { ({ text: baseText, lineCheck, head: oursHead } = checked); baseDoc = oursDoc }
   }
 
   // the left: anchored on arXiv's tokens the wire carries, under the unit marks (none: the units' text alone)

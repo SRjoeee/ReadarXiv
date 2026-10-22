@@ -9,7 +9,7 @@ export interface PdfLike {
   getPage(p: number): Promise<{ view?: number[]; rotate?: number; userUnit?: number; getTextContent(): Promise<{ items?: { str?: string }[] }> }>
   getDestinations(): Promise<Record<string, unknown[] | null> | Map<string, unknown[] | null>>
   getPageIndex(ref: unknown): Promise<number>
-  getMetadata?(): Promise<{ info?: { CreationDate?: string } | null } | null>
+  getMetadata?(): Promise<{ info?: { CreationDate?: string } | null; metadata?: { getRaw?(): unknown } | null } | null>
 }
 /** a document's `axt-` destinations: name → [page, x, y] */
 export declare function marksOfPdf(doc: PdfLike): Promise<Map<string, [page: number | null, x: number | null, y: number | null]>>
@@ -29,5 +29,10 @@ export declare const pageTextOf: (tc: { items?: { str?: string }[] } | null | un
 export declare function textOfPdf(doc: PdfLike): Promise<string[]>
 /** a PDF date (D:YYYYMMDDHHmmSSOHH'mm') as seconds since the epoch, null for what is not one */
 export declare function pdfDateEpoch(s: unknown): number | null
-/** a document's /CreationDate as seconds since the epoch, null where it has none */
+/** an XMP date (ISO 8601) as seconds since the epoch, null where it is not one */
+export declare function xmpDateEpoch(s: unknown): number | null
+/** an XMP packet's xmp:CreateDate and xmp:MetadataDate as seconds since the epoch */
+export declare function xmpDatesOf(raw: unknown): { create: number | null; metadata: number | null }
+/** a document's day as seconds since the epoch: its /CreationDate, else its XMP's CreateDate, else its MetadataDate; null where
+ *  it has none */
 export declare function creationEpochOf(doc: PdfLike): Promise<number | null>

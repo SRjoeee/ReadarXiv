@@ -82,6 +82,20 @@ export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<
 /** why a part has no layout, as its record says it: the paper's refusal (the marked original's, the page count's, the maker's)
  *  or the part's own (a verdict's, a part's bound's), TeX's and the carry's as such, every fault of the engine's own `marks` */
 export declare function layoutRecordOf(r: { refused?: string; why?: string; lines?: [number, number]; stats?: { lines?: { carried: number; total: number } } } | null | undefined): LayoutRefusalRecord | null
+/** our base page's checks (the page-and-line check after the guard: the page count, no mark printed as text, the final pass the
+ *  draft's page, every page box arXiv's, the TeX Live year, the line check's share): its text, the line check and the head's base
+ *  of ours, or the first failing reason (its code, LAYOUT_REFUSED's) */
+export declare function checkOurBase(o: {
+  ours: LayerOptions['ours']
+  /** the marked original the marks were read from (its destinations the final pass's must be), null where `ours.check` says so */
+  draft?: unknown
+  arxiv: { doc: unknown; text: ArxivText }
+  tree?: string | null
+  draw?: boolean
+}): Promise<
+  | { text: ArxivText; lineCheck: { lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number }; pageLines: ReadonlyMap<number, readonly [number, number]> }; head: import('../layer-proto/format.mjs').HeadBase }
+  | { refused: 'final' | 'boxes' | 'marks' | 'carry'; why: string; lines?: [number, number] }
+>
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`); `toplevels` where the paper has
  *  several toplevel sources (its marked original's pages against arXiv's) */
 export declare function layerOfPaper(o: LayerOptions): Promise<

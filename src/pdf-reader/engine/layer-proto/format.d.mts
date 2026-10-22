@@ -20,6 +20,11 @@ export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
 /** why a head of 8's base is arXiv's (`base.why`): LAYOUT_REFUSED's codes, which each part with no layout says too */
 export declare const BASE_WHYS: typeof LAYOUT_REFUSED
+/** whether a head's layer draws: its base is ours (BUNDLE 8); a head of 7 and every head over arXiv's PDF draw nothing */
+export declare const layerDraws: (base: unknown) => boolean
+/** whether a refusal of our base page may be transient (the host retries it rather than commit a fallback head): exactly where
+ *  it names the host's limit or the compile budget that caused it (`limit`) */
+export declare const baseRefusalRetryable: (refusal: unknown) => boolean
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
 export declare const UNITS_FORMAT: '1'
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`, named with the 5 beside bundle.mjs's CTAG whatever BUNDLE5's value */

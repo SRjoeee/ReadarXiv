@@ -105,6 +105,26 @@ export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
 /** why a head's base is arXiv's in a bundle of 8 (`base.why`): the paper's refusal, a code of LAYOUT_REFUSED, which every part
  *  with no layout says too */
 export const BASE_WHYS = LAYOUT_REFUSED
+/**
+ * Whether a head's layer draws: its base is ours (BUNDLE 8, the final pass of the marked original the layout file was made over).
+ * The one predicate every reader and host asks (`base` a head's base, readHead's): a head of 7 (arXiv's PDF, as every base was)
+ * and every head over arXiv's PDF, with a why or none, draw nothing (design note §3.5, §3.6)
+ */
+export const layerDraws = base => base !== null && typeof base === 'object' && base.source === 'ours'
+/**
+ * Whether a refusal of our base page (markedOfPaper's or layoutMarksOfPaper's paper refusal, or its `base` refusal) may be
+ * transient, so that the host retries the paper rather than commit a fallback head for good: exactly where it names the host's
+ * limit or the compile budget that caused it (`limit`: limitOf's name — the box's own, 'time' for a timeout — or 'budget').
+ *   code      retryable where                                               for good where
+ *   compile   the marked original or the paper's own source was stopped by  the paper's own source fails as itself (TeX's
+ *             a host's limit; no compile left in the budget to tell whose   error, its pages), or TeX never ran in it
+ *             fault it is (the paper's own source not compiled)
+ *   final     the final pass was stopped by a host's limit, or the budget   a check failed: a mark moved, another page count or
+ *             held no compile for it                                        box, the pass did not run through, or it threw
+ *   carry, marks, boxes, engine, texlive   never                            always (texlive after every served tree)
+ * A fault of the host's machinery (a failed allocation, a jail that fails) is no refusal: it is thrown, and retried as before
+ */
+export const baseRefusalRetryable = r => r !== null && typeof r === 'object' && typeof r.limit === 'string' && r.limit.length > 0
 export const WHY_MAX = 300
 /** a why as a record holds it: a run of control characters (a TeX log's raw bytes, a terminal's escapes) one space, within
  *  WHY_MAX */

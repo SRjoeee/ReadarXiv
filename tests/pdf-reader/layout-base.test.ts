@@ -1,7 +1,7 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { boxesCheck, creationEpochOf, finalCheck, hasMarkText, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf } from '@/pdf-reader/engine/layout/base.mjs'
+import { boxesCheck, creationEpochOf, finalCheck, hasMarkText, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf, xmpDateEpoch, xmpDatesOf } from '@/pdf-reader/engine/layout/base.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
 // Our compile as the base page (layout/base.mjs; design note §3.1, §3.3): the final pass against the draft it was made of, our
@@ -9,7 +9,7 @@ import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
 type Dest = [{ num: number; gen: number }, { name: string }, number | null, number | null, number | null]
 /** a PDF.js document of `pages` boxes and these destinations (a dest's page by its reference's number) */
-function docOf(boxes: number[][], dests: Record<string, [page: number, x: number | null, y: number | null]>, o: { texts?: string[]; created?: string; rotate?: number[] } = {}) {
+function docOf(boxes: number[][], dests: Record<string, [page: number, x: number | null, y: number | null]>, o: { texts?: string[]; created?: string; rotate?: number[]; xmp?: string } = {}) {
   const wire: Record<string, Dest> = {}
   for (const [name, [page, x, y]] of Object.entries(dests)) wire[name] = [{ num: 100 + page, gen: 0 }, { name: 'XYZ' }, x, y, null]
   return {
@@ -17,7 +17,7 @@ function docOf(boxes: number[][], dests: Record<string, [page: number, x: number
     getPage: async (p: number) => ({ view: boxes[p - 1], rotate: o.rotate?.[p - 1] ?? 0, userUnit: 1, getTextContent: async () => ({ items: [{ str: o.texts?.[p - 1] ?? '' }] }) }),
     getDestinations: async () => wire,
     getPageIndex: async (ref: { num: number }) => ref.num - 101,
-    getMetadata: async () => ({ info: o.created === undefined ? {} : { CreationDate: o.created } }),
+    getMetadata: async () => ({ info: o.created === undefined ? {} : { CreationDate: o.created }, metadata: o.xmp === undefined ? null : { getRaw: () => o.xmp } }),
   }
 }
 const A4 = [0, 0, 595.28, 841.89], LETTER = [0, 0, 612, 792]
@@ -106,6 +106,54 @@ describe('markTextOf: no mark of ours printed as text (2610.19860)', () => {
     expect(await textOfPdf(failing)).toEqual(['one', ''])
     const memory = { ...doc, getPage: async () => { throw new RangeError(ALLOCATION_FAILED) } }
     await expect(textOfPdf(memory)).rejects.toThrow(ALLOCATION_FAILED)
+  })
+})
+
+describe('the XMP dates, where arXiv\'s PDF has no /CreationDate (its PDFs of 2026, rewritten by pikepdf)', () => {
+  // (2608.04322v1's packet: the dates in the attribute form, MetadataDate alone)
+  const PIKEPDF = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/" rdf:about="" xmp:CreatorTool="arXiv GenPDF (tex2pdf:8def8d8)"/><rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/" rdf:about="" xmp:MetadataDate="2026-08-06T00:19:38.109123+00:00"/></rdf:RDF></x:xmpmeta>'
+  const ELEMENTS = '<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/"><xmp:CreateDate>2026-08-05T23:10:00+02:00</xmp:CreateDate><xmp:MetadataDate>2026-08-06T00:19:38Z</xmp:MetadataDate></rdf:Description>'
+
+  it('reads ISO 8601 as XMP writes it: the offset applied, a fraction of a second dropped, a date alone its midnight', () => {
+    expect(xmpDateEpoch('2026-08-06T00:19:38.109123+00:00')).toBe(Date.UTC(2026, 7, 6, 0, 19, 38) / 1000)
+    expect(xmpDateEpoch('2026-08-06T02:19:38+02:00')).toBe(Date.UTC(2026, 7, 6, 0, 19, 38) / 1000)
+    expect(xmpDateEpoch('2026-08-05T19:19:38-05:00')).toBe(Date.UTC(2026, 7, 6, 0, 19, 38) / 1000)
+    expect(xmpDateEpoch('2026-08-06T00:19Z')).toBe(Date.UTC(2026, 7, 6, 0, 19, 0) / 1000)
+    expect(xmpDateEpoch('2026-08-06')).toBe(Date.UTC(2026, 7, 6) / 1000)
+    expect(xmpDateEpoch('2026-08')).toBe(Date.UTC(2026, 7, 1) / 1000)
+    for (const s of ['', '2026-13-01', '2026-08-32', '2026-08-06T25:00Z', 'D:20260806', 'yesterday', null, 7]) expect(xmpDateEpoch(s), String(s)).toBeNull()
+  })
+
+  it('finds xmp:CreateDate and xmp:MetadataDate in either form (an attribute, an element; xap, the old prefix), none in another packet', () => {
+    expect(xmpDatesOf(PIKEPDF)).toEqual({ create: null, metadata: Date.UTC(2026, 7, 6, 0, 19, 38) / 1000 })
+    expect(xmpDatesOf(ELEMENTS)).toEqual({ create: Date.UTC(2026, 7, 5, 21, 10, 0) / 1000, metadata: Date.UTC(2026, 7, 6, 0, 19, 38) / 1000 })
+    expect(xmpDatesOf("<rdf:Description xap:CreateDate='2009-01-02T03:04:05Z'/>")).toEqual({ create: Date.UTC(2009, 0, 2, 3, 4, 5) / 1000, metadata: null })
+    expect(xmpDatesOf('<rdf:Description xmp:ModifyDate="2026-08-06T00:00:00Z"/>')).toEqual({ create: null, metadata: null })
+    expect(xmpDatesOf(null)).toEqual({ create: null, metadata: null })
+  })
+
+  it('takes, in order, the Info dictionary\'s /CreationDate, xmp:CreateDate, then xmp:MetadataDate; none, null', async () => {
+    const info = "D:20260801120000Z"
+    expect(await creationEpochOf(docOf([LETTER], {}, { created: info, xmp: ELEMENTS }))).toBe(Date.UTC(2026, 7, 1, 12) / 1000)
+    expect(await creationEpochOf(docOf([LETTER], {}, { xmp: ELEMENTS }))).toBe(Date.UTC(2026, 7, 5, 21, 10, 0) / 1000)
+    expect(await creationEpochOf(docOf([LETTER], {}, { xmp: PIKEPDF }))).toBe(Date.UTC(2026, 7, 6, 0, 19, 38) / 1000)
+    expect(await creationEpochOf(docOf([LETTER], {}, { created: 'not a date', xmp: PIKEPDF }))).toBe(Date.UTC(2026, 7, 6, 0, 19, 38) / 1000)
+    expect(await creationEpochOf(docOf([LETTER], {}, { xmp: '<x:xmpmeta/>' }))).toBeNull()
+    const throwing = { ...docOf([LETTER], {}), getMetadata: async () => ({ info: {}, metadata: { getRaw: () => { throw new Error('broken') } } }) }
+    expect(await creationEpochOf(throwing)).toBeNull()
+  })
+
+  it('reads a real PDF\'s XMP packet through PDF.js (no Info date: pdf-lib told to write none)', async () => {
+    const pdf = await PL.PDFDocument.create({ updateMetadata: false })
+    pdf.addPage([612, 792])
+    const packet = `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>${PIKEPDF}<?xpacket end="w"?>`
+    const stream = pdf.context.stream(packet, { Type: 'Metadata', Subtype: 'XML' })
+    pdf.catalog.set(PL.PDFName.of('Metadata'), pdf.context.register(stream))
+    const doc = await getDocument({ data: (await pdf.save()).slice(), verbosity: 0 }).promise
+    try {
+      expect((await doc.getMetadata()).info).not.toHaveProperty('CreationDate')
+      expect(await creationEpochOf(doc as never)).toBe(Date.UTC(2026, 7, 6, 0, 19, 38) / 1000)
+    } finally { await doc.loadingTask.destroy() }
   })
 })
 

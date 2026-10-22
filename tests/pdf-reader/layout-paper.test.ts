@@ -158,7 +158,7 @@ describe('layoutMarksOfPaper', () => {
     // compile's but where the host names the engine unknown (the guard's tests); a throw is the host's)
     const ran = { extra: 0, unmarked: [], names: true, failed: ['ran'] }
     const cases: [Compiled | Error, Record<string, unknown>][] = [
-      [{ ok: false, error: 'Compilation timeout' }, { refused: 'compile', why: 'the marked original was stopped by the host\'s time limit', guard: ran }],
+      [{ ok: false, error: 'Compilation timeout' }, { refused: 'compile', why: 'the marked original was stopped by the host\'s time limit', limit: 'time', guard: ran }],
       [{ ok: false, pdf: null, log: 'a halted pass' }, { refused: 'compile', why: 'the pdflatex compile ran no TeX: a halted pass', guard: ran }],
       [{ ok: true, log: 'no PDF either' }, { refused: 'compile', why: 'the pdflatex compile ran no TeX: no PDF either', guard: ran }],
       [{ ok: true, pdf: new Uint8Array(0), log: '' }, { refused: 'compile', why: 'the pdflatex compile ran no TeX', guard: ran }],
@@ -310,7 +310,7 @@ describe('markedOfPaper: the probe and the marked compile, the reading left to t
     expect(await markedOfPaper(paperOf(), { final: false, compile: compiler([{ ok: true, log: '' }]).compile })).toEqual({ refused: 'probe', ms: { probe: expect.any(Number) } })
     expect(await markedOfPaper(paperOf(), { final: false, compile: compiler([new Error('no compiler')]).compile })).toEqual({ refused: 'probe', ms: { probe: expect.any(Number) } })
     const timeout: Compiled = { ok: false, error: 'Compilation timeout (the wall limit)' }
-    expect(await markedOfPaper(paperOf(), { final: false, compile: compiler([{ ok: true, log: PROBE_LOG }, timeout]).compile })).toEqual({ refused: 'compile', why: 'the marked original was stopped by the host\'s time limit', ms: { probe: expect.any(Number), compile: expect.any(Number) }, guard: { extra: 0, unmarked: [], names: true, failed: ['ran'] } })
+    expect(await markedOfPaper(paperOf(), { final: false, compile: compiler([{ ok: true, log: PROBE_LOG }, timeout]).compile })).toEqual({ refused: 'compile', why: 'the marked original was stopped by the host\'s time limit', limit: 'time', ms: { probe: expect.any(Number), compile: expect.any(Number) }, guard: { extra: 0, unmarked: [], names: true, failed: ['ran'] } })
     const cm = await markedOfPaper(paperOf(), { final: false, compile: compiler([{ ok: true, log: PROBE_LOG }, timeout]).compile, converge: true })
     expect(cm).toMatchObject({ refused: 'compile', cm: expect.any(Object) })
     for (const [answers, why] of [[[{ ok: true, log: '' }], 'probe'], [[{ ok: true, log: PROBE_LOG }, timeout], 'compile']] as const) {
