@@ -39,8 +39,13 @@ export { LayoutRefusal } from './json.mjs'
  *  unchanged (the file's schema is 5 still); 12 (layer route step 2): the file's coordinates are our base page's, the final
  *  pass of the marked original (its marks where the draft has them), no longer arXiv's PDF's: a placeholder's segments are its
  *  own glyphs and rules between its two marks, looked up on that page with no matching, and the carry is the line check alone
- *  (the file's schema is 5 still) */
-export const LAYOUT = '12'
+ *  (the file's schema is 5 still); 13 is the engine lane's (its \@ change); 14 (the release sweep's fallbacks, 2026-10-22): the layout
+ *  compile writes a Latin-1 source as the paper's own bytes (live.mjs originalFiles `transcode`), sets no mark inside an
+ *  argument TeX reads verbatim (marks.mjs VERBATIM_ARG), reads no class's fallback for a command the role table knows as the
+ *  command's definition (arg-roles.mjs knownFallback), and takes no marked original of more pages than arXiv's for the base
+ *  page (paper.mjs markedOfPaper): over 183 local sources the marked original changes in 2610.20581 and 2610.19860 alone, the
+ *  gate pack's 32 outputs unchanged (the file's schema is 5 still) */
+export const LAYOUT = '14'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */
