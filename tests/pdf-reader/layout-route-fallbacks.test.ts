@@ -7,7 +7,7 @@ import { latin1Bytes, type SourceUnit } from '@/pdf-reader/engine/source/latex-f
 
 // The whole-paper fallbacks of the layer route's release sweep (2026-10-22), each by its general rule: a Latin-1 source's
 // marked original keeps the paper's own bytes (2610.20581); no mark of ours stands inside an argument TeX reads verbatim, and
-// a class's fallback for a command the role table knows is not read as the command's definition (2610.19860); and, the base
+// a class's fallback that a package the paper loads overrides is not read as the command's definition (2610.19860); and, the base
 // page asked, the guard takes no marked original of more pages than arXiv's, the unmarked original telling whose fault it is
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -87,48 +87,76 @@ describe('an argument TeX reads verbatim (2610.19860): no mark of ours inside it
   })
 })
 
-describe('a class\'s fallback definition (2610.19860\'s llncs.cls): not the command\'s, where the table knows the command', () => {
+describe('a class\'s fallback definition (2610.19860\'s llncs.cls): not the command\'s, where a package the paper loads overrides it', () => {
   /** each unit's pieces, a placeholder in brackets, a group's opening before < and its close after > */
   const piecesOf = (preamble: string, body: string, more: [string, string][] = []) => openPaper(new Map([['main.tex', enc(`\\documentclass{article}\n${preamble}\n\\begin{document}\n${body}\n\\end{document}\n`)], ...more.map(([p, t]): [string, Uint8Array] => [p, enc(t)])])).units.map(u => (u.pieces as { t: string; s?: string; src?: string }[]).map(q => (q.t === 'text' ? q.s : q.t === 'ph' ? `[${q.src}]` : q.t === 'open' ? `<${q.src}` : q.t === 'close' ? `${q.src}>` : q.t)))
   const URL = 'See \\url{https://github.com/a/b-c} and \\url{github.com/a}.'
   const AS_URL = [['\nSee ', '[\\url{https://github.com/a/b-c}]', ' and ', '[\\url{github.com/a}]', '.\n']]
   const AS_GROUP = [['\nSee ', '<\\url{', '[https://github.com/a/b-c]', '}>', ' and ', '<\\url{', 'github.com/a', '}>', '.\n']]
 
-  it('llncs.cls\' \\@ifundefined{url}{\\def\\url#1{#1}}{} in an \\AtBeginDocument: each \\url one placeholder, marked around it alone', () => {
+  it('llncs.cls\' \\@ifundefined{url}{\\def\\url#1{#1}}{} in an \\AtBeginDocument, under hyperref: each \\url one placeholder, marked around it alone', () => {
     const CLS = '\\NeedsTeXFormat{LaTeX2e}\\ProvidesClass{llncs}\\LoadClass{article}\n\\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}}\n'
     const p = openPaper(new Map([['main.tex', enc(`\\documentclass{llncs}\n\\usepackage{hyperref}\n\\begin{document}\nThe code is available at\\newline\n\\url{https://github.com/a/b-c} with $x$.\n\\end{document}\n`)], ['llncs.cls', enc(CLS)]]))
     const marked = ((layoutMarking(p.units, LAYOUT_CLASSES, { lines: false }).units[0]?.pieces ?? []) as { t: string; src?: string }[]).map(q => q.src ?? q.t)
     expect(marked).toEqual(['text', '\\newline', 'text', '\\axtpma{p0.3a}', '\\url{https://github.com/a/b-c}', '\\axtpm{p0.3b}', 'text', '\\axtpmm{p0.5a}', '$x$', '\\axtpm{p0.5b}', 'text'])
   })
-  it('each guard of the name being undefined, and \\providecommand', () => {
+  it('each guard of the name being undefined, \\unless inverting a conditional, and \\providecommand', () => {
     for (const guard of [
       '\\makeatletter\\@ifundefined{url}{\\def\\url#1{#1}}{}\\makeatother',
       '\\makeatletter\\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}}\\makeatother',
       '\\ifx\\url\\undefined\\def\\url#1{#1}\\fi',
       '\\ifx\\undefined\\url \\newcommand{\\url}[1]{#1}\\fi',
       '\\ifdefined\\url\\else\\def\\url#1{#1}\\fi',
+      '\\ifdefined\\url\\relax\\else\\def\\url#1{#1}\\fi',
       '\\expandafter\\ifx\\csname url\\endcsname\\relax\n  \\def\\url#1{#1}\n\\fi',
       '\\ifcsname url\\endcsname\\else\\gdef\\url#1{#1}\\fi',
+      '\\unless\\ifx\\url\\undefined\\else\\def\\url#1{#1}\\fi',
+      '\\unless\\ifdefined\\url\\def\\url#1{#1}\\fi',
+      '\\unless\\ifcsname url\\endcsname \\def\\url#1{#1}\\fi',
       '\\ifcsundef{url}{\\def\\url#1{#1}}{}',
       '\\ifundef{\\url}{\\def\\url#1{#1}}{}',
       '\\providecommand{\\url}[1]{#1}',
     ]) expect(piecesOf(`\\usepackage{hyperref}\n${guard}`, URL), guard).toEqual(AS_URL)
   })
-  it('a definition that stands is the paper\'s, as before: unguarded, in the other branch, under a test of another name or one nested deeper, or in a comment', () => {
+  it('a definition that stands is the paper\'s, as before: unguarded, in the branch taken where the name is defined (\\unless\'s too), under a test of another name or one nested deeper, or in a comment', () => {
     for (const def of [
       '\\def\\url#1{#1}',
       '\\ifx\\url\\undefined\\else\\def\\url#1{#1}\\fi',
+      '\\unless\\ifx\\url\\undefined\\def\\url#1{#1}\\fi',
+      '\\unless\\ifx\\url\\undefined \\relax\\def\\url#1{#1}\\else\\relax\\fi',
       '\\ifdefined\\url\\def\\url#1{#1}\\fi',
+      '\\unless\\ifdefined\\url\\else\\def\\url#1{#1}\\fi',
       '\\makeatletter\\@ifundefined{urlx}{\\def\\url#1{#1}}{}\\makeatother',
       '\\makeatletter\\@ifundefined{url}{}{\\def\\url#1{#1}}\\makeatother',
       '\\ifx\\url\\undefined\\iftrue\\def\\url#1{#1}\\fi\\fi',
       '% \\makeatletter\\@ifundefined{url}{\n\\def\\url#1{#1}',
     ]) expect(piecesOf(`\\usepackage{hyperref}\n${def}`, URL), def).toEqual(AS_GROUP)
   })
-  it('a fallback of a command the table does not know is the paper\'s, as before', () => {
+  it('overridden only where the paper loads a package that defines the command: by \\usepackage or \\RequirePackage, in a list, with options', () => {
+    const FALLBACK = '\\makeatletter\\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}}\\makeatother'
+    for (const loads of ['\\usepackage{url}', '\\usepackage{xurl}', '\\usepackage[hidelinks,colorlinks=true]{hyperref}', '\\usepackage{graphicx, hyperref ,amsmath}', '\\usepackage[T1]{fontenc}\n\\RequirePackage{url}', '\\RequirePackageWithOptions{hyperref}']) {
+      expect(piecesOf(`${loads}\n${FALLBACK}`, URL), loads).toEqual(AS_URL)
+    }
+    // (in a style of the package's own that the preamble loads)
+    expect(piecesOf(`\\usepackage{mystyle}\n${FALLBACK}`, URL, [['mystyle.sty', '\\ProvidesPackage{mystyle}\n\\RequirePackage[hyphens]{url}\n']])).toEqual(AS_URL)
+    // (none of them: the fallback is the definition TeX uses, as before; nor breakurl, under which pdfTeX leaves \\url as it was;
+    // nor one only named in a comment)
+    for (const loads of ['', '\\usepackage{graphicx}', '\\usepackage{breakurl}', '% \\usepackage{hyperref}', '\\usepackage{hyperrefx}']) {
+      expect(piecesOf(`${loads}\n${FALLBACK}`, URL), loads).toEqual(AS_GROUP)
+    }
+  })
+  it('a fallback no package the paper loads overrides is the paper\'s, as before: its argument\'s words are translated', () => {
+    // (a \\providecommand{\\url}[1]{#1} with no url package: TeX prints "important words")
+    expect(piecesOf('\\providecommand{\\url}[1]{#1}', 'See \\url{important words}.')).toEqual([['\nSee ', '<\\url{', 'important words', '}>', '.\n']])
+    expect(piecesOf('\\usepackage{hyperref}\n\\providecommand{\\url}[1]{#1}', 'See \\url{important words}.')).toEqual([['\nSee ', '[\\url{important words}]', '.\n']])
+    // (url.sty defines \\path only where it is undefined: a fallback for it stands; a command of no package's, as any)
+    expect(piecesOf('\\usepackage{url}\n\\providecommand{\\path}[1]{#1}', 'See \\path{important words}.')).toEqual([['\nSee ', '<\\path{', 'important words', '}>', '.\n']])
     const MINE = [['\nSee ', '<\\mycmd{', 'these words', '}>', '.\n']]
-    expect(piecesOf('\\makeatletter\\@ifundefined{mycmd}{\\def\\mycmd#1{#1}}{}\\makeatother', 'See \\mycmd{these words}.')).toEqual(MINE)
-    expect(piecesOf('\\providecommand{\\mycmd}[1]{#1}', 'See \\mycmd{these words}.')).toEqual(MINE)
+    expect(piecesOf('\\usepackage{hyperref}\n\\makeatletter\\@ifundefined{mycmd}{\\def\\mycmd#1{#1}}{}\\makeatother', 'See \\mycmd{these words}.')).toEqual(MINE)
+    expect(piecesOf('\\usepackage{hyperref}\n\\providecommand{\\mycmd}[1]{#1}', 'See \\mycmd{these words}.')).toEqual(MINE)
+    // (breakurl defines \\burl: its call one placeholder, as with no fallback at all)
+    expect(piecesOf('\\usepackage{hyperref,breakurl}\n\\providecommand{\\burl}[1]{#1}', 'See \\burl{github.com/a}.')).toEqual([['\nSee ', '[\\burl{github.com/a}]', '.\n']])
+    expect(piecesOf('\\providecommand{\\burl}[1]{#1}', 'See \\burl{github.com/a}.')).toEqual([['\nSee ', '<\\burl{', 'github.com/a', '}>', '.\n']])
   })
   it('fallbackDefinition: the definition must stand in the branch TeX takes where the name is undefined', () => {
     const at = (t: string) => t.lastIndexOf('\\def')
@@ -138,6 +166,10 @@ describe('a class\'s fallback definition (2610.19860\'s llncs.cls): not the comm
     expect(fallbackDefinition(other, at(other), 'url', 'def')).toBe(false)
     expect(fallbackDefinition('\\newcommand{\\url}[1]{#1}', 0, 'url', 'newcommand')).toBe(false)
     expect(fallbackDefinition('\\providecommand{\\url}[1]{#1}', 0, 'url', 'providecommand')).toBe(true)
+    // (\\ifx\\url\\undefined: its first branch is taken where \\url is undefined, its \\else where it is defined; \\unless the other way)
+    const branch = (t: string) => fallbackDefinition(`${t}\\def\\url#1{#1}\\fi`, t.length, 'url', 'def')
+    expect([branch('\\ifx\\url\\undefined'), branch('\\ifx\\url\\undefined\\else'), branch('\\unless\\ifx\\url\\undefined'), branch('\\unless\\ifx\\url\\undefined\\else')]).toEqual([true, false, false, true])
+    expect([branch('\\ifdefined\\url'), branch('\\ifdefined\\url\\else'), branch('\\unless\\ifdefined\\url'), branch('\\unless \\ifdefined\\url\\else')]).toEqual([false, true, true, false])
     // (a test too far before the definition is none)
     const far = `\\ifx\\url\\undefined${' '.repeat(500)}\\def\\url#1{#1}\\fi`
     expect(fallbackDefinition(far, at(far), 'url', 'def')).toBe(false)

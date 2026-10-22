@@ -41,8 +41,8 @@ export { LayoutRefusal } from './json.mjs'
  *  own glyphs and rules between its two marks, looked up on that page with no matching, and the carry is the line check alone
  *  (the file's schema is 5 still); 13 is the engine lane's (its \@ change); 14 (the release sweep's fallbacks, 2026-10-22): the layout
  *  compile writes a Latin-1 source as the paper's own bytes (live.mjs originalFiles `transcode`), sets no mark inside an
- *  argument TeX reads verbatim (marks.mjs VERBATIM_ARG), reads no class's fallback for a command the role table knows as the
- *  command's definition (arg-roles.mjs knownFallback), and takes no marked original of more pages than arXiv's for the base
+ *  argument TeX reads verbatim (marks.mjs VERBATIM_ARG), reads no class's fallback that a package the paper loads overrides as
+ *  the command's definition (arg-roles.mjs overriddenFallback), and takes no marked original of more pages than arXiv's for the base
  *  page (paper.mjs markedOfPaper): over 183 local sources the marked original changes in 2610.20581 and 2610.19860 alone, the
  *  gate pack's 32 outputs unchanged (the file's schema is 5 still) */
 export const LAYOUT = '14'
