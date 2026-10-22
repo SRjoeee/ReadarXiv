@@ -389,7 +389,8 @@ async function layoutOf(id, paper, dir) {
         // (the engine's first compile is the mark probe, latexmk's one pass; a later one-pass request the final pass, the paper's
         // engine once with no bibliography step; every other the marked original's, every pass)
         const probe = calls++ === 0, once = !probe && !req.rerun
-        const name = `${probe ? 'probe-' : once ? 'final-' : ''}${keyOf(req.overrides)}${Number.isSafeInteger(req.sourceDate) ? `-d${req.sourceDate}` : ''}`
+        // (a latex final pass's cache holds the driver's output behind the host's line since the contract: a pass cached before it has no such log and would be refused `final`, so its name differs)
+        const name = `${probe ? 'probe-' : once ? 'final-' : ''}${keyOf(req.overrides)}${Number.isSafeInteger(req.sourceDate) ? `-d${req.sourceDate}` : ''}${once && paper.meta.compiler === 'latex' ? '-dm' : ''}`
         const c = await compiled(dir, name, withSource(req.overrides), paper, { passes: probe ? 1 : null, once, sourceDate: req.sourceDate ?? null, files: !!req.files })
         return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log, ...(c.files ? { files: c.files } : {}) } : { ok: false, error: 'no log' }
       } catch (e) { fault = e; throw e }
