@@ -313,19 +313,25 @@ const cut = (t, start) => (t && t.length > 1 && CJK.test(t) ? ((start ? tokens(t
  * carries the word it followed where it was recorded (`t`, from markWords) is kept only where `doc` has the same word
  * there: the marks of our own compile of the original then serve arXiv's PDF wherever the two are laid out alike,
  * and nowhere else. `byPage`: the tokens of each page (made here where not given: a caller that bounds a unit at a time makes
- * it once)
+ * it once). `reach` (the layout maker's): a mark that stands at no word, here and in the marks' own compile (its carried word
+ * null: a unit that opens with a formula, a dash or a comma), is bounded by the word `reach(mark, start)` gives, or none; a
+ * reader's anchors keep tokenAtMark's word alone
  */
-export function boundsFromMarks(doc, marks, byPage = pageIndex(doc)) {
+export function boundsFromMarks(doc, marks, byPage = pageIndex(doc), reach = null) {
   const out = new Map()
   for (const [name, s] of marks) {
     if (!name.endsWith('s')) continue
     const id = name.slice(0, -1), e = marks.get(`${id}e`)
     if (!e) continue
-    const a = tokenAtMark(doc, byPage, s, true), b = tokenAtMark(doc, byPage, e, false)
+    let a = tokenAtMark(doc, byPage, s, true), b = tokenAtMark(doc, byPage, e, false)
+    const reachA = a == null && reach !== null && s.t === null, reachB = b == null && reach !== null && e.t === null
+    if (reachA) a = reach(s, true)
+    if (reachB) b = reach(e, false)
     if (a == null || b == null || b < a) continue
     // a carried word as it was, or as the tokenizer cuts it now (cut): the tokenizer still joins a word a hyphen cuts
-    // at a line's end with the CJK character after it, as the carried word has it (the review of A1, M2)
-    if ((s.t !== undefined && s.t !== doc[a].t && cut(s.t, true) !== doc[a].t) || (e.t !== undefined && e.t !== doc[b].t && cut(e.t, false) !== doc[b].t)) continue
+    // at a line's end with the CJK character after it, as the carried word has it (the review of A1, M2); a reached end has
+    // none to compare
+    if ((!reachA && s.t !== undefined && s.t !== doc[a].t && cut(s.t, true) !== doc[a].t) || (!reachB && e.t !== undefined && e.t !== doc[b].t && cut(e.t, false) !== doc[b].t)) continue
     out.set(id, [a, b])
   }
   return out

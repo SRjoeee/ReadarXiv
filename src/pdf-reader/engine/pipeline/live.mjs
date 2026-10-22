@@ -259,7 +259,9 @@ export function probeFiles({ fsys, project, meta }, { width = false, marks = fal
  *  placeholder of those classes and each cell and heading, and LAYOUT_TEX after MARK_DEF; `spans` names the paper's own
  *  units; `switches`, the paper's own switch (layout/marks.mjs readMarkProbe: TeX's answers to the mark probe), the
  *  marks taken off where TeX said they change what follows, and where it gave no answer; without `switches`, the marks
- *  as before; `inkless`, the paper's macros TeX said set no ink (readInkProbe), given no mark; and a babel name a style
+ *  as before; `inkless`, the paper's macros TeX said set no ink (readInkProbe), given no mark; `complete`, the paper's macros
+ *  that read nothing past their arguments (layout/marks.mjs completeCalled), and `apart`, those whose box TeX began with no
+ *  character (readInkApart), as layoutMarking takes them; and a babel name a style
  *  writes literally wrapped as the macro's text is (layout/marks.mjs literalNames). Without `layout`, the bytes as
  *  before. With `layout`, the layout guard's two remedies (layout/guard.mjs): `unmarked`, unit indices each written as
  *  the paper's own bytes (patch `asSource`: no mark, no layout mark, no span), and `names` false, no babel name marked
@@ -269,12 +271,12 @@ export function probeFiles({ fsys, project, meta }, { width = false, marks = fal
  *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before. `pastBegin`
  *  (on with `layout`: the layout compile, our base page): a unit's line probe after an environment's \\begin goes past the
  *  spaces \\begin skips (latex-front.mjs patch), which it would set; off, the live path's original as it was */
-export function originalFiles({ fsys, project, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, unmarked = null, names = true, pastBegin = !!layout } = {}) {
+export function originalFiles({ fsys, project, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, complete = null, apart = null, unmarked = null, names = true, pastBegin = !!layout } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
   let out, patched = null
   if (layout) {
-    const marked = layoutMarking(project.units, layout, { lines, switches, inkless }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    const marked = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     const asSource = unmarked ? new Set([...unmarked].map(i => marked.units[i]).filter(Boolean)) : null
     out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource, pastBegin })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }

@@ -8,7 +8,9 @@
 
 /**
  * The kernel's and textcomp's text symbols, as LaTeX defines them in every encoding, each the one character it sets
- * (\textquotesingle the straight quote ', \textquotedbl the straight double quote ")
+ * (\textquotesingle the straight quote ', \textquotedbl the straight double quote "); and the kernel's letters of Latin
+ * scripts (\o, \ss, \ae, \l, the dotless \i and \j: latex.ltx and the encodings' own, each one glyph) and \slash (`/` and the
+ * permission to break after it), which a paper writes inside a word (`F\o lner`, `and\slash or`), where no mark goes
  */
 export const TEXT_SYMBOLS = Object.freeze({
   '\\%': '%', '\\&': '&', '\\#': '#', '\\$': '$', '\\_': '_', '\\{': '{', '\\}': '}',
@@ -18,6 +20,8 @@ export const TEXT_SYMBOLS = Object.freeze({
   '\\textdagger': '†', '\\textdaggerdbl': '‡', '\\copyright': '©', '\\textcopyright': '©', '\\textregistered': '®',
   '\\texttrademark': '™', '\\pounds': '£', '\\textsterling': '£', '\\textdegree': '°', '\\textbullet': '•',
   '\\textperiodcentered': '·', '\\ldots': '…', '\\dots': '…', '\\textellipsis': '…', '\\textendash': '–', '\\textemdash': '—',
+  '\\o': 'ø', '\\O': 'Ø', '\\ss': 'ß', '\\ae': 'æ', '\\AE': 'Æ', '\\oe': 'œ', '\\OE': 'Œ', '\\aa': 'å', '\\AA': 'Å',
+  '\\l': 'ł', '\\L': 'Ł', '\\i': 'ı', '\\j': 'ȷ', '\\slash': '/',
 })
 
 /** a symbol's text: its source one of TEXT_SYMBOLS, alone or followed by an empty group (`\%{}`, `\dots{}`), else null */

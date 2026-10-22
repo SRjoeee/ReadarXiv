@@ -16,7 +16,7 @@ export interface UnitText { id: number; text: string; gaps?: number[]; lead?: st
 export declare function tokens(s: string): { t: string; at: number; len: number }[]
 export declare function tokenizeDocument(pages: TextPage[]): DocToken[]
 /** marks (`${id}s` / `${id}e` → where, and the word carried with it) → id → [first token, last token] */
-export declare function boundsFromMarks(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number; t?: string | null }>, byPage?: Map<number, number[]>): Map<string, [number, number]>
+export declare function boundsFromMarks(doc: DocToken[], marks: Map<string, { page: number; x: number; y: number; t?: string | null }>, byPage?: Map<number, number[]>, reach?: ((mark: { page: number; x: number; y: number }, start: boolean) => number | null) | null): Map<string, [number, number]>
 /** each page's tokens, by index */
 export declare function pageIndex(doc: readonly DocToken[]): Map<number, number[]>
 /** each mark with the word it stands by in `doc`, the document the marks were recorded in */

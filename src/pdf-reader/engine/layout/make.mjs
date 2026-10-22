@@ -660,6 +660,20 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     for (const [k, m, pos] of startsOn.get(b.page) ?? []) if (Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && (m.x < leadX || (m.x === leadX && pos < leadPos))) { lead = Number(k.slice(0, -1)); leadX = m.x; leadPos = pos }
     return lead
   }
+  /** the word a unit's mark reaches where it stands at none (boundsFromMarks `reach`): a unit that opens with a formula, a
+   *  dash or a comma has its start mark there, and its first word further on its line. The nearest word on the mark's
+   *  line, in its column, after it (a start mark) or before it (an end mark), at any distance: its column bounds it, not a
+   *  measure of points; or null. `byPage`, the base page's tokens by page */
+  const reachIn = byPage => (mk, start) => {
+    let best = null
+    const col = colAt(mk)
+    for (const k of byPage.get(mk.page) ?? []) {
+      const t = doc[k]
+      if (!t.t || Math.abs(t.y - mk.y) > t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
+      if (start ? t.x >= mk.x && (best === null || t.x < doc[best].x) : t.x + t.w <= mk.x + 1 && (best === null || t.x > doc[best].x)) best = k
+    }
+    return best
+  }
   /** the units' own marks where they stand, and the units located on the base page's tokens under them */
   function anchoring() {
     const t = now()
@@ -680,7 +694,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const c = raw.get(k)
       if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), m.t) })
     }
-    const bounds = boundsFromMarks(doc, carriedUnit)
+    const bounds = boundsFromMarks(doc, carriedUnit, byPage, reachIn(byPage))
     // a unit whose own marks were set but stand on no page with ink, or not on the same words there, stays the original's:
     // the text alone would place it, maybe wrongly
     unplaced = new Set()
@@ -888,7 +902,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // own switch it was compiled with)
   const design = new Map()
   {
-    const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless })
+    const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless, complete: marks.marking.complete, apart: marks.marking.apart })
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
         const m = p.t === 'ph' && /^\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
@@ -2048,7 +2062,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // draft frames'
     unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
     carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours); anchors = new Map()
-    const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours)
+    const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours), reach = reachIn(byPage)
     const byName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
     const listed = mh ? mh.named.filter(([, page]) => Number.isInteger(page) && page >= 1 && page <= M).sort(byName) : [...at].map(([nm, m]) => [nm, m.page, m.x, m.y])
     const pageOfName = new Map(), namesOn = new Map(), gOn = new Map(), keyNames = new Map(), keysOn = new Map(), nameList = []
@@ -2117,7 +2131,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const ks = [`${i}s`, `${i}e`].filter(k => withWords.has(k)), raw = new Map()
       for (const k of ks) raw.set(k, anchorMarkOf(nameOf.get(k)))
       for (const k of ks) { const c = raw.get(k); if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), withWords.get(k).t) }) }
-      const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage).get(String(i))
+      const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage, reach).get(String(i))
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !b))) unplaced.add(i)
       R.mark(i, b ?? null)

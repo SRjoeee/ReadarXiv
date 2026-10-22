@@ -276,6 +276,37 @@ export function readInkTexts(log, samples) {
   return out
 }
 
+/** a box's first node that no character before it can kern or join with: glue, a kern, a penalty, a box, a formula's start, a
+ *  rule, a colour stack, a write, a special or a literal, a mark */
+const APART_NODE = /^\.\\(?:glue|kern|penalty|[hv]box\(|mathon|rule\(|pdfcolorstack|write|openout|closeout|special|pdfliteral|pdfdest|pdfsave|mark)/
+/**
+ * The samples whose box TeX began with no character, from the probe's log (inkSection): each sample whose box TeX listed in full
+ * with no error between its rows, its first node one of APART_NODE (`\\,pp`'s kern, \\textsuperscript's formula, a colour's
+ * stack). Glued to the letters before it, such a macro is none of their word: no kern, ligature or hyphenation of theirs
+ * reaches past that node, and a mark set against it moves nothing (layoutMarking `apart`). A sample whose box begins with a
+ * character, or is not listed, is not one
+ */
+export function readInkApart(log, samples) {
+  const out = []
+  let at = null, first = null, listed = false, bad = false, done = false
+  for (const line of (log ?? '').split('\n')) {
+    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
+    if (r && r.schema === PROBE_SCHEMA && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+      const i = Number(r.fields[0])
+      if (r.tag === 'ink-at') { at = i; first = null; listed = false; bad = false; done = false; continue }
+      if (at === i && done && !bad && first !== null && APART_NODE.test(first) && samples[i] !== undefined) out.push(samples[i])
+      at = null
+      continue
+    }
+    if (at === null || done) continue
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) { done = listed; if (!done) bad = true; continue }
+    if (TEX_ERROR.test(line)) { bad = true; continue }
+    if (/^> \\box\d+=/.test(line)) { listed = true; continue }
+    if (listed && first === null && /^\.(?!\.)/.test(line)) first = line
+  }
+  return out
+}
+
 // ---- babel's names: what each one's own text is, TeX asked
 /** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well */
 export const NAME_MACROS = Object.freeze({ abstract: 'abstractname', ref: 'refname', bib: 'bibname', contents: 'contentsname', listfigure: 'listfigurename', listtable: 'listtablename', appendix: 'appendixname', index: 'indexname', proof: 'proofname', preface: 'prefacename', glossary: 'glossaryname', figure: 'figurename', table: 'tablename' })
@@ -820,6 +851,34 @@ export const colourPieceOf = p => (p?.t === 'open' && COLOUR_OPEN.test(p.src ?? 
  *  the unit (latex-front.mjs INLINE: kept equal, which layout-marks.test.ts holds against patch itself) */
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
 const WORD_END = /[\p{L}\p{N}]$/u
+/**
+ * Whether a placeholder is a call of one of the paper's macros that reads nothing past its own arguments (`complete`, name →
+ * arity: latex-front.mjs completeMacros, from the macro's definition) with those arguments all in it: the command, then as
+ * many arguments as it takes, each a brace group or one token (TeX skips the spaces before each), and nothing after them
+ * but white space, or an empty group for a macro of none (`\method{}`, as the front end keeps it)
+ */
+export function completeCall(p, complete) {
+  if (!complete?.size || p?.t !== 'ph' || typeof p.src !== 'string') return false
+  const m = /^\\([A-Za-z@]+)/.exec(p.src)
+  const arity = m && complete.get(m[1])
+  if (arity === undefined || arity === null) return false
+  const s = p.src
+  let k = m[0].length
+  const spaces = () => { while (k < s.length && /\s/.test(s[k])) k++ }
+  for (let n = 0; n < arity; n++) {
+    spaces()
+    if (k >= s.length || s[k] === '}') return false
+    if (s[k] === '{') {
+      let depth = 0, j = k
+      for (; j < s.length; j++) { if (s[j] === '\\') { j++; continue } if (s[j] === '{') depth++; else if (s[j] === '}' && --depth === 0) break }
+      if (j >= s.length) return false
+      k = j + 1
+    } else if (s[k] === '\\') { const c = /^\\(?:[A-Za-z@]+|.)/s.exec(s.slice(k)); k += c ? c[0].length : 1 } else k++
+  }
+  spaces()
+  if (arity === 0 && s.startsWith('{}', k)) { k += 2; spaces() }
+  return k === s.length
+}
 /** a source that ends an environment: \end skips the spaces after it where the environment says so (a display's,
  *  subequations' after a \label: 2608.12255), and a mark is the first thing it would not skip */
 const ENDS_ENV = /\\end\s*\{[^{}]*\}\s*$/
@@ -898,10 +957,16 @@ function passedOver(pieces) {
  *   would stand on the next line, a blank one no paragraph's end any more: 2608.08350's `.\` before one) or an
  *   environment's \end
  */
-export function layoutMarking(units, classes, { lines = false, switches = null, inkless = null } = {}) {
+export function layoutMarking(units, classes, { lines = false, switches = null, inkless = null, complete = null, apart = null } = {}) {
   const on = new Set(classes)
   /** a paper's macro TeX said sets no ink (readInkProbe): no mark, as an invisible placeholder has none */
   const none = new Set(inkless ?? [])
+  /** the paper's macros that read nothing past their arguments (completeMacros): a call of one with all of them looks at
+   *  nothing after it, so its closing mark goes after it and the piece after it keeps its marks */
+  const closed = complete instanceof Map ? complete : new Map(Array.isArray(complete) ? complete : Object.entries(complete ?? {}))
+  const looks = p => LOOKS_AHEAD(p) && !completeCall(p, closed)
+  /** the paper's macros whose box TeX began with no character (readInkApart): glued to a word, they are none of its letters */
+  const parted = new Set(apart ?? [])
   /** what TeX answered for a piece's command before what follows it: a code of readMarkProbe's ('x' no answer: no mark
    *  as '2'); with `switches` and no answer for an asked class's command, '2' too — no mark where TeX did not say one
    *  is safe (the re-review's m4); with no `switches` at all (the probe not run), undefined: the marks as before */
@@ -934,18 +999,20 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) last = p
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
-      const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p)) ? classOf(p) : null
+      const cls = passed && !passed.has(k) && !(looks(after) && !READS_NOTHING(after) && !free(after, p)) ? classOf(p) : null
       if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
-      // part the word's hyphenation and kerns
+      // part the word's hyphenation and kerns — but not one whose box TeX began with no character (`apart`: a kern, glue,
+      // a box, a formula, a colour), which no kern, ligature or word of the letters before it reaches (`0.58\\pp`, \\pp
+      // `\\,pp`; `Zhou\\textsuperscript{1}`)
       const before = u.pieces[k - 1], next = u.pieces[k + 1]
-      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s)) return [piece]
+      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src)) return [piece]
       const said = answer(p, next)
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX)
       const open = { t: 'ph', src: `\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
-      if (said === '1' || (LOOKS_AHEAD(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
+      if (said === '1' || (looks(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
     })
   })
@@ -968,8 +1035,11 @@ export const MARKS_DEPTH = 3
  *  piece past its column's end and of a display group (a later display of one 'in the display before it'); 7 the marked compile's Link annotations that name a destination (`links`:
  *  rectangle, the glyphs under it, their text), which a reference the matcher misses is placed by; 8 each unit's alignment as
  *  TeX set its paragraph (`align`: LAYOUT_TEX's AXT-ALIGN at its end mark, readAlign), which the maker's centred flag is,
- *  and each colour piece's fill as TeX set its run (`colours`: AXT-COLOUR at the piece, readColours) */
-export const MARKS_SCHEMA = 8
+ *  and each colour piece's fill as TeX set its run (`colours`: AXT-COLOUR at the piece, readColours); 9 the paper's macros
+ *  that read nothing past their arguments (`marking.complete`, completeCalled: a call of one gets its closing mark, and the
+ *  piece after it its marks) and those whose box TeX began with no character (`marking.apart`, readInkApart: glued to a
+ *  word, marked all the same) */
+export const MARKS_SCHEMA = 9
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
 /** the keys a marks file holds: KEYS, and `colours` where a colour piece has a fill (a file of before, or of a paper with
@@ -982,7 +1052,7 @@ export const LINKS_MAX = 20_000
 const DEST_MAX = 128, LINK_TEXT_MAX = 64
 /** a link entry: [dest, page, x0, y0, x1, y1, a, b, n, text] */
 const LINK_ROW = 10
-const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts', 'names', 'lineskip']
+const MARKING_KEYS = ['classes', 'switches', 'inkless', 'texts', 'names', 'lineskip', 'complete', 'apart']
 /** a piece's own ink at most: its glyphs, its rules; and a paper's in all (each 5 values) */
 export const GLYPHS_PIECE = 20_000, RULES_PIECE = 2_000, OWNED_ALL = 250_000
 /** the distinct characters of the owned glyphs at most, and the code units of one */
@@ -1031,6 +1101,34 @@ function checkTexts(v, path) {
     seen.add(src)
   }
   return v
+}
+/** the paper's macros a marking takes for reading nothing past their arguments, at most */
+export const COMPLETE_MAX = 4096
+/** the paper's macros that read nothing past their arguments (completeMacros, those its units call: completeCalled), as the
+ *  marking takes them: null where the front end gave none, else an object of at most COMPLETE_MAX names (a control word's,
+ *  without its backslash), each its arity 0 to 9; else a refusal at `path` */
+function checkComplete(v, path) {
+  if (v === null) return null
+  if (!isObject(v)) throw new LayoutRefusal(path, 'not null or an object')
+  const keys = Object.keys(v)
+  if (keys.length > COMPLETE_MAX) throw new LayoutRefusal(path, `more than ${COMPLETE_MAX} macros`)
+  for (const k of keys) {
+    if (!/^[A-Za-z@]{1,63}$/.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word\'s name')
+    if (!Number.isInteger(v[k]) || v[k] < 0 || v[k] > 9) throw new LayoutRefusal(`${path}.${k}`, 'not an arity of 0 to 9')
+  }
+  return v
+}
+/** of the paper's complete macros (latex-front.mjs completeMacros, [name, arity]), those its units call as placeholders,
+ *  as the marking records them: an object by name, at most COMPLETE_MAX, the first by name; null for none given */
+export function completeCalled(units, complete) {
+  if (!Array.isArray(complete)) return null
+  const called = new Set()
+  for (const u of units) for (const p of u.pieces) { const c = p.t === 'ph' && /^\\([A-Za-z@]+)/.exec(p.src ?? ''); if (c) called.add(c[1]) }
+  const out = {}
+  let n = 0
+  // (a name the file's check takes: a control word's of at most 63 letters, an arity of one digit)
+  for (const [name, arity] of complete) if (called.has(name) && n < COMPLETE_MAX && /^[A-Za-z@]{1,63}$/.test(name) && Number.isInteger(arity) && arity >= 0 && arity <= 9) { out[name] = arity; n++ }
+  return out
 }
 /** the names' answers the probe gave (readNameProbe), as the maker takes them: null where no probe ran, else an object
  *  of keys of NAME_KEYS, each 0 or 1; else a refusal at `path` */
@@ -1221,12 +1319,12 @@ const UNIT_MARK = /^\d+[se]$/
  * WORDS_MAX): the lab's file (layoutMarksOf). `marked` a PDF.js document of the marked original, `log` its last pass's log;
  * the options are layoutMarksOf's
  */
-export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, names = null, lineskip = null, units = null, OPS = null, paper = false }) {
+export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASSES, switches = null, inkless = null, texts = null, names = null, lineskip = null, complete = null, apart = null, units = null, OPS = null, paper = false }) {
   if (!ENGINES.includes(engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const sw = checkSwitches(switches, 'switches'), none = checkInkless(inkless, 'inkless')
   const said = texts === null ? null : checkTexts(Array.isArray(texts) ? texts.flat() : texts, 'texts')
   const cased = checkNames(names, 'names')
-  const marking = { classes: [...checkClasses(classes, 'classes')], switches: sw === null ? null : { ...sw }, inkless: none === null ? null : [...none], texts: said === null ? null : [...said], names: cased === null ? null : Object.fromEntries(NAME_KEYS.filter(k => Object.hasOwn(cased, k)).map(k => [k, cased[k]])), lineskip: checkLineskip(lineskip, 'lineskip') === null ? null : lineskip.map(r2z) }
+  const marking = { classes: [...checkClasses(classes, 'classes')], switches: sw === null ? null : { ...sw }, inkless: none === null ? null : [...none], texts: said === null ? null : [...said], names: cased === null ? null : Object.fromEntries(NAME_KEYS.filter(k => Object.hasOwn(cased, k)).map(k => [k, cased[k]])), lineskip: checkLineskip(lineskip, 'lineskip') === null ? null : lineskip.map(r2z), complete: checkComplete(complete, 'complete') === null ? null : { ...complete }, apart: checkInkless(apart, 'apart') === null ? null : [...apart] }
   const pdf = marked
   const pages = checkPages(pdf.numPages, 'pages')
   const dropped = duplicatesIn(log), twice = new Set(dropped)
@@ -1548,7 +1646,7 @@ function fitted(m) {
 export function encodeLayoutMarks(m) {
   const { schema, engine, marking, pages, views, columns, marks, dropped, lines, align, colours, words, tokens, chars, owned, links } = m
   return JSON.stringify({
-    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, align, ...(colours?.length ? { colours } : {}), words,
+    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2), complete: marking.complete, apart: marking.apart }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, align, ...(colours?.length ? { colours } : {}), words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
     owned: owned.map(ownedRow),
     links: (links ?? []).map(e => e.map((v, j) => (j >= 2 && j <= 7 ? r2(v) : v))),
@@ -1570,6 +1668,8 @@ export function parseLayoutMarks(bytes) {
   checkTexts(marking.texts, 'marking.texts')
   checkNames(marking.names, 'marking.names')
   checkLineskip(marking.lineskip, 'marking.lineskip')
+  checkComplete(marking.complete, 'marking.complete')
+  checkInkless(marking.apart, 'marking.apart')
   const pages = checkPages(m.pages, 'pages')
   const views = checkViews(m.views, pages, 'views')
   if (!Array.isArray(m.columns) || m.columns.length !== pages) throw new LayoutRefusal('columns', `not ${pages} entries`)

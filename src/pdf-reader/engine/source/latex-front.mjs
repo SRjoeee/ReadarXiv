@@ -583,6 +583,47 @@ function paperMacros(files) {
   }
   return out
 }
+/** every way a file defines a command, its name in group 1 (arg-roles.mjs OWN_COMMANDS' forms, \\let and the expanded
+ *  definitions among them): a definition completeMacros does not read makes what the command does unknown */
+const ANY_DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|futurelet|newtoks|DeclareMathOperator\*?|DeclareTextCommand|DeclareTextSymbol|DeclareTextCommandDefault|newcounter|newlength|newif)\s*\{?\s*\\([A-Za-z@]+)/g
+/** \\NewDocumentCommand and its kin, all their arguments mandatory (`m`, `+m`): name, spec, at the body's brace */
+const DOCUMENT_COMMAND = /\\(?:New|Renew|Provide|Declare)DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*\{([^{}]*)\}\s*/g
+/**
+ * The paper's macros that read nothing past their own arguments, as [name, arity] by name: each definition of the name in the
+ * package's files one completeMacros reads — \\newcommand, \\renewcommand, \\providecommand, \\DeclareRobustCommand (starred
+ * or not, with `[n]` and no optional first argument), \\def\\x#1#2 (\\edef, \\gdef, \\xdef), \\NewDocumentCommand with a spec of
+ * mandatory arguments alone —, all of one arity, and none whose body reads on (readsOn: \\@ifnextchar, \\@ifstar, \\futurelet,
+ * \\xspace or any command at its end that may take what follows). A call of such a macro that holds its arguments (layout/
+ * marks.mjs) reads nothing after it, so a layout mark after it is none of its arguments. A name defined in any other way
+ * (\\let, a delimited \\def, \\DeclareMathOperator) is not one: what it reads is not known
+ */
+export function completeMacros(files) {
+  const found = new Map(), every = new Map()
+  const add = (name, arity) => (found.get(name) ?? found.set(name, []).get(name)).push(arity)
+  const defs = /\\(?:((?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|(?:[egx]?def)\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*)(?=\{))/g
+  for (const { text: t } of files) {
+    for (const m of t.matchAll(ANY_DEFINITION)) if (!inComment(t, m.index) && !inOwnCall(t, m.index, m[1])) every.set(m[1], (every.get(m[1]) ?? 0) + 1)
+    for (const m of t.matchAll(defs)) {
+      const name = m[2] ?? m[3] ?? m[5], params = m[1] ? Number(m[4] ?? 0) : (m[6].match(/#\d/g) ?? []).length
+      if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
+      let k = skipSpaces(t, m.index + m[0].length)
+      // (an optional first argument: the call looks ahead for its bracket, so it may read what follows)
+      if (t[k] === '[') { add(name, -1); continue }
+      if (t[k] !== '{') { add(name, -1); continue }
+      const e = matchGroup(t, k)
+      add(name, e < 0 || readsOn(t.slice(k + 1, e - 1)) ? -1 : params)
+    }
+    for (const m of t.matchAll(DOCUMENT_COMMAND)) {
+      const name = m[1] ?? m[2], spec = m[3].trim().split(/\s+/).filter(Boolean)
+      if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
+      const k = m.index + m[0].length, e = t[k] === '{' ? matchGroup(t, k) : -1
+      add(name, e < 0 || !spec.every(s => s === 'm' || s === '+m') || readsOn(t.slice(k + 1, e - 1)) ? -1 : spec.length)
+    }
+  }
+  const out = []
+  for (const [name, arities] of found) if (arities.every(a => a >= 0 && a === arities[0]) && every.get(name) === arities.length) out.push([name, arities[0]])
+  return out.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+}
 /**
  * The command a macro's body ends in, none of its arguments given there, by name: TeX's reading goes on past the call's
  * own arguments into that command's (`then`, the walker's: the call is walked as that command). 2106.10165's
@@ -1619,7 +1660,8 @@ function readProject(fsys, main, tables, sourceText, own) {
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
-  return { main: mainFile.rel, files, units, inFloat, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }
+  // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
+  return { main: mainFile.rel, files, units, inFloat, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode, complete: completeMacros(own) }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */

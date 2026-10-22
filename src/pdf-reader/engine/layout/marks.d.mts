@@ -44,6 +44,16 @@ export declare function readInkProbe(log: string, samples: readonly string[]): s
 export declare const INK_TEXT_MAX: number
 /** each sample's text, where the probe showed it sets letters and digits of text fonts alone: [source, text] */
 export declare function readInkTexts(log: string, samples: readonly string[]): [string, string][]
+/** the samples whose box TeX began with no character (a kern, glue, a box, a formula, a colour): glued to a word, none of its letters */
+export declare function readInkApart(log: string, samples: readonly string[]): string[]
+/** the paper's macros a marking takes for reading nothing past their arguments, at most */
+export declare const COMPLETE_MAX: number
+/** the paper's macros that read nothing past their arguments, by name: their arity */
+export type Complete = Record<string, number>
+/** whether a placeholder is a call of such a macro (name → arity) with all its arguments in it */
+export declare function completeCall(p: unknown, complete: ReadonlyMap<string, number> | null | undefined): boolean
+/** of the front end's complete macros ([name, arity]), those the units call, by name; null for none given */
+export declare function completeCalled(units: readonly SourceUnit[], complete: readonly (readonly [string, number])[] | null | undefined): Complete | null
 /** each babel name's macro, by key (\\refname's `ref`) */
 export declare const NAME_MACROS: Readonly<Record<NameKey, string>>
 /** each babel name's English value (babel's en [captions]) */
@@ -103,11 +113,11 @@ export declare const MARK_NAME: RegExp
 /** the units with their layout marks as pieces of their own (each unit copied; the paper's units untouched), and each
  *  unit's mark for patch(): MARK_DEF's for a marked unit (with \axtlines when `lines`), a cell's and a heading's own;
  *  marks taken off where `switches` (TeX's answers) says they change what follows */
-export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; switches?: Switches | null; inkless?: readonly string[] | null }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
+export declare function layoutMarking(units: readonly SourceUnit[], classes: readonly MarkClass[], o: { lines: boolean; switches?: Switches | null; inkless?: readonly string[] | null; complete?: Complete | ReadonlyMap<string, number> | readonly (readonly [string, number])[] | null; apart?: readonly string[] | null }): { units: SourceUnit[]; mark(u: SourceUnit): UnitMark }
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 8
+  schema: 9
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -116,7 +126,7 @@ export interface LayoutMarks {
   /** `texts`: the probe's texts, flat (source, text, source, text, …), null where no probe ran */
   /** `names`: whether each babel name's own text holds a lowercase letter (readNameProbe), null where no probe ran */
   /** `lineskip`: the paper's \lineskip and \lineskiplimit, PDF units (readSkipProbe), null where the probe gave none */
-  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null; names: Partial<Record<NameKey, 0 | 1>> | null; lineskip: [number, number] | null }
+  marking: { classes: MarkClass[]; switches: Switches | null; inkless: string[] | null; texts: string[] | null; names: Partial<Record<NameKey, 0 | 1>> | null; lineskip: [number, number] | null; complete: Complete | null; apart: string[] | null }
   pages: number
   /** per page: x0, y0, x1, y1 (stride 4) */
   views: number[]
@@ -162,7 +172,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 8
+export declare const MARKS_SCHEMA: 9
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]
@@ -180,7 +190,7 @@ export declare const RULES_PIECE: number
 export declare const OWNED_ALL: number
 /** from a PDF.js document of the marked original and its last TeX pass's log; the caller opens and destroys the
  *  document. With the paper's `units` and PDF.js's operator codes, each marked piece's own ink from its operator lists */
-export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
+export declare function layoutMarksOf(marked: unknown, log: string, o: { engine: string; classes?: readonly MarkClass[]; switches?: Switches | null; inkless?: readonly string[] | null; texts?: readonly (readonly [string, string])[] | readonly string[] | null; names?: Partial<Record<NameKey, 0 | 1>> | null; lineskip?: readonly [number, number] | null; complete?: Complete | null; apart?: readonly string[] | null; units?: readonly SourceUnit[] | null; OPS?: Record<string, number> | null }): Promise<LayoutMarks>
 /** the unit marks the left is anchored by: `<id>s` / `<id>e` → the destination's place and the word it stands by (markWords) */
 export type UnitMarks = Map<string, { page: number; x: number; y: number; t: string | null }>
 /** an owned row as a page hands it on: [name, how], or [name, how, n, glyphs (page, x0, y, size, the character itself or its

@@ -43,8 +43,16 @@ export { LayoutRefusal } from './json.mjs'
  *  read nothing (rules/tex-kernel.mjs: `\@` in "Fig.\@ \ref{x}", `\indent`…) or after a LaTeX text symbol (`\S\ref{x}`) gets its
  *  marks, where the maker took the one before it for a macro that may look ahead and left it with none: over 177 sources
  *  19 papers' marked originals gain 359 opening marks, the other 158 and every unit are as they were (the
- *  file's schema is 5 still; the gate pack's seven papers are among those unchanged) */
-export const LAYOUT = '13'
+ *  file's schema is 5 still; the gate pack's seven papers are among those unchanged); 14: what stands beside a placeholder read
+ *  from what the paper says rather than guessed (marks.mjs MARKS_SCHEMA 9): a call of the paper's own macro that reads nothing past
+ *  its arguments (latex-front.mjs completeMacros, from its definition) gets its closing mark and leaves the piece after it its
+ *  marks; a macro glued to a word whose box TeX begins with no character (a kern, a formula, a colour: readInkApart) is marked;
+ *  the kernel's letters and \slash are text symbols; and a unit whose start or end mark stands at no word is bounded by the
+ *  nearest word on the mark's line in its column (make.mjs reachIn). Over the release-route sweep's 35 papers with unanchored
+ *  rows, 70 of the 217 rows (57 units) convert and no other unit's layout changes; the six papers whose marked originals change
+ *  set every word of their base pages where they were (pdftotext, 104,992 words). Of the gate pack's seven papers 2609.26457's
+ *  marked original changes (123 marks gained); the others' are byte for byte as before (the file's schema is 5 still) */
+export const LAYOUT = '14'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */
