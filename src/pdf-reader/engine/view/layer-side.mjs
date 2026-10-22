@@ -26,6 +26,7 @@
 // (contents.mjs) and the heading read are told on the view's channel. Lifted, for the drawing over the places, from the web's
 // web/src/layer/side.ts (drawOver: the copy's source and resolution, the stall, the copies let go) and, for the document's
 // open and the open again, from its visit.ts.
+import { layerDraws } from '../layer-proto/format.mjs'
 import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
 import { unitOf } from '../layer-proto/rows.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
@@ -104,9 +105,9 @@ export function createLayerSide(view, o) {
   let state = 'idle', why = null
   let index = null, bound = null, door = null, doorParts = [], gen = 0, token = null, offPage = null
   /** whether the layer is drawn over our own compile (the head's base says `ours`: the layer route, design §3.2; the engine's
-   *  layerDraws): the composed document's pages are then OUR base's, whose lines are not arXiv's page's, so a page's copy comes
+   *  layerDraws, format.mjs): the composed document's pages are then OUR base's, whose lines are not arXiv's page's, so a page's copy comes
    *  from the composed document alone and a page laid by no layout is the original's page */
-  const oursBase = () => index?.head?.base?.source === 'ours'
+  const oursBase = () => layerDraws(index?.head?.base)
   /** whether page `n` stays the original's page: the layer is over our base and the parts that hold the page have no layout (a
    *  page the door would lay with nothing drawn and nothing erased: our base page, in other line breaks, beside arXiv's) */
   const originalPageOf = n => oursBase() && noLayoutPage(feed.state().parts, n)

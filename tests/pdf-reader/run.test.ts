@@ -14,10 +14,11 @@ import { made, type Made, N, PAPER } from './helpers/format-paper'
 const API = 'https://readarxiv.com'
 const SEG = `${PAPER.id}v${PAPER.version}`
 const ARXIV = `https://arxiv.org/pdf/${SEG}`
-let m: Made
+let m: Made, mOurs: Made
 let catalog: Uint8Array<ArrayBuffer>
 beforeEach(async () => {
   m ??= await made()
+  mOurs ??= await made({ ours: true })
   catalog ??= (await writeCatalog({ head: m.readHead, units: m.chunks.map(c => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length })), parts: m.parts.map(p => ({ from: p.from, to: p.to, sha256: p.sha256, bytes: p.bytes.length })), end: { through: N } } as never)).bytes as Uint8Array<ArrayBuffer>
 })
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
@@ -53,7 +54,8 @@ const hex = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 /** the head the side's index holds: by default a layer over our own compile (`source` ours), with the arXiv PDF its check ran over
  *  (`orig`: the default view's, the tab's own bytes); `base` and `orig` replace them (the head of a layer that draws nothing: arXiv's) */
 function headOf(over: { base?: object; orig?: { bytes: number; sha256: string } | null } = {}) {
-  const base = over.base ?? { ...m.index.head.base, source: 'ours', pages: N, tree: '2025', check: { pages: [N, N], boxes: 'equal', carried: 0.99 } }
+  // (the engine's own head of a layer over our compile: its base, with the check it passed)
+  const base = over.base ?? mOurs.index.head.base
   const orig = over.orig === undefined ? { bytes: 4, sha256: hex(new Uint8Array([1, 2, 3, 4])) } : over.orig
   return { ...m.index.head, base, orig }
 }
@@ -394,7 +396,7 @@ describe('the base (design §3.2, §3.5): only a layer over our own compile draw
       const a = go({ head: { orig } })
       await settle()
       expect(await bindOf(a)(head(over)), what).toBe(false)
-      expect(a.s.calls.filter(c => c.url !== `${API}/api/v1/layer/${SEG}/b7-j6.3.289`), what).toEqual([])
+      expect(a.s.calls.filter(c => c.url !== `${API}/api/v1/layer/${SEG}/${CTAG5}`), what).toEqual([])
       expect(a.v.showOriginal, what).not.toHaveBeenCalled()
       expect(a.v.originalData, what).not.toHaveBeenCalled()
     }
@@ -417,7 +419,7 @@ describe('the base (design §3.2, §3.5): only a layer over our own compile draw
       const a = go()
       await settle()
       expect(await bindOf(a)(base), what).toBe(false)
-      expect(a.s.calls.filter(c => c.url !== `${API}/api/v1/layer/${SEG}/b7-j6.3.289`), what).toEqual([])
+      expect(a.s.calls.filter(c => c.url !== `${API}/api/v1/layer/${SEG}/${CTAG5}`), what).toEqual([])
       expect(a.v.showOriginal, what).not.toHaveBeenCalled()
       expect(a.v.originalData, what).not.toHaveBeenCalled()
     }

@@ -445,10 +445,10 @@ describe('L14: the feed\'s refusals', () => {
 })
 
 describe('L17: a layer over our own compile (the layer route, design §3.2): its copy from the composed document, a page without a layout the original\'s', () => {
-  /** the head says its base is ours, as the engine of BUNDLE 8 writes it (this tree\'s writer cannot: the head as the host\'s base
-   *  check is handed it is told so, before the door opens) */
-  const says = (source: string | undefined) => async (base: Record<string, unknown>) => { if (source) base.source = source; return true }
-  const oursSetup = (o: Parameters<typeof setup>[0] = {}) => setup({ ...o, bind: says('ours') })
+  /** a side over the format test's paper written with the engine's head of a layer over our own compile (made({ ours: true })) */
+  const oursSetup = (o: Parameters<typeof setup>[0] = {}) => setup({ ...o, ours: true })
+  /** a side over the same paper whose head says arXiv's PDF (the writer's, with the why our compile was refused, or none) */
+  const arxivSetup = () => setup()
   /** the left page 1 drawn by PDF.js, so that a copy taken from its canvas is possible */
   const leftDrawn = () => {
     // (the last viewer made: a row may set up more than one view)
@@ -465,8 +465,10 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     const asked = spies(s)
     await nearOn(s, [1, 2])
     const canvas = leftDrawn()
-    s.side.tell(await ALL())
+    s.side.tell(await ALL(true))
     await settle(s)
+    // (the engine\'s head of a layer over our compile, with the arXiv PDF its check ran over)
+    expect((await s.side.index())?.head).toMatchObject({ base: { source: 'ours', check: { boxes: 'equal' } }, orig: { bytes: 12_000 } })
     expect(content(s, 1)).toBe('layer')
     expect(copyOf(s, 1)).toHaveLength(1)
     expect(copyOf(s, 1)[0]?.[1]).not.toBe(canvas)
@@ -478,23 +480,22 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     expect(asked.place).not.toHaveBeenCalled()
   })
 
-  it('a head over arXiv\'s PDF (no source, or arXiv\'s) takes the copy as before: from the left\'s canvas where PDF.js drew the page', async () => {
-    for (const source of [undefined, 'arxiv']) {
-      const s = await setup({ bind: says(source) })
-      const asked = spies(s)
-      await nearOn(s, [1, 2])
-      const canvas = leftDrawn()
-      s.side.tell(await ALL())
-      await settle(s)
-      expect(copyOf(s, 1)[0]?.[1], String(source)).toBe(canvas)
-      expect(asked.left, String(source)).toHaveBeenCalled()
-    }
+  it('a head over arXiv\'s PDF (the writer\'s `arxiv`, which a bundle of 7 reads as too) takes the copy as before: from the left\'s canvas where PDF.js drew the page', async () => {
+    const s = await arxivSetup()
+    const asked = spies(s)
+    await nearOn(s, [1, 2])
+    const canvas = leftDrawn()
+    s.side.tell(await ALL())
+    await settle(s)
+    expect((await s.side.index())?.head.base).toMatchObject({ source: 'arxiv' })
+    expect(copyOf(s, 1)[0]?.[1]).toBe(canvas)
+    expect(asked.left).toHaveBeenCalled()
   })
 
   it('a page of a part with no layout is the original\'s: never asked of the door, never swapped, its place keeps the original\'s page view; a page of a part with a layout is laid', async () => {
     const s = await oursSetup()
     await nearOn(s, [1, 2, 3, 4])
-    s.side.tell(await ALL())
+    s.side.tell(await ALL(true))
     await settle(s)
     for (const n of [1, 2, 3]) expect(content(s, n), `page ${n}`).toBe('layer')
     // (the paper\'s page 4 is its third part\'s, which records no layout)
@@ -510,7 +511,7 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
   })
 
   it('whichever comes first, the part\'s record or the page\'s ask: a page asked before its part is told waits for it, and is the original\'s when it comes', async () => {
-    const m = await M()
+    const m = await M(true)
     // the page asked first: its part (the last) not told yet
     const a = await oursSetup()
     await nearOn(a, [4])
@@ -524,7 +525,7 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     expect(copyOf(a, 4)).toEqual([])
     // the record first, the page near afterwards
     const b = await oursSetup()
-    b.side.tell(await ALL())
+    b.side.tell(await ALL(true))
     await settle(b)
     await nearOn(b, [4])
     await settle(b)
@@ -534,7 +535,7 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
   })
 
   it('a part that gains no layout mid-run (a fork told after its pages were laid): its pages come back as the original\'s, the pages of the others stay the layer\'s', async () => {
-    const m = await M()
+    const m = await M(true)
     const input = partInputs(m.head.sha256, m.lefts)[1]!
     const refused = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], addon: null })
     const s = await oursSetup({ extra: [refused] })
