@@ -17,6 +17,12 @@
 //     document is on the place's box at the pixel ratio, as PDF.js's canvas is;
 // and a page retired and laid again at the same zoom gives the same copy, 0 pixels differing (the time's half of the rule).
 //
+// The sample's layer is the layer route's (lib/layer-cut.mjs: a head of ours, its base our compile's page): the composed document's
+// pages are then our base's, so the copy is drawn from the composed document at the place's k, never taken from PDF.js's canvas of
+// the original (whose rendering is arXiv's, not the page the erase rectangles and crops are laid on). Registration is then the copy
+// from the document against the left's own canvas where PDF.js drew it at the same k: the fixture's base is arXiv's own bytes, so the
+// two are the same page, to the pixel; over a real build of ours they differ where its lines do, which is the reason for the rule.
+//
 // Each check has its positive control: run on the code before the fix (origin/next a567506a), every registration and
 // frame check at a chosen zoom fails (the numbers are the fix's pull request's). The copy drawn from the document is drawn
 // on the context PDF.js draws a page view on, so the two copies agree to the pixel where the frame is right: 0 differ.
@@ -243,12 +249,15 @@ try {
       }
       const aligned = seen.find(s => s.z === 1)
       const floorOf = n => aligned?.pages.find(p => p.page === n)?.residue
-      const chosen = seen.filter(s => s.pages.some(p => p.from !== 'doc' && p.lost / dpr >= FLOORED))
+      const chosen = seen.filter(s => s.pages.some(p => p.lost / dpr >= FLOORED))
       check(`DPR ${dpr}: zooms where PDF.js floors at least ${FLOORED} of a CSS px off the page's width (two at least, chosen from what it drew)`, chosen.length >= 2, chosen.map(s => `${s.z} (${s.scale.toFixed(4)})`).join(', '))
       for (const s of chosen) {
         for (const p of s.pages) {
-          if (p.from === 'doc' || p.lost / dpr < FLOORED) continue
-          check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the copy from PDF.js's canvas is the copy at the place's k`, p.differing <= DIFFERING_MAX && p.kSource === p.k, `${p.differing} of ${p.compared} px differ by more than ${TOLERANCE} (max ${p.maxDiff}); source k ${p.kSource}, place k ${p.k}`)
+          if (p.lost / dpr < FLOORED) continue
+          // over our base (the layer route) the copy is the composed document's page at the place's k, never PDF.js's canvas of the
+          // original: it is the page here the left's canvas is compared with, and in this fixture, whose base is arXiv's own bytes,
+          // the two are the same page to the pixel
+          check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the copy is the composed document's page at the place's k, and the same page as PDF.js's own canvas of the original here`, p.from === 'doc' && p.kSource === p.k && p.compared > 0 && p.differing <= DIFFERING_MAX, `from ${p.from}; ${p.differing} of ${p.compared} px differ by more than ${TOLERANCE} (max ${p.maxDiff}); source k ${p.kSource}, place k ${p.k}`)
           const floor = floorOf(p.page)
           const bound = floor === undefined ? null : floor * (s.scale / aligned.scale) ** 2 + RESIDUE_SLACK * dpr
           check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the ink left at the erased rectangles is no more than at the aligned zoom`, bound !== null && p.residue <= bound, `${p.residue} px darker than 240 within 2 px of ${p.rects} rects; at 100 %: ${floor ?? 'not measured'} (bound ${bound === null ? '-' : bound.toFixed(1)})`)
@@ -259,7 +268,7 @@ try {
         }
       }
       const atAligned = aligned?.pages ?? []
-      check(`DPR ${dpr}: at the aligned zoom (100 %) PDF.js floors nothing and the two copies agree`, atAligned.length > 0 && atAligned.every(p => p.from === 'doc' || (Math.abs(p.lost) < 1e-6 && p.differing <= DIFFERING_MAX)), atAligned.map(p => `page ${p.page}: lost ${p.lost}, ${p.differing} differ, residue ${p.residue}`).join('; '))
+      check(`DPR ${dpr}: at the aligned zoom (100 %) PDF.js floors nothing and the copy and PDF.js's canvas agree`, atAligned.length > 0 && atAligned.every(p => p.from === 'doc' && Math.abs(p.lost) < 1e-6 && p.compared > 0 && p.differing <= DIFFERING_MAX), atAligned.map(p => `page ${p.page}: lost ${p.lost}, ${p.differing} differ, residue ${p.residue}`).join('; '))
       check(`DPR ${dpr}: no request left the route table`, guard.violations.length === 0, guard.violations.map(v => `${v.method} ${v.url}`).join('; '))
       check(`DPR ${dpr}: no page of the reader threw`, pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '))
       await page.close()

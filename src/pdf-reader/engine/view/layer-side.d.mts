@@ -68,14 +68,17 @@ export interface Registration {
   kSource: number
   lost: number
   source: [number, number]
-  /** the commit's own path timed (ms): its source got (a canvas PDF.js drew, or the page drawn from the document), its copy drawn */
-  /** `doc`: the page drawn from the composed document, timed where the commit's own source was the left's canvas (a layer over our base takes it from the document: `source` is then that time) */
+  /** the commit's own path timed (ms): its source got (a canvas PDF.js drew, or the page drawn from the document), its copy drawn;
+   *  `doc`: the page drawn from the composed document, timed where the commit's own source was a canvas of PDF.js's */
   ms: { source: number; copy: number; doc?: number }
+  /** the size of the page drawn from the document */
   doc?: [number, number]
+  /** the pixels compared with the other source's copy, and those differing: the other source is the page drawn from the document
+   *  (when the commit's is a canvas of PDF.js's), or, over our base, the left's canvas where PDF.js drew it at this k */
   compared?: number
   differing?: number
   maxDiff?: number
-  /** with `canvases`: the two copies, which the caller lets go */
+  /** with `canvases`: the two copies (the commit's source's, the other's), which the caller lets go */
   copies?: { source: HTMLCanvasElement; doc: HTMLCanvasElement }
 }
 /** sync; opens nothing until it can. One side per view: a second while one lives throws */

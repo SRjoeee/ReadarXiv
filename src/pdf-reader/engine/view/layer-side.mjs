@@ -884,8 +884,11 @@ export function createLayerSide(view, o) {
         shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
       }
     },
-    /** the harness's registration check (layer-side.d.mts Registration): page n's copy drawn from the source a commit takes
-     *  and from the page drawn here at the place's k, the two compared pixel by pixel */
+    /** the harness's registration check (layer-side.d.mts Registration): page n's copy drawn from the source a commit takes, and
+     *  compared pixel by pixel with the copy drawn from the other source: the page drawn here from the document at the place's k
+     *  (where the commit's source is a canvas PDF.js drew), or, over our base (where the commit's source is that page), the
+     *  left's canvas where PDF.js drew it at this k, which in a fixture whose base is arXiv's own bytes is the same page and
+     *  over a real build of ours differs where its lines do, the very reason the copy is not taken from it */
     async registration(n, { tolerance = 16, canvases = false } = {}) {
       if (disposed || !door || !V.places.near(n)) return null
       const c = pages.get(n)?.content, vp = V.places.view(n)?.viewport, k = kOf(n), d = door
@@ -900,11 +903,20 @@ export function createLayerSide(view, o) {
         const a = await d.copyOf(n, src.canvas, src.k), t2 = clock.now()
         mine.push(a)
         const out = { page: n, size: [w, vp.height / vp.scale], from: src.from, k, kSource: src.k, lost: k * w - src.canvas.width, source: [src.canvas.width, src.canvas.height], ms: { source: t1 - t0, copy: t2 - t1 } }
-        if (src.from === 'doc') return out
-        const t3 = clock.now(), doc = await sourceOf(n, k, true), t4 = clock.now()
-        out.ms.doc = t4 - t3
-        drawnHere.push(doc)
-        const b = await d.copyOf(n, doc.canvas, doc.k)
+        // the page drawn from the document and the source it is compared with
+        let docSrc = src, other = src
+        if (src.from === 'doc') {
+          const left = oursBase() ? V.left.canvas(n) : null
+          if (!left || Math.abs(left.k - k) / k > K_SLACK) return out
+          other = { canvas: left.canvas, k: left.k }
+        } else {
+          const t3 = clock.now()
+          docSrc = await sourceOf(n, k, true)
+          out.ms.doc = clock.now() - t3
+          drawnHere.push(docSrc)
+          other = docSrc
+        }
+        const b = await d.copyOf(n, other.canvas, other.k)
         mine.push(b)
         const W = Math.min(a.width, b.width), H = Math.min(a.height, b.height)
         const pa = a.getContext('2d').getImageData(0, 0, W, H).data, pb = b.getContext('2d').getImageData(0, 0, W, H).data
@@ -914,7 +926,7 @@ export function createLayerSide(view, o) {
           if (m > maxDiff) maxDiff = m
           if (m > tolerance) differing++
         }
-        Object.assign(out, { doc: [doc.canvas.width, doc.canvas.height], compared: W * H, differing, maxDiff })
+        Object.assign(out, { doc: [docSrc.canvas.width, docSrc.canvas.height], compared: W * H, differing, maxDiff })
         if (canvases) { out.copies = { source: a, doc: b }; mine.length = 0 }
         return out
       } finally {

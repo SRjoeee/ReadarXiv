@@ -34,7 +34,14 @@ const views: ReaderView[] = []
 
 let paper: Made | null = null, oursPaper: Made | null = null
 /** the format test's small paper, written and read back once; `ours`: its head the engine's head of a layer over our own compile */
-export const M = async (ours = false) => (ours ? (oursPaper ??= await made({ ours: true })) : (paper ??= await made()))
+export async function M(ours = false): Promise<Made> {
+  if (ours) {
+    oursPaper ??= await made({ ours: true })
+    return oursPaper
+  }
+  paper ??= await made()
+  return paper
+}
 export const macrotask = () => new Promise(r => setTimeout(r, 0))
 export const jobRef = (m: Made, i: number): TellRef => ({ ...(m.parts[i]!.ref as Ref), prev: i ? m.parts[i - 1]!.sha256 : null })
 export const ALL = async (ours = false) => { const m = await M(ours); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }
