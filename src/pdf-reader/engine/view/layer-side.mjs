@@ -13,6 +13,12 @@
 // PAGE_MS, shows the original (a stall warns once a side and is asked again on the next scroll; a failure on a zoom or on
 // coming near again); a late `ready` is taken. A page still `waiting` (for its part, its closure or its rows) is never a stall.
 //
+// Over our own compile (the layer route, design §3.2: the head's base says `ours`) the composed document's pages are our base's, not
+// arXiv's rendering the left shows: a page's copy is then always drawn from the composed document, never taken from the left's
+// canvas or the place's (the original's page view); and a page whose parts all record no layout (a part the engine's check refused)
+// is not asked of the door and not swapped in: its place keeps the original's page, since what TeX's positions do not draw is
+// shown as arXiv's PDF, not as our base page in other line breaks beside it.
+//
 // The highlight's data (§2.7): the left's shapes made page by page from the parts' rectangles and, on the first want of a page
 // from either pane (trap 2: nothing fetched before), its left part; the right's the left's mirrored where its place shows the
 // original and its own over the laid page's words where it shows the layer, with copies of the left's tokens for the units it
@@ -63,6 +69,19 @@ const coded = (e, code) => { const out = e instanceof Error ? e : new Error(Stri
 const release = c => { if (c) { c.width = 0; c.height = 0; c.remove() } }
 const isPrefix = (a, b) => a.length <= b.length && a.every((p, i) => p.sha256 === b[i].sha256)
 
+/** whether page `n` is laid by no layout: some part holds the page and every part that holds it has none (`layout` null: its check
+ *  refused it, or its producer recorded none). A page can lie in two parts' ranges (a unit running on from the page before), so one
+ *  part with a layout makes it a laid page; a page no part holds yet (its part not told) is not this, the door waits for it */
+export function noLayoutPage(parts, n) {
+  let held = false
+  for (const p of parts) {
+    if (n < p.pages[0] || n > p.pages[1]) continue
+    if (p.layout !== null) return false
+    held = true
+  }
+  return held
+}
+
 /** the operator list PDF.js drew a page by, where its drawing is whole (the floats' inputs); null else */
 function drawnList(pdfPage) {
   for (const st of pdfPage?._intentStates?.values?.() ?? []) if (st.displayReadyCapability && st.operatorList?.lastChunk) return st.operatorList
@@ -84,6 +103,13 @@ export function createLayerSide(view, o) {
   /** 'idle' (nothing read yet), 'opening', 'open', 'refused' */
   let state = 'idle', why = null
   let index = null, bound = null, door = null, doorParts = [], gen = 0, token = null, offPage = null
+  /** whether the layer is drawn over our own compile (the head's base says `ours`: the layer route, design §3.2; the engine's
+   *  layerDraws): the composed document's pages are then OUR base's, whose lines are not arXiv's page's, so a page's copy comes
+   *  from the composed document alone and a page laid by no layout is the original's page */
+  const oursBase = () => index?.head?.base?.source === 'ours'
+  /** whether page `n` stays the original's page: the layer is over our base and the parts that hold the page have no layout (a
+   *  page the door would lay with nothing drawn and nothing erased: our base page, in other line breaks, beside arXiv's) */
+  const originalPageOf = n => oursBase() && noLayoutPage(feed.state().parts, n)
   let partsEnded = false, reopenWanted = false
   /** the part the open door refused (its later parts not added to it) */
   let stuck = null
@@ -408,6 +434,9 @@ export function createLayerSide(view, o) {
     const P = rec(n)
     if (!door || disposed || !V.places.near(n)) return
     if (P.content?.wrap && P.content.gen === gen) return
+    // a page of parts with no layout is not asked: the original's page, as the owner decided (what TeX's positions do not draw is
+    // arXiv's PDF)
+    if (originalPageOf(n)) { shownOriginal(n); return }
     if (P.ask) return
     const my = gen, a = new AbortController()
     P.ask = a
@@ -444,14 +473,18 @@ export function createLayerSide(view, o) {
   /** a canvas PDF.js drew page n on whole within K_SLACK of k (the left's, else the place's own page view's), with the scale
    *  it drew it at (drawn.mjs); null where there is none */
   function drawnSource(n, k) {
+    // over our base the left's canvas and the place's are the ORIGINAL's page, arXiv's rendering: not the composed document's page
+    // (our compile's), whose erase rectangles, crops and colours are laid on it
+    if (oursBase()) return null
     for (const [from, got] of [['left', V.left.canvas(n)], ['place', V.places.canvas(n)]]) {
       if (got && Math.abs(got.k - k) / k <= K_SLACK) return { canvas: got.canvas, k: got.k, from }
     }
     return null
   }
   /** the page as it was drawn at about k, with the scale it was drawn at (one frame a page: never a canvas's width over the
-   *  page's, which PDF.js floors to whole CSS px): a canvas PDF.js drew (drawnSource); else the page drawn here from the
-   *  latest composed document (its pages 1 to N are the original's) at k, as PDF.js draws a page view: from its top-left
+   *  page's, which PDF.js floors to whole CSS px): a canvas PDF.js drew (drawnSource: only where the composed document's pages
+   *  are the original's own bytes; over our base, never); else the page drawn here from the latest composed document (its
+   *  pages 1 to N are the original's, or our base's) at k, as PDF.js draws a page view: from its top-left
    *  corner on a canvas of the place's box at k's resolution (its CSS px times the pixel ratio, where k is not held to
    *  COPY_PIXELS), the rest of the page cropped, so that its copy maps pixel for pixel onto the place; and on the context
    *  PDF.js draws the left's page views on (opaque, read back by the CPU unless the host opens its documents with enableHWA,
@@ -495,6 +528,8 @@ export function createLayerSide(view, o) {
   async function commit(n, laid, my) {
     const P = rec(n), k = kOf(n), d = door
     if (k === null || !d) return
+    // (the page asked before its parts were all told, laid with nothing to draw: the original's page stays)
+    if (originalPageOf(n)) { shownOriginal(n); return }
     let got
     try { got = await copyAt(d, n, k, my) } catch (e) {
       if (disposed || my !== gen) return
@@ -865,7 +900,8 @@ export function createLayerSide(view, o) {
         mine.push(a)
         const out = { page: n, size: [w, vp.height / vp.scale], from: src.from, k, kSource: src.k, lost: k * w - src.canvas.width, source: [src.canvas.width, src.canvas.height], ms: { source: t1 - t0, copy: t2 - t1 } }
         if (src.from === 'doc') return out
-        const doc = await sourceOf(n, k, true)
+        const t3 = clock.now(), doc = await sourceOf(n, k, true), t4 = clock.now()
+        out.ms.doc = t4 - t3
         drawnHere.push(doc)
         const b = await d.copyOf(n, doc.canvas, doc.k)
         mine.push(b)

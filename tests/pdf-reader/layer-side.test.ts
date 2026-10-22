@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { createLayerSide, LEFT_RETRY_MS, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { createLayerSide, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, partInputs, TAILS } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
@@ -441,6 +441,129 @@ describe('L14: the feed\'s refusals', () => {
     await settle(s)
     expect(s.fetched.filter(x => x === m.parts[1]!.sha256).length).toBe(2)
     expect(s.door.layer?.stats().parts).toEqual({ through: 4, told: 3 })
+  })
+})
+
+describe('L17: a layer over our own compile (the layer route, design §3.2): its copy from the composed document, a page without a layout the original\'s', () => {
+  /** the head says its base is ours, as the engine of BUNDLE 8 writes it (this tree\'s writer cannot: the head as the host\'s base
+   *  check is handed it is told so, before the door opens) */
+  const says = (source: string | undefined) => async (base: Record<string, unknown>) => { if (source) base.source = source; return true }
+  const oursSetup = (o: Parameters<typeof setup>[0] = {}) => setup({ ...o, bind: says('ours') })
+  /** the left page 1 drawn by PDF.js, so that a copy taken from its canvas is possible */
+  const leftDrawn = () => {
+    // (the last viewer made: a row may set up more than one view)
+    const viewer = FakePDFViewer.made.at(-1) as FakePDFViewer
+    const pv = viewer.getPageView(0) as NonNullable<ReturnType<FakePDFViewer['getPageView']>>
+    viewer.render(1, null, { width: Math.floor(pv.viewport.width), height: Math.floor(pv.viewport.height), sx: 1, sy: 1 })
+    return pv.canvas as HTMLCanvasElement
+  }
+  const spies = (s: Setup) => { const V = internalsOf(s.view); return { left: vi.spyOn(V.left, 'canvas'), place: vi.spyOn(V.places, 'canvas') } }
+  const copyOf = (s: Setup, n: number) => s.doors[0]?.copies.filter(c => c[0] === n) ?? []
+
+  it('the copy of a page is drawn from the composed document, and the left\'s canvas and the place\'s (the original\'s page view) are never asked, at the commit or after a zoom', async () => {
+    const s = await oursSetup()
+    const asked = spies(s)
+    await nearOn(s, [1, 2])
+    const canvas = leftDrawn()
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    expect(copyOf(s, 1)).toHaveLength(1)
+    expect(copyOf(s, 1)[0]?.[1]).not.toBe(canvas)
+    s.view.zoomTo(0.9)
+    await settle(s, 60)
+    expect(copyOf(s, 1).length).toBeGreaterThan(1)
+    for (const c of copyOf(s, 1)) expect(c[1], 'the left\'s canvas is no source of ours').not.toBe(canvas)
+    expect(asked.left).not.toHaveBeenCalled()
+    expect(asked.place).not.toHaveBeenCalled()
+  })
+
+  it('a head over arXiv\'s PDF (no source, or arXiv\'s) takes the copy as before: from the left\'s canvas where PDF.js drew the page', async () => {
+    for (const source of [undefined, 'arxiv']) {
+      const s = await setup({ bind: says(source) })
+      const asked = spies(s)
+      await nearOn(s, [1, 2])
+      const canvas = leftDrawn()
+      s.side.tell(await ALL())
+      await settle(s)
+      expect(copyOf(s, 1)[0]?.[1], String(source)).toBe(canvas)
+      expect(asked.left, String(source)).toHaveBeenCalled()
+    }
+  })
+
+  it('a page of a part with no layout is the original\'s: never asked of the door, never swapped, its place keeps the original\'s page view; a page of a part with a layout is laid', async () => {
+    const s = await oursSetup()
+    await nearOn(s, [1, 2, 3, 4])
+    s.side.tell(await ALL())
+    await settle(s)
+    for (const n of [1, 2, 3]) expect(content(s, n), `page ${n}`).toBe('layer')
+    // (the paper\'s page 4 is its third part\'s, which records no layout)
+    expect(content(s, 4)).toBe('original')
+    expect(layerOf(s, 4)).toBeNull()
+    expect(copyOf(s, 4)).toEqual([])
+    // and over arXiv\'s PDF it is laid as it was
+    const t = await setup()
+    await nearOn(t, [4])
+    t.side.tell(await ALL())
+    await settle(t)
+    expect(content(t, 4)).toBe('layer')
+  })
+
+  it('whichever comes first, the part\'s record or the page\'s ask: a page asked before its part is told waits for it, and is the original\'s when it comes', async () => {
+    const m = await M()
+    // the page asked first: its part (the last) not told yet
+    const a = await oursSetup()
+    await nearOn(a, [4])
+    a.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(m, i)) })
+    await settle(a)
+    expect(content(a, 4)).toBe('original')
+    a.side.tell({ parts: [jobRef(m, 2)], end: { through: N } })
+    await settle(a)
+    expect(content(a, 4)).toBe('original')
+    expect(layerOf(a, 4)).toBeNull()
+    expect(copyOf(a, 4)).toEqual([])
+    // the record first, the page near afterwards
+    const b = await oursSetup()
+    b.side.tell(await ALL())
+    await settle(b)
+    await nearOn(b, [4])
+    await settle(b)
+    expect(content(b, 4)).toBe('original')
+    expect(layerOf(b, 4)).toBeNull()
+    expect(copyOf(b, 4)).toEqual([])
+  })
+
+  it('a part that gains no layout mid-run (a fork told after its pages were laid): its pages come back as the original\'s, the pages of the others stay the layer\'s', async () => {
+    const m = await M()
+    const input = partInputs(m.head.sha256, m.lefts)[1]!
+    const refused = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], addon: null })
+    const s = await oursSetup({ extra: [refused] })
+    await nearOn(s, [1, 2, 3])
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)) })
+    s.side.take([rowOf(2)])
+    await settle(s)
+    for (const n of [1, 2, 3]) expect(content(s, n), `page ${n}`).toBe('layer')
+    s.side.tell({ parts: [{ ...(refused.ref as Ref), prev: m.parts[0]!.sha256 }] })
+    await settle(s)
+    expect(s.side.probe().forks).toBe(1)
+    expect(content(s, 1)).toBe('layer')
+    for (const n of [2, 3]) {
+      expect(content(s, n), `page ${n}`).toBe('original')
+      expect(layerOf(s, n), `page ${n}`).toBeNull()
+    }
+  })
+
+  it('noLayoutPage: a page is the original\'s only when some part holds it and every part that holds it has no layout', () => {
+    const part = (a: number, b: number, layout: unknown) => ({ pages: [a, b], layout }) as never
+    const rows = {}
+    // (a unit running on from the page before can put one page in two parts\' ranges)
+    expect(noLayoutPage([part(1, 2, rows), part(2, 3, null)], 2)).toBe(false)
+    expect(noLayoutPage([part(1, 2, null), part(2, 3, null)], 2)).toBe(true)
+    expect(noLayoutPage([part(1, 2, null), part(2, 3, rows)], 3)).toBe(false)
+    expect(noLayoutPage([part(1, 2, null), part(3, 4, rows)], 2)).toBe(true)
+    // no part holds the page yet (its part not told): not the original\'s by this rule, the door waits for it
+    expect(noLayoutPage([part(1, 2, null)], 3)).toBe(false)
+    expect(noLayoutPage([], 1)).toBe(false)
   })
 })
 

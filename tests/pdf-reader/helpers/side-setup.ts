@@ -62,7 +62,8 @@ export interface Setup {
 }
 export interface Options {
   door?: FakeDoorOptions
-  bind?: () => Promise<boolean>
+  /** the host's base check, given the head's base as the side read it */
+  bind?: (base: Record<string, unknown>) => Promise<boolean>
   composedFails?: boolean
   noOriginal?: boolean
   extra?: { bytes: Uint8Array; sha256: string }[]
@@ -128,7 +129,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const doors: Setup['doors'] = []
   const side = createLayerSide(view, {
     paper: { id: '2608.04322', version: 1 }, target: 'zh', faceSources: o.faceSources ?? (async () => null), hyphUrl: () => '',
-    fetchObject, bind: o.bind ?? (async () => true),
+    fetchObject, bind: (o.bind ?? (async () => true)) as never,
     composed: (tail, options) => {
       const task = fakeTask(destroyed, `composed ${composed.length}`)
       composed.push({ tail, options, task })

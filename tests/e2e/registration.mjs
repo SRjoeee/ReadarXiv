@@ -199,7 +199,7 @@ try {
           for (let i = 0; i < 5; i++) runs.push(await page.evaluate(measureAll))
           for (const p of runs[0].pages) {
             const of = runs.map(r => r.pages.find(q => q.page === p.page)?.ms).filter(Boolean)
-            console.log(`MEASURE DPR ${dpr}, zoom ${z} (scale ${runs[0].scale.toFixed(4)}), page ${p.page}: from ${p.from}, source ${median(of.map(m => m.source)).toFixed(1)} ms, copy ${median(of.map(m => m.copy)).toFixed(1)} ms; the zoom's recopy: ${long.length} long task(s), longest ${Math.max(0, ...long)} ms, ${long.reduce((a, b) => a + b, 0)} ms in all`)
+            console.log(`MEASURE DPR ${dpr}, zoom ${z} (scale ${runs[0].scale.toFixed(4)}), page ${p.page}: from ${p.from}, source ${median(of.map(m => m.source)).toFixed(1)} ms, copy ${median(of.map(m => m.copy)).toFixed(1)} ms, the page drawn from the document ${median(of.map(m => m.doc ?? m.source)).toFixed(1)} ms; the zoom's recopy: ${long.length} long task(s), longest ${Math.max(0, ...long)} ms, ${long.reduce((a, b) => a + b, 0)} ms in all`)
           }
         }
         await page.close()

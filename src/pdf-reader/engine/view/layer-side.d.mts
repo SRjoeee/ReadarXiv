@@ -69,7 +69,8 @@ export interface Registration {
   lost: number
   source: [number, number]
   /** the commit's own path timed (ms): its source got (a canvas PDF.js drew, or the page drawn from the document), its copy drawn */
-  ms: { source: number; copy: number }
+  /** `doc`: the page drawn from the composed document, timed where the commit's own source was the left's canvas (a layer over our base takes it from the document: `source` is then that time) */
+  ms: { source: number; copy: number; doc?: number }
   doc?: [number, number]
   compared?: number
   differing?: number
@@ -85,5 +86,7 @@ export declare const RECOPY_MS: number
 export declare const LEFT_RETRY_MS: number
 /** the most other pages a wanted page's running units bring their left parts from, the nearest first */
 export declare const SPREAD_MAX: number
+/** whether page `n` is laid by no layout: some part holds it and every part that holds it records none (`layout` null) */
+export declare function noLayoutPage(parts: readonly { readonly pages: readonly [number, number]; readonly layout: unknown }[], n: number): boolean
 /** the pages whose left parts page p's running units bring: their other pages not in yet, each once, nearest first, at most `max` */
 export declare function spreadPages(p: number, ids: readonly number[], pagesOf: (id: number) => readonly number[] | undefined, isIn: (page: number) => boolean, max?: number): number[]
