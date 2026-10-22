@@ -1,14 +1,12 @@
-// Our copy of arXiv's PDF read by ranges, each answer held to the layer's base (the reader's base check, run.ts bind): the
-// same contract as the web's reader (readarxiv-web web/src/ranges.ts), written for the extension's run.
+// Our base page read by ranges, each answer held to the layer's base (the run's bind, run.ts bindOurs): the same contract as the web's
+// reader (readarxiv-web web/src/ranges.ts), written for the extension's run.
 //
-// The layer's composed document was arXiv's PDF read whole (PDF.js's getData waits for every byte of it), hashed, copied and
-// parsed again: on 2608.16117v1 (46 MB) the first page was laid 9.5 s after the original was on screen, the rest of arXiv's
-// file still coming (lab/pdf/records/layer-extension.md). Read by ranges instead, the document asks our copy for what its pages need and
-// nothing more, and the bytes after the original's last are the layer's tails. What the hash held, our server holds: it
-// commits a layer only over the copy whose length and SHA-256 are the head's base, and names that copy's entity-tag beside
-// the catalog and every object (server.ts BASE_ETAG_HEADER). Every answer here is held to it: a 206 of exactly the bytes
-// asked, its Content-Range's length the base's bytes, its ETag the one named. An answer that is not refuses the source
-// (RangeRefusal `bytes`): nothing more is read, no byte of another object reaches PDF.js.
+// A layer over our own compile (the layer route, design §3.2) is drawn over our base page, a file of our server named by the digest of
+// its bytes (server.ts basePath): one object per address, never replaced. The composed document asks it for what its pages need and
+// nothing more, and the bytes after its last are the layer's tails. Every answer here is held to the head's base: a 206 of exactly
+// the bytes asked, its Content-Range's length the base's bytes, its ETag the first answer's (no route names a tag beforehand: a Bound
+// may carry the length alone). An answer that is not refuses the source (RangeRefusal `bytes`): nothing more is read, no byte of
+// another object reaches PDF.js.
 //
 // No read waits for ever: a read is let go where nothing comes from the server for STALL_MS (no answer, or no byte of its
 // body; the web measured one range body that never finished), and asked once more after RETRY_MS; a second failure refuses
@@ -16,7 +14,7 @@
 // original (its stall, PAGE_MS): the reader's original is never ours to lose.
 import type * as Lib from 'pdfjs-dist'
 import type { DocumentTask } from '../engine/view.mjs'
-import { bodyWithin, REQUEST, STRONG_ETAG } from './server'
+import { REQUEST, STRONG_ETAG } from './server'
 
 /** PDF.js's own chunk (its default rangeChunkSize): the first read is one */
 export const RANGE_CHUNK = 65_536
@@ -60,9 +58,6 @@ export interface RangeSourceOptions {
   keepReading?: () => boolean
 }
 
-/** a bound as a layer gives it: the base's bytes and the entity-tag its route names; null where either is none */
-export const boundFrom = (bytes: unknown, etag: string | null): Bound | null =>
-  Number.isSafeInteger(bytes) && (bytes as number) > 0 && etag !== null && STRONG_ETAG.test(etag) ? { total: bytes as number, etag } : null
 /** a bound by the base's length alone, for a base page of ours (no route names its tag: its address is its digest); null where
  *  the length is none */
 export const lengthBound = (bytes: unknown): Bound | null => (Number.isSafeInteger(bytes) && (bytes as number) > 0 ? { total: bytes as number, etag: null } : null)
@@ -173,54 +168,6 @@ export async function composedRange(source: RangeSource, total: number, tail: Ui
   const from = Math.max(begin, total)
   out.set(tail.subarray(from - total, end - total), from - begin)
   return out
-}
-
-/** how much of the file's end the base check compares at most */
-export const ENDS_MAX = 262_144
-/** where the end the base check compares begins: the base's startxref (its last cross-reference section, which holds every
- *  object's offset, then the trailer with the file's /ID), else its last kilobyte; within ENDS_MAX of the end */
-export function endsFrom(base: { bytes: number; xref?: number }): number {
-  const x = base.xref
-  const at = Number.isSafeInteger(x) && (x as number) >= 0 && (x as number) < base.bytes ? (x as number) : base.bytes - Math.min(1024, base.bytes)
-  return Math.max(at, base.bytes - ENDS_MAX)
-}
-/**
- * Whether arXiv's PDF at `theirs` ends as our copy at `ours` does: its length the base's, and its bytes from endsFrom to the
- * end the same as our copy's, each read by one range. `other` where its length or those bytes differ (it is not the base,
- * for certain); `alike` where both agree (evidence, not proof: run.ts proves it once the left's bytes are all in); null where
- * either could not be read (arXiv answered no range, the network, our copy refused)
- */
-export async function endsAlike(theirs: string, ours: string, base: { bytes: number; xref?: number }, bound: Bound, o: { fetch?: typeof fetch; signal?: AbortSignal } = {}): Promise<'alike' | 'other' | null> {
-  const f = o.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a))
-  const ac = new AbortController()
-  const leave = () => ac.abort()
-  if (o.signal?.aborted) return null
-  o.signal?.addEventListener('abort', leave, { once: true })
-  const from = endsFrom(base), length = base.bytes - from
-  try {
-    const mine = rangeSource(ours, bound, { fetch: f, signal: ac.signal }).read(from, base.bytes).catch(() => null)
-    // arXiv's ask is let go where it says nothing for STALL_MS, as rangeSource lets go of ours (the end is small, so one clock
-    // for the answer and its body); the verdict is then null, as for any ask that fails
-    const attempt = new AbortController(), silent = setTimeout(() => attempt.abort(), STALL_MS)
-    const leaveAttempt = () => attempt.abort()
-    ac.signal.addEventListener('abort', leaveAttempt, { once: true })
-    const arxiv = await (async (): Promise<Uint8Array | 'other' | null> => {
-      const r = await f(theirs, { ...REQUEST, headers: { range: `bytes=${from}-${base.bytes - 1}` }, signal: attempt.signal })
-      const m = r.status === 206 ? CONTENT_RANGE.exec(r.headers.get('content-range') ?? '') : null
-      const verdict = !m ? null : Number(m[3]) !== base.bytes ? 'other' : Number(m[1]) !== from || Number(m[2]) !== base.bytes - 1 ? null : undefined
-      if (verdict !== undefined) { void r.body?.cancel().catch(() => {}); return verdict }
-      const b = await bodyWithin(r, length)
-      return b.length === length ? b : null
-    })().catch(() => null).finally(() => { clearTimeout(silent); ac.signal.removeEventListener('abort', leaveAttempt) })
-    if (arxiv === null || arxiv === 'other') return arxiv
-    const b = await mine
-    if (!b) return null
-    for (let i = 0; i < length; i++) if (arxiv[i] !== b[i]) return 'other'
-    return 'alike'
-  } finally {
-    o.signal?.removeEventListener('abort', leave)
-    ac.abort()
-  }
 }
 
 /** PDF.js as a ranged document needs it: the reader's build, or a test's stand-in */

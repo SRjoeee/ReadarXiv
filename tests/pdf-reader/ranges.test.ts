@@ -1,11 +1,10 @@
-// Our copy of arXiv's PDF read by ranges (session/ranges.ts; the base's check, DESIGN §16): every answer held to the base's length and
-// the entity-tag our server bound the layer to, a range across the seam split there, no read waiting for ever, PDF.js given the
-// bytes through its range transport; and the base check's two ends, arXiv's and ours
+// Our base page read by ranges (session/ranges.ts; the layer route, design §3.2): every answer held to the base's length and the
+// entity-tag (given, or the first answer's), a range across the seam split there, no read waiting for ever, PDF.js given the bytes
+// through its range transport
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { boundFrom, composedRange, endsAlike, endsFrom, ENDS_MAX, lengthBound, openRanged, RangeRefusal, rangeSource, RANGE_CHUNK, RETRY_MS, STALL_MS } from '@/pdf-reader/session/ranges'
+import { composedRange, lengthBound, openRanged, RangeRefusal, rangeSource, RANGE_CHUNK, RETRY_MS, STALL_MS } from '@/pdf-reader/session/ranges'
 
-const URL_OURS = 'https://readarxiv.com/api/v1/original/2608.04322v1'
-const URL_ARXIV = 'https://arxiv.org/pdf/2608.04322v1'
+const URL_OURS = `https://readarxiv.com/api/v1/base/2608.04322v1/${'ab'.repeat(32)}`
 const TAG = '"5bf5251f12d575b58ced19bb84971986"'
 const FILE = Uint8Array.from({ length: 300 }, (_, i) => i % 251)
 const bound = { total: FILE.length, etag: TAG }
@@ -38,11 +37,9 @@ function serving(file: Uint8Array = FILE, o: { tag?: string; answer?: (begin: nu
 const ranged = (begin: number, end: number, total: number, tag: string, body: Uint8Array = FILE.slice(begin, end)) => new Response(body as BodyInit, { status: 206, headers: { 'content-range': `bytes ${begin}-${end - 1}/${total}`, etag: tag } })
 
 describe('a range source bound by a length alone (a base of ours: the address names the digest of its bytes, no route names a tag)', () => {
-  it('lengthBound: the base\'s bytes as a bound with no tag, none for a length that is none; boundFrom still needs both', () => {
+  it('lengthBound: the base\'s bytes as a bound with no tag, none for a length that is none', () => {
     expect(lengthBound(300)).toEqual({ total: 300, etag: null })
     for (const bytes of [0, -1, 1.5, Number.NaN, '300', null, undefined]) expect(lengthBound(bytes), String(bytes)).toBeNull()
-    expect(boundFrom(300, null)).toBeNull()
-    expect(boundFrom(300, TAG)).toEqual({ total: 300, etag: TAG })
   })
 
   it('the first answer\'s strong tag is learnt and held for every answer after; the length is held from the first', async () => {
@@ -232,67 +229,5 @@ describe('the composed bytes: our copy, then the tails', () => {
     const task = openRanged({ getDocument, PDFDataRangeTransport: class {} } as never, URL_OURS, { bound, options: {}, fetch: s.f })
     await expect(task.promise).rejects.toBeInstanceOf(RangeRefusal)
     expect(getDocument).not.toHaveBeenCalled()
-  })
-})
-
-describe('the base check\'s two ends', () => {
-  const base = { bytes: FILE.length, xref: 250 }
-  /** arXiv at URL_ARXIV serving `theirs`, our copy at URL_OURS serving FILE */
-  function both(theirs: Uint8Array | 'no-range') {
-    const ours = serving(FILE), arxiv = theirs === 'no-range' ? null : serving(theirs, { tag: '"sha256:whatever"' })
-    const calls: string[] = []
-    const f = vi.fn(async (url: string, init: RequestInit) => {
-      calls.push(url)
-      if (url === URL_OURS) return (ours.f as unknown as (u: string, i: RequestInit) => Promise<Response>)(url, init)
-      if (!arxiv) return new Response(FILE as BodyInit, { status: 200 })
-      return (arxiv.f as unknown as (u: string, i: RequestInit) => Promise<Response>)(url, init)
-    })
-    return { f: f as unknown as typeof fetch, calls, arxiv }
-  }
-
-  it('a body arXiv stops sending after accepting the range: unknown once STALL_MS has passed, the request let go', async () => {
-    vi.useFakeTimers()
-    const ours = serving(FILE)
-    let letGo = false
-    const f = vi.fn(async (url: string, init: RequestInit) => {
-      if (url === URL_OURS) return (ours.f as unknown as (u: string, i: RequestInit) => Promise<Response>)(url, init)
-      const body = new ReadableStream<Uint8Array>({ start(c) { init.signal?.addEventListener('abort', () => { letGo = true; c.error(new DOMException('aborted', 'AbortError')) }) } })
-      return new Response(body, { status: 206, headers: { 'content-range': `bytes ${base.xref}-${FILE.length - 1}/${FILE.length}`, 'content-length': String(FILE.length - base.xref) } })
-    })
-    let verdict: string | null | undefined
-    void endsAlike(URL_ARXIV, URL_OURS, base, bound, { fetch: f as unknown as typeof fetch }).then(v => { verdict = v })
-    await vi.advanceTimersByTimeAsync(STALL_MS - 1)
-    expect(verdict).toBeUndefined()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(verdict).toBeNull()
-    expect(letGo).toBe(true)
-  })
-
-  it('from the base\'s startxref to the end, within ENDS_MAX; no startxref, the last kilobyte', () => {
-    expect(endsFrom({ bytes: 300, xref: 250 })).toBe(250)
-    expect(endsFrom({ bytes: 10_000_000, xref: 1_000 })).toBe(10_000_000 - ENDS_MAX)
-    expect(endsFrom({ bytes: 5000 })).toBe(5000 - 1024)
-    expect(endsFrom({ bytes: 300, xref: 300 })).toBe(0)
-  })
-
-  it('alike where arXiv\'s length and end are our copy\'s: one range of each, whatever arXiv\'s tag', async () => {
-    const b = both(FILE.slice())
-    expect(await endsAlike(URL_ARXIV, URL_OURS, base, bound, { fetch: b.f })).toBe('alike')
-    expect(b.calls.sort()).toEqual([URL_ARXIV, URL_OURS].sort())
-    expect((b.arxiv?.calls[0]?.init.headers as Record<string, string> | undefined)?.range).toBe('bytes=250-299')
-  })
-
-  it('other where arXiv\'s length differs, or its end; unknown where arXiv answers no range', async () => {
-    const longer = new Uint8Array(FILE.length + 11)
-    longer.set(FILE)
-    expect(await endsAlike(URL_ARXIV, URL_OURS, base, bound, { fetch: both(longer).f })).toBe('other')
-    const changed = FILE.slice()
-    changed[260] = 0
-    expect(await endsAlike(URL_ARXIV, URL_OURS, base, bound, { fetch: both(changed).f })).toBe('other')
-    // (a change before the end compared is not seen here: the proof's)
-    const early = FILE.slice()
-    early[5] = 0
-    expect(await endsAlike(URL_ARXIV, URL_OURS, base, bound, { fetch: both(early).f })).toBe('alike')
-    expect(await endsAlike(URL_ARXIV, URL_OURS, base, bound, { fetch: both('no-range').f })).toBeNull()
   })
 })

@@ -169,7 +169,7 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
       api: addresses.api, ...(io.fetch ? { fetch: io.fetch } : {}), store,
       engine: () => (io.engine ?? openEngine)({ paper }),
       openPdf: (data, options) => pdfjsLib.getDocument({ ...options, data }) as unknown as DocumentTask,
-      pdfjs: pdfjsLib, originalUrl: addresses.pdf,
+      pdfjs: pdfjsLib,
       hidden: { now: () => document.visibilityState === 'hidden', shown: signal => shownAgain(document, signal) },
       readingPage: () => readingPage,
       mayPrepare: () => { if (prepareAsked) return false; prepareAsked = true; return true },

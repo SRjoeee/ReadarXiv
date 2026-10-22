@@ -123,6 +123,15 @@ describe('reduce: the layer\'s states (Task 12)', () => {
     expect(fold([opened, { type: 'layer', state: 'refused', laid: 0, total: 4 }])).toMatchObject({ phase: 'ready', unavailable: { why: 'unreachable' } })
   })
 
+  it('a layer that draws nothing is the paper\'s (a head over arXiv\'s PDF: the run says `cannot-prepare` at the head), and the side\'s own refusal at the base, before or after, does not make it a moment\'s: the lasting word stands, the displays greyed', () => {
+    const refused: SessionEvent = { type: 'layer', state: 'refused', laid: 0, total: 4 }, lasting: SessionEvent = { type: 'unavailable', why: 'cannot-prepare', retryAt: null }
+    for (const order of [[lasting, refused], [refused, lasting]]) {
+      expect(fold([opened, ...order]), JSON.stringify(order.map(e => e.type))).toMatchObject({ phase: 'ready', available: false, unavailable: { why: 'cannot-prepare', retryAt: null } })
+    }
+    // a limit's wait (passing) is the side's refusal's to replace, as before
+    expect(fold([opened, { type: 'unavailable', why: 'refused', retryAt: 99 }, refused]).unavailable).toEqual({ why: 'unreachable', retryAt: null })
+  })
+
   it('the original not opened (its fetch failed): the run\'s translation meanwhile leaves its card; the original\'s open mends it', () => {
     const failed = fold([{ type: 'fail', event: 'fetch failed', text: '', kind: 'network' }, { type: 'translating', got: 3, total: 9, lost: 0 }, { type: 'translated', got: 9, total: 9, lost: 0, stopped: null }])
     expect(failed).toMatchObject({ phase: 'failed', failure: 'network', progress: 1 })

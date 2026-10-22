@@ -227,7 +227,9 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'layer': {
       const layer = event.laid === state.layer.laid && event.total === state.layer.total ? state.layer : { laid: event.laid, total: event.total }
       // the layer refused for the visit: no bilingual version now, the original stays
-      if (event.state === 'refused') return { ...state, layer, preparing: null, laying: false, unavailable: { why: 'unreachable', retryAt: null }, phase: state.phase === 'failed' ? 'failed' : 'ready' }
+      // (a lasting word the run told already stands: a layer that draws nothing is the paper's, and its side's own refusal at the
+      // base does not make it a moment's)
+      if (event.state === 'refused') return { ...state, layer, preparing: null, laying: false, unavailable: state.unavailable && LASTING.has(state.unavailable.why) ? state.unavailable : { why: 'unreachable', retryAt: null }, phase: state.phase === 'failed' ? 'failed' : 'ready' }
       // a page laid where the translation shows: the end held is told
       if (state.laying && layer.laid > 0) return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
       return layer === state.layer ? state : { ...state, layer }
