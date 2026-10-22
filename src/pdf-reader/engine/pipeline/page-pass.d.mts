@@ -28,13 +28,25 @@ export interface LayerOptions {
    *  fewer pages than arXiv's PDF is not read: the compile's refusal, as `marks` of fewer pages */
   marked?: { doc: unknown; log: string; options: Omit<MarkedOptions, 'units' | 'OPS'> } | null
   /** a PDF.js document of arXiv's PDF (the caller opens and destroys it: for the draw, with pdf-lite's LINK_TEXT_PIXELS and
-   *  fontExtraProperties), and its text as readArxivText read it (step T, with `{ draw }` as this pass's: else the draw reads each
-   *  page's text again) */
+   *  fontExtraProperties, where the layout is made over it), and its text as readArxivText read it (step T, with `{ draw }` as
+   *  this pass's where the layout is made over it: else the draw reads each page's text again). With `ours`, the left's and the
+   *  line check's alone */
   arxiv: { doc: unknown; text?: ArxivText | null }
   OPS: Record<string, number>
   pdfjs: string
-  /** arXiv's PDF: its bytes, its digest and the startxref the remover reads (the head's) */
-  base: { bytes: number; sha256: string; xref: number }
+  /** arXiv's PDF: its bytes, its digest and its startxref (BUNDLE 8; the head's `orig`, and its base on a fallback) */
+  orig?: { bytes: number; sha256: string; xref: number } | null
+  /** our base page (BUNDLE 8): the final pass of the marked original (layout/paper.mjs markedOfPaper `base`), a PDF.js document
+   *  of it (the caller's to open and destroy, opened as arXiv's for the draw), its bytes, digest and startxref (the head's base,
+   *  which the remover's tails continue: the host's remover edits this PDF), its text as readArxivText read it (else read here,
+   *  with `{ draw }` as this pass's), and `check`, a host's word that its marks were checked against the draft's (base.mjs
+   *  finalCheck: layoutMarksOfPaper's `base.check`), needed where the marks are given (`marks`) and not read here (`marked`,
+   *  whose document the check reads). Null, or { refused, why } (no final pass): no base of ours, the paper's fallback ('final') */
+  ours?: { doc: unknown; bytes: number; sha256: string; xref: number; text?: ArxivText | null; check?: { marks: number } | null } | { refused: string; why?: string } | null
+  /** the TeX Live year our compile was made on ('2025'), else the marked original's log's (its banner) */
+  tree?: string | null
+  /** a host of BUNDLE 7's: arXiv's PDF as `orig` is, where neither `orig` nor `ours` is given: the layout made over it, as before */
+  base?: { bytes: number; sha256: string; xref: number } | null
   image: string
   /** the remover's transport (layout/chain.mjs chainedAddon's `remove`), null for none: no part has an add-on */
   remove?: ((ask: { from: number; to: number; plans: Uint8Array }) => Promise<RemoverAnswer>) | null
@@ -70,6 +82,20 @@ export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<
 /** why a part has no layout, as its record says it: the paper's refusal (the marked original's, the page count's, the maker's)
  *  or the part's own (a verdict's, a part's bound's), TeX's and the carry's as such, every fault of the engine's own `marks` */
 export declare function layoutRecordOf(r: { refused?: string; why?: string; lines?: [number, number]; stats?: { lines?: { carried: number; total: number } } } | null | undefined): LayoutRefusalRecord | null
+/** our base page's checks (the page-and-line check after the guard: the page count, no mark printed as text, the final pass the
+ *  draft's page, every page box arXiv's, the TeX Live year, the line check's share): its text, the line check and the head's base
+ *  of ours, or the first failing reason (its code, LAYOUT_REFUSED's) */
+export declare function checkOurBase(o: {
+  ours: LayerOptions['ours']
+  /** the marked original the marks were read from (its destinations the final pass's must be), null where `ours.check` says so */
+  draft?: unknown
+  arxiv: { doc: unknown; text: ArxivText }
+  tree?: string | null
+  draw?: boolean
+}): Promise<
+  | { text: ArxivText; lineCheck: import('../layout/carry.mjs').LineCheck; head: import('../layer-proto/format.mjs').HeadBase }
+  | { refused: 'final' | 'boxes' | 'marks' | 'carry'; why: string; lines?: [number, number] }
+>
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`); `toplevels` where the paper has
  *  several toplevel sources (its marked original's pages against arXiv's) */
 export declare function layerOfPaper(o: LayerOptions): Promise<

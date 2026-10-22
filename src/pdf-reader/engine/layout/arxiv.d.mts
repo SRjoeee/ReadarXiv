@@ -15,6 +15,9 @@ export interface ArxivText {
   edges: { l: Float32Array; r: Float32Array }
   /** each token's item's start and end across (NaN with none) */
   spans: { x0: Float64Array; x1: Float64Array }
+  /** the mark text on its pages (layout/base.mjs markTextOf): no page holds one on a base page of ours. Absent from a text not
+   *  read by readArxivText (a host's or a test's) */
+  markText?: { pages: number[]; units: Set<number>; samples: [number, string][] }
   /** with `draw` asked, each page's text as its draw reads it (drawTextOf; null where not read), taken by the layout maker a page at
    *  a time and let go; else null */
   draw: (DrawText | null)[] | null

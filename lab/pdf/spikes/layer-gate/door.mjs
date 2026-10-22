@@ -78,10 +78,11 @@ const hyphUrl = lang => `/hyph/${lang}.json`
 async function ruleSetOf(url) {
   return url ? (await (await import('/engine/rules/layout.mjs')).readRules(await bytes(url))).set : null
 }
-/** the reader's document: arXiv's bytes, their fingerprint the bundle's, followed by the bundle's add-on */
+/** the reader's document: the base page's bytes (base.pdf: ours where the fixture has it, else arXiv's), their fingerprint the
+ *  bundle's, followed by the bundle's add-on */
 async function composedOf(name, bundle) {
-  const original = await bytes(`/fixtures/${name}/arxiv.pdf`)
-  if (original.length !== bundle.base.bytes || (await digest(original)) !== bundle.base.sha256) throw new Error(`${name}: arXiv's bytes are not the bundle's base`)
+  const original = await bytes(`/fixtures/${name}/base.pdf`)
+  if (original.length !== bundle.base.bytes || (await digest(original)) !== bundle.base.sha256) throw new Error(`${name}: the base page's bytes are not the bundle's base`)
   if (!bundle.addon) return original
   const out = new Uint8Array(original.length + bundle.addon.tail.length)
   out.set(original)

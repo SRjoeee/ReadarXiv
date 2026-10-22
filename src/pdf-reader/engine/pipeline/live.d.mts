@@ -28,11 +28,13 @@ export declare function probeFiles(paper: Paper, options?: { width?: boolean; ma
  *  follows; `inkless` (with `layout` only), the macros TeX said set no ink (readInkProbe): no mark. The layout guard's
  *  remedies (with `layout` only, layout/guard.mjs): `unmarked`, unit indices each written as the paper's own bytes, with no
  *  mark; `names` false, no babel name marked. `spans` gets `skip` too: the main file's head of ours, in bytes */
-export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[]; skip?: number } | null; layout?: readonly import('../layout/marks.mjs').MarkClass[] | null; switches?: import('../layout/marks.mjs').Switches | null; inkless?: readonly string[] | null; unmarked?: Iterable<number> | null; names?: boolean }): Map<string, Uint8Array>
+export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[]; skip?: number } | null; layout?: readonly import('../layout/marks.mjs').MarkClass[] | null; switches?: import('../layout/marks.mjs').Switches | null; inkless?: readonly string[] | null; unmarked?: Iterable<number> | null; names?: boolean; pastBegin?: boolean }): Map<string, Uint8Array>
 /** the units a translation into `lang` leaves as they are */
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a
  *  compile is one that failed */
+/** graphicx's draft option, the first line of every marked original's main file: the final pass makes it an empty line */
+export declare const DRAFT_OPTION: string
 export declare const stoppedShort: (log: string | null | undefined) => boolean
 /** whether a compile ran through, the one test of a compile's success: `ok`, and its last TeX pass neither stopped short
  *  (stoppedShort) nor ended before END_TEX's AXT-END (completeLog). Whether it gave a PDF is the caller's to ask */
@@ -59,7 +61,13 @@ export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string |
  *  xelatex, lualatex, or `latex`, arXiv's DVI compiler — pdfTeX in DVI mode, its DVI made a PDF by dvipdfmx (never dvips and
  *  ps2pdf, arXiv's own: the marks are dvipdfmx's specials, latex-front.mjs DVI_MARK_DEF), every pass by latexmk's -pdfdvi
  *  with dvipdfmx as its dvipdf, a one-pass compile latex then dvipdfmx, a draft latex -draftmode */
-export interface CompileRequest { main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array>; draft?: boolean; files?: boolean }
+export interface CompileRequest {
+  main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array>; draft?: boolean; files?: boolean
+  /** the compile's date, seconds since the epoch: the host sets SOURCE_DATE_EPOCH to it with FORCE_SOURCE_DATE=1, so that
+   *  \today and the PDF's dates are that day's (arXiv's PDF's day, its /CreationDate or else its XMP's: layout/base.mjs creationEpochOf). Absent: the
+   *  host's clock, as before */
+  sourceDate?: number
+}
 /** the compiler a visit uses, opened when first needed and again after a compile the page failed */
 export declare function compilerKeeper(open: () => Promise<{ compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }>): { ready: () => Promise<void>; compile: (req: CompileRequest) => Promise<Compiled>; close: () => void }
 /** the reader's run: translation as it comes in, the compiles, the final (the options as the reader passes them) */

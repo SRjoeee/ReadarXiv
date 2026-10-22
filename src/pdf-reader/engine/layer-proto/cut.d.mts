@@ -9,8 +9,11 @@ import type { BundleUnit } from './units.mjs'
 /** the paper made whole: BUNDLE 3's reading (readBundle) or the object the producer holds */
 export interface WholePaper {
   paper: { id: string; version: number; pages: number }
-  /** `xref`: the original's startxref, which BUNDLE 3 does not carry (`CutOptions.base` may supply it) */
-  base: { bytes: number; sha256: string; xref?: number }
+  /** `xref`: the original's startxref, which BUNDLE 3 does not carry (`CutOptions.base` may supply it); BUNDLE 8's base of ours
+   *  with its `source` and check (format.mjs writeHead) */
+  base: { bytes: number; sha256: string; xref?: number } | import('./format.mjs').HeadBase
+  /** arXiv's PDF beside a base of ours (the head's `orig`) */
+  orig?: { bytes: number; sha256: string } | null
   versions?: { image: string }
   /** the paper's units, none dropped (a null is refused: the chunks hold what stands) */
   units: readonly (BundleUnit | null)[]
@@ -60,7 +63,9 @@ export interface CutOptions {
   chainAddon?(index: number, part: { pages: [number, number]; layout: LayoutPart }): Promise<{ manifest: RemovalManifest; tail: Uint8Array | null } | null> | { manifest: RemovalManifest; tail: Uint8Array | null } | null
   /** called once for each part that has a layout, in order, with the range that was kept: the hook's state advances here */
   acceptAddon?(index: number, part: { pages: [number, number] }): Promise<void> | void
-  base?: { bytes: number; sha256: string; xref: number }
+  base?: { bytes: number; sha256: string; xref: number } | import('./format.mjs').HeadBase
+  /** arXiv's PDF beside a base of ours (the head's `orig`) */
+  orig?: { bytes: number; sha256: string } | null
   image?: string
   lineskip?: [number, number] | null
   /** the parts' left parts may carry draws (the head says so): set where the caller's `leftPages` give them */

@@ -609,7 +609,7 @@ window.gate = {
     try {
       // (layout: the instrument's, the fixture's own, whichever layout file the hybrid is given; texFile: the layout file the
       // fixture's drawing is given, TeX's file as its maker made it, which the content and line measures read)
-      ;[geometry, unitsFile, layout, fixtureUnits, data, texFile] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}kept-layout.json`), json(`${base}units.json`), bytes(`${base}arxiv.pdf`), json(`${base}layout.json`)])
+      ;[geometry, unitsFile, layout, fixtureUnits, data, texFile] = await Promise.all([json(`${base}geometry.json`), json(`${base}${which === 'p7' ? 'units-p7.json' : 'record.json'}`), json(`${base}kept-layout.json`), json(`${base}units.json`), bytes(`${base}base.pdf`), json(`${base}layout.json`)])
     } catch (e) { return { ready: false, why: String(e?.message ?? e).slice(0, 200) } }
     // (--perf, drawing by the add-on: as a reader opens it, one document, arXiv's pages and the add-on's appended to
     // them, its fonts parsed once; neither the check's second reading nor the plan, which no reader has)

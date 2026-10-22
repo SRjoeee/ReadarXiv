@@ -22,6 +22,17 @@ export declare function pipelineOf(records: string, names: string[]): string
 export declare const RECORD_INPUTS: string[]
 export declare function inputsOfRecord(record: unknown, o: { root: string; repo: string; flags?: Record<string, string | boolean | null | undefined>; exists?: (path: string) => boolean; home?: string }): { fixtures: string; records: string; refs: string; geometry: string }
 export declare function layoutOfEngine(engine: string): Promise<LayoutVersion>
+/** base.json's schema */
+export declare const BASE_RECORD_SCHEMA: 1
+/** a fixture's base page record (base.json), checked against base.pdf and layout.json; null where it has none */
+export declare function baseRecordOf(dir: string): (
+  | { schema: 1; source: 'ours'; base: { sha256: string; bytes: number; xref: number; pages: number; tree: string; check: Record<string, unknown> }; layout: { sha256: string; bytes: number } | null }
+  | { schema: 1; source: 'arxiv'; why: string; detail?: string; layout: { sha256: string; bytes: number } }
+) | null
+/** the record base.json holds for a fixture a make of the fixtures made */
+export declare function baseRecordOfMade(o: { made: { source: 'ours'; head: Record<string, unknown> } | { source: 'arxiv'; why: string; detail?: string }; layout: Uint8Array | null; image?: string | null }): Record<string, unknown>
+/** the layout file a fixture keeps where its base page of ours is refused: an older maker's, never the engine's own */
+export declare function keptLayoutOf(bytes: Uint8Array | null, engineLayout: string): Uint8Array | null
 export declare function layoutVersionOf(fixtures: string, names: string[], expected: LayoutVersion): LayoutVersion
 export declare function makePack(o: { entries: { path: string; from: string }[]; out: string; pipeline: string; layout: LayoutVersion; compileImage?: PackImage | null; made?: string }): Manifest
 export declare const COMPILE_IMAGES_FILE: string
