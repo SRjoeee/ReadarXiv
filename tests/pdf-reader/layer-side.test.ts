@@ -8,7 +8,7 @@ import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { createLayerSide, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
-import { made, N, partInputs, TAILS } from './helpers/format-paper'
+import { made, N, ORIG, partInputs, TAILS } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
@@ -70,7 +70,7 @@ describe('L4: the best version, page by page (§2.3)', () => {
 })
 
 describe('L11: laid in place', () => {
-  it('the place\'s size and the pane\'s scroll unchanged, no viewer document set, the copy from the left\'s canvas drawn at its k', async () => {
+  it('the place\'s size and the pane\'s scroll unchanged, no viewer document set, the copy drawn from the composed document at the place\'s k (the left\'s canvas, arXiv\'s rendering, is not its source)', async () => {
     const s = await setup()
     await nearOn(s, [1, 2])
     s.panes.right.scrollTop = 300
@@ -86,10 +86,11 @@ describe('L11: laid in place', () => {
     expect([box(1), box(2)]).toEqual(before)
     expect(s.panes.right.scrollTop).toBe(scrolled)
     expect(leftViewer().log.filter(l => l.startsWith('setDocument')).length).toBe(docs)
-    // page 1's copy over the left's canvas at the scale PDF.js drew it at; page 2's, whose left page PDF.js has not drawn,
-    // from elsewhere
+    // the layer is over our base page: page 1\'s copy is the composed document\'s page at the place\'s k, not the canvas PDF.js drew of
+    // the original, which is drawn at that k here all the same
     const copies = s.doors[0]?.copies ?? []
-    expect(copies.find(c => c[0] === 1)?.slice(1)).toEqual([canvas, pv.viewport.scale])
+    expect(copies.find(c => c[0] === 1)?.[1]).not.toBe(canvas)
+    expect(copies.find(c => c[0] === 1)?.[2]).toBe(pv.viewport.scale)
     expect(copies.find(c => c[0] === 2)?.[1]).not.toBe(canvas)
     expect(content(s, 1)).toBe('layer')
   })
@@ -108,13 +109,13 @@ describe('L11: laid in place', () => {
   })
 })
 
-describe('one frame a page: the copy at the scale its source was drawn at (docs/PDF-READER.md §11.8)', () => {
+describe('one frame a page: the copy at the place\'s k, whatever PDF.js drew the left\'s page at (docs/PDF-READER.md §11.8)', () => {
   /** the owner's fit, 87.25 %, at a pixel ratio of 2: the page 711.9999… CSS px wide, PDF.js's canvas floored to 1422 px */
   const FIT = 0.8725490196078431
   const pageView = (n: number) => leftViewer().getPageView(n - 1) as NonNullable<ReturnType<FakePDFViewer['getPageView']>>
   const copyOf = (s: Setup, n: number) => s.doors[0]?.copies.find(c => c[0] === n) as [number, HTMLCanvasElement, number] | undefined
 
-  it('the copy from the left\'s canvas is drawn at the scale PDF.js drew it at, never its floored width over the page\'s', async () => {
+  it('the copy is at the place\'s k, never the floored width of the canvas PDF.js drew of the original over the page\'s', async () => {
     vi.stubGlobal('devicePixelRatio', 2)
     const s = await setup()
     s.view.zoomTo(FIT)
@@ -125,7 +126,9 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
-    expect(one?.[1]).toBe(pageView(1).canvas)
+    // (over our base the left\'s canvas is no source: the page drawn from the document, on the place\'s box times the pixel ratio)
+    expect(one?.[1]).not.toBe(pageView(1).canvas)
+    expect(s.doors[0]?.sized.find(c => c[0] === 1)).toEqual([1, 1422, 1842])
     expect(one?.[2]).toBe(1.1633986928104574 * 2)
     expect(one?.[2]).not.toBe(1422 / 612)
     expect(content(s, 1)).toBe('layer')
@@ -163,13 +166,11 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     expect(one?.[2]).toBe(1.1633986928104574 * 2)
   })
 
-  it('a canvas PDF.js drew at a restricted output scale near the place\'s k is a source, copied at the scale it drew', async () => {
+  it('at a zoom where the place\'s k is held to COPY_PIXELS, the copy is the document\'s page at that k, whatever output scale PDF.js drew the left\'s page at', async () => {
     vi.stubGlobal('devicePixelRatio', 2)
     const s = await setup()
-    // at 353 % the place's k is held to COPY_PIXELS (5.883); PDF.js under a cap of its own drew at an output scale of 5/4 (a
-    // fraction approximateFraction can give, its terms at most 8: 3600 px over 2880 across, 4655 over 3724 down), 5.883 device
-    // pixels a unit. (With the viewer's detail canvas on, as by default, PDF.js draws a restricted base canvas at half or a
-    // quarter of that, which no K_SLACK takes: this is the case with it off)
+    // at 353 % the place's k is held to COPY_PIXELS (5.883); PDF.js under a cap of its own drew the left\'s page at an output scale of
+    // 5/4 (3600 px over 2880 across, 4655 over 3724 down): a canvas of the original, which is no source over our base
     s.view.zoomTo(3.53)
     await settle(s, 4)
     await nearOn(s, [1])
@@ -177,14 +178,13 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
-    expect(one?.[1]).toBe(pageView(1).canvas)
-    expect(one?.[2]).toBe(pageView(1).viewport.scale * 1.25)
-    expect(one?.[2]).not.toBe(3600 / 612)
+    expect(one?.[1]).not.toBe(pageView(1).canvas)
+    expect(one?.[2]).toBeCloseTo(Math.sqrt(2 ** 24 / (612 * 792)), 6)
+    expect(one?.[2]).not.toBe(pageView(1).viewport.scale * 1.25)
   })
 
-  it('a canvas left as drawn through a zoom\'s steps is copied at the scale it was drawn at, not the page view\'s next', async () => {
+  it('a zoom\'s step leaves the left\'s canvas as it was drawn: the copy is the document\'s page at the place\'s k now, not the scale the canvas was drawn at', async () => {
     const s = await setup()
-    // drawn at the fit, its page 711.99 CSS px floored to 711 (so neither 711 / 612 nor the page view's next scale is it)
     s.view.zoomTo(FIT)
     await settle(s, 4)
     await nearOn(s, [1])
@@ -197,20 +197,19 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
-    expect(one?.[1]).toBe(pv.canvas)
-    expect(one?.[2]).toBe(drawnAt)
-    expect(one?.[2]).not.toBe(711 / 612)
+    expect(one?.[1]).not.toBe(pv.canvas)
+    expect(one?.[2]).toBe(pv.viewport.scale)
+    expect(one?.[2]).not.toBe(drawnAt)
   })
 
-  it('a drawing PDF.js lets finish after a zoom gave its page view the next viewport is kept at the scale it was begun at', async () => {
+  it('a drawing PDF.js lets finish after a zoom changes nothing: the copy is the document\'s page at the place\'s k', async () => {
     const s = await setup()
     s.view.zoomTo(FIT)
     await settle(s, 4)
     await nearOn(s, [1])
     const pv = pageView(1), begun = pv.viewport.scale
     leftViewer().startRender(1, { width: 711, height: 921, sx: 1, sy: 1 })
-    // a zoom to 87.5 % while it draws (as under PDF.js's restricted scaling, which lets the drawing run on): the page view's
-    // next viewport is 714 × 924 CSS px, the old canvas's 711 × 921 within the 8 px of PDF.js's rounding both ways
+    // a zoom to 87.5 % while it draws (as under PDF.js's restricted scaling, which lets the drawing run on)
     s.view.zoomTo(0.875)
     await flush()
     expect(pv.viewport.scale).not.toBe(begun)
@@ -218,9 +217,9 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
-    expect(one?.[1]).toBe(pv.canvas)
-    expect(one?.[2]).toBe(begun)
-    expect(one?.[2]).not.toBe(pv.viewport.scale)
+    expect(one?.[1]).not.toBe(pv.canvas)
+    expect(one?.[2]).toBe(pv.viewport.scale)
+    expect(one?.[2]).not.toBe(begun)
   })
 
   it('the page drawn from the document is drawn on the context of the left\'s page views: the CPU\'s, or the GPU\'s where the host opens its documents with enableHWA', async () => {
@@ -447,8 +446,9 @@ describe('L14: the feed\'s refusals', () => {
 describe('L17: a layer over our own compile (the layer route, design §3.2): its copy from the composed document, a page without a layout the original\'s', () => {
   /** a side over the format test's paper written with the engine's head of a layer over our own compile (made({ ours: true })) */
   const oursSetup = (o: Parameters<typeof setup>[0] = {}) => setup({ ...o, ours: true })
-  /** a side over the same paper whose head says arXiv's PDF (the writer's, with the why our compile was refused, or none) */
-  const arxivSetup = () => setup()
+  /** a side over the same paper whose head says arXiv's PDF (the writer's, with the why our compile was refused, or none): it draws
+   *  nothing in our hosts (they refuse it at bind), and the view takes its copy as it did before layers were over our base */
+  const arxivSetup = () => setup({ ours: false })
   /** the left page 1 drawn by PDF.js, so that a copy taken from its canvas is possible */
   const leftDrawn = () => {
     // (the last viewer made: a row may set up more than one view)
@@ -468,7 +468,7 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     s.side.tell(await ALL(true))
     await settle(s)
     // (the engine\'s head of a layer over our compile, with the arXiv PDF its check ran over)
-    expect((await s.side.index())?.head).toMatchObject({ base: { source: 'ours', check: { boxes: 'equal' } }, orig: { bytes: 12_000 } })
+    expect((await s.side.index())?.head).toMatchObject({ base: { source: 'ours', check: { boxes: 'equal' } }, orig: { bytes: ORIG.bytes } })
     expect(content(s, 1)).toBe('layer')
     expect(copyOf(s, 1)).toHaveLength(1)
     expect(copyOf(s, 1)[0]?.[1]).not.toBe(canvas)
@@ -485,7 +485,7 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     const asked = spies(s)
     await nearOn(s, [1, 2])
     const canvas = leftDrawn()
-    s.side.tell(await ALL())
+    s.side.tell(await ALL(false))
     await settle(s)
     expect((await s.side.index())?.head.base).toMatchObject({ source: 'arxiv' })
     expect(copyOf(s, 1)[0]?.[1]).toBe(canvas)
@@ -503,9 +503,9 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     expect(layerOf(s, 4)).toBeNull()
     expect(copyOf(s, 4)).toEqual([])
     // and over arXiv\'s PDF it is laid as it was
-    const t = await setup()
+    const t = await arxivSetup()
     await nearOn(t, [4])
-    t.side.tell(await ALL())
+    t.side.tell(await ALL(false))
     await settle(t)
     expect(content(t, 4)).toBe('layer')
   })
@@ -701,7 +701,9 @@ describe('L16 and L3: the rows, and what comes in parts', () => {
     b.side.take(all.slice(0, 4))
     await settle(b)
     for (let n = 1; n <= N; n++) expect(content(b, n), `page ${n}`).toBe(content(a, n))
-    expect(content(b, 4)).toBe('layer')
+    // (page 4 is its third part\'s, which records no layout: the original\'s page, whichever way the parts came)
+    expect(content(b, 4)).toBe('original')
+    expect(content(b, 3)).toBe('layer')
     for (const sha of new Set(b.fetched)) expect(b.fetched.filter(x => x === sha).length, sha).toBe(1)
   })
 })

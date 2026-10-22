@@ -2,7 +2,7 @@
 
 A local bench for the instant layer: a paper and a language, any two views side by side, pages in step. Its main view,
 the **quick view** (`a=v0`, once called Layer v0), draws exactly what the engine draws (`src/pdf-reader/engine/`): the
-hybrid over the paper's add-on, with D (adaptive fill), on the layer gate's own inputs. Like the gate it is a
+layer over the paper's layout file and add-on, with D (adaptive fill), on the layer gate's own inputs. Like the gate it is a
 measurement tool of the maintainer's machine: not part of the type check, the unit tests or the build
 (`lab/pdf/README.md`), checked by `pnpm lint` alone.
 
@@ -58,7 +58,6 @@ the foot of the settings); the target languages are always named in their own la
   interface's language. Each group says what the page shows in a few facts; the engine's own names and numbers (fit
   actions, steps, commits, paths) are under its technical details.
 - **The quick view's choices** (kept in the address):
-  - the hybrid: the layout file's geometry where it locates a unit whole (`v0tex`), else v0 alone;
   - over the paper's add-on (`v0rm`), else erased and put back;
   - the prototype's own faces (`v0=prototype`), else the role table's;
 

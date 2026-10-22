@@ -32,19 +32,20 @@ export function installSideFakes() {
 }
 const views: ReaderView[] = []
 
-let paper: Made | null = null, oursPaper: Made | null = null
-/** the format test's small paper, written and read back once; `ours`: its head the engine's head of a layer over our own compile */
-export async function M(ours = false): Promise<Made> {
+let paper: Made | null = null, arxivPaper: Made | null = null
+/** the format test's small paper, written and read back once. Its head is the engine's head of a layer over our own compile (the layer
+ *  draws only over one, BUNDLE 8); `ours = false`: its head over arXiv's PDF, which draws nothing (the fallback) */
+export async function M(ours = true): Promise<Made> {
   if (ours) {
-    oursPaper ??= await made({ ours: true })
-    return oursPaper
+    paper ??= await made({ ours: true })
+    return paper
   }
-  paper ??= await made()
-  return paper
+  arxivPaper ??= await made()
+  return arxivPaper
 }
 export const macrotask = () => new Promise(r => setTimeout(r, 0))
 export const jobRef = (m: Made, i: number): TellRef => ({ ...(m.parts[i]!.ref as Ref), prev: i ? m.parts[i - 1]!.sha256 : null })
-export const ALL = async (ours = false) => { const m = await M(ours); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }
+export const ALL = async (ours = true) => { const m = await M(ours); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }
 /** a row of each unit: its text as one translated piece; `sentences` where given */
 export const rowOf = (id: number, text = `t${id}`, sentences: Row[4] = null): Row => [id, [text], 'whole', 'test', sentences]
 /** the units with lines on page n, rising */

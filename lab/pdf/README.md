@@ -68,6 +68,22 @@ missing or drawn twice, and the fidelity measures against the original page, no 
 
 Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `lab/pdf/records/layer-perf.md`.
 
+**The layer draws only from the layout file (route step 2, 2026-10-22).** A unit the file does not locate whole (not held, or a
+visible piece it has no position for: a placeholder LOST or with no row, but a text symbol, a macro that sets no ink, a space)
+is the original's: no reading of the page's text stands in for a position the file lacks, and no proof checks one. Gone with
+it: v0's own reading of such a unit (the lines from the anchors' rectangles, the placeholders' renderings found by aligning
+gaps with the source, their second chance, the first line's repairs), the held lines' cover of a LOST display
+(`displayCover`), the run of leftover characters that drew a LOST text piece (`textRunsOf`), the proof of v0's renderings
+(`proofOf`; what stays of it is `tex.mjs cropsOf`: a rendering page text cannot be, a character no Unicode stands for or none
+of the unit's in the row's segments, is the segments' crops, else the unit stays the original's), and the gate's options
+`--proto-tex=ph` and `--proto-tex-only=no` (`--proto-tex=lines` is the layer, and the gate requires it). A run's `sources` is
+`{ tex, why, texOnly }`: the units placed, why the others are the original's (`unanchored, <why of locatedWhole>`), how many of
+the placed only the file holds. The file's coordinates are the base page's, so a layer is drawn over a base of ours only
+(`format.mjs layerDraws`, asked by the door's open and the whole's alike): a head whose `base.source` is arXiv's, or a bundle
+merged from one (`mergeParts` keeps the head's `source`), draws nothing, though its parts carry layouts; the door cuts of
+`--door` and `--door-parts` are made over a base of ours (`doorBaseOf`). The sections below describe how those rounds were made; where they name what is removed, it is
+the history of the readings the file now gives.
+
 The gate measures the drawn layer, v0 (`--engine-kind=proto`, its default; the records' mode is `--proto-tex=lines --removal=draw`; `--door` is the reader's door; `--door-parts[=doubling|splits:<n>|seed:<s>]` the door in parts against the door over the same cut made whole, BUNDLE 4's equality proof, never recorded: each part's tail chained after the parts before it, and the cut made whole against BUNDLE 3's open over the single tail; `--door-parts-addon=carried|none` the cut without a tail, or without an add-on). The first layer (`layer/layer.mjs`, with the fit and the line breaker under `layer/`) is parked (`parked/README.md`): `--engine-kind=layer` is refused with a message that says so, for an older worktree given by `--engine=<it>` that still has the entry it measures it as it was, and the layer lab's first view reports that the entry is not there. The checker `layer/check.mjs` stays, since the gate's instrument imports it by its address.
 
 **TeX's file against the drawing** (the 2608.16117 survey and the p59 finding, 2026-10-15). Seven measures read the
@@ -176,13 +192,13 @@ in its group's first display's, which `contentLost` and `textInDisplay` read), a
 (`contentUnknown`). A unit that opens with a display has its rows before its start mark's line taken off as no line of
 it (as the held rows at its end), so that an `OUTSIDE` piece is outside every line of its unit. The prototype's checker
 counts a placeholder shown when it is drawn or left intact where it stands (`inPlace`: an `OUTSIDE` piece, which the
-drawing never erases), never `missing`. The hybrid's safe rule is one place (`layer-proto/tex.mjs` `proofOf`): a
-rendering is drawn only from what the file proves (its segments, its page text, its held run or group, a piece the file
-draws as nothing), else the unit stays the original's; its one exemption is a LaTeX text symbol (`\%`, `$\times$`), whose
+drawing never erases), never `missing`. The layer's safe rule is one place (`layer-proto/tex.mjs` `cropsOf`, after `locatedWhole`): a
+rendering is drawn only from what the file holds (its segments' crops or their page text, a piece the file draws as
+nothing), else the unit stays the original's; its one exemption is a LaTeX text symbol (`\%`, `$\times$`), whose
 source is its rendering's content: one grapheme drawn, with no `_`, `^`, `/` or `√(` (`layer2.mjs textSymbol`), so that a
 formula of no letter or digit (`$\sum_{\alpha}^{\beta}$`) is proven as any formula is; with no layout file (the maker
-refused, the bundle dropped it) the reader's units are still drawn under the rule, which nothing then proves; a piece whose segments all lie past the pages the run shows (the gate's 12) is
-proven and drawn as its page text, never `?`. Fix 4 (the maintainer's ruling of 2026-10-15, every script): a mark UAX 14
+refused, the bundle dropped it, or the head's base is arXiv's) nothing is drawn; a piece whose segments all lie past the pages the run shows (the gate's 12) is
+drawn as its page text where the file has one, else as nothing, never `?`. Fix 4 (the maintainer's ruling of 2026-10-15, every script): a mark UAX 14
 does not let a line start with (`layer-proto/no-start.mjs`, the table `lineStartPunct` reads too, served to the gate from
 this repository) that opens the translation's text right after a displayed formula is dropped from the drawing, unless
 the original's line there opens with one; the rows and the cache keep the translation. The sample's bundle is made so too, over the committed stand-in PDF (`scripts/make-sample-bundle.mjs

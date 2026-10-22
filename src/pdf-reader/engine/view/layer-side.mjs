@@ -318,7 +318,8 @@ export function createLayerSide(view, o) {
     if (s === 'laying') { if (P.ask) clockOn(n); return }
     clockOff(n)
     if (s === 'ready') {
-      ready++
+      // (a page the door lays that stays the original\'s, a part with no layout, is not a page the layer laid)
+      if (!originalPageOf(n)) ready++
       // a page made ready far from the view: nothing of the original drawn there again, its layer asked on coming near
       if (!V.places.near(n) && !P.ask) retire(n)
     } else {

@@ -276,6 +276,7 @@
     "symbolText",
     "tableGrid",
     "texErrors",
+    "texLiveOfPdf",
     "textOfPdf",
     "tokenAtMark",
     "tokenizeDocument",

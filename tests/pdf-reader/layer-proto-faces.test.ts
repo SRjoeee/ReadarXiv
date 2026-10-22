@@ -2,8 +2,9 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COVERAGE } from '@/pdf-reader/engine/rules/font-coverage.mjs'
 import { FACES } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import { fileOfGeometry, unitsOfGeometry } from './helpers/file-of-geometry'
 
-// v0's faces (layer-proto/fonts.mjs roleFaceSet, run.mjs openProto's `faceSources`): the role table's files, served in
+// The layer's faces (layer-proto/fonts.mjs roleFaceSet, run.mjs openProto's `faceSources`): the role table's files, served in
 // slices or whole, and nothing else. A PDF.js document of its own making (one page of paragraphs, nothing drawn), fonts
 // that load by their slices (a FontFace and document.fonts that know which characters each has loaded), and a canvas that
 // measures a character at its face's width only once the slice that holds it has loaded, and records every measure taken
@@ -136,13 +137,13 @@ function docOf(lines: [string, number][]) {
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} }
   return { numPages: 1, getPage: async () => page }
 }
-/** v0 over one page of paragraphs, one line each from the top (the source and its translation), in the role table's faces */
+/** the layer over one page of paragraphs, one line each from the top (the source and its translation), in the role table's faces */
 async function open(paras: [string, string][], o: Record<string, unknown> = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const lines = paras.map(([src], i) => [src, 260 - 30 * i] as [string, number])
   const geometry = { schema: 1, kinds: paras.map(() => 'para'), left: { pages: [[0, 0, 300, 300]], units: paras.map((_, i) => [i, i, [[1, 20, lines[i]![1] - 2.15, 280, lines[i]![1] + 6.83]]]) } }
   const units = paras.map(([src, tr]) => ({ kind: 'para', src, state: 'whole', pieces: [{ t: 'text', tr: true, s: tr }] }))
-  const run = await openProto({ doc: docOf(lines), target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, geometry, units, faceUrl: (f: string) => `/fonts/${encodeURIComponent(f)}`, ...o } as never)
+  const run = await openProto({ doc: docOf(lines), target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, geometry, units, tex: fileOfGeometry(unitsOfGeometry(geometry)), faceUrl: (f: string) => `/fonts/${encodeURIComponent(f)}`, ...o } as never)
   return run as Awaited<ReturnType<typeof openProto>>
 }
 const PARAS: [string, string][] = [['Alpha beta gamma', '\u6c49\u5b57 LLM \u6c49\u5b57\u6c49'], ['Delta epsilon zeta', '\u6c49\u5b57\u5b57 abc'], ['Eta theta iota', '\u5b57\u6c49\u5b57\u6c49\u5b57\u6c49']]

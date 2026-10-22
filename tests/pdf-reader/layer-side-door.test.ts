@@ -36,8 +36,10 @@ vi.hoisted(() => {
 
 installSideFakes()
 const served = async (id: string) => [{ url: `/f/${id}.otf`, ranges: [0, 0x10ffff] }]
-/** the format test's paper's text layer, from its left's rectangles (layer-door.test.ts's) */
-const textOf = (m: Made) => ({ pages: 4, units: m.index.units.map((_, id) => ({ text: `unit ${id}`, lines: m.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], r[3], r[2] + 2.15]))) })) })
+/** the format test's paper's text layer, from its left's rectangles (layer-door.test.ts's); each unit's text 400 pt wide at most,
+ *  so that its first character stands inside the segment of the paragraph's formula (the layer reads a placeholder's rendering
+ *  from the page's characters inside its segment in the layout file) */
+const textOf = (m: Made) => ({ pages: 4, units: m.index.units.map((_, id) => ({ text: `unit ${id}`, lines: m.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], Math.min(r[3], r[1] + 400), r[2] + 2.15]))) })) })
 /** the side over the real door; `fail`: the composed pages that cannot be read */
 async function real(o: Options & { fail?: number[] } = {}) {
   const m = await M()
@@ -89,7 +91,9 @@ describe('the real door: L3, what comes in parts gives the pages one take gives'
     a.side.end()
     await still(a)
     const whole = drawn(a)
-    expect(whole.every(x => x !== null)).toBe(true)
+    // (pages 1 to 3 are drawn; page 4 is its third part\'s, which records no layout: the original\'s page, nothing of the layer in its place)
+    expect(whole.slice(0, 3).every(x => x !== null)).toBe(true)
+    expect(whole[3]).toBeNull()
     a.view.dispose()
     const b = await real()
     await nearOn(b, [1, 2, 3, 4])
@@ -134,15 +138,18 @@ describe('the real door: (c) a page stepped over', () => {
   it('a later page whose composed page cannot be read fails alone and shows the original; the pages around it are laid', async () => {
     const m = await M()
     const s = await real({ fail: [3] })
-    await nearOn(s, [2, 3, 4])
+    await nearOn(s, [1, 2, 3, 4])
     s.side.tell(await ALL())
     s.side.take(rowsOfIndex(m.index))
     s.side.end()
     await still(s)
-    expect([1, 2, 3, 4].map(p => s.layer()?.pageState(p))).toEqual(['ready', 'ready', 'failed', 'ready'])
-    for (const p of [2, 4]) expect(content(s, p), `page ${p}`).toBe('layer')
+    // (page 4 is its third part\'s, which records no layout: never asked of the door, the original\'s page)
+    expect([1, 2, 3].map(p => s.layer()?.pageState(p))).toEqual(['ready', 'ready', 'failed'])
+    for (const p of [1, 2]) expect(content(s, p), `page ${p}`).toBe('layer')
     expect(content(s, 3)).toBe('original')
-    expect(s.side.coverage()).toMatchObject({ laid: 3, failed: 1, total: N })
+    expect(content(s, 4)).toBe('original')
+    expect(layerOf(s, 4)).toBeNull()
+    expect(s.side.coverage()).toMatchObject({ laid: 2, failed: 1, total: N })
   })
 })
 

@@ -48,9 +48,8 @@ const u = { kind: 'para', src: 'a b c d', pieces: [text('\u7532 '), ph("$g(z')=\
 const SEGS = [1, 150, 500, 200, 507, 498, 1, 10, 488, 40, 495, 486]
 const lu = unitOf([L(500), L(488)], [[1, 0, SEGS]])
 const page = (sum: { nu?: boolean } = {}) => [...item('a b', 10, 500, 10, 0), ...item('g=', 150, 500, 10, 1, math), ...item('\u00cd', 10, 488, 10, 2, math).map(c => ({ ...c, ...sum })), ...item('gn', 20, 488, 10, 3, math), ...item('c d', 50, 488, 10, 4)]
-/** the unit read as the hybrid reads one the file locates whole (texParts), or as a filed unit (the proof alone) */
-const whole = (pg = page()) => { const t = T.texRects(lu); return L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { use: 'lines', lines: t }) as never) }
-const filed = (pg = page()) => L2.prepareUnit(u, T.texRects(lu).rects as never, [pg as never], new Map() as never, null, { proof: T.proofOf(lu, [-1, 1, -1]) } as never)
+/** the unit read as the layer reads one the file locates whole (texParts) */
+const whole = (pg = page()) => { const t = T.texRects(lu); return L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu, [-1, 1, -1], { lines: t }) as never) }
 const round = (b: number[]) => b.map(v => Math.round(v * 100) / 100)
 /** its two crops, each a segment's box with the antialias margin (cropOfBox), on the baseline of its own line */
 const TWO = [{ page: 1, baseline: 500, crop: [149.6, 497.7, 200.4, 507.3] }, { page: 1, baseline: 488, crop: [9.6, 485.7, 40.4, 495.3] }]
@@ -67,40 +66,25 @@ describe('a formula TeX broke over lines is its crops, one a line, never its pag
       expect(L2.cropGrows(r.get(1) as never)).toBe(false)
     }
   })
-  it("in a unit filed but not located whole, v0's page text standing in its segments", () => {
-    for (const pg of [page(), page({ nu: true })]) {
-      const r = filed(pg)
-      expect(r.unproven).toBeUndefined()
-      expect(partsOf(r.get(1))).toEqual(TWO)
-    }
-    // (and where v0's reading holds a character outside them, no proof: as before)
-    // (its "g" read 10 before its segment's start)
-    expect(filed(page().map(c => (c.item === 1 && c.ch === 'g' ? { ...c, x0: 140, x1: 145 } : c))).unproven).toBe(1)
-  })
-  it('read from its segments where v0 found no rendering (resolutionFrom: the rendering its row gives)', () => {
-    const uc = page().map(c => ({ ...c, page: 1, rect: [1, 10, c.yb - 2, 200, c.yb + 8] }))
-    const g = T.renderingOf(Float64Array.from(SEGS) as never, uc as never, false)
-    const r = L2.resolutionFrom({ k: 1, src: "$g(z')=\\sum_n g_n$", cls: 'other' } as never, { ...g, proof: true } as never, u)
-    expect(r).toMatchObject({ mode: 'crop', page: 1, baseline: 500 })
-    expect(partsOf(r)).toEqual(TWO)
-    // (each part's extent over and under its baseline its own segment's, never the rendering's box over both lines, which
-    // would open the line under it by a line's depth: lineExtent)
-    expect(L2.cropPartsOf(r).map(q => L2.lineExtent({ items: [{ t: { crop: q } }] } as never, 10, 1))).toMatchObject([{ a: 7, d: 2 }, { a: 7, d: 2 }])
+  it("each part's extent over and under its baseline is its own segment's, never the rendering's box over both lines", () => {
+    // (which would open the line under it by a line's depth: lineExtent)
+    const r = whole().get(1)
+    expect(L2.cropPartsOf(r as never).map(q => L2.lineExtent({ items: [{ t: { crop: q } }] } as never, 10, 1))).toMatchObject([{ a: 7, d: 2 }, { a: 7, d: 2 }])
   })
   it("without its own brackets where the translation sets its own: the first part cut after its opening one, the last before its closing one", () => {
     // "\uff08(x+" on the line at 500, "y)\uff09" on the next: the brackets' ink left out of the crops
     const ub = { kind: 'para', src: 'see (x+y)', pieces: [text('\u89c1\uff08'), ph('$(x+y)$'), text('\uff09')] } as never
     const segs = [1, 150, 500, 165, 507, 498, 1, 10, 488, 20, 495, 486]
-    const uc = [...item('see', 10, 500, 10, 0), ...item('(x+', 150, 500, 10, 1, math), ...item('y)', 10, 488, 10, 2, math)].map(c => ({ ...c, page: 1, rect: [1, 10, c.yb - 2, 200, c.yb + 8] }))
-    const g = T.renderingOf(Float64Array.from(segs) as never, uc as never, false)
-    const r = L2.resolutionFrom({ k: 1, src: '$(x+y)$', cls: 'other' } as never, { ...g, proof: true } as never, ub)
+    const lb = unitOf([L(500), L(488)], [[1, 0, segs]]), t = T.texRects(lb)
+    const pg = [...item('see', 10, 500, 10, 0), ...item('(x+', 150, 500, 10, 1, math), ...item('y)', 10, 488, 10, 2, math)]
+    const r = L2.prepareUnit(ub, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lb, [-1, 1, -1], { lines: t }) as never).get(1)
     expect(partsOf(r)).toEqual([{ page: 1, baseline: 500, crop: [154.6, 497.7, 165.4, 507.3] }, { page: 1, baseline: 488, crop: [9.6, 485.7, 15.4, 495.3] }])
   })
   it('one line of segments (a tall operator, its rows two segments that meet) is one crop of their union', () => {
     const one = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 200, 507, 498, 1, 160, 496, 190, 503, 494]]])
     const t = T.texRects(one)
     const pg1 = [...item('a b', 10, 500, 10, 0), ...item('g=', 150, 500, 10, 1, math), ...item('\u00cd', 170, 496, 10, 2, math), ...item('c d', 10, 488, 10, 4)]
-    const r = L2.prepareUnit(u, t.rects as never, [pg1 as never], new Map() as never, null, T.texParts(one, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    const r = L2.prepareUnit(u, t.rects as never, [pg1 as never], new Map() as never, null, T.texParts(one, [-1, 1, -1], { lines: t }) as never)
     expect(r.get(1)).toMatchObject({ mode: 'crop', page: 1, baseline: 500 })
     expect(r.get(1)?.parts).toBeUndefined()
   })
@@ -109,7 +93,7 @@ describe('a formula TeX broke over lines is its crops, one a line, never its pag
     const lt = unitOf([L(500), L(488)], [[1, 0, [1, 150, 500, 160, 507, 498, 1, 10, 488, 20, 495, 486]]])
     const t = T.texRects(lt)
     const pg = [...item('a b', 10, 500, 10, 0), ...item('ab', 150, 500, 10, 1, mono), ...item('cd', 10, 488, 10, 2, mono), ...item('c d', 50, 488, 10, 4)]
-    const r = L2.prepareUnit(tt, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lt, [-1, 1, -1], { use: 'lines', lines: t }) as never)
+    const r = L2.prepareUnit(tt, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lt, [-1, 1, -1], { lines: t }) as never)
     expect(r.unproven).toBeUndefined()
     expect(r.get(1)).toMatchObject({ mode: 'orig-text', text: 'ab cd' })
   })

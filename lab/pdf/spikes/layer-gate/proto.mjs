@@ -323,7 +323,7 @@ async function removalMeasures(cur, T) {
     if (n >= 6) {
       foreign++
       // (where: the unit, its piece, which way it was drawn, the pixels)
-      ;((out.at ??= {}).crops ??= []).push([u.id, c.k, S.byId.get(u.id)?.tex ? 'tex' : 'v0', c.clip ? 'clip' : 'box', n])
+      ;((out.at ??= {}).crops ??= []).push([u.id, c.k, 'tex', c.clip ? 'clip' : 'box', n])
     }
   }
   return { ...out, ok, ...(unread ? { unread } : {}), crops, cropForeignInk: foreign, cropForeignInkPx: foreignPx }
@@ -616,8 +616,8 @@ window.gate = {
     const one = perf && removal === 'draw' && addon
     const combined = removal && addon ? await bytes(addon.url) : null
     const doc = await pdfjs.getDocument({ data: one ? combined : data, ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
-    // the hybrid (--proto-tex): the layout file given (the engine's own maker's, or the fixture's) read by the engine's
-    // own reader, and the units file's pieces by unit, beside v0's own inputs
+    // the layout file given (the engine's own maker's, or the fixture's) read by the engine's own reader, and the units
+    // file's pieces by unit, beside v0's own inputs: the layer draws only from it
     let texIn = null
     if (tex) {
       const F = await import('/engine/layout/file.mjs')
@@ -795,7 +795,7 @@ window.gate = {
     // plan's)
     if (S.rm) {
       const st = S.run.removalStats?.()?.byPage?.[p]
-      out.removal = { ok: !!S.rm.manifest.page[p]?.ok, refused: S.rm.manifest.page[p]?.ok ? 0 : (S.rm.plan.pages[p]?.units?.length ? 1 : 0), units: st?.units ?? 0, swapped: (st?.tex ?? 0) + (st?.v0 ?? 0), tex: st?.tex ?? 0, v0: st?.v0 ?? 0, extra: st?.extra ?? 0, mismatched: 0 }
+      out.removal = { ok: !!S.rm.manifest.page[p]?.ok, refused: S.rm.manifest.page[p]?.ok ? 0 : (S.rm.plan.pages[p]?.units?.length ? 1 : 0), units: st?.units ?? 0, swapped: st?.units ?? 0, extra: st?.extra ?? 0, mismatched: 0 }
     }
     if (!pixel) return out
     const row = run.rows[p - 1]
@@ -988,7 +988,7 @@ window.gate = {
   dump() {
     const { run } = S
     // (each laid unit's resolutions, for a look at what a source made of it)
-    const units = run.placed.map(laidOf).filter(p => p.prep).map(p => ({ id: p.id, source: p.tex ? 'tex' : 'v0', rects: p.rects, label: p.prep.label?.text, labelChars: p.prep.label?.chars.map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.x1 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]), keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
+    const units = run.placed.map(laidOf).filter(p => p.prep).map(p => ({ id: p.id, rects: p.rects, label: p.prep.label?.text, labelChars: p.prep.label?.chars.map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.x1 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]), keep: p.prep.keep, res: [...p.prep.values()].map(r => ({ k: r.k, mode: r.mode, src: r.src?.slice(0, 60), text: r.text, crop: r.crop, baseline: r.baseline, gap: r.gap?.text, chars: r.gap?.chars.filter(c => !c.sep && !c.space).map(c => [c.ch, Math.round(c.x0 * 100) / 100, Math.round(c.yb * 100) / 100, Math.round(c.size * 100) / 100]) })) }))
     // (the babel names, drawn or why not, without their characters: D1a)
     const names = (run.names ?? []).map(({ chars, ...n }) => n)
     return { order: run.order, stats: run.stats.map(({ ms, ...r }) => r), skipped: run.skipped, audit: run.audit, pages: (S.dump ?? []).map(({ check, ...d }) => d), checks: (S.dump ?? []).map(d => ({ p: d.p, ...d.check })), units, names }
@@ -1058,7 +1058,6 @@ window.gate = {
     const checker = { lost: 0, missing: 0, twice: 0, brackets: 0 }
     for (const c of S.checks) for (const k of Object.keys(checker)) checker[k] += c[k]
     // (the units drawn: laid and recorded; a unit placed may still be left the original's, run.mjs's refusals)
-    const drawnIds = new Set(run.stats.map(r => r.id))
     return {
       laid: run.stats.length, fit: run.stats.length, unfit: 0, why, knob, located: S.geometry.left.units.length,
       // the lines TeX's rule opened, and those it would have where the paper has no values for it (layer2.mjs Layout)
@@ -1067,8 +1066,8 @@ window.gate = {
       medianScale: scales.length ? scales[Math.floor(scales.length / 2)] : null,
       page1Ms: run.pageMs[1] ?? null, slowestUnitMs: ms.length ? Math.max(...ms) : null,
       faces: Object.values(run.designs), failedFaces: [], errors: 0, order: run.order.length, ownChecker: checker,
-      // the hybrid: the units each source's geometry draws, and why the others are v0's
-      ...(run.sources?.tex.length || run.sources?.v0.length ? { sources: { tex: run.sources.tex.length, v0: run.sources.v0.length, v0Drawn: run.sources.v0.filter(id => drawnIds.has(id)).length, texOnly: run.sources.texOnly ?? 0, why: run.sources.why, texIds: run.sources.tex } } : {}),
+      // the units the layer placed, and why the others are the original's
+      ...(run.sources?.tex.length || Object.keys(run.sources?.why ?? {}).length ? { sources: { tex: run.sources.tex.length, texOnly: run.sources.texOnly ?? 0, why: run.sources.why, texIds: run.sources.tex } } : {}),
       // whether v0 left its inputs (the geometry and the units) as they were given
       inputsChanged: S.inputs.of() !== S.inputs.before,
       ...(parts ? { parts } : {}),

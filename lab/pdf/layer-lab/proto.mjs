@@ -1,16 +1,16 @@
 // lab/pdf/layer-lab/proto.mjs
 // The layer lab's v0 view: the instant layer as the engine draws it (src/pdf-reader/engine/layer-proto/run.mjs), with
 // the layer gate's own inputs and choices (lab/pdf/spikes/layer-gate/proto.mjs, a pixel run of
-// --engine-kind=proto --proto-tex=lines --removal=draw): v0's geometry of the paper (its anchors' line rectangles, the
-// cut's), the fixture's record.json (the translation the units file carries), the hybrid (each unit the fixture's layout
-// file locates whole takes the file's lines, label and placeholders: use 'lines', texOnly, symbols 'text', extents
-// 'v0'), the labels in the target's names where the final names them so (the rule set's labels, the record's captions), the
+// --engine-kind=proto --proto-tex=lines --removal=draw): the left's geometry of the paper (its anchors' line rectangles, the
+// cut's), the fixture's record.json (the translation the units file carries), the fixture's layout file (the layer draws only
+// from it: each unit it locates whole takes the file's lines, label and placeholders; any other unit is the original's;
+// symbols 'text', extents 'v0'), the labels in the target's names where the final names them so (the rule set's labels, the record's captions), the
 // role table's faces, and every choice made for the target: the layout rule set (rules/layout.mjs; D, adaptive fill, is its
 // default, B an adaptiveFill of null).
 // The text-removed PDF (the default): the paper's add-on (serve.mjs, the gate's), opened as a reader opens it, arXiv's
 // pages and the add-on's in one document with its manifest; a unit the file locates whole is drawn over the file's own
 // rectangles, filled with paper, or the removed page swapped in where the manifest says kept ink lies under them; no
-// pixel is read. Without it, every unit is erased and put back, as v0 drew alone.
+// pixel is read. Without it, every unit is erased and put back.
 // serve.mjs serves the engine at /proto-engine/. v0 lays each page at its own scale (1.25 CSS px a unit at the device's
 // pixel ratio, the gate's) and keeps the page's drawing as data; the view draws the page at the pane's own resolution
 // (run.mjs drawCopy): arXiv's page as PDF.js renders it for the pane, then v0's drawing scaled onto it, and the SVG
@@ -22,8 +22,8 @@ import * as pdfjs from 'pdfjs-dist'
 const ASSETS = { cMapUrl: '/pdfjs/cmaps/', standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/', verbosity: 0 }
 const json = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status} ${(await r.text()).slice(0, 300)}`); return r.json() }
 const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return new Uint8Array(await r.arrayBuffer()) }
-/** the hybrid's choices, the gate's (--proto-tex=lines) */
-const TEX = { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' }
+/** how the layout file is taken, the gate's (--proto-tex=lines) */
+const TEX = { symbols: 'text', extents: 'v0' }
 
 /** v0's driver and the layout rule set's module (the built-in set, and the reading of a target's rules), or why they are not there */
 export async function loadProto() {
@@ -40,7 +40,8 @@ export class ProtoRun {
   static async open({ V, rules = null, name, target, faces, removal = true, tex = true, status = () => {} }) {
     const base = `/fixtures/${encodeURIComponent(name)}/`
     const [geometry, record, units, layout] = await Promise.all([json(`${base}geometry.json`), json(`${base}record.json`), tex ? json(`${base}units.json`) : null, tex ? bytes(`${base}layout.json`) : null])
-    // the hybrid: the layout file read by the engine's own reader, the units file's pieces by unit
+    // the layout file read by the engine's own reader, the units file's pieces by unit (a fixture with none: the engine
+    // refuses the open, the layer drawing only from the file)
     let texIn = null
     if (tex) {
       const F = await import('/proto-engine/layout/file.mjs')

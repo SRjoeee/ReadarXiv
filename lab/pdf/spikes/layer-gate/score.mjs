@@ -114,9 +114,8 @@ export const MEASURES = [
 export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'], ['onGrid', 'lines on a layout baseline'], ['pageDrift', "page pitch's drift (most)"],
   // (the drawn gap between two paragraphs against the original's, the median ratio: gated until 2026-10-17, paraGapTight above)
   ['paraGap', "paragraph gap / the original's (median)"],
-  // the crops with no TeX baseline to hold them to, the units v0 draws alone (the layout file not locating them whole: D4),
-  // and the lines TeX's rule opened, or would have where the paper has no values for it (layer2.mjs breakLines)
-  ['cropNoTex', 'crops with no TeX baseline'], ['aloneUnits', 'units v0 draws alone'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"],
+  // the crops with no TeX baseline to hold them to, and the lines TeX's rule opened, or would have where the paper has no values for it (layer2.mjs breakLines)
+  ['cropNoTex', 'crops with no TeX baseline'], ['linesOpened', "lines TeX's rule opened"], ['linesUnopened', "lines TeX's rule would open, no values"],
   // (and the frames whose lines stand past the right edge by the marks no line starts with that end them alone, by at most
   // their own width: CJK's hanging punctuation, a closing mark's blank half the breaker hangs; a share of the body frames)
   ['hanging', 'frames past the right edge by hanging marks alone']]
@@ -125,7 +124,7 @@ export const REPORTED = [['pitch', 'pitch ratio'], ['dTop', '|top shift| (pt)'],
 const over = g => g.dRight > 1 && (g.dBody ?? g.dRight) > 1
 const hangs = g => g.dRight > 1 && (g.dBody ?? g.dRight) <= 1
 /** the reported counts a run's totals sum over its fixtures */
-const REPORTED_COUNTS = ['cropNoTex', 'aloneUnits', 'linesOpened', 'linesUnopened']
+const REPORTED_COUNTS = ['cropNoTex', 'linesOpened', 'linesUnopened']
 /** the content and line measures a page's model holds (measure.mjs) */
 const FILE_MEASURES = ['contentLost', 'textInDisplay', 'slotsSkipped', 'lineStartPunct', 'contentUnknown']
 /** the link counts a page's model holds (links.mjs linksPage), and the ones a fixture's totals sum: the shares are made of them */

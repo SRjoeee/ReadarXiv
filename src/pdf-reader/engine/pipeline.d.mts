@@ -26,6 +26,8 @@ export { GLYPHS_PAGE, OPS_CAP } from './layout/ink.mjs'
 export { readArxivText } from './layout/arxiv.mjs'
 export { handoverOf, layoutMarksOfPaper, markedOfPaper } from './layout/paper.mjs'
 export type { FinalPass, OwnVerdict } from './layout/paper.mjs'
+// the TeX Live year arXiv's PDF says it was built on (its pdfTeX banner), read before any compile
+export { texLiveOfPdf } from './layout/guard.mjs'
 // our compile as the base page (BUNDLE 8): the checks the final pass and our pages pass, and arXiv's date the compiles take
 export { BOX_TOL, DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, MARK_TOL, boxesCheck, boxesOfPdf, creationEpochOf, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, hasMarkText, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf } from './layout/base.mjs'
 export type { PdfLike } from './layout/base.mjs'

@@ -1,22 +1,18 @@
 // src/pdf-reader/engine/layer-proto/tex.mjs
-// The layer's hybrid (step 2 of its new direction, 2026-10-06): v0's per-unit reading (layer2.mjs prepareUnit, whose
-// contract layer2.d.mts writes) with its parts from the layout file wherever the file locates the unit whole, and v0's
-// own heuristics everywhere else. A unit the file does not locate whole is v0's, unchanged: a miss of the file never
-// leaves a unit English that v0 draws.
+// The layout file as the layer's only source of a unit (route step 2, 2026-10-22; the hybrid of 2026-10-06 before it drew a
+// unit the file did not hold from v0's own heuristics): the per-unit reading (layer2.mjs prepareUnit, whose contract
+// layer2.d.mts writes) takes its parts from the layout file, and a unit the file does not locate whole, or one with a visible
+// piece the file has no position for, is the original's (locatedWhole).
 //
-// What the file knows that v0 guesses: each line's baseline and size and its ink's extent across (v0 reads them from the
-// anchors' rectangles and the text layer's estimates), the line's frame, each placeholder's ink by its own segments (v0
-// aligns the page's words with the source and takes the runs left over), a label's box, which of its lines are no text of
-// its own (`held`: the lines kept, the alignment keeping none on the file's lines), and where a forced break `\\` ends
-// a line (forcedBreaks). The rest of the unit's reading is the same for both: the alignment with its source (which
-// characters are its words, its style), the resolution's rules, and the finish (what becomes of each page character,
-// which the restore reads). The
-// page characters are PDF.js's in both, so that the paper's citations and macros a unit learns, and the characters the
-// restore counts as accounted for, are the same keys whichever source a unit took.
+// What the file knows: each line's baseline and size and its ink's extent across, the line's frame, each placeholder's ink by
+// its own segments, a label's box, which of its lines are no text of its own (`held`: the lines kept, the alignment keeping
+// none on the file's lines), and where a forced break `\\` ends a line (forcedBreaks). The rest of the unit's reading is the
+// alignment with its source (which characters are its words, its style), the resolution's rules, and the finish (what becomes of
+// each page character, which the restore reads). The page characters are PDF.js's, so that the paper's citations and macros a
+// unit learns, and the characters the restore counts as accounted for, are the same keys whichever unit took them.
 import { PH_FLAG } from '../layout/file.mjs'
-import { textPieceOf } from '../rules/text-piece.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropFields, cropOfBox, cropPartsOfSegments, displayTouched, fontOfStyle, formulaOf, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, resolutionFrom, scriptedOf, SHORT_SKIP, texToText2 } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropFields, cropPartsOfSegments, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, SHORT_SKIP, texToText2 } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -50,185 +46,37 @@ export function kOfPieces(unit, trPieces) {
 }
 
 /**
- * Whether the layout file locates a unit whole, against the file (`lu`, its indexLayout unit, or null): its lines all
- * carried (the maker writes a unit only where every one of its lines was carried to arXiv's page, so a unit in the file
- * has them all); every one of its placeholders that v0 draws ink for found, neither LOST nor EMPTY, but a symbol v0 draws
- * from its source as text (\%, $\times$), whose glyph its line's erasing covers, wherever it is (`symbols: 'strict'`:
- * that too). A text symbol the file draws as its character (PH_FLAG.TEXT: no segments, its glyph the line's) is found; a
- * text macro the file holds no row for sets no ink (inklessOf). Its lines need not be in reading order: those out of it
- * are a display's rows or number the file lists after the line below, which v0's reading keeps as the original's
- * (measured: asking it sent 123 units to v0 and drew worse). With `held` (the file's lines taken, texParts 'lines'), a
- * displayed formula LOST or with no segments is found too where the file's held lines cover it (displayCover: D4 step 1,
- * 2026-10-08): it is kept where it stands, as its held lines are, and breaks the unit's text there. A later display of a
- * display group (PH_FLAG.JOINED) is found with its group's first display, whose segments hold its ink; a LOST piece the
- * file says lies outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) is found
- * with the file's lines (`held`) as drawn as nothing, its ink never erased (the maintainer's ruling of 2026-10-15, the p59 ruling's edge display). A LOST
- * text piece (textPieceOf: a placeholder whose plain text is its whole rendering) passes with the file's lines too
- * (`held`): the file erases a unit line by line, so its ink, wherever on the unit's own lines TeX set it, goes with them,
- * and the proof draws it from the run of the unit's characters that spells it, or leaves the unit the original's
- * (proofOf, textRunsOf). And with them an EMPTY piece, one TeX set no ink for where it stands, is drawn as nothing
- * (emptyOf, the controller's ruling of 2026-10-19): nothing of it is on the unit's lines to erase or to draw. So a
- * unit the file holds is drawn by the file, a piece by its own segments, wherever every piece of it is one the file
- * accounts for; any other LOST piece sends it to v0's reading, where no rendering of it can be proven (proofOf) and the
- * unit stays the original's.
- * Returns { ok, why, kOf }: why one of 'unlocated', 'pieces', 'no row', 'lost', 'empty'.
+ * Whether the layout file locates a unit whole, against the file (`lu`, its indexLayout unit, or null): the layer draws a
+ * unit only from the file, so a unit the file does not hold, or one with a visible piece the file has no position for, is
+ * the original's. Its lines are all carried (the maker writes a unit only where every one of its lines was carried to the
+ * base page, so a unit in the file has them all); every one of its placeholders that is drawn as ink is found: a row with
+ * segments, its own ink between its two points (layout/stream.mjs). Not found are a row LOST or with no segments, and no
+ * row at all (but for a text macro, below). A symbol drawn from its source as text (\%, $\times$) is no piece to find,
+ * whose glyph its line's erasing covers (`symbols: 'strict'` asks it too). A text symbol the file draws as its character
+ * (PH_FLAG.TEXT: no segments, its glyph the line's) is found; a text macro the file holds no row for sets no ink
+ * (inklessOf); an EMPTY piece, one TeX set no ink for where it stands, is drawn as nothing (emptyOf, the controller's ruling of
+ * 2026-10-19): nothing of it is on the unit's lines to erase or to draw. A later display of a display group
+ * (PH_FLAG.JOINED) is found with its group's first display, whose segments hold its ink; a LOST piece the file says
+ * lies outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) is drawn as
+ * nothing, its ink never erased (the maintainer's ruling of 2026-10-15, the p59 ruling's edge display). Its lines need not
+ * be in reading order: those out of it are a display's rows or number the file lists after the line below, which the
+ * unit's text reading keeps as the original's (measured: asking it sent 123 units to the original's reading and drew worse).
+ * Returns { ok, why, kOf }: why one of 'unlocated', 'pieces', 'no row', 'lost'.
  */
-export function locatedWhole(lu, unit, trPieces, { symbols = 'text', held = false } = {}) {
+export function locatedWhole(lu, unit, trPieces, { symbols = 'text' } = {}) {
   if (!lu) return { ok: false, why: 'unlocated' }
   const kOf = kOfPieces(unit, trPieces)
   if (!kOf) return { ok: false, why: 'pieces' }
-  let cover
   for (const [i, p] of unit.pieces.entries()) {
-    // (as the unit is read under the proof: a formula of no letter or digit, "Σ_α^β", no text symbol, phClassProven)
+    // (as the unit is read: a formula of no letter or digit, "Σ_α^β", is no text symbol, phClassProven)
     const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? phClassProven(p.src).cls : null
     if (!cls || !VISIBLE.has(cls) || (cls === 'symbol' && symbols === 'text')) continue
     const row = lu.ph.get(kOf[i])
     if (!row) { if (MACROS.has(cls)) continue; return { ok: false, why: 'no row' } }
-    // (one TeX set no ink for, on the file's lines: drawn as nothing, emptyOf)
-    if (row.flags & PH_FLAG.EMPTY) { if (held) continue; return { ok: false, why: 'empty' } }
-    if (row.flags & (PH_FLAG.TEXT | PH_FLAG.JOINED)) continue
-    // (outside the unit's lines: the file's lines, which never hold it; v0's rectangles may)
-    if (row.flags & PH_FLAG.OUTSIDE && held) continue
-    if (row.flags & PH_FLAG.LOST || !row.segs.length) {
-      if (cls === 'display' && held && (cover ??= displayCover(lu, unit, kOf)).has(i)) continue
-      // (a LOST text piece: its run of the unit's characters, proofOf's to find)
-      if (held && row.flags & PH_FLAG.LOST && p.t === 'ph' && textPieceOf(p.src)) continue
-      return { ok: false, why: 'lost' }
-    }
+    if (row.flags & (PH_FLAG.EMPTY | PH_FLAG.TEXT | PH_FLAG.JOINED | PH_FLAG.OUTSIDE)) continue
+    if (row.flags & PH_FLAG.LOST || !row.segs.length) return { ok: false, why: 'lost' }
   }
   return { ok: true, why: null, kOf }
-}
-
-/**
- * Which of the unit's held runs covers each of its displayed formulas, by its piece's index (D4 step 1), read from TeX's
- * file and the source's order alone, never from the translation's pieces: a translation that sets nothing between two
- * displays the source keeps apart, or moves its words across one, says nothing of where TeX set them (2307.16209 page
- * 59, unit 198: Microsoft dropped the "with" between (3.53) and (3.54), the groups read from its pieces paired nothing,
- * and v0 laid the text over (3.54)).
- * - A held run: the file's `held` lines (those the unit's source does not write: a display's rows; no slot, never erased)
- *   consecutive in one frame, so on one page and in one column, in the unit's line order. TeX sets the source in order,
- *   so the runs stand in the source's order of the display groups they hold, one group a run. Only a display's rows are
- *   one: a run the found segments of an inline placeholder meet, and no display's, is that placeholder's (a fraction's
- *   numerator or denominator, which the file reads as a line of its own and holds), and is not counted.
- * - The displays in their source order (`kOf`), in groups: a display JOINED to the one before it is of its group (TeX
- *   gave it no point, its ink the first's); any other display after a found one, or a found one, is a group of its own
- *   (it has its own point: the maker JOINs a display TeX set in the group of a found one), as is one with a placeholder
- *   the file holds a row for between it and the one before (every visible piece has one). Two LOST displays with no row
- *   between them are one group where only placeholders lie between them in the source (nothing visible: TeX's display
- *   group); where a text piece of the source does, its words (white space, or a line of TeX's) are not the file's, and
- *   the runs' count decides.
- * - Where each group is: a group with a found display is where its segments are, each on the lines of one run (meeting
- *   one of their bands on its page), or off the unit's lines, no segment meeting any (a display after the unit's last
- *   line, before its first, at a column's foot past its lines); a LOST group the file says lies outside the unit's
- *   lines (OUTSIDE: a display after its end mark, which stands on the unit's last line) is off them, left as the
- *   original's ink. The LOST groups between two found groups on runs (or before the first, after the last) take the
- *   runs between theirs in order, each its own where they are as many, or joined across the text between them where
- *   the joined are.
- * Returns a Map of each display of a group on a run to its run's lines: a display LOST or with no segments so covered is
- * kept where it stands, as its held lines are. Empty where the file and the order do not agree (a segment on another
- * line of the unit or on two runs, a found group out of order, a run no group takes or a LOST group no run is left for:
- * a run that is no display, another unit's line the anchor took; a display whose rows hold the source's words and are
- * not held; one display over two frames; three LOST groups and the runs' count saying neither all apart nor all joined).
- * A LOST group's run rests on the order and the count alone, no segment checks it. Where the count agrees and the run is
- * the wrong one, the break moves (which run the flow breaks at) and the held lines stay the original's, drawn and never
- * erased; but a LOST display whose own rows are not held (they hold the source's words) is then laid on another run, and
- * its rows are erased as the unit's text: its ink is lost.
- */
-export function displayCover(lu, unit, kOf) {
-  const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), none = new Map()
-  const { LOST, EMPTY, JOINED, OUTSIDE } = PH_FLAG
-  // the unit's displays by their source index, and the source's pieces the translation holds as no text
-  const ds = [], placed = new Set()
-  for (const [i, p] of unit.pieces.entries()) {
-    if (kOf[i] >= 0) placed.add(kOf[i])
-    if (p.t === 'ph' && phClass2(p.src).cls === 'display') ds.push({ i, k: kOf[i], row: lu.ph.get(kOf[i]) })
-  }
-  if (ds.some(d => !d.row)) return none
-  ds.sort((a, b) => a.k - b.k)
-  const meets = (j, s, S) => L[8 * j] === S[s] && Math.min(S[s + 4], L[8 * j + 4]) > Math.max(S[s + 5], L[8 * j + 5])
-  const isFound = row => !(row.flags & (LOST | EMPTY | JOINED)) && row.segs.length > 0
-  // the held runs: a display's rows, not an inline placeholder's (the found segments of one meeting it, and no display's)
-  const displays = new Set(ds.map(d => d.k))
-  const metBy = (run, display) => {
-    for (const [k, row] of lu.ph) {
-      if (displays.has(k) !== display || !isFound(row)) continue
-      const S = row.segs
-      for (let s = 0; s + 5 < S.length; s += 6) if (run.some(j => meets(j, s, S))) return true
-    }
-    return false
-  }
-  const all = []
-  for (let f = 0; f < F.length; f += 6) {
-    let run = null
-    for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
-      if (!held.has(j)) { run = null; continue }
-      if (!run) all.push((run = []))
-      run.push(j)
-    }
-  }
-  const runs = all.filter(run => !metBy(run, false) || metBy(run, true)), runOf = new Map()
-  runs.forEach((run, n) => { for (const j of run) runOf.set(j, n) })
-  // (the rows' source indices sorted once, each boundary a binary search: a unit may hold thousands of pieces)
-  const rowKs = Float64Array.from(lu.ph.keys()).sort()
-  const rowBetween = (a, b) => {
-    let lo = 0, hi = rowKs.length
-    while (lo < hi) { const mid = (lo + hi) >> 1; if (rowKs[mid] <= a) lo = mid + 1; else hi = mid }
-    return lo < rowKs.length && rowKs[lo] < b
-  }
-  const textBetween = (a, b) => { for (let k = a + 1; k < b; k++) if (!placed.has(k)) return true; return false }
-  // the groups; `open`: one whose boundary with the group before it the file does not give (LOST both, text between)
-  const groups = []
-  for (const d of ds) {
-    const g = groups.at(-1), prev = g?.members.at(-1), f = d.row.flags
-    const lostPair = !!prev && !!(f & LOST) && !!(prev.row.flags & LOST) && !(f & OUTSIDE) === !(prev.row.flags & OUTSIDE) && !rowBetween(prev.k, d.k)
-    const open = lostPair && textBetween(prev.k, d.k)
-    if (prev && (f & JOINED || (lostPair && !open))) g.members.push(d)
-    else groups.push({ members: [d], at: null, open })
-  }
-  // each group's run (its index), -1 off the unit's lines, or null: LOST, the order's to place
-  for (const g of groups) {
-    const found = g.members.filter(d => isFound(d.row))
-    if (!found.length) { if (g.members.every(d => d.row.flags & (OUTSIDE | EMPTY))) g.at = -1; continue }
-    for (const { row: { segs: S } } of found) {
-      for (let s = 0; s + 5 < S.length; s += 6) {
-        const on = new Set()
-        let any = false
-        for (let j = 0; j < L.length / 8; j++) if (meets(j, s, S)) { any = true; if (runOf.has(j)) on.add(runOf.get(j)) }
-        const r = on.size === 1 ? [...on][0] : any ? null : -1
-        if (r === null || (g.at !== null && g.at !== r)) return none
-        g.at = r
-      }
-    }
-  }
-  const out = new Map()
-  let next = 0, lost = []
-  const take = (g, r) => { for (const d of g.members) out.set(d.i, runs[r]) }
-  // the LOST groups since the last group on a run take the runs before `upTo`: each its own, or joined across their
-  // open boundaries, where those are as many
-  const settle = upTo => {
-    let stretch = lost
-    if (upTo - next !== lost.length) {
-      // (the join rests on the runs' count alone: where a LOST display's rows make no run of their own, at a page's or a
-      // column's foot past the unit's lines or holding the source's words and not held, the count can join two displays
-      // the source keeps apart. The file cannot tell: the root fix is the maker writing why a display is LOST, a later
-      // display of a group whose first was not found apart from one LOST on its own, a new flag of the layout file's
-      // schema; debt #299)
-      stretch = []
-      for (const g of lost) { if (g.open && stretch.length) stretch.at(-1).members.push(...g.members); else stretch.push({ members: [...g.members] }) }
-      if (upTo - next !== stretch.length) return false
-    }
-    stretch.forEach((g, n) => take(g, next + n))
-    lost = []
-    return true
-  }
-  for (const g of groups) {
-    if (g.at === null) { lost.push(g); continue }
-    if (g.at < 0) continue
-    if (g.at < next || !settle(g.at)) return none
-    take(g, g.at)
-    next = g.at + 1
-  }
-  return settle(runs.length) ? out : none
 }
 
 /** LaTeX's forced line breaks: `\\` (starred, or with its optional space) and \newline, each set as \hfil\break, so that
@@ -473,162 +321,43 @@ export function renderingOf(segs, uc, display) {
   return { text: chars.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars, box }
 }
 
-/** a display's rendering from the held run that covers it (displayCover): the unit's characters on the run's lines, and
- *  the lines themselves (`held`, their keys), which hold it where its characters are none */
-function heldRendering(run, lines, uc) {
-  const keys = new Set()
-  lines.rects.forEach((r, i) => { if (run.includes(lines.jOf?.[i] ?? lines.lineOf.get(r))) keys.add(rectKey(r)) })
-  const chars = uc.filter(c => !c.sep && !c.space && /\S/.test(c.ch) && keys.has(`${c.page}|${c.rect.join()}`))
-  return { text: chars.map(c => c.ch).join('').replace(/\s+/g, ' ').trim(), chars, held: [...keys], proof: true }
-}
-
-// (a text piece, the maker's and the layer's: rules/text-piece.mjs)
-export { textPieceOf }
-
 /**
- * The proof of the unit's LOST text pieces (textPieceOf, locatedWhole), on the file's lines: each is drawn as a run of the
- * unit's leftover characters that spells its plain text, or its k is the answer (-1: none is LOST, or each has its run).
- * Leftover: a character of the unit's own lines (none held or kept: a display's rows, a label) that is no source word the
- * alignment matched, stands in no found piece's segments and no other rendering's characters. A run: leftover characters
- * one after another in the unit's order, the spaces and line breaks between them aside, that spell the plain text (its
- * white space aside), none of them one no Unicode of the file's stands for (pageChars2's `nu`), each inside an erase
- * rectangle of its own line (the file's: what the removal takes). The pieces take their runs in the source's order, each
- * after the one before, so that two alike take two. A piece so proven is drawn as the run's page text (`orig-text`, its
- * face the run's: the typewriter's for \texttt), proven (`proof`). Where the unit's text holds no such run, TeX set the
- * piece elsewhere (another unit's line, a held one, before the unit's start: its ink never erased, and drawn again it
- * would be doubled), or as other characters than its source writes (a paper's own \texttt, a ligature): the unit stays
- * the original's.
- */
-function textRunsOf(lu, kOf, res, unit) {
-  const { LOST, EMPTY, OUTSIDE, JOINED } = PH_FLAG
-  const want = []
-  for (const r of res.values()) {
-    const p = r && r.k !== undefined ? unit.pieces[r.k] : null
-    if (p?.t !== 'ph' || !(kOf[r.k] >= 0)) continue
-    const row = lu.ph.get(kOf[r.k])
-    if (!row || !(row.flags & LOST) || row.flags & (EMPTY | OUTSIDE)) continue
-    const t = textPieceOf(p.src)
-    if (t) want.push({ r, ord: kOf[r.k], text: t.text.replace(/\s+/g, ' ').trim(), spell: t.text.replace(/\s+/g, '') })
-  }
-  if (!want.length) return -1
-  want.sort((a, b) => a.ord - b.ord)
-  const uc = res.uc ?? []
-  const real = c => !c.sep && !c.space && /\S/.test(c.ch)
-  const lineKey = c => `${c.page}|${c.rect.join()}`
-  const kept = new Set([...(res.keep ?? []), ...displayTouched(res, uc)])
-  const mine = new Set(want.map(w => w.r.k))
-  const taken = new Set((res.label?.chars ?? []).map(charKey))
-  for (const r of res.values()) if (r?.gap && !mine.has(r.k)) for (const c of r.gap.chars) if (real(c)) taken.add(charKey(c))
-  const found = []
-  for (const row of lu.ph.values()) if (!(row.flags & (LOST | EMPTY | JOINED)) && row.segs.length) found.push([segmentsOf(row.segs), row.kind === 'display'])
-  const erased = c => {
-    const e = lu.erase[res.lineInfo?.get(lineKey(c))?.j] ?? []
-    const x = (c.x0 + c.x1) / 2, y = c.yb + 0.3 * c.size
-    for (let q = 0; q + 3 < e.length; q += 4) if (x >= e[q] - 0.5 && x <= e[q + 2] + 0.5 && y >= e[q + 1] - 0.5 && y <= e[q + 3] + 0.5) return true
-    return false
-  }
-  const leftover = c => !res.matchedKeys?.has(charKey(c)) && !kept.has(lineKey(c)) && !taken.has(charKey(c)) && !found.some(([S, display]) => insideOf(S, c, display))
-  // (the run spelling `spell` from uc[i], its last character's index, or -1)
-  const runFrom = (i, spell) => {
-    let at = 0
-    for (let j = i; j < uc.length; j++) {
-      const c = uc[j]
-      if (!real(c)) continue
-      if (c.nu || !spell.startsWith(c.ch, at) || !leftover(c) || !erased(c)) return -1
-      at += c.ch.length
-      if (at === spell.length) return j
-    }
-    return -1
-  }
-  let from = 0
-  for (const w of want) {
-    let first = -1, last = -1
-    for (let i = from; i < uc.length && last < 0; i++) if (real(uc[i]) && w.spell.startsWith(uc[i].ch) && (last = runFrom(i, w.spell)) >= 0) first = i
-    if (last < 0) return w.r.k
-    const chars = uc.slice(first, last + 1)
-    const tally = new Map()
-    for (const c of chars) if (real(c) && c.st) { const f = fontOfStyle(c.st); tally.set(f, (tally.get(f) ?? 0) + 1) }
-    const st = [...tally].sort((a, b) => b[1] - a[1])[0]?.[0]
-    const { k, src, cls } = w.r
-    res.set(k, { mode: 'orig-text', text: w.text, sup: false, st, k, src, cls, gap: { text: w.text, chars, proof: true }, proof: true })
-    from = last + 1
-  }
-  return -1
-}
-
-/**
- * Part 5, the proof (layer2.mjs prepareUnit), for any unit the hybrid draws: the one place the hybrid's safe rule is held
- * (the math round's `unproven`, from its crops to every rendering; the maintainer's ruling of 2026-10-15). A placeholder
- * is drawn only from what proves it: TeX's own (one that sets nothing, a space; a rendering the file gives: a placeholder's segments, a display's held run or its group, a text symbol's TEXT row, one
- * outside the unit's lines drawn as nothing, a macro TeX said sets no ink: `proof`), or of v0's reading:
- * - a crop, cut from its placeholder's own ink, the file's segment of its row on the crop's page that its rectangle meets
- *   (stream ownership, layout/stream.mjs), on that segment's baseline (layer2.mjs cropOfBox): its rendering the same;
- * - its page text, or its ink kept where it stands, where every character of it stands in its row's segments;
- * - and where v0's reading found no rendering at all (its source's plain text, a citation as the page wrote it before)
- *   and its row is found, its segments on the pages shown: the rendering read from those segments as the file's own
- *   reading reads one (renderingOf; layer2.mjs resolutionFrom: a crop cut at its segment, page text standing in them),
- *   given the unit (`unit`) whose pieces say whether the translation sets its brackets;
- * - and on the file's lines (`textRuns`: texParts 'lines'), a LOST text piece (textPieceOf) by the run of the unit's own
- *   leftover characters that spells its plain text, drawn as that run's page text (textRunsOf).
- * Where none does (its row LOST, EMPTY, JOINED or missing, the unit not in the file, `lu` null, or its pieces not the
- * file's, `kOf` null, or its segments holding none of the unit's characters), or the rendering is no page ink with no
- * found row to read it from (its source's plain text, a citation as the page wrote it before, a display drawn as nothing),
- * nothing proves which ink is the placeholder's — a crop of the page's rectangle carries
- * whatever stands in it (2307.16209 page 38's "ıe", from the line above), v0's alignment hands a rendering to the next
- * placeholder along (2608.16117's unit 28) — and the answer is that placeholder's k: its unit stays the original's (the
- * run's `unproven`). Else -1. Mutates the crops it cuts. A placeholder whose row is found and whose segments all lie on
- * pages past those the run shows (`shown`: a unit cut at the last page shown, its lines laid there too) is proven by the
- * file, and drawn as its page text where the file has one, else as nothing: never its source's "?" (no character of it
- * is read on a page not shown; a reader shows every page).
+ * The file's own renderings against the page's, the last check of a unit the file locates whole (layer2.mjs prepareUnit):
+ * a placeholder is drawn from its row's segments (its own ink, layout/stream.mjs), so what it is drawn as is ink the
+ * file holds, never a guess. The renderings the file gives are proven by their making (texParts renderings: a piece's
+ * characters inside its segments, a formula's crops, a display's rows); what is left is the piece drawn as page text that
+ * no Unicode of the file's stands for, and one the segments hold no character of at all. Either is its segments' crops,
+ * one a line of them (layer2.mjs cropPartsOfSegments; E3, E3b, 2026-10-19), or, where it has none to be cropped from, the
+ * unit's whole stays the original's: the answer is that placeholder's k (the run's `unproven`), else -1. Mutates the
+ * crops it cuts.
  * Page text is drawn as its characters read, so a page-text rendering any of whose characters no Unicode of the file's
- * stands for is no proof, whatever proves its ink (the file's own segments too), and its k the answer: layer2.mjs
- * pageChars2's `nu`, a glyph its font's ToUnicode does not map, which PDF.js reads by its code, or a private-use,
- * replacement or control character. The reader would see another character than the page's: 2307.16209 page 133, unit
- * 442, drew "g(z′) = Í n g n (z′) n" for g(z') = Σ_n g_n(z')^n (newtx's display sum, in txexs, which no ToUnicode maps).
- * A unit the file locates whole (`whole`: texParts') is drawn where its rendering cannot be the page's text but TeX's file
- * holds its ink: page text with a character no Unicode stands for, or a rendering with no character of the unit in its
- * segments at all (a \\qed box drawn of rules), or one v0 read off its segments, is its segments' crops, one a line of them
- * (layer2.mjs cropPartsOfSegments; E3, E3b, 2026-10-19).
- * A formula (layer2.mjs formulaOf) is never drawn as its page text: v0's reading of one TeX broke over lines is its crops,
- * one a line of its segments, where its characters stand in them (in any unit the file locates whole, whatever they are);
- * else its k is the answer.
- * The one exemption (the controller's rulings of 2026-10-15): a LaTeX text symbol v0 draws from its source (\%,
- * $\times$, $^\dagger$: layer2.mjs textSymbol, a 'symbol' whose drawn text is one grapheme with no `_`, `^`, `/` or `√(`).
- * Its source is its rendering's content, a character LaTeX's own definition sets, and its glyph is its line's, erased
- * with it; the rule is against guessing where a formula's ink is, which a symbol asks for none of. A formula of no
- * letter or digit ($\sum_{\alpha}^{\beta}$, drawn "Σ_α^β" from its source) is no text symbol: a unit under the proof
- * reads it as 'other' (phClassProven), and it is proven as any formula is.
+ * stands for is cropped, whatever proves its ink: layer2.mjs pageChars2's `nu`, a glyph its font's ToUnicode does not map,
+ * which PDF.js reads by its code, or a private-use, replacement or control character. The reader would see another
+ * character than the page's: 2307.16209 page 133, unit 442, drew "g(z′) = Í n g n (z′) n" for g(z') = Σ_n g_n(z')^n
+ * (newtx's display sum, in txexs, which no ToUnicode maps). A rendering with no character of the unit in its segments (a
+ * \\qed box drawn of rules) is its segments' crops likewise. A placeholder whose row is found and whose segments all lie on
+ * pages past those the run shows (`shown`: a unit cut at the last page shown, its lines laid there too) is drawn as its
+ * page text where the file has one, else as nothing: never its source's "?" (no character of it is read on a page not
+ * shown; a reader shows every page). TeX's own nothing, a space and a text symbol (the controller's rulings of 2026-10-15:
+ * layer2.mjs textSymbol) are exempt: a text symbol's source is its rendering's content, and its glyph is its line's,
+ * erased with it.
  */
-export function proofOf(lu, kOf, shown = Infinity, { textRuns = false, whole = false } = {}) {
-  return (res, unit = null) => {
-    // (with the file's lines, `textRuns`: a LOST text piece is proven by its run of the unit's characters, textRunsOf)
-    if (textRuns && lu && kOf && unit) { const k = textRunsOf(lu, kOf, res, unit); if (k >= 0) return k }
+export function cropsOf(lu, kOf, shown = Infinity) {
+  return res => {
     /** a found row's segments, all on pages shown, as its placeholder's crops, one a line of them (layer2.mjs
-     *  cropPartsOfSegments); `any`: in any unit, else in one the file locates whole alone */
-    const cropped = (r, S, any = false) => {
-      if (!(whole || any) || r.cls === 'display' || !S.length) return false
+     *  cropPartsOfSegments) */
+    const cropped = (r, S) => {
+      if (r.cls === 'display' || !S.length) return false
       for (let s = 0; s + 5 < S.length; s += 6) if (S[s] > shown) return false
       const parts = cropPartsOfSegments(S)
       if (!parts) return false
-      res.set(r.k, { ...cropFields(parts), text: texToText2(r.src ?? '') || '', sup: false, k: r.k, src: r.src, cls: r.cls, gap: { text: r.gap?.text ?? '', chars: r.gap?.chars ?? [], box: parts[0].seg, proof: true }, proof: true, ...(r.second ? { second: true } : {}) })
+      res.set(r.k, { ...cropFields(parts), text: texToText2(r.src ?? '') || '', sup: false, k: r.k, src: r.src, cls: r.cls, gap: { text: r.gap?.text ?? '', chars: r.gap?.chars ?? [], box: parts[0].seg, proof: true }, proof: true })
       return true
     }
     for (const r of res.values()) {
       if (!r) continue
-      const row = lu && kOf ? lu.ph.get(kOf[r.k]) : null
+      const row = lu.ph.get(kOf[r.k])
       const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED)) ? row.segs : []
-      // (a formula is never its page text, which sets every glyph on one baseline: v0's reading of one TeX broke over lines,
-      // its characters in its row's segments, or any where the file locates the unit whole, is its crops, one a line of them;
-      // where its segments all lie on pages shown: one cut at the last page shown keeps the rules below. E3b, 2610.10069's
-      // sigma^{-1}(s_t) drawn "sigma -1 (s t)")
-      const segs = segmentsOf(S)
-      if (r.mode === 'orig-text' && formulaOf(r) && segs.length && segs.every(q => q.page <= shown)) {
-        const real = (r.gap?.chars ?? []).filter(c => !c.sep && !c.space && /\S/.test(c.ch))
-        if ((whole || (real.length && real.every(c => insideOf(segs, c, false)))) && cropped(r, S, true)) continue
-        return r.k
-      }
-      // (whatever proves where its ink is: page text is drawn as its characters read, and one no Unicode of the file's
-      // stands for, pageChars2's `nu`, reads as no glyph the page shows; its segments cropped, where they can be)
       if (r.mode === 'orig-text' && (r.gap?.chars ?? []).some(c => c.nu)) { if (cropped(r, S)) continue; return r.k }
       if (r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
       let past = S.length > 0, anyPast = false
@@ -637,44 +366,6 @@ export function proofOf(lu, kOf, shown = Infinity, { textRuns = false, whole = f
         Object.assign(r, { mode: row.text ? 'source' : 'none', text: row.text ?? '', proof: true })
         continue
       }
-      // v0's reading found no rendering (drawn from its source, or a citation as the page wrote it before) where the file
-      // holds the piece's own ink, its segments all on pages shown: read from them as the file's own reading reads a found
-      // row (renderingOf, the unit's characters inside them; layer2.mjs resolutionFrom: a formula on one line cropped at its
-      // segment, page text standing in them), which is TeX's ground truth and as proven as any rendering the file gives.
-      // A row LOST, EMPTY or JOINED has no segment and is never read: its unit stays the original's (2609.26457's unit 24:
-      // $a^{\mathrm{out}}$, which v0's alignment found nowhere, is cut at its segment; its \texttt{gemini 3 flash} is LOST).
-      // A rendering v0 took that the segments do not hold stays no proof (the rule against a rendering handed along)
-      if (S.length && !anyPast && unit && !r.gap && (r.mode === 'source' || r.mode === 'cite-map') && r.cls !== 'display') {
-        const g = renderingOf(S, res.uc ?? [], false)
-        if (!g || g.chars.some(c => c.nu)) { if (cropped(r, S)) continue; return r.k }
-        res.set(r.k, { ...resolutionFrom(r, { ...g, proof: true }, unit, res.lineInfo), ...(r.second ? { second: true } : {}) })
-        continue
-      }
-      // a text macro v0 reads as page text whose own ink, its segment on one line, sets a raised script (layer2.mjs scriptedOf):
-      // v0's alignment may leave the script's atom to no rendering ("AIDE" without the superscript 2 of 2609.26457's
-      // \aidesq{}), and page text on one baseline loses it. Read from the segment, as the file's own reading is: a crop
-      if ((r.cls === 'macro' || r.cls === 'umacro') && r.mode === 'orig-text' && S.length === 6 && !anyPast && unit) {
-        const g = renderingOf(S, res.uc ?? [], false)
-        if (g && scriptedOf(g.chars)) {
-          res.set(r.k, { ...resolutionFrom(r, { ...g, proof: true }, unit, res.lineInfo), ...(r.second ? { second: true } : {}) })
-          continue
-        }
-      }
-      if (r.mode === 'crop') {
-        if (r.gap?.box) continue
-        let seg = null
-        for (let s = 0; s + 5 < S.length && !seg; s += 6) {
-          if (S[s] !== r.page) continue
-          const box = { x0: S[s + 1], x1: S[s + 3], top: S[s + 4], bottom: S[s + 5], baseline: S[s + 2], lines: 1 }
-          if (Math.min(box.x1, r.crop[2]) > Math.max(box.x0, r.crop[0]) && Math.min(box.top, r.crop[3]) > Math.max(box.bottom, r.crop[1])) seg = box
-        }
-        if (!seg) { if (!anyPast && cropped(r, S)) continue; return r.k }
-        Object.assign(r, cropOfBox(seg))
-        r.gap = { ...r.gap, box: seg }
-        continue
-      }
-      const real = (r.gap?.chars ?? []).filter(c => !c.sep && !c.space && /\S/.test(c.ch))
-      if ((r.mode === 'orig-text' || r.mode === 'kept') && real.length && segs.length && real.every(c => insideOf(segs, c, r.cls === 'display'))) continue
       if (!anyPast && cropped(r, S)) continue
       return r.k
     }
@@ -683,24 +374,21 @@ export function proofOf(lu, kOf, shown = Infinity, { textRuns = false, whole = f
 }
 
 /**
- * The unit's parts from the file (layer2.d.mts UnitParts), for a unit locatedWhole passes. `use`:
- * - 'ph': part 4 alone, the placeholders' renderings by their segments (the unit's lines v0's);
- * - 'lines': part 1 too, the unit's lines (`lines`, texRects' answer), and part 3, its label by the file's box (v0's
- *   where the file has none, and a mark its first line holds before its first word); and where its forced breaks end
- *   those lines (`breaks`, forcedBreaks; `lineskip`, the file's \lineskip and \lineskiplimit, or null);
- * - extents 'tex' (with 'lines'): part 2 too, the file's erase rectangles (its glyphs' boxes merged); else each line's
- *   extent as v0 reads it from its characters.
- * - and part 5 for any `use`, the proof of every rendering (proofOf; `shown`, the last page the run shows).
+ * The unit's parts from the file (layer2.d.mts UnitParts), for a unit locatedWhole passes: part 1, the unit's lines
+ * (`lines`, texRects' answer); part 3, its label by the file's box (the alignment's where the file has none, and a mark its
+ * first line holds before its first word); part 4, the placeholders' renderings by their segments; where its forced breaks
+ * end those lines (`breaks`, forcedBreaks; `lineskip`, the file's \lineskip and \lineskiplimit, or null); part 5, the file's
+ * crops (cropsOf; `shown`, the last page the run shows). With extents 'tex', part 2 too, the file's erase rectangles (its
+ * glyphs' boxes merged); else each line's extent as the alignment reads it from its characters.
  * `kOf`: each piece's source index (kOfPieces).
  */
-export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = Infinity, lineskip = null }) {
+export function texParts(lu, kOf, { lines, extents = 'v0', shown = Infinity, lineskip = null }) {
   const parts = {
-    proof: proofOf(lu, kOf, shown, { textRuns: use === 'lines', whole: true }),
+    crops: cropsOf(lu, kOf, shown),
     fillOf: fillOf(lu, kOf),
     colourOf: colourOf(lu, kOf),
-    renderings({ unit, phs, uc, gaps, citeMap }) {
+    renderings({ phs, uc, gaps, citeMap }) {
       const found = new Map(), joined = []
-      let cover
       for (const p of phs) {
         if (p.cls === 'zero' || p.cls === 'symbol') continue
         const row = lu.ph.get(kOf[p.k])
@@ -709,13 +397,6 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = I
         if (p.cls === 'space' && (!row || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED) || !row.segs.length)) continue
         // (a later display of a display group: its group's rendering, below)
         if (p.cls === 'display' && row && row.flags & PH_FLAG.JOINED) { joined.push(p); continue }
-        // (a display the held lines cover, LOST or with no segments: its run's lines, kept where they stand, and a break
-        // in the unit's text, as a found display's rows are: locatedWhole)
-        if (p.cls === 'display' && lines?.lineOf && row && !(row.flags & PH_FLAG.EMPTY) && (row.flags & PH_FLAG.LOST || !row.segs.length)) {
-          const run = (cover ??= displayCover(lu, unit, kOf)).get(p.k)
-          if (run) found.set(p, heldRendering(run, lines, uc))
-          continue
-        }
         if (!row || row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY) || !row.segs.length) continue
         const g = renderingOf(row.segs, uc, p.cls === 'display')
         if (g) found.set(p, { ...(p.cls === 'cite' ? learnCite(p, g, citeMap) : g), proof: true })
@@ -737,16 +418,15 @@ export function texParts(lu, kOf, { use, lines = null, extents = 'v0', shown = I
       const fixed = p => {
         if (inklessOf(lu, kOf, p)) return { mode: 'none', text: '', proof: true }
         // (`empty`: TeX set no ink for it, which the checker counts as no rendering lost)
-        if (lines?.lineOf && emptyOf(lu, kOf, p)) return { mode: 'none', text: '', proof: true, empty: true }
+        if (emptyOf(lu, kOf, p)) return { mode: 'none', text: '', proof: true, empty: true }
         const row = lu.ph.get(kOf[p.k])
         // (`inPlace`: shown by its own ink, left where it stands: the checker's)
-        if (row && row.flags & PH_FLAG.OUTSIDE && lines?.lineOf) return { mode: 'none', text: '', proof: true, inPlace: true }
+        if (row && row.flags & PH_FLAG.OUTSIDE) return { mode: 'none', text: '', proof: true, inPlace: true }
         return row && row.flags & PH_FLAG.TEXT && row.text && p.cls !== 'symbol' ? { mode: 'source', text: row.text, proof: true } : null
       }
       return { gaps, gapFor: p => found.get(p) ?? null, fixed, inked: p => found.has(p) }
     },
   }
-  if (use !== 'lines') return parts
   const { exact, lineOf } = lines, frameOf = lines.frameOf ?? new Map()
   const held = (lines.held ?? []).map(rectKey)
   parts.lines = (rects, charsByPage) => {

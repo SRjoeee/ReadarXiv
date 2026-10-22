@@ -447,7 +447,7 @@ describe('the door: three opens, the same pages', () => {
 
   it('F4: a page of a closure no part covers once the parts end fails, and the page asked is laid without it', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
-    const M = await made()
+    const M = await made({ ours: true })
     const docFor = docsOf(textOf(M)) as unknown as (r: number) => LayerDocument
     // (page 1's closure draws page 2, a paragraph running on to it: only the first part, page 1, is ever told)
     const layer = await openLayer({ index: M.index, doc: docFor(1), parts: M.readParts.slice(0, 1), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
@@ -538,9 +538,9 @@ describe('the door: three opens, the same pages', () => {
     layer.dispose()
   })
 
-  it('reads a part with no layout as BUNDLE 3 reads a bundle with none: through the proof that nothing proves (#352\'s fail-closed rule)', async () => {
+  it('reads a part with no layout as BUNDLE 3 reads a bundle with none: it draws nothing, every unit the original\'s (the layer draws only from the file)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
-    // (a paragraph with a citation, located by the original's side alone: with no layout file nothing proves its rendering)
+    // (a paragraph with a citation, located by the original's side alone: with no layout file the layer has no position for it)
     const spec: PaperSpec = { pages: 3, units: [...SPEC.units, { ...para('Cited here', 2, 150, { stream: 40, file: false }), cite: true }] }
     const cited = spec.units.length - 1
     for (const ends of [[1], []]) {
@@ -555,7 +555,8 @@ describe('the door: three opens, the same pages', () => {
       const want = await askEvery(whole, spec.pages)
       const wantLeft = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
       whole.dispose()
-      expect(wantLeft).toContain(`${cited}:unproven`)
+      expect(wantLeft).toContain(`${cited}:unanchored`)
+      expect((seen.runs.at(-1) as Run).placed).toEqual([])
       seen.log.length = 0
       const door = await openLayer({ index: c.index, doc: docFor(0), parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
       door.take(rows)
@@ -567,6 +568,38 @@ describe('the door: three opens, the same pages', () => {
       expect({ pages: got.pages, links: got.links, ops: got.ops }, `${ends}`).toEqual({ pages: want.pages, links: want.links, ops: want.ops })
       expect(left, `${ends}`).toEqual(wantLeft)
     }
+  })
+
+  // (the two opens of one paper agree: the parts' (the door's) and the whole's (BUNDLE 3's, mergeParts))
+  it.each(['parts', 'whole'] as const)('draws nothing of a part whose layout is refused ({ refused, why }), nor of a head whose base is arXiv\'s though its parts carry layouts: the %s open', async open => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const placedOf = async (o: Parameters<typeof cutSpec>[2]) => {
+      const c = await cutSpec(SPEC, [1], o)
+      const doc = (docsOf(SPEC) as unknown as (r: number) => LayerDocument)(0)
+      const layer = open === 'parts'
+        ? await openLayer({ index: c.index, doc, parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+        : await openLayer({ bundle: mergeParts(c.index, c.parts), doc, target: 'zh', faceSources, hyphUrl })
+      layer.take(rowsOfIndex(c.index))
+      layer.end()
+      layer.endParts()
+      await askEvery(layer, SPEC.pages)
+      const run = seen.runs.at(-1) as Run
+      const out = { placed: run.placed.length, refusals: c.parts.map(p => p.noLayout?.refused ?? null), layouts: c.parts.map(p => p.layout !== null), base: c.index.head.base.source }
+      layer.dispose()
+      return out
+    }
+    // (the control: our base and the parts' layouts: the layer draws)
+    const drawn = await placedOf({})
+    expect(drawn.placed).toBeGreaterThan(0)
+    expect([drawn.base, drawn.layouts.every(Boolean)]).toEqual(['ours', true])
+    // a layout refused, as the maker records why (the final pass moved a mark): the part holds no layout, the layer no unit
+    const refused = await placedOf({ layout: false, noLayout: { refused: 'final', why: 'the final pass moved a mark' } })
+    expect(refused.refusals.every(r => r === 'final')).toBe(true)
+    expect([refused.placed, refused.layouts.some(Boolean)]).toEqual([0, false])
+    // arXiv's base (a paper whose compile was no base page, or a head of 7), its parts' layouts told: the layer draws none
+    const arxiv = await placedOf({ source: 'arxiv' })
+    expect([arxiv.base, arxiv.layouts.every(Boolean)]).toEqual(['arxiv', true])
+    expect(arxiv.placed).toBe(0)
   })
 
   it('ends an aborted ask\'s wait for rows after its page is drawn: the page is not laid, nothing is told of it (PR #359)', async () => {

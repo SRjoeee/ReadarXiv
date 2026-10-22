@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
-  type HeadBase, indexOf, type Kind, type LayerIndex, type PartChain, type ReadHead, type ReadLeftPart, type ReadPart, type ReadUnitsChunk, readHead, readLeftPart, readPart,
+  indexOf, type Kind, type LayerIndex, type PartChain, type ReadHead, type ReadLeftPart, type ReadPart, type ReadUnitsChunk, readHead, readLeftPart, readPart,
   readUnitsChunk, type Ref, type TokenWire, type Written, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import type { UnitWire } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
@@ -17,10 +17,10 @@ export const PAPER = { id: '2608.04322', version: 1 }
 export const N = 4
 export const BASE = { bytes: 10_000, sha256: '0123456789abcdef'.repeat(4), xref: 9_000 }
 export const IMAGE = '1'
-/** the head of a layer over our own compile (the layer route, design §3.2) as the engine writes it: our base page, the check it passed
- *  (its pages and arXiv's, the boxes equal) and `orig`, the arXiv PDF the check ran over; `made({ ours: true })` writes it */
-export const OURS_BASE: HeadBase = { source: 'ours', bytes: BASE.bytes, sha256: 'fedcba9876543210'.repeat(4), xref: BASE.xref, pages: N, tree: '2025', check: { pages: [N, N], boxes: 'equal', carried: 0.99 } }
-export const ORIG = { bytes: 12_000, sha256: '00112233445566778899aabbccddeeff'.repeat(2) }
+/** the PDF the layer is drawn over where it is ours (BUNDLE 8): our compile's final pass, of arXiv's size and page count, the same
+ *  object the tails continue; and arXiv's, beside it */
+export const OURS = { source: 'ours' as const, ...BASE, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: 1 } }
+export const ORIG = { bytes: 30_000, sha256: 'fedcba9876543210'.repeat(4) }
 
 const H = UNIT_KINDS.indexOf('heading'), P = UNIT_KINDS.indexOf('para'), C = UNIT_KINDS.indexOf('cell'), MATH = PH_KINDS.indexOf('math')
 
@@ -133,10 +133,11 @@ export interface Made {
 
 /** the paper written, then read back by the readers in the order the service reads it */
 /** `draws`: the draw geometry each page's left part carries (by page), none by default; `draw`: the head says the parts may carry them;
- *  `pairs`: the pairs a page's left part carries, in place of LEFT_OF's (by page) */
+ *  `pairs`: the pairs a page's left part carries, in place of LEFT_OF's (by page); `ours`: the base of the head is ours, over which
+ *  the layer draws (else arXiv's: it draws nothing) */
 export async function made(o: { draws?: Record<number, unknown>; draw?: boolean; pairs?: Record<number, [number, number[]][]>; ours?: boolean } = {}): Promise<Made> {
   const chunks = await writeUnitChunks({ paper: PAPER, units: UNITS })
-  const head = await writeHead({ paper: { ...PAPER, pages: N }, ...(o.ours ? { base: OURS_BASE, orig: ORIG } : { base: BASE }), image: IMAGE, units: chunks, lineskip: [1, 0], ...(o.draw ? { draw: true } : {}) })
+  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: o.ours ? OURS : BASE, ...(o.ours ? { orig: ORIG } : {}), image: IMAGE, units: chunks, lineskip: [1, 0], ...(o.draw ? { draw: true } : {}) })
   const rh = await readHead(head.bytes, { ref: head.ref })
   const readChunks: ReadUnitsChunk[] = []
   for (const c of chunks) readChunks.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: readChunks.at(-1) ?? null }))
