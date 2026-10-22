@@ -17,7 +17,8 @@
 // perturbs the times: those runs are left out of the time table).
 //   node lab/pdf/spikes/speed.mjs --base=<engine root> --papers=<dir>[,<dir>…] [--head=<engine root>] [--n=5]
 //       [--sides=base,off,on] [--mem] [--out=<file.jsonl>]
-// A paper's dir: meta.json ({ id, stem, source, arxiv, base? }: the source's .tar.gz, arXiv's PDF and our base page's), P/<stem>.log (the mark probe's
+// A paper's dir: meta.json ({ id, stem, source, arxiv, base? }: the source's .tar.gz, arXiv's PDF and our base page's; a dir with no
+// `base` has this engine's sides reported incomparable and not run: the pass falls back with no base page of ours), P/<stem>.log (the mark probe's
 // log), L/<stem>.pdf and L/<stem>.log (the marked original's compile, its passes' log), as layout-paper's harness keeps them.
 // A paper needs its source and its marked compile: arXiv's PDF alone (a stand-in) gives the pass no unit. Heavy: run it on a
 // quiet machine only. Prints a table a paper and a side: the medians and the spread (min to max) of the total, the first part
@@ -86,7 +87,8 @@ async function child() {
   if (!RULES[side]) { t = at(); marks = await mk.readMarked(mdoc, log, { ...options, units: source.units, OPS }); ms.marks = at() - t }
   const base = { bytes: arxivBytes.length, sha256: createHash('sha256').update(arxivBytes).digest('hex'), xref: tail.startxrefOf(arxivBytes) }
   // (our base page, the final pass of the marked original, where the paper dir names one (`meta.base`): this engine's sides make the
-  // layout over it and the remover edits it; base's engine, and a dir with none, take arXiv's PDF as before)
+  // layout over it and the remover edits it; base's engine takes arXiv's PDF as before; a dir with none is not run on this engine's
+  // sides, the driver's `incomparable`)
   const oursBytes = meta.base && side !== 'base' ? new Uint8Array(readFileSync(meta.base)) : null
   const ours = oursBytes ? { doc: await open(oursBytes, LITE_DRAW), bytes: oursBytes.length, sha256: createHash('sha256').update(oursBytes).digest('hex'), xref: tail.startxrefOf(oursBytes), check: { marks: 0 } } : null
   const remover = remove.removerOf({ bytes: oursBytes ?? arxivBytes, PL, inflate, deflate })
@@ -134,15 +136,21 @@ async function driver() {
     p.on('close', code => (code === 0 ? done(JSON.parse(out.trim().split('\n').at(-1))) : fail(new Error(`${side} ${paper}: exit ${code}\n${err.slice(-2000)}`))))
   })
   const rows = []
+  /** this engine's sides of a paper dir that names no base page of ours (meta.json `base`): the pass falls back (`final`, no
+   *  layout, no removal), so their times are no prepare's to compare with base's, and they are not run */
+  const incomparable = []
   for (const paper of papers) {
     if (!existsSync(join(paper, 'meta.json'))) throw new Error(`${paper}: no meta.json`)
-    for (let i = 0; i < n; i++) for (const side of sides) {
+    const meta = JSON.parse(readFileSync(join(paper, 'meta.json'), 'utf8'))
+    const timed = sides.filter(s => s === 'base' || !!meta.base)
+    for (const side of sides) if (!timed.includes(side)) incomparable.push({ id: meta.id, side })
+    for (let i = 0; i < n; i++) for (const side of timed) {
       const r = await run(paper, side, false)
       rows.push(r)
       if (outFile) appendFileSync(outFile, `${JSON.stringify({ rep: i, ...r })}\n`)
       process.stderr.write(`${r.id} ${side} #${i + 1}: total ${r.ms.total} ms, first part ${r.first.ms} ms (arXiv page ${r.first.page}), RSS ${r.maxRssMiB} MiB\n`)
     }
-    if (has('mem')) for (const side of sides) {
+    if (has('mem')) for (const side of timed) {
       const r = await run(paper, side, true)
       rows.push({ ...r, mem: true })
       if (outFile) appendFileSync(outFile, `${JSON.stringify({ mem: true, ...r })}\n`)
@@ -151,10 +159,11 @@ async function driver() {
   const median = xs => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[s.length >> 1] : null }
   const spread = xs => (xs.length ? `${Math.min(...xs)}-${Math.max(...xs)}` : '-')
   console.log(['paper', 'side', 'runs', 'total ms (spread)', 'first part ms (spread)', 'first page', 'marked read ms', 'maker ops ms', 'rest ms', 'peak RSS MiB (spread)', 'live first/end MiB', 'verdict'].join(' | '))
-  for (const id of [...new Set(rows.map(r => r.id))]) {
+  for (const id of [...new Set([...rows, ...incomparable].map(r => r.id))]) {
     const of = side => rows.filter(r => r.id === id && r.side === side && !r.mem)
     const baseTotals = of('base').map(r => r.ms.total)
     for (const side of sides) {
+      if (incomparable.some(r => r.id === id && r.side === side)) { console.log([id, side, 0, '-', '-', '-', '-', '-', '-', '-', '-', 'INCOMPARABLE: no base page of ours (meta.json base), the pass would fall back; not run'].join(' | ')); continue }
       const rs = of(side), tot = rs.map(r => r.ms.total), fst = rs.map(r => r.first.ms ?? r.ms.total), rss = rs.map(r => r.maxRssMiB)
       const mem = rows.find(r => r.id === id && r.side === side && r.mem)
       const slower = side !== 'base' && baseTotals.length && median(tot) > Math.max(...baseTotals) ? 'SLOWER' : ''

@@ -102,12 +102,13 @@ export async function boxesCheck(ours, arxiv) {
 }
 
 /** a mark of ours printed as text: a mark macro's name (\axt…, or TeX's \axt@… inside a package's own) */
-const MARK_TEXT = /\\axt|axt@/
+const MARK_TEXT = /(?:\\|\u201c)axt@?[a-z]+\s*(?:\{|\u2013)[^{}\u2013\u02dd\s]{1,64}(?:\}|\u02dd)/
+/** the same, each mark's name (its argument) captured */
+const MARKS_TEXT = /(?:\\|\u201c)axt@?[a-z]+\s*(?:\{|\u2013)([^{}\u2013\u02dd\s]{1,64})(?:\}|\u02dd)/g
 /** whether a text holds a mark of ours printed (MARK_TEXT) */
 export const hasMarkText = text => typeof text === 'string' && MARK_TEXT.test(text)
-/** a mark's name inside it, `{name}`, and the unit a name is of: a unit's own mark ([th]?<id>[se]) or a piece's (p<id>.<k>[ab],
- *  a footnote's n<id>.<k>[ab]); a babel name's occurrence (n<occ>.<key>.[se]) and a figure frame's (g<n>[abt]) name none */
-const NAMES = /\{([^{}\s]{1,64})\}/g
+/** the unit a mark's name is of: a unit's own mark ([th]?<id>[se]) or a piece's (p<id>.<k>[ab], a footnote's n<id>.<k>[ab]); a
+ *  babel name's occurrence (n<occ>.<key>.[se]) and a figure frame's (g<n>[abt]) name none */
 const UNIT_NAME = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
 /** the hits kept at most, for the why */
 const SAMPLES = 4
@@ -119,19 +120,88 @@ const SAMPLES = 4
  * ([page, text]); no page where none does
  */
 export function markTextOf(pages) {
+  return marksIn(pages, () => true)
+}
+
+/** markTextOf over `pages`, each hit kept where `keep(page, hit)` */
+function marksIn(pages, keep) {
   const hit = [], units = new Set(), samples = []
   ;(pages ?? []).forEach((text, i) => {
     if (typeof text !== 'string' || !MARK_TEXT.test(text)) return
-    hit.push(i + 1)
-    for (const m of text.matchAll(/(?:\\axt|axt@)[^\s{}]*(?:\{[^{}\s]{1,64}\})?/g)) {
+    let any = false
+    for (const m of text.matchAll(MARKS_TEXT)) {
+      if (!keep(i + 1, m[0])) continue
+      any = true
       if (samples.length < SAMPLES) samples.push([i + 1, m[0].slice(0, 80)])
-      for (const n of m[0].matchAll(NAMES)) {
-        const u = UNIT_NAME.exec(n[1])
-        if (u) units.add(Number(u[1] ?? u[2]))
-      }
+      const u = UNIT_NAME.exec(m[1])
+      if (u) units.add(Number(u[1] ?? u[2]))
     }
+    if (any) hit.push(i + 1)
   })
   return { pages: hit, units, samples }
+}
+
+/**
+ * The mark text on our pages (`ours`, each page's text) that arXiv's same page (`theirs`) does not hold: a paper that prints
+ * what looks like a mark of ours, as its own text, prints it on arXiv's page too, and is no mark of ours. markTextOf's shape
+ */
+export function markTextBeyond(ours, theirs) {
+  return marksIn(ours, (page, hit) => !(typeof theirs?.[page - 1] === 'string' && theirs[page - 1].includes(hit)))
+}
+
+/** a page's text as markTextOf reads it, page p of a PDF.js document; none where it cannot be read */
+export async function pageTextAt(doc, p) {
+  try { return pageTextOf(await (await doc.getPage(p)).getTextContent()) } catch (e) { if (isMemoryError(e)) throw e; return '' }
+}
+
+/**
+ * The host's contract for a `latex` compile's driver (dvipdfmx, a step of the compile's own): after TeX's log, a line that is
+ * DRIVER_OUTPUT_MARK alone, then the driver's terminal output; where the host's bound (generous: 4 MiB) cuts it, a line that is
+ * DRIVER_OUTPUT_TRUNCATED alone after what it kept. Each a whole line, matched as one
+ */
+export const DRIVER_OUTPUT_MARK = 'axt-runner: dvipdfmx output'
+export const DRIVER_OUTPUT_TRUNCATED = 'axt-runner: dvipdfmx output truncated'
+const linesOf = log => (typeof log === 'string' ? log.split(/\r?\n/) : [])
+/** whether a log holds the driver's output: a line that is DRIVER_OUTPUT_MARK */
+export const driverOutputGiven = log => linesOf(log).includes(DRIVER_OUTPUT_MARK)
+/** whether the driver's output a log holds was cut by the host: a line that is DRIVER_OUTPUT_TRUNCATED after the mark's */
+export function driverOutputTruncated(log) {
+  const lines = linesOf(log), at = lines.indexOf(DRIVER_OUTPUT_MARK)
+  return at >= 0 && lines.indexOf(DRIVER_OUTPUT_TRUNCATED, at + 1) > at
+}
+
+/** what dvipdfmx says of a special it could not interpret: the failure, then where and what (`>> at page=…`, `>> xxx "…"`) */
+const DRIVER_FAILED = /^dvipdfmx:warning: Interpreting special command .* failed\.\s*$/
+const DRIVER_AT = /^dvipdfmx:warning: >> at page="(\d+)"/
+const DRIVER_XXX = /^dvipdfmx:warning: >> xxx "(.*)"\s*$/
+const DRIVER_IMAGE = /^dvipdfmx:warning: (Image inclusion failed for .*?)\s*$/
+/** hyperref's dvips driver's specials (`ps:SDict begin …`: its links, anchors, outlines and the document's info, pdfmarks that
+ *  set no ink), which dvipdfmx cannot interpret and loses nothing of the page by */
+const DRIVER_NO_INK = /^ps:\s*SDict\s+begin\b/
+/**
+ * What dvipdfmx said it could not draw, in a log that holds its terminal (a `latex` compile's: the DVI drawn by dvipdfmx, where
+ * arXiv's PDF is drawn by dvips and ps2pdf, which draw it): each special it could not interpret but hyperref's (DRIVER_NO_INK),
+ * a PSTricks picture's or any PostScript of the page's, and each image it could not take in. { count, samples ([page or null,
+ * text], the first SAMPLES) }; none in a log of another driver's (xdvipdfmx's own prefix) or of none
+ */
+export function driverLostInk(log) {
+  const lines = typeof log === 'string' ? log.split(/\r?\n/) : [], samples = []
+  let count = 0
+  const lost = (page, text) => { count++; if (samples.length < SAMPLES) samples.push([page, text.slice(0, 60)]) }
+  for (let i = 0; i < lines.length; i++) {
+    const image = DRIVER_IMAGE.exec(lines[i])
+    if (image) { lost(null, image[1]); continue }
+    if (!DRIVER_FAILED.test(lines[i])) continue
+    let page = null, what = null
+    for (let j = i + 1; j < Math.min(lines.length, i + 5) && what === null; j++) {
+      const at = DRIVER_AT.exec(lines[j]), xxx = DRIVER_XXX.exec(lines[j])
+      if (at) page = Number(at[1])
+      if (xxx) what = xxx[1]
+    }
+    if (what !== null && DRIVER_NO_INK.test(what)) continue
+    lost(page, what ?? 'a special')
+  }
+  return { count, samples }
 }
 
 /** a page's text as markTextOf reads it: its text items' strings, in their order, each item's own (no space between: a mark's

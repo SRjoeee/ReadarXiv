@@ -93,7 +93,7 @@ export declare function checkOurBase(o: {
   tree?: string | null
   draw?: boolean
 }): Promise<
-  | { text: ArxivText; lineCheck: { lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number }; pageLines: ReadonlyMap<number, readonly [number, number]> }; head: import('../layer-proto/format.mjs').HeadBase }
+  | { text: ArxivText; lineCheck: import('../layout/carry.mjs').LineCheck; head: import('../layer-proto/format.mjs').HeadBase }
   | { refused: 'final' | 'boxes' | 'marks' | 'carry'; why: string; lines?: [number, number] }
 >
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`); `toplevels` where the paper has

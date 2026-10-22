@@ -16,6 +16,19 @@ import { arxivOf, endOf, markedOf, marksOf, type Run, text, unit, words, type Wo
 
 // (a page's ink made capped on demand: the maker's draw tells no fills of an ink that is not whole)
 const inkCap = vi.hoisted(() => ({ on: false }))
+// (the maker made to refuse its file once it read every page, on demand: a fallback after the draws were read)
+const makerRefuses = vi.hoisted(() => ({ on: false }))
+vi.mock('@/pdf-reader/engine/layout/make.mjs', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/pdf-reader/engine/layout/make.mjs')>()
+  return {
+    ...actual,
+    makerOf: async (...a: Parameters<typeof actual.makerOf>) => {
+      const m = await actual.makerOf(...a)
+      if (makerRefuses.on && !('refused' in m)) (m as { whole: unknown }).whole = async () => ({ refused: 'fonts', stats: m.stats })
+      return m
+    },
+  }
+})
 vi.mock('@/pdf-reader/engine/layout/ink.mjs', async importOriginal => {
   const actual = await importOriginal<typeof import('@/pdf-reader/engine/layout/ink.mjs')>()
   return { ...actual, pageInk: (...a: Parameters<typeof actual.pageInk>) => { const r = actual.pageInk(...a); return inkCap.on ? { ...r, capped: true } : r } }
@@ -272,5 +285,58 @@ describe('makerOf: the draw option', () => {
     await m.readPage(3)
     expect(m.drawOf(3)).not.toBeNull()
     expect(m.drawStats).toMatchObject({ pages: 2, none: 1, why: { held: 1 } })
+  })
+})
+
+// A fallback's head is over arXiv's PDF; the maker's draws are of our page: a left part of such a bundle carries none, and the head
+// says none (a reader reads each page's from arXiv's PDF itself, as for a bundle of before). Our page's draws go only where it is
+// the base
+describe('layerOfPaper: no draw of our page in a bundle over arXiv\'s PDF', () => {
+  const headOf = (w: Written) => JSON.parse(new TextDecoder().decode(w.bytes)) as { base: { source: string }; draw?: number }
+  /** our page with page 3 broken once its box was read by the checks: the maker reads pages 1 and 2, then throws */
+  const breaking = (w: World) => {
+    const doc = drawable(arxivOf(w.pages))
+    let read = 0
+    return { ...doc, getPage: async (n: number) => { const p = (await doc.getPage(n)) as Record<string, any>; return n === 3 ? { ...p, get rotate(): number { if (read++ === 0) return 0; throw new Error('a broken page') } } : p } }
+  }
+  const oursWith = async (w: World, doc: unknown) => ({ doc, ...OURS, text: await readArxivText(arxivOf(w.pages)), check: { marks: w.marks.length } })
+
+  it('a maker that read pages and then threw, on the whole path: the head arXiv\'s, no left part with a draw, the head saying none', async () => {
+    const w = worldOf()
+    const got = await passOf(w, {}, { whole: true, ours: (await oursWith(w, breaking(w))) as never })
+    expect(got.r).toMatchObject({ stats: { layout: { refused: 'failed', why: 'a broken page' } } })
+    expect(headOf(got.heads[0] as Written).base.source).toBe('arxiv')
+    expect(headOf(got.heads[0] as Written)).not.toHaveProperty('draw')
+    expect([...got.lefts.values()]).toEqual([null, null, null])
+  })
+
+  it('a maker that read every page and then refused its file: the same, on the whole path and under the oracle\'s capture', async () => {
+    const w = worldOf()
+    makerRefuses.on = true
+    try {
+      for (const o of [{ whole: true }, { capture: {} as never }]) {
+        const got = await passOf(w, {}, o)
+        expect(got.r, JSON.stringify(o)).toMatchObject({ stats: { layout: { refused: 'fonts' } } })
+        expect(headOf(got.heads[0] as Written).base.source, JSON.stringify(o)).toBe('arxiv')
+        expect(headOf(got.heads[0] as Written), JSON.stringify(o)).not.toHaveProperty('draw')
+        expect([...got.lefts.values()], JSON.stringify(o)).toEqual([null, null, null])
+      }
+    } finally { makerRefuses.on = false }
+  })
+
+  it('a paper laid over our page keeps its draws, whole and streamed; a stream whose maker throws after its head keeps ours, and its draws', async () => {
+    const w = worldOf()
+    for (const o of [{ whole: true }, {}]) {
+      const got = await passOf(w, {}, o)
+      expect(headOf(got.heads[0] as Written).base.source, JSON.stringify(o)).toBe('ours')
+      expect(headOf(got.heads[0] as Written).draw, JSON.stringify(o)).toBe(1)
+      expect([...got.lefts.values()].every(d => d !== null), JSON.stringify(o)).toBe(true)
+    }
+    // (the page stream tells its head before its maker reads page 3: the base stays ours, and the pages read keep their draws)
+    const capture: Record<string, unknown> = {}
+    await passOf(w, {}, { capture: capture as never })
+    const streamed = await passOf(w, {}, { oracle: capture as never, ours: (await oursWith(w, breaking(w))) as never })
+    expect(headOf(streamed.heads[0] as Written).base.source).toBe('ours')
+    expect(streamed.lefts.get(1)).not.toBeNull()
   })
 })

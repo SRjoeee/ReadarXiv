@@ -111,20 +111,25 @@ export const BASE_WHYS = LAYOUT_REFUSED
  * and every head over arXiv's PDF, with a why or none, draw nothing (design note §3.5, §3.6)
  */
 export const layerDraws = base => base !== null && typeof base === 'object' && base.source === 'ours'
+/** the limits a refusal may name that another try may not meet again (`limit`): the box's wall clock and the compile budget;
+ *  its cpu, file-size and disk limits meet the same paper on the same box again */
+export const RETRY_LIMITS = Object.freeze(['wall', 'budget'])
 /**
  * Whether a refusal of our base page (markedOfPaper's or layoutMarksOfPaper's paper refusal, or its `base` refusal) may be
- * transient, so that the host retries the paper rather than commit a fallback head for good: exactly where it names the host's
- * limit or the compile budget that caused it (`limit`: limitOf's name — the box's own, 'time' for a timeout — or 'budget').
+ * transient, so that the host retries the paper (once, the host's rule) rather than commit a fallback head for good: exactly
+ * where it names the box's wall clock or the compile budget as what stopped it (`limit` 'wall' or 'budget', RETRY_LIMITS; the
+ * name is limitOf's: the box's own, 'time' for another host's timeout, or 'budget').
  *   code      retryable where                                               for good where
  *   compile   the marked original or the paper's own source was stopped by  the paper's own source fails as itself (TeX's
- *             a host's limit; no compile left in the budget to tell whose   error, its pages), or TeX never ran in it
- *             fault it is (the paper's own source not compiled)
- *   final     the final pass was stopped by a host's limit, or the budget   a check failed: a mark moved, another page count or
- *             held no compile for it                                        box, the pass did not run through, or it threw
+ *             the wall clock; no compile left in the budget to tell whose   error, its pages), TeX never ran in it, or a cpu,
+ *             fault it is (the paper's own source not compiled)             file-size or disk limit stopped it
+ *   final     the final pass was stopped by the wall clock, or the budget   a check failed (a mark moved, another page count
+ *             held no compile for it                                        or box), the pass did not run through or threw,
+ *                                                                           or a cpu, file-size or disk limit stopped it
  *   carry, marks, boxes, engine, texlive   never                            always (texlive after every served tree)
  * A fault of the host's machinery (a failed allocation, a jail that fails) is no refusal: it is thrown, and retried as before
  */
-export const baseRefusalRetryable = r => r !== null && typeof r === 'object' && typeof r.limit === 'string' && r.limit.length > 0
+export const baseRefusalRetryable = r => r !== null && typeof r === 'object' && RETRY_LIMITS.includes(r.limit)
 export const WHY_MAX = 300
 /** a why as a record holds it: a run of control characters (a TeX log's raw bytes, a terminal's escapes) one space, within
  *  WHY_MAX */
@@ -823,7 +828,7 @@ export function indexOf(head, chunks, o = {}) {
     if (cat.head.sha256 !== head.sha256 || cat.head.bytes !== head.bytes) throw refuse(K, 'catalog.head', 'not the head the index is made of')
     // (a catalog of the head's format, naming the head's base: catalogBase's of it, or none in a catalog of 7)
     if (cat.bundle !== undefined && head.bundle !== undefined && cat.bundle !== head.bundle) throw refuse(K, 'catalog.bundle', 'not the head\'s format')
-    if (cat.base !== undefined && cat.base !== null && JSON.stringify(cat.base) !== JSON.stringify(catalogBase(head))) throw refuse(K, 'catalog.base', 'not the head\'s base')
+    if (cat.base !== undefined && cat.base !== null && !sameBase(cat.base, catalogBase(head))) throw refuse(K, 'catalog.base', 'not the head\'s base')
     if (cat.paper.id !== head.paper.id || cat.paper.version !== head.paper.version || cat.paper.pages !== head.paper.pages) throw refuse(K, 'catalog.paper', 'not the head\'s')
     for (const k of VERSION_KEYS) if (cat.versions[k] !== head.versions[k]) throw refuse(K, `catalog.versions.${k}`, 'not the head\'s')
     if (cat.units.length !== head.units.length) throw refuse(K, 'catalog.units', 'not the head\'s chunks')
@@ -1283,6 +1288,9 @@ const CATALOG_DEF = { cap: CATALOG_CAP, values: CATALOG_VALUES, depth: CATALOG_D
 /** the base a catalog names, of its head as read (readHead's): ours, the object a reader asks for by its name (baseKey) with its
  *  digest and bytes, { source: 'ours', key, sha256, bytes }; arXiv's, { source: 'arxiv', sha256, bytes } (the host's copy of arXiv's
  *  PDF, which it names itself) */
+/** whether two catalogs' bases are one: the same fields with the same values, in any order (a catalog another writer made,
+ *  the web's, keeps its own) */
+const sameBase = (a, b) => isObject(a) && isObject(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(b).every(k => Object.hasOwn(a, k) && a[k] === b[k])
 export function catalogBase(head) {
   const b = head.base
   return b.source === 'ours' ? { source: 'ours', key: baseKey(head.paper.id, head.paper.version, b.sha256), sha256: b.sha256, bytes: b.bytes } : { source: 'arxiv', sha256: b.sha256, bytes: b.bytes }

@@ -1489,7 +1489,9 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
 - **In.** `paper { id, version }`; `source` (`openPaper`'s); `marks` (`layoutMarksOfPaper`'s: `{ marks, unitMarks }` or
   `{ refused }`), or `marked { doc, log, options }` (the marked original, read by the pass a page at a time); `arxiv { doc,
   text? }` (a PDF.js document of arXiv's PDF, the caller's to open and destroy, and its text as `readArxivText` read it, else
-  read here); `OPS`; `pdfjs`; `base { bytes, sha256, xref }`; `image`; `remove` (the remover's transport, or null: no add-on);
+  read here: the left's); `ours` (our base page, §19.7: `{ doc, bytes, sha256, xref, check }`, or the final pass's refusal, or
+  null), `orig { bytes, sha256 }` (arXiv's PDF beside it) and `tree` (the TeX Live year it was made on); `base { bytes, sha256,
+  xref }` alone is a host of BUNDLE 7's, whose paper falls back (`final`); `OPS`; `pdfjs`; `image`; `remove` (the remover's transport, or null: no add-on);
   `rules` (`DEFAULT_RULES` where not given: rules 1, 3 and 4, the page stream; `WHOLE_RULES`, next's whole run), `whole`
   (the whole made first, whatever the rules), and `frame`, `columns` (read under the whole run's rules); `verdicts`
   (default on).
@@ -1703,4 +1705,85 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   3 for four, 5 for twelve, the document's fonts), so no count of them is kept. What is left is time, which the host's deadline bounds (the prepare run's 1,200 s):
   a paper may take its pages times `OPS_MS` where every page waits and stalls, a parse's own time where it does not (no engine
   bound), and its matching its pages times `MATCH_PAGE_WORK`.
+
+### 19.7 Our compile as the base page (BUNDLE 8)
+
+The layer is drawn over a page of our own compile: the **final pass** of the marked original, the paper set as its authors set
+it, with the marks the layout was read from. arXiv's PDF stays the left's (its anchoring and the highlight), the download and
+the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12), the remover's tails are appended to our
+bytes (REMOVAL 7), and no position is carried from one PDF to another.
+
+- **The final pass** (`layout/paper.mjs` `markedOfPaper`, `final` on by default). Once the guard accepts a marked compile
+  (asked for the files it wrote, `files: true`), one more request: the accepted files with `DRAFT_OPTION`'s line (graphicx's
+  draft option) made an empty line, so that no line moves, over the aux, bibliography, lists and index that compile wrote;
+  `rerun: false`, `bibtex: false`; the paper's own engine (pdflatex, xelatex, lualatex; `latex` then dvipdfmx). It is asked only
+  where the compile budget holds a compile as long as the longest so far and a fifth. `base` is `{ pdf, log, check: { marks } }`
+  once `layout/base.mjs` `finalCheck` finds its `axt-` destinations the draft's (each by name, page and place within
+  `MARK_TOL`, 0.01 pt) and its page count, boxes and rotations the draft's; else `{ refused: 'final', why }`. The marks are read
+  from the draft as before.
+- **The day.** Every compile after the probe carries `sourceDate` (the host sets `SOURCE_DATE_EPOCH` and `FORCE_SOURCE_DATE=1`):
+  arXiv's PDF's day, `creationEpochOf` — its `/CreationDate`, else its XMP's `xmp:CreateDate`, else `xmp:MetadataDate`. arXiv's
+  PDFs of 2026, rewritten by pikepdf, carry only the last (the rewrite's time, within a day of the compile): 2609.26457 prints
+  `\today` in its header, 2026-09-23 on arXiv's page and on ours.
+- **No space of ours on the page.** The marks are invisible but where they stop a skip: LaTeX's `\begin` ends in
+  `\ignorespaces`, and a unit's line probe written first after it set the space it skips (IEEEtran's abstract and keywords,
+  run in after their dash: "Abstract — This", the abstract a line longer and 2608.19431's first two pages re-broken, 0.694 of
+  its lines in place). The marked original's probe goes past those spaces (`latex-front.mjs` `patch`, `pastBegin`), as it
+  went past a line environment's line end before; the translation's compile is left as it was.
+- **No mark printed as text** (the guard's `text` evidence): a host's `textOf` reads each marked compile's text; a page that
+  holds a mark of ours as TeX prints one (`markTextOf`: a mark macro's name and its braced name, `\axt@pma{p176.4a}`, in a
+  monospace face or OT1 roman's quote and dashes; an address with `axt@` in it is none) leaves the units its marks name
+  unmarked and the paper is compiled again within GUARD_EXTRA, as a mark out of place in an aux is (2610.19860:
+  `\axt@pma{p176.4a}` inside a `\url`). The page pass reads our page's own where the host's text gives none, and takes a hit
+  arXiv's same page also holds for the paper's own text (`markTextBeyond`).
+- **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
+  picture, or any PostScript of the page's, dvipdfmx cannot interpret is missing from our page alone, and the marks and boxes
+  would pass. The final pass is refused (`final`) where its log says dvipdfmx failed a special or an image (`base.mjs`
+  `driverLostInk`), but hyperref's own (`ps:SDict begin …`: its links, anchors, outlines and info, no ink; 2608.22687 has
+  2,784 of them, about 0.6 MB of warnings). The host's contract: after TeX's log it appends a line that is
+  `axt-runner: dvipdfmx output` alone, then the driver's terminal output, bounded generously (4 MiB); where the bound cuts it,
+  a line that is `axt-runner: dvipdfmx output truncated` alone after what it kept, the only legal way to cut it. It fails
+  closed: a `latex` final pass whose log lacks the first line, or holds the second, is refused `final` (`DRIVER_OUTPUT_MARK`,
+  `DRIVER_OUTPUT_TRUNCATED`, `driverOutputGiven`, `driverOutputTruncated`, in the pipeline entry).
+- **The page and line check** (`pipeline/page-pass.mjs` `checkOurBase`, which the page pass runs before its head and the lab's
+  makers run as production does), the first that fails the paper's fallback: our page count arXiv's (`boxes`); no mark of ours
+  printed as text on our page (`marks`); the final pass the draft's page (`final`); every page box and rotation arXiv's, to
+  `BOX_TOL` 0.01 pt (`boxes`: PDF.js's `view`, the CropBox clipped to the MediaBox, not the MediaBox itself: the view is the
+  rectangle the reader draws and every coordinate of the layer, the left's and the layout's, is read in, and nothing outside
+  it is shown, so two pages of equal views are one page to the identity map); the TeX Live year known (`final`); and at least `CARRY_MIN` of our lines **in place** on arXiv's
+  PDF (`carry`: `carry.mjs` `lineCheckOf` over the two texts, a line found on its own page within `LINE_PLACE`, 0.5 pt, of any
+  kind; a check that carries no position), the paper's share here and each part's in its verdict. A line found elsewhere is
+  another TeX Live re-breaking the paper, and our page is to be arXiv's: so a paper is compiled on the tree of arXiv's build
+  (the year its 00README declares, which the box hands it over to before any compile).
+- **The maker** (`layout/make.mjs`) reads our page as its document: a placeholder's segments are its own glyphs and rules
+  between its two marks, looked up on that page exactly (`ownedOn`, within `OWN_TOL` 0.02 pt), with no matching; EMPTY, LOST,
+  TEXT, JOINED and OUTSIDE as before. `match.mjs`, `tolerant.mjs`, the link-anchor locator, the text runs and the carry's
+  point mapping are gone.
+- **The head** (`layer-proto/format.mjs`, BUNDLE5 `'8'`; a reader of 8 reads 7's objects, a head of 7 over arXiv's PDF):
+  `base { source: 'ours', bytes, sha256, xref, pages, tree, check: { pages: [ours, arXiv's], boxes: 'equal', carried } }` with
+  `orig { bytes, sha256 }` (arXiv's PDF), or `base { source: 'arxiv', bytes, sha256, xref, why }` (no `orig`) with `why` one of
+  `BASE_WHYS` (`compile`, `carry`, `engine`, `texlive`, `marks`, `final`, `boxes`), which every part with no layout says too.
+  The catalog names the base (`catalogBase`: ours by its key `baseKey` = `base/<id>v<n>/<sha256>.pdf`, its digest and bytes).
+  `layerDraws(base)` is the one predicate of whether a head's layer draws (ours alone); `baseRefusalRetryable(refusal)` is
+  whether a refusal may be transient (it names the host's limit or the compile budget that caused it, `limit`), which a host
+  retries rather than commit a fallback head.
+- **Measured** (2026-10-22, the pinned images). The lines in place, our base page against arXiv's PDF:
+
+  | Paper | Engine | arXiv's build | Ours | In place (0.5 pt) | Found anywhere | Base |
+  |---|---|---|---|---|---|---|
+  | 1512.03385 | pdflatex | TL2011 | TL2025 | 1.000 | 1.000 | ours |
+  | 1706.03762 | pdflatex | TL2023 | TL2025 | 0.979 | 1.000 | ours |
+  | 1810.04805 | pdflatex | TL2016 | TL2025 | 0.956 | 0.999 | ours |
+  | 2307.16209 | pdflatex | TL2023 | TL2025 / TL2023 | 0.802 / 0.902 | 0.999 / 0.999 | `carry` on 2025, ours on 2023 |
+  | 2608.04322 | pdflatex | TL2025 | TL2025 | 1.000 | 1.000 | ours |
+  | 2608.16117 | pdflatex | TL2023 (declared) | TL2023 | 0.988 | 1.000 | ours |
+  | 2609.26457 | pdflatex | TL2023 (declared) | TL2025 / TL2023 | 0.886 / 0.991 | 0.996 / 1.000 | `carry` on 2025, ours on 2023 |
+  | 2608.18760 | xelatex | TL2025 | TL2025 | 0.996 | 1.000 | ours |
+  | 2608.19431 | xelatex | TL2025 | TL2025 | 1.000 (0.694 before `pastBegin`) | 1.000 | ours (`carry` before `pastBegin`) |
+  | 2608.22687 | latex (dvipdfmx; arXiv's dvips) | TL2025 | TL2025 | 0.976 | 0.976 | ours |
+  | a paper of our own | lualatex | TL2025 | TL2025 | 1.000 | 1.000 | ours |
+
+  Counting whole lines alone, `latex` would fail (2608.22687: 0.707 at 0.5 pt, its words up to 0.42 pt apart), and at 0.01 pt
+  every year's change would. Over our own page the maker locates as many units as over arXiv's or more (2307.16209: 453 to
+  464 of 466, its placeholders found 3,485 to 3,571, lost 6 to 2; the other papers of the gate pack the same).
 

@@ -110,7 +110,7 @@ window.doorParts = {
   async whole({ name, target, rules, pages, bundle3 = false, png: keepPng = true, shared = false }) {
     const R = await import('/engine/layer-proto/reader.mjs')
     const { F, index, parts, composed } = await cutOf(name)
-    const original = await bytes(`/fixtures/${name}/arxiv.pdf`)
+    const original = await bytes(`/fixtures/${name}/base.pdf`)
     const three = bundle3 ? R.readBundle(await bytes(`/door/${name}/bundle.json`)) : null
     const bundle = bundle3 === 'none' ? { ...three, addon: null } : bundle3 === 'single' ? three : F.mergeParts(index, parts)
     const data = bundle3 === 'single' ? withTail(original, three.addon.tail) : bundle3 === false && composed ? await bytes(composed) : original
@@ -148,7 +148,7 @@ window.doorParts = {
     const R = await import('/engine/layer-proto/reader.mjs')
     const { index, parts, docs } = await cutOf(name)
     const rows = await json(`/door/${name}/rows.json`)
-    const doc = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/arxiv.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
+    const doc = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/base.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     // (the composed document through each part's tail, opened before the run: addPart is synchronous, as a host's is)
     const composed = new Map()
     for (const [i, path] of Object.entries(docs)) composed.set(Number(i), await pdfjs.getDocument({ data: await bytes(path), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise)

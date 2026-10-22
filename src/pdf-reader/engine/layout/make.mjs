@@ -14,8 +14,8 @@
 // (before its start mark, a display after its end mark) OUTSIDE; a citation's or a reference's own text with it, for the
 // layer to set in the page's face. What cannot be placed is left out, and the layer leaves that unit as the original's: a
 // unit on a page whose ink is not whole (its operator list too long, too slow, its walk too deep or too long), a placeholder
-// whose own ink is not all on the page. The line check (`lineCheck`: our base page's lines found on arXiv's PDF, carry.mjs
-// carrierOf, the host's) is no source of positions: the file is refused where too few of its lines are found (a paper made
+// whose own ink is not all on the page. The line check (`lineCheck`: our base page's lines in place on arXiv's PDF, carry.mjs
+// lineCheckOf, the host's) is no source of positions: the file is refused where too few of its lines are in place (a paper made
 // whole; for parts, each part's verdict), where the page count is out of bounds, and where its own parser refuses it: a
 // file the parser refuses is never returned.
 // Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes, but for a page that passes a
@@ -407,7 +407,7 @@ async function gzipSize(bytes) {
  * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
  * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: the base page's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T), else read here. `lineCheck`: the line check
- * ({ lines, pageLines }: carry.mjs carrierOf of the base page's tokens over arXiv's), whose share of the lines found is the
+ * ({ lines, pageLines }: carry.mjs lineCheckOf of the base page's tokens over arXiv's), whose share of the lines in place is the
  * file's (`stats.lines`, CARRY_MIN: 'carry' where too small and the file is made whole) and each marked page's (`lines` in the
  * result, the parts' verdicts); none: no line is checked;
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
@@ -605,7 +605,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (!lineCheck) return null
     const L = lineCheck.lines
     stats.lines.total = L.total
-    stats.lines.carried = L.same + L.moved + L.respaced + L.fuzzy
+    // (the lines in place, lineCheckOf's; a line check of the carrier's counts alone, every line found)
+    stats.lines.carried = L.placed ?? L.same + L.moved + L.respaced + L.fuzzy
     return L.total > 0 && (parts || stats.lines.carried >= CARRY_MIN * L.total) ? null : 'carry'
   }
   /** the marks as they stand, and the line check's share: null, or 'carry' where too few of the base page's lines are found
@@ -2012,8 +2013,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * every task before it in the whole order on them has run; a page is let go (its ink and facts dropped) once its tasks have
    * run, its names are taken in and its plan is made (`plans`). A unit's rows are the file's (`layout()`, a unit's as the whole
    * file's parse holds them) once they are made. `finish()` after the last page of each. `released()` the pages from 1 let go;
-   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed). With `marked`, the carry's
-   * refusal is known at the marked original's end, or for parts once any line is carried (`carryKnown()`, `refused()`); a piece
+   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed). The line check's refusal is known
+   * before the first page, the host's line check given (`carryRefusal()`: the file's, never a part's); with `marked`, a piece
    * found after its unit's own ink was taken, or a point read twice after its unit's placeholders were matched, is too late
    * (`stats.late`, rows and vetoes: the whole run's file but there)
    */

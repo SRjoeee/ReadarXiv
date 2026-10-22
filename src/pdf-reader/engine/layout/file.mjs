@@ -36,8 +36,11 @@ export { LayoutRefusal } from './json.mjs'
  *  break read by its own words (pipeline/anchors.mjs: a paragraph and its footnote both going on over a page each keep the
  *  lines their matched words are on, and a formula's row of no word of the unit's is held between its lines, not the walk's
  *  end): over 57 papers 10 LOST rows found and none lost, 5 units' lines changed in 4 papers, the gate pack's 32 outputs
- *  unchanged (the file's schema is 5 still) */
-export const LAYOUT = '11'
+ *  unchanged (the file's schema is 5 still); 12 (layer route step 2): the file's coordinates are our base page's, the final
+ *  pass of the marked original (its marks where the draft has them), no longer arXiv's PDF's: a placeholder's segments are its
+ *  own glyphs and rules between its two marks, looked up on that page with no matching, and the carry is the line check alone
+ *  (the file's schema is 5 still) */
+export const LAYOUT = '12'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */

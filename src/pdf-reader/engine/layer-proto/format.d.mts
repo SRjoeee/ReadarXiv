@@ -22,8 +22,10 @@ export type BaseSource = (typeof BASE_SOURCES)[number]
 export declare const BASE_WHYS: typeof LAYOUT_REFUSED
 /** whether a head's layer draws: its base is ours (BUNDLE 8); a head of 7 and every head over arXiv's PDF draw nothing */
 export declare const layerDraws: (base: unknown) => boolean
-/** whether a refusal of our base page may be transient (the host retries it rather than commit a fallback head): exactly where
- *  it names the host's limit or the compile budget that caused it (`limit`) */
+/** the limits a retryable refusal names: the box's wall clock and the compile budget */
+export declare const RETRY_LIMITS: readonly ['wall', 'budget']
+/** whether a refusal of our base page may be transient (the host retries it once rather than commit a fallback head): exactly
+ *  where it names the wall clock or the compile budget (`limit` 'wall' or 'budget') */
 export declare const baseRefusalRetryable: (refusal: unknown) => boolean
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
 export declare const UNITS_FORMAT: '1'

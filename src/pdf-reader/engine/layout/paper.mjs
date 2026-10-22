@@ -25,7 +25,7 @@ import { jobName, lastTexLog, latin1, latin1Bytes } from '../source/latex-front.
 import { DRAFT_OPTION, listsMissing, notFound, originalFiles, probeFiles, ranThrough } from '../pipeline/live.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
-import { finalCheck, markTextOf } from './base.mjs'
+import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
@@ -77,8 +77,8 @@ const GUARD_EXTRA = 2
  * compile for the files it wrote, and once one stands makes the final pass over it (finalPass): the result's `base`, { pdf,
  * log } or { refused: 'final', why }, the base page the layout is made over once its marks are checked against the draft's
  * (base.mjs finalCheck). `sourceDate` (seconds since the epoch, or a function asked once for it, after the probe): every
- * compile after the probe is asked on that day (CompileRequest `sourceDate`: arXiv's PDF's /CreationDate, base.mjs
- * creationEpochOf, so that \today is arXiv's). `textOf(pdf)`, where the host gives it: each page's text of a compile's PDF, in
+ * compile after the probe is asked on that day (CompileRequest `sourceDate`: arXiv's PDF's day, its /CreationDate or else its
+ * XMP's, base.mjs creationEpochOf, so that \today is arXiv's). `textOf(pdf)`, where the host gives it: each page's text of a compile's PDF, in
  * which no mark of ours may stand as text (base.mjs markTextOf; 'text' in the guard's record): a mark printed is out of place
  * as one in an auxiliary file is, its units left unmarked and the paper compiled again within GUARD_EXTRA, else 'marks'
  */
@@ -213,7 +213,20 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       if (isMemoryError(x)) throw x
       return no(`the final pass threw: ${x?.message ?? x}`)
     }
-    if (ranThrough(c) && c.pdf?.length) return out({ pdf: c.pdf, log: lastTexLog(c.log) })
+    if (ranThrough(c) && c.pdf?.length) {
+      // (under `latex` the DVI is drawn by dvipdfmx, and arXiv's by dvips and ps2pdf: a special dvipdfmx could not draw, a
+      // PSTricks picture's, is ink our page lacks and arXiv's has. The host gives the driver's terminal after TeX's log, behind
+      // its own line (base.mjs DRIVER_OUTPUT_MARK); where it gives none, or cut it, what the driver could not draw is not known:
+      // no base page of ours)
+      if (engine === 'latex' && !driverOutputGiven(c.log)) return no(`the host gave no output of the final pass's dvipdfmx: its log lacks the line \`${DRIVER_OUTPUT_MARK}\``)
+      if (engine === 'latex' && driverOutputTruncated(c.log)) return no('the host\'s dvipdfmx output was cut: its special failures cannot be checked')
+      const lost = engine === 'latex' ? driverLostInk(c.log) : null
+      if (lost?.count) {
+        const [page, what] = lost.samples[0]
+        return no(`the final pass's dvipdfmx could not draw ${lost.count} special${lost.count === 1 ? '' : 's'} of the page (${page ? `page ${page}: ` : ''}${what})`)
+      }
+      return out({ pdf: c.pdf, log: lastTexLog(c.log) })
+    }
     const limit = c ? limitOf(c) : null
     if (limit) return no(`the final pass was stopped by the host's ${limit} limit`, limit)
     if (!c || !texRan(c.log)) return no(`the final pass ran no TeX${firstLine(c) ? `: ${firstLine(c)}` : ''}`)

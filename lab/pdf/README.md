@@ -320,6 +320,17 @@ and `layout` fields every `layout.json` carries; the reader refuses a file of an
 engine's own (`layout/file.mjs`, `LAYOUT_SCHEMA` and `LAYOUT`), and `tests/scripts/gate-pack.test.ts` holds the committed
 `gate-pack.json` to the engine's, so a pull request that moves the layout file cannot pass `pnpm test` with the pack as it was.
 
+Since BUNDLE 8 (the layer route's step 2, `docs/PDF-READER.md` §19.7) a layout file is made over **our base page**, the final
+pass of the marked original, not over arXiv's PDF, and the pack holds that page beside it: `fixtures/<output>/base.pdf` and
+its record `base.json` (`layer-fixtures.mjs` makes both as production does: the final pass on the pinned image, on arXiv's day,
+checked by the page pass's own `checkOurBase`). The record names the page's digest and the layout file's, and a make checks the
+three against each other (`gate-pack.mjs` `baseRecordOf`), so a layout file is never packed beside another page than the one it
+was made over. The layer gate draws every output over its `base.pdf` (its add-on, its draws and its bundle's base are made
+over it too), arXiv's PDF where a fixture has none, and `arxiv.pdf` stays the left's. A paper production would refuse a base
+page of ours would keep the layout file the pack held before, made over arXiv's PDF, its `base.json` saying why
+(`source: 'arxiv'`, outside the version check); in the pack of 2026-10-22 (`d25b354b`) every one of the 7 papers has ours, each made on the tree production compiles it on (`base.json`'s `image`: the year its 00README declares, else that of arXiv's build; 2307.16209, 2608.16117 and 2609.26457 on TeX Live 2023).
+Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
+
 Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, the layout file moves,
 or the faces change; `rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's). A pull request that moves the
 layout file makes the fixtures again with its engine (the layer gate's `--layouts=made`), re-makes the pack and uploads the new

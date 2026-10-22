@@ -208,7 +208,7 @@ describe('layerOfPaper: the page pass', () => {
     expect(got.notes).toEqual([{ pages: [1, 1], layout: { refused: 'carry', lines: [7, 10] }, lines: [7, 10] }, { pages: [2, 3], layout: 'kept', lines: [20, 20] }])
     const wire = got.parts.map(p => JSON.parse(new TextDecoder().decode(p.bytes)) as { layout: unknown; addon: unknown })
     // (the part refused says why on the wire: the carry's, in place of its layout)
-    expect(wire[0]?.layout).toEqual({ refused: 'carry', why: '7 of the 10 lines of its marked pages found on arXiv\'s PDF, under 90 %' })
+    expect(wire[0]?.layout).toEqual({ refused: 'carry', why: '7 of the 10 lines of its pages in place on arXiv\'s PDF, under 90 %' })
     expect(wire[1]?.layout).not.toBeNull()
     expect(wire[1]?.layout).not.toHaveProperty('refused')
     // off, the same paper's parts both have their layout
@@ -441,7 +441,7 @@ describe('layerOfPaper: each part with no layout says why, on the wire (BUNDLE 6
     const short = { ...w, marked: w.pages.slice(0, 2), marks: w.marks.filter(m => m[1] <= 2) }
     expect(await readBack(await passOf(short))).toEqual(Array(2).fill({ layout: null, noLayout: { refused: 'compile', why: 'the marked original has 2 pages, arXiv\'s PDF 3' } }))
     const carried = await readBack(await passOf(worldOf((p, j) => p === 1 && j >= 7)))
-    expect(carried[0]).toEqual({ layout: null, noLayout: { refused: 'carry', why: '7 of the 10 lines of its marked pages found on arXiv\'s PDF, under 90 %' } })
+    expect(carried[0]).toEqual({ layout: null, noLayout: { refused: 'carry', why: '7 of the 10 lines of its pages in place on arXiv\'s PDF, under 90 %' } })
     expect(carried[1]?.layout).not.toBeNull()
     expect(carried[1]?.noLayout).toBeNull()
     // (the whole carry refused at the marked original's end: every part, the paper's lines)

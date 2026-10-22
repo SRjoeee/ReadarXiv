@@ -166,6 +166,13 @@ describe('the catalog of BUNDLE 8 names the base', () => {
     const chunksRead = [await readUnitsChunk(chunks[0]!.bytes, { ref: chunks[0]!.ref, before: null })]
     expect(() => indexOf(read, chunksRead, { catalog: other })).toThrow(/catalog\.base/)
     expect(() => indexOf(read, chunksRead, { catalog: { ...other, base: catalogBase(read) } })).not.toThrow()
+    // (by its fields, whatever their order: another writer, the web's, writes the catalog too; a value not the head's refused)
+    const reversed = Object.fromEntries(Object.entries(catalogBase(read)).reverse())
+    expect(() => indexOf(read, chunksRead, { catalog: { ...other, base: reversed as never } })).not.toThrow()
+    for (const [k, v] of [['sha256', 'f'.repeat(64)], ['bytes', OURS.bytes + 1], ['source', 'arxiv'], ['key', 'base/x.pdf']] as const) {
+      expect(() => indexOf(read, chunksRead, { catalog: { ...other, base: { ...reversed, [k]: v } as never } }), k).toThrow(/catalog\.base/)
+    }
+    expect(() => indexOf(read, chunksRead, { catalog: { ...other, base: { ...catalogBase(read), extra: 1 } as never } })).toThrow(/catalog\.base/)
     // (7's catalog: its keys alone)
     const seven = parsed(w)
     seven.bundle = '7'

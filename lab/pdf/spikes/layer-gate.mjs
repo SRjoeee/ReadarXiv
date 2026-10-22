@@ -42,7 +42,10 @@
 //   --records    (or LAYER_RECORDS) the translation alone (record.json, units.json) from another folder of the same layout:
 //                spikes/table-groups.mjs --write's decided records over the engine's own layout files
 //   --fixtures   (or LAYER_FIXTURES) the fixtures' layout.json, units.json and arxiv.pdf from another folder of the same
-//                layout (the web's web/e2e/.fixtures/); the references stay data/layer-fixtures' (LAYER_REFS another)
+//                layout (the web's web/e2e/.fixtures/); the references stay data/layer-fixtures' (LAYER_REFS another). A
+//                fixture's base.pdf, where it has one (our base page, BUNDLE 8), is the page the layer is drawn over, its
+//                add-on made over and its bundle's base: every read of that page, served as /fixtures/<fixture>/base.pdf
+//                (arXiv's PDF where there is none); arxiv.pdf stays the left's
 //   --check      the merge rule against the last record (default <engine>/lab/pdf/records/
 //                layer-fidelity.json, else this repository's): no measure worse on any fixture (shares by more than 0.2
 //                points, ratios by 0.02, unit counts at all, defects as rates per 1,000 translated text cells at all);
@@ -377,6 +380,9 @@ const recordDir = dir => join(dir, 'lab/pdf/records')
 
 // ---------------------------------------------------------------- the fixtures and their references
 const FIXTURES = LAYOUTS === 'given' ? resolve(GIVEN) : LAYOUTS === 'fixed' || FREEZE ? REFS : madeFixtures()
+/** the page the layer is drawn over: our base page where the fixture has one (base.pdf, BUNDLE 8: the final pass of the marked
+ *  original, the layout file made over it, layer-fixtures.mjs), else arXiv's PDF as before; arxiv.pdf stays the left's */
+const basePdf = name => { const ours = join(FIXTURES, name, 'base.pdf'); return existsSync(ours) ? ours : join(FIXTURES, name, 'arxiv.pdf') }
 const fixtures = readdirSync(FIXTURES).filter(n => /^[A-Za-z0-9._-]+v\d+-[A-Za-z-]+$/.test(n) && existsSync(join(FIXTURES, n, 'units.json'))).sort()
 for (const n of fixtures) if (!existsSync(join(FIXTURES, n, 'layout.json'))) console.log(`FAIL ${n}: no layout file (${existsSync(join(FIXTURES, n, 'refusal.json')) ? `refused: ${readJson(join(FIXTURES, n, 'refusal.json')).refused}` : 'none made'})`)
 if (FREEZE) {
@@ -439,6 +445,8 @@ function fileFor(path) {
     if (rest.length || !fixtures.includes(dir)) return null
     if (file === 'units.json') return trFile(dir, file)
     if (['arxiv.pdf', 'layout.json'].includes(file)) return join(FIXTURES, dir, file)
+    // (the page the layer draws over: our base page where the fixture has one, else arXiv's PDF, basePdf)
+    if (file === 'base.pdf') return basePdf(dir)
     // v0's inputs: the made output's geometry (the prototype's, by paper), the fixture's record (its units file), the
     // prototype's own units file
     if (PROTO && file === 'geometry.json') return geometryFile(dir)
@@ -872,7 +880,7 @@ function drawsOf(name) {
   const { paper } = nameOf(name)
   if (!DRAWS.has(paper)) {
     DRAWS.set(paper, (async () => {
-      const pdf = join(FIXTURES, name, 'arxiv.pdf'), script = join(GATE, 'draws.mjs')
+      const pdf = basePdf(name), script = join(GATE, 'draws.mjs')
       const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).filter(f => existsSync(f))
       const key = sha256([fileSha(pdf), ...reading.map(fileSha), fileSha(script), readJson(join(PDFJS, 'package.json')).version].join('|')).slice(0, 24)
       const dir = join(ROOT, 'out/layer-gate/draws'), file = join(dir, `${key}.json`)
@@ -898,7 +906,7 @@ function drawCutOf(name) {
       const D = await drawsOf(name)
       const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
       const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
-      const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf')))
+      const arxiv = new Uint8Array(readFileSync(basePdf(name)))
       const read3 = readBundle(new Uint8Array(made.bytes))
       if (D.pages.length !== read3.paper.pages) throw new Error(`${name}: ${D.pages.length} pages of draws, the paper's ${read3.paper.pages}`)
       const { base, orig } = doorBaseOf(arxiv, startxrefOf(arxiv), read3.paper.pages)
@@ -1067,7 +1075,7 @@ async function doorPartsFixture(page, name, errors) {
   const made = await doorBundleOf(name, removal)
   const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
   const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
-  const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf')))
+  const arxiv = new Uint8Array(readFileSync(basePdf(name)))
   const cutTo = targetOf(DOOR_PARTS), none = DOOR_PARTS_ADDON === 'none', chained = DOOR_PARTS_ADDON === 'chained'
   const read3 = readBundle(new Uint8Array(made.bytes))
   const { base, orig } = doorBaseOf(arxiv, startxrefOf(arxiv), read3.paper.pages)
@@ -1191,8 +1199,8 @@ async function doorBundleOf(name, removal) {
   const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
   const [{ bundleUnitsOf, readBundle, writeBundle }, { rowOf, sourceUnitsOf, toTranslate }, { openPaper }, { unpackSource }, { kOfSource }, { parseLayout }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/rows.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layer/pieces.mjs', 'layout/file.mjs'].map(f => import(E(f))))
   if (!PAPER_UNITS.has(paper)) PAPER_UNITS.set(paper, bundleUnitsOf(openPaper((await unpackSource(new Uint8Array(readFileSync(join(DATA, 'layout', paper, 'source.gz'))))).files)))
-  const arxiv = new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf'))), shipped = new Uint8Array(readFileSync(removal.shippedFile))
-  if (shipped.length <= arxiv.length || !arxiv.every((b, i) => shipped[i] === b)) throw new Error(`${name}: the shipped add-on does not begin with arXiv's bytes`)
+  const arxiv = new Uint8Array(readFileSync(basePdf(name))), shipped = new Uint8Array(readFileSync(removal.shippedFile))
+  if (shipped.length <= arxiv.length || !arxiv.every((b, i) => shipped[i] === b)) throw new Error(`${name}: the shipped add-on does not begin with the base page's bytes`)
   const layout = parseLayout(new Uint8Array(readFileSync(join(FIXTURES, name, 'layout.json'))))
   const g = readJson(geometryFile(name))
   const [, id, version] = /^(.+)v(\d+)$/.exec(paper)
@@ -1232,7 +1240,7 @@ function removerDigest() {
  */
 const ADDON_RUNS = new Map()
 function addonOf(name) {
-  const pdfFile = join(FIXTURES, name, 'arxiv.pdf'), layoutFile = join(FIXTURES, name, 'layout.json')
+  const pdfFile = basePdf(name), layoutFile = join(FIXTURES, name, 'layout.json')
   const bytes = new Uint8Array(readFileSync(pdfFile))
   const key = sha256([sha256(bytes), fileSha(layoutFile), removerDigest()].join('|')).slice(0, 24)
   if (!ADDON_RUNS.has(key)) ADDON_RUNS.set(key, makeAddonOf(key, bytes, layoutFile))
@@ -1406,7 +1414,7 @@ async function serverPerf(name) {
   const layoutBytes = statSync(layoutFile).size, layoutGzip = gzipSync(readFileSync(layoutFile)).length
   let remover = null, addonBytes = 0, manifestGzip = 0
   if (REMOVAL) {
-    const built = await buildAddon(new Uint8Array(readFileSync(join(FIXTURES, name, 'arxiv.pdf'))), layoutFile, { check: false })
+    const built = await buildAddon(new Uint8Array(readFileSync(basePdf(name))), layoutFile, { check: false })
     try { await built.doc.loadingTask.destroy() } catch {}
     remover = Object.fromEntries(Object.entries(built.ms).map(([k, v]) => [k, Math.round(v)]))
     addonBytes = built.shipped.appended
