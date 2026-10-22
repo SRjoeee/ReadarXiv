@@ -828,7 +828,7 @@ export function indexOf(head, chunks, o = {}) {
     if (cat.head.sha256 !== head.sha256 || cat.head.bytes !== head.bytes) throw refuse(K, 'catalog.head', 'not the head the index is made of')
     // (a catalog of the head's format, naming the head's base: catalogBase's of it, or none in a catalog of 7)
     if (cat.bundle !== undefined && head.bundle !== undefined && cat.bundle !== head.bundle) throw refuse(K, 'catalog.bundle', 'not the head\'s format')
-    if (cat.base !== undefined && cat.base !== null && JSON.stringify(cat.base) !== JSON.stringify(catalogBase(head))) throw refuse(K, 'catalog.base', 'not the head\'s base')
+    if (cat.base !== undefined && cat.base !== null && !sameBase(cat.base, catalogBase(head))) throw refuse(K, 'catalog.base', 'not the head\'s base')
     if (cat.paper.id !== head.paper.id || cat.paper.version !== head.paper.version || cat.paper.pages !== head.paper.pages) throw refuse(K, 'catalog.paper', 'not the head\'s')
     for (const k of VERSION_KEYS) if (cat.versions[k] !== head.versions[k]) throw refuse(K, `catalog.versions.${k}`, 'not the head\'s')
     if (cat.units.length !== head.units.length) throw refuse(K, 'catalog.units', 'not the head\'s chunks')
@@ -1288,6 +1288,9 @@ const CATALOG_DEF = { cap: CATALOG_CAP, values: CATALOG_VALUES, depth: CATALOG_D
 /** the base a catalog names, of its head as read (readHead's): ours, the object a reader asks for by its name (baseKey) with its
  *  digest and bytes, { source: 'ours', key, sha256, bytes }; arXiv's, { source: 'arxiv', sha256, bytes } (the host's copy of arXiv's
  *  PDF, which it names itself) */
+/** whether two catalogs' bases are one: the same fields with the same values, in any order (a catalog another writer made,
+ *  the web's, keeps its own) */
+const sameBase = (a, b) => isObject(a) && isObject(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(b).every(k => Object.hasOwn(a, k) && a[k] === b[k])
 export function catalogBase(head) {
   const b = head.base
   return b.source === 'ours' ? { source: 'ours', key: baseKey(head.paper.id, head.paper.version, b.sha256), sha256: b.sha256, bytes: b.bytes } : { source: 'arxiv', sha256: b.sha256, bytes: b.bytes }
