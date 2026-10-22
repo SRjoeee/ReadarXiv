@@ -747,7 +747,7 @@ describe('the door: three opens, the same pages', () => {
 
 // ---------------------------------------------------------------- the draw hand-off (E-C): the run's `drawOf`
 describe('the door: the draw of a left part, handed to the run', () => {
-  const DRAW = { fonts: [['CMR10', 'serif', 0, ['a', 'b']]], items: [['hello', 10, 0, 10, 72, 700, 30, 10, 0], ['', 10, 0, 10, 102, 700, 0, 10, -1]], links: [] }
+  const DRAW = { fonts: [['CMR10', 'serif', 0, ['a', 'b']]], items: [['hello', 10, 0, 10, 72, 700, 30, 10, 0, 0], ['', 10, 0, 10, 102, 700, 0, 10, -1, -1]], links: [] }
   async function drawDoor(o: { draws?: Record<number, unknown>; parts?: number; leftPart?: (page: number, M: Made) => Promise<Uint8Array>; drawsHeld?: number; doc?: (base: LayerDocument) => LayerDocument } = {}) {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const M = await made({ draws: o.draws ?? { 1: DRAW, 2: DRAW } })

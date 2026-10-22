@@ -46,7 +46,9 @@ export interface MakeInput {
 export interface LayoutStats {
   lines: { carried: number; total: number; held: number }
   /** `unplaced`: the units arXiv's text would place whose own marks were not carried there (they stay the original's) */
-  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number }
+  /** `tolerantTried`: the unit marks no line carried that the unit's own words were looked for (layout/tolerant.mjs);
+   *  `tolerant`: those so placed; `tolerantWork`: the marks their bounds were looked for among */
+  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number; tolerantTried: number; tolerant: number; tolerantWork: number }
   /** `marked`: the placeholders of the located units the marked original marks (an opening mark at least), by kind
    *  found among them; `unmarked`: those it gives no mark (LOST, beside them); `symbols`: the text symbols it gives no
    *  mark drawn as their character (PH_FLAG.TEXT, beside them); `inferred`: those found whose end is
@@ -60,7 +62,7 @@ export interface LayoutStats {
    *  (besideMarks) found by the text the probe showed them set, and EMPTY, having set nothing on the line beside the mark;
    *  `joined`, the later displays of a display group (PH_FLAG.JOINED, their ink the group's first display's); `outside`,
    *  the LOST pieces outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) */
-  ph: { marked: number; found: number; empty: number; lost: number; joined: number; outside: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number; heads: [found: number, empty: number] }
+  ph: { marked: number; found: number; empty: number; lost: number; joined: number; outside: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number; heads: [found: number, empty: number]; textRuns: number }
   /** the matcher's matches by kind (the same character, another Unicode at the place, loosely on the line, by a vote),
    *  those it rejected off their run, its work, the pieces past its bound, and the most work a page cost (`most`) */
   match: { same: number; recoded: number; loose: number; vote: number; rejected: number; work: number; over: number; most: number }
@@ -70,6 +72,8 @@ export interface LayoutStats {
   /** the link-anchor locator: the references and citations the matcher did not find that it tried, those it placed by
    *  their links ([unit, k], rising), and why each other stays LOST (its step) */
   links: { tried: number; placed: [unit: number, k: number][]; why: Record<string, number> }
+  /** the colour pieces of the units the file holds, and those whose run's fill TeX wrote (the file's `colours` rows) */
+  colours: { pieces: number; evaluated: number }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */
   labels: Record<string, [found: number, units: number]>
   frames: { units: number; split: number; lineCountChecked: number; lineCountEqual: number }
@@ -124,7 +128,7 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     /** drawOf's draw as its JSON (wireText's: what the left part holds, format.mjs writeLeftPart `drawText`), once */
     drawJsonOf(p: number): string | null
     /** the draw reads: pages kept, pages with none and by why, the encoded bytes, the ms */
-    drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number }
+    drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** the draws' fills: the items and glyphs read, the items told one fill, those told in runs (layout/fills.mjs) */ fills: { items: number; glyphs: number; told: number; runs: number } }
     /** each marked page's lines [carried, total], once carried */
     pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
     /** the maker a page at a time (after carrying(), the columns' edges and the whole document's frame rule given); with `marked` (markedPages' head, the marks

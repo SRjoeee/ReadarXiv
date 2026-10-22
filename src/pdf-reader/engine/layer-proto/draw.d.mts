@@ -5,8 +5,9 @@ export declare const DRAW_LINKS: number, DRAW_QUADS: number, DRAW_URL: number, D
 export declare const DRAW_VALUES: number, DRAW_BYTES: number, DRAW_COORD: number, DRAW_HELD_MAX: number
 /** [name, fallback, type3 (0 a font, 1 Type3, 2 no font object or an error font), mapped: null (no map), or the map's characters; [] = every char unmapped] */
 export type DrawFont = [name: string | null, fallback: string | null, type3: 0 | 1 | 2, mapped: string[] | null]
-/** [str, a, b, d, e, f (the transform's 0, 1, 3, 4, 5), width, height, font: an index into the page's fonts, or -1] */
-export type DrawItem = [str: string, a: number, b: number, d: number, e: number, f: number, width: number, height: number, font: number]
+/** [str, a, b, d, e, f (the transform's 0, 1, 3, 4, 5), width, height, font: an index into the page's fonts, or -1, fills: its
+ *  characters' (layout/fills.mjs ItemFills: one fill for all, -1 none told, or runs by code point)] */
+export type DrawItem = [str: string, a: number, b: number, d: number, e: number, f: number, width: number, height: number, font: number, fills: number | number[]]
 /** a dest: null, a name, [0, num, gen, zoom, ...args] (page by reference) or [1, index, 0, zoom, ...args] (page by index) */
 export type DrawDest = null | string | (string | number | null)[]
 /** [rect, quads (8k numbers) | null, url, dest, overlaid text, border width, border style, colour] */
@@ -15,7 +16,7 @@ export interface Draw { fonts: DrawFont[]; items: DrawItem[]; links: DrawLink[] 
 /** a draw as the writer is given it, in PDF.js's own shapes: typed arrays for rects, quads and colours, an iterable `mapped`, a dest explicit as [{num,gen}|index, {name}, ...args] */
 export interface DrawSource {
   fonts: readonly (readonly [string | null | undefined, string | null | undefined, 0 | 1 | 2, Iterable<string> | null | undefined])[]
-  items: readonly (readonly [string, number, number, number, number, number, number, number, number])[]
+  items: readonly (readonly [string, number, number, number, number, number, number, number, number, (number | readonly number[])?])[]
   links: readonly (readonly [ArrayLike<number>, ArrayLike<number> | null | undefined, string | null | undefined, unknown, string | null | undefined, number | null | undefined, number | null | undefined, ArrayLike<number> | null | undefined])[]
 }
 export declare class DrawRefusal extends Error { constructor(path: string, why: string); readonly path: string; readonly why: string }
@@ -30,6 +31,8 @@ export declare function drawFontKey(row: DrawFont): string
 /** the layer's inputs back from a checked draw */
 export declare function drawInputsOf(draw: Draw): {
   items: { str: string; transform: number[]; width: number; height: number; fontName: string | null }[]
+  /** each item's characters' fills (layout/fills.mjs ItemFills) */
+  fills: (number | number[])[]
   styles: Record<string, { fontFamily: string | null }>
   fonts: Map<string, { name: string | null; fallback: string | null; type3: 0 | 1 | 2; mapped: Set<string> | null }>
   annots: { subtype: 'Link'; rect: number[]; quadPoints: number[] | null; url: string | null; dest: unknown; overlaidText: string | null; borderStyle?: { width: number | null; style: number | null }; color: number[] | null }[]

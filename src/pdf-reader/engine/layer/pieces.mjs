@@ -93,10 +93,12 @@ export function kOfSource(source) {
  *  slots carry these, so that a wire read back against them names its placeholders by k. A run's slot (mt.mjs
  *  formulaRuns: `{ t: 'run', pieces }`, a formula split across inline formulas, one marker) has the indices of all its
  *  pieces, in their order — its formulas and the text between them, which its marker stands for —, an array where any
- *  other slot has a number; -1 where a slot is none of the unit's */
+ *  other slot has a number; so has an edge's (`{ t: 'edge', pieces }`: a kept pair's open or close with the pieces that
+ *  went on no wire beside it, no text among them), each piece found as any slot's; -1 where a slot is none of the unit's */
 export function slotKs(unit, slots) {
   const kOf = kOfSource(unit?.pieces)
   return (Array.isArray(slots) ? slots : []).map(slot => {
+    if (slot?.t === 'edge' && Array.isArray(slot.pieces)) { const ks = slot.pieces.map(kOf); return ks.length && ks.every(k => k >= 0) ? ks : -1 }
     if (slot?.t !== 'run' || !Array.isArray(slot.pieces)) return kOf(slot)
     // (its placeholders found as any slot's, so that an equal one after the run is not taken for one of them; the run is
     // a stretch of the unit's pieces, its text between them by where it stands)

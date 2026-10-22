@@ -7,7 +7,9 @@
 //   shapes  `{` a brace group or one token, as TeX takes an undelimited argument; `[` an optional argument in brackets;
 //           `*` an optional star; `?` an optional `=`; `=` a literal `=` TeX skips; `_` TeX's own syntax for the role (a
 //           number, a dimension, glue with plus and minus, one token or a group); `u` tokens up to a delimiter the
-//           table does not name (read as not known); `b` tokens up to a brace (\def's parameter text)
+//           table does not name (read as not known); `b` tokens up to a brace (\def's parameter text); `g` a brace
+//           group and nothing else, where a package's delimited form needs one (DELIMITED): no group there, and the
+//           form is not known
 //   roles   `t` text, `c` typeset content (a box's, a branch's), `a` an argument LaTeXML leaves untyped (text or a name),
 //           `d` a dimension, glue or number, `k` keys and values, `n` a name (a label, a file, a colour, a counter),
 //           `v` a name set as it is written (a URL, an e-mail address), `r` a register or a control sequence, `x` code (a
@@ -32,6 +34,22 @@ const MAY_BE_TEXT = new Set(['t', 'c', 'a', 'v', 'm'])
  * xcolor, hyperref, booktabs, caption, multirow, makecell, adjustbox, enumitem, url). Not tabu's environment, whose
  * `to <width>` before its columns no parameter here reads
  */
+/**
+ * Commands whose parameters are delimited by tokens only their package's definition names, which neither LaTeXML's
+ * bindings nor a paper's files hold: nothing in the source tells `\\foreach \\ii in {0,...,3} {…}` from prose, so the
+ * forms are written out here, one by one (the 50-paper sweep, 2026-10-19). The rule they serve is the role table's own:
+ * an argument of role x, s or n is never walked as text, and never takes a mark.
+ * - pgffor's \\foreach <variables> [<options>] in {<list>} {<body>}: the variables, options and `in` up to the list's
+ *   brace (b, code), the list (a group: code), the body (a group: content, walked, a paragraph in it a unit of its own).
+ *   2610.21377's three loops were units of `in 0,...,3`, and the body's brace was written twice. A list that is a macro
+ *   (`in \\mylist {…}`) has no group where the body is due: not known, read as a command the table does not know is
+ * - etoc's \\etocdepthtag.toc{<tag>}: `.toc` up to the tag's brace (b, literal), the tag (a group: a name). 2610.21201's
+ *   \\etocdepthtag.toc{main} took a mark, which etoc wrote into the contents file, inside its \\csname
+ */
+const DELIMITED = {
+  foreach: 'bxgxgc',
+  etocdepthtag: 'bsgn',
+}
 const CURATED = {
   // boxes and colours: the last argument the text they set
   mbox: '{c', makebox: '[d[n{c', framebox: '[d[n{c', fbox: '{c', parbox: '[n[d[n{d{c', raisebox: '{d[d[d{c',
@@ -51,7 +69,7 @@ const CURATED = {
   bibliography: '{n', addbibresource: '[k{n', hypersetup: '{k', captionsetup: '[n{k', setlist: '[n{k', sisetup: '{k',
   lstset: '{k', tcbset: '{k', tikzset: '{k', pgfplotsset: '{k', geometry: '{k', setstretch: '{d',
   // references, links, files: their names stay; a link's text is text
-  label: '{n', ref: '*s{n', eqref: '{n', pageref: '*s{n', autoref: '*s{n', cref: '*s{n', Cref: '*s{n', nameref: '*s{n',
+  label: '[n{n', ref: '*s{n', eqref: '{n', pageref: '*s{n', autoref: '*s{n', cref: '*s{n', Cref: '*s{n', nameref: '*s{n',
   hyperref: '[n{t', hyperlink: '{n{t', hypertarget: '{n{t', href: '[k{n{t', url: '{v', nolinkurl: '{v', includegraphics: '*s[k[k{n',
   IfFileExists: '{n{c{c', InputIfFileExists: '{n{c{c', email: '[n{v', orcid: '[n{v', orcidlink: '{n', thanksref: '{n', inst: '{v',
   // definitions: a name, an arity, a default and a body, none of them typeset where they stand
@@ -70,6 +88,9 @@ const CURATED = {
   ac: '*s{n', acp: '*s{n', acs: '*s{n', acsp: '*s{n', acl: '*s{n', aclp: '*s{n', acf: '*s{n', acfp: '*s{n', acfi: '*s{n',
   acsu: '*s{n', aclu: '*s{n', iac: '*s{n', Iac: '*s{n', Ac: '*s{n', Acp: '*s{n', Acs: '*s{n', Acl: '*s{n', Aclp: '*s{n',
   Acf: '*s{n', Acfp: '*s{n', acused: '{n',
+  // a package's setting that sets no ink: soul's highlight colour
+  sethlcolor: '{n',
+  ...DELIMITED,
 }
 /** environments as the front end reads them, where LaTeXML's form is missing or says less: a table's position and
  *  columns (its cells are walked), a box's width, a list's options (enumitem's keys), a theorem's title */
@@ -227,11 +248,12 @@ const tokenEnd = (s, k) => {
   if (j < s.length && isLetter(s[j])) { while (j < s.length && isLetter(s[j])) j++; return j }
   return j + 1
 }
-// TeX's number and dimension: a sign, digits or a register, a unit; glue with its plus and minus
+// TeX's number and dimension: a sign, digits or a register, a unit; glue with its plus and minus; a box's specification,
+// `to` or `spread` before its dimension (\\hbox to 2cm{…}, \\vbox spread 1em{…})
 const UNIT = String.raw`(?:true\s*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|px|fill?l?)(?![A-Za-z])`
 const FACTOR = String.raw`[-+\s]*(?:\d+(?:[.,]\d*)?|[.,]\d+)?\s*`
 const QUANTITY = String.raw`${FACTOR}(?:${UNIT}|\\[A-Za-z@]+(?:\s*\d+)?|\d*)`
-const TEX_VALUE = new RegExp(String.raw`^\s*=?\s*(?:${QUANTITY})(?:\s*(?:plus|minus)\s*${QUANTITY})*`)
+const TEX_VALUE = new RegExp(String.raw`^\s*=?\s*(?:(?:to|spread)(?![A-Za-z])\s*)?(?:${QUANTITY})(?:\s*(?:plus|minus)\s*${QUANTITY})*`)
 /**
  * The arguments of a command whose parameters the table knows, at s[i] just after its name: each { shape, role, param,
  * start, end } (`param` its parameter's index, a group's start at its brace or bracket), an optional one or a star only
@@ -247,12 +269,23 @@ export function readArgs(s, i, params, to = s.length) {
     if (shape === '[') { if (s[k] === '[') { const e = groupEnd(s, k, '[', ']'); if (e < 0 || e > to) return { args, end: at, complete: false }; args.push({ shape, role, param, start: k, end: e }); at = e } continue }
     if (shape === '*') { if (s[k] === '*') { args.push({ shape, role, param, start: k, end: k + 1 }); at = k + 1 } continue }
     if (shape === '?' || shape === '=') { if (s[k] === '=') at = k + 1; continue }
+    // TeX's scanner reads a number or a dimension, never a group: \\hbox{…}'s group is its content, not its specification
+    // (taken for one, the token after the box became its content: `\\vbox{…}\\begin` then `{center}` walked as text, its
+    // lead written inside \\begin's name; `\\hbox{abc} more` sent `ore`)
+    // Nor a command the table reads parameters for: a register (\\baselineskip) or an internal quantity the table does not
+    // know (\\fontdimen2\\font) is a value, \\vspace, \\vskip, \\kern or \\section is a call of its own. \\hrule\n\\vspace{0.5mm}
+    // took \\vspace for the rule's dimension, and its {0.5mm} was walked as text, a mark written inside it (2610.21765);
+    // \\hrule\\vskip 4pt took `\\vskip 4` and left `pt` the text's, its mark between the 4 and its unit. A command whose
+    // expansion is the value (VALUES: \\number, \\the, \\romannumeral …) is a value whatever the table says it reads:
+    // \\vskip\\number\\count0 pt
     if (shape === '_' && role === 'd') {
-      if (s[k] === '{') { const e = groupEnd(s, k); if (e < 0 || e > to) return { args, end: at, complete: false }; args.push({ shape, role, param, start: k, end: e }); at = e; continue }
       const m = TEX_VALUE.exec(s.slice(at, Math.min(to, at + 200)))
-      if (m && /\S/.test(m[0])) { args.push({ shape, role, param, start: at, end: at + m[0].length }); at += m[0].length }
+      const call = m && [...m[0].matchAll(/\\([A-Za-z@]+)/g)].find(c => { const pp = commandParams(c[1]); return !VALUES.has(c[1]) && !!pp?.length && pp !== REGISTER })
+      const value = m ? (call ? m[0].slice(0, call.index) : m[0]) : ''
+      if (/\S/.test(value)) { args.push({ shape, role, param, start: at, end: at + value.length }); at += value.length }
       continue
     }
+    if (shape === 'g') { if (s[k] !== '{') return { args, end: at, complete: false }; const e = groupEnd(s, k); if (e < 0 || e > to) return { args, end: at, complete: false }; args.push({ shape: '{', role, param, start: k, end: e }); at = e; continue }
     if (shape === 'b') { let e = at; while (e < to && s[e] !== '{' && s[e] !== '%') e++; if (e >= to || s[e] !== '{') return { args, end: at, complete: false }; if (e > at) args.push({ shape, role, param, start: at, end: e }); at = e; continue }
     if (shape !== '{' && shape !== '_') return { args, end: at, complete: false }
     // a bracket where a required argument is due is an optional one the table does not know of (a package's): not known
@@ -326,7 +359,20 @@ const TEXTLESS = new Set([
   'fontsize', 'linespread', 'setstretch', 'tablewidth', 'phantom', 'hphantom', 'vphantom',
   'newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand', 'def', 'gdef', 'edef', 'xdef', 'let', 'newif', 'newenvironment', 'renewenvironment', 'newcolumntype', 'DeclareMathOperator',
   'hypersetup', 'captionsetup', 'setlist', 'sisetup', 'lstset', 'tcbset', 'tikzset', 'pgfplotsset', 'definecolor', 'colorlet',
+  // a label (cleveref's type with it: \\label[proposition]{…}), a bibliography's style, soul's highlight colour: the
+  // maker writes no row for them (layout/marks.mjs INVISIBLE, or no ink), so the layer's zero must read them so too
+  'label', 'bibliographystyle', 'sethlcolor',
 ])
+/**
+ * TeX's commands whose expansion, or whose meaning to the scanner, is a number, a dimension or glue: a value where
+ * TeX's own syntax reads one (readArgs' `_d`), though the table gives some of them parameters of their own (\\number's
+ * and \\romannumeral's value, \\value's counter, \\toks's register). The kernel's and e-TeX's, checked by hand
+ * (latex.ltx, the e-TeX manual); the registers the table holds as REGISTER are values already
+ */
+const VALUES = new Set(['number', 'romannumeral', 'the', 'value', 'numexpr', 'dimexpr', 'glueexpr', 'muexpr', 'fontdimen', 'dimen', 'skip', 'count', 'muskip', 'toks', 'wd', 'ht', 'dp', 'fontcharwd', 'fontcharht', 'fontchardp', 'fontcharic', 'gluestretch', 'glueshrink', 'mutoglue', 'gluetomu'])
+/** control symbols that set no letters: a discretionary hyphen (its hyphen, where a line breaks there, is the line's
+ *  break, which the layer sets anew) */
+const TEXTLESS_SYMBOLS = new Set(['\\-'])
 /**
  * Whether a placeholder can never be a text rendering: its source one command of TEXTLESS, its arguments all there as
  * the table reads them and nothing after them, or a register's assignment (\\looseness=-1, \\parindent 0pt). What it sets, if anything (a rule's bar), is the page's own drawing,
@@ -336,6 +382,7 @@ const TEXTLESS = new Set([
 export function textless(src, paper = null) {
   // booktabs' trim, (lr), before \\cmidrule's columns: what the front end passes over too
   const s = src.trim().replace(/^(\\cmidrule\s*(?:\[[^\]]*\]\s*)?)\([^()]*\)/, '$1')
+  if (TEXTLESS_SYMBOLS.has(s)) return true
   if (!/^\\[A-Za-z@]+/.test(s)) return false
   const { name, end } = commandAt(s, 0)
   if ((!TEXTLESS.has(name) && name !== 'noalign' && paperParams(name, paper) !== REGISTER) || paper?.own.has(name)) return false

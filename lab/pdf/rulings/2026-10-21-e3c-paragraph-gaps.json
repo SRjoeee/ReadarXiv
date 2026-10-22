@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-21",
+  "by": "the maintainer",
+  "quote": "E3c\u63a5\u53d7",
+  "english": "E3c accepted, 2026-10-21, relayed by the coordinator",
+  "on": "E3c (pull request 425): a unit over a page break holds on each page the text its source sets there",
+  "measures": [
+    "paraGapTight"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "zh, 1706.03762 page 9, unit 128: paragraph gaps tighter than the lines beside them 0.18 to 0.184; its two lines on page 9, at the original's pitch, give a gap to the filled paragraph after it that the measure now reads",
+  "why": "each sentence is drawn on the page its source is on: page B holds its share of a continued paragraph"
+}

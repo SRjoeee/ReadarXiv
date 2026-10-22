@@ -143,6 +143,7 @@ import { readLeftPart, writeLeftPart } from '../../../src/pdf-reader/engine/laye
 import { leftSideOf } from '../../../src/pdf-reader/engine/pipeline/left-side.mjs'
 import { floatHitOf, floatShapes } from '../../../src/pdf-reader/engine/view/floats.mjs'
 import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/view/highlight.mjs'
+import { startsOfPairs } from '../../../src/pdf-reader/engine/view/shapes.mjs'
 import { displayEdges, plainTranslated, serialize, unitText } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { runPaper, samePieces } from './highlight-runs.mjs'
@@ -276,7 +277,8 @@ for (const id of ids) {
     for (let r = 0; r < ROUNDS; r++) {
       const t0 = performance.now()
       starts = new Map()
-      for (const [i, s] of Object.entries(sents)) { const st = sentenceStarts(anchors.get(+i), textOf.get(+i) ?? '', S === 'L' ? s.src : s.tr); if (st) starts.set(+i, st) }
+      // (each paired token's sentence by its word, as the reader's left reads it: shapes.mjs startsOfPairs, the page-made side's too)
+      for (const [i, s] of Object.entries(sents)) { const st = startsOfPairs(anchors.get(+i), textOf.get(+i) ?? '', S === 'L' ? s.src : s.tr); if (st) starts.set(+i, st) }
       startsMs.push(performance.now() - t0)
     }
     cost[`${id} ${S}`] = { pages: pdf.views.length, tokens: doc.length, layoutMs: +median(layoutMs).toFixed(2), allPagesMs: +median(pagesMs).toFixed(2), perPageMs: +(median(pagesMs) / pdf.views.length).toFixed(3), pageMaxMs: +median(pageMax).toFixed(2), startsMs: +median(startsMs).toFixed(2) }

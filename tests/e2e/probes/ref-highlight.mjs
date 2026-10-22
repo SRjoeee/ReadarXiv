@@ -5,12 +5,14 @@
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { chooseBuiltIn, openOptions, openSection, setSwitch } from '../options-page.mjs'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/ref-highlight.mjs')
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
 const PROFILE = `${E2E}.profile-hl`
 const IDLE = /session idle: (\d+)\/(\d+) requested of (\d+), (\d+) failed, (\d+) cached/
 const sleep = ms => new Promise(r => setTimeout(r, ms))
-const context = await chromium.launchPersistentContext(PROFILE, { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`], viewport: { width: 1440, height: 900 } })
+const context = await chromium.launchPersistentContext(PROFILE, online({ channel: 'chromium', headless: true, args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`], viewport: { width: 1440, height: 900 } }))
 let [worker] = context.serviceWorkers(); if (!worker) worker = await context.waitForEvent('serviceworker')
 const extId = worker.url().split('/')[2]
 const options = await openOptions(context, extId)

@@ -55,6 +55,9 @@ export interface MirroredShapes { readonly layout: Layout; readonly shapes: Shap
 export interface LaidWords {
   tokens: PageTable
   word: Int32Array
+  /** each token's place in the translation (the door's PageWords.at): a token with no word takes its sentence from it; a
+   *  table without it gives its units no starts (they light whole) */
+  at?: Int32Array
   spans: readonly (readonly [number, readonly number[]])[]
   original: readonly number[]
 }
@@ -78,6 +81,9 @@ export interface LayerShapes {
 }
 export declare function layerShapes(source: SideShapes): LayerShapes
 export declare function pdfShapes(layout: Layout): Shapes<Run, Float>
+/** a unit's starts from its pairs (anchors.mjs sentenceStarts), each paired token's sentence by its word: the left's on the layer
+ *  and a layout made whole alike */
+export declare function startsOfPairs(anchor: { tokens: readonly number[]; pairs?: ReadonlyMap<number, number>; bounded?: boolean; coverage?: number } | null | undefined, text: string, offsets: readonly number[] | undefined): Int32Array | null
 export declare function leftPageInput(left: Pick<ReadLeftPart, 'page' | 'first' | 'table' | 'spans' | 'pairs'>): LeftPageInput
 export declare function createShapes(o?: { kindOf?: (id: number) => string | undefined; warn?: (what: string, error: unknown) => void }): SideShapes
 export declare function mirror(source: SideShapes): MirroredShapes

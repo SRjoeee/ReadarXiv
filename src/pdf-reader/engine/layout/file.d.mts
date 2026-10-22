@@ -2,9 +2,12 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
  *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
-export declare const LAYOUT: '6'
-/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE */
-export declare const LAYOUT_SCHEMA: 4
+export declare const LAYOUT: '11'
+/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
+ *  row's last number where its glyphs are not black (4 + 6 × n + 1) */
+export declare const LAYOUT_SCHEMA: 5
+/** a placeholder's fill where no one colour holds more than half its glyphs (the row's last number, schema 5) */
+export declare const MIXED_FILL: -1
 /** a new-style arXiv identifier, or an old one (archive, subject class, a slash and 7 digits); never a version suffix */
 export declare const isPaperId: (id: unknown) => id is string
 /** a paper's version at most */
@@ -35,7 +38,7 @@ export declare const PAGE_TEXT_ALL: number
 export declare function isPageText(s: unknown): s is string
 /** prep/<mid>/layout-<sha256>.json (spec §4.2). arXiv's PDF units, each page unrotated, y up, pages 1-based */
 export interface LayoutFile {
-  schema: 4
+  schema: 5
   layout: string
   pdfjs: string
   paper: { id: string; version: number; pages: number }
@@ -59,6 +62,8 @@ export interface LayoutFile {
   names: number[][]
   /** the paper's \lineskip and \lineskiplimit, PDF units, as TeX gave them (marks.mjs readSkipProbe); null: none given */
   lineskip: [lineskip: number, lineskiplimit: number] | null
+  /** each colour piece's run's fill as TeX set it (marks.mjs readColours), by unit and k rising; the key only where a unit has one */
+  colours?: [id: number, k: number, rgb: number][]
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; a file of another `schema` is
  *  refused, one of another maker's `layout` is read; throws LayoutRefusal. `sized` false: none of the bounds a part holds
@@ -76,7 +81,7 @@ export declare function checkLineskip(lineskip: unknown, path: string): [lineski
 export declare const PART_KEYS: readonly ['fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names']
 /** a layout part: the file's rows and tables of PART_KEYS for the units of one part (a bundle 4 part holds one); its
  *  `fonts` is its own table, which its lines' font indices and its names' name an index of */
-export type LayoutPart = Pick<LayoutFile, (typeof PART_KEYS)[number]>
+export type LayoutPart = Pick<LayoutFile, (typeof PART_KEYS)[number] | 'colours'>
 /** a layout part already parsed: every row bound checkLayout checks, per part, with each row's page one of `lo` to `hi` and
  *  its box within that page's view; `views` are the views of pages lo to hi (stride 4), `pages` the paper's. Returns the
  *  value itself, its -0s written 0; throws LayoutRefusal (a RangeError for a call that is no pages of the paper) */
@@ -95,11 +100,13 @@ export interface LayoutUnit {
   lines: Float64Array                      // stride 8, as the file
   frames: Float64Array                     // stride 6
   erase: Float64Array[]                    // per line: x0, y0, x1, y1 (stride 4)
-  ph: ReadonlyMap<number, { kind: (typeof PH_KINDS)[number]; flags: number; segs: Float64Array; text: string | null }>   // by k; segs stride 6; text: the page text
+  ph: ReadonlyMap<number, { kind: (typeof PH_KINDS)[number]; flags: number; segs: Float64Array; text: string | null; fill: number | null }>   // by k; segs stride 6; text: the page text; fill: its glyphs' colour (0xRRGGBB, MIXED_FILL), null where black
   labels: Float64Array                     // per label: kind, page, x0, baseline, x1, top, bottom (stride 7)
   heading: string | null
   /** the lines its source does not write: no slot, never erased (rising, never its first) */
   held: readonly number[]
+  /** each colour piece's run's fill (0xRRGGBB) as TeX set it, by its piece index */
+  colours: ReadonlyMap<number, number>
 }
 /** a name's occurrence as the layer reads it */
 export interface LayoutName {

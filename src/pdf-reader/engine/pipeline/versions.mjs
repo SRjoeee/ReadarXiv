@@ -80,7 +80,96 @@
 //     a landscape page's captions, a figure's turned labels: 130 of the corpus's 132 PDFs. The units, the wire, the
 //     translation and the layout file are 13's byte for byte; the bundle's content is not, under the same key (VTAG), so a
 //     bundle made before is never taken for one made now. A copy of 13 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '14'
+// 15: raised with TRANSLATE_VERSION 3 (a sentence whose words change style goes out whole, mt.mjs planOf), so that copies
+//     are judged again; the units, their pieces and the layout file are 14's, byte for byte. 2610.19159's lead terms and
+//     word-by-word colour runs went out as a marker at every style boundary and came back as word salad, its "Before"
+//     labels empty. A copy of 14 (and of each older pipeline, with its own test) carries every unit that holds no pair
+//     and no inkless placeholder between its words and whose translation keeps a letter (live.mjs PIPELINE_CARRIES)
+// 16: an environment the paper defines as code is no unit (latex-front.mjs codeEnvsOf): one a listing package's definer
+//     makes, one whose begin code opens a code environment, one set as alltt sets its body (typewriter type, its lines
+//     obeyed). 2610.19159's 720 transcripts were 832 of its 2,645 units, its command lines and terminal output sent to the
+//     translator; 1,813 now. Its later pairs in that file renumbered, 451 units keep their text and change their hash,
+//     found again by seedFrom. The 7 pack papers and the corpus's 124 keep their units byte for byte. The wire, its
+//     reading back and the layout file are 15's: a copy of 15 carries every unit it holds the source of (live.mjs
+//     PIPELINE_CARRIES)
+// 17: a command and its arguments are one piece (arg-roles.mjs readArgs, latex-front.mjs commandArgs): TeX's number, dimension
+//     or glue (`_d`) is never a group, a box's specification `to` or `spread` and a dimension, and a last argument TeX takes
+//     as one token that is a command it sets takes that command's own arguments with it, its groups of text and content
+//     walked as before (\raise2pt\hbox{…}). #407's review: \vbox{…}\begin{center} was marked
+//     \begin{\leavevmode\axtmark{0s}center} and the marked compile stopped. Of the corpus's 132 sources one changes:
+//     2212.06817's \hbox{\includegraphics…}\label{…} key is no unit (432 -> 431), every other unit of it keeping its
+//     hash. Every other paper's units and marked original (so its layout file), the wire and its reading back are 16's byte
+//     for byte, the pack's 32 outputs among them: a copy of 16 carries every unit it holds the source of, matched by
+//     sourceHash (live.mjs PIPELINE_CARRIES)
+// 18: a marked original that stopped at its error limit, never reached the document's end, or has fewer pages than arXiv's
+//     PDF is a failed compile, no layout (live.mjs ranThrough, layout/paper.mjs, page-pass.mjs): 2610.20713 (TL2025, xelatex
+//     and nicematrix, its hundredth error after 7 of 15 pages) and 2608.03994 (751 errors TeX went past, 14 of 17 pages) had
+//     each a layout of the pages it set, 95 and 97 % of their lines carried. Such a paper's bundle is now one with no layout,
+//     under a new key (VTAG). Of 141 compiles counted against arXiv's PDF the other 139 have its count: every other
+//     paper's units, marked original, layout file, wire and reading back are 17's byte for byte, and a copy of 17 carries
+//     every unit it holds the source of (live.mjs PIPELINE_CARRIES)
+// 19: the marked original must be the paper (the layout guard: layout/guard.mjs, layout/paper.mjs markedOfPaper; R1 of
+//     2026-10-19). Before its compile a unit whose writing changes its file's brace balance is written as the paper's own
+//     (2610.21377's three pgffor loop headers, written back with their body's brace doubled); after it a compile that did not
+//     run through, whose page count is not arXiv's (where the host gives it), with a mark of ours where no text is set in a
+//     file it wrote (2610.21201's etoc depth tags inside a \csname of its contents) or with more TeX errors than the unmarked
+//     original's is compiled again with the units the evidence blames left the paper's own, or the babel names' marks off
+//     (2610.21288's \appendixname under revtex4-2 and the appendix package), two compiles more at most; a paper of several
+//     toplevel sources has its marked original compared with arXiv's first pages (2610.20030, which 18's page rule refused
+//     outright); each part with no layout says why (BUNDLE 6, `layout: { refused, why }`). A paper whose marked original
+//     passes every check is compiled as before, its marked original and layout file 18's byte for byte (the gate pack's 32
+//     outputs); the units, the wire and its reading back are 18's, and a copy of 18 carries every unit it holds the source
+//     of (live.mjs PIPELINE_CARRIES). Raised so that the bundle of a paper the guard now mends, or now records the refusal
+//     of, is made again under a new key (VTAG)
+// 20: no unit, and no mark, inside an argument TeX reads as syntax (E2 of 2026-10-19): a TeX value never takes a command
+//     that reads arguments of its own (arg-roles.mjs readArgs: 2610.21765's \hrule then \vspace{0.5mm}, its length a unit
+//     marked inside), the delimited forms only a package defines (arg-roles.mjs DELIMITED: pgffor's \foreach header in
+//     2610.21377, etoc's \etocdepthtag.toc tag in 2610.21201), a unit's range holding the opening brace it ends with
+//     (Builder.open), no assignment after a declaration that takes no argument or a command the table knows takes no
+//     parameter (`{\bfseries 100}`'s digits text again: 2610.19159, 2608.11884, 2608.25210; `\S4 in` its section number
+//     and word: 2608.15334, 2608.10073, 2608.16190, 2608.04242, 2608.08876, 2608.29558), a package's delimited form only
+//     where its groups are (a \foreach over a macro's list read as before), and the commands that set no ink textless
+//     (\label with cleveref's type, \bibliographystyle, \sethlcolor, \-; LAYOUT 10). Of 185 sources the units of those
+//     twelve papers change (54 cut anew, 5 gone, 48 the same but for their pairs' numbers, found again by seedFrom); every
+//     other paper's units, the wire and its reading back are 19's, the pack's 32 outputs among them: a copy of 19 carries
+//     every unit it holds the source of (live.mjs PIPELINE_CARRIES)
+// 21: a source's line ends read as TeX reads them (latex-front.mjs texText: web2c's input_line ends a line at a CR or an
+//     LF, the LF of a CRLF with its CR), wherever the front end turns a file into TeX text, the guard's brace balance and
+//     the probe's main file. A CRLF source's blank lines were no paragraph's end: 2610.10069v1's introduction (ten
+//     paragraphs) and a whole proof (sixteen) were one unit each, its p23 drawn on p22. Of 180 papers 12 have a CR in a
+//     source, and the units of four change: 2610.10069 (110 -> 193), 2608.10322 (70 -> 88), 2608.12096 (297 -> 304),
+//     2608.02991 (278 -> 285, sn-jnl.cls's CRLF hid its author macros); 2608.12502's marked original alone, written with
+//     LF. Every other paper's units and marked original, the wire and its reading back are 20's, the pack's 32 outputs
+//     among them: a copy of 20 carries every unit it holds the source of (live.mjs PIPELINE_CARRIES), and a unit cut
+//     anew, a CRLF file's paragraphs, is asked again
+// 22: raised with TRANSLATE_VERSION 4 (the boundary rule: a styled pair whose two ends stand where the wire is cut
+//     anyway keeps its markers, mt.mjs classOf), so that copies made before it are not taken whole: a copy of 21, and of
+//     every pipeline before it, carries each unit whose wire the rule leaves as it was (mt.mjs boundaryChanges; live.mjs
+//     PIPELINE_CARRIES): over 137 papers' sources 126 of 36,136 units, in 29 papers, are asked again. The units, the
+//     marked original and the layout file are 21's byte for byte
+// 23: raised with TRANSLATE_VERSION 5 (a display's own stop on the wire right after its marker, mt.mjs serialize's and
+//     serializeTags' `own`), so that copies made before it are not taken whole: a copy of 22, and of every pipeline before
+//     it, carries each unit whose wire the rule leaves as it was (mt.mjs displayStopChanges; live.mjs PIPELINE_CARRIES):
+//     over 180 papers' sources 4,215 of 44,825 units, in 153 papers, are asked again. The units, the marked
+//     original and the layout file are 22's byte for byte
+// 24 (23 is the display stop's, #421): a unit's lines at a page break read by its own words (anchors.mjs placeWith: a
+//     paragraph and its footnote whose marked ranges cross each keep the lines their matched words are on; inOrder: a
+//     formula's row of no word of the unit's is held between its lines, not the walk's end), which the layout file's lines
+//     and the left side's places read (LAYOUT 11): over 57 papers 10 LOST rows found and none lost, 5 units' lines changed
+//     in 4 papers and 5 of 1,637 pages' left parts. The units, the wire and its reading back are 23's, the gate pack's 32
+//     outputs' layouts among them: a copy of 23 carries every unit it holds the source of (live.mjs PIPELINE_CARRIES)
+// 25: a package with no 00README has its toplevel sources guessed (source/paper-meta.mjs): every \documentclass file no
+//     other file includes, that begins a document and whose class is not standalone or subfiles, is one (a file whose path
+//     or basename an inclusion names is none). arXiv's AutoTeX compiles each and joins them, in the order of their paths as
+//     observed on one paper (1008.0072v1), so with several the main file is the first path (no longer a preferred name or
+//     the longer body), and its marked original is compared with arXiv's first pages (page-pass.mjs, layout/paper.mjs:
+//     2610.20030's rule); a wrong order ends in the carry's refusal, as the page rule's before. 1008.0072v1,
+//     a revtex4 paper and its supplement joined in arXiv's PDF (5 + 3 of 8 pages), had no layout, refused for 5 pages of 8.
+//     Of 283 packages scanned one has two such files and no 00README (1008.0072v1), its main file the same under both
+//     orders: the units, the wire and its reading back are 24's, and a copy of 24 carries every unit it holds the source
+//     of (live.mjs PIPELINE_CARRIES). Raised so that such a paper's bundle, now with a layout, is made again under a new
+//     key (VTAG)
+export const PIPELINE_VERSION = '25'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

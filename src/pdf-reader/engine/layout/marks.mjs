@@ -13,16 +13,18 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
+import { lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
+import { symbolText } from '../rules/text-symbols.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
-import { plainTranslated } from '../translate/mt.mjs'
+import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
 import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { NAME_KEYS } from './names.mjs'
+import { fillOfColour } from './colour.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
 
@@ -43,8 +45,8 @@ export const INVISIBLE = new RegExp(String.raw`^(?:~|\\[\\,;:!/\s-]|\\(?:${[...N
 /** a character the scanner keeps as structure, with no ink of its own: an alignment's tab in a table it does not read as
  *  one (aastex's deluxetable between \\startdata and \\enddata), a stray brace, a parameter, a script mark */
 const STRUCTURE = /^[&#^_{}]$/
-/** a displayed formula's source */
-export const DISPLAY = /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
+/** a displayed formula's source: the wire's (mt.mjs), whose own stop it writes after the display's marker */
+export { DISPLAY }
 const MATH = /^(?:\$(?!\$)|\\\(|\\ensuremath(?![A-Za-z@]))/
 const CITE = /^\\(?:[cC]ite[A-Za-z]*|(?:paren|text|auto)cites?)(?![A-Za-z@])/
 const EQREF = /^\\eqref(?![A-Za-z@])/
@@ -364,9 +366,10 @@ function optionalEnd(t, i) {
 /**
  * A babel name a style writes literally, in the definition of the very construct the name's macro would name (nips's
  * abstract environment, `{\large\bf Abstract}`; cvpr's and naacl's \abstract; naacl's thebibliography, `References`):
- * each such literal, where it equals the name's English value (NAME_ENGLISH), wrapped as the macro's own text is
- * (\axtnma{<key>}…\axtnmb{<key>}), in the definition's bodies, but in a command's arguments that are no text set on the
- * page (NOT_TEXT). The identity is the definition's, never the page's; what TeX prints is unchanged, so the carry is.
+ * each such literal, where it equals the name's English value (NAME_ENGLISH), wrapped in the name's marks
+ * (\axtnma{<key>}…\axtnmb{<key>}), in the definition's bodies — with no \relax before them, as a name's macro has
+ * (NAMES_TEX): a literal is the construct's own text, set where it stands, never a name a class expands in an \if —,
+ * but in a command's arguments that are no text set on the page (NOT_TEXT). The identity is the definition's, never the page's; what TeX prints is unchanged, so the carry is.
  * Returns the text, the same where it holds none
  */
 export function literalNames(text) {
@@ -428,25 +431,10 @@ export function literalNames(text) {
 }
 
 // ---- what a paper's symbol sets: LaTeX's own
-/**
- * LaTeX's text symbols (the kernel's and textcomp's commands, as LaTeX defines them in every encoding), each the one
- * character it sets: the layout draws one the marking cannot mark (glued to the word before it, at a unit's head) as
- * text, where arXiv's page shows that character on the unit's line (make.mjs). The prototype's texToText, for text
- */
-export const TEXT_SYMBOLS = Object.freeze({
-  '\\%': '%', '\\&': '&', '\\#': '#', '\\$': '$', '\\_': '_', '\\{': '{', '\\}': '}',
-  '\\textbackslash': '\\', '\\textless': '<', '\\textgreater': '>', '\\textbar': '|', '\\textasciitilde': '~', '\\textasciicircum': '^',
-  '\\textunderscore': '_', '\\textdollar': '$', '\\textbraceleft': '{', '\\textbraceright': '}',
-  '\\S': '\u00a7', '\\P': '\u00b6', '\\textsection': '\u00a7', '\\textparagraph': '\u00b6', '\\dag': '\u2020', '\\ddag': '\u2021',
-  '\\textdagger': '\u2020', '\\textdaggerdbl': '\u2021', '\\copyright': '\u00a9', '\\textcopyright': '\u00a9', '\\textregistered': '\u00ae',
-  '\\texttrademark': '\u2122', '\\pounds': '\u00a3', '\\textsterling': '\u00a3', '\\textdegree': '\u00b0', '\\textbullet': '\u2022',
-  '\\textperiodcentered': '\u00b7', '\\ldots': '\u2026', '\\dots': '\u2026', '\\textellipsis': '\u2026', '\\textendash': '\u2013', '\\textemdash': '\u2014',
-})
-/** a symbol's text: its source one of TEXT_SYMBOLS, alone or followed by an empty group (`\%{}`, `\dots{}`), else null */
-export function symbolText(src) {
-  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src ?? '')
-  return m && Object.hasOwn(TEXT_SYMBOLS, m[1]) ? TEXT_SYMBOLS[m[1]] : null
-}
+// LaTeX's text symbols (TEXT_SYMBOLS, each the one character it sets), the one table the layer reads too
+// (rules/text-symbols.mjs): the layout draws one the marking cannot mark (glued to the word before it, at a unit's head) as
+// text, where arXiv's page shows that character on the unit's line (make.mjs); symbolText, a symbol's text
+export { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 /** a line TeX logs for an error: `! …`, or `<file>:<line>: …` under -file-line-error */
 const TEX_ERROR = /^(?:! |[^\s:]+:\d+: )/
 /**
@@ -492,8 +480,20 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
 // ---------------------------------------------------------------- the TeX
 /**
  * The TeX that goes after MARK_DEF in the marked original. One line, no comment: the paper's lines keep their numbers
- * in the log. Allocates no register and writes nothing to the log: no line of it changes but pdfTeX's warnings of a
- * destination set twice. Each part keeps TeX's lists as the paper's, a destination (a whatsit) beside them:
+ * in the log. Allocates no register and writes to the log one line a unit, its alignment (below), and else nothing: no
+ * line of it changes but pdfTeX's warnings of a destination set twice. Each part keeps TeX's lists as the paper's, a
+ * destination (a whatsit) beside them:
+ * - **The alignment.** For a unit's or a heading's end mark (`<i>e`, `h<i>e`; not a cell's), a message to the log,
+ *   `AXT-ALIGN <i> <mode> <lo> <ls> <ro> <rs> <po> <ps>`: the mode TeX is in (p a paragraph, h an \hbox's restricted
+ *   horizontal mode, v vertical), and the stretch's order and amount of \leftskip, \rightskip and \parfillskip (readAlign):
+ *   the author's own alignment, \centering's both skips infinite and its \parfillskip none. TeX breaks a paragraph's lines
+ *   by the skips in force at its \par, not at the mark, so a paragraph's are read once it ends (a one-shot para/after hook
+ *   set at the mark): `{\centering text}` and a blank line is set justified, the group closed before the paragraph ended.
+ *   The paragraph is the next to end at the mark's group level or below, or one ending deeper inside ordinary groups (a
+ *   list's \par, a font's group) whose groups close back to it in vertical mode, each followed by \aftergroup, as the
+ *   lines probe's (latex-front.mjs PARA_END_TEX): one ending inside a box, a note or a cell is one inside the unit, and the
+ *   hook waits for the next. In an \hbox, or after the paragraph ended (v), the skips at the mark. Through \message and
+ *   hooks, which put nothing in any list
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
  *   MARK_DEF's own \axtmark is gated too, so a caption's start mark is set where its float is and not first in the list
@@ -512,7 +512,11 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  *   On an empty list — the paragraph TeX resumes after a display — it sets nothing, and expands to nothing: a mark there
  *   would keep the empty paragraph between two displays a line, and would end the \ignorespaces amsmath's \] began
  *   (2608.20051, 2608.29782). In vertical mode it waits for the next mark that is set, the unit's start mark at the same
- *   place (layoutMarking marks only a placeholder at or after it).
+ *   place (layoutMarking marks only a placeholder at or after it), but a heading's or a babel name's (\axt@hold): a class
+ *   that runs its heading or name into the paragraph sets it first, as the paragraph starts (\everypar, para/begin), and a
+ *   point set there took the run-in text for the placeholder's (2610.19159's "Task specification." owned by the
+ *   $\mathcal{T}$ that opens the paragraph after it: its row covered the heading, and the paragraph's first line began at
+ *   the heading's start, so that no shared line was found).
  * - **\axtpmm{name}, before an inline formula** (its source begins $, \( or \ensuremath): \axtpma, but set on the empty
  *   list too. The formula's math-on node follows the mark at once, so the paragraph TeX resumes after a display is no
  *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
@@ -531,6 +535,13 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  *   (\lastnodetype 9: TeX's \/ adds no correction after any other whatsit, so one there measures nothing). An adjust
  *   node is nothing to TeX's line breaking, hyphenation and pdfTeX's margin kerning, as a whatsit.
  *   A cell's marks do the same: its \axtmark.
+ * - **The colour, at each colour piece** (\axtcolour{c<i>.<k>}, layoutMarking: right inside a \textcolor's group, right
+ *   after a \color switch): a message to the log, `AXT-COLOUR c<i>.<k> <\current@color>`, the fill the driver paints the
+ *   run with where TeX is (readColours): every colour the paper's own TeX accepts, defined anywhere (a body's \definecolor,
+ *   a group's \colorlet), mixed (blue!60!black) or by a model, exactly as it is set. Through \message, which puts nothing
+ *   in any list, gated as the marks are; nothing where no colour package is loaded. It ends in \ignorespaces: \color ends
+ *   in one, which the mark, unexpandable, would stop short of the spaces after it (2503.06072's `\textcolor{red}{ \underline`
+ *   moved its URL a space right)
  * - **Nothing written.** The three test \protect against \@typeset@protect and gobble their name otherwise, so written
  *   to a file (\protected@write: the aux's labels, the contents lists) or into a mark (running heads) they are gone; in a
  *   PDF string they are gobbled (\pdfstringdefDisableCommands); nameref's titles, which it keeps as strings, have them
@@ -591,22 +602,25 @@ export const POINTS_TEX = [
  *   switch babel makes once it has (its afterextras hook): each name macro the document defines, as a macro of no
  *   parameter, not \protected and not blank (a class may test a name for emptiness: REVTeX's jcp style sets no heading
  *   over an empty \refname, and a wrapped one would make it set an empty heading's room), set to
- *   \axtnma{<key>}<its own text>\axtnmb{<key>}; the macro as it was kept
+ *   \relax\axtnma{<key>}<its own text>\axtnmb{<key>}; the macro as it was kept
  *   (\axt@nmt@<key>, the probe's: nameSection) and the macro wrapped (\axt@nmd@<key>), so that one wrapped already is
  *   left as it is. Local, as babel's own captions are. polyglossia's switches are not followed (no paper of the corpus's
- *   five sets names through it)
+ *   five sets names through it). The \relax first: a class that tests a name's first token in an \if expands the name
+ *   there (REVTeX's \@if@empty\@svsec, `\if!#1!`, over the section number "Appendix A"), and reads a token that sets
+ *   nothing, never the marks' assignments, which ended the test in the middle of their macro: "Incomplete \iffalse", every
+ *   revtex4-2 paper with a numbered appendix stopped (2610.21288, 2610.20595); typeset, the \relax does nothing
  */
 export const NAMES_TEX = [
   '\\gdef\\axt@nmn{0}\\global\\let\\axt@nmopen\\@empty\\global\\let\\axt@nmwait\\@empty\\newif\\ifaxt@nmon\\newif\\ifaxt@nmgo\\def\\axt@nmfigure{figure}\\def\\axt@nmtable{table}',
   '\\def\\axt@nmok#1{\\axt@nmgotrue\\ifdefined\\@captype\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmfigure\\axt@nmgofalse\\fi\\ifx\\axt@nmt\\axt@nmtable\\axt@nmgofalse\\fi\\fi}',
-  '\\def\\axt@nmstart#1{\\xdef\\axt@nmn{\\the\\numexpr\\axt@nmn+1\\relax}\\xdef\\axt@nmopen{#1}\\relax\\axt@put{n\\axt@nmn.#1.s}}',
+  '\\def\\axt@nmstart#1{\\xdef\\axt@nmn{\\the\\numexpr\\axt@nmn+1\\relax}\\xdef\\axt@nmopen{#1}\\relax\\axt@holdtrue\\axt@put{n\\axt@nmn.#1.s}\\axt@holdfalse}',
   '\\def\\axt@nmlate{\\ifx\\axt@nmwait\\@empty\\else\\ifaxt@off\\else\\ifhmode\\expandafter\\axt@nmstart\\expandafter{\\axt@nmwait}\\fi\\fi\\global\\let\\axt@nmwait\\@empty\\fi}',
   '\\protected\\def\\axt@nma#1{\\ifaxt@off\\else\\axt@nmok{#1}\\ifaxt@nmgo\\ifhmode\\axt@nmstart{#1}\\else\\ifvmode\\ifdefined\\AddToHookNext\\xdef\\axt@nmwait{#1}\\AddToHookNext{para/begin}{\\axt@nmlate}\\fi\\fi\\fi\\fi\\fi}',
-  '\\protected\\def\\axt@nmb#1{\\global\\let\\axt@nmwait\\@empty\\ifaxt@off\\else\\ifhmode\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmopen\\global\\let\\axt@nmopen\\@empty\\axt@set{n\\axt@nmn.#1.e}\\fi\\fi\\fi}',
+  '\\protected\\def\\axt@nmb#1{\\global\\let\\axt@nmwait\\@empty\\ifaxt@off\\else\\ifhmode\\def\\axt@nmt{#1}\\ifx\\axt@nmt\\axt@nmopen\\global\\let\\axt@nmopen\\@empty\\axt@holdtrue\\axt@set{n\\axt@nmn.#1.e}\\axt@holdfalse\\fi\\fi\\fi}',
   '\\def\\axtnma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nma\\else\\protect\\axtnma\\fi}',
   '\\def\\axtnmb{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@nmb\\else\\protect\\axtnmb\\fi}',
   '\\ifdefined\\ExplSyntaxOn\\ExplSyntaxOn',
-  '\\cs_new_protected:Npn\\axt@nmw#1#2{\\cs_if_eq:NcF#1{axt@nmd@#2}{\\bool_lazy_all:nT{{\\token_if_macro_p:N#1}{!\\token_if_protected_macro_p:N#1}{!\\token_if_protected_long_macro_p:N#1}{\\str_if_eq_p:ee{\\cs_parameter_spec:N#1}{}}{!\\tl_if_blank_p:o{#1}}}{\\cs_set_eq:cN{axt@nmt@#2}#1\\cs_set:Npx#1{\\exp_not:N\\axtnma{#2}\\exp_not:o{#1}\\exp_not:N\\axtnmb{#2}}\\cs_set_eq:cN{axt@nmd@#2}#1}}}',
+  '\\cs_new_protected:Npn\\axt@nmw#1#2{\\cs_if_eq:NcF#1{axt@nmd@#2}{\\bool_lazy_all:nT{{\\token_if_macro_p:N#1}{!\\token_if_protected_macro_p:N#1}{!\\token_if_protected_long_macro_p:N#1}{\\str_if_eq_p:ee{\\cs_parameter_spec:N#1}{}}{!\\tl_if_blank_p:o{#1}}}{\\cs_set_eq:cN{axt@nmt@#2}#1\\cs_set:Npx#1{\\exp_not:N\\relax\\exp_not:N\\axtnma{#2}\\exp_not:o{#1}\\exp_not:N\\axtnmb{#2}}\\cs_set_eq:cN{axt@nmd@#2}#1}}}',
   '\\cs_new_protected:Npn\\axt@nmwrap#1#2{\\cs_if_exist:cT{#2}{\\exp_args:Nc\\axt@nmw{#2}{#1}}}',
   '\\ExplSyntaxOff',
   `\\def\\axt@nmall{\\ifaxt@nmon${NAME_KEYS.map(k => `\\axt@nmwrap{${k}}{${NAME_MACROS[k]}}`).join('')}\\fi}`,
@@ -658,14 +672,23 @@ const UNMARK_TEX = [
 ].join('')
 
 export const LAYOUT_TEX = [
-  '\\makeatletter\\newif\\ifaxt@off\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
+  '\\makeatletter\\newif\\ifaxt@off\\newif\\ifaxt@hold\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
-  '\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi}',
+  '\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifaxt@hold\\else\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi\\fi}',
   '\\def\\axt@icm{\\axt@icr\\ifnum\\lastnodetype=12 \\xdef\\axt@icv{\\the\\lastkern}\\unkern\\ifdim\\axt@icv=\\z@\\else\\global\\axt@sigtrue\\fi\\fi}',
   '\\def\\axt@ic{\\global\\axt@sigfalse\\ifcase\\lastnodetype\\axt@icm\\or\\or\\or\\or\\or\\or\\global\\axt@sigtrue\\or\\axt@icm\\or\\or\\axt@icm\\fi}',
   '\\def\\axt@put#1{\\axt@ic\\axt@mark{#1}\\ifaxt@sig\\vadjust{}\\fi}',
   '\\def\\axt@ift#1#2\\relax{\\if t#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
-  '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',
+  '\\def\\axt@ags{\\the\\gluestretchorder\\leftskip\\space\\the\\gluestretch\\leftskip\\space\\the\\gluestretchorder\\rightskip\\space\\the\\gluestretch\\rightskip\\space\\the\\gluestretchorder\\parfillskip\\space\\the\\gluestretch\\parfillskip}',
+  '\\def\\axt@agnow#1#2{\\message{^^JAXT-ALIGN #1 #2\\space\\axt@ags^^J}}\\def\\axt@agcap#1{\\expandafter\\xdef\\csname axt@ag@#1\\endcsname{\\axt@ags}}\\def\\axt@agmsg#1{\\message{^^JAXT-ALIGN #1 p \\csname axt@ag@#1\\endcsname^^J}}',
+  '\\def\\axt@agplain{\\ifnum\\ifnum\\currentgrouptype=1 1\\else\\ifnum\\currentgrouptype=14 1\\else0\\fi\\fi=1 \\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
+  '\\def\\axt@agover#1#2{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agcap{#1}\\axt@agafter{#1}{#2}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}}\\else\\axt@agcap{#1}\\axt@agmsg{#1}\\fi}',
+  '\\def\\axt@agafter#1#2{\\expandafter\\gdef\\csname axt@agb@#1\\endcsname{\\axt@agback{#1}{#2}}\\expandafter\\aftergroup\\csname axt@agb@#1\\endcsname}',
+  '\\def\\axt@agback#1#2{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agafter{#1}{#2}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}}\\else\\ifhmode\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}\\else\\axt@agmsg{#1}\\fi\\fi}',
+  '\\def\\axt@agpar#1{\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}}}\\axt@agt}',
+  '\\def\\axt@alg#1e#2\\@nil{\\ifx\\relax#2\\relax\\else\\ifhmode\\ifinner\\axt@agnow{#1}h\\else\\ifdefined\\AddToHookNext\\axt@agpar{#1}\\fi\\fi\\else\\axt@agnow{#1}v\\fi\\fi}',
+  '\\def\\axt@align#1{\\axt@ift#1\\relax{}{\\axt@alg#1e\\@nil}}',
+  '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
   '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@tg\\or\\expandafter\\axt@tk\\or\\expandafter\\axt@tp\\fi}',
   '\\def\\axt@tg{\\edef\\axt@back{\\hskip\\the\\lastskip\\relax\\axt@back}\\unskip\\axt@take}',
@@ -685,21 +708,98 @@ export const LAYOUT_TEX = [
   '\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}',
   '\\protected\\def\\axt@pm#1{\\ifaxt@off\\else\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1}\\fi\\fi\\fi}',
-  '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\ifhmode\\relax\\axt@put{#1}\\fi\\fi}',
+  '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}',
+  '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}',
   '\\def\\axtpma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pma\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpmm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pmm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axthmark{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hm\\else\\expandafter\\@gobble\\fi}',
+  '\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
   '\\AddToHook{package/gettitlestring/after}{\\let\\axt@title@of\\GetTitleString\\long\\def\\GetTitleString#1{\\def\\axt@title{#1}\\axt@unmark\\axt@title\\expandafter\\axt@title@of\\expandafter{\\axt@title}}}',
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
-  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
+  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtcolour\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
+  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
   UNMARK_TEX,
   NAMES_TEX,
   POINTS_TEX,
   '\\makeatother',
 ].join('')
+
+/** POINTS_TEX's point under `latex` (latex-front.mjs dviEngine), where pdfTeX writes no PDF itself and its \\pdfliteral sets
+ *  nothing: xdvipdfmx's, as POINTS_TEX sets it under XeTeX, a `pdf:code` special, the same rendering intent in the content
+ *  stream; pdfTeX's where it writes the PDF. DVI_LAYOUT_TEX's last part */
+export const DVI_POINTS_TEX = '\\let\\axt@pdfpoint\\axt@point\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\axt@pdfpoint{#1}\\else\\special{pdf:code /axt-#1 ri}\\fi}'
+/**
+ * LAYOUT_TEX under `latex` (latex-front.mjs dviEngine: arXiv's DVI compiler, the DVI made a PDF by dvipdfmx): where pdfTeX
+ * writes no PDF itself, its destination and its points are xdvipdfmx's, as LAYOUT_TEX sets them under XeTeX — MARK_DEF's
+ * XYZ `pdf:dest` (DVI_MARK_DEF's \\axt@dvidest, which goes before LAYOUT_TEX) and a `pdf:code` point (DVI_POINTS_TEX) —, and
+ * where it does, LAYOUT_TEX's own (its FitR). Each kind of node TeX sets is the one it sets under XeTeX, a whatsit, so the
+ * marks set nothing else (the native cases, lab/pdf/spikes/layout-marks-cases.mjs ONLY=dvi, hold every text item in place).
+ * After LAYOUT_TEX, for such a paper alone (live.mjs originalFiles, probeFiles): every other engine's files are byte for byte
+ * as before. One line, no comment
+ */
+export const DVI_LAYOUT_TEX = `\\makeatletter\\let\\axt@pdfdo\\axt@destonly\\def\\axt@destonly#1{\\ifnum\\pdfoutput>0 \\axt@pdfdo{#1}\\else\\axt@dvidest{#1}\\fi}${DVI_POINTS_TEX}\\makeatother`
+
+/** a unit's alignment as the marks file holds it (readAlign): centred, flush left, flush right, justified */
+export const ALIGN_CODES = Object.freeze(['c', 'l', 'r', 'j'])
+/** the code of a paragraph's skips: both sides stretch and \parfillskip none past them, centred (\centering, a center
+ *  environment, a class's centred heading); \rightskip alone, flush left (\raggedright, ragged2e's \RaggedRight); \leftskip
+ *  alone, flush right; neither, justified (both sides with a \parfillskip as infinite as theirs: its last line not centred) */
+const alignCode = (lo, ls, ro, rs, po, ps) => {
+  const L = lo > 0 || ls > 0, R = ro > 0 || rs > 0, F = po > 0 || ps > 0
+  if (L && R) return !F || po < Math.min(lo, ro) ? 'c' : 'j'
+  return L ? 'r' : R ? 'l' : 'j'
+}
+/**
+ * Each unit's alignment as TeX set its paragraph, from the marked original's log (LAYOUT_TEX's AXT-ALIGN at its end mark, the
+ * last pass's: lastTexLog): [[unit, code]], ids rising, the code ALIGN_CODES'. A unit's last line counts (a caption measured
+ * in a box and then set as a paragraph: the paragraph's). One TeX set in an \hbox (mode h: a caption \@makecaption centres
+ * on one line, \centerline, a table's cell) tells nothing of its alignment, and has no entry; nor has one with no line. A
+ * line not of the form is passed over: a log cut short or a template that redefines what the marks sit in gives fewer
+ * entries, never a refusal
+ */
+export function readAlign(log) {
+  const last = new Map()
+  // (a line TeX wrapped at its 79 characters, max_print_line, joined back: the message starts a line of its own)
+  const text = lastTexLog(typeof log === 'string' ? log : '').replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
+  // (an order 0 to 3 in pdfTeX and XeTeX, normal to filll; 0 to 4 in LuaTeX, whose fi is 1 and fil 2)
+  for (const m of text.matchAll(/^AXT-ALIGN h?(\d{1,9}) ([phv]) ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt$/gm)) {
+    const v = [m[3], m[4], m[5], m[6], m[7], m[8]].map(Number)
+    if (!v.every(Number.isFinite)) continue
+    last.set(Number(m[1]), m[2] === 'h' ? null : alignCode(...v))
+  }
+  return [...last].filter(([, c]) => c !== null).sort((a, b) => a[0] - b[0])
+}
+
+/** a colour piece's name in the log, `c<unit>.<k>` */
+const COLOUR_LINE = /^AXT-COLOUR c(\d{1,9})\.(\d{1,9}) (.*)$/
+/** a log line TeX wraps at (max_print_line) */
+const PRINT_LINE = 79
+/**
+ * Each colour piece's fill as TeX set its run, from the marked original's log (LAYOUT_TEX's AXT-COLOUR at the piece, the
+ * last pass's: lastTexLog): [[unit, k, 0xRRGGBB]], rising by unit and k, the driver's colour string read by colour.mjs
+ * fillOfColour. A piece TeX set twice in two colours (a moving argument typeset in two places) has no entry, nor has one
+ * whose string is of no form known (a dvips named colour): its colour is not known. A line TeX wrapped at its 79 characters is
+ * joined back
+ */
+export function readColours(log) {
+  const lines = lastTexLog(typeof log === 'string' ? log : '').split('\n'), seen = new Map(), twice = new Set()
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]
+    if (!line.startsWith('AXT-COLOUR ')) continue
+    while (line.length % PRINT_LINE === 0 && i + 1 < lines.length && lines[i + 1] !== '') line += lines[++i]
+    const m = COLOUR_LINE.exec(line)
+    if (!m) continue
+    const key = `${m[1]}.${m[2]}`, rgb = fillOfColour(m[3].trim())
+    // (a piece set in two colours, or once in a form not known, has none, whatever comes after)
+    if (seen.has(key) && seen.get(key) !== rgb) twice.add(key)
+    seen.set(key, rgb)
+  }
+  const out = []
+  for (const [key, rgb] of seen) if (rgb !== null && !twice.has(key)) { const [i, k] = key.split('.').map(Number); out.push([i, k, rgb]) }
+  return out.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+}
 
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
@@ -708,6 +808,12 @@ export const LAYOUT_TEX = [
 export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d+[abt]|n\d+\.[a-z]{1,16}\.[se])$/
 
 // ---------------------------------------------------------------- the marking
+/** a colour piece: a \textcolor's open (`\textcolor{blue!60!black}{`, `\textcolor[rgb]{0,0,1}{`) or a \color switch
+ *  (`\color{red}`, `\color[HTML]{245B60}`): its run's text is set in the colour, which the marked original writes at it
+ *  (LAYOUT_TEX's AXT-COLOUR, readColours) */
+const COLOUR_OPEN = /^\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{$/, COLOUR_SWITCH = /^\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}$/
+export const colourPieceOf = p => (p?.t === 'open' && COLOUR_OPEN.test(p.src ?? '')) || (p?.t === 'ph' && COLOUR_SWITCH.test(p.src ?? ''))
+
 /** patch's own test of the pieces that are always set on the line, where a unit's start mark goes before one that opens
  *  the unit (latex-front.mjs INLINE: kept equal, which layout-marks.test.ts holds against patch itself) */
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
@@ -818,6 +924,8 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
       const after = last
       if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) last = p
+      // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
+      if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
       const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !free(after, p)) ? classOf(p) : null
       if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
@@ -850,10 +958,15 @@ export const MARKS_DEPTH = 3
  *  \lineskip and \lineskiplimit (`marking.lineskip`, PDF units, readSkipProbe: one pair, at the body's start); 6 an inline
  *  formula's opening mark set on the empty list after a display (\axtpmm), and `owned` by stream.mjs's OWNED_HOW of a
  *  piece past its column's end and of a display group (a later display of one 'in the display before it'); 7 the marked compile's Link annotations that name a destination (`links`:
- *  rectangle, the glyphs under it, their text), which a reference the matcher misses is placed by */
-export const MARKS_SCHEMA = 7
+ *  rectangle, the glyphs under it, their text), which a reference the matcher misses is placed by; 8 each unit's alignment as
+ *  TeX set its paragraph (`align`: LAYOUT_TEX's AXT-ALIGN at its end mark, readAlign), which the maker's centred flag is,
+ *  and each colour piece's fill as TeX set its run (`colours`: AXT-COLOUR at the piece, readColours) */
+export const MARKS_SCHEMA = 8
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
-const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'words', 'tokens', 'chars', 'owned', 'links']
+const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
+/** the keys a marks file holds: KEYS, and `colours` where a colour piece has a fill (a file of before, or of a paper with
+ *  none, is the bytes it was) */
+const keysOf = m => (isObject(m) && Object.hasOwn(m, 'colours') ? [...KEYS, 'colours'] : KEYS)
 /** the marked compile's links (`links`, the link-anchor locator's: make.mjs phOf) at most: a paper's, past which it has none;
  *  a destination's name's code units; a link's text's, past which it is kept with no glyph (n 0: counted for the order, never
  *  an anchor) */
@@ -1144,8 +1257,10 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     if (isInteger(page, 1, pages)) destPage.set(name, page)
     named.push([name, page, x, y])
   }
-  // (the log's line counts, read before any page: a maker reading the pages as they come takes them with the head)
+  // (the log's line counts and the units' alignments, read before any page: a maker reading the pages as they come takes them
+  // with the head)
   const lines = [...readLines(log)].filter(([id, l]) => isInteger(id, 0, Number.MAX_SAFE_INTEGER) && isInteger(l.lines, 0, LINES_MAX)).sort((a, b) => a[0] - b[0]).map(([id, l]) => [id, l.lines])
+  const align = readAlign(log), colours = readColours(log)
   // the pages whose links are read: those a placeholder that names a link (linkablePiece) has a point on, the pages between its
   // two points too. Any other page's links are no piece's, and the link-anchor locator never pairs them (make.mjs): PDF.js reads
   // a page's annotations at a cost of its own
@@ -1175,7 +1290,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   // (a paper with no links reads no further page's and keeps none: each page's links are then none, as they would be)
   if (noLinks) annotsAt.clear()
   const links = noLinks ? null : { count: linkCount, dests: [...linkDests].sort() }
-  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, links } }
+  yield { head: { pages, marking, dropped, set, named, destPage, pageOf: pageOfName, unitMarks, lines, align, colours, links } }
   // ---- each page, once
   const views = [], wordOf = new Map()
   let words = 0
@@ -1273,7 +1388,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     yield { page: { p, view, tokens, words: fresh, owned, links, dark, found: stream ? stream.found() : p + 1, repeats: stream ? stream.repeats() : [] } }
   }
   if (stream) stream.end(take)
-  yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines } }
+  yield { end: { owned: found, twice: stream ? stream.twice() : new Set(), lines, align, colours } }
 }
 
 /**
@@ -1339,7 +1454,7 @@ export async function readMarked(marked, log, o) {
       owned.push(row)
     }
   }
-  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, words, tokens, chars, owned, links: links ?? [] }, unitMarks, dark }
+  return { marks: { schema: MARKS_SCHEMA, engine: o.engine, marking, pages, views, columns, marks, dropped, lines: end.lines, align: end.align, colours: end.colours, words, tokens, chars, owned, links: links ?? [] }, unitMarks, dark }
 }
 
 /** whether a destination the head names is a mark of the marks file: on a page of the paper, at numbers within its view
@@ -1364,7 +1479,7 @@ export function columnsOf(head) {
 export function marksOfHead(head, engine) {
   // (its links none yet, each page's added as it is read; how many the paper holds and their destinations' names the head's,
   // for the maker's link-anchor locator: none where the paper has no links)
-  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, words: [], tokens: [], chars: [], owned: [], links: [], linkCount: head.links?.count ?? 0, linkDests: head.links?.dests ?? [] }
+  return { schema: MARKS_SCHEMA, engine, marking: head.marking, pages: head.pages, views: [], columns: columnsOf(head), marks: [], dropped: head.dropped, lines: head.lines, align: head.align, colours: head.colours ?? [], words: [], tokens: [], chars: [], owned: [], links: [], linkCount: head.links?.count ?? 0, linkDests: head.links?.dests ?? [] }
 }
 
 /** a point read twice on pages apart (markedPages' `twice`): its piece 'a mark set twice', owning nothing, nor the displays
@@ -1423,9 +1538,9 @@ function fitted(m) {
 
 /** the marks file as written: the schema's keys in order, numbers to a hundredth */
 export function encodeLayoutMarks(m) {
-  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, words, tokens, chars, owned, links } = m
+  const { schema, engine, marking, pages, views, columns, marks, dropped, lines, align, colours, words, tokens, chars, owned, links } = m
   return JSON.stringify({
-    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, words,
+    schema, engine, marking: { classes: marking.classes, switches: marking.switches, inkless: marking.inkless, texts: marking.texts, names: marking.names, lineskip: marking.lineskip === null ? null : marking.lineskip.map(r2) }, pages, views: views.map(r2), columns, marks: marks.map(([n, p, x, y]) => [n, p, r2(x), r2(y)]), dropped, lines, align, ...(colours?.length ? { colours } : {}), words,
     tokens: tokens.map((v, i) => (i % 6 === 0 || i % 6 === 5 ? v : r2(v))), chars,
     owned: owned.map(ownedRow),
     links: (links ?? []).map(e => e.map((v, j) => (j >= 2 && j <= 7 ? r2(v) : v))),
@@ -1436,7 +1551,8 @@ const ownedRow = e => e.map((v, j) => (j < 3 || (j - 3) % 5 === 0 || (j < 3 + 5 
 
 /** bytes, then values and nesting, then JSON.parse, then every bound; throws LayoutRefusal, naming where */
 export function parseLayoutMarks(bytes) {
-  const m = checkKeys(boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH }), KEYS, '')
+  const json = boundedJson(bytes, { cap: MARKS_CAP, values: MARKS_VALUES, depth: MARKS_DEPTH })
+  const m = checkKeys(json, keysOf(json), '')
   if (m.schema !== MARKS_SCHEMA) throw new LayoutRefusal('schema', `not ${MARKS_SCHEMA}`)
   if (!ENGINES.includes(m.engine)) throw new LayoutRefusal('engine', `not one of ${ENGINES.join(', ')}`)
   const marking = checkKeys(m.marking, MARKING_KEYS, 'marking')
@@ -1474,6 +1590,25 @@ export function parseLayoutMarks(bytes) {
     if (!isInteger(e[0], id + 1, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`lines[${i}][0]`, 'not an id above the last')
     if (!isInteger(e[1], 0, LINES_MAX)) throw new LayoutRefusal(`lines[${i}][1]`, `not a count 0 to ${LINES_MAX}`)
     id = e[0]
+  }
+  if (!Array.isArray(m.align)) throw new LayoutRefusal('align', 'not an array')
+  id = -1
+  for (let i = 0; i < m.align.length; i++) {
+    const e = m.align[i]
+    if (!Array.isArray(e) || e.length !== 2) throw new LayoutRefusal(`align[${i}]`, 'not [id, code]')
+    if (!isInteger(e[0], id + 1, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`align[${i}][0]`, 'not an id above the last')
+    if (!ALIGN_CODES.includes(e[1])) throw new LayoutRefusal(`align[${i}][1]`, `not one of ${ALIGN_CODES.join(', ')}`)
+    id = e[0]
+  }
+  // (each colour piece's fill: a key only where one has a row, none read as none)
+  if (!Object.hasOwn(m, 'colours')) m.colours = []
+  else if (!Array.isArray(m.colours) || m.colours.length === 0) throw new LayoutRefusal('colours', 'not an array of a row or more')
+  for (let i = 0; i < m.colours.length; i++) {
+    const e = m.colours[i], before = m.colours[i - 1]
+    if (!Array.isArray(e) || e.length !== 3) throw new LayoutRefusal(`colours[${i}]`, 'not [id, k, rgb]')
+    if (!isInteger(e[0], 0, Number.MAX_SAFE_INTEGER) || !isInteger(e[1], 0, Number.MAX_SAFE_INTEGER)) throw new LayoutRefusal(`colours[${i}]`, 'not a unit and a piece')
+    if (before && (e[0] < before[0] || (e[0] === before[0] && e[1] <= before[1]))) throw new LayoutRefusal(`colours[${i}]`, 'not a piece after the last')
+    if (!isInteger(e[2], 0, 0xffffff)) throw new LayoutRefusal(`colours[${i}][2]`, 'not a fill 0 to 0xFFFFFF')
   }
   if (!Array.isArray(m.words) || m.words.length > WORDS_MAX) throw new LayoutRefusal('words', `not an array of at most ${WORDS_MAX}`)
   for (let i = 0; i < m.words.length; i++) { const w = m.words[i]; if (typeof w !== 'string' || w.length < 1 || w.length > WORD_MAX) throw new LayoutRefusal(`words[${i}]`, `not a word of 1 to ${WORD_MAX} code units`) }

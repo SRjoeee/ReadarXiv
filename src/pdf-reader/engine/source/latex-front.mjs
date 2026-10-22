@@ -19,6 +19,18 @@ export const normalizePath = p => { const out = []; for (const seg of p.split('/
 export const jobName = main => main.slice(main.lastIndexOf('/') + 1).replace(/\.[^.]*$/, '')
 /** bytes as a string of the same code units (latin1, byte for byte): the scanner's view of a source */
 export const latin1 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
+/**
+ * A source file's bytes as TeX reads its lines: latin1, each line's end an LF. web2c's input_line (texmfmp.c) ends a line
+ * at a CR or an LF and takes the LF of a CRLF with its CR, so a CR, an LF or a CRLF is one line's end, and a blank line
+ * a paragraph's end whatever the editor wrote. Every rule of the front end reads lines by their LF: a CRLF source's
+ * blank lines were none, and 2610.10069v1's introduction (ten paragraphs) and a whole proof (sixteen) were one unit
+ * each. A file the front end writes back (patch: its units' marks and translations) is written from this text, with LF,
+ * which TeX reads the same. Every other file is copied as it is, a class or a package the front end read among them;
+ * the passes live.mjs runs over such a copy (literalNames, stripPdftexOption, localizeNames) give the same text on its
+ * own line ends as on this one (the 12 CR files of 180 papers, 2026-10-20). So do the guard's brace balance and the
+ * probe of the main file, which read through this too
+ */
+export const texText = bytes => latin1(bytes).replace(/\r\n?/g, '\n')
 export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
 const utf8Bytes = s => new TextEncoder().encode(s)
 const bytesOf = (s, enc) => (enc === 'utf8' ? utf8Bytes(s) : latin1Bytes(s))
@@ -78,7 +90,7 @@ const LINE_ENVS = /^(?:verbatim|Verbatim|BVerbatim|LVerbatim|SaveVerbatim|Verbat
  *  \\let\\x\\comment) */
 const lineEnvsOf = texts => {
   const text = texts.map(uncommented).join('\n'), out = new Set()
-  for (const m of text.matchAll(/\\(?:(?:exclude|include|special|general|process)comment|(?:Re)?CustomVerbatimEnvironment|DefineVerbatimEnvironment|lstnewenvironment|(?:new|renew)tcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)) out.add(m[1].trim())
+  for (const m of text.matchAll(/\\(?:(?:exclude|include|special|general|process)comment|(?:Custom|Recustom|Define)VerbatimEnvironment|lstnewenvironment|(?:new|renew)tcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)) out.add(m[1].trim())
   for (const m of text.matchAll(/\\(?:re)?newenvironment\s*\*?\s*\{([^}]+)\}\s*(?:\[[^\]]*\]\s*)*\{\s*\\(?:comment|verbatim|Verbatim|BVerbatim|LVerbatim|lstlisting|minted)(?![A-Za-z])|\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:comment|verbatim|Verbatim)(?![A-Za-z])/g)) out.add((m[1] ?? m[2]).trim())
   // minted's \\newminted[name]{lexer}{options}: the environment `name`, else <lexer>code
   for (const m of text.matchAll(/\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g)) out.add(m[1]?.trim() || `${m[2].trim()}code`)
@@ -105,21 +117,74 @@ const setsDisplay = (begin, end) => {
  *  math: read as prose, 2310.20360's 89 eqsplit displays were cut into units, whose marks came between a subscript's _
  *  and its operand (\\bfm_\\leavevmode\\axtmark{…}1: "Missing { inserted"). Not one whose begin code sets a display of
  *  its own and closes it, its body the text after it */
-const displayEnvsOf = texts => {
+const displayEnvsOf = defs => new Set([...defs].filter(([, d]) => d.begin !== undefined && setsDisplay(d.begin, d.end)).map(([name]) => name))
+/** a listing package's definers of an environment (listings', fancyvrb's, tcolorbox's), its name in group 1; then
+ *  minted's \\newminted[name]{lexer}, and a command \\let to a verbatim (\\let\\x\\verbatim, not \\verbatim@font) */
+const LISTING_DEFINERS = /\\(?:lstnewenvironment|(?:Define|Custom|Recustom)VerbatimEnvironment|(?:re)?newtcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g
+const NEWMINTED = /\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g
+const LET_VERBATIM = /\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:verbatim|Verbatim)(?![A-Za-z@])/g
+const ENV_DEFINERS = /\\(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment)\s*\*?\s*\{([^}]+)\}/g
+/**
+ * The paper's own environments, by name, as the last of their definitions in its files leaves them, as TeX takes them
+ * (\\provide… defines nothing a definition before it made): `{ begin, end }`, the code of one \\newenvironment or an
+ * xparse definer made; `{ listing: true }`, one a listing package's definer made (minted's \\newminted{python}{} the
+ * environment pythoncode, \\newminted[name]{…} `name`, each with its star) or a \\let to a verbatim. A \\renewenvironment
+ * after \\lstnewenvironment{snippet} makes snippet the paper's own again
+ */
+const envDefinitionsOf = texts => {
   const out = new Map()
+  const define = (name, def, provide) => { if (!(provide && out.has(name))) out.set(name, def) }
   for (const t of texts.map(uncommented)) {
-    for (const m of t.matchAll(/\\(?:(?:re|provide)?newenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment)\s*\*?\s*\{([^}]+)\}/g)) {
+    const at = []
+    for (const m of t.matchAll(LISTING_DEFINERS)) at.push([m.index, () => define(m[1].trim(), { listing: true }, /^\\Provide/.test(m[0]))])
+    for (const m of t.matchAll(NEWMINTED)) { const name = m[1]?.trim() || `${m[2].trim()}code`; at.push([m.index, () => { define(name, { listing: true }); define(`${name}*`, { listing: true }) }]) }
+    for (const m of t.matchAll(LET_VERBATIM)) at.push([m.index, () => define(m[1], { listing: true })])
+    for (const m of t.matchAll(ENV_DEFINERS)) {
       const doc = m[0].includes('DocumentEnvironment'), name = m[1].trim()
-      if (/^\\(?:provide|Provide)/.test(m[0]) && out.has(name)) continue
       let k = skipSpaces(t, m.index + m[0].length)
       // \\newenvironment's [n][default]; a document environment's argument specification, a group
       if (doc) { if (t[k] !== '{') continue; const g = matchGroup(t, k); if (g < 0) continue; k = skipSpaces(t, g) } else for (let n = 0; n < 2 && t[k] === '['; n++) { const e = matchGroup(t, k, '[', ']'); if (e < 0) break; k = skipSpaces(t, e) }
       if (t[k] !== '{') continue
       const b = matchGroup(t, k), k2 = b > 0 ? skipSpaces(t, b) : -1, e = t[k2] === '{' ? matchGroup(t, k2) : -1
-      if (e > 0) out.set(name, setsDisplay(t.slice(k + 1, b - 1), t.slice(k2 + 1, e - 1)))
+      if (e > 0) at.push([m.index, () => define(name, { begin: t.slice(k + 1, b - 1), end: t.slice(k2 + 1, e - 1) }, /^\\(?:provide|Provide)/.test(m[0]))])
+    }
+    for (const [, run] of at.sort((a, b) => a[0] - b[0])) run()
+  }
+  return out
+}
+/** the code environments a package defines, whose body the paper's own may open (codeEnvsOf) */
+const LISTINGS = new Set(['verbatim', 'Verbatim', 'BVerbatim', 'LVerbatim', 'lstlisting', 'minted', 'alltt', 'tcblisting'])
+/**
+ * The environments a paper defines as code (envDefinitionsOf, by their last definition), whose body stays as the paper
+ * has it and is never a unit, as a listing package's own are not (SKIP_ENVS): `code`, one a listing package's definer
+ * made or a \\let to a verbatim; one of the paper's own whose begin code opens a code environment — a package's
+ * (LISTINGS: \\verbatim, \\begin{Verbatim}), or another of these —; and one whose begin code sets its body as alltt
+ * does, in typewriter type with its lines obeyed. Only what the begin code does where it stands: a definition in it
+ * (\\def\\code{\\begin{alltt}}, \\newcommand\\code[1]{{\\tt ##1}}) does nothing until it is used (texCommands'
+ * `inDef`). `lines`, those of them TeX reads by lines, as the verbatim they open or the listing package that made them
+ * (LINE_ENVS): nothing of the reader's on their \\begin's and \\end's lines, their \\end{document} none. 2610.19159's
+ * transcripts (\\newenvironment{trajectoryCode}{\\begingroup…\\ttfamily…\\obeylines…}{…}): 832 units of code lines
+ * and terminal output sent to the translator, their ASCII punctuation sent back full-width. Not typewriter type alone (a
+ * prompt box, whose words are prose: 2608.03063's seqbox) nor lines obeyed alone (verse)
+ */
+const codeEnvsOf = defs => {
+  const code = new Set([...defs].filter(([, d]) => d.listing).map(([name]) => name)), lines = new Set(code)
+  const opened = new Map()
+  for (const [name, d] of defs) {
+    if (d.begin === undefined) continue
+    const cmds = texCommands(d.begin).filter(c => !c.inDef), has = n => cmds.some(c => c.name === n)
+    if ((has('ttfamily') || has('tt')) && has('obeylines')) code.add(name)
+    opened.set(name, cmds.flatMap(c => (c.name !== 'begin' ? [c.name] : c.env ? [c.env, c.env.replace(/\*$/, '')] : [])))
+  }
+  // an environment that opens one found here is found in turn: until a pass finds none
+  for (let found = true; found;) {
+    found = false
+    for (const [name, names] of opened) {
+      if (!code.has(name) && names.some(n => LISTINGS.has(n) || code.has(n))) { code.add(name); found = true }
+      if (!lines.has(name) && names.some(n => (LISTINGS.has(n) && LINE_ENVS.test(n)) || lines.has(n))) { lines.add(name); found = true }
     }
   }
-  return new Set([...out].filter(([, display]) => display).map(([name]) => name))
+  return { code, lines }
 }
 /** whether `env` is read by lines (LINE_ENVS, or the paper's own `lineEnvs`: by its name, a star in it as defined
  *  (`\\DefineVerbatimEnvironment{Code*}`), or by the name its star is added to) */
@@ -394,7 +459,21 @@ function commandArgs(s, i, name, to = s.length) {
     if (params.length === 1 && params[0].shape === '=') return { args: [], end: i, known: true }
     const r = readArgs(s, i, params, to)
     if (r.complete) {
-      return { args: r.args.map(a => ({ ...a, kind: a.shape === '[' ? 'opt' : 'req' })), end: r.end, known: true }
+      const args = r.args.map(a => ({ ...a, kind: a.shape === '[' ? 'opt' : 'req' }))
+      // a last argument TeX takes as one token that is a command it sets (text, content, an untyped argument): TeX hands
+      // the command the token, which reads its own arguments where it stands, so the call ends past them
+      // (\\raise2pt\\hbox{…}) — the walk never ends a placeholder between a command and its arguments, where a lead or a
+      // mark would be written. Taken alone, a \\begin read as a box's content left its {center} a group of text, and the
+      // lead was written inside the environment's name (#407's review). The token's own groups of text and content come
+      // with it (`kind` 'inner', no `param`: no argument of this command's), so that the walk sets their words as it
+      // would the token's call alone: its pair opens with `\\raise2pt\\hbox{`, and nothing goes between the two
+      const last = args.at(-1), token = last && last.end === r.end && last.kind === 'req' && 'tca'.includes(last.role) && s[last.start] === '\\' ? commandAt(s, last.start) : null
+      if (token && token.end === last.end && /^[A-Za-z@]+$/.test(token.name)) {
+        const own = commandArgs(s, token.end, token.name, to)
+        const inner = own.known ? own.args.filter(a => (a.kind === 'req' || a.kind === 'inner') && s[a.start] === '{' && (a.role === 't' || a.role === 'c')).map(({ param: _, ...a }) => ({ ...a, kind: 'inner' })) : []
+        if (own.end > last.end) return { args: [...args.slice(0, -1), { ...last, end: own.end }, ...inner], end: own.end, known: true }
+      }
+      return { args, end: r.end, known: true }
     }
   }
   return argsAfter(s, i)
@@ -614,7 +693,9 @@ class Builder {
   text(s, start, end) { if (!this.cur) { if (!s.trim()) return; this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] } } this.cur.pieces.push({ t: 'text', s }); this.cur.end = end }
   /** `display`: a formula set on lines of its own (displayOutside) */
   ph(src, start, end, display = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'ph', src }; if (display) this.displays.add(p); this.cur.pieces.push(p); this.cur.end = end; return true }
-  open(src, start) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId; this.cur.pieces.push({ t: 'open', id, src }); return id }
+  /** (the unit's range holds the opening: a unit that ends with it, its close in the next unit, is written over it, which
+   *  else stayed in the source after the unit's range and was set twice — a pgffor loop's `{{`, 2610.21377) */
+  open(src, start) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId; this.cur.pieces.push({ t: 'open', id, src }); this.cur.end = Math.max(this.cur.end, start + src.length); return id }
   close(id, src, end) { if (this.cur) { this.cur.pieces.push({ t: 'close', id, src }); this.cur.end = end } }
   /** a letter an accent made (accentLetter): text, its UTF-8 bytes read as the source's are, and `src` the accent as
    *  the source writes it — what is set wherever the unit is set untranslated (patch). Joined with its word at flush */
@@ -950,7 +1031,7 @@ function walk(s, from, to, b, ctx) {
     }
     if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e, name === '['); i = e; continue } }
     const shorthand = ctx.envMacros.get(name)
-    if (shorthand?.side === 'begin' && (MATH_ENVS.test(shorthand.env) || ctx.displayEnvs.has(shorthand.env) || SKIP_ENVS.test(shorthand.env))) {
+    if (shorthand?.side === 'begin' && (MATH_ENVS.test(shorthand.env) || ctx.displayEnvs.has(shorthand.env) || SKIP_ENVS.test(shorthand.env) || ctx.skipEnvs.has(shorthand.env))) {
       // the block ends at the partner macro or at a literal \end{env}
       const ends = [...ctx.envMacros].filter(([, v]) => v.side === 'end' && v.env === shorthand.env).map(([k]) => k)
       const re = new RegExp(`\\\\(?:${ends.map(e => e.replace(/[@*]/g, m => `\\${m}`)).join('|') || '(?!)'})(?![A-Za-z@])|\\\\end\\s*\\{${shorthand.env.replace(/\*/g, '\\*')}\\}`, 'g')
@@ -1176,8 +1257,12 @@ function walk(s, from, to, b, ctx) {
     let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : args
     // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
     if (args?.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
-    // TeX's own assignment and glue syntax belongs to the command: \looseness=-1, \parindent=0pt, \vskip 3pt plus 1fil, \penalty-100
-    if (e === end && /^[A-Za-z@]+$/.test(name)) { const m = s.slice(e, Math.min(to, e + 120)).match(name === 'hrule' || name === 'vrule' ? RULE_SPEC : ASSIGNMENT); if (m) e += m[0].length }
+    // TeX's own assignment and glue syntax belongs to the command: \looseness=-1, \parindent=0pt, \vskip 3pt plus 1fil,
+    // \penalty-100 — to a register or a primitive that reads a value, never to a declaration that takes no argument
+    // (NO_ARGS) or a command the table knows takes no parameter: `{\bfseries 100}`, `\noindent 38 papers` and `\noindent
+    // = 40` set their digits, which a placeholder took out of the text (2610.19159's tables and lists), and `\S4 in` its
+    // section number and the word after it, read as a length in inches (2608.15334; 2608.30730's `\textyen 45 in`)
+    if (e === end && /^[A-Za-z@]+$/.test(name) && !NO_ARGS.has(name) && !(args?.known && paperParams(name, paper)?.length === 0)) { const m = s.slice(e, Math.min(to, e + 120)).match(name === 'hrule' || name === 'vrule' ? RULE_SPEC : ASSIGNMENT); if (m) e += m[0].length }
     endText(); b.ph(s.slice(i, e), i, e)
     // a command with a letter name eats the following spaces in TeX; keep them with it
     i = e
@@ -1267,7 +1352,9 @@ function texCommands(s, { from = 0, to = s.length, lineEnvs = null, ifs = new Se
     if (m) {
       const env = m[1].trim(), after = end + m[0].length
       out.push({ name, at: i, end: after, depth, env, inDef, sure })
-      if (name === 'begin' && isLineEnv(env, lineEnvs)) { i = endOfEnv(s, after, env)[1] - 1; continue }
+      // (one in a definition's body is read where the definition is used, not here: \\newcommand\\start{\\begin{fx}} in a
+      // preamble read to the body's \\end{fx} past the real \\begin{document})
+      if (name === 'begin' && !inDef && isLineEnv(env, lineEnvs)) { i = endOfEnv(s, after, env)[1] - 1; continue }
       i = after - 1; continue
     }
     out.push({ name, at: i, end, depth, inDef, sure })
@@ -1392,13 +1479,13 @@ const theoremsOf = texts => {
 }
 /** every environment a paper's files define, by whatever package: none of them is the role table's environment of the
  *  same name */
-const OWN_ENVS = /\\(?:(?:re|provide)?newenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|newtheorem|declaretheorem|spnewtheorem|newmdtheoremenv|DefineVerbatimEnvironment|newminted|NewTblrEnviron)\s*\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
+const OWN_ENVS = /\\(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|newtheorem|declaretheorem|spnewtheorem|newmdtheoremenv|DefineVerbatimEnvironment|newminted|NewTblrEnviron)\s*\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
 const ownEnvsOf = texts => new Set([...texts.map(uncommented).join('\n').matchAll(OWN_ENVS)].flatMap(m => m[1].split(',').map(x => x.trim())))
 /** the paper's own environments' parameters, as its files define them: \\newenvironment{name}[n][default] takes n
  *  arguments, the first optional where it has a default; one defined twice, the last */
 const envDefs = texts => {
   const out = new Map()
-  for (const t of texts) for (const m of t.matchAll(/\\(?:re|provide)?newenvironment\s*\*?\s*\{([^}]+)\}\s*(?:\[\s*(\d)\s*\])?\s*(\[)?/g)) {
+  for (const t of texts) for (const m of t.matchAll(/\\(?:(?:re)?newenvironment|provideenvironment)\s*\*?\s*\{([^}]+)\}\s*(?:\[\s*(\d)\s*\])?\s*(\[)?/g)) {
     if (inComment(t, m.index)) continue
     const n = Number(m[2] ?? 0), opt = !!m[3] && n > 0
     out.set(m[1].trim(), paramsOf((opt ? '[a' : '') + '{a'.repeat(n - (opt ? 1 : 0))))
@@ -1442,7 +1529,7 @@ function storedBodies(calls, { ctx, files, units, own }) {
 /** `fsys`: a file system (inMemory, or node-files.mjs folder under Node) */
 export function loadProject(fsys, main, { tables = false } = {}) {
   // each file's text read once: the package's TeX (.tex, .sty, .cls) is read by several of the passes below
-  const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, latin1(fsys.read(f))).get(f)
+  const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, texText(fsys.read(f))).get(f)
   const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: sourceText(f) }))
   const outer = paper
   paper = paperOf(own.map(x => x.text))
@@ -1454,7 +1541,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
   // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
   // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract
-  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: latin1(bytes) } } return null }
+  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } } return null }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)
@@ -1469,16 +1556,18 @@ function readProject(fsys, main, tables, sourceText, own) {
   }
   // the paper's macros twice over, each for its own reader: `macros`, how a call takes its arguments and which it sets
   // as prose (paperMacros, the walker's); `bodies`, what each expands to (macroBodies, a display's letters)
-  const skipEnvs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\(?:lstnewenvironment|newtcblisting|DeclareTCBListing|NewTCBListing|DefineVerbatimEnvironment|newminted)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g)].map(m => m[1].trim()))
-  // the environments of the paper's own that TeX reads by lines (LINE_ENVS), in a class it ships too
-  const lineEnvs = new Set([...skipEnvs, ...lineEnvsOf(ownTexts)])
+  // the environments of the paper's own that are code (codeEnvsOf), kept as they are
+  const definitions = envDefinitionsOf(ownTexts), codeEnvs = codeEnvsOf(definitions), skipEnvs = codeEnvs.code
+  // the environments of the paper's own that TeX reads by lines (LINE_ENVS), in a class it ships too, and the code
+  // environments that open one
+  const lineEnvs = new Set([...lineEnvsOf(ownTexts), ...codeEnvs.lines])
   // the theorem-like environments, as any of the package's files defines them (theoremsOf), and the paper's own
   // environments' arguments (envDefs)
   const theorems = theoremsOf(ownTexts)
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(ownTexts), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -1605,9 +1694,14 @@ export function pseudoTranslate(u, lang) {
  *  Both sit in running text on purpose: after a display (\\]) a mark would open a line of its own, and after an
  *  environment it would stand in the vertical list, where \\addvspace no longer sees the skip before it. The start
  *  mark comes with \\leavevmode, which starts the paragraph just as the word would; after the word it would come
- *  between the word and its comma, and a lost kern there respaces the whole line. */
-export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null } = {}) {
+ *  between the word and its comma, and a lost kern there respaces the whole line.
+ *  `asSource`, a Set of units: each written as the paper's own bytes, its range as the file holds it (a top-level unit's
+ *  range copied as the text around it is, a nested one's piece as its source between the outer unit's text), with no
+ *  mark and no span: the layout guard's unit left unmarked (layout/guard.mjs), whose pieces or marks would not be the
+ *  paper (2610.21377's pgffor loop header written back with its body's brace doubled). Empty or absent: as before */
+export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null, asSource = null } = {}) {
   const out = new Map()
+  const sourced = asSource?.size ? asSource : null
   // `inner`, where asked for: each unit nested in this one, at any depth, its range in the bytes this gives and the
   // length of what closes it after it (its piece's `post`)
   const render = (u, inner = null) => {
@@ -1671,6 +1765,8 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       const p = pieces[k]
       if (m?.before && k === beforeAt && beforeCut === -1) parts.push(utf8Bytes(m.before))
       if (p.t === 'nested') {
+        // (a nested unit written as the paper's own: its bytes between the outer unit's, no span of its own)
+        if (sourced?.has(p.unit)) { parts.push(bytesOf(p.pre + (project.files?.get(p.unit.file) ?? '').slice(p.unit.start, p.unit.end) + p.post, srcEnc)); continue }
         const sub = inner && []
         parts.push(bytesOf(p.pre, srcEnc))
         nested?.push([parts.length, p.unit, sub])
@@ -1706,7 +1802,8 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     return concat(parts)
   }
   const byFile = new Map()
-  for (const u of project.units) if (!u.nested) (byFile.get(u.file) ?? byFile.set(u.file, []).get(u.file)).push(u)
+  // (a top-level unit written as the paper's own is no unit here: its range is copied with the text around it)
+  for (const u of project.units) if (!u.nested && !sourced?.has(u)) (byFile.get(u.file) ?? byFile.set(u.file, []).get(u.file)).push(u)
   for (const [file, text] of project.files) {
     const us = (byFile.get(file) ?? []).sort((a, b) => a.start - b.start)
     const parts = []
@@ -1909,6 +2006,17 @@ export const MARK_DEF = [
   '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
   ...END_MARK,
 ].join('\n') + '\n'
+/** whether a compiler is arXiv's `latex` (its 00README's, or the one guessed for a package of EPS figures alone: paper-meta.mjs):
+ *  pdfTeX in DVI mode, \\pdfoutput 0, whose DVI arXiv makes a PDF by dvips and ps2pdf, and a host by dvipdfmx
+ *  (live.d.mts CompileRequest), which reads the marks' specials (DVI_MARK_DEF) */
+export const dviEngine = engine => engine === 'latex'
+/** MARK_DEF's destination under `latex` (dviEngine), where pdfTeX writes no PDF itself and its \\pdfdest sets nothing: xdvipdfmx's,
+ *  as MARK_DEF sets it under XeTeX, a `pdf:dest` special of an XYZ where it stands (\\axt@dvidest, LAYOUT_TEX's too:
+ *  DVI_LAYOUT_TEX), and the config dvipdfmx is told at the first page, which keeps every destination nothing refers to
+ *  (C 0x0010, "do not optimize PDF destinations": it drops them otherwise). A paper that sets \\pdfoutput 1 is set as pdfLaTeX
+ *  sets it, MARK_DEF's. After MARK_DEF, for such a paper alone (live.mjs originalFiles, probeFiles), so that every other
+ *  engine's files are byte for byte as before; one line, no comment, so that no line of the paper moves */
+export const DVI_MARK_DEF = '\\makeatletter\\def\\axt@dvidest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}\\let\\axt@pdfdest\\axt@dest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\axt@pdfdest{#1}\\else\\axt@dvidest{#1}\\fi}\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\ifnum\\pdfoutput>0 \\else\\special{dvipdfmx:config C 0x0010}\\fi}\\fi\\makeatother'
 /**
  * The end of a unit's own paragraph, which the unit's leading, size and line probe act on (\axt@whenover{id}{at its
  * end}{at each level back}{at its level}). The unit began at a group level; its paragraph is the next to end at that
@@ -1996,14 +2104,14 @@ export const FONT_PROBE = '\\AtEndDocument{\\typeout{AXT-FONTS rm=\\rmdefault;sf
 /** The TeX log of a compile's last pass. The browser's compiler (parked/tex-page/poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
  *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
- *  today). bibtex, biber, makeindex and xdvipdfmx are no TeX passes. A native compile's .log is
+ *  today). bibtex, biber, makeindex, xdvipdfmx and dvipdfmx (latex's driver) are no TeX passes. A native compile's .log is
  *  the last pass's already. Every reader of a compile's log lines takes it (live.mjs lostIn, typeset/tex.mjs readLines,
  *  readForced, typeset/density.mjs readWidthProbe, readSizeProbe): read whole, the echo invents a forced break before a
  *  pass's first unit */
 export const lastTexLog = log => {
   if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
   const steps = [...log.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
-  return steps.filter(m => !/^(?:bibtex|biber|makeindex|xdvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
+  return steps.filter(m => !/^(?:bibtex|biber|makeindex|x?dvipdfmx)/.test(m[1])).at(-1)?.[2] ?? ''
 }
 /** the roles' families from a log written with FONT_PROBE, or null */
 export function readFontProbe(log) {

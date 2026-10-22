@@ -22,10 +22,30 @@ export { LayoutRefusal } from './json.mjs'
  *  formula first after a display found by its own opening mark (marks.mjs \axtpmm), a display group's later displays
  *  JOINED to its first, a LOST piece outside the unit's lines OUTSIDE (the file's schema 4), and an inline piece whose
  *  two marks stand on one line of the unit wholly on it; 7: a piece TeX broke over lines gives its unit the line it wraps onto, and a
- *  reference the matcher misses is placed by its link annotation (the file's schema is 4 still) */
-export const LAYOUT = '7'
-/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE */
-export const LAYOUT_SCHEMA = 4
+ *  reference the matcher misses is placed by its link annotation (the file's schema is 4 still); 8: a unit's CENTRED as TeX
+ *  set its paragraph where the marked original's log tells it (marks.mjs readAlign), else by arXiv's lines, a line across
+ *  both columns on the middle of their centres and one line short of its column by an em; a found placeholder's fill
+ *  (the file's schema 5); and each colour piece's fill as TeX set its run (`colours`, marks.mjs readColours: a key of the
+ *  file's only where a unit has one); 9: a unit's own mark no line carried placed by the unit's words beside it, one of them
+ *  at most a reference's other name (layout/tolerant.mjs: 2609.26457's "section B" for arXiv's "appendix B"), and a text
+ *  piece the matcher missed found by its characters on the unit's lines (TeX broke it over two lines in one PDF alone); 10:
+ *  no row and no mark for a placeholder that sets no ink (arg-roles.mjs textless: \label with cleveref's type,
+ *  \bibliographystyle, soul's \sethlcolor, \-), and a babel name's marks after a \relax (marks.mjs NAMES_TEX), so that a
+ *  class's \if over the name reads it and REVTeX's numbered appendices are set with their names marked (the file's schema
+ *  is 5 still; the gate pack's 32 outputs' marks are 9's, each destination where it was); 11: a unit's lines at a page
+ *  break read by its own words (pipeline/anchors.mjs: a paragraph and its footnote both going on over a page each keep the
+ *  lines their matched words are on, and a formula's row of no word of the unit's is held between its lines, not the walk's
+ *  end): over 57 papers 10 LOST rows found and none lost, 5 units' lines changed in 4 papers, the gate pack's 32 outputs
+ *  unchanged (the file's schema is 5 still) */
+export const LAYOUT = '11'
+/** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
+ *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
+ *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */
+export const LAYOUT_SCHEMA = 5
+/** a placeholder's fill where no one colour holds more than half its glyphs (the row's last number, schema 5) */
+export const MIXED_FILL = -1
+/** a fill's largest value, 0xFFFFFF */
+const FILL_MAX = 0xffffff
 export const LAYOUT_CAP = 4 * 2 ** 20
 export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
@@ -34,6 +54,9 @@ export const LAYOUT_DEPTH = 4
 export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author'])
 export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
+/** a unit's flags. TITLE: the paper's title; FRONT: its front matter; CENTRED: its lines set centred, as TeX set its
+ *  paragraph where the marked original tells it (\centering, a center environment, a class's centred heading), else as
+ *  arXiv's lines show it (make.mjs): what the layer sets the translation's lines by (run.mjs) */
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
 /** babel's names (names.mjs), whose occurrences the file locates (`names`) */
 export { NAME_KEYS } from './names.mjs'
@@ -54,6 +77,10 @@ export const NAME_FLAG = Object.freeze({ CENTRED: 1, CAPITALS: 2, RUN_IN: 4 })
 export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64, JOINED: 128, OUTSIDE: 256 })
 
 const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names', 'lineskip']
+/** a key a file or a part holds only where it has a row: each colour piece's fill (`colours`) */
+const COLOURS = 'colours'
+/** the keys `v` must hold: `keys`, and `colours` where it holds that */
+const withColours = (v, keys) => (isObject(v) && Object.hasOwn(v, COLOURS) ? [...keys, COLOURS] : keys)
 /** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
 export const PAGE_TEXT_KINDS = Object.freeze(['cite', 'ref', 'eqref'])
 /** a page text's code units at most, and a file's in all */
@@ -188,7 +215,7 @@ export function parseLayout(bytes, { sized = true } = {}) {
 export function checkLayout(value, { sized = true } = {}) {
   // (its schema first: a file of another names other fields, and is refused for what it is)
   if (isObject(value) && Object.hasOwn(value, 'schema') && value.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
-  const f = exactKeys(value, KEYS, '')
+  const f = exactKeys(value, withColours(value, KEYS), '')
   if (f.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
   if (!isVersionToken(f.layout)) throw refuse('layout', `not a version, 1 to 32 letters, digits or points (${kindOf(f.layout)})`)
   if (!printable(f.pdfjs, 1, PDFJS_MAX)) throw refuse('pdfjs', `not 1 to ${PDFJS_MAX} printable ASCII characters (${kindOf(f.pdfjs)})`)
@@ -231,7 +258,7 @@ export const PART_KEYS = Object.freeze(['fonts', 'units', 'lines', 'frames', 'er
 export function checkLayoutPart(value, { pages, views, lo, hi }) {
   if (!isInteger(lo, 1, pages) || !isInteger(hi, lo, pages)) throw new RangeError(`not pages lo to hi of ${pages}`)
   if (!Array.isArray(views) || views.length !== 4 * (hi - lo + 1)) throw new RangeError(`not the ${4 * (hi - lo + 1)} numbers of the views of pages ${lo} to ${hi}`)
-  const f = exactKeys(value, PART_KEYS, '')
+  const f = exactKeys(value, withColours(value, PART_KEYS), '')
   return checkRows(f, { views, lo, hi })
 }
 
@@ -343,11 +370,14 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     last = e[0]
   }
 
-  // placeholders: unit, k, kind, flags, then per segment: page, x0, baseline, x1, top, bottom
+  // placeholders: unit, k, kind, flags, then per segment: page, x0, baseline, x1, top, bottom; then, where its glyphs are not
+  // black, their fill (MIXED_FILL, or 0xRRGGBB): only a placeholder with segments has one
   const ph = array(f.ph, 'ph'), seen = new Set(), pageTexts = new Set(), symbols = new Set()
   for (let i = 0; i < ph.length; i++) {
     const r = ph[i]
-    if (!Array.isArray(r) || r.length < 4 || (r.length - 4) % 6 !== 0) throw refuse(`ph[${i}]`, `not 4 + 6 × n numbers (${kindOf(r)})`)
+    if (!Array.isArray(r) || r.length < 4 || (r.length - 4) % 6 > 1) throw refuse(`ph[${i}]`, `not 4 + 6 × n numbers, and a fill (${kindOf(r)})`)
+    const fill = (r.length - 4) % 6 === 1
+    if (fill && !(r.length > 4 + 6 && isInteger(r.at(-1), MIXED_FILL, FILL_MAX))) throw refuse(`ph[${i}][${r.length - 1}]`, `not a fill of a placeholder with segments: ${MIXED_FILL} or 0 to ${FILL_MAX}`)
     const u = slot.get(r[0])
     if (u === undefined) throw refuse(`ph[${i}][0]`, 'not a unit of units')
     const k = r[1]
@@ -364,9 +394,9 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     if ((flags & PH_FLAG.OUTSIDE) !== 0 && flags !== (PH_FLAG.LOST | PH_FLAG.OUTSIDE)) throw refuse(`ph[${i}][3]`, 'OUTSIDE but not LOST alone')
     if (symbol && (empty || lost || kind !== MACRO || r.length !== 4)) throw refuse(`ph[${i}]`, 'TEXT but on a macro alone, with no segments')
     if ((flags & PH_FLAG.NUMBERED) !== 0 && kind !== DISPLAY) throw refuse(`ph[${i}][3]`, 'NUMBERED on a kind not display')
-    const segs = (r.length - 4) / 6, most = kind === DISPLAY ? SEGS_DISPLAY : SEGS_INLINE
+    const segs = Math.floor((r.length - 4) / 6), most = kind === DISPLAY ? SEGS_DISPLAY : SEGS_INLINE
     if (empty || lost || symbol || joined ? segs !== 0 : segs < 1 || segs > most) throw refuse(`ph[${i}]`, empty || lost || symbol || joined ? 'segments on an EMPTY, LOST, TEXT or JOINED placeholder' : `not 1 to ${most} segments`)
-    for (let o = 4; o < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, span, 'ph', i, -1)
+    for (let o = 4; o + 5 < r.length; o += 6) checkBox(r, o, 1, 3, 2, 4, 5, false, views, span, 'ph', i, -1)
     zeroes(r)
     if (!empty && !lost && !joined && PAGE_TEXT.has(kind)) pageTexts.add(key)
     if (symbol) { pageTexts.add(key); symbols.add(key) }
@@ -463,6 +493,25 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     zeroes(r)
     last = r[0]
   }
+
+  // colours: unit, k, the fill TeX set the colour piece's run in (0xRRGGBB); rising by unit and k, a key held only with a row
+  if (Object.hasOwn(f, COLOURS)) {
+    const colours = array(f.colours, COLOURS)
+    if (colours.length === 0) throw refuse(COLOURS, 'empty: a file holds the key only where it has a row')
+    let lastKey = -1
+    for (let i = 0; i < colours.length; i++) {
+      const r = colours[i]
+      if (!Array.isArray(r) || r.length !== 3) throw refuse(`colours[${i}]`, `not [unit, k, rgb] (${kindOf(r)})`)
+      const u = slot.get(r[0])
+      if (u === undefined) throw refuse(`colours[${i}][0]`, 'not a unit of units')
+      if (!isInteger(r[1], 0, piecesAt[u] - 1)) throw refuse(`colours[${i}][1]`, "not a piece below its unit's pieces")
+      const key = u * (PIECES_MAX + 1) + r[1]
+      if (key <= lastKey) throw refuse(`colours[${i}][1]`, 'not a piece after the last')
+      lastKey = key
+      if (!isInteger(r[2], 0, FILL_MAX)) throw refuse(`colours[${i}][2]`, `not a fill 0 to ${FILL_MAX}`)
+      zeroes(r)
+    }
+  }
   return f
 }
 
@@ -488,6 +537,8 @@ function rowsOf(file) {
     pageText,
     held,
     names: names.map(r => rounded(r, NAME_ROW, NAME_EXACT)),
+    // (only where a unit has one: a file with no colour piece is the bytes it was)
+    ...(file.colours?.length ? { colours: file.colours } : {}),
   }
 }
 
@@ -523,10 +574,10 @@ export function encodeLayoutPart(part) {
  * font in no row is left out. The parts are not changed
  */
 export function mergeLayout(parts) {
-  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [] }
+  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], colours: [] }
   const lineList = [], nameList = []
   for (const p of parts) {
-    for (const key of Object.keys(out)) for (const row of p[key]) out[key].push(row)
+    for (const key of Object.keys(out)) for (const row of p[key] ?? []) out[key].push(row)
     for (const e of p.lines) lineList.push([e, p.fonts])
     for (const r of p.names) nameList.push([r, p.fonts])
   }
@@ -534,6 +585,7 @@ export function mergeLayout(parts) {
   for (const key of ['units', 'frames', 'erase', 'headings', 'held', 'labels']) out[key].sort(byId)
   out.ph.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   out.pageText.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  out.colours.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   const fonts = [], index = new Map()
   const fontAt = (table, i) => {
     const name = table[i]
@@ -553,7 +605,7 @@ export function mergeLayout(parts) {
     out[9] = fontAt(table, r[9])
     return out
   })
-  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names }
+  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names, ...(out.colours.length ? { colours: out.colours } : {}) }
 }
 
 // ---------------------------------------------------------------- the index
@@ -561,6 +613,7 @@ const NONE = Object.freeze(new Float64Array(0))
 const NO_UNITS = Object.freeze([])
 const NO_HELD = Object.freeze([])
 const NO_NAMES = Object.freeze([])
+const NO_COLOURS = Object.freeze(new Map())
 
 /** a parsed file's index, in one pass over each array; every typed array holds numbers copied from the file */
 export function indexLayout(file) {
@@ -572,7 +625,7 @@ export function indexLayout(file) {
     byId.set(id, {
       id, kind: UNIT_KINDS[kind], depth,
       title: (flags & UNIT_FLAG.TITLE) !== 0, front: (flags & UNIT_FLAG.FRONT) !== 0, centred: (flags & UNIT_FLAG.CENTRED) !== 0,
-      pieces, lines: NONE, frames: NONE, erase: [], ph: new Map(), labels: NONE, heading: null, held: NO_HELD,
+      pieces, lines: NONE, frames: NONE, erase: [], ph: new Map(), labels: NONE, heading: null, held: NO_HELD, colours: NO_COLOURS,
     })
   }
   for (let i = 0; i < lines.length; i++) {
@@ -601,9 +654,10 @@ export function indexLayout(file) {
   const textOf = new Map()
   for (let i = 0; i < pageText.length; i++) textOf.set(`${pageText[i][0]}|${pageText[i][1]}`, pageText[i][2])
   for (let i = 0; i < ph.length; i++) {
-    const r = ph[i], segs = new Float64Array(r.length - 4)
-    for (let j = 4; j < r.length; j++) segs[j - 4] = r[j]
-    byId.get(r[0]).ph.set(r[1], { kind: PH_KINDS[r[2]], flags: r[3], segs, text: textOf.get(`${r[0]}|${r[1]}`) ?? null })
+    const r = ph[i], n = 6 * Math.floor((r.length - 4) / 6), segs = new Float64Array(n)
+    for (let j = 0; j < n; j++) segs[j] = r[4 + j]
+    // (`fill`: its glyphs' colour, 0xRRGGBB, MIXED_FILL, or null where they are black: what the layer draws its rendering in)
+    byId.get(r[0]).ph.set(r[1], { kind: PH_KINDS[r[2]], flags: r[3], segs, text: textOf.get(`${r[0]}|${r[1]}`) ?? null, fill: 4 + n < r.length ? r[4 + n] : null })
   }
   const labelsOf = new Map()
   for (let i = 0; i < labels.length; i++) {
@@ -615,6 +669,8 @@ export function indexLayout(file) {
   for (const [id, list] of labelsOf) byId.get(id).labels = Float64Array.from(list)
   for (let i = 0; i < headings.length; i++) byId.get(headings[i][0]).heading = headings[i][1]
   for (let i = 0; i < held.length; i++) byId.get(held[i][0]).held = Object.freeze([...held[i][1]])
+  // (each colour piece's run's fill, by its piece index: what the layer draws the run in)
+  for (const [id, k, rgb] of file.colours ?? []) { const unit = byId.get(id); if (unit.colours === NO_COLOURS) unit.colours = new Map(); unit.colours.set(k, rgb) }
   for (const unit of byId.values()) {
     Object.freeze(unit.erase)
     Object.freeze(unit)

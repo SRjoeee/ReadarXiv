@@ -3,7 +3,7 @@ import { type BundleParts, bundleUnitsOf, type ReadBundle, readBundle, writeBund
 import { layerRows, type Row, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import type { PageWords } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { indexLayout, LAYOUT, type LayoutFile, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
+import { indexLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 
 // Synthetic papers for the order of the asks (1b-D design §5: S-A to S-D, the fill paper, and S-E's shared lines): the same page of a PDF.js
@@ -176,7 +176,7 @@ export function build(paper: Paper): Built {
   const asked: number[] = []
   const doc = { numPages: pages, asked, getPage: async (n: number) => { asked.push(n); if (n === paper.fail) throw new Error(`page ${n} cannot be read`); return pageOf(n) } }
   const layout = {
-    schema: 4, lineskip: null, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
+    schema: LAYOUT_SCHEMA, lineskip: null, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
     units: specs.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, 1]),
     lines: specs.map(s => [s.id, s.lines.flatMap(l => [l.page, l.x0, l.x1, l.b, l.b + 7, l.b - 2, 10, 0])]),
     frames: specs.map(s => [s.id, s.lines.flatMap((l, j) => [l.page, 0, j, 1, j ? 0 : -1, 0])]),

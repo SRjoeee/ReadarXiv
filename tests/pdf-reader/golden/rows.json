@@ -1,12 +1,12 @@
 {
   "the ids and batches each language translates": "e13030ab37d964e7d990682e07411907ec9f8c5540481e0148159602b58d21ef",
-  "runRows into zh over markers, faithful": "5e28746401d6868052b65b8517bcea1c6dcbf81f322366925614998f31a3f86d",
-  "runRows into zh over markers, lossy": "5e28746401d6868052b65b8517bcea1c6dcbf81f322366925614998f31a3f86d",
-  "runRows into de over markers, faithful": "73f8dca46f5ed5b11588be15f9376e855fbcef85d6ba26730678fa309905c93f",
-  "runRows into de over markers, lossy": "73f8dca46f5ed5b11588be15f9376e855fbcef85d6ba26730678fa309905c93f",
-  "runRows into zh over tags, faithful": "e2a58703625ad18f26e5da261a71231d64633c617b26d6c88f8dec8aba2bd6df",
-  "runRows into zh over tags, lossy": "0b5e2dde57a1b9719aa78e4a4dfc7e8ee8d7f4090ac5295a19cf59672aee7afa",
-  "runRows into zh over runs, faithful": "0e5f0c14160e15f80c9c82e7d7dedcb8a6c4854636c459ae954fec43ea0d182e",
-  "runRows into zh over runs, lossy": "0e5f0c14160e15f80c9c82e7d7dedcb8a6c4854636c459ae954fec43ea0d182e",
-  "layerRows over every result at once, and as the batches fill": "af84a23d4bdad11d1f7047030a40943d6cad0be07cee69d9fa89f113583baf30"
+  "runRows into zh over markers, faithful": "cfcc4ca5cd926ef20f9410eb104c394c248d0e2edc005c0015713c464a8195c6",
+  "runRows into zh over markers, lossy": "cfcc4ca5cd926ef20f9410eb104c394c248d0e2edc005c0015713c464a8195c6",
+  "runRows into de over markers, faithful": "61c1b036df077688a536149abcc81f315902df5ab5953e16a131aeb773dae7ab",
+  "runRows into de over markers, lossy": "61c1b036df077688a536149abcc81f315902df5ab5953e16a131aeb773dae7ab",
+  "runRows into zh over tags, faithful": "77a4dd83e3b872edba2554bdc07dfb8cbac2d49e0884ca8534cce4bd1bfb9f12",
+  "runRows into zh over tags, lossy": "93bacf67037db00ffa464cf25c375affad0ad1e0d2fe16f83831d9d05e042e79",
+  "runRows into zh over runs, faithful": "abe2586d28059a73da7f6bf4554de1d17bea1c42548df74bffc8e57e73803305",
+  "runRows into zh over runs, lossy": "abe2586d28059a73da7f6bf4554de1d17bea1c42548df74bffc8e57e73803305",
+  "layerRows over every result at once, and as the batches fill": "7c6e697facb49a4c9c795aab07ac84d980915a92ebe38687110e639ff3e9129a"
 }

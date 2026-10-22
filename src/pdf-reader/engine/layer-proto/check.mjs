@@ -29,7 +29,7 @@
 //     ("i.e., i.e.", "σ(y)\uFF0Cσ(y)"), each marked by whether a placeholder made it (the layer's) or the translation has it.
 // (d) equation numbers: each displayed equation's number on the original page ("(1)" at its column's right edge, far
 //     from the text before it) shown exactly once: in place (not erased), or in a crop, or as a placeholder's text.
-import { charKey, displayTouched, nearIn } from './layer2.mjs'
+import { charKey, cropPartsOf, displayTouched, nearIn } from './layer2.mjs'
 import { norm, texToText } from './layer1.mjs'
 
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'display', 'symbol'])
@@ -95,7 +95,14 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
     for (const r of res) if (r.gap) gapRes.set(r.gap, r)
     const cropsOf = r => crops.filter(a => a.unit === p.id && a.k === r.k)
     const tokOf = r => p.tokens.filter(t => t.k === r.k && (t.s || t.crop))
-    const drawnOf = r => (r.mode === 'crop' ? cropsOf(r).length : tokOf(r).some(t => drawnTok.has(t)) ? 1 : 0)
+    // (a crop's showings: each of its parts' (a formula TeX broke over lines, cropPartsOf), the fewest any part is drawn where
+    // one is not, else the most: a part drawn twice is a crop drawn twice)
+    const cropShown = r => {
+      const per = cropPartsOf(r).map(() => 0)
+      for (const a of cropsOf(r)) per[a.part ?? 0] = (per[a.part ?? 0] ?? 0) + 1
+      return Math.min(...per) === 0 ? 0 : Math.max(...per)
+    }
+    const drawnOf = r => (r.mode === 'crop' ? cropShown(r) : tokOf(r).some(t => drawnTok.has(t)) ? 1 : 0)
     // the characters of the unit, each by what became of it, by the checker's own rules (not the layer's account of
     // itself): its text (the source's words, punctuation, a gap's piece that is the source's or the translation's own
     // text or that a drawn placeholder shows), a placeholder's rendering drawn elsewhere (only where it was drawn), kept
@@ -117,8 +124,9 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
       if (!VISIBLE.has(r.cls)) continue
       const where = { unit: p.id, kind: p.unit.kind, k: r.k, src: r.src.slice(0, 80), mode: r.mode, page: p.pages[0] }
       if (r.mode === 'none') {
-        // shown by its own ink, left where it stands: outside the unit's lines, which the drawing never erases
-        if (r.inPlace) continue
+        // shown by its own ink, left where it stands: outside the unit's lines, which the drawing never erases; or one TeX set
+        // no ink for (tex.mjs emptyOf)
+        if (r.inPlace || r.empty) continue
         // a rendering never found on the page: a display there may still stand outside the unit's lines, untouched
         if (r.cls === 'display') B.unlocated.push(where)
         else if (r.text !== ' ') B.missing.push({ ...where, why: 'not found, nothing drawn' })
@@ -160,7 +168,7 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
       const t = it.t
       if (t.space) seq.push({ s: ' ', ph: false })
       else if (t.crop) {
-        const a = crops.find(a => a.unit === p.id && a.k === t.crop.k)
+        const a = crops.find(a => a.unit === p.id && a.k === t.crop.k && (a.part ?? 0) === (t.crop.part ?? 0))
         const s = a ? charsInBox(a.srcPage, a.src).sort((x, y) => x.x0 - y.x0).map(c => c.ch).join('') : (t.crop.text ?? '')
         seq.push({ s, ph: true, k: t.crop.k, crop: true })
       } else if (t.s) seq.push({ s: t.s, ph: t.k !== undefined, k: t.k })
@@ -392,8 +400,11 @@ function categoriesOf(prep, unit, chars2) {
   const trLetters = norm((unit.pieces ?? []).filter(p => p.t === 'text').map(p => p.s).join(' ') + ' ' + res.map(r => r.text ?? '').join(' '))
   const drawn = `|${res.map(r => {
     if (r.mode === 'crop') {
-      const [x0, y0, x1, y1] = r.crop
-      return normU2((chars2[r.page - 1] ?? []).filter(c => (c.x0 + c.x1) / 2 >= x0 && (c.x0 + c.x1) / 2 <= x1 && c.yb >= y0 && c.yb <= y1).map(c => c.ch).join('')) + '|' + normU2(r.text)
+      // (each of its parts' page characters: cropPartsOf)
+      return cropPartsOf(r).map(q => {
+        const [x0, y0, x1, y1] = q.crop
+        return normU2((chars2[q.page - 1] ?? []).filter(c => (c.x0 + c.x1) / 2 >= x0 && (c.x0 + c.x1) / 2 <= x1 && c.yb >= y0 && c.yb <= y1).map(c => c.ch).join(''))
+      }).join('|') + '|' + normU2(r.text)
     }
     return normU2(r.text)
   }).join('|')}|`

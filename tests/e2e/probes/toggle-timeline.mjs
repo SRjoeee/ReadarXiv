@@ -17,6 +17,8 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { goOnline, online } from '../lib/online.mjs'
+goOnline('tests/e2e/probes/toggle-timeline.mjs')
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = process.env.AXT_EXT_DIR ? resolve(process.env.AXT_EXT_DIR) : fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -27,12 +29,12 @@ const TASK_FLOOR_US = 8000
 const AT = process.env.AXT_AT ? Number(process.env.AXT_AT) : null
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-const context = await chromium.launchPersistentContext(`${E2E}.profile-hl`, {
+const context = await chromium.launchPersistentContext(`${E2E}.profile-hl`, online({
   ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }),
   headless: !process.env.AXT_HEADED,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
   viewport: { width: 1440, height: 900 },
-})
+}))
 context.setDefaultNavigationTimeout(90_000)
 let [worker] = context.serviceWorkers()
 if (!worker) worker = await context.waitForEvent('serviceworker')

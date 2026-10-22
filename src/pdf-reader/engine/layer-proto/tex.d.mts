@@ -16,7 +16,14 @@ export declare function locatedWhole(lu: LayoutUnit | null, unit: Unit, trPieces
  *  layout file and the source's order (kOf), never the translation's pieces; empty where the two do not agree */
 export declare function displayCover(lu: LayoutUnit, unit: Unit, kOf: readonly number[]): Map<number, number[]>
 /** whether a placeholder sets no ink by the file: a text macro it holds no row for */
+/** each placeholder's fill by the file, by its piece index: 0xRRGGBB, MIXED_FILL (-1), or null */
+export declare function fillOf(lu: LayoutUnit | null, kOf: readonly number[] | null): (k: number) => number | null
+/** each colour piece's run's fill by the file, by its piece index: 0xRRGGBB, or null where the file has none */
+export declare function colourOf(lu: LayoutUnit | null, kOf: readonly number[] | null): (k: number) => number | null
 export declare function inklessOf(lu: LayoutUnit, kOf: readonly number[], p: { k: number; cls: string }): boolean
+/** whether a placeholder of the unit's is one TeX set no ink for by the file (EMPTY), of a class the layer draws ink for but a
+ *  text symbol: drawn as nothing on the file's lines */
+export declare function emptyOf(lu: LayoutUnit, kOf: readonly number[], p: { k: number; cls: string }): boolean
 /** LaTeX's forced line breaks: `\\` (starred, or with its optional space) and \newline */
 export declare const FORCED_BREAK: RegExp
 /** a forced break TeX set: the file's line after it, its frame's pitch, and the room TeX left between the two beyond it, in
@@ -38,9 +45,13 @@ export declare function shortSkipsOf(lu: LayoutUnit): (Segment & { line: number 
 export declare function renderingOf(segs: Float64Array, uc: readonly Char[], display: boolean): Gap | null
 /** part 5 for any unit the hybrid draws, the safe rule's one place: every rendering proven by the file (the file's own
  *  rendering, a crop cut from its placeholder's segment on its page, that segment's baseline its own, page text or kept
- *  ink inside its segments, and one v0 found none for read from its row's segments: `unit` given); the k of one nothing
+ *  ink inside its segments, and one v0 found none for read from its row's segments: `unit` given; with `textRuns`, the
+ *  file's lines, a LOST text piece by the run of the unit's leftover characters that spells it); the k of one nothing
  *  proves (its unit stays the original's), else -1 */
-export declare function proofOf(lu: LayoutUnit | null, kOf: readonly number[] | null, shown?: number): (out: Prepared, unit?: Unit | null) => number
+export declare function proofOf(lu: LayoutUnit | null, kOf: readonly number[] | null, shown?: number, o?: { textRuns?: boolean; whole?: boolean }): (out: Prepared, unit?: Unit | null) => number
+/** a text piece: a placeholder whose plain text is its whole rendering (a code or URL mark, or a plain-text source, its
+ *  argument literal): its plain text as written, or null */
+export declare function textPieceOf(src: string | undefined | null): { text: string } | null
 /** the unit's parts from the file: 'ph' its placeholders' renderings; 'lines' its lines and label too; extents 'tex' the
  *  file's erase rectangles; every use, the proof (proofOf) */
 export declare function texParts(lu: LayoutUnit, kOf: readonly number[], o: { use: 'ph' | 'lines'; lines?: TexLines | null; extents?: 'v0' | 'tex'; shown?: number; lineskip?: readonly [skip: number, limit: number] | null }): UnitParts

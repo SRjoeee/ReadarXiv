@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
-import { indexLayout, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
+import { indexLayout, LAYOUT_SCHEMA, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 
 // What a unit's laying and a page's painting read is their own (the 1b design, §2.1 and §2.3 C1, PR 1b-B): a crop is cut
@@ -60,7 +60,7 @@ function paper(specs: Spec[], pages: number) {
   const doc = { numPages: pages, getPage: async (n: number) => pageOf(n) }
   const file = specs.filter(s => s.from === 'file')
   const layout = {
-    schema: 4, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
+    schema: LAYOUT_SCHEMA, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
     units: file.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, s.pieces ?? 1]),
     lines: file.map(s => [s.id, s.lines.flatMap(l => { const [x0, x1] = spanOf(l); return [l.page, x0, x1, l.b, l.b + 7, l.b - 2, 10, 0] })]),
     frames: file.map(s => [s.id, s.lines.flatMap((l, j) => [l.page, 0, j, 1, j ? 0 : -1, 0])]),
@@ -293,7 +293,7 @@ describe('the work counters (work.mjs): integer counts of what a page cost, the 
     { id: 1, kind: 'para', src: 'Alpha beta gamma delta', lines: [Q2, Q3], rects: [[2, 20, 197.85, 70, 206.83], [3, 20, 197.85, 80, 206.83]], from: 'geometry', tr: [text(CJK(8, 0x4e20))] },
     { id: 2, kind: 'para', src: 'Mu nu xi omicron', lines: [line(3, 60, [20, 'Mu nu']), line(4, 270, [20, 'xi omicron'])], from: 'geometry', tr: [text(CJK(8, 0x4e60))] },
   ]
-  const KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'edges']
+  const KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'edges', 'fills']
   const laid = async (order: number[]) => {
     const run = await open(paper(specs, 4))
     for (const p of order) await run.layFor(p)

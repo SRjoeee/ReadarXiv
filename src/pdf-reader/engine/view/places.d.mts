@@ -1,5 +1,5 @@
 // places.mjs's types (JavaScript until the engine's port), for the reading view
-import type { PdfJsKit, PlaceContent, PlaceView, ViewClock } from './reader-view.mjs'
+import type { DrawnCanvas, PdfJsKit, PlaceContent, PlaceView, ViewClock } from './reader-view.mjs'
 
 export declare const NEAR: string
 /** the left's page view as a place reads it: its page box (its style is the place's), its viewport and page */
@@ -12,6 +12,10 @@ export interface Places {
   swap(n: number, content: HTMLElement): boolean
   restore(n: number): void
   contentOf(n: number): PlaceContent
+  /** the canvas of place n's own page view where PDF.js drew it whole, with the scale it drew it at; null else */
+  canvas(n: number): DrawnCanvas | null
+  /** place n's box in CSS px as PDF.js sizes the left's page n; null with no viewport */
+  box(n: number): { width: number; height: number } | null
   near(n: number): boolean
   page(n: number): HTMLElement | null
   /** the focus given to place n (a keyboard's jump to it): at once where it shows a page, else once it does, within

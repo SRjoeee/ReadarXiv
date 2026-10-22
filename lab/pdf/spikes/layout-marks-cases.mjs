@@ -11,6 +11,10 @@
 // The names' cases (D1a): babel's named headings marked (marks.mjs NAMES_TEX, literalNames), each under pdfLaTeX and
 // XeLaTeX, with hyperref and without: every text item where v0 has it, the log the run reads unchanged, and each name's
 // two marks on its glyphs.
+// The DVI cases (R1 item 5): a paper arXiv compiles with `latex` (its 00README's compiler), compiled as the host compiles it,
+// latex in DVI mode, the DVI made a PDF by dvipdfmx, its marks xdvipdfmx's specials (latex-front.mjs DVI_MARK_DEF, marks.mjs
+// DVI_LAYOUT_TEX): the documents that stay, each under latex, every text item where v0 has it and the marks there; the
+// stream's under latex, every glyph and box where the compile with no point has it and each piece owning its own ink.
 // The wrappers' case: a book whose paper macros end in \chapter or \section, their arguments before the title
 // (2106.10165's \strangechapter{$\infty$}{…}), and displays the walker reads as prose or as the paper's own environment
 // (2310.20360's eqsplit, \bfm_1): v0 and v1 set with no error in three passes, the contents as v0's.
@@ -18,7 +22,9 @@
 //                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone;
 //                                                                  ONLY=wrappers: the wrappers' alone; ONLY=lost: the LOST
 //                                                                  survey's, an inline formula first after a display, a
-//                                                                  display group and a display at a page's foot)
+//                                                                  display group and a display at a page's foot; ONLY=runin:
+//                                                                  the run-in leads' stream case, F; ONLY=dvi: the DVI
+//                                                                  cases alone, every document under latex)
 // NATIVE_TEX=1 compiles with this machine's TeX Live in place of Docker's (lab/pdf/spikes/native-tex/: its NATIVE_TEX_BIN,
 // NATIVE_TEXMFLOCAL and NATIVE_TEXMFVAR), the jobs one after another as in the container; a compile so is not the image's
 // package versions byte for byte
@@ -30,7 +36,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { lastTexLog, latin1, latin1Bytes } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { NAME_KEYS } from '../../../src/pdf-reader/engine/layout/names.mjs'
-import { classOf, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe, readNameProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { classOf, DVI_POINTS_TEX, encodeLayoutMarks, layoutMarking, layoutMarksOf, MARK_CLASSES, POINTS_TEX, probeSamples, readMarkProbe, readNameProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { OWNED, OWNED_HOW } from '../../../src/pdf-reader/engine/layout/stream.mjs'
 import { boxDiff, pageBoxes } from './layout-marks-compare.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
@@ -41,8 +47,10 @@ await checkCompileImage()
 
 let failed = 0
 const check = (name, ok, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : ` ${detail}`}`) }
-/** the stream's own cases alone */
-const STREAM_ONLY = process.env.ONLY === 'stream'
+/** the run-in leads' stream case alone (F) */
+const RUNIN_ONLY = process.env.ONLY === 'runin'
+/** the stream's own cases alone (F's alone with RUNIN_ONLY) */
+const STREAM_ONLY = process.env.ONLY === 'stream' || RUNIN_ONLY
 /** the names' cases alone */
 const NAMES_ONLY = process.env.ONLY === 'names'
 /** \axt@unmark's case alone */
@@ -51,6 +59,8 @@ const UNMARK_ONLY = process.env.ONLY === 'unmark'
 const WRAPPERS_ONLY = process.env.ONLY === 'wrappers'
 /** the LOST survey's cases alone */
 const LOST_ONLY = process.env.ONLY === 'lost'
+/** the DVI cases alone: every document under latex */
+const DVI_ONLY = process.env.ONLY === 'dvi'
 /** this machine's TeX Live in place of Docker's */
 const NATIVE = process.env.NATIVE_TEX === '1'
 const dir = mkdtempSync(join(tmpdir(), 'layout-marks-cases-'))
@@ -154,8 +164,10 @@ const STAY = {
  *  runs them */
 function compileAll(jobs) {
   // a traced job writes TeX's page boxes whole (no line cut at 79 characters)
-  const pass = j => (j.engine === 'xelatex' && !j.probe ? 'xelatex -no-pdf -interaction=nonstopmode main.tex >> term.txt 2>&1; xdvipdfmx main.xdv >> term.txt 2>&1' : `${j.trace ? 'max_print_line=1000000 ' : ''}${j.engine} -interaction=nonstopmode main.tex >> term.txt 2>&1`)
-  const script = jobs.map(j => `cd ${NATIVE ? dir : '/work'}/${j.name} && for i in ${Array.from({ length: j.passes }, (_, k) => k + 1).join(' ')}; do ${pass(j)}; done`).join('\n')
+  // (latex, arXiv's DVI compiler: its DVI made a PDF by dvipdfmx after each pass, as the host's one-pass compile does)
+  const pass = j => (j.engine === 'xelatex' && !j.probe ? 'xelatex -no-pdf -interaction=nonstopmode main.tex >> term.txt 2>&1; xdvipdfmx main.xdv >> term.txt 2>&1' : `${j.trace ? 'max_print_line=1000000 ' : ''}${j.engine} -interaction=nonstopmode main.tex >> term.txt 2>&1${j.engine === 'latex' && !j.probe ? '; dvipdfmx main.dvi >> term.txt 2>&1' : ''}`)
+  // (a latex job's DVI listed whole, every character and rule TeX set where it set it: dviOf)
+  const script = jobs.map(j => `cd ${NATIVE ? dir : '/work'}/${j.name} && for i in ${Array.from({ length: j.passes }, (_, k) => k + 1).join(' ')}; do ${pass(j)}; done${j.engine === 'latex' && !j.probe ? '; dvitype -output-level=4 main.dvi > main.typ 2>&1' : ''}`).join('\n')
   writeFileSync(join(dir, 'run.sh'), `${script}\n`)
   if (NATIVE) {
     if (!process.env.NATIVE_TEXMFLOCAL) throw new Error('NATIVE_TEX=1: NATIVE_TEXMFLOCAL is not set (lab/pdf/spikes/native-tex/docker)')
@@ -168,9 +180,11 @@ function compileAll(jobs) {
 const jobs = [], queued = []
 /** the source as v0 and v1 of a job, queued: written once the mark probes have answered (prepare) */
 function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', 'v1'], own = true, trace = false, files = {} } = {}) {
+  // (a latex paper says so in its 00README, as arXiv writes it: the marks are then the DVI marks)
+  if (engine === 'latex') files = { ...files, '00README.json': JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } }) }
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-'))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -190,7 +204,8 @@ function prepare() {
       // (the paper's own files first: a style the marks rewrite is written over its own)
       for (const [path, bytes] of q.files) writeFileSync(join(d, path), bytes)
       // v1np: v1 with no points, LAYOUT_TEX as it was before them
-      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(POINTS_TEX, '')) : bytes)
+      // (under latex, v1np is v1 with no DVI point: POINTS_TEX's own sets nothing in DVI mode)
+      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
       jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes, trace: q.trace })
     }
   }
@@ -229,6 +244,41 @@ function moved(a, b) {
   })
   return out
 }
+/**
+ * A latex job's DVI as TeX wrote it (dvitype's listing, main.typ): by page, every character it set (its font, its code and
+ * where, h and v in sp) and every rule (where, its height and width), in order; specials left out, which the marks are. What
+ * TeX set, before any driver: dvipdfmx draws a glyph after a special by the DVI's own place and one with none before it by
+ * its own reckoning, up to 0.35 pt apart (a margin note: the stream's case A, 2026-10-19), which no TeX did
+ */
+function dviOf(name) {
+  const f = join(dir, name, 'main.typ')
+  if (!existsSync(f)) return null
+  const pages = []
+  let page = null, font = '', h = 0, v = 0
+  for (const line of readFileSync(f, 'latin1').split('\n')) {
+    if (/beginning of page/.test(line)) { page = []; pages.push(page); h = 0; v = 0; continue }
+    if (!page) continue
+    const fnt = /current font is (\S+)/.exec(line)
+    if (fnt) font = fnt[1]
+    const lvl = /^level \d+:\(h=(-?\d+),v=(-?\d+)/.exec(line)
+    if (lvl) { h = Number(lvl[1]); v = Number(lvl[2]); continue }
+    const ch = /^\d+: (?:setchar(\d+)|set\d (\d+)|put\d (\d+)) h:=(-?\d+)/.exec(line)
+    if (ch) page.push(`${font} ${ch[1] ?? ch[2] ?? ch[3]} ${ch[4]} ${v}`)
+    const rule = /^\d+: (?:set|put)rule height (-?\d+), width (-?\d+)/.exec(line)
+    if (rule) page.push(`rule ${h} ${v} ${rule[1]} ${rule[2]}`)
+    const hv = /[hv]:=[^=]*=(-?\d+)/g
+    for (const m of line.matchAll(hv)) { if (m[0][0] === 'h') h = Number(m[1]); else v = Number(m[1]) }
+  }
+  return pages
+}
+/** what two latex jobs' TeX set otherwise (dviOf): the pages, then each character or rule not where the other has it */
+function dviMoved(a, b) {
+  if (!a || !b) return ['no DVI listing']
+  if (a.length !== b.length) return [`${a.length} pages → ${b.length}`]
+  const out = []
+  a.forEach((pa, p) => { const pb = b[p]; if (pa.length !== pb.length) out.push(`page ${p + 1}: ${pa.length} items → ${pb.length}`); else pa.forEach((x, i) => { if (x !== pb[i]) out.push(`page ${p + 1} ${x} → ${pb[i]}`) }) })
+  return out
+}
 const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
 /** the log lines the run reads (live.mjs readingsOf), and LaTeX's warnings and errors */
 const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => READ_LINE.test(l) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
@@ -237,7 +287,7 @@ const near = (m, page, x, y, d) => !!m && m.page === page && Math.hypot(m.x - x,
 
 // ---------------------------------------------------------------- the jobs
 /** each document of STAY under each of its engines (pdfLaTeX unless it names others), by its job's key */
-const stays = Object.entries(STAY).flatMap(([name, v]) => (typeof v === 'string' ? [[name, v, 'pdflatex']] : v.engines.map(e => [name, v.src, e])))
+const stays = Object.entries(STAY).flatMap(([name, v]) => [...(typeof v === 'string' ? [[name, v, 'pdflatex']] : v.engines.map(e => [name, v.src, e])), [name, typeof v === 'string' ? v : v.src, 'latex']])
 const stayKey = (name, engine) => `stay-${name.replace(/[^A-Za-z0-9]+/g, '-')}${engine === 'pdflatex' ? '' : `-${engine}`}`
 for (const [name, src, engine] of stays) {
   queue(stayKey(name, engine), src, { engine })
@@ -611,9 +661,26 @@ where the text resumes with $u$ and more words.
 ${Array.from({ length: 10 }, (_, i) => `\\newpage\\vspace*{${548 + 4 * i}pt}\\noindent Words before the display at the foot of page ${i + 2}:\n\\begin{equation} p_{${i}} = q_{${i}} \\end{equation}\nand the words after it with $w_{${i}}$ words.`).join('\n')}
 \end{document}
 `
+// F (PR-C's run-in leads, 2026-10-19): a heading and a proof's name the class runs into the paragraph, each followed by a
+// placeholder first in it, whose opening mark waits in vertical mode for the unit's start mark (\\axtpmm, \\axtpma): TeX sets
+// the heading and the name first, as the paragraph starts, and their marks must leave it waiting (\\axt@hold), or the
+// placeholder owns the run-in text (2610.19159's "Task specification." owned by its $\\mathcal{T}$)
+STREAM.F = String.raw`\documentclass{article}
+\usepackage{amsmath,amsthm}
+\begin{document}
+\section{First}\label{sec:first}
+\paragraph{Task specification.} $\phi$ specifies the words that follow it on the heading's line, and more words after them.
+
+\paragraph{A second heading.} \ref{sec:first} is a reference first in its paragraph, and more words after it.
+
+\begin{proof}
+$\psi$ opens the proof right after its name, and more words after it.
+\end{proof}
+\end{document}
+`
 const streamKey = (name, engine) => `stream-${name}-${engine}`
 const streams = []
-for (const [name, src] of Object.entries(STREAM)) for (const engine of ['pdflatex', 'xelatex']) streams.push({ key: streamKey(name, engine), name, engine, paper: queue(streamKey(name, engine), src, { engine, variants: ['v1', 'v1np'] }) })
+for (const [name, src] of Object.entries(STREAM)) for (const engine of ['pdflatex', 'xelatex', 'latex']) streams.push({ key: streamKey(name, engine), name, engine, paper: queue(streamKey(name, engine), src, { engine, variants: ['v1', 'v1np'] }) })
 // LuaTeX's PDF writer sets the glyphs after a literal by an absolute matrix: a note of how far (the ruling: ≤ ~0.011 pt)
 const luaStream = { key: streamKey('A', 'lualatex'), name: 'A', engine: 'lualatex', paper: queue(streamKey('A', 'lualatex'), STREAM.A, { engine: 'lualatex', variants: ['v1', 'v1np'] }) }
 /** TeX's own page boxes with the points and without them, what the corpus check's trace compares: a balanced last page
@@ -634,7 +701,7 @@ console.log(`compiling ${jobs.length} documents in ${dir}, after ${queued.filter
 compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
-if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !LOST_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !LOST_ONLY && !DVI_ONLY) {
   const heads = wrappersPaper.units.filter(u => u.kind === 'heading').map(u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('').trim())
   check('the wrappers\' titles are headings, the paper\'s display one placeholder', ['Opening', 'The End of Training', 'A Chapter Numbered by Hand', 'The Long Title of It', 'Notes on the Method'].every(h => heads.includes(h)) && wrappersPaper.units.some(u => u.pieces.some(p => p.t === 'ph' && /^\\begin\{eqsplit\}[\s\S]*\\end\{eqsplit\}$/.test(p.src))), JSON.stringify(heads))
   for (const v of ['v0', 'v1']) {
@@ -646,7 +713,7 @@ if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !LOST_ONLY) {
 }
 if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY) {
 for (const [name, , engine] of stays) {
-  if (LOST_ONLY && !queued.some(q => q.name === stayKey(name, engine))) continue
+  if ((LOST_ONLY || DVI_ONLY) && !queued.some(q => q.name === stayKey(name, engine))) continue
   for (const hyper of [false, true]) {
     const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`
     const [a, b] = [await pdfOf(`${key}-v0`), await pdfOf(`${key}-v1`)]
@@ -655,12 +722,25 @@ for (const [name, , engine] of stays) {
     const m = moved(a, b), newErrors = errorsOf(`${key}-v1`).filter(e => !errorsOf(`${key}-v0`).includes(e))
     const logA = readLog(`${key}-v0`), logB = readLog(`${key}-v1`)
     const marks = [...b.dests.keys()].filter(k => /^(?:[pth]\d|n\d+\.\d+[ab])/.test(k)).length
-    check(label, !m.length && !newErrors.length && marks > 0, JSON.stringify({ moved: m.slice(0, 6), newErrors, layoutMarks: marks }))
+    if (engine === 'latex') {
+      // (under latex what TeX set is its DVI, every character and rule to the sp; the PDF dvipdfmx draws of it a note)
+      const dm = dviMoved(dviOf(`${key}-v0`), dviOf(`${key}-v1`))
+      check(`${label}: TeX's DVI`, !dm.length && !newErrors.length && marks > 0, JSON.stringify({ moved: dm.slice(0, 6), newErrors, layoutMarks: marks }))
+      if (m.length) console.log(`note ${label}: dvipdfmx draws ${m.length} text items otherwise, e.g. ${m.slice(0, 2).join('; ')}`)
+    } else check(label, !m.length && !newErrors.length && marks > 0, JSON.stringify({ moved: m.slice(0, 6), newErrors, layoutMarks: marks }))
     check(`${label}: the log the run reads and LaTeX's warnings unchanged`, JSON.stringify(logA) === JSON.stringify(logB), JSON.stringify(logB.filter(l => !logA.includes(l)).slice(0, 4)))
   }
 }
-
 if (!LOST_ONLY) {
+  // under latex a cell's mark in a \resizebox (dvips's scale, which dvipdfmx reads) lies on its glyphs: dvipdfmx reckons a
+  // `pdf:dest`'s place in the scaled box, as pdfTeX its FitR (not XeTeX's: xdvipdfmx's under \pdfsetmatrix, printed below)
+  const key = `${stayKey('a cell in \\resizebox', 'latex')}-v1`, r = await pdfOf(key)
+  const cells = cellPaper.units.map((u, i) => [u, i]).filter(([u]) => u.kind === 'cell').map(([u, i]) => [i, u.pieces.find(p => p.t === 'text' && /\w/.test(p.s))?.s.trim().split(/\s+/)[0]])
+  const got = cells.map(([i, word]) => { const m = r?.dests.get(`t${i}s`), g = m && r.pages[m.page - 1].find(it => it.str.startsWith(word)); return { cell: i, word, d: m && g ? Math.hypot(m.x - g.x, m.y - g.y) : null } })
+  check('a cell mark in \\resizebox lies on its glyphs under latex and dvipdfmx (within 1 pt)', got.length >= 4 && got.every(c => c.d !== null && c.d <= 1), JSON.stringify(got))
+}
+
+if (!LOST_ONLY && !DVI_ONLY) {
 {
   // REVTeX's swap takes the closing mark into a \csname: the probe's box with both marks errors, so before `!`, `?` and
   // a word the answer is the opening mark alone, not every mark (a box that errors measured the previous box once)
@@ -770,7 +850,7 @@ for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a cit
 }
 
 // ---------------------------------------------------------------- \axt@unmark's check
-if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY && !LOST_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY && !LOST_ONLY && !DVI_ONLY) {
   const unit = /^UNIT SUMMARY n=(\d+), bad=(\d+)/m.exec(read('unmark-unit-v1', 'log', 'latin1') ?? '')
   check('\\axt@unmark on hand-written lists: the bare regex\'s result by tokens, in every case', !!unit && Number(unit[1]) >= 25 && unit[2] === '0', `${unit?.[0]} ${(read('unmark-unit-v1', 'log', 'latin1') ?? '').match(/^UNIT DIFF.*/gm)?.slice(0, 3)}`)
   for (const [job, label] of [['unmark-files', 'with hyperref'], ['unmark-files-titlesec', 'and with titlesec']]) {
@@ -789,7 +869,7 @@ if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY && !LOST_ONLY) {
 
 
 // ---------------------------------------------------------------- the names' checks
-if (!STREAM_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY && !LOST_ONLY) {
+if (!STREAM_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY && !LOST_ONLY && !DVI_ONLY) {
   for (const j of nameJobs) {
     const label = `a babel name: ${j.name} (${j.engine}${j.hyper ? ', with hyperref' : ''})`
     const [a, b] = [await pdfOf(`${j.key}-v0`), await pdfOf(`${j.key}-v1`)]
@@ -883,11 +963,13 @@ const OWN = {
   // its aligns numbered on from 1, 9, 21 and 37
   C: [['$\\phi$', '\u03d5'], ['$', glyphsOf], ['\\cite{one}', '[1]'], ['call:Note ', null], ['\\begin{align}', (src, nth) => rowsOf(src.trim(), [1, 9, 21, 37][nth])]],
   D: [['$b_', glyphsOf], ['$', null]],
+  // each its own glyphs, none of the run-in heading's or name's before it
+  F: [['$\\phi$', '\u03d5'], ['\\ref{sec:first}', '1'], ['$\\psi$', '\u03c8']],
   // the group's first display owns the group (an align's row, an equation's, an equation*'s); each foot display its own
   E: [['\\begin{equation} a = b', 'a=b(1)'], ['$x_1$', 'x1'], ['\\begin{align} c', 'c=d(2)e=f(3)g=h'], ['\\begin{equation} e = f', 'LOST:in the display before it'], ['\\begin{equation*} g', 'LOST:in the display before it'], ['$u$', 'u'],
     ['\\begin{equation} p_', (src, n) => ({ s: `${glyphsOf(src.replace(/\\(?:begin|end)\{equation\}/g, '')).s}(${4 + n})`, rules: 0 })], ['$w_', glyphsOf]],
 }
-for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? streams.filter(x => x.name === 'E') : [...streams, luaStream]) {
+for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? streams.filter(x => x.name === 'E') : RUNIN_ONLY ? streams.filter(x => x.name === 'F') : DVI_ONLY ? streams.filter(x => x.engine === 'latex') : [...streams, luaStream]) {
   const label = `the stream, ${s.name} (${s.engine})`
   const [a, b] = [await inkOf(`${s.key}-v1`), await inkOf(`${s.key}-v1np`)]
   if (!a || !b) { check(`${label}: compiled`, false, `no PDF (${a ? 'v1np' : 'v1'})`); continue }
@@ -897,9 +979,15 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
   else {
     // xdvipdfmx writes a glyph after a special by a position it reckons otherwise: up to 0.0013 pt on case A's margin
     // note since the float's points wrap its box, TeX's boxes the same (\tracingoutput)
+    // (dvipdfmx under latex as xdvipdfmx under XeTeX)
     const tol = s.engine === 'xelatex' ? 0.002 : 0.001
-    check(`${label}: every glyph and box within ${tol} pt of the compile with no point, every destination the same`, !d.why && d.worst <= tol && JSON.stringify(a.dests) === JSON.stringify(b.dests) && points > a.dests.length, JSON.stringify({ ...d, dests: [a.dests.length, b.dests.length], points }))
-    if (!d.why && d.over) console.log(`note ${label}: ${d.over} glyphs or boxes past 0.001 pt, ${d.worst.toFixed(4)} at most`)
+    if (s.engine === 'latex') {
+      // (under latex what TeX set is its DVI, to the sp; dvipdfmx draws a glyph with no special before it by its own reckoning)
+      const dm = dviMoved(dviOf(`${s.key}-v1`), dviOf(`${s.key}-v1np`))
+      check(`${label}: TeX's DVI the same as the compile's with no point, every destination the same`, !dm.length && JSON.stringify(a.dests) === JSON.stringify(b.dests) && points > a.dests.length, JSON.stringify({ moved: dm.slice(0, 6), dests: [a.dests.length, b.dests.length], points }))
+      console.log(`note ${label}: dvipdfmx's glyphs and boxes ${d.why ?? `within ${d.worst.toFixed(4)} pt of the compile with no point, ${d.over} past 0.001`}`)
+    } else check(`${label}: every glyph and box within ${tol} pt of the compile with no point, every destination the same`, !d.why && d.worst <= tol && JSON.stringify(a.dests) === JSON.stringify(b.dests) && points > a.dests.length, JSON.stringify({ ...d, dests: [a.dests.length, b.dests.length], points }))
+    if (!d.why && d.over && s.engine !== 'latex') console.log(`note ${label}: ${d.over} glyphs or boxes past 0.001 pt, ${d.worst.toFixed(4)} at most`)
   }
   const log = n => read(n, 'log', 'latin1') ?? ''
   const units = s.paper.units
@@ -909,7 +997,9 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
     const x = JSON.parse(encodeLayoutMarks({ ...m, chars: [], owned: [] })), y = JSON.parse(encodeLayoutMarks(plain))
     let edge = 0
     const same = (p, q) => (typeof p === 'number' && typeof q === 'number' ? (p === q || (Math.abs(p - q) <= 0.0100001 && ++edge > 0)) : Array.isArray(p) ? Array.isArray(q) && p.length === q.length && p.every((v, i) => same(v, q[i])) : p && typeof p === 'object' ? !!q && typeof q === 'object' && JSON.stringify(Object.keys(p)) === JSON.stringify(Object.keys(q)) && Object.keys(p).every(k => same(p[k], q[k])) : p === q)
-    check(`${label}: the marks file the same but for each piece's own ink (to its hundredths)`, same(x, y), '')
+    // (under latex the file's places are the glyphs dvipdfmx draws, which a point before them sets at TeX's place: a note)
+    if (s.engine === 'latex') console.log(`note ${label}: the marks file ${same(x, y) ? 'the same' : 'not the same'} but for each piece's own ink, to its hundredths`)
+    else check(`${label}: the marks file the same but for each piece's own ink (to its hundredths)`, same(x, y), '')
     if (edge) console.log(`note ${label}: ${edge} value${edge > 1 ? 's' : ''} of the marks file a hundredth apart, a value on the rounding edge`)
     if (!d.why) console.log(`note ${label}: the largest difference of a glyph or a box ${d.worst.toExponential(1)} pt`)
   }
@@ -962,7 +1052,7 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
 }
 
 // TeX's own boxes: the points' nodes out (the corpus check's comparison), nothing else different
-for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY || LOST_ONLY ? [] : Object.keys(TRACED)) {
+for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY || LOST_ONLY || RUNIN_ONLY || DVI_ONLY ? [] : Object.keys(TRACED)) {
   const boxesOf = v => { const log = read(`${traceKey(name)}-${v}`, 'log', 'latin1') ?? ''; const out = [], lines = log.split('\n'); for (let i = 0; i < lines.length; i++) if (/^Completed box being shipped out \[/.test(lines[i])) { const at = i; while (i < lines.length && lines[i] !== '') i++; out.push(...lines.slice(at, i), '') } return pageBoxes(out.join('\n')) }
   const [a, b] = [boxesOf('v1np'), boxesOf('v1')], d = boxDiff(a, b)
   check(`the stream, TeX's boxes with the points and without them the same: ${name}`, a.length > 0 && a.length === b.length && !d.length, JSON.stringify({ pages: [a.length, b.length], differences: d.length, first: d.slice(0, 3).map(x => [x.page, x.v0, x.v1]) }))

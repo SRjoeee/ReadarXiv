@@ -156,6 +156,25 @@ describe('LK3: a link over a crop', () => {
     // (an annotation of another page than the crop's source is placed nowhere)
     expect(placeUnit({ groups: [{ to: target(2, { draw: 'crop' }), annots: [{ ...cand(a, 2), tier: 'url' }] }], ...(where as object) } as never).tried).toEqual([{ q: 2, i: 0, why: 'unplaced' }])
   })
+  it("over a formula TeX broke over lines, drawn as its crops one a line: each box by the map of the part it lies in", () => {
+    // its first line's part (x 200-260 on page 3) drawn on page 4's line at 400 from x 150, its second's (x 100-130) on the line
+    // at 388 from x 100: an annotation over the second part (its own box) placed by the second's map, one over both two boxes
+    const part = (crop: number[], baseline: number, part: number) => ({ mode: 'crop', k: 2, page: 3, crop, baseline, part, text: part ? '' : 'x+y' })
+    const two = { f: 10, s: 10, scale: 0.8, state: { track: 0, trackLatin: 0 }, lines: [
+      { page: 4, baseline: 400, x0: 100, items: [{ t: { crop: part([200, 495, 260, 510], 500, 0), cw: 60, w100: 0 }, x: 150, w: 48 }] },
+      { page: 4, baseline: 388, x0: 100, items: [{ t: { crop: part([100, 483, 130, 498], 488, 1), cw: 30, w100: 0 }, x: 100, w: 24 }] },
+    ] }
+    const at = { lines: two.lines.map(line => ({ line, runs: [{ crop: 0 }] })), edge: () => 0, band: () => ({ top: 0, bottom: 0 }), scale: 0.8 } as never
+    const second = ann(3, { url: 'https://x.org/a' }, 'y', ['1|3'], [110, 485, 120, 495])
+    const one = placeUnit({ groups: [{ to: target(2, { draw: 'crop' }), annots: [{ ...cand(second, 3), tier: 'url' }] }], ...(at as object) } as never)
+    expect(one.tried).toEqual([])
+    expect(one.records[0]!.li).toBe(1)
+    expect(one.records[0]!.rec.boxes.map(v => Math.round(v * 100) / 100)).toEqual([108, 385.6, 116, 393.6])
+    const both = { ...ann(4, { url: 'https://x.org/a' }, 'x+y', ['1|4']), boxes: [[230, 497, 260, 507], [100, 485, 120, 495]] }
+    const b = placeUnit({ groups: [{ to: target(2, { draw: 'crop' }), annots: [{ ...cand(both, 3), tier: 'url' }] }], ...(at as object) } as never).records[0]!
+    expect(b.li).toBe(0)
+    expect(b.rec.boxes.map(v => Math.round(v * 100) / 100)).toEqual([174, 397.6, 198, 405.6, 100, 385.6, 116, 393.6])
+  })
   it('a crop not drawn takes none: its annotation is the freeze\'s (over erased ink, dropped)', () => {
     const a = ann(0, { url: 'https://x.org/a' }, 'h', ['1|0'])
     const m = matchUnit({ cands: [cand(a)], targets: [target(2, { kind: 'url', url: 'https://x.org/a', gap: gapOf(1, 1, 3), draw: null })] })

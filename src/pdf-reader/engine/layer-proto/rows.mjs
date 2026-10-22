@@ -197,6 +197,13 @@ export function unitOf(bundle, row) {
   if (!src || !STATES.has(state)) return null
   const group = groupOf(src)
   const unit = { kind: src.kind, src: plainOf(s, id), state, ...(src.title ? { title: true } : {}), ...(group ? { group } : {}) }
+  // (its source pieces, by identity: what each source word is inside, which the layer reads its base style and its pieces' colours by,
+  // layer2.mjs sourceScopes; never written to a row)
+  Object.defineProperty(unit, 'source', { value: src.pieces, enumerable: false })
+  // (its row's sentences, each one's start after the first in the plain source and translation, where the row has them: where
+  // the layer cuts the translation at a page break, layer2.mjs pageCutsOf; never written to a row)
+  const n = row[4]
+  if (isObject(n) && Array.isArray(n.src) && Array.isArray(n.tr) && n.src.length === n.tr.length && n.src.every(Number.isInteger) && n.tr.every(Number.isInteger)) Object.defineProperty(unit, 'sentences', { value: { src: n.src, tr: n.tr }, enumerable: false })
   if (state !== 'whole' && state !== 'partial') return unit
   if (!Array.isArray(pieces) || pieces.length > PIECES_MAX) return null
   const out = []

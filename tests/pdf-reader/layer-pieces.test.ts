@@ -181,11 +181,18 @@ Caf\'e and na\"ive words, {\color{red} red} and \textcolor{blue}{blue}, to the d
 
 describe('slotKs', () => {
   it("are the slots' own indices", () => {
-    // text, $x$, an open, text, a close, \cite{a}
+    // text, $x$, an open, text, a close, \cite{a}: the bold word inside its sentence goes on no wire (mt.mjs planOf)
     const u = unit([text('a '), ph('$x$'), open(1, '\\textbf{'), text('b'), close(1), ph('\\cite{a}')])
-    expect(slotKs(u, serialize(u as never).slots)).toEqual([1, 2, 4, 5])
+    expect(slotKs(u, serialize(u as never).slots)).toEqual([1, 5])
     // slots read from JSON (the early's, from the Worker) find the same
-    expect(slotKs(u, viaJson(serialize(u as never).slots))).toEqual([1, 2, 4, 5])
+    expect(slotKs(u, viaJson(serialize(u as never).slots))).toEqual([1, 5])
+  })
+  it("a kept pair's edges (a run-in label, its switch inside it) have their pieces' indices", () => {
+    // \textbf{\bfseries Setup.} text $x$: the label's open with its switch one slot, its close another
+    const u = unit([open(1, '\\textbf{'), ph('\\bfseries'), text('Setup.'), close(1), text(' We train '), ph('$x$'), text('.')])
+    expect(serialize(u as never).wire).toBe('@a# Setup. @b# We train @c#.')
+    expect(slotKs(u, serialize(u as never).slots)).toEqual([[0, 1], 3, 5])
+    expect(slotKs(u, viaJson(serialize(u as never).slots))).toEqual([[0, 1], 3, 5])
   })
   it("a run's slot (a formula split across inline formulas, one marker) has all its pieces' indices, in order", () => {
     // text, the set's three parts and the commas between them, text, \cite{a}
