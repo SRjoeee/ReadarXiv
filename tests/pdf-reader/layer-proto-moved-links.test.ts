@@ -67,7 +67,7 @@ async function open(P: ReturnType<typeof paper>, { free = true } = {}) {
   for (const [id, r] of P.rows) { units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
     doc: P.doc, target: 'zh', pages: PAGES, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, records: true,
-    tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+    tex: { index: P.index, pieces, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }
 /** what a page answers: its links and their attribution, and what it drew */
@@ -152,7 +152,7 @@ describe('openProto and the documents it retires', () => {
   async function openFresh(told: unknown[]) {
     const P = paper()
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
-    const run = await openProto({ doc: P.doc, target: 'zh', pages: PAGES, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units: [], onRetired: (d: unknown) => told.push(new WeakRef(d as object)) } as never) as Run
+    const run = await openProto({ doc: P.doc, target: 'zh', pages: PAGES, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units: [], tex: { index: P.index, pieces: new Map() }, onRetired: (d: unknown) => told.push(new WeakRef(d as object)) } as never) as Run
     return { run, weak: new WeakRef(P.doc as object) }
   }
   it('lets go of a retired document once it is told: swapped away from, it is told once and then collected; the newest is told at dispose', async () => {

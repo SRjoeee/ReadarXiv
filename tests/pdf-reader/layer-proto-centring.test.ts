@@ -80,24 +80,6 @@ describe('a cell its column cannot decide is drawn as the layout file\'s flag sa
   }
 })
 
-describe('a unit of a part with no layout is centred by the page\'s column', () => {
-  it('a line on its column\'s middle, short of it, in one column of two: centred, as before the file had a flag', async () => {
-    // (the left column 20 to 140, its middle 80: four paragraph lines over it; a line of 60 about 80, not the page's middle 150)
-    const paper: Paper = { name: 'no layout', pages: 1, specs: [para(0, [[1, 270, 4]], 20), { id: 1, kind: 'caption', lines: [line(1, 200, 'Figure caption', 50, 110)], chars: 4, at: 0x4e00 + 64 }] }
-    const P: Built = build(paper)
-    for (const l of paper.specs[0]!.lines) l.x1 = 140
-    const g = P.geometry as { left: { units: unknown[] } }
-    g.left.units = paper.specs.map(s => [s.id, 10, s.lines.map(l => [l.page, l.x0, l.b - 2, l.x1, l.b + 7])])
-    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
-    const units: unknown[] = []
-    for (const [id, r] of P.rows) units[id] = r
-    const run = await openProto({ doc: P.doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free: true, records: true } as never)
-    await run.layFor(1)
-    const lines = (run.stats.find(x => x.id === 1)?.lines ?? []) as unknown as Line[]
-    expect(lines.map(l => l[4])).toEqual(['centred'])
-  })
-})
-
 describe("a centred line on a page with no paragraph is laid in its column's measure (2610.16663's figure pages)", () => {
   // (page 1: a paragraph over 20 to 280; page 2: a figure's caption alone, centred, one line of ink 100 to 200 about 150, its
   // translation 250 wide: on page 2 the page's own lines give no column, and the caption's own ink was its measure, so the

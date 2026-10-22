@@ -206,7 +206,7 @@ export async function openRun(P: Built, { free = true, groups = true, expect = f
   for (const [id, r] of P.rows) { if (!expect) units[id] = r; pieces.set(id, trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) ?? []) }
   return openProto({
     doc: P.doc, target: 'zh', pages: P.paper.pages, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, free, records, groups: groups ? P.groups : null, ...(expect ? { expect: [...P.rows.keys()] } : {}), ...(rules ? { rules } : {}),
-    tex: { index: P.index, pieces, use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+    tex: { index: P.index, pieces, symbols: 'text', extents: 'v0' },
   } as never) as Promise<Run>
 }
 /** a page asked for, as the door asks: its closure laid (Need(p), run.mjs layFor), and nothing else; the page is then final */

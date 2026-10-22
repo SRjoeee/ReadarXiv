@@ -33,10 +33,10 @@ const H = 300
  *  (`beside`), and a paragraph's line at y = 200; the layout file locating the heading as babel's `key`, `flags` its, its
  *  TeX column the paragraph's (20 to 120). `runIn`: IEEEtran's "Abstract—Deep …": the paragraph's line is the heading's,
  *  its dash (the unit's label, 60 to 64) and then its text from 64, the file locating it and the name leading it (RUN_IN,
- *  `glue` after the dash; `whole` false: not located whole, laid by v0's geometry); `bare`: no unit at all, the
+ *  `glue` after the dash); `bare`: no unit at all, the
  *  paragraph's line text no unit holds (a page of references alone); `column`: the name's TeX column in its row;
  *  `nameSize`: its size there (the unit's lines are 10) */
-function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, glue = 0, bare = false, whole = true, column = [20, 120], nameSize = 10, text = '\u6c49\u5b57\u6c49\u5b57' } = {}) {
+function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, glue = 0, bare = false, column = [20, 120], nameSize = 10, text = '\u6c49\u5b57\u6c49\u5b57' } = {}) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (px: number, py: number) => [px * scale, (H - py) * scale], convertToPdfPoint: (px: number, py: number) => [px / scale, H - py / scale] })
   const item = (str: string, ix: number, w: number, y: number) => ({ str, transform: [10, 0, 0, 10, ix, y], width: w, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })
   const items = [item(name, x, width, 230), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), ...(runIn ? [item('\u2014', 60, 4, 230), item('Alpha beta gamma', 64 + glue, 100, 230)] : [item('Alpha beta gamma', 20, 100, 200)])]
@@ -52,7 +52,7 @@ function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string
     geometry: { schema: 1, kinds: bare ? [] : ['para'], left: { pages: [[0, 0, 300, 300]], units: bare ? [] : [[0, 0, [runIn ? [1, 64 + glue, 227.85, 164 + glue, 236.83] : [1, 20, 197.85, 120, 206.83]]]] } },
     units: bare ? [] : [{ kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: text }] }],
     // (the translation's one text piece the source's: the file locates the run-in unit whole)
-    tex: { use: 'lines', texOnly: true, index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map(runIn && whole ? [[0, [[0]]]] : []) },
+    tex: { index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map(runIn ? [[0, [[0]]]] : []) },
   }
 }
 const open = (o: object = {}, p = paper()) => openProto({ ...p, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, labels: { captions: null }, ...o } as never)
@@ -115,10 +115,6 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     expect(xs[0]).toBe(20)
     expect(xs[2]! - xs[1]!).toBeCloseTo(xs[1]! - xs[0]!, 1)
     expect(zh.names[0]!.chars.map(c => c.ch).join('')).toBe('Abstract')
-    // (the same where v0 lays the unit by its own geometry: the joint is the file's label of it)
-    const own = await open({}, paper({ runIn: true, whole: false }))
-    await own.until(1)
-    expect(own.svgOf(1).textContent?.replace(/\s+/g, '')).toContain('\u6458\u8981\u2014\u6c49\u5b57')
     // de's, wider than its own room (75 against 40): not shrunk, and no space after the dash, as the original has none
     // (the unit's text begins with the source's white space after \begin{abstract}, which TeX skips)
     const de = await open({ target: 'de' }, paper({ runIn: true, text: ' Tiefe Netze' }))

@@ -538,9 +538,9 @@ describe('the door: three opens, the same pages', () => {
     layer.dispose()
   })
 
-  it('reads a part with no layout as BUNDLE 3 reads a bundle with none: through the proof that nothing proves (#352\'s fail-closed rule)', async () => {
+  it('reads a part with no layout as BUNDLE 3 reads a bundle with none: it draws nothing, every unit the original\'s (the layer draws only from the file)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
-    // (a paragraph with a citation, located by the original's side alone: with no layout file nothing proves its rendering)
+    // (a paragraph with a citation, located by the original's side alone: with no layout file the layer has no position for it)
     const spec: PaperSpec = { pages: 3, units: [...SPEC.units, { ...para('Cited here', 2, 150, { stream: 40, file: false }), cite: true }] }
     const cited = spec.units.length - 1
     for (const ends of [[1], []]) {
@@ -555,7 +555,8 @@ describe('the door: three opens, the same pages', () => {
       const want = await askEvery(whole, spec.pages)
       const wantLeft = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
       whole.dispose()
-      expect(wantLeft).toContain(`${cited}:unproven`)
+      expect(wantLeft).toContain(`${cited}:unanchored`)
+      expect((seen.runs.at(-1) as Run).placed).toEqual([])
       seen.log.length = 0
       const door = await openLayer({ index: c.index, doc: docFor(0), parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
       door.take(rows)

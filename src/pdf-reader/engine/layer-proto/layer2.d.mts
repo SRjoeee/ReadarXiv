@@ -58,23 +58,23 @@ export interface Unit { kind: string; src: string; pieces: { t: string; s?: stri
 // A line's key is `page|x0,y0,x1,y1` of its rectangle (rectKey); a page character's is `page|item|k` (charKey). The
 // rest of v0 reads a Prepared and nothing else of how it was made: blocks2 (lineInfo, keep, regionOf, referenced), the
 // tokens (the resolutions, referenced), the drawing (extents), the restore (uc, cat), the gate's lost ink (uc, cat,
-// lineInfo) and the checker (the resolutions, uc, gaps, keep, label, cat). Each field is filled by one part; the four
-// parts that read the page's geometry (lines, extents, label, renderings) are v0's heuristics or another source's
-// (UnitParts), the rest are the same for every source.
+// lineInfo) and the checker (the resolutions, uc, gaps, keep, label, cat). Each field is filled by one part; the parts that
+// read the page's geometry (lines, extents, label, renderings, crops) are the layout file's (UnitParts), the rest read the
+// page's characters.
 
 /** a run of the unit's page characters: a gap (what its source does not write: a placeholder's rendering, a label), or a
  *  placeholder's rendering as its source found it. `of`: the gap it was cut from; `box`: where its ink is, where its
  *  source knows it exactly (drawnAs places a crop by it) */
 export interface Gap {
   text: string; chars: Char[]; of?: Gap; unbracketed?: boolean; norm?: string; taken?: boolean; box?: RenderingBox
-  /** a display's rendering from the held lines that cover it (tex.mjs displayCover): those lines' keys */
+  /** a later display of a display group, its rendering the group's lines kept where they stand (tex.mjs texParts): those lines' keys */
   held?: string[]
 }
 /** a rendering's ink as its source knows it: its extent across, the baseline of the line it sits on, its lines */
 export interface RenderingBox { x0: number; x1: number; top?: number; bottom?: number; baseline: number; lines: number; segs?: ArrayLike<number> }   // segs: a layout file's segments (stride 6), a formula broken over lines cropped by them
 /** a crop of one line of a formula's segments (cropPartsOfSegments): its page, its rectangle and baseline, the union as a segment */
 export interface CropPart { page: number; crop: number[]; baseline: number; seg: RenderingBox & { top: number; bottom: number } }
-/** a placeholder of the unit by its piece index `k` (placeholdersOf): its source, its class (phClass2), whether it is a
+/** a placeholder of the unit by its piece index `k` (placeholdersOf): its source, its class (phClassProven), whether it is a
  *  paper's own macro, a nested footnote's mark; a citation's keys */
 export interface Placeholder { k: number; src: string; cls: string; unknown?: boolean; nested?: boolean; keys?: string[] }
 /** the paper's citations as learnt in lay order (a key's number), an author-year key's text, a macro's rendering */
@@ -87,7 +87,7 @@ export interface LineInfo { baseline: number; size: number; top?: number; bottom
 export type Extent = number[] | number[][]
 /** a placeholder's resolution: how it is drawn ('none', 'symbol', 'kept', 'crop', 'orig-text', 'cite-map', 'source'),
  *  with its placeholder (k, src, cls) and the rendering it took (gap) */
-export interface Resolved { mode: string; text?: string; k?: number; src?: string; cls?: string; page?: number; crop?: number[]; baseline?: number; sup?: boolean; math?: boolean; gap?: Gap | null; region?: number; second?: boolean; parts?: CropPart[]; part?: number; [more: string]: unknown }   // parts: a crop's, one a line of a formula TeX broke over lines (its first part's page, crop and baseline its own); part: a part's index, cropPartsOf's
+export interface Resolved { mode: string; text?: string; k?: number; src?: string; cls?: string; page?: number; crop?: number[]; baseline?: number; sup?: boolean; math?: boolean; gap?: Gap | null; region?: number; parts?: CropPart[]; part?: number; [more: string]: unknown }   // parts: a crop's, one a line of a formula TeX broke over lines (its first part's page, crop and baseline its own); part: a part's index, cropPartsOf's
 /** prepareUnit's answer: each placeholder's resolution by its piece's index, with the unit's reading of the page */
 export interface Prepared extends Map<number, Resolved> {
   /** where each later page of the unit begins in its source (pageStartsOf, E3c): by page, the plain source's UTF-16 offset */
@@ -133,11 +133,10 @@ export interface Prepared extends Map<number, Resolved> {
   tail?: { ch: string; st: Style | null }[] | null
   /** the finish: the lines a located display holds */
   displayLines?: Set<string>
-  /** part 5: the piece index of a placeholder whose rendering no source proves (tex.mjs proofOf: the unit is left the
-   *  original's) */
+  /** part 5: the piece index of a placeholder the file cannot draw (tex.mjs cropsOf: the unit is left the original's) */
   unproven?: number
-  /** part 4's source knows each placeholder's ink (a layout file's segments) over part 1's lines (the file's): a gap's piece
-   *  none took is the unit's text */
+  /** the file knows each placeholder's ink (its segments) over part 1's lines (the file's): a gap's piece none took is the
+   *  unit's text */
   inkKnown?: boolean
   /** each placeholder's fill by a source that knows it (tex.mjs fillOf), by piece index: what its rendering's text is drawn
    *  in, 0xRRGGBB; MIXED_FILL or null, its run's colour */
@@ -152,11 +151,11 @@ export interface UnitLines {
   /** the lines (rectKey) the unit's source does not write, by the source's knowledge: kept as the original's */
   held?: string[]
 }
-/** what part 4 is given: the unit, its placeholders, its lines' characters, the gaps the labels left, the paper's
- *  citations and each placeholder's plain text and name (`plain`) */
+/** what part 4 is given: the unit, its placeholders, its lines' characters, the gaps the labels left and the unit's
+ *  citations */
 export interface RenderingsContext {
   unit: Unit; phs: Placeholder[]; rects: readonly Rect[]; charsByPage: readonly (readonly Char[] | undefined)[]; citeMap: CiteMap | null
-  gaps: Gap[]; uc: Char[]; plain: Map<Placeholder, { t: string; name: string }>; out: Prepared
+  gaps: Gap[]; uc: Char[]; out: Prepared
 }
 /** part 4's answer: the gaps as it leaves them, and each placeholder's rendering (called once a placeholder, in the
  *  unit's order, for those the rules look for: 'cite', 'num', 'other'), or none found */
@@ -169,26 +168,26 @@ export interface Renderings {
    *  then looked for (gapFor) and drawn as that ink */
   inked?(p: Placeholder): boolean
 }
-/** the parts of a unit another source gives in place of v0's; a part not given is v0's */
+/** the parts of a unit the layout file gives (tex.mjs texParts): the layer reads a unit only from the file */
 export interface UnitParts {
   /** part 1 (and part 2's default): the unit's lines and their characters */
-  lines?: (rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[]) => UnitLines
-  /** part 2: the erase extents, given the lines */
+  lines: (rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[]) => UnitLines
+  /** part 2: the erase extents, given the lines (the lines' own where absent) */
   extents?: (lines: UnitLines, rects: readonly Rect[]) => Map<Rect, Extent>
   /** part 3: sets out.label, returns the gaps without it */
-  label?: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
-  /** part 4: which ink each placeholder is, by a source that knows it (Prepared.inkKnown, with part 1) */
-  renderings?: (ctx: RenderingsContext) => Renderings
-  /** part 5: every rendering proven, each crop cut from its placeholder's own ink (mutates the crops; one the reading found
-   *  none for read again from the source, `unit`'s); the k of one no source proves, or -1 */
-  proof?: (out: Prepared, unit: Unit) => number
-  /** where the unit's forced breaks end its lines (with part 1's lines, the file's): each break piece's index to the line
-   *  set after it, by its index in the file (LineInfo.j) */
-  breaks?: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
-  /** each placeholder's fill by the source (a layout file's row), by piece index: 0xRRGGBB, MIXED_FILL (-1) or null */
-  fillOf?: (k: number) => number | null
-  /** each colour piece's run's fill by the source (the layout file's `colours`), by piece index: 0xRRGGBB or null */
-  colourOf?: (k: number) => number | null
+  label: (out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]) => Gap[]
+  /** part 4: which ink each placeholder is, by the file's segments */
+  renderings: (ctx: RenderingsContext) => Renderings
+  /** part 5: a rendering page text cannot be is its segments' crops (mutates the crops); the k of a placeholder the file
+   *  cannot draw, or -1 */
+  crops: (out: Prepared) => number
+  /** where the unit's forced breaks end its lines (the file's): each break piece's index to the line set after it, by its
+   *  index in the file (LineInfo.j) */
+  breaks: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
+  /** each placeholder's fill by the file's row, by piece index: 0xRRGGBB, MIXED_FILL (-1) or null */
+  fillOf: (k: number) => number | null
+  /** each colour piece's run's fill by the file (its `colours`), by piece index: 0xRRGGBB or null */
+  colourOf: (k: number) => number | null
 }
 /** a token of a unit's translation */
 export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; kernW?: number; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it; kernW: explicit glue after it (at 100 px), its item's `kern`
@@ -242,32 +241,27 @@ export declare function droppedHeld(s: string, held: readonly string[]): string
 export declare function texToText2(src: string): string
 /** phClass with the paper's own macros told apart: { cls, unknown? } */
 export declare function phClass2(src: string): { cls: string; unknown?: boolean }
-/** whether a 'symbol' is a text symbol the proof exempts: one grapheme drawn, no `_`, `^`, `/` or `√(` */
+/** whether a 'symbol' is a text symbol the file's crops exempt: one grapheme drawn, no `_`, `^`, `/` or `√(` */
 export declare function textSymbol(src: string): boolean
-/** phClass2 under the proof: a 'symbol' that is no text symbol is 'other' */
+/** phClass2 as the layer reads a unit's placeholders: a 'symbol' that is no text symbol is 'other' */
 export declare function phClassProven(src: string): { cls: string; unknown?: boolean }
 /** the unit's characters by its rectangles; `exact`: each rectangle's baseline and size where a layout file gives them */
 export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents?: Map<Rect, number[]>, exact?: ReadonlyMap<Rect, { baseline: number; size: number }> | null): Char[]
 /** `first`: the unit's first line (default rects[0]; `rects` may be its lines on one page alone); `measured`: the rects are the layout file's lines, a justified line grown over what is not math only up to its run's measure (E3d) */
 export declare function extendRects2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, pageViews: readonly number[][], wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect, measured?: boolean): number
-export declare function extendFirstLines(rects: Rect[], pageViews: readonly number[][], others: readonly (readonly Rect[] | undefined)[]): void
 /** a block's lines by the measure TeX set each to, where it changed within the paragraph (a wrapped figure, \parshape,
  *  \hangindent): each line's key to its measure's [x0, x1], or null where the block is one measure */
 export declare function measuresOf(rects: readonly Rect[], keep?: ReadonlySet<string> | null): Map<string, [number, number]> | null
 export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean): (Block & { measures?: Map<string, [number, number]> | null })[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
-/** the unit against its page, in parts: v0's, or `parts` another source gives (the per-unit reading's contract above) */
+/** the unit against its page, in the layout file's parts (the per-unit reading's contract above) */
 /** a fill (0xRRGGBB) as the drawing writes it, `#rrggbb` */
 export declare const hexOf: (rgb: number) => string
-export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap?: CiteMap | null, deny?: ReadonlySet<string> | null, parts?: UnitParts | null): Prepared
-/** the unit's placeholders by piece index; `proven`: classed as a unit drawn under the proof is (phClassProven) */
-export declare function placeholdersOf(unit: Unit, proven?: boolean): Placeholder[]
-/** parts 1 and 2, v0's: the unit's characters by its rectangles, each line's baseline and size, and its extent */
-export declare function linesOf(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): UnitLines
-/** part 3, v0's: the first gap's label, out.label set; the gaps without it */
+export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap: CiteMap | null, deny: ReadonlySet<string> | null, parts: UnitParts): Prepared
+/** the unit's placeholders by piece index, classed by phClassProven */
+export declare function placeholdersOf(unit: Unit): Placeholder[]
+/** part 3, the alignment's where the file has no label: the first gap's label, out.label set; the gaps without it */
 export declare function labelOf(out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]): Gap[]
-/** part 4, v0's: the renderings by the alignment's gaps */
-export declare function v0Renderings(ctx: RenderingsContext): Renderings
 /** a citation's keys from its source */
 export declare const citeKeys: (src: string) => string[]
 /** a citation's rendering without the source's own brackets round it, and what it says learnt for the paper */
@@ -280,8 +274,6 @@ export declare const cropGrows: (r: { crop?: number[] | null; gap?: { box?: unkn
 export declare function nearIn(letters: string, hay: string, src?: string): boolean
 /** a page character's key: page|item|k */
 export declare const charKey: (c: { page?: number; item: number; k: number }) => string
-export declare function snapFirstRect(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): number | undefined
-export declare function snapFirstRect2(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[]): number | undefined
 /** wordChars: the page's characters the first line may grow over the words its source begins with (step 3) */
 export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
 /** a unit's translation as tokens; `.base` is its base style. `measure(s, face)`: a run's width at 100 px (the canvas's, cached,
@@ -321,8 +313,6 @@ export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: numb
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>
 /** whether a rendering's own characters hold one raised over its main glyphs' baseline (a superscript, a raised letter) */
 export declare function scriptedOf(chars: readonly Char[]): boolean
-/** a placeholder's resolution read again from a rendering another source proves (tex.mjs proofOf): its page text or crop */
-export declare function resolutionFrom(r: Resolved, g: Gap & { proof?: boolean }, unit: Unit, lineInfo?: Prepared['lineInfo'] | null): Resolved
 /** a crop from a layout file's segment (its piece's own ink): the box, a fraction of a point around, on its line's
  *  baseline */
 export declare function cropOfBox(box: { x0: number; x1: number; top: number; bottom: number; baseline: number }): { crop: number[]; baseline: number }

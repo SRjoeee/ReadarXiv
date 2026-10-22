@@ -65,7 +65,7 @@ describe("a table group withheld beside one drawn, the whole run (openProto): th
         doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
         geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
         units,
-        tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+        tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), symbols: 'text', extents: 'v0' },
         removal: { OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: true } } } },
       } as never)
       await run.until(1)
@@ -104,7 +104,7 @@ describe("a cell widened over the paper beside it, the whole run (openProto): he
       doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
       geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
       units,
-      tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+      tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), symbols: 'text', extents: 'v0' },
       removal: { OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: true, rules: [60, 107.63, 120, 108.03] } } } },
     } as never)
     await run.until(1)
@@ -139,7 +139,7 @@ describe("a unit the page fill lays anew, the whole run (openProto): its record'
       doc, target: 'de', pages: 1, scale: 1, dpr: 1, copy: false,
       geometry: { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [] } },
       units: [{ kind: 'para', src: words.join(' '), state: 'whole', pieces: [{ t: 'text', tr: true, s: 'Eins zwei drei vier fuenf' }] }],
-      tex: { index, pieces: new Map([[0, [[0]]]]), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+      tex: { index, pieces: new Map([[0, [[0]]]]), symbols: 'text', extents: 'v0' },
       removal: { OPS: {}, mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: 1, sets: {}, page: { 1: { ok: true } } } },
     } as never)
     await run.until(1)
@@ -175,7 +175,7 @@ describe("a paper whose add-on is refused, the whole run (openProto): every unit
       doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
       geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
       units: cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57' }] })),
-      tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' },
+      tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), symbols: 'text', extents: 'v0' },
       removal: removal(doc),
     } as never)
     await run.until(1)

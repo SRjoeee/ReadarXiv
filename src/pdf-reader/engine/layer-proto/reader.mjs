@@ -2,7 +2,7 @@
 // The reader's door (the layer-only plan of 2026-10-08, §7, A2's E4; BUNDLE 4's parts, the door design of 2026-10-15). On
 // 2026-10-08 the instant layer became the only reading view, for the web reader and the extension alike; both take every
 // engine value they use from this module, and both draw a paper through openLayer: the one place v0's host is written
-// (run.mjs openProto's options: the geometry, the hybrid's choices, the add-on, the labels, the scale), so that neither
+// (run.mjs openProto's options: the geometry, the layout file's choices, the add-on, the labels, the scale), so that neither
 // reader decides how a page is drawn and both draw it as the layer gate measured it. The rest is what a host needs around
 // it: the bundle and its bounded reader, the rows, the layout file's and the add-on manifest's readers, the role table's
 // faces and the face to ask for first, and the translation loop the extension runs itself. It reaches none of the server's
@@ -27,10 +27,9 @@ export { trPiecesOf } from '../layer/pieces.mjs'
 export { FACES } from '../rules/font-roles.mjs'
 export { translateUnits } from '../translate/mt.mjs'
 
-/** the hybrid's choices, the layer gate's (--proto-tex=lines): each unit the layout file locates whole drawn by the file's
- *  lines, label and placeholders, the units only the file holds drawn too (but table cells), no symbol drawn as text
- *  asked to be found, each line's erase extent v0's own */
-const HYBRID = Object.freeze({ use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' })
+/** how the layout file is taken, the layer gate's (--proto-tex=lines): no symbol drawn as text asked to be found, each
+ *  line's erase extent v0's own */
+const FILE = Object.freeze({ symbols: 'text', extents: 'v0' })
 /** v0's resolution, one on every device: 2.5 CSS px a PDF unit at a device pixel ratio of 1, the gate's 2.5 device pixels a
  *  unit (a view draws the page at its own, copyOf) */
 const SCALE = 2.5
@@ -79,9 +78,9 @@ function addShapes(by, units) {
 /**
  * The layer of one paper and target, as either reader shows it: v0 opened over the composed document `doc` (arXiv's PDF
  * followed by the paper's removed pages, opened once by PDF.js with PDF_OPTIONS), its left as its geometry, its layout file
- * as the hybrid's (none where the maker refused, or the bundle or a part dropped it: every rendering is still proven, by
- * nothing then, so that a unit with a placeholder other than TeX's own nothing, a space or a text symbol stays the original's;
- * run.mjs openProto's `proof`), its add-on's manifest as the text removal's, the units to come the target's (toTranslate), each table
+ * as the only source of a unit it draws (route step 2: a unit the file does not hold, or one with a visible piece it has no
+ * position for, is the original's; where the maker refused, or the bundle or a part dropped the layout, the paper or the
+ * part draws nothing: the host shows the original), its add-on's manifest as the text removal's, the units to come the target's (toTranslate), each table
  * cell's group from the cells, the target's caption names on every float (L7), the host's served faces (`faceSources`) and
  * hyphenation patterns (`hyphUrl`), at scale 2.5 and a device pixel ratio of 1, no copy kept at v0's own resolution: one set
  * of choices on every device. Each choice made for the target is the layout rules' (`rules`; the built-in set where none),
@@ -193,22 +192,21 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const gone = new Promise((_, no) => { goneNow = no })
   gone.catch(() => {})
   const letGoError = () => new Error('openLayer: the layer was let go (dispose)')
-  // (proof: a unit read with no layout file (none for the paper, or a part's `layout: null`) is still under the proof, which
-  // nothing then proves but TeX's own nothing, a space and a text symbol, so no unproven crop or source text is drawn)
   // (the memory contract, the 1b design §3: each page's analysis state let go once it is laid and read by nothing more, each
   // unit's once it is painted; the units' records and the audit, the gate's, not kept: their counts alone)
-  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, proof: true, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
+  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
   run = await openProto(four
     ? {
         ...common, parts: true, doc, pages: index.head.paper.pages, onRetired, drawOf: page => drawOfPage(page), drawsComing: index.head.draw === 1,
         geometry: { schema: 1, kinds: index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } },
-        tex: { ...HYBRID, index: facade.index, pieces: new Map() },
+        tex: { ...FILE, index: facade.index, pieces: new Map() },
         removal: { mode: 'draw', doc, manifest: { schema: 1, removal: index.head.versions.removal, pages: index.head.paper.pages, sets: {}, page: {} } },
       }
     : {
         ...common, doc, pages: Number.POSITIVE_INFINITY, onRetired: onRetired ?? null,
         geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } },
-        tex: bundle.layout ? { ...HYBRID, index: indexLayout(bundle.layout), pieces: new Map() } : null,
+        // (a bundle with no layout: a file of no unit, so that every unit is the original's)
+        tex: { ...FILE, index: bundle.layout ? indexLayout(bundle.layout) : layoutFacade({ ...bundle, lineskip: null }).index, pieces: new Map() },
         removal: bundle.addon ? { mode: 'draw', doc, manifest: bundle.addon.manifest } : null,
       })
   const N = run.N

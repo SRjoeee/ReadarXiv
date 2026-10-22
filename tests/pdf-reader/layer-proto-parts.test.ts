@@ -98,7 +98,7 @@ const FLOAT: PaperSpec = {
 
 // ---------------------------------------------------------------- the runs
 type Run = Awaited<ReturnType<typeof import('@/pdf-reader/engine/layer-proto/run.mjs').openProto>>
-const HYBRID = { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0' } as const
+const HYBRID = { symbols: 'text', extents: 'v0' } as const
 const LABELS = { captions: { figure: 'target', table: 'target' } }
 interface Paper { N: number; index: LayerIndex; parts: ReadPart[]; docFor: ReturnType<typeof docsOf> }
 const tick = () => new Promise(ok => setTimeout(ok, 0))
@@ -119,7 +119,7 @@ async function wholeRun(P: Paper, o: { records?: boolean; rules?: unknown } = {}
   const doc = P.docFor(P.parts.at(-1)!.chain.r)
   const run = await openProto({
     doc, geometry: { schema: 1, kinds: merged.left.kinds, left: { pages: merged.left.pages, units: merged.left.units } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
-    target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, proof: true, labels: LABELS as never, ...(o as object),
+    target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never, ...(o as object),
     // (BUNDLE 3's door: the text removal where the bundle has an add-on, v0's own drawing where it has none)
     tex: { ...HYBRID, index: indexLayout(merged.layout!), pieces: new Map() }, removal: merged.addon ? { mode: 'draw', doc, manifest: merged.addon.manifest } : null,
   })
@@ -143,7 +143,7 @@ async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?:
   const doc = P.docFor(0)
   let waits = 0, starved: (() => void) | null = null
   const run = await openProto({
-    parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
+    parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, free: true, records: o.records ?? true, labels: LABELS as never, ...(o.rules ? { rules: o.rules } : {}),
     tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
     onRetired: o.onRetired ?? null, onWait: (what: string) => { waits++; if (what === 'part') starved?.() },
@@ -271,7 +271,7 @@ describe('the run in parts: waits, failures and documents', () => {
     const doc = P.docFor(0) as ReturnType<Paper['docFor']>
     const waits: string[] = []
     const run = await openProto({
-      parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
+      parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
       target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
       removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never }, onWait: (w: string) => waits.push(w),
     } as never)
@@ -304,7 +304,7 @@ describe('the run in parts: waits, failures and documents', () => {
     const facade = layoutFacade(P.index.head)
     const target = o.target ?? 'zh'
     const run = await openProto({
-      parts: true, proof: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, target), groups: groupsOfIndex(P.index),
+      parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, target), groups: groupsOfIndex(P.index),
       target, pages: P.N, scale: 1, dpr: 1, copy: o.copy ?? false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
       removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
     } as never)
@@ -370,13 +370,13 @@ describe('the run in parts: waits, failures and documents', () => {
     run.dispose()
   })
 
-  it('refuses parts with no proof: a part with no layout is read through the proof that nothing proves (#352)', async () => {
+  it('refuses an open with no layout file: the layer draws only from the file, a part with none draws nothing', async () => {
     const P = await takePaper(TAKE)
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const doc = docsOf(TAKE)(0)
     await expect(openProto({
       parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: [], groups: groupsOfIndex(P.index),
-      target: 'zh', pages: P.N, scale: 1, copy: false, tex: { ...HYBRID, index: layoutFacade(P.index.head).index, pieces: new Map() },
+      target: 'zh', pages: P.N, scale: 1, copy: false, tex: null,
       removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
     } as never)).rejects.toThrow(TypeError)
   })
@@ -465,7 +465,7 @@ describe('the run in parts: waits, failures and documents', () => {
     const facade = layoutFacade(P.index.head)
     const retired: unknown[] = []
     const run = await openProto({
-      parts: true, proof: true, doc: docFor(0), geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
+      parts: true, doc: docFor(0), geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
       target: 'zh', pages: 4, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
       removal: { mode: 'draw', doc: docFor(0), manifest: { schema: 1, removal: REMOVAL, pages: 4, sets: {}, page: {} } as never }, onRetired: (d: unknown) => retired.push(d),
     } as never)

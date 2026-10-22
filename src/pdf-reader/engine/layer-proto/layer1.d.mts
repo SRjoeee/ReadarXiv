@@ -30,8 +30,6 @@ export declare const SUP: Readonly<Record<string, string>>
 export declare function texToText(src: string): string
 /** what a placeholder draws as: 'macro', 'zero', 'space', 'cite', 'num', 'display', 'other' or 'symbol' */
 export declare function phClass(src: string): string
-/** a gap's kind by its text: 'cite', 'num' or 'other' */
-export declare const gapClass: (text: string) => 'cite' | 'num' | 'other'
 /** letters and digits only, lower case, accents off */
 export declare const norm: (s: string) => string
 /** a run of characters' words: each { w, start, end } over the characters' indices */

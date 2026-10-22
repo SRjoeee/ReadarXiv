@@ -136,9 +136,6 @@ export function phClass(src) {
   const bare = src.replace(/\\(?:mathcal|mathbf|mathrm|mathbb|ve|vec|boldsymbol|bm|hat|tilde|bar)\b/g, 'x').replace(/\\[A-Za-z]+/g, '').replace(/[^A-Za-z0-9]/g, '')
   return bare ? 'other' : 'symbol'
 }
-/** a gap's kind by its text: a bracketed list of numbers (one bracket may be on another line) or an author-year, a
- *  number alone, or anything else */
-export const gapClass = text => (/^\[?[\d,\s–\-;[\]]+\]?$/.test(text) && /\d/.test(text) && /[[\]]/.test(text) || /^\(.*\d{4}[a-z]?\)$/.test(text) ? 'cite' : /^\(?(?:\d+|[IVXLC]+|[A-Z])(?:[.-](?:\d+|[A-Z]))*[a-z]?\)?$/.test(text) ? 'num' : 'other')
 
 export const norm = ch => ch.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
 /** the words of a run of characters, letters and digits only, each with the characters it spans; a word broken by a
