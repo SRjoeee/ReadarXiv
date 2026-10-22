@@ -1,4 +1,5 @@
-// layer-cut.mjs's types: the sample paper as BUNDLE 4's objects, for the stand-in of the layer API and the reader's browser checks
+// layer-cut.mjs's types: the sample paper as BUNDLE 8's objects, a layer over our own compile, for the stand-in of the layer API and
+// the reader's browser checks
 import type { LayerIndex, Ref } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
 import type { Row } from '../../../src/pdf-reader/engine/layer-proto/rows.mjs'
 
@@ -8,6 +9,8 @@ export interface SampleCut {
   catalog: Uint8Array
   index: LayerIndex
   paper: { id: string; version: number; pages: number }
+  /** our base page the head names: the stand-in PDF's length and digest (the stand-in serves it at /api/v1/base/<id>v<n>/<sha256>) */
+  base: { bytes: number; sha256: string }
   /** each page's left part's digest */
   leftRefs: Record<number, string>
   stats: Record<string, number>
