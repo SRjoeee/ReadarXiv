@@ -1,12 +1,14 @@
 // What the extension asks our server, and only that (Stage 5 Task 9; the layer API v1, the web's src/shared/layer-api.ts
 // recorded by tests/pdf-reader/server.test.ts): a paper version's layer by the reader's CTAG — its catalog, or the prepare
 // under way with the objects made so far, or why there is none, or a wait —, its prepare, each object of it by its digest,
-// and our copy of arXiv's PDF of the version.
+// our copy of arXiv's PDF of the version, and, where a layer is laid over our own compile (the layer route, design §3.2), that
+// base page, named by the digest of its bytes.
 //
 //   GET  /api/v1/layer/<id>v<n>/<CTAG5>             200 the catalog | 202 Preparing | 404 { why } | 429 { retryAfterMs }
 //   POST /api/v1/layer/<id>v<n>/<CTAG5>/prepare     (application/json, body {}) 202 Preparing | 200 { ready: true } | 404 | 429
 //   GET  /api/v1/layer/<id>v<n>/<CTAG5>/o/<sha256>  200 the object, immutable
 //   GET  /api/v1/original/<id>v<n>                  200 application/pdf, or 206 for a range (ranges.ts)
+//   GET  /api/v1/base/<id>v<n>/<sha256>             200 application/pdf, or 206 for a range: our base page, where a head says it is ours
 //
 // The catalog's and each object's answer name the original the layer was made over (BASE_ETAG_HEADER: our copy's entity-tag,
 // which the server binds to the head's base as it commits the layer, the web's worker/src/layer/base.ts), so that our copy
@@ -78,6 +80,13 @@ export function paperSegment(p: Paper): string {
 export const layerPath = (api: string, p: Paper) => `${api}${API_ROOT}layer/${paperSegment(p)}/${CTAG5}`
 export const objectPath = (api: string, p: Paper, sha256: string) => `${layerPath(api, p)}/o/${sha256}`
 export const originalPath = (api: string, p: Paper) => `${api}${API_ROOT}original/${paperSegment(p)}`
+/** our base page of the version, where a head says its base is ours: the final pass of our compile, named by the SHA-256 of its
+ *  bytes (so the address is the object and never another), read by ranges from any origin. A digest that is not 64 lower-case
+ *  hex digits makes no address */
+export function basePath(api: string, p: Paper, sha256: string): string {
+  if (typeof sha256 !== 'string' || !DIGEST.test(sha256)) throw new TypeError(`not a SHA-256 digest: ${String(sha256).slice(0, 70)}`)
+  return `${api}${API_ROOT}base/${paperSegment(p)}/${sha256}`
+}
 
 /** every request's options: no credentials, no referrer, nothing of ours but what the request is */
 export const REQUEST: Readonly<RequestInit> = { credentials: 'omit', referrerPolicy: 'no-referrer' }

@@ -9,16 +9,16 @@
 //    (twice) opens a paper whose catalog this machine holds from it, else says the bilingual version cannot be had now.
 // 3. The side fetches each object through this run: this machine's store first (layer-store.ts, every object checked against
 //    its digest there), then our server, each object kept once read.
-// 4. The base (bind): arXiv's PDF the left shows is the layer's base where its bytes are; it is not waited for whole. The
-//    first to answer decides: the left's bytes once all in, digested (a proof); or the two ends compared, arXiv's length and
-//    last cross-reference section against our copy's (ranges.ts endsAlike), where our server names the original it bound the
-//    layer to (server.ts BASE_ETAG_HEADER). Bytes that are not the base show our copy on the left in their place (the store's
-//    whole copy first, else our copy by ranges, else read whole and checked against the base's digest), so that both panes
-//    and the layer are of one document; none to be had is no layer, the original staying. Ends alike, the proof still comes:
-//    arXiv's bytes then other show our copy on the left and lay the pages again.
-// 5. The composed document: the left's bytes followed by the tails told, opened by PDF.js with the side's options; or, where
-//    the ends decided, our copy by ranges, every answer held to the base's length and our server's tag (ranges.ts openRanged),
-//    which is the layer's document whatever arXiv's bytes are.
+// 4. The base (bind): only a layer over our own compile draws (base.ts layerDraws: the head's base says `ours`); a head over arXiv's
+//    PDF, whatever it says (the why our compile was refused, or none, every head of BUNDLE 7), is no layer: the original staying,
+//    nothing translated (translate). Our base page is not arXiv's bytes by design, and the box that made it has already proved
+//    that its pages, their boxes and the lines it carries are arXiv's (the head's `check`). The run takes that check (bindOurs)
+//    and compares nothing of the tab's bytes at bind. In the background it hashes the tab's PDF once its bytes are all in against
+//    the head's `orig`, the arXiv PDF the check ran over (proveTab): the same, nothing more; other (arXiv replaced its file, the tab
+//    is another's), our copy of that PDF is shown on the left in its place (showOurs: the store's whole copy first, else our copy
+//    read whole and checked against orig's digest) and the pages are laid again over it, or, none to be had, the layer is let go.
+// 5. The composed document: our base page by ranges at its digest's address, every answer held to its length and to the tag of
+//    the first answer (ranges.ts openRanged), the layer's tails after its last byte.
 // 6. The rows: runRows over the index (the engine's one translation run without compiles), the units nearest the reading place
 //    first (the page in view's closure, from the side's rowsFor), each batch's rows taken as they come, then the end. A retry
 //    is again(), every row held taken again at once, and the run again: the background's cache answers what was translated.
@@ -32,8 +32,9 @@ import { TARGETS } from '../engine/rules.mjs'
 import { createLayerSide, type DocumentTask, type LayerSide, type LayerSideOptions, type ReaderView } from '../engine/view.mjs'
 import { servedFaces } from './faces'
 import type { Unavailable } from './events'
-import { type Bound, boundFrom, endsAlike, openRanged, type RangedPdfJs } from './ranges'
-import { askPrepare, fetchObject, fetchOriginal, LayerUnreachable, lookLayer, originalPath, type Paper, paperSegment, sha256Of } from './server'
+import { layerDraws } from './base'
+import { type Bound, lengthBound, openRanged, type RangedPdfJs } from './ranges'
+import { askPrepare, basePath, fetchObject, fetchOriginal, LayerUnreachable, lookLayer, type Paper, paperSegment, sha256Of } from './server'
 
 /** what the run tells the reader's controller */
 export type RunEvent =
@@ -52,7 +53,8 @@ export type RunEvent =
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
   /** the service cannot translate: its error kind */
   | { type: 'fail'; kind: ProviderErrorKind }
-  /** the original shown is our copy, arXiv's bytes not being the layer's */
+  /** the original shown is our copy, arXiv's bytes not being the layer's (never told for a layer over our base page: the left
+   *  is the tab's own PDF there, and `ours` keeps this meaning) */
   | { type: 'original'; ours: boolean }
 
 /** the service the run translates with, as translate.mjs openEngine gives it */
@@ -72,10 +74,8 @@ export interface RunHost {
   engine(): Promise<RunEngine>
   /** a PDF.js document over bytes, with the options given (the extension's PDF.js) */
   openPdf(data: Uint8Array, options: Readonly<Record<string, unknown>>): DocumentTask
-  /** the extension's PDF.js, for documents over our copy read by ranges (ranges.ts); none: the base proven whole alone */
+  /** the extension's PDF.js, for the composed document over our base page read by ranges (ranges.ts); none: no layer is drawn */
   pdfjs?: RangedPdfJs
-  /** arXiv's PDF the left opened, whose end the base's check reads by a range */
-  originalUrl?: string
   /** the page the reader is reading (the pane read), for the order of the batches; null before any */
   readingPage(): number | null
   /** whether the prepare may be asked: true once a visit */
@@ -99,9 +99,6 @@ export interface Run {
   probe(): Readonly<Record<string, number | string | boolean | null>>
 }
 
-/** how long the base check waits for the left's bytes to be all in before it reads the two ends: a paper whose bytes are in
- *  by then (a small one, by the time the left is open) is proven with nothing asked of anyone */
-export const ENDS_AFTER_MS = 100
 /** a 202's or a 429's wait, never sooner than our server asks: at least a second, at most ten minutes */
 export const WAIT_MIN = 1000, WAIT_MAX = 600_000
 /** a prepare polled for this long (the tab shown) is asked of every POLL_SLOW_MS at most, whatever its 202s say: staging's
@@ -139,13 +136,20 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   /** the rows of the visit, latest per unit; the attempt's abort; how far the translation is */
   const rows = new Map<number, Row>()
   let attempt: AbortController | null = null, total = 0, lost = 0, looks = 0, prepares = 0, ours = false
+  /** the arXiv PDF the left shows, once known: the tab\'s own proven to be the PDF a head\'s check ran over, or our copy of it shown in
+   *  its place. Every head\'s `orig` is compared with it (a retry may bring a head over another), which `begin()` does not reset: the
+   *  left stays through a retry. null: not known yet (the tab\'s bytes not all in) */
+  let leftShows: { bytes: number; sha256: string } | null = null
+  /** the head cannot draw (layerDraws), decided at the head: the look stops and nothing is said after the lasting word that would make
+   *  the host restore availability (`layer` is `coming`, `prepared` clears the wait); `begin()` resets it for a retry */
+  let terminal = false
   /** how long the prepare has been polled for, the tab shown (its deadline's); until when a limit's wait runs (a retry waits
    *  it out) */
   let preparedFor = 0, refusedUntil = 0
   /** where the run is: its service and its look at the layer (`state`), and its translation of the layer's units (`rowsState`) */
   let state: 'engine' | 'looking' | 'open' | 'unavailable' | 'failed' = 'engine'
   let rowsState: 'idle' | 'translating' | 'translated' | 'failed' = 'idle'
-  const emit = (e: RunEvent) => { if (!disposed) host.emit(e) }
+  const emit = (e: RunEvent) => { if (!disposed && !(terminal && (e.type === 'layer' || e.type === 'preparing' || e.type === 'prepared'))) host.emit(e) }
   const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
     if (signal.aborted) return reject(Object.assign(new Error('the run is let go'), { name: 'AbortError' }))
     const t = setTimeout(resolve, ms)
@@ -173,46 +177,108 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   // ---------------------------------------------------------------- the side's transport
   /** the original the layer's answers name it bound to (server.ts boundOf): the catalog's, else the first object's */
   let tag: string | null = null
-  /** what the composed document is read over: the left's bytes (arXiv's, proven the base, or our copy shown there), or our
-   *  copy by ranges, held to the base's length and `tag` (ranges.ts) */
-  let basis: { kind: 'left' } | { kind: 'ranged'; bound: Bound } = { kind: 'left' }
-  const ourUrl = () => originalPath(host.api, paper)
-  /** a document over our copy by ranges: the composed one (a range that fails twice leaves its page the original's, the
-   *  side's stall), or the left's (`left`: read for as long as it is shown) */
-  const ranged = (bound: Bound, tail: Uint8Array | null, o: Readonly<Record<string, unknown>>, left = false) =>
-    // (the left's lives as long as the run, through its retries: its document stays shown, and the view lets it go; a
-    // composed one, the beginning's)
-    openRanged(host.pdfjs as RangedPdfJs, ourUrl(), { bound, tail, options: o, fetch: f, signal: left ? ac.signal : begun.signal, keepReading: left, refused: e => console.warn('[reader]', e.message) })
+  /** what the composed document is read over: our base page by ranges at `url`, held to the head's length and the first answer's tag
+   *  (ranges.ts); null before bind has taken the head's base */
+  let basis: { bound: Bound; url: string } | null = null
+  /** a document over our base page by ranges: the composed one (a range that fails twice leaves its page the original's, the
+   *  side's stall) */
+  const ranged = (b: { bound: Bound; url: string }, tail: Uint8Array | null, o: Readonly<Record<string, unknown>>) =>
+    openRanged(host.pdfjs as RangedPdfJs, b.url, { bound: b.bound, tail, options: o, fetch: f, signal: begun.signal, refused: e => console.warn('[reader]', e.message) })
   /** the left's bytes, once they are all in as its document loads them of itself (originalData's own read would ask arXiv
-   *  for every byte its stream is still bringing: the rest of the file twice), the base or not */
-  const proof = async (base: { bytes: number; sha256: string }): Promise<'same' | 'other'> => {
+   *  for every byte its stream is still bringing: the rest of the file twice), the arXiv PDF the head's check ran over or not */
+  const proof = async (orig: { bytes: number; sha256: string }): Promise<'same' | 'other'> => {
     if (!(await Promise.resolve(view.originalLoaded()).then(() => true, () => false))) return 'other'
     const data = await Promise.resolve(view.originalData()).catch(() => null)
-    return data && data.length === base.bytes && (await sha256Of(data)) === base.sha256 ? 'same' : 'other'
+    return data && data.length === orig.bytes && (await sha256Of(data)) === orig.sha256 ? 'same' : 'other'
   }
-  /** arXiv's bytes not the layer's: our copy on the left in their place, this machine's whole copy first, else our copy by
-   *  ranges where the layer names its tag, else our copy read whole and checked against the base's digest. False where none
-   *  can be shown: no layer, the original staying */
-  async function showOurs(base: { bytes: number; sha256: string }, bound: Bound | null): Promise<boolean> {
-    let copy: Uint8Array | undefined = await host.store?.object(base.sha256)
-    if (copy?.length !== base.bytes) copy = undefined
-    if (!copy && !bound) {
+  /** the tab's PDF is not the arXiv PDF the head's check ran over: our copy of that PDF on the left in its place, this machine's
+   *  whole copy first, else our copy read whole and checked against orig's digest. False where none can be shown: no layer, the
+   *  original staying */
+  async function showOurs(orig: { bytes: number; sha256: string }): Promise<boolean> {
+    let copy: Uint8Array | undefined = await host.store?.object(orig.sha256)
+    if (copy?.length !== orig.bytes) copy = undefined
+    if (!copy) {
       try {
-        copy = await fetchOriginal(host.api, paper, base, { fetch: f, signal: begun.signal })
+        copy = await fetchOriginal(host.api, paper, orig, { fetch: f, signal: begun.signal })
       } catch (e) {
         if (!isAbort(e)) console.warn('[reader] our copy of the original:', (e as Error)?.message ?? e)
         return false
       }
-      void host.store?.putObject(seg, base.sha256, copy)
+      void host.store?.putObject(seg, orig.sha256, copy)
     }
     if (disposed) return false
     const bytes = copy
-    const shown = await view.showOriginal(o => (bytes ? host.openPdf(bytes.slice(), o) : ranged(bound as Bound, null, { ...o, disableAutoFetch: true }, true)))
+    const shown = await view.showOriginal(o => host.openPdf(bytes.slice(), o))
     if (shown !== 'opened' || disposed) return false
-    basis = bytes ? { kind: 'left' } : { kind: 'ranged', bound: bound as Bound }
     ours = true
+    leftShows = orig
     emit({ type: 'original', ours: true })
     return true
+  }
+  /** the arXiv PDF a head of ours keeps beside its base (`orig`: bytes and digest; the engine's reader requires it), from the
+   *  index the side has read; null where the head names none */
+  async function origOf(): Promise<{ bytes: number; sha256: string } | null> {
+    const index = (await Promise.resolve(side?.index()).catch(() => null)) as { head?: { orig?: { bytes?: unknown; sha256?: unknown } | null } } | null | undefined
+    const orig = index?.head?.orig
+    return orig && Number.isSafeInteger(orig.bytes) && (orig.bytes as number) > 0 && typeof orig.sha256 === 'string' && /^[0-9a-f]{64}$/.test(orig.sha256) ? { bytes: orig.bytes as number, sha256: orig.sha256 } : null
+  }
+  /**
+   * The base of a layer over our own compile (the head's `base.source` `ours`: the layer route, design §3.2). The box proved it
+   * before the head was committed: our base page has arXiv's page count and every page's box, and carries the lines it was
+   * checked on; the head names that check (`check`), and `orig`, the arXiv PDF it ran over. The run takes the check for what it
+   * says, so the layer is drawn over our base page read by ranges at its digest's address, every answer held to its length and
+   * the first one's tag, while the left stays the tab's own PDF, whose pages and boxes are the places the layer is laid in; and
+   * it proves in the background that the tab's PDF is `orig` (proveTab), or, where the left is known to show another PDF (our copy
+   * of an earlier head's orig, or the tab proven to be it: a retry may bring a head over another), shows the newly named original
+   * first. A check that does not say pages and boxes alike, a head with no `orig`, a digest or a length no address is made of, or no PDF.js to read a base by ranges: no layer, the original
+   * staying
+   */
+  async function bindOurs(base: { bytes: number; sha256: string; check?: unknown }): Promise<boolean> {
+    const check = base.check as { pages?: unknown; boxes?: unknown } | null | undefined
+    const pages = check?.pages
+    const proved = typeof check === 'object' && check !== null && check.boxes === 'equal' && Array.isArray(pages) && pages.length === 2 && Number.isSafeInteger(pages[0]) && pages[0] === pages[1]
+    const bound = lengthBound(base.bytes)
+    const orig = await origOf()
+    if (!proved || !bound || !orig || !host.pdfjs) return false
+    let url: string
+    try {
+      url = basePath(host.api, paper, base.sha256)
+    } catch {
+      return false
+    }
+    // what the left shows against what this head\'s check ran over: the same, nothing to prove or fetch; known to be another (a retry
+    // brought a head over another PDF than the one our copy or the proven tab was), the newly named original is shown BEFORE the
+    // layer is used, never this layer over the old PDF (none to be had: no layer); not known yet, proved in the background
+    if (leftShows && leftShows.bytes === orig.bytes && leftShows.sha256 === orig.sha256) {
+      // (the left is the PDF the check ran over)
+    } else if (leftShows) {
+      if (!(await showOurs(orig))) return false
+    } else void proveTab(orig, gen)
+    basis = { bound, url }
+    return true
+  }
+  /** the tab's PDF hashed once its bytes are all in, against the arXiv PDF the head's check ran over: the same, the layer stays;
+   *  other, our copy of that PDF is shown on the left and the pages laid again over it (they were copied from the left's pages),
+   *  or, none to be had, the layer is let go and the bilingual version is not to be had now */
+  async function proveTab(orig: { bytes: number; sha256: string }, my: number) {
+    const proven = await proof(orig)
+    // (a run begun again meanwhile checks its own base)
+    if (disposed || my !== gen) return
+    if (proven === 'same') { leftShows = orig; return }
+    console.warn("[reader] the PDF in this tab is not the one the layer's base was checked against: our copy of that PDF is shown in its place")
+    const s = side
+    if (await showOurs(orig)) {
+      if (disposed || s !== side || !s) return
+      s.again()
+      if (rows.size) s.take([...rows.values()])
+      void translate()
+      return
+    }
+    if (disposed || s !== side) return
+    attempt?.abort()
+    side?.dispose()
+    side = null
+    unavailable('unreachable')
   }
   const options = (): Pick<LayerSideOptions, 'fetchObject' | 'bind' | 'composed'> => ({
     async fetchObject(ref: Ref, signal: AbortSignal) {
@@ -228,90 +294,26 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       return got.bytes
     },
     /**
-     * The base's check, which no longer waits for arXiv's whole file: the first to answer of the left's bytes, digested once all
-     * in (a proof), and the two ends compared (ranges.ts endsAlike: arXiv's length and last cross-reference section against
-     * our copy's, one range each). The proof first: the composed document over the left's bytes, as before. The ends alike
-     * first: over our copy by ranges, held to the base's length and the tag our server bound the layer to, so that it is the
-     * layer's document whatever arXiv's bytes are; the proof, once in, either lets later documents read the left's bytes, or
-     * finds them other and shows our copy on the left, the pages laid again over it. Other bytes, by either: our copy on the
-     * left (showOurs). Ends that cannot be read: the proof decides. A layer whose answers name no tag (this machine's catalog,
-     * our server out of reach): the proof alone, as before
+     * Only a layer over our own compile draws (base.ts layerDraws): any other head — arXiv's PDF with the why our compile was
+     * refused, or with none, every head of BUNDLE 7 — is no layer, the original staying; a head of ours is bound by its check
+     * (bindOurs)
      */
     async bind(base) {
-      const bound = host.pdfjs && host.originalUrl ? boundFrom(base.bytes, tag) : null
-      // a side made again over our copy shown on the left already: by ranges, it is the base where it is bound alike; whole,
-      // the proof alone (the left's bytes are in)
-      if (ours && basis.kind === 'ranged') return (bound && basis.bound.total === bound.total && basis.bound.etag === bound.etag) || showOurs(base, bound)
-      const proven = proof(base)
-      const loaded = await Promise.race([Promise.resolve(view.originalLoaded()).then(() => true, () => true), new Promise<false>(r => setTimeout(r, ENDS_AFTER_MS, false))])
-      if (!bound || ours || loaded) {
-        if ((await proven) !== 'same') return showOurs(base, bound)
-        basis = { kind: 'left' }
-        return true
-      }
-      const check = new AbortController(), stop = () => check.abort()
-      begun.signal.addEventListener('abort', stop, { once: true })
-      const ends = endsAlike(host.originalUrl as string, ourUrl(), base, bound, { fetch: f, signal: check.signal })
-      const first = await Promise.race([proven.then(v => ({ proof: v })), ends.then(v => ({ ends: v }))])
-      // (the proof first: the ends' reads let go)
-      if ('proof' in first) stop()
-      begun.signal.removeEventListener('abort', stop)
-      const proved = 'proof' in first ? first.proof : first.ends === null ? await proven : null
-      if (proved === 'same') { basis = { kind: 'left' }; return true }
-      if ('ends' in first && first.ends === 'alike') {
-        basis = { kind: 'ranged', bound }
-        const my = gen
-        void proven.then(v => {
-          // (a run begun again meanwhile checks its own base)
-          if (disposed || ours || my !== gen) return
-          if (v === 'same') { basis = { kind: 'left' }; return }
-          void lateOther(base, bound)
-        })
-        return true
-      }
-      return showOurs(base, bound)
+      if (!layerDraws(base)) return false
+      return bindOurs(base as typeof base & { check?: unknown })
     },
     composed(tail, o) {
-      if (basis.kind === 'ranged') return ranged(basis.bound, tail, o)
-      let inner: DocumentTask | null = null, gone = false
-      const promise = (async () => {
-        const source = await view.originalData()
-        if (!source) throw new Error('no original to compose the layer\'s document over')
-        if (gone) throw new Error('the composed document was let go')
-        const data = new Uint8Array(source.length + (tail?.length ?? 0))
-        data.set(source)
-        if (tail) data.set(tail, source.length)
-        inner = host.openPdf(data, o)
-        return inner.promise
-      })()
-      return { promise, onProgress: null, destroy: async () => { gone = true; await inner?.destroy() } } as unknown as DocumentTask
+      if (!basis) throw new Error('no base page the layer is bound to')
+      return ranged(basis, tail, o)
     },
   })
-  /** arXiv's bytes proven other once all in, after the ends were alike: our copy on the left, and the pages laid again (they
-   *  were copied from the left's pages); none to be had, the layer let go and the bilingual version not to be had now */
-  async function lateOther(base: { bytes: number; sha256: string }, bound: Bound) {
-    console.warn('[reader] arXiv\'s PDF ends as the layer\'s base but is not it: our copy is shown in its place')
-    const s = side
-    if (await showOurs(base, bound)) {
-      if (disposed || s !== side || !s) return
-      s.again()
-      if (rows.size) s.take([...rows.values()])
-      void translate()
-      return
-    }
-    if (disposed || s !== side) return
-    attempt?.abort()
-    side?.dispose()
-    side = null
-    unavailable('unreachable')
-  }
 
   // ---------------------------------------------------------------- the look at the layer
   /** a catalog told whole to the side, with its end */
   const tellCatalog = (c: ReadCatalog) => side?.tell({ units: c.units, head: c.head, parts: c.parts, end: c.end })
   async function look(my: number, signal: AbortSignal) {
     state = 'looking'
-    const gone = () => disposed || my !== gen || !side
+    const gone = () => disposed || my !== gen || !side || terminal
     for (;;) {
       if (gone()) return
       looks++
@@ -396,6 +398,14 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     if (!s) return
     const index = await s.index()
     if (disposed || !index || !engine || !target || s !== side) return
+    // a head whose layer draws nothing (base.ts layerDraws) is decided here, at the head, before bind has run and before a single
+    // unit goes to the user's service: nothing is translated for a paper whose pages the layer will not draw, and the lasting
+    // word is told (the controller keeps it over the side's own refusal at bind)
+    if (!layerDraws((index as { head?: { base?: unknown } }).head?.base)) {
+      terminal = true
+      attempt?.abort()
+      return unavailable('cannot-prepare')
+    }
     lastIndex = index
     const a = new AbortController()
     attempt?.abort()
@@ -484,6 +494,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     preparedFor = 0
     // the original each beginning's layer is bound to, heard anew (a retry may find the layer made again over another)
     tag = null
+    basis = null
+    terminal = false
     let opened: RunEngine
     try {
       opened = await host.engine()
@@ -538,6 +550,6 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       side = null
       void engine?.close?.()
     },
-    probe: () => ({ state, rowsState, target, looks, prepares, rows: rows.size, total, lost, ours, basis: basis.kind, bound: tag !== null }),
+    probe: () => ({ state, rowsState, target, looks, prepares, rows: rows.size, total, lost, ours, basis: basis ? 'ranged' : 'none', bound: tag !== null }),
   }
 }

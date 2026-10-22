@@ -692,7 +692,7 @@ no `pdfjs-dist`, and nothing of the server's).
 `createLayerSide(view, options)` (`engine/view/layer-side.mjs`, exported by `view.mjs`) is the reading view's one layer
 side. The host tells it what it hears of the paper's layer — refs, rows and their end, from any source, in any order — and
 gives it a transport (`fetchObject`, an object by its ref), the base's check (`bind`) and the composed document's opener
-(`composed`, arXiv's PDF followed by every tail told). No host calls the door.
+(`composed`, the base page followed by every tail told: our compile's, §19.7). No host calls the door.
 
 - **The feed** (`feed.mjs`) merges what is told, deduplicated by digest, fetches each object once while it is wanted and
   reads it with the format's own readers (cap, digest against its ref, values, shape, chain): the units chunks and the head
@@ -716,13 +716,23 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   dropped original stops no later part, no `again()`. A part the door refuses stops the parts added to that door there,
   with one warning; the side stays open. A refusal of the whole side carries a code (`head`, `units`, `index`, `base`,
   `composed`, `open`).
+- **A page of a part with no layout** (over our base: the engine's check refused the part, or its producer recorded none, a
+  part's `layout` null) draws nothing and erases nothing, so its pages would show our base page in other line breaks beside
+  arXiv's. What TeX's positions do not draw is arXiv's PDF: such a page (some part holds it and every part that holds it has no
+  layout, `noLayoutPage`, a unit running on from the page before can put a page in two parts) is not asked of the door and not
+  swapped in, one the door laid before its parts were all told is not committed, and its place keeps, or returns to after a
+  fork, the original's page view. Any other head is laid as before (it draws nothing: `layerDraws`).
 - **The documents** are the side's: each composed task is destroyed once no door reads it (the door's `onRetired`) and the
   side holds a later one, at a refusal of the side (its feed's fetches with it, and the right's shapes the original's again),
   and at dispose; none twice. `again()` reuses the latest.
 - **Each place shows the best version there is** (§11.7): its pre-layer content until the door has laid its page and the
   place is near the view, then the layer's copy (the door's `copyOf` at the place's k: device pixels a PDF unit, within
   2^24 pixels; from the left's canvas where PDF.js drew it within 2 % of that k, else the place's own page view's canvas,
-  else the page drawn from the composed document) and its SVG, put in one task, in place: the place's size and the pane's
+  else the page drawn from the composed document; over our base page (the head's `base.source` `ours`, `layerDraws`) always
+  the page drawn from the composed document, because its pages are our compile's and the erase rectangles, crops and colours
+  are in their coordinates, not on arXiv's rendering the left shows: the left's canvas and the place's, which are the
+  original's, are never asked, at the commit or at a zoom's recopy; one page render a laid page, 10 to 25 ms on the sample
+  where the canvas was free) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
   600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at. A page this
   door laid that leaves the view lets its SVG and its copy go and holds an
@@ -795,8 +805,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
 The extension's run makes the side and tells it (§11.10). The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `layer-side-door.test.ts` (the real door),
 `feed.test.ts`, `contents.test.ts` and `shapes.test.ts` SH5; `pnpm e2e:reader` runs it on the sample cut into BUNDLE 4's
 objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API, and `pnpm e2e:registration` holds the
-frame (the side's `registration(n)`: a laid page's copy drawn from PDF.js's canvas and from the document at the place's k,
-compared pixel by pixel).
+frame (the side's `registration(n)`: a laid page's copy from the document at the place's k, compared pixel by pixel with the one
+made from PDF.js's own canvas of the original where it drew it at that k; in the fixture the base is arXiv's own bytes, so
+0 px differ, and over a real build of ours the two differ where its lines do, the reason the copy is not taken from it).
 
 ### 11.9 The layer's links
 
@@ -851,21 +862,31 @@ contract §4.3), started by the host once a translated display is shown in a vis
    store renewed), else S-R-24. A retry begins the run again where the side refused its layer (a new side, its look, its bind,
    the base's tag heard anew), and opens the service again where it stopped short (its scope bound to the chain the settings
    make now); an engine that comes after its beginning was let go is closed. Only the paper's id and version leave the
-   machine, in the address: no query, `{}` the prepare's only body, no credentials, no referrer.
+   machine, in the address: no query, `{}` the prepare's only body, no credentials, no referrer. A head that cannot draw
+   (item 4) ends the look: `translate()` decides it when the index arrives, before bind and before a unit goes to the user's
+   service, tells the lasting `unavailable` `cannot-prepare`, and sets `terminal`, so that a prepare under way is asked no more
+   and no `layer`, `preparing` or `prepared` follows it (the host would restore availability on any of them); a retry resets it.
 3. **The objects** through this machine's store first (`cache/layer-store.ts`, by digest, checked there), then our server
    within each ref's bytes; the side's readers check every one.
-4. **The base** (`bind`), never waiting for arXiv's whole file: the first to answer of the left's bytes, digested once its
-   document has loaded them of itself (a proof), and the two ends compared (`session/ranges.ts` `endsAlike`: arXiv's length
-   and last cross-reference section against our copy's, one range each, where the catalog's or an object's answer names the
-   original the layer is bound to, `X-Axt-Base-Etag`; read only where the left's bytes are not all in 100 ms after the check
-   begins, so that a small paper asks nobody anything). Bytes that are not the base, by either, show our copy on the left in
-   their place: this machine's whole copy first, else our copy by ranges (read for as long as it is shown), else read whole
-   and checked against the base's digest. None to be had is no layer, the original staying. Ends alike, the proof still
-   comes: the same, later documents read the left's bytes; other, our copy on the left and the pages laid again.
-5. **The composed document**: the left's bytes followed by the tails told, opened by the extension's PDF.js with the side's
-   options; or, where the ends decided, our copy by ranges with the tails after its last byte (`openRanged`), every answer a
-   206 of exactly the bytes asked, of the base's length and the layer's tag, else the source refused (a page it cannot read
-   stays the original's, the side's stall). A read with nothing from our server for 10 s is asked once more.
+4. **The base** (`bind`; the layer route, §19.7). Only a layer over our own compile draws: `session/base.ts` `layerDraws` is the
+   engine's (the head's `base.source` is `ours`); a head over arXiv's PDF, with the why our compile was refused (its
+   fallback) or with none, and every head of BUNDLE 7, is no layer: the original stays, nothing is translated. A base of ours
+   is bound by its head's `check` (`bindOurs`): the box proved before it committed the head that our base page has arXiv's page
+   count and every page's box and the lines it was checked on (`check.pages` equal, `check.boxes` `equal`), so nothing of the
+   tab's bytes is compared at bind (no `endsAlike`), and a check that says otherwise, a head with no usable `orig`, a digest or
+   length no address is made of, or no PDF.js for ranges is no layer. The head also names `orig`, the arXiv PDF the check ran
+   over, and the run proves in the background (`proveTab`, once the left has loaded its bytes) that the tab's PDF is it: the same
+   leaves everything as it is; other (arXiv replaced its file, the tab is another's), our copy of the orig is shown on the left
+   in its place (`showOurs`: this machine's whole copy first, else read whole from `/api/v1/original` and checked against the
+   orig's digest), `original { ours }` is told then and only then, and the pages are laid again; none to be had lets the layer go
+   (S-R-24). What the left shows is kept (`leftShows`: the tab proven to be an orig, or our copy of one) and compared with every
+   head's orig, which a retry may change: the same, nothing is fetched; another, the newly named original is shown before the
+   layer is used (none to be had: no layer), never the new layer over the old PDF.
+5. **The composed document**: our base page by ranges at `/api/v1/base/<id>v<n>/<sha256>` (`openRanged`, its own address: the
+   digest of its bytes, so one object per URL), every answer a 206 of exactly the bytes asked, of the head's length and the tag
+   of the first answer (a `Bound` may carry the length alone: no route names a tag beforehand), the tails after its last byte;
+   else the source refused (a page it cannot read stays the original's, the side's stall). A read with nothing from our server
+   for 10 s is asked once more. The left is never read for the layer.
 6. **The rows**: the engine's `runRows` over the side's index, the paper's title and abstract as an LLM's context, the units
    nearest the page in view first (that page's closure by the side's `rowsFor`, then ahead before behind), each batch's rows
    taken as they come, then the end. A retry is the side's `again()`, every row held taken at once, and the run again.
@@ -875,7 +896,7 @@ the hyphenation `<api>/hyph/<lang>.json`.
 An id with no version is the latest version arXiv's abstract page lists (`session/paper.ts`: within 15 s and 2 MB, a read
 that cannot be had forgotten so that a retry reads it again). The run's rows are
 `tests/pdf-reader/run.test.ts`, `server.test.ts`, `ranges.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
-reader on the sample served by the stand-in of the layer API, through the echo service.
+reader on the sample (cut as a layer over our own compile, `tests/e2e/lib/layer-cut.mjs`) served by the stand-in of the layer API, through the echo service.
 
 ## 12. Performance gates
 
@@ -1462,7 +1483,8 @@ tags they ask by (`layer-proto/bundle.mjs`).
 - **Routes by tag.** `GET /api/v1/layer/<id>v<n>/<tag>` answers 200 with the bundle, 202 `Preparing { position, stage,
   progress, retryAfterMs }`, 404 `{ why }` (`not-prepared`, `no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`) or 429
   `{ retryAfterMs }`; `POST …/<tag>/prepare` (JSON body `{}`) answers 202, 200 `{ ready: true }`, 404 or 429; `GET
-  /api/v1/original/<id>v<n>` is `base.url`, our copy of arXiv's bytes. The tag is the engine's `VTAG`, or its contract
+  /api/v1/original/<id>v<n>` is `base.url`, our copy of arXiv's bytes; `GET /api/v1/base/<id>v<n>/<sha256>` (no suffix) is our
+  base page a head of ours names (§19.7), by its digest, by ranges, a strong `ETag`, any origin, immutable. The tag is the engine's `VTAG`, or its contract
   tag `CTAG` where the server redirects to the newest bundle made under it (§18.4). The public GETs answer CORS `*`; the prepare
   POST relies on the extension's host permission.
 - **What the reader sends.** A paper's id and version, and the engine's public versions (the tag). Nothing else leaves the machine.

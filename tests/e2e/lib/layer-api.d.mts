@@ -36,9 +36,9 @@ export interface RecordedRequest {
 }
 export type Answer = { status: number; headers: Record<string, string>; body: Uint8Array } | { fault: 'reset' | 'hang'; status?: undefined }
 export interface LayerApi {
-  /** the mode of the layer routes and of the original route, either alone (the other as it was) */
-  set(modes: { layer?: Mode | Mode['kind']; original?: Mode | Mode['kind'] }): LayerApi
-  readonly mode: { layer: Mode; original: Mode }
+  /** the mode of the layer routes, of the original route and of our base page's, each alone (the others as they were) */
+  set(modes: { layer?: Mode | Mode['kind']; original?: Mode | Mode['kind']; base?: Mode | Mode['kind'] }): LayerApi
+  readonly mode: { layer: Mode; original: Mode; base: Mode }
   /** every request answered, in order, each kept whole */
   requests: RecordedRequest[]
   handle(request: ApiRequest): Answer
@@ -49,11 +49,12 @@ export interface LayerApi {
   listen(o?: { port?: number; host?: string }): Promise<{ origin: string; close(): Promise<void> }>
   sample: Sample
   vtag: string
-  /** the original's entity-tag, which BUNDLE 4's answers name (X-Axt-Base-Etag) where the stand-in is `bound` */
+  /** the original's entity-tag (our base page's too), which the layer's answers name (X-Axt-Base-Etag) only where the stand-in is
+   *  `bound`, as a layer over arXiv's PDF had it: a layer of ours names none */
   etag: string
 }
-/** BUNDLE 4's objects of the sample (layer-cut.mjs cutSample's) */
-export interface Layer4 { objects: Map<string, Uint8Array>; refs: { head: unknown; units: unknown[]; parts: unknown[]; end: unknown }; catalog: Uint8Array }
+/** the sample's layer objects (layer-cut.mjs cutSample's: a layer of ours, BUNDLE 8), and the base page its head names */
+export interface Layer4 { objects: Map<string, Uint8Array>; refs: { head: unknown; units: unknown[]; parts: unknown[]; end: unknown }; catalog: Uint8Array; base?: { bytes: number; sha256: string } }
 /** the served faces the stand-in gives every face it is told of: their ids, one slice's code points, its file's bytes */
 export interface StandInFaces { ids: readonly string[]; ranges: readonly number[]; bytes: Uint8Array }
 export declare const FACE_GROUP: string

@@ -32,11 +32,20 @@ export function installSideFakes() {
 }
 const views: ReaderView[] = []
 
-let paper: Made | null = null
-export const M = async () => (paper ??= await made({ ours: true }))
+let paper: Made | null = null, arxivPaper: Made | null = null
+/** the format test's small paper, written and read back once. Its head is the engine's head of a layer over our own compile (the layer
+ *  draws only over one, BUNDLE 8); `ours = false`: its head over arXiv's PDF, which draws nothing (the fallback) */
+export async function M(ours = true): Promise<Made> {
+  if (ours) {
+    paper ??= await made({ ours: true })
+    return paper
+  }
+  arxivPaper ??= await made()
+  return arxivPaper
+}
 export const macrotask = () => new Promise(r => setTimeout(r, 0))
 export const jobRef = (m: Made, i: number): TellRef => ({ ...(m.parts[i]!.ref as Ref), prev: i ? m.parts[i - 1]!.sha256 : null })
-export const ALL = async () => { const m = await M(); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }
+export const ALL = async (ours = true) => { const m = await M(ours); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }
 /** a row of each unit: its text as one translated piece; `sentences` where given */
 export const rowOf = (id: number, text = `t${id}`, sentences: Row[4] = null): Row => [id, [text], 'whole', 'test', sentences]
 /** the units with lines on page n, rising */
@@ -61,8 +70,11 @@ export interface Setup {
   opened: string[]
 }
 export interface Options {
+  /** the paper's head the engine's head of a layer over our own compile (format-paper.ts made({ ours: true })) */
+  ours?: boolean
   door?: FakeDoorOptions
-  bind?: () => Promise<boolean>
+  /** the host's base check, given the head's base as the side read it */
+  bind?: (base: Record<string, unknown>) => Promise<boolean>
   composedFails?: boolean
   noOriginal?: boolean
   extra?: { bytes: Uint8Array; sha256: string }[]
@@ -85,7 +97,7 @@ export interface Options {
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
-  const m = await M()
+  const m = await M(o.ours)
   const panes = drawPanes()
   const events: ViewEvent[] = []
   const clock = manualClock()
@@ -128,7 +140,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const doors: Setup['doors'] = []
   const side = createLayerSide(view, {
     paper: { id: '2608.04322', version: 1 }, target: 'zh', faceSources: o.faceSources ?? (async () => null), hyphUrl: () => '',
-    fetchObject, bind: o.bind ?? (async () => true),
+    fetchObject, bind: (o.bind ?? (async () => true)) as never,
     composed: (tail, options) => {
       const task = fakeTask(destroyed, `composed ${composed.length}`)
       composed.push({ tail, options, task })

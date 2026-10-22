@@ -6,9 +6,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { createLayerSide, LEFT_RETRY_MS, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { createLayerSide, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
-import { made, N, partInputs, TAILS } from './helpers/format-paper'
+import { made, N, ORIG, partInputs, TAILS } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
@@ -70,7 +70,7 @@ describe('L4: the best version, page by page (§2.3)', () => {
 })
 
 describe('L11: laid in place', () => {
-  it('the place\'s size and the pane\'s scroll unchanged, no viewer document set, the copy from the left\'s canvas drawn at its k', async () => {
+  it('the place\'s size and the pane\'s scroll unchanged, no viewer document set, the copy drawn from the composed document at the place\'s k (the left\'s canvas, arXiv\'s rendering, is not its source)', async () => {
     const s = await setup()
     await nearOn(s, [1, 2])
     s.panes.right.scrollTop = 300
@@ -86,10 +86,11 @@ describe('L11: laid in place', () => {
     expect([box(1), box(2)]).toEqual(before)
     expect(s.panes.right.scrollTop).toBe(scrolled)
     expect(leftViewer().log.filter(l => l.startsWith('setDocument')).length).toBe(docs)
-    // page 1's copy over the left's canvas at the scale PDF.js drew it at; page 2's, whose left page PDF.js has not drawn,
-    // from elsewhere
+    // the layer is over our base page: page 1\'s copy is the composed document\'s page at the place\'s k, not the canvas PDF.js drew of
+    // the original, which is drawn at that k here all the same
     const copies = s.doors[0]?.copies ?? []
-    expect(copies.find(c => c[0] === 1)?.slice(1)).toEqual([canvas, pv.viewport.scale])
+    expect(copies.find(c => c[0] === 1)?.[1]).not.toBe(canvas)
+    expect(copies.find(c => c[0] === 1)?.[2]).toBe(pv.viewport.scale)
     expect(copies.find(c => c[0] === 2)?.[1]).not.toBe(canvas)
     expect(content(s, 1)).toBe('layer')
   })
@@ -108,13 +109,13 @@ describe('L11: laid in place', () => {
   })
 })
 
-describe('one frame a page: the copy at the scale its source was drawn at (docs/PDF-READER.md §11.8)', () => {
+describe('one frame a page: the copy at the place\'s k, whatever PDF.js drew the left\'s page at (docs/PDF-READER.md §11.8)', () => {
   /** the owner's fit, 87.25 %, at a pixel ratio of 2: the page 711.9999… CSS px wide, PDF.js's canvas floored to 1422 px */
   const FIT = 0.8725490196078431
   const pageView = (n: number) => leftViewer().getPageView(n - 1) as NonNullable<ReturnType<FakePDFViewer['getPageView']>>
   const copyOf = (s: Setup, n: number) => s.doors[0]?.copies.find(c => c[0] === n) as [number, HTMLCanvasElement, number] | undefined
 
-  it('the copy from the left\'s canvas is drawn at the scale PDF.js drew it at, never its floored width over the page\'s', async () => {
+  it('the copy is at the place\'s k, never the floored width of the canvas PDF.js drew of the original over the page\'s', async () => {
     vi.stubGlobal('devicePixelRatio', 2)
     const s = await setup()
     s.view.zoomTo(FIT)
@@ -125,7 +126,9 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
-    expect(one?.[1]).toBe(pageView(1).canvas)
+    // (over our base the left\'s canvas is no source: the page drawn from the document, on the place\'s box times the pixel ratio)
+    expect(one?.[1]).not.toBe(pageView(1).canvas)
+    expect(s.doors[0]?.sized.find(c => c[0] === 1)).toEqual([1, 1422, 1842])
     expect(one?.[2]).toBe(1.1633986928104574 * 2)
     expect(one?.[2]).not.toBe(1422 / 612)
     expect(content(s, 1)).toBe('layer')
@@ -163,13 +166,11 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     expect(one?.[2]).toBe(1.1633986928104574 * 2)
   })
 
-  it('a canvas PDF.js drew at a restricted output scale near the place\'s k is a source, copied at the scale it drew', async () => {
+  it('at a zoom where the place\'s k is held to COPY_PIXELS, the copy is the document\'s page at that k, whatever output scale PDF.js drew the left\'s page at', async () => {
     vi.stubGlobal('devicePixelRatio', 2)
     const s = await setup()
-    // at 353 % the place's k is held to COPY_PIXELS (5.883); PDF.js under a cap of its own drew at an output scale of 5/4 (a
-    // fraction approximateFraction can give, its terms at most 8: 3600 px over 2880 across, 4655 over 3724 down), 5.883 device
-    // pixels a unit. (With the viewer's detail canvas on, as by default, PDF.js draws a restricted base canvas at half or a
-    // quarter of that, which no K_SLACK takes: this is the case with it off)
+    // at 353 % the place's k is held to COPY_PIXELS (5.883); PDF.js under a cap of its own drew the left\'s page at an output scale of
+    // 5/4 (3600 px over 2880 across, 4655 over 3724 down): a canvas of the original, which is no source over our base
     s.view.zoomTo(3.53)
     await settle(s, 4)
     await nearOn(s, [1])
@@ -177,14 +178,13 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
-    expect(one?.[1]).toBe(pageView(1).canvas)
-    expect(one?.[2]).toBe(pageView(1).viewport.scale * 1.25)
-    expect(one?.[2]).not.toBe(3600 / 612)
+    expect(one?.[1]).not.toBe(pageView(1).canvas)
+    expect(one?.[2]).toBeCloseTo(Math.sqrt(2 ** 24 / (612 * 792)), 6)
+    expect(one?.[2]).not.toBe(pageView(1).viewport.scale * 1.25)
   })
 
-  it('a canvas left as drawn through a zoom\'s steps is copied at the scale it was drawn at, not the page view\'s next', async () => {
+  it('a zoom\'s step leaves the left\'s canvas as it was drawn: the copy is the document\'s page at the place\'s k now, not the scale the canvas was drawn at', async () => {
     const s = await setup()
-    // drawn at the fit, its page 711.99 CSS px floored to 711 (so neither 711 / 612 nor the page view's next scale is it)
     s.view.zoomTo(FIT)
     await settle(s, 4)
     await nearOn(s, [1])
@@ -197,20 +197,19 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
-    expect(one?.[1]).toBe(pv.canvas)
-    expect(one?.[2]).toBe(drawnAt)
-    expect(one?.[2]).not.toBe(711 / 612)
+    expect(one?.[1]).not.toBe(pv.canvas)
+    expect(one?.[2]).toBe(pv.viewport.scale)
+    expect(one?.[2]).not.toBe(drawnAt)
   })
 
-  it('a drawing PDF.js lets finish after a zoom gave its page view the next viewport is kept at the scale it was begun at', async () => {
+  it('a drawing PDF.js lets finish after a zoom changes nothing: the copy is the document\'s page at the place\'s k', async () => {
     const s = await setup()
     s.view.zoomTo(FIT)
     await settle(s, 4)
     await nearOn(s, [1])
     const pv = pageView(1), begun = pv.viewport.scale
     leftViewer().startRender(1, { width: 711, height: 921, sx: 1, sy: 1 })
-    // a zoom to 87.5 % while it draws (as under PDF.js's restricted scaling, which lets the drawing run on): the page view's
-    // next viewport is 714 × 924 CSS px, the old canvas's 711 × 921 within the 8 px of PDF.js's rounding both ways
+    // a zoom to 87.5 % while it draws (as under PDF.js's restricted scaling, which lets the drawing run on)
     s.view.zoomTo(0.875)
     await flush()
     expect(pv.viewport.scale).not.toBe(begun)
@@ -218,9 +217,9 @@ describe('one frame a page: the copy at the scale its source was drawn at (docs/
     s.side.tell(await ALL())
     await settle(s)
     const one = copyOf(s, 1)
-    expect(one?.[1]).toBe(pv.canvas)
-    expect(one?.[2]).toBe(begun)
-    expect(one?.[2]).not.toBe(pv.viewport.scale)
+    expect(one?.[1]).not.toBe(pv.canvas)
+    expect(one?.[2]).toBe(pv.viewport.scale)
+    expect(one?.[2]).not.toBe(begun)
   })
 
   it('the page drawn from the document is drawn on the context of the left\'s page views: the CPU\'s, or the GPU\'s where the host opens its documents with enableHWA', async () => {
@@ -444,6 +443,183 @@ describe('L14: the feed\'s refusals', () => {
   })
 })
 
+describe('L17: a layer over our own compile (the layer route, design §3.2): its copy from the composed document, a page without a layout the original\'s', () => {
+  /** a side over the format test's paper written with the engine's head of a layer over our own compile (made({ ours: true })) */
+  const oursSetup = (o: Parameters<typeof setup>[0] = {}) => setup({ ...o, ours: true })
+  /** a side over the same paper whose head says arXiv's PDF (the writer's, with the why our compile was refused, or none): it draws
+   *  nothing in our hosts (they refuse it at bind), and the view takes its copy as it did before layers were over our base */
+  const arxivSetup = () => setup({ ours: false })
+  /** the left page 1 drawn by PDF.js, so that a copy taken from its canvas is possible */
+  const leftDrawn = () => {
+    // (the last viewer made: a row may set up more than one view)
+    const viewer = FakePDFViewer.made.at(-1) as FakePDFViewer
+    const pv = viewer.getPageView(0) as NonNullable<ReturnType<FakePDFViewer['getPageView']>>
+    viewer.render(1, null, { width: Math.floor(pv.viewport.width), height: Math.floor(pv.viewport.height), sx: 1, sy: 1 })
+    return pv.canvas as HTMLCanvasElement
+  }
+  const spies = (s: Setup) => { const V = internalsOf(s.view); return { left: vi.spyOn(V.left, 'canvas'), place: vi.spyOn(V.places, 'canvas') } }
+  const copyOf = (s: Setup, n: number) => s.doors[0]?.copies.filter(c => c[0] === n) ?? []
+
+  it('the copy of a page is drawn from the composed document, and the left\'s canvas and the place\'s (the original\'s page view) are never asked, at the commit or after a zoom', async () => {
+    const s = await oursSetup()
+    const asked = spies(s)
+    await nearOn(s, [1, 2])
+    const canvas = leftDrawn()
+    s.side.tell(await ALL(true))
+    await settle(s)
+    // (the engine\'s head of a layer over our compile, with the arXiv PDF its check ran over)
+    expect((await s.side.index())?.head).toMatchObject({ base: { source: 'ours', check: { boxes: 'equal' } }, orig: { bytes: ORIG.bytes } })
+    expect(content(s, 1)).toBe('layer')
+    expect(copyOf(s, 1)).toHaveLength(1)
+    expect(copyOf(s, 1)[0]?.[1]).not.toBe(canvas)
+    s.view.zoomTo(0.9)
+    await settle(s, 60)
+    expect(copyOf(s, 1).length).toBeGreaterThan(1)
+    for (const c of copyOf(s, 1)) expect(c[1], 'the left\'s canvas is no source of ours').not.toBe(canvas)
+    expect(asked.left).not.toHaveBeenCalled()
+    expect(asked.place).not.toHaveBeenCalled()
+  })
+
+  it('a head over arXiv\'s PDF (the writer\'s `arxiv`, which a bundle of 7 reads as too) takes the copy as before: from the left\'s canvas where PDF.js drew the page', async () => {
+    const s = await arxivSetup()
+    const asked = spies(s)
+    await nearOn(s, [1, 2])
+    const canvas = leftDrawn()
+    s.side.tell(await ALL(false))
+    await settle(s)
+    expect((await s.side.index())?.head.base).toMatchObject({ source: 'arxiv' })
+    expect(copyOf(s, 1)[0]?.[1]).toBe(canvas)
+    expect(asked.left).toHaveBeenCalled()
+  })
+
+  it('a page of a part with no layout is the original\'s: never asked of the door, never swapped, its place keeps the original\'s page view; a page of a part with a layout is laid', async () => {
+    const s = await oursSetup()
+    await nearOn(s, [1, 2, 3, 4])
+    s.side.tell(await ALL(true))
+    await settle(s)
+    for (const n of [1, 2, 3]) expect(content(s, n), `page ${n}`).toBe('layer')
+    // (the paper\'s page 4 is its third part\'s, which records no layout)
+    expect(content(s, 4)).toBe('original')
+    expect(layerOf(s, 4)).toBeNull()
+    expect(copyOf(s, 4)).toEqual([])
+    // and over arXiv\'s PDF it is laid as it was
+    const t = await arxivSetup()
+    await nearOn(t, [4])
+    t.side.tell(await ALL(false))
+    await settle(t)
+    expect(content(t, 4)).toBe('layer')
+  })
+
+  it('whichever comes first, the part\'s record or the page\'s ask: a page asked before its part is told waits for it, and is the original\'s when it comes', async () => {
+    const m = await M(true)
+    // the page asked first: its part (the last) not told yet
+    const a = await oursSetup()
+    await nearOn(a, [4])
+    a.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(m, i)) })
+    await settle(a)
+    expect(content(a, 4)).toBe('original')
+    a.side.tell({ parts: [jobRef(m, 2)], end: { through: N } })
+    await settle(a)
+    expect(content(a, 4)).toBe('original')
+    expect(layerOf(a, 4)).toBeNull()
+    expect(copyOf(a, 4)).toEqual([])
+    // the record first, the page near afterwards
+    const b = await oursSetup()
+    b.side.tell(await ALL(true))
+    await settle(b)
+    await nearOn(b, [4])
+    await settle(b)
+    expect(content(b, 4)).toBe('original')
+    expect(layerOf(b, 4)).toBeNull()
+    expect(copyOf(b, 4)).toEqual([])
+  })
+
+  it('a part that gains no layout mid-run (a fork told after its pages were laid): the page only it holds comes back as the original\'s, the pages of the others (and the one a unit of the first runs on onto) stay the layer\'s', async () => {
+    const m = await M(true)
+    const input = partInputs(m.head.sha256, m.lefts)[1]!
+    const refused = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], addon: null })
+    const s = await oursSetup({ extra: [refused] })
+    await nearOn(s, [1, 2, 3])
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)) })
+    s.side.take([rowOf(2)])
+    await settle(s)
+    for (const n of [1, 2, 3]) expect(content(s, n), `page ${n}`).toBe('layer')
+    s.side.tell({ parts: [{ ...(refused.ref as Ref), prev: m.parts[0]!.sha256 }] })
+    await settle(s)
+    expect(s.side.probe().forks).toBe(1)
+    // (page 2 stays laid: the first part\'s unit runs on onto it, its layout drawn there; page 3 is only the refused part\'s)
+    for (const n of [1, 2]) expect(content(s, n), `page ${n}`).toBe('layer')
+    expect(content(s, 3)).toBe('original')
+    expect(layerOf(s, 3)).toBeNull()
+  })
+
+  it('a unit that runs on from a page of a part with a layout onto a page of a part with none (the part\'s reach): that page is laid, with the continuation drawn, in either order the two records come; the page held by the layoutless part alone stays the original\'s', async () => {
+    const m = await M()
+    // part A (the fixture\'s first) has pages [1, 1] and a layout whose lines run on to page 2; part B owns pages 2 and 3 with NO layout
+    expect(m.readParts[0]?.pages).toEqual([1, 1])
+    expect(m.readParts[0]?.reach).toBe(2)
+    const input = partInputs(m.head.sha256, m.lefts)[1]!
+    const b = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], addon: null })
+    const refB = { ...(b.ref as Ref), prev: m.parts[0]!.sha256 }
+    const head = { head: m.head.ref, units: m.chunks.map(c => c.ref) }
+    const check = async (s: Setup, what: string) => {
+      await settle(s)
+      // page 2: part A\'s reach holds it with a layout, part B owns it with none: laid (A\'s continuation is drawn there)
+      expect(content(s, 2), `${what}: page 2`).toBe('layer')
+      expect(layerOf(s, 2), `${what}: page 2`).not.toBeNull()
+      // page 3: only part B holds it (its pages 2 to 3), with no layout: the original\'s
+      expect(content(s, 3), `${what}: page 3`).toBe('original')
+      expect(layerOf(s, 3), `${what}: page 3`).toBeNull()
+      expect(s.door.layer?.pageState(1), what).toBe('ready')
+      expect(s.side.coverage(), what).toMatchObject({ laid: 2 })
+    }
+    // the reaching part\'s record first, then the layoutless part\'s
+    const first = await oursSetup({ extra: [b] })
+    await nearOn(first, [1, 2, 3])
+    first.side.tell({ ...head, parts: [jobRef(m, 0)] })
+    await settle(first)
+    first.side.tell({ parts: [refB] })
+    await check(first, 'A then B')
+    // the layoutless part\'s record first (it waits for its predecessor), then the reaching part\'s
+    const second = await oursSetup({ extra: [b] })
+    await nearOn(second, [1, 2, 3])
+    second.side.tell({ ...head, parts: [refB] })
+    await settle(second)
+    second.side.tell({ parts: [jobRef(m, 0)] })
+    await check(second, 'B then A')
+    // both in one tell, the pages asked after
+    const third = await oursSetup({ extra: [b] })
+    third.side.tell({ ...head, parts: [jobRef(m, 0), refB] })
+    await settle(third)
+    await nearOn(third, [1, 2, 3])
+    await check(third, 'both, the pages near afterwards')
+  })
+
+  it('noLayoutPage: a page is the original\'s only when a part owns it by its pages and no part that holds it, by its pages or its reach, has a layout', () => {
+    const part = (a: number, b: number, layout: unknown, reach = b) => ({ pages: [a, b], reach, layout }) as never
+    /** a layout whose lines run on the pages given (a row of eight numbers a group, the page first) */
+    const rows = (...pages: number[]) => ({ lines: [[0, pages.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] })
+    // (a unit running on from page 1 onto page 2: part A\'s reach 2, its layout lines there; part B owns page 2 with none)
+    expect(noLayoutPage([part(1, 1, rows(1, 2), 2), part(2, 3, null)], 2)).toBe(false)
+    expect(noLayoutPage([part(1, 1, rows(1, 2), 2), part(2, 3, null)], 3)).toBe(true)
+    expect(noLayoutPage([part(1, 1, null, 2), part(2, 3, null)], 2)).toBe(true)
+    // (a part whose views reach a page its layout draws nothing on does not hold it: the fixture\'s second part reaches page 4)
+    expect(noLayoutPage([part(1, 1, rows(1), 2), part(2, 3, null)], 2)).toBe(true)
+    expect(noLayoutPage([part(2, 3, rows(2, 3), 4), part(4, 4, null)], 4)).toBe(true)
+    // (a part reaching a page no part owns yet is not an owner: the page waits for its part)
+    expect(noLayoutPage([part(1, 1, null, 2)], 2)).toBe(false)
+    expect(noLayoutPage([part(1, 1, rows(1, 2), 2)], 2)).toBe(false)
+    // (a unit running on from the page before can put one page in two parts\' ranges)
+    expect(noLayoutPage([part(1, 2, rows), part(2, 3, null)], 2)).toBe(false)
+    expect(noLayoutPage([part(1, 2, null), part(2, 3, null)], 2)).toBe(true)
+    expect(noLayoutPage([part(1, 2, null), part(2, 3, rows)], 3)).toBe(false)
+    expect(noLayoutPage([part(1, 2, null), part(3, 4, rows)], 2)).toBe(true)
+    // no part holds the page yet (its part not told): not the original\'s by this rule, the door waits for it
+    expect(noLayoutPage([part(1, 2, null)], 3)).toBe(false)
+    expect(noLayoutPage([], 1)).toBe(false)
+  })
+})
+
 describe('L15: a fork', () => {
   it('a different part at a page told opens the door again over the new chain', async () => {
     const m = await M()
@@ -577,7 +753,9 @@ describe('L16 and L3: the rows, and what comes in parts', () => {
     b.side.take(all.slice(0, 4))
     await settle(b)
     for (let n = 1; n <= N; n++) expect(content(b, n), `page ${n}`).toBe(content(a, n))
-    expect(content(b, 4)).toBe('layer')
+    // (page 4 is its third part\'s, which records no layout: the original\'s page, whichever way the parts came)
+    expect(content(b, 4)).toBe('original')
+    expect(content(b, 3)).toBe('layer')
     for (const sha of new Set(b.fetched)) expect(b.fetched.filter(x => x === sha).length, sha).toBe(1)
   })
 })

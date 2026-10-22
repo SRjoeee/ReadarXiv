@@ -68,13 +68,17 @@ export interface Registration {
   kSource: number
   lost: number
   source: [number, number]
-  /** the commit's own path timed (ms): its source got (a canvas PDF.js drew, or the page drawn from the document), its copy drawn */
-  ms: { source: number; copy: number }
+  /** the commit's own path timed (ms): its source got (a canvas PDF.js drew, or the page drawn from the document), its copy drawn;
+   *  `doc`: the page drawn from the composed document, timed where the commit's own source was a canvas of PDF.js's */
+  ms: { source: number; copy: number; doc?: number }
+  /** the size of the page drawn from the document */
   doc?: [number, number]
+  /** the pixels compared with the other source's copy, and those differing: the other source is the page drawn from the document
+   *  (when the commit's is a canvas of PDF.js's), or, over our base, the left's canvas where PDF.js drew it at this k */
   compared?: number
   differing?: number
   maxDiff?: number
-  /** with `canvases`: the two copies, which the caller lets go */
+  /** with `canvases`: the two copies (the commit's source's, the other's), which the caller lets go */
   copies?: { source: HTMLCanvasElement; doc: HTMLCanvasElement }
 }
 /** sync; opens nothing until it can. One side per view: a second while one lives throws */
@@ -85,5 +89,7 @@ export declare const RECOPY_MS: number
 export declare const LEFT_RETRY_MS: number
 /** the most other pages a wanted page's running units bring their left parts from, the nearest first */
 export declare const SPREAD_MAX: number
+/** whether page `n` is laid by no layout: some part owns it by its pages and no part that holds it, by its pages or its reach, has a layout */
+export declare function noLayoutPage(parts: readonly { readonly pages: readonly [number, number]; readonly reach?: number; readonly layout: unknown }[], n: number): boolean
 /** the pages whose left parts page p's running units bring: their other pages not in yet, each once, nearest first, at most `max` */
 export declare function spreadPages(p: number, ids: readonly number[], pagesOf: (id: number) => readonly number[] | undefined, isIn: (page: number) => boolean, max?: number): number[]

@@ -962,22 +962,40 @@ try {
     }
     api.set({ layer: mode.ready() })
     await api.release()
-    // arXiv's bytes that are not the layer's base: our copy read by ranges, each held to the tag the layer names, shown on
-    // the left, and the layer laid over it
+    // The layer's document is our base page (the layer route, design §3.2), read by ranges at /api/v1/base/…, each answer held to its
+    // length and the first answer's tag, whatever the tab's PDF is; the original is fetched only when the tab's PDF is not the one
+    // the head's check ran over (head.orig): then our copy of that PDF is fetched whole (the store's, or the server's, checked
+    // against orig's digest) and shown on the left in its place, and the layer is laid over our base all the same
+    const baseAt = `/api/v1/base/${sample.segment}/`, copyAt = `/api/v1/original/${sample.segment}`
+    const readsSince = since => {
+      const asked = api.requests.slice(since)
+      return { base: asked.filter(r => r.path.startsWith(baseAt)), copy: asked.filter(r => r.path === copyAt) }
+    }
+    const baseByRanges = reads => reads.base.length > 0 && reads.base.every(r => typeof r.headers.range === 'string' && r.answered === 206)
+    // arXiv's bytes that are not the head's orig: our copy of the orig fetched whole and shown on the left, the layer laid over our base
     pdfAnswer = 'other'
-    const copyAt = `/api/v1/original/${sample.segment}`, before = api.requests.length
+    const before = api.requests.length
     const other = await openReader({ mode: 'bilingual' })
     const laidOver = await other.waitForFunction(() => /\[echo\]/.test(document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer svg')?.textContent ?? ''), null, { timeout: 60_000 }).then(() => true, () => false)
+    // (the proof of the tab's bytes comes once they are all in: the left becomes our copy then)
+    await other.waitForFunction(() => window.__reader.run?.probe().ours === true, null, { timeout: 30_000 }).catch(() => undefined)
     const ran = await other.evaluate(() => window.__reader.run?.probe() ?? null)
-    const copies = api.requests.slice(before).filter(r => r.path === copyAt)
-    const byRanges = copies.length > 0 && copies.every(r => typeof r.headers.range === 'string' && r.answered === 206)
-    check('arXiv\'s bytes not the base: our copy read by ranges and shown on the left, the layer laid over it', laidOver && ran?.ours === true && ran?.basis === 'ranged' && byRanges, `laid ${laidOver}, ${JSON.stringify({ ours: ran?.ours, basis: ran?.basis, bound: ran?.bound })}, ${copies.length} reads of our copy, ${copies.filter(r => r.answered === 206).length} by range`)
+    const reads = readsSince(before)
+    check('the tab\'s PDF not the one the head\'s check ran over: our copy of it fetched whole and shown on the left, the layer laid over our base page read by ranges', laidOver && ran?.ours === true && ran?.basis === 'ranged' && baseByRanges(reads) && reads.copy.length === 1 && reads.copy[0]?.answered === 200 && reads.copy[0]?.headers.range === undefined, `laid ${laidOver}, ${JSON.stringify({ ours: ran?.ours, basis: ran?.basis })}, base ${reads.base.length} reads (${reads.base.filter(r => r.answered === 206).length} by range), the original ${reads.copy.length} (${reads.copy.map(r => `${r.answered}${r.headers.range ? ' ranged' : ' whole'}`).join(', ')})`)
     await other.close()
+    // the tab's PDF the one the check ran over: nothing fetched of the original, the left stays the tab's own, the layer laid over our base
     pdfAnswer = 'ok'
+    const sameFrom = api.requests.length
     const same = await openReader({ mode: 'bilingual' })
     await same.waitForFunction(() => /\[echo\]/.test(document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer svg')?.textContent ?? ''), null, { timeout: 60_000 }).catch(() => undefined)
+    // (long enough for the proof of the tab's bytes, which comes once they are all in)
+    await same.waitForTimeout(1500)
     const sameRun = await same.evaluate(() => window.__reader.run?.probe() ?? null)
-    control('arXiv\'s bytes that are the base fetch no copy of ours (the same assertion, on the sample as arXiv serves it)', { ok: sameRun?.ours === true && sameRun?.basis === 'ranged', detail: `${JSON.stringify(sameRun && { ours: sameRun.ours, basis: sameRun.basis })}: our copy not shown, the left's bytes read` })
+    const sameReads = readsSince(sameFrom)
+    const sameOk = sameRun?.ours === false && sameRun?.basis === 'ranged' && baseByRanges(sameReads) && sameReads.copy.length === 0
+    check('the tab\'s PDF the one the check ran over: the left stays the tab\'s own, no copy of the original fetched, the layer laid over our base page read by ranges', sameOk, `${JSON.stringify(sameRun && { ours: sameRun.ours, basis: sameRun.basis })}, base ${sameReads.base.length} reads, the original ${sameReads.copy.length}`)
+    // (the same assertion on the other PDF fails: ours, and a copy fetched)
+    control('the same assertion, on the PDF that is not the head\'s orig', { ok: ran?.ours === false && reads.copy.length === 0, detail: `${JSON.stringify(ran && { ours: ran.ours })}, the original ${reads.copy.length} fetched` })
     await same.close()
   }
 
