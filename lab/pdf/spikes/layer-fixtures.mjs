@@ -8,7 +8,17 @@
 //                (latexmk in Docker's texlive/texlive:latest, no network), each compile kept by what it compiles in
 //                data/layout/<id>v<n>/compiles/; refusal.json in its place where the maker refuses the paper, or a
 //                stage of the marks fails (`refused`: probe, compile, marks or the maker's own; the reader then runs as
-//                Plan 5's there);
+//                Plan 5's there); with an engine of BUNDLE 8 made over our base page, not arXiv's PDF:
+//   base.pdf     our base page (design note §3.1): the final pass of the marked original, made as production makes it (on the
+//                pinned image, SOURCE_DATE_EPOCH arXiv's day, creationEpochOf) once it passes the page pass's checks (§3.3,
+//                page-pass.mjs checkOurBase), which the layer draws over;
+//   base.json    what the gate pack checks it by (gate-pack.mjs baseRecordOf): { schema, source: 'ours', base (the head's: bytes,
+//                sha256, xref, pages, tree, check), image (the compile image it was made on: its tree's pin, COMPILE_YEAR's),
+//                layout ({ sha256, bytes } of layout.json, made over it) }; or, the paper
+//                refused a base page of ours (production's fallback, no layout), { schema, source: 'arxiv', why, detail,
+//                layout } and no base.pdf, its refusal.json saying the same: `layout` the layout file the fixture kept in its
+//                place, an older maker's over arXiv's PDF (gate-pack.mjs keptLayoutOf), null where it held none, which a
+//                pack make refuses (baseRecordOfMade writes the record);
 //   units.json   the translation as the layer takes it: `units`, each unit with a translation, its pieces as TrPiece by
 //                kOfSource (layer/pieces.mjs), its sentence starts in trText (mt.mjs sentencesOf's `tr`, null where the
 //                engine gave none), its state and engine; and where it came from;
@@ -54,6 +64,7 @@ import { promisify } from 'node:util'
 import { getDocument, OPS, version as PDFJS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { LITE } from './lite-pdfjs.mjs'
 import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, latexmkEngine, PLATFORM } from './compile-image.mjs'
+import { baseRecordOfMade, keptLayoutOf } from './gate-pack.mjs'
 
 // (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
 await checkCompileImage()
@@ -272,29 +283,64 @@ async function paperFiles(id) {
  * reader reads the same compile otherwise
  */
 const COMPILES = process.env.GATE_PDF_CACHE ?? process.env.COMPILES ?? null
+/** the files under `dir`, by their paths there */
+const filesUnder = (dir, rel = '') => readdirSync(join(dir, rel), { withFileTypes: true }).flatMap(d => (d.isDirectory() ? filesUnder(dir, join(rel, d.name)) : [join(rel, d.name)]))
+/**
+ * One compile, kept by its name (what it compiles, and its day). `opts`: `passes` 1 (latexmk's one pass, the mark probe's), `once`
+ * (the final pass: one pass of the paper's engine with no bibliography step and no latexmk, dvipdfmx after it for `latex`),
+ * `sourceDate` (SOURCE_DATE_EPOCH with FORCE_SOURCE_DATE, as the box sets it from the compile request), `files` (the files it
+ * wrote, new or changed against what it was given, kept beside it in `<name>.files/` and returned: what the final pass is made
+ * over)
+ */
 async function compiled(dir, name, files, paper, opts = {}) {
-  const at = COMPILES ? join(COMPILES, dir.split(sep).pop()) : join(dir, 'compiles'), pdfF = join(at, `${name}.pdf`), logF = join(at, `${name}.log`)
-  if (existsSync(logF)) return { pdf: existsSync(pdfF) ? new Uint8Array(readFileSync(pdfF)) : null, log: readFileSync(logF, 'latin1') }
+  const at = COMPILES ? join(COMPILES, dir.split(sep).pop()) : join(dir, 'compiles'), pdfF = join(at, `${name}.pdf`), logF = join(at, `${name}.log`), filesD = join(at, `${name}.files`)
+  const read = () => ({ pdf: existsSync(pdfF) ? new Uint8Array(readFileSync(pdfF)) : null, log: readFileSync(logF, 'latin1'), ...(opts.files && existsSync(filesD) ? { files: new Map(filesUnder(filesD).map(p => [p.split(sep).join('/'), new Uint8Array(readFileSync(join(filesD, p)))])) } : {}) })
+  if (existsSync(logF) && (!opts.files || existsSync(filesD))) return read()
   const c = await compiledNow(dir, name, files, paper, opts)
-  if (c) { mkdirSync(at, { recursive: true }); if (c.pdf) write(pdfF, c.pdf); write(logF, Buffer.from(c.log, 'latin1')) }
+  if (c) {
+    mkdirSync(at, { recursive: true })
+    if (c.pdf) write(pdfF, c.pdf)
+    write(logF, Buffer.from(c.log, 'latin1'))
+    if (c.files) for (const [p, b] of c.files) write(join(filesD, p), b)
+    else if (opts.files) mkdirSync(filesD, { recursive: true })
+  }
   return c
 }
-async function compiledNow(dir, name, files, paper, { passes = null } = {}) {
+async function compiledNow(dir, name, files, paper, { passes = null, once = false, sourceDate = null, files: keep = false } = {}) {
   if (free(dir) < FREE_MIN) throw new Error(`less than 10 GiB free on ${dir}`)
   const main = paper.project.main, stem = main.split('/').pop().replace(/\.[^.]+$/, '')
   const build = join(dir, `build-${name}`)
   rmSync(build, { recursive: true, force: true })
   try {
     for (const [p, b] of files) { const f = join(build, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }
-    const engine = latexmkEngine(paper.meta.compiler)
-    const once = passes === 1 ? ['-e', '$max_repeat=1'] : []
-    await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', 'latexmk', ...engine, ...once, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
+    const date = Number.isSafeInteger(sourceDate) ? ['-e', `SOURCE_DATE_EPOCH=${sourceDate}`, '-e', 'FORCE_SOURCE_DATE=1'] : []
+    const texEngine = latexmkEngine(paper.meta.compiler)
+    const one = passes === 1 ? ['-e', '$max_repeat=1'] : []
+    const compiler = paper.meta.compiler ?? 'pdflatex'
+    const cmd = once
+      ? ['sh', '-c', `${compiler === 'latex' ? 'latex' : compiler} -interaction=nonstopmode ./${main}${compiler === 'latex' ? `; dvipdfmx -o ${stem}.pdf ${stem}.dvi` : ''}; true`]
+      : ['latexmk', ...texEngine, ...one, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
+    const said = await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...date, '-v', `${build}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).then(r => `${r.stdout}${r.stderr}`, e => `${e?.stdout ?? ''}${e?.stderr ?? ''}`)
     const pdf = join(build, `${stem}.pdf`), log = join(build, `${stem}.log`)
-    return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') } : null
+    if (!existsSync(log)) return null
+    // (the files it wrote: new, or other bytes than it was given)
+    const wrote = keep ? new Map() : null
+    if (wrote) for (const p of filesUnder(build)) { const key = p.split(sep).join('/'), b = new Uint8Array(readFileSync(join(build, p))), had = files.get(key); if (!had || Buffer.compare(Buffer.from(had), Buffer.from(b)) !== 0) wrote.set(key, b) }
+    // (one pass of `latex`: dvipdfmx's terminal after TeX's log, behind the host's line (base.mjs DRIVER_OUTPUT_MARK; an engine of
+    // before names none), as the box gives it, so that what the driver could not draw is read: base.mjs driverLostInk. No bound
+    // here cuts it: the lab writes no DRIVER_OUTPUT_TRUNCATED)
+    const mark = (await engine('layout/base.mjs').catch(() => ({}))).DRIVER_OUTPUT_MARK
+    const driver = once && compiler === 'latex' ? `\n${mark ? `${mark}\n` : ''}${said}` : ''
+    return { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') + driver, ...(wrote ? { files: wrote } : {}) }
   } finally { rmSync(build, { recursive: true, force: true }) }
 }
 
-/** the layout file of a paper, or the maker's refusal, with the stats */
+/** whether the engine makes our compile the base page (BUNDLE 8: layout/base.mjs's final-pass check) */
+let ofBase8 = null
+const base8Of = async () => (ofBase8 ??= typeof (await engine('layout/base.mjs').catch(() => ({}))).finalCheck === 'function')
+
+/** the layout file of a paper, or the maker's refusal, with the stats; with an engine of BUNDLE 8 `base`, our base page the layout
+ *  is made over ({ source: 'ours', pdf, head }: the head's base) or why the paper has none ({ source: 'arxiv', why, detail }) */
 async function layoutOf(id, paper, dir) {
   const { files: source } = await unpackSource(new Uint8Array(readFileSync(join(dir, 'source.gz'))))
   const keyOf = marked => {
@@ -312,7 +358,7 @@ async function layoutOf(id, paper, dir) {
     }
     return null
   }
-  let marksBytes = null, switched = null, asked = false
+  let marksBytes = null, switched = null, asked = false, baseMade = null
   const withSource = marked => { const all = new Map(source); for (const [p, b] of marked) all.set(p, b); return all }
   if (typeof MARKS.punctuationMovers === 'function') {
     // an engine of before Task 2: the paper's own switch from its preamble, then from the compile's log too, compiled
@@ -334,14 +380,25 @@ async function layoutOf(id, paper, dir) {
     // The call turns whatever its compile throws into a refusal, which is a paper the maker cannot lay out; a fault of this
     // file's own (the disk guard, a full disk) is not that, so it is kept and thrown again: the run fails and writes nothing
     const { layoutMarksOfPaper } = await engine('layout/paper.mjs')
-    let fault = null
+    let fault = null, calls = 0
+    // (an engine of BUNDLE 8, our compile as the base page: the final pass asked of the compile, its files, the day; production's
+    // compile request, arXiv's page count for the guard, arXiv's day (its /CreationDate, else its XMP's) for every compile after the probe)
+    const base8 = await base8Of()
     const compile = async req => {
       try {
-        const probe = !req.rerun
-        const c = await compiled(dir, `${probe ? 'probe-' : ''}${keyOf(req.overrides)}`, withSource(req.overrides), paper, { passes: probe ? 1 : null })
-        return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log } : { ok: false, error: 'no log' }
+        // (the engine's first compile is the mark probe, latexmk's one pass; a later one-pass request the final pass, the paper's
+        // engine once with no bibliography step; every other the marked original's, every pass)
+        const probe = calls++ === 0, once = !probe && !req.rerun
+        // (a latex final pass's cache holds the driver's output behind the host's line since the contract: a pass cached before it has no such log and would be refused `final`, so its name differs)
+        const name = `${probe ? 'probe-' : once ? 'final-' : ''}${keyOf(req.overrides)}${Number.isSafeInteger(req.sourceDate) ? `-d${req.sourceDate}` : ''}${once && paper.meta.compiler === 'latex' ? '-dm' : ''}`
+        const c = await compiled(dir, name, withSource(req.overrides), paper, { passes: probe ? 1 : null, once, sourceDate: req.sourceDate ?? null, files: !!req.files })
+        return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log, ...(c.files ? { files: c.files } : {}) } : { ok: false, error: 'no log' }
       } catch (e) { fault = e; throw e }
     }
+    const arxivTask = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))))
+    const arxivDoc = await arxivTask.promise
+    let date = null
+    try { date = base8 ? await (await engine('layout/base.mjs')).creationEpochOf(arxivDoc) : null } finally { await arxivTask.destroy() }
     const made = await layoutMarksOfPaper(paper, {
       compile,
       open: async bytes => {
@@ -349,9 +406,11 @@ async function layoutOf(id, paper, dir) {
         try { return { doc: await task.promise, close: () => task.destroy() } } catch (e) { await task.destroy().catch(() => {}); throw e }
       },
       OPS,
+      ...(base8 ? { pages: arxivDoc.numPages, sourceDate: date } : {}),
     })
     if (fault) throw fault
     if (!('marks' in made)) return { refused: made.refused, stats: null }
+    baseMade = made.base ?? null
     // (an engine of the page stream hands the marks on in memory: their file, as the lab keeps it)
     marksBytes = Buffer.from(made.marks instanceof Uint8Array ? made.marks : MARKS.marksFile(made.marks))
     asked = true
@@ -366,15 +425,36 @@ async function layoutOf(id, paper, dir) {
   }
   const task = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))))
   const m = /^(.+)v(\d+)$/.exec(id)
-  try {
-    const arxivDoc = await task.promise
+  const ofPaper = { id: m[1], version: Number(m[2]) }
+  /** the maker over `doc` (its text and line check where the base page's check gave them), with its times */
+  const made = async (doc, more = {}) => {
     const tm = performance.now()
-    const out = await makeLayout({ units: paper.units, marks, arxiv: arxivDoc, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS })
+    const out = await makeLayout({ units: paper.units, marks, arxiv: doc, OPS, paper: ofPaper, left: '', pdfjs: PDFJS, ...more })
     // (the maker's own time, and its operator lists' within it: the server's prepare reads them once for the remover too)
     out.stats.makerMs = Math.round(performance.now() - tm)
     // GATE_DBG=<dir>: the maker's own diagnostics, where it gives them
     if (out.stats.dbg && process.env.GATE_DBG) writeFileSync(join(process.env.GATE_DBG, `${id}.json`), JSON.stringify({ dbg: out.stats.dbg, u: out.stats.dbgU }))
     return 'file' in out ? { text: encodeLayout(out.file), stats: out.stats, switched } : { refused: out.refused, stats: out.stats, switched }
+  }
+  try {
+    const arxivDoc = await task.promise
+    if (!asked || !(await base8Of())) return await made(arxivDoc)
+    // BUNDLE 8 (design note §3.1, §3.3): the layout is made over our base page, the final pass of the marked original, once it
+    // passes the page pass's own checks (page-pass.mjs checkOurBase, as production runs them); a paper whose base page is refused
+    // has no layout in production, and here keeps the one the pack held (base.json says why: `base`, below)
+    const { readArxivText } = await engine('layout/arxiv.mjs'), { checkOurBase } = await engine('pipeline/page-pass.mjs')
+    const { texLiveOf } = await engine('layout/guard.mjs'), { startxrefOf } = await engine('layout/tail.mjs')
+    const refusedBase = (code, why) => ({ refused: code, why, stats: null, switched, base: { source: 'arxiv', why: code, detail: why } })
+    if (!baseMade?.pdf) return refusedBase('final', baseMade?.why ?? 'the final pass was not made')
+    const bytes = baseMade.pdf, baseTask = open(bytes.slice())
+    try {
+      const baseDoc = await baseTask.promise
+      const ours = { doc: baseDoc, bytes: bytes.length, sha256: sha256(bytes), xref: startxrefOf(bytes), check: baseMade.check }
+      const checked = await checkOurBase({ ours, arxiv: { doc: arxivDoc, text: await readArxivText(arxivDoc, { draw: false }) }, tree: texLiveOf(baseMade.log), draw: false })
+      if (checked.refused) return refusedBase(checked.refused, checked.why)
+      const out = await made(baseDoc, { text: checked.text, lineCheck: checked.lineCheck })
+      return { ...out, base: { source: 'ours', pdf: bytes, head: checked.head } }
+    } finally { await baseTask.destroy() }
   } finally { await task.destroy() }
 }
 /** a compile's marks file, as bytes */
@@ -478,15 +558,31 @@ for (const [id, target] of asked) {
       const hashes = await Promise.all(paper.units.map(sourceHash))
       papers.set(id, { dir, paper, layout, hashes, ms: Date.now() - t0 })
       const s = layout.stats
-      console.log(`${id}: ${layout.text ? `layout ${layout.text.length} bytes` : `refused (${layout.refused})`}${layout.switched?.length ? `, switched ${layout.switched.join(' ')}` : ''}${s ? `, lines carried ${s.lines.carried}/${s.lines.total}, units located ${s.units.located}/${s.units.total}` : ''}${s ? `, ph ${JSON.stringify({ found: s.ph.found, lost: s.ph.lost, unmarked: s.ph.unmarked, symbols: s.ph.symbols, twice: s.ph.twice, unmatched: s.ph.unmatched, foreign: s.ph.foreign, shared: s.ph.shared })}` : ''} (${Date.now() - t0} ms${s?.makerMs !== undefined ? `; maker ${s.makerMs} ms, its operator lists ${Math.round(s.ms?.ops ?? 0)} ms` : ''})`)
+      console.log(`${id}: ${layout.base ? `base ${layout.base.source === 'ours' ? `ours (${layout.base.pdf.length} bytes, lines ${layout.base.head.check.carried})` : `arXiv's (${layout.base.why}: ${layout.base.detail})`}; ` : ''}${layout.text ? `layout ${layout.text.length} bytes` : `refused (${layout.refused})`}${layout.switched?.length ? `, switched ${layout.switched.join(' ')}` : ''}${s ? `, lines carried ${s.lines.carried}/${s.lines.total}, units located ${s.units.located}/${s.units.total}` : ''}${s ? `, ph ${JSON.stringify({ found: s.ph.found, lost: s.ph.lost, unmarked: s.ph.unmarked, symbols: s.ph.symbols, twice: s.ph.twice, unmatched: s.ph.unmatched, foreign: s.ph.foreign, shared: s.ph.shared })}` : ''} (${Date.now() - t0} ms${s?.makerMs !== undefined ? `; maker ${s.makerMs} ms, its operator lists ${Math.round(s.ms?.ops ?? 0)} ms` : ''})`)
     }
     const { dir, paper, layout, hashes } = papers.get(id)
     const m = /^(.+)v(\d+)$/.exec(id)
     mkdirSync(out, { recursive: true })
     copyFileSync(join(dir, 'arxiv.pdf'), join(out, 'arxiv.pdf'))
     exclude(join(out, 'arxiv.pdf'))
+    // (a paper whose base page of ours is refused has no layout in production; the fixture keeps the layout file it held, an
+    // older maker's over arXiv's PDF, which the gate draws over arxiv.pdf as before: gate-pack.mjs keptLayoutOf)
+    const refusedBase = !!layout.base && layout.base.source !== 'ours'
+    const kept = refusedBase ? keptLayoutOf(existsSync(join(out, 'layout.json')) ? new Uint8Array(readFileSync(join(out, 'layout.json'))) : null, LAYOUT) : null
     if (layout.text) { write(join(out, 'layout.json'), layout.text); rmSync(join(out, 'refusal.json'), { force: true }) }
-    else { write(join(out, 'refusal.json'), JSON.stringify({ refused: layout.refused, stats: layout.stats }, null, 1)); rmSync(join(out, 'layout.json'), { force: true }) }
+    else {
+      write(join(out, 'refusal.json'), JSON.stringify({ refused: layout.refused, ...(layout.why ? { why: layout.why } : {}), stats: layout.stats }, null, 1))
+      if (!kept) rmSync(join(out, 'layout.json'), { force: true })
+    }
+    // (BUNDLE 8: our base page the layout was made over, and base.json, what the gate pack checks it by: the base page's digest and
+    // the layout's; or why the paper has none, production's fallback; neither for an engine of before)
+    rmSync(join(out, 'base.pdf'), { force: true })
+    rmSync(join(out, 'base.json'), { force: true })
+    if (layout.base?.source === 'ours') write(join(out, 'base.pdf'), layout.base.pdf)
+    if (layout.base) {
+      const made = layout.base.source === 'ours' ? { source: 'ours', head: layout.base.head } : layout.base
+      write(join(out, 'base.json'), `${JSON.stringify(baseRecordOfMade({ made, layout: layout.base.source === 'ours' ? (layout.text ? Buffer.from(layout.text) : null) : kept, image: COMPILE_IMAGE }), null, 1)}\n`)
+    }
     // the translation: the record made before, where it is of this cut of the units; else staging's; else Microsoft's
     const recordFile = join(out, 'record.json'), unitsFile = join(out, 'units.json')
     let record = null, from = null, source = null

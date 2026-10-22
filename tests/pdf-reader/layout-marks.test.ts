@@ -250,7 +250,9 @@ describe('originalFiles with the layout marks', () => {
         const marked = decode(originalFiles(paperOf(src), { lines, layout: MARK_CLASSES }))
         expect(marked.indexOf(LAYOUT_TEX), name).toBeGreaterThan(0)
         const out = marked.replace(LAYOUT_TEX, '').replace(/\\axtpm[am]\{[^}]*\}|\\axtpm\{[^}]*\}|\\axthmark\{[^}]*\}|\\leavevmode\\axtmark\{t\d+s\}|\\axtend\{t\d+e\}/g, '')
-        expect(out, name).toBe(decode(originalFiles(paperOf(src), { lines })))
+        // (the layout compile's line probe past the spaces a \\begin skips, `pastBegin`, which the live path's original leaves as
+        // it was: the pin)
+        expect(out, name).toBe(decode(originalFiles(paperOf(src), { lines, pastBegin: true })))
       }
     }
     // not vacuously: the sources hold every kind of mark

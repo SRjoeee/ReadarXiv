@@ -350,7 +350,8 @@ export function gateArgs({ engine, rules, pack, workers = 4 }) {
  * digest of the parts of the committed listing (gate-pack.json, whose files `gate-pack.mjs verify` checked in the directory the
  * run read) the references, the geometry, the fixtures' own inputs (the PDFs and the translations), the served faces and the
  * hyphenation patterns. Not among them, because an engine makes them and the pull request may move them: the made layout files
- * (`fixtures/<output>/layout.json`). A pack with another reference, another geometry, another PDF, translation, face or pattern
+ * (`fixtures/<output>/layout.json`) and our base pages they were made over with their record (`fixtures/<output>/base.pdf`, the final
+ * pass of the marked original, and `base.json`: BUNDLE 8, design note §3.1). A pack with another reference, another geometry, another PDF, translation, face or pattern
  * is another instrument, whichever directory it is in.
  */
 export function instrumentOfPack(pack) {
@@ -360,7 +361,7 @@ export function instrumentOfPack(pack) {
   const stray = files.map(f => String(f.path)).filter(p => !/^(?:fixtures|refs|geometry|data|texmf)\//.test(p))
   if (stray.length) throw new Error(`the pack holds ${stray.length} file${stray.length === 1 ? '' : 's'} outside the parts the instrument names (${stray[0]}…): name the part in instrumentOfPack`)
   return {
-    fixtures: part(p => p.startsWith('fixtures/') && !/^fixtures\/[^/]+\/layout\.json$/.test(p)),
+    fixtures: part(p => p.startsWith('fixtures/') && !/^fixtures\/[^/]+\/(?:layout\.json|base\.pdf|base\.json)$/.test(p)),
     refs: part(p => p.startsWith('refs/')),
     geometry: part(p => p.startsWith('geometry/')),
     data: part(p => p.startsWith('data/')),

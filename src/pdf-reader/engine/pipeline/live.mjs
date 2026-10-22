@@ -73,13 +73,16 @@ export const stoppedShort = log => /^(?:! Emergency stop\.|! TeX capacity exceed
 export const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
 /** a compile that did not run through is one that failed, as the TeX page's is: its PDF not taken */
 const finished = r => (r.ok && !ranThrough(r) ? { ...r, ok: false, pdf: null } : r)
+/** DRAFT's first line, graphicx's draft option alone: the final pass of the marked original (layout/paper.mjs markedOfPaper
+ *  `base`) is its files with this line made empty, so that no line of them moves */
+export const DRAFT_OPTION = '\\PassOptionsToPackage{draft}{graphicx}'
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
  *  \resizebox around it, angle=) turns or scales its frame and not the marks, whose rectangle then has the size of no
  *  figure on the left, and the reader leaves that frame as it is */
 const DRAFT = [
-  '\\PassOptionsToPackage{draft}{graphicx}',
+  DRAFT_OPTION,
   '\\makeatletter\\AddToHook{package/graphics/after}{\\newcount\\axt@g\\let\\axt@setfile\\Gin@setfile%',
   '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
@@ -263,15 +266,17 @@ export function probeFiles({ fsys, project, meta }, { width = false, marks = fal
  *  (none wrapped literally, LAYOUT_TEX's \axt@nmall made \relax on LAYOUT_TEX's own line: NAMES_OFF).
  *  Neither given: the bytes as before. Under `latex` (latex-front.mjs dviEngine: arXiv's DVI compiler), MARK_DEF and
  *  LAYOUT_TEX each followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX: xdvipdfmx's specials where pdfTeX
- *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before */
-export function originalFiles({ fsys, project, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, unmarked = null, names = true } = {}) {
+ *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before. `pastBegin`
+ *  (on with `layout`: the layout compile, our base page): a unit's line probe after an environment's \\begin goes past the
+ *  spaces \\begin skips (latex-front.mjs patch), which it would set; off, the live path's original as it was */
+export function originalFiles({ fsys, project, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, unmarked = null, names = true, pastBegin = !!layout } = {}) {
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
   let out, patched = null
   if (layout) {
     const marked = layoutMarking(project.units, layout, { lines, switches, inkless }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     const asSource = unmarked ? new Set([...unmarked].map(i => marked.units[i]).filter(Boolean)) : null
-    out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource })
+    out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource, pastBegin })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
     // (the files as patch wrote them, the units' bytes in them, before the names' wraps below move what follows a wrap)
     patched = spans ? new Map(out) : null
@@ -287,7 +292,7 @@ export function originalFiles({ fsys, project, meta }, { lines = false, spans = 
       if (wrapped !== text.slice(0, at)) out.set(path, latin1Bytes(wrapped + text.slice(at)))
     }
   } else {
-    out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw })
+    out = patch(project, new Map(), { mark: lines ? u => { const m = base(u); return m && { ...m, before: `\\axtlines{${index.get(u)}}` } } : base, spans: raw, pastBegin })
     patched = spans ? new Map(out) : null
   }
   const dvi = dviEngine(meta?.compiler)

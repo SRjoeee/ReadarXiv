@@ -196,6 +196,11 @@ const lineBound = (text, at, lineEnvs) => {
   for (const m of text.slice(from, at).matchAll(/\\(?:begin|end)\s*\{([^}]+)\}/g)) if (isLineEnv(m[1].trim(), lineEnvs) && !inComment(text, from + m.index)) return true
   return false
 }
+/** whether the text before `at` ends in an environment's \\begin{…} and the arguments written with it: LaTeX's \\begin ends in
+ *  \\ignorespaces, so the space after it is skipped, and a command of ours there first would stop the skip and set the space
+ *  (IEEEtran's abstract and keywords, run in after their dash: 2608.19431's abstract a line longer, its first two pages
+ *  re-broken) */
+const afterBegin = (text, at) => !inComment(text, at) && /\\begin\s*\{[^{}]*\}(?:\s*\[[^\]]*\]|\s*\{[^{}]*\})*$/.test(text.slice(Math.max(0, at - 400), at))
 const ACCENTS = new Set(["'", '`', '"', '^', '~', '=', '.', 'u', 'v', 'H', 'c', 'd', 'b', 't', 'r', 'k'])
 /** the text accents whose letter goes into its word (accentLetter), by the combining mark each puts on its letter */
 const ACCENT_MARKS = { '`': '\u0300', "'": '\u0301', '^': '\u0302', '~': '\u0303', '"': '\u0308', c: '\u0327', v: '\u030c', u: '\u0306', H: '\u030b', '.': '\u0307' }
@@ -1699,7 +1704,7 @@ export function pseudoTranslate(u, lang) {
  *  range copied as the text around it is, a nested one's piece as its source between the outer unit's text), with no
  *  mark and no span: the layout guard's unit left unmarked (layout/guard.mjs), whose pieces or marks would not be the
  *  paper (2610.21377's pgffor loop header written back with its body's brace doubled). Empty or absent: as before */
-export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null, asSource = null } = {}) {
+export function patch(project, translated /* Map unit -> pieces */, { guardControlWords = true, mark, spans = null, asSource = null, pastBegin = false } = {}) {
   const out = new Map()
   const sourced = asSource?.size ? asSource : null
   // `inner`, where asked for: each unit nested in this one, at any depth, its range in the bytes this gives and the
@@ -1748,17 +1753,20 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // environment TeX reads by lines (lineBound, LINE_ENVS), it goes past that line's end and the spaces that open the
     // next, before the unit's first word or command: TeX reads the line end's space and then ours, as it read the space
     // before, and the line keeps nothing after the environment's \\begin or \\end. A unit whose own words share that
-    // line — the paper's choice — is marked where it begins, as before. (piece `beforeAt`, at `beforeCut` in its text,
-    // or before it at -1)
+    // line — the paper's choice — is marked where it begins, as before. A unit that begins right after an environment's
+    // \\begin{…} has it past the spaces that open it too, which \\begin's \\ignorespaces skips (afterBegin), where asked
+    // (`pastBegin`: the marked original, our base page): ours first would stop the skip, and the space be set. (piece
+    // `beforeAt`, at `beforeCut` in its text, or before it at -1)
     let beforeAt = 0, beforeCut = -1
-    if (m?.before && lineBound(project.files?.get(u.file) ?? '', u.start, project.lineEnvs)) {
+    const file = m?.before ? (project.files?.get(u.file) ?? '') : '', begun = pastBegin && !!m?.before && afterBegin(file, u.start)
+    if (m?.before && (begun || lineBound(file, u.start, project.lineEnvs))) {
       let k = 0, crossed = false, cut = -1
       for (; k < pieces.length && pieces[k].t === 'text'; k++) {
         const ws = /^[ \t\r\n]*/.exec(pieces[k].s)[0]
         crossed ||= ws.includes('\n')
         if (ws.length < pieces[k].s.length) { cut = ws.length; break }
       }
-      if (crossed) { beforeAt = k; beforeCut = cut }
+      if (crossed || begun) { beforeAt = k; beforeCut = cut }
     }
     const parts = [], nested = inner && []
     for (let k = 0; k < pieces.length; k++) {

@@ -127,7 +127,8 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * The BUNDLE 4 objects of a paper made whole.
  *
  * `whole`: BUNDLE 3's reading (readBundle) or the object the producer holds: `paper` { id, version, pages }, `base` { bytes,
- * sha256, xref } (`xref`: the original's startxref, which BUNDLE 3 does not carry: `o.base` may supply it), `units` (none
+ * sha256, xref } (`xref`: the original's startxref, which BUNDLE 3 does not carry: `o.base` may supply it; BUNDLE 8's `source`
+ * and the fields of a base of ours with it, `orig` beside it: format.mjs writeHead), `units` (none
  * dropped), `left` { pages, units }, `layout` (the layout file or null) and, if `o.image` is not given, `versions.image`.
  * `o.target(a, N)`: the last page the part that begins at `a` is cut to, 'a' to N (default partTarget, the doubling
  * schedule); a harness cuts at any split with it. `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
@@ -171,7 +172,8 @@ export async function wholeCutter(whole, o) {
   const image = o.image ?? whole.versions?.image
   const base = o.base ?? whole.base
   const lineskip = 'lineskip' in o ? o.lineskip : whole.layout?.lineskip ?? null
-  const head = await writeHead({ paper: { ...paper, pages: N }, base: { bytes: base.bytes, sha256: base.sha256, xref: base.xref }, image, units, lineskip, draw: o.draw === true })
+  // (the base as given: arXiv's, or BUNDLE 8's of ours with its check, `orig` arXiv's beside it: format.mjs writeHead)
+  const head = await writeHead({ paper: { ...paper, pages: N }, base, orig: o.orig ?? whole.orig ?? null, image, units, lineskip, draw: o.draw === true })
 
   // K and its frontier, then the parts
   const { K, F } = wholeFrontier(whole, frontier)
