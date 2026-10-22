@@ -1,0 +1,523 @@
+{
+  "date": "2026-10-23",
+  "by": "the maintainer",
+  "quote": "PENDING",
+  "english": "PENDING: the maintainer's ruling on this pull request is still to be asked; this draft is the implementer's, and none of its words are the maintainer's. It rests on the standing rules: coverage first (every unit of the body translated but formulas and code, rather more than less); the standard is the original page, not the last build; and decision 3, accepted on 2026-10-22 (\"3 \u63a5\u53d7\", lab/pdf/rulings/2026-10-22-route-base-page.json): what fails the check is shown untranslated",
+  "on": "per-unit verification (pull request of feat/unit-verify, LAYOUT 14): a unit is laid only where every line it owns is in place on arXiv's PDF (the median of its matched words' offsets within 0.5 pt on its own page, or a twin of the same words but for their characters outside ASCII); the per-part share (CARRY_MIN 0.9) and the paper's share are gone; a paper of no unit laid falls back to arXiv's PDF",
+  "measures": [
+    "unitsLeft",
+    "blankLines",
+    "framesBlank1",
+    "fullSize",
+    "paraGapTight"
+  ],
+  "targets": [
+    "de",
+    "es",
+    "fr",
+    "ja",
+    "ko",
+    "ru",
+    "zh"
+  ],
+  "scope": "text units left English on every target (de 1 -> 15, es 1 -> 3, fr 1 -> 3, ja 3 -> 5, ko 1 -> 3, ru 1 -> 3, zh 10 -> 85); on zh blank lines / frame 0.532 -> 0.557, frames with a blank line 21.1 -> 21.9 %, full size 96.3 -> 95.9 %, paragraph gaps tighter than the lines beside them 0.174 -> 0.178, and on ko the last 0.184 -> 0.186. All on the 69 pages of 5 papers where the pack's 79 units whose own lines do not all stand in place on arXiv's PDF are left the original's (1706.03762 1, 1810.04805 23, 2307.16209 47, 2608.16117 6, 2609.26457 2): with those pages left out on both sides every one of these measures is equal on every target, same frames, same aggregation",
+  "why": "The standard is closeness to the original page, not equality with the last build. The merge base's gate draws each paper's whole layout file, so it counts as drawn the units production never drew: production's per-part rule left a part whose lines were under 90 % in place untranslated, whole (1706.03762 page 1, 1810.04805 pages 12-16, 2307.16209 pages 70-139: 328 of the pack's 1,802 units). Against what production shows today the pack draws 249 units more (1,474 -> 1,723: 279 gained, 30 lost), so coverage rises. A unit now left the original's is one whose own lines stand elsewhere on our base page than on arXiv's (another TeX Live's line breaks, lines 0.5 pt off and more, or on another page, a line of no partner): drawn, its translation would stand in a frame arXiv's original does not have; left the original's, every unit that is drawn stands where arXiv's page sets it. The frame measures move only because the drawn set changes on those pages (the page-local fill and the gaps of the units beside them): with those pages excluded they are equal",
+  "evidence": {
+    "what": "the rules gate locally, c9c5576e on pack d25b354b against f97c6195 on pack 514c8841 (rules-gate.mjs run and compare; model tier, 32 outputs); the recount with pages left out on both sides: layer-gate/score.mjs fixtureTotals and pooled over the same frames",
+    "units": {
+      "pack": {
+        "gateBaseDrawn": 1802,
+        "productionDrawn": 1474,
+        "headDrawn": 1723,
+        "gained": 279,
+        "lost": 30,
+        "notInPlace": 79,
+        "ofNoRowRead": 0
+      },
+      "releaseSweep": {
+        "papers": 50,
+        "drawnToday": 13554,
+        "headDrawn": 13523,
+        "lost": 31,
+        "ofNoRowRead": 0
+      },
+      "medianAgainstFirstWord": {
+        "packLines": [
+          18130,
+          0,
+          11
+        ],
+        "sweepLines": [
+          101191,
+          21,
+          42
+        ],
+        "note": "[lines, in place by the median alone, in place by the first word alone]"
+      }
+    },
+    "productionRefusedParts": {
+      "1706.03762v7": [
+        [
+          1,
+          1
+        ]
+      ],
+      "1810.04805v2": [
+        [
+          12,
+          16
+        ]
+      ],
+      "2307.16209v1": [
+        [
+          70,
+          139
+        ]
+      ]
+    },
+    "crops": "/Users/cheongzhiyan/Downloads/readarxiv-test/route-unitverify-evidence/ (the original, the old build under the per-part rule, this branch; every page of a unit lost, and a sample of the pages gained)",
+    "table": [
+      {
+        "target": "de",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          15
+        ],
+        "blankLines": [
+          0.061,
+          0.064
+        ],
+        "framesBlank1": [
+          0.026,
+          0.027
+        ],
+        "fullSize": [
+          0.244,
+          0.249
+        ],
+        "paraGapTight": [
+          0.009,
+          0.009
+        ]
+      },
+      {
+        "target": "de",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.06,
+          0.06
+        ],
+        "framesBlank1": [
+          0.022,
+          0.022
+        ],
+        "fullSize": [
+          0.249,
+          0.249
+        ],
+        "paraGapTight": [
+          0.01,
+          0.01
+        ]
+      },
+      {
+        "target": "es",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          3
+        ],
+        "blankLines": [
+          0.019,
+          0.019
+        ],
+        "framesBlank1": [
+          0.005,
+          0.005
+        ],
+        "fullSize": [
+          0.259,
+          0.258
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "es",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.019,
+          0.019
+        ],
+        "framesBlank1": [
+          0.006,
+          0.006
+        ],
+        "fullSize": [
+          0.261,
+          0.261
+        ],
+        "paraGapTight": [
+          0.015,
+          0.015
+        ]
+      },
+      {
+        "target": "fr",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          3
+        ],
+        "blankLines": [
+          0.025,
+          0.025
+        ],
+        "framesBlank1": [
+          0.008,
+          0.008
+        ],
+        "fullSize": [
+          0.237,
+          0.236
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "fr",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.025,
+          0.025
+        ],
+        "framesBlank1": [
+          0.008,
+          0.008
+        ],
+        "fullSize": [
+          0.239,
+          0.239
+        ],
+        "paraGapTight": [
+          0.015,
+          0.015
+        ]
+      },
+      {
+        "target": "ja",
+        "pages": "every page",
+        "unitsLeft": [
+          3,
+          5
+        ],
+        "blankLines": [
+          0.106,
+          0.105
+        ],
+        "framesBlank1": [
+          0.022,
+          0.022
+        ],
+        "fullSize": [
+          0.745,
+          0.743
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "ja",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          3,
+          3
+        ],
+        "blankLines": [
+          0.106,
+          0.106
+        ],
+        "framesBlank1": [
+          0.023,
+          0.023
+        ],
+        "fullSize": [
+          0.749,
+          0.749
+        ],
+        "paraGapTight": [
+          0.015,
+          0.015
+        ]
+      },
+      {
+        "target": "ko",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          3
+        ],
+        "blankLines": [
+          0.224,
+          0.224
+        ],
+        "framesBlank1": [
+          0.055,
+          0.055
+        ],
+        "fullSize": [
+          0.943,
+          0.942
+        ],
+        "paraGapTight": [
+          0.184,
+          0.186
+        ]
+      },
+      {
+        "target": "ko",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.227,
+          0.227
+        ],
+        "framesBlank1": [
+          0.056,
+          0.056
+        ],
+        "fullSize": [
+          0.947,
+          0.947
+        ],
+        "paraGapTight": [
+          0.192,
+          0.192
+        ]
+      },
+      {
+        "target": "ru",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          3
+        ],
+        "blankLines": [
+          0.02,
+          0.02
+        ],
+        "framesBlank1": [
+          0,
+          0
+        ],
+        "fullSize": [
+          0.234,
+          0.234
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "ru",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.02,
+          0.02
+        ],
+        "framesBlank1": [
+          0,
+          0
+        ],
+        "fullSize": [
+          0.23,
+          0.23
+        ],
+        "paraGapTight": [
+          0.015,
+          0.015
+        ]
+      },
+      {
+        "target": "zh",
+        "pages": "every page",
+        "unitsLeft": [
+          10,
+          85
+        ],
+        "blankLines": [
+          0.532,
+          0.557
+        ],
+        "framesBlank1": [
+          0.211,
+          0.219
+        ],
+        "fullSize": [
+          0.963,
+          0.959
+        ],
+        "paraGapTight": [
+          0.174,
+          0.178
+        ]
+      },
+      {
+        "target": "zh",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          6,
+          6
+        ],
+        "blankLines": [
+          0.56,
+          0.56
+        ],
+        "framesBlank1": [
+          0.22,
+          0.22
+        ],
+        "fullSize": [
+          0.96,
+          0.96
+        ],
+        "paraGapTight": [
+          0.185,
+          0.185
+        ]
+      }
+    ],
+    "pagesLeftOut": {
+      "1706.03762v7-de": [
+        1
+      ],
+      "1706.03762v7-es": [
+        1
+      ],
+      "1706.03762v7-fr": [
+        1
+      ],
+      "1706.03762v7-ja": [
+        1
+      ],
+      "1706.03762v7-ko": [
+        1
+      ],
+      "1706.03762v7-ru": [
+        1
+      ],
+      "1706.03762v7-zh": [
+        1
+      ],
+      "1810.04805v2-de": [
+        6
+      ],
+      "1810.04805v2-es": [
+        6
+      ],
+      "1810.04805v2-fr": [
+        6
+      ],
+      "1810.04805v2-ja": [
+        6
+      ],
+      "1810.04805v2-ko": [
+        6
+      ],
+      "1810.04805v2-ru": [
+        6
+      ],
+      "1810.04805v2-zh": [
+        6
+      ],
+      "2307.16209v1-zh": [
+        27,
+        31,
+        32,
+        34,
+        35,
+        40,
+        41,
+        42,
+        47,
+        50,
+        55,
+        56,
+        57,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        82,
+        89,
+        128,
+        129,
+        135,
+        136
+      ],
+      "2608.16117v1-de": [
+        17,
+        18,
+        19,
+        23,
+        24,
+        25,
+        27,
+        28,
+        38,
+        39
+      ],
+      "2608.16117v1-zh": [
+        17,
+        18,
+        19,
+        23,
+        24,
+        25,
+        27,
+        28,
+        38,
+        39
+      ],
+      "2609.26457v1-zh": [
+        2,
+        4,
+        5
+      ]
+    }
+  }
+}
