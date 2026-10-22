@@ -1,4 +1,5 @@
 // guard.mjs's types: the layout guard's checks of a marked original (markedOfPaper's), for its tests
+import type { PdfLike } from './base.mjs'
 import type { Compiled, Paper } from '../pipeline/live.mjs'
 import type { UnitLines } from '../pipeline/tex-errors.mjs'
 
@@ -19,8 +20,8 @@ export declare const errorCount: (log: string | null | undefined) => number
 export declare const pagesOfLog: (log: string | null | undefined) => number | null
 /** the TeX Live year of the engine's banner, else null */
 export declare const texLiveOf: (log: string | null | undefined) => string | null
-/** the TeX Live year of the build arXiv's PDF says (its `/PTEX.Fullbanner`, in the first or last 64 KiB), else null */
-export declare const texLiveOfPdf: (bytes: Uint8Array | null | undefined) => string | null
+/** the TeX Live year of the build arXiv's PDF says: the `PTEX.Fullbanner` of the Info dictionary PDF.js resolves, else null */
+export declare const texLiveOfPdf: (doc: PdfLike) => Promise<string | null>
 /** whether TeX ran: its banner in the log */
 export declare const texRan: (log: string | null | undefined) => boolean
 /** the host's limit a compile met, else null */

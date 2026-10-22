@@ -9,7 +9,7 @@ export interface PdfLike {
   getPage(p: number): Promise<{ view?: number[]; rotate?: number; userUnit?: number; getTextContent(): Promise<{ items?: { str?: string }[] }> }>
   getDestinations(): Promise<Record<string, unknown[] | null> | Map<string, unknown[] | null>>
   getPageIndex(ref: unknown): Promise<number>
-  getMetadata?(): Promise<{ info?: { CreationDate?: string } | null; metadata?: { getRaw?(): unknown } | null } | null>
+  getMetadata?(): Promise<{ info?: { CreationDate?: string; Custom?: Map<string, unknown> } | null; metadata?: { getRaw?(): unknown } | null } | null>
 }
 /** a document's `axt-` destinations: name → [page, x, y] */
 export declare function marksOfPdf(doc: PdfLike): Promise<Map<string, [page: number | null, x: number | null, y: number | null]>>

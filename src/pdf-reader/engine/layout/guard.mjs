@@ -11,6 +11,7 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path, and no node:
 // specifier: the TeX page's host runs it in a browser.
 import { whyText } from '../layer-proto/format.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from '../pipeline/tex-errors.mjs'
 import { END_TEX } from '../pipeline/typeset/tex.mjs'
@@ -196,45 +197,18 @@ export const errorCount = log => (lastTexLog(log ?? '').match(/^! /gm) ?? []).le
 export const pagesOfLog = log => { const all = [...unwrapped(lastTexLog(log ?? '')).matchAll(/Output written on .*?\((\d+) pages?\b/g)]; return all.length ? Number(all.at(-1)[1]) : null }
 /** the TeX Live year of a compile, from its engine's banner ("This is pdfTeX, … (TeX Live 2025) …"), else null */
 export const texLiveOf = log => /\(TeX Live (\d{4})\)/.exec(log ?? '')?.[1] ?? null
-
-const BANNER_KEY = '/PTEX.Fullbanner'
-/** how much of a PDF's head and of its tail texLiveOfPdf reads: the Info dictionary arXiv writes sits in one of them */
-const BANNER_WINDOW = 64 * 1024
-const isPdfSpace = c => c === 0 || c === 9 || c === 10 || c === 12 || c === 13 || c === 32
-/** the index of the `)` that closes each `(` of a text (-1 where none does), parentheses nested and a backslash taking the
- *  next character as its own (`\(`, `\)`, `\\`): one pass with a stack, so a text of any shape costs its length */
-const closersOf = text => {
-  const closer = new Int32Array(text.length).fill(-1), open = []
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i)
-    if (c === 92) i++
-    else if (c === 40) open.push(i)
-    else if (c === 41 && open.length) closer[open.pop()] = i
-  }
-  return closer
-}
-/** the text of the last `/PTEX.Fullbanner (…)` in a window (a literal string that ends: a hex string, another value or a
- *  literal the window cuts is no banner), else null */
-const lastBannerIn = text => {
-  let at = text.lastIndexOf(BANNER_KEY)
-  if (at < 0) return null
-  const closer = closersOf(text)
-  while (at >= 0) {
-    let open = at + BANNER_KEY.length
-    while (open < text.length && isPdfSpace(text.charCodeAt(open))) open++
-    if (text.charCodeAt(open) === 40 && closer[open] > open) return text.slice(open + 1, closer[open])
-    at = at > 0 ? text.lastIndexOf(BANNER_KEY, at - 1) : -1
-  }
-  return null
-}
-/** the TeX Live year of the build arXiv's PDF says (`/PTEX.Fullbanner (… (TeX Live 2023) …)` in its Info dictionary), else
- *  null: read from the PDF's first and last 64 KiB, the banner nearest the end of the file (the document's own, written last;
- *  the tail before the head) decides, and no other signal counts (never the Producer, never a version number); no throw */
-export const texLiveOfPdf = bytes => {
-  if (typeof bytes?.subarray !== 'function' || !bytes.length) return null
-  const banner = lastBannerIn(latin1(bytes.subarray(Math.max(0, bytes.length - BANNER_WINDOW)))) ??
-    (bytes.length > BANNER_WINDOW ? lastBannerIn(latin1(bytes.subarray(0, BANNER_WINDOW))) : null)
-  return /TeX Live (\d{4})/.exec(banner ?? '')?.[1] ?? null
+/**
+ * The TeX Live year of the build arXiv's PDF says it was made on, from the `PTEX.Fullbanner` of its Info dictionary
+ * ("This is pdfTeX, … (TeX Live 2023) kpathsea …"), else null. The dictionary is the one PDF.js resolves from the trailer's
+ * /Info (`info.Custom`, a Map of the keys it has no field for), and no scan of the bytes: a PDF holds other banners, an
+ * included PDF's Info dictionary (`/PTEX.InfoDict`) and a superseded object's, and object order does not say which is the
+ * document's. No other signal counts (never the Producer, never a version number). A document that cannot say is null; only
+ * a memory-class error is thrown (base.mjs creationEpochOf).
+ */
+export const texLiveOfPdf = async doc => {
+  let banner = null
+  try { banner = (await doc.getMetadata())?.info?.Custom?.get?.('PTEX.Fullbanner') ?? null } catch (e) { if (isMemoryError(e)) throw e; banner = null }
+  return typeof banner === 'string' ? /TeX Live (\d{4})/.exec(banner)?.[1] ?? null : null
 }
 /** whether TeX ran at all: its banner in the log (a host that refused the compiler, a jail that ran nothing, has none) */
 export const texRan = log => /^This is \S*TeX\b/m.test(log ?? '')

@@ -1,6 +1,9 @@
+import * as PL from '@cantoo/pdf-lib'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { auxUnits, braceBalance, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
 import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { handoverOf, layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
@@ -435,92 +438,57 @@ describe('the refusal names the unmarked original\'s verdict and the trees tried
   })
 })
 
-describe('texLiveOfPdf: the TeX Live year of the build arXiv\'s PDF says, from its pdfTeX banner', () => {
-  const W = 64 * 1024
-  const banner = (year: string | null) => `This is pdfTeX, Version 3.141592653-2.6-1.40.25 (${year === null ? 'MiKTeX' : `TeX Live ${year}`}) kpathsea version 6.3.5`
-  const info = (year: string | null) => `<< /Producer (pdfTeX-1.40.25) /PTEX.Fullbanner (${banner(year)}) /Creator (LaTeX) >>`
-  /** a PDF of `size` bytes with `at` laid at `where`, the rest filler with no banner in it */
-  const pdf = (size: number, ...laid: [number, string][]) => {
-    const bytes = new Uint8Array(size).fill(0x20)
-    for (const [where, text] of laid) bytes.set(enc(text), where < 0 ? size + where : where)
-    return bytes
-  }
-  const tail = (text: string) => -text.length - 8
+describe('texLiveOfPdf: the TeX Live year arXiv\'s PDF says, from the Info dictionary PDF.js resolves', () => {
+  const BANNER = (year: string) => `This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live ${year}) kpathsea version 6.3.5`
+  /** a PDF.js document that answers getMetadata with this (PDF.js 6 puts the Info keys it has no field for in `info.Custom`, a Map) */
+  const docOf = (custom: Map<string, unknown> | undefined) => ({ getMetadata: async () => ({ info: custom ? { Producer: 'pikepdf', Custom: custom } : { Producer: 'pikepdf' }, metadata: null }) }) as never
 
-  it('reads the year from a banner in the head, in the tail, and in a PDF shorter than a window', () => {
-    expect(texLiveOfPdf(pdf(300 * 1024, [100, info('2023')]))).toBe('2023')
-    expect(texLiveOfPdf(pdf(300 * 1024, [tail(info('2024')), info('2024')]))).toBe('2024')
-    expect(texLiveOfPdf(enc(`%PDF-1.5\n1 0 obj ${info('2020')} endobj\n%%EOF\n`))).toBe('2020')
+  it('reads the year from the banner of the Info dictionary', async () => {
+    expect(await texLiveOfPdf(docOf(new Map([['DOI', 'x'], ['PTEX.Fullbanner', BANNER('2023')]])))).toBe('2023')
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', BANNER('2025')]])))).toBe('2025')
+    // (the year is a string, the type texLiveOf gives; a banner a distribution words otherwise still has it)
+    expect(typeof await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', BANNER('2025')]])))).toBe('string')
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', 'This is pdfTeX (TeX Live 2020/Debian) kpathsea']])))).toBe('2020')
   })
 
-  it('takes the banner nearest the end: the tail over the head, and the last of the tail', () => {
-    expect(texLiveOfPdf(pdf(300 * 1024, [100, info('2021')], [tail(info('2024')), info('2024')]))).toBe('2024')
-    const two = `${info('2022')}\n${info('2023')}`
-    expect(texLiveOfPdf(pdf(300 * 1024, [tail(two), two]))).toBe('2023')
-    expect(texLiveOfPdf(enc(`${info('2022')}\n${info('2025')}`))).toBe('2025')
-    // (the banner nearest the end decides even where it names no year: the document's own Info is last, an earlier one is another PDF's)
-    expect(texLiveOfPdf(enc(`${info('2022')}\n${info(null)}`))).toBeNull()
-    expect(texLiveOfPdf(pdf(300 * 1024, [100, info('2021')], [tail(info(null)), info(null)]))).toBeNull()
+  it('is null where the document does not say: no banner, a banner without a year, another value, nothing of Info', async () => {
+    expect(await texLiveOfPdf(docOf(undefined))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map([['DOI', 'x'], ['arXivID', '2610.20713']])))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', 'This is pdfTeX, Version 3.141592653-2.6-1.40.25']])))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map<string, unknown>([['PTEX.Fullbanner', { name: 'TeX Live 2023' }], ['PTEX.Fullbanner2', BANNER('2023')]])))).toBeNull()
+    // (no other signal counts: not the Producer, not another key)
+    expect(await texLiveOfPdf({ getMetadata: async () => ({ info: { Producer: 'pdfTeX-1.40.25 TeX Live 2023', Custom: new Map([['Notes', BANNER('2023')]]) } }) } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: async () => null } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: async () => ({}) } as never)).toBeNull()
+    expect(await texLiveOfPdf({} as never)).toBeNull()
+    expect(await texLiveOfPdf(null as never)).toBeNull()
   })
 
-  it('keeps nested and escaped parentheses inside the banner, and a year the text says in any form', () => {
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner (This is pdfTeX (TeX Live 2023) \\) (kpathsea (6.3.5)) \\\\)'))).toBe('2023')
-    // (an escaped parenthesis does not end the literal, so the year after it is the banner's)
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner (a \\) b \\( TeX Live 2021 c)'))).toBe('2021')
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner(This is pdfTeX (TeX Live 2020/Debian) kpathsea)'))).toBe('2020')
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner\r\n\t (This is pdfTeX, Version 3.14159265-2.6-1.40.21 (TeX Live 2020/Debian) kpathsea version 6.3.2)'))).toBe('2020')
-    // (the year is a string, the type texLiveOf gives)
-    expect(typeof texLiveOfPdf(enc(info('2025')))).toBe('string')
+  it('does not throw where getMetadata does, and lets a memory-class error through', async () => {
+    expect(await texLiveOfPdf({ getMetadata: async () => { throw new Error('broken') } } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: () => { throw new Error('broken') } } as never)).toBeNull()
+    await expect(texLiveOfPdf({ getMetadata: async () => { throw new RangeError(ALLOCATION_FAILED) } } as never)).rejects.toThrow(ALLOCATION_FAILED)
   })
 
-  it('is null for no banner, a banner without a year, a hex string, another value, and a literal that does not end', () => {
-    expect(texLiveOfPdf(enc('%PDF-1.7\n/Producer (pdfTeX-1.40.25) /Creator (TeX Live 2023)'))).toBeNull()
-    expect(texLiveOfPdf(enc(info(null)))).toBeNull()
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner (This is pdfTeX, Version 3.141592653-2.6-1.40.25)'))).toBeNull()
-    // (nothing but the banner counts: not the Producer, not the version number)
-    expect(texLiveOfPdf(enc('/Producer (pdfTeX-1.40.25 TeX Live 2023) /PTEX.Fullbanner (pdfTeX 1.40.25)'))).toBeNull()
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner <54656820204c697665203230323>'))).toBeNull()
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner /TeX#20Live#202023 /Other (TeX Live 2023)'))).toBeNull()
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner (This is pdfTeX (TeX Live 2023) kpathsea'))).toBeNull()
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner (This is pdfTeX (TeX Live 2023\\)'))).toBeNull()
-    expect(texLiveOfPdf(enc('/PTEX.Fullbanner'))).toBeNull()
-    expect(texLiveOfPdf(enc('/PTEX.FullbannerX (TeX Live 2023)'))).toBeNull()
-    // (a value that is no banner is passed over for the banner before it, a banner without a year is not)
-    expect(texLiveOfPdf(enc(`${info('2023')}\n/PTEX.Fullbanner <00>`))).toBe('2023')
-    expect(texLiveOfPdf(enc(`${info('2023')}\n/PTEX.Fullbanner (TeX Live 2024`))).toBe('2023')
-  })
-
-  it('does not throw on empty, garbage or other input', () => {
-    for (const bytes of [new Uint8Array(0), new Uint8Array([40]), new Uint8Array([92, 92, 41, 41, 40]), enc('(((('), enc('\\'), null, undefined, 'a string', 5, {}] as const) {
-      expect(texLiveOfPdf(bytes as unknown as Uint8Array)).toBeNull()
-    }
-    expect(texLiveOfPdf(new Uint8Array(0))).toBeNull()
-  })
-
-  it('reads the first and the last 64 KiB and no more', () => {
-    const text = `/PTEX.Fullbanner (${banner('2023')})`
-    expect(texLiveOfPdf(pdf(300 * 1024, [W + 1000, text]))).toBeNull()
-    expect(texLiveOfPdf(pdf(300 * 1024, [150 * 1024, text]))).toBeNull()
-    // (the head's last bytes hold the whole banner, or are cut through its closing parenthesis)
-    expect(texLiveOfPdf(pdf(300 * 1024, [W - text.length, text]))).toBe('2023')
-    expect(texLiveOfPdf(pdf(300 * 1024, [W - text.length + 1, text]))).toBeNull()
-    // (the tail's first bytes: the whole banner, or its key cut)
-    expect(texLiveOfPdf(pdf(300 * 1024, [300 * 1024 - W, text]))).toBe('2023')
-    expect(texLiveOfPdf(pdf(300 * 1024, [300 * 1024 - W - 1, text]))).toBeNull()
-  })
-
-  it('costs the length of the window: a random 5 MB buffer, and a window of nothing but unfinished banners', () => {
-    const random = new Uint8Array(5 * 1024 * 1024)
-    let x = 123456789
-    for (let i = 0; i < random.length; i++) { x = (Math.imul(x, 1103515245) + 12345) >>> 0; random[i] = x >>> 24 }
-    let t = performance.now()
-    expect(texLiveOfPdf(random)).toBeNull()
-    expect(performance.now() - t).toBeLessThan(1000)
-    for (const unit of ['/PTEX.Fullbanner (', '/PTEX.Fullbanner (\\', '/PTEX.Fullbanner ((((((((((((', '(/PTEX.Fullbanner ']) {
-      const bytes = enc(unit.repeat(Math.ceil((2 * W) / unit.length)))
-      t = performance.now()
-      expect(texLiveOfPdf(bytes)).toBeNull()
-      expect(performance.now() - t).toBeLessThan(1000)
-    }
+  it('reads a real PDF through PDF.js: the Info the trailer names, not the banner of an included PDF or of an object nothing names', async () => {
+    const pdf = await PL.PDFDocument.create({ updateMetadata: false })
+    pdf.addPage([612, 792])
+    // (the objects an included figure leaves behind: pdfTeX copies its Info dictionary as an object, banner and all, and a
+    // superseded Info stays in the file; both come after the page and before the document's own Info in object order)
+    const decoy = (year: string) => pdf.context.register(pdf.context.obj({ Producer: PL.PDFString.of('pdfTeX-1.40.20'), 'PTEX.Fullbanner': PL.PDFString.of(BANNER(year)) }))
+    decoy('2019'); decoy('2021')
+    const info = pdf.context.lookup(pdf.context.trailerInfo.Info) as PL.PDFDict | undefined ?? pdf.context.obj({})
+    info.set(PL.PDFName.of('PTEX.Fullbanner'), PL.PDFString.of(BANNER('2023')))
+    pdf.context.trailerInfo.Info = pdf.context.register(info)
+    decoy('2024')
+    const bytes = await pdf.save({ useObjectStreams: false })
+    // (the banners are in the bytes in that order, the document's second: a scan of the file would not tell it)
+    const raw = new TextDecoder('latin1').decode(bytes)
+    expect([...raw.matchAll(/\(TeX Live (\d{4})\)/g)].map(m => m[1])).toEqual(['2019', '2021', '2023', '2024'])
+    const doc = await getDocument({ data: bytes.slice(), verbosity: 0 }).promise
+    try {
+      expect(((await doc.getMetadata()).info as { Custom?: unknown }).Custom).toBeInstanceOf(Map)
+      expect(await texLiveOfPdf(doc as never)).toBe('2023')
+    } finally { await doc.loadingTask.destroy() }
   })
 })
