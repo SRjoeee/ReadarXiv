@@ -33,7 +33,7 @@ export function installSideFakes() {
 const views: ReaderView[] = []
 
 let paper: Made | null = null
-export const M = async () => (paper ??= await made())
+export const M = async () => (paper ??= await made({ ours: true }))
 export const macrotask = () => new Promise(r => setTimeout(r, 0))
 export const jobRef = (m: Made, i: number): TellRef => ({ ...(m.parts[i]!.ref as Ref), prev: i ? m.parts[i - 1]!.sha256 : null })
 export const ALL = async () => { const m = await M(); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }

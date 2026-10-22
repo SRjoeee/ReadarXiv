@@ -21,26 +21,23 @@ export type { Captions } from '../layout/names.mjs'
 import type { Captions } from '../layout/names.mjs'
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
 export interface Geometry { schema: number; kinds: string[]; left: { pages: number[][]; units: [number, number, Rect[]][] }; right?: unknown }
-/** a unit v0 places: its rectangles (all of them: a unit cut by the pages shown is laid over its lines past them too), the
+/** a unit the layer places (the file locates it whole): its rectangles (all of them: a unit cut by the pages shown is laid over its lines past them too), the
  *  pages shown it has lines on (`cut`: it has more past them), and once laid its reading, tokens, blocks and layout, until
  *  a run that frees (`free`) lets them go once it is painted for good (`full` gives it as laid on the gate's shelf) */
-export interface Placed { id: number; stream: number; rects: Rect[]; unit: LaidUnit; pages: number[]; cut: boolean; blocks?: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; why?: string; missing?: number[]; tex?: (Whole & { lu: LayoutUnit; lines?: TexLines }) | null }
-/** the hybrid's options (openProto `tex`): the layout file, the units file's pieces by unit id, and how the file's
- *  geometry is taken */
-export interface HybridOptions {
+export interface Placed { id: number; stream: number; rects: Rect[]; unit: LaidUnit; pages: number[]; cut: boolean; blocks?: Block2[]; prep?: Prepared; tokens?: Token[]; layout?: Layout; s?: number; rec?: Rec; local?: Char[][]; refused?: boolean; why?: string; missing?: number[]; tex: Whole & { lu: LayoutUnit; lines: TexLines } }
+/** the layout file as openProto takes it (`tex`): the file's index (a file of no unit where the maker refused to make one: the
+ *  layer draws nothing), the units file's pieces by unit id, and how the file's geometry is taken */
+export interface LayoutOptions {
   index: LayoutIndex
   pieces: Map<number, unknown[]>
-  /** 'ph': each placeholder's ink alone; 'lines': the unit's lines and label too */
-  use: 'ph' | 'lines'
-  /** with 'lines': the units the file locates whole that v0's geometry does not hold, but table cells */
-  texOnly?: boolean
   /** locatedWhole's: 'text' (the default) asks no symbol drawn as text to be found; 'strict' asks it too */
   symbols?: 'text' | 'strict'
-  /** with 'lines': each line's erase extent from its characters (v0's, the default) or the file's erase rectangles */
+  /** each line's erase extent from its characters (v0's, the default) or the file's erase rectangles */
   extents?: 'v0' | 'tex'
 }
-/** which source each placed unit's geometry is (ids), and why the others are v0's (by locatedWhole's why) */
-export interface Sources { tex: number[]; v0: number[]; why: Record<string, number>; texOnly?: number }
+/** the units the layer placed (ids), and why the others are the original's (by locatedWhole's why); `texOnly`: how many of the
+ *  placed are units only the file holds, not the geometry */
+export interface Sources { tex: number[]; why: Record<string, number>; texOnly?: number }
 /** a page's fill numbers (adaptiveFill's pass, fillPage's answer): the median fill leading of the units begun on it (`own`),
  *  that of every body unit drawn on it (`anchor`), the target (`own` held within the band of `anchor`; null where only a
  *  continuation tells), whether its body units told its own */
@@ -266,12 +263,12 @@ export interface ProtoRun {
    *  or laid after; an until under way resolves */
   dispose(): void
 }
-/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it (tex: the layout file's
- *  rectangles) and the old way (v0: its own reading), the rectangles filled with paper and swapped from the removed page,
- *  the characters erased the file gives no rectangle for, the pages a swap drew the removed page for */
+/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it (over the layout file's
+ *  rectangles), the rectangles filled with paper and swapped from the removed page, the characters erased the file gives no
+ *  rectangle for, the pages a swap drew the removed page for */
 export interface RemovalStats {
-  pages: number; refused: number; units: number; tex: number; v0: number; fills: number; swaps: number; swapPages: number; extra: number
-  byPage: Record<number, { units: number; tex: number; v0: number }>
+  pages: number; refused: number; units: number; fills: number; swaps: number; swapPages: number; extra: number
+  byPage: Record<number, { units: number }>
   /** the time it took, ms in all: the removed pages drawn, the rectangles worked out */
   ms: { render: number; rects: number }
 }
@@ -298,7 +295,7 @@ export declare function openProto(o: {
   groups?: ReadonlyMap<number, string> | null
   target: string
   /** the last page drawn at most (default 999). The run shows N, the least of it, the document's pages and the
-   *  manifest's, and the proof's `shown` is N: a piece whose segments all lie past it is drawn as its page text or as
+   *  manifest's, and the file's crops' `shown` is N: a piece whose segments all lie past it is drawn as its page text or as
    *  nothing, for good, so a reader passes the paper's pages or none, never how far the parts received so far reach
    *  (BUNDLE 4's PartChain.reach, which grows as parts are added) */
   pages?: number
@@ -319,12 +316,9 @@ export declare function openProto(o: {
   hyphUrl?: (lang: string) => string
   /** whether each page's copy is kept at v0's own resolution (the checker's and the gate's plane); default true */
   copy?: boolean
-  /** the hybrid (tex.mjs): null, v0 alone */
-  tex?: HybridOptions | null
-  /** with `tex` null, every unit still drawn under the proof, which nothing proves but TeX's own nothing, a space and a
-   *  text symbol (a reader's paper with no layout file: reader.mjs); default false, v0 alone with no proof (the lab's) */
-  proof?: boolean
-  /** the text-removed PDF: null, v0's own drawing */
+  /** the layout file (tex.mjs), the layer's only source of a unit: a unit it does not locate whole is the original's */
+  tex: LayoutOptions
+  /** the text-removed PDF: null, the unit's drawing erased and put back */
   removal?: RemovalOptions | null
   /** which floats the final names in the target's language (live.mjs captionsOf): a float's label is drawn in the target's
    *  name for it, which the rule set gives, where the final's is, and every babel name in the target's word whatever the

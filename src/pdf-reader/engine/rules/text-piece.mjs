@@ -1,7 +1,7 @@
 // src/pdf-reader/engine/rules/text-piece.mjs
 // A text piece: a placeholder whose plain text is its whole rendering, TeX setting its characters as they are written. One
-// rule for both of its readers: the layer proves a LOST one by the run of its unit's characters that spells it
-// (layer-proto/tex.mjs textRunsOf, the soundness round of 2026-10-19), and the layout maker finds one the matcher missed,
+// rule for both of its readers: the layer draws one as page text, never as a formula's crops (layer-proto/layer2.mjs formulaOf),
+// and the layout maker finds one the matcher missed,
 // set over two lines in one PDF and on one in the other, by its characters on the unit's own lines (layout/make.mjs, the
 // tolerant match). Imports nothing.
 

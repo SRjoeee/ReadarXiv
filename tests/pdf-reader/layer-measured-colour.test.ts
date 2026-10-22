@@ -6,11 +6,14 @@ import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 // its glyphs outside its styled pieces, a piece's colour from its own, a rendering of the page's characters in their own fills
 
 type L2 = typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+type Tex = typeof import('@/pdf-reader/engine/layer-proto/tex.mjs')
 let L2: L2
+let T: Tex
 beforeAll(async () => {
   const g = globalThis as { OffscreenCanvas?: unknown }
   g.OffscreenCanvas = class { getContext() { return { font: '', measureText: (s: string) => ({ width: 50 * s.length, actualBoundingBoxAscent: 70, actualBoundingBoxDescent: 20 }) } } }
   L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  T = await import('@/pdf-reader/engine/layer-proto/tex.mjs')
 })
 
 const serif = { fam: 'serif', bold: false, italic: false, caps: false, known: false, design: 'times' }
@@ -39,8 +42,23 @@ const unitOf = (source: Record<string, unknown>[], translated: (number | string)
 const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
 const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
 const P = () => ({ ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 })
-const tokensOf = (u: never, page: ReturnType<typeof pageOf>, parts: unknown = null) => {
-  const prep = L2.prepareUnit(u, [page.rect] as never, [page.page as never], new Map() as never, null, parts as never)
+/** the extent across of the page's item `n`, as a placeholder's segment in the layout file */
+const rowOf = (page: ReturnType<typeof pageOf>, n: number): [number, number] => {
+  const cs = page.page.filter(c => c.item === n)
+  return [Math.min(...cs.map(c => c.x0)), Math.max(...cs.map(c => c.x1))]
+}
+/** the unit in a layout file of one line (the page's rectangle) and the segments given by placeholder (`rows`, by the piece's k),
+ *  read with the file's parts, over which `over` (a row's fill, a colours row) is laid */
+const tokensOf = (u: never, page: ReturnType<typeof pageOf>, over: { rows?: Record<number, [number, number]>; colourOf?: unknown; fillOf?: unknown } = {}) => {
+  const { rows = {}, ...given } = over
+  const lu = {
+    lines: Float64Array.from([1, page.rect[1]!, page.rect[3]!, 100, 108, 98, 10, 0]), frames: Float64Array.from([1, 0, 0, 1, -1, 0]), erase: [new Float64Array(0)], labels: new Float64Array(0),
+    ph: new Map(Object.entries(rows).map(([k, [a, z]]) => [Number(k), { kind: 'math', flags: 0, segs: Float64Array.from([1, a - 0.3, 100, z + 0.3, 108, 98]) }])),
+  } as never
+  const t = T.texRects(lu)
+  const kOf = (u as unknown as { pieces: { k?: number }[] }).pieces.map(p => p.k ?? -1)
+  const parts = { ...T.texParts(lu, kOf, { lines: t }), ...given }
+  const prep = L2.prepareUnit(u, t.rects as never, [page.page as never], new Map() as never, null, parts as never)
   const tokens = L2.tokensOf2(u, prep as never, 'zh', BASE as never, DESIGNS as never, P() as never, null, () => 0) as unknown as { s?: string; st: { bold?: boolean; italic?: boolean; color?: string }; k?: number }[] & { base: { bold: boolean; italic: boolean; color?: string } }
   return { prep, tokens, drawn: tokens.filter(t => typeof t.s === 'string' && /\S/.test(t.s)) }
 }
@@ -166,7 +184,7 @@ describe('the unit\'s base, measured outside its styled pieces', () => {
   it('a rendering inside a run a colours row tells is drawn in the row\'s colour, not its glyphs\' (Codex on #415)', () => {
     const page = pageOf([['see', plain(0xff0000)], ['[16]', k => plain(k === 1 || k === 2 ? 0x0000ff : 0xff0000)], ['here', plain(0xff0000)]])
     const u = unitOf([open('\\textcolor{red}{', 1), text('see '), ph('\\cite{k}'), text(' here'), close(1)], [0, '\u89C1 ', 2, ' \u8FD9\u91CC', 4])
-    const { drawn } = tokensOf(u, page, { colourOf: (k: number) => (k === 0 ? 0x123456 : null) })
+    const { drawn } = tokensOf(u, page, { rows: { 2: rowOf(page, 1) }, colourOf: (k: number) => (k === 0 ? 0x123456 : null) })
     expect(new Set(drawn.filter(t => t.k === 2).map(t => t.st.color))).toEqual(new Set(['#123456']))
   })
 
@@ -182,7 +200,7 @@ describe('a rendering of the page\'s characters, in their own fills', () => {
   it('"[16]": its brackets black, its number in the link\'s blue (a tie, which one majority fill drew in the run\'s ink)', () => {
     const page = pageOf([['as', plain(0)], ['in', plain(0)], ['[16]', k => plain(k === 1 || k === 2 ? 0x0000ff : 0)], ['here', plain(0)]])
     const u = unitOf([text('as in '), ph('\\cite{k}'), text(' here')], ['\u5982 ', 1, ' \u6240\u793A'])
-    const { prep, drawn } = tokensOf(u, page)
+    const { prep, drawn } = tokensOf(u, page, { rows: { 1: rowOf(page, 2) } })
     expect((prep.get(1) as { mode?: string } | undefined)?.mode).toBe('orig-text')
     expect(drawn.filter(t => t.k === 1).map(t => [t.s, t.st.color ?? null])).toEqual([['[', null], ['16', '#0000ff'], [']', null]])
     // (raised, a superscript citation: its runs raised each, glued, in their own fills (the review of #415))
@@ -194,23 +212,24 @@ describe('a rendering of the page\'s characters, in their own fills', () => {
   it('cleveref\'s number in its link\'s green; "[1, 2]" its brackets and comma black, its numbers blue', () => {
     const page = pageOf([['see', plain(0)], ['Figure', plain(0)], ['1', plain(0x00aa00)], ['and', plain(0)]])
     const u = unitOf([text('see '), ph('\\cref{fig:a}'), text(' and')], ['\u89C1', 1, '\u548C'])
-    // (v0 reads cleveref's rendering as its number, its name the gap's other part)
-    expect(tokensOf(u, page).drawn.filter(t => t.k === 1).map(t => [t.s, t.st.color ?? null])).toEqual([['1', '#00aa00']])
+    // (the file's segment holds cleveref's whole rendering, its name too: "Figure" in the text's colour, its number in the link's)
+    const both: [number, number] = [rowOf(page, 1)[0], rowOf(page, 2)[1]]
+    expect(tokensOf(u, page, { rows: { 1: both } }).drawn.filter(t => t.k === 1).map(t => [t.s, t.st.color ?? null])).toEqual([['Figure', null], ['1', '#00aa00']])
     const cite = pageOf([['by', plain(0)], ['[1,', k => plain(k === 1 ? 0x0000ff : 0)], ['2]', k => plain(k === 0 ? 0x0000ff : 0)], ['here', plain(0)]])
     const v = unitOf([text('by '), ph('\\cite{a,b}'), text(' here')], ['\u7531', 1, '\u6240\u793A'])
-    expect(tokensOf(v, cite).drawn.filter(t => t.k === 1).map(t => [t.s, t.st.color ?? null])).toEqual([['[', null], ['1', '#0000ff'], [',', null], ['2', '#0000ff'], [']', null]])
+    expect(tokensOf(v, cite, { rows: { 1: [rowOf(cite, 1)[0], rowOf(cite, 2)[1]] } }).drawn.filter(t => t.k === 1).map(t => [t.s, t.st.color ?? null])).toEqual([['[', null], ['1', '#0000ff'], [',', null], ['2', '#0000ff'], [']', null]])
   })
 
   it('a rendering whose characters tell no fill is drawn as before (the run\'s colour)', () => {
     const page = pageOf([['as', plain()], ['[16]', plain()], ['here', plain()]])
     const u = unitOf([text('as '), ph('\\cite{k}'), text(' here')], ['\u5982 ', 1, ' \u6240\u793A'])
-    expect(tokensOf(u, page).drawn.filter(t => t.k === 1).map(t => t.st.color ?? null)).toEqual([null])
+    expect(tokensOf(u, page, { rows: { 1: rowOf(page, 1) } }).drawn.filter(t => t.k === 1).map(t => t.st.color ?? null)).toEqual([null])
   })
 
   it('runs drawn alike are one token: brackets whose fill is not told beside digits of the colour the row falls back to', () => {
     const page = pageOf([['as', plain(0)], ['[16]', k => (k === 1 || k === 2 ? plain(0x0000ff) : plain())], ['here', plain(0)]])
     const u = unitOf([text('as '), ph('\\cite{k}'), text(' here')], ['\u5982 ', 1, ' \u6240\u793A'])
-    const { drawn } = tokensOf(u, page, { fillOf: (k: number) => (k === 1 ? 0x0000ff : null) })
+    const { drawn } = tokensOf(u, page, { rows: { 1: rowOf(page, 1) }, fillOf: (k: number) => (k === 1 ? 0x0000ff : null) })
     expect(drawn.filter(t => t.k === 1).map(t => [t.s, t.st.color ?? null])).toEqual([['[16]', '#0000ff']])
   })
 })

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { BUILTIN_RULES, type RuleSet, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { fileOfGeometry, unitsOfGeometry } from './helpers/file-of-geometry'
 
-// v0's open reads every choice made for its target from the layout rule set it is given (layer-proto/run.mjs `rules`,
+// The layer's open reads every choice made for its target from the layout rule set it is given (layer-proto/run.mjs `rules`,
 // rules/layout.mjs): none from the target's name. These are the wiring tests: a set passed changes the drawing, no set is
 // the built-in one, the faces, the patterns and the float names are the set's. The set's own contract is
 // rules-layout.test.ts's; the rows are the layer gate's
@@ -46,10 +47,12 @@ function paper(lines: [string, number, number, number?][] = [['Alpha beta gamma'
   const items = lines.map(([str, x, width], i) => ({ str, transform: [10, 0, 0, 10, x, 200 - 12 * rowOf(i)], width, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
   const rects = [...new Set(lines.map((_, i) => rowOf(i)))].map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])
+  const geometry = { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, rects]] } }
   return {
     doc: { numPages: 1, getPage: async () => page },
-    geometry: { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, rects]] } },
+    geometry,
     units: [{ kind: 'para', src, state: 'whole', pieces: [{ t: 'text', tr: true, s: tr }] }],
+    tex: fileOfGeometry(unitsOfGeometry(geometry)),
   }
 }
 const open = (o: object = {}, p = paper()) => openProto({ ...p, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, ...o } as never)
@@ -170,10 +173,12 @@ function column(units: { kind: string; rows: number[]; tr: string }[]) {
   const words = (u: number, r: number) => `unit${u} line${r} alpha beta gamma delta`
   const items = units.flatMap((u, ui) => u.rows.map(r => ({ str: words(ui, r), transform: [10, 0, 0, 10, 20, 200 - 12 * r], width: 200, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
+  const geometry = { schema: 1, kinds: units.map(u => u.kind), left: { pages: [[0, 0, 300, 300]], units: units.map((u, i) => [i, i, u.rows.map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])]) } }
   return {
     doc: { numPages: 1, getPage: async () => page },
-    geometry: { schema: 1, kinds: units.map(u => u.kind), left: { pages: [[0, 0, 300, 300]], units: units.map((u, i) => [i, i, u.rows.map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])]) } },
+    geometry,
     units: units.map((u, ui) => ({ kind: u.kind, src: u.rows.map(r => words(ui, r)).join(' '), state: 'whole', pieces: [{ t: 'text', tr: true, s: u.tr }] })),
+    tex: fileOfGeometry(unitsOfGeometry(geometry)),
   }
 }
 // A, six lines, translated in two (thirty characters, twenty a line): filled to 2 em of 10 pt over a pitch of 12, 1.667,

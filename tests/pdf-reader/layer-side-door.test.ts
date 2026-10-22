@@ -36,8 +36,10 @@ vi.hoisted(() => {
 
 installSideFakes()
 const served = async (id: string) => [{ url: `/f/${id}.otf`, ranges: [0, 0x10ffff] }]
-/** the format test's paper's text layer, from its left's rectangles (layer-door.test.ts's) */
-const textOf = (m: Made) => ({ pages: 4, units: m.index.units.map((_, id) => ({ text: `unit ${id}`, lines: m.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], r[3], r[2] + 2.15]))) })) })
+/** the format test's paper's text layer, from its left's rectangles (layer-door.test.ts's); each unit's text 400 pt wide at most,
+ *  so that its first character stands inside the segment of the paragraph's formula (the layer reads a placeholder's rendering
+ *  from the page's characters inside its segment in the layout file) */
+const textOf = (m: Made) => ({ pages: 4, units: m.index.units.map((_, id) => ({ text: `unit ${id}`, lines: m.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], Math.min(r[3], r[1] + 400), r[2] + 2.15]))) })) })
 /** the side over the real door; `fail`: the composed pages that cannot be read */
 async function real(o: Options & { fail?: number[] } = {}) {
   const m = await M()

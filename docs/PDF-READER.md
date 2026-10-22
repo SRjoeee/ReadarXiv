@@ -1457,7 +1457,8 @@ tags they ask by (`layer-proto/bundle.mjs`).
   sha256, url }, versions { bundle, pipeline, layout, removal, pdfjs, image }, units, left, layout | null, addon { manifest,
   tail } | null }`. Both readers parse it with `readBundle(json, caps)` after the byte cap (`BUNDLE_CAP`) and the value count
   (`BUNDLE_VALUES`) are checked before `JSON.parse`; a refused bundle draws no layer, a refused unit is dropped and counted, a
-  layout of `null` draws the layer without the hybrid, an add-on of `null` erases and restores.
+  layout of `null` draws nothing (the layer draws only from the layout file: every unit stays the original's), an add-on of
+  `null` erases and restores.
 - **Routes by tag.** `GET /api/v1/layer/<id>v<n>/<tag>` answers 200 with the bundle, 202 `Preparing { position, stage,
   progress, retryAfterMs }`, 404 `{ why }` (`not-prepared`, `no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`) or 429
   `{ retryAfterMs }`; `POST …/<tag>/prepare` (JSON body `{}`) answers 202, 200 `{ ready: true }`, 404 or 429; `GET
@@ -1610,9 +1611,8 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   (`CARRY_MIN`, the marked original's lines found on arXiv's) took both and drew their pages from a layout arXiv never
   set. Of 141 compiles counted against arXiv's PDF (the corpus's 113, the TL2025/TL2023 survey's 28) the other 139 have
   arXiv's count and none has more: fewer by any page is refused, more is left to the carry. Such a paper's layer is that
-  of a paper with no layout: a part with no layout (its record, below), every unit read under the proof with no file, so a
-  unit the left locates by its text and that holds no placeholder but a space, a text symbol or TeX's nothing is drawn
-  translated, and every other unit is left the original's; no unit is placed by the short original's lines. A paper of
+  of a paper with no layout: a part with no layout (its record, below), and the layer draws only from the layout file, so
+  every unit is left the original's; no unit is placed by the short original's lines. A paper of
   several toplevel sources (`meta.toplevels`) is not refused so: arXiv compiles each and joins their PDFs, the
   pipeline the first alone, so its marked original's pages are compared with arXiv's first (2610.20030: 8 of 12, the carry
   judging them; 18's rule refused it outright, 39 rows), `stats.toplevels` { files, pages }. The count is 00README's
