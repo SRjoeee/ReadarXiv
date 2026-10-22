@@ -23,6 +23,27 @@ const marked = (pdf = DRAFT, files: Map<string, Uint8Array> | null = WROTE): Com
 /** the result's base page, where it has one */
 const baseOf = (r: unknown) => (r as { base?: unknown }).base
 const finalAnswer = (pdf = FINAL): Compiled => ({ ok: true, pdf, log: log(), ms: 200 })
+/** what dvipdfmx says of a PSTricks picture it cannot draw (a review's latex paper, the driver's terminal after the TeX log) */
+const PSTRICKS_FAILED = [
+  'main.dvi -> main.pdf', '[1',
+  'dvipdfmx:warning: Unknown token "load"', 'dvipdfmx:warning: Interpreting PS code failed!!! Output might be broken!!!',
+  'dvipdfmx:warning: Interpreting special command ps: (ps:) failed.', 'dvipdfmx:warning: >> at page="1" position="(133.768, 667.198)" (in PDF)',
+  'dvipdfmx:warning: >> xxx "ps: /pssetRGBcolor /setrgbcolor load def /pssetCMYKcolor /se..."',
+  'dvipdfmx:warning: >> Reading special command stopped around >>def /pssetCMYKcolor /setcmykcolor load def /pssetGraycolor /...<<',
+  'dvipdfmx:warning: Unknown token "tx@Dict"', 'dvipdfmx:warning: Interpreting PS code failed!!! Output might be broken!!!',
+  'dvipdfmx:warning: Interpreting special command ps: (ps:) failed.', 'dvipdfmx:warning: >> at page="1" position="(133.768, 667.198)" (in PDF)',
+  'dvipdfmx:warning: >> xxx "ps:tx@Dict begin  gsave STV CP T /ps@rot 0 def grestore  end"',
+  'dvipdfmx:warning: >> Reading special command stopped around >>begin  gsave STV CP T /ps@rot 0 def grestore  end<<', ']', '',
+].join('\n')
+/** what dvipdfmx says of hyperref's dvips driver's specials (2608.22687: 2,784 of them, every one `SDict begin`): links, no ink */
+const HYPERREF_FAILED = [
+  'dvipdfmx:warning: Unknown token "SDict"', 'dvipdfmx:warning: Interpreting PS code failed!!! Output might be broken!!!',
+  'dvipdfmx:warning: Interpreting special command ps: (ps:) failed.', 'dvipdfmx:warning: >> at page="1" position="(72, 720)" (in PDF)',
+  'dvipdfmx:warning: >> xxx "ps:SDict begin H.S end"', 'dvipdfmx:warning: >> Reading special command stopped around >>begin H.S end<<',
+  'dvipdfmx:warning: Unknown token "SDict"', 'dvipdfmx:warning: Interpreting PS code failed!!! Output might be broken!!!',
+  'dvipdfmx:warning: Interpreting special command ps: (ps:) failed.', 'dvipdfmx:warning: >> at page="2" position="(99.7996, 714.118)" (in PDF)',
+  'dvipdfmx:warning: >> xxx "ps:SDict begin [/View [/XYZ H.V]/Dest (equation.2.1) cvn /DEST pdfmark end"', '',
+].join('\n')
 
 function compiler(answers: (Compiled | Error)[]) {
   const asked: CompileRequest[] = []
@@ -67,6 +88,20 @@ describe('the final pass', () => {
       expect(await markedOfPaper(paper, { compile: c.compile })).toMatchObject({ base: { pdf: FINAL } })
       expect(c.asked[2]).toMatchObject({ engine: paper.meta.compiler, rerun: false, bibtex: false })
     }
+  })
+
+  it('under `latex`, is none (`final`) where dvipdfmx could not draw a special of the page (PSTricks): arXiv\'s dvips and ps2pdf draw it', async () => {
+    const readme = (compiler_: string) => JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: compiler_ } })
+    const paperIn = (compiler_: string) => openPaper(new Map([['main.tex', enc(SOURCE)], ['00README.json', enc(readme(compiler_))]]))
+    const final = (driver: string): Compiled => ({ ok: true, pdf: FINAL, log: `${log()}${driver}`, ms: 200 })
+    const got = await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final(PSTRICKS_FAILED)]).compile })
+    expect(baseOf(got)).toMatchObject({ refused: 'final', why: expect.stringMatching(/^the final pass's dvipdfmx could not draw 2 specials of the page \(page 1: ps: \/pssetRGBcolor/) })
+    expect(baseOf(got)).not.toHaveProperty('limit')
+    // (hyperref's dvips driver's specials, its links and outlines, set no ink: dvipdfmx failing them loses nothing)
+    expect(baseOf(await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final(HYPERREF_FAILED)]).compile }))).toMatchObject({ pdf: FINAL })
+    expect(baseOf(await markedOfPaper(paperIn('latex'), { compile: compiler([PROBE, marked(), final('')]).compile }))).toMatchObject({ pdf: FINAL })
+    // (pdfTeX and XeTeX: arXiv's PDF is made by the same driver as ours, whatever it said)
+    for (const compiler_ of ['pdflatex', 'xelatex']) expect(baseOf(await markedOfPaper(paperIn(compiler_), { compile: compiler([PROBE, marked(), final(PSTRICKS_FAILED)]).compile })), compiler_).toMatchObject({ pdf: FINAL })
   })
 
   it('carries a converged compile\'s files: CM\'s carried files with its last pass\'s, its own beside', async () => {

@@ -1,7 +1,7 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { boxesCheck, creationEpochOf, finalCheck, hasMarkText, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf, xmpDateEpoch, xmpDatesOf } from '@/pdf-reader/engine/layout/base.mjs'
+import { boxesCheck, creationEpochOf, driverLostInk, finalCheck, hasMarkText, markTextBeyond, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf, xmpDateEpoch, xmpDatesOf } from '@/pdf-reader/engine/layout/base.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
 // Our compile as the base page (layout/base.mjs; design note §3.1, §3.3): the final pass against the draft it was made of, our
@@ -93,7 +93,7 @@ describe('markTextOf: no mark of ours printed as text (2610.19860)', () => {
     expect([...markTextOf(['\\axtmark{12s} \\axtmark{h3e} \\axtend{n7.0b}']).units].sort((a, b) => a - b)).toEqual([3, 7, 12])
     expect(markTextOf(['\\axtmark{n2.abstract.s}\\axtmark{g4a}'])).toMatchObject({ pages: [1], units: new Set() })
     expect(markTextOf(['AXT Inc. reported 12s and p176.4a in axt units.', null, undefined as never])).toEqual({ pages: [], units: new Set(), samples: [] })
-    expect(hasMarkText('a taxt@ion')).toBe(true)
+    expect(hasMarkText('a taxt@ion')).toBe(false)
     expect(hasMarkText(null)).toBe(false)
   })
 
@@ -106,6 +106,37 @@ describe('markTextOf: no mark of ours printed as text (2610.19860)', () => {
     expect(await textOfPdf(failing)).toEqual(['one', ''])
     const memory = { ...doc, getPage: async () => { throw new RangeError(ALLOCATION_FAILED) } }
     await expect(textOfPdf(memory)).rejects.toThrow(ALLOCATION_FAILED)
+  })
+})
+
+describe('markTextOf reads the marks\' own grammar (a review of 431)', () => {
+  it('an address or a word with axt@ in it is no mark; the marks are, as TeX prints them in a monospace or OT1 roman face', () => {
+    for (const text of ['Contact: j.saxt@uni-example.de', 'see taxt@ion and \\axtonomy', 'AXT@corp {12s}']) expect(markTextOf([text]).pages, text).toEqual([])
+    expect(markTextOf(['Code is at \\axt@pma{p176.4a}https://x.org']).pages).toEqual([1])
+    for (const text of ['\\axtmark{12s}', '\\axtend{n7.0b}', '\\axtlines{3}', '\\axthmark{h4s}', '\\axtpm{p0.5b}', '\\axt@hm{h2e}']) expect(markTextOf([text]).pages, text).toEqual([1])
+    // (OT1 roman: the backslash a left quote, a brace an en dash and a double acute)
+    expect(markTextOf(['\u201caxtmark\u2013p1.0a\u02dd']).pages).toEqual([1])
+    expect([...markTextOf(['\u201caxtmark\u2013p1.0a\u02dd']).units]).toEqual([1])
+    expect(hasMarkText('j.saxt@uni.de')).toBe(false)
+  })
+
+  it('markTextBeyond keeps the hits on our pages that arXiv\'s same page does not hold', () => {
+    const ours = ['A paper about \\axtmark{0s} itself.', 'Code at \\axt@pma{p1.0a}x.org']
+    expect(markTextBeyond(ours, ['A paper about \\axtmark{0s} itself.', 'Code at x.org'])).toEqual({ pages: [2], units: new Set([1]), samples: [[2, '\\axt@pma{p1.0a}']] })
+    expect(markTextBeyond(ours, ['', ''])).toMatchObject({ pages: [1, 2] })
+    expect(markTextBeyond(ours, null)).toMatchObject({ pages: [1, 2] })
+    expect(markTextBeyond(['plain'], ['plain'])).toMatchObject({ pages: [] })
+  })
+})
+
+describe('driverLostInk: what dvipdfmx says it could not draw', () => {
+  const block = (content: string, page = 1) => ['dvipdfmx:warning: Interpreting PS code failed!!! Output might be broken!!!', 'dvipdfmx:warning: Interpreting special command ps: (ps:) failed.', `dvipdfmx:warning: >> at page="${page}" position="(72, 720)" (in PDF)`, `dvipdfmx:warning: >> xxx "${content}"`].join('\n')
+  it('counts the failed specials that may set ink, page and text, and none of hyperref\'s (SDict: links, outlines, the document\'s info)', () => {
+    expect(driverLostInk(`${block('ps:tx@Dict begin STP newpath /ArrowA { m')}\n${block('ps:SDict begin H.S end', 2)}\n${block('"  tx@Dict begin STP newpath', 3)}`)).toEqual({ count: 2, samples: [[1, 'ps:tx@Dict begin STP newpath /ArrowA { m'], [3, '"  tx@Dict begin STP newpath']] })
+    expect(driverLostInk(block('ps:SDict begin [/View [/XYZ H.V]/Dest (equation.2.1) cvn /DEST pdfmark end'))).toEqual({ count: 0, samples: [] })
+    // (an image dvipdfmx could not take in: its ink is lost too)
+    expect(driverLostInk('dvipdfmx:warning: Image inclusion failed for "fig.eps".')).toMatchObject({ count: 1, samples: [[null, 'Image inclusion failed for "fig.eps".']] })
+    for (const log of ['', null, 'Output written on main.pdf (3 pages).', 'xdvipdfmx:warning: Interpreting PS code failed!!! Output might be broken!!!']) expect(driverLostInk(log as never), String(log)).toEqual({ count: 0, samples: [] })
   })
 })
 

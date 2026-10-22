@@ -20,7 +20,7 @@ import { groupsOfUnits, indexOf, layerDraws, partTarget, readHead, readPart, rea
 import { needBound } from '../layer-proto/need.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
-import { boxesCheck, finalCheck } from '../layout/base.mjs'
+import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, textOfPdf } from '../layout/base.mjs'
 import { LINE_PLACE, lineCheckOf } from '../layout/carry.mjs'
 import { chainedAddon } from '../layout/chain.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
@@ -100,9 +100,16 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
   if (!oursDoc) return no('final', typeof ours?.why === 'string' && ours.why ? ours.why : PLAIN_WHY.final)
   const { doc, text } = arxiv, N = doc.numPages
   const baseText = ours.text ?? await readArxivText(oursDoc, { draw })
-  const shown = baseText.markText ?? null
   if (baseText.pages !== N) return no('boxes', `our base page has ${baseText.pages} pages, arXiv's PDF ${N}`)
-  if (shown?.pages?.length) return no('marks', `a mark of ours stands as text on page ${shown.pages[0]} of our base page${shown.samples?.[0] ? ` (${shown.samples[0][1]})` : ''}`)
+  // (the mark text on our pages: the text's, else read here from our page; a hit arXiv's own page holds the same is the paper's
+  // text, no mark of ours)
+  let shown = baseText.markText ?? markTextOf(await textOfPdf(oursDoc))
+  if (shown.pages.length) {
+    const ourPages = [], theirPages = []
+    for (const p of shown.pages) { ourPages[p - 1] = await pageTextAt(oursDoc, p); theirPages[p - 1] = p <= N ? await pageTextAt(doc, p) : '' }
+    shown = markTextBeyond(ourPages, theirPages)
+  }
+  if (shown.pages.length) return no('marks', `a mark of ours stands as text on page ${shown.pages[0]} of our base page${shown.samples?.[0] ? ` (${shown.samples[0][1]})` : ''}`)
   let fc = null
   try { fc = draft ? await finalCheck(draft, oursDoc) : ours.check ? { ok: true } : { ok: false, why: 'it was not checked against the draft' } } catch (e) {
     if (isMemoryError(e)) throw e

@@ -25,6 +25,12 @@ export declare function markTextOf(pages: readonly (string | null | undefined)[]
 export declare const hasMarkText: (text: unknown) => boolean
 /** a page's text as markTextOf reads it: its text items' strings joined */
 export declare const pageTextOf: (tc: { items?: { str?: string }[] } | null | undefined) => string
+/** the mark text on our pages (each page's text) that arXiv's same page does not hold; markTextOf's shape */
+export declare function markTextBeyond(ours: readonly (string | null | undefined)[] | null | undefined, theirs: readonly (string | null | undefined)[] | null | undefined): { pages: number[]; units: Set<number>; samples: [page: number, text: string][] }
+/** page p's text of a document, as markTextOf reads it; '' where it cannot be read */
+export declare function pageTextAt(doc: PdfLike, p: number): Promise<string>
+/** what dvipdfmx said it could not draw in a log holding its terminal: the specials but hyperref's, the images */
+export declare function driverLostInk(log: string | null | undefined): { count: number; samples: [page: number | null, text: string][] }
 /** every page's text of a document, as markTextOf reads it */
 export declare function textOfPdf(doc: PdfLike): Promise<string[]>
 /** a PDF date (D:YYYYMMDDHHmmSSOHH'mm') as seconds since the epoch, null for what is not one */

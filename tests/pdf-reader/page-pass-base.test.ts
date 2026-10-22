@@ -1,6 +1,7 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { indexOf, type PartChain, type ReadPart, type ReadUnitsChunk, readHead, readPart, readUnitsChunk, type Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { arxivOf, endOf, markedOf, type Page, type Run, text, unit, words, type World } from './helpers/make-world'
@@ -99,6 +100,25 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
     // (half a point off is still in place)
     const near = { ...w, pages: (w.pages as Page[]).map(p => ({ runs: p.runs.map(r => ({ ...r, y: r.y - 0.4 })) })) }
     expect((await passOf(near, { orig: ORIG, ours: oursOf(near) })).head.base).toMatchObject({ source: 'ours', check: { carried: 1 } })
+  })
+
+  it('a mark printed as text is refused whether or not the host\'s text of our page reads it, and not where arXiv\'s page holds the same', async () => {
+    const w = worldOf()
+    const printed = (p: Page[]) => p.map((x, i) => (i === 1 ? { runs: [...x.runs, { s: '\\axt@pma{p1.0a}', x: 72, y: 100 }] } : x))
+    const shown = { ...w, marked: printed(w.marked as Page[]) }
+    const doc = markedOf(shown.marked, shown.marks)
+    const { markText, ...noMarkText } = await readArxivText(doc as never)
+    expect(markText?.pages).toEqual([2])
+    for (const text of [undefined, noMarkText]) {
+      const got = await passOf(shown, { orig: ORIG, ours: oursOf(shown, text ? { text } : {}) })
+      expect(got.head.base, String(!!text)).toMatchObject({ source: 'arxiv', why: 'marks' })
+    }
+    // (arXiv's own page 2 prints the same: the paper's text, no mark of ours)
+    const both = { ...shown, pages: printed(w.pages) }
+    expect((await passOf(both, { orig: ORIG, ours: oursOf(both) })).head.base).toMatchObject({ source: 'ours' })
+    // (an address with axt@ in it is no mark)
+    const mail = { ...w, marked: (w.marked as Page[]).map((x, i) => (i === 1 ? { runs: [...x.runs, { s: 'j.saxt@uni-example.de', x: 72, y: 100 }] } : x)) }
+    expect((await passOf(mail, { orig: ORIG, ours: oursOf(mail) })).head.base).toMatchObject({ source: 'ours' })
   })
 
   it('the guard\'s refusal is the paper\'s fallback, its why its own', async () => {
