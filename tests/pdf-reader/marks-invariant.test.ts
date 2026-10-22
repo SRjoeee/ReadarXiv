@@ -1,0 +1,108 @@
+// @vitest-environment node
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { describe, expect, it } from 'vitest'
+import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
+import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { compileImageRef } from '../../lab/pdf/spikes/compile-image.mjs'
+
+// "The marks do not move the page": a marked original as the layout compile makes it (markedOfPaper: the probe, its answers to
+// the marking, the marked compile), against the paper compiled as it is, in the pinned TeX Live image, offline: every text item
+// of the two PDFs at the same place, its text the same. Each document holds a shape where a mark could move a line — a word's
+// suffix after a macro (its hyphenation), a macro whose body ends in an argument (\xspace in it), a citation or a footnote in a
+// macro (cite's superscripts and fnpct move the punctuation), a kern after a macro's last letter, a box or a formula glued to a
+// word (TeX hyphenates no word a box follows, and one a mark's whatsit follows) — each in a narrow measure, so that some line
+// breaks in the word it is about
+
+const IMAGE = compileImageRef()
+const docker = spawnSync('docker', ['image', 'inspect', IMAGE], { stdio: 'ignore' }).status === 0
+type Request = { main: string; rerun: boolean; overrides: Map<string, Uint8Array> }
+/** a compile in the image: the paper's files and the request's, pdflatex once, or three times where it is rerun */
+const compiler = (files: Map<string, Uint8Array>) => async ({ main, rerun, overrides }: Request) => {
+  const dir = mkdtempSync(join(tmpdir(), 'axt-invariant-'))
+  try {
+    for (const [p, b] of [...files, ...overrides]) { mkdirSync(dirname(join(dir, p)), { recursive: true }); writeFileSync(join(dir, p), b) }
+    for (let pass = 0; pass < (rerun ? 3 : 1); pass++) {
+      try { execFileSync('docker', ['run', '--rm', '--network', 'none', '-v', `${dir}:/work`, '-w', '/work', IMAGE, 'pdflatex', '-interaction=nonstopmode', main], { stdio: 'pipe', timeout: 300_000 }) } catch { /* errors are the log's */ }
+    }
+    const read = (f: string) => { try { return readFileSync(join(dir, f)) } catch { return null } }
+    const stem = main.replace(/\.tex$/, '')
+    const pdf = read(`${stem}.pdf`)
+    return { ok: !!pdf, pdf: pdf ? new Uint8Array(pdf) : null, log: read(`${stem}.log`)?.toString('latin1') ?? '', aux: read(`${stem}.aux`)?.toString('utf8') ?? null, bbl: null, ms: 1 }
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
+/** every text item of a PDF, its text and its place, by page */
+const itemsOf = async (pdf: Uint8Array) => {
+  const doc = await getDocument({ data: pdf.slice(), verbosity: 0 }).promise
+  const out: string[] = []
+  for (let n = 1; n <= doc.numPages; n++) for (const it of (await (await doc.getPage(n)).getTextContent()).items as { str: string; transform: number[] }[]) if (it.str.trim()) out.push(`${n} ${it.transform[4]?.toFixed(2)} ${it.transform[5]?.toFixed(2)} ${it.str}`)
+  await doc.loadingTask.destroy()
+  return out
+}
+/** the destinations a PDF names */
+const destsOf = async (pdf: Uint8Array) => {
+  const doc = await getDocument({ data: pdf.slice(), verbosity: 0 }).promise
+  const all = await doc.getDestinations()
+  await doc.loadingTask.destroy()
+  return new Set(all instanceof Map ? all.keys() : Object.keys(all ?? {}))
+}
+/** the marked original's items against the paper's own; the marks it set, by each piece's source: 'a' its opening mark, 'b' its
+ *  closing one, of the first piece of that source */
+async function compare(tex: string) {
+  const files = new Map([['main.tex', new TextEncoder().encode(tex)]])
+  const paper = openPaper(files), compile = compiler(files)
+  const made = await markedOfPaper(paper, { compile: compile as never, final: false })
+  if (!('pdf' in made) || !made.pdf) throw new Error(`no marked original: ${JSON.stringify(made).slice(0, 300)}`)
+  const own = await compile({ main: 'main.tex', rerun: true, overrides: new Map() })
+  const dests = await destsOf(made.pdf)
+  const marksOf = (src: string) => {
+    for (const [i, u] of paper.units.entries()) for (const [k, p] of (u.pieces as { t: string; src?: string }[]).entries()) if (p.t === 'ph' && p.src === src) return `${dests.has(`axt-p${i}.${k}a`) ? 'a' : ''}${dests.has(`axt-p${i}.${k}b`) ? 'b' : ''}`
+    return null
+  }
+  const options = made.options as { switches?: Record<string, string>; inkless?: string[] }
+  return { marked: await itemsOf(made.pdf), own: await itemsOf(own.pdf as Uint8Array), marksOf, switches: options.switches ?? {}, inkless: options.inkless ?? [] }
+}
+/** a paragraph each with a few more words before `x`, so that some line ends inside the word `x` is about (never none: a
+ *  paragraph that opens with a macro has its start mark after it, which an \\xspace in it sees, as before this marking) */
+const lines = (x: string, n = 14) => Array.from({ length: n }, (_, i) => `${'one two three four five six seven eight nine ten eleven '.split(' ').slice(0, 1 + (i % 10)).join(' ')} ${x} and more words after it to fill the line out.`).join('\n\n')
+const doc = (pre: string, body: string) => `\\documentclass{article}\n${pre}\n\\begin{document}\n\\hsize=4.2cm \\textwidth=4.2cm \\columnwidth=4.2cm \\linewidth=4.2cm\n${body}\n\\begin{thebibliography}{9}\\bibitem{a} A. Author. A title. 2020.\\end{thebibliography}\n\\end{document}\n`
+
+describe.skipIf(!docker)('the marked original sets every text item where the paper\'s own compile does', () => {
+  it('a macro before its word\'s suffix (\\tf{}s: Transform-ers at a line\'s end) and a macro that reads nothing past its arguments', async () => {
+    const r = await compare(doc('\\newcommand\\tf{Transformer}\\newcommand\\method{RoBERTa}\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('\\tf{}s')}\n\n${lines('\\method{}s')}\n\nThe share is \\share{}\\cite{a} of all, and the rate \\rate{} \\cite{a} here.`))
+    expect(r.marked).toEqual(r.own)
+    // (the marks it set: \\tf{} before its suffix its opening mark alone; \\rate{} TeX answered for, both, and the citation past
+    // white space after it both; the citation right against \\share{} none)
+    expect([r.marksOf('\\tf{}'), r.marksOf('\\rate{}'), r.marksOf('\\share{}')]).toEqual(['a', 'ab', 'a'])
+    expect(r.switches['\\rate']).toBe('00000000')
+  }, 900_000)
+  it('a macro whose body ends in an argument (\\pair{Ro}{\\bert}: \\xspace in it), and one that redefines another', async () => {
+    const r = await compare(doc('\\usepackage{xspace}\\newcommand\\pair[2]{#1#2}\\newcommand\\bert{BERT\\xspace}\\newcommand\\setx[1]{\\renewcommand\\s{#1}}\\newcommand\\s{none}', `${lines('\\pair{Ro}{\\bert}.')}\n\n\\setx{abc}The value \\s{} here and \\s.`))
+    expect(r.marked).toEqual(r.own)
+  }, 900_000)
+  it('a citation in a macro under cite\'s superscripts, a footnote in a macro under fnpct, and a kern after a macro\'s last letter (mathptmx: V.)', async () => {
+    const r = await compare(doc('\\usepackage[super]{cite}\\usepackage{fnpct}\\usepackage{url}\\usepackage{mathptmx}\\newcommand\\rc[1]{\\cite{#1}}\\newcommand\\fnurl[1]{\\footnote{\\url{#1}}}\\newcommand\\kv[2]{#1#2V}', `${lines('work \\rc{a}.')}\n\n${lines('a site\\fnurl{http://x.org}.')}\n\n${lines('the \\kv{I}{x}.')}`))
+    expect(r.marked).toEqual(r.own)
+    // (TeX's answers: a closing mark before the full stop moves it under cite's superscripts, under fnpct and after the V)
+    for (const c of ['\\rc', '\\kv']) expect(r.switches[c]?.[0], c).not.toBe('0')
+  }, 900_000)
+  it('a box, a formula or a rule glued to a word (TeX hyphenates no word a box follows), and the shapes the marking now marks', async () => {
+    const r = await compare(doc('\\newcommand\\st{\\mbox{$\\star$}}\\newcommand\\sq{\\textsuperscript{2}}\\newcommand\\ru{\\rule{1pt}{1ex}}\\newcommand\\pp{\\,pp}', `${lines('characterization\\st{}')}\n\n${lines('representation\\sq{}')}\n\n${lines('representation\\ru{}')}\n\n${lines('a gap of 0.58\\pp{} or')}\n\nA F\\o lner sequence, and\\slash or a code, by Zhou\\textsuperscript{1} and others.`))
+    expect(r.marked).toEqual(r.own)
+    // (the marks it set: \\pp{}, whose box begins with a kern, both; the box, the formula and the rule glued, none)
+    expect([r.marksOf('\\pp{}'), r.marksOf('\\st{}'), r.marksOf('\\sq{}'), r.marksOf('\\ru{}')]).toEqual(['ab', '', '', ''])
+  }, 900_000)
+  it('a complete macro whose call is more errors than TeX goes on past, asked about last: the probe\'s other answers stand', async () => {
+    // (\\bad's four undefined commands, in each of the punctuation test's 32 boxes, make more than the hundred errors one
+    // paragraph may hold, and TeX stops: \\nothing's ink answer, asked before, says it sets none, and it has no mark)
+    const r = await compare(doc('\\newcommand\\bad{\\axtundefA\\axtundefA\\axtundefA\\axtundefA x}\\newcommand\\nothing{\\relax}', `A word\\nothing{} here, and \\bad{} there \\cite{a}.`))
+    expect(r.marked).toEqual(r.own)
+    expect(r.inkless).toContain('\\nothing{}')
+    expect(r.switches['\\cite']).toBe('00000000')
+    expect(r.switches['\\bad']).toBeUndefined()
+    expect(r.marksOf('\\nothing{}')).toBe('')
+  }, 900_000)
+})

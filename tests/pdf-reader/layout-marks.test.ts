@@ -31,6 +31,9 @@ const srcs = (u: SourceUnit | undefined) => ((u?.pieces ?? []) as Piece[]).map(p
 
 afterEach(() => { vi.restoreAllMocks() })
 
+/** a switch of `n` commands, each \\axtq and its number in letters, every mark safe */
+const switchOf = (n: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`\\axtq${i.toString(26).replace(/\d/g, d => String.fromCharCode(113 + Number(d)))}`, '00000000']))
+
 describe('the classes', () => {
   it('subequations is a display, as every display environment of the corpus', () => {
     for (const env of ['subequations', 'equation', 'equation*', 'align', 'align*', 'gather', 'gather*', 'multline', 'multline*', 'flalign', 'alignat', 'eqnarray', 'eqnarray*', 'displaymath', 'dmath', 'IEEEeqnarray'])
@@ -1090,7 +1093,8 @@ describe('the marks file', () => {
       ['a switch of no command', m => { (m.marking.switches as Record<string, string>).cite = '00000000' }, 'marking.switches.cite'],
       ['a switch of 7 codes', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '2222000' }, 'marking.switches.\\\\cite'],
       ['a switch of a code 3', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '22223000' }, 'marking.switches.\\\\cite'],
-      ['a switch of 17 commands', m => { for (let i = 0; i < 17; i++) (m.marking.switches as Record<string, string>)[`\\c${'i'.repeat(i + 1)}te`] = '00000000' }, 'marking.switches'],
+      // (the asked classes' commands and the paper's own complete macros, PROBE_MAX + COMPLETE_PROBE_MAX: one past them)
+      ['a switch of 529 commands', m => { m.marking.switches = switchOf(529) }, 'marking.switches'],
       ['no inkless key', m => { delete (m.marking as Partial<LayoutMarks['marking']>).inkless }, 'marking.inkless'],
       ['the inkless an object', m => { (m.marking as Record<string, unknown>).inkless = {} }, 'marking.inkless'],
       ['an inkless source twice', m => { (m.marking.inkless as string[])[1] = '\\rule{0pt}{2ex}' }, 'marking.inkless[1]'],
@@ -1181,6 +1185,10 @@ describe('the marks file', () => {
       change(m)
       expect(refusal(bytes(m)), name).toBe(path)
     }
+    // a switch of every command the probe asks about at most stands
+    const most = valid()
+    most.marking.switches = switchOf(528)
+    expect(refusal(bytes(most))).toBeNull()
     // a later token the rest of the word before
     const rest = valid()
     rest.tokens[11] = -1

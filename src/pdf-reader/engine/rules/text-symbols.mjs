@@ -9,8 +9,10 @@
 /**
  * The kernel's and textcomp's text symbols, as LaTeX defines them in every encoding, each the one character it sets
  * (\textquotesingle the straight quote ', \textquotedbl the straight double quote "); and the kernel's letters of Latin
- * scripts (\o, \ss, \ae, \l, the dotless \i and \j: latex.ltx and the encodings' own, each one glyph) and \slash (`/` and the
- * permission to break after it), which a paper writes inside a word (`F\o lner`, `and\slash or`), where no mark goes
+ * scripts (\o, \ss, \ae, \l, the dotless \i and \j: latex.ltx and the encodings' own) and \slash (`/` and the permission to
+ * break after it), which a paper writes inside a word (`F\o lner`, `and\slash or`), where no mark goes. Each is one character;
+ * most are one glyph in every encoding, but OT1 sets \l, \L, \aa and \AA of two (a bar or a ring over a letter), which a page's
+ * text then gives as two characters, not the one: there the maker finds none and the piece stays LOST, as it was
  */
 export const TEXT_SYMBOLS = Object.freeze({
   '\\%': '%', '\\&': '&', '\\#': '#', '\\$': '$', '\\_': '_', '\\{': '{', '\\}': '}',

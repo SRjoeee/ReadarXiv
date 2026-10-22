@@ -18,7 +18,9 @@ export declare const PROBE_MAX: number
 /** a piece's leading command, or null */
 export declare const commandOf: (p: unknown) => string | null
 /** each command of the asked classes the paper writes, once, with a source TeX can set in a box */
-export declare function probeSamples(units: readonly SourceUnit[]): { command: string; src: string; call: boolean }[]
+export declare function probeSamples(units: readonly SourceUnit[], complete?: Complete | ReadonlyMap<string, number> | readonly (readonly [string, number])[] | null): { command: string; src: string; call: boolean; own?: true }[]
+/** the asked classes' commands the probe asks about at most, and the complete macros apart */
+export declare const COMPLETE_PROBE_MAX: number
 /** the probe's schema: a new section adds rows of a tag of its own */
 export declare const PROBE_SCHEMA: number
 /** the TeX that writes one row `LAYOUT-PROBE <schema> <tag> <fields…>` */
@@ -28,10 +30,10 @@ export declare const probeTex: (sections: readonly string[]) => string
 /** every row of a probe's log */
 export declare function readProbe(log: string): { schema: number; tag: string; fields: string[] }[]
 /** the punctuation section (`punct`) */
-export declare function punctuationSection(samples: readonly { src: string; call: boolean }[]): string
+export declare function punctuationSection(samples: readonly { src: string; call: boolean }[], from?: number): string
 /** the layout marks' probe document, after \\begin{document} of the font probe: the punctuation section, then the ink
  *  section where `ink` holds samples */
-export declare function markProbeTex(samples: readonly { src: string; call: boolean }[], ink?: readonly string[]): string
+export declare function markProbeTex(samples: readonly { src: string; call: boolean; own?: true }[], ink?: readonly string[]): string
 /** the distinct sources of the paper's macros the ink section asks about, at most */
 export declare const INK_MAX: number
 /** the ink section's samples: each macro's source once, in the paper's order, that TeX can set in a box of its own */

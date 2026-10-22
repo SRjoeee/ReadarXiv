@@ -586,6 +586,20 @@ function paperMacros(files) {
 /** every way a file defines a command, its name in group 1 (arg-roles.mjs OWN_COMMANDS' forms, \\let and the expanded
  *  definitions among them): a definition completeMacros does not read makes what the command does unknown */
 const ANY_DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|futurelet|newtoks|DeclareMathOperator\*?|DeclareTextCommand|DeclareTextSymbol|DeclareTextCommandDefault|newcounter|newlength|newif)\s*\{?\s*\\([A-Za-z@]+)/g
+/** a body that may read on in a way readsOn does not see: it ends in an argument (`\\newcommand\\pair[2]{#1#2}`: the call's
+ *  last argument, `\\bert` = BERT\\xspace, is the body's last token), it defines or changes a command (`\\renewcommand\\s{#1}`,
+ *  `\\let`, `\\global`), or it names an argument past its own arity (a definition inside another's body, whose #1 is that one's) */
+const readsOnToo = (body, arity) => {
+  const t = uncommented(body).trimEnd()
+  if (/#\d$/.test(t)) return true
+  if (/\\(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|global|futurelet|csdef|csgdef|newtoks|newcounter|newlength|setlength|addtolength|setcounter|addtocounter)(?![A-Za-z@])/.test(t)) return true
+  return [...t.matchAll(/#(\d)/g)].some(m => Number(m[1]) > arity)
+}
+/** a body that sets more than a piece of a line: an environment, a paragraph's end, an alignment's row or cell, a list's item,
+ *  a page's end. No mark stands beside a call of one in a line, and set in the mark probe's box (marks.mjs probeSamples) it is
+ *  errors TeX may not get past: jnsao.cls's \\and, `\\end{tabular}\\hskip1em\\begin{tabular}`, made a hundred in one paragraph
+ *  and stopped 2610.21377's probe before its later answers */
+const STRUCTURAL = /\\(?:begin|end|par|item|cr|crcr|noalign|hline|tabularnewline|newline|newpage|clearpage)(?![A-Za-z@])|\\\\|(?<!\\)&/
 /** \\NewDocumentCommand and its kin, all their arguments mandatory (`m`, `+m`): name, spec, at the body's brace */
 const DOCUMENT_COMMAND = /\\(?:New|Renew|Provide|Declare)DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*\{([^{}]*)\}\s*/g
 /**
@@ -593,9 +607,11 @@ const DOCUMENT_COMMAND = /\\(?:New|Renew|Provide|Declare)DocumentCommand\s*(?:\{
  * package's files one completeMacros reads — \\newcommand, \\renewcommand, \\providecommand, \\DeclareRobustCommand (starred
  * or not, with `[n]` and no optional first argument), \\def\\x#1#2 (\\edef, \\gdef, \\xdef), \\NewDocumentCommand with a spec of
  * mandatory arguments alone —, all of one arity, and none whose body reads on (readsOn: \\@ifnextchar, \\@ifstar, \\futurelet,
- * \\xspace or any command at its end that may take what follows). A call of such a macro that holds its arguments (layout/
- * marks.mjs) reads nothing after it, so a layout mark after it is none of its arguments. A name defined in any other way
- * (\\let, a delimited \\def, \\DeclareMathOperator) is not one: what it reads is not known
+ * \\xspace or any command at its end that may take what follows; readsOnToo: an argument at its end, a definition in it), nor
+ * one that sets more than a piece of a line (STRUCTURAL: an environment, a paragraph's end, an alignment's cell). A
+ * call of such a macro that holds its arguments (layout/marks.mjs) reads nothing after it, so a layout mark after it is none
+ * of its arguments — what a mark does to the punctuation after it is TeX's to answer (the mark probe). A name defined in any
+ * other way (\\let, a delimited \\def, \\DeclareMathOperator) is not one: what it reads is not known
  */
 export function completeMacros(files) {
   const found = new Map(), every = new Map()
@@ -603,21 +619,28 @@ export function completeMacros(files) {
   const defs = /\\(?:((?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|(?:[egx]?def)\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*)(?=\{))/g
   for (const { text: t } of files) {
     for (const m of t.matchAll(ANY_DEFINITION)) if (!inComment(t, m.index) && !inOwnCall(t, m.index, m[1])) every.set(m[1], (every.get(m[1]) ?? 0) + 1)
+    // (each definition with its body's range: one inside another's body is that macro's doing, made when it is called, not the
+    // definition in effect where the paper calls it)
+    const here = []
     for (const m of t.matchAll(defs)) {
       const name = m[2] ?? m[3] ?? m[5], params = m[1] ? Number(m[4] ?? 0) : (m[6].match(/#\d/g) ?? []).length
       if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
-      let k = skipSpaces(t, m.index + m[0].length)
+      const k = skipSpaces(t, m.index + m[0].length)
+      here.push({ name, params, at: m.index, k, e: t[k] === '{' ? matchGroup(t, k) : -1, bracket: t[k] === '[' })
+    }
+    for (const d of here) {
+      const nested = here.some(o => o !== d && o.e > 0 && d.at > o.k && d.at < o.e)
       // (an optional first argument: the call looks ahead for its bracket, so it may read what follows)
-      if (t[k] === '[') { add(name, -1); continue }
-      if (t[k] !== '{') { add(name, -1); continue }
-      const e = matchGroup(t, k)
-      add(name, e < 0 || readsOn(t.slice(k + 1, e - 1)) ? -1 : params)
+      if (nested || d.bracket || d.e < 0) { add(d.name, -1); continue }
+      const body = t.slice(d.k + 1, d.e - 1)
+      add(d.name, readsOn(body) || readsOnToo(body, d.params) || STRUCTURAL.test(uncommented(body)) ? -1 : d.params)
     }
     for (const m of t.matchAll(DOCUMENT_COMMAND)) {
       const name = m[1] ?? m[2], spec = m[3].trim().split(/\s+/).filter(Boolean)
       if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
       const k = m.index + m[0].length, e = t[k] === '{' ? matchGroup(t, k) : -1
-      add(name, e < 0 || !spec.every(s => s === 'm' || s === '+m') || readsOn(t.slice(k + 1, e - 1)) ? -1 : spec.length)
+      const body = e < 0 ? '' : t.slice(k + 1, e - 1)
+      add(name, e < 0 || !spec.every(s => s === 'm' || s === '+m') || readsOn(body) || readsOnToo(body, spec.length) || STRUCTURAL.test(uncommented(body)) ? -1 : spec.length)
     }
   }
   const out = []

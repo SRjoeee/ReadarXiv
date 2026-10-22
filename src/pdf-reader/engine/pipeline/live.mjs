@@ -237,7 +237,7 @@ export function openPaper(files) {
  *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by;
  *  with `marks`, the layout marks' TeX (MARK_DEF, LAYOUT_TEX) first and, after the width probe, the mark probe
  *  (layout/marks.mjs markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
- *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units)`) are the paper's own switch, and what
+ *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units, paper.project.complete)`) are the paper's own switch, and what
  *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`); under `latex` (latex-front.mjs dviEngine), each
  *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
@@ -247,7 +247,7 @@ export function probeFiles({ fsys, project, meta }, { width = false, marks = fal
   const text = texText(fsys.read(project.main))
   const at = beginDocument(text)
   const dvi = dviEngine(meta?.compiler)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units), inkSamples(project.units)) : ''
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units)) : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
 }
 

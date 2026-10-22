@@ -22,7 +22,7 @@
 // clock, its operator list not given within OPS_MS (`stats.timedOut`) or its ink's walk past its backstop (ink.mjs INK_MS,
 // `stats.inkTimedOut`). No real page comes near either (the walk's own bound is counted, STEPS_MAX), and a page past one is
 // dark, its units the original's: a slower machine may show a hostile page untranslated where a faster one reads it.
-import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, pageFrame, pageIndex, tokenAtMark, tokens } from '../pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, pageFrame, pageIndex, tokenAtMark, tokens, uprightToken } from '../pipeline/anchors.mjs'
 import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
@@ -660,17 +660,19 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     for (const [k, m, pos] of startsOn.get(b.page) ?? []) if (Math.abs(m.y - b.y) <= 0.5 && m.x >= b.x - 0.05 && colAt(m) === colAt(b) && (m.x < leadX || (m.x === leadX && pos < leadPos))) { lead = Number(k.slice(0, -1)); leadX = m.x; leadPos = pos }
     return lead
   }
-  /** the word a unit's mark reaches where it stands at none (boundsFromMarks `reach`): a unit that opens with a formula, a
-   *  dash or a comma has its start mark there, and its first word further on its line. The nearest word on the mark's
-   *  line, in its column, after it (a start mark) or before it (an end mark), at any distance: its column bounds it, not a
-   *  measure of points; or null. `byPage`, the base page's tokens by page */
-  const reachIn = byPage => (mk, start) => {
+  /** the word a unit's start mark reaches where it stands at none (boundsFromMarks `reach`): a unit that opens with a formula, a
+   *  dash or a comma has its start mark there, and its first word further on its line. The nearest upright word on the mark's
+   *  baseline, in its column, after it, at any distance: its column bounds it, not a measure of points; or null. A turned line
+   *  (a sideways caption) reaches none: its baseline is no horizontal one, and a word at the mark's height there is another
+   *  line's. An end mark needs none: tokenAtMark takes the last word before it on its line at any distance. `byPage`, the base
+   *  page's tokens by page */
+  const reachIn = byPage => mk => {
     let best = null
     const col = colAt(mk)
     for (const k of byPage.get(mk.page) ?? []) {
       const t = doc[k]
-      if (!t.t || Math.abs(t.y - mk.y) > t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
-      if (start ? t.x >= mk.x && (best === null || t.x < doc[best].x) : t.x + t.w <= mk.x + 1 && (best === null || t.x > doc[best].x)) best = k
+      if (!t.t || !uprightToken(t) || Math.abs(t.y - mk.y) > t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
+      if (t.x >= mk.x && (best === null || t.x < doc[best].x)) best = k
     }
     return best
   }

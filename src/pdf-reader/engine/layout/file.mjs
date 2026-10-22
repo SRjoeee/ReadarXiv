@@ -45,13 +45,15 @@ export { LayoutRefusal } from './json.mjs'
  *  19 papers' marked originals gain 359 opening marks, the other 158 and every unit are as they were (the
  *  file's schema is 5 still; the gate pack's seven papers are among those unchanged); 14: what stands beside a placeholder read
  *  from what the paper says rather than guessed (marks.mjs MARKS_SCHEMA 9): a call of the paper's own macro that reads nothing past
- *  its arguments (latex-front.mjs completeMacros, from its definition) gets its closing mark and leaves the piece after it its
- *  marks; a macro glued to a word whose box TeX begins with no character (a kern, a formula, a colour: readInkApart) is marked;
- *  the kernel's letters and \slash are text symbols; and a unit whose start or end mark stands at no word is bounded by the
- *  nearest word on the mark's line in its column (make.mjs reachIn). Over the release-route sweep's 35 papers with unanchored
- *  rows, 70 of the 217 rows (57 units) convert and no other unit's layout changes; the six papers whose marked originals change
- *  set every word of their base pages where they were (pdftotext, 104,992 words). Of the gate pack's seven papers 2609.26457's
- *  marked original changes (123 marks gained); the others' are byte for byte as before (the file's schema is 5 still) */
+ *  its arguments (latex-front.mjs completeMacros, from its definitions) is asked about by the mark probe, last, and gets the
+ *  closing mark TeX answered moves nothing, before white space or punctuation, and leaves the piece after it, past white space,
+ *  its marks; a macro glued to a word whose box TeX begins with glue, a kern, a penalty or a whatsit (readInkApart) is marked;
+ *  the kernel's letters and \slash are text symbols; and a unit whose start mark stands at no word is bounded by the nearest
+ *  upright word after it on its baseline in its column (make.mjs reachIn). Over the release-route sweep's 35 papers with
+ *  unanchored rows, 37 of the 217 rows (31 units) convert, 57 units in all are placed better and no other unit's layout
+ *  changes; the 21 papers whose marked originals were made again set every word of their base pages where they were
+ *  (pdftotext, 378,881 words). Of the gate pack's seven papers 2609.26457's marked original changes (114 marks gained); the
+ *  others' are byte for byte as before (the file's schema is 5 still) */
 export const LAYOUT = '14'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour

@@ -118,7 +118,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const log = lastTexLog(c?.log)
     if (!log) return null
     const ink = inkSamples(paper.units)
-    return { switches: readMarkProbe(log, probeSamples(paper.units)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, ink), names: readNameProbe(log), lineskip: readSkipProbe(log), apart: readInkApart(log, ink) }
+    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, ink), names: readNameProbe(log), lineskip: readSkipProbe(log), apart: readInkApart(log, ink) }
   })
   if (!probe) return { refused: 'probe', ms }
   // (the day the marked original and its final pass are compiled on: the host's, asked once; any failure of the host's but a

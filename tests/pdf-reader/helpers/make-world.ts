@@ -24,7 +24,7 @@ export type Run = { s: string; x: number; y: number; size?: number; font?: strin
 export type Annot = { rect: number[]; dest: string | unknown[]; quadPoints?: number[]; url?: string }
 export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
 export type Mark = [name: string, page: number, x: number, y: number]
-export type World = { pages: Page[]; marked?: Page[]; base?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
+export type World = { pages: Page[]; marked?: Page[]; base?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1>; complete?: Record<string, number>; apart?: string[] }
 
 export const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
@@ -146,7 +146,7 @@ export function markedOf(pages: Page[], marks: Mark[]) {
   }
 }
 export async function marksOf(w: World, log = '', classes?: MarkClass[]) {
-  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
+  return parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(await layoutMarksOf(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, complete: w.complete ?? null, apart: w.apart ?? null, units: w.units, OPS, ...(classes ? { classes } : {}) }))))
 }
 export const text = (s: string) => ({ t: 'text', s })
 export const ph = (src: string) => ({ t: 'ph', src })

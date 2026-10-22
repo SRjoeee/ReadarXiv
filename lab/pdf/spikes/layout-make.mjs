@@ -94,7 +94,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     for (const [p, b] of [...all].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)
     return hash.digest('hex').slice(0, 16)
   }
-  const samples = probeSamples(paper.units), probe = probeFiles(paper, { marks: true }), probeLog = join(dir, `probe-${keyOf(probe)}.log`)
+  const samples = probeSamples(paper.units, paper.project.complete), probe = probeFiles(paper, { marks: true }), probeLog = join(dir, `probe-${keyOf(probe)}.log`)
   if (!existsSync(probeLog)) {
     const pdir = join(dir, 'probe')
     rmSync(pdir, { recursive: true, force: true })
