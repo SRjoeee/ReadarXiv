@@ -11,6 +11,7 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path, and no node:
 // specifier: the TeX page's host runs it in a browser.
 import { whyText } from '../layer-proto/format.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from '../pipeline/tex-errors.mjs'
 import { END_TEX } from '../pipeline/typeset/tex.mjs'
@@ -196,6 +197,19 @@ export const errorCount = log => (lastTexLog(log ?? '').match(/^! /gm) ?? []).le
 export const pagesOfLog = log => { const all = [...unwrapped(lastTexLog(log ?? '')).matchAll(/Output written on .*?\((\d+) pages?\b/g)]; return all.length ? Number(all.at(-1)[1]) : null }
 /** the TeX Live year of a compile, from its engine's banner ("This is pdfTeX, … (TeX Live 2025) …"), else null */
 export const texLiveOf = log => /\(TeX Live (\d{4})\)/.exec(log ?? '')?.[1] ?? null
+/**
+ * The TeX Live year of the build arXiv's PDF says it was made on, from the `PTEX.Fullbanner` of its Info dictionary
+ * ("This is pdfTeX, … (TeX Live 2023) kpathsea …"), else null. The dictionary is the one PDF.js resolves from the trailer's
+ * /Info (`info.Custom`, a Map of the keys it has no field for), and no scan of the bytes: a PDF holds other banners, an
+ * included PDF's Info dictionary (`/PTEX.InfoDict`) and a superseded object's, and object order does not say which is the
+ * document's. No other signal counts (never the Producer, never a version number). A document that cannot say is null; only
+ * a memory-class error is thrown (base.mjs creationEpochOf).
+ */
+export const texLiveOfPdf = async doc => {
+  let banner = null
+  try { banner = (await doc.getMetadata())?.info?.Custom?.get?.('PTEX.Fullbanner') ?? null } catch (e) { if (isMemoryError(e)) throw e; banner = null }
+  return typeof banner === 'string' ? /TeX Live (\d{4})/.exec(banner)?.[1] ?? null : null
+}
 /** whether TeX ran at all: its banner in the log (a host that refused the compiler, a jail that ran nothing, has none) */
 export const texRan = log => /^This is \S*TeX\b/m.test(log ?? '')
 /** whether the host says it does not run the compiler asked (the web runner's "unknown engine"): the one answer TeX never ran

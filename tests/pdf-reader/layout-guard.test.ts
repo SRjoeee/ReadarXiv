@@ -1,6 +1,9 @@
+import * as PL from '@cantoo/pdf-lib'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { auxUnits, braceBalance, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
+import { auxUnits, braceBalance, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
 import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { handoverOf, layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
@@ -432,5 +435,60 @@ describe('the refusal names the unmarked original\'s verdict and the trees tried
       [failed, { served: ['2025'], last: false }],
       [undefined, { served, last: false }],
     ] as const) expect(handoverOf(own, { declared: null, ...o })).toBeNull()
+  })
+})
+
+describe('texLiveOfPdf: the TeX Live year arXiv\'s PDF says, from the Info dictionary PDF.js resolves', () => {
+  const BANNER = (year: string) => `This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live ${year}) kpathsea version 6.3.5`
+  /** a PDF.js document that answers getMetadata with this (PDF.js 6 puts the Info keys it has no field for in `info.Custom`, a Map) */
+  const docOf = (custom: Map<string, unknown> | undefined) => ({ getMetadata: async () => ({ info: custom ? { Producer: 'pikepdf', Custom: custom } : { Producer: 'pikepdf' }, metadata: null }) }) as never
+
+  it('reads the year from the banner of the Info dictionary', async () => {
+    expect(await texLiveOfPdf(docOf(new Map([['DOI', 'x'], ['PTEX.Fullbanner', BANNER('2023')]])))).toBe('2023')
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', BANNER('2025')]])))).toBe('2025')
+    // (the year is a string, the type texLiveOf gives; a banner a distribution words otherwise still has it)
+    expect(typeof await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', BANNER('2025')]])))).toBe('string')
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', 'This is pdfTeX (TeX Live 2020/Debian) kpathsea']])))).toBe('2020')
+  })
+
+  it('is null where the document does not say: no banner, a banner without a year, another value, nothing of Info', async () => {
+    expect(await texLiveOfPdf(docOf(undefined))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map([['DOI', 'x'], ['arXivID', '2610.20713']])))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map([['PTEX.Fullbanner', 'This is pdfTeX, Version 3.141592653-2.6-1.40.25']])))).toBeNull()
+    expect(await texLiveOfPdf(docOf(new Map<string, unknown>([['PTEX.Fullbanner', { name: 'TeX Live 2023' }], ['PTEX.Fullbanner2', BANNER('2023')]])))).toBeNull()
+    // (no other signal counts: not the Producer, not another key)
+    expect(await texLiveOfPdf({ getMetadata: async () => ({ info: { Producer: 'pdfTeX-1.40.25 TeX Live 2023', Custom: new Map([['Notes', BANNER('2023')]]) } }) } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: async () => null } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: async () => ({}) } as never)).toBeNull()
+    expect(await texLiveOfPdf({} as never)).toBeNull()
+    expect(await texLiveOfPdf(null as never)).toBeNull()
+  })
+
+  it('does not throw where getMetadata does, and lets a memory-class error through', async () => {
+    expect(await texLiveOfPdf({ getMetadata: async () => { throw new Error('broken') } } as never)).toBeNull()
+    expect(await texLiveOfPdf({ getMetadata: () => { throw new Error('broken') } } as never)).toBeNull()
+    await expect(texLiveOfPdf({ getMetadata: async () => { throw new RangeError(ALLOCATION_FAILED) } } as never)).rejects.toThrow(ALLOCATION_FAILED)
+  })
+
+  it('reads a real PDF through PDF.js: the Info the trailer names, not the banner of an included PDF or of an object nothing names', async () => {
+    const pdf = await PL.PDFDocument.create({ updateMetadata: false })
+    pdf.addPage([612, 792])
+    // (the objects an included figure leaves behind: pdfTeX copies its Info dictionary as an object, banner and all, and a
+    // superseded Info stays in the file; both come after the page and before the document's own Info in object order)
+    const decoy = (year: string) => pdf.context.register(pdf.context.obj({ Producer: PL.PDFString.of('pdfTeX-1.40.20'), 'PTEX.Fullbanner': PL.PDFString.of(BANNER(year)) }))
+    decoy('2019'); decoy('2021')
+    const info = pdf.context.lookup(pdf.context.trailerInfo.Info) as PL.PDFDict | undefined ?? pdf.context.obj({})
+    info.set(PL.PDFName.of('PTEX.Fullbanner'), PL.PDFString.of(BANNER('2023')))
+    pdf.context.trailerInfo.Info = pdf.context.register(info)
+    decoy('2024')
+    const bytes = await pdf.save({ useObjectStreams: false })
+    // (the banners are in the bytes in that order, the document's second: a scan of the file would not tell it)
+    const raw = new TextDecoder('latin1').decode(bytes)
+    expect([...raw.matchAll(/\(TeX Live (\d{4})\)/g)].map(m => m[1])).toEqual(['2019', '2021', '2023', '2024'])
+    const doc = await getDocument({ data: bytes.slice(), verbosity: 0 }).promise
+    try {
+      expect(((await doc.getMetadata()).info as { Custom?: unknown }).Custom).toBeInstanceOf(Map)
+      expect(await texLiveOfPdf(doc as never)).toBe('2023')
+    } finally { await doc.loadingTask.destroy() }
   })
 })
