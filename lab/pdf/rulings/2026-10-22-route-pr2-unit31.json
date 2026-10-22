@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-22",
+  "by": "the maintainer",
+  "quote": "3 \u63a5\u53d7",
+  "english": "decision 3 accepted, 2026-10-22, relayed by the coordinator: units without TeX positions stay untranslated",
+  "on": "route PR 2 (pull request 430): the layer draws only from the layout file",
+  "measures": [
+    "text units left English",
+    "paragraph gaps tighter than the lines beside them"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "zh, 2307.16209v1-zh, unit 31 on page 18: text units left English 9 to 10 (pooled over the zh outputs), paragraph gaps tighter than the lines beside them 0.181 to 0.182 (the unit's page has one gap fewer to count); page 18 alone moves worse (text units drawn 6 to 5), no other page and no other output",
+  "why": "the maker locates no row for unit 31 (its marks stand on page 18) and v0 drew it before; the route deletes v0, so a unit without TeX positions stays the original's"
+}
