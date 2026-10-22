@@ -59,6 +59,12 @@ describe('B2: only the paper\'s id and version leave the machine', () => {
     expect(() => basePath(API, { id: '../x', version: 1 }, sha)).toThrow(TypeError)
   })
 
+  it('the catalog is asked by the engine\'s own CTAG, the contract of BUNDLE 8: no request names the CTAG of a bundle of 7', () => {
+    expect(CTAG5).toMatch(/^b8-j/)
+    expect(layerPath(API, PAPER)).toBe(`${API}/api/v1/layer/${PAPER.id}v${PAPER.version}/${CTAG5}`)
+    for (const path of [layerPath(API, PAPER), `${layerPath(API, PAPER)}/prepare`]) expect(path).not.toMatch(/\/b7-j/)
+  })
+
   it('a paper version of either style as one segment; anything else no request', () => {
     expect(paperSegment({ id: 'hep-th/9711200', version: 2 })).toBe('hep-th_9711200v2')
     expect(paperSegment({ id: 'math.AG/0601001', version: 1 })).toBe('math.AG_0601001v1')

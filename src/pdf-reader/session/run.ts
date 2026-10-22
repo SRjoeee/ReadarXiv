@@ -136,13 +136,20 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   /** the rows of the visit, latest per unit; the attempt's abort; how far the translation is */
   const rows = new Map<number, Row>()
   let attempt: AbortController | null = null, total = 0, lost = 0, looks = 0, prepares = 0, ours = false
+  /** the arXiv PDF the left shows, once known: the tab\'s own proven to be the PDF a head\'s check ran over, or our copy of it shown in
+   *  its place. Every head\'s `orig` is compared with it (a retry may bring a head over another), which `begin()` does not reset: the
+   *  left stays through a retry. null: not known yet (the tab\'s bytes not all in) */
+  let leftShows: { bytes: number; sha256: string } | null = null
+  /** the head cannot draw (layerDraws), decided at the head: the look stops and nothing is said after the lasting word that would make
+   *  the host restore availability (`layer` is `coming`, `prepared` clears the wait); `begin()` resets it for a retry */
+  let terminal = false
   /** how long the prepare has been polled for, the tab shown (its deadline's); until when a limit's wait runs (a retry waits
    *  it out) */
   let preparedFor = 0, refusedUntil = 0
   /** where the run is: its service and its look at the layer (`state`), and its translation of the layer's units (`rowsState`) */
   let state: 'engine' | 'looking' | 'open' | 'unavailable' | 'failed' = 'engine'
   let rowsState: 'idle' | 'translating' | 'translated' | 'failed' = 'idle'
-  const emit = (e: RunEvent) => { if (!disposed) host.emit(e) }
+  const emit = (e: RunEvent) => { if (!disposed && !(terminal && (e.type === 'layer' || e.type === 'preparing' || e.type === 'prepared'))) host.emit(e) }
   const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
     if (signal.aborted) return reject(Object.assign(new Error('the run is let go'), { name: 'AbortError' }))
     const t = setTimeout(resolve, ms)
@@ -204,6 +211,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     const shown = await view.showOriginal(o => host.openPdf(bytes.slice(), o))
     if (shown !== 'opened' || disposed) return false
     ours = true
+    leftShows = orig
     emit({ type: 'original', ours: true })
     return true
   }
@@ -220,8 +228,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
    * checked on; the head names that check (`check`), and `orig`, the arXiv PDF it ran over. The run takes the check for what it
    * says, so the layer is drawn over our base page read by ranges at its digest's address, every answer held to its length and
    * the first one's tag, while the left stays the tab's own PDF, whose pages and boxes are the places the layer is laid in; and
-   * it proves in the background that the tab's PDF is `orig` (proveTab). A check that does not say pages and boxes alike, a head
-   * with no `orig`, a digest or a length no address is made of, or no PDF.js to read a base by ranges: no layer, the original
+   * it proves in the background that the tab's PDF is `orig` (proveTab), or, where the left is known to show another PDF (our copy
+   * of an earlier head's orig, or the tab proven to be it: a retry may bring a head over another), shows the newly named original
+   * first. A check that does not say pages and boxes alike, a head with no `orig`, a digest or a length no address is made of, or no PDF.js to read a base by ranges: no layer, the original
    * staying
    */
   async function bindOurs(base: { bytes: number; sha256: string; check?: unknown }): Promise<boolean> {
@@ -237,9 +246,15 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     } catch {
       return false
     }
+    // what the left shows against what this head\'s check ran over: the same, nothing to prove or fetch; known to be another (a retry
+    // brought a head over another PDF than the one our copy or the proven tab was), the newly named original is shown BEFORE the
+    // layer is used, never this layer over the old PDF (none to be had: no layer); not known yet, proved in the background
+    if (leftShows && leftShows.bytes === orig.bytes && leftShows.sha256 === orig.sha256) {
+      // (the left is the PDF the check ran over)
+    } else if (leftShows) {
+      if (!(await showOurs(orig))) return false
+    } else void proveTab(orig, gen)
     basis = { bound, url }
-    // (a left that is our copy already, or a run begun again meanwhile, has nothing to prove)
-    if (!ours) void proveTab(orig, gen)
     return true
   }
   /** the tab's PDF hashed once its bytes are all in, against the arXiv PDF the head's check ran over: the same, the layer stays;
@@ -248,7 +263,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   async function proveTab(orig: { bytes: number; sha256: string }, my: number) {
     const proven = await proof(orig)
     // (a run begun again meanwhile checks its own base)
-    if (disposed || ours || my !== gen || proven === 'same') return
+    if (disposed || my !== gen) return
+    if (proven === 'same') { leftShows = orig; return }
     console.warn("[reader] the PDF in this tab is not the one the layer's base was checked against: our copy of that PDF is shown in its place")
     const s = side
     if (await showOurs(orig)) {
@@ -297,7 +313,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   const tellCatalog = (c: ReadCatalog) => side?.tell({ units: c.units, head: c.head, parts: c.parts, end: c.end })
   async function look(my: number, signal: AbortSignal) {
     state = 'looking'
-    const gone = () => disposed || my !== gen || !side
+    const gone = () => disposed || my !== gen || !side || terminal
     for (;;) {
       if (gone()) return
       looks++
@@ -386,6 +402,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     // unit goes to the user's service: nothing is translated for a paper whose pages the layer will not draw, and the lasting
     // word is told (the controller keeps it over the side's own refusal at bind)
     if (!layerDraws((index as { head?: { base?: unknown } }).head?.base)) {
+      terminal = true
       attempt?.abort()
       return unavailable('cannot-prepare')
     }
@@ -478,6 +495,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     // the original each beginning's layer is bound to, heard anew (a retry may find the layer made again over another)
     tag = null
     basis = null
+    terminal = false
     let opened: RunEngine
     try {
       opened = await host.engine()

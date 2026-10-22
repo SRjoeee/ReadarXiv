@@ -59,14 +59,14 @@ function headOf(over: { base?: object; orig?: { bytes: number; sha256: string } 
   const orig = over.orig === undefined ? { bytes: 4, sha256: hex(new Uint8Array([1, 2, 3, 4])) } : over.orig
   return { ...m.index.head, base, orig }
 }
-function fakeSide(head: ReturnType<typeof headOf> | null = null) {
+function fakeSide(first: ReturnType<typeof headOf> | null = null) {
   const told: unknown[] = [], taken: Row[] = []
-  let ended = 0, agains = 0, options: Record<string, unknown> | null = null
+  let ended = 0, agains = 0, options: Record<string, unknown> | null = null, head = first
   const side = {
     tell: vi.fn((r: unknown) => { told.push(r) }), index: vi.fn(async () => ({ ...m.index, head: head ?? headOf() })), take: vi.fn((rows: Row[]) => { taken.push(...rows) }),
     end: vi.fn(() => { ended++ }), again: vi.fn(() => { agains++ }), rowsFor: vi.fn(() => [] as number[]), coverage: vi.fn(), probe: vi.fn(() => ({})), dispose: vi.fn(),
   }
-  return { side, told, taken, ended: () => ended, agains: () => agains, options: () => options as never as { fetchObject(r: unknown, s: AbortSignal): Promise<Uint8Array>; bind(b: { bytes: number; sha256: string; xref: number }): Promise<boolean>; composed(t: Uint8Array | null, o: object): { promise: Promise<unknown> } }, make: vi.fn((_v: unknown, o: Record<string, unknown>) => { options = o; return side }) }
+  return { side, told, taken, setHead: (next: ReturnType<typeof headOf>) => { head = next }, ended: () => ended, agains: () => agains, options: () => options as never as { fetchObject(r: unknown, s: AbortSignal): Promise<Uint8Array>; bind(b: { bytes: number; sha256: string; xref: number }): Promise<boolean>; composed(t: Uint8Array | null, o: object): { promise: Promise<unknown> } }, make: vi.fn((_v: unknown, o: Record<string, unknown>) => { options = o; return side }) }
 }
 const echo = () => ({ lang: 'zh', format: 'markers', translate: vi.fn(async (texts: string[]) => texts.map(t => ({ text: t, by: 'test' }))), close: vi.fn() })
 function view(original = new Uint8Array([1, 2, 3, 4]), loaded: Promise<void> = Promise.resolve()) {
@@ -104,7 +104,7 @@ function run(o: { head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]
     readingPage: () => 1, mayPrepare: o.may ?? (() => true), ...(o.unsent ? { prepareUnsent: o.unsent } : {}), emit: e => events.push(e), faces: async () => null, createSide: side.make as never,
   }
   const r = startRun(v as never, PAPER, host)
-  return { r, s, side, v, events, engine: engine as ReturnType<typeof echo>, opened, docs: lib.docs, host }
+  return { r, s, side, v, events, engine: engine as ReturnType<typeof echo>, opened, docs: lib.docs, host, opts: o }
 }
 /** engines handed out in turn, each recorded; `hold`: the next one's promise waits for its release */
 function engines() {
@@ -423,6 +423,79 @@ describe('the base (design §3.2, §3.5): only a layer over our own compile draw
       expect(a.v.showOriginal, what).not.toHaveBeenCalled()
       expect(a.v.originalData, what).not.toHaveBeenCalled()
     }
+  })
+
+  it('a retry whose head names another orig than the one the left shows: the left is replaced by the newly named original BEFORE the layer is used (never the new layer over the old PDF); one that names the same orig fetches and replaces nothing', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const arxivB = new Uint8Array(arxiv.length + 7).fill(3)
+    const origB = { bytes: arxivB.length, sha256: hex(arxivB) }
+    // the tab\'s PDF is other than head A\'s orig (our copy of A replaces it), or is A\'s own (proven the same)
+    for (const [what, tab] of [['the tab differed from A: our copy of A is on the left', new Uint8Array(arxiv.length).fill(7)], ['the tab was A\'s own, proven', arxiv]] as const) {
+      const a = go({ tab })
+      await settle()
+      expect(await bindOf(a)(head()), what).toBe(true)
+      await settle(60)
+      const shownA = a.v.showOriginal.mock.calls.length
+      expect(shownA, what).toBe(tab === arxiv ? 0 : 1)
+      const fetches = () => a.s.calls.filter(c => c.url === `${API}/api/v1/original/${SEG}`).length
+      // a retry that gets the same head again: nothing to prove, nothing fetched, the left as it is
+      a.side.side.probe.mockReturnValue({ state: 'refused' } as never)
+      a.r.retry()
+      await settle(60)
+      const before = fetches()
+      expect(await bindOf(a)(head()), what).toBe(true)
+      await settle(60)
+      expect([a.v.showOriginal.mock.calls.length, fetches()], what).toEqual([shownA, before])
+      // a retry that gets a head naming B: the left is B\'s copy by the time bind answers
+      a.side.side.probe.mockReturnValue({ state: 'refused' } as never)
+      a.r.retry()
+      await settle(60)
+      a.opts.original = arxivB
+      a.side.setHead(headOf({ orig: origB }))
+      expect(await bindOf(a)(head()), what).toBe(true)
+      expect(a.v.showOriginal.mock.calls.length, what).toBe(shownA + 1)
+      expect([...(a.opened.at(-1) ?? [])], what).toEqual([...arxivB])
+      expect(fetches(), what).toBe(before + 1)
+      expect(a.events.at(-1), what).toEqual({ type: 'original', ours: true })
+      // and B again: nothing more
+      a.side.side.probe.mockReturnValue({ state: 'refused' } as never)
+      a.r.retry()
+      await settle(60)
+      expect(await bindOf(a)(head()), what).toBe(true)
+      await settle(60)
+      expect([a.v.showOriginal.mock.calls.length, fetches()], what).toEqual([shownA + 1, before + 1])
+    }
+  })
+
+  it('a retry whose head names an orig that cannot be had (our copy of it: a 404): no layer, never the new layer over the old PDF', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const arxivB = new Uint8Array(arxiv.length + 7).fill(3)
+    const a = go({ tab: new Uint8Array(arxiv.length).fill(7) })
+    await settle()
+    expect(await bindOf(a)(head())).toBe(true)
+    await settle(60)
+    a.side.side.probe.mockReturnValue({ state: 'refused' } as never)
+    a.r.retry()
+    await settle(60)
+    a.opts.original = undefined
+    a.side.setHead(headOf({ orig: { bytes: arxivB.length, sha256: hex(arxivB) } }))
+    expect(await bindOf(a)(head())).toBe(false)
+    expect(a.v.showOriginal).toHaveBeenCalledTimes(1)
+  })
+
+  it('a head that cannot draw ends the look: a prepare under way is asked no more, and nothing said after the lasting word comes back as availability', async () => {
+    vi.useFakeTimers()
+    const arxivBase = { bytes: arxiv.length, sha256: hex(arxiv), xref: 250, source: 'arxiv', why: 'carry' }
+    const preparing = () => json(202, { position: 1, stage: 'laying-out', progress: 0.5, retryAfterMs: 1000, layer: { units: [], head: null, parts: [] } })
+    const a = run({ looks: [preparing, preparing, preparing, () => new Response(catalog)], head: { base: arxivBase, orig: null } })
+    await vi.advanceTimersByTimeAsync(10_000)
+    const at = a.events.findIndex(e => e.type === 'unavailable')
+    expect(a.events[at]).toEqual({ type: 'unavailable', why: 'cannot-prepare', retryAt: null })
+    // the look stopped at the terminal decision: not asked again, whatever the server\'s waits say
+    expect(a.s.layerLooks()).toBeLessThanOrEqual(1)
+    // and nothing the session says after it would make the host restore availability (`layer` is `coming`, `prepared` clears the wait)
+    expect(a.events.slice(at + 1).filter(e => e.type === 'layer' || e.type === 'preparing' || e.type === 'prepared')).toEqual([])
+    expect(a.r.probe()).toMatchObject({ state: 'unavailable' })
   })
 
   it('a head that draws nothing is decided at the head, before bind and before a unit goes to the user\'s service: nothing translated, the paper\'s lasting word told (`cannot-prepare`), once', async () => {
