@@ -2013,8 +2013,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * every task before it in the whole order on them has run; a page is let go (its ink and facts dropped) once its tasks have
    * run, its names are taken in and its plan is made (`plans`). A unit's rows are the file's (`layout()`, a unit's as the whole
    * file's parse holds them) once they are made. `finish()` after the last page of each. `released()` the pages from 1 let go;
-   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed). With `marked`, the carry's
-   * refusal is known at the marked original's end, or for parts once any line is carried (`carryKnown()`, `refused()`); a piece
+   * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed). The line check's refusal is known
+   * before the first page, the host's line check given (`carryRefusal()`: the file's, never a part's); with `marked`, a piece
    * found after its unit's own ink was taken, or a point read twice after its unit's placeholders were matched, is too late
    * (`stats.late`, rows and vetoes: the whole run's file but there)
    */

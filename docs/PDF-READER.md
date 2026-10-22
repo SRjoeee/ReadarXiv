@@ -1731,12 +1731,22 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   its lines in place). The marked original's probe goes past those spaces (`latex-front.mjs` `patch`, `pastBegin`), as it
   went past a line environment's line end before; the translation's compile is left as it was.
 - **No mark printed as text** (the guard's `text` evidence): a host's `textOf` reads each marked compile's text; a page that
-  holds `\axt` or `axt@` (`markTextOf`) leaves the units its marks name unmarked and the paper is compiled again within
-  GUARD_EXTRA, as a mark out of place in an aux is (2610.19860: `\axt@pma{p176.4a}` inside a `\url`).
+  holds a mark of ours as TeX prints one (`markTextOf`: a mark macro's name and its braced name, `\axt@pma{p176.4a}`, in a
+  monospace face or OT1 roman's quote and dashes; an address with `axt@` in it is none) leaves the units its marks name
+  unmarked and the paper is compiled again within GUARD_EXTRA, as a mark out of place in an aux is (2610.19860:
+  `\axt@pma{p176.4a}` inside a `\url`). The page pass reads our page's own where the host's text gives none, and takes a hit
+  arXiv's same page also holds for the paper's own text (`markTextBeyond`).
+- **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
+  picture, or any PostScript of the page's, dvipdfmx cannot interpret is missing from our page alone, and the marks and boxes
+  would pass. The final pass is refused (`final`) where its log, which holds the driver's terminal after TeX's (every host's
+  compile joins its steps), says dvipdfmx failed a special or an image (`base.mjs` `driverLostInk`), but hyperref's own
+  (`ps:SDict begin …`: its links, anchors, outlines and info, no ink; 2608.22687 has 2,784 of them).
 - **The page and line check** (`pipeline/page-pass.mjs` `checkOurBase`, which the page pass runs before its head and the lab's
   makers run as production does), the first that fails the paper's fallback: our page count arXiv's (`boxes`); no mark of ours
   printed as text on our page (`marks`); the final pass the draft's page (`final`); every page box and rotation arXiv's, to
-  `BOX_TOL` 0.01 pt (`boxes`); the TeX Live year known (`final`); and at least `CARRY_MIN` of our lines **in place** on arXiv's
+  `BOX_TOL` 0.01 pt (`boxes`: PDF.js's `view`, the CropBox clipped to the MediaBox, not the MediaBox itself: the view is the
+  rectangle the reader draws and every coordinate of the layer, the left's and the layout's, is read in, and nothing outside
+  it is shown, so two pages of equal views are one page to the identity map); the TeX Live year known (`final`); and at least `CARRY_MIN` of our lines **in place** on arXiv's
   PDF (`carry`: `carry.mjs` `lineCheckOf` over the two texts, a line found on its own page within `LINE_PLACE`, 0.5 pt, of any
   kind; a check that carries no position), the paper's share here and each part's in its verdict. A line found elsewhere is
   another TeX Live re-breaking the paper, and our page is to be arXiv's: so a paper is compiled on the tree of arXiv's build
@@ -1765,7 +1775,7 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   | 2608.16117 | pdflatex | TL2023 (declared) | TL2023 | 0.988 | 1.000 | ours |
   | 2609.26457 | pdflatex | TL2023 (declared) | TL2025 / TL2023 | 0.886 / 0.991 | 0.996 / 1.000 | `carry` on 2025, ours on 2023 |
   | 2608.18760 | xelatex | TL2025 | TL2025 | 0.996 | 1.000 | ours |
-  | 2608.19431 | xelatex | TL2025 | TL2025 | 0.694 | 0.996 | `carry` |
+  | 2608.19431 | xelatex | TL2025 | TL2025 | 1.000 (0.694 before `pastBegin`) | 1.000 | ours (`carry` before `pastBegin`) |
   | 2608.22687 | latex (dvipdfmx; arXiv's dvips) | TL2025 | TL2025 | 0.976 | 0.976 | ours |
   | a paper of our own | lualatex | TL2025 | TL2025 | 1.000 | 1.000 | ours |
 
