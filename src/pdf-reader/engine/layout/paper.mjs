@@ -173,8 +173,11 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   let verdict = null
   const owned = r => (verdict ? { ...r, own: verdict } : r)
   // (a throw of the guard's own after the compile: the last remedy that passed the checks stands, else the marked original as
-  // before the guard, one that ran through with a PDF, else the compile's refusal)
+  // before the guard, one that ran through with a PDF — with the base page asked, not one of more pages than arXiv's, as the
+  // guard's own rule (`stands`); a remedy that passed never is one —, else the compile's refusal)
   let standing = null
+  /** arXiv's page count, once the checks asked the host for it (null: not given, or not asked yet) */
+  let N = null
   /** the compile the marked original is (its evidence: the answer `c` and its files), once one stands: the final pass's */
   let accepted = null
   const made = await (async () => {
@@ -182,7 +185,12 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       if (isMemoryError(e)) throw e
       g.judged = whyText(`the layout guard failed: ${e?.message ?? e}`)
       if (standing) { g.unmarked = standing.unmarked; g.names = standing.named; accepted = standing; return guarded({ pdf: standing.c.pdf, log: lastTexLog(standing.c.log), options, ms }) }
-      if (ranThrough(marked) && marked.pdf?.length) { accepted = { c: marked, files }; return guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms }) }
+      if (ranThrough(marked) && marked.pdf?.length) {
+        const M = pagesOfLog(marked.log)
+        if (wantFinal && N !== null && M !== null && M > N) return guarded(owned({ refused: 'compile', why: whyText(`the marked original has ${M} pages, arXiv's PDF ${N}; ${g.judged}`), ms }))
+        accepted = { c: marked, files }
+        return guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms })
+      }
       return guarded(owned({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms }))
     }
   })()
@@ -238,8 +246,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
 
   /** the checks after the compile, and the remedies */
   async function checked() {
-    // arXiv's page count, asked once where the host gives it
-    let N = null
+    // arXiv's page count, asked once where the host gives it (N, the result's too: a throw after it is judged by it)
     if (pages !== null && pages !== undefined) {
       // (any failure of the host's but a failed allocation leaves the page check out: N null)
       try { const n = typeof pages === 'function' ? await pages() : pages; if (Number.isInteger(n) && n > 0) N = n } catch (e) { if (isMemoryError(e)) throw e }
