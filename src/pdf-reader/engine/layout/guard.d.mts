@@ -19,6 +19,8 @@ export declare const errorCount: (log: string | null | undefined) => number
 export declare const pagesOfLog: (log: string | null | undefined) => number | null
 /** the TeX Live year of the engine's banner, else null */
 export declare const texLiveOf: (log: string | null | undefined) => string | null
+/** the TeX Live year of the build arXiv's PDF says (its `/PTEX.Fullbanner`, in the first or last 64 KiB), else null */
+export declare const texLiveOfPdf: (bytes: Uint8Array | null | undefined) => string | null
 /** whether TeX ran: its banner in the log */
 export declare const texRan: (log: string | null | undefined) => boolean
 /** the host's limit a compile met, else null */
