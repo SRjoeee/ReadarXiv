@@ -107,11 +107,12 @@ describe('each writer then its reader is the identity', () => {
 
   it('the head: the paper, the original (no url: amendment M13), the versions, the chunk by digest', () => {
     const h = M.readHead
-    expect(h).toMatchObject({ kind: 'head', paper: { ...PAPER, pages: N }, base: BASE, lineskip: [1, 0], sha256: M.head.sha256 })
+    // (BUNDLE 8: a base given with no `source` is arXiv's, written so, read as it is; no `orig` beside it)
+    expect(h).toMatchObject({ kind: 'head', bundle: BUNDLE5, paper: { ...PAPER, pages: N }, base: { source: 'arxiv', ...BASE }, orig: null, lineskip: [1, 0], sha256: M.head.sha256 })
     expect(h.versions).toEqual({ pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image: IMAGE })
     expect(h.units).toEqual([{ kind: 'units', from: 0, to: 7, sha256: M.chunks[0]!.sha256, bytes: M.chunks[0]!.bytes.length }])
     expect(Object.keys(parsed(M.head))).toEqual(['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip'])
-    expect(parsed(M.head).base).toEqual(BASE)
+    expect(parsed(M.head).base).toEqual({ source: 'arxiv', ...BASE })
   })
 
   it('the index: every unit, its kind, none dropped', () => {
@@ -166,7 +167,9 @@ describe('each writer then its reader is the identity', () => {
     const c = await readCatalog(done.bytes, { key: done.key, paper: PAPER })
     expect(c).toMatchObject({ kind: 'catalog', sha256: done.sha256, paper: { ...PAPER, pages: N }, head: { kind: 'head', sha256: M.head.sha256 }, end: { through: 4 } })
     expect(c.parts).toEqual(parts.map(r => ({ kind: 'part', ...r })))
-    expect(Object.keys(parsed(done))).toEqual(['bundle', 'kind', 'paper', 'versions', 'head', 'units', 'parts', 'end'])
+    expect(Object.keys(parsed(done))).toEqual(['bundle', 'kind', 'paper', 'versions', 'head', 'base', 'units', 'parts', 'end'])
+    // (the base the head names: arXiv's PDF, by its digest and bytes)
+    expect(c.base).toEqual({ source: 'arxiv', sha256: BASE.sha256, bytes: BASE.bytes })
     expect(indexOf(M.readHead, M.readChunks, { catalog: c })).toEqual(M.index)
     for (const why of END_WHYS) {
       const cut = await writeCatalog({ head: M.readHead, units, parts: parts.slice(0, 2), end: { through: 3, refused: why } })
@@ -253,7 +256,7 @@ describe('mergeParts is the whole', () => {
 type Reader = (bytes: Uint8Array, ref: ReturnType<typeof forged>['ref'] | null, caps?: { bytes?: number; values?: number }) => Promise<unknown>
 const READERS: { kind: 'units' | 'head' | 'part' | 'left' | 'catalog'; cap: number; values: number; depth: number; read: Reader; sample: () => { bytes: Uint8Array } }[] = [
   { kind: 'units', cap: UNITS_CAP, values: UNITS_VALUES, depth: 5, sample: () => M.chunks[0]!, read: (b, ref, caps) => readUnitsChunk(b, { ref: ref!, before: null, caps }) },
-  { kind: 'head', cap: HEAD_CAP, values: HEAD_VALUES, depth: 3, sample: () => M.head, read: (b, ref, caps) => readHead(b, { ref: ref!, caps }) },
+  { kind: 'head', cap: HEAD_CAP, values: HEAD_VALUES, depth: 4, sample: () => M.head, read: (b, ref, caps) => readHead(b, { ref: ref!, caps }) },
   { kind: 'part', cap: PART_CAP, values: PART_VALUES, depth: 7, sample: () => M.parts[0]!, read: (b, ref, caps) => readPart(b, { ref: ref!, index: M.index, chain: null, caps }) },
   { kind: 'left', cap: LEFT_CAP, values: LEFT_VALUES, depth: 5, sample: () => M.lefts[1]!, read: (b, ref, caps) => readLeftPart(b, { ref: ref as never, streamOf: id => STREAM.get(id), caps }) },
   { kind: 'catalog', cap: CATALOG_CAP, values: CATALOG_VALUES, depth: 3, sample: () => CAT, read: (b, _ref, caps) => readCatalog(b, { caps }) },
@@ -407,8 +410,9 @@ describe('a reader\'s envelope', () => {
   it('refuses a unit chunk\'s old envelope (`bundle` in place of `format`): the chunk\'s format is its own', async () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
-    // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills)
-    expect(BUNDLE5).toBe('7')
+    // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills; 8: the
+    // head's base says whose PDF the layer is drawn over)
+    expect(BUNDLE5).toBe('8')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1226,7 +1230,7 @@ describe('a part with no layout says why (`layout: { refused, why }`, LAYOUT_REF
   })
 
   it('refuses a word not LAYOUT_REFUSED\'s, a why past WHY_MAX or not a string, another key, and a record beside file-only units or an add-on', async () => {
-    expect(LAYOUT_REFUSED).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks'])
+    expect(LAYOUT_REFUSED).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes'])
     const refused = async (edit: (p: never) => void, path: string) => {
       const e = await refusal(partWith(0, edit as never))
       expect(e?.kind, path).toBe('part')
@@ -1712,7 +1716,7 @@ describe('the catalog', () => {
     const f = forged('head', h)
     const other = await readHead(f.bytes, { ref: f.ref })
     const w = await writeCatalog({ head: other, units: units(), parts: parts(), end: { through: 4 } })
-    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b7-j${PDFJS}-p12-l7-r99`))
+    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b${BUNDLE5}-j${PDFJS}-p12-l7-r99`))
     expect(w.key).not.toBe(catalogKey(PAPER.id, PAPER.version, VTAG5))
     const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
     expect(c.versions).toMatchObject({ pipeline: '12', layout: '7', removal: '99' })
@@ -1861,7 +1865,7 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b7-j${PDFJS}`)
+    expect(CTAG5).toBe(`b8-j${PDFJS}`)
     expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const key = keyOf('2608.04322', 3, CTAG5, sha)
     expect(key).toBe(`layer/2608.04322v3/${CTAG5}/${sha}.json`)
