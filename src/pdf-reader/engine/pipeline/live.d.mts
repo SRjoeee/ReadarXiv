@@ -64,7 +64,7 @@ export interface Compiled { ok: boolean; pdf?: Uint8Array | null; aux?: string |
 export interface CompileRequest {
   main: string; engine: string; rerun: boolean; bibtex: boolean | null; overrides: Map<string, Uint8Array>; draft?: boolean; files?: boolean
   /** the compile's date, seconds since the epoch: the host sets SOURCE_DATE_EPOCH to it with FORCE_SOURCE_DATE=1, so that
-   *  \today and the PDF's dates are that day's (arXiv's PDF's /CreationDate: layout/base.mjs creationEpochOf). Absent: the
+   *  \today and the PDF's dates are that day's (arXiv's PDF's day, its /CreationDate or else its XMP's: layout/base.mjs creationEpochOf). Absent: the
    *  host's clock, as before */
   sourceDate?: number
 }

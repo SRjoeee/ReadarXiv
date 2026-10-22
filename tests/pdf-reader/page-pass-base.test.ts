@@ -70,7 +70,7 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
       ['marks', shown, { ours: oursOf(shown) }, /mark of ours stands as text on page 2/],
       ['final', w, { ours: oursOf(w, { check: null }) }, /not checked against the draft/],
       ['boxes', worldOf(() => false, { oursView: [0, 0, 595.28, 841.89] }), {}, /page 1's box/],
-      ['carry', worldOf((p, j) => j < 3 || p === 2), {}, /^14 of the 30 lines .* found on arXiv's PDF, under 90 %$/],
+      ['carry', worldOf((p, j) => j < 3 || p === 2), {}, /^14 of the 30 lines .* in place on arXiv's PDF, under 90 %$/],
     ]
     for (const [code, world, o, why] of cases) {
       const got = await passOf(world, { orig: ORIG, ours: oursOf(world), ...o })
@@ -86,6 +86,19 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
     // (and the TeX Live year, which a base of ours names: none known is no base)
     const noTree = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf()), tree: null })
     expect(noTree.head.base).toMatchObject({ source: 'arxiv', why: 'final' })
+  })
+
+  it('a base of ours whose lines are all found but not in place (another TeX Live re-breaking the paper) falls back, `carry`', async () => {
+    // (every line of arXiv's pages 2 and 3 a line lower than ours: found, moved whole, 12 pt off; page 1 in place, 10 of 30)
+    const w = worldOf()
+    const lower = { ...w, pages: (w.pages as Page[]).map((p, i) => (i === 0 ? p : { runs: p.runs.map(r => ({ ...r, y: r.y - 12 })) })) }
+    const got = await passOf(lower, { orig: ORIG, ours: oursOf(lower) })
+    expect(got.head.base).toMatchObject({ source: 'arxiv', why: 'carry' })
+    expect(got.parts[0]?.noLayout?.why).toBe('10 of the 30 lines of its pages in place on arXiv\'s PDF, under 90 %')
+    expect(got.r).toMatchObject({ stats: { layout: { refused: 'carry', why: '10 of our 30 lines in place on arXiv\'s PDF (within 0.5 pt on their page), under 90 %' } } })
+    // (half a point off is still in place)
+    const near = { ...w, pages: (w.pages as Page[]).map(p => ({ runs: p.runs.map(r => ({ ...r, y: r.y - 0.4 })) })) }
+    expect((await passOf(near, { orig: ORIG, ours: oursOf(near) })).head.base).toMatchObject({ source: 'ours', check: { carried: 1 } })
   })
 
   it('the guard\'s refusal is the paper\'s fallback, its why its own', async () => {

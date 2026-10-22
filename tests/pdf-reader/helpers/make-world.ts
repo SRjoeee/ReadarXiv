@@ -3,7 +3,7 @@ import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { BOXES_PAGE, OPS_CAP, STACK_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
-import { carrierOf } from '@/pdf-reader/engine/layout/carry.mjs'
+import { lineCheckOf as checkOf } from '@/pdf-reader/engine/layout/carry.mjs'
 
 // The layout maker's fake world (layout-make.test.ts, page-pass.test.ts): fake PDF.js documents of arXiv's PDF (`pages`) and of
 // the base page (our compile's final pass: the marked original's pages, `marked`, or `base` where a test gives it pages of
@@ -132,8 +132,7 @@ export const basePagesOf = (w: World) => w.base ?? w.marked ?? w.pages
 export const baseOf = (w: World, asked: number[] = []) => arxivOf(basePagesOf(w), asked)
 /** the line check of a world: the base page's lines found on arXiv's (`pages`), as the page pass makes it */
 export async function lineCheckOf(w: World) {
-  const c = carrierOf((await readArxivText(baseOf(w))).tokens, (await readArxivText(arxivOf(w.pages))).tokens)
-  return { lines: c.lines, pageLines: c.pageLines }
+  return checkOf((await readArxivText(baseOf(w))).tokens, (await readArxivText(arxivOf(w.pages))).tokens)
 }
 export function markedOf(pages: Page[], marks: Mark[]) {
   return {

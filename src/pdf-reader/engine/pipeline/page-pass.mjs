@@ -21,7 +21,7 @@ import { needBound } from '../layer-proto/need.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck } from '../layout/base.mjs'
-import { carrierOf } from '../layout/carry.mjs'
+import { LINE_PLACE, lineCheckOf } from '../layout/carry.mjs'
 import { chainedAddon } from '../layout/chain.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
 import { CARRY_MIN, makerOf, rulesOf } from '../layout/make.mjs'
@@ -53,7 +53,7 @@ export function layoutRecordOf(r) {
     case 'compile': case 'texlive': case 'engine': case 'marks': case 'final': case 'boxes': return { refused: r.refused, why: given || PLAIN_WHY[r.refused] }
     case 'carry': {
       const [c, t] = Array.isArray(r.lines) ? r.lines : [r.stats?.lines?.carried, r.stats?.lines?.total]
-      return { refused: 'carry', why: whyText(Number.isInteger(c) && Number.isInteger(t) ? `${c} of the ${t} lines of its marked pages found on arXiv's PDF, under ${Math.round(CARRY_MIN * 100)} %` : `the marked original's lines found on arXiv's PDF are under ${Math.round(CARRY_MIN * 100)} %`) }
+      return { refused: 'carry', why: whyText(Number.isInteger(c) && Number.isInteger(t) ? `${c} of the ${t} lines of its pages in place on arXiv's PDF, under ${Math.round(CARRY_MIN * 100)} %` : `our lines in place on arXiv's PDF are under ${Math.round(CARRY_MIN * 100)} %`) }
     }
     case 'probe': return { refused: 'marks', why: said('the mark probe gave no log') }
     case 'failed': return { refused: 'marks', why: said('the layout maker failed') }
@@ -89,7 +89,8 @@ function fitted(text) {
  * arXiv's PDF and its text, `tree` the TeX Live year our compile was made on. In turn: the base page's text read (ours.text, else
  * readArxivText with `draw`), its page count arXiv's ('boxes'), no mark of ours printed as text on it ('marks'), the final pass
  * the draft's page ('final'), every page box arXiv's ('boxes': boxesCheck), the year known ('final'), and the share of its lines
- * found on arXiv's PDF at least CARRY_MIN ('carry': carry.mjs carrierOf of the two texts' tokens). { text, lineCheck: { lines,
+ * in place on arXiv's PDF at least CARRY_MIN ('carry': carry.mjs lineCheckOf of the two texts' tokens, a line in place found on
+ * its own page within LINE_PLACE: our page is to be arXiv's, not re-broken by another TeX Live). { text, lineCheck: { lines,
  * pageLines }, head } (the head's base of ours, BUNDLE 8), or the first failing reason { refused, why, lines? }. What the page pass
  * checks before its head, and the lab's makers with it (the gate pack's base pages). Never throws but a failed allocation
  */
@@ -115,11 +116,12 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
   }
   if (!bc.equal) return no('boxes', bc.why)
   if (typeof tree !== 'string' || !/^\d{4}$/.test(tree)) return no('final', 'the TeX Live year our compile was made on is not known')
-  // the line check: our base page's lines found on arXiv's PDF (carry.mjs carrierOf over the two texts' tokens), the paper's share
+  // the line check: our base page's lines in place on arXiv's PDF (carry.mjs lineCheckOf over the two texts' tokens: found on their
+  // own page within LINE_PLACE), the paper's share
   // here and each part's in its verdict; no position is carried
-  const c = carrierOf(baseText.tokens, text.tokens), L = c.lines, carried = L.same + L.moved + L.respaced + L.fuzzy
-  if (!(L.total > 0 && carried >= CARRY_MIN * L.total)) return no('carry', `${carried} of our ${L.total} lines found on arXiv's PDF, under ${Math.round(CARRY_MIN * 100)} %`, { lines: [carried, L.total] })
-  return { text: baseText, lineCheck: { lines: L, pageLines: c.pageLines }, head: { source: 'ours', bytes: ours.bytes, sha256: ours.sha256, xref: ours.xref, pages: N, tree, check: { pages: [N, N], boxes: 'equal', carried: carried / L.total } } }
+  const lineCheck = lineCheckOf(baseText.tokens, text.tokens), L = lineCheck.lines, carried = L.placed
+  if (!(L.total > 0 && carried >= CARRY_MIN * L.total)) return no('carry', `${carried} of our ${L.total} lines in place on arXiv's PDF (within ${LINE_PLACE} pt on their page), under ${Math.round(CARRY_MIN * 100)} %`, { lines: [carried, L.total] })
+  return { text: baseText, lineCheck, head: { source: 'ours', bytes: ours.bytes, sha256: ours.sha256, xref: ours.xref, pages: N, tree, check: { pages: [N, N], boxes: 'equal', carried: carried / L.total } } }
 }
 
 /**
@@ -180,9 +182,9 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
  * here or given), the left on arXiv's text, once ours passes the page-and-line check, each in turn, before the head: the guard
  * (a marked original refused or of other pages: its refusal), no mark printed as text on our pages ('marks': arxiv.mjs
  * `markText`), the final pass placing every mark where the draft does ('final': base.mjs finalCheck against `marked.doc`,
- * else `ours.check`, a host's check of it), every page box arXiv's ('boxes': boxesCheck), and the share of our lines found
- * on arXiv's PDF at least CARRY_MIN for the paper ('carry': carry.mjs carrierOf of our text's tokens over arXiv's, the line
- * check alone; and for each part, its pages' lines, the verdicts). The head's base is then ours ({ source: 'ours', …, check
+ * else `ours.check`, a host's check of it), every page box arXiv's ('boxes': boxesCheck), and the share of our lines in place
+ * on arXiv's PDF at least CARRY_MIN for the paper ('carry': carry.mjs lineCheckOf of our text's tokens over arXiv's, the line
+ * check alone; and for each part, its pages' lines in place, the verdicts): checkOurBase. The head's base is then ours ({ source: 'ours', …, check
  * }, `orig` arXiv's PDF) and the remover's tails continue it. A paper that fails, or that has no base of ours (`ours` null,
  * or { refused, why }: no final pass, 'final'), falls back: its head's base arXiv's PDF ({ source: 'arxiv', …, why }) and every
  * part with no layout, its record the same why. The layout is never made over arXiv's PDF: a host that gives no base of ours

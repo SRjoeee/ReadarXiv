@@ -10,8 +10,10 @@
 //    other);
 //  - else the one longer line within WINDOW on its page holding all of its words together, once: arXiv's text layer runs two
 //    things on one baseline into one line (two panel titles side by side, a heading and a figure's text beside it).
-// The share of our lines found is the page-and-line check of our compile as the base page (design note §3.3: CARRY_MIN, per
-// paper and per part); no position is carried, our base page being the page the marks stand on. Pure, and over tokens alone
+// The page-and-line check of our compile as the base page (design note §3.3: CARRY_MIN, per paper and per part) is the share
+// of our lines **in place** (lineCheckOf): found on their own page within LINE_PLACE, of any kind. A line found elsewhere is
+// another TeX Live re-breaking the paper (2307.16209 on TeX Live 2025 against arXiv's 2023: 48 % of its lines moved, 80 % in
+// place), and our page is to be arXiv's. No position is carried, our base page being the page the marks stand on. Pure, and over tokens alone
 // (anchors.mjs DocTokens: tokenizeDocument's of each PDF's text layer, or a marks file's for ours).
 // Imports nothing.
 
@@ -26,6 +28,12 @@ const SIG_BASE = 0.15, SIG_FLOOR = 0.85
 const WHOLE = 0.1
 /** a line at the same place: its offset under this */
 const SAME = 0.01
+/** a line in place, for the page-and-line check: found on its own page with its first word within this of its partner's, in
+ *  x and in y, PDF units, whatever its kind. Measured (2026-10-22, our base pages against arXiv's PDFs): dvipdfmx's DVI against
+ *  arXiv's dvips and ps2pdf sets a paper's words up to 0.42 pt apart (2608.22687: 97.6 % in place at 0.5 pt, 70.7 % counting
+ *  whole lines alone), the same TeX Live 99.9 to 100 %, an older paper on a newer one 95.6 to 97.9 % (1810.04805, 1706.03762),
+ *  and a paper re-broken by another year 80.2 % (2307.16209) and 88.6 % (2609.26457) */
+export const LINE_PLACE = 0.5
 /** the longest common run of words holds this share of the longer line's words, and of at least two */
 const FUZZY = 0.8, FUZZY_PAIRS = 2
 /** a fuzzy partner on the line's own page lies within this of its baseline */
@@ -117,7 +125,8 @@ function commonRun(a, b, A, B) {
  * page, whose longest common run of words holds FUZZY of the longer line's and at least FUZZY_PAIRS. The work a marked
  * page costs is bounded (PAGE_WORK): a page past it finds none of its lines and is listed in `over`. `lines`: every marked
  * line (`total`), and those found, each counted once: at the same place (`same`), moved whole (`moved`), the same words at
- * other spaces (`respaced`), matched by most of their words (`fuzzy`); `pageLines`: each marked page's [found, total]
+ * other spaces (`respaced`), matched by most of their words (`fuzzy`); `pageLines`: each marked page's [found, total]; `placed`
+ * and `pagePlaced` ([placed, total]): the lines found on their own page within LINE_PLACE, the page-and-line check's (lineCheckOf)
  */
 export function carrierOf(marked, arxiv) {
   const c = carrier(marked, arxiv)
@@ -143,8 +152,9 @@ export function carrier(marked, arxiv) {
   const X = (ts, l, j) => ts[l.tokens[j]].x
   const over = [], added = new Set()
   const lines = { total: 0, same: 0, moved: 0, respaced: 0, fuzzy: 0 }
-  // (each marked page's lines: [carried, total])
-  const pageLines = new Map()
+  // (each marked page's lines: [carried, total]; and in place, LINE_PLACE: [placed, total], their sum `placed`)
+  const pageLines = new Map(), pagePlaced = new Map()
+  let placed = 0
 
   /** the marked tokens `from` to `to`, whole pages none of which was added */
   function add(from = 0, to = marked.length) {
@@ -163,13 +173,17 @@ export function carrier(marked, arxiv) {
       const spend = n => (work += n) > PAGE_WORK
       const found = matchPage(oursOn.get(page), spend)
       pageLines.set(page, [found === null ? 0 : found.size, oursOn.get(page).length])
-      if (found === null) { over.push(page); continue }
+      if (found === null) { over.push(page); pagePlaced.set(page, [0, oursOn.get(page).length]); continue }
+      let here = 0
       for (const [l, best] of found) {
         if (best.fuzzy) lines.fuzzy++
         else if (!best.whole) lines.respaced++
         else if (best.page === l.page && Math.abs(best.dx) < SAME && Math.abs(best.dy) < SAME) lines.same++
         else lines.moved++
+        if (best.page === l.page && Math.abs(best.dx) <= LINE_PLACE && Math.abs(best.dy) <= LINE_PLACE) here++
       }
+      pagePlaced.set(page, [here, oursOn.get(page).length])
+      placed += here
     }
     for (const page of oursOn.keys()) added.add(page)
   }
@@ -282,7 +296,17 @@ export function carrier(marked, arxiv) {
     return at
   }
 
-  return { lines, pageLines, over, add }
+  return { lines, pageLines, get placed() { return placed }, pagePlaced, over, add }
+}
+
+/**
+ * The page-and-line check of our base page's tokens (`ours`) over arXiv's (`arxiv`): the carrier's counts with `placed`, the
+ * lines in place (LINE_PLACE), and `pageLines` each page's [placed, total], which the paper's share and each part's are taken
+ * from (CARRY_MIN): what the page pass hands the maker as its `lineCheck`
+ */
+export function lineCheckOf(ours, arxiv) {
+  const c = carrierOf(ours, arxiv)
+  return { lines: { ...c.lines, placed: c.placed }, pageLines: c.pagePlaced }
 }
 const before = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false }
 

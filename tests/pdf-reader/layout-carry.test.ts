@@ -4,7 +4,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { type DocToken, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
-import { carrier, carrierOf, linesOf, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
+import { carrier, carrierOf, LINE_PLACE, lineCheckOf, linesOf, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
 import { encodeLayoutMarks, layoutMarksOf, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // The line check (carry.mjs): our compile's lines found on arXiv's PDF. Our compile is not arXiv's file (another TeX Live,
@@ -190,6 +190,36 @@ describe('carrierOf', () => {
     const marked = [...words(same, 1, 72, 700), ...words(moved, 1, 72, 650), ...words(spaced, 1, 72, 600), ...words(fuzzy.map((w, j) => (j === 4 ? '2and' : w)), 1, 72, 550), ...words(lost, 1, 72, 500)]
     const arxiv = [...words(same, 1, 72, 700), ...words(moved, 1, 72, 649.39), ...words(spaced, 1, 72, 600, 5), ...words(fuzzy, 1, 72, 550)]
     expect(carrierOf(marked, arxiv).lines).toEqual({ total: 5, same: 1, moved: 1, respaced: 1, fuzzy: 1 })
+  })
+})
+
+// The page-and-line check counts the lines in place (the layer route's step 2): our base page is to be arXiv's page, so a line
+// found elsewhere (another TeX Live re-breaking the paper: 2307.16209's thesis, 48 % of its lines moved on TeX Live 2025) is
+// found but not in place; within LINE_PLACE on its own page, of any kind (dvipdfmx's DVI against arXiv's dvips sets words up to
+// 0.42 pt apart: respaced, in place)
+describe('lineCheckOf: the lines in place', () => {
+  it('counts a line found on its page within LINE_PLACE, whole or respaced; one moved further, or onto another page, is found and not in place', () => {
+    expect(LINE_PLACE).toBe(0.5)
+    const A = ['alpha', 'beta', 'gamma'], B = ['delta', 'eps', 'zeta'], C = ['eta', 'theta', 'iota'], D = ['kappa', 'lambda', 'mu']
+    const ours = [...words(A, 1, 72, 700), ...words(B, 1, 72, 680), ...words(C, 1, 72, 660), ...words(D, 1, 72, 640)]
+    // (A in place; B 0.4 pt off and respaced; C moved 12 pt; D onto page 2)
+    const arxiv = [...words(A, 1, 72, 700), ...words(B, 1, 72.4, 680, [3.3, 3]), ...words(C, 1, 72, 648), ...words(D, 2, 72, 640)]
+    const got = lineCheckOf(ours, arxiv)
+    expect(got.lines).toMatchObject({ total: 4, same: 1, respaced: 1, moved: 2, placed: 2 })
+    expect(got.pageLines.get(1)).toEqual([2, 4])
+    // (the carrier's own counts, every line found, as before)
+    expect(carrierOf(ours, arxiv).pageLines.get(1)).toEqual([4, 4])
+    expect(lineCheckOf(ours, ours).lines).toMatchObject({ total: 4, same: 4, placed: 4 })
+    expect(lineCheckOf([], []).lines).toMatchObject({ total: 0, placed: 0 })
+  })
+
+  it('page by page it is the same as at once', () => {
+    const ours = [...words(TEN, 1, 72, 700), ...words(TEN, 2, 72, 700)], arxiv = [...words(TEN, 1, 72, 700), ...words(TEN, 2, 72, 690)]
+    const c = carrier(ours, arxiv)
+    c.add(0, TEN.length)
+    c.add(TEN.length, ours.length)
+    expect([...c.pagePlaced]).toEqual([...lineCheckOf(ours, arxiv).pageLines])
+    expect(c.placed).toBe(1)
   })
 })
 

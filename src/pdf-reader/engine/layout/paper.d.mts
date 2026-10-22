@@ -35,7 +35,7 @@ export interface MarkedCompileOptions {
    *  one stands the final pass is made over them (the result's `base`). false: no final pass, and no `base` */
   final?: boolean
   /** the day every compile after the probe is made on, seconds since the epoch (CompileRequest `sourceDate`; arXiv's PDF's
-   *  /CreationDate: base.mjs creationEpochOf), or a function asked once for it after the probe. Absent, null, or not such a
+   *  day, its /CreationDate or else its XMP's: base.mjs creationEpochOf), or a function asked once for it after the probe. Absent, null, or not such a
    *  number: the host's clock */
   sourceDate?: number | (() => number | null | Promise<number | null>) | null
   /** each page's text of a compile's PDF (its text items' strings joined: base.mjs pageTextOf), or null where it cannot be

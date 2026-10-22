@@ -77,8 +77,8 @@ const GUARD_EXTRA = 2
  * compile for the files it wrote, and once one stands makes the final pass over it (finalPass): the result's `base`, { pdf,
  * log } or { refused: 'final', why }, the base page the layout is made over once its marks are checked against the draft's
  * (base.mjs finalCheck). `sourceDate` (seconds since the epoch, or a function asked once for it, after the probe): every
- * compile after the probe is asked on that day (CompileRequest `sourceDate`: arXiv's PDF's /CreationDate, base.mjs
- * creationEpochOf, so that \today is arXiv's). `textOf(pdf)`, where the host gives it: each page's text of a compile's PDF, in
+ * compile after the probe is asked on that day (CompileRequest `sourceDate`: arXiv's PDF's day, its /CreationDate or else its
+ * XMP's, base.mjs creationEpochOf, so that \today is arXiv's). `textOf(pdf)`, where the host gives it: each page's text of a compile's PDF, in
  * which no mark of ours may stand as text (base.mjs markTextOf; 'text' in the guard's record): a mark printed is out of place
  * as one in an auxiliary file is, its units left unmarked and the paper compiled again within GUARD_EXTRA, else 'marks'
  */

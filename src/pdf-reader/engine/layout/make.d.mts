@@ -20,9 +20,10 @@ export interface MakeInput {
   pdfjs: string
   /** the base page's text as layout/arxiv.mjs readArxivText read it from `arxiv` (step T), else read by the maker */
   text?: ArxivText | null
-  /** the line check: our base page's lines found on arXiv's PDF (carry.mjs carrierOf of the base page's tokens over arXiv's),
-   *  the file's share (`stats.lines`, CARRY_MIN) and each page's (`lines`, `pageLines()`); none: no line checked */
-  lineCheck?: { lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number }; pageLines: ReadonlyMap<number, readonly [number, number]> } | null
+  /** the line check: our base page's lines in place on arXiv's PDF (carry.mjs lineCheckOf of the base page's tokens over
+   *  arXiv's: `placed`, else every line found), the file's share (`stats.lines`, CARRY_MIN) and each page's (`lines`,
+   *  `pageLines()`); none: no line checked */
+  lineCheck?: { lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number; placed?: number }; pageLines: ReadonlyMap<number, readonly [number, number]> } | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
   /** the pages' frame's rule the maker's anchors are placed under, given (a whole run's); else the rule set's: frameOfTokens
