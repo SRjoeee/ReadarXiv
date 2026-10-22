@@ -203,7 +203,8 @@ async function paperRow(id) {
     }
     return withSources(files)
   }
-  const v0Files = originalFiles(paper, { lines: true })
+  // (the paper's own bytes, as v1's: a Latin-1 source is not transcoded for either, live.mjs originalFiles `transcode`)
+  const v0Files = originalFiles(paper, { lines: true, transcode: false })
   v0Files.set(project.main, latin1Bytes(withFitr(latin1(v0Files.get(project.main)), MARK_DEF, LAYOUT_TEX)))
   const f0 = withSources(v0Files), f1 = v1Of(CLASSES)
   const [c0, c1] = await Promise.all([compile(id, f0, opts('v0')), compile(id, f1, { ...opts('v1'), marking: { classes: CLASSES, switches, inkless, texts, units, OPS } })])
