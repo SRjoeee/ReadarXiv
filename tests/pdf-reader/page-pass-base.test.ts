@@ -103,9 +103,9 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
     expect(got.notes.map(n => (n as { lines: unknown }).lines)).toEqual([[8, 10], [20, 20]])
   })
 
-  it('a host of BUNDLE 7\'s (arXiv\'s PDF alone, as `base`): the layout over it, the head\'s base arXiv\'s with no why', async () => {
+  it('a host of BUNDLE 7\'s (arXiv\'s PDF alone, as `base`): no base of ours, the paper\'s fallback (`final`); no layout over arXiv\'s PDF', async () => {
     const got = await passOf(worldOf(), { base: ORIG })
-    expect(got.head.base).toEqual({ source: 'arxiv', ...ORIG })
-    expect(got.parts.map(p => p.layout !== null)).toEqual([true, true])
+    expect(got.head.base).toEqual({ source: 'arxiv', ...ORIG, why: 'final' })
+    expect(got.parts.map(p => p.noLayout?.refused)).toEqual(['final', 'final'])
   })
 })

@@ -2,9 +2,12 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { BOXES_PAGE, OPS_CAP, STACK_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
+import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
+import { carrierOf } from '@/pdf-reader/engine/layout/carry.mjs'
 
-// The layout maker's fake world (layout-make.test.ts, page-pass.test.ts): a fake PDF.js document of arXiv's PDF and a
-// marks file made, as the run makes it, from a fake marked original: each run of text is a text item and the glyphs of an operator list alike, every character half an em
+// The layout maker's fake world (layout-make.test.ts, page-pass.test.ts): fake PDF.js documents of arXiv's PDF (`pages`) and of
+// the base page (our compile's final pass: the marked original's pages, `marked`, or `base` where a test gives it pages of
+// its own), and a marks file made, as the run makes it, from a fake marked original: each run of text is a text item and the glyphs of an operator list alike, every character half an em
 // wide, so that a word's place in the text layer is its glyphs' place. The marked original's operator list shows its
 // runs in their order, and a point (`/axt-<name> ri`) beside each mark: before the first glyph on the mark's baseline at
 // or right of it, else after the last one on that baseline (a page's `points` places one by hand, before a run's
@@ -21,7 +24,7 @@ export type Run = { s: string; x: number; y: number; size?: number; font?: strin
 export type Annot = { rect: number[]; dest: string | unknown[]; quadPoints?: number[]; url?: string }
 export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
 export type Mark = [name: string, page: number, x: number, y: number]
-export type World = { pages: Page[]; marked?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
+export type World = { pages: Page[]; marked?: Page[]; base?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1> }
 
 export const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
@@ -121,6 +124,16 @@ export function arxivOf(pages: Page[], asked: number[] = []) {
       }
     },
   }
+}
+/** the base page's pages (the layer route's step 2): the final pass of the marked original, whose glyphs stand where the marked
+ *  original's do — `base` where a test gives the base page properties of its own (a page whose list never comes, …) */
+export const basePagesOf = (w: World) => w.base ?? w.marked ?? w.pages
+/** a fake PDF.js document of the base page */
+export const baseOf = (w: World, asked: number[] = []) => arxivOf(basePagesOf(w), asked)
+/** the line check of a world: the base page's lines found on arXiv's (`pages`), as the page pass makes it */
+export async function lineCheckOf(w: World) {
+  const c = carrierOf((await readArxivText(baseOf(w))).tokens, (await readArxivText(arxivOf(w.pages))).tokens)
+  return { lines: c.lines, pageLines: c.pageLines }
 }
 export function markedOf(pages: Page[], marks: Mark[]) {
   return {

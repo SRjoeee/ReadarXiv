@@ -23,6 +23,7 @@ vi.mock('@/pdf-reader/engine/layout/ink.mjs', async importOriginal => {
 
 const PAPER = { id: '2608.04322', version: 1 }
 const BASE = { bytes: 10_000, sha256: '0123456789abcdef'.repeat(4), xref: 9_000 }
+const OURS = { bytes: 12_000, sha256: 'fedcba9876543210'.repeat(4), xref: 11_500 }
 const linesOf = (page: number): Run[] => Array.from({ length: 10 }, (_, j) => ({ s: words(100 * page + 10 * j, 10), x: 72, y: 700 - 12 * j }))
 function worldOf(): World {
   const pages = [1, 2, 3].map(p => ({ runs: linesOf(p) }))
@@ -34,7 +35,7 @@ const source = (w: World) => ({ units: w.units, kept: new Set(), inFloat: [] }) 
 const readOf = (w: World) => readMarked(markedOf(w.marked ?? w.pages, w.marks), '', { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, units: w.units, OPS } as never)
 
 type Mode = 'ok' | 'text' | 'annots' | 'never' | 'font'
-/** arXiv's fake document with what draw needs of a page proxy: annotations (one Link), fonts with a map, and a page's mode */
+/** the base page's fake document with what draw needs of a page proxy: annotations (one Link), fonts with a map, and a page's mode */
 function drawable(doc: ReturnType<typeof arxivOf>, modes: Record<number, Mode> = {}) {
   return {
     ...doc,
@@ -55,7 +56,9 @@ async function passOf(w: World, modes: Record<number, Mode> = {}, o: Partial<Par
   const lefts = new Map<number, Draw | null>(), told: string[] = []
   const heads: Written[] = []
   const r = await layerOfPaper({
-    paper: PAPER, source: source(w), marks: await readOf(w), arxiv: { doc: drawable(arxivOf(w.pages), modes), text: await readArxivText(arxivOf(w.pages)) }, OPS, pdfjs: '6.3.289', base: BASE, image: '1',
+    // (the draw is the base page's, our compile's: its document the drawable one, arXiv's the left's and the line check's)
+    paper: PAPER, source: source(w), marks: await readOf(w), arxiv: { doc: arxivOf(w.pages), text: await readArxivText(arxivOf(w.pages)) },
+    ours: { doc: drawable(arxivOf(w.pages), modes), ...OURS, text: await readArxivText(arxivOf(w.pages)), check: { marks: w.marks.length } }, orig: BASE, tree: '2025', OPS, pdfjs: '6.3.289', image: '1',
     onHead: h => { told.push('head'); heads.push(h) },
     onLeft: l => { lefts.set((l as Written & { page: number }).page, (JSON.parse(new TextDecoder().decode(l.bytes)) as { draw: Draw | null }).draw) },
     onPart: p => { told.push(`part ${(p as Written & { from: number }).from}`) },
