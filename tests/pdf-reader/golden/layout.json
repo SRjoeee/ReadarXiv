@@ -1,6 +1,6 @@
 {
-  "the sample's layout: encode, parse and index": "1d12246733a56c5fb1e900653eeb102389ad1c63f3ea04ca8a50f8625cd6becf",
-  "the layer test helper's layouts: written, parsed and indexed": "f18e747e47450eca5b324e3c1f885c07daf19c90f4c791444c4ef8edb99eb5fb",
+  "the sample's layout: encode, parse and index": "17a25bd3406b889e5012668e828714efdd85be3894308472feaa487f4a78f058",
+  "the layer test helper's layouts: written, parsed and indexed": "c10d9c0dbf55db37c491bd60729b5159f38a3d6995bcd1ecb6719d66bda92fd1",
   "the sample's add-on manifest, read in its shipped form and in the check's": "159323d345fd052e891846ea4192704b5519f4b54491ec1e2c66a647c4833b98",
   "the add-on paperAddon makes of the sample's PDF and layout": "f88db20b228adff8c05b8c0dd84189d9ddb7db7b8e3b065d2d2fe184d4adab4d"
 }

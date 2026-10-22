@@ -16,6 +16,7 @@
 import { lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
+import { INK_FREE_LEAD } from '../rules/tex-kernel.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
@@ -37,11 +38,12 @@ export const MARK_CLASSES = Object.freeze(['math', 'display', 'cite', 'ref', 'eq
 export const LAYOUT_CLASSES = Object.freeze([...MARK_CLASSES])
 
 /** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument */
-const INVISIBLE_WORDS = ['label', 'index', 'xspace', 'phantom', 'hphantom', 'vphantom', 'hspace', 'vspace', 'hskip', 'vskip', 'kern', 'color', 'nobreakspace', 'newline', 'linebreak', 'pagebreak', 'nopagebreak', 'footnotesize', 'normalsize']
-/** a placeholder whose rendering is never ink: matched on its leading control sequence — a tie, a forced break, a space
- *  or kern of TeX's (a backslash before a line's end is its control space too), a discretionary hyphen, an italic
- *  correction, or a control word of the lists, followed by no letter */
-export const INVISIBLE = new RegExp(String.raw`^(?:~|\\[\\,;:!/\s-]|\\(?:${[...NO_ARG_COMMANDS, ...INVISIBLE_WORDS].join('|')})(?![A-Za-z@]))`)
+const INVISIBLE_WORDS = ['label', 'index', 'xspace', 'phantom', 'hphantom', 'vphantom', 'hspace', 'vspace', 'hskip', 'vskip', 'kern', 'color', 'nobreakspace', 'footnotesize', 'normalsize']
+/** a placeholder whose rendering is never ink: matched on its leading control sequence — a tie, a forced break `\\`, one of
+ *  TeX's and LaTeX's own that set no ink and read nothing after them (rules/tex-kernel.mjs: a space or kern, an italic
+ *  correction, a discretionary hyphen, `\@`, a penalty, `\relax`…; none gets a mark, which would move a line), or a control
+ *  word of the lists, followed by no letter */
+export const INVISIBLE = new RegExp(String.raw`^(?:~|\\\\|${INK_FREE_LEAD}|\\(?:${[...NO_ARG_COMMANDS, ...INVISIBLE_WORDS].join('|')})(?![A-Za-z@]))`)
 /** a character the scanner keeps as structure, with no ink of its own: an alignment's tab in a table it does not read as
  *  one (aastex's deluxetable between \\startdata and \\enddata), a stray brace, a parameter, a script mark */
 const STRUCTURE = /^[&#^_{}]$/
@@ -833,6 +835,11 @@ const LOOKS_AHEAD = p => {
   const cls = classOf(p)
   return cls === 'macro' || cls === 'footnote' || (p?.t === 'ph' && /\\(?:xspace\*?|protect|noexpand|expandafter|string|unexpanded|detokenize|global|long|outer|protected|immediate)$/.test(p.src ?? ''))
 }
+/** a placeholder that reads nothing after it, whatever else it is: a LaTeX text symbol (text-symbols.mjs: `\S`, `\%`, `\_`, each
+ *  one character by the kernel's own definition, no argument and no look ahead), where LOOKS_AHEAD's class of a macro
+ *  takes it for a paper's macro. The piece right after it keeps its marks ("\S\ref{sec:a}"); its ink is read as any macro's
+ *  is, by the probe and its own rows. The ink-free ones (rules/tex-kernel.mjs) never come here: INVISIBLE has no class for them */
+const READS_NOTHING = p => p?.t === 'ph' && symbolText(p.src) !== null
 
 /**
  * Where a unit's start mark goes, as patch places it: the first piece at or after it, from `from`. The commands at the
@@ -878,8 +885,9 @@ function passedOver(pieces) {
  * (\axtpmm for an inline formula, set on the empty list after a display too) and \axtpm{p<i>.<k>b} after it (`n` for a
  * footnote's call), but where a mark would change what TeX does:
  * - none at a unit's head before its start mark, nor so after a forced break or an alignment's tab (passedOver);
- * - none right after a piece that may look ahead (LOOKS_AHEAD), unless TeX answered that a mark there changes nothing
- *   (`switches`: a footnote's call's `word`, or its `call` before another call), and none for a paper's macro glued to
+ * - none right after a piece that may look ahead (LOOKS_AHEAD), unless it reads nothing after it (READS_NOTHING: a text
+ *   symbol) or TeX answered that a mark there changes nothing (`switches`: a footnote's call's `word`, or its `call` before
+ *   another call), and none for a paper's macro glued to
  *   the letters before it, which may be letters of the same word;
  * - as TeX answered for the piece's command and what follows it (`switches`, the paper's own switch: readMarkProbe):
  *   none (a package sets the full stop before a citation against the word before it, where an opening mark would part
@@ -926,7 +934,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) last = p
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
-      const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !free(after, p)) ? classOf(p) : null
+      const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p)) ? classOf(p) : null
       if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
       // part the word's hyphenation and kerns
