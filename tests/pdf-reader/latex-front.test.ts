@@ -536,7 +536,8 @@ describe('nothing is inserted inside a call or between a subscript and its opera
   it('a unit that begins right after an environment\'s \\begin{…} has its line probe after the space \\begin skips (IEEEtran\'s abstract and keywords, run in after their dash: 2608.19431)', () => {
     const p = paperOf('', '\\begin{abstract}\nThis paper investigates a thing.\n\\end{abstract}\n\n\\begin{IEEEkeywords} Integrated sensing.\n\\end{IEEEkeywords}\n\n\\begin{quote}[x]\n  Quoted words.\n\\end{quote}\n\nA paragraph.\n', 'article')
     expect(units(p).map(u => u[1])).toEqual(['This paper investigates a thing.', 'Integrated sensing.', 'Quoted words.', 'A paragraph.'])
-    for (const text of marked(p)) {
+    // (the layout compile's, our base page; the live path's original, marked(p)[0], keeps the probe where it was: the pin)
+    for (const text of marked(p).slice(1)) {
       // (LaTeX's \\begin ends in \\ignorespaces: a command of ours before the space stopped it, and the space was set after the dash)
       expect(text).toMatch(/\\begin\{abstract\}\n\\axtlines\{0\}(?:\\leavevmode\\axtmark\{0s\})?This/)
       expect(text).toMatch(/\\begin\{IEEEkeywords\} \\axtlines\{1\}(?:\\leavevmode\\axtmark\{1s\})?Integrated/)
@@ -544,6 +545,7 @@ describe('nothing is inserted inside a call or between a subscript and its opera
       // (a paragraph after a blank line keeps its probe where it begins, as before)
       expect(text).toMatch(/\n\n\\axtlines\{3\}(?:\\leavevmode\\axtmark\{3s\})?A paragraph/)
     }
+    expect(marked(p)[0]).toContain('\\begin{abstract}\\axtlines{0}')
   })
 
   it('a call followed by no argument, or a macro that ends in a command that takes none or one the walk does not know, is read as before', () => {
