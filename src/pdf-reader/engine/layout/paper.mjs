@@ -506,7 +506,7 @@ const bibMissing = (files, fsys) => {
 /**
  * CM, converge then mark (paper.d.mts): the files the marked original's passes read, made by the unmarked original's
  * (live.mjs originalFiles with `lines`: MARK_DEF's unit marks and the line probes, which a caption writes into its list
- * and nameref into its names, as the marked one does) in draft passes, then the marked original (`marked`) compiled in
+ * and nameref into its names, as the marked one does; `transcode` off, the paper's own bytes as the marked one's) in draft passes, then the marked original (`marked`) compiled in
  * them, one pass at a time, until a pass writes the files it was given. `cm` counts the passes as they run, so that a
  * compile that throws (the stage's refusal) leaves them told
  *   - draft 1 asks BibTeX where the paper ships no bibliography; draft 2 runs only where draft 1 left the next pass
@@ -538,7 +538,9 @@ const bibMissing = (files, fsys) => {
  */
 async function convergeThenMark(paper, compile, marked, cm, { wall, budget, bound, keep = false }) {
   const { main } = paper.project, engine = paper.meta.compiler, shipped = !!paper.meta.bbl
-  const unmarked = originalFiles(paper, { lines: true })
+  // (the paper's own bytes, as the marked passes' are: originalFiles `transcode`, so that the aux the drafts write is the one
+  // the marked passes would)
+  const unmarked = originalFiles(paper, { lines: true, transcode: false })
   const carried = new Map()
   let passes = 0, bibSeen = null
   /** whether the budget leaves room for one more pass as long as the longest compile so far, the probe's included */
