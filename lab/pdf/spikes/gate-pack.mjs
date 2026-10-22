@@ -211,6 +211,33 @@ export function baseRecordOf(dir) {
   throw new Error('base.json names no source (ours, arxiv)')
 }
 
+/**
+ * The record base.json holds for a fixture a make of the fixtures made (layer-fixtures.mjs; baseRecordOf reads it): `made` what
+ * the make says of its base page ({ source: 'ours', head }, the head's base; or { source: 'arxiv', why, detail }), `layout` the
+ * bytes of the layout file the fixture holds after the make (the one made over our page; where our page was refused, the one
+ * kept in its place, keptLayoutOf; null where there is none), `image` the compile image our page was made on
+ */
+export function baseRecordOfMade({ made, layout, image = null }) {
+  const file = layout ? { sha256: sha256(layout), bytes: layout.length } : null
+  if (made?.source === 'ours') {
+    const { source, ...base } = made.head
+    return { schema: BASE_RECORD_SCHEMA, source, base, ...(image ? { image } : {}), layout: file }
+  }
+  return { schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: made?.why, ...(made?.detail ? { detail: made.detail } : {}), layout: file }
+}
+
+/**
+ * The layout file a fixture keeps where its base page of ours is refused (`bytes` the file it held, `engineLayout` the engine's
+ * LAYOUT): one an older maker made over arXiv's PDF, which the gate draws over arxiv.pdf as before; never one of the engine's own,
+ * made over a base page of ours by an earlier make, which no longer stands. Null for none
+ */
+export function keptLayoutOf(bytes, engineLayout) {
+  if (!bytes) return null
+  let v = null
+  try { v = JSON.parse(new TextDecoder().decode(bytes))?.layout ?? null } catch { return null }
+  return typeof v === 'string' && v !== engineLayout ? bytes : null
+}
+
 /** the PIPELINE the translations of the outputs were made under: the one `pipeline` every units.json names */
 export function pipelineOf(records, names) {
   const seen = new Set(names.map(n => {

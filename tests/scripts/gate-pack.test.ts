@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LAYOUT, LAYOUT_SCHEMA } from '../../src/pdf-reader/engine/layout/file.mjs'
 import { signV4 } from '../../scripts/r2-read.mjs'
-import { BASE_RECORD_SCHEMA, baseRecordOf, checkCompileImage, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { BASE_RECORD_SCHEMA, baseRecordOf, baseRecordOfMade, checkCompileImage, keptLayoutOf, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -224,6 +224,37 @@ describe('our base pages the layout files were made over', () => {
       if (page) put(join(j.fixtures, n, 'base.pdf'), page)
       expect(message(j)).toMatch(why)
     }
+  })
+})
+
+// layer-fixtures.mjs writes base.json from what it made (baseRecordOfMade); where our base page is refused, the fixture keeps the
+// layout file it held, an older maker's over arXiv's PDF (keptLayoutOf), and the record names it, so that a make packs it
+describe('the base record a make of the fixtures writes', () => {
+  const n = '0001.00001v1-zh'
+  const HEAD = { source: 'ours', bytes: 13, sha256: sha256('our base page'), xref: 3, pages: 1, tree: '2025', check: { pages: [1, 1], boxes: 'equal', carried: 1 } }
+  it('names our base page and the layout made over it, or why there is none and the layout kept in its place', () => {
+    const i = inputs(), layout = readFileSync(join(i.fixtures, n, 'layout.json'))
+    put(join(i.fixtures, n, 'base.pdf'), 'our base page')
+    const ours = baseRecordOfMade({ made: { source: 'ours', head: HEAD }, layout, image: compileImagesOf().images['2025']?.texlive ?? null })
+    put(join(i.fixtures, n, 'base.json'), JSON.stringify(ours))
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ source: 'ours', base: { sha256: sha256('our base page') }, layout: { sha256: sha256(layout), bytes: layout.length } })
+    // (refused: the layout file kept, named; none kept, null, which a make refuses)
+    const j = inputs(), keptBytes = readFileSync(join(j.fixtures, n, 'layout.json'))
+    const kept = baseRecordOfMade({ made: { source: 'arxiv', why: 'carry', detail: 'x' }, layout: keptBytes, image: null })
+    put(join(j.fixtures, n, 'base.json'), JSON.stringify(kept))
+    expect(kept).toEqual({ schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: 'carry', detail: 'x', layout: { sha256: sha256(keptBytes), bytes: keptBytes.length } })
+    expect(baseRecordOf(join(j.fixtures, n))).toMatchObject({ source: 'arxiv', why: 'carry' })
+    const k = inputs()
+    put(join(k.fixtures, n, 'base.json'), JSON.stringify(baseRecordOfMade({ made: { source: 'arxiv', why: 'carry', detail: 'x' }, layout: null, image: null })))
+    expect(() => baseRecordOf(join(k.fixtures, n))).toThrow(/no layout file is kept/)
+  })
+
+  it('keeps a layout file of an older maker (made over arXiv\'s PDF), never one of the engine\'s own (made over a base page of ours)', () => {
+    const file = (layout: string) => new TextEncoder().encode(JSON.stringify({ schema: 5, layout }))
+    expect(keptLayoutOf(file('9'), '12')).toEqual(file('9'))
+    expect(keptLayoutOf(file('12'), '12')).toBeNull()
+    expect(keptLayoutOf(null, '12')).toBeNull()
+    expect(keptLayoutOf(new TextEncoder().encode('not json'), '12')).toBeNull()
   })
 })
 

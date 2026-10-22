@@ -16,7 +16,9 @@
 //                sha256, xref, pages, tree, check), image (the compile image it was made on: its tree's pin, COMPILE_YEAR's),
 //                layout ({ sha256, bytes } of layout.json, made over it) }; or, the paper
 //                refused a base page of ours (production's fallback, no layout), { schema, source: 'arxiv', why, detail,
-//                layout: null } and no base.pdf, its refusal.json saying the same;
+//                layout } and no base.pdf, its refusal.json saying the same: `layout` the layout file the fixture kept in its
+//                place, an older maker's over arXiv's PDF (gate-pack.mjs keptLayoutOf), null where it held none, which a
+//                pack make refuses (baseRecordOfMade writes the record);
 //   units.json   the translation as the layer takes it: `units`, each unit with a translation, its pieces as TrPiece by
 //                kOfSource (layer/pieces.mjs), its sentence starts in trText (mt.mjs sentencesOf's `tr`, null where the
 //                engine gave none), its state and engine; and where it came from;
@@ -62,6 +64,7 @@ import { promisify } from 'node:util'
 import { getDocument, OPS, version as PDFJS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { LITE } from './lite-pdfjs.mjs'
 import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, latexmkEngine, PLATFORM } from './compile-image.mjs'
+import { baseRecordOfMade, keptLayoutOf } from './gate-pack.mjs'
 
 // (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
 await checkCompileImage()
@@ -317,18 +320,19 @@ async function compiledNow(dir, name, files, paper, { passes = null, once = fals
     const cmd = once
       ? ['sh', '-c', `${compiler === 'latex' ? 'latex' : compiler} -interaction=nonstopmode ./${main}${compiler === 'latex' ? `; dvipdfmx -o ${stem}.pdf ${stem}.dvi` : ''}; true`]
       : ['latexmk', ...engine, ...one, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
-    await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...date, '-v', `${build}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).catch(() => null)
+    const said = await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...date, '-v', `${build}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).then(r => `${r.stdout}${r.stderr}`, e => `${e?.stdout ?? ''}${e?.stderr ?? ''}`)
     const pdf = join(build, `${stem}.pdf`), log = join(build, `${stem}.log`)
     if (!existsSync(log)) return null
     // (the files it wrote: new, or other bytes than it was given)
     const wrote = keep ? new Map() : null
     if (wrote) for (const p of filesUnder(build)) { const key = p.split(sep).join('/'), b = new Uint8Array(readFileSync(join(build, p))), had = files.get(key); if (!had || Buffer.compare(Buffer.from(had), Buffer.from(b)) !== 0) wrote.set(key, b) }
-    return { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1'), ...(wrote ? { files: wrote } : {}) }
+    // (one pass of `latex`: dvipdfmx's terminal after TeX's log, as a host joins a compile's steps, so that what the driver could not
+    // draw is read: base.mjs driverLostInk)
+    const driver = once && compiler === 'latex' ? `\n${said}` : ''
+    return { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') + driver, ...(wrote ? { files: wrote } : {}) }
   } finally { rmSync(build, { recursive: true, force: true }) }
 }
 
-/** base.json's schema (gate-pack.mjs baseRecordOf reads it) */
-const BASE_RECORD_SCHEMA = 1
 /** whether the engine makes our compile the base page (BUNDLE 8: layout/base.mjs's final-pass check) */
 let ofBase8 = null
 const base8Of = async () => (ofBase8 ??= typeof (await engine('layout/base.mjs').catch(() => ({}))).finalCheck === 'function')
@@ -558,17 +562,24 @@ for (const [id, target] of asked) {
     mkdirSync(out, { recursive: true })
     copyFileSync(join(dir, 'arxiv.pdf'), join(out, 'arxiv.pdf'))
     exclude(join(out, 'arxiv.pdf'))
+    // (a paper whose base page of ours is refused has no layout in production; the fixture keeps the layout file it held, an
+    // older maker's over arXiv's PDF, which the gate draws over arxiv.pdf as before: gate-pack.mjs keptLayoutOf)
+    const refusedBase = !!layout.base && layout.base.source !== 'ours'
+    const kept = refusedBase ? keptLayoutOf(existsSync(join(out, 'layout.json')) ? new Uint8Array(readFileSync(join(out, 'layout.json'))) : null, LAYOUT) : null
     if (layout.text) { write(join(out, 'layout.json'), layout.text); rmSync(join(out, 'refusal.json'), { force: true }) }
-    else { write(join(out, 'refusal.json'), JSON.stringify({ refused: layout.refused, ...(layout.why ? { why: layout.why } : {}), stats: layout.stats }, null, 1)); rmSync(join(out, 'layout.json'), { force: true }) }
+    else {
+      write(join(out, 'refusal.json'), JSON.stringify({ refused: layout.refused, ...(layout.why ? { why: layout.why } : {}), stats: layout.stats }, null, 1))
+      if (!kept) rmSync(join(out, 'layout.json'), { force: true })
+    }
     // (BUNDLE 8: our base page the layout was made over, and base.json, what the gate pack checks it by: the base page's digest and
     // the layout's; or why the paper has none, production's fallback; neither for an engine of before)
     rmSync(join(out, 'base.pdf'), { force: true })
     rmSync(join(out, 'base.json'), { force: true })
-    if (layout.base?.source === 'ours') {
-      write(join(out, 'base.pdf'), layout.base.pdf)
-      const { source, ...base } = layout.base.head
-      write(join(out, 'base.json'), `${JSON.stringify({ schema: BASE_RECORD_SCHEMA, source, base, image: COMPILE_IMAGE, layout: layout.text ? { sha256: sha256(Buffer.from(layout.text)), bytes: Buffer.byteLength(layout.text) } : null }, null, 1)}\n`)
-    } else if (layout.base) write(join(out, 'base.json'), `${JSON.stringify({ schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: layout.base.why, detail: layout.base.detail, layout: null }, null, 1)}\n`)
+    if (layout.base?.source === 'ours') write(join(out, 'base.pdf'), layout.base.pdf)
+    if (layout.base) {
+      const made = layout.base.source === 'ours' ? { source: 'ours', head: layout.base.head } : layout.base
+      write(join(out, 'base.json'), `${JSON.stringify(baseRecordOfMade({ made, layout: layout.base.source === 'ours' ? (layout.text ? Buffer.from(layout.text) : null) : kept, image: COMPILE_IMAGE }), null, 1)}\n`)
+    }
     // the translation: the record made before, where it is of this cut of the units; else staging's; else Microsoft's
     const recordFile = join(out, 'record.json'), unitsFile = join(out, 'units.json')
     let record = null, from = null, source = null

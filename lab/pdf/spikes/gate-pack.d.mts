@@ -29,6 +29,10 @@ export declare function baseRecordOf(dir: string): (
   | { schema: 1; source: 'ours'; base: { sha256: string; bytes: number; xref: number; pages: number; tree: string; check: Record<string, unknown> }; layout: { sha256: string; bytes: number } | null }
   | { schema: 1; source: 'arxiv'; why: string; detail?: string; layout: { sha256: string; bytes: number } }
 ) | null
+/** the record base.json holds for a fixture a make of the fixtures made */
+export declare function baseRecordOfMade(o: { made: { source: 'ours'; head: Record<string, unknown> } | { source: 'arxiv'; why: string; detail?: string }; layout: Uint8Array | null; image?: string | null }): Record<string, unknown>
+/** the layout file a fixture keeps where its base page of ours is refused: an older maker's, never the engine's own */
+export declare function keptLayoutOf(bytes: Uint8Array | null, engineLayout: string): Uint8Array | null
 export declare function layoutVersionOf(fixtures: string, names: string[], expected: LayoutVersion): LayoutVersion
 export declare function makePack(o: { entries: { path: string; from: string }[]; out: string; pipeline: string; layout: LayoutVersion; compileImage?: PackImage | null; made?: string }): Manifest
 export declare const COMPILE_IMAGES_FILE: string
