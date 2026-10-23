@@ -11,3 +11,5 @@ export interface OwnPage { glyphs: OwnGlyph[]; boxes: ArrayLike<number>; paths: 
 export interface OwnUnit { groups: Set<string>; pages: Set<number>; unhidden: Unhidden | null; labelKept: boolean }
 export interface OwnStats { units: number; unhidden: Record<Unhidden, number>; spell: number[]; labelKept: number }
 export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; follows?: ((name: string) => unknown) | null }): { glyphs: (string | null)[][]; boxes: (string | null)[][]; units: Map<number, OwnUnit>; stats: OwnStats }
+/** the glyphs and boxes the ownership of a paper may visit */
+export declare const OWN_WORK: number
