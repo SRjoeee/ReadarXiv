@@ -169,7 +169,13 @@
 //     orders: the units, the wire and its reading back are 24's, and a copy of 24 carries every unit it holds the source
 //     of (live.mjs PIPELINE_CARRIES). Raised so that such a paper's bundle, now with a layout, is made again under a new
 //     key (VTAG)
-export const PIPELINE_VERSION = '25'
+// 26: a package with no 00README, whose compiler is guessed from its files (source/paper-meta.mjs: a source with no figure is
+//     taken for pdflatex), is compiled by the compiler arXiv's PDF says made it where the host reads one (layout/guard.mjs
+//     compilerOfPdf, markedOfPaper's `compilerOf`): a figure-less paper arXiv built with latex, dvips and Ghostscript (1007.0072v1,
+//     Letter) was compiled by pdfTeX (A4) and its base page refused for its page box; it is now a `latex` compile to arXiv's page
+//     size. The units, the wire and its reading back are 25's: a copy of 25 carries every unit it holds the source of
+//     (live.mjs PIPELINE_CARRIES). Raised so that such a paper's bundle, now with a layout, is made again under a new key (VTAG)
+export const PIPELINE_VERSION = '26'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

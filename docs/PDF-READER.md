@@ -1648,6 +1648,14 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   'latex'`: latexmk's -pdfdvi with dvipdfmx as its dvipdf, a one-pass compile latex then dvipdfmx, a draft latex
   -draftmode). pdfLaTeX in its place sets such a paper otherwise (2610.21765's pages 8 to 14 refused for their carry, 83 %;
   2608.22687's 25 to 35, 88 %); and through dvips and Ghostscript no mark of ours would reach the PDF's content stream.
+  - *A package that names no compiler* has one guessed from its files (`source/paper-meta.mjs`: EPS figures alone mean `latex`,
+    else `pdflatex`), and a figure-less paper arXiv built with latex and dvips was taken for `pdflatex` (1007.0072v1: our base
+    pdfTeX's A4, arXiv's Letter, refused for its page box). Where the host reads arXiv's PDF, its Info dictionary is the ground
+    truth (PIPELINE 26): `compilerOfPdf` (`layout/guard.mjs`) reads the Creator and Producer (dvips: `latex`; pdfTeX: `pdflatex`;
+    xdvipdfmx: `xelatex`; LuaTeX: `lualatex`; anything else: none), the host gives it to `markedOfPaper` as `compilerOf`, and
+    the answer becomes the paper's compiler before the first compile (`meta.compilerFrom` 'pdf'). A compiler the package names
+    (00README) is never asked for; a PDF that says nothing, or a failure of the host's reader, leaves the guess. In the 55
+    papers of the sweep caches one original is dvips-made (this one): the class is the old, figure-less papers (before about 2012).
   - *The marks*: where pdfTeX writes no PDF itself, MARK_DEF's and LAYOUT_TEX's destination and points are xdvipdfmx's as
     under XeTeX, a `pdf:dest` special of an XYZ and a `pdf:code` rendering intent, with dvipdfmx told at the first page to
     keep every destination nothing refers to (`C 0x0010`): `DVI_MARK_DEF` after MARK_DEF, `DVI_LAYOUT_TEX` after
