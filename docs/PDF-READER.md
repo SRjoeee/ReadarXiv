@@ -1898,6 +1898,20 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   `transcode`, off with `layout`): written as UTF-8, as only a translation may (`translationFiles` switches the option to
   `utf8`), 2610.20581's `latin1` source set each é as Ã© and each no-break space in math as a `\^` error, 74 errors and a
   page more than arXiv's, a fault no remedy of the guard's could mend. The live path's original transcodes as before.
+- **A unit's text is what TeX sets** (PIPELINE 27; S1 to S4 of 2026-10-24, `source/latex-front.mjs`). Wrong words sent to the
+  translator are worse than a unit left English. *A paper macro that sets words of its own* (`\newcommand{\nb}[1]{Notebook~#1}`)
+  is its expansion: the call is one text piece, its source the call (as an accent's letter is), or one placeholder where the
+  body is more than text; only a body that sets no word outside its groups, commands and formulas is a pair around its
+  argument (2610.21547 sent "(4--6)" for "(Notebook 4--Notebook 6)"). *A file that is not UTF-8* has its text pieces read in
+  the encoding its main file declares (`latin1`, `cp1252`/`ansinew`), else latin1, what pdfTeX reads a byte as; a UTF-8 file
+  is never decoded again (2610.20581's é were U+FFFD). *A conditional TeX closes with `\fi`* gives one branch where its own text decides it (`\iftrue`, `\if` or `\ifx` of two
+  characters: an author's `\if 0 … \fi`); any other (`\ifdefined`, `\ifcsname`, a `\newif`, `\ifx` of commands) whose two
+  branches hold words gives neither (`skipped.ifUnknown`, left English: 2610.21098's two \ifdefined branches were one unit),
+  and so does one whose span holds `\verb`, inline code, a verbatim environment or a definition, where the scan could take an
+  `\else` TeX never reads for one. Following the paper's definitions was tried and dropped: the review of #457 found a fault
+  in it in each of three rounds (a file nothing reads, a group, a `\let` in the body), and that is TeX's own work. Not resolved by the probe compile: the units are cut before any
+  compile and must be the same on every reader. The accents were checked and needed nothing: the regression's "JÃ©rÃ´me"
+  was a report printing the units' raw bytes (their text is UTF-8 read latin1; `mt.mjs` `utf8` decodes it)
 - **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
   picture, or any PostScript of the page's, dvipdfmx cannot interpret is missing from our page alone, and the marks and boxes
   would pass. The final pass is refused (`final`) where its log says dvipdfmx failed a special or an image (`base.mjs`
