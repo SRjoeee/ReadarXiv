@@ -180,11 +180,12 @@ export interface AxtMessages {
   'axt:ocr-run': { request: { image: string; mime: string }; response: OcrRunResponse }
   /**
    * a page of the extension framed in arXiv's → the content script of its tab's top frame (shared/frame-owner.ts):
-   * whether `ticket` is one that script posted to this page's frame, the claim coming from an extension page at the address
-   * it gave that frame (the sender's URL, as the browser reports it). Answered only by the script that holds the ticket,
-   * which spends it
+   * whether `ticket` is one that script posted to this page's frame, the claim coming from an extension page (the
+   * sender's origin as the browser reports it) at the address it gave that frame (`address`, the page's own path and
+   * query, and the sender's URL where the browser reports it). Answered only by the script that holds the ticket, which
+   * spends it
    */
-  'axt:frame-claim': { request: { ticket: string }; response: { owned: boolean } }
+  'axt:frame-claim': { request: { ticket: string; address: string }; response: { owned: boolean } }
   /** background → the offscreen document: a figure was given up on, the recogniser's worker is ended (the figure in it
    *  answered as failed) and the next figure starts a new one */
   'axt:ocr-reset': { request: Record<never, never>; response: { reset: true } }
@@ -226,11 +227,14 @@ export function replyWith<T>(promise: Promise<T>, sendResponse: (reply: T | Fail
 
 /**
  * Who sent a message, as far as a handler may know: the tab, when a content script did — an extension page has none —
- * and the sending document's URL as the browser reports it, which no sender can choose
+ * and the sending document's origin and URL as the browser reports them, which no sender can choose. Chrome 131 reports
+ * a content script no `url` for a message an extension page sent it with `tabs.sendMessage`, only `origin` (measured
+ * 2026-10-24); Chrome 153 reports both
  */
 export interface MessageSender {
   tabId: number | undefined
   url?: string
+  origin?: string
 }
 
 /**
@@ -261,13 +265,13 @@ export type MessageHandlers = {
  * throws before it has a promise is answered the same way
  */
 export function answerMessages(handlers: MessageHandlers) {
-  return (message: unknown, sender: { tab?: { id?: number }; url?: string }, sendResponse: (reply: unknown) => void): true | undefined => {
+  return (message: unknown, sender: { tab?: { id?: number }; url?: string; origin?: string }, sendResponse: (reply: unknown) => void): true | undefined => {
     if (!isAxtMessage(message)) return undefined
     const handler = handlers[message.type] as ((message: AxtMessage, sender: MessageSender) => Promise<unknown> | undefined) | undefined
     if (!handler) return undefined
     let answer: Promise<unknown> | undefined
     try {
-      answer = handler(message, { tabId: tabOf(sender), ...(sender.url !== undefined ? { url: sender.url } : {}) })
+      answer = handler(message, { tabId: tabOf(sender), ...(sender.url !== undefined ? { url: sender.url } : {}), ...(sender.origin !== undefined ? { origin: sender.origin } : {}) })
     } catch (error) {
       answer = Promise.reject(error)
     }

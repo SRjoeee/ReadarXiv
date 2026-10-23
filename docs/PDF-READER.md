@@ -562,8 +562,9 @@ each piece. They stay in the source language, counted, and the failure is kept (
 - **Framed, the reader acts only for the content script that made its frame** (`shared/frame-owner.ts`, DESIGN §4.0c):
   with no such content script to vouch for it, it draws nothing and does nothing — no paper fetched, no run started, no
   setting written, whatever its address asks (`ask=translate` included). **Nor does a release build's reader that is no
-  frame**: the PDF page only ever frames it, while an arXiv page that learnt its address could send its own tab there,
-  and there the settings alone would start a run (`?paper=` and a translated display). A development build, and the
+  frame**: the PDF page only ever frames it, while an arXiv page that learnt its address could send its own tab there
+  (Chrome 153 lets that navigation through; Chrome 131 refuses it: measured 2026-10-24), and there the settings alone
+  would start a run (`?paper=` and a translated display). A development build, and the
   harness's copy of a release build (the manifest key `axt_top_level_reader`, which `scripts/check-output.mjs` holds no
   build carries; `tests/e2e/lib/extension.mjs`), open it as its address says, for the browser checks and the probes.
 - **`?paper=` is an arXiv id or none** (`core/paper-id.ts`, read once by `addresses.ts` `paperOf`): anything else is an

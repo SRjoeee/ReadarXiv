@@ -355,10 +355,12 @@ try {
     // (an absence: the page is given its owner's answer's worth of time, and then some)
     await sleep(4000)
     const shown = arrived ? await drawn(tab.mainFrame()) : null
+    // (Chrome 131 refuses an arXiv page's navigation to the address outright: its error page, measured; nothing either)
+    const refused = !arrived && /^chrome-error:/.test(tab.url())
     const after = JSON.stringify(await config())
     check(`sent to the reader's address ${why}: it draws nothing, starts no run, asks the layer API nothing, translates nothing, fetches no PDF, writes no setting`,
-      arrived && shown?.root === 0 && shown.reader === 'undefined' && layerAsks() === layerAt && echo.seen.post === echoAt && asked.filter(a => a.includes('/pdf/')).length === pdfAt && after === before,
-      `${arrived ? tab.url().replace(/^chrome-extension:\/\/[^/]+/, '') : 'never arrived'}; ${JSON.stringify(shown)}; ${layerAsks() - layerAt} asks of the layer API, ${echo.seen.post - echoAt} translations, ${asked.filter(a => a.includes('/pdf/')).length - pdfAt} PDF fetches, settings ${after === before ? 'unchanged' : 'changed'}`)
+      (refused || (arrived && shown?.root === 0 && shown.reader === 'undefined')) && layerAsks() === layerAt && echo.seen.post === echoAt && asked.filter(a => a.includes('/pdf/')).length === pdfAt && after === before,
+      `${arrived ? tab.url().replace(/^chrome-extension:\/\/[^/]+/, '') : refused ? 'the browser refused the navigation (its error page)' : `never arrived (at ${tab.url()})`}; ${JSON.stringify(shown)}; ${layerAsks() - layerAt} asks of the layer API, ${echo.seen.post - echoAt} translations, ${asked.filter(a => a.includes('/pdf/')).length - pdfAt} PDF fetches, settings ${after === before ? 'unchanged' : 'changed'}`)
     await tab.close()
   }
   await setReader({ original: false })

@@ -24,8 +24,11 @@ function windowOf(extra: Record<string, unknown> = {}) {
 const messageEvent = (data: unknown, origin: string, source: unknown) => Object.assign(new Event('message'), { data, origin, source })
 
 let claims: Listener[] = []
-/** the claimant's URL as the browser reports it to the content script (`sender.url`): who sent the claim, not what it says */
-let claimant: string | undefined
+/**
+ * The claimant as the browser reports it to the content script: Chrome 153 gives its `url` and `origin`, Chrome 131 its
+ * `origin` alone (measured). Who sent the claim, not what it says
+ */
+let claimant: { url?: string; origin?: string } | undefined
 async function load() {
   vi.resetModules()
   claims = []
@@ -35,14 +38,14 @@ async function load() {
   // a claim reaches the content scripts of the tab's top frame; one that no listener answers is a rejection, as in Chrome
   ;(fakeBrowser.tabs as unknown as { sendMessage: unknown }).sendMessage = vi.fn((tab: number, message: unknown, options?: { frameId?: number }) => new Promise((resolve, reject) => {
     if (tab !== TAB || options?.frameId !== 0) { reject(new Error('Could not establish connection. Receiving end does not exist.')); return }
-    const answered = claims.some(listener => listener(message, claimant === undefined ? {} : { url: claimant }, resolve) === true)
+    const answered = claims.some(listener => listener(message, claimant ?? {}, resolve) === true)
     if (!answered) reject(new Error('The message port closed before a response was received.'))
   }))
   return import('@/shared/frame-owner')
 }
 
 /** our content script's page with its frame, and the extension's page in that frame, wired as a browser wires them */
-async function framed(o: { frameUrl?: string; pageAddress?: { pathname: string; search: string } } = {}) {
+async function framed(o: { frameUrl?: string; pageAddress?: { pathname: string; search: string }; urlReported?: boolean } = {}) {
   const m = await load()
   const origin = m.extensionOrigin()
   const parent = windowOf()
@@ -53,9 +56,10 @@ async function framed(o: { frameUrl?: string; pageAddress?: { pathname: string; 
   parent.deliver = data => parent.dispatchEvent(messageEvent(data, origin, page))
   page.deliver = data => page.dispatchEvent(messageEvent(data, 'https://arxiv.org', parent))
   const stop = m.vouchFor(frame, o.frameUrl ?? 'chrome-extension://d04aca1c-69fc-4855-bd82-8307ca6e11d8/pdf-reader.html?live=1&paper=2600.00001', parent as unknown as Window)
-  // the page's own claims come from its own URL: the extension's origin (the static id's, whatever address loaded it)
+  // the page's own claims come from its own URL at the extension's origin (the static id's, whatever address loaded it);
+  // Chrome 131 reports the origin alone
   const location = page.location as { pathname: string; search: string }
-  claimant = `${origin}${location.pathname}${location.search}`
+  claimant = o.urlReported === false ? { origin } : { url: `${origin}${location.pathname}${location.search}`, origin }
   return { m, origin, parent, page, frame, stop }
 }
 
@@ -79,10 +83,16 @@ describe('a framed page acts only for the content script that made its frame (DE
     expect(parent.posted).toEqual([{ data: { type: 'axt:frame-ask' }, targetOrigin: '*' }])
     const [ticket] = page.posted
     expect(ticket).toMatchObject({ data: { type: 'axt:frame-ticket', ticket: expect.stringMatching(/^[0-9a-f-]{36}$/) }, targetOrigin: origin })
-    // the claim carries the ticket alone, to the top frame, and the ticket is spent: claimed again, nobody answers
+    // the claim names the page's own address, to the top frame, and the ticket is spent: claimed again, nobody answers
     const send = (fakeBrowser.tabs as unknown as { sendMessage: (tab: number, message: unknown, options: { frameId: number }) => Promise<unknown> }).sendMessage
-    expect(send).toHaveBeenCalledWith(TAB, { type: 'axt:frame-claim', ticket: (ticket!.data as { ticket: string }).ticket }, { frameId: 0 })
-    await expect(send(TAB, { type: 'axt:frame-claim', ticket: (ticket!.data as { ticket: string }).ticket }, { frameId: 0 })).rejects.toThrow()
+    const claim = { type: 'axt:frame-claim', ticket: (ticket!.data as { ticket: string }).ticket, address: '/pdf-reader.html?live=1&paper=2600.00001' }
+    expect(send).toHaveBeenCalledWith(TAB, claim, { frameId: 0 })
+    await expect(send(TAB, claim, { frameId: 0 })).rejects.toThrow()
+  })
+
+  it('on Chrome 131, whose browser reports the claimant\'s origin and no URL, the frame\'s own page is vouched for by the address it reports', async () => {
+    const { m, page } = await framed({ urlReported: false })
+    expect(await m.frameOwner(page as unknown as Window)).toEqual({ framed: true, tab: TAB })
   })
 
   it('framed by a page that is not ours, in a tab where our content script runs: the ticket that page makes up is answered by nobody, and after OWNER_MS the page acts for no one', async () => {
@@ -124,19 +134,26 @@ describe('a framed page acts only for the content script that made its frame (DE
 
   it('a ticket that reached another sender is not vouched for: the claimant is who the browser says sent it, an extension page at the frame\'s address, never what the claim says', async () => {
     const send = (fakeBrowser.tabs as unknown as { sendMessage: (tab: number, message: unknown, options: { frameId: number }) => Promise<{ owned: boolean }> }).sendMessage
-    for (const other of [undefined, 'https://arxiv.org/pdf-reader.html?live=1&paper=2600.00001', 'chrome-extension://another0extension0id/pdf-reader.html?live=1&paper=2600.00001', 'options']) {
+    const FRAME = '/pdf-reader.html?live=1&paper=2600.00001'
+    const claimed = async (sender: (origin: string) => { url?: string; origin?: string } | undefined, address = FRAME) => {
       const { origin, parent, page } = await framed()
       // the framed page's ask, answered with a ticket posted to its frame
       parent.dispatchEvent(messageEvent({ type: 'axt:frame-ask' }, origin, page))
-      const ticket = (page.posted[0]!.data as { ticket: string }).ticket
-      // claimed by another sender: none, a web page, another extension's page, another page of ours (the settings)
-      claimant = other === 'options' ? `${origin}/options.html` : other
-      expect([other, await send(TAB, { type: 'axt:frame-claim', ticket }, { frameId: 0 }).catch(() => 'no answer')]).toEqual([other, { owned: false }])
+      claimant = sender(origin)
+      return send(TAB, { type: 'axt:frame-claim', ticket: (page.posted[0]!.data as { ticket: string }).ticket, address }, { frameId: 0 }).catch(() => 'no answer')
     }
-    // the control: the same ticket's claim from the framed page's own URL is vouched for
-    const { origin, parent, page } = await framed()
-    parent.dispatchEvent(messageEvent({ type: 'axt:frame-ask' }, origin, page))
-    expect(await send(TAB, { type: 'axt:frame-claim', ticket: (page.posted[0]!.data as { ticket: string }).ticket }, { frameId: 0 })).toEqual({ owned: true })
+    const cases: [string, (origin: string) => { url?: string; origin?: string } | undefined, string?][] = [
+      ['no sender at all', () => undefined],
+      ['a web page', () => ({ url: `https://arxiv.org${FRAME}`, origin: 'https://arxiv.org' })],
+      ['another extension\'s page', () => ({ url: `chrome-extension://another0extension0id${FRAME}`, origin: 'chrome-extension://another0extension0id' })],
+      ['another page of ours, naming the frame\'s address', origin => ({ url: `${origin}/options.html`, origin })],
+      ['another page of ours on Chrome 131, naming another address', origin => ({ origin }), '/options.html'],
+      ['the frame\'s page, naming another address than the browser reports', origin => ({ url: `${origin}${FRAME}`, origin }), '/popup.html'],
+    ]
+    for (const [who, sender, address] of cases) expect([who, await claimed(sender, address)]).toEqual([who, { owned: false }])
+    // the control: the frame's own page, as either browser reports it, is vouched for
+    expect(await claimed(origin => ({ url: `${origin}${FRAME}`, origin }))).toEqual({ owned: true })
+    expect(await claimed(origin => ({ origin }))).toEqual({ owned: true })
   })
 
   it('once its frame is gone, our content script answers no more asks', async () => {
