@@ -532,19 +532,6 @@ describe("the file's baselines in v0's blocks", () => {
   })
 })
 
-describe('the erase of a line of several boxes', () => {
-  it('erases each, the last to its block\'s edge where the line is not the block\'s last', () => {
-    const blocks = [{ page: 1, x1: 300, rects: [[1, 10, 98, 200, 107], [1, 10, 86, 150, 95]] }]
-    const extents = new Map([['1,10,98,200,107', [[10, 98, 60, 107], [80, 98, 200, 107]]]])
-    const ops = L2.unitOps({ lines: [], scale: 1 } as never, blocks as never, 1, { px: (x: number, y: number) => [x, -y], k: 1, hasSource: () => false, pxOf: () => (x: number, y: number) => [x, -y], extents: extents as never })
-    const boxes = ops.filter(o => o.op === 'erase').map(o => (o as { box: number[] }).box)
-    expect(boxes.length).toBe(3)
-    const [first, second] = boxes as [number[], number[]]
-    expect(first[0]).toBeCloseTo(9.7)
-    expect((first[0] ?? 0) + (first[2] ?? 0)).toBeCloseTo(61.8)
-    expect((second[0] ?? 0) + (second[2] ?? 0)).toBeCloseTo(301.8)
-  })
-})
 
 describe("TeX's own lines, kept and broken (the 2608.16117 survey's fixes 2 and 3, 2026-10-15)", () => {
   const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })

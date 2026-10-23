@@ -334,11 +334,12 @@ export function commentOf(report, o) {
 
 // ---------------------------------------------------------------- running the gate
 
-/** the layer gate's flags and environment for one side of the comparison: the production configuration, the model tier, 4
- *  workers, every input from the pack (`pack` is its directory) */
+/** the layer gate's flags and environment for one side of the comparison: the production configuration (our base page wrapped
+ *  by optional content from the pack's sources at load), the model tier, 4 workers, every input from the pack (`pack` is its
+ *  directory) */
 export function gateArgs({ engine, rules, pack, workers = 4 }) {
   return {
-    args: ['--tier=model', '--engine-kind=proto', '--proto-tex=lines', '--removal=draw', `--fixtures=${join(pack, 'fixtures')}`, `--engine=${engine}`, `--rules=${rules}`, `--workers=${workers}`],
+    args: ['--tier=model', '--engine-kind=proto', '--proto-tex=lines', `--fixtures=${join(pack, 'fixtures')}`, `--sources=${join(pack, 'sources')}`, `--engine=${engine}`, `--rules=${rules}`, `--workers=${workers}`],
     env: { AXT_DATA: join(pack, 'data'), LAYER_REFS: join(pack, 'refs'), LAYER_GEOMETRY: join(pack, 'geometry'), TEXMF_DIST: join(pack, 'texmf') },
   }
 }
@@ -358,7 +359,7 @@ export function instrumentOfPack(pack) {
   const files = pack?.files
   if (!Array.isArray(files) || !files.length) throw new Error('the pack names no files: it is not a gate-pack.json')
   const part = test => listingDigest(files.filter(f => test(String(f.path))))
-  const stray = files.map(f => String(f.path)).filter(p => !/^(?:fixtures|refs|geometry|data|texmf)\//.test(p))
+  const stray = files.map(f => String(f.path)).filter(p => !/^(?:fixtures|refs|geometry|data|texmf|sources)\//.test(p))
   if (stray.length) throw new Error(`the pack holds ${stray.length} file${stray.length === 1 ? '' : 's'} outside the parts the instrument names (${stray[0]}…): name the part in instrumentOfPack`)
   return {
     fixtures: part(p => p.startsWith('fixtures/') && !/^fixtures\/[^/]+\/(?:layout\.json|base\.pdf|base\.json)$/.test(p)),
@@ -366,6 +367,8 @@ export function instrumentOfPack(pack) {
     geometry: part(p => p.startsWith('geometry/')),
     data: part(p => p.startsWith('data/')),
     texmf: part(p => p.startsWith('texmf/')),
+    // (the papers' sources, which the wrap reads each base's units from: a pack of none, from before the wrap, names no part)
+    ...(files.some(f => String(f.path).startsWith('sources/')) ? { sources: part(p => p.startsWith('sources/')) } : {}),
   }
 }
 

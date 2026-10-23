@@ -202,9 +202,9 @@ export function annotsOf(raw, points, points2 = null) {
 }
 
 /**
- * The erased area of a page as a question: whether a point (device pixels) lies where the drawing's operations (a page record's
- * `ops`, device pixels [x, y, w, h]) left the paper erased at the end. In their order: an erase, paper or swap rectangle erases;
- * a restore puts the page's pixels back in each of its boxes within its clip; a crop erases nothing
+ * The hidden area of a page as a question: whether a point (device pixels) lies where the drawing's operations (a page record's
+ * `ops`, device pixels [x, y, w, h]) left the original's ink hidden at the end. In their order: a unit's hidden rectangles hide; a
+ * paste shows the page's ink again in its rectangles; a crop hides nothing
  */
 export function erasedOf(ops) {
   const list = ops ?? []
@@ -212,9 +212,8 @@ export function erasedOf(ops) {
   return (x, y) => {
     let erased = false
     for (const o of list) {
-      if (o.op === 'erase') { if (within(x, y, o.box)) erased = true }
-      else if (o.op === 'paper' || o.op === 'swap') { if (o.rects.some(b => within(x, y, b))) erased = true }
-      else if (o.op === 'restore') { if (o.boxes.some(b => within(x, y, b)) && o.clip.some(b => within(x, y, b))) erased = false }
+      if (o.op === 'hidden') { if (o.rects.some(b => within(x, y, b))) erased = true }
+      else if (o.op === 'paste') { if (o.rects.some(b => within(x, y, b))) erased = false }
     }
     return erased
   }

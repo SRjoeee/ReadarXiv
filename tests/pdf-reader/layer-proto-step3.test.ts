@@ -809,7 +809,7 @@ describe("the leftover packed (P.leftover 'pack', D6's F6c): each paragraph keep
   })
 })
 
-describe('the ink that stays (stayingInk): the page\'s ink but the glyphs the drawing takes away, and the dirty boxes', () => {
+describe('the ink that stays (stayingInk): the page\'s ink but the glyphs the drawing takes away', () => {
   // a map of 100 x 100 cells at one device pixel a cell and a PDF unit, PDF y up: a rule at row 40 (PDF y 59 to 60) across x
   // 10-90, a glyph at rows 70-72 and x 20-24 (PDF y 27 to 30)
   const map = () => {
@@ -828,7 +828,5 @@ describe('the ink that stays (stayingInk): the page\'s ink but the glyphs the dr
     const taken = stayingInk({ map: map(), ...io, accounted: [[20, 27.5, 25, 30]] })
     expect(taken(0, 100, 20, 50)).toBeNull()
     expect(taken(0, 100, 20, 70)).toBe(59)
-    // (a dirty box: the add-on's kept ink under a unit's rectangle, ink whatever the map says)
-    expect(stayingInk({ map: map(), ...io, dirty: [[50, 10, 60, 20]] })(40, 70, 0, 30)).toBe(9)
   })
 })

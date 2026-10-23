@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COVERAGE } from '@/pdf-reader/engine/rules/font-coverage.mjs'
 import { FACES } from '@/pdf-reader/engine/rules/font-roles.mjs'
 import { fileOfGeometry, unitsOfGeometry } from './helpers/file-of-geometry'
+import { withGroups } from './helpers/groups'
 
 // The layer's faces (layer-proto/fonts.mjs roleFaceSet, run.mjs openProto's `faceSources`): the role table's files, served in
 // slices or whole, and nothing else. A PDF.js document of its own making (one page of paragraphs, nothing drawn), fonts
@@ -135,7 +136,7 @@ function docOf(lines: [string, number][]) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const items = lines.map(([str, y]) => ({ str, transform: [10, 0, 0, 10, 20, y], width: 260, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} }
-  return { numPages: 1, getPage: async () => page }
+  return withGroups({ numPages: 1, getPage: async () => page })
 }
 /** the layer over one page of paragraphs, one line each from the top (the source and its translation), in the role table's faces */
 async function open(paras: [string, string][], o: Record<string, unknown> = {}) {

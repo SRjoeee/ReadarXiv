@@ -21,12 +21,12 @@ export interface Moved { fixture: string; measure: string; label: string; from: 
 export declare function compare(prev: Record<string, { totals: Totals; pages: PageEntry[] }>, cur: Record<string, { totals: Totals; pages: PageEntry[] }>, tier: Tier): { regressions: Moved[]; improvements: Moved[]; pages: { fixture: string; page: number; worse: string[]; better: string[] }[]; unmatched: string[] }
 /** the outputs a record's run of `key` (for a model key, else its pixel run) holds that `fixtures` lacks */
 export declare function droppedOutputs(record: { tiers?: Record<string, { fixtures?: Record<string, unknown> }> } | null, key: string, fixtures: string[]): string[]
-/** an add-on's ink read as a row reports it: the pages whose ink was capped, timed out or degraded */
-export interface InkRow { capped: number[]; timedOut: number[]; degraded: number[] }
-export interface CompletenessRow { name: string; pages: number; numbers: [number, number]; lostInk?: number; fails: string[]; ink: InkRow | null; [check: string]: unknown }
-/** an add-on's ink read (layout/addon.mjs pagePlansOf's `ink`) as a row reports it, or null */
-export declare function inkOf(ink: unknown): InkRow | null
-/** the gate's ink line over the completeness rows: names and counts alone */
-export declare function inkLine(rows: readonly CompletenessRow[]): string
+/** whether an output's page was wrapped by optional content, or why not (then every unit is the original's) */
+export interface WrapRow { wrapped: boolean; why: string | null }
+export interface CompletenessRow { name: string; pages: number; numbers: [number, number]; lostInk?: number; hiddenOutside?: number; fails: string[]; wrap: WrapRow | null; [check: string]: unknown }
+/** an output's wrap as a row reports it, or null where the run tells none */
+export declare function wrapOf(wrap: unknown): WrapRow | null
+/** the gate's wrap line over the completeness rows: names and reasons alone */
+export declare function wrapLine(rows: readonly CompletenessRow[]): string
 /** the brief's completeness rows of a run: per output each check's count and the checks above 0 (`fails`) */
-export declare function completenessRows(run: { fixtures: Record<string, { totals: Totals; summary?: { recordErrors?: number; linksLost?: string[]; removal?: { ink?: unknown } }; pages?: { p: number; where?: { linksTrue?: string[]; linksWrong?: string[] } }[] }> }, tier: Tier): CompletenessRow[]
+export declare function completenessRows(run: { fixtures: Record<string, { totals: Totals; summary?: { recordErrors?: number; linksLost?: string[]; wrap?: unknown }; pages?: { p: number; where?: { linksTrue?: string[]; linksWrong?: string[] } }[] }> }, tier: Tier): CompletenessRow[]

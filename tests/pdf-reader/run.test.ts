@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs'
 import * as PL from '@cantoo/pdf-lib'
 import { deltaOf } from '@/pdf-reader/engine/layout/delta.mjs'
 import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
-import { cutSample, oursOf } from '../e2e/lib/layer-cut.mjs'
+import { cutSample } from '../e2e/lib/layer-cut.mjs'
 import { made, type Made, N, PAPER } from './helpers/format-paper'
 
 const API = 'https://readarxiv.com'
@@ -378,14 +378,14 @@ describe('the base (design §3.2, §3.5): only a layer over our own compile draw
     }
   })
 
-  it('the composed document is our base page by ranges at /api/v1/base/…, held to the base\'s length, the tails after its last byte', async () => {
+  it('the composed document is our base page by ranges at /api/v1/base/…, held to the base\'s length (no tail: parts carry none)', async () => {
     const a = go()
     await settle()
     expect(await bindOf(a)(head())).toBe(true)
-    await a.side.options().composed(new Uint8Array([7, 7]), { x: 1 }).promise
+    await a.side.options().composed(null, { x: 1 }).promise
     const doc = a.docs[0] as { range: { length: number; initialData: Uint8Array }; x: number }
-    expect(doc.range.length).toBe(302)
-    expect([...doc.range.initialData]).toEqual([...ours, 7, 7])
+    expect(doc.range.length).toBe(300)
+    expect([...doc.range.initialData]).toEqual([...ours])
     expect(doc.x).toBe(1)
     expect(asked(a, baseAt)).toEqual(['bytes=0-299'])
     // no credentials, no referrer: the paper's id and version and the digest in the address, and a range
@@ -529,8 +529,9 @@ describe('the base (design §3.2, §3.5): only a layer over our own compile draw
 describe('the layer over a delta (the delta route): one byte source, the original\'s', async () => {
   // (the repository's sample paper, read by path: the cutter's own default address is a file URL this environment's URL is not)
   const dir = `${import.meta.dirname}/../fixtures/pdf/sample-1/`
-  const files = { pdf: new Uint8Array(readFileSync(`${dir}sample-1.pdf`)), bundle: new Uint8Array(readFileSync(`${dir}bundle.json`)) }
-  const cut = await cutSample({ pdf: files.pdf.slice(), bundle: files.bundle.slice() }, { base: 'delta' })
+  const ocg = `${import.meta.dirname}/../fixtures/pdf/ocg/`
+  const files = { pdf: new Uint8Array(readFileSync(`${dir}sample-1.pdf`)), bundle: new Uint8Array(readFileSync(`${dir}bundle.json`)), wrapped: new Uint8Array(readFileSync(`${ocg}sample-1-wrapped.pdf`)), wrap: JSON.parse(readFileSync(`${ocg}sample-1-wrapped.json`, 'utf8')) }
+  const cut = await cutSample({ pdf: files.pdf.slice(), bundle: files.bundle.slice(), wrapped: files.wrapped, wrap: files.wrap }, { base: 'delta' })
   const original = files.pdf, delta = cut.delta as NonNullable<typeof cut.delta>
   const O = original.length, TAGO = '"orig-tag"'
   const baseOf = (over: Record<string, unknown> = {}) => ({ ...cut.index.head.base, ...over })
@@ -543,25 +544,24 @@ describe('the layer over a delta (the delta route): one byte source, the origina
   const asked = (a: ReturnType<typeof run>, url: string) => a.s.calls.filter(c => c.url === url).map(c => (c.init.headers as Record<string, string> | undefined)?.range ?? null)
   const baseCalls = (a: ReturnType<typeof run>) => a.s.calls.filter(c => c.url.includes('/api/v1/base/'))
 
-  it('binds: the delta object is fetched by its digest, held to checkDelta, and the composed document is the original by ranges (bound by the head\'s orig length) then the delta then the tails; /api/v1/base is never asked', async () => {
+  it('binds: the delta object is fetched by its digest, held to checkDelta, and the composed document is the original by ranges (bound by the head\'s orig length) then the delta; /api/v1/base is never asked', async () => {
     const a = go()
     await settle()
     expect(await bindOf(a)(cut.index.head.base)).toBe(true)
     expect(a.s.calls.filter(c => c.url.endsWith(`/o/${delta.sha256}`))).toHaveLength(1)
-    const tail = Uint8Array.from([9, 8, 7, 6, 5])
-    await a.side.options().composed(tail, { x: 1 }).promise
+    await a.side.options().composed(null, { x: 1 }).promise
     const doc = a.docs[0] as { range: { length: number; initialData: Uint8Array; requestDataRange(b: number, e: number): void } }
-    // one document: the original's O bytes, the delta's D, the tails'
-    expect(doc.range.length).toBe(O + delta.bytes + tail.length)
+    // one document: the original's O bytes, then the delta's D
+    expect(doc.range.length).toBe(O + delta.bytes)
     expect([...doc.range.initialData]).toEqual([...original.slice(0, doc.range.initialData.length)])
     expect(asked(a, origPath)[0]).toBe(`bytes=0-${Math.min(65_535, O - 1)}`)
     // the seam at O: a range across it is the original's last bytes, then the delta's first
     doc.range.requestDataRange(O - 4, O + 8)
-    doc.range.requestDataRange(O + delta.bytes - 3, O + delta.bytes + 3)
+    doc.range.requestDataRange(O + delta.bytes - 3, O + delta.bytes)
     await settle()
-    const seam = a.given.find(g => g[0] === O - 4)?.[1], tails = a.given.find(g => g[0] === O + delta.bytes - 3)?.[1]
+    const seam = a.given.find(g => g[0] === O - 4)?.[1], end = a.given.find(g => g[0] === O + delta.bytes - 3)?.[1]
     expect([...(seam ?? [])]).toEqual([...original.slice(O - 4), ...delta.data.slice(0, 8)])
-    expect([...(tails ?? [])]).toEqual([...delta.data.slice(delta.bytes - 3), ...tail.slice(0, 3)])
+    expect([...(end ?? [])]).toEqual([...delta.data.slice(delta.bytes - 3)])
     // nothing of the original beyond its own length is asked, and no base of ours
     for (const r of asked(a, origPath)) expect(Number(/^bytes=\d+-(\d+)$/.exec(r ?? '')?.[1]), String(r)).toBeLessThan(O)
     expect(baseCalls(a)).toEqual([])
@@ -574,12 +574,12 @@ describe('the layer over a delta (the delta route): one byte source, the origina
     const a = run({ looks: [() => new Response(catalog)], view: view(original as Uint8Array<ArrayBuffer>), original, tag: TAGO, originalTag: '"other-tag"', objects: objects(), ranged: true, head: deltaHead() })
     await settle()
     expect(await bindOf(a)(cut.index.head.base)).toBe(true)
-    await expect(a.side.options().composed(Uint8Array.from([1]), { x: 1 }).promise).rejects.toBeTruthy()
+    await expect(a.side.options().composed(null, { x: 1 }).promise).rejects.toBeTruthy()
     // the same tag on both: composed
     const b = go()
     await settle()
     expect(await bindOf(b)(cut.index.head.base)).toBe(true)
-    await expect(b.side.options().composed(Uint8Array.from([1]), { x: 1 }).promise).resolves.toBeTruthy()
+    await expect(b.side.options().composed(null, { x: 1 }).promise).resolves.toBeTruthy()
   })
 
   it('a delta that is not the head\'s (other bytes of its length, a length, a section that does not parse) or past the bound is no layer: the original staying, nothing composed', async () => {
@@ -637,7 +637,7 @@ describe('the layer over a delta (the delta route): one byte source, the origina
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     // another arXiv PDF: the same pages with a comment after the last %%EOF (its offsets, so its delta, are not the first's)
     const other = Uint8Array.from([...original, ...new TextEncoder().encode('\n% a later version\n')])
-    const made = await deltaOf(other, await oursOf(original), { PL })
+    const made = await deltaOf(other, files.wrapped, { PL })
     if ('refused' in made) throw new Error(made.why)
     const head2 = deltaHead({ base: baseOf({ bytes: made.delta.length, sha256: made.sha256, xref: made.xref }), orig: { bytes: other.length, sha256: hex(other), xref: startxrefOf(other) ?? undefined } })
     const a = go({ tab: new Uint8Array(O).fill(7) })

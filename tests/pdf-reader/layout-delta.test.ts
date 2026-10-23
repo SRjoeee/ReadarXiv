@@ -1,17 +1,14 @@
 // @vitest-environment node
 import * as PL from '@cantoo/pdf-lib'
 import { deflateSync } from 'node:zlib'
-import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { encodeAsk, readEntries } from '@/pdf-reader/engine/layout/chain-wire.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { deltaOf, proveDelta } from '@/pdf-reader/engine/layout/delta.mjs'
 import { deltaSection, pagesOf, rangesOf, replacedWhy } from '@/pdf-reader/engine/layout/delta-wire.mjs'
-import { alignOf, removerOf } from '@/pdf-reader/engine/layout/remove.mjs'
-import { startxrefOf, tailLinks } from '@/pdf-reader/engine/layout/tail.mjs'
+import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
 import { openObjects } from '@/pdf-reader/engine/layout/xref.mjs'
-import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { appendSection } from '@/pdf-reader/engine/layout/section.mjs'
 import { concat, ORIG_PACKED, type Obj, origObjects, oursObjects, pdfOf } from './helpers/delta-pdfs'
 
@@ -182,36 +179,6 @@ describe('the replaced pages\' list', () => {
   })
 })
 
-describe('the remover over the composed document (arXiv\'s bytes, then the delta)', () => {
-  it('continues the delta\'s section: its /Prev the delta\'s startxref, its numbers from the delta\'s /Size, PDF.js seeing the removal', async () => {
-    for (const orig of [ORIG_TABLE, ORIG_STREAM]) {
-      const r = await built(orig)
-      const composed = concat([orig, r.delta])
-      const task = getDocument({ data: composed.slice(), verbosity: 0 }), doc = await task.promise
-      const align = alignOf(OPS as never, await (await doc.getPage(2)).getOperatorList() as never)
-      await task.destroy()
-      // (remove the first glyph of page 2's first text-showing operation: "O" of "Our page two")
-      const ask = encodeAsk({ from: 2, to: 2, pages: 3, pdfjs: PDFJS, chain: { end: composed.length, xref: r.xref, next: null, kids: [], empty: null }, plans: [{ p: 2, shows: align.codes.length, units: [[0, [0, 0], []]], names: [], crops: [], align }] })!
-      const answer = await removerOf({ bytes: composed, PL, deflate: (b: Uint8Array) => new Uint8Array(deflateSync(b)) }).remove(ask)
-      expect(answer.ok).toBe(true)
-      const entries = readEntries((answer as { entries: Uint8Array }).entries)
-      if (entries.over) throw new Error('over')
-      expect(entries.page[2]).toMatchObject({ ok: true, at: { R: 4 } })
-      expect(entries.stats.removed).toBe(1)
-      const tail = (answer as { tail: Uint8Array }).tail
-      const links = tailLinks(tail)!
-      expect(links.prev).toBe(r.xref)
-      expect(links.startxref).toBe(composed.length + links.xrefAt)
-      expect(links.first).toBe(r.size)
-      const pages = await textOf(concat([composed, tail]))
-      expect(pages.slice(0, 3)).toEqual(await textOf(OURS))
-      // (Helvetica without /Widths: the removed glyph is shown invisible, render mode 3, still in the text; the page is there)
-      expect(pages).toHaveLength(4)
-    }
-  })
-})
-
-
 // ---- the adversarial review's findings (scratchpad route/delta/review), each a case the builder or the proof must meet
 const HELV = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'
 const line = (s: string, y = 100, font = 'F1') => `BT /${font} 12 Tf 20 ${y} Td (${s}) Tj ET\n`
@@ -333,11 +300,11 @@ describe('the review\'s findings', () => {
     expect(await deltaOf(orig, ours, { PL, workMax: 10_000 })).toMatchObject({ refused: 'delta-bound', why: /work/ })
   }, 30_000)
 
-  it('should-fix 4: a delta whose /Size leaves the remover\'s tails too few object numbers is refused, and read back refused', async () => {
-    const big = pdfOf(origObjects(), { root: 1, size: 8_000_000 })
-    expect(await deltaOf(big, OURS, { PL })).toMatchObject({ refused: 'delta-bound', why: /tails/ })
-    const d = appendSection({ end: ORIG_TABLE.length, objects: [[8_000_000, 0, enc('8000000 0 obj\nnull\nendobj\n')]], kind: 'table', prev: startxrefOf(ORIG_TABLE)!, size: 8_000_001, trailer: { root: '1 0 R' } }).bytes
-    expect(deltaSection(d, { bytes: ORIG_TABLE.length, xref: startxrefOf(ORIG_TABLE)! }).why).toMatch(/tails/)
+  it('should-fix 4: a delta whose /Size is past PDF\'s object numbers is refused, and read back refused', async () => {
+    const big = pdfOf(origObjects(), { root: 1, size: 8_388_609 })
+    expect(await deltaOf(big, OURS, { PL })).toMatchObject({ refused: 'delta-bound', why: /object numbers/ })
+    const d = appendSection({ end: ORIG_TABLE.length, objects: [[8_388_607, 0, enc('8388607 0 obj\nnull\nendobj\n')]], kind: 'table', prev: startxrefOf(ORIG_TABLE)!, size: 8_388_609, trailer: { root: '1 0 R' } }).bytes
+    expect(deltaSection(d, { bytes: ORIG_TABLE.length, xref: startxrefOf(ORIG_TABLE)! }).why).toMatch(/object numbers/)
   })
 })
 

@@ -8,10 +8,9 @@
 //     repository, `isImageDecoderSupported: false`, scale 2; a mismatch rendered again up to three times, since Chromium's own
 //     renders of a page may differ from each other), every page: G1, every group ON against our unwrapped page, the pixels
 //     outside the split shows' glyph boxes (+1 px) and the image edges (within 1 px of an image's box) must be 0, and those
-//     inside the split glyphs are counted (E4's bound: at most 0.1 % of the boxes' pixels, max channel Δ 16); G2', the units'
-//     text and labels OFF (placeholders and names ON) against the remover's cut of the same ownership (layout/remove.mjs
-//     makeAddon, today's R page), 0 px outside the image edges and split glyphs, and the image-edge pixels each changes counted
-//     (E6's ruling: equal). G2' needs the remover's makeAddon; where the module no longer exports it, it is skipped and said so.
+//     inside the split glyphs are counted (E4's bound: at most 0.1 % of the boxes' pixels, max channel Δ 16). (G2', the units'
+//     text and labels OFF against the remover's cut of the same ownership, was measured while the remover was there, at
+//     85fdc442: lab/pdf/records/ocg-gate.md; it went with the remover, its only oracle, when REMOVAL 8 deleted it.)
 // It reads the gate pack's fixtures (`--pack`, lab/pdf/data/fixtures by default: <id>-zh/arxiv.pdf and base.pdf, our final
 // pass), each paper's source (`--sources`, lab/pdf/data/corpus/<id>/source.gz: its units), and pairs given whole (`--pair=<id>=
 // <arxiv.pdf>,<base.pdf>`, the 2602.23285v2 heavy pair, whose source is not read: no spell check); it writes nothing but its
@@ -28,7 +27,6 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { deltaOf, proveDelta } from '../../../src/pdf-reader/engine/layout/delta.mjs'
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { liteWorkerSource, NO_IMAGE_PIXELS } from '../../../src/pdf-reader/engine/layout/pdf-lite.mjs'
-import * as remover from '../../../src/pdf-reader/engine/layout/remove.mjs'
 import { wrapFinal } from '../../../src/pdf-reader/engine/layout/wrap.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
@@ -90,14 +88,14 @@ async function paper(id) {
   if (r.refused) return { id, refused: r.refused, why: r.why }
   const d = await deltaOf(orig, r.bytes, { PL }), d0 = await deltaOf(orig, bytes, { PL })
   const proof = d.refused ? d.refused : (await proveDelta(orig, d.delta, r.bytes, { PL, getDocument, documentOptions: OPTIONS, replaced: d.replaced })).ok ? 'ok' : 'failed'
-  // the pages' split glyphs and image edges (device px at scale 2), and the remover's plan of the same ownership
-  const own = r.owned, rects = [], plan = { pages: {} }
+  // the pages' split glyphs and image edges (device px at scale 2)
+  const own = r.owned, rects = []
   const task = getDocument({ ...OPTIONS, data: bytes.slice() }), doc = await task.promise
   const N = doc.numPages
   for (let p = 1; p <= N; p++) {
     const page = await doc.getPage(p), vp = page.getViewport({ scale: 2 })
     const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: page.rotate, indices: true })
-    const G = own.glyphs[p - 1] ?? [], B = own.boxes[p - 1] ?? []
+    const G = own.glyphs[p - 1] ?? []
     const byShow = new Map()
     ink.glyphs.forEach((g, i) => { if (g.n >= 0) (byShow.get(g.n) ?? byShow.set(g.n, new Set()).get(g.n)).add(G[i] ?? null) })
     const split = new Set([...byShow].filter(([, s]) => s.size > 1).map(([n]) => n))
@@ -109,21 +107,11 @@ async function paper(id) {
       image.push([x0 - 1, y0 - 1, x1 + 1, y0 + 1], [x0 - 1, y1 - 1, x1 + 1, y1 + 1], [x0 - 1, y0 - 1, x0 + 1, y1 + 1], [x1 - 1, y0 - 1, x1 + 1, y1 + 1])
     }
     rects.push({ split: ink.glyphs.filter(g => split.has(g.n)).map(g => dev(Math.min(g.x0, g.ix0), g.bottom, Math.max(g.x1, g.ix1), g.top)), image })
-    const byUnit = new Map(), of = u => byUnit.get(u) ?? byUnit.set(u, { id: u, glyphs: [], paths: [] }).get(u)
-    const unitOf = grp => (grp && grp[0] === 'u' && !grp.endsWith('.p') ? Number(grp.slice(1).split('.')[0]) : null)
-    ink.glyphs.forEach((g, i) => { const u = unitOf(G[i]); if (u !== null) of(u).glyphs.push(g.n, g.k) })
-    B.forEach((grp, b) => { const u = unitOf(grp); if (u !== null && ink.paths[b] >= 0) of(u).paths.push(ink.paths[b]) })
-    if (byUnit.size) plan.pages[p] = { units: [...byUnit.values()], shows: ink.shows }
     page.cleanup()
-  }
-  let removed = null
-  if (typeof remover.makeAddon === 'function') {
-    const R = await remover.openRemover(bytes, { PL, inflate })
-    removed = (await remover.makeAddon({ R, bytes, OPS, opListOf: async p => (await doc.getPage(p)).getOperatorList(), deflate, plan, sets: ['R'] }))
   }
   await task.destroy()
   // Chromium
-  const files = new Map([['plain.pdf', bytes], ['wrapped.pdf', r.bytes], ...(removed ? [['removed.pdf', removed.bytes]] : [])])
+  const files = new Map([['plain.pdf', bytes], ['wrapped.pdf', r.bytes]])
   const browser = await chromium.launch({ channel: 'chromium' })
   try {
     const page = await browser.newPage()
@@ -139,8 +127,6 @@ async function paper(id) {
     const call = (fn, ...a) => page.evaluate(([f, x]) => window.gate[f](...x), [fn, a])
     await call('open', 'P', 'plain.pdf')
     await call('open', 'W', 'wrapped.pdf')
-    if (removed) await call('open', 'R', 'removed.pdf')
-    const off = [...own.units.keys()].flatMap(u => [`axt:u${u}`, `axt:u${u}.l`])
     const rows = []
     for (let p = 1; p <= N; p++) {
       const { split, image } = rects[p - 1], row = { p }
@@ -148,11 +134,6 @@ async function paper(id) {
       const g1 = await again('P', 'A', async () => { await call('render', 'P', p, 'P'); await call('render', 'W', p, 'A') }, [...split, ...image])
       const inSplit = split.length ? await call('cmp', 'P', 'A', split) : { inside: 0, region: 0, maxIn: 0 }
       Object.assign(row, { g1: g1.outside, splitShare: inSplit.region ? inSplit.inside / inSplit.region : 0, splitMax: inSplit.maxIn })
-      if (removed?.manifest.page[p]?.ok) {
-        const g2 = await again('H', 'X', async () => { await call('render', 'W', p, 'H', off); await call('render', 'R', N + p, 'X') }, [...split, ...image])
-        row.g2 = g2.outside
-        if (image.length) { row.edgeWrap = (await call('cmp', 'P', 'H', image)).inside; row.edgeRemover = (await call('cmp', 'P', 'X', image)).inside }
-      }
       rows.push(row)
     }
     const st = r.stats
@@ -160,7 +141,6 @@ async function paper(id) {
       id, canvas: CANVAS, pages: N, wrapped: st.wrapped, refusedPages: st.refusedPages, unhidden: st.unhidden, labelKept: st.labelKept, split: st.split, groups: st.groups,
       wrapMs, baseBytes: [bytes.length, r.bytes.length], delta: d.refused ?? d.delta.length, deltaUnwrapped: d0.refused ?? d0.delta.length, proof,
       g1Pages: rows.filter(x => x.g1).map(x => [x.p, x.g1]), splitShareMax: Math.max(0, ...rows.map(x => x.splitShare)), splitMax: Math.max(0, ...rows.map(x => x.splitMax)),
-      g2: removed ? { pages: rows.filter(x => x.g2 !== undefined).length, failing: rows.filter(x => x.g2).map(x => [x.p, x.g2]), edgeWrap: rows.reduce((n, x) => n + (x.edgeWrap ?? 0), 0), edgeRemover: rows.reduce((n, x) => n + (x.edgeRemover ?? 0), 0), edgeUnequal: rows.filter(x => x.edgeWrap !== x.edgeRemover).map(x => x.p) } : 'skipped: remove.mjs exports no makeAddon',
       ...(ROWS ? { rows } : {}),
     }
   } finally { await browser.close() }

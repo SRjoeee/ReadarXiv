@@ -89,58 +89,17 @@ delta's catalog carrying `/OCProperties`). What stays open here:
 - Invariant: no content stream of ours references an OCG directly.
 
 
-## 4. The reader hides exactly the units it draws (engine: layer-proto/run.mjs, view/layer-side.mjs)
+## 4. The reader hides exactly the units it draws: settled (the reader side, feat/ocg-reader)
 
-### 4.1 Contract
-- D(p) is the units the door draws on p: laid, faces served, not `unhidden`, and a table group whole.
-  OFF(p) = `u<id>` for each of them, plus `.p` unless the reading keeps every placeholder in place, plus `.l` where the label
-  is drawn in the target's form, plus `n<occ>` for names drawn in the target's word.
-- **One config per document** (E3, E8; ruling): the view builds one `getOptionalContentConfig({ intent: 'display' })` when the
-  document opens, keeps it, and passes it to every render. PDF.js 6.3.289 otherwise builds a new config on every render (+23 MiB
-  main-thread peak on the thesis).
-  - The config is never changed while a render using it runs: renders of a document are serialized through one queue.
-  - Each render sets the visibility it needs (`setVisibility`, 1.4 ms for 40,000 groups) just before it starts, and awaits the
-    render before the next one sets visibility.
-- Render A: the composed page at k with OFF(p) false and the rest true, on a canvas of `pageBox`.
-- Render B: drawn only where a crop or a kept placeholder needs it. It has every `u` and `.l` OFF and every `.p` ON. Crops are
-  cut through their own glyph boxes, so no neighbouring word comes along.
-- Render C: all ON, for keep and orphan characters only, counted as `pastedKeep`.
-- Commit is one task: A, the pastes and the SVG. No frame shows a unit hidden without its translation, or a translation over
-  its visible ink.
-- A change in D(p) (a later lay, a reopen, a fallback, a zoom) re-renders A with no re-parse, because visibility is read at
-  paint time (spike).
-
-### 4.2 Deleted in this project (R2)
-
-| Deleted | Kept |
-|---|---|
-| `layer/swap.mjs`; `removal.mjs` (fileOwnership, pagePlan, pageDirty, protection, fileSwap, RULE_*; ~630 lines) | the SVG layer, faces, `commit`'s one task |
-| the remover child and transport: `remove.mjs` (except `lex` and the hide-mode chunker, moved under delta), `addon.mjs`, `addon-manifest.mjs`, `chain.mjs`, `chain-wire.mjs`, `tail.mjs`, the cut's chain hooks, part tails in `format.mjs readPart`, Worker TAIL_CAP | `pageBox`/calcRound for our canvases, `drew(canvas, k)`, RECOPY_MS, COPY_PIXELS |
-| paper fills (`erase` ops), the old way (`run.mjs` erase-and-restore, `cut.mjs:17`, `removal.mjs:12-14`), v0's own reading for units the file does not locate whole | crops (from B), kept placeholders (B), keep characters (C) |
-| `drawnSource`, K_SLACK, left-canvas copies, `drawn.mjs` capture, ROUND_MAX for foreign canvases | — |
-
-Roughly 2,300–2,800 lines across engine, web and extension (`full` is kept); the count is made at deletion. The outline table (`readOutlines`)
-and the `rules` boxes stay only if a consumer other than the swap remains. That is audited at deletion.
-
-### 4.3 Invariants
-1. H1. Ink is hidden by groups only.
-2. H2. A, B and C use one document, page, k and canvas size. Non-unit ink is pixel-equal across them except on image edges
-   (E6: Chromium rasterizes an image's edge depending on what was drawn before it; today's removal moves the same pixels). B
-   draws on the same GPU canvas kind as A; there is no CPU fallback.
-3. H3. A unit's groups are OFF on p iff it is in D(p).
-
-### 4.4 Failure modes
-
-| Failure | Reader shows |
-|---|---|
-| a group named in the head's index missing from the config | that unit as the original; warned once |
-| render A or B throws or is aborted | the page as the original (`shownOriginal`, `rearm`) |
-| host PDF.js ≠ PDFJS | the original; warning `pdfjs` |
-
-### 4.5 Tests
-- T4.1 (fake PDF.js): OFF(p) for kept or moved placeholders, labels, names, table groups, and units spanning pages.
-- T4.2 (Node PDF.js over S1/sample-1): A equals G2's oracle, and a D(p) change does not call `getOperatorList` (spy).
-- T4.3: no `swap` or `erase` op exists anywhere: grep gate plus one runtime assertion.
+Folded into `docs/PDF-READER.md` §11.8 ("What a copy hides": one configuration a document and the serialized renders, renders
+A, B and C, what a unit hides on a page, `unhidden` and `labelKept`, the cell rules a part carries, the failures, the lab
+gate's numbers) and §19.4, §19.6, §18.2 (the bundle's and the parts' `rules`, no add-on, no tails, REMOVAL 8). Deleted as
+§4.2 listed: `layer/swap.mjs`, `layer-proto/removal.mjs`, `layout/addon.mjs`, `addon-manifest.mjs`, `chain.mjs`,
+`chain-wire.mjs`, the remover child (`remove.mjs` keeps `lex`, `alignOf` and `openRemover`, which the wrap reads), `tailLinks`,
+part tails and `TAIL_CAP`, paper fills and the old way, `drawnSource`, `K_SLACK`, the capture of a page view's scale and the
+left-canvas copies (`drawn.mjs` keeps `pageBox`). What stays open here:
+- T4.2 is `tests/pdf-reader/layer-visibility-pixels.test.ts` (render A against a per-unit oracle and PDF.js's own path, no
+  operator list asked again); the production path's one parse a page is `layer-proto-parts.test.ts` (WARM_PAGES).
 
 ## 5. Hosts
 

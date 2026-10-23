@@ -22,7 +22,7 @@ for r in $(seq 1 $reps); do
     if [ $s = head ]; then eng=$head; else eng=$base; fi
     echo "$(date '+%H:%M:%S') model-$s-r$r"
     LAYER_REFS=$PACK/refs LAYER_GEOMETRY=$PACK/geometry AXT_DATA=${AXT_DATA:-$PACK/data} TEXMF_DIST=${TEXMF_DIST:-$PACK/texmf} \
-      node_modules/.bin/tsx lab/pdf/spikes/layer-gate.mjs --tier=model --engine-kind=proto --proto-tex=lines --removal=draw --layouts=fixed \
+      node_modules/.bin/tsx lab/pdf/spikes/layer-gate.mjs --tier=model --engine-kind=proto --proto-tex=lines --layouts=fixed \
       --fixtures=$PACK/fixtures --engine=$eng --perf --workers=1 --no-progress > $LOGS/model-$s-r$r.log 2>&1
     echo "exit $?" >> $LOGS/model-$s-r$r.log
   done

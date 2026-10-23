@@ -419,7 +419,7 @@ function tech(name, rows) {
   return d
 }
 const engineRows = () => [
-  [t('techEngine'), info.proto ? t('techEngine1', info.proto.root === 'this worktree' ? (info.branch ?? info.proto.root) : info.proto.root, protoCommit ?? '-', info.proto.remover ?? '-') : '-', 'mono'],
+  [t('techEngine'), info.proto ? t('techEngine1', info.proto.root === 'this worktree' ? (info.branch ?? info.proto.root) : info.proto.root, protoCommit ?? '-') : '-', 'mono'],
   [t('techInputs'), t('techInputs1', info.inputs ?? {}), 'mono'],
   rules?.from() ? [t('rules.current'), `${t('rules.setFrom', rules.from().label, rules.from().version)}${rules.dirty() ? ` · ${t('rules.src.edit')}` : ''}`, 'mono'] : null,
 ]

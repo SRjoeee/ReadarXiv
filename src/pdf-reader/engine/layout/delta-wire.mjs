@@ -15,9 +15,6 @@ export const DELTA_MAX_BYTES = 24 * 2 ** 20
 export const DELTA_MAX_SHARE = 0.35
 /** the objects at most: of either document read, and of the delta written */
 export const DELTA_OBJECTS_MAX = 200_000
-/** the object numbers a delta leaves free below OBJECT_MAX at least, for the remover's tails (its /Size plus this at most
- *  OBJECT_MAX + 1; a part's tail holds far fewer than 2^20 objects: TAIL_CAP's 1 MiB of at least a byte each) */
-export const DELTA_TAIL_ROOM = 2 ** 20
 /** the replaced pages' ranges a head names at most */
 export const REPLACED_MAX = 4096
 /** why a paper's base of ours is whole (`full`) where a delta was asked: the delta's builder or its proof refused it. `parse`
@@ -180,7 +177,7 @@ export function deltaSection(delta, orig) {
     if (7 * r !== L) return no('a cross-reference stream longer than its /Index')
   }
   if (prev !== orig.xref) return no(`its /Prev ${prev} is not the original's startxref ${orig.xref}`)
-  if (size + DELTA_TAIL_ROOM > OBJECT_MAX + 1) return no(`its /Size ${size} leaves the remover's tails fewer than ${DELTA_TAIL_ROOM} object numbers`)
+  if (size > OBJECT_MAX + 1) return no(`its /Size ${size} is past PDF's object numbers (${OBJECT_MAX})`)
   const numbers = new Set()
   for (const [n, g, off] of rows) {
     if (numbers.has(n)) return no(`object ${n} twice`)

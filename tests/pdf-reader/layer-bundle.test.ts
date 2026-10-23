@@ -4,11 +4,10 @@ import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import {
   BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, type BundleParts, type BundleUnit, BundleRefusal, bundleKey, bundleUnitsOf, CTAG, type ReadBundle, readBundle, UNIT_FLAG_BITS, VTAG, writeBundle,
 } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { ADDON_CAP, REMOVAL, type RemovalManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PIPELINE_VERSION as LIVE_PIPELINE } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { displayEdges } from '@/pdf-reader/engine/translate/mt.mjs'
-import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
+import { PDFJS, PIPELINE_VERSION, REMOVAL } from '@/pdf-reader/engine/pipeline/versions.mjs'
 
 // The layer bundle (the layer-only plan §3, A2's E7): one JSON file a paper version, written by the engine where the
 // paper is prepared and read by both readers with the engine's one parser, within bounds. Synthetic inputs only: the
@@ -65,17 +64,9 @@ function layoutOf(): LayoutFile {
     erase: [], ph: [[2, 4, MATH, 0, 1, 100, 650, 110, 657, 647]], labels: [], headings: [[0, 'A Title']], pageText: [], held: [], names: [], lineskip: null,
   }
 }
-/** the add-on's bytes after arXiv's: every byte value, so that base64 holds every character */
-const tailOf = (n = 300) => Uint8Array.from({ length: n }, (_, i) => (i * 37 + 11) & 255)
-function manifestOf(appended: number): RemovalManifest {
-  return {
-    schema: 1, removal: REMOVAL, pages: 2, sets: {},
-    page: { 1: { ok: true, units: { 2: [72, 640, 300, 660] }, at: { R: 3 }, dirty: [72, 640, 80, 650] }, 2: { ok: true, rules: [72, 500, 540, 500.4] } },
-    appended, stats: { removed: 3, cut: 3 },
-  }
-}
+/** the rules near the bundle's table cells: one on page 2 */
+const RULES = { 2: [72, 500, 540, 500.4] }
 function partsOf(): BundleParts {
-  const tail = tailOf()
   return {
     paper: { id: '2608.04322', version: 1, pages: 2 },
     base: { bytes: 123_456, sha256: '0123456789abcdef'.repeat(4), url: '/api/v1/original/2608.04322v1' },
@@ -87,7 +78,7 @@ function partsOf(): BundleParts {
       units: [[0, 0, [[1, 150, 696, 460, 712]]], [2, 12, [[1, 72, 647, 540, 657.5], [2, 72, 700, 300, 710]]], [3, 40, [[2, 100, 600, 140, 610]]]],
     },
     layout: layoutOf(),
-    addon: { manifest: manifestOf(tail.length), tail },
+    rules: RULES,
   }
 }
 const ENGINE = { bundle: BUNDLE, pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS }
@@ -118,7 +109,7 @@ describe('the versions a bundle names', () => {
     expect(CTAG).toBe(`b${BUNDLE}-j${PDFJS}`)
     expect(VTAG).toBe(`${CTAG}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const vtag = VTAG
-    expect(vtag).toBe('b3-j6.3.289-p26-l18-r7')
+    expect(vtag).toBe('b3-j6.3.289-p26-l18-r8')
     expect(bundleKey('1706.03762', 7)).toBe(`layer/1706.03762v7/${vtag}.json`)
     expect(bundleKey('hep-th/9901001', 1)).toBe(`layer/hep-th_9901001v1/${vtag}.json`)
     // (the web's vtag form, src/shared/identity.ts VTAG_FORM, is stricter than a token of letters, digits and points)
@@ -156,7 +147,7 @@ describe('bundleUnitsOf', () => {
 })
 
 describe('writeBundle, then readBundle', () => {
-  it('is the identity: every part as it was given, the engine\'s versions with the image, the tail its bytes', () => {
+  it('is the identity: every part as it was given, the engine\'s versions with the image', () => {
     const parts = partsOf()
     const bytes = writeBundle(parts)
     for (const json of [bytes, textOf(bytes)]) {
@@ -169,33 +160,24 @@ describe('writeBundle, then readBundle', () => {
       expect(r.units).toEqual(UNITS)
       expect(r.left).toEqual(parts.left)
       expect(r.layout).toEqual(parts.layout)
-      expect(r.addon?.manifest).toEqual(parts.addon?.manifest)
-      expect(r.addon?.tail).toEqual(parts.addon?.tail)
+      expect(r.rules).toEqual(RULES)
       expect(r.dropped).toEqual([])
     }
   })
 
-  it('is deterministic, in a fixed order, the layout as its file writes it and the tail as base64', () => {
+  it('is deterministic, in a fixed order, the layout as its file writes it and the rules in page order', () => {
     const a = writeBundle(partsOf()), b = writeBundle(partsOf())
     expect(textOf(a)).toBe(textOf(b))
     const json = JSON.parse(textOf(a))
-    expect(Object.keys(json)).toEqual(['schema', 'paper', 'base', 'versions', 'units', 'left', 'layout', 'addon'])
+    expect(Object.keys(json)).toEqual(['schema', 'paper', 'base', 'versions', 'units', 'left', 'layout', 'rules'])
     expect(Object.keys(json.versions)).toEqual(['bundle', 'pipeline', 'layout', 'removal', 'pdfjs', 'image'])
-    expect(textOf(a)).toContain(`"layout":${encodeLayout(layoutOf())},"addon":`)
-    expect(json.addon.tail).toBe(Buffer.from(tailOf()).toString('base64'))
+    expect(textOf(a)).toContain(`"layout":${encodeLayout(layoutOf())},"rules":{"2":[72,500,540,500.4]}}`)
   })
 
-  it('carries a tail of any length through base64, and no add-on or no layout as null', () => {
-    for (let n = 1; n <= 7; n++) {
-      const parts = partsOf(), tail = tailOf(n)
-      parts.addon = { manifest: manifestOf(n), tail }
-      const json = JSON.parse(textOf(writeBundle(parts)))
-      expect(json.addon.tail).toBe(Buffer.from(tail).toString('base64'))
-      expect(readBundle(writeBundle(parts)).addon?.tail).toEqual(tail)
-    }
-    const parts = { ...partsOf(), layout: null, addon: null }
-    const r = readBundle(writeBundle(parts))
-    expect([r.layout, r.addon]).toEqual([null, null])
+  it('writes no rules, or none with no layout, as null', () => {
+    for (const rules of [null, {}]) expect(readBundle(writeBundle({ ...partsOf(), rules })).rules).toBeNull()
+    const r = readBundle(writeBundle({ ...partsOf(), layout: null }))
+    expect([r.layout, r.rules]).toEqual([null, null])
   })
 })
 
@@ -306,69 +288,35 @@ describe('readBundle refuses', () => {
     expect(refusalOf(broken(b => { (b.layout as { unlaid?: unknown }).unlaid = [[9, 'noAnchor']] }))?.why).toMatch(/^layout\.unlaid\[0\]\[0\]/)
   })
 
-  it("a layout file of a newer maker and a manifest of a newer remover are read: a part is refused by its schema, never by what made it (decision 4)", () => {
-    const r = readBundle(bytesOf(broken(b => { b.versions.layout = '5'; b.layout.layout = '5'; b.versions.removal = '6'; b.addon.manifest.removal = '6' })))
-    expect([r.layout?.layout, r.addon?.manifest.removal, r.dropped]).toEqual(['5', '6', []])
-    expect(refusalOf(broken(b => { b.addon.manifest.schema = 2 }))?.why).toMatch(/^addon\.manifest\.schema/)
+  it("a layout file of a newer maker is read: a part is refused by its schema, never by what made it (decision 4)", () => {
+    const r = readBundle(bytesOf(broken(b => { b.versions.layout = '5'; b.layout.layout = '5'; b.versions.removal = '6' })))
+    expect([r.layout?.layout, r.versions.removal, r.dropped]).toEqual(['5', '6', []])
   })
 
-  it('a manifest refused by its own rules, its pages the paper\'s; a tail that is not base64 or not the manifest\'s bytes', () => {
-    expect(refusalOf(broken(b => { b.addon.manifest.page[1].dirty.push(1) }))?.why).toMatch(/^addon\.manifest\.page\.1\.dirty/)
-    expect(refusalOf(broken(b => { b.addon.manifest.pages = 3; b.addon.manifest.page[3] = { ok: true } }))?.why).toMatch(/^addon\.manifest\.pages/)
-    // (within the page's view, which the left gives)
-    expect(refusalOf(broken(b => { b.addon.manifest.page[2].rules = [72, 500, 640, 501] }))?.why).toMatch(/^addon\.manifest\.page\.2\.rules\[2\]/)
-    for (const tail of ['', 'AAA', 'AA=A', 'AB==', 'A===', '****', 7]) expect(refusalOf(broken(b => { b.addon.tail = tail }))?.why).toMatch(/^addon\.tail/)
-    expect(refusalOf(broken(b => { b.addon.manifest.appended += 1 }))?.why).toMatch(/^addon\.tail/)
-    // one spelling of each tail: the bits its padding leaves are 0 (one byte 0 is AA==, two are AAA=)
-    for (const [tail, n] of [['AA==', 1], ['AAA=', 2]] as const) expect(refusalOf(broken(b => { b.addon.tail = tail; b.addon.manifest.appended = n }))).toBeNull()
-    for (const [tail, n] of [['AB==', 1], ['AAB=', 2]] as const) expect(refusalOf(broken(b => { b.addon.tail = tail; b.addon.manifest.appended = n }))?.why).toBe('addon.tail: not base64: padded bits not 0')
-    expect(refusalOf(broken(b => { b.addon.more = 1 }))?.why).toMatch(/^addon\.more/)
+  it('cell rules where the layout is none, on no page of the paper, or that are no boxes within their page\'s view', () => {
+    expect(refusalOf(broken(b => { b.layout = null }))?.why).toMatch(/^rules: not null where the layout is none/)
+    expect(refusalOf(broken(b => { b.rules = { 3: [72, 500, 540, 500.4] } }))?.why).toMatch(/^rules\.3/)
+    expect(refusalOf(broken(b => { b.rules = { x: [72, 500, 540, 500.4] } }))?.why).toMatch(/^rules\.x/)
+    expect(refusalOf(broken(b => { b.rules = {} }))?.why).toMatch(/^rules/)
+    expect(refusalOf(broken(b => { b.rules[2] = [72, 500, 640, 501] }))?.why).toMatch(/^rules\.2\[2\]/)
+    expect(refusalOf(broken(b => { b.rules[2] = [72, 500, 540] }))?.why).toMatch(/^rules\.2/)
+    expect(refusalOf(broken(b => { b.rules[2] = [] }))?.why).toMatch(/^rules\.2/)
   })
 
-  it('a manifest of the check\'s form (its outline table, its colours, a set past the shipped ones), or a key naming a prototype', () => {
-    expect(refusalOf(broken(b => { b.addon.manifest.outlines = { CMR10: ['a', 1, 0, 2, 3] } }))?.why).toBe('addon.manifest.outlines: not a key of the schema')
-    expect(refusalOf(broken(b => { b.addon.manifest.colours = { '1.0': [255, 0, 0] } }))?.why).toBe('addon.manifest.colours: not a key of the schema')
-    expect(refusalOf(broken(b => { b.addon.manifest.sets = { R: 2, P: 4 } }))?.why).toMatch(/^addon\.manifest\.sets\.P: not a key/)
-    expect(refusalOf(broken(b => { b.addon.manifest.page[1].at = { R: 3, P: 4 } }))?.why).toMatch(/^addon\.manifest\.page\.1\.at\.P: not a key/)
-    // (the shipped add-on's sets: none, compact, or R at its fixed place)
-    expect(refusalOf(broken(b => { b.addon.manifest.sets = { R: 2 }; delete b.addon.manifest.page[1].at }))).toBeNull()
-    for (const k of ['constructor', 'prototype']) expect(refusalOf(broken(b => { b.addon.manifest.stats[k] = 1 }))?.why).toMatch(new RegExp(`^addon\\.manifest\\.stats\\.${k}: not a count's name`))
-    const text = JSON.stringify(written()).replace('"stats":{', '"stats":{"__proto__":1,')
-    expect(refusalOf(text)?.why).toBe('addon.manifest.stats.__proto__: not a count\'s name')
-    // and nowhere else may an object read take one
-    for (const [at, key] of [['"versions":{', '__proto__'], ['"paper":{', 'constructor'], ['"left":{', 'prototype'], ['"addon":{', '__proto__'], ['"layout":{', '__proto__']] as const) {
+  it('a key naming a prototype', () => {
+    for (const [at, key] of [['"versions":{', '__proto__'], ['"paper":{', 'constructor'], ['"left":{', 'prototype'], ['"layout":{', '__proto__']] as const) {
       expect(refusalOf(JSON.stringify(written()).replace(at, `${at}"${key}":1,`))?.why).toMatch(/not a key of the schema/)
     }
+    // (the rules' keys are pages: a prototype's name is none)
+    expect(refusalOf(JSON.stringify(written()).replace('"rules":{', '"rules":{"__proto__":1,'))?.why).toMatch(/^rules\.__proto__: not a page/)
     expect(readBundle(JSON.stringify(written()).replace('{"trail":"xy"}', '{"trail":"xy","__proto__":"x"}')).dropped).toEqual([2])
   })
 
-  it('a tail past ADDON_CAP (which a bundle within BUNDLE_CAP cannot hold: its base64 is past it)', () => {
-    const b = written()
-    b.addon.tail = 'A'.repeat(4 * Math.ceil((ADDON_CAP + 1) / 3))
-    b.addon.manifest.appended = 3 * (b.addon.tail.length / 4)
-    expect(refusalOf(b)?.why).toBe(`more than ${BUNDLE_CAP} bytes`)
-    const parse = vi.spyOn(JSON, 'parse')
-    expect(refusalOf(b, { bytes: 8 * 2 ** 20 })?.why).toMatch(new RegExp(`^addon\\.tail: .*more than ${ADDON_CAP}`))
-    expect(parse).toHaveBeenCalledTimes(1)
-    b.addon.tail = 'A'.repeat(4 * Math.floor(ADDON_CAP / 3))
-    b.addon.manifest.appended = 3 * (b.addon.tail.length / 4)
-    expect(refusalOf(b, { bytes: 8 * 2 ** 20 })).toBeNull()
-  })
 })
 
 describe('writeBundle never writes a bundle readBundle refuses', () => {
   const para: BundleUnit = ['para', 0, null, null, null, [[0, 'x']]]
-  it('past BUNDLE_CAP bytes: the add-on written null, the layout kept', () => {
-    // (a tail of 3 MiB: its base64 is 4 MiB)
-    const tail = Uint8Array.from({ length: 3 * 2 ** 20 }, (_, i) => (i * 37 + 11) & 255)
-    const parts = { ...partsOf(), addon: { manifest: manifestOf(tail.length), tail } }
-    const bytes = writeBundle(parts)
-    expect(bytes.length).toBeLessThanOrEqual(BUNDLE_CAP)
-    const read = readBundle(bytes)
-    expect(read.addon).toBeNull()
-    expect(read.layout).toEqual(partsOf().layout)
-  })
-  it('past BUNDLE_VALUES with the add-on dropped: the layout written null too', () => {
+  it('past BUNDLE_VALUES: the layout written null, and its rules with it', () => {
     // (a layout of 100 units, 2,000 lines each: 1.6 million values)
     const n = 100, P = UNIT_KINDS.indexOf('para')
     const line = [1, 72, 540, 650, 657.5, 647.25, 10, 0], rows = Array.from({ length: 2000 }, () => line).flat()
@@ -378,7 +326,7 @@ describe('writeBundle never writes a bundle readBundle refuses', () => {
     } as never
     const parts = { ...partsOf(), units: Array.from({ length: n }, () => para), left: { ...partsOf().left, kinds: Array.from({ length: n }, () => 'para'), units: [] }, layout }
     const read = readBundle(writeBundle(parts))
-    expect([read.layout, read.addon]).toEqual([null, null])
+    expect([read.layout, read.rules]).toEqual([null, null])
     expect(read.units).toHaveLength(n)
   })
   it('past both with neither: throws BundleRefusal', () => {

@@ -141,12 +141,11 @@ describe("v0's drawing as data: recorded in its own device pixels, drawn at any 
     g.OffscreenCanvas ??= class { getContext() { return { font: '', measureText: (s: string) => ({ width: 50 * s.length }) } } }
     L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
   })
-  // a page 792 units tall at 2.5 device pixels a unit; one block of two lines, a crop of page 1 on the second
+  // a page 792 units tall at 2.5 device pixels a unit; a unit's hidden lines, a kept placeholder, a kept character, a crop of page 1
   const k = 2.5
   const px = (x: number, y: number): [number, number] => [x * k, (792 - y) * k]
-  const rects = [[1, 100, 700, 300, 710], [1, 100, 686, 250, 696]]
-  const blocks = [{ page: 1, rects, x1: 300 }] as unknown as Parameters<typeof L2.unitOps>[1]
-  const L = { scale: 0.9, lines: [{ page: 1, baseline: 688, items: [{ x: 120, w: 18, t: { crop: { crop: [40, 500, 60, 510], page: 1, baseline: 502, k: 3 } } }] }] } as unknown as Parameters<typeof L2.unitOps>[0]
+  const L = { scale: 0.9, lines: [{ page: 1, baseline: 688, items: [{ x: 120, w: 18, t: { crop: { crop: [40, 500, 60, 510], page: 1, baseline: 502, k: 3 } } }, { x: 150, w: 10, t: { crop: { crop: [70, 600, 80, 610], page: 1, baseline: 602 } } }] }] } as unknown as Parameters<typeof L2.hideOps>[0]
+  const dev = (b: number[]) => { const [ax, ay] = px(b[0]!, b[3]!), [bx, by] = px(b[2]!, b[1]!); return [ax, ay, bx - ax, by - ay].map(v => expect.closeTo(v, 9)) }
   /** a 2D context that records its calls */
   const recorder = () => {
     const calls: unknown[][] = []
@@ -156,46 +155,51 @@ describe("v0's drawing as data: recorded in its own device pixels, drawn at any 
     })
     return { ctx: ctx as unknown as CanvasRenderingContext2D, calls }
   }
-  it("records v0's erase (its padding: 0.3 before the unit's first line, 1.8 elsewhere, 1.2 above and below) and its crop", () => {
+  it('records where the unit\'s ink is hidden, what is pasted back from B and C, and its crops: a placeholder\'s from B through its segments, a label\'s from C', () => {
     const audit: Audit[] = []
-    const ops = L2.unitOps(L, blocks, 1, { px, k, hasSource: () => true, pxOf: () => px, audit, id: 7 })
-    expect(ops.map(o => o.op)).toEqual(['erase', 'erase', 'crop'])
-    // the first line from 0.3 before it; the second, not its block's last but the block's own, to its own right edge
-    expect(ops[0]).toEqual({ op: 'erase', box: [(100 - 0.3) * k, (792 - 711.2) * k, (300 + 1.8 - (100 - 0.3)) * k, (711.2 - 698.8) * k].map(v => expect.closeTo(v, 9)) })
-    expect(ops[1]).toEqual({ op: 'erase', box: [(100 - 1.8) * k, (792 - 697.2) * k, (250 + 1.8 - (100 - 1.8)) * k, (697.2 - 684.8) * k].map(v => expect.closeTo(v, 9)) })
-    // the crop: its source's box, laid at the item's place with its baseline on the line's, at the fit's scale
-    expect(ops[2]).toEqual({ op: 'crop', page: 1, src: [40 * k, (792 - 510) * k, 20 * k, 10 * k].map(v => expect.closeTo(v, 9)), dst: [120 * k, (792 - (688 + 8 * 0.9)) * k, 18 * k, 10 * 0.9 * k].map(v => expect.closeTo(v, 9)) })
-    expect(audit.map(a => (a as { what: string }).what)).toEqual(['erase', 'erase', 'crop'])
+    const hidden = [[100, 698, 302, 712], [98, 684, 252, 698]], fromB = [[60, 680, 70, 690]], fromC = [[200, 684, 206, 694]]
+    const clips = new Map([[3, { rects: [[40, 500, 50, 510]], own: [[40.6, 500.6, 49.4, 509.4]] }]])
+    const ops = L2.hideOps(L, 1, { px, k, hasSource: () => true, pxOf: () => px, hidden, fromB, fromC, clips, audit, id: 7 })
+    expect(ops.map(o => o.op)).toEqual(['hidden', 'paste', 'paste', 'crop', 'crop'])
+    expect(ops[0]).toEqual({ op: 'hidden', rects: hidden.map(dev) })
+    expect(ops[1]).toEqual({ op: 'paste', page: 1, plane: 'B', unit: 7, rects: fromB.map(dev) })
+    expect(ops[2]).toEqual({ op: 'paste', page: 1, plane: 'C', unit: 7, rects: fromC.map(dev) })
+    // the crop: its source's box, laid at the item's place with its baseline on the line's, at the fit's scale, through its segment
+    expect(ops[3]).toEqual({ op: 'crop', page: 1, plane: 'B', src: [40 * k, (792 - 510) * k, 20 * k, 10 * k].map(v => expect.closeTo(v, 9)), dst: [120 * k, (792 - (688 + 8 * 0.9)) * k, 18 * k, 10 * 0.9 * k].map(v => expect.closeTo(v, 9)), clip: [dev([40, 500, 50, 510])] })
+    // a crop of no piece (a label's ink, whose group B hides) from C, with no clip
+    expect(ops[4]).toMatchObject({ op: 'crop', plane: 'C' })
+    expect(ops[4]).not.toHaveProperty('clip')
+    expect(audit.map(a => (a as { what: string }).what)).toEqual(['erase', 'erase', 'crop', 'crop'])
   })
-  it('leaves out a crop whose page is not drawn, and records it nowhere', () => {
+  it('leaves out a crop whose page is not drawn, and records it nowhere; a unit with nothing hidden has no hidden operation', () => {
     const audit: Audit[] = []
-    const ops = L2.unitOps(L, blocks, 1, { px, k, hasSource: () => false, pxOf: () => px, audit, id: 7 })
-    expect(ops.map(o => o.op)).toEqual(['erase', 'erase'])
-    expect(audit).toHaveLength(2)
+    const ops = L2.hideOps(L, 1, { px, k, hasSource: () => false, pxOf: () => px, audit, id: 7 })
+    expect(ops).toEqual([])
+    expect(audit).toEqual([])
   })
   const ops = [
-    { op: 'erase', box: [10, 20, 30, 40] },
-    { op: 'restore', page: 1, clip: [[10, 20, 30, 40]], boxes: [[12, 22, 4, 4]] },
-    { op: 'crop', page: 2, src: [1, 2, 3, 4], dst: [5, 6, 7, 8] },
+    { op: 'hidden', rects: [[10, 20, 30, 40]] },
+    { op: 'paste', page: 1, plane: 'C', rects: [[12.5, 22, 4, 4]] },
+    { op: 'crop', page: 2, plane: 'B', src: [1, 2, 3, 4], dst: [5, 6, 7, 8] },
   ] as Parameters<typeof L2.drawOps>[1]
-  it("draws at v0's own resolution with v0's own calls and numbers: white, the page put back within the erase, the crop darkened in", () => {
+  it("draws over render A at v0's own resolution: nothing for what is hidden, the paste out to whole device pixels, the crop darkened in", () => {
     const { ctx, calls } = recorder()
-    const page1 = { id: 1 } as unknown as CanvasImageSource, page2 = { id: 2 } as unknown as CanvasImageSource
-    L2.drawOps(ctx, ops, 1, p => (p === 1 ? page1 : page2))
+    const c1 = { id: 'C1' } as unknown as CanvasImageSource, b2 = { id: 'B2' } as unknown as CanvasImageSource
+    L2.drawOps(ctx, ops, 1, (p, plane) => (p === 1 && plane === 'C' ? c1 : p === 2 && plane === 'B' ? b2 : null))
     expect(calls).toEqual([
-      ['save'], ['=fillStyle', '#fff'], ['fillRect', 10, 20, 30, 40],
-      ['save'], ['beginPath'], ['rect', 10, 20, 30, 40], ['clip'], ['drawImage', page1, 12, 22, 4, 4, 12, 22, 4, 4], ['restore'],
-      ['=globalCompositeOperation', 'darken'], ['drawImage', page2, 1, 2, 3, 4, 5, 6, 7, 8], ['=globalCompositeOperation', 'source-over'],
+      ['save'],
+      ['save'], ['beginPath'], ['rect', 12, 22, 5, 4], ['clip'], ['drawImage', c1, 0, 0], ['restore'],
+      ['=globalCompositeOperation', 'darken'], ['drawImage', b2, 1, 2, 3, 4, 5, 6, 7, 8], ['=globalCompositeOperation', 'source-over'],
       ['restore'],
     ])
   })
-  it('draws at any other resolution scaled, cut from the page drawn there; an operation with no page drawn is left out', () => {
+  it('draws at any other resolution scaled, cut from the planes drawn there; an operation with no plane drawn is left out', () => {
     const { ctx, calls } = recorder()
-    const page1 = { id: 1 } as unknown as CanvasImageSource
-    L2.drawOps(ctx, ops, 2, p => (p === 1 ? page1 : null))
+    const c1 = { id: 'C1' } as unknown as CanvasImageSource
+    L2.drawOps(ctx, ops, 2, (p, plane) => (p === 1 && plane === 'C' ? c1 : null))
     expect(calls).toEqual([
-      ['save'], ['=fillStyle', '#fff'], ['fillRect', 20, 40, 60, 80],
-      ['save'], ['beginPath'], ['rect', 20, 40, 60, 80], ['clip'], ['drawImage', page1, 24, 44, 8, 8, 24, 44, 8, 8], ['restore'],
+      ['save'],
+      ['save'], ['beginPath'], ['rect', 25, 44, 8, 8], ['clip'], ['drawImage', c1, 0, 0], ['restore'],
       ['restore'],
     ])
   })

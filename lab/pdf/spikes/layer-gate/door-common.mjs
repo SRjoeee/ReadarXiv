@@ -1,13 +1,12 @@
 // lab/pdf/spikes/layer-gate/door-common.mjs
 // What the order pages share (door-order.mjs: --door-order; door-jump.mjs: --door-jump): the helpers the door pages of this
 // folder each carry a copy of (digests, PNG round trips, the served faces), and the open of one layer over a fixture's
-// bundle and rows, as door.mjs opens its door: BUNDLE 3's open (readBundle over the bundle the driver wrote, the composed
-// document from arXiv's bytes and the bundle's tail), the rows the driver made of the record taken at once and ended, the
+// bundle and rows, as door.mjs opens its door: BUNDLE 3's open (readBundle over the bundle the driver wrote, the document the
+// wrapped page, base.pdf), the rows the driver made of the record taken at once and ended, the
 // run reached through the driver's stand-in of run.mjs (which keeps each run it opens and gives its units' records,
 // layer-gate.mjs RUN_STAND_IN). Each page's answer is the same few numbers wherever it was asked: its SVG's markup (lang
-// aside), its word table's digest (words.mjs), the digest of its link records (3a-0), copyOf's pixels over the PNG of the page as PDF.js drew it in the reference
-// run (so that every run's copy starts from the same pixels: PDF.js's first drawing of a page in a document is not always
-// another load's, door.mjs head) and the digest of the records of the units on the page
+// aside), its word table's digest (words.mjs), the digest of its link records (3a-0), copyOf's pixels at the size of the page as PDF.js drew it in the reference
+// run (copyOf draws the page itself: render A of the wrapped page, then its crops and pastes) and the digest of the records of the units on the page
 import * as pdfjs from 'pdfjs-dist'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
@@ -54,16 +53,12 @@ export const hyphUrl = lang => `/hyph/${lang}.json`
 export async function ruleSetOf(url) {
   return url ? (await (await import('/engine/rules/layout.mjs')).readRules(await bytes(url))).set : null
 }
-/** the reader's document: the base page's bytes (base.pdf: ours where the fixture has it, else arXiv's), their fingerprint the
- *  bundle's, followed by the bundle's add-on */
+/** the reader's document: the page the layer is drawn over (base.pdf: our page wrapped by optional content where the driver could
+ *  wrap it, layer-gate/wrap.mjs), its fingerprint the bundle's base */
 async function composedOf(name, bundle) {
   const original = await bytes(`/fixtures/${name}/base.pdf`)
   if (original.length !== bundle.base.bytes || (await digest(original)) !== bundle.base.sha256) throw new Error(`${name}: the base page's bytes are not the bundle's base`)
-  if (!bundle.addon) return original
-  const out = new Uint8Array(original.length + bundle.addon.tail.length)
-  out.set(original)
-  out.set(bundle.addon.tail, original.length)
-  return out
+  return original
 }
 export const macrotask = () => new Promise(ok => setTimeout(ok, 0))
 /** a 32-bit integer's bits mixed (murmur3's finaliser) */
@@ -121,7 +116,7 @@ export async function openDoor({ name, target, rules }) {
 }
 
 /** a laid page's answer, the numbers every run is compared by: its SVG's markup (lang aside), its size, its word table's digest
- *  and copyOf's pixels over `sourcePng`, the page as PDF.js drew it (the records' digest is taken once the run is done: a
+ *  and copyOf's pixels at the size of `sourcePng`, the page as PDF.js drew it (the records' digest is taken once the run is done: a
  *  unit's record is made when the unit is laid) */
 export async function answerOf(layer, p, got, sourcePng) {
   const { svg, w, h, words, links } = got
@@ -129,7 +124,7 @@ export async function answerOf(layer, p, got, sourcePng) {
   const lang = markup.getAttribute('lang')
   markup.removeAttribute('lang')
   const source = await canvasOfPng(sourcePng)
-  const copy = await layer.copyOf(p, source, K)
+  const copy = await layer.copyOf(p, { k: K, width: source.width, height: source.height })
   const out = { p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), links: await textDigest(JSON.stringify(links ?? [])), copy: await pixelsOf(copy) }
   for (const c of [source, copy]) { c.width = 0; c.height = 0 }
   return out

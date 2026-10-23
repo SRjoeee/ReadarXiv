@@ -32,7 +32,7 @@
 // wire and the memory-class test; @cantoo/pdf-lib (MIT) and PDF.js are given.
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { textRecordDiffers, textRecordOf } from './page-text.mjs'
-import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, DELTA_TAIL_ROOM, deltaSection, pagesOf, rangesOf } from './delta-wire.mjs'
+import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, deltaSection, pagesOf, rangesOf } from './delta-wire.mjs'
 import { appendSection } from './section.mjs'
 import { OBJECT_MAX, startxrefOf } from './tail.mjs'
 import { openObjects, XrefRefusal } from './xref.mjs'
@@ -414,7 +414,7 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
     if (all.length > objectsMax) return refusal('delta-bound', `${all.length} objects, past ${objectsMax}`)
     const written = appendSection({ end: origBytes.length, objects: all, kind: O.kind, prev: O.startxref, size: next, trailer: { root: O.trailer.root, info: O.trailer.info, id: O.trailer.id } })
     const delta = written.bytes
-    if (written.size + DELTA_TAIL_ROOM > OBJECT_MAX + 1) return refusal('delta-bound', `its /Size ${written.size} leaves the remover's tails fewer than ${DELTA_TAIL_ROOM} object numbers`)
+    if (written.size > OBJECT_MAX + 1) return refusal('delta-bound', `its /Size ${written.size} is past PDF's object numbers (${OBJECT_MAX})`)
     if (delta.length > DELTA_MAX_BYTES) return refusal('delta-bound', `${delta.length} bytes, past ${DELTA_MAX_BYTES}`)
     if (delta.length > DELTA_MAX_SHARE * finalBytes.length) return refusal('delta-bound', `${delta.length} bytes, past ${DELTA_MAX_SHARE} of our base page's ${finalBytes.length}`)
     let included = 0

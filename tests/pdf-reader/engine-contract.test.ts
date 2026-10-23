@@ -68,16 +68,17 @@ describe('the five entries', () => {
     expect(layer.filter(n => !door.includes(n) && !format.includes(n) && !draw.includes(n) && n !== 'isMemoryError')).toEqual([])
     for (const name of ['readUnitsChunk', 'readHead', 'indexOf', 'unitsOfChunks', 'readPart', 'readLeftPart', 'readCatalog', 'mergeParts', 'keyOf', 'keyParts', 'catalogKey', 'writeCatalog', 'isMemoryError', 'BUNDLE5', 'CTAG5', 'VTAG5', 'checkDraw', 'drawFontKey', 'drawInputsOf']) expect(layer, name).toContain(name)
     for (const name of ['writeUnitChunks', 'writeHead', 'writePart', 'writeLeftPart']) expect(layer, name).not.toContain(name)
-    for (const name of ['openLayer', 'readBundle', 'BundleRefusal', 'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'VTAG', 'parseLayout', 'indexLayout', 'parseAddonManifest']) expect(layer, name).toContain(name)
+    for (const name of ['openLayer', 'readBundle', 'BundleRefusal', 'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'VTAG', 'parseLayout', 'indexLayout']) expect(layer, name).toContain(name)
+    for (const name of ['parseAddonManifest', 'ADDON_CAP', 'TAIL_CAP']) expect(layer, name).not.toContain(name)
   })
 
   it('give the server the bundle\'s writer and the translation the rows, and not the other way about', async () => {
     const pipeline = await namesOf('pipeline'), translate = await namesOf('translate')
-    for (const name of ['openPaper', 'originalFiles', 'makeLayout', 'layoutMarksOfPaper', 'paperAddon', 'writeBundle', 'bundleUnitsOf', 'unpackSource', 'PDFJS', 'writeUnitChunks', 'writeHead', 'writePart', 'writeLeftPart', 'writeCatalog', 'partTarget', 'isMemoryError', 'BundleRefusal', 'drawDataOf', 'wireOf', 'DRAW_ITEMS']) expect(pipeline, name).toContain(name)
+    for (const name of ['openPaper', 'originalFiles', 'makeLayout', 'layoutMarksOfPaper', 'pageRules', 'checkBoxes', 'writeBundle', 'bundleUnitsOf', 'unpackSource', 'PDFJS', 'writeUnitChunks', 'writeHead', 'writePart', 'writeLeftPart', 'writeCatalog', 'partTarget', 'isMemoryError', 'BundleRefusal', 'drawDataOf', 'wireOf', 'DRAW_ITEMS']) expect(pipeline, name).toContain(name)
     for (const name of ['serialize', 'rehydrate', 'serializeTags', 'translateUnits', 'decideGroups', 'authorsTranslated', 'TRANSLATE_VERSION', 'rowOf', 'unitOf', 'layerRows', 'toTranslate', 'batchesOf', 'runRows']) expect(translate, name).toContain(name)
     // (the compile path stays out of the server's entry, and the layout maker and the front end out of the translation's)
     for (const name of ['runLive', 'translationFiles', 'strategiesFor', 'typesetting']) expect(pipeline, name).not.toContain(name)
-    for (const name of ['makeLayout', 'paperAddon', 'openPaper', 'loadProject']) expect(translate, name).not.toContain(name)
+    for (const name of ['makeLayout', 'openPaper', 'loadProject']) expect(translate, name).not.toContain(name)
   })
 })
 
@@ -119,11 +120,11 @@ describe('the engine\'s imports', () => {
 
 describe('what the translation, the rules and the browser load', () => {
   // the server's modules: the front end and the files it reads, the compile path and the paper's pipeline, the layout maker,
-  // the marks, the remover and the add-on's maker, and the pixel checker. The anchors and the versions are the pipeline's too,
-  // and leaves that every reader takes
+  // the marks, the content walk the wrap reads (remove.mjs), the ownership and the wrap, and the pixel checker. The anchors and
+  // the versions are the pipeline's too, and leaves that every reader takes
   const server = (f: string) => f.startsWith(`${ENGINE}/source/`)
     || (f.startsWith(`${ENGINE}/pipeline/`) && !/\/pipeline\/(?:anchors|versions|memory)\.mjs$/.test(f))
-    || /\/layout\/(?:make|marks|paper|remove|addon|carry|match|stream)\.mjs$/.test(f)
+    || /\/layout\/(?:make|marks|paper|remove|wrap|own|carry|match|stream)\.mjs$/.test(f)
     || f.endsWith('/layer/check.mjs')
   for (const name of ['translate', 'rules', 'layer', 'view'] as const) {
     it(`reach none of the server's modules from ${name}`, () => {
