@@ -6,6 +6,8 @@ export interface PageNode { ref: unknown; node: unknown; inherited: { Resources?
 export interface PdfObjects {
   kind: 'table' | 'stream'; startxref: number; size: number
   trailer: { root: unknown; info?: unknown; id?: unknown; size?: number }
+  /** the newest section's own /Root, /Info and /ID, as written */
+  own: { root?: unknown; info?: unknown; id?: unknown }
   /** the object a ref names (a stream's data the bytes its resolved /Length names), undefined for none */
   lookup(ref: unknown): unknown
   numbers(): number[]

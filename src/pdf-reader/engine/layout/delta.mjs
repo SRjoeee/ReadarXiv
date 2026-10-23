@@ -405,6 +405,13 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     // (what the delta overrides of the original: the replaced pages' objects, exactly, and nothing else of the original's numbers
     // — no catalog, no other page — and its /Size not below the original's)
     if (sect.size < O.size) return no(`its /Size ${sect.size} is below the original's ${O.size}`)
+    // (the composed trailer is the delta's own: it keeps the original's /Root and /Info as references and /ID byte for byte, so
+    // that the catalog, outlines, destinations and document info stay the original's)
+    const refText = v => (v instanceof PL.PDFRef ? `${v.objectNumber} ${v.generationNumber} R` : v === undefined ? 'none' : 'direct')
+    const idBytes = v => (v instanceof PL.PDFArray ? v.asArray().map(x => (x instanceof PL.PDFString || x instanceof PL.PDFHexString ? hexOf(x.asBytes()) : '?')).join(',') : 'none')
+    if (refText(X.own.root) !== refText(O.trailer.root) || refText(O.trailer.root) === 'direct') return no('its trailer\'s /Root is not the original\'s')
+    if (refText(X.own.info) !== refText(O.trailer.info)) return no('its trailer\'s /Info is not the original\'s')
+    if (idBytes(X.own.id) !== idBytes(O.trailer.id)) return no('its trailer\'s /ID is not the original\'s')
     const pageRefs = new Map(oP.map((o, i) => [o.ref.objectNumber, i + 1]))
     const over = new Set()
     for (const [n, g] of sect.rows) {

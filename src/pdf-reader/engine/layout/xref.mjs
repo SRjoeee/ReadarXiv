@@ -64,7 +64,7 @@ function unpredict(data, columns, colors, bits) {
  * `decodedMax` the most bytes its object streams and cross-reference streams decode to in all. Throws XrefRefusal where it
  * will not read the document (encrypted, hybrid, an entry or a section it cannot read safely, a bound). Returns { kind (the
  * newest section's, 'table' or 'stream'), startxref, size (the newest /Size, or one past the greatest number named),
- * trailer { root, info, id } (the newest section's that names each), lookup(ref) (the object, a stream's data its exact
+ * trailer { root, info, id } (the newest section's that names each), own (the newest section's own, as written), lookup(ref) (the object, a stream's data its exact
  * bytes; undefined for a free or absent number, or another generation), numbers() (every number in use, rising), pages()
  * (each page's ref, dict and inherited /Resources, /MediaBox, /CropBox, /Rotate, in order), entryOf(n), dataAt(ref) (a stream's
  * data's offset and length in the bytes) }
@@ -121,6 +121,8 @@ export function openObjects(bytes, { PL, objectsMax, decodedMax }) {
   // ---- the cross-reference sections, newest first: the first entry for a number is its own
   const entries = new Map()
   const trailer = { root: undefined, info: undefined, id: undefined, size: undefined }
+  /** the newest section's own /Root, /Info and /ID (what an update's trailer says itself, before any older one fills in) */
+  let own = null
   const startxref = startxrefOf(bytes)
   if (startxref === null || startxref >= bytes.length) throw new XrefRefusal('delta-xref', 'no startxref')
   let kind = null, maxNumber = -1
@@ -131,6 +133,7 @@ export function openObjects(bytes, { PL, objectsMax, decodedMax }) {
   const readTrailer = d => {
     if (d.get(N('Encrypt')) !== undefined) throw new XrefRefusal('delta-encrypted', 'an encrypted document')
     if (d.get(N('XRefStm')) !== undefined) throw new XrefRefusal('delta-xref', 'a hybrid cross-reference (/XRefStm)')
+    own ??= { root: d.get(N('Root')), info: d.get(N('Info')), id: d.get(N('ID')) }
     for (const k of ['root', 'info', 'id']) { const v = d.get(N(k === 'id' ? 'ID' : k[0].toUpperCase() + k.slice(1))); if (trailer[k] === undefined && v !== undefined) trailer[k] = v }
     const size = d.get(N('Size'))
     if (trailer.size === undefined && size instanceof PDFNumber) trailer.size = size.asNumber()
@@ -279,7 +282,7 @@ export function openObjects(bytes, { PL, objectsMax, decodedMax }) {
   }
   const size = Math.max(trailer.size ?? 0, maxNumber + 1)
   return {
-    kind, startxref, size, trailer, lookup, numbers, pages, entryOf: n => entries.get(n) ?? null,
+    kind, startxref, size, trailer, own, lookup, numbers, pages, entryOf: n => entries.get(n) ?? null,
     /** a stream's data in the bytes ([start, length]), once it is looked up */
     dataAt: ref => { lookup(ref); return dataOf.get(ref.objectNumber) ?? null },
   }

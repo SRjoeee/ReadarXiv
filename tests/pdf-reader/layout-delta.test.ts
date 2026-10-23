@@ -378,4 +378,18 @@ describe('Codex on #439', () => {
       expect(await prove(orig, forged, ours, r.replaced), String(indirect)).toMatchObject({ ok: false, why: /graph is not ours/ })
     }
   })
+
+  it('the composed trailer keeps the original\'s /Root, /Info and /ID: a delta that points /Root at a fresh catalog fails', async () => {
+    const r = await built(ORIG_TABLE)
+    const objects = objectsOf(r.delta, ORIG_TABLE), prev = startxrefOf(ORIG_TABLE)!
+    const fresh = r.size
+    const redirected = appendSection({ end: ORIG_TABLE.length, objects: [...objects, [fresh, 0, enc(`${fresh} 0 obj\n<< /Type /Catalog /Pages 2 0 R /PageMode /FullScreen >>\nendobj\n`)]], kind: 'table', prev, size: fresh + 1, trailer: { root: `${fresh} 0 R`, id: '[ <0011aabb> <0011aabb> ]' } }).bytes
+    expect(deltaSection(redirected, { bytes: ORIG_TABLE.length, xref: prev }).why).toBeUndefined()
+    expect(await prove(ORIG_TABLE, redirected, OURS, r.replaced)).toMatchObject({ ok: false, why: /\/Root is not the original's/ })
+    const otherId = appendSection({ end: ORIG_TABLE.length, objects, kind: 'table', prev, size: r.size, trailer: { root: '1 0 R', id: '[ <0011aabc> <0011aabb> ]' } }).bytes
+    expect(await prove(ORIG_TABLE, otherId, OURS, r.replaced)).toMatchObject({ ok: false, why: /\/ID is not the original's/ })
+    const withInfo = appendSection({ end: ORIG_TABLE.length, objects, kind: 'table', prev, size: r.size, trailer: { root: '1 0 R', info: '1 0 R', id: '[ <0011aabb> <0011aabb> ]' } }).bytes
+    expect(await prove(ORIG_TABLE, withInfo, OURS, r.replaced)).toMatchObject({ ok: false, why: /\/Info is not the original's/ })
+    expect(await prove(ORIG_TABLE, r.delta, OURS, r.replaced)).toMatchObject({ ok: true })
+  })
 })
