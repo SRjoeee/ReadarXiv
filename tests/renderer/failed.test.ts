@@ -15,6 +15,9 @@ import { S, reasonText, setLocale } from '@/ui/strings'
 // Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
 const docOf = docOfChecked()
 
+/** a click as the reader's pointer or keyboard makes it: trusted, as no page script's can be (the retry acts on no other) */
+const userClick = () => Object.defineProperty(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }), 'isTrusted', { value: true })
+
 const page = '<p class="ltx_p" id="p1">Text.</p>'
 
 /** The family's danger in each theme, and the 60 % of it the retry's edge and the block's hint line draw (§3, §7) */
@@ -80,9 +83,24 @@ describe('renderFailed', () => {
     const retry = vi.fn()
     const host = renderFailed(p, 'x', retry)
     const button = host.shadowRoot!.querySelector('button')!
-    button.click()
+    button.dispatchEvent(userClick())
     expect(retry).toHaveBeenCalledTimes(1)
     expect(button.disabled).toBe(true)
+  })
+
+  it('a page script cannot retry for the reader: an untrusted click or a synthetic key does nothing, the button stays live (DESIGN §4.0c)', () => {
+    const doc = docOf(page)
+    const p = extract(doc)[0] as TextBlock
+    const retry = vi.fn()
+    const button = renderFailed(p, 'x', retry).shadowRoot!.querySelector('button')!
+    button.click()
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }))
+    for (const type of ['keydown', 'keyup', 'keypress']) for (const key of ['Enter', ' ']) button.dispatchEvent(new KeyboardEvent(type, { key, bubbles: true, composed: true }))
+    expect(retry).not.toHaveBeenCalled()
+    expect(button.disabled).toBe(false)
+    // and the reader's own click still works afterwards
+    button.dispatchEvent(userClick())
+    expect(retry).toHaveBeenCalledTimes(1)
   })
 
   it('clearTranslation / restore remove it cleanly, the DOM equal node for node (§7.1)', () => {
@@ -111,6 +129,8 @@ describe('renderFailed', () => {
     expect(widget.getAttribute(REASON_ATTR)).toBe('network: boom')
     expect(copy.textContent).not.toContain('cap')
     widget.shadowRoot!.querySelector('button')!.click()
+    expect(retry).not.toHaveBeenCalled()
+    widget.shadowRoot!.querySelector('button')!.dispatchEvent(userClick())
     expect(retry).toHaveBeenCalledWith(caption.id)
     // The original's own widget is untouched and still live
     expect(doc.querySelectorAll(`.${ERROR_CLASS}`)).toHaveLength(2)
