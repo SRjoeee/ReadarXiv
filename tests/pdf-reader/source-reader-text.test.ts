@@ -108,48 +108,33 @@ describe('S3: an accent command is its Unicode letter, decoded once (2610.20595,
 
 describe('S4: one branch of a conditional is the translator\'s, never both', () => {
   const BRANCHES = '\\ifdefined\\Preprint\nThe public code is at the repository.\n\\else\nAn anonymized copy is provided at the link.\n\\fi\nIt contains the generator.'
-  it('\\ifdefined of a command the paper defines: the live branch alone, the other left in the source (2610.21098)', () => {
-    const p = project(`\\def\\Preprint{1}\n${doc(BRANCHES)}`)
-    expect(texts(p)).toEqual(['The public code is at the repository. It contains the generator.'])
-    expect(new TextDecoder().decode(untranslated(p))).toContain(BRANCHES)
+  it('\\ifdefined, whatever the paper defines: neither branch is text, the conditional one placeholder, counted (2610.21098)', () => {
+    for (const tex of [`\\def\\Preprint{1}\n${doc(BRANCHES)}`, doc(BRANCHES)]) {
+      const p = project(tex)
+      expect(texts(p)).toEqual(['It contains the generator.'])
+      expect((p as unknown as { skipped: Record<string, number> }).skipped).toMatchObject({ ifUnknown: 1 })
+      expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
+    }
   })
 
-  it('of one it does not define: neither branch is text, the conditional one placeholder, counted (`ifUnknown`)', () => {
-    const p = project(doc(BRANCHES))
-    expect(texts(p)).toEqual(['It contains the generator.'])
-    expect((p as unknown as { skipped: Record<string, number> }).skipped).toMatchObject({ ifUnknown: 1 })
-    expect(new TextDecoder().decode(untranslated(p))).toContain(BRANCHES)
+  it('what the paper\'s definitions decide is not worked out (#457 review: a file nothing reads, a group, a \\let in the body): neither branch', () => {
+    const body = '\\ifdefined\\Flag Draft branch words. \\else Final branch words. \\fi'
+    for (const tex of [`{\\def\\Flag{1}}\n${doc(body)}`, `\\def\\Flag{1}\n${doc(`\\let\\Flag\\undefined${body}`)}`, `\\def\\Flag{1}\n${doc(body)}`]) expect(texts(project(tex))).toEqual([])
+    expect(texts(projectOf({ 'main.tex': enc(doc(body)), 'unused.tex': enc('\\def\\Flag{1}\n') }))).toEqual([])
+    expect(texts(project(doc('\\newif\\iflong\\longtrue\n\\iflong Long words here. \\else Short words here. \\fi')))).toEqual([])
   })
 
-  it('\\ifx\\x\\undefined, a \\newif set once, \\iftrue and \\if 0: the branch TeX sets', () => {
-    const pre = '\\newcommand{\\Final}{}\n\\newif\\iflong\\longtrue'
-    const body = ['\\ifx\\Final\\undefined Draft words here. \\else Final words here. \\fi', '\\iflong Long words here. \\else Short words here. \\fi', '\\iftrue True words here. \\else False words here. \\fi'].join('\n\n')
-    expect(texts(project(doc(body, pre)))).toEqual(['Final words here.', 'Long words here.', 'True words here.'])
+  it('a test its own text decides: \\iftrue, \\if 0, \\ifx of two characters: the branch TeX sets', () => {
+    const body = ['\\iftrue True words here. \\else False words here. \\fi', '\\ifx aa Same words here. \\else Other words here. \\fi'].join('\n\n')
+    expect(texts(project(doc(body)))).toEqual(['True words here.', 'Same words here.'])
     expect(texts(project(doc('Kept words.\n\n\\if 0\nA passage set aside.\n\n\\fi\nMore kept words.')))).toEqual(['Kept words.', 'More kept words.'])
   })
 
-  it('a definition TeX has not read when the body begins decides nothing: a file nothing reads, or one later in the body', () => {
-    const body = '\\ifdefined\\Flag Draft branch words. \\else Final branch words. \\fi'
-    const unused = projectOf({ 'main.tex': enc(doc(body)), 'unused.tex': enc('\\def\\Flag{1}\n') })
-    expect(texts(unused)).toEqual([])
-    expect(texts(project(doc(`${body}\n\n\\def\\Flag{1}\nMore words here.`)))).toEqual(['More words here.'])
-    // (one the preamble reads: the input file's definition is TeX's before the body)
-    expect(texts(projectOf({ 'main.tex': enc(doc(body, '\\input{flags}')), 'flags.tex': enc('\\def\\Flag{1}\n') }))).toEqual(['Draft branch words.'])
-  })
-
-  it('a definition local to a group, or a command \\let to \\undefined, is no definition the body sees (#457 review)', () => {
-    const body = '\\ifdefined\\Flag Draft branch words. \\else Final branch words. \\fi'
-    expect(texts(project(`{\\def\\Flag{1}}\n${doc(body)}`))).toEqual([])
-    expect(texts(project(`\\let\\Flag\\undefined\n${doc(body)}`))).toEqual([])
-    expect(texts(project(`\\def\\Flag{1}\n\\let\\Flag\\undefined\n${doc(body)}`))).toEqual([])
-    expect(texts(project(`{\\gdef\\Flag{1}}\n${doc(body)}`))).toEqual(['Draft branch words.'])
-  })
-
-  it('a test in the preamble is not decided by what the preamble defines (it may come first): neither branch; the same test in the body is', () => {
-    const cond = '\\ifdefined\\Flag Draft title words here.\\else Final title words here.\\fi'
-    const pre = project(`\\documentclass{article}\n\\def\\Flag{1}\n\\title{${cond}}\n\\begin{document}\n\\maketitle\nBody words here.\n\\end{document}\n`)
-    expect(texts(pre).some(t => /Draft|Final/.test(t))).toBe(false)
-    expect(texts(project(`\\def\\Flag{1}\n${doc(cond)}`))).toEqual(['Draft title words here.'])
+  it('a span TeX reads otherwise than as tokens (\\verb, a definition) is read as before: the file written back is its own bytes (#457 review)', () => {
+    for (const body of ['\\iftrue Visible \\verb|\\else| example words.\\else Hidden branch words.\\fi', '\\iftrue Visible words \\def\\unused{\\else} here.\\else Hidden branch words.\\fi']) {
+      const tex = doc(body), p = project(tex)
+      expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
+    }
   })
 
   it('a conditional whose branches set no words is left as it was read: its pieces, and its units\' hashes, as before', () => {

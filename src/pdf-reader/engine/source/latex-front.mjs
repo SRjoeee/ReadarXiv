@@ -972,26 +972,15 @@ const commandBefore = (s, at) => /\\([A-Za-z]+)$/.exec(s.slice(Math.max(0, at - 
 const wordsIn = (s, from, to) => from < to && /\p{L}{2}/u.test(s.slice(from, to).replace(/(^|[^\\])%.*$/gm, '$1').replace(/\$[^$]*\$/g, ' ')
   .replace(/\\([A-Za-z@]+)\*?((?:\s*\[[^\]]*\])*(?:\s*\{[^{}]*\})*)/g, (m, name, args) => (INLINE_TEXT.has(name) || CONTENT_BOX.has(name) || name === 'footnote' ? ` ${args} ` : ' ')))
 /**
- * A conditional's value where the paper's own sources decide it: \\iftrue, a \\newif whose value TeX reads the same
- * everywhere (newifValues), and \\ifdefined\\x, \\ifcsname x\\endcsname and \\ifx\\x\\undefined of a command the paper surely
- * defines outside every definition and unsure conditional (`defined`, loadProject); null where they do not: a test TeX
- * alone answers (\\ifnum, \\ifdim, \\ifx of two commands), and one of a command the paper does not define, which a package
- * may. Not asked of TeX: the units are cut before any compile, the same on every reader
+ * A conditional's value where its own text decides it: \\iftrue, \\if of two characters (an author's \\if 0 … \\fi around a
+ * passage) and \\ifx of two characters; null for every other, which the paper's definitions or TeX's state decide (\\ifdefined,
+ * \\ifcsname, a \\newif, \\ifx of commands, \\ifnum). Not asked of TeX, and not worked out from the paper's definitions:
+ * the units are cut before any compile, the same on every reader, and following definitions through the files, their
+ * groups and every \\let that clears one is TeX's own work (the review of #457 found a fault in each of three rounds of it)
  */
-function conditionalValue(name, s, end, ctx) {
+function conditionalValue(name, s, end) {
   if (name === 'iftrue') return true
-  if (ctx.ifValues.has(name)) return ctx.ifValues.get(name)
-  const k = skipSpaces(s, end)
-  // (what the preamble defined is known in the body alone: a test in the preamble may come before the definition)
-  if (!ctx.inBody && /^(?:ifdefined|ifcsname|ifx)$/.test(name)) return null
-  // \\if of two characters (an author's \\if 0 … \\fi around a passage): a line's end or a space is a space
-  if (name === 'if') { const two = ifChars(s, end); return two ? two[0] === two[1] : null }
-  if (name === 'ifdefined' && s[k] === '\\') return ctx.defined.has(commandAt(s, k).name) ? true : null
-  if (name === 'ifcsname') { const m = /^\s*([A-Za-z@]+)\s*\\endcsname/.exec(s.slice(end)); return m && ctx.defined.has(m[1]) ? true : null }
-  if (name === 'ifx' && s[k] === '\\') {
-    const a = commandAt(s, k), k2 = skipSpaces(s, a.end), b2 = s[k2] === '\\' ? commandAt(s, k2) : null
-    if (b2 && /^(?:undefined|@undefined)$/.test(b2.name) && ctx.defined.has(a.name)) return false
-  }
+  if (name === 'if' || name === 'ifx') { const two = ifChars(s, end); return two ? two[0] === two[1] : null }
   return null
 }
 /** the two characters \\if compares where both are characters (neither a command, a group, a parameter nor a comment),
@@ -1001,15 +990,14 @@ function ifChars(s, end) {
   if (!a || /[\\{}%#\s]/.test(a) || !b || /[\\{}%#]/.test(b)) return null
   return [a, /\s/.test(b) ? ' ' : b]
 }
-/** where the tokens of the tests conditionalValue reads end (the then branch begins there): the command \\ifdefined tests,
- *  \\ifcsname's name to its \\endcsname, \\ifx's two commands; any other's at its name */
+/** where the tokens of the tests conditionalValue reads end (the then branch begins there): \\if's and \\ifx's two
+ *  characters; any other's at its name */
+/** whether s[from, to) holds what branchEnd cannot scan as TeX would: \\verb or inline code, a verbatim-like environment,
+ *  or a definition (whose body TeX stores, its \\else and \\fi among it) */
+const consumes = (s, from, to) => /\\(?:verb|lstinline|mintinline|[gex]?def|let|(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)DocumentCommand|(?:re)?newenvironment)(?![A-Za-z@])|\\begin\s*\{\s*(?:verbatim|Verbatim|lstlisting|minted|comment|alltt)/.test(s.slice(from, to))
 function testEnd(name, s, end) {
   const k = skipSpaces(s, end)
-  if (name === 'if') return ifChars(s, end) ? k + 2 : end
-  if (name === 'ifdefined' && s[k] === '\\') return commandAt(s, k).end
-  if (name === 'ifcsname') { const m = /^\s*[A-Za-z@]+\s*\\endcsname(?![A-Za-z@])/.exec(s.slice(end)); return m ? end + m[0].length : end }
-  if (name === 'ifx' && s[k] === '\\') { const a = commandAt(s, k), k2 = skipSpaces(s, a.end); return s[k2] === '\\' ? commandAt(s, k2).end : end }
-  return end
+  return (name === 'if' || name === 'ifx') && ifChars(s, end) ? k + 2 : end
 }
 /** a control word TeX takes as a conditional, which a \\fi ends: TeX's own, the paper's \\newif ones, LaTeX's internal
  *  \\if@… — not etoolbox's \\ifdefempty{…}{…}{…} and the like, macros that no \\fi ends */
@@ -1216,13 +1204,15 @@ function walk(s, from, to, b, ctx) {
       if (stop > 0) { endText(); b.flush(); ctx.skipped[name] = (ctx.skipped[name] ?? 0) + 1; i = stop; continue }
     }
     // any other conditional TeX closes with a \\fi: one branch is what TeX sets (S4 of 2026-10-24: 2610.21098's
-    // \\ifdefined\\BottleneckPreprint, both its branches' sentences one unit). Where the paper's own sources decide it
-    // (conditionalValue) the live branch is walked, the rest stays in the source; where they do not, neither branch is
-    // the translator's (`skipped.ifUnknown`). Only one whose branches TeX would not set hold words (wordsIn): another's
-    // pieces stay as they were
+    // \\ifdefined\\BottleneckPreprint, both its branches' sentences one unit). Where its own text decides it
+    // (conditionalValue: \\iftrue, \\if 0) the live branch is walked, the rest stays in the source; where it does not and
+    // both branches hold words, neither branch is the translator's (`skipped.ifUnknown`): left English, never the branch
+    // TeX does not set. One whose branches hold no words (wordsIn) has its pieces as they were
     if (isConditional(name, ctx.ifs) && name !== 'ifcase') {
-      const c = conditionalAt(s, end, to, ctx.ifs)
-      const value = c && conditionalValue(name, s, end, ctx)
+      // (one whose span holds what TeX reads otherwise than as tokens there — \\verb, inline code, a verbatim environment, a
+      // definition's body — may have its \\else or \\fi where TeX has none: read as before, its pieces as they were)
+      const c = (x => (x && !consumes(s, end, x.end) ? x : null))(conditionalAt(s, end, to, ctx.ifs))
+      const value = c && conditionalValue(name, s, end)
       if (c) c.thenFrom = Math.min(testEnd(name, s, end), c.thenTo)
       if (c && (value !== null || (wordsIn(s, c.thenFrom, c.thenTo) && c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo)))) {
         const [from, upto] = value === true ? [c.thenFrom, c.thenTo] : value === false ? (c.elseFrom >= 0 ? [c.elseFrom, c.elseTo] : [c.thenTo, c.thenTo]) : [-1, -1]
@@ -1766,44 +1756,6 @@ function decodersOf(own, sourceText, main) {
   for (const x of bad) out.set(x.file, INPUT_ENCODINGS[declared ?? 'latin1'])
   return out
 }
-const DEFINES = /^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|[gex]?def|let|newif|newcounter|newlength|newtoks|chardef|mathchardef)$/
-/**
- * The commands TeX has surely defined when the document's body begins (conditionalValue): a definition TeX acts on (outside
- * every definition's body and every conditional it may skip) in the main file before its \\begin{document}, or in a file of
- * the package that preamble reads (\\input, \\include, \\usepackage, \\RequirePackage, \\documentclass of a .sty or .cls
- * the package holds). A file nothing reads, or a definition later in the document, defines nothing here: 2026-10-24's
- * review, an unused.tex's \\def\\Flag had chosen the branch TeX does not set
- */
-function preambleDefinitions(mainFile, read, scan) {
-  // (only one TeX keeps to the body: outside every group, or a global one, \\gdef and \\xdef — {\\def\\Flag{1}} is gone at the
-  // group's end —; and no command \\let to \\undefined anywhere in what is read, which TeX leaves or makes undefined)
-  const out = new Set(), done = new Set(), cleared = new Set()
-  const take = (t, cmds, upto) => {
-    for (const c of cmds) {
-      if (c.at >= upto) break
-      if (c.inDef || !c.sure || !DEFINES.test(c.name)) continue
-      const m = /^\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?\s*=?\s*(?:\\([A-Za-z@]+))?/.exec(t.slice(c.end, c.end + 200))
-      if (!m) continue
-      if (c.name === 'let' && /^(?:undefined|@undefined)$/.test(m[2] ?? '')) { cleared.add(m[1]); continue }
-      if (c.depth === 0 || c.name === 'gdef' || c.name === 'xdef') out.add(m[1])
-    }
-  }
-  const t = mainFile.text, cmds = texCommands(t, scan), { begin } = boundsOf(cmds, t), upto = begin >= 0 ? begin : 0
-  take(t, cmds, upto)
-  for (const c of cmds) {
-    if (c.at >= upto || c.inDef || !c.sure) continue
-    const ext = c.name === 'documentclass' ? ['.cls'] : /^(?:usepackage|RequirePackage)$/.test(c.name) ? ['.sty'] : /^(?:input|include)$/.test(c.name) ? ['', '.tex'] : null
-    const arg = ext && /^\s*(?:\[[^\]]*\]\s*)?\{([^{}]+)\}/.exec(t.slice(c.end, c.end + 400))
-    if (!arg) continue
-    for (const name of arg[1].split(',').map(x => x.trim()).filter(Boolean)) for (const e of ext) {
-      const f = read(`${name}${e}`)
-      if (!f || done.has(f.rel) || f.rel === mainFile.rel) continue
-      done.add(f.rel); take(f.text, texCommands(f.text, scan), f.text.length)
-    }
-  }
-  for (const name of cleared) out.delete(name)
-  return out
-}
 function readProject(fsys, main, tables, sourceText, own) {
   const ownTexts = own.map(x => x.text)
   // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from
@@ -1836,8 +1788,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  const defined = preambleDefinitions(mainFile, read, { lineEnvs, ifs, ifValues })
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, defined, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -1859,7 +1810,6 @@ function readProject(fsys, main, tables, sourceText, own) {
       // the \end{document} TeX acts on, where the walk stops too
       const bounds = boundsOf(cmds, f.text)
       if (bounds.begin >= 0) { frontMatter(f.text, 0, bounds.begin, b, ctx); from = bounds.body }
-      ctx.inBody = true
       to = Math.min(to, bounds.end)
     }
     walk(f.text, from, to, b, ctx); b.flush()
