@@ -72,6 +72,24 @@ window.ocg = {
       let g1 = apart(on, unwrapped)
       for (let t = 0; t < 3 && g1.n; t++) { on = await draw(V, doc, p, k); unwrapped = await draw(V, base, p, k); g1 = apart(on, unwrapped) }
       const g3 = apart(on, A, inside)
+      // (a paste's ink that is not its unit's: render C (B) of the page against the same page with A's hidden groups, less the
+      // unit's own, hidden too, inside the paste's rectangles; any pixel apart is a neighbour's hidden ink the paste brings back)
+      let resurrected = 0
+      // (the planes' pixels a copy renders, B and C cut to the boxes their operations need, against the whole page each)
+      const L2m = await import('/engine/layer-proto/layer2.mjs')
+      const planeBoxes = [...L2m.opsSources(row.ops, 1).values()]
+      const planesPx = planeBoxes.reduce((a, b) => a + b[2] * b[3], 0), planesFull = planeBoxes.length * on.c.width * on.c.height
+      const cropOff = g => g.startsWith('u') && !g.endsWith('.p')
+      for (const o of row.ops.filter(o => o.op === 'paste' && o.unit !== undefined)) {
+        const own = g => g === `u${o.unit}` || g.startsWith(`u${o.unit}.`)
+        const plane = await draw(V, doc, p, k, o.plane === 'C' ? [] : cropOff)
+        const exact = await draw(V, doc, p, k, o.plane === 'C' ? off.filter(g => !own(g)) : g => cropOff(g) || (off.includes(g) && g !== `u${o.unit}.p`))
+        const W = plane.c.width
+        for (const [x, y, w, h] of o.rects) for (let yy = Math.max(0, Math.floor(y)); yy < Math.min(plane.c.height, Math.ceil(y + h)); yy++) for (let xx = Math.max(0, Math.floor(x)); xx < Math.min(W, Math.ceil(x + w)); xx++) {
+          const i = (yy * W + xx) * 4
+          if (plane.data[i] !== exact.data[i] || plane.data[i + 1] !== exact.data[i + 1] || plane.data[i + 2] !== exact.data[i + 2]) resurrected++
+        }
+      }
       // the copy as a view draws it (render A, then its crops and pastes)
       const copy = document.createElement('canvas')
       copy.width = on.c.width; copy.height = on.c.height
@@ -135,7 +153,7 @@ window.ocg = {
       }
       const ops = {}
       for (const o of row.ops) ops[o.op] = (ops[o.op] ?? 0) + 1
-      const rec = { p, off: off.length, ops, g1: g1.n, a: g3.n, aOutside: g3.out, copyOutside: g3copy.out, spill, lost, lostOwn, lostOther: lost - lostOwn, otherMax, lostPath, pathUnits: [...pathUnits], ...(lost ? { lostCells: [...lostCells].sort((a, b) => b[1] - a[1]).slice(0, 8) } : {}), aNoise: apart(A, A2).n, ...(explain && g3copy.out ? { copyCells } : {}), ms: { a: A.ms, aWarm: A2.ms, base: unwrapped.ms, baseWarm: base2.ms, copy: copyMs } }
+      const rec = { p, off: off.length, ops, g1: g1.n, a: g3.n, aOutside: g3.out, copyOutside: g3copy.out, spill, resurrected, planesPx, planesFull, lost, lostOwn, lostOther: lost - lostOwn, otherMax, lostPath, pathUnits: [...pathUnits], ...(lost ? { lostCells: [...lostCells].sort((a, b) => b[1] - a[1]).slice(0, 8) } : {}), aNoise: apart(A, A2).n, ...(explain && g3copy.out ? { copyCells } : {}), ms: { a: A.ms, aWarm: A2.ms, base: unwrapped.ms, baseWarm: base2.ms, copy: copyMs } }
       // (where A hides ink outside the rectangles: each drawn group alone, the pixels outside it changes and their box, in PDF units)
       if (explain && g3.out) {
         rec.outside = []

@@ -69,6 +69,8 @@ export interface Rec {
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
 /** the longest a page's drawing waits for its draw (openProto `drawOf`) once it begins, ms; then the page is read live */
 export declare const DRAW_WAIT_MS: number
+/** the pages a run keeps warm for its next renders (their operator lists and decoded images), the one drawn last kept longest */
+export declare const WARM_PAGES: number
 /** the longest the live fills' glyph walk runs, ms: past it a page tells no fill */
 export declare const LIVE_FILLS_MS: number
 /** what an ink read of a page read from its draw throws while its pixels are not read: the page, and the step that reads them */
@@ -229,7 +231,7 @@ export interface ProtoRun {
   /** a done page's copy at `k` device pixels a PDF unit onto `ctx` (a canvas of the page at k from its top-left corner): render A
    *  of the composed document (the groups of the units drawn there hidden), then its crops and pastes; `annotationMode` PDF.js's,
    *  for render A */
-  drawCopy(page: number, ctx: CanvasRenderingContext2D, k: number, o?: { annotationMode?: number }): Promise<void>
+  drawCopy(page: number, ctx: CanvasRenderingContext2D, k: number, o?: { annotationMode?: number; signal?: AbortSignal | null }): Promise<void>
   /** page `page`'s SVG, a new element each call, made of its record's markup (class, size and spacing as the page's own): a
    *  parse alone, no layout, face, ink or PDF.js call, 0.3 to 8.6 ms (420 to 12,000 elements) */
   svgOf(page: number): SVGSVGElement

@@ -863,6 +863,8 @@ export function createReaderView(host) {
     left: {
       doc: () => current?.doc ?? null, scale: () => L.viewer.currentScale,
       pdfPage: n => (laid ? L.viewer.getPageView(n - 1)?.pdfPage ?? null : null),
+      // (whether page n of the left is being drawn: PDF.js's page view running or paused, RenderingStates 1 and 2)
+      drawing: n => (laid ? [1, 2].includes(L.viewer.getPageView(n - 1)?.renderingState) : false),
     },
     lib: kit.lib,
     assets: kit.assets,

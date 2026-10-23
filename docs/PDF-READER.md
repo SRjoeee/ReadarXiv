@@ -803,6 +803,17 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     14.9 against 18.7 (2608.04322v1), 18.5 against 15.7 (2608.16117v1), 15.0 against 19.3 (2609.26457v1); on the thesis (2307.16209v1, 147 pages, render alone) 9.2 ms against 10.0 cold (p95 25.1 against
     25.1), 9.5 against 8.3 warm (p95 23.8 against 22.4): within §8's 1.5× cold and about 1.1× warm. A copy (render A, B and C
     where asked, its pastes and crops) 31.9 to 36.5 ms at the median.
+  - **One parse a page, planes cut to their boxes** (the review of #447). A copy's renders keep the page's rendering state for each
+    other (`run.mjs` `renderAt`, `WARM_PAGES` 4 pages, the one drawn last kept longest, let go at dispose): PDF.js 6.3.289's
+    `page.cleanup` drops the operator list and the decoded images, so A, B and C and every recopy after a zoom each parsed the
+    page and decoded its images again (2602.23285v2 p8, 16.6 MB of images, at k 2 in Node: 4 operator lists and 80 image decodes
+    for A, B, C and A again, 1 and 20 now). B and C are rendered on the box their operations cut from alone (`layer2.mjs`
+    `opsSources`: 8 to 30 % of the pages' pixels on the pack), with render A's annotation mode, and a copy of a page that leaves
+    the view is aborted before its next render (`copyOf`'s `signal`).
+  - **The left first, or in the same frame.** A copy ready while the left's page is being drawn waits for it (at most
+    `LEFT_WAIT_MS`) and is put in place in the task the left's page is told drawn in. Chromium, 2602.23285v2 p8 at k 2, asked to
+    both painted, three runs: 3,275 to 3,324 ms before (the right 2,031 to 2,083 ms after the left), 1,260 to 1,272 ms now (0 to
+    38 ms apart), against 1,211 to 1,238 ms for the left alone.
   - **Failures.** A group the document does not hold: the unit is the original's. A render that throws: the page shows the
     original (`shownOriginal`) and is asked again on the next scroll or zoom.
 - **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
@@ -1986,7 +1997,7 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
 The original's ink under a drawn unit is hidden by that unit's own operators, never by rectangles: each unit's ink in our
 final pass is put in optional-content groups of its own, ON by default, and the reader sets a drawn unit's groups OFF
 (architecture audit item 5; the design note `docs/route/ocg-erasure.md` keeps what is not settled: the reader, the hosts,
-staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the base PDF's bytes do (wrapping adds a section).
+staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes do (wrapping adds a section). BUNDLE5 is `'9'` since the reader side (§11.8): a part carries its cell rules in place of the add-on and no tail, which a reader of 8 refuses, so 8's bundles are prepared again under 9's CTAG (`b9-j6.3.289`); the head's and the catalog's shapes are 8's, and the reader reads 7's and 9's objects.
 
 - **Ownership by marks** (`layout/own.mjs` `ownOf`, pure): a unit's ink is what TeX shipped between its points in our final
   pass, in content-stream order (pageInk with `indices`), in its start point's region (in a column's body or not, at a depth of

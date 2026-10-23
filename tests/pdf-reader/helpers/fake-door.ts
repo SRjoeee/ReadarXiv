@@ -354,7 +354,7 @@ class FakeLayer implements Layer {
   // ---------------------------------------------------------------- the rest
   /** as the real door: render A of the composed document's page (its render told, with the host's annotation mode), on a canvas of
    *  the size asked */
-  copyOf(page: number, o: { k: number; width: number; height: number; context?: CanvasRenderingContext2DSettings | null; annotationMode?: number }): Promise<HTMLCanvasElement> {
+  copyOf(page: number, o: { k: number; width: number; height: number; context?: CanvasRenderingContext2DSettings | null; annotationMode?: number; signal?: AbortSignal | null }): Promise<HTMLCanvasElement> {
     this.check()
     this.range(page)
     if (this.state[page] !== 'ready') return Promise.reject(new Error(`page ${page} is not laid`))

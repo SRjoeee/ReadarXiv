@@ -143,7 +143,7 @@ export interface Layer {
    *  top-left corner): the composed page with the groups of its drawn units hidden, its crops and pastes; `context` the 2D
    *  context's options, `annotationMode` PDF.js's. For any ready page after end() until dispose (D-4); a page not ready rejects;
    *  throws after dispose */
-  copyOf(page: number, o: { k: number; width: number; height: number; context?: CanvasRenderingContext2DSettings | null; annotationMode?: number }): Promise<HTMLCanvasElement>
+  copyOf(page: number, o: { k: number; width: number; height: number; context?: CanvasRenderingContext2DSettings | null; annotationMode?: number; signal?: AbortSignal | null }): Promise<HTMLCanvasElement>
   /** the unit at a point of a page (the parts' left rectangles, PDF units), the smallest where several hold it; null where none
    *  is located or the page is uncovered (D-6). Answers after dispose */
   unitAt(page: number, x: number, y: number): number | null

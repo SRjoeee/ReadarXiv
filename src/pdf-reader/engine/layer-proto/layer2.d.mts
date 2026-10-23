@@ -361,7 +361,7 @@ export type DevBox = [number, number, number, number]
  *  page put back in rectangles, a crop of a page's plane darkened in */
 export type DrawOp =
   | { op: 'hidden'; rects: DevBox[] }
-  | { op: 'paste'; page: number; plane: Plane; rects: DevBox[] }
+  | { op: 'paste'; page: number; plane: Plane; unit?: number | null; rects: DevBox[] }
   | { op: 'crop'; page: number; src: DevBox; dst: DevBox; plane: Plane; clip?: DevBox[] }
 /** which render of a page an operation cuts from: B every unit's text and label hidden (a crop's source), C every group shown */
 export type Plane = 'B' | 'C'
@@ -371,7 +371,9 @@ export type DrawSource = CanvasImageSource
  *  device pixels out) */
 export declare function hideOps(L: Layout, page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; hidden?: number[][]; fromB?: number[][]; fromC?: number[][]; clips?: Map<number, { rects: number[][]; own: number[][] }> | null; audit?: Audit[] | null; id?: number | null }): DrawOp[]
 /** the operations drawn over render A at `z` times v0's resolution, cut from each page's planes as PDF.js drew them there */
-export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number, plane: Plane) => DrawSource | null | undefined): void
+/** the part of each plane the operations cut from, by `${plane}${page}`: [x, y, w, h], whole device pixels at z times v0's resolution */
+export declare function opsSources(ops: readonly DrawOp[], z: number): Map<string, [number, number, number, number]>
+export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number, plane: Plane) => DrawSource | { canvas: DrawSource; x: number; y: number } | null | undefined): void
 /** the unit's lines on one page as SVG markup (a <g data-u="id">) */
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string
 /** a <tspan> of a laid line's text as svgOfUnit draws it: its face, whether it is a run of single CJK characters each at its

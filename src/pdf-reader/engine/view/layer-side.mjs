@@ -46,6 +46,9 @@ export const PAGE_MS = 30_000
 export const COPY_PIXELS = 2 ** 24
 /** how long after a zoom's last step the copies are drawn again: PDF.js draws its own pages 400 ms after it */
 export const RECOPY_MS = 600
+/** the longest a laid page's copy waits for the left's page to be drawn before it is put in place (layer-side commit): the two
+ *  panes paint within one frame of each other, the left first, unless the left is slower than this */
+export const LEFT_WAIT_MS = 1500
 /** how long after a left part's fetch or read fails it is asked again, on a want of its page: a failure may be the network's,
  *  or the part's own, which asking on every pointer frame would only repeat */
 export const LEFT_RETRY_MS = 10_000
@@ -410,6 +413,7 @@ export function createLayerSide(view, o) {
    *  that holds the focus is kept until the focus leaves it (keptForFocus) */
   function retire(n) {
     const P = rec(n)
+    for (const ac of P.copyAcs ?? []) ac.abort()
     if (P.content && !P.content.wrap) return
     if (holdsFocus(n)) { keptForFocus.add(n); return }
     keptForFocus.delete(n)
@@ -491,10 +495,23 @@ export function createLayerSide(view, o) {
     if (!vp?.scale || !box) throw new Error(`page ${n} has no viewport to draw its copy at`)
     const r = k / vp.scale
     const annotationMode = index?.head?.base?.kind === 'delta' && replacedPage(n) ? V.lib?.AnnotationMode?.DISABLE : undefined
-    const canvas = await d.copyOf(n, { k, width: Math.max(1, Math.round(box.width * r)), height: Math.max(1, Math.round(box.height * r)), context: { alpha: false, willReadFrequently: !V.assets?.enableHWA }, annotationMode })
+    // (aborted where the page leaves the view before its copy is drawn: retire; its queued renders not drawn)
+    const P = rec(n), ac = new AbortController()
+    ;(P.copyAcs ??= new Set()).add(ac)
+    const canvas = await d.copyOf(n, { k, width: Math.max(1, Math.round(box.width * r)), height: Math.max(1, Math.round(box.height * r)), context: { alpha: false, willReadFrequently: !V.assets?.enableHWA }, annotationMode, signal: ac.signal }).finally(() => P.copyAcs.delete(ac))
     if (disposed || my !== gen) { release(canvas); return null }
     counts.copies++
     return { canvas, k }
+  }
+  /** resolves once page n of the left is drawn where it is being drawn (at once where it is not: drawn already, or not asked of the
+   *  left at all; else in the task the left's page is told drawn in, or after LEFT_WAIT_MS) */
+  function leftDrawn(n) {
+    if (!V.left.drawing?.(n)) return Promise.resolve()
+    return new Promise(done => {
+      let off = () => {}
+      const timer = clock.later(() => { off(); done() }, LEFT_WAIT_MS)
+      off = V.onPageDrawn((side, page) => { if (side === 'left' && page === n) { clock.clear(timer); off(); done() } })
+    })
   }
   /** a laid page in its place: its copy, then the copy and the SVG put in one task */
   async function commit(n, laid, my) {
@@ -504,7 +521,7 @@ export function createLayerSide(view, o) {
     if (originalPageOf(n)) { shownOriginal(n); return }
     let got
     try { got = await copyAt(d, n, k, my) } catch (e) {
-      if (disposed || my !== gen) return
+      if (disposed || my !== gen || e?.name === 'AbortError') return
       // the page shows the original (an earlier door's drawing let go); asked again on the next scroll or a zoom
       warn('copy', e)
       P.failed = true
@@ -513,6 +530,10 @@ export function createLayerSide(view, o) {
       return
     }
     if (!got) return
+    // (the left first, or in the same frame: a copy ready while the left's page is being drawn waits for it, at most LEFT_WAIT_MS,
+    // and is put in place in the same task as the left's page is told drawn, so that the two panes paint within one frame)
+    await leftDrawn(n)
+    if (disposed || my !== gen) { release(got.canvas); return }
     if (!V.places.near(n) || P.content?.gen === my && P.content.wrap) { release(got.canvas); if (!V.places.near(n)) retire(n); return }
     laid.svg.setAttribute('viewBox', `0 0 ${laid.w} ${laid.h}`)
     laid.svg.setAttribute('preserveAspectRatio', 'none')
@@ -565,7 +586,7 @@ export function createLayerSide(view, o) {
       release(c.copy)
       c.copy = got.canvas
       c.k = got.k
-    } catch (e) { if (!disposed) warn('copy', e) } finally {
+    } catch (e) { if (!disposed && e?.name !== 'AbortError') warn('copy', e) } finally {
       P.copying = false
       if (P.again) { P.again = false; void recopy(n) }
     }

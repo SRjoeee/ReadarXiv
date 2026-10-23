@@ -3377,8 +3377,9 @@ const partOf = c => (c.part !== undefined ? { part: c.part } : {})
  * drawOps draws over render A (the page with the units drawn there hidden by their groups), in v0's device pixels on the page
  * (`px`, `k` of them a PDF unit). Drawn at any other resolution they are scaled to it, from the planes PDF.js draws there. Each:
  * - { op: 'hidden', rects }: where the unit's hidden ink lies, less what is shown again (nothing drawn: what the links ask);
- * - { op: 'paste', page, plane, rects }: render `plane` of this page ('B': every unit's text and label hidden; 'C': every group
- *   shown) put back in each rectangle: the ink the unit's reading keeps;
+ * - { op: 'paste', page, plane, unit, rects }: render `plane` of this page ('B': every unit's text and label hidden; 'C': every
+ *   group shown) put back in each rectangle: the ink the unit's reading keeps (`unit`, whose it is: the lab's check of what a
+ *   paste brings back, lab/pdf/spikes/ocg-reader/page.mjs `resurrected`);
  * - { op: 'crop', page, plane: 'B', src, dst, clip? }: that page's render B in src laid on dst, darkened in, cut through its
  *   placeholder's own segments (`clip`, source pixels) where it has them; a label's crop (no piece) from render C.
  * `hidden`, `fromB`, `fromC`: PDF boxes; `clips`: by the piece's index (hide.mjs). `hasSource(page)`: whether a crop's page is drawn.
@@ -3389,8 +3390,8 @@ export function hideOps(L, page, { px, k, hasSource, pxOf, hidden = [], fromB = 
   const ops = []
   if (hidden.length) ops.push({ op: 'hidden', rects: hidden.map(dev) })
   for (const b of hidden) { const [x, y, w, h] = dev(b); audit?.push({ what: 'erase', unit: id, page, box: [x, y, x + w, y + h] }) }
-  if (fromB.length) ops.push({ op: 'paste', page, plane: 'B', rects: fromB.map(dev) })
-  if (fromC.length) ops.push({ op: 'paste', page, plane: 'C', rects: fromC.map(dev) })
+  if (fromB.length) ops.push({ op: 'paste', page, plane: 'B', unit: id, rects: fromB.map(dev) })
+  if (fromC.length) ops.push({ op: 'paste', page, plane: 'C', unit: id, rects: fromC.map(dev) })
   for (const line of L.lines) {
     if (line.page !== page) continue
     for (const it of line.items) {
@@ -3416,25 +3417,27 @@ export function hideOps(L, page, { px, k, hasSource, pxOf, hidden = [], fromB = 
 /**
  * hideOps' operations drawn on `ctx` (render A of the page, at `z` times v0's resolution), in their order. `sourceOf(page, plane)`:
  * that page's render `plane` at the same resolution as `ctx`, which the pastes and crops are cut from (null: the operation is left
- * out). A paste puts the plane's pixels back in its rectangles, out to whole device pixels (no edge blended); a crop is darkened in,
+ * out): a canvas of the whole page, or { canvas, x, y }, the part of the page from (x, y) that the operations cut from (opsSources).
+ * A paste puts the plane's pixels back in its rectangles, out to whole device pixels (no edge blended); a crop is darkened in,
  * never pasted: its paper is white, and pasted it would cover what it is laid over (a kept label)
  */
 export function drawOps(ctx, ops, z, sourceOf) {
   const at = b => [b[0] * z, b[1] * z, b[2] * z, b[3] * z]
+  const part = v => (v && v.canvas ? v : v ? { canvas: v, x: 0, y: 0 } : null)
   const whole = b => { const x0 = Math.floor(b[0] * z + 1e-6), y0 = Math.floor(b[1] * z + 1e-6), x1 = Math.ceil((b[0] + b[2]) * z - 1e-6), y1 = Math.ceil((b[1] + b[3]) * z - 1e-6); return [x0, y0, x1 - x0, y1 - y0] }
   ctx.save()
   for (const o of ops) {
     if (o.op === 'paste') {
-      const src = sourceOf(o.page, o.plane)
+      const src = part(sourceOf(o.page, o.plane))
       if (!src || !o.rects.length) continue
       ctx.save()
       ctx.beginPath()
       for (const e of o.rects) ctx.rect(...whole(e))
       ctx.clip()
-      ctx.drawImage(src, 0, 0)
+      ctx.drawImage(src.canvas, src.x, src.y)
       ctx.restore()
     } else if (o.op === 'crop') {
-      const src = sourceOf(o.page, o.plane)
+      const src = part(sourceOf(o.page, o.plane))
       if (!src) continue
       const s = at(o.src), d = at(o.dst)
       if (o.clip) {
@@ -3446,12 +3449,33 @@ export function drawOps(ctx, ops, z, sourceOf) {
         ctx.clip()
       }
       ctx.globalCompositeOperation = 'darken'
-      ctx.drawImage(src, ...s, ...d)
+      ctx.drawImage(src.canvas, s[0] - src.x, s[1] - src.y, s[2], s[3], ...d)
       ctx.globalCompositeOperation = 'source-over'
       if (o.clip) ctx.restore()
     }
   }
   ctx.restore()
+}
+
+/**
+ * The part of each plane drawOps cuts from, at `z` times v0's resolution: by `${plane}${page}`, the box [x, y, w, h] (whole device
+ * pixels) that holds every paste's rectangles and every crop's source of that plane, so that a plane is rendered on a canvas of
+ * that box alone, not of the whole page (a page at a view's resolution is up to COPY_PIXELS: tens of MB a plane)
+ */
+export function opsSources(ops, z) {
+  const boxes = new Map()
+  const grow = (key, x0, y0, x1, y1) => { const b = boxes.get(key); if (!b) boxes.set(key, [x0, y0, x1, y1]); else { b[0] = Math.min(b[0], x0); b[1] = Math.min(b[1], y0); b[2] = Math.max(b[2], x1); b[3] = Math.max(b[3], y1) } }
+  for (const o of ops) {
+    const key = `${o.plane}${o.page}`
+    if (o.op === 'paste') for (const e of o.rects) grow(key, e[0] * z, e[1] * z, (e[0] + e[2]) * z, (e[1] + e[3]) * z)
+    else if (o.op === 'crop') grow(key, o.src[0] * z, o.src[1] * z, (o.src[0] + o.src[2]) * z, (o.src[1] + o.src[3]) * z)
+  }
+  const out = new Map()
+  for (const [key, [x0, y0, x1, y1]] of boxes) {
+    const x = Math.max(0, Math.floor(x0) - 1), y = Math.max(0, Math.floor(y0) - 1)
+    out.set(key, [x, y, Math.max(1, Math.ceil(x1) + 1 - x), Math.max(1, Math.ceil(y1) + 1 - y)])
+  }
+  return out
 }
 
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

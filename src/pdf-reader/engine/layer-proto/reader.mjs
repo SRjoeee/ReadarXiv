@@ -201,6 +201,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const unhidden = new Map(base?.unhidden ?? []), labelKept = new Set(base?.labelKept ?? []), rulesByPage = new Map()
   const hear = x => { for (const [pg, r] of Object.entries(x?.rules ?? {})) rulesByPage.set(Number(pg), r) }
   if (!four) hear(bundle)
+  // (a bundle of 3 names no lists: its base is arXiv's PDF, which holds none of our groups, so no unit is hidden over it)
   const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg) }
   const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
   run = await openProto(four
@@ -519,7 +520,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       if (!four) return Promise.reject(new Error('leftPageOf: a bundle 3 layer has no left parts'))
       return awaitLeft(page, signal)
     },
-    copyOf(page, { k, width, height, context = null, annotationMode } = {}) {
+    copyOf(page, { k, width, height, context = null, annotationMode, signal = null } = {}) {
       live()
       pageIn(page)
       if (!(typeof k === 'number' && Number.isFinite(k) && k > 0)) return Promise.reject(new RangeError(`k: device pixels a PDF unit, not ${typeof k === 'number' ? k : kindOf(k)}`))
@@ -531,9 +532,10 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
         canvas.height = height
         // (the context PDF.js draws render A on: the host's options where it gives them, opaque and read back as its page views')
         const ctx = canvas.getContext('2d', context ?? undefined)
-        try { await run.drawCopy(page, ctx, k, { annotationMode }) } catch (e) { canvas.width = 0; canvas.height = 0; throw e }
-        // (let go while it was drawn: no canvas after dispose, as no page)
+        try { await run.drawCopy(page, ctx, k, { annotationMode, signal }) } catch (e) { canvas.width = 0; canvas.height = 0; throw e }
+        // (let go while it was drawn: no canvas after dispose, as no page; aborted, none either)
         if (disposed) { canvas.width = 0; canvas.height = 0 }
+        if (signal?.aborted) { canvas.width = 0; canvas.height = 0; throw signal.reason ?? abortError() }
         live()
         return canvas
       })()

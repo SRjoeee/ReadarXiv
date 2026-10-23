@@ -162,6 +162,8 @@ export interface Internals {
     scale(): number
     /** the left's page n as PDF.js holds it (its operator list drawn: the floats' inputs), once laid out */
     pdfPage(n: number): unknown
+    /** whether page n of the left is being drawn (its page view running or paused) */
+    drawing?(n: number): boolean
   }
   /** the host's PDF.js library (OPS, AnnotationMode) and its getDocument options (assets) */
   readonly lib: unknown

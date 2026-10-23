@@ -162,8 +162,8 @@ describe("v0's drawing as data: recorded in its own device pixels, drawn at any 
     const ops = L2.hideOps(L, 1, { px, k, hasSource: () => true, pxOf: () => px, hidden, fromB, fromC, clips, audit, id: 7 })
     expect(ops.map(o => o.op)).toEqual(['hidden', 'paste', 'paste', 'crop', 'crop'])
     expect(ops[0]).toEqual({ op: 'hidden', rects: hidden.map(dev) })
-    expect(ops[1]).toEqual({ op: 'paste', page: 1, plane: 'B', rects: fromB.map(dev) })
-    expect(ops[2]).toEqual({ op: 'paste', page: 1, plane: 'C', rects: fromC.map(dev) })
+    expect(ops[1]).toEqual({ op: 'paste', page: 1, plane: 'B', unit: 7, rects: fromB.map(dev) })
+    expect(ops[2]).toEqual({ op: 'paste', page: 1, plane: 'C', unit: 7, rects: fromC.map(dev) })
     // the crop: its source's box, laid at the item's place with its baseline on the line's, at the fit's scale, through its segment
     expect(ops[3]).toEqual({ op: 'crop', page: 1, plane: 'B', src: [40 * k, (792 - 510) * k, 20 * k, 10 * k].map(v => expect.closeTo(v, 9)), dst: [120 * k, (792 - (688 + 8 * 0.9)) * k, 18 * k, 10 * 0.9 * k].map(v => expect.closeTo(v, 9)), clip: [dev([40, 500, 50, 510])] })
     // a crop of no piece (a label's ink, whose group B hides) from C, with no clip

@@ -387,7 +387,7 @@ describe('the run in parts: waits, failures and documents', () => {
     const run = await openWarm(P, doc)
     await run.until(2)
     // (page 2's drawing as if it cut from pages 1 and 3: two other pages to read for its copy)
-    run.rows[1]!.ops.push({ op: 'crop', page: 1, plane: 'B' } as never, { op: 'crop', page: 3, plane: 'B' } as never)
+    run.rows[1]!.ops.push({ op: 'crop', page: 1, plane: 'B', src: [0, 0, 1, 1], dst: [0, 0, 1, 1] } as never, { op: 'crop', page: 3, plane: 'B', src: [0, 0, 1, 1], dst: [0, 0, 1, 1] } as never)
     const reads = doc.reads.length
     holding = true
     const canvas = document.createElement('canvas')
@@ -400,6 +400,41 @@ describe('the run in parts: waits, failures and documents', () => {
     await copying
     // (the first read under way when it was let go, render A of the page itself, ends; the crops' sources are never read)
     expect(doc.reads.slice(reads)).toEqual([2])
+  })
+
+  it('parses a page once for every render of its copies (its planes, its crops\' sources, a copy again): warm, at most WARM_PAGES pages, let go at dispose', async () => {
+    const { WARM_PAGES } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const P = await takePaper(TAKE)
+    const base = docsOf(TAKE)(0)
+    // (PDF.js 6.3.289's page: a render asks the worker for the operator list unless the page still holds it; cleanup lets it go)
+    const lists: number[] = [], cleaned: number[] = []
+    const pages = new Map<number, unknown>()
+    const pageOf = async (n: number) => {
+      if (!pages.has(n)) {
+        const pg = (await base.getPage(n)) as Record<string, unknown>
+        let held = false
+        pages.set(n, { ...pg, render: () => { if (!held) { lists.push(n); held = true } return { promise: Promise.resolve() } }, cleanup: () => { held = false; cleaned.push(n) } })
+      }
+      return pages.get(n)
+    }
+    const doc = withGroups({ numPages: base.numPages, getPage: pageOf })
+    const run = await openWarm(P, doc)
+    await run.until(3)
+    // (page 2's drawing as if it cut from pages 1 and 3 and pasted from its own render C)
+    run.rows[1]!.ops.push({ op: 'crop', page: 1, plane: 'B', src: [0, 0, 1, 1], dst: [0, 0, 1, 1] } as never, { op: 'crop', page: 3, plane: 'B', src: [0, 0, 1, 1], dst: [0, 0, 1, 1] } as never, { op: 'paste', page: 2, plane: 'C', rects: [[0, 0, 1, 1]] } as never)
+    const canvas = document.createElement('canvas')
+    canvas.width = 10
+    canvas.height = 10
+    lists.length = 0
+    cleaned.length = 0
+    await run.drawCopy(2, canvas.getContext('2d')!, 1)
+    await run.drawCopy(2, canvas.getContext('2d')!, 2)
+    // (A and C of page 2, B of pages 1 and 3, twice: each page's list asked once, none let go between)
+    expect([...lists].sort()).toEqual([1, 2, 3])
+    expect(cleaned).toEqual([])
+    expect(WARM_PAGES).toBeGreaterThanOrEqual(3)
+    run.dispose()
+    expect([...cleaned].sort()).toEqual([1, 2, 3])
   })
 
   it('steps over a page whose drawing throws: its units the original\'s on all their pages, why page; the others drawn', async () => {

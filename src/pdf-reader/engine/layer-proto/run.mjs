@@ -211,6 +211,9 @@ const SVG_RULES = ['.tl{position:absolute;left:0;top:0;overflow:visible;font-syn
 const r1 = x => Math.round(x * 100) / 100
 /** a run's `still` that never stops it */
 const ALWAYS = () => true
+/** the pages whose rendering state (operator list, decoded images) a run keeps for its next renders (renderAt): the copies near a
+ *  view, a page's planes and its crops' sources, without the page parsed again for each */
+export const WARM_PAGES = 4
 const yieldNow = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise(ok => setTimeout(ok, 0)))
 /** the most of its own work v0 runs in one task, ms: units are laid back to back while their work since the last yield is
  *  under it, then it gives way, so that no task of the engine's approaches a long task (50 ms, the web's budget) but by one
@@ -2814,14 +2817,25 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  source: every placeholder shown), C none (every group shown: the ink a reading keeps) */
   const offOf = (pg, plane) => (plane === 'A' ? [...(rows[pg - 1]?.off ?? [])] : plane === 'B' ? cropSourceOff : [])
   /** page pg's plane drawn by PDF.js at k device pixels a PDF unit, on `canvas` where given (sized by its caller) else on a new one
-   *  of the page's size; `annotationMode` PDF.js's, where the host sets it */
-  const renderAt = (pg, k, plane, canvas = null, annotationMode = undefined) => using([D], async () => {
+   *  of the page's size; `annotationMode` PDF.js's, where the host sets it. The page's rendering state (its operator list and
+   *  the images it decoded) is kept for the renders after it, warm: the planes of one copy and the copies again after a zoom are
+   *  one parse of the page, not one each (PDF.js 6.3.289's page.cleanup lets the list and the decoded objects go, and the next
+   *  render asks the worker for both again). At most WARM_PAGES pages are kept warm, the one drawn last kept longest */
+  const warm = []
+  const keepWarm = page => {
+    const at = warm.indexOf(page)
+    if (at >= 0) warm.splice(at, 1)
+    warm.push(page)
+    while (warm.length > WARM_PAGES) warm.shift().cleanup()
+  }
+  // (`box`: [x, y, w, h] device pixels of the page at k, the part rendered on a canvas of that size alone: a plane's sources, opsSources)
+  const renderAt = (pg, k, plane, canvas = null, annotationMode = undefined, box = null) => using([D], async () => {
     const page = await D.getPage(pg)
     const viewport = page.getViewport({ scale: k })
     const c = canvas ?? document.createElement('canvas')
-    if (!canvas) { c.width = Math.ceil(viewport.width); c.height = Math.ceil(viewport.height) }
-    // (drawn, the page's rendering state let go: lp item 2)
-    try { await VIS.render(page, { canvas: c, canvasContext: c.getContext('2d'), viewport, ...(annotationMode === undefined ? {} : { annotationMode }) }, offOf(pg, plane)) } finally { page.cleanup() }
+    if (!canvas) { c.width = box ? box[2] : Math.ceil(viewport.width); c.height = box ? box[3] : Math.ceil(viewport.height) }
+    const params = { canvas: c, canvasContext: c.getContext('2d'), viewport, ...(box ? { transform: [1, 0, 0, 1, -box[0], -box[1]] } : {}), ...(annotationMode === undefined ? {} : { annotationMode }) }
+    try { await VIS.render(page, params, offOf(pg, plane)) } finally { keepWarm(page) }
     return c
   })
   const needsCopy = () => {
@@ -3049,12 +3063,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
      * with the groups of the units drawn on it hidden: offOf), then the page's drawing (its units' operations in the order v0
      * painted them) scaled to k: its crops cut from render B of their page, what its readings keep pasted from render B or C of
      * this page. Every render is the composed document's at k, through its one configuration (visibility.mjs), so that the copy is
-     * as sharp as the original at every zoom. `annotationMode`: PDF.js's, for render A (the host's: a delta's replaced page draws
+     * as sharp as the original at every zoom. `signal`: an abort stops the copy before its next render (a page that left the view).
+     * `annotationMode`: PDF.js's, for every render of the copy (the host's: a delta's replaced page draws
      * none of the original's annotations)
      */
-    async drawCopy(pg, ctx, k, { annotationMode } = {}) {
+    async drawCopy(pg, ctx, k, { annotationMode, signal = null } = {}) {
       const r = rows[pg - 1]
       // every plane the drawing cuts from: B of a crop's page, B and C of this page for its pastes
+      // (each plane rendered on the box its operations cut from alone, not the whole page: L2.opsSources)
+      const z = k / (scale * dpr), boxes = L2.opsSources(r.ops, z)
       const others = new Map()
       const need = (j, plane) => { const key = `${plane}${j}`; if (!others.has(key)) others.set(key, [j, plane]) }
       for (const o of r.ops) { if (o.op === 'crop' || o.op === 'paste') need(o.page, o.plane) }
@@ -3063,13 +3080,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const rendered = []
       try {
         for (const [key, [j, plane]] of others) {
-          if (disposed) return
-          const c = await renderAt(j, k, plane)
+          if (disposed || signal?.aborted) return
+          const box = boxes.get(key)
+          const c = await renderAt(j, k, plane, null, annotationMode, box)
           rendered.push(c)
-          others.set(key, c)
+          others.set(key, box ? { canvas: c, x: box[0], y: box[1] } : c)
         }
-        if (disposed) return
-        L2.drawOps(ctx, r.ops, k / (scale * dpr), (j, plane) => others.get(`${plane}${j}`) ?? null)
+        if (disposed || signal?.aborted) return
+        L2.drawOps(ctx, r.ops, z, (j, plane) => others.get(`${plane}${j}`) ?? null)
       } finally { for (const c of rendered) { c.width = 0; c.height = 0 } }
     },
     /** a done page's canvases let go (its record stays), once no unit on it is still to be painted on any of its pages: no
@@ -3088,6 +3106,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** the run let go: its sheet removed, every page's canvases released (a page under way when it is called, once it ends),
      *  nothing drawn or laid after; an until under way resolves. Its pages' records stay with whoever holds them */
     dispose() {
+      for (const page of warm.splice(0)) { try { page.cleanup() } catch { /* the document's, gone with it */ } }
       if (disposed) return
       disposed = true
       sheet.remove()
