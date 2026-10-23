@@ -3,14 +3,13 @@
 // (the hybrid at f267adb9, drawing the old way), beyond noise; a cost that buys a fidelity gain is named, and small.
 // From several runs of each (layer-gate.mjs --perf, one pass a run, run alternately so that the machine's load falls on
 // both alike), the medians:
-//   - browser, per page: the first drawing (v0's page step: the original drawn, the units laid and painted, and over the
-//     text-removed PDF its ink read and its removed pages drawn), the drawing again at twice the resolution (the original
+//   - browser, per page: the first drawing (v0's page step: the page drawn, the units laid and painted), the drawing again at twice the resolution (the original
 //     drawn there, then drawCopy), the canvases held and the JS heap live (after a collection) at their peak; and where
 //     the new path's time goes
-//     (its own split: render, text, ink, removed pages, lay, operations, compose, SVG);
-//   - server, per paper: the layout maker (its operator lists within it, which the remover shares), the remover beyond
-//     them;
-//   - reader download, per paper: the layout file (gzipped), the add-on (deflated already) and its manifest (gzipped).
+//     (its own split: render, text, ink, lay, operations, compose, SVG);
+//   - server, per paper: the layout maker (its operator lists within it), and the wrap of our page by optional content
+//     (layout/wrap.mjs, the maker child's; the old path had a remover, whose time is no longer measured);
+//   - reader download, per paper: the layout file (gzipped).
 // The rule: a time may be at most 10 % above the old path's median; a byte count, a canvas count and the heap at most
 // what the old path's is (the heap 10 %: Chromium's count moves by itself). Each line that fails is listed.
 //   pnpm exec tsx lab/pdf/spikes/layer-perf.mjs --old=<run.json>,… --new=<run.json>,… [--record] [--label=<new's name>]
@@ -63,8 +62,7 @@ function server(runs) {
   for (const paper of Object.keys(runs[0].perf.server)) {
     const list = runs.map(r => r.perf.server[paper]).filter(Boolean)
     const m = f => median(list.map(f))
-    const rem = list.some(x => x.remover) ? { parse: m(x => x.remover?.parse), ink: m(x => x.remover?.ink), plan: m(x => x.remover?.plan), make: m(x => x.remover?.make), ops: m(x => x.remover?.ops) } : null
-    out[paper] = { makerMs: m(x => x.maker?.ms), makerOpsMs: m(x => x.maker?.opsMs), removerMs: rem ? rem.parse + rem.ink + rem.plan + rem.make : 0, remover: rem, layoutBytes: list[0].layoutBytes, layoutGzip: list[0].layoutGzip, addonBytes: list[0].addonBytes, manifestGzip: list[0].manifestGzip, download: list[0].download }
+    out[paper] = { makerMs: m(x => x.maker?.ms), makerOpsMs: m(x => x.maker?.opsMs), wrapMs: list.some(x => x.wrap) ? m(x => x.wrap?.ms) : null, layoutBytes: list[0].layoutBytes, layoutGzip: list[0].layoutGzip, download: list[0].download }
   }
   return out
 }
@@ -99,17 +97,17 @@ for (const n of Object.keys(now.browser.fixtures).sort()) {
   L.push(`| ${n} | ${a.firstDraw} / ${b.firstDraw} | ${a.zoom} / ${b.zoom} | ${r1(a.canvasPeak / 2 ** 20)} / ${r1(b.canvasPeak / 2 ** 20)} | ${marks.every(x => x === 'ok') ? 'ok' : '**over**'} |`)
 }
 L.push('', '## Server, per paper', '')
-L.push('| paper | maker ms, old / new (its operator lists) | remover ms beyond them, new (parse + ink + plan + make) |', '|---|---|---|')
+L.push('| paper | maker ms, old / new (its operator lists) | wrap ms, new |', '|---|---|---|')
 for (const p of Object.keys(now.server).sort()) {
   const a = old.server[p], b = now.server[p]
   check(`${p} maker`, a?.makerMs, b.makerMs, 'time')
-  L.push(`| ${p} | ${a?.makerMs ?? '-'} (${a?.makerOpsMs ?? '-'}) / ${b.makerMs} (${b.makerOpsMs}) | ${b.removerMs}${b.remover ? ` (${b.remover.parse} + ${b.remover.ink} + ${b.remover.plan} + ${b.remover.make})` : ''} |`)
+  L.push(`| ${p} | ${a?.makerMs ?? '-'} (${a?.makerOpsMs ?? '-'}) / ${b.makerMs} (${b.makerOpsMs}) | ${b.wrapMs ?? '-'} |`)
 }
 L.push('', '## Reader download, per paper (bytes)', '')
-L.push('| paper | layout file gz, old / new | add-on, new | manifest gz, new | in all, old / new |', '|---|---|---|---|---|')
+L.push('| paper | layout file gz, old / new | in all, old / new |', '|---|---|---|')
 for (const p of Object.keys(now.server).sort()) {
   const a = old.server[p], b = now.server[p]
-  L.push(`| ${p} | ${a?.layoutGzip ?? '-'} / ${b.layoutGzip} | ${b.addonBytes} | ${b.manifestGzip} | ${a?.download ?? '-'} / ${b.download} |`)
+  L.push(`| ${p} | ${a?.layoutGzip ?? '-'} / ${b.layoutGzip} | ${a?.download ?? '-'} / ${b.download} |`)
 }
 L.push('', fails.length ? `## Over the budget (${fails.length})\n\n${fails.map(f => `- ${f}`).join('\n')}` : '## Over the budget\n\nNothing.', '')
 console.log(L.join('\n'))

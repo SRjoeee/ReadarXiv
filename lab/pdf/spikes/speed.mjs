@@ -1,7 +1,8 @@
 // lab/pdf/spikes/speed.mjs
 // The prepare's speed, head against base (P2's speed check: a rule may be improved, the prepare must not get slower): for each
-// paper, the page pass as production runs it (layerOfPaper over one reading of each PDF on the lite worker, the remover in
-// process, the verdicts on), each side in a process of its own, N times, the sides interleaved, so that a drift of the machine
+// paper, the page pass as production runs it (layerOfPaper over one reading of each PDF on the lite worker, our base page wrapped
+// by optional content first as the maker child wraps it (layout/wrap.mjs wrapFinal, where the engine has it; no remover is given
+// an older engine's pass: the text removal is gone, docs/PDF-READER.md §19.9), the verdicts on), each side in a process of its own, N times, the sides interleaved, so that a drift of the machine
 // spreads over all of them. The sides:
 //   base   an engine of next's (--base=<a tree of it>: `git archive <commit> | tar -x -C <dir>`, its node_modules linked): the
 //          marked original read whole first (readMarked), then the pass
@@ -11,7 +12,7 @@
 //   on5    `on` and rule 5 (a float's search from its last body neighbour's page on)
 // Each run records, from the process's start: the source's parse, step T (arXiv's text), the marked read (base and off; the
 // stream reads it inside the pass), the maker's own times (stats.layout.stats.ms: ops, carry, anchor, rows), the rest of the
-// pass (the left, the cut, the plans, the verdicts: total less the others), the total, and the first part told (onPart): its
+// pass (the left, the cut, the verdicts: total less the others), the wrap (`wrap`, where this engine's side has a base page), the total, and the first part told (onPart): its
 // wall time and the arXiv page read then (the stream's `closed`; today's path reads every page first). The peak RSS, and with
 // --mem a run more a side whose live set (heap and ArrayBuffers after two gc()) is taken at the first part and at the end (gc
 // perturbs the times: those runs are left out of the time table).
@@ -51,7 +52,9 @@ async function child() {
   const { constants: Z, deflateSync, inflateRawSync, inflateSync } = await import('node:zlib')
   const E = join(ROOT, 'src/pdf-reader/engine'), im = f => import(join(E, f))
   const mk = await im('layout/marks.mjs'), front = await im('source/latex-front.mjs'), live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs')
-  const arx = await im('layout/arxiv.mjs'), pass = await im('pipeline/page-pass.mjs'), remove = await im('layout/remove.mjs'), tail = await im('layout/tail.mjs'), versions = await im('pipeline/versions.mjs')
+  const arx = await im('layout/arxiv.mjs'), pass = await im('pipeline/page-pass.mjs'), tail = await im('layout/tail.mjs'), versions = await im('pipeline/versions.mjs')
+  // (the wrap where the engine has it)
+  const wrapMod = existsSync(join(E, 'layout/wrap.mjs')) ? await im('layout/wrap.mjs') : null
   const NM = join(REPO, 'node_modules/pdfjs-dist/')
   const tasks = []
   const open = (bytes, o = LITE) => { const task = getDocument({ data: bytes.slice(), ...o, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }); tasks.push(task); return task.promise }
@@ -86,17 +89,22 @@ async function child() {
   let marks = null
   if (!RULES[side]) { t = at(); marks = await mk.readMarked(mdoc, log, { ...options, units: source.units, OPS }); ms.marks = at() - t }
   const base = { bytes: arxivBytes.length, sha256: createHash('sha256').update(arxivBytes).digest('hex'), xref: tail.startxrefOf(arxivBytes) }
-  // (our base page, the final pass of the marked original, where the paper dir names one (`meta.base`): this engine's sides make the
-  // layout over it and the remover edits it; base's engine takes arXiv's PDF as before; a dir with none is not run on this engine's
-  // sides, the driver's `incomparable`)
-  const oursBytes = meta.base && side !== 'base' ? new Uint8Array(readFileSync(meta.base)) : null
-  const ours = oursBytes ? { doc: await open(oursBytes, LITE_DRAW), bytes: oursBytes.length, sha256: createHash('sha256').update(oursBytes).digest('hex'), xref: tail.startxrefOf(oursBytes), check: { marks: 0 } } : null
-  const remover = remove.removerOf({ bytes: oursBytes ?? arxivBytes, PL, inflate, deflate })
+  // (our base page, the final pass of the marked original, where the paper dir names one (`meta.base`): this engine's sides wrap it
+  // and make the layout over it; base's engine takes arXiv's PDF as before; a dir with none is not run on this engine's sides, the
+  // driver's `incomparable`)
+  const finalBytes = meta.base && side !== 'base' ? new Uint8Array(readFileSync(meta.base)) : null
+  let oursBytes = finalBytes, wrap = null
+  if (finalBytes && wrapMod) {
+    t = at()
+    const w = await wrapMod.wrapFinal(finalBytes, { PL, getDocument, documentOptions: { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }, OPS, units: source.units, deflate, inflate })
+    ms.wrap = at() - t
+    if (!w.refused) { oursBytes = w.bytes; wrap = { stats: w.stats, unhidden: w.unhidden, labelKept: w.labelKept, pages: w.pages } }
+  }
+  const ours = oursBytes ? { doc: await open(oursBytes, LITE_DRAW), bytes: oursBytes.length, sha256: createHash('sha256').update(oursBytes).digest('hex'), xref: tail.startxrefOf(oursBytes), check: { marks: 0 }, ...(wrap ? { wrap } : {}) } : null
   let first = null, parts = 0
   t = at()
   const r = await pass.layerOfPaper({
     paper, source, ...(marks ? { marks, ...(side === 'off' ? { rules: OFF_RULES } : {}) } : { marked: { doc: mdoc, log, options }, rules: RULES[side] }), arxiv: { doc: arxiv, text }, ...(ours ? { ours, orig: base, tree: '2025' } : { base }), OPS, pdfjs: versions.PDFJS, image: '1',
-    remove: ({ plans }) => remover.remove(plans),
     onHead: () => {}, onLeft: () => {},
     onPart: () => { parts++; if (!first) first = { ms: at(), ...(MEM ? { live: liveSet() } : {}) } },
   })
