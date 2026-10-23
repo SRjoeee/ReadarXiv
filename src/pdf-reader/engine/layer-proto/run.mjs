@@ -2067,14 +2067,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // between two displays is a text block of its own), then laid as one again
     const asRuns = list => list.flatMap(p => p.runs ?? [p])
     const filledRuns = new Map()
-    // (each run filled on the page it begins on, against that page's target; a run begun on a page before and running on to
-    // this one continues here, and a run on no block of this page is no unit of its)
-    const firstOf = q => (q.parent ? q.blocks[0].page : q.pages[0])
-    const here = asRuns(laid[pg].filter(p => p.fillable && !p.refused))
-    const r = fillPage(here.filter(q => firstOf(q) === pg), P, (q, target) => {
+    // (a unit's runs are filled on the page the unit begins on, together: one pass, so that they keep one tracking (fillPage).
+    // Filling each on the page it begins on was measured and declined (2026-10-24, 7 Chinese papers: link colours lost 2 -> 9,
+    // paragraph ends letter-spaced 4 -> 14), left to its own change)
+    const r = fillPage(asRuns(begun), P, (q, target) => {
       if (q.parent) { filledRuns.set(q.parent, target); return }
       recorded(q, target, q.fillLead)
-    }, { continuing: here.filter(q => firstOf(q) !== pg && (!q.parent || (firstOf(q) < pg && q.blocks.some(b => b.page === pg)))) })
+    }, { continuing: asRuns(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg)) })
     for (const [p, target] of filledRuns) {
       const keep = p.layout.extents
       p.layout = L2.joinRuns(p.runs)
