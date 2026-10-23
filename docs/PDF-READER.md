@@ -423,6 +423,12 @@ switch alone: figure text in every display), `uiLanguage` (the reader's words), 
 
 - **Writing the display**: 对照 writes `mode: 'side'`, unless it is `'stack'` (a side-by-side choice already for the
   reader); 译文 writes `'only'`; both clear `pdfReader.original`. 原文 sets `pdfReader.original` and leaves `mode` alone.
+- **Another target language**, once a translation has started (chosen here or elsewhere): the translation in it in place, the
+  page never loaded again (`settings.ts` `followOf` `retarget`, the run's `retarget`, §11.8). The left, both documents, the zoom,
+  the sync and the reading place stay; each laid page shows the language before until the new one's page is laid, and the
+  original's page where the new one's service fails or stops short with nothing translated. The line and the phase are an open's (Translating, §8). A hold
+  for the language before (one the layer does not set) is lifted and the translated display shown again; a hold for the
+  paper's own reason stays.
 
 **New**, a `pdfReader` group; `CONFIG_VERSION` 18 → 19, with a migration that adds it with its defaults:
 
@@ -814,13 +820,36 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     14.9 against 18.7 (2608.04322v1), 18.5 against 15.7 (2608.16117v1), 15.0 against 19.3 (2609.26457v1); on the thesis (2307.16209v1, 147 pages, render alone) 9.2 ms against 10.0 cold (p95 25.1 against
     25.1), 9.5 against 8.3 warm (p95 23.8 against 22.4): within §8's 1.5× cold and about 1.1× warm. A copy (render A, B and C
     where asked, its pastes and crops) 31.9 to 36.5 ms at the median.
-  - **One parse a page, planes cut to their boxes** (the review of #447). A copy's renders keep the page's rendering state for each
-    other (`run.mjs` `renderAt`, `WARM_PAGES` 4 pages, the one drawn last kept longest, let go at dispose): PDF.js 6.3.289's
-    `page.cleanup` drops the operator list and the decoded images, so A, B and C and every recopy after a zoom each parsed the
-    page and decoded its images again (2602.23285v2 p8, 16.6 MB of images, at k 2 in Node: 4 operator lists and 80 image decodes
-    for A, B, C and A again, 1 and 20 now). B and C are rendered on the box their operations cut from alone (`layer2.mjs`
+  - **One parse a page, planes cut to their boxes** (the review of #447). The document keeps its pages' rendering state for every
+    render after them (`visibility.mjs`, through which every render of the document goes: `WARM_PAGES` 4 pages, the one drawn
+    last kept longest, the oldest let go by its `cleanup()`, the rest with the document): PDF.js 6.3.289's `page.cleanup` drops
+    the operator list and the decoded images, so A, B and C and every recopy after a zoom each parsed the page and decoded its
+    images again (2602.23285v2 p8, 16.6 MB of images, at k 2 in Node: 4 operator lists and 80 image decodes for A, B, C and A
+    again, 1 and 20 now). The lay's reads of a page (its pixels, a live reading) keep it warm too, so a page's copy renders from
+    the parse its lay made, and a run opened again over the same document (another target, a retry) reads and copies its warm
+    pages with no operator list asked. The bound is the document's: at most `WARM_PAGES` pages' operator lists and decoded
+    images, whatever runs over it. B and C are rendered on the box their operations cut from alone (`layer2.mjs`
     `opsSources`: 8 to 30 % of the pages' pixels on the pack), with render A's annotation mode, and a copy of a page that leaves
     the view is aborted before its next render (`copyOf`'s `signal`).
+  - **Another target, in place** (`retarget(to)`). The layer is the paper's whatever the language, so another target is a later
+    attempt over the same layer and the same composed document: the door laying the target before is let go at once (its
+    generation past: nothing it lays or copies is put in place, and no page is asked of it in the new language; its copies
+    under way aborted), then the door opened again as `again()` opens it, over the latest composed document (no document opened
+    or read again, no range of the base or the original asked). Its run sets its own groups off a page (render A) through the
+    document's one configuration. A laid page keeps the target before until the new target's page commits; one the new door
+    fails or stalls shows the original's page; `dropOthers()`, the host's word that the new target's rows will not come (its
+    service failed, or it stopped short with no unit translated), lets every page still showing another target's layer go to the
+    original's (one holding the focus once the focus leaves it). A kept page's shapes are muted (`shapes.mjs` `mute`): nothing
+    of it is lit or hit until the new target's page commits, since neither the new layout nor the mirror describes its drawing;
+    it is not drawn again on a zoom either (its door is gone), so it is soft until then. The run's renders stop once it is let go
+    (`VIS.render`'s `live`), so the door before holds no turn of the document's queue; a live reading pins its page warm until
+    its fills are read. A stop tells the end only where a unit of the target was translated (`whole` or `partial`); a service
+    that never answers ends as any stop does, by the request queue's bounds (each batch's timeout, the queue's whole budget).
+    A language change during a limit's wait (429) is retargeted in place, the look asked no sooner. Whatever the target, a laid
+    page whose copy hides nothing (`LaidPage.hides` 0: no unit translated there, its rows `none`, lost or not come by the end, or
+    nothing to translate) is never put in place: arXiv's page stays, never our base page in its place. `dropOthers()` lets go
+    every drawing of a door before, another target's or this one's before it was opened again. The left pane is not
+    touched. A same-target retry keeps its pages as before.
   - **The left first, or in the same frame.** A copy ready while the left's page is being drawn waits for it (at most
     `LEFT_WAIT_MS`) and is put in place in the task the left's page is told drawn in. Chromium, 2602.23285v2 p8 at k 2, asked to
     both painted, three runs: 3,275 to 3,324 ms before (the right 2,031 to 2,083 ms after the left), 1,260 to 1,272 ms now (0 to

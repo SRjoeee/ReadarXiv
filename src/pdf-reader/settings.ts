@@ -52,8 +52,9 @@ export function figuresShown(config: Config, display: EngineDisplay): boolean {
 }
 
 export interface Follow {
-  /** start the page again: a new target language once a translation has started (another document, from the source) */
-  reload: boolean
+  /** the translation in the new target language, in place, once a translation has started (the run's retarget: the left, the
+   *  documents and the reading place kept) */
+  retarget: boolean
   /** the display to show, or null to keep the one on screen */
   display: EngineDisplay | null
   /** the sync mode to apply, or null to keep the one in effect */
@@ -76,19 +77,19 @@ export function followOf(
    *  stopped: the last translation stopped short, and a retry can mend it */
   at: { translating: boolean; held: boolean; stopped: boolean; addressDisplay: boolean; addressSync: boolean; display: EngineDisplay; syncMode: string },
 ): Follow {
-  const none: Follow = { reload: false, display: null, sync: null, retry: false }
+  const none: Follow = { retarget: false, display: null, sync: null, retry: false }
   if (from === 'refused' || from === 'first') return none
-  if (at.translating && next.targetLanguage !== prev.targetLanguage) return { ...none, reload: true }
+  const retarget = at.translating && next.targetLanguage !== prev.targetLanguage
   const wanted = displayOf(next)
   const display = !at.addressDisplay && !at.held && wanted !== displayOf(prev) && wanted !== at.display ? wanted : null
   const sync = next.pdfReader.sync ? 'same' : 'off'
   const switchable = at.syncMode === 'same' || at.syncMode === 'off'
   return {
-    reload: false,
+    retarget,
     display,
     sync: !at.addressSync && switchable && next.pdfReader.sync !== prev.pdfReader.sync && sync !== at.syncMode ? sync : null,
     // a translation that stopped short runs again once the services change: most often the key the card sent the
-    // reader to set (the reader's design, §8)
-    retry: at.stopped && chainConfigChanged(prev, next),
+    // reader to set (the reader's design, §8); a new target language opens the service again of itself
+    retry: !retarget && at.stopped && chainConfigChanged(prev, next),
   }
 }

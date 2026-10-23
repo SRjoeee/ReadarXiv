@@ -239,7 +239,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     const r = run.rows[page - 1]
     const svg = run.svgOf(page)
     svg.setAttribute('lang', lang)
-    return { svg, w: r.w, h: r.h, words: run.wordsOf(page), links: run.linksOf(page) }
+    return { svg, w: r.w, h: r.h, words: run.wordsOf(page), links: run.linksOf(page), hides: run.hides(page) }
   }
   const off = a => { if (a.signal && a.onAbort) a.signal.removeEventListener('abort', a.onAbort) }
 

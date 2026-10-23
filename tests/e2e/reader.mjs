@@ -958,6 +958,86 @@ try {
     api.set({ layer: mode.ready() })
   }
 
+  // --------------------------------------------------------------------------------- another target, in place
+  section('another target language, in place: the left, both documents and what PDF.js parsed of them kept; each page laid in the new language over the old; a failing service shows the original')
+  {
+    const stored = await worker.evaluate(() => chrome.storage.local.get('config').then(r => r.config))
+    await seedService(worker, { id: 'svc-e2efail0', name: 'failing', baseURL: echo.failingURL, model: 'local-echo' }, { choose: false })
+    const page = await openReader({ mode: 'bilingual' })
+    const side = () => page.evaluate(() => window.__reader.side()?.probe() ?? null)
+    /** what each place shows: the layer's language (a dash where its copy is not drawn), the original's page view, or nothing */
+    const shownNow = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => {
+      const l = p.querySelector('.axt-place-view > .axt-layer')
+      if (l) return `${l.querySelector('svg')?.getAttribute('lang') ?? '?'}${l.querySelector('canvas.axt-layer-copy')?.width > 0 ? '' : '-'}`
+      return p.querySelector('.axt-place-view > .page canvas') ? 'original' : 'none'
+    }))
+    const laidIn = lang => page.waitForFunction(lang => { const l = document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer'); return l?.querySelector('svg')?.getAttribute('lang') === lang && l.querySelector('canvas.axt-layer-copy')?.width > 0 && window.__reader.side()?.probe().rowsEnded === true }, lang, { timeout: 60_000 }).then(() => true, () => false)
+    const first = await laidIn('de')
+    await page.waitForFunction(() => window.__reader.view.probe().original === 'open', null, { timeout: 30_000 }).catch(() => undefined)
+    await sleep(1500)
+    // the counters from here: a mark a reload would clear; each document's operator lists asked (PDF.js's GetOperatorList
+    // message to its worker, by the document and the page); canvases made in the left pane; the original's page views put
+    // back in the right's places; the requests for the base and arXiv's PDF
+    await page.evaluate(() => {
+      window.__kept = true
+      const lists = {}
+      window.__lists = lists
+      const post = Worker.prototype.postMessage
+      Worker.prototype.postMessage = function (m, ...rest) {
+        if (m?.action === 'GetOperatorList') { const k = `${m.sourceName} p${(m.data?.pageIndex ?? -1) + 1}`; lists[k] = (lists[k] ?? 0) + 1 }
+        return post.call(this, m, ...rest)
+      }
+      const made = { left: 0, original: 0 }
+      window.__made = made
+      const canvases = n => n.nodeType === 1 && (n.nodeName === 'CANVAS' || !!n.querySelector?.('canvas'))
+      new MutationObserver(rs => { for (const r of rs) for (const n of r.addedNodes) if (canvases(n)) made.left++ }).observe(document.getElementById('left'), { childList: true, subtree: true })
+      // (a place's page view, the original's: under its view holder, beside which the layer's own wrapper is put)
+      const pageView = n => n.nodeType === 1 && (n.matches?.('.axt-place-view > .page') || !!n.closest?.('.axt-place-view > .page'))
+      new MutationObserver(rs => { for (const r of rs) for (const n of r.addedNodes) if (pageView(n) && canvases(n)) made.original++ }).observe(document.getElementById('right'), { childList: true, subtree: true })
+    })
+    const asked0 = api.requests.length, arxiv0 = asked.arxiv.length, before = await side(), shown0 = await shownNow()
+    const scroll0 = await page.evaluate(() => [document.getElementById('left').scrollTop, document.getElementById('right').scrollTop])
+    await setConfig({ targetLanguage: 'fra' })
+    // (the place of page 1 sampled while the new target is laid: the target before, until the new one's page is in place)
+    const during = await page.evaluate(() => new Promise(done => {
+      const seen = new Set(), t0 = performance.now()
+      const look = () => {
+        const l = document.querySelector('#right .axt-place[data-page-number="1"] .axt-place-view > .axt-layer')
+        const now = l ? l.querySelector('svg')?.getAttribute('lang') ?? '?' : document.querySelector('#right .axt-place[data-page-number="1"] .axt-place-view > .page canvas') ? 'original' : 'none'
+        seen.add(now)
+        if (now === 'fr' || performance.now() - t0 > 30_000) done([...seen])
+        else requestAnimationFrame(look)
+      }
+      look()
+    }))
+    const again = await laidIn('fr')
+    await sleep(1500)
+    const after = await page.evaluate(() => ({ kept: window.__kept === true, lists: window.__lists, made: window.__made, scroll: [document.getElementById('left').scrollTop, document.getElementById('right').scrollTop] }))
+    const p = await side(), shown1 = await shownNow()
+    const paths = api.requests.slice(asked0).map(r => r.path)
+    const bases = paths.filter(x => /\/api\/v1\/(base|original)\//.test(x)), objects = paths.filter(x => /\/o\/[0-9a-f]{64}$/.test(x)), looks = paths.filter(x => x.startsWith('/api/v1/layer/') && !/\/o\//.test(x))
+    check('another target is laid in place: the page not loaded again, its places in the new language, each showing the language before until then (never the original between)', first && again && after.kept && during.every(l => l === 'de' || l === 'fr') && shown1.filter(x => x !== 'none').every(x => x === 'fr'), `${shown0.join(' ')} then ${shown1.join(' ')}; page 1 showed ${during.join(' > ')}`)
+    check('… over the same layer and composed document: the door opened once more, no document opened, the layer not looked at again, nothing of the base or arXiv\'s PDF asked', p?.composed === 1 && p?.docs === 1 && p?.opens === (before?.opens ?? 0) + 1 && looks.length === 0 && bases.length === 0 && asked.arxiv.length === arxiv0, JSON.stringify({ opens: [before?.opens, p?.opens], composed: p?.composed, docs: p?.docs, looks: looks.length, base: bases.length, arxiv: asked.arxiv.slice(arxiv0), objects: objects.length }))
+    check('… with nothing parsed again: no operator list asked of either document, no canvas made on the left, no original page view put back on the right, the panes where they were', Object.keys(after.lists).length === 0 && after.made.left === 0 && after.made.original === 0 && JSON.stringify(after.scroll) === JSON.stringify(scroll0), JSON.stringify(after))
+    control('a page loaded again loses its mark: the check of in place fails there', await (async () => { const q = track(await context.newPage()); await q.goto(page.url()); await q.waitForFunction(() => !!window.__reader, null, { timeout: 30_000 }).catch(() => undefined); const kept = await q.evaluate(() => window.__kept === true); await q.close(); return { ok: kept, detail: `the mark after a load: ${kept}` } })())
+    // the new target's service fails (its key refused, no free service to fall back on): the pages still in French show the
+    // original's page, the failure told
+    await setConfig({ targetLanguage: 'spa', provider: 'svc-e2efail0', fallback: { enabled: false } })
+    const dropped = await page.waitForFunction(() => { const place = document.querySelector('#right .axt-place[data-page-number="1"]'); return !place?.querySelector('.axt-place-view > .axt-layer') && !!place?.querySelector('.axt-place-view > .page canvas') }, null, { timeout: 30_000 }).then(() => true, () => false)
+    const failed = await page.waitForFunction(() => window.__reader.controller.getState().failure !== null, null, { timeout: 30_000 }).then(() => true, () => false)
+    const st = await page.evaluate(() => { const s = window.__reader.controller.getState(); return { phase: s.phase, failure: s.failure } })
+    check('the new target\'s service failing (its key refused): the pages still in the language before show the original\'s page, the failure told', dropped && failed && (await shownNow()).every(x => x !== 'fr' && x !== 'fr-'), JSON.stringify({ ...st, refused: echo.seen.refused, shown: await shownNow() }))
+    // (the counter counts: a page of the left not drawn before, its operator list asked)
+    const listed0 = await page.evaluate(() => Object.values(window.__lists).reduce((a, n) => a + n, 0))
+    await page.evaluate(n => window.__reader.controller.goToPage('left', n), sampleCut.paper.pages)
+    await sleep(2500)
+    const listed = await page.evaluate(() => ({ ...window.__lists }))
+    control('the operator lists counted: a page of the left not drawn before asks one, and the check of nothing parsed again fails there', { ok: Object.values(listed).reduce((a, n) => a + n, 0) === listed0, detail: JSON.stringify(listed) })
+    await page.close()
+    await worker.evaluate(c => chrome.storage.local.set({ config: c }), stored)
+    await sleep(300)
+  }
+
   // --------------------------------------------------------------------------------- the reader's states on the layer
   section('the reader\'s states on the layer: none for the paper, refused, unreachable, a retry, arXiv\'s bytes not the base (Task 12)')
   {
