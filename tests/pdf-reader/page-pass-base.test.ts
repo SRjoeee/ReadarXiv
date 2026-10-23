@@ -204,3 +204,13 @@ describe('layerOfPaper over our base page held as a delta over arXiv\'s PDF', ()
     expect((await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf()) })).r).not.toHaveProperty('stats.delta')
   })
 })
+
+describe('a delta the host gives over more pages of ours than arXiv\'s (CodeRabbit on #439)', () => {
+  it('falls to the whole base (`delta-pages`), then `boxes` for the page counts: no head drops a page of ours', async () => {
+    const w = worldOf()
+    const longer = { ...w, marked: [...(w.marked as Page[]), { runs: linesOf(4) }] }
+    const got = await passOf(w, { orig: ORIG, ours: oursOf(longer, { delta: await deltaOver([1]) }) })
+    expect(got.head.base).toMatchObject({ source: 'arxiv', why: 'boxes' })
+    expect(got.parts.every(p => p.noLayout?.refused === 'boxes')).toBe(true)
+  })
+})

@@ -168,6 +168,8 @@ async function deltaOfOurs(given, { orig, ours, M, N, tree, doc }) {
   if (typeof given !== 'object') return shape('not an object')
   if (Object.hasOwn(given, 'refused')) return { why: DELTA_WHYS.includes(given.refused) ? given.refused : 'delta-shape', reason: whyText(given.why ?? '') }
   const { bytes, sha256, replaced, stats } = given
+  // (our pages more than arXiv's: no composed document holds them, as deltaOf refuses them)
+  if (!Number.isInteger(M) || M > N) return { why: 'delta-pages', reason: `our base page has ${M} pages, arXiv's PDF ${N}` }
   if (!(bytes instanceof Uint8Array) || bytes.length < 1 || bytes.length > DELTA_MAX_BYTES) return shape(`not 1 to ${DELTA_MAX_BYTES} bytes`)
   if (bytes.length > DELTA_MAX_SHARE * ours.bytes) return { why: 'delta-bound', reason: `${bytes.length} bytes, past ${DELTA_MAX_SHARE} of our base page's ${ours.bytes}` }
   let digest
@@ -315,7 +317,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   let baseDoc = null, baseText = null, lineCheck = null, oursHead = null, oursTail = null, deltaStat = null
   if (!(marks && !('marks' in marks))) {
     const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
-    const held = oursDoc ? await deltaOfOurs(ours.delta, { orig: origRef, ours, M: Math.min(oursDoc.numPages, N), N, tree, doc }) : null
+    const held = oursDoc ? await deltaOfOurs(ours.delta, { orig: origRef, ours, M: oursDoc.numPages, N, tree, doc }) : null
     const checked = await checkOurBase({ ours, draft: marked?.doc ?? null, arxiv: { doc, text }, tree, draw, toplevels, delta: held?.delta ? pagesOf(held.delta.replaced) : false })
     if ('refused' in checked) { marks = { refused: checked.refused, why: checked.why }; marked = null }
     else {
