@@ -34,6 +34,23 @@ export const texText = bytes => latin1(bytes).replace(/\r\n?/g, '\n')
 export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
 const utf8Bytes = s => new TextEncoder().encode(s)
 const bytesOf = (s, enc) => (enc === 'utf8' ? utf8Bytes(s) : latin1Bytes(s))
+const UTF8 = new TextDecoder('utf-8', { fatal: true }), UTF8_LAX = new TextDecoder()
+/** whether a source's text (its bytes read latin1) is UTF-8: a file that is never decodes as UTF-8 */
+const isUtf8Text = t => { try { UTF8.decode(latin1Bytes(t)); return true } catch { return false } }
+/**
+ * A file's input encoding as its characters (S2 of 2026-10-24): a unit's text is UTF-8 bytes read latin1 (mt.mjs utf8
+ * decodes it), so a file that is not UTF-8 has each of its text pieces turned into UTF-8 by the encoding the main file's
+ * \\usepackage[…]{inputenc} declares — latin1 its characters as they are, cp1252 (ansinew) Windows' — and by latin1, what
+ * pdfTeX reads a byte as, where it declares none or one this table does not hold. Read as UTF-8, 2610.20581's latin1
+ * bytes were each a U+FFFD and the translator was sent "Universit Gustave Eiffel". A UTF-8 file is never decoded again
+ */
+const INPUT_ENCODINGS = { latin1: s => s, cp1252: s => CP1252.decode(latin1Bytes(s)), ansinew: s => CP1252.decode(latin1Bytes(s)) }
+const CP1252 = new TextDecoder('windows-1252')
+/** the paper's files that are not UTF-8, each with the decoding of its text (loadProject sets it for its walk) */
+let decoders = new Map()
+/** a source text piece, raw, as the engine's text: its file's characters as UTF-8 bytes read latin1 */
+const asEngineText = (file, s) => { const d = decoders.get(file); return d && !ASCII_ONLY.test(s) ? latin1(utf8Bytes(d(s))) : s }
+const ASCII_ONLY = /^[\t\n\r -~]*$/
 const concat = parts => { const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
 
 // ---------------------------------------------------------------- what carries prose
@@ -578,7 +595,7 @@ function paperMacros(files) {
     // marked where it was called, left a translation's leading on every page after it)
     const p0 = prose.length === 1 ? prose[0] : undefined
     const then = params ? tailOf(t.slice(k + 1, e - 1)) : null
-    out.set(name, { params, opt, prose: p0, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
+    out.set(name, { params, opt, prose: p0, def: t.slice(k + 1, e - 1), ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
   }
   return out
 }
@@ -696,6 +713,40 @@ function readsOn(body) {
 }
 /** a paper macro's arguments at a call, as TeX takes them: its optional one when given, then each required one a brace
  *  group or a single token; null when the call runs past `to` */
+/** the pieces the walk reads a macro's body as, with `args` in place of its parameters (none: each parameter empty), in a
+ *  walk of its own that changes nothing of the paper's: null where the body ends or starts a unit */
+function bodyPieces(macro, args, file, ctx) {
+  const body = macro.def.replace(/#(\d)/g, (m, n) => args?.[Number(n) - 1] ?? '')
+  const units = [], b = new Builder(file, units, body, ctx.bodies, null)
+  walk(body, 0, body.length, b, { ...ctx, called: null, fits: [], skipped: {}, ended: false, visit: () => {}, visitFront: () => {} })
+  return units.length ? null : (b.cur?.pieces ?? [])
+}
+/** whether a macro's body sets words of its own beside what its parameters hold: a word outside every group, command and
+ *  formula of it (Notebook~#1; \\textbf{#1}, \\textcolor{red}{#1}, #1\\xspace and \\rowcolor{gray!8}\\multicolumn{6}{…}{#1}
+ *  hold none, and stay the pair they were) */
+function setsWords(macro) {
+  if (macro.words === undefined) {
+    let t = typeof macro.def === 'string' ? uncommented(macro.def).replace(/\$[^$]*\$/g, ' ') : ''
+    for (let n = 0; n < 20 && /\{[^{}]*\}/.test(t); n++) t = t.replace(/\{[^{}]*\}/g, ' ')
+    // (an optional argument's brackets, a box's [c][14.5pt], and a dimension after a command, \\rowcolor{gray!8}[0pt], are no words)
+    t = t.replace(/\[[^\]]*\]/g, ' ').replace(/[-+]?(?:\d+\.?\d*|\.\d+)\s*(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu)\b/g, ' ')
+    macro.words = /\p{L}{2}/u.test(t.replace(/\\(?:[A-Za-z@]+|.)/g, ' ').replace(/#\d/g, ' '))
+  }
+  return macro.words
+}
+/** a call's expansion as plain text (the call's arguments' sources, `args`, put in its body), in Unicode: text pieces, an
+ *  accent's letter, and a tie or a control space as a space; null where it holds anything else (a command, a group, math) */
+function expandedText(macro, args, file, ctx) {
+  const pieces = bodyPieces(macro, args, file, ctx)
+  if (!pieces?.length) return null
+  let out = ''
+  for (const p of pieces) {
+    if (p.t === 'text') out += UTF8_LAX.decode(latin1Bytes(p.src === undefined ? asEngineText(file, p.s) : p.s))
+    else if (p.t === 'ph' && /^(?:~|\\ )$/.test(p.src)) out += ' '
+    else return null
+  }
+  return /\p{L}/u.test(out) ? out : null
+}
 function macroArgs(s, i, macro, to) {
   const reqs = []
   let k = i
@@ -774,7 +825,8 @@ class Builder {
   flush() {
     const u = this.cur; this.cur = null
     if (!u) return
-    u.pieces = joinLetters(keepAddresses(u.pieces))
+    // (a file that is not UTF-8: each text piece as UTF-8, `src` its own bytes, which patch writes back, before its letters join it)
+    u.pieces = joinLetters(keepAddresses(u.pieces).map(p => { if (p.t !== 'text' || p.src !== undefined) return p; const t = asEngineText(this.file, p.s); return t === p.s ? p : { t: 'text', s: t, src: p.s } }))
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
@@ -895,6 +947,62 @@ function branchEnd(s, from, to, ifs, { toFi = false } = {}) {
     k = end - 1
   }
   return -1
+}
+/** a conditional's branches after its test's name at `end`: `then` up to its \\else (or its \\fi), `else` after it up to the
+ *  \\fi (-1 where it has none), and `end` past the \\fi; null where no \\fi closes it before `to`. The test's own tokens are
+ *  the then branch's first (conditionalValue says where they end where it reads them) */
+function conditionalAt(s, end, to, ifs) {
+  const first = branchEnd(s, end, to, ifs)
+  if (first < 0) return null
+  const firstName = commandBefore(s, first)
+  if (firstName === 'or') return null
+  if (firstName === 'fi') return { thenFrom: end, thenTo: first - 3, elseFrom: -1, elseTo: -1, end: first }
+  const fi = branchEnd(s, first, to, ifs, { toFi: true })
+  return fi < 0 ? null : { thenFrom: end, thenTo: first - 5, elseFrom: first, elseTo: fi - 3, end: fi }
+}
+/** the control word that ends at `at` (branchEnd's \\fi, \\else, \\or) */
+const commandBefore = (s, at) => /\\([A-Za-z]+)$/.exec(s.slice(Math.max(0, at - 6), at))?.[1]
+/** whether s[from, to) holds words TeX would set: letters outside comments, math, commands' names and their arguments — but
+ *  a font command's or a box's, whose argument is text (\\end{document}, \\url{…} hold no words; \\textbf{Final words} does) */
+const wordsIn = (s, from, to) => from < to && /\p{L}{2}/u.test(s.slice(from, to).replace(/(^|[^\\])%.*$/gm, '$1').replace(/\$[^$]*\$/g, ' ')
+  .replace(/\\([A-Za-z@]+)\*?((?:\s*\[[^\]]*\])*(?:\s*\{[^{}]*\})*)/g, (m, name, args) => (INLINE_TEXT.has(name) || CONTENT_BOX.has(name) || name === 'footnote' ? ` ${args} ` : ' ')))
+/**
+ * A conditional's value where the paper's own sources decide it: \\iftrue, a \\newif whose value TeX reads the same
+ * everywhere (newifValues), and \\ifdefined\\x, \\ifcsname x\\endcsname and \\ifx\\x\\undefined of a command the paper surely
+ * defines outside every definition and unsure conditional (`defined`, loadProject); null where they do not: a test TeX
+ * alone answers (\\ifnum, \\ifdim, \\ifx of two commands), and one of a command the paper does not define, which a package
+ * may. Not asked of TeX: the units are cut before any compile, the same on every reader
+ */
+function conditionalValue(name, s, end, ctx) {
+  if (name === 'iftrue') return true
+  if (ctx.ifValues.has(name)) return ctx.ifValues.get(name)
+  const k = skipSpaces(s, end)
+  // \\if of two characters (an author's \\if 0 … \\fi around a passage): a line's end or a space is a space
+  if (name === 'if') { const two = ifChars(s, end); return two ? two[0] === two[1] : null }
+  if (name === 'ifdefined' && s[k] === '\\') return ctx.defined.has(commandAt(s, k).name) ? true : null
+  if (name === 'ifcsname') { const m = /^\s*([A-Za-z@]+)\s*\\endcsname/.exec(s.slice(end)); return m && ctx.defined.has(m[1]) ? true : null }
+  if (name === 'ifx' && s[k] === '\\') {
+    const a = commandAt(s, k), k2 = skipSpaces(s, a.end), b2 = s[k2] === '\\' ? commandAt(s, k2) : null
+    if (b2 && /^(?:undefined|@undefined)$/.test(b2.name) && ctx.defined.has(a.name)) return false
+  }
+  return null
+}
+/** the two characters \\if compares where both are characters (neither a command, a group, a parameter nor a comment),
+ *  a space or a line's end after the first a space; else null */
+function ifChars(s, end) {
+  const k = skipSpaces(s, end), a = s[k], b = s[k + 1]
+  if (!a || /[\\{}%#\s]/.test(a) || !b || /[\\{}%#]/.test(b)) return null
+  return [a, /\s/.test(b) ? ' ' : b]
+}
+/** where the tokens of the tests conditionalValue reads end (the then branch begins there): the command \\ifdefined tests,
+ *  \\ifcsname's name to its \\endcsname, \\ifx's two commands; any other's at its name */
+function testEnd(name, s, end) {
+  const k = skipSpaces(s, end)
+  if (name === 'if') return ifChars(s, end) ? k + 2 : end
+  if (name === 'ifdefined' && s[k] === '\\') return commandAt(s, k).end
+  if (name === 'ifcsname') { const m = /^\s*[A-Za-z@]+\s*\\endcsname(?![A-Za-z@])/.exec(s.slice(end)); return m ? end + m[0].length : end }
+  if (name === 'ifx' && s[k] === '\\') { const a = commandAt(s, k), k2 = skipSpaces(s, a.end); return s[k2] === '\\' ? commandAt(s, k2).end : end }
+  return end
 }
 /** a control word TeX takes as a conditional, which a \\fi ends: TeX's own, the paper's \\newif ones, LaTeX's internal
  *  \\if@… — not etoolbox's \\ifdefempty{…}{…}{…} and the like, macros that no \\fi ends */
@@ -1100,6 +1208,27 @@ function walk(s, from, to, b, ctx) {
       const stop = branchEnd(s, end, to, ctx.ifs)
       if (stop > 0) { endText(); b.flush(); ctx.skipped[name] = (ctx.skipped[name] ?? 0) + 1; i = stop; continue }
     }
+    // any other conditional TeX closes with a \\fi: one branch is what TeX sets (S4 of 2026-10-24: 2610.21098's
+    // \\ifdefined\\BottleneckPreprint, both its branches' sentences one unit). Where the paper's own sources decide it
+    // (conditionalValue) the live branch is walked, the rest stays in the source; where they do not, neither branch is
+    // the translator's (`skipped.ifUnknown`). Only one whose branches TeX would not set hold words (wordsIn): another's
+    // pieces stay as they were
+    if (isConditional(name, ctx.ifs) && name !== 'ifcase') {
+      const c = conditionalAt(s, end, to, ctx.ifs)
+      const value = c && conditionalValue(name, s, end, ctx)
+      if (c) c.thenFrom = Math.min(testEnd(name, s, end), c.thenTo)
+      if (c && (value !== null || (wordsIn(s, c.thenFrom, c.thenTo) && c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo)))) {
+        const [from, upto] = value === true ? [c.thenFrom, c.thenTo] : value === false ? (c.elseFrom >= 0 ? [c.elseFrom, c.elseTo] : [c.thenTo, c.thenTo]) : [-1, -1]
+        const dead = value === null ? true : value ? c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo) : wordsIn(s, c.thenFrom, c.thenTo)
+        if (dead) {
+          const block = holdsBlock(s.slice(c.thenFrom, c.end))
+          endText()
+          if (value === null) { ctx.skipped.ifUnknown = (ctx.skipped.ifUnknown ?? 0) + 1; if (block) b.flush(); else b.ph(s.slice(i, c.end), i, c.end); i = c.end; continue }
+          if (block) { b.flush(); walk(s, from, upto, b, ctx); b.flush(); i = c.end; continue }
+          b.ph(s.slice(i, from), i, from); walk(s, from, upto, b, ctx); endText(); if (upto < c.end) b.ph(s.slice(upto, c.end), upto, c.end); i = c.end; continue
+        }
+      }
+    }
     if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e, name === '['); i = e; continue } }
     const shorthand = ctx.envMacros.get(name)
     if (shorthand?.side === 'begin' && (MATH_ENVS.test(shorthand.env) || ctx.displayEnvs.has(shorthand.env) || SKIP_ENVS.test(shorthand.env) || ctx.skipEnvs.has(shorthand.env))) {
@@ -1271,6 +1400,18 @@ function walk(s, from, to, b, ctx) {
         // (`held`: its text is the macro's to use, as text or not: elsarticle's \\biboptions{semicolon} holds natbib's options)
         for (const u of b.units.slice(before)) { u.front = true; u.held = true }
         i = call.end; goOn(macro, call, i); continue
+      }
+      // a macro whose body sets words of its own around its argument (\\newcommand{\\nb}[1]{Notebook~#1}) is no wrapper: its
+      // call is its expansion, text whose source is the call (expandedText), or where the body is more than text, the
+      // call one placeholder. As a pair around its argument, the translator was sent "(4--6)" for "(Notebook 4--Notebook
+      // 6)" (2610.21547's eleven units, S1 of 2026-10-24)
+      if (arg && !macro.then && setsWords(macro)) {
+        const text = !macro.opt && expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, ctx)
+        // (the pair's id spent as the pair's was: the pairs after it keep theirs, and their units their hashes)
+        endText(); b.pairId++
+        if (text) b.letter(text, s.slice(i, call.end), i, call.end)
+        else b.ph(s.slice(i, call.end), i, call.end)
+        i = call.end; continue
       }
       if (arg?.group) {
         // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
@@ -1603,9 +1744,20 @@ export function loadProject(fsys, main, { tables = false } = {}) {
   // each file's text read once: the package's TeX (.tex, .sty, .cls) is read by several of the passes below
   const texts = new Map(), sourceText = f => texts.get(f) ?? texts.set(f, texText(fsys.read(f))).get(f)
   const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: sourceText(f) }))
-  const outer = paper
+  const outer = paper, outerDecoders = decoders
   paper = paperOf(own.map(x => x.text))
-  try { return readProject(fsys, main, tables, sourceText, own) } finally { paper = outer }
+  decoders = decodersOf(own, sourceText, main)
+  try { return readProject(fsys, main, tables, sourceText, own) } finally { paper = outer; decoders = outerDecoders }
+}
+/** each of the package's files that is not UTF-8, by its normalized name, with its decoding (INPUT_ENCODINGS): the one the
+ *  main file declares, else latin1 */
+function decodersOf(own, sourceText, main) {
+  const out = new Map(), bad = own.filter(x => !isUtf8Text(x.text))
+  if (!bad.length) return out
+  const mainText = own.find(x => x.file === normalizePath(main) || x.file === normalizePath(`${main}.tex`))?.text ?? ''
+  const declared = inputencOf(mainText)?.options.split(',').map(x => x.trim()).find(x => x in INPUT_ENCODINGS)
+  for (const x of bad) out.set(x.file, INPUT_ENCODINGS[declared ?? 'latin1'])
+  return out
 }
 function readProject(fsys, main, tables, sourceText, own) {
   const ownTexts = own.map(x => x.text)
@@ -1639,7 +1791,15 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
+  // the commands the paper surely defines (conditionalValue): a definition in one of its files outside every definition's
+  // body and every conditional TeX may skip
+  const defined = new Set()
+  for (const t of ownTexts) for (const c of texCommands(t, { lineEnvs: lineEnvsOf(ownTexts), ifs, ifValues })) {
+    if (c.inDef || !c.sure || !/^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|[gex]?def|let|newif|newcounter|newlength|newtoks|chardef|mathchardef)$/.test(c.name)) continue
+    const m = /^\*?\s*\{?\s*\\([A-Za-z@]+)/.exec(t.slice(c.end, c.end + 200))
+    if (m) defined.add(m[1])
+  }
+  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, defined, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;

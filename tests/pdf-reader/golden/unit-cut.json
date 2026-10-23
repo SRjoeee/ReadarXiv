@@ -1,5 +1,5 @@
 {
- "pipeline": "26",
+ "pipeline": "27",
  "units": {
   "sample-1": [
    "heading: text",
@@ -50,6 +50,10 @@
   ],
   "llncs-url": [
    "para: text,ph,text,ph,text,ph,text"
+  ],
+  "text-read": [
+   "para: text",
+   "para: ph,text,ph,text,ph,text"
   ]
  }
 }

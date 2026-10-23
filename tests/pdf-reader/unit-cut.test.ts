@@ -20,6 +20,8 @@ import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 //                \[…\]), a table, a theorem, a list, \href, \emph
 //   llncs-url    layout-route-fallbacks.test.ts's 2610.19860 case as it stands: llncs.cls's fallback \url under hyperref, the
 //                \newline before it and a formula after (the cut #435 moved)
+//   text-read    PIPELINE 27's cuts (source-reader-text.test.ts): a macro that sets words of its own (2610.21547's \nb), a
+//                Latin-1 file under its inputenc (2610.20581), a conditional the paper decides (2610.21098's \ifdefined)
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const SAMPLE = new URL('../fixtures/pdf/sample-1/', import.meta.url)
@@ -29,6 +31,9 @@ const UNIT_CUT_SOURCES: Record<string, () => Map<string, Uint8Array>> = {
   'llncs-url': () => new Map([
     ['main.tex', enc('\\documentclass{llncs}\n\\usepackage{hyperref}\n\\begin{document}\nThe code is available at\\newline\n\\url{https://github.com/a/b-c} with $x$.\n\\end{document}\n')],
     ['llncs.cls', enc(LLNCS)],
+  ]),
+  'text-read': () => new Map([
+    ['main.tex', Uint8Array.from('\\def\\Preprint{1}\n\\documentclass{article}\n\\usepackage[latin1]{inputenc}\n\\newcommand{\\nb}[1]{Notebook~#1}\n\\begin{document}\nThe notebooks (\\nb{4}--\\nb{6}) of the Universit\xe9 run.\n\n\\ifdefined\\Preprint\nThe public code is at \\url{a}.\n\\else\nAn anonymized copy is at \\url{b}.\n\\fi\nIt contains the generator.\n\\end{document}\n', c => c.charCodeAt(0))],
   ]),
 }
 const GOLDEN = new URL('./golden/unit-cut.json', import.meta.url)
