@@ -226,6 +226,29 @@ at "original".
 - **Specific to `delta`** (about 20–30 lines): carrying `/OCProperties` into the composed catalog, and the (d) check.
 - Nothing in the reader is form-specific. It hides groups in whatever composed document it opened.
 
+### 2.8 The file contract (decided by the file owner, 2026-10-23)
+- **Groups:** one OCG per name, `<< /Type /OCG /Name (axt:<group>) >>`, group `u<id>`, `u<id>.p`, `u<id>.l` or `n<occ>`; content
+  streams name them by `/OC /axt<group> BDC`, each page's `/Properties` mapping `/axt<group>` to its OCG. `/D << /BaseState
+  /ON /ON [ours] /Order [] >>`. The reader finds a group by its name in PDF.js's config.
+- **Where the lists are:** `head.base.unhidden` = `[[unit id, code], …]`, ids rising, code one of `marks`, `across`, `spell`,
+  `page`, `bounds`; `head.base.labelKept` = rising unit ids, none of `unhidden`'s. Both on either kind (`full` and `delta`),
+  beside `head.base.stats` (`wrapped`, `refusedPages`, `unhidden` counts by code, `split`, `groups`, `labelKept`; a delta's
+  own counts kept). They are known in the maker child before the layout is made, so the head carries them and waits for
+  nothing. Checked on both sides by `layout/delta-wire.mjs wrapWhy` (the counts equal the lists'). A head with no `stats`
+  on a `full` base, or no lists on a `delta`, is an unwrapped base: no unit is hidden.
+- **Bounds:** at most `UNHIDDEN_MAX` = 8,000 entries a list (as many as a document's groups, GROUPS_DOC; both full are
+  32,000 of the head's 64,000 values). Past it the wrap is refused (`wrap-bound`) and the paper's base is arXiv's (`wrap`).
+- **The reader's rule:** a unit is drawable over the file iff the config holds `axt:u<id>` and the unit is in neither
+  list; a `labelKept` unit is drawn body only, its label left the original's ink (no `.l` group is written for it).
+- **`units` of `wrapFinal`:** the paper's SOURCE units (`pipeline/live.mjs openPaper`'s `units`, the page pass's
+  `source.units`), each `{ kind, pieces }` with untranslated text pieces; the spell check reads a unit's `src` where it has
+  one, else its pieces' plain source text; the marking's `follows` (an opening alone's end, by the text after it) is made of
+  the same pieces. A translation's units (a record's, text pieces `tr`) are refused with a TypeError: they give neither.
+- **The cell rules** (the add-on manifest's per-page `rules`) are not the file side's: the maker returns them and the cut
+  writes them into the part (the reader lane).
+- **Wrap refused for the paper:** `wrapFinal` returns `{ refused: 'wrap-parse' | 'wrap-proof' | 'wrap-bound', why }`; the host
+  passes `ours: { refused: 'wrap', why }` and the head's base is arXiv's with `why: 'wrap'` (a new LAYOUT_REFUSED code).
+
 ### 2.6 Tests (CI)
 - T2.1: W1–W6 on S1–S12, with the proof's (b) and (c) as the oracle.
 - T2.2: refusal rows, each with its reason. A refused page writes no `/Properties` of ours.

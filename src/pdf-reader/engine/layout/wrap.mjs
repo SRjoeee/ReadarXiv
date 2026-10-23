@@ -406,8 +406,10 @@ export { UNHIDDEN_MAX }
 /**
  * Our final pass read, owned and wrapped: the maker child's one call, before any document of its own is open (its delta is then
  * built from the bytes this returns, and the page pass given them). `finalBytes` our final pass; `units` the paper's units (their
- * ids their indices: own.mjs takes their source text, and the marking's `follows` is made of them and the points read, unless
- * `follows` is given, or null for none); `getDocument` and `documentOptions` the engine's PDF.js and the host's options; `OPS`
+ * ids their indices, the SOURCE units — pipeline/live.mjs openPaper's `units`, layerOfPaper's `source.units`, each { kind, pieces:
+ * [{ t: 'text', s } | { t: 'ph', src } | …] }, never a translation's (a record's, whose text pieces are `tr`: a TypeError): own.mjs
+ * spells each against its `src` where it has one, else its pieces' plain source text, and the marking's `follows` is made of
+ * them and the points read, unless `follows` is given, or null for none); `getDocument` and `documentOptions` the engine's PDF.js and the host's options; `OPS`
  * its operator codes; `PL`, `deflate`, `inflate` wrapOf's. Every page our compile marks is wrapped; one PDF.js reads past its
  * bounds (capped, timed out, its boxes merged, rotated) is left unwrapped, its units the original's. Returns { bytes, xref,
  * sha256, stats, unhidden, labelKept } — `stats` { wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds }, split,
@@ -417,6 +419,9 @@ export { UNHIDDEN_MAX }
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
 export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units = null, follows: given = undefined, deflate, inflate = null, keepOwned = false }) {
+  // (the paper's SOURCE units: a translation's (a record's units, its text pieces `tr`) holds no text after a placeholder to
+  // find its ink's end by, nor the source text the spell check reads)
+  if (units !== null && (!Array.isArray(units) || units.some(u => u?.pieces?.some?.(p => p?.tr)))) throw new TypeError('units: the paper\'s source units (live.mjs openPaper\'s, layerOfPaper\'s `source.units`), not a translation\'s')
   let task = null
   const pages = [], facts = []
   try {

@@ -187,7 +187,7 @@ export interface PartChain {
 /** why a part has no layout, as its wire records it in place of one: TeX's (`compile`, `texlive`, `engine`), ours (`marks`),
  *  the carry's (`carry`), and BUNDLE 8's where our compile is no base page (`final`: the final pass failed, moved a mark or had
  *  no budget; `boxes`: a page of ours not arXiv's size, or other page counts) */
-export declare const LAYOUT_REFUSED: readonly ['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes']
+export declare const LAYOUT_REFUSED: readonly ['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap']
 export type LayoutRefused = (typeof LAYOUT_REFUSED)[number]
 /** a record's `why`, in code units at most */
 export declare const WHY_MAX: 300

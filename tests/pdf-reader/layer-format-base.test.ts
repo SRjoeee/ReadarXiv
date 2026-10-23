@@ -32,7 +32,7 @@ describe('the head of BUNDLE 8', () => {
     expect(BUNDLES_READ).toEqual(['7', '8'])
     expect(BASE_SOURCES).toEqual(['ours', 'arxiv'])
     expect(BASE_WHYS).toEqual(LAYOUT_REFUSED)
-    expect(BASE_WHYS).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes'])
+    expect(BASE_WHYS).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap'])
   })
 
   it('a base of ours: its pages, year and check, arXiv\'s PDF beside it, in the wire\'s order; the share to a ten-thousandth', async () => {

@@ -37,7 +37,7 @@ import { isMemoryError } from './memory.mjs'
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 const why = e => String(e?.message ?? e).slice(0, 200)
 /** the why each refusal word says where none was given */
-const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', texlive: 'the paper needs another TeX Live', engine: 'the host does not run the paper\'s compiler', marks: 'the marked original could not be read', final: 'there is no final pass of the marked original', boxes: 'our pages are not arXiv\'s' })
+const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', texlive: 'the paper needs another TeX Live', engine: 'the host does not run the paper\'s compiler', marks: 'the marked original could not be read', final: 'there is no final pass of the marked original', boxes: 'our pages are not arXiv\'s', wrap: 'our pages could not be wrapped by optional content' })
 /**
  * Why a part has no layout, as its record says it (layer-proto/format.mjs LAYOUT_REFUSED: `{ refused, why }`, `why` within
  * WHY_MAX): the paper's refusal — the marked original's (layout/paper.mjs markedOfPaper's 'compile', 'texlive', 'engine',
@@ -103,7 +103,8 @@ function fitted(text) {
 export async function checkOurBase({ ours, draft = null, arxiv, tree = null, draw = true, toplevels = 1, delta = false }) {
   const no = (refused, why, extra = {}) => ({ refused, why: whyText(why), ...extra })
   const own = ours?.doc ?? null
-  if (!own) return no('final', typeof ours?.why === 'string' && ours.why ? ours.why : PLAIN_WHY.final)
+  // (a final pass whose wrap was refused (layout/wrap.mjs wrapFinal: `wrap-<code>`) is no base of ours either: `wrap`)
+  if (!own) { const k = ours?.refused === 'wrap' ? 'wrap' : 'final'; return no(k, typeof ours?.why === 'string' && ours.why ? ours.why : PLAIN_WHY[k]) }
   const { doc, text } = arxiv, N = doc.numPages
   const M = own.numPages
   // (a delta: `true`, every page of ours replaced, or the pages it replaces; the composed document is ours on those alone)

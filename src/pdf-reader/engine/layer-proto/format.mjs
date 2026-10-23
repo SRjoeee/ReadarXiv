@@ -98,9 +98,10 @@ export const TOKEN_SCALE = 1000, TOKEN_LIMIT = 100_000
  *  the marks' reading or the maker failed) —; and `carry` (no unit of our compile laid: no page with a unit on it arXiv's
  *  page, layout/make.mjs drawable); BUNDLE 8's, where our compile is no base page — `final` (the final pass of the
  *  marked original failed, or did not place every mark where the draft did, or the compile budget held none), `boxes` (a page
- *  of ours is not arXiv's size, or the page counts differ). A part with `layout: null` is one whose producer recorded no
+ *  of ours is not arXiv's size, or the page counts differ), `wrap` (our pages could not be wrapped by optional content: layout/
+ *  wrap.mjs wrapFinal's refusal, `wrap-<code>` in the why). A part with `layout: null` is one whose producer recorded no
  *  reason (5's shape, cutBundle with none given) */
-export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes'])
+export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap'])
 /** whose PDF a layer is drawn over (the head's `base.source`): our compile's final pass, or arXiv's (a fallback, or a bundle of 7) */
 export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
 /** how a base of ours is held (the head's `base.kind`, BUNDLE 8): `delta`, an incremental update over arXiv's PDF (the

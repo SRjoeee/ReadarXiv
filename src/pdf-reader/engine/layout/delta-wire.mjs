@@ -36,8 +36,10 @@ export const UNHIDDEN = Object.freeze(['marks', 'across', 'spell', 'page', 'boun
 /** what a head says of our pages' wrap (`base.stats`, beside a delta's own counts): pages wrapped and refused, the units the
  *  original's by why, the shows split, the groups, the labels left the original's ink */
 export const WRAP_STATS = Object.freeze(['wrapped', 'refusedPages', 'unhidden', 'split', 'groups', 'labelKept'])
-/** the units a head lists as the original's (`base.unhidden`) or with their label kept (`base.labelKept`) at most */
-export const UNHIDDEN_MAX = 20_000
+/** the units a head lists as the original's (`base.unhidden`) or with their label kept (`base.labelKept`) at most, each list (as many
+ *  as a document may have groups, GROUPS_DOC: with both full, 32,000 of the head's HEAD_VALUES 64,000); past it the wrap is refused
+ *  (`wrap-bound`) and the base is arXiv's */
+export const UNHIDDEN_MAX = 8000
 
 /**
  * Why a wrap's head fields (`stats` WRAP_STATS', `unhidden` [[unit id, UNHIDDEN code], …] by rising id, `labelKept` rising ids,
