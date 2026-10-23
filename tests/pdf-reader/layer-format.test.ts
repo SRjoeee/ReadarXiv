@@ -8,18 +8,17 @@ import type { PartChain, ReadUnitsChunk, ReadUnitsChunkLight } from '@/pdf-reade
 import {
   BUILD_END_WHYS, BUNDLE5, DEPTH_NONE, KIND_NONE, RECORD_FLAG, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG5, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
   isFinalEnd, keyOf, keyParts, LAYOUT_REFUSED, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
-  readUnitsChunk, TAIL_CAP, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG5, WHY_MAX, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
+  readUnitsChunk, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG5, WHY_MAX, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { authorsTranslated } from '@/pdf-reader/engine/translate/kept.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 import { batchesOf, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
-import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
-import { PDFJS, PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
+import { PDFJS, PIPELINE_VERSION, REMOVAL } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import {
-  BASE, forged, IMAGE, LEFT_OF, type Made, made, N, PAPER, parsed, partInputs, sha256Of, STREAM, textOf, TAILS, tailOf, TOKENS_ON_PAGE, tokenWire, UNITS, utf8, VIEWS,
+  BASE, forged, IMAGE, LEFT_OF, type Made, made, N, PAPER, parsed, partInputs, RULES_2, sha256Of, STREAM, textOf, TOKENS_ON_PAGE, tokenWire, UNITS, utf8, VIEWS,
 } from './helpers/format-paper'
 
 // BUNDLE 4's format (the prepare pipeline's bundle 4 contract and its amendments): the five kinds of object, each writer
@@ -134,18 +133,16 @@ describe('each writer then its reader is the identity', () => {
     expect([...p2.views]).toEqual(VIEWS.slice(1).flat())
     expect(p1.layout).toEqual(inputs[0]!.layout)
     expect(p3.layout).toBeNull()
-    expect(p3.addon).toBeNull()
-    expect(p1.addon).toMatchObject({ tail: TAILS[0]!.tail, r: 1 })
-    expect(p2.addon).toMatchObject({ tail: TAILS[1]!.tail, r: 1 })
-    expect(p2.addon!.manifest.page).toEqual(inputs[1]!.addon!.manifest.page)
+    expect(p3.rules).toBeNull()
+    expect(p1.rules).toBeNull()
+    expect(p2.rules).toEqual({ 2: RULES_2 })
     expect(p1.leftParts).toEqual([M.lefts[1]!.ref])
     expect(p2.leftParts).toEqual([M.lefts[2]!.ref, M.lefts[3]!.ref])
     expect(p1.chain).toEqual({
-      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), groups: Uint8Array.of(0, 0, 0), reach: 2, ahead: VIEWS[1], end: BASE.bytes + TAILS[0]!.tail.length,
-      xref: TAILS[0]!.startxref, next: 104, root: 12, r: 1,
+      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), groups: Uint8Array.of(0, 0, 0), reach: 2, ahead: VIEWS[1],
     })
-    expect(p2.chain).toMatchObject({ through: 3, slot: 41.5, id: 5, reach: 4, ahead: VIEWS[3], end: BASE.bytes + TAILS[0]!.tail.length + TAILS[1]!.tail.length, xref: TAILS[1]!.startxref, next: 108, root: 12, r: 2 })
-    expect(p3.chain).toMatchObject({ through: 4, slot: 70, id: 7, reach: 4, ahead: [], r: 2 })
+    expect(p2.chain).toMatchObject({ through: 3, slot: 41.5, id: 5, reach: 4, ahead: VIEWS[3] })
+    expect(p3.chain).toMatchObject({ through: 4, slot: 70, id: 7, reach: 4, ahead: [] })
   })
 
   it('the left parts: the tokens decoded once into typed arrays, the spans and the pairs as written', () => {
@@ -189,7 +186,7 @@ describe('each writer then its reader is the identity', () => {
 })
 
 describe('mergeParts is the whole', () => {
-  it('equals readBundle of the BUNDLE 3 file made of the same paper: units, left, layout as encodeLayout bytes, manifest, tail', () => {
+  it('equals readBundle of the BUNDLE 3 file made of the same paper: units, left, layout as encodeLayout bytes, the cell rules', () => {
     const merged = mergeParts(M.index, M.readParts)
     // the whole file by hand: the layout's fonts by first appearance (lines by unit id, then names), page 4 not planned
     const whole: LayoutFile = {
@@ -203,23 +200,11 @@ describe('mergeParts is the whole', () => {
       erase: [], ph: [[2, 4, 0, 0, 1, 100, 650, 110, 657, 647]], labels: [], headings: [[0, 'A Title']], pageText: [], held: [],
       names: [[0, 0, 3, 280, 680, 332.5, 687, 677.5, 9, 1, 1, -1, 0, 72, 540]], lineskip: [1, 0],
     }
-    const tail = new Uint8Array(TAILS[0]!.tail.length + TAILS[1]!.tail.length)
-    tail.set(TAILS[0]!.tail)
-    tail.set(TAILS[1]!.tail, TAILS[0]!.tail.length)
-    const manifest = {
-      schema: 1 as const, removal: REMOVAL, pages: N, sets: {}, appended: tail.length, stats: { removed: 6 },
-      page: {
-        1: { ok: true, units: { 2: [72, 640, 300, 660] }, at: { R: 5 }, dirty: [72, 640, 80, 650] },
-        2: { ok: true, rules: [72, 500, 540, 500.4] },
-        3: { ok: true, units: { 3: [72, 300, 200, 320] }, at: { R: 6 }, dirty: [72, 300, 80, 310] },
-        4: { ok: false, refused: 'not planned' },
-      },
-    }
     const url = `/api/v1/original/${PAPER.id}v${PAPER.version}`
     const leftUnits = [...M.readParts.flatMap(p => p.left)].sort((a, b) => a[0] - b[0])
     const bytes = writeBundle({
       paper: { ...PAPER, pages: N }, base: { bytes: BASE.bytes, sha256: BASE.sha256, url }, image: IMAGE, units: UNITS,
-      left: { kinds: UNITS.map(u => u[0]), pages: VIEWS as [number, number, number, number][], units: leftUnits }, layout: whole, addon: { manifest, tail },
+      left: { kinds: UNITS.map(u => u[0]), pages: VIEWS as [number, number, number, number][], units: leftUnits }, layout: whole, rules: { 2: RULES_2 },
     })
     const read = readBundle(bytes)
     expect(merged.units).toEqual(read.units)
@@ -229,16 +214,16 @@ describe('mergeParts is the whole', () => {
     expect(merged.base).toEqual({ ...read.base, source: M.readHead.base.source })
     expect(merged.left).toEqual(read.left)
     expect(encodeLayout(merged.layout!)).toBe(encodeLayout(read.layout!))
-    expect(merged.addon!.manifest).toEqual(read.addon!.manifest)
-    expect(merged.addon!.tail).toEqual(read.addon!.tail)
+    expect(merged.rules).toEqual(read.rules)
+    expect(merged.rules).toEqual({ 2: RULES_2 })
     expect(merged.versions).toEqual({ bundle: BUNDLE5, ...M.readHead.versions })
   })
 
   it('refuses parts that are not one chain: the first with a prev, a part that does not follow the digest of the one before (two chains sharing a head)', async () => {
     expect(() => mergeParts(M.index, [{ ...M.readParts[0]!, prev: 'a'.repeat(64) }, M.readParts[1]!, M.readParts[2]!])).toThrow(expect.objectContaining({ kind: 'index', path: 'parts[0]' }))
-    // an alternate second part (a stat changed), read after the first: it extends the first as the original does, and the third does not follow it
+    // an alternate second part (a rule moved), read after the first: it extends the first as the original does, and the third does not follow it
     const input = partInputs(M.head.sha256, M.lefts, [null, M.parts[0]!.sha256, M.parts[1]!.sha256])[1]!
-    const alt = await writePart({ ...input, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 4 } } } })
+    const alt = await writePart({ ...input, rules: { 2: [72, 501, 540, 501.4] } })
     expect(alt.sha256).not.toBe(M.parts[1]!.sha256)
     const readAlt = await readPart(alt.bytes, { ref: alt.ref, index: M.index, chain: M.readParts[0]!.chain })
     expect(readAlt.prev).toBe(M.parts[0]!.sha256)
@@ -246,7 +231,7 @@ describe('mergeParts is the whole', () => {
     expect(() => mergeParts(M.index, [M.readParts[0]!, M.readParts[1]!, M.readParts[2]!])).not.toThrow()
   })
 
-  it('refuses parts that are not a chain to the paper\'s last page, and is null where no part has a layout or an add-on', () => {
+  it('refuses parts that are not a chain to the paper\'s last page', () => {
     expect(() => mergeParts(M.index, M.readParts.slice(0, 2))).toThrow(BundleRefusal)
     expect(() => mergeParts(M.index, [M.readParts[1]!, M.readParts[2]!])).toThrow(BundleRefusal)
     expect(() => mergeParts(M.index, [M.readParts[0]!, M.readParts[0]!, M.readParts[1]!, M.readParts[2]!])).toThrow(BundleRefusal)
@@ -773,7 +758,7 @@ describe('a paper with no units is a paper (readBundle reads one)', () => {
     const index = indexOf(rh, [])
     expect(index.units).toEqual([])
     const left = await writeLeftPart({ paper: PAPER, page: 1, first: 0, tokens: tokenWire(0), spans: [], pairs: [] })
-    const part = await writePart({ paper: PAPER, head: head.sha256, prev: null, pages: [1, 1], views: [0, 0, 612, 792], left: [], fileOnly: [], layout: null, addon: null, leftParts: [left] })
+    const part = await writePart({ paper: PAPER, head: head.sha256, prev: null, pages: [1, 1], views: [0, 0, 612, 792], left: [], fileOnly: [], layout: null, rules: null, leftParts: [left] })
     const read = await readPart(part.bytes, { ref: part.ref, index, chain: null })
     expect(read).toMatchObject({ pages: [1, 1], left: [], fileOnly: [], layout: null })
     const cat = await writeCatalog({ head: rh, units: [], parts: [{ from: 1, to: 1, sha256: part.sha256, bytes: part.bytes.length }], end: { through: 1 } })
@@ -781,11 +766,11 @@ describe('a paper with no units is a paper (readBundle reads one)', () => {
     expect(c.units).toEqual([])
     expect(indexOf(rh, [], { catalog: c }).units).toEqual([])
     const merged = mergeParts(index, [read])
-    expect(merged).toMatchObject({ units: [], left: { kinds: [], units: [], pages: [[0, 0, 612, 792]] }, layout: null, addon: null })
+    expect(merged).toMatchObject({ units: [], left: { kinds: [], units: [], pages: [[0, 0, 612, 792]] }, layout: null, rules: null })
     // BUNDLE 3's reader reads the same paper
     const bundle = readBundle(writeBundle({
       paper: { ...PAPER, pages: 1 }, base: { bytes: BASE.bytes, sha256: BASE.sha256, url: `/api/v1/original/${PAPER.id}v${PAPER.version}` }, image: IMAGE, units: [],
-      left: { kinds: [], pages: [[0, 0, 612, 792]], units: [] }, layout: null, addon: null,
+      left: { kinds: [], pages: [[0, 0, 612, 792]], units: [] }, layout: null, rules: null,
     }))
     expect(merged.units).toEqual(bundle.units)
     expect(merged.left).toEqual(bundle.left)
@@ -1214,12 +1199,12 @@ describe('a part against the index', () => {
 // ---------------------------------------------------------------- a part's record of why it has no layout (BUNDLE 6)
 describe('a part with no layout says why (`layout: { refused, why }`, LAYOUT_REFUSED)', () => {
   // biome-ignore lint/suspicious/noExplicitAny: a test sets the part's wire as it likes
-  const none = (r: unknown) => (p: any) => { p.layout = r; p.fileOnly = []; p.addon = null }
+  const none = (r: unknown) => (p: any) => { p.layout = r; p.fileOnly = []; p.rules = null }
   it('is read as a part with no layout (`layout: null`, as a reader that tests it takes it), the record beside it', async () => {
     for (const refused of LAYOUT_REFUSED) {
       const r = await partWith(0, none({ refused, why: 'the reason' }))
       expect(r.layout).toBeNull()
-      expect(r.addon).toBeNull()
+      expect(r.rules).toBeNull()
       expect(r.noLayout).toEqual({ refused, why: 'the reason' })
     }
     // (no reason recorded: null, as a part of 5's shape and cutBundle with none given write it)
@@ -1252,10 +1237,10 @@ describe('a part with no layout says why (`layout: { refused, why }`, LAYOUT_REF
 
   it('is written as given, and a writer given what its reader refuses throws', async () => {
     const input = partInputs(M.head.sha256, M.lefts as never)[0]!
-    const w = await writePart({ ...input, fileOnly: [], layout: { refused: 'texlive', why: 'the paper declares TeX Live 2023' } as never, addon: null })
+    const w = await writePart({ ...input, fileOnly: [], layout: { refused: 'texlive', why: 'the paper declares TeX Live 2023' } as never, rules: null })
     expect(parsed(w).layout).toEqual({ refused: 'texlive', why: 'the paper declares TeX Live 2023' })
     expect((await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })).noLayout).toEqual({ refused: 'texlive', why: 'the paper declares TeX Live 2023' })
-    await expect(writePart({ ...input, fileOnly: [], layout: { refused: 'nope', why: '' } as never, addon: null })).rejects.toBeInstanceOf(BundleRefusal)
+    await expect(writePart({ ...input, fileOnly: [], layout: { refused: 'nope', why: '' } as never, rules: null })).rejects.toBeInstanceOf(BundleRefusal)
   })
 })
 
@@ -1363,108 +1348,28 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).views = (p as Any).views.slice(0, 8); (p as Any).views[6] = 600 }, 'views[6]', reached)
   })
 
-  it('refuses a manifest that numbers its removed pages from anywhere but N + R + 1, or not in page order', async () => {
-    await refused(0, p => { (p as Any).addon.manifest.page[1].at.R = 6 }, 'addon.manifest.page.1.at.R')
-    await refused(0, p => { (p as Any).addon.manifest.page[1].at.R = 4 }, 'addon.manifest.page.1.at.R')
-    await refused(1, p => { (p as Any).addon.manifest.page[3].at.R = 5 }, 'addon.manifest.page.3.at.R')
-    // (R: one removed page told before part 2, so it begins at 4 + 1 + 1 = 6; read with no part before it, at 5)
-    expect(await partWith(1, p => { (p as Any).addon.manifest.page[3].at.R = 5 }, { chain: { ...chain(0), r: 0 } })).toMatchObject({ pages: [2, 3] })
-    // two removed pages: rising in page order
-    const two = (a: number, b: number) => (p: Any) => {
-      p.addon.manifest.page[2].at = { R: a }
-      p.addon.manifest.page[2].dirty = [72, 500, 80, 510]
-      p.addon.manifest.page[3].at.R = b
+  it('refuses cell rules where the layout is null, on a page outside the part\'s own, or that are no boxes within the page\'s view', async () => {
+    await refused(2, p => { (p as Any).rules = { 4: [72, 500, 540, 500.4] } }, 'rules')
+    await refused(1, p => { (p as Any).rules = { 4: [72, 500, 540, 500.4] } }, 'rules.4')
+    await refused(1, p => { (p as Any).rules = { 1: [72, 500, 540, 500.4] } }, 'rules.1')
+    await refused(1, p => { (p as Any).rules = { x: [72, 500, 540, 500.4] } }, 'rules.x')
+    await refused(1, p => { (p as Any).rules = {} }, 'rules')
+    await refused(1, p => { (p as Any).rules = [] }, 'rules')
+    await refused(1, p => { (p as Any).rules = { 2: [] } }, 'rules.2')
+    await refused(1, p => { (p as Any).rules = { 2: [72, 500, 540] } }, 'rules.2')
+    await refused(1, p => { (p as Any).rules = { 2: [72, 500, 72, 500.4] } }, 'rules.2[2]')
+    // (page 2's view is 700 wide: a box past it by more than the slack is no rule of the page)
+    await refused(1, p => { (p as Any).rules = { 2: [72, 500, 702, 500.4] } }, 'rules.2[2]')
+    expect(await partWith(1, p => { (p as Any).rules = { 2: [72, 500, 700, 500.4], 3: [72, 300, 200, 300.3] } })).toMatchObject({ rules: { 2: [72, 500, 700, 500.4], 3: [72, 300, 200, 300.3] } })
+  })
+
+  it('a layout with no cell rules is a part (`rules: null`), as the writer writes one given none or an empty table', async () => {
+    const bare = await partWith(1, p => { (p as Any).rules = null })
+    expect([bare.layout !== null, bare.rules]).toEqual([true, null])
+    for (const rules of [null, {}]) {
+      const w = await writePart({ ...partInputs(M.head.sha256, M.lefts)[1]!, prev: M.parts[0]!.sha256, rules })
+      expect(parsed(w).rules).toBeNull()
     }
-    await refused(1, two(7, 6) as never, 'addon.manifest.page.2.at.R')
-    expect(await refusal(partWith(1, two(6, 7)))).toBeNull()
-  })
-
-  it('refuses a manifest entry outside the part\'s pages, a page missing, and a manifest of another page count', async () => {
-    await refused(1, p => { (p as Any).addon.manifest.page[1] = { ok: true } }, 'addon.manifest.page.1')
-    await refused(1, p => { (p as Any).addon.manifest.page[4] = { ok: true } }, 'addon.manifest.page.4')
-    await refused(1, p => { delete (p as Any).addon.manifest.page[2] }, 'addon.manifest.page')
-    await refused(1, p => { (p as Any).addon.manifest.pages = 5 }, 'addon.manifest.pages')
-    await refused(1, p => { (p as Any).addon.manifest.sets = { R: 4 } }, 'addon.manifest.sets.R')
-  })
-
-  it('refuses an add-on where the layout is null and a tail the manifest does not account for; a layout with no add-on is a part (M20)', async () => {
-    await refused(2, p => { (p as Any).addon = { manifest: parsed(M.parts[1]!).addon.manifest, tail: null } }, 'addon')
-    // (no add-on for the part's pages: no manifest entry, no tail, no removed page counted)
-    const bare = await partWith(0, p => { (p as Any).addon = null })
-    expect(bare.layout).not.toBeNull()
-    expect(bare.addon).toBeNull()
-    expect([bare.chain.r, bare.chain.end, bare.chain.xref, bare.chain.next, bare.chain.root]).toEqual([0, BASE.bytes, BASE.xref, null, null])
-    // (and the writer writes one: its reader reads it back)
-    const w = await writePart({ ...partInputs(M.head.sha256, M.lefts)[0]!, addon: null })
-    const back = await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })
-    expect([back.layout !== null, back.addon, back.chain.r]).toEqual([true, null, 0])
-    await refused(0, p => { (p as Any).addon.manifest.appended = 1 }, 'addon.tail')
-    await refused(0, p => { (p as Any).addon.tail = null }, 'addon.manifest.appended')
-    await refused(0, p => { (p as Any).addon.tail = '' }, 'addon.tail')
-    await refused(0, p => { (p as Any).addon.tail = 'a'.repeat(7) }, 'addon.tail')
-  })
-
-  describe('the tail continues the last cross-reference section', () => {
-    /** part 2 with its tail replaced by the section made from these numbers */
-    const withTail = (end: number, prev: number, root: number, first: number, count: number, at?: number) => {
-      const t = tailOf(end, prev, root, first, count)
-      return (p: Any) => {
-        p.addon.tail = Buffer.from(t.tail).toString('base64')
-        p.addon.manifest.appended = t.tail.length
-        void at
-      }
-    }
-    const end1 = BASE.bytes + TAILS[0]!.tail.length
-    it('is the second tail of the paper', async () => {
-      expect(await partWith(1, withTail(end1, TAILS[0]!.startxref, 12, 104, 4))).toMatchObject({ pages: [2, 3] })
-    })
-    it('refuses a /Prev that is not the last startxref', async () => {
-      await refused(1, withTail(end1, BASE.xref, 12, 104, 4) as never, 'addon.tail')
-      await refused(1, withTail(end1, 5, 12, 104, 4) as never, 'addon.tail')
-    })
-    it('refuses a startxref that is not where the section is, though it lies inside the tail (a stream form and a classic one)', async () => {
-      // the declaration moved to another place of the tail: the number after `startxref`, same digits
-      const t = tailOf(end1, TAILS[0]!.startxref, 12, 104, 4)
-      const text = textOf(t.tail)
-      for (const shift of [1, -1, 7, 20]) {
-        const other = text.replace(`startxref\n${t.startxref}\n`, `startxref\n${t.startxref + shift}\n`)
-        expect(other).not.toBe(text)
-        const tail = Uint8Array.from(other, c => c.charCodeAt(0))
-        await refused(1, ((p: Any) => { p.addon.tail = Buffer.from(tail).toString('base64'); p.addon.manifest.appended = tail.length }) as never, 'addon.tail')
-      }
-      // the stream form: the sample's real tail declares its section's place exactly, and a shifted declaration is refused
-      const sample = JSON.parse(readFileSync('tests/fixtures/pdf/sample-1/bundle.json', 'utf8')) as { addon: { tail: string }; base: { bytes: number } }
-      const real = Buffer.from(sample.addon.tail, 'base64')
-      const placed = (declared: number) => Buffer.from(textOf(real).replace(/startxref\n\d+\n/, `startxref\n${declared}\n`), 'latin1')
-      const at = sample.base.bytes + 132
-      const first = { head: M.head.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(UNITS.length), groups: new Uint8Array(0), reach: 0, ahead: [], end: sample.base.bytes, xref: 212001, next: null, root: null, r: 0 } as unknown as PartChain
-      const run = (tail: Buffer) => partWith(0, ((p: Any) => { p.addon.tail = tail.toString('base64'); p.addon.manifest.appended = tail.length }) as never, { chain: first })
-      // (the real stream tail, as its declaration places it, is read through the chain; the same tail declared elsewhere is not)
-      expect((await run(placed(at))).addon!.tail).toHaveLength(real.length)
-      for (const shift of [1, -1, 40]) expect(await refusal(run(placed(at + shift))), String(shift)).toMatchObject({ kind: 'part', path: 'addon.tail' })
-    })
-
-    it('refuses a startxref outside the tail: before it, or past it', async () => {
-      const t = tailOf(end1, TAILS[0]!.startxref, 12, 104, 4)
-      for (const shift of [-100, t.tail.length]) {
-        const moved = tailOf(end1 + shift, TAILS[0]!.startxref, 12, 104, 4)
-        await refused(1, ((p: Any) => { p.addon.tail = Buffer.from(moved.tail).toString('base64'); p.addon.manifest.appended = moved.tail.length }) as never, 'addon.tail')
-      }
-      // (and the first tail's, read as if it began elsewhere: the end is the chain's)
-      await refused(0, withTail(BASE.bytes - 100, BASE.xref, 12, 100, 4) as never, 'addon.tail')
-    })
-    it('refuses a run of fresh numbers that does not follow the last tail\'s, or overlaps it, and another page tree root', async () => {
-      await refused(1, withTail(end1, TAILS[0]!.startxref, 12, 105, 4) as never, 'addon.tail')
-      await refused(1, withTail(end1, TAILS[0]!.startxref, 12, 100, 4) as never, 'addon.tail')
-      await refused(1, withTail(end1, TAILS[0]!.startxref, 12, 103, 4) as never, 'addon.tail')
-      await refused(1, withTail(end1, TAILS[0]!.startxref, 11, 104, 4) as never, 'addon.tail')
-      // the first tail's run is unchecked
-      expect(await partWith(0, withTail(BASE.bytes, BASE.xref, 12, 9000, 2))).toMatchObject({ pages: [1, 1] })
-    })
-    it('refuses a tail that ends in no cross-reference section', async () => {
-      const junk = new Uint8Array(40).fill(0x41)
-      await refused(0, ((p: Any) => { p.addon.tail = Buffer.from(junk).toString('base64'); p.addon.manifest.appended = 40 }) as never, 'addon.tail')
-    })
   })
 
   it('refuses left parts that are not one for each page of the part, in page order, of a left kind', async () => {
@@ -1841,15 +1746,14 @@ describe('every writer twice gives the same bytes, digest and key, whatever orde
     same(a, b)
   })
 
-  it('the parts: the manifest and the add-on in other key orders, the stats in another order', async () => {
+  it('the parts: the cell rules in another page order, written in page order', async () => {
     const inputs = partInputs(M.head.sha256, M.lefts, [null, M.parts[0]!.sha256, M.parts[1]!.sha256])
     for (let i = 0; i < 3; i++) same(await writePart(inputs[i]!), M.parts[i]!)
-    const first = inputs[0]!
-    const manifest = { ...first.addon!.manifest, stats: { z: 1, a: 2, removed: 3 } }
-    const a = await writePart({ ...first, addon: { manifest, tail: first.addon!.tail } })
-    const b = await writePart({ ...first, addon: { manifest: reversed(manifest) as typeof manifest, tail: first.addon!.tail } })
+    const second = inputs[1]!
+    const a = await writePart({ ...second, rules: { 2: [72, 500, 540, 500.4], 3: [72, 300, 200, 300.3] } })
+    const b = await writePart({ ...second, rules: { 3: [72, 300, 200, 300.3], 2: [72, 500, 540, 500.4] } })
     same(a, b)
-    expect(textOf(a.bytes)).toContain('"stats":{"a":2,"removed":3,"z":1}')
+    expect(textOf(a.bytes)).toContain('"rules":{"2":[72,500,540,500.4],"3":[72,300,200,300.3]}')
   })
 
   it('a whole paper written again is the same objects: the digests, the keys', async () => {
@@ -1929,53 +1833,20 @@ describe('a writer given what its reader would refuse throws BundleRefusal', () 
   const input = () => partInputs(M.head.sha256, M.lefts)[0]!
   const writeRefused = (edit: (p: ReturnType<typeof input>) => void) => { const p = input(); edit(p); return refusal(writePart(p)) }
 
-  it('a part past CONTENT_MAX bytes of content (the tail\'s base64 apart)', async () => {
-    // a unit of 140,000 rectangles, each 37 bytes: about 5.2 MB, 840,000 values
-    const rects = Array.from({ length: 140_000 }, (_, i) => [1, 72.123 + (i % 7) / 1000, 647.123, 540.123, 657.123] as [number, number, number, number, number])
-    const e = await writeRefused(p => { p.left = [[0, 0, rects], p.left[1]!] })
-    expect(e).toMatchObject({ kind: 'part', message: expect.stringMatching(/bytes of content, past 4827816/) })
-    // (the same content, shorter by a tenth, is written, and read)
-    const ok = input()
-    ok.left = [[0, 0, rects.slice(0, 100_000)], ok.left[1]!]
-    const w = await writePart(ok)
-    expect(w.bytes.length).toBeGreaterThan(3_000_000)
-    expect((await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })).left[0]![2]).toHaveLength(100_000)
+  it('a part\'s content at most: the cap less 64 KiB for the digests and the rest', () => {
+    expect(CONTENT_MAX + 64 * 1024).toBe(PART_CAP)
   })
 
   it('a part past PART_VALUES values, or PART_CAP bytes', async () => {
     const rects = Array.from({ length: 170_000 }, () => [1, 72, 647, 540, 657] as [number, number, number, number, number])
     expect(await writeRefused(p => { p.left = [[0, 0, rects], p.left[1]!] })).toMatchObject({ kind: 'part', message: expect.stringMatching(/more than 1000000 values/) })
     expect(PART_VALUES).toBe(1_000_000)
-    // the tail's base64 counts against the cap, but not the content: the largest tail beside a part at CONTENT_MAX fits PART_CAP
-    expect(CONTENT_MAX + 4 * Math.ceil(TAIL_CAP / 3) + 64 * 1024).toBe(PART_CAP)
   })
 
-  it('a tail past TAIL_CAP, and a tail at it', async () => {
-    // a tail of n bytes that ends in a real cross-reference section: white space, then the section
-    const tail = (n: number) => {
-      // (the section's startxref is its own place in the document: the tail begins at the end of the original)
-      let section = tailOf(0, BASE.xref, 12, 100, 4).tail
-      for (let pass = 0; pass < 3; pass++) section = tailOf(BASE.bytes + n - section.length, BASE.xref, 12, 100, 4).tail
-      const t = new Uint8Array(n).fill(0x20)
-      t.set(section, n - section.length)
-      return t
-    }
-    const withTail = (t: Uint8Array) => writeRefused(p => { p.addon = { manifest: { ...p.addon!.manifest, appended: t.length }, tail: t } })
-    expect(await withTail(tail(TAIL_CAP + 1))).toMatchObject({ kind: 'part', path: 'addon.tail', message: expect.stringMatching(/more than 1048576 bytes/) })
-    expect(await withTail(tail(TAIL_CAP))).toBeNull()
-    // a tail its reader cannot parse is not written: white space, a section cut short, a classic table with no trailer
-    expect(await withTail(new Uint8Array(64).fill(0x20))).toMatchObject({ kind: 'part', path: 'addon.tail', message: expect.stringMatching(/cross-reference section/) })
-    expect(await withTail(tail(300).subarray(0, 290))).toMatchObject({ path: 'addon.tail' })
-    expect(await withTail(new Uint8Array(0))).toMatchObject({ path: 'addon.tail' })
-    // (and what the writer writes the reader reads: a section in a tail of the cap's size)
-    const w = await writePart({ ...input(), addon: { manifest: { ...input().addon!.manifest, appended: TAIL_CAP }, tail: tail(TAIL_CAP) } })
-    expect((await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })).addon!.tail).toHaveLength(TAIL_CAP)
-  })
-
-  it('a shape the part alone shows wrong: a rectangle off its page, a unit in both lists, an add-on without a layout, a missing left part', async () => {
+  it('a shape the part alone shows wrong: a rectangle off its page, a unit in both lists, cell rules without a layout, a missing left part', async () => {
     expect(await writeRefused(p => { p.left = [[0, 0, [[1, 72, 647, 900, 657]]], p.left[1]!] })).toMatchObject({ kind: 'part', path: 'left[0][2][0][3]' })
     expect(await writeRefused(p => { p.fileOnly = [[0, 0]] })).toMatchObject({ path: 'fileOnly[0][0]' })
-    expect(await writeRefused(p => { p.layout = null })).toMatchObject({ kind: 'part' })
+    expect(await writeRefused(p => { p.layout = null; p.rules = { 1: [72, 500, 540, 500.4] } })).toMatchObject({ kind: 'part', path: 'rules' })
     expect(await writeRefused(p => { p.leftParts = [] })).toMatchObject({ path: 'leftParts' })
     expect(await writeRefused(p => { p.pages = [1, 0] })).toMatchObject({ path: 'pages' })
     expect(await writeRefused(p => { p.head = 'abc' })).toMatchObject({ path: 'head' })
@@ -2171,7 +2042,7 @@ describe.skipIf(!LAB_ON)('the real papers: units, layout files and left cut at t
           lefts[pg] = l
           leftParts.push(l)
         }
-        const w = await writePart({ paper, head: head.sha256, prev, pages: p.pages, views: p.views, left: p.left, fileOnly: p.fileOnly, layout: p.layout, addon: { manifest: p.manifest, tail: null }, leftParts })
+        const w = await writePart({ paper, head: head.sha256, prev, pages: p.pages, views: p.views, left: p.left, fileOnly: p.fileOnly, layout: p.layout, rules: null, leftParts })
         const r = await readPart(w.bytes, { ref: w.ref, index, chain })
         readParts.push(r)
         chain = r.chain

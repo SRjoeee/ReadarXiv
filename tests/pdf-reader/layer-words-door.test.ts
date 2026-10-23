@@ -78,7 +78,7 @@ async function open(order: readonly number[], how: 'whole' | 'parts') {
   const docFor = docsOf(SPEC) as unknown as (r: number) => LayerDocument
   const rows = rowsOfIndex(c.index).filter(r => r[0] !== ABSENT).map(r => (r[0] === BOOM ? ([r[0], ['BOOM'], ...r.slice(2)] as typeof r) : r[0] === LOST ? ([r[0], [], 'lost', 'test', null] as unknown as typeof r) : r))
   const layer: Layer = how === 'whole'
-    ? await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(c.parts.at(-1)!.chain.r), target: 'zh', faceSources, hyphUrl })
+    ? await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(0), target: 'zh', faceSources, hyphUrl })
     : await openLayer({ index: c.index, doc: docFor(0), parts: c.parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
   layer.take(rows)
   layer.end()

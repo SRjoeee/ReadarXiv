@@ -14,7 +14,6 @@ import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 export { PDF_OPTIONS } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
 export { batchesOf, layerRows, rowOf, runRows, toTranslate, unitOf } from './rows.mjs'
-export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, parseAddonManifest } from '../layout/addon-manifest.mjs'
 export { indexLayout, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, LayoutRefusal, parseLayout } from '../layout/file.mjs'
 export { trPiecesOf } from '../layer/pieces.mjs'
 export { FACES } from '../rules/font-roles.mjs'
@@ -24,7 +23,6 @@ export type { Row } from './rows.mjs'
 export type { Unit } from './run.mjs'
 export type { FaceId } from '../rules/font-roles.mjs'
 export type { FaceSources } from './fonts.mjs'
-export type { RemovalManifest } from '../layout/addon-manifest.mjs'
 
 /** the composed document as PDF.js opened it (a PDFDocumentProxy): arXiv's PDF followed by the removed pages of the parts told
  *  (BUNDLE 4) or of the bundle's add-on (BUNDLE 3), opened once with PDF_OPTIONS, or arXiv's PDF alone */

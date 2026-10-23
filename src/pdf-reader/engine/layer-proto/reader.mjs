@@ -21,7 +21,6 @@ import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 export { PDF_OPTIONS } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
 export { batchesOf, layerRows, rowOf, runRows, toTranslate, unitOf } from './rows.mjs'
-export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, parseAddonManifest } from '../layout/addon-manifest.mjs'
 export { indexLayout, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, LayoutRefusal, parseLayout } from '../layout/file.mjs'
 export { trPiecesOf } from '../layer/pieces.mjs'
 export { FACES } from '../rules/font-roles.mjs'
@@ -196,14 +195,13 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const letGoError = () => new Error('openLayer: the layer was let go (dispose)')
   // (the memory contract, the 1b design §3: each page's analysis state let go once it is laid and read by nothing more, each
   // unit's once it is painted; the units' records and the audit, the gate's, not kept: their counts alone)
-  // what the file says it could not hide (the wrap's word, per unit and per page), as the parts tell it: the run reads it as it lays
-  const unhidden = new Map(), rulesByPage = new Map()
-  const hear = x => {
-    for (const [id, why] of x?.hiding?.unhidden ?? []) unhidden.set(id, why)
-    for (const [pg, e] of Object.entries(x?.hiding?.rules ?? x?.addon?.manifest?.page ?? {})) { const r = Array.isArray(e) ? e : e?.rules; if (r) rulesByPage.set(Number(pg), r) }
-  }
+  // what the wrap could not hide (the head's base: `unhidden`, by unit, and `labelKept`), and each page's cell rules as the parts
+  // tell them: the run reads them as it lays
+  const base = four ? index.head.base : bundle.base
+  const unhidden = new Map(base?.unhidden ?? []), labelKept = new Set(base?.labelKept ?? []), rulesByPage = new Map()
+  const hear = x => { for (const [pg, r] of Object.entries(x?.rules ?? {})) rulesByPage.set(Number(pg), r) }
   if (!four) hear(bundle)
-  const hiding = { unhidden: id => unhidden.get(id) ?? null, rules: pg => rulesByPage.get(pg) }
+  const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg) }
   const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
   run = await openProto(four
     ? {

@@ -18,7 +18,7 @@
 //    is another's), our copy of that PDF is shown on the left in its place (showOurs: the store's whole copy first, else our copy
 //    read whole and checked against orig's digest) and the pages are laid again over it, or, none to be had, the layer is let go.
 // 5. The composed document: our base page by ranges at its digest's address, every answer held to its length and to the tag of
-//    the first answer (ranges.ts openRanged), the layer's tails after its last byte.
+//    the first answer (ranges.ts openRanged); under a delta the original's bytes by ranges, then the delta in memory.
 // 6. The rows: runRows over the index (the engine's one translation run without compiles), the units nearest the reading place
 //    first (the page in view's closure, from the side's rowsFor), each batch's rows taken as they come, then the end. A retry
 //    is again(), every row held taken again at once, and the run again: the background's cache answers what was translated.
@@ -178,20 +178,13 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   /** the original the layer's answers name it bound to (server.ts boundOf): the catalog's, else the first object's */
   let tag: string | null = null
   /** what the composed document is read over, by ranges at `url`, held to the head's length and the first answer's tag (ranges.ts):
-   *  our base page (a base of ours held whole), or the original (a delta: `prefix` the delta object, which goes before the tails
-   *  after the original's last byte); null before bind has taken the head's base */
+   *  our base page (a base of ours held whole), or the original (a delta: `prefix` the delta object, after the original's last
+   *  byte); null before bind has taken the head's base */
   let basis: { bound: Bound; url: string; prefix?: Uint8Array } | null = null
   /** a document over a copy by ranges: the composed one (a range that fails twice leaves its page the original's, the side's stall) */
-  const ranged = (b: { bound: Bound; url: string; prefix?: Uint8Array }, tail: Uint8Array | null, o: Readonly<Record<string, unknown>>) => {
-    // (a delta is the original\'s successor in the composed document: delta ++ tails, in memory, after its last byte)
-    let after = tail
-    if (b.prefix) {
-      after = new Uint8Array(b.prefix.length + (tail?.length ?? 0))
-      after.set(b.prefix)
-      if (tail) after.set(tail, b.prefix.length)
-    }
-    return openRanged(host.pdfjs as RangedPdfJs, b.url, { bound: b.bound, tail: after, options: o, fetch: f, signal: begun.signal, refused: e => console.warn('[reader]', e.message) })
-  }
+  const ranged = (b: { bound: Bound; url: string; prefix?: Uint8Array }, o: Readonly<Record<string, unknown>>) =>
+    // (a delta is the original\'s successor in the composed document: in memory, after its last byte)
+    openRanged(host.pdfjs as RangedPdfJs, b.url, { bound: b.bound, tail: b.prefix ?? null, options: o, fetch: f, signal: begun.signal, refused: e => console.warn('[reader]', e.message) })
   /** the left's bytes, once they are all in as its document loads them of itself (originalData's own read would ask arXiv
    *  for every byte its stream is still bringing: the rest of the file twice), the arXiv PDF the head's check ran over or not */
   const proof = async (orig: { bytes: number; sha256: string }): Promise<'same' | 'other'> => {
@@ -247,7 +240,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
    * Held whole (`kind` 'full'), the layer is drawn over our base page read by ranges at its digest's address, every answer held to
    * its length and the first one's tag. Held as a delta over arXiv's PDF (`kind` 'delta'), one document: the ORIGINAL's bytes read
    * by ranges from our server's copy (the same bytes the tab shows, once proven), held to orig's length and the tag the layer's
-   * answers name, then the delta object (a bundle object, fetched by its digest and held to checkDelta) and the tails in memory
+   * answers name, then the delta object (a bundle object, fetched by its digest and held to checkDelta) in memory
    */
   async function bindOurs(base: { bytes: number; sha256: string; check?: unknown; kind?: unknown }): Promise<boolean> {
     const delta = base.kind === 'delta'
@@ -341,9 +334,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       if (!layerDraws(base)) return false
       return bindOurs(base as typeof base & { check?: unknown })
     },
-    composed(tail, o) {
+    composed(_tail, o) {
       if (!basis) throw new Error('no base page the layer is bound to')
-      return ranged(basis, tail, o)
+      return ranged(basis, o)
     },
   })
 

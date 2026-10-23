@@ -2220,11 +2220,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const m = markWork()
     try { return f() } finally { inWork = false; chargeWork(pg, m) }
   }
-  // the documents read: the original (`doc`) and the text-removed one (`removal.doc`, often the same). Under parts the newest
-  // composed document, swapped at a part with a tail (swap); each read of a page holds its document (using), and one no longer
-  // the newest is told to the host (onRetired) once no read holds it, the newest at dispose: each once, none destroyed here
+  // the document read, our wrapped page (one a run: its groups hide what a unit owns, docs/route/ocg-erasure.md §4); each read of
+  // a page holds it (using), and it is told to the host (onRetired) at dispose once no read holds it: once, never destroyed here
   const D = doc
-  // (`retired` weakly: it only says a document was told already, and a strong set would keep every document the host has since destroyed, with its pages, for the run's length)
+  // (`retired` weakly: it only says the document was told already)
   const uses = new Map(), retiring = new Set(), retired = new WeakSet()
   const tellRetired = d => { if (retired.has(d)) return; retired.add(d); onRetired?.(d) }
   const retire = d => { if (!d || retired.has(d)) return; if (uses.get(d)) retiring.add(d); else tellRetired(d) }

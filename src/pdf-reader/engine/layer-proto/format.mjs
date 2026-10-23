@@ -1057,7 +1057,7 @@ function partShape(v, { N, unitCount }) {
       if (!isInteger(p, a, b)) throw refuse(K, `rules.${told(k)}`, `not a page ${a} to ${b}`)
       const boxes = v.rules[k]
       if (!Array.isArray(boxes) || !boxes.length) throw refuse(K, `rules.${k}`, `not boxes (${kindOf(boxes)})`)
-      inside(K, '', () => checkBoxes(boxes, p, views, `rules.${k}`, a))
+      inside(K, 'rules', () => checkBoxes(boxes, p, views, k, a))
       rules[p] = boxes
     }
   }

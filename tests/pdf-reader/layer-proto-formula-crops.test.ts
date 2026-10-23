@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { fileSwap, unitRemoval } from '@/pdf-reader/engine/layer-proto/removal.mjs'
+import { unitHiding } from '@/pdf-reader/engine/layer-proto/hide.mjs'
 import { addUnitWords, newWords } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
@@ -151,7 +151,7 @@ describe('every reader of a crop takes its parts', () => {
   it('the drawer cuts each part once, the svg copies the formula once, and the checker counts one showing, nothing lost', () => {
     const { prep, tokens, layout } = laid()
     const audit: { what: string; k?: number; part?: number; src?: number[] }[] = []
-    L2.unitOps(layout as never, [], 1, { px: id, k: 1, hasSource: () => true, pxOf: () => id, audit: audit as never, id: 7 } as never)
+    L2.hideOps(layout as never, 1, { px: id, k: 1, hasSource: () => true, pxOf: () => id, audit: audit as never, id: 7 } as never)
     const crops = audit.filter(a => a.what === 'crop')
     expect(crops.map(a => [a.k, a.part, round(a.src!)])).toEqual([[1, 0, TWO[0]!.crop], [1, 1, TWO[1]!.crop]])
     const svg = L2.svgOfUnit(layout as never, 1, id as never, 1, 7)
@@ -180,37 +180,26 @@ describe('every reader of a crop takes its parts', () => {
     const crops = [...Array(W.n).keys()].filter(i => W.word[i] === -1 && W.r[i]! - W.l[i]! > 30)
     expect(crops.map(i => [Math.round(W.l[i]! * 100) / 100, Math.round(W.y[i]!)])).toEqual([[2.5, 500], [0, 488]])
   })
-  it("the removal: a part on another page than the first is that page's crop, its glyphs and its clip", () => {
-    // its second line the next page's first: the part there cut from page 2
-    const two = unitOf([L(500), [2, 10, 200, 700, 707, 698, 10, 0]], [[1, 0, [1, 150, 500, 200, 507, 498, 2, 10, 700, 40, 707, 698]]]) as { ph: Map<number, unknown> }
-    const r = { mode: 'crop', k: 1, page: 1, crop: [149.6, 497.7, 200.4, 507.3], baseline: 500, parts: [{ page: 1, crop: [149.6, 497.7, 200.4, 507.3], baseline: 500 }, { page: 2, crop: [9.6, 697.7, 40.4, 707.3], baseline: 700 }] }
-    const prep = Object.assign(new Map([[1, r]]), { keep: [], uc: [], cat: new Map(), label: null }) as never
-    const sw = fileSwap({ page: 2, lu: two as never, kOf: [-1, 1, -1], lines: { rects: [], lineOf: new Map(), jOf: [] } as never, prep })
-    expect(sw.clips.get(1)?.own).toEqual([[10, 698, 40, 707]])
-    const glyph = { u: 'x', x0: 12, x1: 17, y: 700, top: 707, bottom: 698, size: 10, font: 'F', ix0: 12, ix1: 17, n: 0, k: 0 }
-    const ink = { glyphs: [glyph], boxes: [], paths: [], shows: 1 }
-    const own = { owner: Int32Array.from([3]), ph: Int32Array.from([1]), paths: new Map(), linePaths: new Map() }
-    const rm = unitRemoval({ id: 3, page: 2, prep, tex: { lu: two as never, kOf: [-1, 1, -1] }, own: own as never, charMap: new Map(), unmapped: [], ink: ink as never, claimed: new Map(), fileDrawn: new Set([3]) } as never)
-    expect(rm.crops).toEqual([{ k: 1, glyphs: [0], paths: [] }])
-    // and with no file (v0's reading): the glyphs no character stands for inside the part's box on the page
-    const v0 = unitRemoval({ id: 3, page: 2, prep, tex: null, own: own as never, charMap: new Map(), unmapped: [0], ink: ink as never, claimed: new Map(), fileDrawn: new Set() } as never)
-    expect(v0.crops).toEqual([{ k: 1, glyphs: [0], paths: [] }])
-  })
-  it("the removal's clips: each page's its own segments, and a part cut only through its own page's (the review of #424)", () => {
+  it("the crops' clips: each page's its own segments, and a part cut only through its own page's (the review of #424)", () => {
     // the formula's first line at the foot of page 1, its second at the head of page 2, the unit drawn on page 2 with both
     // parts on its one line: page 2's clip is in page 2's pixels and through page 2's segment, outside the part from page 1
     const two = unitOf([L(500), [2, 10, 200, 700, 707, 698, 10, 0]], [[1, 0, [1, 150, 500, 200, 507, 498, 2, 10, 700, 40, 707, 698]]]) as { ph: Map<number, unknown> }
     const r = { mode: 'crop', k: 1, page: 1, crop: [149.6, 497.7, 200.4, 507.3], baseline: 500, text: 'x', parts: [{ page: 1, crop: [149.6, 497.7, 200.4, 507.3], baseline: 500 }, { page: 2, crop: [9.6, 697.7, 40.4, 707.3], baseline: 700 }] }
     const prep = Object.assign(new Map([[1, r]]), { keep: [], uc: [], cat: new Map(), label: null }) as never
-    const swap = (page: number) => fileSwap({ page, lu: two as never, kOf: [-1, 1, -1], lines: { rects: [], lineOf: new Map(), jOf: [] } as never, prep })
+    const swap = (page: number) => unitHiding({ page, id: 3, lu: two as never, kOf: [-1, 1, -1], lines: { rects: [], lineOf: new Map(), jOf: [] } as never, prep })
     expect(swap(1).clips.get(1)?.own).toEqual([[150, 498, 200, 507]])
     const clips = swap(2).clips
     expect(clips.get(1)?.own).toEqual([[10, 698, 40, 707]])
     const items = L2.cropPartsOf(r as never).map((q, n) => ({ t: { crop: q }, x: 20 + 60 * n, w: q.crop![2]! - q.crop![0]! }))
     const audit: { what: string; part?: number; srcPage?: number; clip?: unknown }[] = []
-    const ops = L2.removalOps({ lines: [{ page: 2, baseline: 650, items }], scale: 1 } as never, 2, { px: id, k: 1, hasSource: () => true, pxOf: () => id, rects: [], erase: [], lines: [], removed: () => true, clips, audit, id: 3 } as never) as unknown as { op: string; page: number; clip?: unknown }[]
-    expect(ops.filter(o => o.op === 'crop').map(o => [o.page, o.clip ?? null])).toEqual([[1, null], [2, clips.get(1)!.rects]])
-    expect(audit.filter(a => a.what === 'crop').map(a => [a.part, a.srcPage, a.clip ?? null])).toEqual([[0, 1, null], [1, 2, clips.get(1)!.rects]])
+    const ops = L2.hideOps({ lines: [{ page: 2, baseline: 650, items }], scale: 1 } as never, 2, { px: id, k: 1, hasSource: () => true, pxOf: () => id, clips, audit, id: 3 } as never) as unknown as { op: string; page: number; plane: string; clip?: unknown }[]
+    // (in the page's pixels, here the PDF's own: the boxes as [x, y, w, h])
+    const dev = clips.get(1)!.rects.map(b => [b[0], b[1], b[2]! - b[0]!, b[3]! - b[1]!].map(v => expect.closeTo(v as number, 9)))
+    expect(ops.filter(o => o.op === 'crop').map(o => [o.page, o.plane, o.clip ?? null])).toEqual([[1, 'B', null], [2, 'B', dev]])
+    expect(audit.filter(a => a.what === 'crop').map(a => [a.part, a.srcPage, a.clip ?? null])).toEqual([[0, 1, null], [1, 2, dev]])
+    // (the unit hides its placeholders' group on each page a part of the crop is cut from)
+    expect(swap(1).off).toEqual(['u3', 'u3.p'])
+    expect(swap(2).off).toEqual(['u3', 'u3.p'])
   })
   it('the crop loop grows no part: each is a segment of the file, its ink TeX set', () => {
     const r = whole().get(1)

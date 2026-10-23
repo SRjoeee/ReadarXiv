@@ -208,7 +208,7 @@ describe('the real door: (g) parts with no add-on', () => {
   const SPEC: PaperSpec = { pages: 3, units: [para('First paragraph', 1, 260, 0), { ...para('Running on', 1, 40, 5), lines: [[1, 20, 280, 40], [2, 20, 280, 270]] }, para('Second page', 2, 120, 30), para('Third page', 3, 220, 60)] }
 
   it('a cutter with no add-on: one composed document, the original alone; each part added with no document, every page laid', async () => {
-    const { cut, index } = await cutSpec(SPEC, [1, 2], { addon: false })
+    const { cut, index } = await cutSpec(SPEC, [1, 2])
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const s = await setup({ faceSources: served, paper: { objects: [...cut.units, cut.head, ...cut.parts, ...cut.left], pages: 3 }, real: { openLayer, docFor: docsOf(SPEC) as unknown as (r: number) => LayerDocument } })
     await nearOn(s, [1, 2, 3])
@@ -228,7 +228,7 @@ describe('the real door: target-first laying (1b-D1, #380)', () => {
   const para = (text: string, page: number, b: number, stream: number) => ({ kind: 'para', text, lines: [[page, 20, 280, b]] as [number, number, number, number][], file: true, stream })
   const SPEC: PaperSpec = { pages: 8, units: Array.from({ length: 8 }, (_, i) => para(`Paragraph of page ${i + 1}`, i + 1, 200, 20 * i)) }
   async function eight() {
-    const { cut, index } = await cutSpec(SPEC, undefined, { addon: false })
+    const { cut, index } = await cutSpec(SPEC, undefined)
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const s = await setup({ faceSources: served, paper: { objects: [...cut.units, cut.head, ...cut.parts, ...cut.left], pages: 8 }, real: { openLayer, docFor: docsOf(SPEC) as unknown as (r: number) => LayerDocument } })
     const refs = { head: cut.head.ref, units: cut.units.map(u => u.ref), parts: cut.parts.map((p, i) => ({ ...p.ref, prev: i ? cut.parts[i - 1]!.sha256 : null })), end: cut.end }
@@ -306,7 +306,7 @@ describe('the real door: a fork, and L8', () => {
     const { partInputs } = await import('./helpers/format-paper')
     const { writePart } = await import('@/pdf-reader/engine/layer-proto/format.mjs')
     const input = partInputs(m.head.sha256, m.lefts)[1]!
-    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const sheets = () => document.querySelectorAll('style, link[rel="stylesheet"]').length + (document.adoptedStyleSheets?.length ?? 0)
     const before = sheets()
     const s = await real({ extra: [other] })

@@ -150,7 +150,7 @@ describe('the feed: L15, a fork', () => {
     const M = await made()
     // another attempt's part of pages 2-3: the same chain before it, other bytes
     const input = partInputs(M.head.sha256, M.lefts)[1]!
-    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     expect(other.sha256).not.toBe(M.parts[1]!.sha256)
     const s = server(M, [other])
     const f = createFeed({ fetchObject: s.fetchObject })
@@ -170,7 +170,7 @@ describe('the feed: L15, a fork', () => {
   it('takes the catalog\'s chain, told without prev, where it differs from a part told at its page', async () => {
     const M = await made()
     const input = partInputs(M.head.sha256, M.lefts)[1]!
-    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const f = createFeed({ fetchObject: server(M, [other]).fetchObject })
     f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [jobRef(M, 0), { ...(other.ref as Ref), prev: M.parts[0]!.sha256 }] })
     await flush()
@@ -205,7 +205,7 @@ describe('the feed: a fork that does not read, a source that comes late (the rev
   it('a job\'s fork, then a 202 made before it telling the old chain: the fork stands; the catalog\'s chain is the one kept', async () => {
     const M = await made()
     const input = partInputs(M.head.sha256, M.lefts)[1]!
-    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const f = createFeed({ fetchObject: server(M, [other]).fetchObject })
     f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(M, i)) })
     await flush()
@@ -324,7 +324,7 @@ describe('the feed: the PR\'s review, second round', () => {
   it('a catalog shortening the chain does not bring back a part that waited before it (4289064224)', async () => {
     const M = await made()
     const input = partInputs(M.head.sha256, M.lefts)[1]!
-    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: M.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const f = createFeed({ fetchObject: server(M, [other]).fetchObject })
     f.tell({ head: M.head.ref, units: M.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(M, i)) })
     await flush()

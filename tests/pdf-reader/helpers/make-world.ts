@@ -4,6 +4,7 @@ import { BOXES_PAGE, OPS_CAP, STACK_MAX } from '@/pdf-reader/engine/layout/ink.m
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { lineCheckOf as checkOf } from '@/pdf-reader/engine/layout/carry.mjs'
+import { withGroups } from './groups'
 
 // The layout maker's fake world (layout-make.test.ts, page-pass.test.ts): fake PDF.js documents of arXiv's PDF (`pages`) and of
 // the base page (our compile's final pass: the marked original's pages, `marked`, or `base` where a test gives it pages of
@@ -109,7 +110,7 @@ export const commonObjs = { get: (id: string) => (id in PATHS ? { path: new Floa
 /** a page's getAnnotations, where it has annotations (`annots`): its Link annotations as PDF.js lists them; none, no such call */
 const annotsOf = (p: Page) => (p.annots ? { getAnnotations: async () => (p.annots ?? []).map(a => ({ subtype: 'Link', ...a })) } : {})
 export function arxivOf(pages: Page[], asked: number[] = []) {
-  return {
+  return withGroups({
     numPages: pages.length,
     getPage: async (n: number) => {
       const p = pages[n - 1] as Page
@@ -123,7 +124,7 @@ export function arxivOf(pages: Page[], asked: number[] = []) {
         },
       }
     },
-  }
+  })
 }
 /** the base page's pages (the layer route's step 2): the final pass of the marked original, whose glyphs stand where the marked
  *  original's do — `base` where a test gives the base page properties of its own (a page whose list never comes, …) */

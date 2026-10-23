@@ -268,6 +268,8 @@ export interface HidingStats { units: number; fromB: number; pastedKeep: number;
  *  page's cells (x0, y0, x1, y1 stride 4), or undefined */
 export interface HidingOptions {
   unhidden?: (id: number) => string | null
+  /** whether a unit's label is left the original's ink (the wrap wrote it no group): the body drawn, the label kept */
+  labelKept?: (id: number) => boolean
   rules?: (page: number) => readonly number[] | undefined
 }
 export declare function openProto(o: {

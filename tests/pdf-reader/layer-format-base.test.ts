@@ -186,7 +186,7 @@ describe('a part with no layout of BUNDLE 8 may say why our compile is no base p
   it('writes and reads `final` and `boxes`', async () => {
     const inputs = partInputs(M.head.sha256, M.lefts)
     for (const refused of ['final', 'boxes'] as const) {
-      const w = await writePart({ ...inputs[0]!, layout: { refused, why: 'x' }, addon: null, fileOnly: [] })
+      const w = await writePart({ ...inputs[0]!, layout: { refused, why: 'x' }, rules: null, fileOnly: [] })
       const read = await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })
       expect(read.noLayout).toEqual({ refused, why: 'x' })
     }

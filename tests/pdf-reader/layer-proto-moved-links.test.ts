@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { indexLayout, LAYOUT, LAYOUT_SCHEMA, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { withGroups } from './helpers/groups'
 import { installStubs, shuffled } from './helpers/order-paper'
 
 // The links moved with the text the layer redraws, over a run (PR 3a-2; the 3a design §3.2 to §3.5, §4, §5 LK10 and LK14): a
@@ -45,7 +46,7 @@ function paper({ annots = true } = {}) {
   const items = all.map(p => specs.flatMap(s => s.lines.filter(l => l.page === p).flatMap(l => l.items.map(([x, str]) => ({ str, transform: [10, 0, 0, 10, x, l.b], width: 5 * str.length, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))))
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(annots ? { getAnnotations: async () => annotationsOf(n) } : {}) })
-  const doc = { numPages: PAGES, getPage: async (n: number) => pageOf(n) }
+  const doc = withGroups({ numPages: PAGES, getPage: async (n: number) => pageOf(n) })
   const layout = {
     schema: LAYOUT_SCHEMA, lineskip: null, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: PAGES }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
     units: specs.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, s.pieces ?? 1]),
@@ -144,10 +145,8 @@ describe('openProto and the font maps', () => {
   })
 })
 
-// A document the run swapped away from is told to the host once no read holds it, and the run keeps nothing of it after: the
-// host destroys it, and a set of retired documents kept for the run's length held every one of them (and its pages) alive
-describe('openProto and the documents it retires', () => {
-  const collect = async () => { for (let i = 0; i < 3; i++) { await new Promise<void>(resolve => setTimeout(resolve, 10)); (globalThis as { gc?: () => void }).gc!() } }
+// The run's one document is told to the host once, at dispose: the host destroys it then
+describe('openProto and the document it retires', () => {
   /** a run read from a fresh document, the document itself held by nothing here but a weak reference */
   async function openFresh(told: unknown[]) {
     const P = paper()
@@ -155,19 +154,14 @@ describe('openProto and the documents it retires', () => {
     const run = await openProto({ doc: P.doc, target: 'zh', pages: PAGES, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units: [], tex: { index: P.index, pieces: new Map() }, onRetired: (d: unknown) => told.push(new WeakRef(d as object)) } as never) as Run
     return { run, weak: new WeakRef(P.doc as object) }
   }
-  it('lets go of a retired document once it is told: swapped away from, it is told once and then collected; the newest is told at dispose', async () => {
+  it('tells its document retired once, at dispose', async () => {
     const told: WeakRef<object>[] = []
     const { run, weak } = await openFresh(told)
-    expect((globalThis as { gc?: () => void }).gc, 'the test run must expose gc').toBeTypeOf('function')
     await run.layFor(1)
-    run.swap(paper().doc as never)
+    expect(told.length).toBe(0)
+    run.dispose()
     expect(told.map(t => t.deref())).toEqual([weak.deref()])
+    run.dispose()
     expect(told.length).toBe(1)
-    await collect()
-    expect(weak.deref(), 'the retired document is still held by the run').toBeUndefined()
-    run.dispose()
-    expect(told.length).toBe(2)
-    run.dispose()
-    expect(told.length).toBe(2)
   })
 })

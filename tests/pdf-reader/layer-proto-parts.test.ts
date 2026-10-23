@@ -6,7 +6,6 @@ import { cutBundle, needFrontier } from '@/pdf-reader/engine/layer-proto/cut.mjs
 import { layoutFacade } from '@/pdf-reader/engine/layer-proto/facade.mjs'
 import { type LayerIndex, mergeParts, type ReadPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { indexLayout, PH_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { made } from './helpers/format-paper'
@@ -116,12 +115,11 @@ const drawing = (run: Run) => ({
 async function wholeRun(P: Paper, o: { records?: boolean; rules?: unknown } = {}) {
   const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
   const merged = mergeParts(P.index, P.parts)
-  const doc = P.docFor(P.parts.at(-1)!.chain.r)
+  const doc = P.docFor(0)
   const run = await openProto({
     doc, geometry: { schema: 1, kinds: merged.left.kinds, left: { pages: merged.left.pages, units: merged.left.units } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never, ...(o as object),
-    // (BUNDLE 3's door: the text removal where the bundle has an add-on, v0's own drawing where it has none)
-    tex: { ...HYBRID, index: indexLayout(merged.layout!), pieces: new Map() }, removal: merged.addon ? { mode: 'draw', doc, manifest: merged.addon.manifest } : null,
+    tex: { ...HYBRID, index: indexLayout(merged.layout!), pieces: new Map() },
   })
   run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
   run.end()
@@ -145,7 +143,7 @@ async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?:
   const run = await openProto({
     parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, free: true, records: o.records ?? true, labels: LABELS as never, ...(o.rules ? { rules: o.rules } : {}),
-    tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
+    tex: { ...HYBRID, index: facade.index, pieces: new Map() },
     onRetired: o.onRetired ?? null, onWait: (what: string) => { waits++; if (what === 'part') starved?.() },
   } as never)
   const all = unitsOfRows(P.index, rowsOfIndex(P.index))
@@ -157,7 +155,6 @@ async function partsRun(P: Paper, o: PartsOptions & { records?: boolean; rules?:
     const part = P.parts[i]!
     facade.add(part)
     run.grow(part)
-    if (part.addon?.tail) run.swap(P.docFor(part.chain.r))
     if (byParts) { const ids = [...part.left.map(w => w[0]), ...part.fileOnly.map(e => e[0])]; run.take(new Map([...all].filter(([id]) => ids.includes(id))) as never) }
   }
   for (let i = 0; i < o.before; i++) grow(i)
@@ -216,14 +213,12 @@ describe('the run in parts draws every page as the open over the whole paper doe
     })
   }
 
-  it('a paper with no add-on (M20): its parts carry none, and draw as the open over the whole with none, table groups drawn', async () => {
+  it('a paper of no cell rules: its parts carry none, and draw as the open over the whole, table groups drawn', async () => {
     for (const [name, spec] of [['the take test\'s paper', TAKE], ['a float told late and a column across a page break', FLOAT]] as const) {
       for (const ends of everySplit(spec.pages)) {
-        const P = await takePaper(spec, ends, { addon: false })
-        expect(P.parts.every(p => p.addon === null), `${name} ${ends}`).toBe(true)
+        const P = await takePaper(spec, ends)
+        expect(P.parts.every(p => p.rules === null), `${name} ${ends}`).toBe(true)
         const want = drawing(await wholeRun(P))
-        // (no group withheld for a page the text removal has no word of: the whole with no add-on draws them)
-        expect(want.skipped.filter(s => s.includes('its page not removed'))).toEqual([])
         if (spec === TAKE) expect(want.order).toEqual(expect.arrayContaining([6, 7, 8]))
         for (let before = 0; before <= P.parts.length; before += P.parts.length) for (const feed of ['eager', 'starved'] as const) {
           const { run, q1 } = await partsRun(P, { before, ended: 'open', feed })
@@ -273,7 +268,7 @@ describe('the run in parts: waits, failures and documents', () => {
     const run = await openProto({
       parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
       target: 'zh', pages: P.N, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
-      removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never }, onWait: (w: string) => waits.push(w),
+      onWait: (w: string) => waits.push(w),
     } as never)
     run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
     expect(run.rows.every(r => r === null)).toBe(true)
@@ -306,11 +301,11 @@ describe('the run in parts: waits, failures and documents', () => {
     const run = await openProto({
       parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, target), groups: groupsOfIndex(P.index),
       target, pages: P.N, scale: 1, dpr: 1, copy: o.copy ?? false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
-      removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
+      
     } as never)
     run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
     run.end()
-    for (const part of P.parts) { facade.add(part); run.grow(part); if (part.addon?.tail) run.swap(P.docFor(part.chain.r)) }
+    for (const part of P.parts) { facade.add(part); run.grow(part) }
     return run
   }
 
@@ -377,7 +372,7 @@ describe('the run in parts: waits, failures and documents', () => {
     await expect(openProto({
       parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: [], groups: groupsOfIndex(P.index),
       target: 'zh', pages: P.N, scale: 1, copy: false, tex: null,
-      removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: P.N, sets: {}, page: {} } as never },
+      
     } as never)).rejects.toThrow(TypeError)
   })
 
@@ -391,34 +386,19 @@ describe('the run in parts: waits, failures and documents', () => {
     const run = await openWarm(P, doc)
     await run.until(2)
     // (page 2's drawing as if it cut from pages 1 and 3: two other pages to read for its copy)
-    run.rows[1]!.ops.push({ op: 'crop', page: 1, plane: 'O' } as never, { op: 'crop', page: 3, plane: 'O' } as never)
+    run.rows[1]!.ops.push({ op: 'crop', page: 1, plane: 'B' } as never, { op: 'crop', page: 3, plane: 'B' } as never)
     const reads = doc.reads.length
     holding = true
     const canvas = document.createElement('canvas')
     canvas.width = 10
     canvas.height = 10
-    const copying = run.drawCopy(2, canvas.getContext('2d')!, canvas, 1).then(() => 'drawn', (e: Error) => e.message)
+    const copying = run.drawCopy(2, canvas.getContext('2d')!, 1).then(() => 'drawn', (e: Error) => e.message)
     await ticks()
     run.dispose()
     release()
     await copying
-    // (the first read under way when it was let go ends; the second is never made)
-    expect(doc.reads.slice(reads)).toEqual([1])
-  })
-
-  it('keeps no source of a page that failed after its original was drawn (Minor 5: no crop cut from it)', async () => {
-    const M = await made()
-    const units = M.index.units.map((_, id) => ({ text: `unit ${id}`, lines: M.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], r[3], r[2] + 2.15]))) }))
-    const plain = docsOf({ pages: 4, units })
-    // (page 3's removed page, the add-on's sixth page, cannot be read: page 3 fails after its original is drawn)
-    const docFor = (r: number) => { const d = plain(r); return { numPages: d.numPages, reads: d.reads, getPage: (n: number) => (n === 6 ? Promise.reject(new Error('page 6 cannot be read')) : d.getPage(n)) } }
-    const P: Paper = { N: 4, index: M.index, parts: M.readParts, docFor: docFor as never }
-    const run = await openWarm(P, docFor(0), { copy: true })
-    await run.until(4)
-    expect(run.failed(3)).toBe(true)
-    expect(run.rows[2]!.base).toBe(false)
-    expect(run.rows[1]!.base).toBe(true)
-    run.dispose()
+    // (the first read under way when it was let go, render A of the page itself, ends; the crops' sources are never read)
+    expect(doc.reads.slice(reads)).toEqual([2])
   })
 
   it('steps over a page whose drawing throws: its units the original\'s on all their pages, why page; the others drawn', async () => {
@@ -467,11 +447,11 @@ describe('the run in parts: waits, failures and documents', () => {
     const run = await openProto({
       parts: true, doc: docFor(0), geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
       target: 'zh', pages: 4, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
-      removal: { mode: 'draw', doc: docFor(0), manifest: { schema: 1, removal: REMOVAL, pages: 4, sets: {}, page: {} } as never }, onRetired: (d: unknown) => retired.push(d),
+      onRetired: (d: unknown) => retired.push(d),
     } as never)
     run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
     run.end()
-    const grow = (i: number) => { const part = P.parts[i]!; facade.add(part); run.grow(part); if (part.addon?.tail) run.swap(docFor(part.chain.r)) }
+    const grow = (i: number) => { const part = P.parts[i]!; facade.add(part); run.grow(part) }
     // (the first part's tail: its document read from now on, the one the run was opened with read by nothing, told at once)
     grow(0)
     expect(retired).toEqual([docFor(0)])
@@ -766,7 +746,6 @@ describe.skipIf(!LAB_ON)('H4: the local papers in parts, as the open over each m
       const whole = {
         paper: { id, version, pages: N }, base: { bytes: 1_000_000, sha256: 'a'.repeat(64), xref: 999_000 }, versions: { image: '1' }, units,
         left: { kinds: units.map(u => u[0]), pages: geometry.left.pages, units: [...geometry.left.units].sort((a, b) => a[0] - b[0]) }, layout,
-        addon: { manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page: Object.fromEntries(Array.from({ length: N }, (_, i) => [i + 1, { ok: true }])), appended: 0, stats: {} } },
       }
       // (the text layer: each unit's left rectangles and layout lines, its id its text)
       const lines = new Map<number, number[][]>()
