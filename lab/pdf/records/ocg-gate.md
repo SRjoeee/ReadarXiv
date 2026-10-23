@@ -57,3 +57,13 @@ Every page of the eight, a fresh browser for each paper; a mismatch rendered aga
   unwrapped page against itself up to 1,530 px between renders) and 2609.26457v1 p2 (CPU; a figure's text, Δ 7; 0 px from
   fresh documents). Run again on the same inputs (at `db827a2f`), each came and went. The runs on a quiet machine (at
   `c4027ed7`) showed none.
+
+## The run at `2d0a3964` (the pixel tier's second round)
+
+Counts as noted above (marks 38, spell 1, labels kept 0, groups 3,430, deltas 2,561,558 bytes, proof 8/8). Chromium, a fresh
+browser for each paper, on a heavily loaded machine (load average 70 to 120):
+
+| Canvas | G1 pages with px outside split glyphs and image edges | Px inside split glyphs | G2' pages | G2' pages with px outside | Image-edge px, wrap / remover |
+|---|---|---|---:|---|---|
+| GPU | none | 0 | 247 | none | 72 / 72 (1810.04805v2 4, 2602.23285v2 68) |
+| CPU | 2609.26457v1 p2: 27 px (Chromium's own, as above) | 0 | 247 | none | 43 / 43 (1810.04805v2 18, 2608.04322v1 24, 2602.23285v2 1) |
