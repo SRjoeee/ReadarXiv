@@ -52,7 +52,11 @@ export function failureWidget(doc: Document, reason: string, retry: () => void):
   const button = doc.createElement('button')
   button.type = 'button'
   button.textContent = strings.retry
-  button.addEventListener('click', () => {
+  // **Only the reader's own clicks retry** (DESIGN §4.0c, §7.6): a retry spends the reader's quota, and the shadow root is
+  // open, so a page script can reach this button and `.click()` it. A script's click is untrusted; a pointer's, the
+  // keyboard's (Enter or Space on the focused button) and assistive technology's are not. A synthetic key event starts nothing
+  button.addEventListener('click', event => {
+    if (!event.isTrusted) return
     button.disabled = true
     retry()
   })

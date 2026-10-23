@@ -364,7 +364,11 @@ describe('startTranslation', () => {
     await run.translate([byId(blocks, 'p1')])
     const widget = doc.querySelector(`.${ERROR_CLASS}[${FOR_ATTR}="p1"]`)!
     fail = false
-    widget.shadowRoot!.querySelector('button')!.click()
+    const button = widget.shadowRoot!.querySelector('button')!
+    // A page script's click retries nothing (DESIGN §4.0c): the reader's own does
+    button.click()
+    expect(run.progress()).toMatchObject({ failed: 1 })
+    button.dispatchEvent(Object.defineProperty(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }), 'isTrusted', { value: true }))
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(run.progress()).toMatchObject({ failed: 0, done: 1 })
     expect(doc.querySelector(`.${ERROR_CLASS}`)).toBeNull()
