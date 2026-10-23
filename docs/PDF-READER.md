@@ -916,6 +916,74 @@ that cannot be had forgotten so that a retry reads it again). The run's rows are
 `tests/pdf-reader/run.test.ts`, `server.test.ts`, `ranges.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
 reader on the sample (cut as a layer over our own compile, `tests/e2e/lib/layer-cut.mjs`) served by the stand-in of the layer API, through the echo service.
 
+### 11.11 The layer's text: selection, copy and find on a laid page
+
+A laid page is a copy of the composed page with the layer's drawing on it, its translation an SVG. Selection, copy and find on it
+work as on the left's pages: **one transparent PDF.js text layer per laid page**, over the SVG and under the links, holding one copy
+of every text the page shows. The visible paint does not change (the e2e row compares the place's pixels with and without it).
+Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that drafted it is folded here).
+
+- **What it holds** (`layer-proto/textlayer.mjs`, pure; unit rows TL1-TL18). The composed page's text items (PDF.js's text
+  content of our compile's page, kept compact on the page's record as it is drawn: `itemsOf`, upright text alone, ~13-70 KB on
+  the heaviest pages) split by the page's drawing operations, by the links' rule (`links.mjs erasedOf`): an item whose box's
+  centre the operations leave erased (an erase, a paper fill or a swap, unless a later restore puts it back) is the drawing's.
+  Erased and under the source of a crop of the same page: **moved**, relocated by the crop's map from its source to its drawn box
+  (a formula's text where its ink is drawn); a crop cut from another page takes that page's items under its source; a crop
+  with none under it carries its own plain text (the SVG's alternative) over its drawn box. Erased otherwise: dropped, its
+  translation takes its place. Not erased: **kept** where PDF.js gives it (heading numbers, labels, untranslated units,
+  references, page numbers). Each drawn unit and babel name adds its lines as **translated** items, one a drawn line (split
+  where a crop stands or the script changes: each span its own measure), at the line's box across its tokens' bands
+  (`words.mjs tokenBand`), its text as a copy reads it (lineRuns' spaces). Items of the page's own that abut on one baseline at
+  one size are one item (a run PDF.js reads in pieces where its font changes); at most 2000 items (`TEXT_ITEMS_MAX`, past it a
+  line's neighbours are merged).
+- **Reading order.** The composed page's text content is in its content stream's order, which for a TeX page is its reading
+  order (columns, floats, footnotes as the output routine shipped them). Each drawn thing owns the items its operations erased
+  (the last operation that erased an item lies in that thing's range of the page's operations: the run records each unit's and
+  name's range as it paints), and its lines go, as one block in their own order, where the first item it erased was: a heading
+  number before its translated heading, a reference after the paragraph above it. A kept item the stream sets between two items
+  of one drawn thing (a displayed formula a unit keeps, a float set inside a paragraph's run) goes inside its block, before the
+  first of its lines on its line to its right or below it in its column (a line's slot across, not its text, says the column).
+  A drawn thing that erased nothing is placed by the same geometry. Between two sources a copy breaks the line where they stand
+  on two lines (`eol`) and gets a space where they stand apart on one; within a source, its own breaks (PDF.js's `hasEOL`, a
+  translated paragraph's lines joined as one).
+- **The contract.** The door's `textOf(page)` → `Promise<TextLayerData>`: `{ items: [{ str, x, y, w, h, base, dir, fontSize, from:
+  'kept' | 'moved' | 'translated', unit?, eol? }], page: { w, h }, stats }`, PDF units of the page (user space, unrotated, y up, as
+  `LinkRecord.boxes`; `x, y, w, h` the item's box, `base` its baseline), plain data made anew and equal on every call, read from
+  the page's record alone (no layout, ink or PDF.js call), for any ready page until dispose; a page not ready rejects, and it
+  throws after dispose, as `copyOf`. `LaidPage` is unchanged: nothing is added to the commit's path. The fake door's and the real
+  door's conformance rows hold it; the real door's three opens (in parts, warm, BUNDLE 3) give every page the same layer, pure of
+  the order the pages were asked in.
+- **The host** (`view/text-layer.mjs`, `layer-side.mjs`): after a page's commit, once the main thread is idle (`requestIdleCallback`
+  within `TEXT_IDLE_MS` 500), the side asks the door for the page's data and the view builds it with **PDF.js's own
+  `TextLayerBuilder`** (the host's pdf_viewer, given in the kit's `viewer.TextLayerBuilder`) over a text content of the items (each
+  an upright run at its baseline, its width the item's, one generic face that PDF.js measures and scales each span to): one
+  span an item, `user-select: text`, PDF.js's handling of a drag (end of content, `selecting`) and of a copy (its Unicode
+  normalisation). Translated spans carry the target's `lang`. An upright page's layer lies in the copy's frame (`--axt-frame-w`,
+  `-h`, the SVG's), contained (`contain: strict`). The SVG's text becomes drawn, not read: `aria-hidden` and `user-select: none`,
+  so a selection, a copy, a search and a screen reader each meet one copy of the text (`window.find` finds the text layer's
+  alone). It goes with the drawing it belongs to (retired, failed back to the original, replaced, disposed), cancelled from
+  PDF.js's registry of its selection listener; one that comes after its page was let go is put nowhere. The hover highlight is
+  unaffected: the lighting reads the pointer's place, not its target. A host whose PDF.js gives no builder draws the page as
+  before, with none. A page shown as the original's (no layout, refused parts, a page over arXiv's PDF) is never committed, so it
+  gets no layer of ours: PDF.js's own is there.
+- **Cost** (`lab/pdf/spikes/text-layer-cost.mjs`, `lab/pdf/records/text-layer.md`, Chromium 153, real pages, a synthetic full,
+  half or no translation of them): the engine's step at most 0.6 ms a page (budget 3 ms), the host's build, its append and a
+  forced layout at most 4.0 ms (budget 5 ms), at most 361 nodes (budget 2000), on 2602.23285v2 pp6-9 (977 items on p7, the
+  heaviest) and 2608.16117v1 pp11, 13. Before runs were merged, every item its own span, p7 with nothing translated took 9.1 ms:
+  the merge is what holds the budget. On the sample in the extension: 1.4-1.8 ms a page (`probe().textsRing`).
+- **Not in v1.** Rotated and vertical text (an axis label turned a quarter) is left out of our layer (`itemsOf`): the left's
+  layer has it. Right-to-left targets. A zoom does not measure the spans again (PDF.js scales them by CSS; their widths were
+  measured once). A page wrapped by optional content (§19.9) is read as today's pages are: the wrap's reader change gives
+  `textOf` the visible text (`route/ocg-erasure.md`, the text layer's row).
+
+The rows: `tests/pdf-reader/textlayer.test.ts` (TL1-TL18, the pure core), `layer-door.test.ts` (the real door's pages and their
+layers through three opens) and the conformance suite (`helpers/door-conformance.ts`), `text-layer-view.test.ts` (TV1-TV3 the
+builder, TS1-TS6 the side); in a real browser `pnpm e2e:reader` (built after the commit between the drawing and the links; one
+drag from a heading's number through its translated heading into the paragraph after it, the selection and its copy; a
+formula's text where its crop is drawn; find of a translated and of a kept phrase in the text layer; invisible, with its
+control; one copy of each text in the accessibility tree; the hover over it; let go far from the view) and the web's
+`web/e2e/layer.mjs`.
+
 ## 12. Performance gates
 
 Each before the stage's pull request, on the heaviest demo paper, in a real window:

@@ -98,6 +98,8 @@ export interface Options {
   assets?: Record<string, unknown>
   /** the fake door's links of a laid page (the door's own gives none); `n` the page, `door` its index (0 the first opened) */
   links?: (n: number, door: number) => LinkRecord[]
+  /** the host's PDF.js text layer builder (its pdf_viewer's TextLayerBuilder: the fakes' FakeTextLayerBuilder), none by default */
+  textBuilder?: unknown
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
@@ -108,8 +110,10 @@ export async function setup(o: Options = {}): Promise<Setup> {
   let look: ViewPrefs = { swapped: false, dimPages: false, theme: 'light', highlight: true }
   const lookers = new Set<(p: ViewPrefs) => void>()
   const opened: string[] = []
+  const kit = fakeKit()
+  if (o.textBuilder) kit.viewer = { ...kit.viewer, TextLayerBuilder: o.textBuilder } as typeof kit.viewer
   const host: ReaderHost = {
-    panes, pdfjs: { ...fakeKit(), ...(o.assets ? { assets: o.assets } : {}), lib: { AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2 }, OPS: {} } }, clock, scrollEnd: 'native',
+    panes, pdfjs: { ...kit, ...(o.assets ? { assets: o.assets } : {}), lib: { AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2 }, OPS: {} } }, clock, scrollEnd: 'native',
     words: { pageName: (s, n) => `${s} ${n}`, sideName: s => s },
     prefs: { get: () => look, subscribe: l => { lookers.add(l); return () => { lookers.delete(l) } } }, links: { openExternal: u => { opened.push(u) } }, emit: e => events.push(e),
   }

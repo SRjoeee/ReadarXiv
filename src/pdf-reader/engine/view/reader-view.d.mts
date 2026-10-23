@@ -1,6 +1,7 @@
 // reader-view.mjs's types: the one reading view both readers run (docs/PDF-READER.md §11.7). Browser; no extension module
 // and no pdfjs-dist: PDF.js is the host's kit, so every PDF.js type here is structural
-import type { LayerDocument, LinkRecord } from '../layer-proto/reader.mjs'
+import type { LayerDocument, LinkRecord, TextLayerData } from '../layer-proto/reader.mjs'
+import type { BuiltTextLayer } from './text-layer.mjs'
 import type { OutlineEntry } from './outline'
 
 export type Side = 'left' | 'right'
@@ -30,10 +31,11 @@ export type DocumentOpener = (options: Readonly<Record<string, unknown>>) => Doc
 /** the layer's composed document: arXiv's PDF ‖ every tail told (null for none), opened by the layer side */
 export type ComposedOpener = (tail: Uint8Array | null, options: Readonly<Record<string, unknown>>) => DocumentTask
 /** the host's PDF.js build (the web: modern or legacy); `assets` the getDocument options its data files are found by
- *  (cMapUrl, cMapPacked, standardFontDataUrl, wasmUrl). The view calls `lib.AnnotationMode` alone of the library */
+ *  (cMapUrl, cMapPacked, standardFontDataUrl, wasmUrl). The view calls `lib.AnnotationMode` alone of the library; the viewer's
+ *  `TextLayerBuilder` builds a laid page's text layer (text-layer.mjs; none given: the laid pages have none) */
 export interface PdfJsKit {
   lib: unknown
-  viewer: { EventBus: unknown; PDFViewer: unknown; PDFPageView: unknown; PDFLinkService: unknown; LinkTarget: unknown }
+  viewer: { EventBus: unknown; PDFViewer: unknown; PDFPageView: unknown; PDFLinkService: unknown; LinkTarget: unknown; TextLayerBuilder?: unknown }
   assets: Readonly<Record<string, unknown>>
 }
 /** the look the view reads: the highlight on or off. The rest is the host's sheet (the panes swapped, dimmed pages, the
@@ -202,6 +204,10 @@ export interface Internals {
   /** the links of the layer's page `n` over its place (links.mjs linkLayer, over the place's viewport): followed inside the
    *  paper on the right pane, out of it through the host; null where none can be carried */
   links(n: number, records: readonly LinkRecord[] | null | undefined): HTMLDivElement | null
+  /** the text layer of the layer's page `n` over its place (text-layer.mjs textLayer: PDF.js's own builder, the host's pdf_viewer
+   *  TextLayerBuilder, over the place's viewport), its translated spans in `lang`; null where nothing can be placed or the host's
+   *  PDF.js has no builder */
+  text(n: number, data: TextLayerData, lang: string): Promise<BuiltTextLayer | null>
   /** a unit, or one of its sentences, lit as the pointer would light it (-1 for the whole); null for nothing */
   light(id: number | null, s?: number): void
 }

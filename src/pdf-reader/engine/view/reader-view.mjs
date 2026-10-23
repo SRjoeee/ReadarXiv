@@ -19,6 +19,7 @@ import { createFollower } from './sync.mjs'
 import { createPlaces } from './places.mjs'
 import { createLighting } from './lighting.mjs'
 import { linkLayer } from './links.mjs'
+import { textLayer } from './text-layer.mjs'
 import { drawing, drawn, drawnCanvas } from './drawn.mjs'
 
 const DISPLAYS = ['original', 'bilingual', 'translation']
@@ -908,6 +909,7 @@ export function createReaderView(host) {
     },
     emit,
     links: (n, records) => linkLayer(records, { viewport: places.views().get(n)?.viewport ?? null, follow, open: url => host.links.openExternal(url), words: host.words }),
+    text: (n, data, lang) => textLayer(data, { viewport: places.views().get(n)?.viewport ?? null, Builder: V?.TextLayerBuilder ?? null, lang }),
     light: (id, s = -1) => lighting.light(id == null ? null : { id, s }),
   })
   showMode()

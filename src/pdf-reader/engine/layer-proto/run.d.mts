@@ -11,6 +11,7 @@ import type { ReadPart } from './format.mjs'
 import type { OpenWords, PageWords } from './words.mjs'
 import type { LayerStats, LinkRecord } from './reader.mjs'
 import type { Draw } from './draw.mjs'
+import type { CompactItems, DrawnText, TextLayerData } from './textlayer.mjs'
 
 /** a unit as the units record holds it (a row): its kind, source and state; its translation's pieces, none where it has
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
@@ -53,6 +54,8 @@ export interface PageFill { own: number | null; anchor: number | null; target: n
  *  and did not fail) */
 export interface Row {
   page: number; w: number; h: number; view?: number[]; markup: string[]; ops: DrawOp[]; words: PageWords | null; wordsOpen: OpenWords | null; links: LinkRecord[] | null; linksOpen: { rec: LinkRecord; stream?: number; id?: number; seq?: number; sources?: unknown }[] | null; fill: PageFill | null
+  /** its text items kept compact (textlayer.mjs itemsOf), once it is drawn; what each drawn thing adds to its text layer */
+  items: CompactItems | null; text: { owners: [number, number, string][]; drawn: DrawnText[] } | null
   left: HTMLCanvasElement | null; right: HTMLCanvasElement | null; base: boolean; released?: boolean
 }
 /** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the
@@ -238,6 +241,9 @@ export interface ProtoRun {
   wordsOf(page: number): PageWords
   /** the page's links, a new copy on every ask (links.mjs; the 3a design), frozen at the first ask if the page is not already; a RangeError for a page that is not final (ready) */
   linksOf(page: number): LinkRecord[]
+  /** the page's text layer, made anew on every ask from its record (textlayer.mjs; docs/PDF-READER.md §11.11): equal data on every
+   *  ask; a RangeError for a page that is not final (ready) */
+  textOf(page: number): TextLayerData
   /** the counts of the links read and frozen so far (LayerStats.links), a copy */
   readonly linkStats: LayerStats['links']
   /** with `records` (the gate's): each record of the page's source annotations and the tier that made it, in the records' order; absent without */

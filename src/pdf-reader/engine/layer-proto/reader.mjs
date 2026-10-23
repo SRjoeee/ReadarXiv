@@ -102,9 +102,11 @@ function addShapes(by, units) {
  *                        rejects where the page fails, the layer is let go or the signal aborts
  *   leftPageOf(page, { signal })  the page's left part, fetched once through leftPart and read, once a part covers it
  *   copyOf(page, source, k)  a ready page's copy at a view's resolution, over `source` (the page as PDF.js drew it at k)
+ *   textOf(page)         a ready page's text layer, plain data (textlayer.mjs): the page's text the drawing keeps, the text it
+ *                        moves with a crop, and each drawn line of the translation, in reading order; made anew on every call
  *   unitAt(page, x, y)   the unit of the left whose shape holds the point (PDF units), the smallest; null where none
  *   stats(), dispose()   what it has done; the run let go, every ask rejected, its documents told to onRetired once read by
- *                        nothing. After dispose pageOf, leftPageOf, copyOf and pageState throw; stats and unitAt answer
+ *                        nothing. After dispose pageOf, leftPageOf, copyOf and pageState throw; stats and unitAt answer; textOf throws as copyOf does
  */
 /** the draws of left parts the door holds for the run at most (their left parts' bytes): past it the oldest go, and the run reads
  *  those pages itself (drawOf null) */
@@ -534,6 +536,13 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
         live()
         return canvas
       })()
+    },
+    textOf(page) {
+      live()
+      pageIn(page)
+      if (told[page] !== READY) return Promise.reject(new Error(`textOf: page ${page} is not laid (${STATES[told[page]]})`))
+      // (answered in a microtask, as a ready page's pageOf: a dispose in between rejects it)
+      return Promise.resolve().then(() => { live(); return run.textOf(page) })
     },
     unitAt(page, x, y) {
       if (!Number.isSafeInteger(page) || page > chain.through || !Number.isFinite(x) || !Number.isFinite(y)) return null
