@@ -1089,7 +1089,8 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // part the word's hyphenation and kerns — but not one whose box TeX began with a node apart from it (`apart`: a kern, glue,
       // a colour), which no kern or ligature of the letters before it reaches and their hyphenation ends at (`0.58\\pp`, \\pp
       // `\\,pp`)
-      const before = u.pieces[k - 1], next = u.pieces[k + 1]
+      // (the piece before a prefix's, past it: the pair is one command, glued to the word before it as the command alone would be)
+      const before = u.pieces[prefixed ? k - 2 : k - 1], next = u.pieces[k + 1]
       if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src)) return [piece]
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
       // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,

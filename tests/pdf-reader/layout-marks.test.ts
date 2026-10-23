@@ -177,6 +177,11 @@ describe('layoutMarking', () => {
     // (\\noexpand itself is a paper's macro to the classes, marked before it as any)
     expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.2a}', 'ph \\protect', 'ph \\eqref{e}', 'ph \\axtpm{p0.2b}', 'text', 'ph \\axtpma{p0.4a}', 'ph \\noexpand', 'text', 'ph $x$', 'text', 'ph \\axtpmm{p0.8a}', 'ph $y$', 'ph \\axtpm{p0.8b}'])
   })
+  it('marks no macro inside a word behind a prefix either: Giessenbachstra\\protect\\ss e', () => {
+    // (the word before the prefix is the macro's neighbour: \\protect is transparent, and the guard looks past it as the marks do)
+    const { units: marked } = layoutMarking([unit('para', [text('In Giessenbachstra'), ph('\\protect'), ph('\\ss'), text(' e, the end')])], MARK_CLASSES, { lines: false })
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\protect', 'ph \\ss', 'text'])
+  })
   it('marks no macro inside a word', () => {
     // a letter command or an accent glued to the word's letters (Giessenbachstra\\ss e, 2608.15334): a mark there would
     // part the word, its hyphenation and its kerns; a citation, a formula, a reference begin with no letter of the word
