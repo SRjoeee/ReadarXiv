@@ -28,7 +28,7 @@ export interface Params {
   /** run.mjs's adaptiveFill (the page fill, D6's since 2026-10-08; null: B): every unit spread over its frame, the page's
    *  body units held to one leading and one size; and the loosest pitch it spreads to, in em of the size drawn (null: the
    *  original's own) */
-  adaptiveFill: { band: number; track: number; size: number } | null; fillLead: number | null
+  adaptiveFill: { band: number; track: number; size: number } | null; fillLead: number | null; fillLeadRel: number | null
   /** what the fill leaves over: at each unit's foot, or packed to the end of its run of paragraphs (run.mjs packPage) */
   leftover: 'foot' | 'pack'
   /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or

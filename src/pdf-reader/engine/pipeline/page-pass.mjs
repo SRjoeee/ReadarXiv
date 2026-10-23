@@ -48,7 +48,7 @@ export function layoutRecordOf(r) {
   // (a why given, as a log's or a host's text may hold, without its control characters: whyText)
   const given = typeof r.why === 'string' ? whyText(r.why) : '', said = (lead, w = given) => whyText(`${lead}${w ? `: ${w}` : ''}`)
   switch (r.refused) {
-    case 'compile': case 'texlive': case 'engine': case 'marks': case 'final': case 'boxes': return { refused: r.refused, why: given || PLAIN_WHY[r.refused] }
+    case 'compile': case 'texlive': case 'engine': case 'marks': case 'final': case 'boxes': case 'wrap': return { refused: r.refused, why: given || PLAIN_WHY[r.refused] }
     case 'carry': {
       const n = r.stats?.units?.total
       return { refused: 'carry', why: whyText(Number.isInteger(n) ? `0 of the ${n} units on a page that is arXiv's page` : 'no unit on a page that is arXiv\'s page') }

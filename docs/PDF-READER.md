@@ -1318,7 +1318,7 @@ The edge cases, decided:
 | `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
-| `RULES_SCHEMA` (`rules/layout.mjs`, `4`: `adaptiveFill.band` read against the page's own paragraphs, 1b-C; 3 before) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `5`: `fillLeadRel` added, the fill's top relative to the original's pitch; 4 before it: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
@@ -1384,6 +1384,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `fillSize` | script | fit | 0 to 1.5, step 0.05 | How far a unit's size may grow to fill a loose original's paragraph, × the original's size; 0 is off. |
 | `adaptiveFill` | script | fit | band, track, size; or none | Spreading each unit's lines over its original's space, the page's body units to one leading and one size, the leading within a band of the page's own paragraphs' (D6, page by page); empty keeps the script's leading on the original's pitch alone (B). |
 | `fillLead` | script | fit | 1 to 3, step 0.05, or none | The loosest line pitch the fill spreads a unit's lines to, in em of the size it is drawn at; empty: the original's own pitch. |
+| `fillLeadRel` | script | fit | 1 to 3, step 0.05, or none | The loosest line pitch the fill spreads a unit's lines to, as a multiple of the original's own pitch, where that is looser than the pitch above; empty: the pitch above alone. |
 | `leftover` | script | fit | `foot`, `pack` | Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it. |
 | `keepAll` | script | breaking | yes or no | Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters. |
 | `cjkQuotes` | script | breaking | yes or no | Whether curly quotes, dashes, the ellipsis and the middle dot are set as CJK characters. |
@@ -1412,6 +1413,18 @@ What a host (the web's door, the extension's session, the gate, the lab) calls. 
   - **`etag`** is the answer's `ETag` header, given where there is one. It is compared with the SHA-256 of the bytes given to `readRules`, the body decoded of any content coding, and a different one is refused with the field `etag`. Two forms are read: the strong `"<sha256>"` and the weak `W/"<sha256>"`, which a CDN may put in the strong one's place when it recodes the body. Any other form is refused. A host passes the header as it came, or `null`.
 - **The reader's choice** is the same in both readers: the server's answer, when one comes and is read; else the last read answer the reader cached; else the built-in. The server is the authority, so a lower version is taken like any other. A refused answer is ignored and counted, and the reader keeps what it had. The set is chosen when the composed document is ready, and an answer that has not come by then serves the next open: a rule-set fetch never delays a page.
 - **A `rules` must come from `readRules` or `parseRules`**, or be `BUILTIN_RULES`. The door checks only a set's shape (an object holding `scripts` and `languages`, else a `TypeError`), not its values; a set built by hand can fail to resolve a target, or draw badly. `BUILTIN_RULES` is frozen to every depth and typed read-only, so a set to edit is `structuredClone(BUILTIN_RULES)`.
+
+### 18.7 Layout decisions of 2026-10-23
+
+Decisions made by the maintainer by looking at crops, and what they changed. The drawing code reads them at read time: none moves a version token (§18.1), and `RULES_SCHEMA` rises only for the field the fill rule adds.
+
+**A Chinese or Japanese line breaks before an inline formula (PR #438).** After a CJK character or mark a formula crop no longer glues to it: a script that breaks between CJK characters (`keepAll` false) may end the line before the crop, as xeCJK's `\CJKecglue` allows. A mark no line ends with (an opening bracket), a lead's end and a kern stay glued.
+
+**A letter-spaced line squeezes (PR #438).** A line takes the group it misses only when, without it, it would stretch more than `STRETCH_MIN` = 0.05 em a gap, the overflow is at most what it can give, and that squeeze a gap is less than the stretch. What it can give: the blank halves of comma-, full-stop- and bracket-type marks, spaces down to `spaceMin`, then `SQUEEZE` = 0.02 em a gap, never past the tracking floor (`trackMin`) and never below the tracking the page fill raised (`fitTrack`). Only marks whose ink sits in one half of the em in every face the layer draws are cut: comma, full stop, enumeration comma, brackets and quotes. Never the colon, the semicolon, `!` or `?`: the CJK face centres them, and a question mark cut by half ran 0.22 em into the next character. Measured on the 53 papers of the release route's sweep: lines more than 0.15 em a gap over their unit's least 403 to 265, ragged CJK lines 625 to 457, the owner's line (2610.10069 page 7, unit 49) 0.194 to 0.022 em a gap. Long formulas stay stretched: no new cap and no new ragged rule.
+
+**The fill's top is relative to the original's pitch for Chinese (`fillLeadRel`).** The fill spreads a unit's lines up to a top; the em top (`fillLead`, 2 em of the size drawn) equals the original's own pitch on a double-spaced original and is below what the frame allows, so the paragraph ended early (2610.11256 page 12, unit 75: 7 lines of 9). The top is now the looser of the em top and `fillLeadRel` = 1.3 times the original's pitch, scaled by the fit's size; 1.3 is the engine's own Chinese `leadBase`, so Chinese reads at the same density as its original. Chosen by the owner by eye on crops, 2026-10-23, over 1.5 and over replacing the em top outright (which tightened 3,035 single-spaced units). Simplified and Traditional Chinese only; Japanese and Korean stay off until measured. Measured on the 53 papers (Chinese): 168 units whose leading shows change by a median of 0.20 pitch (0.36 em), none tighter, none past its frame, no new collision, and a page of single-spaced originals is unchanged. It acts only where the em cap binds: a single-spaced original keeps its top, and the band, tracking, size and the leftover below the paragraph are unchanged. For the same two scripts the halving that finds the loosest leading now tries the top itself (it was left untried when the fraction of a step was under a half, so the unit took neither tracking nor the page's size). With that step more pages grow, and a unit of one line keeps its own size in these scripts: it has no frame to spread over, and a larger size only carries its ink past the original's line (a note under a table's rule, 2610.21924 page 18, whose formulas touched the rule at x1.1).
+
+**Judging a block (the rubric for samples and rulings).** The owner, 2026-10-23: judge per block, not per line. A block is better, the same or worse than its base on three questions. (i) Uniformity inside the block: no line stretched or squeezed out of step with the others. (ii) The block lands in place: each sentence at the right place in its paragraph, paragraph boundaries where the original has them. (iii) Rhythm against its neighbours: leading and density consistent with the page's other blocks. A shift under one pitch counts as the same. Line-level shifts and per-line offsets are normal and are not a verdict.
 
 ## 19. The engine's contract
 
@@ -1878,8 +1891,9 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   page object written again under its own number and generation, every key kept but `/Contents` and `/Resources`, which are
   ours; our content streams copied byte for byte as new objects; a `/Resources` dict of our entries, each the original's object
   where the two are canonically equal (the whole sub-graph reused), else copied with its closure from the original's `/Size`
-  up. Names stay ours. Nothing else is written: catalog, page tree, outlines, destinations, annotations and info stay the
-  original's. The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
+  up. Names stay ours. Nothing else is written: page tree, outlines, destinations, annotations and info stay the
+  original's, and so does the catalog but for our `/OCProperties` where our pages are wrapped (19.9): the catalog is then
+  written again under its number, every other key the original's. The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
   remover's `makeAddon` writes its tails with too: a table, or a stream of `/W [1 4 2]`, no hybrid), numbers in runs, objects
   uncompressed, `/Prev` the original's startxref, `/Root` `/Info` `/ID` the original's, its startxref in composed offsets.
 - **The canonical form**: a stream is its dict less `/Length` and the exact bytes its **resolved** `/Length` names (an
@@ -1905,7 +1919,8 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
   gives (its console captured, each document read in turn); the original's page count; every page's box, rotation, user unit and text (strings and
   places within 0.01) ours on replaced pages and the original's elsewhere. What the delta overrides of the original is bounded:
-  the replaced pages' objects exactly (no catalog, no other page), its `/Size` not below the original's, and its trailer the
+  the replaced pages' objects exactly (no other page; the catalog only to carry our `/OCProperties`, every other key of it the
+  original's, that key ours), its `/Size` not below the original's, and its trailer the
   original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
   cross-reference PDF.js recovers on its own (any such message on the original alone: it then indexes the whole file, where an
   unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
@@ -1942,3 +1957,81 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   bytes over 83,666,965 of originals, 2.48 % (the spike 2.48 %); the largest 0.70 MiB (2307.16209v1); per paper 0.30 % to
   30.05 % of the original and at most 28.5 % of our base page; the proof passes on 8 of 8; two builds give the same bytes; the
   build 15 to 160 ms, the proof 0.2 to 1.4 s (Node).
+
+### 19.9 Our pages wrapped by optional content (per-unit erasure, the file side)
+
+The original's ink under a drawn unit is hidden by that unit's own operators, never by rectangles: each unit's ink in our
+final pass is put in optional-content groups of its own, ON by default, and the reader sets a drawn unit's groups OFF
+(architecture audit item 5; the design note `docs/route/ocg-erasure.md` keeps what is not settled: the reader, the hosts,
+staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the base PDF's bytes do (wrapping adds a section).
+
+- **Ownership by marks** (`layout/own.mjs` `ownOf`, pure): a unit's ink is what TeX shipped between its points in our final
+  pass, in content-stream order (pageInk with `indices`), in its start point's region (in a column's body or not, at a depth of
+  floats: `stream.mjs regionsOf`). Text `u<id>`: from its start mark (`<id>s`, `t<id>s`, `h<id>s`) to its end mark; across
+  pages only inside the bodies, but a range outside them from page p to p + 1 at one depth (a continued footnote) is page p
+  to the next unit's start in that region and page p + 1 from after the last other unit's end (over more pages: `across`); a
+  unit with an end mark alone (a title) from the point before it. Placeholders `u<id>.p`: `stream.mjs ownedOf`'s entry
+  (the marking's `follows`); a footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
+  baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
+  `n<occ>`: between `n<occ>.<key>.s` and `.e`. A glyph is one group's: a placeholder's or a name's over the text's, the
+  text's over a label's, the first text's over a later. Images and forms are no unit's (a form whose ink is all one group's
+  is wrapped whole). Marks absent, twice or out of order: `marks`.
+- **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
+  its source text, letters and digits alone (NFKD, marks and case dropped, `ß` as `ss`: TeX's accents, ligatures, hyphenation
+  and punctuation are no evidence), or it is `spell`, its groups still written. Its label must be a label's form (a number
+  or an item's mark, maybe a caption's, a section's or a theorem's name before it, in brackets or with a stop, a dash or a
+  bar after it) or empty; where it is not and its glyphs stand apart from the text's, the label is left the original's ink
+  (`labelKept`: no `.l` group, the body alone drawn; the coordinator's amendment of 2026-10-28), else `spell`.
+- **The wrap** (`layout/wrap.mjs` `wrapOf`): our bytes and ONE incremental section of their cross-reference kind
+  (`appendSection`): each wrapped page's dict again under its number, `/Resources` our page's with `/Properties` mapping
+  `/axt<group>` to its OCG, ONE new content stream (its pieces joined, deflated at a fixed level: the same inputs give the same
+  bytes); `<< /Type /OCG /Name (axt:<group>) >>` per group; the catalog again with `/OCProperties` (`/D << /BaseState /ON /ON
+  [ours] /Order [] >>`, or a foreign one's kept, ours appended to its `/OCGs` and `/ON`). A BDC goes only between whole
+  operators, and each BDC and its EMC share a stream, a q depth, a text-object state and a depth of marked content: a run is
+  one group's operators with only state between them, closed at q, Q, BT, ET, any marked content, an inline image, a shading
+  or ink not its group's; a rule's path object is wrapped from its first construction operator to its painting; the `ri`
+  points stay. A show two groups share is split as the remover's hide mode splits one (E4's variant (a): a number stays with
+  the chunk before it, codes kept): no re-anchoring. Content streams name properties, never OCG objects (the later export
+  re-points names, §3.3 of the note).
+- **Page refusals** (the page left unwrapped, its units `page`): it does not align with PDF.js's reading (remove.mjs
+  `alignPage`), passes the walk's bounds, holds a form partly owned, an owned run in a clipping text mode (Tr 4 to 6: hiding
+  the only clipping run lifts the clip; Tr 7 glyphs are never ink, so never owned), a split in a vertical font or a Type 3 font
+  without widths, or PDF.js read it past its bounds. Past `GROUPS_PAGE` 512 groups or `SEQUENCES_PAGE` 2000 sequences the
+  page's `.p` and `.l` groups are merged into the text's (a unit with a placeholder there `bounds`), and refused if still past;
+  past `GROUPS_DOC` 8000 groups the later pages are refused.
+- **The proof** (in the box, every wrap): the section read back (`deltaSection`: each entry at its `n g obj`, `/Prev` our
+  startxref); each new stream lexed again: every BDC of ours named by its page's `/Properties` and closed at its depth and
+  state, none left open; its operators, ours taken out and each split show's chunks joined, the unwrapped page's (operators,
+  operands, codes and numbers in order). A failed wrap is the paper's: `wrapFinal` gives `{ refused: 'wrap-parse' |
+  'wrap-proof' | 'wrap-bound', why }`, the host passes `ours: { refused: 'wrap', why }`, the head's base is arXiv's with `why:
+  'wrap'` (a LAYOUT_REFUSED code).
+- **Both forms** are made of the wrapped bytes: the full base IS them (its head's `bytes`, `sha256`, `xref` theirs); the delta
+  copies their streams verbatim and carries their catalog's `/OCProperties` alone (19.8). Every check that judges our compile
+  reads the same pass; wrapping changes no glyph. The page pass numbers glyphs on the wrapped streams (one stream a page).
+- **The host's contract** (the maker child, before any document of its own is open): `wrapFinal(final, { PL, getDocument,
+  documentOptions, OPS, units, deflate, inflate })` → `{ bytes, xref, sha256, stats, unhidden, labelKept, own }`; then
+  `deltaOf(orig, bytes)` and `proveDelta`; then `layerOfPaper({ …, ours: { doc (of the wrapped bytes), bytes, sha256, xref,
+  delta, wrap: { stats, unhidden, labelKept } } })`; the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
+  bounds }, spell: [ids, at most 64], labelKept }`). `units` are the paper's SOURCE units (`pipeline/live.mjs openPaper`'s,
+  the page pass's `source.units`): a translation's (text pieces `tr`) holds neither the text after a placeholder its ink ends
+  at nor the source the spell check reads, and is refused (TypeError).
+- **The head** (both kinds): `base.stats` gains `{ wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds },
+  split, groups, labelKept }` (a delta's own counts beside them); `base.unhidden` `[[unit id, code], …]` by rising id and
+  `base.labelKept` rising ids, none in both, at most `UNHIDDEN_MAX` 8000 each (past it `wrap-bound`); checked by
+  `delta-wire.mjs wrapWhy` on both sides. A unit is the reader's to hide iff the config holds `axt:u<id>` and it is in neither
+  list. A head without them is an unwrapped base. The cell rules the add-on manifest carried are the reader lane's.
+- **Measured** (2026-10-23, the gate pack's 7 papers in Chinese and 2602.23285v2, the sources' units): every page wrapped
+  (302/302, 0 refused, the proof passing on all); `spell` 1 unit of 1,806 (2608.04322v1 u0: its journal header over-taken),
+  `marks` 24 (the title block's authors and `\thanks` notes the marker does not mark: the engine lane's item), `across` 0,
+  labels kept 32; ownership equal to today's geometric ownership on 1,729 of 1,806 units (95.7 %: the rest the marks' own over
+  today's residue, a table's row header today calls a cell's label, a babel name, the unmarked authors); 54 shows split; 230 to
+  981 groups a paper. The wrap 0.4 to 1.9 s a paper in Node with PDF.js's lite worker (the 147-page thesis 1.9 s), +165 MB
+  at most beside what the maker holds (the 46 MB pair); the wrapped base 0.4 % to 23 % larger (the thesis 3.08 to 3.79 MB);
+  the deltas 2,500,441 bytes over 83,666,965 of originals (2.99 %, 2.48 % unwrapped: 1.08x to 1.64x each), the largest 0.87
+  MB (2307.16209v1), the delta proof passing on 8 of 8. The lab gate in Chromium (GPU and CPU canvases,
+  `isImageDecoderSupported: false`, a mismatch rendered again up to three times), every page of the 8: all groups ON is our
+  page, 0 px outside split glyphs and image edges, 0 px inside the split glyphs; text and labels OFF equal the remover's cut
+  of the same ownership, 0 px outside image edges, and the image-edge pixels the wrap and the remover change equal on every
+  page (72 px in all on GPU, 32 on CPU). Two pages differ only where Chromium differs from itself: 2608.04322v1 p9 on GPU (our
+  unwrapped page against itself, 1,530 px between renders; equal once warm) and 2609.26457v1 p2 on CPU (18 px, max Δ 7, in a
+  figure's text, after earlier pages rendered; 0 px from fresh documents).
