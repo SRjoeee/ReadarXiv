@@ -3457,7 +3457,9 @@ export function shareOf(layout, blocks, row) {
  * the page fill spreads a unit's lines over its frames, and a looser leading holds fewer of them on a page's frame, so it can
  * carry text the source sets on one page over to the next, which the page cuts (pageCutsOf) only keep from the page before.
  * 2610.21884v1's unit 10 in Chinese, a paragraph over pages 1 and 2: its last run filled to 1.61 set a sentence of page 1 at
- * the top of page 2 (the sweep's (i))
+ * the top of page 2 (the sweep's (i)). Read for a unit's runs (run.mjs fillPage, fillLeadsOf): a unit of one run is filled as
+ * before, byte for byte, though the same can befall it (34 pages of 19 Chinese papers move where it is read for every unit;
+ * left to its own change)
  */
 export function keepsPages(fit, lines) {
   let j = 0
