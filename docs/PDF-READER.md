@@ -2080,7 +2080,7 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   today's residue, a table's row header today calls a cell's label, a babel name, the unmarked authors); 54 shows split; 230 to
   981 groups a paper. The wrap 0.4 to 1.9 s a paper in Node with PDF.js's lite worker (the 147-page thesis 1.9 s), +165 MB
   at most beside what the maker holds (the 46 MB pair); the wrapped base 0.4 % to 23 % larger (the thesis 3.08 to 3.79 MB);
-  the deltas 2,561,446 bytes over 83,666,965 of originals (3.06 %; 2,139,403 unwrapped, 2.56 %: 1.08x to 1.53x each; layers
+  the deltas 2,561,390 bytes over 83,666,965 of originals (3.06 %; 2,139,403 unwrapped, 2.56 %: 1.08x to 1.53x each; layers
   matched by identity cost 1706.03762v7's figures, whose forms name arXiv's layers, 61 KB either way), the largest 0.87 MB
   (2307.16209v1), the delta proof passing on 8 of 8. The lab gate (`lab/pdf/spikes/ocg-gate.mjs`, its run in
   `lab/pdf/records/ocg-gate.md`) in Chromium, GPU and CPU canvases, every page of the 8: all groups ON is our page, 0 px
