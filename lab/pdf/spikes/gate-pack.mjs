@@ -226,16 +226,21 @@ export function baseRecordOfMade({ made, layout, image = null }) {
   return { schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: made?.why, ...(made?.detail ? { detail: made.detail } : {}), layout: file }
 }
 
+/** the first LAYOUT whose file is written over a base page of ours (the marked final pass), not over arXiv's PDF: file.mjs LAYOUT 12 */
+const FIRST_OUR_BASE_LAYOUT = 12
+
 /**
  * The layout file a fixture keeps where its base page of ours is refused (`bytes` the file it held, `engineLayout` the engine's
- * LAYOUT): one an older maker made over arXiv's PDF, which the gate draws over arxiv.pdf as before; never one of the engine's own,
- * made over a base page of ours by an earlier make, which no longer stands. Null for none
+ * LAYOUT): one an older maker made over arXiv's PDF (a LAYOUT below FIRST_OUR_BASE_LAYOUT), which the gate draws over arxiv.pdf as
+ * before; never one made over a base page of ours (the engine's own, or an earlier engine's from LAYOUT 12 on), whose coordinates
+ * are that page's and would be drawn over arxiv.pdf. Null for none
  */
 export function keptLayoutOf(bytes, engineLayout) {
   if (!bytes) return null
   let v = null
   try { v = JSON.parse(new TextDecoder().decode(bytes))?.layout ?? null } catch { return null }
-  return typeof v === 'string' && v !== engineLayout ? bytes : null
+  // (the version is a token; its number is what orders it, and a token with none is no older maker's)
+  return typeof v === 'string' && v !== engineLayout && Number.parseInt(v, 10) < FIRST_OUR_BASE_LAYOUT ? bytes : null
 }
 
 /** the PIPELINE the translations of the outputs were made under: the one `pipeline` every units.json names */
