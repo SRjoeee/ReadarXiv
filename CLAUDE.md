@@ -1,12 +1,13 @@
 # CLAUDE.md — Read arXiv
 
-Chrome extension (MV3) that translates `https://arxiv.org/html/*` in place: structure-preserving, reversible, made for long bilingual reading sessions. Display name **Read arXiv**; repository `ReadarXiv`; everything the extension injects is prefixed `axt-` / `data-axt-` / `--axt-`.
+Read arXiv is a bilingual arXiv reader. This repository holds the Chrome extension (MV3): the in-place translator of `https://arxiv.org/html/*` (structure-preserving, reversible, made for long reading sessions) and the bilingual PDF reader; and the PDF reader's engine (`src/pdf-reader/engine/`), which the website (readarxiv.com, the private repository `readarxiv-web`) pins as a submodule, with the engine's gates in `lab/pdf/`. Display name **Read arXiv**; repository `ReadarXiv`; everything the extension injects is prefixed `axt-` / `data-axt-` / `--axt-`.
 
 ## Where the truth lives
 
 - `docs/DESIGN.md` — the current design: what the extension does, how it is built, why each non-obvious choice was made, with the measurements beside the decisions. Cite it by section (`DESIGN §7.2`). A decision that changes goes into its section in the same pull request as the code.
 - `docs/UI.md` — the interface contract: every control and string of the popup and the settings page, by id (`S-P-80`), with the reasons behind them.
 - `docs/PDF-READER.md` — the PDF reader's interface design: every control, state and motion with the reason behind it, the maintainer's words where a decision rests on them, and the measurements; §17 is the highlight. The reader's engine is held by the gates of `lab/pdf/README.md`; the experiment it grew in (its running record and plans) is read from the tag: `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md`, `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/<file>`.
+- `docs/route/` — the PDF layer route's working designs (the route, the delta, erasure by optional content, the text layer, the audits): live notes while the work lands; each pull request folds its decisions into `docs/PDF-READER.md` and deletes what it settled.
 - `docs/RELEASE.md` — how a version is cut, and the store listing.
 - `docs/THIRD_PARTY.md` — what was ported from which project, under which licence.
 - `CHANGELOG.md` — reader-facing changes.
@@ -35,10 +36,10 @@ WXT + React + TypeScript with pnpm · Vercel AI SDK for LLM providers (structure
 
 ## Working rules
 
-- **A pull request is one complete, explainable, verifiable change.** Cross-module changes update the interface and every caller together; unrelated changes stay out; a coherent change is not split to look small.
-- **Gate before every pull request** — the same four steps CI runs: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, judged by the exit code, plus the e2e scripts relevant to the change. `pnpm test` is vitest and does not type-check.
+- **A pull request is one complete, explainable, verifiable change.** Cross-module changes update the interface and every caller together; small changes, related or not, batch into one pull request per cycle and are tested once as a batch; a coherent change is not split to look small.
+- **Gate before every pull request** — the same four steps CI runs: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`, judged by the exit code, plus the e2e scripts relevant to the change. `pnpm test` is vitest and does not type-check. Before a test build or a release the batch also runs the engine's speed check and the random fresh-paper sweep (`lab/pdf/README.md`).
 - **Self-review before asking for review**: after adding a constraint, grep for everyone else on that path; read your own diff as someone else's code and ask what used to work and now does not.
-- **Wait for CI and the review's terminal signal before merging**; verify every review comment against a fixture, a probe or the code before adopting it, and write down what was declined and why. Merge with a merge commit, never squash. Nothing merges into `main` and no version is released without the maintainer's explicit request.
+- **Wait for CI and every reviewer's terminal signal before merging**: Codex and CodeRabbit review each pull request on open; a terminal signal is a 👍 reaction, a review with comments, or a usage-limit notice (👀 means still reviewing); after a fix round, comment `@codex review` once (`docs/agents/review.md`). Verify every review comment against a fixture, a probe or the code before adopting it, and write down what was declined and why. Merge with a merge commit, never squash. Nothing merges into `main` and no version is released without the maintainer's explicit request.
 - **Measure before deciding**: a performance claim comes with a probe or a measurement (`tests/e2e/probes/`, `AXT_MEASURE=1 pnpm vitest run tests/perf`); a claim in a document or an old comment is a hypothesis until checked.
 - **Ported code**: keep only what is called; when a ported module is touched, its unused parts go.
 
@@ -73,14 +74,16 @@ pnpm fixtures:fetch      # download and verify the fixtures the repository may n
 pnpm fixtures:stats      # rule coverage audit over the fixtures
 pnpm zip                 # the store archive; pnpm icons regenerates the icons
 pnpm tokens              # src/styles/tokens.css from src/shared/tokens.ts; a test fails while the two differ
-pnpm exec tsx lab/pdf/spikes/highlight-gate.mjs     # the PDF reader's highlight in Node, on this machine's data (lab/pdf/data and lab/pdf/out, never in the repository): the ten papers' runs and the ground truth (data/runs/highlight-ten, highlight-gt), their sources and arXiv's PDFs (data/corpus), and the Microsoft answers their sentences are made again from (out/highlight/B3/ms-cache-zh-auto.json, ms-cache-zh-en.json; a set missing fails the gate); WRITE_BASELINE=1 records a change meant; the lab's other gates: lab/pdf/README.md
-pnpm exec tsx lab/pdf/spikes/highlight-papers.mjs lab/pdf/out/highlight/papers   # the browser gate's demo papers, their units carrying their sentences
-node lab/pdf/spikes/highlight-gate-browser.mjs checks  # the highlight in a real browser (pnpm build first; PAPERS defaults to those demo papers); floats, resting, tokens: those checks alone; costs: BASE_BUILD=<a build to compare with>
+# the PDF engine's lab gates and their commands: lab/pdf/README.md
 AXT_MEASURE=1 pnpm vitest run tests/perf       # the cost measurements (readings, not assertions)
 AXT_CHROME=<binary> pnpm e2e                   # the e2e suite on a chosen Chrome; probes live in tests/e2e/probes/
 ```
 
 ## Agent skills
+
+### Review
+
+Codex and CodeRabbit review every pull request; a merge waits for their terminal signals, and findings are verified before they are adopted. See `docs/agents/review.md`.
 
 ### Issue tracker
 
