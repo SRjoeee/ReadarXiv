@@ -403,7 +403,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     // a head whose layer draws nothing (base.ts layerDraws) is decided here, at the head, before bind has run and before a single
     // unit goes to the user's service: nothing is translated for a paper whose pages the layer will not draw, and the lasting
     // word is told (the controller keeps it over the side's own refusal at bind)
-    if (!layerDraws((index as { head?: { base?: unknown } }).head?.base)) {
+    // (a base of ours held as a delta over arXiv's PDF is not bound here yet, bindOurs: decided here too, nothing sent for it)
+    const headBase = (index as { head?: { base?: { kind?: unknown } } }).head?.base
+    if (!layerDraws(headBase) || headBase?.kind === 'delta') {
       terminal = true
       attempt?.abort()
       return unavailable('cannot-prepare')
