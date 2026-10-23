@@ -22,7 +22,7 @@ import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
 import { chainedAddon } from '../layout/chain.mjs'
-import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, replacedWhy, wrapWhy } from '../layout/delta-wire.mjs'
+import { countOf, DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, replacedWhy, wrapWhy } from '../layout/delta-wire.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
@@ -320,7 +320,10 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // labelKept, `ours` the wrapped bytes' document, length, digest and startxref): written into the head's base of either kind
   const wrap = ours?.wrap ?? null
   if (wrap !== null) {
-    const why = wrapWhy(wrap.stats, wrap.unhidden, wrap.labelKept) ?? (wrap.pages === undefined || (Array.isArray(wrap.pages) && wrap.pages.length === 0) || replacedWhy(wrap.pages, Number.MAX_SAFE_INTEGER) === null ? null : 'pages: not page ranges')
+    // (`pages` required, the wrapped pages as ranges within our pages, as many as `stats.wrapped` says)
+    const M0 = oursDoc?.numPages ?? 0
+    const pagesWhy = !Array.isArray(wrap.pages) ? 'pages: missing' : wrap.pages.length === 0 ? (wrap.stats?.wrapped === 0 ? null : 'pages: none, and pages wrapped') : replacedWhy(wrap.pages, M0) !== null ? `pages: not page ranges within our ${M0} pages` : countOf(wrap.pages) !== wrap.stats?.wrapped ? 'pages: not the pages `stats.wrapped` counts' : null
+    const why = wrapWhy(wrap.stats, wrap.unhidden, wrap.labelKept) ?? pagesWhy
     if (why !== null) throw new TypeError(`ours.wrap: ${why}`)
   }
   if (!(marks && !('marks' in marks))) {
@@ -332,7 +335,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       ({ text: baseText, lineCheck, head: oursHead, doc: baseDoc } = checked)
       oursTail = { bytes: oursHead.bytes, xref: oursHead.xref }
       // (a delta must write again every page our wrap wrapped: a unit's group on a page it leaves arXiv's could not be hidden there)
-      if (held?.delta && wrap?.pages) {
+      if (held?.delta && wrap) {
         const rep = new Set(pagesOf(held.delta.replaced)), left = pagesOf(wrap.pages).find(p => !rep.has(p))
         if (left !== undefined) { held.why = 'delta-shape'; held.reason = whyText(`page ${left} is wrapped and the delta does not replace it`); held.delta = null }
       }

@@ -44,7 +44,9 @@ export const UNHIDDEN_MAX = 8000
 /**
  * Why a wrap's head fields (`stats` WRAP_STATS', `unhidden` [[unit id, UNHIDDEN code], …] by rising id, `labelKept` rising ids,
  * no id in both) do not read, null where they do: the lists within UNHIDDEN_MAX, `stats.unhidden` counting every unit (the
- * lists hold those with a group in the document alone, so at least as many by each code), `stats.labelKept` the list's count
+ * lists hold those with a group in the document alone, so at least as many by each code: that every unit with a group and no
+ * entry is hideable is the producer's word, layout/wrap.mjs wrapFinal's, which no reader of a head can check), `stats.labelKept`
+ * the list's count
  */
 export function wrapWhy(stats, unhidden, labelKept) {
   const isCount = v => Number.isSafeInteger(v) && v >= 0
