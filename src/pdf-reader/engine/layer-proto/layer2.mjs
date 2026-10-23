@@ -3327,6 +3327,9 @@ export function runsOf(tokens, blocks) {
   }
   if (carry.length && runs.length) runs.at(-1).tokens.push(...carry)
   if (runs.length < 2) return null
+  // (the display after a run ends its last line, TeX's \parfillskip before it: ragged, as the unit's own walk ends it there,
+  // breakLines; a forced break of no room ends it so where the run is laid alone)
+  for (const r of runs.slice(0, -1)) r.tokens.push({ newline: -1, room: 0, w100: 0 })
   let at = 0
   for (const r of runs) {
     const bi0 = at

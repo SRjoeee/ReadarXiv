@@ -48,6 +48,10 @@ describe('a unit laid in runs between its displays', () => {
     ])
     // (the cramped run as the unit's fit set it: the same lines)
     expect(drawn(laid!.layout as never).filter(l => l[0] === 2)).toEqual(drawn(whole as never).filter(l => l[0] === 2))
+    // (each run's last line before a display ended there, ragged, as the unit's own walk ends it: TeX's \parfillskip)
+    const ends = (l: { lines: { block: number; ends?: boolean }[] }) => l.lines.map(x => [x.block, !!x.ends])
+    expect(ends(laid!.layout as never).filter(([b], j, a) => a[j + 1]?.[0] !== b)).toEqual([[0, true], [1, true], [2, false]])
+    expect(ends(whole as never).filter(([b], j, a) => a[j + 1]?.[0] !== b)).toEqual([[0, true], [1, true], [2, false]])
   })
 
   it('a cramped first run shrinks alone: the runs after it keep the original\'s size', () => {
@@ -70,7 +74,7 @@ describe('a unit laid in runs between its displays', () => {
     const t = [...words(3), display(0), ...words(3)]
     const whole = L2.layoutUnit2(t as never, b as never, 10, P as never), laid = L2.layoutRuns(t as never, b as never, 10, P as never)
     // (both at the original's size: the runs' lines are the unit's own, its later run's first line not indented)
-    expect(laid!.layout.lines.map(l => [l.block, l.x0, l.baseline])).toEqual(whole.lines.map(l => [l.block, l.x0, l.baseline]))
+    expect(laid!.layout.lines.map(l => [l.block, l.x0, l.baseline, !!l.ends, l.used])).toEqual(whole.lines.map(l => [l.block, l.x0, l.baseline, !!l.ends, l.used]))
     expect(laid!.layout.lines.filter(l => l.block === 1)[0]!.x0).toBe(0)
     expect(laid!.layout.lines[0]!.x0).toBe(20)
   })
@@ -78,5 +82,7 @@ describe('a unit laid in runs between its displays', () => {
   it('a text-less region between two displays breaks with the run after it', () => {
     const runs = L2.runsOf([...words(2), display(0), display(1), ...words(2)] as never, [block(500, 2, 0, 0), block(400, 2, 2, 1)] as never)
     expect(runs?.map(r => [r.after, r.bi0, r.tokens.filter(t => (t as { blockTo?: number }).blockTo !== undefined).length])).toEqual([[0, 0, 0], [2, 1, 2]])
+    // (and the first run ends its last line before them)
+    expect((runs?.[0]?.tokens.at(-1) as { newline?: number } | undefined)?.newline).toBe(-1)
   })
 })
