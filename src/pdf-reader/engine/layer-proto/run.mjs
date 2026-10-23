@@ -396,10 +396,15 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   const grown = filled.filter(f => EVEN_KINDS.has(f.p.unit.kind))
   if (size > 1 && grown.length && grown.every(f => !f.full)) {
     const scaleOf = k => r3(1 + k * P.step)
-    const all = k => { const ls = []; for (const f of grown) { const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
+    // (a unit of one line keeps its own size in the scripts that spread to fillLeadRel: it has no frame to spread over, so a
+    // larger size only carries its ink past the original's line, over a rule or a neighbour's text that the size step cannot
+    // see, which the grid's last step above exposes (it makes more pages grow): 2610.21924's note of one line under a table's
+    // rule, whose formulas touched it at x1.1. The other scripts' page fill is as it was until it is measured on theirs)
+    const steps = f => !(P.fillLeadRel && f.p.fitLines < 2)
+    const all = k => { const ls = []; for (const f of grown) { if (!steps(f)) { ls.push(null); continue } const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
     let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
     while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
-    if (ok) grown.forEach((f, i) => { if (!L2.keepsShare(f.p.share, best[i].lines)) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
+    if (ok) grown.forEach((f, i) => { if (!best[i] || !L2.keepsShare(f.p.share, best[i].lines)) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
   }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
