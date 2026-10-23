@@ -3458,10 +3458,6 @@ export function shareOf(layout, blocks, row) {
   for (const l of layout.lines) if (onShare(share, l) && (share.end === null || l.x0 + l.used > share.end)) { share.end = l.x0 + l.used; share.at = l.baseline }
   return share
 }
-/** whether a layout of a unit keeps its shared row as the unit's fit left it (shareOf): its text there ending no further
- *  right, none there where the fit set none, and the line that ends furthest there on the baseline the fit set it at (`at`),
- *  so that the next unit on the row, laid from the fit's end and on its baseline, stays clear of it and on its line
- *  (run.mjs fillPage). True with no share */
 /**
  * Whether `lines` set no token on a later page than the fit's lines (`fit`) set it, read by each line's first token (`from`):
  * the page fill spreads a unit's lines over its frames, and a looser leading holds fewer of them on a page's frame, so it can
@@ -3479,6 +3475,10 @@ export function keepsPages(fit, lines) {
   }
   return true
 }
+/** whether a layout of a unit keeps its shared row as the unit's fit left it (shareOf): its text there ending no further
+ *  right, none there where the fit set none, and the line that ends furthest there on the baseline the fit set it at (`at`),
+ *  so that the next unit on the row, laid from the fit's end and on its baseline, stays clear of it and on its line
+ *  (run.mjs fillPage). True with no share */
 export function keepsShare(share, lines) {
   if (!share) return true
   let far = null
