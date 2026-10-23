@@ -950,13 +950,15 @@ try {
     // back in the right's places; the requests for the base and arXiv's PDF
     await page.evaluate(() => {
       window.__kept = true
-      const lists = (window.__lists = {})
+      const lists = {}
+      window.__lists = lists
       const post = Worker.prototype.postMessage
       Worker.prototype.postMessage = function (m, ...rest) {
         if (m?.action === 'GetOperatorList') { const k = `${m.sourceName} p${(m.data?.pageIndex ?? -1) + 1}`; lists[k] = (lists[k] ?? 0) + 1 }
         return post.call(this, m, ...rest)
       }
-      const made = (window.__made = { left: 0, original: 0 })
+      const made = { left: 0, original: 0 }
+      window.__made = made
       const canvases = n => n.nodeType === 1 && (n.nodeName === 'CANVAS' || !!n.querySelector?.('canvas'))
       new MutationObserver(rs => { for (const r of rs) for (const n of r.addedNodes) if (canvases(n)) made.left++ }).observe(document.getElementById('left'), { childList: true, subtree: true })
       // (a place's page view, the original's: under its view holder, beside which the layer's own wrapper is put)
