@@ -393,3 +393,16 @@ describe('Codex on #439', () => {
     expect(await prove(ORIG_TABLE, r.delta, OURS, r.replaced)).toMatchObject({ ok: true })
   })
 })
+
+describe('overlapping proofs in one process (CodeRabbit on #439)', () => {
+  it('take the console one at a time: each sees its own messages alone, and the console is the original after both', async () => {
+    const r = await built(ORIG_TABLE)
+    const before = [console.log, console.warn, console.error]
+    // (B's original reads as one PDF.js recovers: its message must be B's, never A's)
+    const loud = ((o: Record<string, unknown>) => { if ((o.data as Uint8Array).length === ORIG_TABLE.length) console.log('Warning: Indexing all PDF objects'); return getDocument(o as never) }) as never
+    const [a, b] = await Promise.all([prove(ORIG_TABLE, r.delta, OURS, r.replaced), proveDelta(ORIG_TABLE, r.delta, OURS, { PL, getDocument: loud, replaced: r.replaced })])
+    expect(a).toMatchObject({ ok: true })
+    expect(b).toMatchObject({ ok: false, code: 'delta-xref' })
+    expect([console.log, console.warn, console.error]).toEqual(before)
+  })
+})

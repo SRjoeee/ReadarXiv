@@ -356,6 +356,18 @@ function sameGraph(PL) {
 }
 
 const near = (a, b) => Math.abs(a - b) <= 0.01
+/** the console taken by one proof at a time in this process (its PDF.js reads in turn): a proof that overlaps another waits for
+ *  it, so that neither keeps the other's capture as the console's own nor reads the other's messages as its documents' */
+let consoleQueue = Promise.resolve()
+async function consoleHeld(fn) {
+  const before = consoleQueue
+  let release
+  consoleQueue = new Promise(r => { release = r })
+  try {
+    await before
+    return await fn()
+  } finally { release() }
+}
 /** PDF.js's messages of a cross-reference it does not read as written (it then indexes the whole file, or skips a section) */
 const RECOVERY = /Indexing all PDF objects|XRef|xref|startxref|trailer/
 /** the first difference between two pages' text items (PDF.js's getTextContent, strings alone), within 0.01 */
@@ -468,9 +480,7 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
   // (one copy of a source document at a time, for PDF.js to own; the composed bytes are the proof's own, read last)
   let orig, ours, comp
   try {
-    orig = await read(origBytes.slice(), 'orig')
-    ours = await read(finalBytes.slice(), 'ours')
-    comp = await read(composed, 'composed')
+    ;[orig, ours, comp] = await consoleHeld(async () => [await read(origBytes.slice(), 'orig'), await read(finalBytes.slice(), 'ours'), await read(composed, 'composed')])
   } catch (e) {
     if (isMemoryError(e)) throw e
     return no(`PDF.js: ${String(e?.message ?? e)}`)
