@@ -11,14 +11,17 @@
 //      inside the bodies, but 2a: a range outside the bodies from page p to page p + 1 at one depth (a footnote continued) is
 //      page p from its start to the next unit's start in that region (else the stream's end) and page p + 1 from after the last
 //      other unit's end in it (else the stream's start) to its end mark; over more pages, `across`;
-//   3. a unit with an end mark alone (a title: TeX sets no start in vertical mode): from the point before it on its page;
+//   3. a unit with an end mark alone (a title: TeX sets no start in vertical mode): from the point before it on its page, its
+//      glyphs alone (a rule above a title is no title's);
 //   4. a placeholder (`p<id>.<j>a`/`b`, a footnote call `n<id>.<j>a`/`b`): stream.mjs ownedOf's entry where the marking is
 //      given (`follows`), else the pair, or an opening alone to the next point in its region;
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
-//      placeholders' and names' ranges passed over;
+//      placeholders' and names' ranges passed over; none for a table cell;
 //   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`;
 //   7. images and forms are never a unit's here (a form whose ink is all one group's is wrapped whole by wrap.mjs).
 // A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first text's over a later.
+// A placeholder whose ink cannot be told apart (its range lost) makes its unit the original's (`marks`), as do marks that the
+// units do not name; the work is bounded (OWN_WORK).
 //
 // The spell check (§1.3) is what makes "a unit that cannot be delimited shows the original" exact: a unit's `u` glyphs must
 // spell its source text, letters and digits alone (NFKD, marks and case dropped: TeX's accents, ligatures, hyphenation and
@@ -30,9 +33,11 @@
 // An original module (no port statement).
 import { plainSource } from '../translate/mt.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
-import { ownedOf, regionsOf } from './stream.mjs'
+import { OWNED, ownedOf, regionsOf } from './stream.mjs'
 
 export { UNHIDDEN }
+/** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
+export const OWN_WORK = 20_000_000
 /** the unit ids a record lists the spell check's refusals of, at most */
 export const SPELL_LIST_MAX = 64
 
@@ -67,6 +72,8 @@ export const isLabelForm = s => { const t = labelText(s); return t === '' || LAB
  */
 export function ownOf(pages, { units = null, follows = null } = {}) {
   const P = pages.length
+  // (the glyphs and boxes visited: real ranges never overlap and cost the paper's ink once; past OWN_WORK a unit is not owned)
+  let work = 0
   const regions = pages.map(pg => regionsOf({ glyphs: { n: pg.glyphs.length }, boxes: pg.boxes, points: pg.points }))
   const gOwn = pages.map(pg => new Array(pg.glyphs.length).fill(null)), bOwn = pages.map(pg => new Array(pg.boxes.length / 4).fill(null))
   // every point by its name: [page, index]; and each page's points in stream order
@@ -79,11 +86,13 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
   /** the glyphs and boxes of A's region r from point A to point B (pages between whole), each [page, index] */
   const take = (A, B, r, crossOk = true) => {
     const glyphs = [], boxes = []
+    work += B[0] - A[0] + 1
     for (let p = A[0]; p <= B[0]; p++) {
       if (p !== A[0] && p !== B[0] && !crossOk) continue
       const pg = pages[p - 1], R = regions[p - 1]
       const g0 = p === A[0] ? pt(A).glyph : 0, g1 = p === B[0] ? pt(B).glyph : pg.glyphs.length
       const b0 = p === A[0] ? pt(A).box : 0, b1 = p === B[0] ? pt(B).box : pg.boxes.length / 4
+      work += g1 - g0 + b1 - b0
       for (let g = g0; g < g1; g++) if (R.glyph[g] === r) glyphs.push([p, g])
       for (let b = b0; b < b1; b++) if (R.box[b] === r) boxes.push([p, b])
     }
@@ -119,6 +128,7 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
   const textOf = new Map()
   for (const id of [...ids].sort((a, b) => a - b)) {
     const u = unit(id)
+    if (work > OWN_WORK) { u.unhidden = 'marks'; continue }
     const S = [`${id}s`, `t${id}s`, `h${id}s`].flatMap(n => where.get(n) ?? []), E = [`${id}e`, `t${id}e`, `h${id}e`].flatMap(n => where.get(n) ?? [])
     if (S.length > 1 || E.length > 1) { u.unhidden = 'marks'; continue }
     const s = S[0] ?? null, e = E[0] ?? null
@@ -140,9 +150,11 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
         list = { glyphs: [...a.glyphs, ...b.glyphs], boxes: [...a.boxes, ...b.boxes] }
       } else { u.unhidden = 'across'; continue }
     } else {
-      // MR 3: from the point before the end mark on its page (or the page's start)
+      // MR 3: from the point before the end mark on its page (or the page's start); its glyphs alone, no rule: what stands
+      // above a title (a class's rule over it) is no title's, and the spell check reads no rule
       const prev = e[1] > 0 ? [e[0], e[1] - 1] : null
       list = prev ? take(prev, e, at(e)) : takeFromStart(e, at(e))
+      list = { glyphs: list.glyphs, boxes: [] }
     }
     textOf.set(id, { s, e })
     claim(list, `u${id}`, 'u')
@@ -162,7 +174,9 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
 
   // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
   for (const [id, { s }] of textOf) {
-    if (!s) continue
+    // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
+    // unmarked cell's)
+    if (!s || units?.[id]?.kind === 'cell' || pt(s).name.startsWith('t')) continue
     const [p, q] = s, pg = pages[p - 1], S = pt(s), r = at(s), R = regions[p - 1]
     if (S.glyph >= pg.glyphs.length) continue
     const F = pg.glyphs[S.glyph]
@@ -190,7 +204,8 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     if (!m) continue
     const id = Number(m[2])
     let e = null
-    if (owned) { const x = owned.get(name); if (x && x.how < 6) e = { glyphs: x.glyphs, boxes: x.boxes } }
+    let lost = false
+    if (owned) { const x = owned.get(name); if (x && x.how < OWNED) e = { glyphs: x.glyphs, boxes: x.boxes }; else if (x && x.how > OWNED) lost = true }
     else if (list.length === 1) {
       const close = where.get(`${m[1]}${m[2]}.${m[3]}b`) ?? []
       const A = list[0], r = at(A)
@@ -205,9 +220,12 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
         }
         if (B) e = take(A, B, r)
       }
+      if (!e) lost = true
     }
     if (e) claim(e, `u${id}.p`, 'p')
-    else if (unitOf.has(id) && !unitOf.get(id).unhidden && textOf.has(id)) unit(id).placeholderLost = true
+    // a placeholder whose ink cannot be told apart is in the text's range: hidden with it, it could not be kept in place, and the
+    // spell check reads no symbol (=, ×, †): its unit is the original's
+    else if (lost && unitOf.has(id) && !unitOf.get(id).unhidden && textOf.has(id)) unit(id).unhidden = 'marks'
   }
 
   // ---- the names (MR 6)
@@ -239,6 +257,8 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
   let labelKept = 0
   for (const [id, u] of unitOf) {
     if (u.unhidden) continue
+    // (a unit the marks name and the units do not: no source to spell it against, so the original's)
+    if (units && !units[id]) { u.unhidden = 'marks'; continue }
     const src = units ? sourceOf(units[id]) : null
     if (src !== null && spellOf(text.get(id)?.join('') ?? '') !== spellOf(src)) { u.unhidden = 'spell'; spell.push(id); continue }
     const lead = label.get(id)

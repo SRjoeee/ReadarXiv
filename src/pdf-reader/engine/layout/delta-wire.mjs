@@ -43,7 +43,8 @@ export const UNHIDDEN_MAX = 8000
 
 /**
  * Why a wrap's head fields (`stats` WRAP_STATS', `unhidden` [[unit id, UNHIDDEN code], …] by rising id, `labelKept` rising ids,
- * no id in both) do not read, null where they do: the lists within UNHIDDEN_MAX, the counts the lists'
+ * no id in both) do not read, null where they do: the lists within UNHIDDEN_MAX, `stats.unhidden` counting every unit (the
+ * lists hold those with a group in the document alone, so at least as many by each code), `stats.labelKept` the list's count
  */
 export function wrapWhy(stats, unhidden, labelKept) {
   const isCount = v => Number.isSafeInteger(v) && v >= 0
@@ -62,7 +63,7 @@ export function wrapWhy(stats, unhidden, labelKept) {
     ids.add(r[0])
     counts[r[1]]++
   }
-  if (UNHIDDEN.some(k => counts[k] !== u[k])) return 'stats.unhidden: not the counts of `unhidden`'
+  if (UNHIDDEN.some(k => counts[k] > u[k])) return 'stats.unhidden: fewer than `unhidden` lists'
   if (!Array.isArray(labelKept) || labelKept.length > UNHIDDEN_MAX) return `labelKept: not an array of at most ${UNHIDDEN_MAX}`
   last = -1
   for (let i = 0; i < labelKept.length; i++) {

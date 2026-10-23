@@ -20,7 +20,7 @@ import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
-import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, wrapWhy } from '../layout/delta-wire.mjs'
+import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, replacedWhy, wrapWhy } from '../layout/delta-wire.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
@@ -314,7 +314,10 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // our pages wrapped by optional content (layout/wrap.mjs wrapFinal, in the maker child: `ours.wrap` its stats, unhidden and
   // labelKept, `ours` the wrapped bytes' document, length, digest and startxref): written into the head's base of either kind
   const wrap = ours?.wrap ?? null
-  if (wrap !== null) { const why = wrapWhy(wrap.stats, wrap.unhidden, wrap.labelKept); if (why !== null) throw new TypeError(`ours.wrap: ${why}`) }
+  if (wrap !== null) {
+    const why = wrapWhy(wrap.stats, wrap.unhidden, wrap.labelKept) ?? (wrap.pages === undefined || (Array.isArray(wrap.pages) && wrap.pages.length === 0) || replacedWhy(wrap.pages, Number.MAX_SAFE_INTEGER) === null ? null : 'pages: not page ranges')
+    if (why !== null) throw new TypeError(`ours.wrap: ${why}`)
+  }
   if (!(marks && !('marks' in marks))) {
     const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
     const held = oursDoc ? await deltaOfOurs(ours.delta, { orig: origRef, ours, M: oursDoc.numPages, N, tree, doc }) : null
@@ -322,6 +325,11 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
     if ('refused' in checked) { marks = { refused: checked.refused, why: checked.why }; marked = null }
     else {
       ({ text: baseText, lineCheck, head: oursHead, doc: baseDoc } = checked)
+      // (a delta must write again every page our wrap wrapped: a unit's group on a page it leaves arXiv's could not be hidden there)
+      if (held?.delta && wrap?.pages) {
+        const rep = new Set(pagesOf(held.delta.replaced)), left = pagesOf(wrap.pages).find(p => !rep.has(p))
+        if (left !== undefined) { held.why = 'delta-shape'; held.reason = whyText(`page ${left} is wrapped and the delta does not replace it`); held.delta = null }
+      }
       if (held?.delta && held.delta.replaced.at(-1)[1] <= oursHead.check.pages[0]) {
         const d = held.delta
         oursHead = { source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: N, tree: oursHead.tree, check: oursHead.check, replaced: d.replaced, stats: { ...d.stats, ...(wrap ? wrap.stats : {}) }, ...(wrap ? { unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}) }

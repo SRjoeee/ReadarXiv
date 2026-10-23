@@ -16,31 +16,40 @@
 // construction operator to its painting; a form XObject whose ink is all one group's has its `Do` wrapped.
 //
 // A page is refused, its streams left as they are and its units the original's (`page`), where it does not align with PDF.js's
-// reading, passes the walk's bounds, holds a form partly owned, an owned run in a clipping text mode (Tr ≥ 4: hiding the only
+// reading, passes the walk's bounds or the wrap's (WRAP_DECODED_PAGE, WRAP_HELD_PAGE: every read of the page, the proof's too,
+// under one budget), fails its proof, its own /Properties already name a group of ours (the page's own entries are kept, never
+// dropped), holds a form partly owned, an owned run in a clipping text mode (Tr ≥ 4: hiding the only
 // clipping run lifts the clip, E5), or a split in a vertical font or a Type 3 font without widths. A page past GROUPS_PAGE
 // groups or SEQUENCES_PAGE sequences has its placeholders' and labels' groups merged into the text's (a unit with a placeholder
 // there `bounds`), and is refused if still past; past GROUPS_DOC groups in the document, the later pages are refused.
 //
-// The proof (§2.5, (a)–(d)): the section exact over our bytes (delta-wire.mjs deltaSection: every entry at its object, /Prev our
-// startxref); the wrapped document read again by the object layer (xref.mjs), its catalog, pages and resources ours but for
-// /OCProperties, /Contents and /Properties, every group listed and ON, every page's names resolving to its OCGs; and each new
-// stream lexed again: every BDC of ours balanced by its EMC at its depth and text state, and its operators, with ours taken
-// out and the split shows joined, our page's.
+// The proof (§2.5, (a)–(d)). Of each page before it is written (a failure refuses the page, never the paper): its new stream
+// lexed again, every BDC of ours balanced by its EMC at its depth and text state, its operators, with ours taken out and the
+// split shows joined, our page's, and the deflated bytes written inflated back to it. Of the paper: the section exact over our
+// bytes (delta-wire.mjs deltaSection: every entry at its object, /Prev our startxref) and the wrapped document read again by the
+// object layer (xref.mjs), its catalog, pages and resources ours but for /OCProperties, /Contents and /Properties, each page's
+// own /Properties kept and ours beside them, every group listed and ON.
 //
 // An original module (no port statement). It imports the remover's lexer and page walk (layout/remove.mjs), the section writer
 // and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given.
 import { isMemoryError } from '../pipeline/memory.mjs'
-import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.mjs'
+import { DELTA_OBJECTS_MAX, deltaSection, rangesOf, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
 import { followsOf } from './marks.mjs'
 import { ownOf, UNHIDDEN } from './own.mjs'
-import { alignOf, lex, openRemover } from './remove.mjs'
+import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
 import { appendSection } from './section.mjs'
 import { startxrefOf } from './tail.mjs'
 import { openObjects } from './xref.mjs'
 
 /** the groups and the marked-content sequences of ours a page may hold, and the groups a document may (E1, E3) */
 export const GROUPS_PAGE = 512, SEQUENCES_PAGE = 2000, GROUPS_DOC = 8000
+/** what the wrap of one page may read and hold, every read of it (the wrap, the proof's two) under the same bounds: its content
+ *  streams' decoded bytes, and its operators by their heap (remove.mjs COST, every operator counted, not the walk's alone).
+ *  Past either the page is not wrapped (its units the original's), never the paper and never the process: a plot of two
+ *  million path operators (30 MB decoded) holds 320 MB of them. The remover's own walk keeps its HELD_MAX and BYTES_MAX */
+export const WRAP_DECODED_PAGE = 32 * 2 ** 20, WRAP_HELD_PAGE = 48 * 2 ** 20
+const BOUND_WHY = 'past the bounds a page\'s wrap may read'
 /** why the wrap of a whole paper is refused (its base then arXiv's PDF, `wrap-<code>`) */
 export const WRAP_WHYS = Object.freeze(['wrap-parse', 'wrap-proof', 'wrap-bound'])
 /** an optional-content group's name as a viewer lists it, of a group's name */
@@ -49,6 +58,7 @@ export const ocgName = g => `axt:${g}`
 export const propName = g => `axt${g}`
 
 const enc = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255; return b }
+const equalBytes = (a, b) => { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true }
 const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
 const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'))
 const hex = b => { let s = '<'; for (let i = 0; i < b.length; i++) s += HEX[b[i]]; return `${s}>` }
@@ -118,23 +128,37 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate = null, g
         else if (made.ok) made.merged = true
       }
       if (made.ok && [...made.groups].filter(g => !docGroups.has(g)).length + docGroups.size > groupsDoc) { docFull = true; made = { ok: false, why: `past ${groupsDoc} groups in the document` } }
+      // the page's own /Properties kept whole, ours beside them under names of our own; a page that already names one of ours
+      // is not wrapped (B3: never an entry of the page's dropped)
+      const node = made.ok ? made.walk.node : null, res = node ? node.Resources() : null
+      const own = res instanceof PDFDict ? R.look(res.get(PDFName.of('Properties'))) : undefined
+      if (made.ok && own instanceof PDFDict && own.entries().some(([k]) => made.groups.has(k.decodeText?.()?.replace(/^axt/, '') ?? '') && /^\/axt/.test(k.toString()))) made = { ok: false, why: 'its /Properties already name a group of ours' }
+      // (b), (c): the page's stream proved before it is written, and the bytes written read back (deflate's output inflated)
+      let data = null
+      if (made.ok) {
+        const why = provePage(R, p, made)
+        if (why) made = { ok: false, why: `its proof: ${why}` }
+        else {
+          data = deflate(made.stream)
+          let back = null
+          try { back = inflate ? inflate(data, made.stream.length) : null } catch (e) { if (isMemoryError(e)) throw e }
+          if (!back || !equalBytes(back, made.stream)) made = { ok: false, why: inflate ? 'its deflated stream does not inflate to the stream proved' : 'no inflate to read its deflated stream back' }
+        }
+      }
+      R.release()
       if (!made.ok) { out.set(p, { ok: false, why: made.why }); continue }
       for (const g of [...made.groups].sort()) if (!docGroups.has(g)) docGroups.set(g, next++)
       // the page's stream, its resources with our /Properties, its dict again under its number
-      const data = deflate(made.stream)
       const sref = next++
       objects.push([sref, 0, concat([enc(`${sref} 0 obj\n<< /Filter /FlateDecode /Length ${data.length} >>\nstream\n`), data, enc('\nendstream\nendobj\n')])])
-      const node = made.walk.node, pageRef = R.doc.getPages()[p - 1].ref
-      const res = node.Resources()
+      const pageRef = R.doc.getPages()[p - 1].ref
       const resEntries = res instanceof PDFDict ? res.entries().filter(([k]) => k.toString() !== '/Properties') : []
-      const own = res instanceof PDFDict ? R.look(res.get(PDFName.of('Properties'))) : undefined
-      const props = own instanceof PDFDict ? own.entries().filter(([k]) => !made.groups.has(k.toString().slice(1).replace(/^axt/, ''))).map(([k, v]) => ` ${k.toString()} ${lit(v)}`) : []
+      const props = own instanceof PDFDict ? own.entries().map(([k, v]) => ` ${k.toString()} ${lit(v)}`) : []
       for (const g of [...made.groups].sort()) props.push(` /${propName(g)} ${docGroups.get(g)} 0 R`)
       const resText = `<<${resEntries.map(([k, v]) => ` ${k.toString()} ${lit(v)}`).join('')} /Properties <<${props.join('')} >> >>`
       const ents = node.entries().filter(([k]) => k.toString() !== '/Contents' && k.toString() !== '/Resources').map(([k, v]) => ` ${k.toString()} ${lit(v)}`)
       objects.push([pageRef.objectNumber, pageRef.generationNumber, enc(`${pageRef.objectNumber} ${pageRef.generationNumber} obj\n<<${ents.join('')} /Resources ${resText} /Contents ${sref} 0 R >>\nendobj\n`)])
-      out.set(p, { ok: true, groups: made.groups.size, sequences: made.sequences, split: made.split, merged: !!made.merged, stream: made.stream, names: made.groups })
-      R.release()
+      out.set(p, { ok: true, groups: made.groups.size, sequences: made.sequences, split: made.split, merged: !!made.merged, names: made.groups })
     }
     // the groups, and the catalog again with /OCProperties: ours appended to a foreign one's and listed ON
     const refs = []
@@ -165,9 +189,8 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate = null, g
     const kind = /^\s*xref/.test(td.decode(finalBytes.subarray(prev, prev + 16))) ? 'table' : 'stream'
     const section = appendSection({ end: finalBytes.length, objects, kind, prev, size: next, trailer: { root: T.Root.toString(), info: T.Info?.toString(), id: T.ID?.toString() } })
     const bytes = concat([finalBytes, section.bytes])
-    const proof = proveWrap(finalBytes, section.bytes, { R, out, PL, groups: docGroups })
+    const proof = proveWrap(finalBytes, section.bytes, { out, PL, groups: docGroups })
     if (proof) return { refused: 'wrap-proof', why: proof }
-    for (const x of out.values()) delete x.stream
     return { bytes, xref: section.xref, sha256: await sha256Of(bytes), pages: out, groups: docGroups, stats }
   } catch (e) {
     if (isMemoryError(e)) throw e
@@ -182,11 +205,34 @@ async function sha256Of(bytes) {
   return s
 }
 
+/** a page's read budget: its decoded bytes and its operators' heap so far (WRAP_DECODED_PAGE, WRAP_HELD_PAGE) */
+const pageBudget = () => ({ bytes: 0, held: 0 })
+/** a content stream's bytes and every operator of it, within the page's budget: { bytes, ops } or { why } */
+function readPiece(R, piece, budget) {
+  try {
+    const bytes = piece.st ? R.decode(piece.st, WRAP_DECODED_PAGE - budget.bytes) : new Uint8Array(0)
+    budget.bytes += bytes.length
+    if (budget.bytes > WRAP_DECODED_PAGE) return { why: BOUND_WHY }
+    const ops = lex(bytes, WRAP_HELD_PAGE - budget.held)
+    budget.held += ops.bytes
+    return { bytes, ops }
+  } catch (e) {
+    if (e instanceof DecodeLimit || e instanceof LexLimit) return { why: BOUND_WHY }
+    throw e
+  }
+}
+/** our stream lexed within the budget, or null past it */
+function lexWithin(bytes, budget) {
+  if ((budget.bytes += bytes.length) > WRAP_DECODED_PAGE) return null
+  try { const ops = lex(bytes, WRAP_HELD_PAGE - budget.held); budget.held += ops.bytes; return ops } catch (e) { if (e instanceof LexLimit) return null; throw e }
+}
+
 /**
  * One page wrapped (or why not): its walk aligned with PDF.js's facts, each event's group, the page's own operators lexed
  * whole and the runs written. `merge` folds the placeholders' and labels' groups into the text's (the bounds' ladder)
  */
 function wrapPage(R, p, plan, merge) {
+  const budget = pageBudget()
   const al = R.alignPage(p - 1, plan.facts)
   if (!al.ok) return { ok: false, why: al.why.slice(0, 3).join('; ') }
   const fold = g => (g === null || g === undefined || !merge ? g : g.replace(/\.[pl]$/, ''))
@@ -221,8 +267,9 @@ function wrapPage(R, p, plan, merge) {
   let sequences = 0, split = 0
   const pieces = []
   for (let pi = 0; pi < pc.pieces.length; pi++) {
-    const bytes = pc.pieces[pi].st ? R.decode(pc.pieces[pi].st) : new Uint8Array(0)
-    const ops = lex(bytes)
+    const read = readPiece(R, pc.pieces[pi], budget)
+    if (read.why) return { ok: false, why: read.why }
+    const { bytes, ops } = read
     const byEnd = new Map(ops.map((o, i) => [o.e, i]))
     const role = new Array(ops.length).fill(null) // { g, s, e, text? } for an owned operator (or a split's text)
     for (const [e, gs] of groupsOf) {
@@ -321,48 +368,62 @@ function applyInserts(bytes, list) {
  * a TJ; (c) its operators, ours taken out and each split show's chunks joined, the unwrapped page's: the same operators and
  * operands, the shows' codes and numbers (adjacent numbers summed, zeros dropped) in order
  */
-function proveWrap(finalBytes, sectionBytes, { R, out, PL, groups }) {
+function proveWrap(finalBytes, sectionBytes, { out, PL, groups }) {
   const sect = deltaSection(sectionBytes, { bytes: finalBytes.length, xref: startxrefOf(finalBytes) })
   if (sect.why) return `the section: ${sect.why}`
-  const graph = graphWhy(finalBytes, concat([finalBytes, sectionBytes]), { PL, out, groups })
-  if (graph) return graph
-  for (const [p, x] of out) {
-    if (!x.ok) continue
-    const mine = lex(x.stream)
-    // (b)
-    const stack = []
-    let q = 0, bt = false
-    const flat = []
-    for (const o of mine) {
-      if (o.op === 'q') q++
-      else if (o.op === 'Q') q--
-      else if (o.op === 'BT') bt = true
-      else if (o.op === 'ET') bt = false
-      if (o.op === 'BDC' && o.args[0]?.v === 'OC' && /^axt/.test(o.args[1]?.v ?? '')) {
-        const g = o.args[1].v.slice(3)
-        if (!x.names.has(g)) return `page ${p}: a group not in its /Properties (${g})`
-        stack.push({ ours: true, q, bt })
-        continue
-      }
-      if (o.op === 'BDC' || o.op === 'BMC') { stack.push({ ours: false, q, bt }); flat.push(o); continue }
-      if (o.op === 'EMC') {
-        const top = stack.pop()
-        if (!top) return `page ${p}: an EMC with no BDC`
-        if (top.ours && (top.q !== q || top.bt !== bt)) return `page ${p}: a group closed at another depth or text state`
-        if (!top.ours) flat.push(o)
-        continue
-      }
-      flat.push(o)
+  return graphWhy(finalBytes, concat([finalBytes, sectionBytes]), { PL, out, groups })
+}
+
+/**
+ * (b), (c) of one page, on the stream about to be written, within the page's bounds (`why`, or null): every BDC of ours named by
+ * the page's groups and closed by an EMC at the same q depth and text state (the page's own marked content need not balance:
+ * our runs close at every BDC, BMC and EMC of its, so they lie in none), none left open; its operators, ours taken out and each
+ * split show's chunks joined, the unwrapped page's
+ */
+function provePage(R, p, made) {
+  const budget = pageBudget()
+  const mine = lexWithin(made.stream, budget)
+  if (!mine) return BOUND_WHY
+  const stack = []
+  let q = 0, bt = false, open = 0
+  const flat = []
+  for (const o of mine) {
+    if (o.op === 'q') q++
+    else if (o.op === 'Q') q--
+    else if (o.op === 'BT') bt = true
+    else if (o.op === 'ET') bt = false
+    if (o.op === 'BDC' && o.args[0]?.v === 'OC' && /^axt/.test(o.args[1]?.v ?? '')) {
+      const g = o.args[1].v.slice(3)
+      if (!made.groups.has(g)) return `a group not in its /Properties (${g})`
+      if (stack.at(-1)?.ours) return 'a group of ours inside another'
+      stack.push({ ours: true, q, bt })
+      open++
+      continue
     }
-    if (stack.length) return `page ${p}: a group left open`
-    // (c) the page's own operators, unwrapped
-    const walk = R.walkPage(p - 1)
-    const theirs = walk.pc.pieces.flatMap(pc => (pc.st ? lex(R.decode(pc.st)) : []))
-    const why = sameOps(theirs, flat)
-    R.release()
-    if (why) return `page ${p}: ${why}`
+    if (o.op === 'BDC' || o.op === 'BMC') { stack.push({ ours: false, q, bt }); flat.push(o); continue }
+    if (o.op === 'EMC') {
+      if (stack.at(-1)?.ours) {
+        const top = stack.pop()
+        open--
+        if (top.q !== q || top.bt !== bt) return 'a group closed at another depth or text state'
+        continue
+      }
+      stack.pop()
+      flat.push(o)
+      continue
+    }
+    if (open && (o.op === 'q' || o.op === 'Q' || o.op === 'BT' || o.op === 'ET' || o.op === 'BI')) return `a group of ours over ${o.op}`
+    flat.push(o)
   }
-  return null
+  if (open) return 'a group left open'
+  const walk = R.walkPage(p - 1)
+  const theirs = []
+  for (const piece of walk.pc.pieces) {
+    const read = readPiece(R, piece, budget)
+    if (read.why) return read.why
+    theirs.push(...read.ops)
+  }
+  return sameOps(theirs, flat)
 }
 
 /**
@@ -396,7 +457,12 @@ function graphWhy(finalBytes, bytes, { PL, out, groups }) {
     if (!sameBut(b.node, a.node, ['/Contents', '/Resources'])) return `page ${p}'s dict is not ours but for its contents and resources`
     const ra = look(F, a.inherited.Resources), rb = look(X, b.node.get(PDFName.of('Resources')))
     if (!sameBut(rb, ra, ['/Properties'])) return `page ${p}'s resources are not ours but for /Properties`
-    const props = look(X, rb.get(PDFName.of('Properties')))
+    const props = look(X, rb.get(PDFName.of('Properties'))), theirs = look(F, ra?.get?.(PDFName.of('Properties')))
+    // (the page's own entries every one kept as it was, ours beside them and nothing else)
+    const mine = new Set([...x.names].map(g => `/${propName(g)}`))
+    const kept = theirs instanceof PDFDict ? theirs.entries() : []
+    if (!(props instanceof PDFDict) || props.entries().length !== kept.length + mine.size) return `page ${p}: its /Properties are not its own and ours`
+    for (const [k, v] of kept) if (mine.has(k.toString()) || text(props.get(k)) !== text(v)) return `page ${p}: its own /Properties entry ${k.toString()} is not kept`
     for (const g of x.names) {
       const r = props?.get?.(PDFName.of(propName(g))), o = look(X, r)
       if (!(r instanceof PDFRef) || !(o instanceof PDFDict) || o.get(PDFName.of('Type'))?.asString?.() !== '/OCG' || o.get(PDFName.of('Name'))?.decodeText?.() !== ocgName(g) || text(r) !== `${groups.get(g)} 0 R`) return `page ${p}: its /Properties do not name the group ${g}`
@@ -426,8 +492,13 @@ function sameOps(a, b) {
       // a split: its prefix's operators (T*, and " 's Tw and Tc) and then TJs whose elements join to the show's
       if (o.op === "'" || o.op === '"') {
         if (b[j]?.op === o.op && operand(b[j].args) === operand(o.args)) { j++; continue }
-        const want = o.op === "'" ? ['T*'] : ['Tw', 'Tc', 'T*']
-        for (const w of want) { if (b[j]?.op !== w) return `operator ${i}: a split show's ${w} missing`; j++ }
+        // (" sets the word and character spacing it is given before its T*: a split writes them as Tw and Tc, the same numbers)
+        const want = o.op === "'" ? [['T*', null]] : [['Tw', o.args[0]], ['Tc', o.args[1]], ['T*', null]]
+        for (const [w, v] of want) {
+          if (b[j]?.op !== w) return `operator ${i}: a split show's ${w} missing`
+          if (v !== null && !(typeof v === 'number' && typeof b[j].args[0] === 'number' && Math.abs(b[j].args[0] - v) < 5e-7)) return `operator ${i}: a split show's ${w} not its own`
+          j++
+        }
       } else if (b[j]?.op === o.op && operand(b[j].args) === operand(o.args)) { j++; continue }
       const target = elementsOf(o)
       const got = []
@@ -458,8 +529,10 @@ export { UNHIDDEN_MAX }
  * its operator codes; `PL`, `deflate`, `inflate` wrapOf's. Every page our compile marks is wrapped; one PDF.js reads past its
  * bounds (capped, timed out, its boxes merged, rotated) is left unwrapped, its units the original's. Returns { bytes, xref,
  * sha256, stats, unhidden, labelKept } — `stats` { wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds }, split,
- * groups, labelKept } (integers, the head's), `unhidden` [[unit id, code of UNHIDDEN], …] ascending, `labelKept` the unit ids
- * whose label is left the original's ink, `own` own.mjs's stats (the record's), `owned` own.mjs's whole result where `keepOwned`
+ * groups, labelKept } (integers, the head's: every unit counted), `unhidden` [[unit id, code of UNHIDDEN], …] ascending and
+ * `labelKept` the unit ids whose label is left the original's ink, each of the units with a group in the document alone (a
+ * unit with none is the original's: no reader can hide it), `pages` the pages wrapped as ranges (the host's delta must replace
+ * every one: layerOfPaper refuses a delta that does not), `own` own.mjs's stats (the record's), `owned` own.mjs's whole result where `keepOwned`
  * (the lab's); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
@@ -467,6 +540,12 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // (the paper's SOURCE units: a translation's (a record's units, its text pieces `tr`) holds no text after a placeholder to
   // find its ink's end by, nor the source text the spell check reads)
   if (units !== null && (!Array.isArray(units) || units.some(u => u?.pieces?.some?.(p => p?.tr)))) throw new TypeError('units: the paper\'s source units (live.mjs openPaper\'s, layerOfPaper\'s `source.units`), not a translation\'s')
+  // (each unit one the spell check can read: a source text or pieces; a hole, or an entry with neither, is no paper's units.
+  // null alone asks for no spell check, the lab's pair whose source is not read)
+  if (units !== null) for (let i = 0; i < units.length; i++) {
+    const u = units[i]
+    if (!u || typeof u !== 'object' || !(typeof u.src === 'string' || Array.isArray(u.pieces))) throw new TypeError(`units[${i}]: no source text and no pieces`)
+  }
   let task = null
   const pages = [], facts = []
   try {
@@ -498,18 +577,23 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
     for (const p of u.pages) {
       const x = made.pages.get(p)
       if (!x?.ok) { u.unhidden = 'page'; break }
-      if (x.merged && [...u.groups].some(g => g.endsWith('.p'))) { u.unhidden = 'bounds'; break }
+      // (a merged page folds a unit's placeholders and its label into its text: neither can then be kept in place)
+      if (x.merged && [...u.groups].some(g => g.endsWith('.p') || g.endsWith('.l'))) { u.unhidden = 'bounds'; break }
     }
   }
   const counts = Object.fromEntries(UNHIDDEN.map(k => [k, 0]))
   const unhidden = [], labelKept = []
+  // (listed: the units with a group in the document, the only ones a reader could hide; one with none is the original's by
+  // construction, counted alone. So the lists hold at most GROUPS_DOC, and a long paper's cut at it costs no base)
+  const written = id => [...own.units.get(id).groups].some(g => made.groups.has(g))
   for (const [id, u] of [...own.units].sort((a, b) => a[0] - b[0])) {
-    if (u.unhidden) { counts[u.unhidden]++; unhidden.push([id, u.unhidden]) }
-    else if (u.labelKept) labelKept.push(id)
+    if (u.unhidden) { counts[u.unhidden]++; if (written(id)) unhidden.push([id, u.unhidden]) }
+    else if (u.labelKept && written(id)) labelKept.push(id)
   }
   if (unhidden.length > UNHIDDEN_MAX || labelKept.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
   const stats = { ...made.stats, unhidden: counts, labelKept: labelKept.length }
-  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, own: { ...own.stats, unhidden: counts }, ...(keepOwned ? { owned: own } : {}) }
+  const wrappedPages = rangesOf([...made.pages].filter(([, x]) => x.ok).map(([p]) => p))
+  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ...(keepOwned ? { owned: own } : {}) }
 }
 
 export { alignOf }

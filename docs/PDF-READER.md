@@ -1902,7 +1902,11 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   items, a reference the form of what it names (direct or indirect alike); the back links `/Parent` `/P` `/Prev` `/Next`
   `/First` `/Last` cut by the dict's own context, never by the value being a reference: `/Parent` of a page-tree node, `/P`
   and `/Parent` of an annotation, `/P` of a structure element, the outline's chain; never in an optional-content membership
-  (its `/P` policy, direct or by reference, is data) or a dict of no such context; a cycle leaves the object unmatched (copied), never an error. Forms are interned (exact equality); stream
+  (its `/P` policy, direct or by reference, is data) or a dict of no such context; a cycle leaves the object unmatched (copied), never an error.
+  An optional-content group or membership (`/OCG`, `/OCMD`) is matched by its identity alone, never by its content (two
+  layers of equal dicts, one ON and one OFF, are two layers): by reference its form is its document's and object's, so it
+  and everything that names it are copied; the proof checks that ours and the composed document's are one to one over
+  `/OCProperties`' `/OCGs` and every replaced page's `/Properties`. Forms are interned (exact equality); stream
   bytes are bucketed by a hash of secret random seeds and compared whole, and the whole build spends at most
   `DELTA_WORK_MAX` (2^31 bytes hashed or compared and objects read: the 46 MB pair about 150 million), so no input makes a
   bucket or the build long. Its `/Size` leaves the remover's tails `DELTA_TAIL_ROOM` (2^20) numbers below `OBJECT_MAX`.
@@ -1975,7 +1979,11 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`. A glyph is one group's: a placeholder's or a name's over the text's, the
   text's over a label's, the first text's over a later. Images and forms are no unit's (a form whose ink is all one group's
-  is wrapped whole). Marks absent, twice or out of order: `marks`.
+  is wrapped whole). A title's range (an end mark alone) takes its glyphs and no rule (a class's rule above it is no title's).
+  A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's). Marks absent, twice or out of
+  order, a unit the paper's units lack, or a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
+  it could not be kept in place, and the spell check reads no symbol): `marks`. The ownership visits at most `OWN_WORK`
+  20 million glyphs and boxes (real ranges cost the ink once); past it a unit is `marks`.
 - **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
   its source text, letters and digits alone (NFKD, marks and case dropped, `ß` as `ss`: TeX's accents, ligatures, hyphenation
   and punctuation are no evidence), or it is `spell`, its groups still written. Its label must be a label's form (a number
@@ -1994,42 +2002,57 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   the chunk before it, codes kept): no re-anchoring. Content streams name properties, never OCG objects (the later export
   re-points names, §3.3 of the note).
 - **Page refusals** (the page left unwrapped, its units `page`): it does not align with PDF.js's reading (remove.mjs
-  `alignPage`), passes the walk's bounds, holds a form partly owned, an owned run in a clipping text mode (Tr 4 to 6: hiding
+  `alignPage`), passes the walk's bounds or the wrap's own (`WRAP_DECODED_PAGE` 32 MiB of its content streams decoded,
+  `WRAP_HELD_PAGE` 48 MiB of every operator's heap by remove.mjs COST: the wrap and both of the proof's reads under the same
+  budget, so that a plot of millions of path operators is a refused page and never the process), fails its proof (below),
+  its own `/Properties` already name a group of ours (the page's own entries are kept, never dropped), holds a form partly owned, an owned run in a clipping text mode (Tr 4 to 6: hiding
   the only clipping run lifts the clip; Tr 7 glyphs are never ink, so never owned), a split in a vertical font or a Type 3 font
   without widths, or PDF.js read it past its bounds. Past `GROUPS_PAGE` 512 groups or `SEQUENCES_PAGE` 2000 sequences the
   page's `.p` and `.l` groups are merged into the text's (a unit with a placeholder there `bounds`), and refused if still past;
   past `GROUPS_DOC` 8000 groups the later pages are refused.
-- **The proof** (in the box, every wrap): the section read back (`deltaSection`: each entry at its `n g obj`, `/Prev` our
-  startxref); each new stream lexed again: every BDC of ours named by its page's `/Properties` and closed at its depth and
-  state, none left open; its operators, ours taken out and each split show's chunks joined, the unwrapped page's (operators,
-  operands, codes and numbers in order). A failed wrap is the paper's: `wrapFinal` gives `{ refused: 'wrap-parse' |
+- **The proof** (in the box, every wrap). Of each page, before it is written (a page that fails is refused, never the
+  paper): its new stream lexed again within the page's bounds, every BDC of ours named by its groups, none inside another and
+  closed at its depth and state, none left open (the page's own marked content need not balance: our runs lie in none of it);
+  its operators, ours taken out and each split show's chunks joined, the unwrapped page's (operators, operands, codes and
+  numbers in order); and the deflated bytes written inflated back to that stream. Of the paper: the section read back
+  (`deltaSection`: each entry at its `n g obj`, `/Prev` our startxref) and the wrapped document read again by the object layer
+  (catalog, page dicts and resources ours but `/OCProperties`, `/Contents` and `/Properties`; each page's own `/Properties`
+  entries kept as they were and ours beside them; every group listed and ON). A failed wrap is the paper's: `wrapFinal` gives `{ refused: 'wrap-parse' |
   'wrap-proof' | 'wrap-bound', why }`, the host passes `ours: { refused: 'wrap', why }`, the head's base is arXiv's with `why:
   'wrap'` (a LAYOUT_REFUSED code).
 - **Both forms** are made of the wrapped bytes: the full base IS them (its head's `bytes`, `sha256`, `xref` theirs); the delta
   copies their streams verbatim and carries their catalog's `/OCProperties` alone (19.8). Every check that judges our compile
   reads the same pass; wrapping changes no glyph. The page pass numbers glyphs on the wrapped streams (one stream a page).
 - **The host's contract** (the maker child, before any document of its own is open): `wrapFinal(final, { PL, getDocument,
-  documentOptions, OPS, units, deflate, inflate })` → `{ bytes, xref, sha256, stats, unhidden, labelKept, own }`; then
-  `deltaOf(orig, bytes)` and `proveDelta`; then `layerOfPaper({ …, ours: { doc (of the wrapped bytes), bytes, sha256, xref,
-  delta, wrap: { stats, unhidden, labelKept } } })`; the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
-  bounds }, spell: [ids, at most 64], labelKept }`). `units` are the paper's SOURCE units (`pipeline/live.mjs openPaper`'s,
+  documentOptions, OPS, units, deflate, inflate })` → `{ bytes, xref, sha256, stats, unhidden, labelKept, pages, own }`
+  (`documentOptions` the box's: the lite worker, `maxImageSize: NO_IMAGE_PIXELS`, so that the ownership's read of every
+  page decodes no image: a stock read of the 46 MB pair peaks at 3 GB of native memory); then `deltaOf(orig, bytes)` with
+  every page replaced that the wrap wrapped (the default) and `proveDelta`; then `layerOfPaper({ …, ours: { doc (of the
+  wrapped bytes), bytes, sha256, xref, delta, wrap: { stats, unhidden, labelKept, pages } } })` (a delta that leaves a wrapped
+  page arXiv's is refused there, `delta-shape`: a unit's group on it could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
+  bounds }, spell: [ids, at most 64], labelKept }`). `units` are the paper's SOURCE units, an array each entry of which has a
+  source text or pieces (a hole or an entry with neither a TypeError; null asks for no spell check, the lab's alone) (`pipeline/live.mjs openPaper`'s,
   the page pass's `source.units`): a translation's (text pieces `tr`) holds neither the text after a placeholder its ink ends
   at nor the source the spell check reads, and is refused (TypeError).
 - **The head** (both kinds): `base.stats` gains `{ wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds },
-  split, groups, labelKept }` (a delta's own counts beside them); `base.unhidden` `[[unit id, code], …]` by rising id and
-  `base.labelKept` rising ids, none in both, at most `UNHIDDEN_MAX` 8000 each (past it `wrap-bound`); checked by
-  `delta-wire.mjs wrapWhy` on both sides. A unit is the reader's to hide iff the config holds `axt:u<id>` and it is in neither
+  split, groups, labelKept }` (a delta's own counts beside them; every unit counted); `base.unhidden` `[[unit id, code], …]`
+  by rising id and `base.labelKept` rising ids, none in both, of the units with a group in the document alone (a unit with
+  none is the original's by construction): so each holds at most `GROUPS_DOC`, `UNHIDDEN_MAX` 8000, and a long paper cut at
+  `GROUPS_DOC` keeps its base, its later pages unwrapped; checked by `delta-wire.mjs wrapWhy` on both sides (the counts at
+  least the lists'). A page merged for its bounds makes a unit with a placeholder or a label there `bounds`. A unit is the reader's to hide iff the config holds `axt:u<id>` and it is in neither
   list. A head without them is an unwrapped base. The cell rules the add-on manifest carried are the reader lane's.
 - **Measured** (2026-10-23, the gate pack's 7 papers in Chinese and 2602.23285v2, the sources' units): every page wrapped
   (290/290, 0 refused, the proof passing on all); `spell` 1 unit of 1,806 (2608.04322v1 u0: its journal header over-taken),
   `marks` 24 (the title block's authors and `\thanks` notes the marker does not mark: the engine lane's item), `across` 0,
-  labels kept 32; ownership equal to today's geometric ownership on 1,729 of 1,806 units (95.7 %: the rest the marks' own over
+  labels kept 9; ownership equal to today's geometric ownership on 1,732 of 1,806 units (95.9 %: the rest the marks' own over
   today's residue, a table's row header today calls a cell's label, a babel name, the unmarked authors); 54 shows split; 230 to
   981 groups a paper. The wrap 0.4 to 1.9 s a paper in Node with PDF.js's lite worker (the 147-page thesis 1.9 s), +165 MB
   at most beside what the maker holds (the 46 MB pair); the wrapped base 0.4 % to 23 % larger (the thesis 3.08 to 3.79 MB);
-  the deltas 2,500,441 bytes over 83,666,965 of originals (2.99 %, 2.48 % unwrapped: 1.08x to 1.64x each), the largest 0.87
-  MB (2307.16209v1), the delta proof passing on 8 of 8. The lab gate (`lab/pdf/spikes/ocg-gate.mjs`, its run in
+  the deltas 2,561,446 bytes over 83,666,965 of originals (3.06 %; 2,139,403 unwrapped, 2.56 %: 1.08x to 1.53x each; layers
+  matched by identity cost 1706.03762v7's figures, whose forms name arXiv's layers, 61 KB either way), the largest 0.87 MB
+  (2307.16209v1), the delta proof passing on 8 of 8. The lab gate (`lab/pdf/spikes/ocg-gate.mjs`, its run in
   `lab/pdf/records/ocg-gate.md`) in Chromium, GPU and CPU canvases, every page of the 8: all groups ON is our page, 0 px
   outside split glyphs and image edges, 0 px inside the split glyphs; text and labels OFF equal the remover's cut of the same
-  ownership on 247 pages, 0 px outside image edges and the image-edge pixels the two change equal (72 on GPU, 31 on CPU), but
-  2609.26457v1 p2 on CPU (27 px, Δ 7, a figure's text: Chromium's own, 0 px from fresh documents).
+  ownership on 247 pages, 0 px outside image edges, and the image-edge pixels the two change equal (72 on GPU, 31 on CPU).
+  Chromium differs from itself on two pages in earlier runs of one long-lived browser (2608.04322v1 p9 GPU, 2609.26457v1 p2
+  CPU: our unwrapped page against itself), 0 px from fresh documents.
