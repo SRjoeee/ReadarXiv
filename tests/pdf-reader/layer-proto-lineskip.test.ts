@@ -164,6 +164,13 @@ describe("a line opens by TeX's rule", () => {
     const even = [500, 488, 476, 464, 452], evenRects = even.map(y => [1, 0, y - 2, 100, y + 8])
     const evenInfo = new Map(evenRects.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: even[i]!, size: 10, top: even[i]! + 7, bottom: even[i]! - 2, exact: true, file: true, j: 10 + i, frame: 0 }]))
     expect(L2.blocks2(evenRects as never, [[0, 0, 612, 792]], null, evenInfo as never, null, null, [1, 0])[0]!.G).toBeUndefined()
+    // a block the text goes on from into a later block keeps the original's grid (a slot the closing keeps above
+    // the foot may be one a tall line of the translation's own is then opened out of, which fails the state: 2610.21880's unit 73)
+    const ys2 = [500, 488, 470, 434, 422], rects2 = ys2.map(y => [1, 0, y - 2, 100, y + 8])
+    const info2 = new Map(rects2.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: ys2[i]!, size: 10, top: ys2[i]! + (i === 2 ? 7.5 : 7), bottom: ys2[i]! - (i === 1 ? 9.5 : 2), exact: true, file: true, j: 10 + i, frame: 0 }]))
+    const two = L2.blocks2(rects2 as never, [[0, 0, 612, 792]], null, info2 as never, null, null, [1, 0])
+    expect(two.map(b => b.flow)).toEqual([0, 0])
+    expect(two[0]!.G).toBeUndefined()
     const wideInfo = new Map(rects.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: ys[i]!, size: 10, top: ys[i]! + 7, bottom: ys[i]! - 2, exact: true, file: true, j: 10 + i, frame: 0 }]))
     expect(L2.blocks2(rects as never, [[0, 0, 612, 792]], null, wideInfo as never, null, null, [1, 0])[0]!.G).toBeUndefined()
   })

@@ -2366,8 +2366,9 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     // that the pitch the other leadings are laid at is the original's, and only the leading-1 grid is the block's rhythm)
     const joined = hasGap(joinPitch) ? gridOf(joinPitch) : null
     const both = i => joinPitch(i) ?? tallPitch(i)
-    if (hasGap(both)) b.G = gridOf(both)
-    else if (joined) b.G = joined
+    // (the tall-line closing is applied below, to the unit's last block alone)
+    b.tallGrid = hasGap(both) && hasGap(tallPitch) ? gridOf(both) : null
+    if (joined) b.G = joined
     const G = joined ?? b.B
     const d = G.slice(1).map((y, i) => G[i] - y).filter(v => v > 0)
     b.pitch0 = d.length ? median(d) : null
@@ -2409,6 +2410,14 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
         && to.baseline - from.baseline <= (to.baseline - to.bottom) + (from.top - from.baseline) + lineskip[0] + 0.025
       a.through = !!tight && ia >= 0 && ib > ia && rects.slice(ia + 1, ib).every(r => r[2] >= last[2])
     }
+  }
+  // (the grid with a tall line's opening closed, for the unit's last block: where the text goes on in a later block, a slot above
+  // the foot that the closing keeps may be one a tall line of the translation's own is then opened out of, which fails the state
+  // (`over`) where the original's grid would have dropped the slot and let the line flow on: 2610.21880's unit 73 went from two
+  // lines and two to three at 0.85 of its size, its next block empty)
+  for (const [i, b] of blocks.entries()) {
+    if (b.tallGrid && i === blocks.length - 1) b.G = b.tallGrid
+    delete b.tallGrid
   }
   return blocks
 }

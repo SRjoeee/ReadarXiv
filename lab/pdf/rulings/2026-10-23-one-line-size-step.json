@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-23",
+  "by": "the maintainer",
+  "on": "a unit of one line keeps its own size under the page's size step for Chinese (pull request 441): it is not grown with the page's other body units",
+  "quote": "what matters is uniformity and naturalness within a block, and paragraph-level correspondence: each sentence lands at the right place in its paragraph, and paragraph boundaries fall where the original has them. Line-level shifts and per-line offsets are normal and are not a regression",
+  "english": "the maintainer's standard relayed by the coordinator on 2026-10-23: uniformity and naturalness within a block and paragraph-level correspondence (each sentence at the right place in its paragraph, paragraph boundaries where the original has them); line-level shifts and per-line offsets are normal and not a regression; a shift under one pitch counts as the same; the gate's 0-worse-than-base is a safety net",
+  "measures": [
+    "framesBlank1"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "zh: frames with a blank line, 21.7 % to 22.1 % at 8c4c7f1d; the gate names 2307.16209 pages 6, 8 and 22 worse on it. The gate's fixtures are not reproducible offline, so the units below are from the 53 papers of the release route's sweep, laid with the gate's own frame definitions",
+  "why": "the one-line guard is the cause of 14 of the 30 frames that cross the line in the sweep's laying (the fill rule is the cause of the other 16); 44 frames leave it (37 by the fill rule, 7 by the grid's last step), so the sweep's rate goes from 16.57 % to 16.44 %. Each of the 14 holds one drawn line in a frame of two original lines and used to grow with its page, by 0.05 to 0.1 in size; it now keeps the original's size, and the bottom of its one line stands 0.98 to 0.99 pitch above the original's last line before and 1.00 after: a shift of 0.01 to 0.02 pitch, which crosses the measure's threshold of 1 and moves no block. The guard exists because a one-line note under a table's rule (2610.21924 page 18) drew glyphs over the rule at the grown size, a collision the sweep counted as a violation. Examples: 2610.10069 unit 112, 2610.18513 units 184, 419 and 478"
+}
