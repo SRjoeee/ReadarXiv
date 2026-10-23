@@ -680,8 +680,9 @@ window.gate = {
     out.hidden = { groups: run.rows[p - 1]?.off?.size ?? 0, wrapped: S.wrap.wrapped }
     if (!pixel) return out
     const row = run.rows[p - 1]
-    // (the copy at v0's own resolution, drawn as a view draws it: render A, its crops and pastes)
-    await run.copyCanvas(p)
+    // (the copy at v0's own resolution, drawn as a view draws it: render A, its crops and pastes; an engine from before REMOVAL 8
+    // drew it on its row as it laid the page)
+    if (run.copyCanvas) await run.copyCanvas(p)
     // (the page's SVG made of its kept markup, run.mjs svgOf; an engine before it kept the element on its row)
     const svg = run.svgOf ? run.svgOf(p) : row.svg
     const W = row.left.width, H = row.left.height
