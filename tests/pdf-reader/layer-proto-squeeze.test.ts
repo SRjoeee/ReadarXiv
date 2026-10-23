@@ -26,9 +26,9 @@ const params = (to: string) => ({ ...resolveRules(BUILTIN_RULES, to).params, bor
 /** one block of n lines 12 pt apart from 500, `w` pt wide, at size 10 */
 const block = (n: number, w: number) => { const B = Array.from({ length: n }, (_, k) => 500 - 12 * k); return { page: 1, rects: B.map(b => [1, 0, b - 2, w, b + 8]), x0: 0, x1: w, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
 /** a CJK character or mark a full em wide (10 pt at size 10), as a CJK face sets it; anything else half an em */
-const CJK_WIDE = /[　-鿿가-힯＀-￯]/u
+const CJK_WIDE = /[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/u
 const measure = (s: string) => [...s].reduce((a, ch) => a + (CJK_WIDE.test(ch) ? 100 : 50), 0)
-const HAN = '汉', COMMA = '，', OPEN = '（'
+const HAN = '\u6c49', COMMA = '\uff0c', OPEN = '\uff08'
 const han = (n: number) => HAN.repeat(n)
 /** a formula piece, drawn as a crop `w` pt wide */
 const crop = (w: number) => ({ mode: 'crop', page: 1, crop: [0, 498, w, 506], baseline: 500 })
@@ -49,7 +49,7 @@ function lay(pieces: Piece[], to: string, w: number, crops: Record<number, numbe
 }
 const cropTokens = (tokens: unknown[]) => (tokens as { crop?: unknown; glue?: boolean }[]).filter(t => t.crop)
 
-describe('a line may break before an inline formula that follows a CJK character (xeCJK’s \\CJKecglue)', () => {
+describe('a line may break before an inline formula that follows a CJK character (xeCJK\u2019s \\CJKecglue)', () => {
   // eight characters, then a formula of 25 pt and a comma, then more text
   const unit = [text(han(8)), ph(), text(`${COMMA}${han(6)}`)]
   it('the crop is glued to no CJK character or plain CJK mark before it, in Chinese and Japanese', () => {
@@ -60,7 +60,7 @@ describe('a line may break before an inline formula that follows a CJK character
   })
   it('stays glued after a mark no line ends with, and in Korean and the alphabets', () => {
     expect(cropTokens(lay([text(`${han(3)}${OPEN}`), ph(), text(han(2))], 'zh', 200, { 1: 25 }).tokens).map(t => t.glue)).toEqual([true])
-    expect(cropTokens(lay([text('가나'), ph(), text(' 다')], 'ko', 200, { 1: 25 }).tokens).map(t => t.glue)).toEqual([true])
+    expect(cropTokens(lay([text('\uac00\ub098'), ph(), text(' \ub2e4')], 'ko', 200, { 1: 25 }).tokens).map(t => t.glue)).toEqual([true])
     for (const to of ['de', 'ru']) expect(cropTokens(lay([text('word'), ph(), text(' more')], to, 200, { 1: 25 }).tokens).map(t => t.glue), to).toEqual([true])
   })
   it("ends the line after the characters before the formula, where the glue had sent the last one down with it, its gaps spread", () => {

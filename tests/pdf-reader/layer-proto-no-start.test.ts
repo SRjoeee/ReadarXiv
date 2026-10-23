@@ -185,7 +185,8 @@ describe('a layout no barred start touches is the one it was', () => {
       const w = 110 + Math.floor(r() * 90)
       const { shown, layout } = lay(text, to, w, { lines: 60, measure })
       expect(opened(shown, to), `${n}: ${JSON.stringify(shown)}`).toEqual([])
-      ;(out[to] ??= []).push(JSON.stringify([to, w, layout.clipped, shown, layout.lines.map(l => Math.round((l as unknown as { used: number }).used * 1000))]))
+      out[to] = out[to] ?? []
+      out[to].push(JSON.stringify([to, w, layout.clipped, shown, layout.lines.map(l => Math.round((l as unknown as { used: number }).used * 1000))]))
     }
     const digests = Object.fromEntries(Object.entries(out).map(([to, v]) => [to, createHash('sha256').update(v.join('\n')).digest('hex').slice(0, 16)]))
     // (the Chinese and Japanese texts' since a CJK line squeezes to take a group it misses by a little, 2026-10-23,
