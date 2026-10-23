@@ -1,7 +1,7 @@
 // latex-front.mjs's types (JavaScript until the engine's port), for the reader's tests
 /** a table cell's place in its table's grid (tableGrid): its table, row, first column, the columns it spans, and whether its row is the header's */
 export interface CellPlace { table: number; row: number; col: number; span: number; head: boolean }
-export interface SourceUnit { kind: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; front?: boolean; stored?: boolean; bracketed?: boolean; pieces: unknown[]; cell?: CellPlace }
+export interface SourceUnit { kind: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; front?: boolean; held?: boolean; stored?: boolean; bracketed?: boolean; pieces: unknown[]; cell?: CellPlace }
 /** a table's body as its cells lay it out: each cell's stretch of the source, its row, first column and span, and whether its row is the header's */
 export declare function tableGrid(s: string, from: number, to: number): (Omit<CellPlace, 'table'> & { start: number; end: number })[]
 /** a source tree held in memory: path → bytes */
@@ -24,6 +24,8 @@ export type UnitMark = { start: string; end: string; before?: string; whole?: bo
  *  with the top-level unit it is written in (`outer`) and the length of what closes it there (`post`) */
 export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark; spans?: { file: string; unit: SourceUnit; from: number; to: number; post?: number; outer?: SourceUnit }[] | null; pastBegin?: boolean }): Map<string, Uint8Array>
 export declare function markUnits(units: SourceUnit[], translated?: Map<SourceUnit, unknown[]> | null): (unit: SourceUnit) => UnitMark
+/** the front matter's units' marks in the layout compile alone: an author block's, a front unit's (not a heading, not one a macro only stores), its text no other's */
+export declare function frontMarks(units: readonly SourceUnit[]): (unit: SourceUnit) => UnitMark
 /** a style's abstract heading written out, made to go by \\abstractname */
 export declare function localizeNames(text: string): string
 /** a translation's pieces with its own line breaks: room to break in long code and formulas, a heading's forced break

@@ -1268,7 +1268,8 @@ function walk(s, from, to, b, ctx) {
       if (arg?.group && macro.stores) {
         endText(); b.flush()
         const before = b.units.length, saved = b.kind; b.kind = 'para'; walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); b.kind = saved
-        for (const u of b.units.slice(before)) u.front = true
+        // (`held`: its text is the macro's to use, as text or not: elsarticle's \\biboptions{semicolon} holds natbib's options)
+        for (const u of b.units.slice(before)) { u.front = true; u.held = true }
         i = call.end; goOn(macro, call, i); continue
       }
       if (arg?.group) {
@@ -2164,6 +2165,33 @@ export const markUnits = (units, translated = null) => {
  * and neither does its leading or its line probe, which come with the mark
  */
 const inMath = u => u.pieces.some(p => p.t === 'ph' && (p.src === '_' || p.src === '^'))
+/** a unit's source as its pieces write it, its white space one space: what a class that compares two of its front matter's
+ *  texts compares */
+const sourceText = u => u.pieces.map(p => (p.t === 'text' ? p.src ?? p.s : p.t === 'nested' ? `${p.pre}\u0000${p.post}` : p.src ?? '')).join('').replace(/\s+/g, ' ').trim()
+/**
+ * Marks for the front matter's units in the layout compile alone (the marked original, our base page: layout/marks.mjs
+ * layoutMarking): the author block's names and places and the front matter's own units the role table knows (a \\thanks,
+ * elsarticle's \\cortext, a \\date, a class's command whose text it hands elsewhere too), each a unit's start and end mark as
+ * markUnits writes them, which the page's
+ * reading of each unit's own ink (its stream order between the two) needs as any unit's. markUnits leaves them out for the
+ * translation, which sets them again where the class copies them; in the layout compile what TeX sets is the paper's own,
+ * and a copy's marks set nothing where TeX writes (MARK_DEF's \\axtmark is \\protected: \\thanks's \\protected@xdef keeps it
+ * for the note it sets) or ships it as a running head (the gate, LAYOUT_TEX). Not a heading (its own marks), not one stored
+ * or read in math (markUnits'), and not one whose text another such unit's equals: a class compares them (revtex sets
+ * authors' equal affiliations, and their equal notes, once), and two marks of their own would make them two. Not one a macro
+ * of the paper's or its class's only stores (`held`: elsarticle's \\biboptions{semicolon}, read as prose, is natbib's options,
+ * and a mark there one natbib does not know: 2608.16117 lost a page). The \\date too: a class sets its front matter where it
+ * likes (amsart: the date in a note of the first page, the addresses at the paper's end), and an unmarked unit is searched
+ * between its marked neighbours, so the addresses' marks alone took 2610.21037's date out of its search
+ */
+export function frontMarks(units) {
+  const id = new Map(units.map((u, i) => [u, i]))
+  const front = units.filter(u => (u.kind === 'author' || (u.front && u.kind !== 'heading' && !u.held)) && !u.stored && !inMath(u))
+  const seen = new Map()
+  for (const u of front) { const t = sourceText(u); seen.set(t, (seen.get(t) ?? 0) + 1) }
+  const marked = new Set(front.filter(u => seen.get(sourceText(u)) === 1))
+  return u => (marked.has(u) ? { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` } : null)
+}
 /** A translated line of names or places goes into \\axtwide (FIT_DEF), all of it — its marks, a \\IEEEauthorrefmark
  *  after the last name — inside the braces that hold it: in a box that does not wrap (a table's c column, where
  *  article and IEEEtran set their author blocks) a line the translation made wider than the page is set as a paragraph
