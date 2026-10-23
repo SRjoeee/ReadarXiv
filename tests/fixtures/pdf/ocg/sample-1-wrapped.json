@@ -1,0 +1,21 @@
+{
+ "bytes": 283159,
+ "sha256": "51867b1706466f7f8c3f7ef5a539b6d529cc61b663318100d47aa087da69d4db",
+ "xref": 278654,
+ "stats": {
+  "wrapped": 4,
+  "refusedPages": 0,
+  "split": 0,
+  "groups": 206,
+  "unhidden": {
+   "marks": 0,
+   "across": 0,
+   "spell": 0,
+   "page": 0,
+   "bounds": 0
+  },
+  "labelKept": 0
+ },
+ "unhidden": [],
+ "labelKept": []
+}

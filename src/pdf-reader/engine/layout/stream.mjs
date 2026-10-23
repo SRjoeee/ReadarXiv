@@ -64,7 +64,7 @@ const code = (body, depth) => depth * 2 + (body ? 1 : 0)
 const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_Selector}/gu, '')
 
 /** each page's regions: of each glyph, of each box, at each point; every page begins outside any body */
-function regionsOf(page) {
+export function regionsOf(page) {
   const { glyphs, points } = page, nBoxes = page.boxes.length / 4
   const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
   let body = false, depth = 0, bodies = false
