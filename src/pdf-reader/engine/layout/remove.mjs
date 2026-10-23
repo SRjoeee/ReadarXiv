@@ -49,6 +49,7 @@ import { isMemoryError } from '../pipeline/memory.mjs'
 import { PDFJS } from '../pipeline/versions.mjs'
 import { REFUSED_MAX, REMOVAL } from './addon-manifest.mjs'
 import { encodeEntries, readAsk } from './chain-wire.mjs'
+import { appendSection } from './section.mjs'
 import { startxrefOf, TAIL_CAP } from './tail.mjs'
 
 /** the remover's version (addon-manifest.mjs, beside the manifest that names it, where a reader checks one without
@@ -731,7 +732,9 @@ export const PAST_PART = 'its removed page passes what a part holds'
 const ZERO_STATS = Object.freeze({ removed: 0, rules: 0, cut: 0, hidden: 0, refused: 0, forms: 0, streams: 0 })
 
 /**
- * The remover child's one call (the bundle 4 contract's C8.2, M6; E3): `bytes` arXiv's PDF as the service checked it, `PL`,
+ * The remover child's one call (the bundle 4 contract's C8.2, M6; E3): `bytes` the PDF the tails continue as the service
+ * checked it (arXiv's PDF, our whole base, or a delta's composed document: arXiv's bytes followed by the delta, whose pages it
+ * replaced are read there, and whose /Size the first tail's numbers follow, as a document's own largest number), `PL`,
  * `inflate` and `deflate` as openRemover's and makeAddon's. Returns { remove(plans) }: one part's removed pages, `plans` the
  * ask's bytes (chain-wire.mjs encodeAsk, read here within its bounds). The remover is opened at the first ask and kept (its
  * decoded streams and fonts let go after each); it keeps no chain: each ask carries the state the tails so far leave, so
@@ -1013,32 +1016,17 @@ export async function makeAddon({ R, bytes, OPS, opListOf, alignOf: factsOf = nu
   objects.push([rootRef, enc(`${rootRef.objectNumber} ${rootRef.generationNumber} obj\n${dictText(entries)}\nendobj\n`)])
 
   // the update: the objects, then a cross-reference section of the original's kind with /Prev (the original's startxref,
-  // or the last update's section where the chain has one), its offsets from the document's end so far
-  const chunks = [enc('\n')]
-  let size = (chain === null ? bytes.length : chain.end) + 1
-  const offsets = []
-  for (const [ref, b] of objects) { offsets.push([ref.objectNumber, ref.generationNumber, size]); chunks.push(b); size += b.length }
+  // or the last update's section where the chain has one), its offsets from the document's end so far (section.mjs, one
+  // subsection a number, as the tails were always written)
   const tail = td.decode(bytes.subarray(Math.max(0, bytes.length - 1024)))
   const own = Number(/startxref\s+(\d+)\s+%%EOF\s*$/.exec(tail)?.[1] ?? /startxref\s+(\d+)/.exec(tail.slice(tail.lastIndexOf('startxref')))?.[1])
   const prev = chain === null ? own : chain.xref
   // (the section is of the original's kind, read at the original's own section)
   const isStream = !/^\s*xref/.test(td.decode(bytes.subarray(own, own + 16)))
   const T = ctx.trailerInfo
-  const tr = [`/Root ${T.Root}`, T.Info ? `/Info ${T.Info}` : '', T.ID ? `/ID ${T.ID}` : '', `/Prev ${prev}`].filter(Boolean).join(' ')
-  let SIZE = Math.max(next, ctx.largestObjectNumber + 1)
-  offsets.sort((a, b) => a[0] - b[0])
-  const xrefAt = size
-  if (!isStream) {
-    chunks.push(enc(`xref\n${offsets.map(([n, g, o]) => `${n} 1\n${String(o).padStart(10, '0')} ${String(g).padStart(5, '0')} n\r\n`).join('')}trailer\n<< /Size ${SIZE} ${tr} >>\nstartxref\n${xrefAt}\n%%EOF\n`))
-  } else {
-    const xs = SIZE
-    SIZE += 1
-    const rows = [...offsets, [xs, 0, xrefAt]]
-    const data = new Uint8Array(rows.length * 7)
-    rows.forEach(([, g, o], r) => { data[7 * r] = 1; data[7 * r + 1] = (o >>> 24) & 255; data[7 * r + 2] = (o >>> 16) & 255; data[7 * r + 3] = (o >>> 8) & 255; data[7 * r + 4] = o & 255; data[7 * r + 5] = (g >> 8) & 255; data[7 * r + 6] = g & 255 })
-    chunks.push(enc(`${xs} 0 obj\n<< /Type /XRef /Size ${SIZE} /W [1 4 2] /Index [${rows.map(([n]) => `${n} 1`).join(' ')}] ${tr} /Length ${data.length} >>\nstream\n`), data, enc(`\nendstream\nendobj\nstartxref\n${xrefAt}\n%%EOF\n`))
-  }
-  const update = concat(chunks)
+  const written = appendSection({ end: chain === null ? bytes.length : chain.end, objects: objects.map(([ref, b]) => [ref.objectNumber, ref.generationNumber, b]), kind: isStream ? 'stream' : 'table', prev, size: Math.max(next, ctx.largestObjectNumber + 1), trailer: { root: T.Root, info: T.Info, id: T.ID }, runs: false })
+  const SIZE = written.size
+  const update = written.bytes
   manifest.appended = update.length
   manifest.stats = stats
   if (paletteOf.size) manifest.colours = Object.fromEntries(paletteOf)

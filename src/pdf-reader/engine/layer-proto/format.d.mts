@@ -18,6 +18,8 @@ export declare const BUNDLES_READ: readonly ['7', '8']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
 export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
+/** how a base of ours is held: a delta over arXiv's PDF, or our whole PDF (`full`, no `kind` on the wire); the delta's bounds */
+export { BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_TAIL_ROOM, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
 /** why a head of 8's base is arXiv's (`base.why`): LAYOUT_REFUSED's codes, which each part with no layout says too */
 export declare const BASE_WHYS: typeof LAYOUT_REFUSED
 /** whether a head's layer draws: its base is ours (BUNDLE 8); a head of 7 and every head over arXiv's PDF draw nothing */
@@ -109,12 +111,17 @@ export interface ReadUnitsChunkLight extends Omit<ReadUnitsChunk, 'units'> {
 /** the page-and-line check a base of ours passed: our page count and arXiv's (both the paper's), every page box equal to
  *  arXiv's, the share of our lines found on arXiv's PDF (0 to 1, to a ten-thousandth) */
 export interface BaseCheck { pages: [ours: number, arxiv: number]; boxes: 'equal'; carried: number }
+/** a base of ours held as a delta over arXiv's PDF (`kind` 'delta'): `bytes` and `sha256` the delta section's, `xref` its
+ *  startxref in the composed document (arXiv's bytes first), the check's pages [M, N] (M < N only for a paper of several
+ *  toplevel sources), the pages it writes again (`replaced`, ranges within our M) and its counts */
+export interface DeltaBase { source: 'ours'; kind: 'delta'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats }
 /** the PDF a layer is drawn over (the head's `base`): ours, the final pass of our marked compile, with its page count, the
  *  TeX Live year it was compiled on ('2025') and its check; or arXiv's, with why ours was refused where a head of 8 says it
  *  (absent: a head of 7, or a producer that made no base of its own). `xref`: the PDF's last cross-reference section's
  *  offset, which the remover's tails continue */
 export type HeadBase =
-  | { source: 'ours'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck }
+  | { source: 'ours'; kind?: undefined; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck }
+  | DeltaBase
   | { source: 'arxiv'; bytes: number; sha256: string; xref: number; why?: LayoutRefused }
 export interface ReadHead {
   kind: 'head'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }
@@ -123,7 +130,8 @@ export interface ReadHead {
   /** the PDF the layer is drawn over */
   base: HeadBase
   /** arXiv's PDF, where the base is ours; null where the base is arXiv's */
-  orig: { bytes: number; sha256: string } | null
+  /** with its startxref (`xref`) where the base is a delta: the section the delta's /Prev names */
+  orig: { bytes: number; sha256: string; xref?: number } | null
   versions: HeadVersions
   units: (Ref & { from: number; to: number })[]; lineskip: [number, number] | null
   /** 1: the parts may carry the draw of their pages' left parts (a page can still have none); 0 (absent in the bytes): not made with them */
@@ -162,7 +170,7 @@ export interface PartChain {
   readonly reach: number
   /** the views of pages through + 1 … reach */
   readonly ahead: readonly number[]
-  /** base.bytes + every tail told */
+  /** base.bytes (a delta's: arXiv's bytes and the delta's) + every tail told */
   readonly end: number
   /** the last cross-reference section's offset (base.xref before any tail) */
   readonly xref: number
@@ -202,7 +210,7 @@ export interface ReadLeftPart {
   draw: Draw | null
 }
 /** the base a catalog of 8 names (catalogBase): ours by its name (baseKey), digest and bytes; arXiv's by its digest and bytes */
-export type CatalogBase = { source: 'ours'; key: string; sha256: string; bytes: number } | { source: 'arxiv'; sha256: string; bytes: number }
+export type CatalogBase = { source: 'ours'; kind?: undefined; key: string; sha256: string; bytes: number } | { source: 'ours'; kind: 'delta'; object: { key: string; sha256: string; bytes: number } } | { source: 'arxiv'; sha256: string; bytes: number }
 export interface ReadCatalog {
   kind: 'catalog'; bundle: '7' | '8'; sha256: string; bytes: number; paper: { id: string; version: number; pages: number }; versions: HeadVersions
   head: Ref
@@ -296,7 +304,7 @@ export declare function writeHead(o: {
   /** the PDF the layer is drawn over; one given with no `source` is arXiv's (as every base was before BUNDLE 8) */
   base: HeadBase | { bytes: number; sha256: string; xref: number; source?: undefined }
   /** arXiv's PDF: written where the base is ours (and required there), ignored else */
-  orig?: { bytes: number; sha256: string } | null
+  orig?: { bytes: number; sha256: string; xref?: number } | null
   image: string
   units: readonly (Written & { from: number; to: number })[]; lineskip: readonly [number, number] | null
   /** the parts may carry draws: the head says `draw: 1` (omitted when false) */
@@ -330,6 +338,12 @@ export declare function keyOf(paper: string, version: number, ctag: string, sha2
 export declare function catalogKey(paper: string, version: number, vtag: string): string
 /** a base page of ours' name, `base/<id>v<n>/<sha256>.pdf` (R2's key, immutable); throws a RangeError on what is not one */
 export declare function baseKey(paper: string, version: number, sha256: string): string
+/** a delta's name, `layer/<id>v<n>/<ctag>/<sha256>.delta`: a bundle object beside the units chunks, never a /base/ PDF */
+export declare function deltaKey(paper: string, version: number, sha256: string): string
+/** why a delta base would not be read in a head of `N` pages over `orig` (the head reader's refusal), null where it would */
+export declare function deltaBaseWhy(base: unknown, orig: { bytes: number; sha256: string; xref: number }, N: number): string | null
+/** whether bytes are the delta a head names (length, digest, its section over the head's orig, its startxref): null, or why not */
+export declare function checkDelta(head: ReadHead, bytes: Uint8Array): Promise<string | null>
 /** the base a catalog names, of its head as read */
 export declare function catalogBase(head: ReadHead): CatalogBase
 /** a key taken apart: an object's { paper, version, ctag, sha256 }, a catalog's { paper, version, vtag }; null for what keyOf

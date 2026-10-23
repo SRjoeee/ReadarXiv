@@ -12,6 +12,7 @@ import { leftSideOf } from '@/pdf-reader/engine/pipeline/left-side.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 import { lineCheckOf } from '@/pdf-reader/engine/layout/carry.mjs'
+import { deltaOf } from './helpers/delta-pdfs'
 import { arxivOf, basePagesOf, endOf, type Mark, markedOf, type Run, text, unit, words, type World } from './helpers/make-world'
 
 // The page pass (pipeline/page-pass.mjs layerOfPaper) over the layout maker's fake world: a paper's layer made from its marks,
@@ -407,6 +408,24 @@ describe('layerOfPaper: a marked original of fewer pages than arXiv\'s PDF', () 
     }
     // (one toplevel source, or none named: refused as before)
     for (const meta of [{ toplevels: 1 }, { toplevels: 0 }, {}]) expect((await passOf(w, { source: { ...(source(w) as object), meta } } as never)).r).toMatchObject({ stats: { layout: { refused: 'compile' } } })
+  })
+
+  it('of a paper of several toplevel sources, held as a delta over arXiv\'s PDF: our 2 pages laid, arXiv\'s third its own (check [2, 3]); one toplevel source still `compile`', async () => {
+    const w = shortWorld()
+    const delta = await deltaOf(BASE, [1, 2])
+    for (const input of [{}, { marks: null, marked: markedIn(w) }]) {
+      const got = await passOf(w, { ...input, ours: { ...oursOf(w), delta }, source: { ...(source(w) as object), meta: { toplevels: 2 } } } as never)
+      const at = JSON.stringify(input)
+      expect(got.r, at).toMatchObject({ stats: { toplevels: { files: 2, pages: [2, 3] }, delta: { kind: 'delta', replaced: 2 } } })
+      const head = await readHead(got.head!.bytes, { ref: got.head!.ref })
+      expect(head.base, at).toMatchObject({ source: 'ours', kind: 'delta', pages: 3, check: { pages: [2, 3], boxes: 'equal' }, replaced: [[1, 2]] })
+      expect(layouts(got.notes), at).toContain('kept')
+    }
+    // (a replaced page past ours: the delta does not check, and our two pages are not arXiv's three: `boxes`)
+    const past = await passOf(w, { ours: { ...oursOf(w), delta: await deltaOf(BASE, [1, 3]) }, source: { ...(source(w) as object), meta: { toplevels: 2 } } } as never)
+    expect(past.r).toMatchObject({ stats: { layout: { refused: 'boxes' } } })
+    // (one toplevel source: the compile's refusal, delta or none)
+    expect((await passOf(w, { ours: { ...oursOf(w), delta }, source: { ...(source(w) as object), meta: { toplevels: 1 } } } as never)).r).toMatchObject({ stats: { layout: { refused: 'compile' } } })
   })
 
   it('as many pages is the line check\'s to judge; more, a base page of other pages than arXiv\'s (`boxes`)', async () => {
