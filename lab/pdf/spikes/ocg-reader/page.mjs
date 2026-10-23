@@ -46,7 +46,7 @@ window.ocg = {
     const [V, F] = await Promise.all([import('/engine/layer-proto/visibility.mjs'), import('/engine/layout/file.mjs')])
     const P = await import('/engine/layer-proto/run.mjs')
     const fx = `/fx/${name}/`
-    const [wrappedBytes, baseBytes, geometry, record, unitsFile, layout, head] = await Promise.all([bytes(`${fx}wrapped.pdf`), bytes(`${fx}base.pdf`), json(`${fx}geometry.json`), json(`${fx}record.json`), json(`${fx}units.json`), bytes(`${fx}layout.json`), json(`${fx}wrapped.json`)])
+    const [wrappedBytes, baseBytes, geometry, record, unitsFile, layout, head, glyphs] = await Promise.all([bytes(`${fx}wrapped.pdf`), bytes(`${fx}base.pdf`), json(`${fx}geometry.json`), json(`${fx}record.json`), json(`${fx}units.json`), bytes(`${fx}layout.json`), json(`${fx}wrapped.json`), json(`${fx}glyphs.json`)])
     const unhidden = new Map(head.unhidden), labelKept = new Set(head.labelKept)
     const doc = await open(wrappedBytes.slice()), base = await open(baseBytes.slice())
     const t0 = performance.now()
@@ -99,7 +99,12 @@ window.ocg = {
       }
       // (and the ink render A hides outside every rectangle the copy draws into and that the copy does not show again: a unit's own
       // ink past the layout file's rectangles, hidden with its groups, with nothing of the translation over it; counted, with its boxes)
-      let lost = 0
+      // (by ownership: a lost pixel inside a glyph whose group the page hides is that unit's own ink (`lostOwn`); one in no such
+      // glyph is ink of no drawn unit's (`lostOther`), which must be 0)
+      const pageGlyphs = (glyphs[p - 1] ?? []).filter(g => g[0] && off.includes(g[0]))
+      const ownAt = (x, y) => pageGlyphs.find(g => x >= g[1] - 1.5 && x < g[3] + 1.5 && y >= g[2] - 1.5 && y < g[4] + 1.5) ?? null
+      let lost = 0, lostOwn = 0, lostPath = 0, otherMax = 0
+      const pathUnits = new Set()
       const lostCells = new Map()
       { const W = on.c.width, C = 10 * k
         for (let i = 0; i < on.data.length; i += 4) {
@@ -108,6 +113,9 @@ window.ocg = {
           const x = (i / 4) % W, y = Math.floor(i / 4 / W)
           if (into.some(r => x >= r[0] && x < r[2] && y >= r[1] && y < r[3])) continue
           lost++
+          const at = ownAt(x, y)
+          if (at) { lostOwn++; if (at[5] === 'path') { lostPath++; pathUnits.add(at[0]) } }
+          else otherMax = Math.max(otherMax, Math.abs(on.data[i] - copied.data[i]), Math.abs(on.data[i + 1] - copied.data[i + 1]), Math.abs(on.data[i + 2] - copied.data[i + 2]))
           const key = `${Math.floor(x / C) * 10},${Math.floor(y / C) * 10}`
           lostCells.set(key, (lostCells.get(key) ?? 0) + 1)
         } }
@@ -127,7 +135,7 @@ window.ocg = {
       }
       const ops = {}
       for (const o of row.ops) ops[o.op] = (ops[o.op] ?? 0) + 1
-      const rec = { p, off: off.length, ops, g1: g1.n, a: g3.n, aOutside: g3.out, copyOutside: g3copy.out, spill, lost, ...(lost ? { lostCells: [...lostCells].sort((a, b) => b[1] - a[1]).slice(0, 8) } : {}), aNoise: apart(A, A2).n, ...(explain && g3copy.out ? { copyCells } : {}), ms: { a: A.ms, aWarm: A2.ms, base: unwrapped.ms, baseWarm: base2.ms, copy: copyMs } }
+      const rec = { p, off: off.length, ops, g1: g1.n, a: g3.n, aOutside: g3.out, copyOutside: g3copy.out, spill, lost, lostOwn, lostOther: lost - lostOwn, otherMax, lostPath, pathUnits: [...pathUnits], ...(lost ? { lostCells: [...lostCells].sort((a, b) => b[1] - a[1]).slice(0, 8) } : {}), aNoise: apart(A, A2).n, ...(explain && g3copy.out ? { copyCells } : {}), ms: { a: A.ms, aWarm: A2.ms, base: unwrapped.ms, baseWarm: base2.ms, copy: copyMs } }
       // (where A hides ink outside the rectangles: each drawn group alone, the pixels outside it changes and their box, in PDF units)
       if (explain && g3.out) {
         rec.outside = []
@@ -145,6 +153,7 @@ window.ocg = {
         }
       }
       if (png.includes(p)) {
+        rec.onPng = on.c.toDataURL('image/png')
         const holder = document.createElement('div')
         holder.id = `page-${p}`
         holder.style.cssText = `position:relative;width:${copy.width}px;height:${copy.height}px`

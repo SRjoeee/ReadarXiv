@@ -34,8 +34,8 @@ mkdirSync(join(OUT, NAME), { recursive: true })
 const FX = join(PACK, 'fixtures', NAME)
 const baseBytes = new Uint8Array(readFileSync(join(FX, 'base.pdf')))
 const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap.mjs'))).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/own.mjs'))).digest('hex').slice(0, 16)
-const wrappedPath = join(OUT, NAME, `wrapped-${digest}.pdf`), headPath = join(OUT, NAME, `wrapped-${digest}.json`)
-if (!existsSync(wrappedPath)) {
+const wrappedPath = join(OUT, NAME, `wrapped-${digest}.pdf`), headPath = join(OUT, NAME, `wrapped-${digest}.json`), glyphsPath = join(OUT, NAME, `wrapped-${digest}-ink2.json`)
+if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
   const { wrapFinal } = await import(join(REPO, 'src/pdf-reader/engine/layout/wrap.mjs'))
   const { openPaper } = await import(join(REPO, 'src/pdf-reader/engine/pipeline/live.mjs'))
   const { unpackSource } = await import(join(REPO, 'src/pdf-reader/engine/source/tar.mjs'))
@@ -45,11 +45,30 @@ if (!existsSync(wrappedPath)) {
   const t0 = performance.now()
   const r = await wrapFinal(baseBytes, {
     PL, getDocument, OPS, units, documentOptions: { verbosity: 0, useSystemFonts: false, isEvalSupported: false, fontExtraProperties: true, standardFontDataUrl: join(REPO, 'node_modules/pdfjs-dist/standard_fonts/'), cMapUrl: join(REPO, 'node_modules/pdfjs-dist/cmaps/'), cMapPacked: true },
-    deflate: b => new Uint8Array(deflateSync(b, { level: 6 })), inflate: (b, limit) => new Uint8Array(inflateSync(b, { maxOutputLength: limit + 1 })),
+    deflate: b => new Uint8Array(deflateSync(b, { level: 6 })), inflate: (b, limit) => new Uint8Array(inflateSync(b, { maxOutputLength: limit + 1 })), keepOwned: true,
   })
   if ('refused' in r) throw new Error(`wrap refused: ${r.refused}: ${r.why}`)
   writeFileSync(wrappedPath, r.bytes)
   writeFileSync(headPath, JSON.stringify({ stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept, own: r.own, ms: Math.round(performance.now() - t0) }))
+  // (each page's glyphs as ownership read them, with their group, in device px at the page's k (2.5), y down: what a hidden pixel
+  // outside the layout file's rectangles belongs to)
+  const { pageInk } = await import(join(REPO, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const task = getDocument({ data: baseBytes.slice(), verbosity: 0, fontExtraProperties: true, standardFontDataUrl: join(REPO, 'node_modules/pdfjs-dist/standard_fonts/'), cMapUrl: join(REPO, 'node_modules/pdfjs-dist/cmaps/'), cMapPacked: true })
+  const doc = await task.promise, glyphs = []
+  for (let p = 1; p <= doc.numPages; p++) {
+    const page = await doc.getPage(p), vp = page.getViewport({ scale: 2.5 })
+    const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: page.rotate, indices: true })
+    const G = r.owned.glyphs[p - 1] ?? []
+    const B = r.owned.boxes?.[p - 1] ?? []
+    const dev = (x0, y0, x1, y1) => { const [a, b] = vp.convertToViewportPoint(x0, y0), [c, d] = vp.convertToViewportPoint(x1, y1); return [Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)] }
+    // (its painted paths too: a rule or a bar a unit owns)
+    const paths = []
+    for (let b = 0; 4 * b + 3 < ink.boxes.length; b++) if (ink.paths[b] >= 0 && B[b]) paths.push([B[b], ...dev(ink.boxes[4 * b], ink.boxes[4 * b + 1], ink.boxes[4 * b + 2], ink.boxes[4 * b + 3]), 'path'])
+    glyphs.push([...ink.glyphs.map((g, i) => [G[i] ?? null, ...dev(Math.min(g.x0, g.ix0), g.bottom, Math.max(g.x1, g.ix1), g.top)]), ...paths])
+    page.cleanup()
+  }
+  await task.destroy()
+  writeFileSync(glyphsPath, JSON.stringify(glyphs))
 }
 
 // ---- the server: the page, the engine, PDF.js, the fixture, the faces, TeX's patterns
@@ -67,6 +86,7 @@ const fileOf = path => {
   if (path.startsWith('/fonts/')) return at(join(PACK, 'data/fonts'), path.slice(7))
   if (path === `/fx/${NAME}/wrapped.pdf`) return wrappedPath
   if (path === `/fx/${NAME}/wrapped.json`) return headPath
+  if (path === `/fx/${NAME}/glyphs.json`) return glyphsPath
   if (path === `/fx/${NAME}/geometry.json`) return join(PACK, 'geometry', `${NAME}-geometry.json`)
   if (path.startsWith(`/fx/${NAME}/`)) return at(FX, path.slice(NAME.length + 5))
   return null
@@ -114,6 +134,7 @@ try {
     const head = JSON.parse(readFileSync(headPath, 'utf8'))
     writeFileSync(join(OUT, NAME, 'run.json'), JSON.stringify({ head, ...r }, null, 1))
     for (const p of pngs) { const el = await page.$(`#page-${p}`); if (el) await el.screenshot({ path: join(OUT, NAME, `copy-${p}.png`) }) }
+    for (const x of r.pages) if (x.onPng) { writeFileSync(join(OUT, NAME, `on-${x.p}.png`), Buffer.from(x.onPng.split(',')[1], 'base64')); delete x.onPng }
     console.log(JSON.stringify({ fixture: NAME, wrap: { ...head.stats, ms: head.ms }, N: r.N, groups: r.groups, drawn: r.drawn, hiding: r.hiding, skipped: r.skipped }))
     for (const x of r.pages) console.log(JSON.stringify(x))
   }
