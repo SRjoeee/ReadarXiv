@@ -559,6 +559,25 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     expect(r.lay(3, wordsOf(3, [5]))).toBe(false)
   })
 
+  it('a muted page (another target\'s layer kept there) lights and hits nothing, its float included; unmuted, as before', () => {
+    const l = built([1, 2, 3])
+    l.floats(2)
+    const r = layerShapes(l)
+    const f = r.shapes.float(4)
+    expect(f).toMatchObject({ id: 4, page: 2 })
+    const run1 = nth(r.shapes.runs(1), 0), b = blockOf(run1, PAD)
+    expect(r.mute(2, true)).toBe(true)
+    expect(r.mute(1, true)).toBe(true)
+    expect(r.muted()).toEqual([1, 2])
+    expect(r.shapes.float(4)).toBeNull()
+    expect(r.shapes.floatShapes(f as NonNullable<typeof f>, PAD)).toEqual([])
+    expect(r.shapes.runs(1)).toEqual([])
+    expect(r.shapes.hit(1, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, PAD, () => null)).toBeNull()
+    expect(r.mute(2, false)).toBe(true)
+    expect(r.shapes.float(4)).toBe(f)
+    expect(r.shapes.floatShapes(f as NonNullable<typeof f>, PAD).length).toBeGreaterThan(0)
+  })
+
   it('gives the right\'s starts of a unit all on laid pages from its words, the left\'s of a unit on none, none of a unit on both', () => {
     const l = built([1, 2, 3]), r = layerShapes(l)
     r.lay(3, wordsOf(3, [6]))

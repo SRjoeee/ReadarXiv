@@ -334,8 +334,9 @@ export function layerShapes(source) {
     block: (run, padX) => blockOf(run, padX),
     sentence: (run, starts, s, padX) => { if (!laid(run.page)) return M.shapes.sentence(run, starts, s, padX); floatsOf(run.page); return sentenceOf(L, run, starts, s, padX) },
     fits: (id, starts, now) => { const m = mode(id); return m === 'laid' ? sentencesFit(L, id, starts, !now) : m === 'mirror' ? M.shapes.fits(id, starts, now) : false },
-    float: M.shapes.float,
-    floatShapes: M.shapes.floatShapes,
+    // (a float on a muted page lights nothing there, as its text does not: its shapes are not the drawing's)
+    float: id => { const f = M.shapes.float(id); return f && muted.has(f.page) ? null : f },
+    floatShapes: (f, padX) => (muted.has(f.page) ? [] : M.shapes.floatShapes(f, padX)),
     hit: (page, x, y, padX, startsOf) => { if (muted.has(page)) return null; if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf); floatsOf(page); return floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)) },
     click: (page, x, y, padX, startsOf) => { if (muted.has(page)) return null; if (!laid(page)) return M.shapes.click(page, x, y, padX, startsOf); floatsOf(page); return clickOf(L, page, x, y, padX, startsOf) },
   }
