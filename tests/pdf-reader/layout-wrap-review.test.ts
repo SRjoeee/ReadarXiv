@@ -276,6 +276,11 @@ describe('coverage: a soft mask\'s content is no painted ink of the page', () =>
     expect(r.stats.refusedPages).toBe(0)
     expect(r.unhidden).toEqual([])
     expect(r.stats.groups).toBe(2)
+    // (by pixels: the unit's text and its placeholder's rule OFF is the page with the masked square alone)
+    const want = (await markedSample({ pages: [2], edit: only('q /GS1 gs 0 0 0 rg 300 300 80 80 re f Q\n'), tweak: softMask })).bytes
+    expect(pixelsApart(await renderPage(r.bytes, 2, { off: n => n === 'axt:u0' || n === 'axt:u0.p' }), await renderPage(want, 2))).toBe(0)
+    // (and all ON, our page)
+    expect(pixelsApart(await renderPage(r.bytes, 2), await renderPage(bytes, 2))).toBe(0)
   })
 })
 

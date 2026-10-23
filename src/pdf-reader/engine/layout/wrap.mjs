@@ -541,7 +541,8 @@ export { UNHIDDEN_MAX }
  * [{ t: 'text', s } | { t: 'ph', src } | …] }, never a translation's (a record's, whose text pieces are `tr`: a TypeError): own.mjs
  * spells each against its `src` where it has one, else its pieces' plain source text, and the marking's `follows` is made of
  * them and the points read, unless `follows` is given, or null for none); `getDocument` and `documentOptions` the engine's PDF.js and the host's options; `OPS`
- * its operator codes; `PL`, `deflate`, `inflate` wrapOf's. Every page our compile marks is wrapped; one PDF.js reads past its
+ * its operator codes; `texts`, the marks file's `marking.texts` (flat [macro source, text, …], or a Map; null: only a text
+ * symbol's text is known, own.mjs's cell leads); `PL`, `deflate`, `inflate` wrapOf's. Every page our compile marks is wrapped; one PDF.js reads past its
  * bounds (capped, timed out, its boxes merged, rotated) is left unwrapped, its units the original's. Returns { bytes, xref,
  * sha256, stats, unhidden, labelKept } — `stats` { wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds }, split,
  * groups, labelKept } (integers, the head's: every unit counted), `unhidden` [[unit id, code of UNHIDDEN], …] ascending and
@@ -556,7 +557,7 @@ export { UNHIDDEN_MAX }
  *  `/axt-H0E ri` (2610.20967v1, 2610.20581v1), the same mark at the same place */
 const lowerPoint = x => (/[A-Z]/.test(x.name) ? { ...x, name: x.name.toLowerCase() } : x)
 
-export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, deflate, inflate, keepOwned = false, bounds = {} }) {
+export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, texts = null, deflate, inflate, keepOwned = false, bounds = {} }) {
   // (units required: null alone, said, asks for no spell check, the lab's pair whose source is not read; deflate and inflate
   // required, the written bytes read back)
   if (units === undefined) throw new TypeError('units: the paper\'s source units, or null said for no spell check')
@@ -590,7 +591,10 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   } finally { await task?.destroy?.().catch?.(() => {}) }
   const names = new Set(pages.flatMap(pg => pg.points.map(x => x.name)))
   const follows = given !== undefined ? given : units ? followsOf(units, names) : null
-  const own = ownOf(pages, { units, follows })
+  // (the texts the marking's probe showed the paper's macros set: the marks file's `marking.texts`, flat [source, text, …]
+  // pairs, or a Map; a cell's lead macro is owned by them alone, own.mjs)
+  const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]]).filter(([a, b]) => typeof a === 'string' && typeof b === 'string')) : null
+  const own = ownOf(pages, { units, follows, texts: shown })
   const plans = new Map()
   pages.forEach((pg, i) => { if (facts[i] && pg.points.length) plans.set(i + 1, { facts: facts[i], ...planOf(pg.glyphs, own.glyphs[i], pg.paths, own.boxes[i]) }) })
   const made = await wrapOf(finalBytes, plans, { PL, deflate, inflate, ...bounds })

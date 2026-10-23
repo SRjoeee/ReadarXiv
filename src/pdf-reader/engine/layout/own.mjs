@@ -32,6 +32,7 @@
 // Pure arithmetic over what pageInk read (layout/ink.mjs, `indices`); imports the stream's regions and a unit's source text.
 // An original module (no port statement).
 import { plainSource } from '../translate/mt.mjs'
+import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
 import { classOf } from './marks.mjs'
 import { OWNED, ownedOf, regionsOf } from './stream.mjs'
@@ -54,9 +55,10 @@ const NAME_END = /^n(\d+)\.([a-z]{1,16})\.e$/
 const BRACKET = /^[bf][se]\d+$/
 
 /** a text's evidence for the spell check: its letters and digits, without their accents, lower case */
-// (a spacing accent — OT1's \\^ sets ˆ beside its letter, a modifier letter to Unicode — is no letter, and a dotless ı or ȷ under an
+// (a spacing accent — OT1's \\^ sets ˆ beside its letter, a modifier letter to Unicode: TeX's own, U+02C6, U+02C7 and
+// U+02D8 to U+02DD, the others no letters already; not every modifier letter, CJK's prolonged sound mark and iteration mark among them — is no letter, and a dotless ı or ȷ under an
 // accent is its letter: 2610.20595v1 "Ciˆencia", 2610.20581v1 "Estad´ısticas")
-export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}\p{Lm}\p{Sk}]/gu, '').toLowerCase().replace(/ß/g, 'ss').replace(/ı/g, 'i').replace(/ȷ/g, 'j').replace(/[^\p{L}\p{N}]/gu, '')
+export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}\u02c6\u02c7\u02d8-\u02dd]/gu, '').toLowerCase().replace(/ß/g, 'ss').replace(/ı/g, 'i').replace(/ȷ/g, 'j').replace(/[^\p{L}\p{N}]/gu, '')
 /** a label's form (§1.3): a number or an item's mark, maybe a caption's or a section's name before it, in brackets or with a
  *  stop after it — of its characters, NFKC, lower case, no white space */
 const LABEL_NAME = '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
@@ -71,12 +73,13 @@ export const isLabelForm = s => { const t = labelText(s); return t === '' || LAB
  * painted path's place, or its kind: < 0), `points` ({ name, glyph, box }), `boxAt` — and its `view`; a page that was not read
  * is { glyphs: [], boxes: [], paths: [], points: [], boxAt: [] }. `units` the paper's units (their ids their indices; each its
  * source text `src`, else layout/../translate/mt.mjs plainSource of its pieces); `follows` (layout/marks.mjs followsOf over the
- * units and the points' names) where the marking is known, else null.
+ * units and the points' names) where the marking is known, else null; `texts` (a Map, a macro's source -> the text the
+ * marking's probe showed it sets: the marks file's `marking.texts`) where known, else null.
  * Returns { glyphs, boxes, units, stats }: `glyphs[p - 1][g]`, `boxes[p - 1][b]` the group a page's glyph or painted rule is
  * hidden with, or null; `units` Map id -> { groups: Set, pages: Set, unhidden: a code of UNHIDDEN or null, labelKept }; `stats`
  * { units, unhidden: { marks, across, spell, page: 0, bounds: 0 }, spell: [ids, at most SPELL_LIST_MAX], labelKept }
  */
-export function ownOf(pages, { units = null, follows = null } = {}) {
+export function ownOf(pages, { units = null, follows = null, texts = null } = {}) {
   const P = pages.length
   // (the glyphs and boxes visited: real ranges never overlap and cost the paper's ink once; past OWN_WORK a unit is not owned)
   let work = 0
@@ -244,28 +247,48 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
 
   // ---- a cell's lead macro (MR 5b): a cell that opens with a placeholder of no mark of its own (\\CompletionTokenCap{}, \\#,
   // \\bertbase) has that ink set before its start mark, on its line, after the point before it. A cell takes no label, and what
-  // stands before it on its line may be an unmarked cell's (a number): so the placeholder's ink is only the run that abuts the
-  // start — each glyph less than CELL_ABUT of an em from the next — never across a column's gap (\\tabcolsep on each side):
-  // ink in no group past that gap is another cell's, left standing. A cell with no such run (its macro's ink apart from its
-  // start) is the original's, as before (leadUnmarked); 2610.21098v1 p13
+  // stands before it on its line may be an unmarked cell's (a number), however close the columns (\\tabcolsep 2pt, @{}): so
+  // the placeholder's ink is told by its TEXT alone — the text the marking's probe showed the macro sets (`texts`, marks.mjs
+  // readInkTexts) or a text symbol's (\\# "#") — the glyphs right before the start that spell exactly it, none of them
+  // CELL_ABUT of an em or more from the next, on the start's line, in its region, in no group. Where the text is not known or
+  // the glyphs there are not it, the cell is the original's, as before (leadUnmarked); 2610.21098v1 p13
   const cellLead = new Set()
+  /** the text a unit's unmarked lead placeholders set, NFKC with no white space, or null where one is not known */
+  const leadText = (u, id) => {
+    let out = ''
+    for (let k = 0; k < (u?.pieces?.length ?? 0); k++) {
+      const piece = u.pieces[k]
+      if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) break; continue }
+      const c = classOf(piece)
+      if (!c) continue
+      if (c === 'footnote' || where.has(`p${id}.${k}a`) || where.has(`p${id}.${k}b`)) break
+      const t = texts?.get(piece.src) ?? symbolText(piece.src)
+      if (typeof t !== 'string') return null
+      out += t
+    }
+    out = out.normalize('NFKC').replace(/\s/gu, '')
+    return out || null
+  }
   for (const [id, { s }] of textOf) {
     if (!s || !units || !(units[id]?.kind === 'cell' || pt(s).name.startsWith('t')) || !opensUnmarked(units[id], id)) continue
     if (work > OWN_WORK) { unit(id).unhidden ??= 'marks'; continue }
+    const want = leadText(units[id], id)
+    if (want === null) continue
     const [p, q] = s, pg = pages[p - 1], S = pt(s), r = at(s), R = regions[p - 1]
     if (S.glyph >= pg.glyphs.length) continue
     const F = pg.glyphs[S.glyph], from = q > 0 ? pg.points[q - 1].glyph : 0
     const run = []
-    let right = F
+    let right = F, got = ''
     work += S.glyph - from
-    for (let g = S.glyph - 1; g >= from; g--) {
+    for (let g = S.glyph - 1; g >= from && got.length < want.length; g--) {
       const G = pg.glyphs[g]
       if (R.glyph[g] !== r || gOwn[p - 1][g] !== null || Math.abs(G.y - F.y) >= 0.5 * Math.max(G.size, F.size)) break
       if (right.x0 - G.x1 >= CELL_ABUT * Math.max(G.size, right.size)) break
       run.push([p, g])
+      got = (G.u ?? '').normalize('NFKC').replace(/\s/gu, '') + got
       right = G
     }
-    if (!run.some(([, g]) => /\S/.test(pg.glyphs[g].u ?? ''))) continue
+    if (got !== want) continue
     claim({ glyphs: run.reverse() }, `u${id}.p`, 'p')
     cellLead.add(id)
   }
@@ -374,6 +397,9 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
    *  exactly and every glyph before them stands on no line of theirs, those glyphs are left the page's (no group) and the
    *  title is the rest. Ink on a line of the title's own cannot be told from it: none is trimmed there (2610.20581v1 p1u0) */
   function trimLead(id, want) {
+    // (a title that opens with a placeholder of no mark of its own — \\sysname: before its text — has that ink in this lead,
+    // which its source spells as nothing: never released, the title the original's, review of b479095e)
+    if (units && opensUnmarked(units[id], id)) return false
     const mine = `u${id}`, list = []
     for (let p = 1; p <= P; p++) gOwn[p - 1].forEach((g, i) => { if (g === mine) list.push([p, i]) })
     const G = ([p, i]) => pages[p - 1].glyphs[i]

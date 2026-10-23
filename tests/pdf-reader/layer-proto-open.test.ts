@@ -197,4 +197,11 @@ describe("a unit whose ink cannot be hidden, the whole run (openProto): shown as
     expect(r.placed).toEqual([])
     expect(r.skipped.sort()).toEqual(['0:group: a cell not drawn', '1:unhidden: marks'])
   })
+  it('keeps a group whole the original\'s where the cell fails the spell check (its range may hold a sibling\'s ink) or sets a \\multirow', async () => {
+    const spell = await open({ hiding: { unhidden: (id: number) => (id === 1 ? 'spell' : null) }, group: 'T:c0' })
+    expect(spell.placed).toEqual([])
+    expect(spell.skipped.sort()).toEqual(['0:group: a cell not drawn', '1:unhidden: spell'])
+    const { cellSpans } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    expect([cellSpans({ cell: { span: 2 } }), cellSpans({ pieces: [{ t: 'open', src: '\\multirow{2}{*}{' }] }), cellSpans({ cell: { span: 1 }, pieces: [{ t: 'text', s: 'a' }] }), cellSpans({ pieces: [{ t: 'ph', src: '\\multirowx' }] })]).toEqual([true, true, false, false])
+  })
 })

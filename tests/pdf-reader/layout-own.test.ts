@@ -137,6 +137,10 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     const r = ownOf(pages, { units: [{ kind: 'heading', src: 'All Serrin bands' }] })
     expect(groupsOf(r, pages)).toEqual({ u0: 'ALL SERRIN BANDS' })
     expect(r.units.get(0)?.unhidden).toBe(null)
+    // (a title that opens with a placeholder of no mark of its own, \\sysname: its ink is that lead: never released, the title
+    // the original's — the review of b479095e)
+    const lead = [page([{ pt: 'bs2' }, 'LLAMA-X:\n', 'Fast tuning', { pt: '0e' }])]
+    expect(ownOf(lead, { units: [{ kind: 'heading', pieces: [{ t: 'ph', src: '\\sysname' }, { t: 'text', s: ': Fast tuning' }] }] }).units.get(0)?.unhidden).toBe('spell')
     // (on the title's own line: what stands before it cannot be told from it, the title the original's)
     const one = [page([{ pt: 'bs2' }, 'JOUR ALL SERRIN BANDS', { pt: '0e' }])]
     expect(ownOf(one, { units: [{ kind: 'heading', src: 'All Serrin bands' }] }).units.get(0)?.unhidden).toBe('spell')
@@ -145,30 +149,41 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     expect(spellOf('Ciˆencia e Tecnologia')).toBe(spellOf('Ciência e Tecnologia'))
     expect(spellOf('Estad´ısticas')).toBe(spellOf('Estadísticas'))
     expect(spellOf('Jo˜ao')).toBe(spellOf('João'))
+    // (only TeX's spacing accents: a modifier letter of a script, CJK's prolonged sound mark, is spelled)
+    expect(spellOf('\u30c7\u30fc\u30bf')).not.toBe(spellOf('\u30c7\u30bf'))
     // (a letter still differs)
     expect(spellOf('Ciencia')).not.toBe(spellOf('Ciancia'))
   })
-  it('owns a cell\'s lead macro set before its start mark, abutting its text, as its placeholder (2610.21098v1 p13u136)', () => {
+  it('owns a cell\'s lead macro set before its start mark as its placeholder, by the text the probe showed it sets (2610.21098v1 p13u136)', () => {
     // "Completion cap | \\CompletionTokenCap{} tokens per request": TeX set the macro's "1,024" after the cell before's end and
-    // before this cell's start mark
+    // before this cell's start mark; the marking's probe said the macro sets "1,024" (marks.mjs readInkTexts)
     const pages = [page([{ pt: 't0s' }, 'Completion cap', { pt: 't0e' }, { dx: 30 }, '1,024 ', { pt: 't1s' }, 'tokens per request', { pt: 't1e' }])]
     const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Completion cap' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\CompletionTokenCap{}' }, { t: 'text', s: ' tokens per request ' }] }]
-    const r = ownOf(pages, { units: cells })
+    const r = ownOf(pages, { units: cells, texts: new Map([['\\CompletionTokenCap{}', '1,024']]) })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Completion cap', u1: 'tokens per request', 'u1.p': '1,024 ' })
     expect([r.units.get(0)?.unhidden, r.units.get(1)?.unhidden]).toEqual([null, null])
     expect(r.stats.leaks).toEqual({ count: 0, units: [] })
+    // (a text symbol's text is known without the probe: \\# sets "#")
+    const hash = [page([{ pt: 't0s' }, 'Model', { pt: 't0e' }, { dx: 30 }, '#', { pt: 't1s' }, 'Steps', { pt: 't1e' }])]
+    const h = ownOf(hash, { units: [{ kind: 'cell', pieces: [{ t: 'text', s: 'Model' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\#' }, { t: 'text', s: ' Steps' }] }] })
+    expect(groupsOf(h, hash)).toEqual({ u0: 'Model', u1: 'Steps', 'u1.p': '#' })
+    // (the macro's text not known: the cell the original's, as before)
+    expect(ownOf(pages, { units: cells }).units.get(1)?.unhidden).toBe('marks')
   })
-  it('never takes a neighbour cell\'s ink across a column\'s gap for a cell\'s lead: that cell the original\'s (the neighbour check)', () => {
-    // an unmarked number cell ("80.8") a column's gap before the macro's ink: the run stops at the gap, and what stands apart
-    // from the start is not the macro's for certain
-    const pages = [page([{ pt: 't0s' }, 'Ours', { pt: 't0e' }, { dx: 20 }, '80.8', { dx: 20 }, 'BERT', { dx: 20 }, { pt: 't1s' }, '(Single)', { pt: 't1e' }])]
+  it('never takes a neighbour cell\'s ink for a cell\'s lead, however close the columns (the neighbour check; the review of b479095e)', () => {
+    // an unmarked number cell ("80.8") 0.4 em before the macro's ink (\\tabcolsep 2pt): the macro's text ends the run
     const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Ours' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bert' }, { t: 'text', s: ' (Single)' }] }]
-    const r = ownOf(pages, { units: cells })
-    expect(r.units.get(1)?.unhidden).toBe('marks')
-    expect(groupsOf(r, pages)).toEqual({ u0: 'Ours', u1: '(Single)' })
-    const near = [page([{ pt: 't0s' }, 'Ours', { pt: 't0e' }, { dx: 20 }, '80.8', { dx: 20 }, 'BERT ', { pt: 't1s' }, '(Single)', { pt: 't1e' }])]
-    const n = ownOf(near, { units: cells })
+    const texts = new Map([['\\bert', 'BERT']])
+    const near = [page([{ pt: 't0s' }, 'Ours', { pt: 't0e' }, { dx: 4 }, '80.8', { dx: 4 }, 'BERT ', { pt: 't1s' }, '(Single)', { pt: 't1e' }])]
+    const n = ownOf(near, { units: cells, texts })
     expect(groupsOf(n, near)).toEqual({ u0: 'Ours', u1: '(Single)', 'u1.p': 'BERT ' })
-    expect(n.units.get(1)?.unhidden).toBe(null)
+    // (no gap at all, @{}: the same)
+    const glued = [page([{ pt: 't0s' }, 'Ours', { pt: 't0e' }, '80.8BERT ', { pt: 't1s' }, '(Single)', { pt: 't1e' }])]
+    expect(groupsOf(ownOf(glued, { units: cells, texts }), glued)).toEqual({ u0: 'Ours', u1: '(Single)', 'u1.p': 'BERT ' })
+    // (what stands before the start is not the macro's text: none taken, the cell the original's)
+    const other = [page([{ pt: 't0s' }, 'Ours', { pt: 't0e' }, { dx: 20 }, '80.8', { pt: 't1s' }, '(Single)', { pt: 't1e' }])]
+    const o = ownOf(other, { units: cells, texts })
+    expect(o.units.get(1)?.unhidden).toBe('marks')
+    expect(groupsOf(o, other)).toEqual({ u0: 'Ours', u1: '(Single)' })
   })
 })

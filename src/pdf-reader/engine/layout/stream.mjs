@@ -209,8 +209,11 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
       if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
+        // (the erasure's: a later unit's opening as its start mark only where that unit's start mark follows it on the page — the
+        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it)
         const opening = erasure ? OPENING.exec(N.name) : null
-        const later = START.exec(N.name) ?? (opening ? [N.name, opening[2]] : null)
+        const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
+        const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
         if (f.blocked) return erasure && f.through && N.name === f.through ? { how: HOW["open, to its unit's next mark"], glyphs, boxes } : none(HOW['open, an unmarked piece follows'])
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
         if (later && Number(later[1]) > Number(m[2])) {
@@ -228,8 +231,11 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
       if (end === 0) {
         // (the erasure's: rules alone before the text after it are the piece's ink — a glyph set there would be one, and
         // REVTeX's swapped punctuation sets none)
-        const [p0, g0] = glyphs[0], ruled = boxes.filter(([q, b]) => q < p0 || (q === p0 && b < pages[p0 - 1].boxAt[g0]))
-        if (erasure && ruled.length) return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
+        // (a rule under or over the text after it — ulem's \\uline, soul's \\hl paint theirs before the word — is that text's, not
+        // the piece's: none where a rule reaches past the first glyph of the text after it on its line)
+        const [p0, g0] = glyphs[0], P0 = pages[p0 - 1], ruled = boxes.filter(([q, b]) => q < p0 || (q === p0 && b < P0.boxAt[g0]))
+        const under = ([q, b]) => q === p0 && P0.boxes[4 * b + 2] > P0.glyphs.x0[g0] + 0.1 * P0.glyphs.size[g0] && P0.boxes[4 * b + 1] < P0.glyphs.y[g0] + P0.glyphs.size[g0] && P0.boxes[4 * b + 3] > P0.glyphs.y[g0] - 0.5 * P0.glyphs.size[g0]
+        if (erasure && ruled.length && !ruled.some(under)) return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
         return none(HOW['open, nothing before the text after it'])
       }
       return cut(HOW['open, to the text after it'], glyphs, boxes, end)

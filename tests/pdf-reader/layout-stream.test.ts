@@ -292,10 +292,13 @@ describe('ownedOf for the erasure (erasure: true)', () => {
     expect(ink([page], f, true)).toEqual({ 'p0.6a': ['§', 0] })
   })
   it('owns a piece whose ink is a rule alone before the text after it (2610.19159v1 p151u1677: \\_ before \\allowbreak); a swap still none', () => {
-    const page = pageOf(['the compute', { at: 'p0.2a' }, { rule: [130, 699, 135, 699.4] }, 'sstar function', { at: '0e' }])
+    const page = pageOf(['the compute', { at: 'p0.2a' }, { rule: [126, 699, 131, 699.4] }, { u: 's', x: 132, y: 700 }, 'star function', { at: '0e' }])
     const f = { 'p0.2a': open('sstarfun') }
     expect(ink([page], f, false)).toEqual({ 'p0.2a': 'open, nothing before the text after it' })
     expect(ink([page], f, true)).toEqual({ 'p0.2a': ['', 1] })
+    // (a rule under the text after it — \uline{sstar} painted before its word — is that text's: none)
+    const ul = pageOf(['the compute', { at: 'p0.2a' }, { rule: [127, 697, 160, 697.4] }, 'sstar function', { at: '0e' }])
+    expect(ink([ul], f, true)).toEqual({ 'p0.2a': 'open, nothing before the text after it' })
     // (REVTeX's swap, no rule: the text after it at once is not the piece's ink)
     const swapped = pageOf(['as shown', { at: 'p0.1a' }, '.', { u: '1', x: 120, y: 703.5, size: 7 }, { at: '0e' }])
     expect(ink([swapped], { 'p0.1a': open('.', ['0e']) }, true)).toEqual({ 'p0.1a': 'open, nothing before the text after it' })
@@ -306,15 +309,22 @@ describe('ownedOf for the erasure (erasure: true)', () => {
     const through: Follow = { closing: false, want: '', ends: ['p0.2a', '0e'], blocked: true, through: 'p0.3a' }
     expect(ink([page], { 'p0.1a': through, 'p0.3a': closed }, false)).toEqual({ 'p0.1a': 'open, an unmarked piece follows', 'p0.3a': ['donut', 0] })
     expect(ink([page], { 'p0.1a': through, 'p0.3a': closed }, true)).toEqual({ 'p0.1a': ['circle→', 0], 'p0.3a': ['donut', 0] })
+    // (over a line's end: the arrow at the line's end, the next placeholder on the next line)
+    const broken = pageOf(['flipping (', { at: 'p0.1a' }, 'circle', '→', '\n', { at: 'p0.3a' }, 'donut', { at: 'p0.3b' }, ') over', { at: '0e' }])
+    expect(ink([broken], { 'p0.1a': through, 'p0.3a': closed }, true)).toEqual({ 'p0.1a': ['circle→', 0], 'p0.3a': ['donut', 0] })
     // (text between the unmarked piece and the next mark: where the one ends is not known, none)
     const blocked: Follow = { ...through, through: null }
     expect(ink([page], { 'p0.1a': blocked, 'p0.3a': closed }, true)).toEqual({ 'p0.1a': 'open, an unmarked piece follows', 'p0.3a': ['donut', 0] })
   })
   it('ends a display after its unit\'s end mark at a later unit\'s opening, that unit\'s label left out (2610.20595v1 p19u153)', () => {
-    const page = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc(G9)', '\n', { u: '2', x: 72, y: 676 }, { u: '.', x: 77, y: 676 }, { at: 'p1.0a' }, { u: 'T', x: 90, y: 676 }, 'riangulene', { at: 'p1.0b' }])
+    const page = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc(G9)', '\n', { u: '2', x: 72, y: 676 }, { u: '.', x: 77, y: 676 }, { at: 'p1.0a' }, { at: 'h1s' }, { u: 'T', x: 90, y: 676 }, 'riangulene', { at: 'p1.0b' }])
     const f = { 'p0.3a': open('', ['0e']), 'p1.0a': closed }
     expect(ink([page], f, false)['p0.3a']).toBe("open, the next mark not its unit's")
     expect(ink([page], f, true)['p0.3a']).toEqual(['E=mc(G9)', 0])
+    // (a later unit with no start mark, a title of two lines whose placeholder opens on its second: its first line is the
+    // title's, not the display's; none — the review of b479095e)
+    const title = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc', '\nTitle line one', '\nfor ', { at: 'p1.1a' }, 'X', { at: 'p1.1b' }, ' rest', { at: '1e' }])
+    expect(ink([title], { 'p0.3a': open('', ['0e']), 'p1.1a': closed }, true)['p0.3a']).toBe("open, the next mark not its unit's")
     // (an earlier unit's opening next: none, as before)
     const earlier = pageOf(['follow', { at: 'p3.1a' }, '\na=b(1)', { at: 'p2.0a' }, 'text', { at: 'p2.0b' }])
     expect(ink([earlier], { 'p3.1a': open('', ['3e']), 'p2.0a': closed }, true)['p3.1a']).toBe("open, the next mark not its unit's")

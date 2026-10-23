@@ -805,8 +805,9 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     it (RUN_IN) with it. A unit the head lists as `unhidden` (marks, across, spell, page, bounds) or whose text group the
     document does not hold (an unwrapped page; a base that was not wrapped) is the original's and is not drawn — a table's
     cell so alone, the rest of its group drawn (the coordinator's ruling of 2026-10-24, coverage first: a table with one
-    English cell beats an English table), but for one spanning columns, whose box the others share, which keeps the group
-    the original's as any cell that cannot be drawn does; one the
+    English cell beats an English table), but for one spanning columns or rows (`\multicolumn`, `\multirow`), whose box the
+    others share, and one that fails the spell check (its range may hold a sibling's ink), which keep the group the
+    original's as any cell that cannot be drawn does; one the
     head lists as `labelKept` draws its body alone and never hides a label. A table rule near a CJK cell (`cellBands`) is
     read from the part's `rules` (each page's, made by the maker over our page's ink: `layout/cell-rules.mjs`), the one fact
     of the add-on's manifest a reader kept.
@@ -2110,14 +2111,16 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   unit with an end mark alone (a title) from the point before it that is not one of its own placeholders' (a title's
   `$-$` or `:` sets points inside it: 2610.20848v1's title was read from its last one); where that range opens with ink TeX
   set before the title on lines of its own (amsart's date, a journal's header) and its last glyphs spell the title's source
-  exactly, those lines are left the page's (no group) and the title is the rest (none trimmed on a line of the title's own). A point's name is read in lower case:
+  exactly, those lines are left the page's (no group) and the title is the rest (none trimmed on a line of the title's own,
+  nor for a title that opens with a placeholder of no mark of its own: that lead is its ink). A point's name is read in lower case:
   a class that sets a title or a heading by `\uppercase` (spconf's `\section`, amsart's `\title`) sets its marks' names in
   capitals with it (`/axt-H0E ri`). Placeholders `u<id>.p`: `stream.mjs ownedOf`'s entry (the marking's `follows`) read with
   `erasure`, which finds exactly what the maker's reading leaves LOST (the maker's layouts unchanged): the text after a piece
   compared with TeX's quotes as one (OT1 sets `"` as ”: `\S{}"Held fixed"`), rules alone before the text after it the piece's
-  own (`\_` before `\allowbreak` is a rule), an opening alone over placeholders of no mark of their own, nothing else between,
-  to the next marked piece's opening (`\cls{circle}$\to$\cls{donut}`), and a display after its unit's end mark ending at a
-  later unit's opening as at its start mark; a footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
+  own (`\_` before `\allowbreak` is a rule; not one that reaches under the text after it, ulem's `\uline`), an opening alone
+  over placeholders of no mark of their own, nothing else between, to the next marked piece's opening
+  (`\cls{circle}$\to$\cls{donut}`), and a display after its unit's end mark ending at a later unit's opening as at its start
+  mark, where that unit's start mark follows the opening (an end-only title's opening may stand lines into it); a footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
   baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
   the reference's). A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first
@@ -2128,9 +2131,11 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   is wrapped whole). A unit's text takes its glyphs alone, never a rule: a rule in its range (a footnote's separator, a
   class's rule above a title, an underline) is the page's and stays; a placeholder's rules are its `.p`.
   A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's); a cell that opens with a
-  placeholder of no mark of its own (`\CompletionTokenCap{}`, `\#`) has that ink before its start mark, and the run that abuts
-  its start (each glyph under `CELL_ABUT` 0.6 em from the next, never across a column's gap of two `\tabcolsep`) is its `.p`;
-  ink in no group past that gap is another cell's and stands. Marks absent, twice or out of
+  placeholder of no mark of its own (`\CompletionTokenCap{}`, `\#`) has that ink before its start mark, told by its text
+  alone, never by a gap (an unmarked number cell may stand 0.4 em or nothing before it: `\tabcolsep` 2pt, `@{}`): the glyphs
+  right before the start that spell exactly the text the marking's probe showed the macro sets (`wrapFinal`'s `texts`, the
+  marks file's `marking.texts`) or a text symbol's (`\#` "#"), each under `CELL_ABUT` 0.6 em from the next, are its `.p`;
+  where that text is not known or not there, the cell is `marks`. Marks absent, twice or out of
   order, a unit the paper's units lack, a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
   it could not be kept in place, and the spell check reads no symbol), or a unit that opens with a placeholder of no mark of
   its own whose ink still stands, in no group, on its start's line before its start mark (a table's cell, `\bertlarge` first
@@ -2140,7 +2145,7 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   20 million glyphs and boxes (real ranges cost the ink once), over every loop (text, labels, placeholders, names); past it a
   unit is `marks`.
 - **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
-  its source text, letters and digits alone (NFKD, marks, modifier letters and spacing accents and case dropped, `ß` as
+  its source text, letters and digits alone (NFKD, marks, TeX's spacing accents U+02C6, U+02C7, U+02D8 to U+02DD and case dropped, `ß` as
   `ss`, a dotless `ı` and `ȷ` as their letters: TeX's accents — OT1 sets `\^e` as `ˆ` beside `e` —, ligatures, hyphenation
   and punctuation are no evidence), or it is `spell`, its groups still written. Its label must be a label's form (a number
   or an item's mark, maybe a caption's, a section's or a theorem's name before it, in brackets or with a stop, a dash or a

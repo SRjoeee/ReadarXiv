@@ -741,6 +741,10 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * `OPS` (PDF.js's operator codes, the host's): a page read live reads its characters' fills off the list PDF.js drew it by
  * (liveFillsOf), as its draw tells them; without it such a page tells none.
  */
+/** whether a table cell's box is other cells' too: it spans columns (its `cell.span`) or rows (a \\multirow, or a
+ *  \\multicolumn its span does not tell, among its pieces) */
+export const cellSpans = u => (u?.cell?.span ?? 1) > 1 || (Array.isArray(u?.pieces) ? u.pieces : []).some(p => /\\multi(?:row|column)(?![A-Za-z])/.test(typeof p?.src === 'string' ? p.src : ''))
+
 export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
@@ -1226,8 +1230,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     read.add(g)
     for (const id of ids) fixed.add(id)
     // (a cell whose ink the file cannot hide is the original's alone, the rest of its group drawn: coverage first, the
-    // coordinator's ruling of 2026-10-24 — but one spanning columns, whose box is the others' too, keeps the group whole)
-    const kept = id => { const d = candOf.has(id) ? decisionOf(candOf.get(id)) : null; return !!d && !d.p && d.skip?.code === 'unhidden' && !((U.get(id)?.cell?.span ?? 1) > 1) }
+    // coordinator's ruling of 2026-10-24 — but one spanning columns or rows (\\multicolumn, \\multirow), whose box is the
+    // others' too, keeps the group whole; and so does one that fails the spell check, whose range may hold a sibling's ink)
+    const kept = id => { const d = candOf.has(id) ? decisionOf(candOf.get(id)) : null; return !!d && !d.p && d.skip?.code === 'unhidden' && d.skip.why !== 'unhidden: spell' && !cellSpans(U.get(id)) }
     const cells = ids.filter(id => translated(U.get(id)) && !kept(id))
     if (!cells.length) return
     groupCells.set(g, cells)
