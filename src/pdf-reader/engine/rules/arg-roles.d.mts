@@ -13,13 +13,19 @@ export declare const paramsOf: (spec: string) => readonly Param[]
 /** the LaTeXML bindings a paper's files load (BINDINGS' indices) */
 export declare function bindingsOf(texts: string[]): Set<number>
 export declare function commandParams(name: string, bindings?: Set<number> | null): readonly Param[] | null
-/** a paper as the table reads it: the bindings its files load and the commands they define */
-export interface Paper { bindings: Set<number>; own: Set<string> }
+/** a paper as the table reads it: the bindings its files load, the packages they load by name, and the commands they define
+ *  (not by a fallback a package the paper loads overrides, overriddenFallback) */
+export interface Paper { bindings: Set<number>; packages: Set<string>; own: Set<string> }
 export declare function paperOf(texts: string[]): Paper
 /** a command's parameters for a paper: none for one it defines, else its bindings' */
 export declare function paperParams(name: string, paper?: Paper | null): readonly Param[] | null
 /** whether a definition of \name at t[at] stands inside an argument of a call of \name before it */
 export declare function inOwnCall(t: string, at: number, name: string): boolean
+/** whether the definition of \name at t[at], by the command `how`, is made only where \name is undefined: \providecommand's
+ *  kind, or one in the branch a test of \name takes where it is undefined (\unless inverting a conditional) */
+export declare function fallbackDefinition(t: string, at: number, name: string, how: string): boolean
+/** whether that definition is a fallback a package the paper loads (`packages`) overrides: no definition of the paper's */
+export declare function overriddenFallback(t: string, at: number, name: string, how: string, packages: Set<string> | null | undefined): boolean
 export declare function environmentParams(name: string, bindings?: Set<number> | null): readonly Param[] | null
 export declare function groupEnd(s: string, i: number, open?: string, close?: string): number
 export declare function readArgs(s: string, i: number, params: readonly Param[], to?: number): { args: Arg[]; end: number; complete: boolean }

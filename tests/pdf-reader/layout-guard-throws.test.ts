@@ -69,6 +69,20 @@ describe('markedOfPaper: a throw of the guard\'s own is no refusal', () => {
     } finally { fault.at = null }
   })
 
+  it('takes no marked original of more pages than arXiv\'s where its checks threw, the base page asked: as the guard\'s own rule', async () => {
+    fault.at = 'aux'
+    fault.error = new Error('the check broke')
+    try {
+      const five: Compiled = { ...ran, log: `${TEX}AXT-END\nOutput written on main.pdf (5 pages, 9 bytes).\n` }
+      const c = compiler([PROBE, five])
+      expect(await markedOfPaper(paperOf(), { compile: c.compile, pages: 4 })).toMatchObject({ refused: 'compile', why: 'the marked original has 5 pages, arXiv\'s PDF 4; the layout guard failed: the check broke' })
+      expect(c.asked).toHaveLength(2)
+      // (without the base page, or with arXiv's pages, as before: the marked original taken)
+      expect(await markedOfPaper(paperOf(), { final: false, compile: compiler([PROBE, five]).compile, pages: 4 })).toMatchObject({ pdf: PDF })
+      expect(await markedOfPaper(paperOf(), { compile: compiler([PROBE, five]).compile, pages: 5 })).toMatchObject({ pdf: PDF })
+    } finally { fault.at = null }
+  })
+
   it('keeps a remedy that passed where a later check throws: not the marked original that failed', async () => {
     // (the marked original stops at an error in unit 0; unit 0 unmarked and the names off, it passes; the smaller remedy's
     // checks then throw)

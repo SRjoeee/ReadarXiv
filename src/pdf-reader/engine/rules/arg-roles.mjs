@@ -18,6 +18,7 @@
 // \titlerunning) `?s{x`, its value a group. A command LaTeXML reads in code past its prototype (\cmidrule[]'s
 // (trim){a-b}, acronym's \ac*{key}) is not known: its arguments are no reader's text
 import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, LATEXML_COMMIT, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUIRES } from './latexml-args.mjs'
+import { BREAK_HINTS, inkFree } from './tex-kernel.mjs'
 
 export { LATEXML_COMMIT }
 /** the roles' names, by their letter */
@@ -159,13 +160,75 @@ export function commandParams(name, bindings = null) {
 /** the ways a paper's files define a command, its name in group 1: whatever the table says of a name the paper defines
  *  is another command's (melba.cls's \def\firstname{…}, which LaTeXML's moderncv gives an argument) */
 const OWN_COMMANDS = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|newtoks|DeclareMathOperator\*?)\s*\{?\s*\\([A-Za-z@]+)/g
-/** a paper as the table reads it: the bindings its files load (bindingsOf) and the commands they define (`own`), whose
- *  arguments the table cannot know (llncs.cls' \newtoks\titlerunning among them) — not a command defined anew only
- *  inside its own call's argument, which is the kernel's where it is called (inOwnCall) */
+/** a paper as the table reads it: the bindings its files load (bindingsOf), the packages they load by name (`packages`:
+ *  \usepackage and \RequirePackage, each name of a list) and the commands they define (`own`), whose arguments the table
+ *  cannot know (llncs.cls' \newtoks\titlerunning among them) — not a command defined anew only inside its own call's
+ *  argument, which is the kernel's where it is called (inOwnCall), nor a fallback a package the paper loads overrides
+ *  (overriddenFallback: llncs.cls' \@ifundefined{url}{\def\url#1{#1}}{} under hyperref) */
 export function paperOf(texts) {
-  const own = new Set(), plain = texts.map(uncommented)
-  for (const text of plain) for (const m of text.matchAll(OWN_COMMANDS)) if (!own.has(m[1]) && !inOwnCall(text, m.index, m[1])) own.add(m[1])
-  return { bindings: bindingsOfText(plain), own }
+  const own = new Set(), plain = texts.map(uncommented), bindings = bindingsOfText(plain), packages = packagesOf(plain)
+  for (const text of plain) {
+    for (const m of text.matchAll(OWN_COMMANDS)) {
+      if (own.has(m[1]) || inOwnCall(text, m.index, m[1]) || overriddenFallback(text, m.index, m[1], /^\\([A-Za-z]+)/.exec(m[0])?.[1] ?? '', packages)) continue
+      own.add(m[1])
+    }
+  }
+  return { bindings, packages, own }
+}
+/** the packages texts load by name: every name of each \usepackage and \RequirePackage (WithOptions too), its options aside */
+function packagesOf(texts) {
+  const out = new Set()
+  for (const text of texts) for (const m of text.matchAll(/\\(?:usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g)) for (const name of m[1].split(',')) if (name.trim()) out.add(name.trim())
+  return out
+}
+/**
+ * The packages that define a command whatever was defined before them, by the command, as TeX Live 2025's sources do: url.sty's
+ * \DeclareUrlCommand\url; hyperref.sty's \DeclareRobustCommand* of \url (after its \RequirePackage{url}), \nolinkurl and \href;
+ * xurl.sty's \RequirePackage{url}; breakurl.sty's \DeclareRobustCommand{\burl}. Not breakurl for \url (under pdfTeX \burl is
+ * \url's synonym and \url is left as it was), nor \path, which url.sty defines only where it is undefined (a fallback before it
+ * stands). A command none of whose packages the paper loads has its fallback the paper's definition, as any
+ */
+const OVERRIDDEN_BY = Object.freeze({ url: ['url', 'hyperref', 'xurl'], nolinkurl: ['hyperref'], href: ['hyperref'], burl: ['breakurl'] })
+/** how far before a definition the test of its name being undefined is looked for */
+const FALLBACK_WINDOW = 400
+/** the definers that define only a command not defined yet */
+const PROVIDERS = /^(?:providecommand|Provide(?:Expandable)?DocumentCommand|providerobustcmd)$/
+/**
+ * Whether the definition of \name at t[at], made by the command `how` (providecommand, def, newcommand…), is a fallback: one TeX
+ * makes only where \name is undefined. \providecommand's kind; or one in the branch TeX takes then of a test of \name: the first
+ * argument of \@ifundefined{name}, \ifcsundef{name} or \ifundef{\name} (in an \AtBeginDocument too: llncs.cls'
+ * \AtBeginDocument{\@ifundefined{url}{\def\url#1{#1}}{}}); of a conditional, the branch taken where \name is undefined:
+ * \ifx\name\undefined's (\@undefined; \ifx\undefined\name, \expandafter\ifx\csname name\endcsname\relax) first, \ifdefined\name's
+ * and \ifcsname name\endcsname's \else, each the other branch after \unless, which inverts the conditional — with no other
+ * conditional, \or or \fi between the test and the definition. A test in a comment, of another name, or nested deeper is none:
+ * the definition stands, as before
+ */
+export function fallbackDefinition(t, at, name, how) {
+  if (PROVIDERS.test(how)) return true
+  const from = Math.max(0, at - FALLBACK_WINDOW), before = t.slice(from, at)
+  const commented = k => /(?:^|[^\\])%/.test(t.slice(t.lastIndexOf('\n', k - 1) + 1, k))
+  // (a name is letters and @, none of them special in a pattern)
+  for (const m of before.matchAll(new RegExp(String.raw`\\(?:@ifundefined|ifcsundef)\s*\{\s*${name}\s*\}|\\ifundef\s*(?:\{\s*\\${name}\s*\}|\\${name}(?![A-Za-z@]))`, 'g'))) {
+    const k = skipSpaces(t, from + m.index + m[0].length), e = t[k] === '{' ? groupEnd(t, k) : -1
+    if (e > at && !commented(from + m.index)) return true
+  }
+  // (`undef`: a test true where \name is undefined; `def`, one true where it is defined; `un`, an \unless before either)
+  const test = new RegExp(String.raw`(?<un>\\unless\s*)?(?:(?<undef>\\ifx\s*(?:\\${name}\s*\\@?undefined|\\@?undefined\s*\\${name})|\\expandafter\s*(?<un2>\\unless\s*)?\\ifx\s*\\csname\s*${name}\s*\\endcsname\s*\\relax)|(?<def>\\ifdefined\s*\\${name}|\\ifcsname\s*${name}\s*\\endcsname))(?![A-Za-z@])`, 'g')
+  const last = [...before.matchAll(test)].at(-1)
+  if (!last || commented(from + last.index)) return false
+  const between = before.slice(last.index + last[0].length)
+  if (/\\(?:if[A-Za-z@]*|unless|or|fi)(?![A-Za-z@])/.test(between)) return false
+  // (the branch taken where \name is undefined: the first, or the one after the conditional's \else)
+  const undefinedFirst = !!last.groups?.undef !== !!(last.groups?.un || last.groups?.un2)
+  return (between.match(/\\else(?![A-Za-z@])/g)?.length ?? 0) === (undefinedFirst ? 0 : 1)
+}
+/** whether a definition is a fallback (fallbackDefinition) of a command a package the paper loads (`packages`, paperOf)
+ *  defines whatever was defined before it (OVERRIDDEN_BY): that package's definition is the one in force, and the fallback
+ *  is no definition of the paper's, the table reading the calls (2610.19860: llncs.cls' fallback \def\url#1{#1}, read as
+ *  \url's own under hyperref, made its argument a group, and hyperref's \url printed the mark set inside it). Where no such
+ *  package is loaded, the fallback is the definition TeX uses: false */
+export function overriddenFallback(t, at, name, how, packages) {
+  return !!packages && !!OVERRIDDEN_BY[name]?.some(p => packages.has(p)) && fallbackDefinition(t, at, name, how)
 }
 const OWN_CALL_WINDOW = 4000
 /**
@@ -353,7 +416,7 @@ export function textArgsOf(src, paper = null) {
  * around one of these (\\noalign{\\vskip 4mm}, not \\noalign{\\hbox{Group A}})
  */
 const TEXTLESS = new Set([
-  'vspace', 'hspace', 'addvspace', 'vskip', 'hskip', 'kern', 'penalty', 'enlargethispage', 'linebreak', 'pagebreak', 'nolinebreak', 'nopagebreak',
+  'vspace', 'hspace', 'addvspace', 'vskip', 'hskip', 'kern', 'penalty', 'enlargethispage', ...BREAK_HINTS,
   'rule', 'specialrule', 'addlinespace', 'toprule', 'midrule', 'bottomrule', 'cmidrule', 'cline', 'hhline', 'tabularnewline',
   'setlength', 'addtolength', 'settowidth', 'settoheight', 'settodepth', 'setcounter', 'addtocounter', 'stepcounter', 'newlength', 'newcounter',
   'fontsize', 'linespread', 'setstretch', 'tablewidth', 'phantom', 'hphantom', 'vphantom',
@@ -370,9 +433,6 @@ const TEXTLESS = new Set([
  * (latex.ltx, the e-TeX manual); the registers the table holds as REGISTER are values already
  */
 const VALUES = new Set(['number', 'romannumeral', 'the', 'value', 'numexpr', 'dimexpr', 'glueexpr', 'muexpr', 'fontdimen', 'dimen', 'skip', 'count', 'muskip', 'toks', 'wd', 'ht', 'dp', 'fontcharwd', 'fontcharht', 'fontchardp', 'fontcharic', 'gluestretch', 'glueshrink', 'mutoglue', 'gluetomu'])
-/** control symbols that set no letters: a discretionary hyphen (its hyphen, where a line breaks there, is the line's
- *  break, which the layer sets anew) */
-const TEXTLESS_SYMBOLS = new Set(['\\-'])
 /**
  * Whether a placeholder can never be a text rendering: its source one command of TEXTLESS, its arguments all there as
  * the table reads them and nothing after them, or a register's assignment (\\looseness=-1, \\parindent 0pt). What it sets, if anything (a rule's bar), is the page's own drawing,
@@ -382,7 +442,9 @@ const TEXTLESS_SYMBOLS = new Set(['\\-'])
 export function textless(src, paper = null) {
   // booktabs' trim, (lr), before \\cmidrule's columns: what the front end passes over too
   const s = src.trim().replace(/^(\\cmidrule\s*(?:\[[^\]]*\]\s*)?)\([^()]*\)/, '$1')
-  if (TEXTLESS_SYMBOLS.has(s)) return true
+  // TeX's and the kernel's own control sequences that set no ink and read nothing (tex-kernel.mjs: `\\@`, `\\-`, `\\relax`…), but
+  // a control word the paper defines anew
+  if (inkFree(src)) return !paper?.own.has(/^\s*\\([A-Za-z]+)/.exec(src)?.[1])
   if (!/^\\[A-Za-z@]+/.test(s)) return false
   const { name, end } = commandAt(s, 0)
   if ((!TEXTLESS.has(name) && name !== 'noalign' && paperParams(name, paper) !== REGISTER) || paper?.own.has(name)) return false

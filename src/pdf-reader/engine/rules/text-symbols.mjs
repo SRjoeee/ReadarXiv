@@ -8,7 +8,13 @@
 
 /**
  * The kernel's and textcomp's text symbols, as LaTeX defines them in every encoding, each the one character it sets
- * (\textquotesingle the straight quote ', \textquotedbl the straight double quote ")
+ * (\textquotesingle the straight quote ', \textquotedbl the straight double quote "); and the kernel's letters of Latin
+ * scripts (\o, \ss, \ae, \l: latex.ltx and the encodings' own) and \slash (`/` and the permission to break after it), which
+ * a paper writes inside a word (`F\o lner`, `and\slash or`), where no mark goes. Not the dotless \i and \j: a paper that
+ * writes them in its text has made them its own as often as not (2608.23818's indices, a coloured italic i and j with \xspace),
+ * and the table would draw ı and ȷ for them. Each is one character;
+ * most are one glyph in every encoding, but OT1 sets \l, \L, \aa and \AA of two (a bar or a ring over a letter), which a page's
+ * text then gives as two characters, not the one: there the maker finds none and the piece stays LOST, as it was
  */
 export const TEXT_SYMBOLS = Object.freeze({
   '\\%': '%', '\\&': '&', '\\#': '#', '\\$': '$', '\\_': '_', '\\{': '{', '\\}': '}',
@@ -18,6 +24,8 @@ export const TEXT_SYMBOLS = Object.freeze({
   '\\textdagger': '†', '\\textdaggerdbl': '‡', '\\copyright': '©', '\\textcopyright': '©', '\\textregistered': '®',
   '\\texttrademark': '™', '\\pounds': '£', '\\textsterling': '£', '\\textdegree': '°', '\\textbullet': '•',
   '\\textperiodcentered': '·', '\\ldots': '…', '\\dots': '…', '\\textellipsis': '…', '\\textendash': '–', '\\textemdash': '—',
+  '\\o': 'ø', '\\O': 'Ø', '\\ss': 'ß', '\\ae': 'æ', '\\AE': 'Æ', '\\oe': 'œ', '\\OE': 'Œ', '\\aa': 'å', '\\AA': 'Å',
+  '\\l': 'ł', '\\L': 'Ł', '\\slash': '/',
 })
 
 /** a symbol's text: its source one of TEXT_SYMBOLS, alone or followed by an empty group (`\%{}`, `\dots{}`), else null */

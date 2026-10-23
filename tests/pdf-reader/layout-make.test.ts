@@ -54,7 +54,7 @@ async function byPages(w: World, log: string) {
   const st = await m.byStream()
   if ('refused' in st) throw new Error('the stream refused what the whole made')
   // and the marked original read a page at a time too (markedPages: its head, then each page before arXiv's of its number)
-  const events = markedPages(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, units: w.units, OPS } as never)
+  const events = markedPages(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, complete: w.complete ?? null, apart: w.apart ?? null, units: w.units, OPS } as never)
   const head = ((await events.next()).value as { head: Parameters<typeof marksOfHead>[0] }).head
   const both = await makerOf({ ...input, marks: marksOfHead(head, 'pdflatex'), arxiv: baseOf(w), frame: () => frameOf as never, columnEdges: first.edges(), check: true })
   if ('refused' in both) throw new Error('the marked stream refused what the whole made')
@@ -81,7 +81,7 @@ async function byPages(w: World, log: string) {
   if ('refused' in ds) throw new Error('the default stream refused what the whole made')
   const sd = await ds.byStream()
   if ('refused' in sd) throw new Error('the default stream refused what the whole made')
-  const events2 = markedPages(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, units: w.units, OPS } as never)
+  const events2 = markedPages(markedOf(w.marked ?? w.pages, w.marks), log, { engine: 'pdflatex', switches: w.switches ?? null, inkless: w.inkless ?? null, texts: w.texts ?? null, names: w.names ?? null, complete: w.complete ?? null, apart: w.apart ?? null, units: w.units, OPS } as never)
   const head2 = ((await events2.next()).value as { head: Parameters<typeof marksOfHead>[0] }).head
   const dm = await makerOf({ ...input, marks: marksOfHead(head2, 'pdflatex'), arxiv: baseOf(w), check: true })
   if ('refused' in dm) throw new Error('the default marked stream refused what the whole made')
@@ -2017,3 +2017,57 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
   })
 })
 
+
+describe('makeLayout, the marking the marks file records: the complete macros, the boxes apart, a start mark at no word (#436)', () => {
+  // (each character half an em of 10 pt: 5 pt; the maker replays the marking from the file, layoutMarking with its `complete`
+  // and `apart`, and bounds a unit whose start mark stands at no word by the word its line reaches)
+  const at = (j: number) => 72 + 5 * j
+  it('a citation after a complete macro TeX answered for is the marking\'s, and found: the maker replays the marking with `complete`', async () => {
+    const runs: Run[] = [{ s: 'The share is 91.5 [1] of all', x: 72, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.1a', 1, at(13), 700], ['p0.1b', 1, at(17), 700], ['p0.3a', 1, at(18), 700], ['p0.3b', 1, at(21), 700]],
+      units: [unit('para', [text('The share is '), ph('\\share{}'), text(' '), ph('\\cite{a}'), text(' of all')])],
+      complete: { share: 0 }, switches: { '\\share': '00000000', '\\cite': '00000000' },
+    })
+    expect(phOf(file, 0, 3)[3]).toBe(0)
+    expect(phOf(file, 0, 3).slice(5, 8)).toEqual([at(18), 700, at(21)])
+    expect(phOf(file, 0, 1)[3]).toBe(0)
+  })
+  it('a macro glued to a number whose box begins with a kern is the marking\'s, and found: the maker replays it with `apart`', async () => {
+    const runs: Run[] = [{ s: 'a gap of 0.58pp more', x: 72, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.1a', 1, at(13), 700], ['p0.1b', 1, at(15), 700]],
+      units: [unit('para', [text('a gap of 0.58'), ph('\\pp{}'), text(' more')])],
+      complete: { pp: 0 }, switches: { '\\pp': '00000000' }, apart: ['\\pp{}'],
+    })
+    expect(phOf(file, 0, 1)[3]).toBe(0)
+    expect(phOf(file, 0, 1).slice(5, 8)).toEqual([at(13), 700, at(15)])
+  })
+  it('a unit that opens with a formula, its start mark at no word, is placed from its line\'s first word after the mark', async () => {
+    // (the formula's glyphs give no text: a run of blanks)
+    const runs: Run[] = [{ s: 'xxxx', x: 72, y: 700, blank: true }, { s: 'is a word here', x: 95, y: 700 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 700], ['p0.0a', 1, 72, 700], ['p0.0b', 1, 92, 700]],
+      units: [unit('para', [ph('$x$'), text(' is a word here')])],
+    })
+    expect(chunk(rowsOf(file, 0, 'lines'), 8)).toHaveLength(1)
+  })
+  it('but not from a word of the other column on its baseline, whatever the reading order: unplaced as before', async () => {
+    const runs: Run[] = [{ s: 'xxxxxxxxxx', x: 60, y: 700, blank: true }, { s: 'Other text here', x: 320, y: 700 }, { s: 'is the unit', x: 60, y: 688 }]
+    // (its paper's one unit unplaced, none laid: the file is refused, the paper falls back to arXiv's PDF; with a unit beside it
+    // that is laid, it has no row of its own in the file)
+    const second: Run = { s: 'a second paragraph laid', x: 60, y: 600 }
+    const w: World = {
+      pages: [{ runs: [...runs, second] }],
+      marks: [COLS2(1), ['0s', 1, 60, 700], ['0e', 1, endOf(runs[2] as Run), 688], ['p0.0a', 1, 60, 700], ['p0.0b', 1, 110, 700], ['1s', 1, 60, 600], ['1e', 1, endOf(second), 600]],
+      units: [unit('para', [ph('$x$'), text(' is the unit')]), unit('para', [text('a second paragraph laid')])],
+    }
+    const { file } = await made(w)
+    expect(file.lines.find(([u]) => u === 0)).toBeUndefined()
+    expect(file.lines.map(([u]) => u)).toEqual([1])
+    expect(await make({ ...w, pages: [{ runs }], marks: w.marks.slice(0, 5), units: w.units.slice(0, 1) })).toMatchObject({ refused: 'carry', stats: { units: { unplaced: 1, located: 0 } } })
+  })
+})
