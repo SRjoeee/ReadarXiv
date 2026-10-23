@@ -22,6 +22,7 @@ export declare const pagesOfLog: (log: string | null | undefined) => number | nu
 export declare const texLiveOf: (log: string | null | undefined) => string | null
 /** the TeX Live year of the build arXiv's PDF says: the `PTEX.Fullbanner` of the Info dictionary PDF.js resolves, else null */
 export declare const texLiveOfPdf: (doc: PdfLike) => Promise<string | null>
+export declare const compilerOfPdf: (doc: PdfLike) => Promise<'latex' | 'pdflatex' | 'xelatex' | 'lualatex' | null>
 /** whether TeX ran: its banner in the log */
 export declare const texRan: (log: string | null | undefined) => boolean
 /** the host's limit a compile met, else null */
