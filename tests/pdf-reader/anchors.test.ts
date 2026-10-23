@@ -80,8 +80,12 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     const words = markWords(one, at)
     expect(words.get('0s')?.t).toBe('attention')
     expect(boundsFromMarks(cut, words).get('0')).toEqual([2, 3])
-    // a word whose shared box ends within half a character before the mark is still the one it stands at
-    expect(markWords(one, new Map([['0s', { page: 1, x: 359.5, y: 440 }]])).get('0s')?.t).toBe('1')
+    // a mark just past a label's digit (1.4 pt, a third of its box) is the next word's: no slack past a word's end (2610.22214's
+    // "Figure 9: Manufacturability", as its marked original read it)
+    const nine = tokenizeDocument([{ page: 1, items: [item('Figure', 317.96, 582.49, { width: 25.77 }), item('9:', 348.02, 582.49, { width: 6.5 }), item('Manufacturability', 360.9, 582.49, { width: 73.01 })], styles: {} }])
+    expect(markWords(nine, new Map([['0s', { page: 1, x: 353.74, y: 582.49 }]])).get('0s')?.t).toBe('manufacturability')
+    // a mark inside a word's box is that word's
+    expect(markWords(one, new Map([['0s', { page: 1, x: 370, y: 440 }]])).get('0s')?.t).toBe('attention')
     // and with no word after it on its line within reach, the word it stands past, as before
     expect(markWords(one, new Map([['0s', { page: 1, x: 441, y: 440 }]])).get('0s')?.t).toBe('maps')
   })
