@@ -65,7 +65,6 @@
 import { noStart } from './no-start.mjs'
 import { work } from './work.mjs'
 import { sourceRepeats, stutterCuts } from './stutter.mjs'
-import { SWAP_PAD } from '../layer/swap.mjs'
 import { blocksOf, CITE, kinsokuOf, lcsPairs, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -3368,83 +3367,30 @@ export function keepsShare(share, lines) {
   return far === null || share.at === null || Math.abs(far.baseline - share.at) < 0.01
 }
 
-// ---- drawing: the layer as data (erasing, restoring, crops), drawn on a copy of the page at any resolution; the SVG text
+// ---- drawing: the layer as data (crops and pastes over our page with the drawn units' groups hidden), drawn at any
+// resolution; the SVG text
 
-/**
- * The unit's lines erased on the page, what the erasing covered that no painted unit accounts for put back, and its crops
- * (layer.js paintPart without its text), as data: the operations drawOps draws, in v0's device pixels on the page (`px`,
- * `k` of them a PDF unit). Drawn at v0's own resolution they are v0's own drawing, call for call; drawn at any other
- * they are scaled to it, from the page as PDF.js draws it there, so that nothing is drawn from a page image of a fixed
- * resolution. `hasSource(page)`: whether a crop's page is drawn (v0 leaves out a crop whose page is not). Each operation:
- * - { op: 'erase', box: [x, y, w, h] }: the paper's white;
- * - { op: 'restore', page, clip: [[x, y, w, h], …], boxes: [[x, y, w, h], …] }: the page's own pixels in each box,
- *   within the erased boxes (clip);
- * - { op: 'crop', page, src: [x, y, w, h], dst: [x, y, w, h] }: that page's pixels in src laid on dst, darkened in.
- */
 /** a crop's part in its audit entry (`part`, cropPartsOf's), where its formula has parts: the checker counts each part's */
 const partOf = c => (c.part !== undefined ? { part: c.part } : {})
-export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audit = null, id = null, restore = null }) {
-  const ops = []
-  const erased = []
-  for (const [bi, b] of blocks.entries()) {
-    if (b.page !== page) continue
-    for (const [ri, r] of b.rects.entries()) {
-      const ext = extents?.get(r.join()) ?? r.slice(1)
-      // (an extent of several boxes, a layout file's: each erased so, the line's last to the column's edge)
-      const boxes = Array.isArray(ext[0]) ? ext : [ext]
-      for (const [ei, e] of boxes.entries()) {
-        const [x0, y0, , y1] = e
-        // a line that is not its block's last is justified to the column's edge: erased to it (a closing symbol the
-        // anchors' line rectangle left out stayed, 1512.03385 page 2's "&"); to its own measure's where the paragraph's
-        // changed (measuresOf: a line beside a wrapped figure, never erased over it)
-        const edge = b.measures && !b.centred ? b.measures.get(rectKey(r))?.[1] ?? b.x1 : b.x1
-        const x1 = ri < b.rects.length - 1 && ei === boxes.length - 1 ? Math.max(e[2], edge) : e[2]
-        const [ax, ay] = px(x0 - (bi === 0 && ri === 0 && ei === 0 ? 0.3 : 1.8), y1 + 1.2), [bx, by] = px(x1 + 1.8, y0 - 1.2)
-        ops.push({ op: 'erase', box: [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] })
-        erased.push([Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)])
-        audit?.push({ what: 'erase', unit: id, page, box: [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] })
-      }
-    }
-  }
-  if (restore && erased.length) {
-    const op = restoreUnaccounted(erased, px, restore, audit, id, page)
-    if (op) ops.push(op)
-  }
-  for (const line of L.lines) {
-    if (line.page !== page) continue
-    for (const it of line.items) {
-      if (!it.t.crop) continue
-      const c = it.t.crop.crop
-      if (!hasSource(it.t.crop.page)) continue
-      const sc = L.scale
-      const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
-      const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
-      ops.push({ op: 'crop', page: it.t.crop.page, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k] })
-      audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, ...partOf(it.t.crop), srcPage: it.t.crop.page, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k] })
-    }
-  }
-  return ops
-}
-
 /**
- * The unit's drawing on a page whose text the removed PDF has taken out (removal.mjs, layout/remove.mjs), as data: the
- * removed page's pixels swapped in over the unit's own glyphs (`rects`, device pixels, where kept ink lies under them),
- * then its other rectangles filled with paper (`erase`, one path: the fill takes no kept ink), then
- * its crops, each cut from the original through its own glyphs' and rules' outline boxes (`clips`, by the piece's
- * index: `rects` drawn through, `own` its boxes unpadded, for a check). Nothing is put back. The
- * audit has the unit's swapped boxes (as its 'erase', what the gate's residue and bites read) and its crops, as unitOps'.
- * `lines`: the unit's removed glyphs' boxes on the page grouped by line, in PDF units, for the audit.
+ * A unit's drawing on a page of our wrapped document (docs/route/ocg-erasure.md §4.1; hide.mjs unitHiding), as data: the operations
+ * drawOps draws over render A (the page with the units drawn there hidden by their groups), in v0's device pixels on the page
+ * (`px`, `k` of them a PDF unit). Drawn at any other resolution they are scaled to it, from the planes PDF.js draws there. Each:
+ * - { op: 'hidden', rects }: where the unit's hidden ink lies, less what is shown again (nothing drawn: what the links ask);
+ * - { op: 'paste', page, plane, rects }: render `plane` of this page ('B': every unit's text and label hidden; 'C': every group
+ *   shown) put back in each rectangle: the ink the unit's reading keeps;
+ * - { op: 'crop', page, plane: 'B', src, dst, clip? }: that page's render B in src laid on dst, darkened in, cut through its
+ *   placeholder's own segments (`clip`, source pixels) where it has them; a label's crop (no piece) from render C.
+ * `hidden`, `fromB`, `fromC`: PDF boxes; `clips`: by the piece's index (hide.mjs). `hasSource(page)`: whether a crop's page is drawn.
+ * The audit has the unit's hidden rectangles (as 'erase', what the checker reads as taken away) and its crops.
  */
-export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [], lines = [], removed, audit = null, id = null, clips = null }) {
+export function hideOps(L, page, { px, k, hasSource, pxOf, hidden = [], fromB = [], fromC = [], clips = null, audit = null, id = null }) {
+  const dev = b => { const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1]); return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] }
   const ops = []
-  if (rects.length) ops.push({ op: 'swap', page, rects })
-  // (the rest filled with paper, all of it one path: two rectangles' shared edge, a fraction of a pixel, would show a
-  // seam of the original's ink where each covered it in part)
-  if (erase.length) ops.push({ op: 'paper', rects: erase })
-  for (const b of lines) {
-    const [ax, ay] = px(b[0], b[3]), [bx, by] = px(b[2], b[1])
-    audit?.push({ what: 'erase', unit: id, page, box: [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)], swap: true })
-  }
+  if (hidden.length) ops.push({ op: 'hidden', rects: hidden.map(dev) })
+  for (const b of hidden) { const [x, y, w, h] = dev(b); audit?.push({ what: 'erase', unit: id, page, box: [x, y, x + w, y + h] }) }
+  if (fromB.length) ops.push({ op: 'paste', page, plane: 'B', rects: fromB.map(dev) })
+  if (fromC.length) ops.push({ op: 'paste', page, plane: 'C', rects: fromC.map(dev) })
   for (const line of L.lines) {
     if (line.page !== page) continue
     for (const it of line.items) {
@@ -3454,11 +3400,12 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
       const sc = L.scale
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
-      // (cut from the original through its own glyphs' and rules' outline boxes, where it has them: a crop's box may
-      // reach another line's ink, its glyphs' boxes do not. The clips are this page's segments in this page's pixels: a
-      // crop, or a part of one, from another page has none)
-      const cut = it.t.crop.page === page ? clips?.get(it.t.crop.k) ?? null : null, clip = cut?.rects ?? null
-      const plane = 'O'
+      // (cut through its own segments where it has them: a crop's box may reach another line's ink, its segments do not. The clips
+      // are this page's segments in this page's pixels: a crop, or a part of one, from another page has none. A crop of no piece
+      // is a label's, whose group render B hides: cut from render C)
+      const piece = it.t.crop.k !== undefined
+      const cut = piece && it.t.crop.page === page ? clips?.get(it.t.crop.k) ?? null : null, clip = cut?.rects.map(dev) ?? null
+      const plane = piece ? 'B' : 'C'
       ops.push({ op: 'crop', page: it.t.crop.page, plane, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip } : {}) })
       audit?.push({ what: 'crop', unit: id, page, k: it.t.crop.k, ...partOf(it.t.crop), srcPage: it.t.crop.page, plane, src: c, dst: [dx, dy, dx + it.w * k, dy + (c[3] - c[1]) * sc * k], ...(clip?.length ? { clip, own: cut.own } : {}) })
     }
@@ -3467,53 +3414,27 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
 }
 
 /**
- * unitOps' and removalOps' operations drawn on `ctx`, a copy of the page, in their order, `z` times v0's resolution (1:
- * v0's own canvas calls, with the same numbers). `sourceOf(page, plane)`: that page as PDF.js drew it at the same
- * resolution as `ctx`, untouched, which the restores, swaps and crops are cut from (null: the operation is left out):
- * plane 'O' (or none) the original, 'R' its text-removed page, 'P' its placeholders alone. A crop is darkened in, never
- * pasted: its paper is white, and pasted it erased what it was laid over (a kept label). A swap puts the removed page's
- * pixels in its rectangles.
- * `k`: the device pixels a PDF unit `ctx` is drawn at, where the caller knows it. A swap's and a paper fill's rectangles are a
- * removed glyph's outline grown by SWAP_PAD for its antialiased edge, a device pixel and more at 2.5 device pixels a unit and
- * up; where the pad is less than a device pixel (a reader at 85 % and a device pixel ratio of 1: 1.06 a unit), the glyph's
- * edge pixel straddled the rectangle's edge, which the canvas antialiases too, and a faint row of the erased line's ink was
- * left (the M1 survey of 2608.16117, Chinese page 10). There each rectangle is taken out to whole device pixels: every pixel
- * the grown outline touches is wholly replaced, and no edge is blended. Where the pad is a device pixel or more, as drawn
+ * hideOps' operations drawn on `ctx` (render A of the page, at `z` times v0's resolution), in their order. `sourceOf(page, plane)`:
+ * that page's render `plane` at the same resolution as `ctx`, which the pastes and crops are cut from (null: the operation is left
+ * out). A paste puts the plane's pixels back in its rectangles, out to whole device pixels (no edge blended); a crop is darkened in,
+ * never pasted: its paper is white, and pasted it would cover what it is laid over (a kept label)
  */
-export function drawOps(ctx, ops, z, sourceOf, k = null) {
+export function drawOps(ctx, ops, z, sourceOf) {
   const at = b => [b[0] * z, b[1] * z, b[2] * z, b[3] * z]
-  // (out to whole device pixels: a hair of rounding is no pixel)
   const whole = b => { const x0 = Math.floor(b[0] * z + 1e-6), y0 = Math.floor(b[1] * z + 1e-6), x1 = Math.ceil((b[0] + b[2]) * z - 1e-6), y1 = Math.ceil((b[1] + b[3]) * z - 1e-6); return [x0, y0, x1 - x0, y1 - y0] }
-  const removed = k !== null && SWAP_PAD * k < 1 ? whole : at
   ctx.save()
-  ctx.fillStyle = '#fff'
   for (const o of ops) {
-    if (o.op === 'erase') ctx.fillRect(...at(o.box))
-    else if (o.op === 'paper') {
-      ctx.beginPath()
-      for (const e of o.rects) ctx.rect(...removed(e))
-      ctx.fill()
-    }
-    else if (o.op === 'restore') {
-      const src = sourceOf(o.page, 'O')
-      if (!src) continue
-      ctx.save()
-      ctx.beginPath()
-      for (const e of o.clip) ctx.rect(...at(e))
-      ctx.clip()
-      for (const b of o.boxes) { const d = at(b); ctx.drawImage(src, ...d, ...d) }
-      ctx.restore()
-    } else if (o.op === 'swap') {
-      const src = sourceOf(o.page, 'R')
+    if (o.op === 'paste') {
+      const src = sourceOf(o.page, o.plane)
       if (!src || !o.rects.length) continue
       ctx.save()
       ctx.beginPath()
-      for (const e of o.rects) ctx.rect(...removed(e))
+      for (const e of o.rects) ctx.rect(...whole(e))
       ctx.clip()
       ctx.drawImage(src, 0, 0)
       ctx.restore()
     } else if (o.op === 'crop') {
-      const src = sourceOf(o.page, o.plane ?? 'O')
+      const src = sourceOf(o.page, o.plane)
       if (!src) continue
       const s = at(o.src), d = at(o.dst)
       if (o.clip) {
@@ -3531,92 +3452,6 @@ export function drawOps(ctx, ops, z, sourceOf, k = null) {
     }
   }
   ctx.restore()
-}
-
-/**
- * Iteration 3: what a unit's erasing covered that no painted unit accounts for, put back from the original: a page's
- * characters whose keys `accounted` lacks (a kept formula, a label, a rendering no placeholder took, another unit's
- * line the rectangles overlap), each item whole where all of its characters are (an item's width is exact, its
- * characters' places estimates), and the ink no character covers (a rule, a figure's part: the page's ink map, a
- * quarter of the canvas's resolution, against `cover`, the cells the page's text covers). Only inside the erased boxes.
- * `restore`: { items ([{ chars, keys }] of the page), accounted (Set), kept, ink, cover }. Returns the restore operation
- * (unitOps'), its boxes in whole device pixels as v0 drew them, or null.
- */
-export function restoreUnaccounted(erased, px, { items, accounted, kept, ink, cover }, audit, id, page) {
-  const boxes = []
-  // the erased boxes' own extent first: most of the page's items are nowhere near them
-  const ex0 = Math.min(...erased.map(e => e[0])), ex1 = Math.max(...erased.map(e => e[2])), ey0 = Math.min(...erased.map(e => e[1])), ey1 = Math.max(...erased.map(e => e[3]))
-  const hit = b => b[0] < ex1 && b[2] > ex0 && b[1] < ey1 && b[3] > ey0 && erased.some(e => b[0] < e[2] && b[2] > e[0] && b[1] < e[3] && b[3] > e[1])
-  const dev = (x0, y0, x1, y1) => { const [ax, ay] = px(x0, y1), [bx, by] = px(x1, y0); return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)] }
-  // a kept line (a formula) whole, its hull: its rules and radicals are ink no character covers
-  for (const h of kept?.hulls ?? []) if (hit(h)) boxes.push(h)
-  const isKept = key => kept?.keys.has(key)
-  for (const it of items) {
-    if (!hit(it.box)) continue
-    const out = it.chars.filter((c, n) => /\S/.test(c.ch) && (!accounted.has(it.keys[n]) || isKept(it.keys[n])))
-    if (!out.length) continue
-    if (out.length === it.chars.filter(c => /\S/.test(c.ch)).length) boxes.push(it.box)
-    else for (const c of out) boxes.push(dev(c.x0 - 0.3, c.yb - 0.3 * c.size, c.x1 + 0.3, c.yb + 0.9 * c.size))
-  }
-  if (ink && cover) {
-    const f = ink.factor
-    // the ink no accounted character stands on is put back: covered only by an item whose characters are all accounted
-    // (its box, exact) or by an accounted character's box a cell around (a hanging bracket below its own glyph's box,
-    // a rule, a figure's part are not)
-    cover = new Uint8Array(ink.w * ink.h)
-    const mark = b => {
-      const c0 = Math.max(0, Math.floor(b[0] / f) - 1), c1 = Math.min(ink.w - 1, Math.floor(b[2] / f) + 1), r0 = Math.max(0, Math.floor(b[1] / f) - 1), r1 = Math.min(ink.h - 1, Math.floor(b[3] / f) + 1)
-      for (let r = r0; r <= r1; r++) cover.fill(1, r * ink.w + c0, r * ink.w + c1 + 1)
-    }
-    for (const it of items) {
-      if (!hit(it.box)) continue
-      const ok = it.chars.map((c, n) => !/\S/.test(c.ch) || (accounted.has(it.keys[n]) && !isKept(it.keys[n])))
-      if (ok.every(Boolean)) { mark(it.box); continue }
-      it.chars.forEach((c, n) => { if (/\S/.test(c.ch) && ok[n]) mark(dev(c.x0 - 0.3, c.yb - 0.3 * c.size, c.x1 + 0.3, c.yb + 0.9 * c.size)) })
-    }
-    for (const e of erased) {
-      const c0 = Math.max(0, Math.floor(e[0] / f)), c1 = Math.min(ink.w - 1, Math.floor(e[2] / f)), r0 = Math.max(0, Math.floor(e[1] / f)), r1 = Math.min(ink.h - 1, Math.floor(e[3] / f))
-      for (let r = r0; r <= r1; r++) {
-        let from = -1
-        for (let c = c0; c <= c1 + 1; c++) {
-          const on = c <= c1 && ink.ink[r * ink.w + c] && !cover[r * ink.w + c]
-          if (on && from < 0) from = c
-          if (!on && from >= 0) { boxes.push([from * f, r * f, c * f, (r + 1) * f]); from = -1 }
-        }
-      }
-    }
-  }
-  if (!boxes.length) return null
-  const whole = []
-  for (const b of boxes) {
-    const x = Math.floor(b[0]), y = Math.floor(b[1]), w = Math.ceil(b[2]) - x, h = Math.ceil(b[3]) - y
-    if (w > 0 && h > 0) whole.push([x, y, w, h])
-  }
-  audit?.push({ what: 'restore', unit: id, page, boxes: boxes.length })
-  return { op: 'restore', page, clip: erased.map(e => [e[0], e[1], e[2] - e[0], e[3] - e[1]]), boxes: whole }
-}
-
-/** a page's text items, each with its characters, their keys and its box in device pixels (restoreUnaccounted's), and
- *  the ink map's cells their boxes cover, a cell around */
-export function pageItemsOf(chars, page, px, ink) {
-  const by = new Map()
-  for (const c of chars) { if (!by.has(c.item)) by.set(c.item, []); by.get(c.item).push(c) }
-  const items = []
-  for (const cs of by.values()) {
-    const size = Math.max(...cs.map(c => c.size))
-    const [ax, ay] = px(cs[0].x0 - 0.3, cs[0].yb + 0.9 * size), [bx, by2] = px(cs.at(-1).x1 + 0.3, cs[0].yb - 0.3 * size)
-    items.push({ chars: cs, keys: cs.map(c => `${page}|${c.item}|${c.k}`), box: [Math.min(ax, bx), Math.min(ay, by2), Math.max(ax, bx), Math.max(ay, by2)] })
-  }
-  let cover = null
-  if (ink) {
-    cover = new Uint8Array(ink.w * ink.h)
-    const f = ink.factor
-    for (const it of items) {
-      const c0 = Math.max(0, Math.floor(it.box[0] / f) - 1), c1 = Math.min(ink.w - 1, Math.floor(it.box[2] / f) + 1), r0 = Math.max(0, Math.floor(it.box[1] / f) - 1), r1 = Math.min(ink.h - 1, Math.floor(it.box[3] / f) + 1)
-      for (let r = r0; r <= r1; r++) cover.fill(1, r * ink.w + c0, r * ink.w + c1 + 1)
-    }
-  }
-  return { items, cover }
 }
 
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

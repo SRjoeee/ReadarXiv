@@ -110,14 +110,11 @@ export interface Layer {
   /** no more rows: every page is complete with what it holds */
   end(): void
   /**
-   * The next part, read against this Layer's index (readPart). `doc`: the composed document through this part's tail, opened
-   * with PDF_OPTIONS; required iff `part.addon?.tail`, refused (TypeError) otherwise. Sync. Throws BundleRefusal for another
-   * head, for a part out of order (pages[0] is not through + 1, or prev is not the last part's digest), for a `doc` whose
-   * numPages is not N + part.chain.r; TypeError for a missing or invalid doc; changing nothing. The same part again (its
-   * sha256 told) is a no-op. After endParts() (and on a BUNDLE 3 layer) it throws BundleRefusal; after dispose() it is a no-op.
-   * A part with a tail swaps the document: the one it replaces is told to `onRetired` once no task reads it
+   * The next part, read against this Layer's index (readPart). Sync. Throws BundleRefusal for another head, or for a part out of
+   * order (pages[0] is not through + 1, or prev is not the last part's digest), changing nothing. The same part again (its sha256
+   * told) is a no-op. After endParts() (and on a BUNDLE 3 layer) it throws BundleRefusal; after dispose() it is a no-op
    */
-  addPart(part: ReadPart, o?: { doc?: LayerDocument }): void
+  addPart(part: ReadPart): void
   /** no more parts (the catalog's end): every page no part covers becomes `failed`, told once; its pageOf and leftPageOf reject */
   endParts(): void
   /** sync; throws after dispose. A page a part covers is never `waiting` for that part again */
@@ -144,9 +141,11 @@ export interface Layer {
    * for a page still awaiting its covering part, nothing is fetched. Throws synchronously after dispose
    */
   leftPageOf(page: number, o?: { signal?: AbortSignal }): Promise<LeftPage>
-  /** the ready page's copy at a view's resolution, for any ready page after end() until dispose (D-4); a page not ready
-   *  rejects; throws after dispose */
-  copyOf(page: number, source: CanvasImageSource & { width: number; height: number }, k: number): Promise<HTMLCanvasElement>
+  /** the ready page's copy at a view's resolution (`k` device pixels a PDF unit, on a canvas `width` × `height` from the page's
+   *  top-left corner): the composed page with the groups of its drawn units hidden, its crops and pastes; `context` the 2D
+   *  context's options, `annotationMode` PDF.js's. For any ready page after end() until dispose (D-4); a page not ready rejects;
+   *  throws after dispose */
+  copyOf(page: number, o: { k: number; width: number; height: number; context?: CanvasRenderingContext2DSettings | null; annotationMode?: number }): Promise<HTMLCanvasElement>
   /** the unit at a point of a page (the parts' left rectangles, PDF units), the smallest where several hold it; null where none
    *  is located or the page is uncovered (D-6). Answers after dispose */
   unitAt(page: number, x: number, y: number): number | null
@@ -171,8 +170,8 @@ export interface OpenLayerOptions {
   rules?: FrozenRuleSet
   /** the host's transport for the left parts: the bytes of the object `ref` names (the Layer runs readLeftPart on them) */
   leftPart(page: number, ref: Ref & { page: number }): Promise<Uint8Array>
-  /** a superseded document is no longer read (told at the swap, once the tasks reading it are done), and once at dispose for the
-   *  last: the host destroys it. The Layer never destroys a document */
+  /** the document is no longer read (told once at dispose, once the tasks reading it are done): the host destroys it. The Layer
+   *  never destroys a document */
   onRetired(doc: LayerDocument): void
   /** the draws held for the run at most, in their left parts' bytes (DRAWS_HELD by default): past it the oldest are let go */
   drawsHeld?: number
