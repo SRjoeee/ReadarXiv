@@ -10,7 +10,7 @@ import { createLayerSide, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spre
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, ORIG, partInputs, TAILS } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
-import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, rowOf, type Setup, settle, setup } from './helpers/side-setup'
+import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, renders, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
 installSideFakes()
 
@@ -622,6 +622,101 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     // no part holds the page yet (its part not told): not the original\'s by this rule, the door waits for it
     expect(noLayoutPage([part(1, 2, null)], 3)).toBe(false)
     expect(noLayoutPage([], 1)).toBe(false)
+  })
+})
+
+describe('L18: a layer whose base is a delta over arXiv\'s PDF (the delta route): the composed document is the original\'s bytes but for the replaced pages', () => {
+  // the small paper replaces its pages 2 and 3 (ranges [[2, 3]]): pages 1 and 4 are the original\'s in the composed document
+  const REPLACED: [number, number][] = [[2, 3]]
+  const deltaSetup = (o: Parameters<typeof setup>[0] = {}) => setup({ ...o, ours: true, delta: REPLACED })
+  const leftDrawn = (n: number) => {
+    const viewer = FakePDFViewer.made.at(-1) as FakePDFViewer
+    const pv = viewer.getPageView(n - 1) as NonNullable<ReturnType<FakePDFViewer['getPageView']>>
+    viewer.render(n, null, { width: Math.floor(pv.viewport.width), height: Math.floor(pv.viewport.height), sx: 1, sy: 1 })
+    return pv.canvas as HTMLCanvasElement
+  }
+  const copyOf = (s: Setup, n: number) => s.doors[0]?.copies.filter(c => c[0] === n) ?? []
+  const spies = (s: Setup) => { const V = internalsOf(s.view); return { left: vi.spyOn(V.left, 'canvas'), place: vi.spyOn(V.places, 'canvas') } }
+
+  it('a page the delta does not replace is the original\'s in the composed document: its copy is the left\'s canvas, drawn at its k, and the composed document is not rendered for it; a replaced page\'s copy is the composed document\'s page, the left\'s canvas never asked for it', async () => {
+    const s = await deltaSetup()
+    const asked = spies(s)
+    await nearOn(s, [1, 2, 3, 4])
+    const canvas1 = leftDrawn(1), canvas2 = leftDrawn(2)
+    renders.length = 0
+    s.side.tell(await ALL(true, REPLACED))
+    await settle(s)
+    expect((await s.side.index())?.head.base).toMatchObject({ source: 'ours', kind: 'delta', replaced: REPLACED })
+    // page 1: not replaced, the left\'s canvas
+    expect(copyOf(s, 1)[0]?.[1]).toBe(canvas1)
+    expect(renders.filter(r => r.page === 1)).toEqual([])
+    // page 2: replaced, the composed document\'s page, though the left\'s canvas of the original is drawn at the same k
+    expect(copyOf(s, 2)[0]?.[1]).not.toBe(canvas2)
+    expect(renders.filter(r => r.page === 2)).toHaveLength(1)
+    expect(asked.left.mock.calls.filter(c => c[0] === 2)).toEqual([])
+    // (pages 1 to 3 are drawn; page 4 is the third part\'s, which records no layout: the original\'s page)
+    for (const n of [1, 2, 3]) expect(content(s, n), `page ${n}`).toBe('layer')
+    expect(content(s, 4)).toBe('original')
+  })
+
+  it('a zoom draws the copies again by the same rule: the unreplaced page from the left\'s canvas, the replaced one from the document', async () => {
+    const s = await deltaSetup()
+    await nearOn(s, [1, 2])
+    leftDrawn(1)
+    s.side.tell(await ALL(true, REPLACED))
+    await settle(s)
+    const before = [copyOf(s, 1).length, copyOf(s, 2).length]
+    renders.length = 0
+    s.view.zoomTo(0.9)
+    await flush(10)
+    // (PDF.js redraws the left\'s page 1 at the new scale: the fake draws it on request)
+    const canvas = leftDrawn(1)
+    await settle(s, 60)
+    expect(copyOf(s, 1).at(-1)?.[1]).toBe(canvas)
+    expect(copyOf(s, 2).length).toBeGreaterThan(before[1] as number)
+    expect(renders.filter(r => r.page === 1)).toEqual([])
+  })
+
+  it('a replaced page is drawn from the composed document with the original\'s annotations off: its links are the layer\'s own (the door\'s), once; no element of the composed document\'s annotation layer is on any laid page', async () => {
+    const link = (n: number) => ({ boxes: [100, 100, 200, 112], url: `https://example.org/${n}`, name: `l${n}`, moved: false, order: 0 })
+    const s = await deltaSetup({ links: n => [link(n)] })
+    await nearOn(s, [1, 2, 3, 4])
+    renders.length = 0
+    s.side.tell(await ALL(true, REPLACED))
+    await settle(s)
+    // the composed page of a replaced page is rendered with annotations off (the original\'s /Annots are kept in the delta, ~91 % of
+    // their rectangles ours): nothing of them is drawn into the copy
+    for (const r of renders.filter(x => x.page === 2 || x.page === 3)) expect(r.annotationMode, `page ${r.page}`).toBe(0)
+    for (const n of [1, 2, 3]) {
+      const wrap = layerOf(s, n) as HTMLElement
+      // the layer\'s own links, one for each link record, in one wrapper; nothing else that links
+      const anchors = [...wrap.querySelectorAll('a')]
+      expect(anchors.map(a => a.getAttribute('href')), `page ${n}`).toEqual([`https://example.org/${n}`])
+      expect(anchors.every(a => a.closest('.axt-links') !== null), `page ${n}`).toBe(true)
+      expect(wrap.querySelector('.annotationLayer, [data-annotation-id], section.linkAnnotation, .linkAnnotation'), `page ${n}`).toBeNull()
+      expect(places(s)[n - 1]?.querySelectorAll('.annotationLayer, section.linkAnnotation').length, `page ${n}`).toBe(0)
+    }
+  })
+
+  it('a base held whole (kind full, or no kind) is as it was: every page\'s copy from the document, the annotations as the render has them', async () => {
+    const s = await setup({ ours: true })
+    await nearOn(s, [1, 2])
+    const canvas = leftDrawn(1)
+    renders.length = 0
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(copyOf(s, 1)[0]?.[1]).not.toBe(canvas)
+    expect(renders.some(r => r.page === 1)).toBe(true)
+    expect(renders.every(r => r.annotationMode === undefined)).toBe(true)
+  })
+
+  it('a head over arXiv\'s PDF is as it was (the shortcut of before the route)', async () => {
+    const s = await setup({ ours: false })
+    await nearOn(s, [1])
+    const canvas = leftDrawn(1)
+    s.side.tell(await ALL(false))
+    await settle(s)
+    expect(copyOf(s, 1)[0]?.[1]).toBe(canvas)
   })
 })
 
