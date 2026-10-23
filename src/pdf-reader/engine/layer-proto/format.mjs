@@ -21,6 +21,7 @@
 import { checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
 import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
+import { BASE_KINDS, countOf, DELTA_MAX_BYTES, replacedWhy } from '../layout/delta-wire.mjs'
 import { TAIL_CAP, tailLinks } from '../layout/tail.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
@@ -102,6 +103,12 @@ export const TOKEN_SCALE = 1000, TOKEN_LIMIT = 100_000
 export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes'])
 /** whose PDF a layer is drawn over (the head's `base.source`): our compile's final pass, or arXiv's (a fallback, or a bundle of 7) */
 export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
+/** how a base of ours is held (the head's `base.kind`, BUNDLE 8): `delta`, an incremental update over arXiv's PDF (the
+ *  composed document arXiv's bytes, the delta, the remover's tails: layout/delta.mjs), or `full`, our whole PDF (no `kind` on
+ *  the wire: a head without one reads as `full`), the delta's fallback. The delta's bounds and its replaced pages' list:
+ *  layout/delta-wire.mjs */
+export { BASE_KINDS, DELTA_MAX_BYTES }
+export { DELTA_MAX_SHARE, REPLACED_MAX, replacedWhy } from '../layout/delta-wire.mjs'
 /** why a head's base is arXiv's in a bundle of 8 (`base.why`): the paper's refusal, a code of LAYOUT_REFUSED, which every part
  *  with no layout says too */
 export const BASE_WHYS = LAYOUT_REFUSED
@@ -353,6 +360,11 @@ export function baseKey(paper, version, sha256) {
   if (!isDigest(sha256)) throw new RangeError('not a digest')
   return `base/${seg}/${sha256}.pdf`
 }
+
+/** the name of a delta (BUNDLE 8, our base held as an update over arXiv's PDF): a bundle object like a units chunk,
+ *  content-addressed under the CTAG (keyOf with CTAG5: `layer/<seg>/<ctag>/<sha256>.json`, served as the layer's `o/<sha256>`),
+ *  never a /base/ PDF. Throws a RangeError on an identifier, a version or a digest that is not one */
+export const deltaKey = (paper, version, sha256) => keyOf(paper, version, CTAG5, sha256)
 
 /** a key taken apart: `{ paper, version, ctag, sha256 }` for an object, `{ paper, version, vtag }` for a catalog; null for
  *  what keyOf and catalogKey would not write (a leading zero, upper-case hex, a slash where a _ goes) */
@@ -697,6 +709,10 @@ const HEAD_DEF = { cap: HEAD_CAP, values: HEAD_VALUES, depth: HEAD_DEPTH }
  *  over arXiv's PDF by a producer that made no base of its own, read as 7's) */
 const BASE_7 = ['bytes', 'sha256', 'xref']
 const BASE_OURS = ['source', 'bytes', 'sha256', 'xref', 'pages', 'tree', 'check']
+/** a base of ours held as a delta over arXiv's PDF: `bytes`, `sha256` the delta section's, `xref` its startxref in the composed
+ *  document (arXiv's bytes first), `replaced` the pages it writes again, `stats` what it reused of the original and wrote */
+const BASE_DELTA = ['source', 'kind', 'bytes', 'sha256', 'xref', 'pages', 'tree', 'check', 'replaced', 'stats']
+const DELTA_STATS = ['replaced', 'reused', 'included'], DELTA_REUSED = ['fonts', 'images', 'forms', 'other'], DELTA_INCLUDED = ['bytes', 'objects']
 const BASE_ARXIV = ['source', 'bytes', 'sha256', 'xref']
 const CHECK_KEYS = ['pages', 'boxes', 'carried']
 /** the TeX Live year our base was compiled on, as the compile's banner names it */
@@ -734,18 +750,78 @@ function baseShape(K, v, bundle, N) {
     if (Object.hasOwn(v, 'orig')) throw refuse(K, 'orig', 'there, where the base is arXiv\'s PDF')
     return { base: { source: 'arxiv', bytes: b.bytes, sha256: b.sha256, xref: b.xref, ...(Object.hasOwn(b, 'why') ? { why: b.why } : {}) }, orig: null }
   }
-  const b = exactKeys(K, v.base, BASE_OURS, 'base')
+  const kind = Object.hasOwn(v.base, 'kind') ? v.base.kind : 'full'
+  if (!BASE_KINDS.includes(kind)) throw refuse(K, 'base.kind', `not one of ${BASE_KINDS.join(', ')} (${typeof kind === 'string' ? told(kind) : kindOf(kind)})`)
+  if (kind === 'delta') return deltaShape(K, v, N)
+  const b = exactKeys(K, v.base, Object.hasOwn(v.base, 'kind') ? [...BASE_OURS, 'kind'] : BASE_OURS, 'base')
   pdfRef(K, b, 'base', true)
-  if (b.pages !== N) throw refuse(K, 'base.pages', `not the paper's ${N} pages (${kindOf(b.pages)})`)
-  if (typeof b.tree !== 'string' || !TREE.test(b.tree)) throw refuse(K, 'base.tree', `not a TeX Live year (${kindOf(b.tree)})`)
-  const c = exactKeys(K, b.check, CHECK_KEYS, 'base.check')
-  if (!Array.isArray(c.pages) || c.pages.length !== 2 || c.pages[0] !== N || c.pages[1] !== N) throw refuse(K, 'base.check.pages', `not [${N}, ${N}]: our pages and arXiv's, the paper's`)
-  if (c.boxes !== 'equal') throw refuse(K, 'base.check.boxes', `not 'equal' (${typeof c.boxes === 'string' ? told(c.boxes) : kindOf(c.boxes)}): a base of ours has arXiv's page boxes`)
-  if (!isNumber(c.carried) || c.carried < 0 || c.carried > 1) throw refuse(K, 'base.check.carried', `not a share 0 to 1 (${kindOf(c.carried)})`)
+  const check = oursCommon(K, b, N, false)
+  const o = origOf(K, v)
+  return { base: { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check }, orig: o }
+}
+
+/** arXiv's PDF beside a base of ours (`orig`), required there */
+function origOf(K, v) {
   if (!Object.hasOwn(v, 'orig')) throw refuse(K, 'orig', 'missing, where the base is ours')
   const o = exactKeys(K, v.orig, ['bytes', 'sha256'], 'orig')
   pdfRef(K, o, 'orig', false)
-  return { base: { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: { pages: [c.pages[0], c.pages[1]], boxes: c.boxes, carried: c.carried } }, orig: { bytes: o.bytes, sha256: o.sha256 } }
+  return { bytes: o.bytes, sha256: o.sha256 }
+}
+
+/** a base of ours' pages, year and check: its pages the paper's, the check's our pages and arXiv's ([N, N]; a delta's [M, N],
+ *  our M pages 1 to N: a paper of several toplevel sources whose first is compiled alone, the pages past ours arXiv's by
+ *  construction), arXiv's boxes ('equal') and the share of our lines in place */
+function oursCommon(K, b, N, delta) {
+  if (b.pages !== N) throw refuse(K, 'base.pages', `not the paper's ${N} pages (${kindOf(b.pages)})`)
+  if (typeof b.tree !== 'string' || !TREE.test(b.tree)) throw refuse(K, 'base.tree', `not a TeX Live year (${kindOf(b.tree)})`)
+  const c = exactKeys(K, b.check, CHECK_KEYS, 'base.check')
+  const ok = Array.isArray(c.pages) && c.pages.length === 2 && c.pages[1] === N && (delta ? isInteger(c.pages[0], 1, N) : c.pages[0] === N)
+  if (!ok) throw refuse(K, 'base.check.pages', delta ? `not [M, ${N}], M 1 to ${N}: our pages and arXiv's` : `not [${N}, ${N}]: our pages and arXiv's, the paper's`)
+  if (c.boxes !== 'equal') throw refuse(K, 'base.check.boxes', `not 'equal' (${typeof c.boxes === 'string' ? told(c.boxes) : kindOf(c.boxes)}): a base of ours has arXiv's page boxes`)
+  if (!isNumber(c.carried) || c.carried < 0 || c.carried > 1) throw refuse(K, 'base.check.carried', `not a share 0 to 1 (${kindOf(c.carried)})`)
+  return { pages: [c.pages[0], c.pages[1]], boxes: c.boxes, carried: c.carried }
+}
+
+/** a non-negative safe integer at `path` */
+function count(K, v, path) {
+  if (!isInteger(v, 0, Number.MAX_SAFE_INTEGER)) throw refuse(K, path, `not an integer 0 or more (${kindOf(v)})`)
+  return v
+}
+
+/** a base of ours held as a delta over arXiv's PDF (BASE_DELTA): `orig` required and the original it extends (its section
+ *  after arXiv's bytes: `xref` within the delta, read in the composed document's offsets); no `over` (orig says it) */
+function deltaShape(K, v, N) {
+  const b = exactKeys(K, v.base, BASE_DELTA, 'base')
+  const o = origOf(K, v)
+  if (!isInteger(b.bytes, 1, DELTA_MAX_BYTES)) throw refuse(K, 'base.bytes', `not an integer 1 to ${DELTA_MAX_BYTES}`)
+  digestField(K, b.sha256, 'base.sha256')
+  if (!isInteger(b.xref, o.bytes + 1, o.bytes + b.bytes - 1)) throw refuse(K, 'base.xref', `not an offset in the delta after arXiv's ${o.bytes} bytes`)
+  const check = oursCommon(K, b, N, true)
+  const why = replacedWhy(b.replaced, check.pages[0])
+  if (why !== null) throw refuse(K, 'base.replaced', `${why}: ascending, merged page ranges within our ${check.pages[0]} pages`)
+  const st = exactKeys(K, b.stats, DELTA_STATS, 'base.stats')
+  const reused = exactKeys(K, st.reused, DELTA_REUSED, 'base.stats.reused'), included = exactKeys(K, st.included, DELTA_INCLUDED, 'base.stats.included')
+  for (const k of DELTA_REUSED) count(K, reused[k], `base.stats.reused.${k}`)
+  for (const k of DELTA_INCLUDED) count(K, included[k], `base.stats.included.${k}`)
+  if (count(K, st.replaced, 'base.stats.replaced') !== countOf(b.replaced)) throw refuse(K, 'base.stats.replaced', 'not the pages `replaced` names')
+  if (included.bytes > b.bytes) throw refuse(K, 'base.stats.included.bytes', 'more than the delta\'s bytes')
+  if (included.objects < st.replaced) throw refuse(K, 'base.stats.included.objects', 'fewer than the pages it replaces')
+  return {
+    base: { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check, replaced: b.replaced.map(r => [r[0], r[1]]), stats: { replaced: st.replaced, reused: Object.fromEntries(DELTA_REUSED.map(k => [k, reused[k]])), included: { bytes: included.bytes, objects: included.objects } } },
+    orig: o,
+  }
+}
+
+/**
+ * Why a delta base of ours (BASE_DELTA's fields: `base`, with `kind` 'delta') would not be read in a head of `N` pages over
+ * `orig` { bytes, sha256 } arXiv's PDF (the head's reader's refusal, its path and why), null where it would: the page pass's
+ * test of a delta its host gave, before it names it (a delta that fails is a whole base, never a refused paper)
+ */
+export function deltaBaseWhy(base, orig, N) {
+  try { deltaShape('head', { base, orig }, N); return null } catch (e) {
+    if (e instanceof BundleRefusal) return e.message
+    throw e
+  }
 }
 
 /** the head's fields, checked: what a reader and a writer share */
@@ -780,9 +856,13 @@ export async function readHead(bytes, { ref, caps }) {
 }
 
 /** a base as the head writes it: of ours, with its pages, year and check (the share to a ten-thousandth); of arXiv's, `why` where
- *  given (a base given with no `source` is arXiv's, as every base was before BUNDLE 8) */
+ *  given (a base given with no `source` is arXiv's, as every base was before BUNDLE 8); a delta with its kind, replaced pages
+ *  and counts, a whole one of ours with no `kind` (read as `full`) */
+const checkWire = c => ({ pages: [c?.pages?.[0], c?.pages?.[1]], boxes: c?.boxes, carried: isNumber(c?.carried) ? r4(c.carried) : c?.carried })
 const baseWire = b => (b.source === 'ours'
-  ? { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: { pages: [b.check?.pages?.[0], b.check?.pages?.[1]], boxes: b.check?.boxes, carried: isNumber(b.check?.carried) ? r4(b.check.carried) : b.check?.carried } }
+  ? b.kind === 'delta'
+    ? { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check), replaced: b.replaced, stats: b.stats }
+    : { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check) }
   : { source: 'arxiv', bytes: b.bytes, sha256: b.sha256, xref: b.xref, ...(b.why === undefined || b.why === null ? {} : { why: b.why }) })
 
 /** the head written: the paper, the base (baseShape's: ours with `orig`, arXiv's PDF; or arXiv's), the versions this engine
@@ -974,7 +1054,9 @@ function partShape(v, { N, unitCount, atFrom }) {
 /** the chain before any part */
 function initialChain(index) {
   const base = index.head.base
-  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), groups: new Uint8Array(indexGroups(index).count), reach: 0, ahead: [], end: base.bytes, xref: base.xref, next: null, root: null, r: 0 }
+  // (a delta is the tails' base: the composed document so far arXiv's bytes and the delta's, its section the last)
+  const end = base.kind === 'delta' ? index.head.orig.bytes + base.bytes : base.bytes
+  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), groups: new Uint8Array(indexGroups(index).count), reach: 0, ahead: [], end, xref: base.xref, next: null, root: null, r: 0 }
 }
 
 /**
@@ -1285,14 +1367,16 @@ const CATALOG_KEYS = ['bundle', 'kind', 'paper', 'versions', 'head', 'units', 'p
 const CATALOG_KEYS_8 = ['bundle', 'kind', 'paper', 'versions', 'head', 'base', 'units', 'parts', 'end']
 const CATALOG_DEF = { cap: CATALOG_CAP, values: CATALOG_VALUES, depth: CATALOG_DEPTH }
 
-/** the base a catalog names, of its head as read (readHead's): ours, the object a reader asks for by its name (baseKey) with its
- *  digest and bytes, { source: 'ours', key, sha256, bytes }; arXiv's, { source: 'arxiv', sha256, bytes } (the host's copy of arXiv's
- *  PDF, which it names itself) */
 /** whether two catalogs' bases are one: the same fields with the same values, in any order (a catalog another writer made,
- *  the web's, keeps its own) */
-const sameBase = (a, b) => isObject(a) && isObject(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(b).every(k => Object.hasOwn(a, k) && a[k] === b[k])
+ *  the web's, keeps its own; a delta's nested `object` compared the same way) */
+const sameBase = (a, b) => isObject(a) && isObject(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(b).every(k => Object.hasOwn(a, k) && (isObject(b[k]) ? sameBase(a[k], b[k]) : a[k] === b[k]))
+/** the base a catalog names, of its head as read (readHead's): ours whole, the object a reader asks for by its name (baseKey)
+ *  with its digest and bytes, { source: 'ours', key, sha256, bytes }; ours as a delta, the bundle object it is (deltaKey),
+ *  { source: 'ours', kind: 'delta', object: { key, sha256, bytes } }, read after arXiv's PDF; arXiv's, { source: 'arxiv', sha256,
+ *  bytes } (the host's copy of arXiv's PDF, which it names itself) */
 export function catalogBase(head) {
   const b = head.base
+  if (b.source === 'ours' && b.kind === 'delta') return { source: 'ours', kind: 'delta', object: { key: deltaKey(head.paper.id, head.paper.version, b.sha256), sha256: b.sha256, bytes: b.bytes } }
   return b.source === 'ours' ? { source: 'ours', key: baseKey(head.paper.id, head.paper.version, b.sha256), sha256: b.sha256, bytes: b.bytes } : { source: 'arxiv', sha256: b.sha256, bytes: b.bytes }
 }
 
@@ -1305,9 +1389,19 @@ function catalogShape(v) {
   if (v.bundle !== '7') {
     const s = isObject(v.base) ? v.base.source : undefined
     if (!BASE_SOURCES.includes(s)) throw refuse(K, 'base.source', `not one of ${BASE_SOURCES.join(', ')} (${typeof s === 'string' ? told(s) : kindOf(s)})`)
-    base = exactKeys(K, v.base, s === 'ours' ? ['source', 'key', 'sha256', 'bytes'] : ['source', 'sha256', 'bytes'], 'base')
-    pdfRef(K, base, 'base', false)
-    if (s === 'ours' && base.key !== baseKey(paper.id, paper.version, base.sha256)) throw refuse(K, 'base.key', 'not the name of the base\'s digest (baseKey)')
+    if (s === 'ours' && Object.hasOwn(v.base, 'kind')) {
+      // (a delta: the bundle object it is, by its name under the CTAG, its digest and bytes)
+      if (v.base.kind !== 'delta') throw refuse(K, 'base.kind', `not 'delta' (${typeof v.base.kind === 'string' ? told(v.base.kind) : kindOf(v.base.kind)}): a whole base of ours names no kind`)
+      base = exactKeys(K, v.base, ['source', 'kind', 'object'], 'base')
+      const ob = exactKeys(K, base.object, ['key', 'sha256', 'bytes'], 'base.object')
+      digestField(K, ob.sha256, 'base.object.sha256')
+      if (!isInteger(ob.bytes, 1, DELTA_MAX_BYTES)) throw refuse(K, 'base.object.bytes', `not an integer 1 to ${DELTA_MAX_BYTES}`)
+      if (ob.key !== deltaKey(paper.id, paper.version, ob.sha256)) throw refuse(K, 'base.object.key', 'not the name of the delta\'s digest (deltaKey)')
+    } else {
+      base = exactKeys(K, v.base, s === 'ours' ? ['source', 'key', 'sha256', 'bytes'] : ['source', 'sha256', 'bytes'], 'base')
+      pdfRef(K, base, 'base', false)
+      if (s === 'ours' && base.key !== baseKey(paper.id, paper.version, base.sha256)) throw refuse(K, 'base.key', 'not the name of the base\'s digest (baseKey)')
+    }
   }
   rangesOf(K, v.units, 'units', { refKind: 'units', lo: 0, hi: CHUNKS_MAX, first: 0, last: ID_MAX, max: UNITS_CAP })
   // parts: contiguous from page 1, each within the paper

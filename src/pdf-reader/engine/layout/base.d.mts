@@ -17,6 +17,9 @@ export declare function marksOfPdf(doc: PdfLike): Promise<Map<string, [page: num
 export declare function boxesOfPdf(doc: PdfLike): Promise<[number, number, number, number, number, number][]>
 /** the final pass against the draft (design §3.1): the same pages, boxes and marks, each within MARK_TOL */
 export declare function finalCheck(draft: PdfLike, final: PdfLike): Promise<{ ok: true; marks: number } | { ok: false; why: string }>
+/** our base page's M pages then arXiv's past them, as one document (a delta's composed document of a paper of several toplevel
+ *  sources): `numPages` arXiv's, its destinations and metadata ours */
+export declare function prefixDoc(ours: PdfLike, arxiv: PdfLike, m: number): PdfLike
 /** our base page against arXiv's PDF (design §3.3.4): the same page count, every page's box the same */
 export declare function boxesCheck(ours: PdfLike, arxiv: PdfLike): Promise<{ equal: true; pages: [number, number] } | { equal: false; pages: [number, number]; why: string }>
 /** mark text in each page's text (design §3.3.2): the pages it is on, the units its names name, the first hits */

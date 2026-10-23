@@ -39,7 +39,8 @@ export function startxrefOf(pdf) {
  * the tail ends in (an offset into the whole document, arXiv's bytes first); `prev`, the section's `/Prev` (the startxref of
  * the document before it); `root`, the page tree's root, the least object number the section names (the tree is an object
  * of the document, rewritten, and the fresh objects are numbered above all it had); `first` and `last`, the least and
- * greatest of the fresh numbers; `xrefAt`, where the section begins in the tail (the offset `startxref` declares, less where the
+ * greatest of the fresh numbers (a remover's tail's: of a delta over arXiv's PDF, layout/delta.mjs, read the same way, `root`
+ * and `first` mean nothing, the delta rewriting no page tree); `xrefAt`, where the section begins in the tail (the offset `startxref` declares, less where the
  * tail begins). null where the tail ends in no such section (or names the root alone). Never throws
  */
 export function tailLinks(tail) {

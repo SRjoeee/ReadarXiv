@@ -1843,3 +1843,62 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   every year's change would. Over our own page the maker locates as many units as over arXiv's or more (2307.16209: 453 to
   464 of 466, its placeholders found 3,485 to 3,571, lost 6 to 2; the other papers of the gate pack the same).
 
+
+### 19.8 Our base as an incremental update over arXiv's PDF (the delta)
+
+Our base page is stored not as a whole PDF but as one **incremental-update section** over arXiv's original, so that the
+composed document is `orig.bytes ++ delta ++ the remover's tails`: one byte source for the left pane and the layer, and only
+what our compile changed is stored (the coordinator's GO of 2026-10-23). `kind: 'full'`, the whole PDF of 19.7, stays the
+fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both), LAYOUT 16, the catalog key unmoved.
+
+- **The builder** (`layout/delta.mjs` `deltaOf(origBytes, finalBytes, { PL, replacedPages })`, pure and deterministic, in the
+  pipeline entry). For each page the layer lays on whose contents and resources are not canonically arXiv's: the original's
+  page object written again under its own number and generation, every key kept but `/Contents` and `/Resources`, which are
+  ours; our content streams copied byte for byte as new objects; a `/Resources` dict of our entries, each the original's object
+  where the two are canonically equal (the whole sub-graph reused), else copied with its closure from the original's `/Size`
+  up. Names stay ours. Nothing else is written: catalog, page tree, outlines, destinations, annotations and info stay the
+  original's. The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
+  remover's `makeAddon` writes its tails with too: a table, or a stream of `/W [1 4 2]`, no hybrid), numbers in runs, objects
+  uncompressed, `/Prev` the original's startxref, `/Root` `/Info` `/ID` the original's, its startxref in composed offsets.
+- **The canonical form**: a stream is its dict less `/Length` and the exact bytes its **resolved** `/Length` names (an
+  indirect one followed, as PDF.js reads it: `layout/xref.mjs` reads every object where the cross-reference puts it; the object
+  layer's own scan to `endstream` reads a stream ending in CR or LF a byte short); a dict its sorted entries, an array its
+  items, a reference the form of what it names (direct or indirect alike); the back links `/Parent` `/P` `/Prev` `/Next`
+  `/First` `/Last` cut; a cycle leaves the object unmatched (copied), never an error. Forms are interned (exact equality).
+- **Refused, the whole base kept** (`DELTA_WHYS`): an original it cannot read safely (`delta-parse`, `delta-encrypted`,
+  `delta-xref`: hybrid, an entry not at its `n g obj`, a section that does not parse; `delta-stream`: a `/Length` not ending at
+  `endstream`), our pages more than arXiv's (`delta-pages`), a bound (`delta-bound`: `DELTA_MAX_BYTES` 24 MiB, more than
+  `DELTA_MAX_SHARE` 0.35 of our whole base page, `DELTA_OBJECTS_MAX` 200,000 objects, `DELTA_HELD_MAX` 64 MiB of forms held,
+  `DELTA_DECODED_MAX` 48 MiB of object and cross-reference streams decoded), nothing to replace (`delta-empty`), the proof
+  (`delta-proof`), a delta the page pass was given that does not check (`delta-shape`).
+- **The proof** (`proveDelta(origBytes, delta, finalBytes, { PL, getDocument, documentOptions, replaced })`, in the box, the
+  structural one; pixels are the lab's gate): every entry of the section at its `n g obj` (`delta-wire.mjs` `deltaSection`),
+  `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again by the object
+  layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a pairwise graph
+  comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
+  gives (its console captured, each document read in turn); the original's page count; every page's box and text (strings and
+  places within 0.01) ours on replaced pages and the original's elsewhere. A failure is `delta-proof`.
+- **The host's contract.** At the end of the maker child, once the maker let its documents go: `deltaOf(orig, final, { PL,
+  replacedPages })` and `proveDelta(...)`; then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, ..., delta: { bytes,
+  sha256, replaced, stats } } })` (or `delta: { refused, why }`). The page pass checks it again (shape, bounds, digest, the
+  section over `orig`, the head's reader): the head's base becomes `kind: 'delta'` where it checks, else stays `full` with
+  `stats.delta: { kind: 'full', why }` — never a refusal of the paper. The remover reads the composed document (`removerOf({
+  bytes: orig ++ delta })`): the delta is the tails' base, the first chain's `end` O + D and `xref` the delta's startxref, its
+  fresh numbers after the delta's `/Size`; `TAIL_CAP` binds the tails alone; `tailLinks`' `root` and `first` mean nothing of
+  the delta. The delta is a bundle object, content-addressed under the CTAG like a units chunk (`deltaKey`), not a `/base/` PDF.
+- **The head** (`format.mjs`): `base { source: 'ours', kind: 'delta', bytes, sha256 (the section's), xref (its startxref,
+  composed: after `orig.bytes`), pages, tree, check { pages: [M, N], boxes: 'equal', carried }, replaced, stats }` with `orig`
+  required (it is the original the delta extends; no `over`). `replaced`: 1-based inclusive ranges `[[from, to], …]`,
+  ascending, non-overlapping, adjacent ones merged, within our M pages, 1 to `REPLACED_MAX` 4096 (`replacedWhy`). `stats`,
+  integers only: `{ replaced, reused: { fonts, images, forms, other }, included: { bytes, objects } }`. A head without `kind` is
+  `full`; a `full` head keeps `check.pages` [N, N]. The catalog's base of a delta: `{ source: 'ours', kind: 'delta', object: {
+  key: deltaKey(id, version, sha256), sha256, bytes } }`. `layerDraws` is true for ours of either kind. The extension's run
+  does not bind a delta head yet (no layer, the original staying) until its host reads the composed document.
+- **Several toplevel sources** (2610.20030: arXiv joins 8 + 4 pages, we compile the first): only with a delta may our pages be
+  fewer (`checkOurBase` `toplevels` > 1 and `delta`): the base page's document is ours then arXiv's past M (`base.mjs`
+  `prefixDoc`), the boxes compared on our M pages, `check.pages` [M, N], `replaced` within 1..M, the pages past M the
+  original's by construction. Every other paper keeps the equal count (`boxes`).
+- **Measured** (2026-10-23, the gate pack's 7 pairs and 2602.23285v2, this builder against the spike's): 2,078,038 delta
+  bytes over 83,666,965 of originals, 2.48 % (the spike 2.48 %); the largest 0.70 MiB (2307.16209v1); per paper 0.30 % to
+  30.05 % of the original and at most 28.5 % of our base page; the proof passes on 8 of 8; two builds give the same bytes; the
+  build 15 to 160 ms, the proof 0.2 to 1.4 s (Node).

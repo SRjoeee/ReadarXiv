@@ -2,6 +2,7 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { indexOf, type PartChain, type ReadPart, type ReadUnitsChunk, readHead, readPart, readUnitsChunk, type Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
+import { deltaOf } from './helpers/delta-pdfs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { arxivOf, endOf, markedOf, type Page, type Run, text, unit, words, type World } from './helpers/make-world'
@@ -154,5 +155,43 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
     const got = await passOf(worldOf(), { base: ORIG })
     expect(got.head.base).toEqual({ source: 'arxiv', ...ORIG, why: 'final' })
     expect(got.parts.map(p => p.noLayout?.refused)).toEqual(['final', 'final'])
+  })
+})
+
+const deltaOver = (pages: number[], o: { prev?: number; extra?: number } = {}) => deltaOf(ORIG, pages, o)
+
+describe('layerOfPaper over our base page held as a delta over arXiv\'s PDF', () => {
+  it('a delta that checks is the head\'s base (kind `delta`, its section\'s bytes and startxref, the replaced pages), `orig` arXiv\'s', async () => {
+    const d = await deltaOver([1, 2, 3])
+    for (const whole of [false, true]) {
+      const got = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { delta: d }), whole })
+      expect(got.head.base, String(whole)).toEqual({ source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: 3, tree: '2025', check: { pages: [3, 3], boxes: 'equal', carried: 1 }, replaced: [[1, 3]], stats: d.stats })
+      expect(got.head.orig).toEqual({ bytes: ORIG.bytes, sha256: ORIG.sha256 })
+      expect(got.parts.map(p => p.layout !== null)).toEqual([true, true])
+      expect(got.r).toMatchObject({ stats: { delta: { kind: 'delta', bytes: d.bytes.length, replaced: 3 } } })
+      // (the parts' chain begins after arXiv's bytes and the delta's)
+      expect(got.parts[0]?.chain).toMatchObject({ end: ORIG.bytes + d.bytes.length, xref: d.xref })
+    }
+  })
+
+  it('a delta that does not check leaves our whole PDF the base, never the paper refused: `stats.delta` says why', async () => {
+    const good = await deltaOver([1, 3])
+    const cases: [string, unknown, string][] = [
+      ['digest', { ...good, sha256: 'f'.repeat(64) }, 'delta-shape'],
+      ['replaced past our pages', { ...good, replaced: [[1, 4]] }, 'delta-shape'],
+      ['replaced not merged', { ...good, replaced: [[1, 1], [2, 2]], stats: { ...good.stats, replaced: 2 } }, 'delta-shape'],
+      ['counts', { ...good, stats: { ...good.stats, replaced: 1 } }, 'delta-shape'],
+      ['another /Prev', await deltaOver([1, 3], { prev: ORIG.xref - 1 }), 'delta-shape'],
+      ['past its share of our base page', await deltaOver([1, 3], { extra: 5000 }), 'delta-bound'],
+      ['the host\'s refusal', { refused: 'delta-proof', why: 'page 2\'s graph is not ours' }, 'delta-proof'],
+      ['not bytes', { ...good, bytes: [1, 2] }, 'delta-shape'],
+    ]
+    for (const [name, delta, why] of cases) {
+      const got = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { delta }) })
+      expect(got.head.base, name).toEqual({ source: 'ours', ...OURS, pages: 3, tree: '2025', check: { pages: [3, 3], boxes: 'equal', carried: 1 } })
+      expect(got.r, name).toMatchObject({ stats: { delta: { kind: 'full', why } } })
+    }
+    // (no delta given: nothing said)
+    expect((await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf()) })).r).not.toHaveProperty('stats.delta')
   })
 })

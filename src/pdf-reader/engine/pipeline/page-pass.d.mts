@@ -42,7 +42,12 @@ export interface LayerOptions {
    *  with `{ draw }` as this pass's), and `check`, a host's word that its marks were checked against the draft's (base.mjs
    *  finalCheck: layoutMarksOfPaper's `base.check`), needed where the marks are given (`marks`) and not read here (`marked`,
    *  whose document the check reads). Null, or { refused, why } (no final pass): no base of ours, the paper's fallback ('final') */
-  ours?: { doc: unknown; bytes: number; sha256: string; xref: number; text?: ArxivText | null; check?: { marks: number } | null } | { refused: string; why?: string } | null
+  ours?: {
+    doc: unknown; bytes: number; sha256: string; xref: number; text?: ArxivText | null; check?: { marks: number } | null
+    /** the delta of this final pass over arXiv's PDF (layout/delta.mjs deltaOf's, built and proved in the maker child), or its
+     *  refusal: a delta that checks is the head's base (`kind` 'delta'), else our whole PDF (`stats.delta` says why) */
+    delta?: { bytes: Uint8Array; sha256: string; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats } | { refused: string; why?: string } | null
+  } | { refused: string; why?: string } | null
   /** the TeX Live year our compile was made on ('2025'), else the marked original's log's (its banner) */
   tree?: string | null
   /** a host of BUNDLE 7's: arXiv's PDF as `orig` is, where neither `orig` nor `ours` is given: the layout made over it, as before */
@@ -93,13 +98,16 @@ export declare function checkOurBase(o: {
   arxiv: { doc: unknown; text: ArxivText }
   tree?: string | null
   draw?: boolean
+  /** the paper's toplevel sources (`meta.toplevels`) and whether its base is held as a delta: only both let our pages be fewer */
+  toplevels?: number
+  delta?: boolean
 }): Promise<
-  | { text: ArxivText; lineCheck: import('../layout/carry.mjs').LineCheck; head: import('../layer-proto/format.mjs').HeadBase }
+  | { text: ArxivText; lineCheck: import('../layout/carry.mjs').LineCheck; head: import('../layer-proto/format.mjs').HeadBase; doc: unknown }
   | { refused: 'final' | 'boxes' | 'marks'; why: string }
 >
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`); `toplevels` where the paper has
  *  several toplevel sources (its marked original's pages against arXiv's) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
-  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; own?: OwnVerdict; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][]; toplevels?: { files: number; pages: [marked: number | null, arxiv: number] } } }
+  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; own?: OwnVerdict; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][]; toplevels?: { files: number; pages: [marked: number | null, arxiv: number] }; delta?: { kind: 'delta'; bytes: number; replaced: number } | { kind: 'full'; why: string; reason?: string } } }
   | { refused: 'anchors'; why: string }
 >
