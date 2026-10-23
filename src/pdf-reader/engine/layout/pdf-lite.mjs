@@ -33,7 +33,7 @@
 // once, before the first getDocument. A document whose pages' draw geometry is read (pipeline/draw-data.mjs) is opened with
 // `maxImageSize: LINK_TEXT_PIXELS` and `fontExtraProperties: true`: without the latter a font carries no ToUnicode map and every page
 // tells its draw as none (`why: 'props'`).
-// Server-side only: the browser layer (the extension, removal.mjs's rendering, copyOf) keeps stock
+// Server-side only: the browser layer (the extension, run.mjs's rendering, copyOf) keeps stock
 // PDF.js, which has to decode the images it draws.
 //
 // BUMPING PDFJS (layout versions.mjs): the anchor is one line of the worker. Install the new version, run
