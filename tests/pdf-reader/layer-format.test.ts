@@ -1231,7 +1231,7 @@ describe('a part with no layout says why (`layout: { refused, why }`, LAYOUT_REF
   })
 
   it('refuses a word not LAYOUT_REFUSED\'s, a why past WHY_MAX or not a string, another key, and a record beside file-only units or an add-on', async () => {
-    expect(LAYOUT_REFUSED).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes'])
+    expect(LAYOUT_REFUSED).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap'])
     const refused = async (edit: (p: never) => void, path: string) => {
       const e = await refusal(partWith(0, edit as never))
       expect(e?.kind, path).toBe('part')

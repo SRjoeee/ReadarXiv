@@ -111,13 +111,18 @@ export interface BaseCheck { pages: [ours: number, arxiv: number]; boxes: 'equal
 /** a base of ours held as a delta over arXiv's PDF (`kind` 'delta'): `bytes` and `sha256` the delta section's, `xref` its
  *  startxref in the composed document (arXiv's bytes first), the check's pages [M, N] (M < N only for a paper of several
  *  toplevel sources), the pages it writes again (`replaced`, ranges within our M) and its counts */
-export interface DeltaBase { source: 'ours'; kind: 'delta'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats }
+export interface DeltaBase { source: 'ours'; kind: 'delta'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats & Partial<WrapStats>; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[] }
+/** our pages wrapped by optional content (layout/wrap.mjs): every unit with a group `axt:u<id>` and in neither list is the
+ *  reader's to hide where it draws it; `unhidden` the units whose ink stays the original's and why, `labelKept` those whose
+ *  label is left the original's ink (only the body drawn) */
+export type WrapStats = import('../layout/delta-wire.mjs').WrapStats
+export type Unhidden = import('../layout/delta-wire.mjs').Unhidden
 /** the PDF a layer is drawn over (the head's `base`): ours, the final pass of our marked compile, with its page count, the
  *  TeX Live year it was compiled on ('2025') and its check; or arXiv's, with why ours was refused where a head of 8 says it
  *  (absent: a head of 7, or a producer that made no base of its own). `xref`: the PDF's last cross-reference section's
  *  offset */
 export type HeadBase =
-  | { source: 'ours'; kind?: undefined; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck }
+  | { source: 'ours'; kind?: undefined; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; stats?: WrapStats; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[] }
   | DeltaBase
   | { source: 'arxiv'; bytes: number; sha256: string; xref: number; why?: LayoutRefused }
 export interface ReadHead {
@@ -171,7 +176,7 @@ export interface PartChain {
 /** why a part has no layout, as its wire records it in place of one: TeX's (`compile`, `texlive`, `engine`), ours (`marks`),
  *  the carry's (`carry`), and BUNDLE 8's where our compile is no base page (`final`: the final pass failed, moved a mark or had
  *  no budget; `boxes`: a page of ours not arXiv's size, or other page counts) */
-export declare const LAYOUT_REFUSED: readonly ['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes']
+export declare const LAYOUT_REFUSED: readonly ['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap']
 export type LayoutRefused = (typeof LAYOUT_REFUSED)[number]
 /** a record's `why`, in code units at most */
 export declare const WHY_MAX: 300

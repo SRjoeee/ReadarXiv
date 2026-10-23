@@ -22,7 +22,7 @@ import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
 import { chainedAddon } from '../layout/chain.mjs'
-import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf } from '../layout/delta-wire.mjs'
+import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, wrapWhy } from '../layout/delta-wire.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
@@ -37,7 +37,7 @@ import { isMemoryError } from './memory.mjs'
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 const why = e => String(e?.message ?? e).slice(0, 200)
 /** the why each refusal word says where none was given */
-const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', texlive: 'the paper needs another TeX Live', engine: 'the host does not run the paper\'s compiler', marks: 'the marked original could not be read', final: 'there is no final pass of the marked original', boxes: 'our pages are not arXiv\'s' })
+const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', texlive: 'the paper needs another TeX Live', engine: 'the host does not run the paper\'s compiler', marks: 'the marked original could not be read', final: 'there is no final pass of the marked original', boxes: 'our pages are not arXiv\'s', wrap: 'our pages could not be wrapped by optional content' })
 /**
  * Why a part has no layout, as its record says it (layer-proto/format.mjs LAYOUT_REFUSED: `{ refused, why }`, `why` within
  * WHY_MAX): the paper's refusal — the marked original's (layout/paper.mjs markedOfPaper's 'compile', 'texlive', 'engine',
@@ -103,7 +103,8 @@ function fitted(text) {
 export async function checkOurBase({ ours, draft = null, arxiv, tree = null, draw = true, toplevels = 1, delta = false }) {
   const no = (refused, why, extra = {}) => ({ refused, why: whyText(why), ...extra })
   const own = ours?.doc ?? null
-  if (!own) return no('final', typeof ours?.why === 'string' && ours.why ? ours.why : PLAIN_WHY.final)
+  // (a final pass whose wrap was refused (layout/wrap.mjs wrapFinal: `wrap-<code>`) is no base of ours either: `wrap`)
+  if (!own) { const k = ours?.refused === 'wrap' ? 'wrap' : 'final'; return no(k, typeof ours?.why === 'string' && ours.why ? ours.why : PLAIN_WHY[k]) }
   const { doc, text } = arxiv, N = doc.numPages
   const M = own.numPages
   // (a delta: `true`, every page of ours replaced, or the pages it replaces; the composed document is ours on those alone)
@@ -315,6 +316,10 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // (and how it is held: a delta over arXiv's PDF where the host gave one that checks, else our whole PDF, `stats.delta` saying
   // which and why)
   let baseDoc = null, baseText = null, lineCheck = null, oursHead = null, oursTail = null, deltaStat = null
+  // our pages wrapped by optional content (layout/wrap.mjs wrapFinal, in the maker child: `ours.wrap` its stats, unhidden and
+  // labelKept, `ours` the wrapped bytes' document, length, digest and startxref): written into the head's base of either kind
+  const wrap = ours?.wrap ?? null
+  if (wrap !== null) { const why = wrapWhy(wrap.stats, wrap.unhidden, wrap.labelKept); if (why !== null) throw new TypeError(`ours.wrap: ${why}`) }
   if (!(marks && !('marks' in marks))) {
     const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
     const held = oursDoc ? await deltaOfOurs(ours.delta, { orig: origRef, ours, M: oursDoc.numPages, N, tree, doc }) : null
@@ -325,10 +330,13 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       oursTail = { bytes: oursHead.bytes, xref: oursHead.xref }
       if (held?.delta && held.delta.replaced.at(-1)[1] <= oursHead.check.pages[0]) {
         const d = held.delta
-        oursHead = { source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: N, tree: oursHead.tree, check: oursHead.check, replaced: d.replaced, stats: d.stats }
+        oursHead = { source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: N, tree: oursHead.tree, check: oursHead.check, replaced: d.replaced, stats: { ...d.stats, ...(wrap ? wrap.stats : {}) }, ...(wrap ? { unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}) }
         oursTail = { bytes: origRef.bytes + d.bytes.length, xref: d.xref }
         deltaStat = { kind: 'delta', bytes: d.bytes.length, replaced: d.stats.replaced }
-      } else if (held) deltaStat = { kind: 'full', why: held.why ?? 'delta-shape', ...(held.reason ? { reason: held.reason } : {}) }
+      } else {
+        if (held) deltaStat = { kind: 'full', why: held.why ?? 'delta-shape', ...(held.reason ? { reason: held.reason } : {}) }
+        if (wrap) oursHead = { ...oursHead, stats: wrap.stats, unhidden: wrap.unhidden, labelKept: wrap.labelKept }
+      }
     }
   }
 

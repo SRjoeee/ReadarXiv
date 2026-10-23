@@ -21,7 +21,7 @@
 import { checkBoxes } from '../layout/cell-rules.mjs'
 import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
-import { BASE_KINDS, countOf, DELTA_MAX_BYTES, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
+import { BASE_KINDS, countOf, DELTA_MAX_BYTES, deltaSection, replacedWhy, WRAP_STATS, wrapWhy } from '../layout/delta-wire.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { PDFJS, PIPELINE_VERSION, REMOVAL } from '../pipeline/versions.mjs'
 import { groupOf } from '../translate/groups.mjs'
@@ -95,9 +95,10 @@ export const TOKEN_SCALE = 1000, TOKEN_LIMIT = 100_000
  *  the marks' reading or the maker failed) —; and `carry` (no unit of our compile laid: no page with a unit on it arXiv's
  *  page, layout/make.mjs drawable); BUNDLE 8's, where our compile is no base page — `final` (the final pass of the
  *  marked original failed, or did not place every mark where the draft did, or the compile budget held none), `boxes` (a page
- *  of ours is not arXiv's size, or the page counts differ). A part with `layout: null` is one whose producer recorded no
+ *  of ours is not arXiv's size, or the page counts differ), `wrap` (our pages could not be wrapped by optional content: layout/
+ *  wrap.mjs wrapFinal's refusal, `wrap-<code>` in the why). A part with `layout: null` is one whose producer recorded no
  *  reason (5's shape, cutBundle with none given) */
-export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes'])
+export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap'])
 /** whose PDF a layer is drawn over (the head's `base.source`): our compile's final pass, or arXiv's (a fallback, or a bundle of 7) */
 export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
 /** how a base of ours is held (the head's `base.kind`, BUNDLE 8): `delta`, an incremental update over arXiv's PDF (the
@@ -710,6 +711,17 @@ const BASE_OURS = ['source', 'bytes', 'sha256', 'xref', 'pages', 'tree', 'check'
  *  document (arXiv's bytes first), `replaced` the pages it writes again, `stats` what it reused of the original and wrote */
 const BASE_DELTA = ['source', 'kind', 'bytes', 'sha256', 'xref', 'pages', 'tree', 'check', 'replaced', 'stats']
 const DELTA_STATS = ['replaced', 'reused', 'included'], DELTA_REUSED = ['fonts', 'images', 'forms', 'other'], DELTA_INCLUDED = ['bytes', 'objects']
+/** a base of ours whose pages are wrapped by optional content (layout/wrap.mjs): its wrap's counts in `stats` (a delta's beside
+ *  its own), the units whose ink stays the original's and why (`unhidden`), those whose label is left the original's ink
+ *  (`labelKept`): every unit with a group of its own (`axt:u<id>`) and in neither list is the reader's to hide where it draws it */
+const WRAP_KEYS = ['stats', 'unhidden', 'labelKept']
+/** a wrap's head fields checked (delta-wire.mjs wrapWhy) and as a reader takes them */
+function wrapOf(K, stats, b) {
+  const why = wrapWhy(stats, b.unhidden, b.labelKept)
+  // (wrapWhy says `<path>: <why>`)
+  if (why !== null) { const at = why.indexOf(': '); throw refuse(K, `base.${why.slice(0, at)}`, why.slice(at + 2)) }
+  return { stats: { ...Object.fromEntries(WRAP_STATS.map(k => [k, k === 'unhidden' ? { ...stats.unhidden } : stats[k]])) }, unhidden: b.unhidden.map(r => [r[0], r[1]]), labelKept: [...b.labelKept] }
+}
 const BASE_ARXIV = ['source', 'bytes', 'sha256', 'xref']
 const CHECK_KEYS = ['pages', 'boxes', 'carried']
 /** the TeX Live year our base was compiled on, as the compile's banner names it */
@@ -750,11 +762,13 @@ function baseShape(K, v, bundle, N) {
   const kind = Object.hasOwn(v.base, 'kind') ? v.base.kind : 'full'
   if (!BASE_KINDS.includes(kind)) throw refuse(K, 'base.kind', `not one of ${BASE_KINDS.join(', ')} (${typeof kind === 'string' ? told(kind) : kindOf(kind)})`)
   if (kind === 'delta') return deltaShape(K, v, N)
-  const b = exactKeys(K, v.base, Object.hasOwn(v.base, 'kind') ? [...BASE_OURS, 'kind'] : BASE_OURS, 'base')
+  const wrapped = Object.hasOwn(v.base, 'stats') || Object.hasOwn(v.base, 'unhidden') || Object.hasOwn(v.base, 'labelKept')
+  const b = exactKeys(K, v.base, [...BASE_OURS, ...(Object.hasOwn(v.base, 'kind') ? ['kind'] : []), ...(wrapped ? WRAP_KEYS : [])], 'base')
   pdfRef(K, b, 'base', true)
   const check = oursCommon(K, b, N, false)
   const o = origOf(K, v)
-  return { base: { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check }, orig: o }
+  const wrap = wrapped ? wrapOf(K, b.stats, b) : null
+  return { base: { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check, ...(wrap ? { stats: wrap.stats, unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}) }, orig: o }
 }
 
 /** arXiv's PDF beside a base of ours (`orig`), required there; of a delta's, with its startxref (`xref`: the section the
@@ -789,7 +803,8 @@ function count(K, v, path) {
 /** a base of ours held as a delta over arXiv's PDF (BASE_DELTA): `orig` required and the original it extends (its section
  *  after arXiv's bytes: `xref` within the delta, read in the composed document's offsets); no `over` (orig says it) */
 function deltaShape(K, v, N) {
-  const b = exactKeys(K, v.base, BASE_DELTA, 'base')
+  const wrapped = Object.hasOwn(v.base, 'unhidden') || Object.hasOwn(v.base, 'labelKept')
+  const b = exactKeys(K, v.base, wrapped ? [...BASE_DELTA, 'unhidden', 'labelKept'] : BASE_DELTA, 'base')
   if (b.kind !== 'delta') throw refuse(K, 'base.kind', `not 'delta' (${typeof b.kind === 'string' ? told(b.kind) : kindOf(b.kind)})`)
   const o = origOf(K, v, true)
   if (!isInteger(b.bytes, 1, DELTA_MAX_BYTES)) throw refuse(K, 'base.bytes', `not an integer 1 to ${DELTA_MAX_BYTES}`)
@@ -798,7 +813,8 @@ function deltaShape(K, v, N) {
   const check = oursCommon(K, b, N, true)
   const why = replacedWhy(b.replaced, check.pages[0])
   if (why !== null) throw refuse(K, 'base.replaced', `${why}: ascending, merged page ranges within our ${check.pages[0]} pages`)
-  const st = exactKeys(K, b.stats, DELTA_STATS, 'base.stats')
+  const st = exactKeys(K, b.stats, wrapped ? [...DELTA_STATS, ...WRAP_STATS] : DELTA_STATS, 'base.stats')
+  const wrap = wrapped ? wrapOf(K, Object.fromEntries(WRAP_STATS.map(k => [k, st[k]])), b) : null
   const reused = exactKeys(K, st.reused, DELTA_REUSED, 'base.stats.reused'), included = exactKeys(K, st.included, DELTA_INCLUDED, 'base.stats.included')
   for (const k of DELTA_REUSED) count(K, reused[k], `base.stats.reused.${k}`)
   for (const k of DELTA_INCLUDED) count(K, included[k], `base.stats.included.${k}`)
@@ -806,7 +822,7 @@ function deltaShape(K, v, N) {
   if (included.bytes > b.bytes) throw refuse(K, 'base.stats.included.bytes', 'more than the delta\'s bytes')
   if (included.objects < st.replaced) throw refuse(K, 'base.stats.included.objects', 'fewer than the pages it replaces')
   return {
-    base: { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check, replaced: b.replaced.map(r => [r[0], r[1]]), stats: { replaced: st.replaced, reused: Object.fromEntries(DELTA_REUSED.map(k => [k, reused[k]])), included: { bytes: included.bytes, objects: included.objects } } },
+    base: { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check, replaced: b.replaced.map(r => [r[0], r[1]]), stats: { replaced: st.replaced, reused: Object.fromEntries(DELTA_REUSED.map(k => [k, reused[k]])), included: { bytes: included.bytes, objects: included.objects }, ...(wrap ? wrap.stats : {}) }, ...(wrap ? { unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}) },
     orig: o,
   }
 }
@@ -876,8 +892,8 @@ export async function readHead(bytes, { ref, caps }) {
 const checkWire = c => ({ pages: [c?.pages?.[0], c?.pages?.[1]], boxes: c?.boxes, carried: isNumber(c?.carried) ? r4(c.carried) : c?.carried })
 const baseWire = b => (b.source === 'ours'
   ? b.kind === 'delta'
-    ? { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check), replaced: b.replaced, stats: b.stats }
-    : { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check) }
+    ? { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check), replaced: b.replaced, stats: b.stats, ...(b.unhidden ? { unhidden: b.unhidden, labelKept: b.labelKept } : {}) }
+    : { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check), ...(b.unhidden ? { stats: b.stats, unhidden: b.unhidden, labelKept: b.labelKept } : {}) }
   : { source: 'arxiv', bytes: b.bytes, sha256: b.sha256, xref: b.xref, ...(b.why === undefined || b.why === null ? {} : { why: b.why }) })
 
 /** the head written: the paper, the base (baseShape's: ours with `orig`, arXiv's PDF; or arXiv's), the versions this engine

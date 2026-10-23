@@ -29,11 +29,10 @@
 // Pure arithmetic over what pageInk read (layout/ink.mjs, `indices`); imports the stream's regions and a unit's source text.
 // An original module (no port statement).
 import { plainSource } from '../translate/mt.mjs'
+import { UNHIDDEN } from './delta-wire.mjs'
 import { ownedOf, regionsOf } from './stream.mjs'
 
-/** why a unit's ink stays the original's (§1.4, §2.4, §3.2): its marks absent, twice or out of order; a range over more pages
- *  than a continued footnote's; its glyphs that do not spell it; a page that could not be wrapped; a page past its group bounds */
-export const UNHIDDEN = Object.freeze(['marks', 'across', 'spell', 'page', 'bounds'])
+export { UNHIDDEN }
 /** the unit ids a record lists the spell check's refusals of, at most */
 export const SPELL_LIST_MAX = 64
 
@@ -49,7 +48,9 @@ const BRACKET = /^[bf][se]\d+$/
 export const spellOf = s => s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/ß/g, 'ss').replace(/[^\p{L}\p{N}]/gu, '')
 /** a label's form (§1.3): a number or an item's mark, maybe a caption's or a section's name before it, in brackets or with a
  *  stop after it — of its characters, NFKC, lower case, no white space */
-const LABEL_FORM = /^(?:(?:figure|fig\.?|table|tab\.?|algorithm|alg\.?|listing|section|sec\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\.?)?[([]?(?:\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\-–](?:\d{1,4}|[a-z]))*[)\].:]{0,2}|[•◦▪▫‣⁃∙·∗*–—\-+○●■□►▸▹➢✓✔])$/u
+const LABEL_NAME = '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
+const LABEL_NUMBER = '[([]?(?:\\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\\-–](?:\\d{1,4}|[a-z]))*'
+const LABEL_FORM = new RegExp(`^(?:(?:${LABEL_NAME}(?:${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
 const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
 export const isLabelForm = s => { const t = labelText(s); return t === '' || LABEL_FORM.test(t) }
 
