@@ -111,7 +111,7 @@ describe('S8: Type 3 text, and the splits refused', () => {
 })
 
 describe('G4 and G5: a toggle on a kept config, the crop source', () => {
-  const TEXT = unit(0, 72, 700, '(Order)') + unit(1, 72, 680, '(points)') + run(72, 660, '(x)', { before: '/axt-2s ri ', font: 'F35' }).replace('[(x)] TJ', '[(the)] TJ /axt-p2.1a ri /F35 10.9091 Tf [(x)] TJ /axt-p2.1b ri') + ' /axt-2e ri\n'
+  const TEXT = `${unit(0, 72, 700, '(Order)')}${unit(1, 72, 680, '(points)')}${run(72, 660, '(x)', { before: '/axt-2s ri ', font: 'F35' }).replace('[(x)] TJ', '[(the)] TJ /axt-p2.1a ri /F35 10.9091 Tf [(x)] TJ /axt-p2.1b ri')} /axt-2e ri\n`
   it('a config toggled between renders draws as a fresh config does (G4)', async () => {
     const { bytes } = await markedSample({ pages: [2], edit: only(TEXT) })
     const r = ok(await wrapped(bytes, { units: [{ src: 'Order' }, { src: 'points' }, { src: 'the' }] }))
@@ -161,7 +161,7 @@ describe('sample-1 end to end from its marked compile (T1.2, T2.4)', () => {
     const inkOf = async (b: Uint8Array) => {
       const task = getDocument({ ...DOCUMENT_OPTIONS, data: b.slice() } as never), doc = await task.promise
       const out: { glyphs: number; shows: number }[] = []
-      for (let p = 1; p <= doc.numPages; p++) { const page = await doc.getPage(p); const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: 0, indices: true }); out.push({ glyphs: ink.glyphs.length, shows: ink.shows }) }
+      for (let p = 1; p <= doc.numPages; p++) { const page = await doc.getPage(p); const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: 0, indices: true }); out.push({ glyphs: ink.glyphs.length, shows: ink.shows ?? 0 }) }
       await task.destroy()
       return out
     }
