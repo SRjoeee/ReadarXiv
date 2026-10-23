@@ -154,9 +154,9 @@ describe('sample-1 end to end from its marked compile (T1.2, T2.4)', () => {
     expect(r.stats.refusedPages).toBe(0)
     // (I1: the groups are the units' by their ids, every unit with marks drawable but the ones listed)
     expect(r.stats.unhidden.spell).toBe(0)
-    // (the original's only where the marker sets no marks: the title block's author and date, the figure's TikZ labels; with no
-    // group of their own, counted and not listed)
-    expect(r.stats.unhidden.marks).toBe(4)
+    // (the original's only where the marker sets no marks, with no group of their own, counted and not listed: 4 before LAYOUT 17,
+    // whose marker marks two of them, the title block's and the figure's TikZ labels before it)
+    expect(r.stats.unhidden.marks).toBe(2)
     expect(r.unhidden).toEqual([])
     for (const p of [1, 2, 3, 4]) expect(pixelsApart(await renderPage(final, p), await renderPage(r.bytes, p)), `page ${p}`).toBe(0)
     // (the page pass reads the wrapped pages: their glyphs the unwrapped pass's, one more show for each split)

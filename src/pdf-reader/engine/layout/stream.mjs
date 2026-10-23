@@ -1,6 +1,6 @@
 // Each placeholder's own ink in the marked compile, by content-stream order (Plan 8b, Task 6b; spec §4.2; the stream
 // ownership spike of 2026-10-06). LAYOUT_TEX sets a point, `/axt-<name> ri`, beside each destination it sets
-// (layout/marks.mjs), and points around each column's body (bs<n>, be<n>, in \@makecol) and each float's box (fs<n>,
+// (layout/marks.mjs), and points around each column's body (bs<n>, be<n>, in \@makecol, else at \@outputpage) and each float's box (fs<n>,
 // fe<n>); pageInk reads them in order among the glyphs and the boxes (layout/ink.mjs). A piece's own ink is what the
 // content stream shows between its two points: every glyph and rule TeX set for it, its scripts, limits, bars and
 // radicals, and nothing of its neighbours', where geometry can only guess. What TeX ships between two points that is

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { completeMacros, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { completeCall, completeCalled, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { completeCall, completeCalled, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -217,5 +217,54 @@ describe('uprightToken: the maker reaches only upright words (2610.19282 p15: a 
   it('a word of an upright line is; of a line turned a quarter either way, or upside down, none is', () => {
     expect(tokensOf([10, 0, 0, 10, 72, 700]).map(uprightToken)).toEqual([true, true, true, true])
     for (const m of [[0, 10, -10, 0, 300, 400], [0, -10, 10, 0, 300, 400], [-10, 0, 0, -10, 400, 300]]) expect(tokensOf(m).map(uprightToken), JSON.stringify(m)).toEqual([false, false, false, false])
+  })
+})
+
+describe('a complete macro glued to the placeholder after it (2610.21098\'s \\HarnessLimitShare{}\\%): asked about that follower', () => {
+  const u = unit([text('A share of '), ph('\\share{}'), ph('\\%'), text(' and '), ph('\\share{}'), ph('\\%'), text(', then '), ph('\\share{}'), ph('\\cite{a}'), text('.')])
+  it('the probe asks its probed call before its glued follower, as the call follower (a percent or hash sign escaped is no comment)', () => {
+    const samples = probeSamples([u], [['share', 0]])
+    expect(samples).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { command: '\\share', src: '\\share{}', call: false, own: true, glued: '\\%' }])
+    const tex = markProbeTex(samples)
+    expect(tex).toContain('way \\share{}\\% \\unskip')
+    expect(tex).toContain('way \\share{}{}\\% \\unskip')
+    expect(tex).toContain('way \\axtpma{q1a}\\share{}\\axtpm{q1b}\\% \\unskip')
+    // (a follower that is a comment's start, or a call followed by text, asks nothing more)
+    expect(probeSamples([unit([ph('\\share{}'), ph('\\\\%x')])], [['share', 0]])).toEqual([{ command: '\\share', src: '\\share{}', call: false, own: true }])
+    expect(probeSamples([unit([ph('\\share{}'), text('%')])], [['share', 0]])).toEqual([{ command: '\\share', src: '\\share{}', call: false, own: true }])
+  })
+  it('its answer read as the call follower\'s, an error in its boxes no answer', () => {
+    const samples = probeSamples([u], [['share', 0]])
+    expect(readMarkProbe('LAYOUT-PROBE 1 punct 1 00000001\n', samples)).toEqual({ '\\share': '00000001' })
+    expect(readMarkProbe('LAYOUT-PROBE 1 punct-at 1 7 a\n! Undefined control sequence.\nLAYOUT-PROBE 1 punct 1 00000000\n', samples)).toEqual({ '\\share': '0000000x' })
+  })
+  it('layoutMarking: a call glued to that follower gets its closing mark where TeX answered 0 for it; else, and against another placeholder, its opening mark alone', () => {
+    const switches = { '\\share': '00000000', '\\cite': '00000000' }
+    const marked = (codes: string) => ((layoutMarking([u], MARK_CLASSES, { lines: false, complete: { share: 0 }, switches: { ...switches, '\\share': codes } }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')
+    expect(marked('00000000')).toContain('\\axtpma{p0.1a}\\share{}\\axtpm{p0.1b}\\%')
+    expect(marked('00000000')).toContain('\\axtpma{p0.4a}\\share{}\\axtpm{p0.4b}\\%')
+    // (before \\cite{a}, a follower the probe did not ask about: no closing mark)
+    expect(marked('00000000')).toContain('\\axtpma{p0.7a}\\share{}\\cite{a}')
+    for (const codes of ['00000001', '00000002', '0000000x']) expect(marked(codes)).toContain('\\axtpma{p0.1a}\\share{}\\%')
+  })
+})
+
+describe('frontMarks: the front matter\'s units, marked in the layout compile as any unit', () => {
+  const front = (kind: string, s: string, more: object = {}) => ({ ...unit([text(s)]), kind, ...more }) as SourceUnit
+  it('an author block\'s names and places, a front note (\\thanks), a front unit of the role table\'s (a \\date): start and end marks; not a heading, nor one a macro only stores (\\biboptions{semicolon})', () => {
+    const units = [front('heading', 'A title', { front: true }), front('author', 'Ada Lovelace'), front('footnote', 'Equal contribution.', { front: true }), front('para', 'October 2026', { front: true }), front('para', 'Body text.'), front('para', 'semicolon', { front: true, held: true })]
+    const m = frontMarks(units)
+    expect(units.map(u => m(u))).toEqual([null, { start: '\\leavevmode\\axtmark{1s}', end: '\\axtend{1e}' }, { start: '\\leavevmode\\axtmark{2s}', end: '\\axtend{2e}' }, { start: '\\leavevmode\\axtmark{3s}', end: '\\axtend{3e}' }, null, null])
+  })
+  it('none whose text another one\'s equals (a class compares them: revtex\'s affiliations), none stored or read in math', () => {
+    const units = [front('author', 'Dept. of Engines'), front('author', 'Ada'), front('author', 'Dept.  of Engines'), front('footnote', 'Equal.', { front: true }), front('footnote', 'Equal.', { front: true }), front('author', 'Stored', { stored: true }), { ...unit([text('A'), ph('^'), text('1')]), kind: 'author' } as SourceUnit]
+    const m = frontMarks(units)
+    expect(units.map(u => !!m(u))).toEqual([false, true, false, false, false, false, false])
+  })
+  it('layoutMarking gives them those marks, and their placeholders theirs', () => {
+    const a = { ...unit([text('Ada Lovelace, '), ph('\\texttt{ada@x.org}'), text(' and more')]), kind: 'author' } as SourceUnit
+    const { units, mark } = layoutMarking([a], MARK_CLASSES, { lines: true })
+    expect(mark(a)).toEqual({ start: '\\leavevmode\\axtmark{0s}', end: '\\axtend{0e}' })
+    expect(((units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')).toContain('\\axtpma{p0.1a}\\texttt{ada@x.org}\\axtpm{p0.1b}')
   })
 })

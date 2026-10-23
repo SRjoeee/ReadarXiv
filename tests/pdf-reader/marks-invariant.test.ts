@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
@@ -49,6 +49,17 @@ const destsOf = async (pdf: Uint8Array) => {
   await doc.loadingTask.destroy()
   return new Set(all instanceof Map ? all.keys() : Object.keys(all ?? {}))
 }
+/** the points (`/axt-<name> ri`) of each page of a PDF, in stream order: [page, name] */
+const pointsOf = async (pdf: Uint8Array) => {
+  const doc = await getDocument({ data: pdf.slice(), verbosity: 0 }).promise
+  const out: [number, string][] = []
+  for (let n = 1; n <= doc.numPages; n++) {
+    const ops = await (await doc.getPage(n)).getOperatorList()
+    ops.fnArray.forEach((f, j) => { const name = (ops.argsArray[j]?.[0] as { name?: string } | undefined)?.name; if (f === OPS.setRenderingIntent && typeof name === 'string' && name.startsWith('axt-')) out.push([n, name.slice(4)]) })
+  }
+  await doc.loadingTask.destroy()
+  return out
+}
 /** the marked original's items against the paper's own; the marks it set, by each piece's source: 'a' its opening mark, 'b' its
  *  closing one, of the first piece of that source */
 async function compare(tex: string) {
@@ -63,7 +74,12 @@ async function compare(tex: string) {
     return null
   }
   const options = made.options as { switches?: Record<string, string>; inkless?: string[] }
-  return { marked: await itemsOf(made.pdf), own: await itemsOf(own.pdf as Uint8Array), marksOf, switches: options.switches ?? {}, inkless: options.inkless ?? [] }
+  /** a unit's own marks, by its first text: 's' its start mark, 'e' its end mark */
+  const unitMarksOf = (first: string) => {
+    const i = paper.units.findIndex(u => (u.pieces as { t: string; s?: string }[]).some(p => p.t === 'text' && (p.s ?? '').trim().startsWith(first)))
+    return i < 0 ? null : `${dests.has(`axt-${i}s`) ? 's' : ''}${dests.has(`axt-${i}e`) ? 'e' : ''}`
+  }
+  return { marked: await itemsOf(made.pdf), own: await itemsOf(own.pdf as Uint8Array), marksOf, unitMarksOf, switches: options.switches ?? {}, inkless: options.inkless ?? [], pdf: made.pdf, units: paper.units }
 }
 /** a paragraph each with a few more words before `x`, so that some line ends inside the word `x` is about (never none: a
  *  paragraph that opens with a macro has its start mark after it, which an \\xspace in it sees, as before this marking) */
@@ -75,8 +91,10 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     const r = await compare(doc('\\newcommand\\tf{Transformer}\\newcommand\\method{RoBERTa}\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('\\tf{}s')}\n\n${lines('\\method{}s')}\n\nThe share is \\share{}\\cite{a} of all, and the rate \\rate{} \\cite{a} here.`))
     expect(r.marked).toEqual(r.own)
     // (the marks it set: \\tf{} before its suffix its opening mark alone; \\rate{} TeX answered for, both, and the citation past
-    // white space after it both; the citation right against \\share{} none)
-    expect([r.marksOf('\\tf{}'), r.marksOf('\\rate{}'), r.marksOf('\\share{}')]).toEqual(['a', 'ab', 'a'])
+    // white space after it both; \\share{}, its probed call glued to the citation, both where TeX answered so for that follower;
+    // the citation right against it none)
+    expect([r.marksOf('\\tf{}'), r.marksOf('\\rate{}'), r.marksOf('\\share{}'), r.marksOf('\\cite{a}')]).toEqual(['a', 'ab', 'ab', ''])
+    expect(r.switches['\\share']).toBe('00000000')
     expect(r.switches['\\rate']).toBe('00000000')
   }, 900_000)
   it('a macro whose body ends in an argument (\\pair{Ro}{\\bert}: \\xspace in it), and one that redefines another', async () => {
@@ -128,5 +146,43 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     expect(r.switches['\\cite']).toBe('00000000')
     expect(r.switches['\\bad']).toBeUndefined()
     expect(r.marksOf('\\nothing{}')).toBe('')
+  }, 900_000)
+  it('the front matter\'s units, marked as any unit: an author block\'s names and places and its \\thanks notes, set in \\maketitle', async () => {
+    const r = await compare(`\\documentclass{article}\n\\usepackage{hyperref}\n\\title{Counting Paths}\n\\author{Ada Lovelace\\thanks{Analytical Engine Society.} \\and Charles Babbage\\thanks{Difference Engine Club.}\\\\ Cambridge, England}\n\\date{}\n\\begin{document}\n\\maketitle\n${lines('a word')}\n\\end{document}\n`)
+    expect(r.marked).toEqual(r.own)
+    // (the names' unit, which \\maketitle sets in a table's cell, and each note, which \\thanks keeps for the foot of the page)
+    expect([r.unitMarksOf('Ada Lovelace'), r.unitMarksOf('Analytical Engine'), r.unitMarksOf('Difference Engine')]).toEqual(['se', 'se', 'se'])
+  }, 900_000)
+  it('a unit that ends inside \\emph{...} on a centred line (2610.21880\'s IEEEtran author block): its end mark keeps the italic correction \\emph adds after its group', async () => {
+    const r = await compare(`\\documentclass[conference]{IEEEtran}\n\\begin{document}\n\\title{A Title}\n\\author{Sohani Hiam, Mohammad Soleymani, \\emph{Senior Member, IEEE}, \\\\and Rafael F. Schaefer, \\emph{Senior Member, IEEE}\n \\\\ \n\\thanks{This work was supported.}}\n\\maketitle\n\\begin{center}\nA centred paragraph of Rafael F. Schaefer, \\emph{Senior Member, IEEE}\n\\end{center}\n\\end{document}\n`)
+    expect(r.marked).toEqual(r.own)
+    expect([r.unitMarksOf('Sohani Hiam'), r.unitMarksOf('A centred paragraph')]).toEqual(['se', 'se'])
+  }, 900_000)
+  it('but not two of them whose texts are equal, which a class compares (revtex4-2 sets two authors\' equal affiliations once)', async () => {
+    const r = await compare(`\\documentclass[aps,prl,twocolumn]{revtex4-2}\n\\begin{document}\n\\title{Counting Paths}\n\\author{Ada Lovelace}\n\\affiliation{Department of Engines, Cambridge, England}\n\\author{Charles Babbage}\n\\affiliation{Department of Engines, Cambridge, England}\n\\author{Mary Somerville}\n\\affiliation{Royal Institution, London, England}\n\\begin{abstract}A short abstract of the paper.\\end{abstract}\n\\maketitle\n${lines('a word')}\n\\end{document}\n`)
+    expect(r.marked).toEqual(r.own)
+    expect([r.unitMarksOf('Department of Engines'), r.unitMarksOf('Royal Institution'), r.unitMarksOf('Mary Somerville')]).toEqual(['', 'se', 'se'])
+  }, 900_000)
+  it('revtex4-2, whose ltxgrid makes its columns without \\@makecol: each page\'s text block bracketed by body points at \\@outputpage', async () => {
+    const r = await compare(`\\documentclass[aps,prl,twocolumn]{revtex4-2}\n\\begin{document}\n\\title{Counting Paths}\n\\author{Ada Lovelace}\n\\affiliation{Department of Engines}\n\\maketitle\n${lines('a word', 40)}\n\\begin{equation}a^2+b^2=c^2\\end{equation}\n${lines('a word', 30)}\n\\end{document}\n`)
+    expect(r.marked).toEqual(r.own)
+    const points = await pointsOf(r.pdf)
+    const pages = new Set(r.marked.map(x => Number(x.split(' ')[0])))
+    expect(pages.size).toBeGreaterThan(1)
+    // (every page one bracket, opening before its closing)
+    for (const p of pages) {
+      const names = points.filter(([q]) => q === p).map(([, n]) => n).filter(n => /^b[se]\d+$/.test(n))
+      expect(names.map(n => n[1]), `page ${p}`).toEqual(['s', 'e'])
+    }
+  }, 900_000)
+  it('cite.sty\'s superscripts under hyperref: no mark before the punctuation it moves', async () => {
+    const r = await compare(doc('\\usepackage[super]{cite}\\usepackage{hyperref}', `${lines('work \\cite{a}.')}`))
+    expect(r.marked).toEqual(r.own)
+    expect(r.switches['\\cite']?.[0]).toBe('2')
+  }, 900_000)
+  it('a complete macro glued to the placeholder after it (2610.21098\'s \\HarnessLimitShare{}\\%): its closing mark where TeX answered so for that follower', async () => {
+    const r = await compare(doc('\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('of \\share{}\\% each')}\n\n${lines('of \\rate{}\\S{} each')}`))
+    expect(r.marked).toEqual(r.own)
+    expect([r.switches['\\share'], r.marksOf('\\share{}'), r.marksOf('\\rate{}')]).toEqual(['00000000', 'ab', 'ab'])
   }, 900_000)
 })

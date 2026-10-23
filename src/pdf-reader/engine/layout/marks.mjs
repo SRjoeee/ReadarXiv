@@ -13,7 +13,7 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
+import { frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { INK_FREE_LEAD } from '../rules/tex-kernel.mjs'
@@ -88,7 +88,8 @@ export function classOf(piece) {
 // ---------------------------------------------------------------- the paper's own switch: TeX asked
 /** what the mark probe sets after a placeholder: the six marks of punctuation a package may look for and set first
  *  (biblatex scans for all six; natmove, cite.sty and REVTeX for the first four), a word after a space, and for a
- *  footnote's call a second call */
+ *  footnote's call a second call; for a paper's complete macro whose probed call is glued to a placeholder (probeSamples'
+ *  `glued`), that placeholder in the last's place, else nothing there (0, as every other sample's) */
 export const FOLLOWERS = Object.freeze(['.', ',', ';', ':', '!', '?', 'word', 'call'])
 const PUNCT = '.,;:!?'
 /** the classes whose commands the probe asks about: a package may look past their closing brace (a paper's macro has its
@@ -114,14 +115,19 @@ export const commandOf = p => (p?.t === 'nested' ? /^\\[A-Za-z@]+/.exec(p.pre ??
 export function probeSamples(units, complete = null) {
   const seen = new Map(), own = new Map(), closed = completeMap(complete)
   const fit = src => !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
-  for (const u of units) for (const p of u.pieces) {
+  for (const u of units) for (const [k, p] of u.pieces.entries()) {
     const cmd = commandOf(p), cls = classOf(p)
     if (!cmd) continue
     if (ASKED.has(cls)) {
       if (seen.has(cmd) || seen.size >= PROBE_MAX) continue
       const src = p.t === 'nested' ? `${p.pre}A note.${p.post}` : p.src
       if (fit(src)) seen.set(cmd, { command: cmd, src, call: cls === 'footnote' })
-    } else if (cls === 'macro' && !own.has(cmd) && own.size < COMPLETE_PROBE_MAX && completeCall(p, closed) && fit(p.src) && p.src.length <= COMPLETE_SRC_MAX) own.set(cmd, { command: cmd, src: p.src, call: false, own: true })
+    } else if (cls === 'macro' && !own.has(cmd) && own.size < COMPLETE_PROBE_MAX && completeCall(p, closed) && fit(p.src) && p.src.length <= COMPLETE_SRC_MAX) {
+      // (the placeholder its call is glued to, where one stands right after it: `\\share{}\\%`, asked as its `call` follower)
+      // (a percent or hash sign only escaped, as a text symbol writes it: `\\%`, an odd number of backslashes before it)
+      const next = u.pieces[k + 1], glued = next?.t === 'ph' && typeof next.src === 'string' && fit(next.src.replace(/(?<!\\)((?:\\\\)*)\\[%#]/g, '$1')) && next.src.length <= COMPLETE_SRC_MAX ? next.src : null
+      own.set(cmd, { command: cmd, src: p.src, call: false, own: true, ...(glued ? { glued } : {}) })
+    }
   }
   return [...seen.values(), ...own.values()]
 }
@@ -162,10 +168,12 @@ export function readProbe(log) {
 export function punctuationSection(samples, from = 0) {
   const box = (i, j, n, body) => `${probeRow('punct-at', i, j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
   const put = d => `\\xdef\\axt@qo{\\axt@qo${d}}`
-  const tests = samples.map(({ src, call }, n) => {
+  const tests = samples.map(({ src, call, glued }, n) => {
     const i = from + n, open = `\\axtpma{q${i}a}`, close = `\\axtpm{q${i}b}`
     const each = [...PUNCT, ' x'].map((f, j) => `\\begingroup${box(i, j, 'a', `${src}${f}`)}${box(i, j, 'b', `${src}{}${f}`)}${box(i, j, 'c', `${open}${src}${close}${f}`)}${box(i, j, 'd', `${open}${src}${f}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi\\else${put(2)}\\fi`).join('')
-    const again = call ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi` : put(0)
+    const again = call ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi`
+      : glued ? `\\begingroup${box(i, 7, 'a', `${src}${glued}`)}${box(i, 7, 'b', `${src}{}${glued}`)}${box(i, 7, 'c', `${open}${src}${close}${glued}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi`
+      : put(0)
     return `${each}${again}${probeRow('punct', i, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
   })
   const reset = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
@@ -585,11 +593,13 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  * - **The italic correction.** Where a mark is set against a letter that has one, an empty \vadjust after the mark says
  *   so, and \/ and LaTeX's \@@italiccorr add that letter's correction, measured when the mark was set, where they find
  *   it: TeX adds none after a whatsit, and cite.sty's [super] (\unskip then \/), \textup's left correction (\eqref),
- *   \textit and \textbf after their group set it on the letter before (0.14 pt after a "g" in cmr10, 1.45 pt after an
- *   italic "f"). The letter is a character, a ligature, or under XeTeX a word of a font of its own, which is a whatsit
+ *   \textit, \textbf and \emph after their group set it on the letter before (0.14 pt after a "g" in cmr10, 1.45 pt after
+ *   an italic "f"). The letter is a character, a ligature, or under XeTeX a word of a font of its own, which is a whatsit
  *   (\lastnodetype 9: TeX's \/ adds no correction after any other whatsit, so one there measures nothing). An adjust
  *   node is nothing to TeX's line breaking, hyphenation and pdfTeX's margin kerning, as a whatsit.
- *   A cell's marks do the same: its \axtmark.
+ *   Every \axtmark in horizontal mode does the same, a unit's own as a cell's: a unit that ends inside \emph{…} lost the
+ *   correction \emph adds after its group, a quarter point on its line, which a centred line shows as half of it moved
+ *   (2610.21880's IEEEtran author block, "Senior Member, IEEE").
  * - **The colour, at each colour piece** (\axtcolour{c<i>.<k>}, layoutMarking: right inside a \textcolor's group, right
  *   after a \color switch): a message to the log, `AXT-COLOUR c<i>.<k> <\current@color>`, the fill the driver paints the
  *   run with where TeX is (readColours): every colour the paper's own TeX accepts, defined anywhere (a body's \definecolor,
@@ -612,7 +622,12 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[
  *   whatsit before the body's first glue makes it a place to break, and \vsplit — balance.sty's last page — then takes
  *   an empty column; the closing one after the body's last box, its glue, kerns and penalties taken off and put back
  *   after it, so that no place to break is made or lost, and LaTeX's \@outputbox@removebskip still finds a \vfil
- *   last)
+ *   last);
+ *   and where a page is shipped with no column's body bracketed since the last (a class whose output routine makes its
+ *   columns without \@makecol: revtex4-2's ltxgrid, its \@makecolumn; 24 units of 5 papers of the release-route sweep), around
+ *   its text block at LaTeX's \@outputpage, which every LaTeX output routine ships its page by (\@outputbox: the columns with
+ *   their footnotes, a vertical box or two columns side by side in a horizontal one, repacked to its own size as the body is),
+ *   so that every class's page has its body bracketed; its footnotes are inside that bracket (the debt of #299)
  *   and around each float's finished box (after \@endfloatbox, the box repacked as the body is: a point at the box's
  *   start would give its first paragraph a \parskip), points alone (bs, be, fs, fe and a count kept in a macro): a range
  *   across a page or a column, or one an [h] float is shipped into, is cut to its own.
@@ -631,7 +646,9 @@ export const POINTS_TEX = [
   '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}',
   '\\gdef\\axt@bn{0}\\def\\axt@bump{\\xdef\\axt@bn{\\the\\numexpr\\axt@bn+1\\relax}}',
   '\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}\\def\\axt@vtg{\\edef\\axt@vback{\\vskip\\the\\lastskip\\relax\\axt@vback}\\unskip\\axt@vtake}\\def\\axt@vtk{\\edef\\axt@vback{\\kern\\the\\lastkern\\relax\\axt@vback}\\unkern\\axt@vtake}\\def\\axt@vtp{\\edef\\axt@vback{\\penalty\\the\\lastpenalty\\relax\\axt@vback}\\unpenalty\\axt@vtake}',
-  '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\fi}\\fi',
+  '\\newif\\ifaxt@bodied',
+  '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}\\fi',
+  '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
   '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
 ].join('')
 
@@ -743,7 +760,7 @@ export const LAYOUT_TEX = [
   '\\def\\axt@agpar#1{\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}}}\\axt@agt}',
   '\\def\\axt@alg#1e#2\\@nil{\\ifx\\relax#2\\relax\\else\\ifhmode\\ifinner\\axt@agnow{#1}h\\else\\ifdefined\\AddToHookNext\\axt@agpar{#1}\\fi\\fi\\else\\axt@agnow{#1}v\\fi\\fi}',
   '\\def\\axt@align#1{\\axt@ift#1\\relax{}{\\axt@alg#1e\\@nil}}',
-  '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}',
+  '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@put{#1}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
   '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@tg\\or\\expandafter\\axt@tk\\or\\expandafter\\axt@tp\\fi}',
   '\\def\\axt@tg{\\edef\\axt@back{\\hskip\\the\\lastskip\\relax\\axt@back}\\unskip\\axt@take}',
@@ -773,8 +790,8 @@ export const LAYOUT_TEX = [
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
   '\\AddToHook{package/gettitlestring/after}{\\let\\axt@title@of\\GetTitleString\\long\\def\\GetTitleString#1{\\def\\axt@title{#1}\\axt@unmark\\axt@title\\expandafter\\axt@title@of\\expandafter{\\axt@title}}}',
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtcolour\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
-  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
+  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtmark\\@gobble\\let\\axtend\\@gobble\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtcolour\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
+  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axtend\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
   UNMARK_TEX,
   NAMES_TEX,
   POINTS_TEX,
@@ -1000,9 +1017,16 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   /** the call the probe asked about for each complete macro (probeSamples, over the same units): a call of it with other
    *  arguments may end in another glyph, which TeX kerns otherwise with what follows (`\\fmt{x}{V}.` under mathptmx, the
    *  probe's `\\fmt{x}{x}.`), so its answer is that call's, and a call of no arguments's at all */
-  const probed = new Map(switches && closed.size ? probeSamples(units, closed).filter(s => s.own).map(s => [s.command, s.src]) : [])
+  const asked = switches && closed.size ? probeSamples(units, closed).filter(s => s.own) : []
+  const probed = new Map(asked.map(s => [s.command, s.src]))
+  /** the placeholder each complete macro's probed call is glued to (probeSamples' `glued`), TeX's answer for it the `call`
+   *  follower's: a call glued to a placeholder of that source has its closing mark where TeX answered that a mark between the
+   *  two moves nothing (2610.21098's `\\HarnessLimitShare{}\\%`: a kern between the number's last digit and the next
+   *  glyph, which a mark would take, is the font's to say) */
+  const glued = new Map(asked.filter(s => s.glued).map(s => [s.command, s.glued]))
   const answered = p => completeCall(p, closed) && !!switches?.[commandOf(p)] && (closed.get(commandOf(p).slice(1)) === 0 || probed.get(commandOf(p)) === p.src)
   const looks = p => LOOKS_AHEAD(p) && !answered(p)
+  const gluedTo = (p, next) => next?.t === 'ph' && answered(p) && glued.get(commandOf(p)) === next.src
   // (white space after a call that ends in a control word is none: TeX skips it, and the next piece stands against the call's
   // last letter, where its mark's whatsit would let TeX hyphenate the word a citation's box keeps whole: `\\tf \\cite{a}`)
   const opensAfter = (after, spaced) => spaced && !ENDS_IN_CS.test(after.src ?? '') && answered(after) && switches[commandOf(after)][6] === '0'
@@ -1015,17 +1039,20 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     if (!switches) return undefined
     const codes = switches[commandOf(p)]
     if (!codes) return ASKED.has(classOf(p)) ? '2' : undefined
-    const code = classOf(next) === 'footnote' && classOf(p) === 'footnote' ? (codes[7] === '0' ? codes[6] : codes[7] === 'x' ? 'x' : '1') : codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
+    const code = classOf(next) === 'footnote' && classOf(p) === 'footnote' ? (codes[7] === '0' ? codes[6] : codes[7] === 'x' ? 'x' : '1') : gluedTo(p, next) ? codes[7] : codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
     return code === 'x' ? '2' : code
   }
   /** whether a piece after one that may look ahead may have its marks: TeX answered so for a footnote's call */
   const free = (after, p) => classOf(after) === 'footnote' && !!switches?.[commandOf(after)] && (classOf(p) === 'footnote' ? switches[commandOf(after)][7] === '0' : switches[commandOf(after)][6] === '0')
-  const base = markUnits(units)
+  const base = markUnits(units), front = frontMarks(units)
   const index = new Map(units.map((u, i) => [u, i]))
   const own = u => {
     const i = index.get(u)
     if (u.kind === 'cell') return { start: `\\leavevmode\\axtmark{t${i}s}`, end: `\\axtend{t${i}e}` }
     if (u.kind === 'heading') return u.front ? null : { start: `\\axthmark{h${i}s}`, end: `\\axthmark{h${i}e}` }
+    // (the front matter's units: their unit marks, no line probe, which would act on the class's own paragraph)
+    const f = front(u)
+    if (f) return f
     const m = base(u)
     return m && lines ? { ...m, before: `\\axtlines{${i}}` } : m
   }
@@ -1067,7 +1094,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // a complete call's closing mark, where TeX answered for what follows (`said`), only before white space or punctuation, or at
       // the unit's end: before a letter or a digit it would stand inside a word (`\\tf{}s`: TeX would break Transform-ers no
       // more), before another piece against that piece's first character
-      const closes = !answered(p) || next === undefined || (next.t === 'text' && /^[ \t\r\n.,;:!?]/.test(next.s))
+      const closes = !answered(p) || next === undefined || (next.t === 'text' && /^[ \t\r\n.,;:!?]/.test(next.s)) || gluedTo(p, next)
       if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
     })

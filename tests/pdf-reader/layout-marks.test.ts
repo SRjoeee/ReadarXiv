@@ -580,7 +580,11 @@ describe('LAYOUT_TEX', () => {
     // and \vsplit (balance.sty's last page) then takes an empty column (2608.06007); the closing one after the body's last
     // box, its glue, kerns and penalties taken off and put back after it, each where TeX had it: LaTeX's
     // \@outputbox@removebskip reads the body's \lastskip (2608.24503), and no place to break is made or lost
-    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\fi}')
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}')
+    // a page shipped with no column's body bracketed (a class whose output routine makes its columns without \@makecol:
+    // revtex4-2's ltxgrid): its text block, \@outputbox at \@outputpage, bracketed as the body is, a vertical box or a
+    // horizontal one (two columns side by side); the flag cleared at each page
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}')
     expect(POINTS_TEX).toContain('\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}')
     // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first
     // paragraph a \parskip (2608.01890's figures)
@@ -1470,8 +1474,9 @@ describe('an opening point that waits in vertical mode is set with its unit, not
     expect(LAYOUT_TEX).toContain('\\newif\\ifaxt@hold')
     expect(LAYOUT_TEX).toContain('\\def\\axt@mark#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{#1}\\ifaxt@hold\\else\\ifx\\axt@pend\\@empty\\else\\axt@dest{\\axt@pend}\\global\\let\\axt@pend\\@empty\\fi\\fi\\fi}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}')
-    // (the unit's start mark and a placeholder's own still set it)
-    expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@ift#1\\relax{\\axt@put{#1}}{\\axt@mark{#1}}\\else\\axt@mark{#1}\\fi\\fi}')
+    // (the unit's start mark and a placeholder's own still set it; every mark in horizontal mode keeps a letter's italic
+    // correction, a unit's as a cell's)
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@put{#1}\\else\\axt@mark{#1}\\fi\\fi}')
     expect((LAYOUT_TEX.match(/\\axt@holdtrue/g) ?? []).length).toBe(3)
   })
 })
