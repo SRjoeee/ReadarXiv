@@ -305,7 +305,7 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
     const under = new Uint8Array(W * H)
     for (const p of units) for (const l of p.layout.lines) {
       if (l.page !== pg) continue
-      const f = p.layout.f
+      const f = (l.seg ?? p.layout).f
       for (const it of l.items) {
         if (it.t.crop || it.t.space || !it.t.s) continue
         const b = devBox(px, [it.x + 0.3, l.baseline - 0.15 * f, it.x + it.w - 0.3, l.baseline + 0.7 * f])

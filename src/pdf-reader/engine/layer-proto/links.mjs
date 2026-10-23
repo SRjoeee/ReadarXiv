@@ -641,7 +641,7 @@ function placeCrop(to, annots, lines, scale, records, tried) {
       const { line, it } = x, r = it.t.crop, cr = r.crop
       if (c.q !== r.page || (first && line.page !== first.line.page)) continue
       const sx = it.w / (cr[2] - cr[0])
-      const X = v => it.x + (v - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * scale
+      const X = v => it.x + (v - cr[0]) * sx, Y = y => line.baseline + (y - r.baseline) * (line.seg?.scale ?? scale)
       const drawn = [it.x, Y(cr[1]), it.x + it.w, Y(cr[3])]
       const had = box.length
       for (const ar of c.a.boxes?.length ? c.a.boxes : [c.a.rect]) {

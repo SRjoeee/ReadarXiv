@@ -304,6 +304,16 @@ export function settleLayout(p, layout = p.layout) {
  * is the same however the paper is opened. Null where no unit begun on the page tells a fill leading; `target` null where
  * only a continuation tells one. `body`: the page's body units told its own.
  */
+/**
+ * What a page's fill pass hands fillPage (fillPass): the units begun on the page, a unit laid in runs as its runs (`units`, each
+ * filled as a unit of the page's); and the units its target reads (`voters`, `continuing`), each unit once, as one, at its fit
+ * as one (`whole`): a unit's runs do not each vote, so that its neighbours keep the rhythm they had before it was laid in runs,
+ * and a run drawn on a page before is no unit of the next page's anchor
+ */
+export function fillUnitsOf(begun, continuing) {
+  return { units: begun.flatMap(p => p.runs ?? [p]), voters: begun, continuing }
+}
+
 export function pageTarget(units, continuing, band) {
   const r3 = x => Math.round(x * 1000) / 1000
   const tells = p => typeof p.fillLead === 'number'
@@ -340,7 +350,7 @@ export function pageTarget(units, continuing, band) {
  * kept), then `onFilled(p, target)`. Returns pageTarget's answer: the page's target, its own (before it is held), the anchor
  * and whether its body units told it; `target` null where only a continuation tells, and null where nothing tells.
  */
-export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}) {
+export function fillPage(units, P, onFilled = () => {}, { continuing = [], voters = null } = {}) {
   const { band, track, size } = P.adaptiveFill
   const r3 = x => Math.round(x * 1000) / 1000
   // (a unit whose last row the next unit's first continues on a shared line, laid from where its fit ended there (`share`,
@@ -350,11 +360,13 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own. Each try is
   // settled (settleLayout: a cell's lines in their bands) before anything is read of it, as the fit's share was: the row is
   // kept as it is drawn)
-  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped) return null; settleLayout(p, l); return l }
+  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped || (p.parent && !L2.keepsPages(p.layout.lines, l.lines))) return null; settleLayout(p, l); return l }
   const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l.lines) ? l : null }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
-  const told = pageTarget(units, continuing, band)
+  // (`voters`: the units the page's target reads, where they are not the units filled: a unit laid in runs is filled a run at
+  // a time and read once, as one (fillPass))
+  const told = pageTarget(voters ?? units, continuing, band)
   if (!told || told.target === null) return told
   const { target } = told
   // (each unit's leading as the pass lays it, its fill leading under the band over the target; and the next paragraph's: the
@@ -403,7 +415,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
     // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
     // page's size (not one the next paragraph's gap set closer: it is spread to its floor)
     const short = !closer && (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillTop - 1e-9)
-    let full = !short
+    let full = !short, tracked = 0
+    const untracked = { st, l }
     if (short && P.cjk) {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
       const K = Math.round(track / 0.01), st2 = k => ({ ...st, track: r3(st.track + k * 0.01) })
@@ -411,8 +424,21 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
       while (no - ok > 1) { const k = (ok + no) >> 1, l2 = at(p, st2(k)); if (l2) { ok = k; lk = l2 } else no = k }
       if (ok) { st = st2(ok); l = lk }
       full = ok < K
+      tracked = ok
     }
-    filled.push({ p, st, l, full })
+    filled.push({ p, st, l, full, tracked, untracked })
+  }
+  // (the runs of a unit split by its displays (`parent`, run.mjs layoutRuns) keep one tracking, as their fit does
+  // (layer2.mjs layoutRuns): each the least any of its unit's runs on the page takes, a run the pass does not track taking
+  // none; its leading still its own)
+  const least = new Map()
+  for (const q of units) if (q.parent) least.set(q.parent, Math.min(least.get(q.parent) ?? Infinity, filled.find(f => f.p === q)?.tracked ?? 0))
+  for (const f of filled) {
+    const k = f.p.parent ? least.get(f.p.parent) : f.tracked
+    if (k >= f.tracked) continue
+    const l = k ? at(f.p, { ...f.untracked.st, track: r3(f.untracked.st.track + k * 0.01) }) : null
+    f.st = l ? { ...f.untracked.st, track: r3(f.untracked.st.track + k * 0.01) } : f.untracked.st
+    f.l = l ?? f.untracked.l
   }
   // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
   // set whole, by halving (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
@@ -426,7 +452,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
     // larger size only carries its ink past the original's line, over a rule or a neighbour's text that the size step cannot
     // see, which the grid's last step above exposes (it makes more pages grow): 2610.21924's note of one line under a table's
     // rule, whose formulas touched it at x1.1. The other scripts' page fill is as it was until it is measured on theirs)
-    const steps = f => !(P.fillLeadRel && f.p.fitLines < 2)
+    // (a run reads its unit's line count: a unit's runs grow together, or none of them)
+    const steps = f => !(P.fillLeadRel && (f.p.parent ?? f.p).fitLines < 2)
     const all = k => { const ls = []; for (const f of grown) { if (!steps(f)) { ls.push(null); continue } const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
     let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
     while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
@@ -460,7 +487,7 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
  */
 function fillLeadsOf(p, P) {
   const r3 = x => Math.round(x * 1000) / 1000
-  const at = (q, st) => { const l = L2.layoutAt(q.tokens, q.blocks, q.s, q.P, st); return l.clipped ? null : l }
+  const at = (q, st) => { const l = L2.layoutAt(q.tokens, q.blocks, q.s, q.P, st); return l.clipped || (q.parent && !L2.keepsPages(q.layout.lines, l.lines)) ? null : l }
   if (P.fillLead === null) p.fillTop = 1
   else {
     const pitches = p.blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
@@ -1075,7 +1102,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     })
     const m = LK.matchUnit({ cands, targets, budget })
     const lines = L.lines.map(line => ({ line, runs: L2.lineRuns(line, L) }))
-    const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, L, line.baseline), scale: L.scale, budget })
+    const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, line.seg ?? L, line.baseline), scale: L.scale, budget })
     // (each page's records in the unit's drawing order there, after those of the units before it)
     const byPage = new Map()
     for (const r of placed.records) if (rows[r.page - 1]) (byPage.get(r.page) ?? byPage.set(r.page, []).get(r.page)).push(r)
@@ -1114,7 +1141,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const q of unswept) if (!reads[q] && readyOf(q) && !awaitsPaint(q)) letGoPage(q)
   }
   /** what a unit holds for its lay, its passes and its paint alone (and the file's lines it is laid by: `tex.lines`) */
-  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf', 'pieceAt']
+  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf', 'pieceAt', 'runs', 'whole']
   /** a unit nothing reads again: painted on every page it is on, or left the original's (refused, or withheld with its
    *  group), its table group settled, and each of its pages passed (with a page pass: a pass reads the units running on to
    *  its page) */
@@ -1964,11 +1991,23 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const further = fitFurther(p, tokens, s)
       if (further) { p.layout = further.layout; p.blocks = further.blocks; if (further.P) { p.P = further.P; p.clear = further.clear } }
       else { p.refused = true; unlead(p); return }
+    } else if (p.unit.kind !== 'cell') {
+      // (a unit split by its displays into runs: each run its own text block, at the first state at which its own text fits its
+      // own slots, so that a cramped run alone shrinks (layer2.mjs layoutRuns); its page's fill fills each run apart (fillPass).
+      // A unit of one run, or one its runs do not set alone, as before; a table's cell is one block of its table's)
+      const laidRuns = L2.layoutRuns(p.tokens, p.blocks, s, p.P, p.layout.lines)
+      if (laidRuns) {
+        // (the unit's fit as one kept (`whole`): its page's target reads the unit once, at the fill leading it had as one, as it
+        // did before units were laid in runs, so that a neighbour's rhythm is the same (fillPass))
+        p.whole = p.layout
+        p.layout = laidRuns.layout
+        p.runs = laidRuns.runs.map((r, i) => ({ id: p.id, unit: p.unit, parent: p, run: i, refused: false, fillable: !!p.fillable, tokens: r.tokens, blocks: r.blocks, bi0: r.bi0, s, P: r.P, layout: r.layout, clear: null, share: null }))
+      }
     }
     settleLayout(p)
     // (a unit whose last row another unit's first continues on a shared line: where its translation ends on that row, which
-    // that unit is laid from, and which its page's fill keeps)
-    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null }
+    // that unit is laid from, and which its page's fill keeps; its last run's, where it is laid in runs)
+    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null; if (p.runs) p.runs.at(-1).share = p.share }
     const t4 = lap()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined)) {
@@ -2022,6 +2061,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const keep = { extents: p.layout.extents, rec: p.rec }
       const PU = p.P ?? P
       p.layout = L2.layoutUnit2(p.tokens, p.blocks, p.s, { ...PU, maxScale: target, leadBase: Math.min(PU.leadBase, leadTo) })
+      // (the even pass sets the page's body units at one size: a unit's runs are one again)
+      p.runs = null
       p.layout.extents = keep.extents
       settleLayout(p)
       if (p.rec) Object.assign(p.rec, { f: r1(p.layout.f), sizeRatio: r1(p.layout.f / p.s), fitScale: p.layout.scale, knob: p.layout.knob, opened: p.layout.opened, unopened: p.layout.unopened, lead: p.layout.state.lead, lines: recLinesOf(p) })
@@ -2034,10 +2075,30 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const begun = laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] === pg)
     // (after the even pass, which laid them anew: their fill leadings are the pass's, as they were)
     if (P.even) for (const p of begun) fillLeadsOf(p, P)
-    const r = fillPage(begun, P, (p, target) => {
+    const recorded = (p, target, fillLead) => {
       const l = p.layout
-      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: p.fillLead } })
-    }, { continuing: laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg) })
+      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: fillLead } })
+    }
+    // (a unit laid in runs is filled a run at a time, each run a unit of the page's fill, read by its target once, as one: a block
+    // between two displays is a text block of its own), then laid as one again
+    const filledRuns = new Map()
+    // (a unit's runs are filled on the page the unit begins on, together: one pass, so that they keep one tracking (fillPage).
+    // Filling each on the page it begins on was measured and declined (2026-10-24, 7 Chinese papers: link colours lost 2 -> 9,
+    // paragraph ends letter-spaced 4 -> 14), left to its own change)
+    const { units: filling, ...told } = fillUnitsOf(begun, laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg))
+    const r = fillPage(filling, P, (q, target) => {
+      if (q.parent) { filledRuns.set(q.parent, target); return }
+      recorded(q, target, q.fillLead)
+    }, told)
+    for (const [p, target] of filledRuns) {
+      const keep = p.layout.extents
+      p.layout = L2.joinRuns(p.runs)
+      p.layout.extents = keep
+      settleLayout(p)
+      // (its fill leading as its page's target read it, the unit's as one; each run's beside it)
+      recorded(p, target, p.fillLead)
+      if (p.rec) p.rec.fill.runs = p.runs.map(q => q.fillLead)
+    }
     // (the page's fill numbers, kept with its record)
     rows[pg - 1].fill = r && { own: r.own, anchor: r.anchor, target: r.target, body: r.body }
   }
@@ -2220,7 +2281,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // the fill, the fill leading of a unit on its own first page is the pass's, as it was (fillPass), and `fit` keeps the
       // fit's, which is all a page it runs on to reads of it: no page's target then reads another page's even pass)
       if (P.adaptiveFill && p.fillable && !p.refused) {
-        fillLeadsOf(p, P)
+        // (a unit laid in runs: each run's own, the page fill's units)
+        for (const q of p.runs ?? [p]) fillLeadsOf(q, P)
+        // (and the unit's own, read from its fit as one: its one vote in its pages' targets, and its line count, which the page's
+        // size step reads for each of its runs)
+        if (p.runs) { const joined = p.layout; p.layout = p.whole; fillLeadsOf(p, P); p.layout = joined }
         if (P.even) p.fit = { fillLead: p.fillLead, fitLines: p.fitLines }
       }
       // (a page's pass sets the units that begin on it, which are then painted on each of their pages, each page in its
