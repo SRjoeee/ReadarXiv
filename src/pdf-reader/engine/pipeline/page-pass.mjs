@@ -95,7 +95,9 @@ function fitted(text) {
  * first failing reason { refused, why }. Our pages fewer than arXiv's (M < N) pass only for a paper of several toplevel sources
  * (`toplevels` > 1, the first compiled alone) whose base is held as a delta over arXiv's PDF (`delta`: the pages past ours are
  * then the original's by construction): its document is ours then arXiv's past M (base.mjs prefixDoc), its boxes compared on
- * our M pages (arXiv's own past them), its check's pages [M, N]; every other paper keeps the equal count. What the page pass
+ * our M pages (arXiv's own past them), its check's pages [M, N]; every other paper keeps the equal count. `delta` the pages
+ * the delta replaces (or true, every page of ours): the document is ours on those alone and arXiv's on every other (the
+ * composed document's pages), and no unit is laid on a page it does not replace (the line check's `undrawable`). What the page pass
  * checks before its head, and the lab's makers with it (the gate pack's base pages). Never throws but a failed allocation
  */
 export async function checkOurBase({ ours, draft = null, arxiv, tree = null, draw = true, toplevels = 1, delta = false }) {
@@ -104,9 +106,14 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
   if (!own) return no('final', typeof ours?.why === 'string' && ours.why ? ours.why : PLAIN_WHY.final)
   const { doc, text } = arxiv, N = doc.numPages
   const M = own.numPages
-  const prefix = Number.isInteger(M) && M >= 1 && M < N && toplevels > 1 && delta === true
-  const oursDoc = prefix ? prefixDoc(own, doc, M) : own
-  const baseText = ours.text && ours.text.pages === oursDoc.numPages ? ours.text : await readArxivText(oursDoc, { draw })
+  // (a delta: `true`, every page of ours replaced, or the pages it replaces; the composed document is ours on those alone)
+  const held = delta === true || Array.isArray(delta), rep = Array.isArray(delta) ? new Set(delta) : null
+  const prefix = Number.isInteger(M) && M >= 1 && M < N && toplevels > 1 && held
+  const last = prefix ? M : Math.min(M, N)
+  const partial = rep !== null && Array.from({ length: last }, (_, i) => i + 1).some(p => !rep.has(p))
+  const composed = prefix || partial
+  const oursDoc = composed ? prefixDoc(own, doc, last, rep) : own
+  const baseText = !composed && ours.text && ours.text.pages === oursDoc.numPages ? ours.text : await readArxivText(oursDoc, { draw })
   if (baseText.pages !== N) return no('boxes', `our base page has ${baseText.pages} pages, arXiv's PDF ${N}`)
   // (the mark text on our pages: the text's, else read here from our page; a hit arXiv's own page holds the same is the paper's
   // text, no mark of ours)
@@ -132,8 +139,18 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
   if (typeof tree !== 'string' || !/^\d{4}$/.test(tree)) return no('final', 'the TeX Live year our compile was made on is not known')
   // the line check: each page drawable or not, each line in place or not (carry.mjs lineCheckOf over the two texts'
   // tokens), the maker's to lay each unit by; the paper's share information alone; no position is carried
-  const lineCheck = lineCheckOf(baseText.tokens, text.tokens), L = lineCheck.lines
+  const checked = lineCheckOf(baseText.tokens, text.tokens), L = checked.lines
+  // (under a delta a page it does not replace is the original's in the composed document: no unit is laid on it, one rule — a
+  // page laid is a page replaced — so that what the layer draws over is ours)
+  const lineCheck = rep === null && !prefix ? checked : laidOnReplaced(checked, p => p <= last && (rep === null || rep.has(p)))
   return { text: baseText, lineCheck, doc: oursDoc, head: { source: 'ours', bytes: ours.bytes, sha256: ours.sha256, xref: ours.xref, pages: N, tree, check: { pages: [prefix ? M : N, N], boxes: 'equal', carried: L.total > 0 ? L.placed / L.total : 0 } } }
+}
+
+/** a line check whose pages not replaced by the delta (`replaced(p)` false) are not drawable: no unit laid there */
+function laidOnReplaced(check, replaced) {
+  const undrawable = new Set(check.undrawable)
+  const pages = check.pages.map(e => (replaced(e.page) ? e : (undrawable.add(e.page), { ...e, drawable: false, delta: 'not replaced' })))
+  return { ...check, pages, undrawable: [...undrawable].sort((a, b) => a - b) }
 }
 
 /**
@@ -299,7 +316,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   if (!(marks && !('marks' in marks))) {
     const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
     const held = oursDoc ? await deltaOfOurs(ours.delta, { orig: origRef, ours, M: Math.min(oursDoc.numPages, N), N, tree, doc }) : null
-    const checked = await checkOurBase({ ours, draft: marked?.doc ?? null, arxiv: { doc, text }, tree, draw, toplevels, delta: !!held?.delta })
+    const checked = await checkOurBase({ ours, draft: marked?.doc ?? null, arxiv: { doc, text }, tree, draw, toplevels, delta: held?.delta ? pagesOf(held.delta.replaced) : false })
     if ('refused' in checked) { marks = { refused: checked.refused, why: checked.why }; marked = null }
     else {
       ({ text: baseText, lineCheck, head: oursHead, doc: baseDoc } = checked)

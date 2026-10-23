@@ -100,7 +100,7 @@ export declare function checkOurBase(o: {
   draw?: boolean
   /** the paper's toplevel sources (`meta.toplevels`) and whether its base is held as a delta: only both let our pages be fewer */
   toplevels?: number
-  delta?: boolean
+  delta?: boolean | number[]
 }): Promise<
   | { text: ArxivText; lineCheck: import('../layout/carry.mjs').LineCheck; head: import('../layer-proto/format.mjs').HeadBase; doc: unknown }
   | { refused: 'final' | 'boxes' | 'marks'; why: string }

@@ -1866,8 +1866,9 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   indirect one followed, as PDF.js reads it: `layout/xref.mjs` reads every object where the cross-reference puts it; the object
   layer's own scan to `endstream` reads a stream ending in CR or LF a byte short); a dict its sorted entries, an array its
   items, a reference the form of what it names (direct or indirect alike); the back links `/Parent` `/P` `/Prev` `/Next`
-  `/First` `/Last` cut where their value is a reference (a direct value under them is data: an optional-content membership's
-  `/P` policy); a cycle leaves the object unmatched (copied), never an error. Forms are interned (exact equality); stream
+  `/First` `/Last` cut by the dict's own context, never by the value being a reference: `/Parent` of a page-tree node, `/P`
+  and `/Parent` of an annotation, `/P` of a structure element, the outline's chain; never in an optional-content membership
+  (its `/P` policy, direct or by reference, is data) or a dict of no such context; a cycle leaves the object unmatched (copied), never an error. Forms are interned (exact equality); stream
   bytes are bucketed by a hash of secret random seeds and compared whole, and the whole build spends at most
   `DELTA_WORK_MAX` (2^31 bytes hashed or compared and objects read: the 46 MB pair about 150 million), so no input makes a
   bucket or the build long. Its `/Size` leaves the remover's tails `DELTA_TAIL_ROOM` (2^20) numbers below `OBJECT_MAX`.
@@ -1884,7 +1885,8 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
   gives (its console captured, each document read in turn); the original's page count; every page's box and text (strings and
   places within 0.01) ours on replaced pages and the original's elsewhere. What the delta overrides of the original is bounded:
-  the replaced pages' objects exactly (no catalog, no other page) and its `/Size` not below the original's. An original whose
+  the replaced pages' objects exactly (no catalog, no other page), its `/Size` not below the original's, and its trailer the
+  original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
   cross-reference PDF.js recovers on its own (any such message on the original alone: it then indexes the whole file, where an
   unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
   entry of a type PDF.js does not know. Any other failure is `delta-proof`.
@@ -1893,7 +1895,10 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   sha256, replaced, stats } } })` (or `delta: { refused, why }`). The page pass checks it again (shape, bounds, digest, the
   section over `orig`, the head's reader): the head's base becomes `kind: 'delta'` where it checks, else stays `full` with
   `stats.delta: { kind: 'full', why }` — never a refusal of the paper. The page pass binds `replaced` to the delta's bytes: each
-  replaced page's object (arXiv's PDF.js document's page refs) among the section's entries, and no other page's. The remover reads the composed document (`removerOf({
+  replaced page's object (arXiv's PDF.js document's page refs) among the section's entries, and no other page's. One rule
+  for what is laid: **a page laid is a page replaced**. Under a delta the maker reads the composed document (our page where
+  the delta replaces it, arXiv's elsewhere: `prefixDoc` with the replaced pages), so an unreplaced page's draw and text are
+  the original's, and the line check marks every page not replaced undrawable, so no unit is laid there. The remover reads the composed document (`removerOf({
   bytes: orig ++ delta })`): the delta is the tails' base, the first chain's `end` O + D and `xref` the delta's startxref, its
   fresh numbers after the delta's `/Size`; `TAIL_CAP` binds the tails alone; `tailLinks`' `root` and `first` mean nothing of
   the delta. The delta is a bundle object beside the units chunks, content-addressed under the CTAG: `deltaKey` =
