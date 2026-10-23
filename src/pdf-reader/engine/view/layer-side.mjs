@@ -121,6 +121,8 @@ export function createLayerSide(view, o) {
   let index = null, bound = null, door = null, doorParts = [], gen = 0, offPage = null
   /** the language the side lays (retarget sets another), and the one the open door lays */
   let target = o.target, doorTarget = null
+  /** whether the host has said this target's rows will not come (dropOthers): another target's pages are the original's from then */
+  let dropped = false
   /** whether the layer is drawn over our own compile (the head's base says `ours`: the layer route, design §3.2; the engine's
    *  layerDraws, format.mjs): the composed document's pages are then OUR base's, whose lines are not arXiv's page's, so a page's copy comes
    *  from the composed document alone and a page laid by no layout is the original's page */
@@ -280,10 +282,14 @@ export function createLayerSide(view, o) {
     ready = 0
     failed = 0
     right?.reset()
+    // (a page kept drawn by the door before shows what the shapes no longer hold: nothing of it lit or hit until this door's page
+    // commits there, or the original's is shown)
+    for (const [n, P] of pages) if (P.content?.wrap) right?.mute(n, true)
     shapesChanged()
     state = 'opening'
     emitLayer()
-    const doc = await composedFor().catch(e => { throw coded(e, 'composed') })
+    // (an open overtaken meanwhile, a later target's or a fork's, is let go whatever it came to: its failure is not the side's)
+    const doc = await composedFor().catch(e => { if (disposed || my !== gen) return null; throw coded(e, 'composed') })
     if (disposed || my !== gen) return
     const me = {}
     let layer
@@ -294,7 +300,7 @@ export function createLayerSide(view, o) {
         leftPart: (_page, ref) => o.fetchObject(ref, leftAc.signal),
         onRetired: d => retired(d, me),
       })
-    } catch (e) { throw coded(e, 'open') }
+    } catch (e) { if (disposed || my !== gen) return; throw coded(e, 'open') }
     if (disposed || my !== gen) { layer.dispose(); return }
     door = layer
     doorParts = parts
@@ -380,6 +386,8 @@ export function createLayerSide(view, o) {
     release(P.content.copy)
     P.content = null
     V.places.restore(n)
+    // (the original's page there: the mirror's geometry is its own)
+    if (right?.mute(n, false)) shapesChanged()
   }
   /** the laid pages far from the view kept for the focus inside them (a link, or the place a jump gave it to): retiring one
    *  would take the focused element out of the document, and the focus with it to the document's body. Each is retired once
@@ -407,6 +415,8 @@ export function createLayerSide(view, o) {
         if (holdsFocus(n)) continue
         keptForFocus.delete(n)
         if (!V.places.near(n)) farGone(n)
+        // (kept for the focus by dropOthers: another target's layer, the original's page once the focus has left it)
+        else if (dropped && pages.get(n)?.content && pages.get(n).content.target !== target) unlay(n)
       }
     }, 0)
   }
@@ -571,7 +581,9 @@ export function createLayerSide(view, o) {
     if (ring.length > RING) ring.shift()
     // the right's shapes of the page: its words (the units the layer shows as the original's from the left's tokens)
     // (both: the words given, and the page shown again where an earlier fallback hid it)
+    const unmuted = right?.mute(n, false)
     const given = right?.lay(n, laid.words), shown = right?.show(n)
+    if (unmuted && !given && !shown) shapesChanged()
     if (given || shown) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
   }
   /** a laid page's copy drawn again at the place's new k (a zoom). A copy is kept while it is at the k a copy drawn now would be
@@ -862,6 +874,7 @@ export function createLayerSide(view, o) {
     retarget(to) {
       if (disposed || state === 'refused' || typeof to !== 'string' || !to || to === target) return
       target = to
+      dropped = false
       gen++
       offPage?.()
       offPage = null
@@ -876,9 +889,12 @@ export function createLayerSide(view, o) {
      *  will not come (its service failed, or it stopped short) */
     dropOthers() {
       if (disposed) return
+      dropped = true
       let hid = false
       for (const [n, P] of pages) {
         if (!P.content || P.content.target === target) continue
+        // (a page holding the focus is kept until the focus leaves it, as a far page is: unlaid, it would take the focus with it)
+        if (holdsFocus(n)) { keptForFocus.add(n); continue }
         unlay(n)
         if (right?.hide(n)) hid = true
       }
@@ -913,6 +929,7 @@ export function createLayerSide(view, o) {
         composed: counts.composed, docs: entries.size, opens: counts.opens, forks: counts.forks, asked: counts.asked, commits: counts.commits, copies: counts.copies, retirements: counts.retired,
         leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '),
         shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
+        muted: right ? right.muted().join(' ') : '',
       }
     },
     dispose() {

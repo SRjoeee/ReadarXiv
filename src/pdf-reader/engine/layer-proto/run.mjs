@@ -2320,13 +2320,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     t = using([d], async () => {
       const t0 = performance.now()
       const page = await d.getPage(q)
+      // (a run let go renders nothing more: its renders would hold the document's queue for the run over it after, and push its
+      // pages out of the warm ones; one let go while its render waits its turn is not drawn either, VIS.render's `live`)
+      if (disposed) return
       const viewport = page.getViewport({ scale })
       const c = document.createElement('canvas')
       c.width = Math.floor(viewport.width * dpr)
       c.height = Math.floor(viewport.height * dpr)
       let list = null
       // (the page kept warm by the document after it: the copy of the page asked renders from the same parse)
-      await VIS.render(page, { canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined })
+      try {
+        await VIS.render(page, { canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }, [], live)
+      } catch (e) { if (disposed && e?.name === 'AbortError') { c.width = 0; c.height = 0; return } throw e }
       // (the list it was drawn by: the page's fills, should its draw be refused or late)
       if (Number.isInteger(OPS?.showText)) list = renderedList(page)
       // (kept only while it is still the page's reading: not where the page was let go (letGoPage) or the ask it was read for
@@ -2391,24 +2396,28 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // (its render's time from here where its draw was waited for, which is no render's; the page's own start otherwise)
       const tLive = asked ? performance.now() : tPage
       const textP = page.getTextContent()
-      // (read for its pixels already, its draw then refused or late: its ink is that reading's, the same pixels at the same size,
-      // their render charged there, pixelsOf)
-      const prefetched = pixelTasks.has(i)
-      if (prefetched) await pixelTasks.get(i)
-      else await VIS.render(page, { canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined })
-      tRendered = performance.now()
-      // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
-      // read before the page is cleaned up)
-      annP = LK.readAnnots(page)
-      // (and its getPage, which an ordinary live reading's time holds too; never the wait for its draw)
-      if (!prefetched) timesOf(i).render += tRendered - tLive + (asked ? tGot - tPage : 0)
-      tc = await textP
-      fonts = FR.live(page, tc.styles)
-      // (its characters' fills as its draw would tell them: its ink off the list PDF.js drew it by, here or in its early pixel read)
-      const tFills = performance.now(), held = heldLists.get(i)
-      heldLists.delete(i)
-      fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null)
-      timesOf(i).fills += performance.now() - tFills
+      // (held warm until its fills are read off the list it was drawn by: the renders of other pages meanwhile let it go no sooner)
+      const unpin = VIS.pin(page)
+      try {
+        // (read for its pixels already, its draw then refused or late: its ink is that reading's, the same pixels at the same size,
+        // their render charged there, pixelsOf)
+        const prefetched = pixelTasks.has(i)
+        if (prefetched) await pixelTasks.get(i)
+        // (a live reading under way when the run is let go ends as it began: its page's canvases go once it ends)
+        else await VIS.render(page, { canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined })
+        tRendered = performance.now()
+        // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip)
+        annP = LK.readAnnots(page)
+        // (and its getPage, which an ordinary live reading's time holds too; never the wait for its draw)
+        if (!prefetched) timesOf(i).render += tRendered - tLive + (asked ? tGot - tPage : 0)
+        tc = await textP
+        fonts = FR.live(page, tc.styles)
+        // (its characters' fills as its draw would tell them: its ink off the list PDF.js drew it by, here or in its early pixel read)
+        const tFills = performance.now(), held = heldLists.get(i)
+        heldLists.delete(i)
+        fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null)
+        timesOf(i).fills += performance.now() - tFills
+      } finally { unpin() }
     }
     if (i === 1 && lmP) await lmP
     const fontOf = fonts.fontOf
@@ -2593,6 +2602,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   let wake = null
   /** whether the run was let go (dispose): nothing is drawn or laid after it */
   let disposed = false
+  /** whether a render of the run's still has a reader: none once it is let go (VIS.render's `live`) */
+  const live = () => !disposed
   const changed = () => { const w = wake; wake = null; w?.() }
   /** the one wait, until a take, a part, end() or a poke changes something: the waiter set before the instrument hears of it,
    *  so that what the instrument does at once is not lost */
@@ -2847,12 +2858,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  the copies again after a zoom and a later run's copies over the same document are one parse of the page, not one each */
   // (`box`: [x, y, w, h] device pixels of the page at k, the part rendered on a canvas of that size alone: a plane's sources, opsSources)
   const renderAt = (pg, k, plane, canvas = null, annotationMode = undefined, box = null) => using([D], async () => {
+    // (a run let go renders nothing more: the document's queue and its warm pages are the next run's)
+    if (disposed) throw Object.assign(new Error('the run is let go'), { name: 'AbortError' })
     const page = await D.getPage(pg)
     const viewport = page.getViewport({ scale: k })
     const c = canvas ?? document.createElement('canvas')
     if (!canvas) { c.width = box ? box[2] : Math.ceil(viewport.width); c.height = box ? box[3] : Math.ceil(viewport.height) }
     const params = { canvas: c, canvasContext: c.getContext('2d'), viewport, ...(box ? { transform: [1, 0, 0, 1, -box[0], -box[1]] } : {}), ...(annotationMode === undefined ? {} : { annotationMode }) }
-    await VIS.render(page, params, offOf(pg, plane))
+    await VIS.render(page, params, offOf(pg, plane), live)
     return c
   })
   const needsCopy = () => {

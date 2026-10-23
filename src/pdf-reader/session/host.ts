@@ -213,7 +213,8 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
     // own reason stays (no language mends it); the run told once this page's writes are in, so that the service it opens again is
     // the new target's
     if (follow.retarget && heldFor !== 'paper') {
-      if (held) { held = false; heldFor = null; mode = displayFrom(params, config); view.setDisplay(mode) }
+      // (the language's notice and the greyed switch go with the hold: the layer is coming again, as an open tells it)
+      if (held) { held = false; heldFor = null; host.emit({ type: 'coming' }); mode = displayFrom(params, config); view.setDisplay(mode) }
       const to = toBcp47(next.targetLanguage)
       void writes.then(() => run?.retarget(to))
     }

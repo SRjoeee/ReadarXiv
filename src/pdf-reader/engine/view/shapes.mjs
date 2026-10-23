@@ -257,7 +257,9 @@ const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
  * `text` its plainTranslated and `offsets` its row's `sentences.tr`), each token's sentence read from the text — a word's by
  * its word, any other's by its place in the translation (`words.at`: a formula's, a display's kept line's) —; of a unit on no
  * laid page, the left's (`left`: the same tokens, mirrored); of one on both, none (it lights whole); `reset()` every page
- * back to the mirror (a door opened again);
+ * back to the mirror (a door opened again); `mute(page, on)` a page that shows another target's layer, whose drawing neither the
+ * laid layout nor the mirror describes: nothing of it lit or hit until it is unmuted (its new target's page laid, or the original's
+ * shown), whatever reset() does;
  * `forget(page)` its geometry let go; `dispose()` stops following the source
  */
 export function layerShapes(source) {
@@ -265,6 +267,8 @@ export function layerShapes(source) {
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
   let L, words, made, wordAt, placeAt, noPlaces, hidden
+  /** the pages that show another target's layer (mute): none of their geometry is the drawing's */
+  const muted = new Set()
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
   const tellParts = parts => layoutParts(L, parts.map(part => ({
     pages: [...part.pages], views: [...part.views],
@@ -326,14 +330,14 @@ export function layerShapes(source) {
   // a laid page's floats are the left's, as the mirror's are (made then)
   const floatsOf = p => { state.floatsOn(p); L.floats = source.layout.floats }
   const shapes = {
-    runs: id => pagesOf(id).flatMap(p => pageGeometry(laid(p) ? L : M.layout, p).byId.get(id) ?? []),
+    runs: id => pagesOf(id).filter(p => !muted.has(p)).flatMap(p => pageGeometry(laid(p) ? L : M.layout, p).byId.get(id) ?? []),
     block: (run, padX) => blockOf(run, padX),
     sentence: (run, starts, s, padX) => { if (!laid(run.page)) return M.shapes.sentence(run, starts, s, padX); floatsOf(run.page); return sentenceOf(L, run, starts, s, padX) },
     fits: (id, starts, now) => { const m = mode(id); return m === 'laid' ? sentencesFit(L, id, starts, !now) : m === 'mirror' ? M.shapes.fits(id, starts, now) : false },
     float: M.shapes.float,
     floatShapes: M.shapes.floatShapes,
-    hit: (page, x, y, padX, startsOf) => { if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf); floatsOf(page); return floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)) },
-    click: (page, x, y, padX, startsOf) => { if (!laid(page)) return M.shapes.click(page, x, y, padX, startsOf); floatsOf(page); return clickOf(L, page, x, y, padX, startsOf) },
+    hit: (page, x, y, padX, startsOf) => { if (muted.has(page)) return null; if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf); floatsOf(page); return floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)) },
+    click: (page, x, y, padX, startsOf) => { if (muted.has(page)) return null; if (!laid(page)) return M.shapes.click(page, x, y, padX, startsOf); floatsOf(page); return clickOf(L, page, x, y, padX, startsOf) },
   }
   return {
     get layout() { return L },
@@ -344,6 +348,10 @@ export function layerShapes(source) {
      *  again; whether that changed anything */
     hide: p => { if (hidden.has(p)) return false; hidden.add(p); return made.has(p) },
     show: p => hidden.delete(p),
+    /** page p shows another target's layer (on) or no longer does: whether that changed anything */
+    mute: (p, on) => (on ? (muted.has(p) ? false : (muted.add(p), true)) : muted.delete(p)),
+    /** the pages muted, rising */
+    muted: () => [...muted].sort((a, b) => a - b),
     starts(id, text, offsets, left) {
       const m = mode(id)
       if (m === 'mirror') return left ?? null

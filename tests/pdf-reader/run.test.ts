@@ -708,7 +708,7 @@ describe('another target language, in place (retarget)', () => {
   }
   const byOf = (rows: Row[]) => rows.map(r => r[3])
 
-  it('lays the new target over the same side and layer: nothing looked at or made again, the engine before closed, the new target\'s rows taken, the line told at once', async () => {
+  it('lays the new target over the same side and layer: nothing looked at or made again, the engine before closed, the new target\'s rows taken, the line told as an open tells it', async () => {
     const pool = serving('ja')
     const a = run({ looks: [() => new Response(catalog)], engine: pool.next })
     await settle(60)
@@ -717,8 +717,10 @@ describe('another target language, in place (retarget)', () => {
     const told = a.events.length
     a.r.retarget('ja')
     expect(a.side.side.retarget).toHaveBeenCalledWith('ja')
-    expect(a.events[told]).toEqual({ type: 'translating', got: 0, total: 0, lost: 0 })
+    // (nothing told before the index is read: the line comes as an open's, with the new target's count)
+    expect(a.events.length).toBe(told)
     await settle(60)
+    expect(a.events.slice(told).find(e => e.type === 'translating')).toEqual({ type: 'translating', got: 0, total: toTranslate(m.index, 'ja').length, lost: 0 })
     expect(pool.made[0]?.close).toHaveBeenCalled()
     expect(a.s.layerLooks()).toBe(1)
     expect(a.side.make).toHaveBeenCalledTimes(1)
@@ -766,6 +768,113 @@ describe('another target language, in place (retarget)', () => {
     await settle(60)
     expect(c.side.side.dropOthers).toHaveBeenCalled()
     expect(c.events.filter(e => e.type === 'translated').at(-1)).toMatchObject({ stopped: 'network' })
+  })
+
+  it('during a limit\'s wait (429): retargeted in place, the look asked no sooner than its wait', async () => {
+    vi.useFakeTimers()
+    const pool = serving('ja')
+    const a = run({ looks: [() => json(429, { retryAfterMs: 30_000 }), () => new Response(catalog)], engine: pool.next })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(a.events.at(-1)).toMatchObject({ type: 'unavailable', why: 'refused' })
+    a.r.retarget('ja')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect([a.s.layerLooks(), a.side.make.mock.calls.length]).toEqual([1, 1])
+    expect(a.side.side.retarget).toHaveBeenCalledWith('ja')
+    await vi.advanceTimersByTimeAsync(20_500)
+    expect(a.s.layerLooks()).toBe(2)
+    a.r.dispose()
+  })
+
+  it('while the paper is still prepared (a 202, no index yet): no line told before the index is read', async () => {
+    vi.useFakeTimers()
+    const pool = serving('ja')
+    const a = run({ looks: [() => json(202, { position: 3, stage: null, progress: null, retryAfterMs: 5000 })], engine: pool.next })
+    a.side.side.index.mockImplementation(() => new Promise(() => {}))
+    await vi.advanceTimersByTimeAsync(0)
+    const told = a.events.length
+    a.r.retarget('ja')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(a.events.slice(told).some(e => e.type === 'translating')).toBe(false)
+    a.r.dispose()
+  })
+
+  it('A -> B -> C in quick succession: only C\'s service is asked for rows, each before it closed', async () => {
+    const made: ReturnType<typeof tagged>[] = []
+    const langs = ['zh', 'ja', 'ko']
+    const a = run({ looks: [() => new Response(catalog)], engine: vi.fn(async () => { const e = tagged(langs[Math.min(made.length, 2)] as string); made.push(e); return e }) as never })
+    await settle(60)
+    const before = a.side.taken.length
+    a.r.retarget('ja')
+    a.r.retarget('ko')
+    await settle(80)
+    expect(a.side.side.retarget.mock.calls.map(c => c[0])).toEqual(['ja', 'ko'])
+    const after = byOf(a.side.taken.slice(before))
+    expect(after.every(b => b === 'ko')).toBe(true)
+    expect(after.length).toBe(toTranslate(m.index, 'ko').length)
+    expect(made.filter(e => e.lang === 'ja').every(e => e.translate.mock.calls.length === 0)).toBe(true)
+    expect(made.slice(0, -1).every(e => e.close.mock.calls.length > 0)).toBe(true)
+  })
+
+  it('two translations waiting on the index (a retarget while the first waits): the first sends nothing', async () => {
+    let free = () => {}
+    const pool = serving('ja')
+    const a = run({ looks: [() => new Response(catalog)], engine: pool.next })
+    const gate = new Promise<void>(r => { free = r })
+    const index = a.side.side.index.getMockImplementation()
+    a.side.side.index.mockImplementation((async () => { await gate; return index?.() }) as never)
+    await settle(20)
+    a.r.retarget('ja')
+    await settle(20)
+    free()
+    await settle(80)
+    expect(pool.made[0]?.translate.mock.calls.length).toBe(0)
+    expect(byOf(a.side.taken).every(b => b === 'ja')).toBe(true)
+  })
+
+  it('a stop with rows of the target translated tells the end and lets no page go first; one whose rows are all `none` tells none and shows the original', async () => {
+    const zh = tagged('zh'), ja = tagged('ja')
+    let calls = 0
+    ja.translate.mockImplementation(async (texts: string[]) => { if (calls++) throw Object.assign(new Error('down'), { kind: 'network' }); return texts.map(t => ({ text: t, by: 'ja' })) })
+    let n = 0
+    const a = run({ looks: [() => new Response(catalog)], engine: vi.fn(async () => (n++ ? ja : zh)) as never })
+    await settle(60)
+    a.r.retarget('ja')
+    await settle(80)
+    const last = a.events.filter(e => e.type === 'translated').at(-1) as Extract<RunEvent, { type: 'translated' }>
+    if (last.got > 0) {
+      expect(a.side.ended()).toBe(2)
+      expect(a.side.side.dropOthers).not.toHaveBeenCalled()
+    }
+    // (a translation whose every row says nothing, `none`, then a stop on the retry: nothing translated, no end)
+    const dash = echo('zh')
+    let k = 0
+    dash.translate.mockImplementation(async (texts: string[]) => { if (k++ > 1) throw Object.assign(new Error('down'), { kind: 'network' }); return texts.map(() => ({ text: '—', by: 'test' })) })
+    const b = run({ looks: [() => new Response(catalog)], engine: dash })
+    await settle(60)
+    expect(b.r.probe().rows).toBeGreaterThan(0)
+    const ended = b.side.ended()
+    b.r.retry()
+    await settle(60)
+    expect(b.events.filter(e => e.type === 'translated').at(-1)).toMatchObject({ stopped: 'network' })
+    expect(b.side.ended()).toBe(ended)
+    expect(b.side.side.dropOthers).toHaveBeenCalled()
+  })
+
+  it('a language the layer does not set while the service before still opens: the late service closed, never applied', async () => {
+    const pool = engines()
+    const a = run({ looks: [() => new Response(catalog)], engine: pool.next })
+    await settle(60)
+    a.side.side.probe.mockReturnValue({ state: 'refused' } as never)
+    pool.hold()
+    // (a beginning again under way: its service held)
+    a.r.retry()
+    await settle(5)
+    a.r.retarget('xx')
+    pool.release()
+    await settle(60)
+    expect(pool.made.at(-1)?.close).toHaveBeenCalled()
+    expect(a.r.probe().target).toBe('xx')
+    expect(a.events.at(-1)).toEqual({ type: 'unavailable', why: 'target', retryAt: null })
   })
 
   it('a language the layer does not set: said so, the side let go; another target after it begins the run again', async () => {

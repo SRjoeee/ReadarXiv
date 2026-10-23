@@ -429,16 +429,20 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     return d >= 0 ? 1 + d : 1 - 2 * d
   }
   let lastIndex: Parameters<typeof unitOf>[0] | null = null
+  /** the units of the target with translated text (a row neither lost nor `none`) */
+  const translatedUnits = () => { let n = 0; for (const r of rows.values()) if (r[2] === 'whole' || r[2] === 'partial') n++; return n }
   const counts = () => {
     let got = 0, gone = 0
     for (const r of rows.values()) { if (r[2] === 'lost') gone++; else got++ }
     return { got, lost: gone }
   }
+  /** each translate()'s turn: of two waiting on the index (a retarget's and the one before it), the later alone sends anything */
+  let translating = 0
   async function translate() {
-    const s = side
+    const s = side, mine = ++translating
     if (!s) return
     const index = await s.index()
-    if (disposed || !index || !engine || !target || s !== side) return
+    if (disposed || !index || !engine || !target || s !== side || mine !== translating) return
     // a head whose layer draws nothing (base.ts layerDraws) is decided here, at the head, before bind has run and before a single
     // unit goes to the user's service: nothing is translated for a paper whose pages the layer will not draw, and the lasting
     // word is told (the controller keeps it over the side's own refusal at bind)
@@ -461,7 +465,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     try {
       result = await runRows(index, {
         lang: target,
-        send: (texts, cuts) => e.translate(texts, context, cuts),
+        // (nothing sent once the attempt is let go: a retarget's, a retry's or the page's end)
+        send: (texts, cuts) => (a.signal.aborted ? Promise.reject(Object.assign(new Error('the attempt is let go'), { name: 'AbortError' })) : e.translate(texts, context, cuts)),
         format: e.format as 'markers' | 'tags' | 'runs',
         rank,
         onRows(batch) {
@@ -486,11 +491,13 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     if (a.signal.aborted || disposed || s !== side) return
     lost = result.lost
     rowsState = result.stopped && result.stopped !== 'aborted' ? 'failed' : 'translated'
-    // the end told, the pages laid with what they hold; but a stop with no row translated has nothing to lay (its pages would be
-    // drawn as the original's, our page in place of arXiv's): they stay the original's page, the pages still showing another
-    // target's layer among them
-    if (rowsState !== 'failed' || counts().got > 0) s.end()
-    if (rowsState === 'failed') s.dropOthers()
+    // the end told, the pages laid with what they hold; but a stop with no unit translated has nothing to lay (its pages would be
+    // drawn as the original's, our page in place of arXiv's): no end, they stay the original's page, the pages still showing another
+    // target's layer among them. A stop that ends this way ends the run as any stop does: the service's own bounds (each batch's
+    // timeout and the queue's whole budget, translate-service.ts) end a service that never answers, and a later target, a retry
+    // or the page's end aborts the attempt before
+    if (rowsState !== 'failed' || translatedUnits() > 0) s.end()
+    else s.dropOthers()
     const c = counts()
     emit({ type: 'translated', got: c.got, total, lost: result.lost, stopped: result.stopped && result.stopped !== 'aborted' ? (result.stopped as ProviderErrorKind) : null })
   }
@@ -545,6 +552,10 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     target = to
     near = { page: -1, ids: new Set<number>(), anchor: 0 }
     if (!(TARGETS as readonly string[]).includes(to)) {
+      // (a service still opening, for a beginning or a renewal, is closed when it comes, never applied: the beginning let go)
+      gen++
+      renewing++
+      begun.abort()
       rowsState = 'idle'
       void engine?.close?.()
       engine = null
@@ -552,7 +563,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       side = null
       return unavailable('target')
     }
-    if (!side || state === 'unavailable' || state === 'failed' || (side.probe() as { state?: string }).state === 'refused') {
+    // (a limit's wait under way keeps its look, which resumes once the wait has passed: the side is retargeted in place)
+    const waiting = state === 'unavailable' && refusedUntil > Date.now()
+    if (!side || (state === 'unavailable' && !waiting) || state === 'failed' || (side.probe() as { state?: string }).state === 'refused') {
       void engine?.close?.()
       side?.dispose()
       side = null
@@ -561,8 +574,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       return
     }
     side.retarget(to)
-    // (the line told at once, as an open's translation: its count the new target's once its run begins)
-    emit({ type: 'translating', got: 0, total: 0, lost: 0 })
+    // (the line told as an open tells it: once the index is read, translate())
     void renewed(gen, true)
   }
   async function begin() {

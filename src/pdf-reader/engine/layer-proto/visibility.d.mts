@@ -15,9 +15,11 @@ export interface Visibility {
   readonly size: number
   /** the page rendered with the groups `off` names (or tests) hidden and every other group of ours shown, after every render asked
    *  before it */
-  render(page: { render(params: object): { promise: Promise<unknown> }; cleanup?(): unknown }, params: object, off?: Iterable<string> | ((group: string) => boolean)): Promise<unknown>
+  render(page: { render(params: object): { promise: Promise<unknown> }; cleanup?(): unknown }, params: object, off?: Iterable<string> | ((group: string) => boolean), live?: (() => boolean) | null): Promise<unknown>
   /** the pages kept warm after their renders (at most WARM_PAGES, the latest last; each the next render's state, the oldest let go
    *  by its `cleanup()`): a copy */
   readonly warm: readonly object[]
+  /** the page held warm (never let go) until the release returned is called: a reading of its rendering state under way */
+  pin(page: object): () => void
 }
 export declare function visibilityOf(doc: object): Visibility

@@ -51,4 +51,29 @@ describe('a document keeps the pages it rendered last warm', () => {
     expect(log.filter(l => l.startsWith('cleanup'))).toEqual([])
     expect([A.warm.length, B.warm.length]).toEqual([WARM_PAGES, 1])
   })
+
+  it('a pinned page is never let go while a reading holds it; let go among the oldest once released', async () => {
+    const log: string[] = [], page = pagesOf(log), V = visibilityOf({})
+    await V.render(page(1), {})
+    const release = V.pin(page(1))
+    for (let n = 2; n <= WARM_PAGES + 2; n++) await V.render(page(n), {})
+    expect(log.filter(l => l === 'cleanup 1')).toEqual([])
+    expect(V.warm.length).toBe(WARM_PAGES)
+    release()
+    release()
+    await V.render(page(WARM_PAGES + 3), {})
+    expect(log.filter(l => l === 'cleanup 1')).toEqual(['cleanup 1'])
+  })
+
+  it('a render whose reader has let go by its turn is not drawn nor kept (an AbortError)', async () => {
+    const log: string[] = [], page = pagesOf(log), V = visibilityOf({})
+    let alive = true
+    const first = V.render(page(1), {})
+    const second = V.render(page(2), {}, [], () => alive)
+    alive = false
+    await first
+    await expect(second).rejects.toMatchObject({ name: 'AbortError' })
+    expect(log.filter(l => l.startsWith('render'))).toEqual(['render 1'])
+    expect(V.warm.map(p => (p as { n: number }).n)).toEqual([1])
+  })
 })

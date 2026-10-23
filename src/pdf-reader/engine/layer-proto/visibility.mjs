@@ -42,7 +42,9 @@ const byDoc = new WeakMap()
  * canvasContext, viewport, transform) with the groups named in `off` (names, or a test of a name) hidden and every other group of
  * ours shown, after every
  * render asked before it has ended (its promise PDF.js's render's: a render that throws rejects it, and the next one runs), the
- * page then kept warm (WARM_PAGES, the oldest let go: its `cleanup()`); `warm` the pages kept, the latest last (a copy)
+ * page then kept warm (WARM_PAGES, the oldest let go: its `cleanup()`), unless `live` (where given) says by its turn that its
+ * reader has let go (an AbortError, nothing drawn); `warm` the pages kept, the latest last (a copy); `pin(page)` a page held
+ * warm while a reading of its state is under way
  */
 export function visibilityOf(doc) {
   let v = byDoc.get(doc)
@@ -62,25 +64,49 @@ export function visibilityOf(doc) {
   /** the groups hidden now, by id: only those changed are set again */
   let hidden = new Set()
   let tail = Promise.resolve()
-  /** the pages rendered last, the latest last, each once */
-  const warm = []
+  /** the pages rendered last, the latest last, each once; the pages a reading holds (pin), never let go while it does */
+  const warm = [], pins = new Map()
+  const evict = () => {
+    while (warm.length > WARM_PAGES) {
+      const at = warm.findIndex(p => !pins.has(p))
+      if (at < 0) return
+      const [p] = warm.splice(at, 1)
+      try { p.cleanup?.() } catch { /* the document's, gone with it */ }
+    }
+  }
   const keep = page => {
     const at = warm.indexOf(page)
     if (at >= 0) warm.splice(at, 1)
     warm.push(page)
-    while (warm.length > WARM_PAGES) { try { warm.shift().cleanup?.() } catch { /* the document's, gone with it */ } }
+    evict()
   }
   v = {
     ready: settled,
     has: group => ids.has(group),
     get size() { return ids.size },
-    render(page, params, off = []) {
-      // (the page kept once its render has settled, whatever it came to, before the render's promise settles and the next begins)
-      const turn = tail.then(() => drawn(page, params, off)).finally(() => keep(page))
+    render(page, params, off = [], live = null) {
+      // (the page kept once its render has settled, whatever it came to, before the render's promise settles and the next begins;
+      // a render whose reader has let go by its turn (`live`) is not drawn, nor kept)
+      const turn = tail.then(() => {
+        if (live && !live()) throw Object.assign(new Error('the render\'s reader is let go'), { name: 'AbortError' })
+        return drawn(page, params, off).finally(() => keep(page))
+      })
       tail = turn.then(() => {}, () => {})
       return turn
     },
     get warm() { return warm.slice() },
+    /** the page held warm while a reading of its rendering state is under way (its list read after other renders): the release */
+    pin(page) {
+      pins.set(page, (pins.get(page) ?? 0) + 1)
+      let done = false
+      return () => {
+        if (done) return
+        done = true
+        const n = (pins.get(page) ?? 1) - 1
+        if (n > 0) pins.set(page, n)
+        else { pins.delete(page); evict() }
+      }
+    },
   }
   /** the page drawn with the groups `off` names hidden and every other group of ours shown */
   async function drawn(page, params, off) {

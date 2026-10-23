@@ -426,7 +426,7 @@ switch alone: figure text in every display), `uiLanguage` (the reader's words), 
 - **Another target language**, once a translation has started (chosen here or elsewhere): the translation in it in place, the
   page never loaded again (`settings.ts` `followOf` `retarget`, the run's `retarget`, §11.8). The left, both documents, the zoom,
   the sync and the reading place stay; each laid page shows the language before until the new one's page is laid, and the
-  original's page where the new one's service fails or stops short. The line and the phase are an open's (Translating, §8). A hold
+  original's page where the new one's service fails or stops short with nothing translated. The line and the phase are an open's (Translating, §8). A hold
   for the language before (one the layer does not set) is lifted and the translated display shown again; a hold for the
   paper's own reason stays.
 
@@ -827,8 +827,15 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     or read again, no range of the base or the original asked). Its run sets its own groups off a page (render A) through the
     document's one configuration. A laid page keeps the target before until the new target's page commits; one the new door
     fails or stalls shows the original's page; `dropOthers()`, the host's word that the new target's rows will not come (its
-    service failed, or it stopped short), lets every page still showing another target's layer go to the original's. The left
-    pane is not touched. A same-target retry keeps its pages as before.
+    service failed, or it stopped short with no unit translated), lets every page still showing another target's layer go to the
+    original's (one holding the focus once the focus leaves it). A kept page's shapes are muted (`shapes.mjs` `mute`): nothing
+    of it is lit or hit until the new target's page commits, since neither the new layout nor the mirror describes its drawing;
+    it is not drawn again on a zoom either (its door is gone), so it is soft until then. The run's renders stop once it is let go
+    (`VIS.render`'s `live`), so the door before holds no turn of the document's queue; a live reading pins its page warm until
+    its fills are read. A stop tells the end only where a unit of the target was translated (`whole` or `partial`); a service
+    that never answers ends as any stop does, by the request queue's bounds (each batch's timeout, the queue's whole budget).
+    A language change during a limit's wait (429) is retargeted in place, the look asked no sooner. The left pane is not
+    touched. A same-target retry keeps its pages as before.
   - **The left first, or in the same frame.** A copy ready while the left's page is being drawn waits for it (at most
     `LEFT_WAIT_MS`) and is put in place in the task the left's page is told drawn in. Chromium, 2602.23285v2 p8 at k 2, asked to
     both painted, three runs: 3,275 to 3,324 ms before (the right 2,031 to 2,083 ms after the left), 1,260 to 1,272 ms now (0 to
