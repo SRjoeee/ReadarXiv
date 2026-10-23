@@ -510,6 +510,33 @@ describe('makeLayout', () => {
     await expect(makeLayout({ units: w.units, marks: await marksOf(w), arxiv: baseOf(w), lineCheck: { ...(await lineCheckOf(w)), tokenLine: new Int32Array(3) }, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })).rejects.toThrow(TypeError)
   })
 
+  it('a unit sharing a baseline with another is read by its own words: the one beside it in place does not carry it (review of #437)', async () => {
+    const left: Run = { s: 'scaled dot product attention', x: 72, y: 700 }, right: Run = { s: 'multi head', x: 300, y: 700 }
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, endOf(left), 700], ['1s', 1, 300, 700], ['1e', 1, endOf(right), 700]]
+    const units = [unit('heading', [text(left.s)]), unit('heading', [text(right.s)])]
+    const w: World = { pages: [{ runs: [left, { ...right, x: 301 }] }], marked: [{ runs: [left, right] }], marks, units }
+    const check = await lineCheckOf(w)
+    expect(new Set(check.tokenLine).size).toBe(1)
+    expect([...check.inPlace]).toEqual([1])
+    const { file, stats } = await made(w)
+    expect(file.units.map(u => u[0])).toEqual([0])
+    expect(stats.units.unverified).toBe(1)
+  })
+
+  it('every rest of a word on a row is read, beside its words (review of #437)', async () => {
+    const runs: Run[] = [{ s: 'the robustness of text generation mod-', x: 72, y: 700, eol: true }, { s: 'els. works well here', x: 72, y: 688 }]
+    const w: World = { pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 688]], units: [unit('para', [text('the robustness of text generation models. works well here')])] }
+    const check = await lineCheckOf(w)
+    const rest = check.rests.findIndex(r => r === 1)
+    expect(rest).toBeGreaterThanOrEqual(0)
+    const input = { units: w.units, marks: await marksOf(w), arxiv: baseOf(w), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
+    const laid = await makeLayout({ ...input, lineCheck: check })
+    expect('file' in laid && laid.file.units.map(u => u[0])).toEqual([0])
+    // (arXiv's rest elsewhere, its row's words in place: not laid)
+    const rests = check.rests.slice(); rests[rest] = 0
+    expect(await makeLayout({ ...input, lineCheck: { ...check, rests } })).toMatchObject({ refused: 'carry', stats: { units: { unverified: 1 } } })
+  })
+
   it('a unit over two pages is laid only where its lines on both are in place; a row holding only the rest of a word is read by that rest', async () => {
     const p1 = Array.from({ length: 3 }, (_, j): Run => ({ s: words(10 * j, 10), x: 72, y: 100 - 12 * j }))
     const p2 = Array.from({ length: 3 }, (_, j): Run => ({ s: words(30 + 10 * j, 10), x: 72, y: 700 - 12 * j }))

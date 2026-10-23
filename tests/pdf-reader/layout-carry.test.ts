@@ -272,6 +272,28 @@ describe('lineCheckOf: the lines in place', () => {
     expect(lineCheckOf(before, rebroken).lineAt[0]?.twin).toBeUndefined()
   })
 
+  it('a twin is a known text-layer substitution only (NFKC, and arXiv\'s "\u01eb" for \u03b5): distinct symbols at the same place are none (review of #437)', () => {
+    const ours = words(['let', '\u03b5', 'and', '\u03b4\u03b5', 'be', 'small'], 1, 72, 700)
+    // (\u03b4 for \u03b5 at the very same place: another symbol, not a glyph mapped otherwise)
+    expect([...lineCheckOf(ours, words(['let', '\u03b4', 'and', '\u03b4\u03b4', 'be', 'small'], 1, 72, 700)).inPlace]).toEqual([0])
+    expect([...lineCheckOf(words(['\u03b5'], 1, 300, 650), words(['\u03b4'], 1, 300, 650)).inPlace]).toEqual([0])
+    // (NFKC's own equivalents: the lunate epsilon, a ligature)
+    expect([...lineCheckOf(ours, words(['let', '\u03f5', 'and', '\u03b4\u03f5', 'be', 'small'], 1, 72, 700)).inPlace]).toEqual([1])
+    expect([...lineCheckOf(words(['the', '\ufb01rst', 'of', '\u03b5', 'a', '\u03b5'], 1, 72, 700), words(['the', 'first', 'of', '\u01eb', 'a', '\u01eb'], 1, 72, 700, [3, -2, 3, 3, 3])).inPlace]).toEqual([1])
+  })
+
+  it('each unit\'s own words: every matched token\'s offset, the line a shared one (review of #437)', () => {
+    const ours = [...words(['scaled', 'dot', 'product', 'attention'], 1, 72, 700), ...words(['multi', 'head'], 1, 300, 700)]
+    const theirs = [...words(['scaled', 'dot', 'product', 'attention'], 1, 72, 700), ...words(['multi', 'head'], 1, 301, 700)]
+    const got = lineCheckOf(ours, theirs)
+    expect([...got.tokenLine]).toEqual([0, 0, 0, 0, 0, 0])
+    expect([...got.tokenDx].map(v => Math.round(v * 100) / 100)).toEqual([0, 0, 0, 0, 1, 1])
+    expect([...got.tokenDy]).toEqual([0, 0, 0, 0, 0, 0])
+    // (a token no partner word matched: no offset)
+    const lone = lineCheckOf(words(['a', 'b'], 1, 72, 700), words(['c', 'd'], 1, 72, 600))
+    expect([...lone.tokenDx].every(Number.isNaN)).toBe(true)
+  })
+
   it('each of our tokens on its line, the rest of a word given in parts on none; each rest in place where arXiv\'s stands within LINE_PLACE of it', () => {
     // a line with a raised footnote number (off its baseline, on the line), then a line holding the rest of a word alone
     const ours = [...words(['the', 'robustness', 'of', 'mod'], 1, 72, 700), tok('1', 1, 160, 703, 3, 7), tok('', 1, 72, 688, 20)]

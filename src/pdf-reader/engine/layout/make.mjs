@@ -26,7 +26,7 @@ import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, pageFrame, page
 import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
-import { tokensOfMarks } from './carry.mjs'
+import { LINE_PLACE, tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
@@ -471,7 +471,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   const unread = new Set(dark), inked = new Uint8Array(pages + 1)
   const doc = read.tokens
   // (the line check, of this document's own tokens: each token's line, each line in place or not, each rest of a word)
-  if (lineCheck && !(ArrayBuffer.isView(lineCheck.tokenLine) && lineCheck.tokenLine.length === doc.length && ArrayBuffer.isView(lineCheck.rests) && lineCheck.rests.length === doc.length && ArrayBuffer.isView(lineCheck.inPlace) && Array.isArray(lineCheck.over))) throw new TypeError('lineCheck: carry.mjs lineCheckOf of the base page\'s own tokens')
+  if (lineCheck && !(ArrayBuffer.isView(lineCheck.tokenLine) && lineCheck.tokenLine.length === doc.length && ArrayBuffer.isView(lineCheck.rests) && lineCheck.rests.length === doc.length && ArrayBuffer.isView(lineCheck.inPlace) && ArrayBuffer.isView(lineCheck.tokenDx) && lineCheck.tokenDx.length === doc.length && ArrayBuffer.isView(lineCheck.tokenDy) && lineCheck.tokenDy.length === doc.length && Array.isArray(lineCheck.over))) throw new TypeError('lineCheck: carry.mjs lineCheckOf of the base page\'s own tokens')
   const overPages = new Set(lineCheck?.over ?? [])
   // the frame's rule given (a whole run's, the oracle's), else the rule set's: rule 1's of the base page's text, made once; the whole
   // run's (pageFrame) the whole paper's alone, none for the page stream (its ranges are placed from their own units)
@@ -1800,28 +1800,38 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /**
    * Whether unit `one` is in place on arXiv's PDF (the line check's, `lineCheck`): every row of its own that the check reads is,
    * and one at least. A row is read by its tokens' own lines (carry.mjs `tokenLine`, whatever the baseline the row's ink gives:
-   * a row of tall math stands 1.6 to 3 pt off its words', a word on a baseline of its own is its line's), each of them in place
-   * (`inPlace`: on its page, the median of its words' offsets within LINE_PLACE, or a twin's); a row holding only the rest of
-   * a word given in parts (a token of no text, on no line) by that rest's own place (`rests`: arXiv's rest within LINE_PLACE).
+   * a row of tall math stands 1.6 to 3 pt off its words', a word on a baseline of its own is its line's), each of them by the
+   * unit's own words on it a partner word matched (`tokenDx`, `tokenDy`: their offsets' median within LINE_PLACE, the line's
+   * partner on its page; a line two units share judges each by its own words), else by the line's verdict (`inPlace`); every
+   * rest of a word given in parts on it (a token of no text, on no line) by that rest's own place (`rests`: arXiv's rest within
+   * LINE_PLACE), beside its words or alone.
    * A row the check reads nothing of (a placeholder's run wrapped onto a line of no token: wrapOf) is no evidence either way,
    * and a unit of no row read is not in place (null). A unit on a page past the check's work (`over`) is not. A unit on several
    * pages is read on every one; a line shared with another unit is read for both. True where no line check is given
    */
+  const medianOf = v => { v.sort((a, b) => a - b); const h = v.length >> 1; return v.length % 2 ? v[h] : (v[h - 1] + v[h]) / 2 }
   function inPlace(one) {
     if (!lineCheck) return true
-    const { tokenLine, inPlace: placed, rests } = lineCheck
+    const { tokenLine, inPlace: placed, rests, lineAt, tokenDx, tokenDy } = lineCheck
     let read = 0
     for (const r of one.rows) {
       if (overPages.has(r.page)) return false
-      let lines = 0, rest = false
+      // (the row's words by their line, its rests of words given in parts each)
+      const own = new Map()
+      let rest = false
       for (const k of r.ks) {
         const l = tokenLine[k]
-        if (l >= 0) { lines++; if (placed[l] !== 1) return false } else if (doc[k]?.t === '') rest = true
+        if (l >= 0) (own.get(l) ?? own.set(l, []).get(l)).push(k)
+        else if (doc[k]?.t === '') { rest = true; if (rests[k] !== 1) return false }
       }
-      if (lines) read++
-      else if (rest) {
-        read++
-        for (const k of r.ks) if (doc[k]?.t === '' && rests[k] !== 1) return false
+      if (own.size || rest) read++
+      // each line by the unit's own words on it, a partner word matched (another unit's on a line they share no evidence), its
+      // partner on its page; by the line's own verdict where none of them was matched
+      for (const [l, ks] of own) {
+        const xs = [], ys = []
+        for (const k of ks) if (Number.isFinite(tokenDx[k])) { xs.push(tokenDx[k]); ys.push(tokenDy[k]) }
+        if (!xs.length) { if (placed[l] !== 1) return false; continue }
+        if (lineAt[l]?.page !== doc[ks[0]].page || Math.abs(medianOf(xs)) > LINE_PLACE || Math.abs(medianOf(ys)) > LINE_PLACE) return false
       }
     }
     return read > 0 ? true : null

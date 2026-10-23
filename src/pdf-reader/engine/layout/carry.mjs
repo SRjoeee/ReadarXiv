@@ -66,8 +66,12 @@ const r2 = v => Math.round(v * 100) / 100
 const usable = t => !!t && typeof t.t === 'string' && t.t.length > 0 && Number.isInteger(t.page) && Number.isFinite(t.x) && Number.isFinite(t.y) && Number.isFinite(t.w) && Number.isFinite(t.h)
 /** the rest of a word given in parts: a token of no text, at a place */
 const isRest = t => !!t && t.t === '' && Number.isInteger(t.page) && Number.isFinite(t.x) && Number.isFinite(t.y)
-/** a word's characters within ASCII alone: what two text layers that map a glyph to other characters still share */
-const ascii = s => s.replace(/[^\p{ASCII}]/gu, '')
+/** the characters a text layer is known to give for another's, beside NFKC's own equivalents (U+03F5 and U+03B5, U+03D1 and
+ *  U+03B8, a ligature and its letters): arXiv's dvips and ps2pdf give cmmi's epsilon as U+01EB where ours gives U+03B5
+ *  (2610.21765: the only pair the release sweep's 50 papers and the pack need, 24 twins on pages 5 to 11) */
+const SUBSTITUTES = new Map([['\u01eb', '\u03b5']])
+/** a word as two text layers that map a glyph to another character still share: NFKC, then the known substitutes */
+const known = s => [...s.normalize('NFKC')].map(ch => SUBSTITUTES.get(ch) ?? ch).join('')
 /** the median of the numbers (sorted here) */
 const median = v => { v.sort(); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2 }
 
@@ -187,6 +191,8 @@ export function carrier(marked, arxiv) {
   let placed = 0
   // (each marked line's partner and verdict, in the order added; each marked token's line; each marked rest's verdict)
   const lineAt = [], inPlace = [], tokenLine = [], rests = new Map()
+  // (each marked token a partner word matched: its offset from that word, x and y)
+  const tokenDx = new Map(), tokenDy = new Map()
 
   /** the median of the offsets of line `l`'s words from their partners' (`best`'s pairs, else all its words in order), kept on it */
   function offsetOf(l, best) {
@@ -250,6 +256,13 @@ export function carrier(marked, arxiv) {
         else if (best.page === l.page && Math.abs(best.dx) < SAME && Math.abs(best.dy) < SAME) lines.same++
         else lines.moved++
         const { dx, dy } = offsetOf(l, best), i = index.get(l)
+        const n = best.pairs ? best.pairs.length : l.tokens.length
+        for (let j = 0; j < n; j++) {
+          const a = best.pairs ? best.pairs[j][0] : j, b = best.pairs ? best.pairs[j][1] : j
+          const k = l.tokens[a], t = marked[k], u = arxiv[best.to.tokens[b]]
+          tokenDx.set(k, u.x - t.x)
+          tokenDy.set(k, u.y - t.y)
+        }
         lineAt[i] = { page: best.page, dx, dy, whole: best.whole, fuzzy: best.fuzzy, pairs: best.pairs, ...(best.twin ? { twin: true } : {}) }
         if (placedBy(l, best)) { inPlace[i] = 1; here++ }
       }
@@ -359,7 +372,8 @@ export function carrier(marked, arxiv) {
     return found
   }
   /** line `l`'s twin on its page (carrierOf's): an arXiv line whose baseline and both ends stand within LINE_PLACE of its own
-   *  and whose words are its words once their characters outside ASCII are dropped, as many and in order; null for none,
+   *  and whose words are its words but for a character a text layer is known to give for another (`known`: NFKC, SUBSTITUTES),
+   *  as many and in order; another symbol is no twin; null for none,
    *  undefined where the page is past its work */
   function twinOf(l, spend) {
     const n = l.tokens.length, a = marked[l.tokens[0]], z = marked[l.tokens[n - 1]], y = Math.floor(l.y)
@@ -373,8 +387,8 @@ export function carrier(marked, arxiv) {
         const b = arxiv[c.tokens[0]], e = arxiv[c.tokens[n - 1]]
         if (Math.abs(b.x - a.x) > LINE_PLACE || Math.abs(e.x + e.w - (z.x + z.w)) > LINE_PLACE) continue
         if (spend(n)) return undefined
-        mine ??= l.tokens.map(k => ascii(marked[k].t))
-        if (c.tokens.every((k, j) => ascii(arxiv[k].t) === mine[j])) return { rank: [0, 0], to: c, page: c.page, dx: b.x - a.x, dy: c.y - l.y, whole: false, pairs: null, fuzzy: true, twin: true }
+        mine ??= l.tokens.map(k => known(marked[k].t))
+        if (c.tokens.every((k, j) => known(arxiv[k].t) === mine[j])) return { rank: [0, 0], to: c, page: c.page, dx: b.x - a.x, dy: c.y - l.y, whole: false, pairs: null, fuzzy: true, twin: true }
       }
     }
     return null
@@ -394,7 +408,7 @@ export function carrier(marked, arxiv) {
     return at
   }
 
-  return { lines, pageLines, get placed() { return placed }, pagePlaced, over, add, lineAt, inPlace, tokenLine, rests }
+  return { lines, pageLines, get placed() { return placed }, pagePlaced, over, add, lineAt, inPlace, tokenLine, rests, tokenDx, tokenDy }
 }
 
 /**
@@ -403,15 +417,19 @@ export function carrier(marked, arxiv) {
  * `placed`, the lines in place (LINE_PLACE), and `pageLines` each page's [placed, total] (information: the paper's share, the
  * head's `carried`); each of our lines' partner (`lineAt`) and verdict (`inPlace`, 1 in place), each of our tokens' line
  * (`tokenLine`, -1 for a token on no line: a rest of a word given in parts, one of no place), each of our rests' verdict
- * (`rests`, 1 where arXiv's rest stands within LINE_PLACE of it), and the pages past their work (`over`: none of their lines
- * found, none of their rests)
+ * (`rests`, 1 where arXiv's rest stands within LINE_PLACE of it), each of our tokens a partner word matched its offset from
+ * that word (`tokenDx`, `tokenDy`; NaN for none: the maker reads a unit by its own words on a line it shares), and the pages
+ * past their work (`over`: none of their lines found, none of their rests)
  */
 export function lineCheckOf(ours, arxiv) {
   const c = carrierOf(ours, arxiv)
   const tokenLine = new Int32Array(ours.length).fill(-1), rests = new Uint8Array(ours.length)
   c.tokenLine.forEach((l, k) => { tokenLine[k] = l })
   for (const [k, r] of c.rests) rests[k] = r
-  return { lines: { ...c.lines, placed: c.placed }, pageLines: c.pagePlaced, lineAt: c.lineAt, inPlace: Uint8Array.from(c.inPlace), tokenLine, rests, over: [...c.over] }
+  const tokenDx = new Float64Array(ours.length).fill(Number.NaN), tokenDy = new Float64Array(ours.length).fill(Number.NaN)
+  for (const [k, v] of c.tokenDx) tokenDx[k] = v
+  for (const [k, v] of c.tokenDy) tokenDy[k] = v
+  return { lines: { ...c.lines, placed: c.placed }, pageLines: c.pagePlaced, lineAt: c.lineAt, inPlace: Uint8Array.from(c.inPlace), tokenLine, rests, tokenDx, tokenDy, over: [...c.over] }
 }
 const before = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false }
 

@@ -29,6 +29,9 @@ export interface Carrier {
   readonly tokenLine: readonly number[]
   /** each marked rest of a word given in parts on a page carried: 1 where arXiv's rest stands within LINE_PLACE of it, else 0 */
   readonly rests: ReadonlyMap<number, number>
+  /** each marked token a partner word matched: its offset from that word, x and y */
+  readonly tokenDx: ReadonlyMap<number, number>
+  readonly tokenDy: ReadonlyMap<number, number>
   /** the marked tokens `from` to `to` (`marked`'s indices), whole pages none of which was added: their lines matched */
   add(from?: number, to?: number): void
 }
@@ -45,6 +48,9 @@ export interface LineCheck {
   inPlace: Uint8Array
   tokenLine: Int32Array
   rests: Uint8Array
+  /** each of our tokens a partner word matched: its offset from that word (NaN for none) */
+  tokenDx: Float64Array
+  tokenDy: Float64Array
   over: number[]
 }
 export declare function lineCheckOf(ours: readonly DocToken[], arxiv: readonly DocToken[]): LineCheck
