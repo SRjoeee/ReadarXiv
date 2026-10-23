@@ -98,8 +98,8 @@ gate's numbers) and §19.4, §19.6, §18.2 (the bundle's and the parts' `rules`,
 `chain-wire.mjs`, the remover child (`remove.mjs` keeps `lex`, `alignOf` and `openRemover`, which the wrap reads), `tailLinks`,
 part tails and `TAIL_CAP`, paper fills and the old way, `drawnSource`, `K_SLACK`, the capture of a page view's scale and the
 left-canvas copies (`drawn.mjs` keeps `pageBox`). What stays open here:
-- T4.2 (A equals a per-unit oracle in Node over sample-1, and a D(p) change asks no operator list) is not written: the reader's
-  pixel checks are the lab gate's (`lab/pdf/spikes/ocg-reader.mjs`) and the e2e's frame (`pnpm e2e:registration`).
+- T4.2 is `tests/pdf-reader/layer-visibility-pixels.test.ts` (render A against a per-unit oracle and PDF.js's own path, no
+  operator list asked again); the production path's one parse a page is `layer-proto-parts.test.ts` (WARM_PAGES).
 
 ## 5. Hosts
 

@@ -11,7 +11,7 @@ import type { UnitWire } from './bundle.mjs'
 /** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why;
  *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
  *  and `orig` names arXiv's beside ours, the catalog names the base */
-export declare const BUNDLE5: '8'
+export declare const BUNDLE5: '9'
 /** the formats a reader takes: its own and 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv') */
 export declare const BUNDLES_READ: readonly ['7', '8']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */

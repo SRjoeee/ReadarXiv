@@ -41,9 +41,13 @@ import { CELL, EDGES, unitStands } from './units.mjs'
  *  the base page): the head's `base` says whose PDF the layer is drawn over (`source`: 'ours', the final pass of our marked
  *  compile, with its check, or 'arxiv', with why our base was refused) and `orig` names arXiv's PDF beside ours; the catalog
  *  names the base object (`base`); a part with no layout may say `final` or `boxes` too (LAYOUT_REFUSED). A reader of 7
- *  refuses the new keys. This reader reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF */
-export const BUNDLE5 = '8'
-/** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 8 reads unchanged: its
+ *  refuses the new keys. 9 (REMOVAL 8, the per-unit erasure): a part carries its pages' cell rules (`rules`) in place of the
+ *  text-removed PDF's add-on (`addon`, its manifest and tail), no tail follows a part, and our base page is wrapped by optional
+ *  content (the head's `base.stats`, `unhidden`, `labelKept`): a reader of 8 refuses a part of 9, and this one a part of 8, so
+ *  a bundle of 8 is not found under 9's CTAG and is prepared again. The head's and the catalog's shapes are 8's. This reader
+ *  reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF */
+export const BUNDLE5 = '9'
+/** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`). Every object of a bundle is of its head's format */
 export const BUNDLES_READ = Object.freeze(['7', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
