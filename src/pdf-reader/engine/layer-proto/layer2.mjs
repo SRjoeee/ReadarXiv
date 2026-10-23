@@ -33,7 +33,10 @@
 //   tighter tracking; alphabets: letter spacing), the white space below the unit (an ink map of the original page),
 //   leading (down to the script's floor), and only then the size, in steps, down to its floor; past it, clipped.
 // - Line breaking: CJK kinsoku (as before), Korean at spaces with a cap on word spacing (ragged past it), alphabets at
-//   spaces with TeX's patterns for hyphenation (hyph.js), CJK–Latin autospace in Chinese and Japanese.
+//   spaces with TeX's patterns for hyphenation (hyph.js), CJK–Latin autospace in Chinese and Japanese. In Chinese and
+//   Japanese a line may break before an inline formula that follows a CJK character (xeCJK's \CJKecglue), and a line takes
+//   a group it misses by a little by squeezing (its marks' blank halves, then at most SQUEEZE em a gap) where that costs
+//   less a gap than the stretch it would be justified by without it (breakLines' squeezeTakes).
 // - DOM text: an SVG per page over the page's copy, one <text> per line and a <tspan> per run, positioned from canvas
 //   measurements (no layout read-back): selectable, copyable, searchable, vector at any zoom. The canvas copy keeps the
 //   erasing and the crops of math.
@@ -2186,9 +2189,16 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (r.mode === 'crop') {
       // (a formula TeX broke over lines, its crops one after another, a space between them: the line breaks only there, at
       // TeX's own break, and where they stand on one line they are the glue TeX dropped at the break apart, a space's width)
+      // A crop is glued to the token before it where no space stands between them, but not to a CJK character or a CJK mark in a
+      // script that breaks between CJK characters (keepAll false): there xeCJK sets \CJKecglue between a CJK character and
+      // inline math, a place TeX may break, and a Chinese or Japanese translation sets no space there, so the glue made the
+      // character, the formula and the mark after it one group that a line could not take and had to end before, its gaps
+      // spread (2610.10069 page 7, unit 49). A mark no line ends with (an opening bracket), a lead's end and a kern stay glued
+      const pv = tokens.at(-1)
+      const ecglue = !keepAll && pv?.cls === 'cjk' && !pv.leadEnd && !pv.kernW && !(pv.s && kinsoku.ends(pv.s))
       for (const [n, q] of cropPartsOf(r).entries()) {
         if (n) pushText(' ', style())
-        const glue = tokens.length > 0 && !lastIsSpace()
+        const glue = tokens.length > 0 && !lastIsSpace() && !(n === 0 && ecglue)
         tokens.push({ crop: q, cw: q.crop[2] - q.crop[0], glue, w100: 0 })
       }
       return
@@ -2594,6 +2604,23 @@ const tokW = (t, f, st, scale) => {
 }
 
 /**
+ * The most a CJK line closes each gap between its items to take one more group (breakLines' squeeze), in em: TeX's CJKglue
+ * between two CJK characters has no shrink at all, so the squeeze is kept to the least that takes a group a line misses by a
+ * little. 0.02 em is the study's (2026-10-23, the (j) rows of the release route's sweep): it took 264 of the sweep's 378
+ * letter-spaced lines, with half of all justified CJK lines already within 0.02 em of their natural spacing
+ */
+const SQUEEZE = 0.02
+
+/** whether a line is set as Latin text, its slack in its word spaces (placeItems): it has spaces, and its script breaks only
+ *  at spaces or fewer than half its items are CJK */
+const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || items.filter(it => it.t.cls === 'cjk').length < items.length / 2)
+
+/** the marks of a line whose blank half a squeeze may take (placeItems): its full-width marks that have not lost one (`cut`),
+ *  but the closing mark at its end where it hangs in the margin; none where the state compresses as far as the rules let it
+ *  (compress 2: every mark has lost its half) or the rules compress none (compressMax 0) */
+const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && !(hangs && n === items.length - 1)) : [])
+
+/**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
  * No line the breaker opens starts with a mark UAX 14 or the target's rules keep from a line's start (`barred`): such a
@@ -2741,7 +2768,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       // (`kern`: the explicit glue after it, an advance of its own beside its width, which trim drops at a line's end: no part of
       // what it draws, a crop's image, a word's box)
       const kern = kernOf(t, f)
-      items.push({ t, w: tw, shift, asp, ...(kern ? { kern } : {}) })
+      // (`cut`: the mark has lost its blank half, which a squeezed line does not take from it again, placeItems)
+      items.push({ t, w: tw, shift, asp, ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
       w += tw + asp + kern
       prev = t
     }
@@ -2757,6 +2785,33 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     while (l.items.at(-1)?.t.space) { const sp = l.items.pop(); l.x -= sp.w; l.spaces -= sp.w }
     const end = l.items.at(-1)
     if (end?.kern) { l.x -= end.kern; end.kern = 0 }
+  }
+  // A CJK line squeezed to take the group it misses (`squeezes`: Chinese and Japanese, the scripts that break between CJK
+  // characters): light compression before stretching, as TeX takes the cheaper of the two breaks by their badness. The line
+  // takes the group where the group overflows it by no more than the line can give, its marks' blank halves (the usual CJK
+  // punctuation compression, where the state compresses less than the rules let it) and then SQUEEZE em a gap, its word
+  // spaces at spaceMin as `fits` takes them; and only where that squeeze a gap is less than the stretch a gap the line would
+  // be justified by if it ended before the group (`stretchOf`). placeItems sets it (`squeezed`). Never a centred line, nor
+  // one placeItems sets as Latin text
+  const squeezes = !!P.cjk && !P.keepAll
+  /** the stretch a gap the line in hand is justified by if it is closed here: its trailing spaces and its last kern dropped
+   *  and its closing mark hung, as trim and placeItems leave it; Infinity where it has no gap */
+  const stretchOf = cap => {
+    let n = line.items.length, x = line.x
+    while (n > 0 && line.items[n - 1].t.space) x -= line.items[--n].w
+    if (n < 2) return Infinity
+    const end = line.items[n - 1]
+    const hang = end.t.punct === 'close' && !end.cut && st.compress < 2 ? half : 0
+    return (cap - (x - (end.kern ?? 0)) + hang) / (n - 1)
+  }
+  /** whether the line in hand squeezes to take group g, which does not fit it */
+  const squeezeTakes = (g, cap) => {
+    if (!squeezes || line.centred || !line.items.length) return false
+    const all = line.items.concat(g.items)
+    if (latinishOf(all, P)) return false
+    const need = line.x - (line.spaces + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
+    const gaps = all.length - 1
+    return gaps > 0 && need <= squeezable(all, g.hang > 0, st.compress, P).length * half + SQUEEZE * f * gaps + 1e-9 && need / gaps < stretchOf(cap)
   }
   if (slots.length) open()
   while (i < tokens.length && li < slots.length && !stop) {
@@ -2899,6 +2954,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
         i++
       }
       advance()
+      continue
+    }
+    // a CJK line squeezed to take the group (squeezeTakes)
+    if (squeezeTakes(g, cap)) {
+      for (const it of items) { line.items.push(it); if (it.t.space) line.spaces += it.w }
+      line.x += w
+      line.squeezed = true
+      i = j
       continue
     }
     // a word hyphenated: the most of it that fits, with its hyphen
@@ -3045,10 +3108,27 @@ function placeItems(lines, f, P) {
     let slack = cap - natural + hang
     const spaces = line.items.filter(it => it.t.space)
     const spW = spaces.reduce((s, it) => s + it.w, 0)
-    const cjkItems = line.items.filter(it => it.t.cls === 'cjk').length
-    const latinish = spaces.length > 0 && (P.keepAll || cjkItems < line.items.length / 2)
+    const latinish = latinishOf(line.items, P)
     let perSpace = 0, perGap = 0
     line.mode = line.centred ? 'centred' : line === last || line.ends ? 'last' : 'just'
+    // a line squeezed to take its last group (breakLines' squeezeTakes): its marks' blank halves first, as many as it needs,
+    // then its word spaces down to spaceMin, then each gap by what is left, which breakLines kept within SQUEEZE em; a mark's
+    // half more than it needed is spread as any line's slack
+    if (line.squeezed && slack < 0 && !latinish && line.items.length > 1) {
+      for (const it of squeezable(line.items, hang > 0, P._compress, P)) {
+        if (slack >= 0) break
+        it.w -= 0.5 * f
+        if (it.t.punct === 'open') it.shift = (it.shift ?? 0) - 0.5 * f
+        it.cut = true
+        slack += 0.5 * f
+      }
+      if (slack < 0) {
+        const by = Math.max(slack, -spW * (1 - P.spaceMin))
+        if (spaces.length) perSpace = by / spaces.length
+        perGap = (slack - (spaces.length ? by : 0)) / (line.items.length - 1)
+        slack = 0
+      }
+    }
     if (slack < 0 && spaces.length) perSpace = slack / spaces.length // shrunk spaces (never past spaceMin by the breaking)
     else if (line.mode === 'just' && slack > 0) {
       if (latinish) {

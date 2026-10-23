@@ -439,15 +439,16 @@ describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every o
     expect(b.layout.lines).toHaveLength(5)
   })
 
-  it("leaves a unit the fit had to shrink at its own size: two units fitted at 0.925 and 0.85 keep them", async () => {
-    // (blocks of two lines; at the original's pitch, its tracking tightened, 22 characters take 0.925, eleven a line, and
-    // 24 take 0.85, twelve. Setting both at 0.85, one size a page below 1, left the alphabets' units short of their frames:
-    // the coordinator's ruling of 2026-10-09 keeps one size for growth alone)
+  it("leaves a unit the fit had to shrink at its own size: two units fitted at 0.95 and 0.875 keep them", async () => {
+    // (blocks of two lines; at the original's pitch, its tracking tightened, 22 characters take 0.95, eleven a line, and
+    // 24 take 0.875, twelve, each line squeezed to take its last character (layer2.mjs squeezeTakes). Setting both at
+    // 0.875, one size a page below 1, left the alphabets' units short of their frames: the coordinator's ruling of
+    // 2026-10-09 keeps one size for growth alone)
     const two = (id: number, n: number) => { const u = laid(id, n); u.blocks = [{ ...(u.blocks[0] as object), B: [500, 488], rects: [[1, 0, 498, 100, 508], [1, 0, 486, 100, 496]], exact: [true, true], sizes: [10, 10] }]; u.layout = L2.layoutUnit2(u.tokens as never, u.blocks as never, 10, u.P as never) as never; return u }
     const a = two(1, 22), b = two(2, 24)
-    expect([a.layout.scale, b.layout.scale]).toEqual([0.925, 0.85])
+    expect([a.layout.scale, b.layout.scale]).toEqual([0.95, 0.875])
     await fill([a, b])
-    expect([a.layout.scale, b.layout.scale]).toEqual([0.925, 0.85])
+    expect([a.layout.scale, b.layout.scale]).toEqual([0.95, 0.875])
   })
 
   it("reads a continuation for its page's anchor alone: the page tells no target of its own, and lays nothing", async () => {
