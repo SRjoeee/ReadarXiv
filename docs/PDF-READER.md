@@ -1895,8 +1895,10 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   original's, and so does the catalog but for its `/OCProperties` where our pages are wrapped (19.9): the catalog is then
   written again under its number, every other key the original's, and its `/OCProperties` is the original's with our groups
   appended to its `/OCGs` and its default's `/ON` (every other key, and the default's `/BaseState`, `/OFF`, `/AS`, the
-  original's). The paper's own layers of our compile are paired with the original's by their place in each `/OCGs` (the same
-  names, as many; else the delta is refused, `delta-proof`), so a replaced page names the original's objects and an unreplaced
+  original's). The paper's own layers of our compile are paired with the original's by their place in each `/OCGs` where
+  each pair is one layer (as many, every name unique on each side, each pair of one name, one default state by `/D`'s
+  `/BaseState`, `/ON` and `/OFF`, one `/Intent` and `/Usage`; else the delta is refused, `delta-proof`, and the full base
+  serves: two layers of one name are never paired by their place), so a replaced page names the original's objects and an unreplaced
   page's layers stay listed with their default state. A page of ours that names a group of ours and is not replaced refuses
   the delta (`delta-pages`). The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
   remover's `makeAddon` writes its tails with too: a table, or a stream of `/W [1 4 2]`, no hybrid), numbers in runs, objects
@@ -2040,7 +2042,8 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   page decodes no image: a stock read of the 46 MB pair peaks at 3 GB of native memory); then `deltaOf(orig, bytes)` with
   every page replaced that the wrap wrapped (the default) and `proveDelta`; then `layerOfPaper({ …, ours: { doc (of the
   wrapped bytes), bytes, sha256, xref, delta, wrap: { stats, unhidden, labelKept, pages } } })` (a delta that leaves a wrapped
-  page arXiv's is refused there, `delta-shape`: a unit's group on it could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
+  page arXiv's is refused there, `delta-shape`, beside deltaOf's and the proof's own check on the bytes: a unit's group on it
+  could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
   bounds }, spell: [ids, at most 64], labelKept }`). `units` (required) are the paper's SOURCE units, an array each entry of
   which has a source text or pieces (missing, a hole or an entry with neither a TypeError; `null` said asks for no spell check,
   the lab's alone); `deflate` and `inflate` are required (the written bytes are read back); `pages` is required beside the

@@ -29,18 +29,23 @@ describe('B1: a page past the wrap\'s bounds is refused, never the process', () 
 })
 
 describe('B2: the delta matches optional content by identity, never by content', () => {
-  it('keeps two layers of equal dicts two, proves, and renders as the full base', async () => {
-    const layers = (doc: PL.PDFDocument) => {
-      const ctx = doc.context
-      const A = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of('frame') })), B = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of('frame') }))
-      doc.catalog.set(PL.PDFName.of('OCProperties'), ctx.obj({ OCGs: [A, B], D: ctx.obj({ BaseState: 'ON', OFF: [B] }) }))
-      doc.getPages()[1]!.node.Resources()!.set(PL.PDFName.of('Properties'), ctx.obj({ fa: A, fb: B }))
-    }
-    const body = (marked: boolean) => (marked ? unit(0, 72, 720, '(Order)') : run(72, 720, '(Order)')) + run(72, 700, '(shown)', { before: '/OC /fa BDC ', after: ' EMC' }) + run(72, 680, '(hidden)', { before: '/OC /fb BDC ', after: ' EMC' })
-    const orig = (await markedSample({ pages: [2], edit: only(body(false)), tweak: layers })).bytes
-    const ours = (await markedSample({ pages: [2], edit: only(body(true)), tweak: layers })).bytes
+  /** arXiv's and our compile's layers: two OCGs, A then B in arXiv's /OCGs, as `oursOrder` in ours; names and default states given */
+  const layered = (names: [string, string], states: { orig: [boolean, boolean]; ours: [boolean, boolean] }, swap = false) => (which: 'orig' | 'ours') => (doc: PL.PDFDocument) => {
+    const ctx = doc.context
+    const A = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of(names[0]) })), B = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of(names[1]) }))
+    const st = states[which], list = which === 'ours' && swap ? [B, A] : [A, B]
+    doc.catalog.set(PL.PDFName.of('OCProperties'), ctx.obj({ OCGs: list, D: ctx.obj({ BaseState: 'ON', OFF: [A, B].filter((_, i) => !st[i]) }) }))
+    doc.getPages()[1]!.node.Resources()!.set(PL.PDFName.of('Properties'), ctx.obj({ fa: A, fb: B }))
+  }
+  const body = (marked: boolean) => (marked ? unit(0, 72, 720, '(Order)') : run(72, 720, '(Order)')) + run(72, 700, '(shown)', { before: '/OC /fa BDC ', after: ' EMC' }) + run(72, 680, '(hidden)', { before: '/OC /fb BDC ', after: ' EMC' })
+  async function pair(tweak: ReturnType<typeof layered>) {
+    const orig = (await markedSample({ pages: [2], edit: only(body(false)), tweak: tweak('orig') })).bytes
+    const ours = (await markedSample({ pages: [2], edit: only(body(true)), tweak: tweak('ours') })).bytes
     const r = ok(await wrapped(ours, { units: [{ src: 'Order' }] }))
-    const d = await deltaOf(orig, r.bytes, { PL: PL as never })
+    return { orig, r, d: await deltaOf(orig, r.bytes, { PL: PL as never }) }
+  }
+  it('pairs the paper\'s own layers by place where each pair is one name, state, intent and usage: the delta renders as the full base', async () => {
+    const { orig, r, d } = await pair(layered(['frame', 'caption'], { orig: [true, false], ours: [true, false] }))
     if ('refused' in d) throw new Error(d.why)
     const prove = (delta: Uint8Array) => proveDelta(orig, delta, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced: d.replaced })
     expect((await prove(d.delta)).ok).toBe(true)
@@ -54,6 +59,12 @@ describe('B2: the delta matches optional content by identity, never by content',
     expect(m[1]!.length).toBe(m[2]!.length)
     const merged = Uint8Array.from(text.replace(`/fb ${m[2]} 0 R`, `/fb ${m[1]} 0 R`), c => c.charCodeAt(0))
     expect((await prove(merged)).ok).toBe(false)
+  })
+  it('refuses the delta where the layers do not pair: two of one name (in either order), or one name at another state (r18)', async () => {
+    for (const [names, states, swap] of [[['frame', 'frame'], { orig: [true, false], ours: [true, false] }, false], [['frame', 'frame'], { orig: [true, false], ours: [false, true] }, true], [['frame', 'caption'], { orig: [true, false], ours: [false, false] }, false]] as const) {
+      const { d } = await pair(layered([...names] as [string, string], { orig: [...states.orig] as [boolean, boolean], ours: [...states.ours] as [boolean, boolean] }, swap))
+      expect(d, JSON.stringify(names)).toMatchObject({ refused: 'delta-proof' })
+    }
   })
 })
 
