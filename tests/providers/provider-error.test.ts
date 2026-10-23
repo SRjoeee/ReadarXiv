@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { attachRequestErrorMeta, defaultRequestRetryPolicy, getRequestErrorMeta } from '@/providers/request/retry-policy'
-import { PROVIDER_ERROR_KINDS, ProviderError, isPermanentErrorKind, type ProviderErrorKind } from '@/providers/types'
+import { malformedReply, PROVIDER_ERROR_KINDS, ProviderError, isPermanentErrorKind, type ProviderErrorKind } from '@/providers/types'
 
-const decide = (error: unknown) =>
-  defaultRequestRetryPolicy.decide(error, { retryCount: 0, maxRetries: 2, baseRetryDelayMs: 1000, now: 0, rateLimitRetryCount: 0, consecutiveRateLimits: 0 })
+const decide = (error: unknown, retryCount = 0) =>
+  defaultRequestRetryPolicy.decide(error, { retryCount, maxRetries: 2, baseRetryDelayMs: 1000, now: 0, rateLimitRetryCount: 0, consecutiveRateLimits: 0 })
 
 // The ported retry-policy knows only its own kinds; ProviderError attaches metadata by kind at construction so the policy decides right
 describe('ProviderError\'s retry metadata', () => {
@@ -29,6 +29,21 @@ describe('ProviderError\'s retry metadata', () => {
       expect(getRequestErrorMeta(new ProviderError(kind, kind)).isRetryable).toBe(false)
       expect(decide(new ProviderError(kind, kind))).toEqual({ action: 'fail' })
     }
+  })
+
+  it('invalid-response names its kind: a raw model output quoted in the message that says 429 or timeout is no rate limit and no network failure', () => {
+    const quoted = new ProviderError('invalid-response', 'does not match the schema; raw model output: HTTP 429 Too Many Requests, a rate limit after the timeout')
+    expect(getRequestErrorMeta(quoted).kind).toBe('unknown')
+    expect(decide(quoted)).toEqual({ action: 'fail' })
+  })
+
+  it('a malformed reply: retried once, under the queue\'s own cap, then failed, never pausing the queue whatever its message quotes (DESIGN §8.2)', () => {
+    const reply = malformedReply('No object generated; raw model output: rate limit exceeded (429)')
+    expect(reply).toMatchObject({ kind: 'invalid-response', isolatable: false })
+    expect(decide(reply, 0).action).toBe('retry')
+    expect(decide(reply, 1)).toEqual({ action: 'fail' })
+    // the queue's cap still binds where it is lower (a test's or a caller's maxRetries: 0)
+    expect(defaultRequestRetryPolicy.decide(reply, { retryCount: 0, maxRetries: 0, baseRetryDelayMs: 0, now: 0, rateLimitRetryCount: 0, consecutiveRateLimits: 0 })).toEqual({ action: 'fail' })
   })
 
   it('timeout / network: retry with backoff; rate-limit: pause', () => {

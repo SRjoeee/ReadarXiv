@@ -10,7 +10,7 @@ import { buildPrompts } from './prompt'
 import { promptKey, type PromptsConfig } from './prompt-library'
 import { attachRequestErrorMeta } from './request/retry-policy'
 import { thinkingBodyFields } from './thinking'
-import { ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
+import { malformedReply, ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
 import { WIRE_FORMATS } from './wire-formats'
 
 const outputSchema = z.object({
@@ -92,7 +92,10 @@ export function createOpenAICompatProvider(
   }
 }
 
-/** The ids returned must equal the request's exactly; ordered as requested */
+/**
+ * The ids returned must equal the request's exactly; ordered as requested. A parsed reply that misses or adds one is
+ * isolatable (types.ts): some segment most likely led the model astray, and the service finds which by sending fewer
+ */
 function alignSegments(request: TranslateRequest, returned: { id: string; text: string }[]) {
   const byId = new Map(returned.map(s => [s.id, s.text]))
   const missing = request.segments.filter(s => !byId.has(s.id)).map(s => s.id)
@@ -117,10 +120,11 @@ function toProviderError(e: unknown): ProviderError {
     return attachRequestErrorMeta(err, { statusCode: status, responseHeaders: e.responseHeaders, isRetryable: e.isRetryable })
   }
   if (typeof name === 'string' && /NoObjectGenerated|NoOutputGenerated|TypeValidation|JSONParse/.test(name)) {
-    // A short stretch of the model's raw output travels along, so a “does not match the schema” can be diagnosed by what it actually returned
+    // No object at all came out of the reply: the model's way of answering, not a segment's doing (DESIGN §8.2). A
+    // short stretch of the model's raw output travels along, so a “does not match the schema” can be diagnosed by what it actually returned
     const raw = (e as { text?: unknown }).text
     const snippet = typeof raw === 'string' && raw.trim() ? `; raw model output: ${raw.trim().slice(0, 300)}` : ''
-    return new ProviderError('invalid-response', `${(e as Error).message}${snippet}`, { cause: e })
+    return malformedReply(`${(e as Error).message}${snippet}`, e)
   }
   if (e instanceof TypeError) return attachRequestErrorMeta(new ProviderError('network', e.message, { cause: e }), { kind: 'network', isRetryable: true })
   return new ProviderError('unknown', e instanceof Error ? e.message : String(e), { cause: e })

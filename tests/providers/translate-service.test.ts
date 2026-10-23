@@ -5,7 +5,10 @@ import { attachRequestErrorMeta } from '@/providers/request/retry-policy'
 import type { CachedEntry } from '@/cache/store'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createTranslateService, toErrorInfo, type CacheEntry, type CachePort, type TranslateServiceDeps } from '@/providers/translate-service'
-import { ProviderError, type TranslationProvider } from '@/providers/types'
+import { MockLanguageModelV4 } from 'ai/test'
+import { createGoogleWebProvider } from '@/providers/google-web'
+import { createOpenAICompatProvider } from '@/providers/openai-compat'
+import { malformedReply, ProviderError, type TranslationProvider } from '@/providers/types'
 import { RECORD_SHAPES } from '@/shared/diagnostics'
 
 const provider = (translate: TranslationProvider['translate'], id = 'mock', extra: Partial<TranslationProvider> = {}): TranslationProvider => ({
@@ -652,6 +655,75 @@ describe('a systemic failure must not be multiplied by batch-level retries (Code
   })
 })
 
+describe('a reply in no usable shape is not multiplied into paid requests (issue #78)', () => {
+  const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } }
+  /** an OpenAI-compatible model that answers every request with `text`, counting the requests */
+  const answering = (text: string) => {
+    const sent = { n: 0 }
+    const model = new MockLanguageModelV4({ doGenerate: async () => { sent.n++; return { content: [{ type: 'text', text }], finishReason: { unified: 'stop', raw: undefined }, usage, warnings: [] } } })
+    return { sent, provider: createOpenAICompatProvider({ baseURL: 'https://openrouter.ai/api/v1', apiKey: 'k', model: 'm' }, { model }) }
+  }
+  const callOf = (n: number) => ({
+    request: { segments: Array.from({ length: n }, (_, i) => ({ id: `s${i}`, text: `text ${i}` })), source: 'en' as const, target: 'zh-CN' },
+  })
+
+  it('a model that never answers in the protocol\'s shape: 4 segments cost 2 requests (the batch and its one retry), handed on as not isolatable', async () => {
+    // Prose where JSON was asked for, a model that ignores response_format: before, 1 + 3 batch retries + 4 alone = 8
+    // here, and the content side halved that twice over (40)
+    const { sent, provider: llm } = answering('Sure! Here is the translation of your segments.')
+    const service = build({ getProvider: async () => llm, queue: { baseRetryDelayMs: 0 } })
+    const res = await service.translate(callOf(4))
+    expect(res).toMatchObject({ ok: false, error: { kind: 'invalid-response', isolatable: false } })
+    expect(sent.n).toBe(2)
+  })
+
+  it('the same for fenced JSON and for an object of another shape', async () => {
+    for (const text of ['```json\n{"segments":[{"id":"s0","text":"x"}]}\n```', '{"translations":["a","b","c","d"]}']) {
+      const { sent, provider: llm } = answering(text)
+      const res = await build({ getProvider: async () => llm, queue: { baseRetryDelayMs: 0 } }).translate(callOf(4))
+      expect([text.slice(0, 12), res.ok, sent.n]).toEqual([text.slice(0, 12), false, 2])
+    }
+  })
+
+  it('a reply that parses with ids the request never had is isolated at the service and no further: 1 + 3 retries + 4 alone = 8, and the caller is not asked to split it', async () => {
+    vi.useFakeTimers()
+    const { sent, provider: llm } = answering('{"segments":[{"id":"other","text":"x"}]}')
+    const service = build({ getProvider: async () => llm })
+    const answer = service.translate(callOf(4))
+    await vi.runAllTimersAsync()
+    const res = await answer
+    expect(res).toMatchObject({ ok: false, error: { kind: 'invalid-response', isolatable: false } })
+    expect(sent.n).toBe(8)
+  })
+
+  it('the web translator answering 99 items for 100: 2 requests, not 104', async () => {
+    let fetched = 0
+    const short: typeof fetch = async (_url, init) => {
+      fetched++
+      const [[items]] = JSON.parse(String(init?.body)) as [[string[]]]
+      return new Response(JSON.stringify([items.slice(1)]), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+    const service = build({ getProvider: async () => createGoogleWebProvider({ fetch: short }), queue: { baseRetryDelayMs: 0 } })
+    const res = await service.translate(callOf(100))
+    expect(res).toMatchObject({ ok: false, error: { kind: 'invalid-response', isolatable: false } })
+    expect(fetched).toBe(2)
+  })
+
+  it('a malformed reply that comes right the second time is translated: the one retry is what it is for', async () => {
+    let calls = 0
+    const service = build({
+      getProvider: async () => provider(async r => {
+        if (++calls === 1) throw malformedReply('No object generated: could not parse the response.')
+        return { segments: r.segments.map(s => ({ ...s, text: `T:${s.text}` })), provider: 'mock' }
+      }),
+      queue: { baseRetryDelayMs: 0 },
+    })
+    const res = await service.translate(callOf(4))
+    expect(res.ok && res.result.segments.map(s => s.text)).toEqual(['T:text 0', 'T:text 1', 'T:text 2', 'T:text 3'])
+    expect(calls).toBe(2)
+  })
+})
+
 describe('createTranslateService: rate limiting, timeouts, cancellation (fake timers)', () => {
   const log = () => {
     const calls: { id: string; t: number }[] = []
@@ -981,8 +1053,9 @@ describe('attributing failures: isolatable travels with the error across the mes
     // The HTTP status goes along when the failure had one: the background tells a refused key (401) from a 403 by it
     expect(toErrorInfo(attachRequestErrorMeta(new ProviderError('auth', 'refused'), { statusCode: 401 }))).toEqual({ kind: 'auth', message: 'refused', isolatable: false, status: 401 })
     expect(toErrorInfo(attachRequestErrorMeta(new ProviderError('auth', 'forbidden'), { statusCode: 403 }))).toMatchObject({ kind: 'auth', status: 403 })
-    // A count mismatch is the typical “one segment threw the output off”
-    expect(toErrorInfo(new BatchCountMismatchError(4, 3, ['x'])).isolatable).toBe(true)
+    // A count mismatch is the typical “one segment threw the output off”, and the batch queue has located it already
+    // (retried, then each segment alone): what reaches the boundary is one segment's own failure, split no further (issue #78)
+    expect(toErrorInfo(new BatchCountMismatchError(4, 3, ['x'])).isolatable).toBe(false)
     expect(toErrorInfo(new Error('boom'))).toMatchObject({ kind: 'unknown', isolatable: true })
     const timeout = Object.assign(new Error('slow'), { name: 'RequestTimeoutError' })
     expect(toErrorInfo(timeout)).toMatchObject({ kind: 'timeout', isolatable: false })
