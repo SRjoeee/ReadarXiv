@@ -16,7 +16,8 @@
 //                                               catalog | 202 { position, stage, progress, retryAfterMs, layer: { units, head,
 //                                               parts } }, the objects made so far (every part's `prev`), parts given as the
 //                                               preparation's progress passes their share | 404, 429, faults as above
-//   GET  /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>  200 an object of the layer, by its whole digest (immutable) | 404
+//   GET  /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>  200 an object of the layer, by its whole digest (immutable; a delta's,
+//                                               layer-cut.mjs cutSample's `delta`, application/octet-stream) | 404
 //                                               { why: 'not-prepared' } for a digest it does not hold
 //   GET  /api/v1/base/<id>v<n>/<sha256>         our base page a head of ours names (BUNDLE 8, `layer4`: layer-cut.mjs cutSample's
 //                                               `base`), by its digest, no suffix: 200 application/pdf, 206 a range, 416 a range
@@ -203,7 +204,10 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...(four ? baseTag : {}) }, body: four ? layer4.catalog : sample.bundle }
   }
   function objectAnswer(segment, tag, sha) {
-    const bytes = segment === sample.segment && tag === CTAG5 ? layer4?.objects.get(sha) : null
+    const mine = segment === sample.segment && tag === CTAG5
+    // (a delta, BUNDLE 8's base of ours as an update over the original: a bundle object by its digest, PDF bytes, not JSON)
+    if (mine && layer4?.delta && sha === layer4.delta.sha256) return { status: 200, headers: { ...COMMON, 'content-type': 'application/octet-stream', 'cache-control': IMMUTABLE, ...baseTag }, body: layer4.delta.data }
+    const bytes = mine ? layer4?.objects.get(sha) : null
     if (!bytes) return missing('not-prepared')
     return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...baseTag }, body: bytes }
   }

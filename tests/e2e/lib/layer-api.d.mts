@@ -54,7 +54,7 @@ export interface LayerApi {
   etag: string
 }
 /** the sample's layer objects (layer-cut.mjs cutSample's: a layer of ours, BUNDLE 8), and the base page its head names */
-export interface Layer4 { objects: Map<string, Uint8Array>; refs: { head: unknown; units: unknown[]; parts: unknown[]; end: unknown }; catalog: Uint8Array; base?: { bytes: number; sha256: string } }
+export interface Layer4 { objects: Map<string, Uint8Array>; refs: { head: unknown; units: unknown[]; parts: unknown[]; end: unknown }; catalog: Uint8Array; base?: { bytes: number; sha256: string } | null; delta?: { sha256: string; data: Uint8Array } | null }
 /** the served faces the stand-in gives every face it is told of: their ids, one slice's code points, its file's bytes */
 export interface StandInFaces { ids: readonly string[]; ranges: readonly number[]; bytes: Uint8Array }
 export declare const FACE_GROUP: string
