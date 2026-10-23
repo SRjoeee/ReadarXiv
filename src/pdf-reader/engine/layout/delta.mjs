@@ -721,7 +721,8 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     }
   }
   /** `task` destroyed; a destroy that throws is the failure only where nothing failed before it (`failed`), never in its place */
-  const destroyed = async (task, failed) => { try { await task?.destroy?.() } catch (d) { if (!failed) throw d } }
+  // (a failed allocation of the destroy's own goes on whatever failed before it: the run's, never the proof's refusal)
+  const destroyed = async (task, failed) => { try { await task?.destroy?.() } catch (d) { if (!failed || isMemoryError(d)) throw d } }
   /** a document's text records, each page's, read here */
   const read = (bytes, tag) => heard(tag, async () => {
     let task = null, failed = false
@@ -756,19 +757,43 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       throw e
     }
     handed[tag] = doc
-    const n = doc.numPages, records = new Array(n).fill(null), otherwise = new Set()
+    const n = doc.numPages, records = new Array(n).fill(null), otherwise = new Set(), twice = new Set(), failed = new Map()
     let reading = true
+    // (the reader holds proxies whose methods are the ones taken here, before it has them, and which it cannot change: no record of
+    // a function or a box the reader put there)
+    const fixed = what => ({ set: () => { throw new TypeError(`the ${tag} reader may not change its ${what}`) }, defineProperty: () => { throw new TypeError(`the ${tag} reader may not change its ${what}`) }, deleteProperty: () => { throw new TypeError(`the ${tag} reader may not change its ${what}`) } })
     const own = (t, k) => { const v = Reflect.get(t, k); return typeof v === 'function' ? v.bind(t) : v }
-    const pageOf = (page, p) => new Proxy(page, {
-      get: (t, k) => (k !== 'getTextContent' ? own(t, k) : async (...a) => {
-        const content = await t.getTextContent(...a)
-        if (reading && Number.isInteger(p) && p >= 1 && p <= n) { if (a.length) otherwise.add(p); else records[p - 1] = await textRecordOf(t, content) }
-        return content
-      }),
-    })
-    try { await reader.read(new Proxy(doc, { get: (t, k) => (k !== 'getPage' ? own(t, k) : async p => pageOf(await t.getPage(p), p)) })) } finally { reading = false }
-    const other = [...otherwise].sort((a, b) => a - b)[0]
+    const pageOf = (page, p) => {
+      const textOf = page.getTextContent.bind(page), box = { view: page.view, rotate: page.rotate, userUnit: page.userUnit }
+      return new Proxy(page, {
+        ...fixed('page'),
+        get: (t, k) => (k !== 'getTextContent' ? own(t, k) : async (...a) => {
+          const content = await textOf(...a)
+          if (reading && Number.isInteger(p) && p >= 1 && p <= n) {
+            if (a.length) otherwise.add(p)
+            else {
+              // (a record the proof cannot make is the proof's to say, the page's text still the reader's; a failed allocation goes on)
+              let record = null
+              try { record = await textRecordOf(box, content) } catch (e) { if (isMemoryError(e)) throw e; failed.set(p, e) }
+              // (a page read again must give the same text)
+              if (record && records[p - 1] && textRecordDiffers(record, records[p - 1]) !== null) twice.add(p)
+              if (record) records[p - 1] = record
+            }
+          }
+          return content
+        }),
+      })
+    }
+    const getPage = doc.getPage.bind(doc)
+    const view = new Proxy(doc, { ...fixed('document'), get: (t, k) => (k !== 'getPage' ? own(t, k) : async p => pageOf(await getPage(p), p)) })
+    try { await reader.read(view) } finally { reading = false }
+    const first = set => [...set].sort((a, b) => a - b)[0]
+    const bad = first(failed.keys())
+    if (bad !== undefined) throw new TypeError(`page ${bad} of the ${tag} document: its record could not be made: ${String(failed.get(bad)?.message ?? failed.get(bad))}`)
+    const other = first(otherwise)
     if (other !== undefined) throw new TypeError(`page ${other} of the ${tag} document was read with other options than the proof's`)
+    const again = first(twice)
+    if (again !== undefined) throw new TypeError(`page ${again} of the ${tag} document gave another text when read again`)
     const unread = records.indexOf(null)
     if (unread >= 0) throw new TypeError(`page ${unread + 1} of the ${tag} document was not read`)
     return records
@@ -789,8 +814,8 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     })
   } catch (e) {
     if (isMemoryError(e)) {
-      // (no result reaches the host: what it was handed is let go here)
-      for (const d of Object.values(handed)) await d?.loadingTask?.destroy?.().catch?.(() => {})
+      // (no result reaches the host: what it was handed is let go here, each in turn, nothing of it in the failed allocation's place)
+      for (const d of Object.values(handed)) { try { await d?.loadingTask?.destroy?.() } catch {} }
       throw e
     }
     return no(`PDF.js: ${String(e?.message ?? e)}`)
