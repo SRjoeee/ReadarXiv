@@ -89,8 +89,11 @@ async function sha256Of(bytes) {
   return hexOf(d)
 }
 
-/** the canonical forms, interned across the documents read: `of(doc)` gives a document's { ofRef, ser } */
+/** the canonical forms, interned across the documents read: `of(doc)` gives a document's { ofRef, ser }. An optional-content
+ *  group or membership (/Type /OCG, /OCMD) is matched by its identity alone: by reference, a form of its document and object;
+ *  direct, none (unmatched, copied) */
 function canonical(PL, heldMax, work) {
+  const isOC = v => v instanceof PL.PDFDict && ['/OCG', '/OCMD'].includes(v.get(PL.PDFName.of('Type'))?.asString?.())
   const { PDFRef, PDFDict, PDFArray, PDFRawStream, PDFName, PDFNumber, PDFString, PDFHexString, PDFBool, PDFNull } = PL
   const texts = new Map(), buckets = new Map(), hash = keyedHash()
   let held = 0
@@ -116,8 +119,9 @@ function canonical(PL, heldMax, work) {
   }
   // (a dict, an array or a stream is its form's token, `@<id>`, direct or reached by a reference alike: a resource written
   // inline in one document and as an object in the other is the same; a reference to a number, a name… is that value's form)
+  let docs = 0
   function of(doc) {
-    const memo = new Map(), busy = new Set()
+    const memo = new Map(), busy = new Set(), seq = docs++
     const ofRef = (ref, depth = 0) => {
       const k = `${ref.objectNumber} ${ref.generationNumber}`
       if (memo.has(k)) return memo.get(k)
@@ -126,7 +130,9 @@ function canonical(PL, heldMax, work) {
       let token
       try {
         const obj = doc.lookup(ref)
-        token = obj === undefined ? 'null' : obj instanceof PDFRef ? null : ser(obj, depth + 1)
+        // (an optional-content group or membership is its object, never its content: two of equal dicts, one ON and one OFF,
+        // are two layers, and nothing that names one is another document's)
+        token = obj === undefined ? 'null' : obj instanceof PDFRef ? null : isOC(obj) ? `@${intern(`OC${seq}:${k}`)}` : ser(obj, depth + 1)
       } finally { busy.delete(k) }
       memo.set(k, token)
       return token
@@ -143,7 +149,7 @@ function canonical(PL, heldMax, work) {
       work.spend(16)
       if (v instanceof PDFRef) return ofRef(v, depth)
       if (v instanceof PDFRawStream) { const d = serDict(v.dict, true, depth); return d === null ? null : token(`S${d}#${dataId(v.contents)}`) }
-      if (v instanceof PDFDict) return token(serDict(v, false, depth, drop))
+      if (v instanceof PDFDict) return isOC(v) ? null : token(serDict(v, false, depth, drop))
       if (v instanceof PDFArray) {
         const parts = []
         for (const x of v.asArray()) { const s = ser(x, depth); if (s === null) return null; parts.push(s) }
@@ -386,6 +392,36 @@ function sameGraph(PL) {
   }
 }
 
+/** why the composed document's optional content is not ours one to one (null where it is): ours to its by the position of each
+ *  in /OCProperties' /OCGs, then by each replaced page's /Properties names; a map that is not a bijection is a merge or a split */
+function ocIdentityWhy(PL, U, X, ourOcp, pages) {
+  const { PDFRef, PDFDict, PDFArray, PDFName } = PL
+  const fwd = new Map(), back = new Map()
+  const key = r => `${r.objectNumber} ${r.generationNumber}`
+  const pair = (u, x, where) => {
+    if (!(u instanceof PDFRef) || !(x instanceof PDFRef)) return u instanceof PDFRef || x instanceof PDFRef ? `${where}: a layer named by reference on one side only` : null
+    const a = key(u), b = key(x)
+    if ((fwd.has(a) && fwd.get(a) !== b) || (back.has(b) && back.get(b) !== a)) return `${where}: two layers of ours one, or one of ours two`
+    fwd.set(a, b)
+    back.set(b, a)
+    return null
+  }
+  const look = (D, v) => (v instanceof PDFRef ? D.lookup(v) : v)
+  const ocgs = D => { const c = look(D, D.trailer.root), o = c instanceof PDFDict ? look(D, c.get(PDFName.of('OCProperties'))) : undefined, a = o instanceof PDFDict ? look(D, o.get(PDFName.of('OCGs'))) : undefined; return a instanceof PDFArray ? a.asArray() : [] }
+  if (ourOcp !== undefined) {
+    const u = ocgs(U), x = ocgs(X)
+    if (u.length !== x.length) return 'its /OCGs are not ours one to one'
+    for (let i = 0; i < u.length; i++) { const why = pair(u[i], x[i], '/OCGs'); if (why) return why }
+  }
+  for (const [up, xp] of pages) {
+    const props = (D, page) => { const r = look(D, page.inherited.Resources), p = r instanceof PDFDict ? look(D, r.get(PDFName.of('Properties'))) : undefined; return p instanceof PDFDict ? p : null }
+    const pu = props(U, up), px = props(X, xp)
+    if (!pu) continue
+    for (const [k, v] of pu.entries()) { const why = pair(v, px?.get(k), `a page's /Properties ${k.toString()}`); if (why) return why }
+  }
+  return null
+}
+
 const near = (a, b) => Math.abs(a - b) <= 0.01
 /** the console taken by one proof at a time in this process (its PDF.js reads in turn): a proof that overlaps another waits for
  *  it, so that neither keeps the other's capture as the console's own nor reads the other's messages as its documents' */
@@ -478,6 +514,10 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       const xo = xc instanceof PL.PDFDict ? xc.get(PL.PDFName.of('OCProperties')) : undefined
       if (xo === undefined || !same(X, xo, U, ourOcp)) return no('its /OCProperties is not ours')
     }
+    // (optional content by identity: each group or membership of ours one object of the composed document's and no two of ours
+    // one, over /OCProperties' /OCGs and every replaced page's /Properties)
+    const ocWhy = ocIdentityWhy(PL, U, X, ourOcp, [...rep].map(p => [uP[p - 1], xP[p - 1]]))
+    if (ocWhy) return no(ocWhy)
     const drop = new Set(['/Contents', '/Resources'])
     const contents = (doc, page) => contentsOf(PL, doc, page.node)
     for (let p = 1; p <= N; p++) {
