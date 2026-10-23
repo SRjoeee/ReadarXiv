@@ -716,6 +716,11 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   dropped original stops no later part, no `again()`. A part the door refuses stops the parts added to that door there,
   with one warning; the side stays open. A refusal of the whole side carries a code (`head`, `units`, `index`, `base`,
   `composed`, `open`).
+- **The link layer under a delta.** The delta keeps the original's `/Annots` on a replaced page (about 91 % of its link rectangles
+  match ours); the layer draws its own links from the layout (the door's `links`, one wrapper). The composed document's annotation
+  layer is rendered nowhere: the side draws the copy canvas, the SVG and that wrapper, never a viewer's annotation layer, and the
+  copy is rendered with `AnnotationMode.DISABLE` on a replaced page so that none of the original's appearances are drawn into it.
+  `layer-side.test.ts` L18 pins it: no annotation element on a laid page, each link once, all in the wrapper.
 - **A page of a part with no layout** (over our base: the engine's check refused the part, or its producer recorded none, a
   part's `layout` null) draws nothing and erases nothing, so its pages would show our base page in other line breaks beside
   arXiv's. What TeX's positions do not draw is arXiv's PDF: such a page (some part holds it and every part that holds it has no
@@ -732,7 +737,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   the page drawn from the composed document, because its pages are our compile's and the erase rectangles, crops and colours
   are in their coordinates, not on arXiv's rendering the left shows: the left's canvas and the place's, which are the
   original's, are never asked, at the commit or at a zoom's recopy; one page render a laid page, 10 to 25 ms on the sample
-  where the canvas was free) and its SVG, put in one task, in place: the place's size and the pane's
+  where the canvas was free; held as a delta over arXiv's PDF (§19.8), a page the delta does not replace (`base.replaced`) IS the
+  original's own bytes in the composed document, so the left's canvas is its copy source again and the composed document is not
+  rendered for it, while a replaced page is drawn from the composed document with annotations off) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
   600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at. A page this
   door laid that leaves the view lets its SVG and its copy go and holds an
@@ -882,7 +889,18 @@ contract §4.3), started by the host once a translated display is shown in a vis
    (S-R-24). What the left shows is kept (`leftShows`: the tab proven to be an orig, or our copy of one) and compared with every
    head's orig, which a retry may change: the same, nothing is fetched; another, the newly named original is shown before the
    layer is used (none to be had: no layer), never the new layer over the old PDF.
-5. **The composed document**: our base page by ranges at `/api/v1/base/<id>v<n>/<sha256>` (`openRanged`, its own address: the
+   **A base held as a delta** (`base.kind` 'delta', §19.8): `bindOurs` fetches the delta object by the head's digest through the
+   layer's object route (`objectBytes`, this machine's store first, `DELTA_MS` for the ask, `DELTA_MAX_BYTES` the bound) and holds it
+   to `checkDelta(head, bytes)` (length, digest, its section over `orig`, its startxref the head's) before it is used; a delta that
+   does not check, or past the bound, is no layer. Pages `check.pages` [M, N] with M at most N (a paper of several toplevel
+   sources) bind; the pages past M are the original's and the layer draws none there. The composed document is then ONE byte
+   source: the ORIGINAL by ranges from our server's copy (`/api/v1/original/<id>v<n>`, bound by `head.orig.bytes` and the tag the
+   layer's objects name, else the first answer's), then `delta ++ the tails` in memory after its last byte (`composedRange`
+   unchanged; `/api/v1/base` is asked for a whole base alone). The composed document IS arXiv's bytes there, so the proof of the
+   tab's PDF against `head.orig` applies exactly as above (`leftShows`, `proveTab`, `showOurs`), also across a retry whose head
+   names another orig. The extension reads the original from our server's copy, not the tab's own source (it holds none by
+   ranges); the left pane and the composed document are two streams of the same bytes there, which the web, one store, is not.
+5. **The composed document** (a whole base): our base page by ranges at `/api/v1/base/<id>v<n>/<sha256>` (`openRanged`, its own address: the
    digest of its bytes, so one object per URL), every answer a 206 of exactly the bytes asked, of the head's length and the tag
    of the first answer (a `Bound` may carry the length alone: no route names a tag beforehand), the tails after its last byte;
    else the source refused (a page it cannot read stays the original's, the side's stall). A read with nothing from our server
@@ -1300,7 +1318,7 @@ The edge cases, decided:
 | `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
-| `RULES_SCHEMA` (`rules/layout.mjs`, `4`: `adaptiveFill.band` read against the page's own paragraphs, 1b-C; 3 before) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `5`: `fillLeadRel` added, the fill's top relative to the original's pitch; 4 before it: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
@@ -1366,6 +1384,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `fillSize` | script | fit | 0 to 1.5, step 0.05 | How far a unit's size may grow to fill a loose original's paragraph, × the original's size; 0 is off. |
 | `adaptiveFill` | script | fit | band, track, size; or none | Spreading each unit's lines over its original's space, the page's body units to one leading and one size, the leading within a band of the page's own paragraphs' (D6, page by page); empty keeps the script's leading on the original's pitch alone (B). |
 | `fillLead` | script | fit | 1 to 3, step 0.05, or none | The loosest line pitch the fill spreads a unit's lines to, in em of the size it is drawn at; empty: the original's own pitch. |
+| `fillLeadRel` | script | fit | 1 to 3, step 0.05, or none | The loosest line pitch the fill spreads a unit's lines to, as a multiple of the original's own pitch, where that is looser than the pitch above; empty: the pitch above alone. |
 | `leftover` | script | fit | `foot`, `pack` | Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it. |
 | `keepAll` | script | breaking | yes or no | Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters. |
 | `cjkQuotes` | script | breaking | yes or no | Whether curly quotes, dashes, the ellipsis and the middle dot are set as CJK characters. |
@@ -1394,6 +1413,18 @@ What a host (the web's door, the extension's session, the gate, the lab) calls. 
   - **`etag`** is the answer's `ETag` header, given where there is one. It is compared with the SHA-256 of the bytes given to `readRules`, the body decoded of any content coding, and a different one is refused with the field `etag`. Two forms are read: the strong `"<sha256>"` and the weak `W/"<sha256>"`, which a CDN may put in the strong one's place when it recodes the body. Any other form is refused. A host passes the header as it came, or `null`.
 - **The reader's choice** is the same in both readers: the server's answer, when one comes and is read; else the last read answer the reader cached; else the built-in. The server is the authority, so a lower version is taken like any other. A refused answer is ignored and counted, and the reader keeps what it had. The set is chosen when the composed document is ready, and an answer that has not come by then serves the next open: a rule-set fetch never delays a page.
 - **A `rules` must come from `readRules` or `parseRules`**, or be `BUILTIN_RULES`. The door checks only a set's shape (an object holding `scripts` and `languages`, else a `TypeError`), not its values; a set built by hand can fail to resolve a target, or draw badly. `BUILTIN_RULES` is frozen to every depth and typed read-only, so a set to edit is `structuredClone(BUILTIN_RULES)`.
+
+### 18.7 Layout decisions of 2026-10-23
+
+Decisions made by the maintainer by looking at crops, and what they changed. The drawing code reads them at read time: none moves a version token (§18.1), and `RULES_SCHEMA` rises only for the field the fill rule adds.
+
+**A Chinese or Japanese line breaks before an inline formula (PR #438).** After a CJK character or mark a formula crop no longer glues to it: a script that breaks between CJK characters (`keepAll` false) may end the line before the crop, as xeCJK's `\CJKecglue` allows. A mark no line ends with (an opening bracket), a lead's end and a kern stay glued.
+
+**A letter-spaced line squeezes (PR #438).** A line takes the group it misses only when, without it, it would stretch more than `STRETCH_MIN` = 0.05 em a gap, the overflow is at most what it can give, and that squeeze a gap is less than the stretch. What it can give: the blank halves of comma-, full-stop- and bracket-type marks, spaces down to `spaceMin`, then `SQUEEZE` = 0.02 em a gap, never past the tracking floor (`trackMin`) and never below the tracking the page fill raised (`fitTrack`). Only marks whose ink sits in one half of the em in every face the layer draws are cut: comma, full stop, enumeration comma, brackets and quotes. Never the colon, the semicolon, `!` or `?`: the CJK face centres them, and a question mark cut by half ran 0.22 em into the next character. Measured on the 53 papers of the release route's sweep: lines more than 0.15 em a gap over their unit's least 403 to 265, ragged CJK lines 625 to 457, the owner's line (2610.10069 page 7, unit 49) 0.194 to 0.022 em a gap. Long formulas stay stretched: no new cap and no new ragged rule.
+
+**The fill's top is relative to the original's pitch for Chinese (`fillLeadRel`).** The fill spreads a unit's lines up to a top; the em top (`fillLead`, 2 em of the size drawn) equals the original's own pitch on a double-spaced original and is below what the frame allows, so the paragraph ended early (2610.11256 page 12, unit 75: 7 lines of 9). The top is now the looser of the em top and `fillLeadRel` = 1.3 times the original's pitch, scaled by the fit's size; 1.3 is the engine's own Chinese `leadBase`, so Chinese reads at the same density as its original. Chosen by the owner by eye on crops, 2026-10-23, over 1.5 and over replacing the em top outright (which tightened 3,035 single-spaced units). Simplified and Traditional Chinese only; Japanese and Korean stay off until measured. Measured on the 53 papers (Chinese): 168 units whose leading shows change by a median of 0.20 pitch (0.36 em), none tighter, none past its frame, no new collision, and a page of single-spaced originals is unchanged. It acts only where the em cap binds: a single-spaced original keeps its top, and the band, tracking, size and the leftover below the paragraph are unchanged. For the same two scripts the halving that finds the loosest leading now tries the top itself (it was left untried when the fraction of a step was under a half, so the unit took neither tracking nor the page's size). With that step more pages grow, and a unit of one line keeps its own size in these scripts: it has no frame to spread over, and a larger size only carries its ink past the original's line (a note under a table's rule, 2610.21924 page 18, whose formulas touched the rule at x1.1).
+
+**Judging a block (the rubric for samples and rulings).** The owner, 2026-10-23: judge per block, not per line. A block is better, the same or worse than its base on three questions. (i) Uniformity inside the block: no line stretched or squeezed out of step with the others. (ii) The block lands in place: each sentence at the right place in its paragraph, paragraph boundaries where the original has them. (iii) Rhythm against its neighbours: leading and density consistent with the page's other blocks. A shift under one pitch counts as the same. Line-level shifts and per-line offsets are normal and are not a verdict.
 
 ## 19. The engine's contract
 
@@ -1484,7 +1515,9 @@ tags they ask by (`layer-proto/bundle.mjs`).
   progress, retryAfterMs }`, 404 `{ why }` (`not-prepared`, `no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`) or 429
   `{ retryAfterMs }`; `POST …/<tag>/prepare` (JSON body `{}`) answers 202, 200 `{ ready: true }`, 404 or 429; `GET
   /api/v1/original/<id>v<n>` is `base.url`, our copy of arXiv's bytes; `GET /api/v1/base/<id>v<n>/<sha256>` (no suffix) is our
-  base page a head of ours names (§19.7), by its digest, by ranges, a strong `ETag`, any origin, immutable. The tag is the engine's `VTAG`, or its contract
+  base page a head of ours names (§19.7), by its digest, by ranges, a strong `ETag`, any origin, immutable; a head held as a delta (§19.8) names no
+  such page: its delta is a bundle object, `GET /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>` as bytes (`application/octet-stream`), and its
+  composed document reads `/api/v1/original` by ranges. The tag is the engine's `VTAG`, or its contract
   tag `CTAG` where the server redirects to the newest bundle made under it (§18.4). The public GETs answer CORS `*`; the prepare
   POST relies on the extension's host permission.
 - **What the reader sends.** A paper's id and version, and the engine's public versions (the tag). Nothing else leaves the machine.
@@ -1845,3 +1878,80 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   every year's change would. Over our own page the maker locates as many units as over arXiv's or more (2307.16209: 453 to
   464 of 466, its placeholders found 3,485 to 3,571, lost 6 to 2; the other papers of the gate pack the same).
 
+
+### 19.8 Our base as an incremental update over arXiv's PDF (the delta)
+
+Our base page is stored not as a whole PDF but as one **incremental-update section** over arXiv's original, so that the
+composed document is `orig.bytes ++ delta ++ the remover's tails`: one byte source for the left pane and the layer, and only
+what our compile changed is stored (the coordinator's GO of 2026-10-23). `kind: 'full'`, the whole PDF of 19.7, stays the
+fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both), LAYOUT 16, the catalog key unmoved.
+
+- **The builder** (`layout/delta.mjs` `deltaOf(origBytes, finalBytes, { PL, replacedPages })`, pure and deterministic, in the
+  pipeline entry). For each page the layer lays on whose contents and resources are not canonically arXiv's: the original's
+  page object written again under its own number and generation, every key kept but `/Contents` and `/Resources`, which are
+  ours; our content streams copied byte for byte as new objects; a `/Resources` dict of our entries, each the original's object
+  where the two are canonically equal (the whole sub-graph reused), else copied with its closure from the original's `/Size`
+  up. Names stay ours. Nothing else is written: catalog, page tree, outlines, destinations, annotations and info stay the
+  original's. The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
+  remover's `makeAddon` writes its tails with too: a table, or a stream of `/W [1 4 2]`, no hybrid), numbers in runs, objects
+  uncompressed, `/Prev` the original's startxref, `/Root` `/Info` `/ID` the original's, its startxref in composed offsets.
+- **The canonical form**: a stream is its dict less `/Length` and the exact bytes its **resolved** `/Length` names (an
+  indirect one followed, as PDF.js reads it: `layout/xref.mjs` reads every object where the cross-reference puts it; the object
+  layer's own scan to `endstream` reads a stream ending in CR or LF a byte short); a dict its sorted entries, an array its
+  items, a reference the form of what it names (direct or indirect alike); the back links `/Parent` `/P` `/Prev` `/Next`
+  `/First` `/Last` cut by the dict's own context, never by the value being a reference: `/Parent` of a page-tree node, `/P`
+  and `/Parent` of an annotation, `/P` of a structure element, the outline's chain; never in an optional-content membership
+  (its `/P` policy, direct or by reference, is data) or a dict of no such context; a cycle leaves the object unmatched (copied), never an error. Forms are interned (exact equality); stream
+  bytes are bucketed by a hash of secret random seeds and compared whole, and the whole build spends at most
+  `DELTA_WORK_MAX` (2^31 bytes hashed or compared and objects read: the 46 MB pair about 150 million), so no input makes a
+  bucket or the build long. Its `/Size` leaves the remover's tails `DELTA_TAIL_ROOM` (2^20) numbers below `OBJECT_MAX`.
+- **Refused, the whole base kept** (`DELTA_WHYS`): an original it cannot read safely (`delta-parse`, `delta-encrypted`,
+  `delta-xref`: hybrid, an entry not at its `n g obj`, a section that does not parse; `delta-stream`: a `/Length` not ending at
+  `endstream`), our pages more than arXiv's (`delta-pages`), a replaced page of ours whose box (the CropBox within the MediaBox, inherited), rotation or `/UserUnit` is not arXiv's page's, which the delta's page dict keeps (`delta-boxes`), a bound (`delta-bound`: `DELTA_MAX_BYTES` 24 MiB, more than
+  `DELTA_MAX_SHARE` 0.35 of our whole base page, `DELTA_OBJECTS_MAX` 200,000 objects, `DELTA_HELD_MAX` 64 MiB of forms held,
+  `DELTA_DECODED_MAX` 48 MiB of object and cross-reference streams decoded), nothing to replace (`delta-empty`), the proof
+  (`delta-proof`), a delta the page pass was given that does not check (`delta-shape`).
+- **The proof** (`proveDelta(origBytes, delta, finalBytes, { PL, getDocument, documentOptions, replaced })`, in the box, the
+  structural one; pixels are the lab's gate): every entry of the section at its `n g obj` (`delta-wire.mjs` `deltaSection`),
+  `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again by the object
+  layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a pairwise graph
+  comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
+  gives (its console captured, each document read in turn); the original's page count; every page's box, rotation, user unit and text (strings and
+  places within 0.01) ours on replaced pages and the original's elsewhere. What the delta overrides of the original is bounded:
+  the replaced pages' objects exactly (no catalog, no other page), its `/Size` not below the original's, and its trailer the
+  original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
+  cross-reference PDF.js recovers on its own (any such message on the original alone: it then indexes the whole file, where an
+  unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
+  entry of a type PDF.js does not know. Any other failure is `delta-proof`.
+- **The host's contract.** At the end of the maker child, once the maker let its documents go: `deltaOf(orig, final, { PL,
+  replacedPages })` and `proveDelta(...)`; then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, ..., delta: { bytes,
+  sha256, replaced, stats } } })` (or `delta: { refused, why }`). The page pass checks it again (shape, bounds, digest, the
+  section over `orig`, the head's reader): the head's base becomes `kind: 'delta'` where it checks, else stays `full` with
+  `stats.delta: { kind: 'full', why }` — never a refusal of the paper. The page pass binds `replaced` to the delta's bytes: each
+  replaced page's object (arXiv's PDF.js document's page refs) among the section's entries, and no other page's. One rule
+  for what is laid: **a page laid is a page replaced**. Under a delta the maker reads the composed document (our page where
+  the delta replaces it, arXiv's elsewhere: `prefixDoc` with the replaced pages), so an unreplaced page's draw and text are
+  the original's, and the line check marks every page not replaced undrawable, so no unit is laid there. The remover reads the composed document (`removerOf({
+  bytes: orig ++ delta })`): the delta is the tails' base, the first chain's `end` O + D and `xref` the delta's startxref, its
+  fresh numbers after the delta's `/Size`; `TAIL_CAP` binds the tails alone; `tailLinks`' `root` and `first` mean nothing of
+  the delta. The delta is a bundle object beside the units chunks, content-addressed under the CTAG: `deltaKey` =
+  `layer/<seg>/<ctag>/<sha256>.delta` (its own suffix: PDF bytes, not JSON), not a `/base/` PDF. A holder of its bytes (the
+  Worker before it commits it, a reader before it composes it) checks them with `checkDelta(head, bytes)` (length, digest,
+  `deltaSection` over `orig` and its startxref the head's), which the layer entry exports with `deltaSection`.
+- **The head** (`format.mjs`): `base { source: 'ours', kind: 'delta', bytes, sha256 (the section's), xref (its startxref,
+  composed: after `orig.bytes`), pages, tree, check { pages: [M, N], boxes: 'equal', carried }, replaced, stats }` with `orig
+  { bytes, sha256, xref }` required (the original the delta extends, its startxref the delta's /Prev, so that a holder checks
+  the section with no read of the original; a `full` head's `orig` takes no `xref`; no `over`). `replaced`: 1-based inclusive ranges `[[from, to], …]`,
+  ascending, non-overlapping, adjacent ones merged, within our M pages, 1 to `REPLACED_MAX` 4096 (`replacedWhy`). `stats`,
+  integers only: `{ replaced, reused: { fonts, images, forms, other }, included: { bytes, objects } }`. A head without `kind` is
+  `full`; a `full` head keeps `check.pages` [N, N]. The catalog's base of a delta: `{ source: 'ours', kind: 'delta', object: {
+  key: deltaKey(id, version, sha256), sha256, bytes } }`. `layerDraws` is true for ours of either kind. The extension's run
+  binds a delta head (§11.10 item 4) and the layer side takes its copies by the replaced pages (§11.8).
+- **Several toplevel sources** (2610.20030: arXiv joins 8 + 4 pages, we compile the first): only with a delta may our pages be
+  fewer (`checkOurBase` `toplevels` > 1 and `delta`): the base page's document is ours then arXiv's past M (`base.mjs`
+  `prefixDoc`), the boxes compared on our M pages, `check.pages` [M, N], `replaced` within 1..M, the pages past M the
+  original's by construction. Every other paper keeps the equal count (`boxes`).
+- **Measured** (2026-10-23, the gate pack's 7 pairs and 2602.23285v2, this builder against the spike's): 2,078,038 delta
+  bytes over 83,666,965 of originals, 2.48 % (the spike 2.48 %); the largest 0.70 MiB (2307.16209v1); per paper 0.30 % to
+  30.05 % of the original and at most 28.5 % of our base page; the proof passes on 8 of 8; two builds give the same bytes; the
+  build 15 to 160 ms, the proof 0.2 to 1.4 s (Node).

@@ -8,6 +8,7 @@ import { makerOf, OPS_MS } from '@/pdf-reader/engine/layout/make.mjs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { settleWithClock } from './helpers/clock'
+import { deltaOf } from './helpers/delta-pdfs'
 import { arxivOf, endOf, markedOf, marksOf, type Run, text, unit, words, type World } from './helpers/make-world'
 
 // The page pass tells each page's draw geometry in its left part (E-C): read with the page's operator list by the maker, taken once as
@@ -338,5 +339,31 @@ describe('layerOfPaper: no draw of our page in a bundle over arXiv\'s PDF', () =
     const streamed = await passOf(w, {}, { oracle: capture as never, ours: (await oursWith(w, breaking(w))) as never })
     expect(headOf(streamed.heads[0] as Written).base.source).toBe('ours')
     expect(streamed.lefts.get(1)).not.toBeNull()
+  })
+})
+
+describe('layerOfPaper over a delta that replaces some pages (Codex on #439)', () => {
+  it('a page the delta does not replace is the original\'s: its draw and text the composed page\'s, no unit laid on it', async () => {
+    // (arXiv's pages 2 and 3 swapped against ours; the delta replaces page 1 alone)
+    const w = worldOf(), ourPages = w.pages, theirPages = [ourPages[0]!, ourPages[2]!, ourPages[1]!]
+    const lefts = new Map<number, Draw | null>(), parts: Written[] = [], heads: Written[] = []
+    const delta = await deltaOf(BASE, [1])
+    const r = await layerOfPaper({
+      paper: PAPER, source: source(w), marks: await readOf(w), arxiv: { doc: drawable(arxivOf(theirPages)), text: await readArxivText(arxivOf(theirPages)) },
+      ours: { doc: drawable(arxivOf(ourPages)), ...OURS, text: await readArxivText(arxivOf(ourPages)), check: { marks: w.marks.length }, delta }, orig: BASE, tree: '2025', OPS, pdfjs: '6.3.289', image: '1',
+      onHead: h => { heads.push(h) },
+      onLeft: l => { lefts.set((l as Written & { page: number }).page, (JSON.parse(new TextDecoder().decode(l.bytes)) as { draw: Draw | null }).draw) },
+      onPart: p => { parts.push(p) },
+    })
+    expect(r).toMatchObject({ stats: { delta: { kind: 'delta', replaced: 1 } } })
+    expect(JSON.parse(new TextDecoder().decode((heads[0] as Written).bytes)).base).toMatchObject({ kind: 'delta', replaced: [[1, 1]] })
+    // (page 2's draw is the composed page 2, arXiv's: our page 3's words, none of ours of page 2)
+    const page2 = JSON.stringify(lefts.get(2))
+    expect(page2).not.toContain('w200')
+    expect(page2).toContain('w300')
+    expect(JSON.stringify(lefts.get(1))).toContain('w100')
+    // (no unit laid on pages 2 and 3: the one laid is page 1's)
+    const laid = parts.flatMap(p => (JSON.parse(new TextDecoder().decode(p.bytes)).layout?.units ?? []).map((u: unknown[]) => u[0]))
+    expect(laid).toEqual([0])
   })
 })

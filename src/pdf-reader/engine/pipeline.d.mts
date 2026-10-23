@@ -29,7 +29,7 @@ export type { FinalPass, OwnVerdict } from './layout/paper.mjs'
 // the TeX Live year arXiv's PDF says it was built on (its pdfTeX banner), read before any compile
 export { texLiveOfPdf } from './layout/guard.mjs'
 // our compile as the base page (BUNDLE 8): the checks the final pass and our pages pass, and arXiv's date the compiles take
-export { BOX_TOL, DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, MARK_TOL, boxesCheck, boxesOfPdf, creationEpochOf, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, hasMarkText, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf } from './layout/base.mjs'
+export { BOX_TOL, DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, MARK_TOL, boxesCheck, boxesOfPdf, prefixDoc, creationEpochOf, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, hasMarkText, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf } from './layout/base.mjs'
 export type { PdfLike } from './layout/base.mjs'
 export { LINK_TEXT_PIXELS, LITE_PDFJS, NO_IMAGE_PIXELS, liteWorkerSource } from './layout/pdf-lite.mjs'
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, REFUSED_MAX, REMOVAL, checkAddonManifest, checkBoxes, parseAddonManifest } from './layout/addon-manifest.mjs'
@@ -41,11 +41,16 @@ export type { AlignFacts } from './layout/remove.mjs'
 export { ANSWER_CAP, ASK_CAP, ASK_VALUES, ENTRIES_CAP, ENTRIES_VALUES, REMOVER_WHYS, encodeAsk, encodeEntries, readAsk, readEntries } from './layout/chain-wire.mjs'
 export type { Ask, AskChain, AskPlan, RemoverWhy } from './layout/chain-wire.mjs'
 export { chainedAddon } from './layout/chain.mjs'
+// our base as an incremental update over arXiv's PDF (the delta): built and proved in the maker child, its section read back, its why
+export { DELTA_DECODED_MAX, DELTA_HELD_MAX, DELTA_WORK_MAX, deltaOf, proveDelta } from './layout/delta.mjs'
+export { DELTA_OBJECTS_MAX, DELTA_WHYS, deltaSection } from './layout/delta-wire.mjs'
+export type { Delta, DeltaRefusal, DeltaStats } from './layout/delta.mjs'
+export type { BaseKind, DeltaWhy, PageRanges } from './layout/delta-wire.mjs'
 export type { AddonChainState, RemoverAnswer } from './layout/chain.mjs'
 // the bundle's writer (the reader's parsers are the layer entry's)
 export { bundleUnitsOf, writeBundle } from './layer-proto/bundle.mjs'
 // BUNDLE 4: the writers of a paper's objects, the keys and the bounds (the readers are the layer entry's), and the memory-class errors every catch lets through
-export { BUILD_END_WHYS, BUNDLE5, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG5, DEPTH_NONE, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG5, catalogKey, isFinalEnd, keyOf, keyParts, KIND_NONE, RECORD_FLAG, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks, isLayoutRefusal, LAYOUT_REFUSED, WHY_MAX, BASE_SOURCES, BASE_WHYS, BUNDLES_READ, baseKey, catalogBase, layerDraws, baseRefusalRetryable, RETRY_LIMITS } from './layer-proto/format.mjs'
+export { BUILD_END_WHYS, BUNDLE5, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG5, DEPTH_NONE, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG5, catalogKey, isFinalEnd, keyOf, keyParts, KIND_NONE, RECORD_FLAG, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks, isLayoutRefusal, LAYOUT_REFUSED, WHY_MAX, BASE_SOURCES, BASE_WHYS, BUNDLES_READ, baseKey, catalogBase, layerDraws, baseRefusalRetryable, RETRY_LIMITS, BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, REPLACED_MAX, replacedWhy, deltaKey, checkDelta, DELTA_TAIL_ROOM } from './layer-proto/format.mjs'
 export { BundleRefusal } from './layer-proto/bundle.mjs'
 // the cut: a paper made whole, in BUNDLE 4's objects
 export { cutBundle, needFrontier, partCutter, wholeCutter, wholeFrontier } from './layer-proto/cut.mjs'

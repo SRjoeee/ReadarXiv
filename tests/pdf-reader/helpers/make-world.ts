@@ -114,7 +114,7 @@ export function arxivOf(pages: Page[], asked: number[] = []) {
     getPage: async (n: number) => {
       const p = pages[n - 1] as Page
       return {
-        view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs,
+        view: p.view ?? [0, 0, 612, 792], rotate: 0, commonObjs, ref: { num: 10 + n, gen: 0 },
         getTextContent: async () => ({ items: p.runs.map(item), styles: STYLES }),
         ...annotsOf(p),
         getOperatorList: () => {

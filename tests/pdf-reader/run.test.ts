@@ -9,6 +9,11 @@ import { CTAG5, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { POLL_SLOW_AFTER_MS, POLL_SLOW_MS, PREPARE_DEADLINE_MS, type RunEvent, type RunHost, startRun, WAIT_MIN } from '@/pdf-reader/session/run'
+import { readFileSync } from 'node:fs'
+import * as PL from '@cantoo/pdf-lib'
+import { deltaOf } from '@/pdf-reader/engine/layout/delta.mjs'
+import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
+import { cutSample, oursOf } from '../e2e/lib/layer-cut.mjs'
 import { made, type Made, N, PAPER } from './helpers/format-paper'
 
 const API = 'https://readarxiv.com'
@@ -33,7 +38,7 @@ function ranges(file: Uint8Array, init: RequestInit, tag: string) {
   const begin = Number(m[1]), end = Math.min(Number(m[2]) + 1, file.length)
   return new Response(file.slice(begin, end) as BodyInit, { status: 206, headers: { 'content-range': `bytes ${begin}-${end - 1}/${file.length}`, etag: tag } })
 }
-function server(looks: (() => Response)[], o: { prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; tag?: string; arxiv?: Uint8Array | 'whole' } = {}) {
+function server(looks: (() => Response)[], o: { prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; tag?: string; originalTag?: string; arxiv?: Uint8Array | 'whole' } = {}) {
   const calls: { url: string; init: RequestInit }[] = []
   let i = 0
   const f = vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -43,7 +48,7 @@ function server(looks: (() => Response)[], o: { prepare?: () => Response; origin
     if (url.includes('/o/')) { const b = o.objects?.get(url.slice(-64)); return b ? new Response(b as BodyInit, { headers: o.tag ? { 'x-axt-base-etag': o.tag } : {} }) : new Response('', { status: 404 }) }
     // our base page (the layer route): by ranges, its own tag (the run is bound to its length alone)
     if (url.includes('/api/v1/base/')) return o.base ? ranges(o.base, init, '"base-tag"') : new Response('', { status: 404 })
-    if (url.includes('/original/')) return o.original ? (o.tag ? ranges(o.original, init, o.tag) : new Response(o.original as BodyInit)) : new Response('', { status: 404 })
+    if (url.includes('/original/')) return o.original ? ((o.originalTag ?? o.tag) ? ranges(o.original, init, (o.originalTag ?? o.tag) as string) : new Response(o.original as BodyInit)) : new Response('', { status: 404 })
     return (looks[Math.min(i++, looks.length - 1)] as () => Response)()
   })
   return { f: f as unknown as typeof fetch, calls, layerLooks: () => calls.filter(c => c.url === `${API}/api/v1/layer/${SEG}/${CTAG5}`).length }
@@ -53,7 +58,7 @@ function server(looks: (() => Response)[], o: { prepare?: () => Response; origin
 const hex = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 /** the head the side's index holds: by default a layer over our own compile (`source` ours), with the arXiv PDF its check ran over
  *  (`orig`: the default view's, the tab's own bytes); `base` and `orig` replace them (the head of a layer that draws nothing: arXiv's) */
-function headOf(over: { base?: object; orig?: { bytes: number; sha256: string } | null } = {}) {
+function headOf(over: { base?: object; orig?: { bytes: number; sha256: string; xref?: number } | null } = {}) {
   // (the engine's own head of a layer over our compile: its base, with the check it passed)
   const base = over.base ?? mOurs.index.head.base
   const orig = over.orig === undefined ? { bytes: 4, sha256: hex(new Uint8Array([1, 2, 3, 4])) } : over.orig
@@ -81,16 +86,18 @@ function view(original = new Uint8Array([1, 2, 3, 4]), loaded: Promise<void> = P
 /** PDF.js as the ranged documents use it: each getDocument's parameters recorded */
 function pdfjs() {
   const docs: Record<string, unknown>[] = []
+  /** the ranges the documents were given: PDF.js's `onDataRange` */
+  const given: [number, Uint8Array][] = []
   class PDFDataRangeTransport {
     constructor(readonly length: number, readonly initialData: Uint8Array) {}
     requestDataRange(_b: number, _e: number) {}
-    onDataRange(_b: number, _c: Uint8Array) {}
+    onDataRange(b: number, c: Uint8Array) { given.push([b, c]) }
     abort() {}
   }
   const getDocument = vi.fn((p: Record<string, unknown>) => { docs.push(p); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } })
-  return { lib: { getDocument, PDFDataRangeTransport } as never, docs }
+  return { lib: { getDocument, PDFDataRangeTransport } as never, docs, given }
 }
-function run(o: { head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
+function run(o: { head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; originalTag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
   const s = server(o.looks, o), side = fakeSide(headOf(o.head)), v = o.view ?? view(), events: RunEvent[] = []
   const engine = o.engine ?? echo()
   const opened: Uint8Array[] = []
@@ -104,7 +111,7 @@ function run(o: { head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]
     readingPage: () => 1, mayPrepare: o.may ?? (() => true), ...(o.unsent ? { prepareUnsent: o.unsent } : {}), emit: e => events.push(e), faces: async () => null, createSide: side.make as never,
   }
   const r = startRun(v as never, PAPER, host)
-  return { r, s, side, v, events, engine: engine as ReturnType<typeof echo>, opened, docs: lib.docs, host, opts: o }
+  return { r, s, side, v, events, engine: engine as ReturnType<typeof echo>, opened, docs: lib.docs, given: lib.given, host, opts: o }
 }
 /** engines handed out in turn, each recorded; `hold`: the next one's promise waits for its release */
 function engines() {
@@ -513,6 +520,162 @@ describe('the base (design §3.2, §3.5): only a layer over our own compile draw
     await settle()
     expect(ok.engine.translate).toHaveBeenCalled()
     expect(ok.events.some(e => e.type === 'unavailable')).toBe(false)
+  })
+})
+
+// A base of ours held as a delta over arXiv's PDF (BUNDLE 8, `base.kind` 'delta'): the composed document is the ORIGINAL's bytes read by
+// ranges from our server's copy (/api/v1/original, held to the head's orig length and the first answer's tag), then the delta object
+// (a bundle object, fetched by its digest) and the parts' tails in memory; no /api/v1/base. The stand-in PDF of the cutter is the original.
+describe('the layer over a delta (the delta route): one byte source, the original\'s', async () => {
+  // (the repository's sample paper, read by path: the cutter's own default address is a file URL this environment's URL is not)
+  const dir = `${import.meta.dirname}/../fixtures/pdf/sample-1/`
+  const files = { pdf: new Uint8Array(readFileSync(`${dir}sample-1.pdf`)), bundle: new Uint8Array(readFileSync(`${dir}bundle.json`)) }
+  const cut = await cutSample({ pdf: files.pdf.slice(), bundle: files.bundle.slice() }, { base: 'delta' })
+  const original = files.pdf, delta = cut.delta as NonNullable<typeof cut.delta>
+  const O = original.length, TAGO = '"orig-tag"'
+  const baseOf = (over: Record<string, unknown> = {}) => ({ ...cut.index.head.base, ...over })
+  const deltaHead = (over: { base?: object; orig?: { bytes: number; sha256: string; xref?: number } | null } = {}) => ({ base: baseOf(), orig: cut.index.head.orig as { bytes: number; sha256: string; xref?: number }, ...over })
+  const objects = (bytes: Uint8Array = delta.data) => new Map([[delta.sha256, bytes]])
+  const go = (o: { tab?: Uint8Array; head?: Parameters<typeof headOf>[0]; bytes?: Uint8Array; store?: LayerStore | null; ranged?: boolean } = {}) =>
+    run({ looks: [() => new Response(catalog)], view: view((o.tab ?? original) as Uint8Array<ArrayBuffer>), original, tag: TAGO, objects: objects(o.bytes), ranged: o.ranged ?? true, head: o.head ?? deltaHead(), ...(o.store !== undefined ? { store: o.store } : {}) })
+  const bindOf = (a: ReturnType<typeof run>) => a.side.options().bind as unknown as (b: unknown) => Promise<boolean>
+  const origPath = `${API}/api/v1/original/${SEG}`
+  const asked = (a: ReturnType<typeof run>, url: string) => a.s.calls.filter(c => c.url === url).map(c => (c.init.headers as Record<string, string> | undefined)?.range ?? null)
+  const baseCalls = (a: ReturnType<typeof run>) => a.s.calls.filter(c => c.url.includes('/api/v1/base/'))
+
+  it('binds: the delta object is fetched by its digest, held to checkDelta, and the composed document is the original by ranges (bound by the head\'s orig length) then the delta then the tails; /api/v1/base is never asked', async () => {
+    const a = go()
+    await settle()
+    expect(await bindOf(a)(cut.index.head.base)).toBe(true)
+    expect(a.s.calls.filter(c => c.url.endsWith(`/o/${delta.sha256}`))).toHaveLength(1)
+    const tail = Uint8Array.from([9, 8, 7, 6, 5])
+    await a.side.options().composed(tail, { x: 1 }).promise
+    const doc = a.docs[0] as { range: { length: number; initialData: Uint8Array; requestDataRange(b: number, e: number): void } }
+    // one document: the original's O bytes, the delta's D, the tails'
+    expect(doc.range.length).toBe(O + delta.bytes + tail.length)
+    expect([...doc.range.initialData]).toEqual([...original.slice(0, doc.range.initialData.length)])
+    expect(asked(a, origPath)[0]).toBe(`bytes=0-${Math.min(65_535, O - 1)}`)
+    // the seam at O: a range across it is the original's last bytes, then the delta's first
+    doc.range.requestDataRange(O - 4, O + 8)
+    doc.range.requestDataRange(O + delta.bytes - 3, O + delta.bytes + 3)
+    await settle()
+    const seam = a.given.find(g => g[0] === O - 4)?.[1], tails = a.given.find(g => g[0] === O + delta.bytes - 3)?.[1]
+    expect([...(seam ?? [])]).toEqual([...original.slice(O - 4), ...delta.data.slice(0, 8)])
+    expect([...(tails ?? [])]).toEqual([...delta.data.slice(delta.bytes - 3), ...tail.slice(0, 3)])
+    // nothing of the original beyond its own length is asked, and no base of ours
+    for (const r of asked(a, origPath)) expect(Number(/^bytes=\d+-(\d+)$/.exec(r ?? '')?.[1]), String(r)).toBeLessThan(O)
+    expect(baseCalls(a)).toEqual([])
+    expect(a.r.probe()).toMatchObject({ basis: 'ranged', ours: false })
+    for (const c of a.s.calls) expect([c.init.credentials, c.init.referrerPolicy], c.url).toEqual(['omit', 'no-referrer'])
+  })
+
+  it('the original\'s tag is the one the delta object names: with nothing cached, the delta\'s answer is the first to name it, and the ranges are held to it (another original of the same length is refused)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const a = run({ looks: [() => new Response(catalog)], view: view(original as Uint8Array<ArrayBuffer>), original, tag: TAGO, originalTag: '"other-tag"', objects: objects(), ranged: true, head: deltaHead() })
+    await settle()
+    expect(await bindOf(a)(cut.index.head.base)).toBe(true)
+    await expect(a.side.options().composed(Uint8Array.from([1]), { x: 1 }).promise).rejects.toBeTruthy()
+    // the same tag on both: composed
+    const b = go()
+    await settle()
+    expect(await bindOf(b)(cut.index.head.base)).toBe(true)
+    await expect(b.side.options().composed(Uint8Array.from([1]), { x: 1 }).promise).resolves.toBeTruthy()
+  })
+
+  it('a delta that is not the head\'s (other bytes of its length, a length, a section that does not parse) or past the bound is no layer: the original staying, nothing composed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const flipped = delta.data.slice()
+    flipped[flipped.length >> 1] = (flipped[flipped.length >> 1] ?? 0) ^ 0xff
+    for (const [what, bytes] of [['other bytes', flipped], ['a shorter delta', delta.data.slice(0, delta.bytes - 1)]] as const) {
+      const a = go({ bytes })
+      await settle()
+      expect(await bindOf(a)(cut.index.head.base), what).toBe(false)
+      expect(a.docs, what).toEqual([])
+      expect(a.v.showOriginal, what).not.toHaveBeenCalled()
+    }
+    // a delta the server does not hold (404)
+    const gone = go({ head: deltaHead() })
+    gone.opts.objects?.clear()
+    await settle()
+    expect(await bindOf(gone)(cut.index.head.base)).toBe(false)
+    // a head naming a delta past DELTA_MAX_BYTES: not even asked
+    const big = go({ head: deltaHead({ base: baseOf({ bytes: 24 * 2 ** 20 + 1 }) }) })
+    await settle()
+    expect(await bindOf(big)(baseOf({ bytes: 24 * 2 ** 20 + 1 }))).toBe(false)
+    expect(big.s.calls.filter(c => c.url.includes('/o/'))).toEqual([])
+    // no PDF.js to read the original by ranges, or a head with no orig startxref: no layer
+    const none = go({ ranged: false })
+    await settle()
+    expect(await bindOf(none)(cut.index.head.base)).toBe(false)
+    const noXref = go({ head: deltaHead({ orig: { bytes: O, sha256: (cut.index.head.orig as { sha256: string }).sha256 } }) })
+    await settle()
+    expect(await bindOf(noXref)(cut.index.head.base)).toBe(false)
+  })
+
+  it('the tab\'s PDF is not the head\'s orig: our copy of the orig is shown on the left, `original { ours }` told then, the pages laid again (the composed document is the original\'s own bytes, so the proof applies as it did before our base)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const a = go({ tab: new Uint8Array(O).fill(7) })
+    await settle()
+    expect(await bindOf(a)(cut.index.head.base)).toBe(true)
+    expect(a.events.some(e => e.type === 'original')).toBe(false)
+    await settle(60)
+    expect(a.v.showOriginal).toHaveBeenCalledTimes(1)
+    expect([...(a.opened[0] ?? [])]).toEqual([...original])
+    expect(a.events.filter(e => e.type === 'original')).toEqual([{ type: 'original', ours: true }])
+    expect(a.side.agains()).toBe(1)
+    // the tab\'s own PDF, proven the orig: nothing fetched whole, the left as it is
+    const same = go()
+    await settle()
+    expect(await bindOf(same)(cut.index.head.base)).toBe(true)
+    await settle(60)
+    expect(same.v.showOriginal).not.toHaveBeenCalled()
+    expect(same.s.calls.filter(c => c.url === origPath && !(c.init.headers as Record<string, string> | undefined)?.range)).toEqual([])
+    expect(same.r.probe()).toMatchObject({ ours: false })
+  })
+
+  it('a retry whose head is a delta over another orig shows that original before the layer is used (the leftShows rule of a full base holds for a delta)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // another arXiv PDF: the same pages with a comment after the last %%EOF (its offsets, so its delta, are not the first's)
+    const other = Uint8Array.from([...original, ...new TextEncoder().encode('\n% a later version\n')])
+    const made = await deltaOf(other, await oursOf(original), { PL })
+    if ('refused' in made) throw new Error(made.why)
+    const head2 = deltaHead({ base: baseOf({ bytes: made.delta.length, sha256: made.sha256, xref: made.xref }), orig: { bytes: other.length, sha256: hex(other), xref: startxrefOf(other) ?? undefined } })
+    const a = go({ tab: new Uint8Array(O).fill(7) })
+    a.opts.objects?.set(made.sha256, made.delta)
+    await settle()
+    expect(await bindOf(a)(cut.index.head.base)).toBe(true)
+    await settle(60)
+    expect(a.v.showOriginal).toHaveBeenCalledTimes(1)
+    a.side.side.probe.mockReturnValue({ state: 'refused' } as never)
+    a.r.retry()
+    await settle(60)
+    a.opts.original = other
+    a.side.setHead(headOf(head2) as never)
+    expect(await bindOf(a)(head2.base)).toBe(true)
+    expect(a.v.showOriginal).toHaveBeenCalledTimes(2)
+    expect([...(a.opened.at(-1) ?? [])]).toEqual([...other])
+  })
+
+  it('a head of several toplevel sources (check pages [M, N], M < N) binds: the pages past M are the original\'s, nothing of ours there; a full base of the same check does not', async () => {
+    const N0 = (cut.index.head.base as { pages: number }).pages
+    const check = { ...(cut.index.head.base as { check: object }).check, pages: [2, N0] }
+    const a = go({ head: deltaHead({ base: baseOf({ check }) }) })
+    await settle()
+    expect(await bindOf(a)(baseOf({ check }))).toBe(true)
+    // a base of ours that is whole (no delta) keeps the equal count
+    const full = go({ head: { base: { ...mOurs.index.head.base, check: { ...(mOurs.index.head.base as { check: object }).check, pages: [2, N] } } }, ranged: true })
+    await settle()
+    expect(await bindOf(full)({ ...mOurs.index.head.base, check: { ...(mOurs.index.head.base as { check: object }).check, pages: [2, N] } })).toBe(false)
+  })
+
+  it('a kind \'full\' head is as before: the base page at /api/v1/base, the original not asked for the composed document', async () => {
+    const ours = Uint8Array.from({ length: 300 }, (_, i) => (i * 3) % 251)
+    const a = run({ looks: [() => new Response(catalog)], view: view(new Uint8Array(4) as Uint8Array<ArrayBuffer>), base: ours, ranged: true, head: {} })
+    await settle()
+    const base = { ...mOurs.index.head.base, bytes: ours.length, sha256: hex(ours) }
+    expect(await bindOf(a)(base)).toBe(true)
+    await a.side.options().composed(null, {}).promise
+    expect(baseCalls(a)).toHaveLength(1)
   })
 })
 

@@ -101,6 +101,23 @@ export async function boxesCheck(ours, arxiv) {
   return why === null ? { equal: true, pages: [a.length, b.length] } : { equal: false, pages: [a.length, b.length], why }
 }
 
+/**
+ * Our base page's M pages followed by arXiv's pages past them, as one PDF.js document (`numPages` arXiv's N): the composed
+ * document a delta over arXiv's PDF makes of a paper of several toplevel sources whose first is compiled alone (the pages past
+ * ours are the original's by construction), for the base page's checks and the maker to read as they read a whole base. With
+ * `replaced` (a Set of pages), only those of our M are ours and every other is arXiv's: the composed document a delta that
+ * replaces those pages makes. Its destinations, page indices and metadata are ours (the marks are our compile's)
+ */
+export function prefixDoc(ours, arxiv, m, replaced = null) {
+  return {
+    numPages: arxiv.numPages,
+    getPage: p => (p <= m && (replaced === null || replaced.has(p)) ? ours.getPage(p) : arxiv.getPage(p)),
+    getDestinations: () => ours.getDestinations(),
+    getPageIndex: ref => ours.getPageIndex(ref),
+    getMetadata: () => ours.getMetadata(),
+  }
+}
+
 /** a mark of ours printed as text: a mark macro's name (\axt…, or TeX's \axt@… inside a package's own) */
 const MARK_TEXT = /(?:\\|\u201c)axt@?[a-z]+\s*(?:\{|\u2013)[^{}\u2013\u02dd\s]{1,64}(?:\}|\u02dd)/
 /** the same, each mark's name (its argument) captured */

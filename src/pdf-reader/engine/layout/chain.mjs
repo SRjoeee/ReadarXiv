@@ -40,7 +40,10 @@ const tooBig = (a, b, why) => new BundleRefusal(`pages ${a} to ${b}: ${why}`, { 
 /**
  * The hooks of a chained add-on. `N` the paper's pages; `views` each page's view as the cutter writes them (`whole.left.pages`,
  * [x0, y0, x1, y1] a page), against which a part's manifest is checked as its reader will (a range whose manifest it would
- * refuse gets no add-on: null); `base` { bytes, xref }: arXiv's PDF's length and startxref (the head's); `planOf(p)` the
+ * refuse gets no add-on: null); `base` { bytes, xref }: the PDF the tails continue, its length and startxref (the head's base
+ * whole, or, a delta over arXiv's PDF, the composed document arXiv's bytes and the delta's: O + D, the delta's startxref; the
+ * delta is the tails' base and no tail, so TAIL_CAP binds it not, and its section's least and fresh numbers are no tail's root
+ * and first: the first tail's are checked against none, its /Prev the delta's section, its numbers above the delta's /Size); `planOf(p)` the
  * page's plan (layout/addon.mjs pagePlanOf's, or null), a cheap lookup; `pdfjs` the version of the PDF.js the plans' facts
  * were read by (the remover refuses another than its pinned one); `remove({ from, to, plans })` the transport to the remover
  * child, `plans` the ask's bytes, resolving to its answer { ok: true, tail, entries } or { ok: false, why }.

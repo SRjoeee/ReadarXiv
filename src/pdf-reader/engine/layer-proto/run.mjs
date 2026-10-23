@@ -396,10 +396,15 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
   const grown = filled.filter(f => EVEN_KINDS.has(f.p.unit.kind))
   if (size > 1 && grown.length && grown.every(f => !f.full)) {
     const scaleOf = k => r3(1 + k * P.step)
-    const all = k => { const ls = []; for (const f of grown) { const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
+    // (a unit of one line keeps its own size in the scripts that spread to fillLeadRel: it has no frame to spread over, so a
+    // larger size only carries its ink past the original's line, over a rule or a neighbour's text that the size step cannot
+    // see, which the grid's last step above exposes (it makes more pages grow): 2610.21924's note of one line under a table's
+    // rule, whose formulas touched it at x1.1. The other scripts' page fill is as it was until it is measured on theirs)
+    const steps = f => !(P.fillLeadRel && f.p.fitLines < 2)
+    const all = k => { const ls = []; for (const f of grown) { if (!steps(f)) { ls.push(null); continue } const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
     let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
     while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
-    if (ok) grown.forEach((f, i) => { if (!L2.keepsShare(f.p.share, best[i].lines)) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
+    if (ok) grown.forEach((f, i) => { if (!best[i] || !L2.keepsShare(f.p.share, best[i].lines)) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
   }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
@@ -417,7 +422,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
 
 /**
  * A unit's fill leading (fillPage's) and its top, read from its fit alone: `fillTop`, the loosest leading P.fillLead allows
- * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null); `fillLead`, the
+ * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null; the looser of that and
+ * P.fillLeadRel × the original's pitch scaled by the fit's size, where the script has one); `fillLead`, the
  * loosest leading from its fitted one up to the top at which its fitted state still sets it whole as the page fill lays it
  * (its last line no lower than a leading over the next line of its column, layer2.mjs footFloorAt: its last baseline on its
  * frame's last but where that would leave the gap under it tighter than its lines); where its fitted one does not, the
@@ -433,7 +439,11 @@ function fillLeadsOf(p, P) {
   else {
     const pitches = p.blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
     const p0 = pitches.length ? pitches[pitches.length >> 1] : 1.2 * p.s
-    p.fillTop = r3((P.fillLead * p.s * p.layout.state.scale) / p0)
+    const emTop = r3((P.fillLead * p.s * p.layout.state.scale) / p0)
+    // (fillLeadRel: a loose original's pitch can be as wide as the em top or wider, which would pin its translation to the
+    // original's own pitch and end its paragraph early; the top is then fillLeadRel × the original's pitch scaled by the fit's
+    // size, where that is the looser. Never tighter than the em top, so a single-spaced original is unchanged)
+    p.fillTop = P.fillLeadRel ? Math.max(emTop, r3(P.fillLeadRel * p.layout.state.scale)) : emTop
   }
   // (a looser leading holds no more lines than a closer one: the loosest that sets the unit is found by halving, a few
   // layouts a unit where trying each hundredth from the top took up to forty. Monotone in practice, not by construction:
@@ -447,7 +457,11 @@ function fillLeadsOf(p, P) {
   const lo = st.lead, bx = { ...st, box: true }
   if (at(p, bx)) {
     const hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
-    let ok = 0, no = Math.round((hi - lo) / 0.01) + 1
+    // (the grid's last step is the top itself, which `short` (fillPage) reads. Rounding the step count down left it untried
+    // where the fraction was under a half, and the unit then took neither tracking nor the page's size; fillLeadRel's scripts
+    // count it up, the others' fill as it was until it is measured on theirs)
+    const steps = (hi - lo) / 0.01
+    let ok = 0, no = (P.fillLeadRel ? Math.ceil(steps - 1e-9) : Math.round(steps)) + 1
     while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...bx, lead: L(k) })) ok = k; else no = k }
     p.fillLead = ok ? L(ok) : lo
     return

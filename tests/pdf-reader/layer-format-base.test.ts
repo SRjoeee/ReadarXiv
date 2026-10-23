@@ -1,8 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import {
-  BASE_SOURCES, BASE_WHYS, BUNDLE5, BUNDLES_READ, baseKey, catalogBase, indexOf, layerDraws, LAYOUT_REFUSED, readCatalog, readHead, readPart, readUnitsChunk, writeCatalog, writeHead, writePart, writeUnitChunks,
+  BASE_KINDS, BASE_SOURCES, checkDelta, BASE_WHYS, BUNDLE5, BUNDLES_READ, baseKey, CTAG5, catalogBase, DELTA_MAX_BYTES, DELTA_MAX_SHARE, deltaBaseWhy, deltaKey, indexOf, keyOf, layerDraws, LAYOUT_REFUSED, REPLACED_MAX, readCatalog, readHead, readPart, readUnitsChunk, writeCatalog, writeHead, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { deltaOf } from './helpers/delta-pdfs'
 import { BASE, forged, IMAGE, type Made, made, N, PAPER, parsed, partInputs, UNITS } from './helpers/format-paper'
 
 // BUNDLE 8 (the layer route's step 2, design note §3.2): the head's base says whose PDF the layer is drawn over — ours, the
@@ -189,5 +190,132 @@ describe('a part with no layout of BUNDLE 8 may say why our compile is no base p
       const read = await readPart(w.bytes, { ref: w.ref, index: M.index, chain: null })
       expect(read.noLayout).toEqual({ refused, why: 'x' })
     }
+  })
+})
+
+describe('a base of ours held as a delta over arXiv\'s PDF (base.kind)', () => {
+  // (the delta's bytes and digest; its startxref in the composed document, after arXiv's ORIG.bytes)
+  // (arXiv's PDF with its startxref: the section the delta's /Prev names)
+  const OX = { ...ORIG, xref: ORIG.bytes - 100 }
+  const DELTA = { source: 'ours' as const, kind: 'delta' as const, bytes: 4_000, sha256: 'abcdef0123456789'.repeat(4), xref: ORIG.bytes + 3_500, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: 0.9 }, replaced: [[1, N]] as [number, number][], stats: { replaced: N, reused: { fonts: 3, images: 1, forms: 0, other: 2 }, included: { bytes: 3_200, objects: N + 4 } } }
+
+  it('names its kinds and bounds; a head without `kind` reads as whole (`full`), one with `kind: full` too', async () => {
+    expect(BASE_KINDS).toEqual(['delta', 'full'])
+    expect(DELTA_MAX_BYTES).toBe(24 * 2 ** 20)
+    expect(DELTA_MAX_SHARE).toBe(0.35)
+    expect(REPLACED_MAX).toBe(4096)
+    const whole = parsed((await headOf(OURS, ORIG)).head)
+    expect(whole.base).not.toHaveProperty('kind')
+    whole.base.kind = 'full'
+    const f = forged('head', whole)
+    expect((await readHead(f.bytes, { ref: f.ref })).base).toEqual({ ...OURS, check: { ...OURS.check, carried: 0.9951 } })
+  })
+
+  it('round trips: its section\'s bytes, digest and startxref, the replaced ranges and the counts, `orig` the original it extends', async () => {
+    const { head, read } = await headOf(DELTA, OX)
+    expect(Object.keys(parsed(head).base)).toEqual(['source', 'kind', 'bytes', 'sha256', 'xref', 'pages', 'tree', 'check', 'replaced', 'stats'])
+    expect(read.base).toEqual(DELTA)
+    expect(read.orig).toEqual(OX)
+    expect(layerDraws(read.base)).toBe(true)
+    // (our pages fewer than arXiv's: a paper of several toplevel sources, its replaced pages within ours)
+    const fewer = { ...DELTA, check: { ...DELTA.check, pages: [N - 1, N] as [number, number] }, replaced: [[1, N - 1]] as [number, number][], stats: { ...DELTA.stats, replaced: N - 1 } }
+    expect((await headOf(fewer, OX)).read.base).toEqual(fewer)
+  })
+
+  it('refuses every violation: kind unknown, replaced malformed, out of range, overlapping, descending, no orig, `over`, counts not integers, on arXiv\'s', async () => {
+    const { head } = await headOf(DELTA, OX)
+    const edits: [string, (h: Wire) => void][] = [
+      ['base.kind', h => { h.base.kind = 'patch' }],
+      ['base.kind', h => { h.base.kind = 1 }],
+      ['base.replaced', h => { h.base.replaced = 'all' }],
+      ['base.replaced', h => { h.base.replaced = [] }],
+      ['base.replaced', h => { h.base.replaced = [[1]] }],
+      ['base.replaced', h => { h.base.replaced = [[0, 1]] }],
+      ['base.replaced', h => { h.base.replaced = [[1, N + 1]] }],
+      ['base.replaced', h => { h.base.replaced = [[2, 1]] }],
+      ['base.replaced', h => { h.base.replaced = [[1, 2], [2, 3]] }],
+      ['base.replaced', h => { h.base.replaced = [[3, 3], [1, 1]] }],
+      ['base.replaced', h => { h.base.replaced = [[1, 1], [2, 2]] }],
+      ['base.replaced', h => { h.base.check.pages = [N - 1, N] }],
+      ['orig', h => { delete h.orig }],
+      ['orig.xref', h => { delete h.orig.xref }],
+      ['orig.xref', h => { h.orig.xref = ORIG.bytes }],
+      ['base.over', h => { h.base.over = { ...ORIG } }],
+      ['base.stats.reused.fonts', h => { h.base.stats.reused.fonts = 1.5 }],
+      ['base.stats.included.objects', h => { h.base.stats.included.objects = -1 }],
+      ['base.stats.replaced', h => { h.base.stats.replaced = N + 1 }],
+      ['base.stats.reused.links', h => { h.base.stats.reused.links = 0 }],
+      ['base.stats.included.bytes', h => { h.base.stats.included.bytes = DELTA.bytes + 1 }],
+      ['base.xref', h => { h.base.xref = ORIG.bytes - 1 }],
+      ['base.xref', h => { h.base.xref = ORIG.bytes + DELTA.bytes }],
+      ['base.bytes', h => { h.base.bytes = DELTA_MAX_BYTES + 1 }],
+      ['base.check.pages', h => { h.base.check.pages = [N + 1, N] }],
+      ['base.check.pages', h => { h.base.check.pages = [0, N] }],
+    ]
+    for (const [path, edit] of edits) {
+      const h = parsed(head)
+      edit(h)
+      const f = forged('head', h)
+      expect(await refusal(readHead(f.bytes, { ref: f.ref })), path).toMatchObject({ kind: 'head', path })
+    }
+    // (a whole base of ours keeps its equal page count; arXiv's base takes no kind)
+    const whole = parsed((await headOf(OURS, ORIG)).head)
+    whole.base.check.pages = [N - 1, N]
+    const w = forged('head', whole)
+    expect(await refusal(readHead(w.bytes, { ref: w.ref }))).toMatchObject({ kind: 'head', path: 'base.check.pages' })
+    const arxiv = parsed((await headOf({ source: 'arxiv', ...BASE, why: 'carry' })).head)
+    arxiv.base.kind = 'delta'
+    const a = forged('head', arxiv)
+    expect(await refusal(readHead(a.bytes, { ref: a.ref }))).toMatchObject({ kind: 'head' })
+    // (the writer refuses what its reader would; deltaBaseWhy says why without a throw)
+    await expect(headOf({ ...DELTA, replaced: [[2, 1]] }, OX)).rejects.toBeInstanceOf(BundleRefusal)
+    expect(deltaBaseWhy(DELTA, OX, N)).toBeNull()
+    expect(deltaBaseWhy({ ...DELTA, stats: { ...DELTA.stats, replaced: 1 } }, OX, N)).toMatch(/stats\.replaced/)
+    expect(deltaBaseWhy({ ...DELTA, kind: 'full' }, OX, N)).toMatch(/base\.kind/)
+    // (a whole head's orig takes no xref)
+    const wo = parsed((await headOf(OURS, ORIG)).head)
+    wo.orig.xref = 1
+    const fw = forged('head', wo)
+    expect(await refusal(readHead(fw.bytes, { ref: fw.ref }))).toMatchObject({ kind: 'head', path: 'orig.xref' })
+  })
+
+  it('the catalog names the delta as a bundle object under the CTAG (deltaKey), never a /base/ PDF; the chain starts after arXiv\'s bytes and the delta\'s', async () => {
+    const { chunks, read } = await headOf(DELTA, OX)
+    expect(deltaKey(PAPER.id, PAPER.version, DELTA.sha256)).toBe(keyOf(PAPER.id, PAPER.version, CTAG5, DELTA.sha256).replace(/\.json$/, '.delta'))
+    expect(deltaKey(PAPER.id, PAPER.version, DELTA.sha256)).toMatch(/^layer\/.+\/[0-9a-f]{64}\.delta$/)
+    expect(catalogBase(read)).toEqual({ source: 'ours', kind: 'delta', object: { key: deltaKey(PAPER.id, PAPER.version, DELTA.sha256), sha256: DELTA.sha256, bytes: DELTA.bytes } })
+    const refs = chunks.map(x => ({ from: x.from, to: x.to, sha256: x.sha256, bytes: x.bytes.length }))
+    const w = await writeCatalog({ head: read, units: refs, parts: [], end: { through: 0, refused: 'bound' } })
+    const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
+    expect(c.base).toEqual(catalogBase(read))
+    const chunksRead = [await readUnitsChunk(chunks[0]!.bytes, { ref: chunks[0]!.ref, before: null })]
+    expect(() => indexOf(read, chunksRead, { catalog: c })).not.toThrow()
+    expect(() => indexOf(read, chunksRead, { catalog: { ...c, base: { ...catalogBase(read), object: { ...(catalogBase(read) as { object: object }).object, bytes: 1 } } as never } })).toThrow(/catalog\.base/)
+    for (const [path, edit] of [
+      ['base.object.key', (x: Wire) => { x.base.object.key = baseKey(PAPER.id, PAPER.version, DELTA.sha256) }],
+      ['base.kind', (x: Wire) => { x.base.kind = 'full' }],
+      ['base.object', (x: Wire) => { x.base.object.extra = 1 }],
+      ['base.object.bytes', (x: Wire) => { x.base.object.bytes = 0 }],
+    ] as const) {
+      const x = parsed(w)
+      edit(x)
+      expect(await refusal(readCatalog(new TextEncoder().encode(JSON.stringify(x)))), path).toMatchObject({ kind: 'catalog' })
+    }
+  })
+})
+
+describe('checkDelta: the bytes a delta head names, checked by a holder of them (the Worker, a reader)', () => {
+  it('takes the delta whose length, digest, section over the head\'s orig and startxref are the head\'s; refuses any other', async () => {
+    const OX = { ...ORIG, xref: ORIG.bytes - 100 }
+    const d = await deltaOf(OX, [1, N])
+    const base = { source: 'ours' as const, kind: 'delta' as const, bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: 1 }, replaced: d.replaced, stats: d.stats }
+    const { read } = await headOf(base, OX)
+    expect(await checkDelta(read, d.bytes)).toBeNull()
+    const flipped = d.bytes.slice()
+    flipped[5] = (flipped[5] ?? 0) ^ 1
+    expect(await checkDelta(read, flipped)).toMatch(/digest/)
+    expect(await checkDelta(read, d.bytes.subarray(1))).toMatch(/bytes/)
+    expect(await checkDelta({ ...read, orig: { ...OX, xref: OX.xref - 1 } }, d.bytes)).toMatch(/Prev/)
+    expect(await checkDelta((await headOf(OURS, ORIG)).read, d.bytes)).toMatch(/not a head/)
   })
 })

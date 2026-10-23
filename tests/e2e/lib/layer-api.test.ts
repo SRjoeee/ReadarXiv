@@ -410,7 +410,7 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
 
   it('serves our base page at /api/v1/base/<id>v<n>/<sha256> by ranges: 200, 206, 416, a strong tag, any origin; no other digest, no .pdf', () => {
     const api = layerApi({ sample, layer4 })
-    const at = `/api/v1/base/${sample.segment}/${layer4.base.sha256}`
+    const at = `/api/v1/base/${sample.segment}/${layer4.base!.sha256}`
     const whole = get(api, at)
     expect(whole).toMatchObject({ status: 200, headers: { 'content-type': 'application/pdf', 'accept-ranges': 'bytes', 'access-control-allow-origin': '*', 'cache-control': 'public, max-age=31536000, immutable' } })
     expect((whole as { body: Uint8Array }).body).toEqual(sample.pdf)
@@ -420,7 +420,7 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
     expect((get(api, at, { range: 'bytes=0-9' }) as { body: Uint8Array }).body).toEqual(sample.pdf.subarray(0, 10))
     expect(get(api, at, { range: `bytes=${sample.pdf.length}-` })).toMatchObject({ status: 416, headers: { 'content-range': `bytes */${sample.pdf.length}` } })
     expect(serves(at)).toBe(true)
-    for (const path of [`${at}.pdf`, `/api/v1/base/${sample.segment}/${'0'.repeat(64)}`, `/api/v1/base/2600.99999v1/${layer4.base.sha256}`, `/api/v1/base/${sample.segment}/ABC`]) expect(get(api, path).status, path).toBe(404)
+    for (const path of [`${at}.pdf`, `/api/v1/base/${sample.segment}/${'0'.repeat(64)}`, `/api/v1/base/2600.99999v1/${layer4.base!.sha256}`, `/api/v1/base/${sample.segment}/ABC`]) expect(get(api, path).status, path).toBe(404)
     expect(api.handle({ method: 'POST', path: at }).status).toBe(405)
     // (without the cut, no base page of ours; its faults set apart from the layer's and the original's)
     expect(get(layerApi({ sample }), at).status).toBe(404)
@@ -473,5 +473,70 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
     expect(get(api, '/hyph/en.json').status).toBe(404)
     expect(serves('/static-fonts/index.json') && serves('/hyph/de.json') && serves(`/static-fonts/${FACE_FILE}.woff2`)).toBe(true)
     expect(get(layerApi({ sample }), '/static-fonts/index.json').status).toBe(404)
+  })
+})
+
+describe('BUNDLE 8 held as a delta: the stand-in PDF the original, our page a delta over it (cutSample `base: \'delta\'`)', async () => {
+  const { cutSample, sampleFiles } = await import('./layer-cut.mjs')
+  const F = await import('@/pdf-reader/engine/layer-proto/format.mjs')
+  const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const { startxrefOf } = await import('@/pdf-reader/engine/layout/tail.mjs')
+  const cut = await cutSample(sampleFiles(), { base: 'delta' })
+  const PATH = `/api/v1/layer/${sample.segment}/${F.CTAG5}`
+  const sha = createHash('sha256').update(sample.pdf).digest('hex')
+  const delta = cut.delta!
+
+  it('names the delta in its head (kind delta, every page but the last replaced, orig the stand-in PDF with its startxref), held to checkDelta', async () => {
+    const headRef = cut.refs.head as { sha256: string; bytes: number }
+    const head = await F.readHead(cut.objects.get(headRef.sha256) as Uint8Array, { ref: { kind: 'head', ...headRef } as never })
+    const N = cut.paper.pages
+    expect(N).toBe(4)
+    expect(head.base).toMatchObject({ source: 'ours', kind: 'delta', bytes: delta.bytes, sha256: delta.sha256, xref: delta.xref, pages: N, check: { pages: [N, N], boxes: 'equal' }, replaced: [[1, N - 1]] })
+    expect(head.orig).toEqual({ bytes: sample.pdf.length, sha256: sha, xref: startxrefOf(sample.pdf) })
+    expect(F.layerDraws(head.base)).toBe(true)
+    expect(await F.checkDelta(head, delta.data)).toBeNull()
+    expect(cut.base).toBeNull()
+    // (the catalog names it as a bundle object, and the index takes the catalog; every part reads in its chain)
+    const catalog = await F.readCatalog(cut.catalog, { paper: cut.paper })
+    expect(catalog.base).toEqual({ source: 'ours', kind: 'delta', object: { key: F.deltaKey(cut.paper.id, cut.paper.version, delta.sha256), sha256: delta.sha256, bytes: delta.bytes } })
+    expect(delta.key).toMatch(/\.delta$/)
+    const chunks: import('@/pdf-reader/engine/layer-proto/format.mjs').ReadUnitsChunk[] = []
+    for (const r of cut.refs.units) chunks.push(await F.readUnitsChunk(cut.objects.get(r.sha256) as Uint8Array, { ref: r as never, before: chunks.at(-1) ?? null }))
+    const index = F.indexOf(head, chunks, { catalog })
+    let chain: import('@/pdf-reader/engine/layer-proto/format.mjs').PartChain | null = null
+    for (const r of cut.refs.parts) chain = (await F.readPart(cut.objects.get(r.sha256) as Uint8Array, { ref: r as never, index, chain })).chain
+    expect(chain).toMatchObject({ end: sample.pdf.length + delta.bytes, xref: delta.xref })
+  })
+
+  it('serves the delta at the layer\'s object route by its digest, immutable, as bytes; no base PDF of ours; the original as before', () => {
+    const api = layerApi({ sample, layer4: cut })
+    const a = get(api, `${PATH}/o/${delta.sha256}`)
+    expect(a).toMatchObject({ status: 200, headers: { 'content-type': 'application/octet-stream', 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*' } })
+    expect((a as { body: Uint8Array }).body).toEqual(delta.data)
+    expect(get(api, `/api/v1/base/${sample.segment}/${delta.sha256}`).status).toBe(404)
+    expect(get(api, `/api/v1/original/${sample.segment}`)).toMatchObject({ status: 200 })
+    expect((get(api, `/api/v1/original/${sample.segment}`) as { body: Uint8Array }).body).toEqual(sample.pdf)
+  })
+
+  it('composes: the original\'s bytes then the delta open in PDF.js, the replaced pages ours and the last the original\'s', async () => {
+    const opsOf = async (bytes: Uint8Array) => {
+      const task = getDocument({ data: bytes.slice(), verbosity: 0 }), doc = await task.promise
+      const out: number[][] = []
+      for (let p = 1; p <= doc.numPages; p++) out.push(Array.from((await (await doc.getPage(p)).getOperatorList()).fnArray))
+      await task.destroy()
+      return out
+    }
+    const composed = new Uint8Array(sample.pdf.length + delta.bytes)
+    composed.set(sample.pdf)
+    composed.set(delta.data, sample.pdf.length)
+    const [c, ours, orig] = [await opsOf(composed), await opsOf(cut.ours!), await opsOf(sample.pdf)]
+    expect(c).toHaveLength(4)
+    for (let p = 0; p < 3; p++) {
+      expect(c[p], `page ${p + 1}`).toEqual(ours[p])
+      expect(c[p], `page ${p + 1}`).not.toEqual(orig[p])
+      // (our `q Q`, and the object layer's own q … Q around the page's first stream)
+      expect(c[p]!.filter(f => f === OPS.save).length).toBeGreaterThan(orig[p]!.filter(f => f === OPS.save).length)
+    }
+    expect(c[3]).toEqual(orig[3])
   })
 })
