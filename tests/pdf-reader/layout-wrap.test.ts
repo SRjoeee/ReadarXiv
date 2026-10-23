@@ -43,7 +43,7 @@ const S1 = (hide = -1) => [unit(0, 72, 700, '(Order)-290(the)', hide === 0), uni
 const only = (text: string) => (_: string, p: number) => (p === 2 ? text : _)
 const S1_UNITS = [{ src: 'Order the' }, { src: 'points by' }, { src: 'their' }]
 const off = (re: RegExp) => (n: string) => re.test(n)
-const ok = <T extends object>(r: T | { refused: string; why: string }): T => { if ('refused' in r) throw new Error(`${r.refused}: ${r.why}`); return r as T }
+const ok = <T extends object>(r: T): Exclude<T, { refused: string }> => { if ('refused' in r) { const x = r as unknown as { refused: string; why: string }; throw new Error(`${x.refused}: ${x.why}`) } return r as Exclude<T, { refused: string }> }
 
 describe('the wrap on hand-written pages (S1, S6, S9–S12; G1, G2)', () => {
   it('hides exactly a unit: its group OFF is the page with its runs in 3 Tr (G2), and every group ON our page (G1)', async () => {

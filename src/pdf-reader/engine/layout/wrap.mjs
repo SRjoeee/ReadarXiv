@@ -21,19 +21,23 @@
 // groups or SEQUENCES_PAGE sequences has its placeholders' and labels' groups merged into the text's (a unit with a placeholder
 // there `bounds`), and is refused if still past; past GROUPS_DOC groups in the document, the later pages are refused.
 //
-// The proof (§2.5, (a)–(c)): the section exact over our bytes (delta-wire.mjs deltaSection: every entry at its object, /Prev our
-// startxref), and each new stream inflated and lexed again: every BDC of ours balanced by its EMC at its depth and text state,
-// named by the page's /Properties, and its operators, with ours taken out and the split shows joined, our page's.
+// The proof (§2.5, (a)–(d)): the section exact over our bytes (delta-wire.mjs deltaSection: every entry at its object, /Prev our
+// startxref); the wrapped document read again by the object layer (xref.mjs), its catalog, pages and resources ours but for
+// /OCProperties, /Contents and /Properties, every group listed and ON, every page's names resolving to its OCGs; and each new
+// stream lexed again: every BDC of ours balanced by its EMC at its depth and text state, and its operators, with ours taken
+// out and the split shows joined, our page's.
 //
 // An original module (no port statement). It imports the remover's lexer and page walk (layout/remove.mjs), the section writer
 // and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given.
-import { deltaSection, UNHIDDEN_MAX } from './delta-wire.mjs'
+import { isMemoryError } from '../pipeline/memory.mjs'
+import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
 import { followsOf } from './marks.mjs'
 import { ownOf, UNHIDDEN } from './own.mjs'
 import { alignOf, lex, openRemover } from './remove.mjs'
 import { appendSection } from './section.mjs'
 import { startxrefOf } from './tail.mjs'
+import { openObjects } from './xref.mjs'
 
 /** the groups and the marked-content sequences of ours a page may hold, and the groups a document may (E1, E3) */
 export const GROUPS_PAGE = 512, SEQUENCES_PAGE = 2000, GROUPS_DOC = 8000
@@ -86,15 +90,15 @@ function codeGroups(row, count) {
 
 /**
  * Wrap our final pass. `finalBytes` its bytes; `plans` page (1-based) -> { facts (remove.mjs alignOf's of PDF.js's list of the
- * page), shows, paths } (planOf's), a page with none left unwrapped; `units` own.mjs's units (their pages: a refused page makes
- * each unit on it `page`, a merge `bounds`); `PL` @cantoo/pdf-lib's exports; `deflate` (bytes -> bytes, deterministic) and
+ * page), shows, paths } (planOf's), a page with none left unwrapped; `PL` @cantoo/pdf-lib's exports; `deflate` (bytes -> bytes, deterministic) and
  * `inflate` (bytes, limit -> bytes) as the remover takes them. Returns { bytes (finalBytes and the section), xref, sha256,
- * pages: Map p -> { ok, why?, groups, sequences, split }, groups (in the document), stats } or { refused (a WRAP_WHYS code), why }.
+ * pages: Map p -> { ok, why?, groups, sequences, split, merged } (a page not ok or merged makes each unit on it `page` or, with a
+ * placeholder, `bounds`: wrapFinal's), groups (in the document), stats } or { refused (a WRAP_WHYS code), why }.
  * Never throws but a failed allocation
  */
-export async function wrapOf(finalBytes, plans, { units = new Map(), PL, deflate, inflate = null, groupsPage = GROUPS_PAGE, sequencesPage = SEQUENCES_PAGE, groupsDoc = GROUPS_DOC }) {
+export async function wrapOf(finalBytes, plans, { PL, deflate, inflate = null, groupsPage = GROUPS_PAGE, sequencesPage = SEQUENCES_PAGE, groupsDoc = GROUPS_DOC }) {
   let R
-  try { R = await openRemover(finalBytes, { PL, inflate }) } catch (e) { if (isMemory(e)) throw e; return { refused: 'wrap-parse', why: String(e?.message ?? e).slice(0, 300) } }
+  try { R = await openRemover(finalBytes, { PL, inflate }) } catch (e) { if (isMemoryError(e)) throw e; return { refused: 'wrap-parse', why: String(e?.message ?? e).slice(0, 300) } }
   try {
     const { ctx, PDFName, PDFDict, PDFRef } = { ctx: R.ctx, ...PL }
     const out = new Map()
@@ -161,17 +165,16 @@ export async function wrapOf(finalBytes, plans, { units = new Map(), PL, deflate
     const kind = /^\s*xref/.test(td.decode(finalBytes.subarray(prev, prev + 16))) ? 'table' : 'stream'
     const section = appendSection({ end: finalBytes.length, objects, kind, prev, size: next, trailer: { root: T.Root.toString(), info: T.Info?.toString(), id: T.ID?.toString() } })
     const bytes = concat([finalBytes, section.bytes])
-    const proof = proveWrap(finalBytes, section.bytes, { R, out, inflate: inflate ?? null, kind })
+    const proof = proveWrap(finalBytes, section.bytes, { R, out, PL, groups: docGroups })
     if (proof) return { refused: 'wrap-proof', why: proof }
     for (const x of out.values()) delete x.stream
     return { bytes, xref: section.xref, sha256: await sha256Of(bytes), pages: out, groups: docGroups, stats }
   } catch (e) {
-    if (isMemory(e)) throw e
+    if (isMemoryError(e)) throw e
     return { refused: 'wrap-parse', why: String(e?.message ?? e).slice(0, 300) }
   }
 }
 
-const isMemory = e => e instanceof RangeError && /allocation|memory|Array buffer/i.test(String(e?.message))
 async function sha256Of(bytes) {
   const d = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))
   let s = ''
@@ -318,9 +321,11 @@ function applyInserts(bytes, list) {
  * a TJ; (c) its operators, ours taken out and each split show's chunks joined, the unwrapped page's: the same operators and
  * operands, the shows' codes and numbers (adjacent numbers summed, zeros dropped) in order
  */
-function proveWrap(finalBytes, sectionBytes, { R, out }) {
+function proveWrap(finalBytes, sectionBytes, { R, out, PL, groups }) {
   const sect = deltaSection(sectionBytes, { bytes: finalBytes.length, xref: startxrefOf(finalBytes) })
   if (sect.why) return `the section: ${sect.why}`
+  const graph = graphWhy(finalBytes, concat([finalBytes, sectionBytes]), { PL, out, groups })
+  if (graph) return graph
   for (const [p, x] of out) {
     if (!x.ok) continue
     const mine = lex(x.stream)
@@ -356,6 +361,46 @@ function proveWrap(finalBytes, sectionBytes, { R, out }) {
     const why = sameOps(theirs, flat)
     R.release()
     if (why) return `page ${p}: ${why}`
+  }
+  return null
+}
+
+/**
+ * (d) The wrapped document read again by the object layer as PDF.js reads it (xref.mjs), against our pass: the catalog ours
+ * but its /OCProperties, which lists every group of ours and holds each in its default /ON; each page our pass's object, its
+ * dict ours but /Contents and /Resources, its resources ours but /Properties, which names each of the page's groups by its
+ * resource name and an OCG of its name; every page not wrapped ours whole. `why`, or null
+ */
+function graphWhy(finalBytes, bytes, { PL, out, groups }) {
+  const { PDFDict, PDFArray, PDFRef, PDFName } = PL
+  const bound = { PL, objectsMax: DELTA_OBJECTS_MAX, decodedMax: 48 * 2 ** 20 }
+  const F = openObjects(finalBytes, bound), X = openObjects(bytes, bound)
+  const look = (D, v) => (v instanceof PDFRef ? D.lookup(v) : v)
+  const text = v => (v === undefined ? 'none' : v instanceof PDFRef ? `${v.objectNumber} ${v.generationNumber} R` : v.toString())
+  const sameBut = (a, b, but) => {
+    if (!(a instanceof PDFDict) || !(b instanceof PDFDict)) return false
+    const ka = a.entries().filter(([k]) => !but.includes(k.asString())), kb = b.entries().filter(([k]) => !but.includes(k.asString()))
+    return ka.length === kb.length && ka.every(([k, v]) => text(b.get(k)) === text(v))
+  }
+  const refs = v => (v instanceof PDFArray ? v.asArray().map(text) : [])
+  const fc = look(F, F.trailer.root), xc = look(X, X.trailer.root)
+  if (text(X.trailer.root) !== text(F.trailer.root) || !sameBut(xc, fc, ['/OCProperties'])) return 'the catalog is not ours but for /OCProperties'
+  const oc = look(X, xc.get(PDFName.of('OCProperties'))), ocgs = new Set(refs(look(X, oc?.get?.(PDFName.of('OCGs'))))), on = new Set(refs(look(X, look(X, oc?.get?.(PDFName.of('D')))?.get?.(PDFName.of('ON')))))
+  for (const [g, n] of groups) if (!ocgs.has(`${n} 0 R`) || !on.has(`${n} 0 R`)) return `the group ${g} is not in /OCProperties, or not ON`
+  const fp = F.pages(), xp = X.pages()
+  if (fp.length !== xp.length) return 'another page count'
+  for (let p = 1; p <= fp.length; p++) {
+    const a = fp[p - 1], b = xp[p - 1], x = out.get(p)
+    if (text(a.ref) !== text(b.ref)) return `page ${p} is another object`
+    if (!x?.ok) { if (!sameBut(b.node, a.node, [])) return `page ${p}, not wrapped, is not ours`; continue }
+    if (!sameBut(b.node, a.node, ['/Contents', '/Resources'])) return `page ${p}'s dict is not ours but for its contents and resources`
+    const ra = look(F, a.inherited.Resources), rb = look(X, b.node.get(PDFName.of('Resources')))
+    if (!sameBut(rb, ra, ['/Properties'])) return `page ${p}'s resources are not ours but for /Properties`
+    const props = look(X, rb.get(PDFName.of('Properties')))
+    for (const g of x.names) {
+      const r = props?.get?.(PDFName.of(propName(g))), o = look(X, r)
+      if (!(r instanceof PDFRef) || !(o instanceof PDFDict) || o.get(PDFName.of('Type'))?.asString?.() !== '/OCG' || o.get(PDFName.of('Name'))?.decodeText?.() !== ocgName(g) || text(r) !== `${groups.get(g)} 0 R`) return `page ${p}: its /Properties do not name the group ${g}`
+    }
   }
   return null
 }
@@ -437,7 +482,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
       page.cleanup()
     }
   } catch (e) {
-    if (isMemory(e)) throw e
+    if (isMemoryError(e)) throw e
     return { refused: 'wrap-parse', why: `PDF.js: ${String(e?.message ?? e)}`.slice(0, 300) }
   } finally { await task?.destroy?.().catch?.(() => {}) }
   const names = new Set(pages.flatMap(pg => pg.points.map(x => x.name)))
@@ -445,7 +490,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   const own = ownOf(pages, { units, follows })
   const plans = new Map()
   pages.forEach((pg, i) => { if (facts[i] && pg.points.length) plans.set(i + 1, { facts: facts[i], ...planOf(pg.glyphs, own.glyphs[i], pg.paths, own.boxes[i]) }) })
-  const made = await wrapOf(finalBytes, plans, { units: own.units, PL, deflate, inflate, ...bounds })
+  const made = await wrapOf(finalBytes, plans, { PL, deflate, inflate, ...bounds })
   if (made.refused) return made
   // a unit on a page not wrapped, or with a placeholder where the page's groups were merged, is the original's
   for (const u of own.units.values()) {
