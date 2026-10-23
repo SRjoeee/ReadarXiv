@@ -1,6 +1,7 @@
 // arxiv.mjs's types: arXiv's text read once (the prepare's step T), for the left, the layout maker and the highlight's layout
 import type { DocToken } from '../pipeline/anchors.mjs'
 import type { DrawText } from '../pipeline/draw-data.mjs'
+import type { TextRecord } from './page-text.mjs'
 
 export interface ArxivText {
   /** the document's pages */
@@ -21,6 +22,10 @@ export interface ArxivText {
   /** with `draw` asked, each page's text as its draw reads it (drawTextOf; null where not read), taken by the layout maker a page at
    *  a time and let go; else null */
   draw: (DrawText | null)[] | null
+  /** with `pageTexts` asked, each page's text record as the delta's proof compares it (null where not read); else null. Absent
+   *  from a text not read by readArxivText */
+  pageTexts?: (TextRecord | null)[] | null
 }
-/** every page's view and text read once (`draw`: and kept as the draw geometry reads it); the caller opens and destroys the document */
-export declare function readArxivText(doc: { numPages: number; getPage(n: number): Promise<unknown> }, o?: { draw?: boolean }): Promise<ArxivText>
+/** every page's view and text read once (`draw`: and kept as the draw geometry reads it; `pageTexts`: and each page's text record
+ *  the delta's proof compares); the caller opens and destroys the document */
+export declare function readArxivText(doc: { numPages: number; getPage(n: number): Promise<unknown> }, o?: { draw?: boolean; pageTexts?: boolean }): Promise<ArxivText>

@@ -23,12 +23,15 @@
 // the delta's section exact (deltaSection: every entry at its `n g obj`, /Prev the original's startxref, startxref at the
 // section), the composed page graphs canonically ours on replaced pages and the original's elsewhere (a second, independent
 // parse), PDF.js opening the composed bytes with no message neither source gives alone, the page count the original's, every
-// page box and every page's text (strings and places within 0.01) ours on replaced pages and the original's elsewhere. No
-// operator list and no pixel: those are the lab's gate.
+// page box and every page's text items (layout/page-text.mjs: exactly, every field of every item) ours on replaced pages and the
+// original's elsewhere. The two sources' texts are the host's own readings where it gives them (`readers`: the documents it keeps
+// for the page pass, read once), else read here; the composed document is always read here. No operator list and no pixel: those
+// are the lab's gate.
 //
 // An original module (no port statement). It imports the object layer's reading (xref.mjs), the section writer, the delta's
 // wire and the memory-class test; @cantoo/pdf-lib (MIT) and PDF.js are given.
 import { isMemoryError } from '../pipeline/memory.mjs'
+import { textRecordDiffers, textRecordOf } from './page-text.mjs'
 import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, DELTA_TAIL_ROOM, deltaSection, pagesOf, rangesOf } from './delta-wire.mjs'
 import { appendSection } from './section.mjs'
 import { OBJECT_MAX, startxrefOf } from './tail.mjs'
@@ -580,7 +583,6 @@ function ocNamedWhy(PL, X, pages) {
   return null
 }
 
-const near = (a, b) => Math.abs(a - b) <= 0.01
 /** the console taken by one proof at a time in this process (its PDF.js reads in turn): a proof that overlaps another waits for
  *  it, so that neither keeps the other's capture as the console's own nor reads the other's messages as its documents' */
 let consoleQueue = Promise.resolve()
@@ -593,19 +595,10 @@ async function consoleHeld(fn) {
     return await fn()
   } finally { release() }
 }
+/** whether a reader's entry is a page's text record (layout/page-text.mjs textRecordOf's shape) */
+const isTextRecord = r => !!r && typeof r === 'object' && Array.isArray(r.view) && r.view.every(v => typeof v === 'number') && typeof r.rotate === 'number' && typeof r.userUnit === 'number' && Number.isInteger(r.count) && typeof r.items === 'string'
 /** PDF.js's messages of a cross-reference it does not read as written (it then indexes the whole file, or skips a section) */
 const RECOVERY = /Indexing all PDF objects|XRef|xref|startxref|trailer/
-/** the first difference between two pages' text items (PDF.js's getTextContent, strings alone), within 0.01 */
-function textDiffers(a, b) {
-  if (a.length !== b.length) return `${a.length} text items, not ${b.length}`
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i], y = b[i]
-    if (x.str !== y.str) return `item ${i}: ${JSON.stringify(x.str.slice(0, 40))}, not ${JSON.stringify(y.str.slice(0, 40))}`
-    if (!x.transform.every((v, k) => near(v, y.transform[k])) || !near(x.width, y.width) || !near(x.height, y.height)) return `item ${i}: another place`
-    if (x.dir !== y.dir || x.hasEOL !== y.hasEOL) return `item ${i}: another direction or line end`
-  }
-  return null
-}
 
 /**
  * The structural proof of a delta (the contract's §14.2), in the box, before a head names it: `origBytes` arXiv's PDF,
@@ -615,13 +608,18 @@ function textDiffers(a, b) {
  * (delta-wire.mjs deltaSection) and the composed document's startxref the section's; (f) the composed page graphs, read by
  * the object layer, canonically ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere;
  * (a, d, e) PDF.js opens the composed bytes with no message that neither source alone gives (its console captured, each
- * document read in turn), the original's page count, every page's box and text (strings, places within 0.01) ours on replaced
- * pages and the original's elsewhere. What the delta overrides of the original is bounded: the replaced pages' objects exactly
- * (no other page; the catalog only to carry our /OCProperties, every other key of it the original's), its /Size not below the original's. An original PDF.js recovers by its own scan (any message
- * of its cross-reference on the original alone) is refused (`delta-xref`). { ok: true, pages, replaced } or { ok: false, code
+ * document read in turn), the original's page count, every page's box and text items (layout/page-text.mjs textRecordDiffers:
+ * the box within 0.01, the items exactly) ours on replaced pages and the original's elsewhere. `readers` { orig?, ours? }: the
+ * host's own readings of arXiv's PDF and of our final pass, each a function the proof calls in place of its own reading of that
+ * document, in the same turn and under the same capture of the console (so the host opens the document there, at PDF.js's
+ * verbosity 1, and keeps it): it gives each page's text record (arxiv.mjs readArxivText `pageTexts`, null for a page not read),
+ * and a reader that throws is a PDF.js failure as the proof's own reading's is. What the delta overrides of the original is
+ * bounded: the replaced pages' objects exactly (no other page; the catalog only to carry our /OCProperties, every other key of it
+ * the original's), its /Size not below the original's. An original PDF.js recovers by its own scan (any message of its
+ * cross-reference on the original alone) is refused (`delta-xref`). { ok: true, pages, replaced } or { ok: false, code
  * ('delta-proof' or 'delta-xref'), why }. Never throws but a failed allocation
  */
-export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDocument, documentOptions = {}, replaced, objectsMax = DELTA_OBJECTS_MAX, decodedMax = DELTA_DECODED_MAX, heldMax = DELTA_HELD_MAX }) {
+export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDocument, documentOptions = {}, replaced, readers = null, objectsMax = DELTA_OBJECTS_MAX, decodedMax = DELTA_DECODED_MAX, heldMax = DELTA_HELD_MAX }) {
   const no = (why, code = 'delta-proof') => ({ ok: false, code, why: String(why).slice(0, 300) })
   const composed = concat([origBytes, deltaBytes])
   const rep = new Set(pagesOf(replaced ?? []))
@@ -693,39 +691,54 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     return no(`the object layer: ${r.why}`)
   }
 
-  // (a, d, e) PDF.js, each document read whole in turn under a captured console
+  // (a, d, e) PDF.js, each document read whole in turn under a captured console: the composed document here, always, first (its
+  // reading let go before a reader's document, which the host keeps, is opened); then arXiv's PDF and ours, by the host's readers
+  // where it gives them, else here
   const said = { orig: new Set(), ours: new Set(), composed: new Set() }
-  const read = async (bytes, tag) => {
+  /** `fn` with the console's messages kept as `tag`'s (the console restored on every path: a read may throw before its task exists,
+   *  the task reject, its destroy throw) */
+  const heard = async (tag, fn) => {
     const log0 = console.log, warn0 = console.warn, err0 = console.error
     const keep = (...a) => said[tag].add(a.map(String).join(' '))
-    // (the console restored on every path: getDocument may throw before its task exists, the task reject, its destroy throw)
-    let task = null
     console.log = keep
     console.warn = keep
     console.error = keep
+    try { return await fn() } finally {
+      console.log = log0
+      console.warn = warn0
+      console.error = err0
+    }
+  }
+  /** a document's text records, each page's, read here */
+  const read = (bytes, tag) => heard(tag, async () => {
+    let task = null
     try {
       task = getDocument({ ...documentOptions, data: bytes, verbosity: 1 })
       const doc = await task.promise
       const pages = []
       for (let p = 1; p <= doc.numPages; p++) {
         const page = await doc.getPage(p)
-        const tc = await page.getTextContent()
-        pages.push({ view: [...page.view], rotate: page.rotate, userUnit: page.userUnit ?? 1, items: tc.items.filter(x => 'str' in x) })
+        pages.push(await textRecordOf(page, await page.getTextContent()))
         page.cleanup()
       }
       return pages
-    } finally {
-      try { await task?.destroy?.() } finally {
-        console.log = log0
-        console.warn = warn0
-        console.error = err0
-      }
-    }
-  }
-  // (one copy of a source document at a time, for PDF.js to own; the composed bytes are the proof's own, read last)
+    } finally { await task?.destroy?.() }
+  })
+  /** a document's text records as the host's reader gives them */
+  const given = (reader, tag) => heard(tag, async () => {
+    const pages = await reader()
+    if (!Array.isArray(pages)) throw new TypeError(`the ${tag} reader gave no pages`)
+    // (an entry that is no text record is a page not read)
+    return Array.from(pages, r => (isTextRecord(r) ? r : null))
+  })
+  // (one copy of a source document at a time, for PDF.js to own; the composed bytes are the proof's own, read whole first)
   let orig, ours, comp
   try {
-    ;[orig, ours, comp] = await consoleHeld(async () => [await read(origBytes.slice(), 'orig'), await read(finalBytes.slice(), 'ours'), await read(composed, 'composed')])
+    ;[comp, orig, ours] = await consoleHeld(async () => [
+      await read(composed, 'composed'),
+      typeof readers?.orig === 'function' ? await given(readers.orig, 'orig') : await read(origBytes.slice(), 'orig'),
+      typeof readers?.ours === 'function' ? await given(readers.ours, 'ours') : await read(finalBytes.slice(), 'ours'),
+    ])
   } catch (e) {
     if (isMemoryError(e)) throw e
     return no(`PDF.js: ${String(e?.message ?? e)}`)
@@ -739,11 +752,10 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
   if (comp.length !== orig.length) return no(`PDF.js reads ${comp.length} pages of the composed document, ${orig.length} of arXiv's`)
   for (let p = 1; p <= comp.length; p++) {
     // (a replaced page is ours; every other is the original's in the composed document, whatever ours is there)
-    const ref = rep.has(p) ? ours[p - 1] : orig[p - 1], c = comp[p - 1]
-    if (c.rotate !== ref.rotate || c.userUnit !== ref.userUnit || c.view.some((v, i) => !near(v, ref.view[i]))) return no(`page ${p}'s box is not ${rep.has(p) ? 'ours' : 'the original\'s'}`)
-    const want = rep.has(p) ? ours[p - 1] : orig[p - 1]
-    const d = textDiffers(c.items, want.items)
-    if (d) return no(`page ${p}'s text is not ${rep.has(p) ? 'ours' : 'the original\'s'}: ${d}`)
+    const whose = rep.has(p) ? 'ours' : 'the original\'s'
+    const d = textRecordDiffers(comp[p - 1], rep.has(p) ? ours[p - 1] : orig[p - 1])
+    if (d === 'its box differs') return no(`page ${p}'s box is not ${whose}`)
+    if (d !== null) return no(`page ${p}'s text is not ${whose}: ${d}`)
   }
   return { ok: true, pages: [M, N], replaced: rep.size }
 }

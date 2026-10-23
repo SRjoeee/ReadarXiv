@@ -1,4 +1,5 @@
 // delta.mjs's types: our base page as an incremental update over arXiv's PDF, built and proved in the box
+import type { TextRecord } from './page-text.mjs'
 import type { DeltaWhy, PageRanges } from './delta-wire.mjs'
 import type { PdfLib } from './remove.mjs'
 
@@ -27,6 +28,9 @@ export declare function proveDelta(origBytes: Uint8Array, deltaBytes: Uint8Array
   getDocument: (options: Record<string, unknown>) => { promise: Promise<unknown>; destroy?: () => Promise<void> }
   documentOptions?: Record<string, unknown>
   replaced: PageRanges
+  /** the host's own readings of arXiv's PDF (`orig`) and of our final pass (`ours`), each called once in place of the proof's
+   *  reading of that document, under the proof's capture of the console: each page's text record (readArxivText `pageTexts`) */
+  readers?: { orig?: () => Promise<readonly (TextRecord | null)[]>; ours?: () => Promise<readonly (TextRecord | null)[]> } | null
   objectsMax?: number; decodedMax?: number; heldMax?: number
 }): Promise<{ ok: true; pages: [ours: number, arxiv: number]; replaced: number } | { ok: false; code: 'delta-proof' | 'delta-xref'; why: string }>
 export declare function wrappedPagesOf(PL: import('./remove.mjs').PdfLib, doc: unknown): number[]
