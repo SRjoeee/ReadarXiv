@@ -56,3 +56,6 @@ each other on a few pages; each such page was run again twice on the same inputs
   renders. 2609.26457v1 p2 (CPU): 0, then 27 px in G1 and G2'. 2602.23285v2 (CPU): image-edge px 0 / 0, then 1 / 1, and p5
   76 px in G1 once. 2608.04322v1 p3 (CPU) image-edge px 24 / 24, then 24 / 23. The earlier runs on a quiet machine (at
   `c4027ed7`, the same counts) showed no exception on either canvas, the image-edge px equal: 72 / 72 (GPU), 31 / 31 (CPU).
+- G2' (text and labels OFF against the remover's cut of the same ownership) is no longer measured: the remover, its only
+  oracle, was deleted with REMOVAL 8 (feat/ocg-reader, docs/route/ocg-erasure.md §4.2), and the spike no longer runs it. The
+  columns above are its last runs, on the file side's final head.
