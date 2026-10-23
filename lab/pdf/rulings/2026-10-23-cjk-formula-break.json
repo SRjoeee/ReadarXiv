@@ -1,9 +1,9 @@
 {
-  "date": "2026-10-28",
+  "date": "2026-10-23",
   "by": "the maintainer",
   "on": "the CJK formula break and squeeze (pull request 438): a Chinese or Japanese line may break before an inline formula, and a line that would be letter-spaced squeezes to take the group it misses by a little",
   "quote": "almost everything meets the requirements; there is no truly worse case. What matters is uniformity and naturalness within a block, and paragraph-level correspondence: each sentence lands at the right place in its paragraph, and paragraph boundaries fall where the original has them. Line-level shifts and per-line offsets are normal and are not a regression",
-  "english": "the maintainer's ruling of 2026-10-28 after the side-by-side sample, relayed by the coordinator: almost everything meets the requirements; there is no truly worse case; what matters is uniformity and naturalness within a block and paragraph-level correspondence (each sentence at the right place in its paragraph, paragraph boundaries where the original has them); line-level shifts and per-line offsets are normal and not a regression. With the standing rule relayed on 2026-10-22: the gate's 0-worse-than-base is a safety net, and the evidence is closeness to the original, not equality with the last build",
+  "english": "the maintainer's ruling of 2026-10-23 after the side-by-side sample, relayed by the coordinator: almost everything meets the requirements; there is no truly worse case; what matters is uniformity and naturalness within a block and paragraph-level correspondence (each sentence at the right place in its paragraph, paragraph boundaries where the original has them); line-level shifts and per-line offsets are normal and not a regression. With the standing rule relayed on 2026-10-22: the gate's 0-worse-than-base is a safety net, and the evidence is closeness to the original, not equality with the last build",
   "measures": [
     "paraGapWide"
   ],

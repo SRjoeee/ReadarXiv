@@ -5,7 +5,7 @@ import type { Params } from '../layer-proto/layer2.mjs'
 import type { NameKey } from '../layout/names.mjs'
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 4
+export declare const RULES_SCHEMA: 5
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
@@ -38,6 +38,8 @@ export interface ScriptRules {
   adaptiveFill: { band: number; track: number; size: number } | null
   /** em of the size drawn: the loosest pitch the fill spreads a unit to; null: the original's own pitch */
   fillLead: number | null
+  /** × the original's own pitch (scaled by the fit's size): the loosest pitch the fill spreads a unit to where that is looser than fillLead's; null: fillLead's alone */
+  fillLeadRel: number | null
   /** what the fill leaves over: at each unit's foot, or packed to its run's end */
   leftover: 'foot' | 'pack'
   // breaking (layer2.mjs tokensOf2, layer1.mjs kinsokuOf)
@@ -64,7 +66,7 @@ export type LanguageRules = Partial<ScriptRules> & {
   labels: Labels | null
 }
 export interface RuleSet {
-  schema: 4
+  schema: 5
   /** an integer ≥ 1, one more than the set it replaces */
   version: number
   /** at most 1,000 characters: what changed and why */
