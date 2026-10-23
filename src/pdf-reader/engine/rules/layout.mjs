@@ -38,7 +38,7 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
  *  original's pitch while the size shrinks); `adaptiveFill` read for every original, its page's target held near the last
  *  page's and one size a page; `fillLead` and `leftover` added. 3 (D1a, 2026-10-08): `labels` holds every babel name
  *  (layout/names.mjs NAME_KEYS), the generated headings' as well as the floats'. 4 (1b-C, 2026-10-16): `adaptiveFill.band` is read
- *  against the page's own paragraphs (run.mjs pageTarget), no longer against the page before's and the fullest page's. 5 (2026-10-28):
+ *  against the page's own paragraphs (run.mjs pageTarget), no longer against the page before's and the fullest page's. 5 (2026-10-23):
  *  `fillLeadRel` added, the fill's top relative to the original's own pitch (run.mjs fillLeadsOf) */
 export const RULES_SCHEMA = 5
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
@@ -147,7 +147,7 @@ const SCRIPT_FIELDS = [
   // (D6's F6b, 2026-10-08: the top of a unit's fill leading, which replaced the script's leading on the original's pitch;
   // in em of the size drawn, so that a shrunk unit is spread no looser for its size than one set at the full size)
   { key: 'fillLead', group: 'fit', kind: 'number', nullable: true, min: 1, max: 3, step: 0.05, words: "The loosest line pitch the fill spreads a unit's lines to, in em of the size it is drawn at; empty: the original's own pitch.", schema: () => z.nullable(range(1, 3)) },
-  // (2026-10-28, chosen by eye on a double-spaced paper: the em top above can sit at the original's own pitch or under what the frame
+  // (2026-10-23, chosen by eye on a double-spaced paper: the em top above can sit at the original's own pitch or under what the frame
   // allows, and the translation then ends early. 1.3 is the engine's own Chinese leadBase, the leading that makes Chinese read as
   // the original's pitch does; a ceiling of that many original pitches (scaled by the fit's size) never sets a gap wider than the
   // original's own in proportion. Read only with fillLead; empty: the em top alone, as before. Per script, so that Japanese and
