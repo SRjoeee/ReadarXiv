@@ -1138,18 +1138,51 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       let j = one.linkAt
       while (j < one.links.length && !(want.has(one.links[j].dest) && free(one.links[j]))) j++
       if (j >= one.links.length) return null
-      const took = [one.links[j]], used = new Set([one.links[j].dest])
-      for (let q = j + 1; q < one.links.length && want.has(one.links[q].dest) && !used.has(one.links[q].dest) && free(one.links[q]); q++) { took.push(one.links[q]); used.add(one.links[q].dest) }
+      // (its keys as a multiset: a key cited twice is linked twice, \cite{a,a})
+      const left = new Map()
+      for (const key of kind.keys) left.set(`cite.${key}`, (left.get(`cite.${key}`) ?? 0) + 1)
+      const free1 = (P, g) => !P.taken[g] && (P.owner[g] === -1 || P.owner[g] === i) && /\S/u.test(P.u[g])
+      /** the glyphs between two links on one line at their height, where they are one citation's: no letter or digit among
+       *  them (prose parts two citations: "[1] and [2]") and the gap within twice the links' height (a comma, a range's dash);
+       *  null where not */
+      const between = (L, N) => {
+        if (N.page !== L.page || N.row !== L.row || N.x0 - L.x1 > 2 * Math.max(L.y1 - L.y0, N.y1 - N.y0)) return null
+        const P = ink[L.page], out = []
+        for (let g = lowest(P, Math.min(L.y0, N.y0)); g < P.n && P.y[g] < Math.max(L.y1, N.y1); g++) {
+          if (mid(P, g) < L.x1 || mid(P, g) > N.x0 || !/\S/u.test(P.u[g])) continue
+          if (!free1(P, g) || /[\p{L}\p{N}]/u.test(P.u[g])) return null
+          out.push(g)
+        }
+        return out
+      }
+      const took = [one.links[j]], gaps = []
+      left.set(one.links[j].dest, left.get(one.links[j].dest) - 1)
+      for (let q = j + 1; q < one.links.length; q++) {
+        const N = one.links[q], g = (left.get(N.dest) ?? 0) > 0 && free(N) ? between(took.at(-1), N) : null
+        if (!g) break
+        took.push(N); gaps.push(g); left.set(N.dest, left.get(N.dest) - 1)
+      }
       one.linkAt = j + took.length
+      /** the bracket TeX set right against a link, outside its rectangle (hyperref links a bracketed citation's number alone,
+       *  "[1]"): the nearest glyph of `chars` at its height whose edge is within half its height of the link's, or none */
+      const bracket = (L, before) => {
+        const P = ink[L.page], h = L.y1 - L.y0
+        let best = -1, d = Infinity
+        for (let g = lowest(P, L.y0); g < P.n && P.y[g] < L.y1; g++) {
+          if (P.y[g] <= L.y0 || !free1(P, g) || !(before ? /^[[(]$/ : /^[\])]$/).test(P.u[g])) continue
+          const e = before ? L.x0 - P.x1[g] : P.x0[g] - L.x1
+          if (e >= -0.5 && e <= 0.5 * h && e < d) { d = e; best = g }
+        }
+        return best
+      }
       const glyphs = []
+      const open = bracket(took[0], true), close = bracket(took.at(-1), false)
+      if (open >= 0) glyphs.push([took[0].page, open])
       took.forEach((L, q) => {
-        const P = ink[L.page]
         for (const g of L.gs) glyphs.push([L.page, g])
-        // (what stands between it and the next of its links on its line, at its height: a comma, a dash)
-        const N = took[q + 1]
-        if (!N || N.page !== L.page || N.row !== L.row) return
-        for (let g = lowest(P, Math.min(L.y0, N.y0)); g < P.n && P.y[g] < Math.max(L.y1, N.y1); g++) if (mid(P, g) >= L.x1 && mid(P, g) <= N.x0 && !P.taken[g] && P.owner[g] === -1 && /\S/u.test(P.u[g])) glyphs.push([L.page, g])
+        for (const g of gaps[q] ?? []) glyphs.push([L.page, g])
       })
+      if (close >= 0) glyphs.push([took.at(-1).page, close])
       for (const [p, g] of glyphs) ink[p].taken[g] = 1
       return { glyphs, boxes: [] }
     }

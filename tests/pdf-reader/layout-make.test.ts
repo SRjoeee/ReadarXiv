@@ -2077,6 +2077,29 @@ describe('makeLayout, a citation whose marks give it no ink: found by its link a
     expect(a.slice(5, 8)).toEqual([117, 700, 120.5])
     expect(b.slice(5, 8)).toEqual([167, 700, 177.5])
   })
+  it('a list\'s links stop at the citation: a compressed range (1–3, its ends linked) and a later citation of a middle key after prose', async () => {
+    const run: Run = { s: 'Work. And more', x: 72, y: 700 }
+    const { file } = await made({
+      pages: [{ runs: [run, sup('1–3', 97), sup('2', 142)], annots: [{ rect: box(97, 1), dest: 'cite.a' }, { rect: box(104, 1), dest: 'cite.c' }, { rect: box(142, 1), dest: 'cite.b' }] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(run), 700]],
+      units: [unit('para', [text('Work'), ph('\\cite{a,b,c}'), text('. And more'), ph('\\cite{b}'), text('.')])],
+      switches: { '\\cite': '22220000' },
+    })
+    expect([(phOf(file, 0, 1)[3] ?? 0) & PH_FLAG.LOST, (phOf(file, 0, 3)[3] ?? 0) & PH_FLAG.LOST]).toEqual([0, 0])
+    expect(phOf(file, 0, 1).slice(5, 8)).toEqual([97, 700, 107.5])
+    expect(phOf(file, 0, 3).slice(5, 8)).toEqual([142, 700, 145.5])
+  })
+  it('a key cited twice is linked twice (\\cite{a,a}), and a bracketed citation\'s brackets, outside its link, are its own', async () => {
+    const run: Run = { s: 'Our work 91.5[1]. More', x: 72, y: 700 }
+    const { file } = await made({
+      pages: [{ runs: [run, sup('1,1', 182)], annots: [{ rect: [xAt(run, 14) - 0.5, 699, xAt(run, 15) + 0.5, 708], dest: 'cite.a' }, { rect: box(182, 1), dest: 'cite.a' }, { rect: box(189, 1), dest: 'cite.a' }] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(run), 700]],
+      units: [unit('para', [text('Our work 91.5'), ph('\\cite{a}'), text('. More'), ph('\\cite{a,a}'), text('.')])],
+      switches: { '\\cite': '22220000' },
+    })
+    expect(phOf(file, 0, 1).slice(5, 8)).toEqual([xAt(run, 13), 700, xAt(run, 16)])
+    expect(phOf(file, 0, 3).slice(5, 8)).toEqual([182, 700, 192.5])
+  })
   it('none where the page has no link of its keys, nor one whose glyphs are on no line of the unit\'s: LOST, as before', async () => {
     const { file } = await made(world([{ rect: box(117, 1), dest: 'cite.z' }, { rect: [167, 500, 180, 510], dest: 'cite.b' }]))
     expect([(phOf(file, 0, 1)[3] ?? 0) & PH_FLAG.LOST, (phOf(file, 0, 3)[3] ?? 0) & PH_FLAG.LOST]).toEqual([PH_FLAG.LOST, PH_FLAG.LOST])
