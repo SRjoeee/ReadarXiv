@@ -39,13 +39,30 @@ export { LayoutRefusal } from './json.mjs'
  *  unchanged (the file's schema is 5 still); 12 (layer route step 2): the file's coordinates are our base page's, the final
  *  pass of the marked original (its marks where the draft has them), no longer arXiv's PDF's: a placeholder's segments are its
  *  own glyphs and rules between its two marks, looked up on that page with no matching, and the carry is the line check alone
- *  (the file's schema is 5 still); 13 is the engine lane's (its \@ change); 14 (the release sweep's fallbacks, 2026-10-22): the layout
- *  compile writes a Latin-1 source as the paper's own bytes (live.mjs originalFiles `transcode`), sets no mark inside an
- *  argument TeX reads verbatim (marks.mjs VERBATIM_ARG), reads no class's fallback that a package the paper loads overrides as
- *  the command's definition (arg-roles.mjs overriddenFallback), and takes no marked original of more pages than arXiv's for the base
- *  page (paper.mjs markedOfPaper): over 183 local sources the marked original changes in 2610.20581 and 2610.19860 alone, the
- *  gate pack's 32 outputs unchanged (the file's schema is 5 still) */
-export const LAYOUT = '14'
+ *  (the file's schema is 5 still); 13: a placeholder after a control sequence TeX and the kernel define to set no ink and
+ *  read nothing (rules/tex-kernel.mjs: `\@` in "Fig.\@ \ref{x}", `\indent`…) or after a LaTeX text symbol (`\S\ref{x}`) gets its
+ *  marks, where the maker took the one before it for a macro that may look ahead and left it with none: over 177 sources
+ *  19 papers' marked originals gain 359 opening marks, the other 158 and every unit are as they were (the
+ *  file's schema is 5 still; the gate pack's seven papers are among those unchanged); 14: what stands beside a placeholder read
+ *  from what the paper says rather than guessed (marks.mjs MARKS_SCHEMA 9): a call of the paper's own macro that reads nothing past
+ *  its arguments (latex-front.mjs completeMacros, from its definitions) is asked about by the mark probe, last, and a call the
+ *  probe asked about (or one of no arguments) gets the closing mark TeX answered moves nothing, before white space or
+ *  punctuation, and leaves the piece after it, past white space, its marks; a macro glued to a word whose box TeX begins with glue, a kern, a penalty or a whatsit (readInkApart) is marked;
+ *  the kernel's letters but the dotless \i and \j, and \slash, are text symbols; and a unit whose start mark stands at no word is bounded by the nearest
+ *  upright word after it on its baseline in its column (make.mjs reachIn); and a unit's line probe goes past the white space
+ *  that opens it, where its start mark goes, so that a space TeX skips after a control word or by \ignorespaces stays skipped
+ *  (latex-front.mjs patch: paralist's inline `\item Which`, 2610.21098's page re-broken from page 1). Every marked original's
+ *  bytes change where a unit opens with white space. Over the release-route sweep's 35 papers with unanchored rows, 37 of the
+ *  217 rows (31 units) convert, 57 units in all are placed better and no other unit's layout changes; of their 34 base pages
+ *  made again, 19 set every word where the paper's own compile in the same image does (pdftotext), the other 15 as the sweep's
+ *  did or nearer. Of the gate pack's seven papers 2609.26457's marking gains 73 marks, and each base page sets every word as
+ *  before or as the paper's own compile does (2307.16209 and 2608.16117 now as it) (the file's schema is 5 still); 15 (the release sweep's
+ *  fallbacks, 2026-10-22): the layout compile writes a Latin-1 source as the paper's own bytes (live.mjs originalFiles
+ *  `transcode`), sets no mark inside an argument TeX reads verbatim (marks.mjs VERBATIM_ARG), reads no class's fallback that a
+ *  package the paper loads overrides as the command's definition (arg-roles.mjs overriddenFallback), and takes no marked original
+ *  of more pages than arXiv's for the base page (paper.mjs markedOfPaper): over 183 local sources the marked original changes in
+ *  2610.20581 and 2610.19860 alone, the gate pack's 32 outputs unchanged (the file's schema is 5 still; MARKS_SCHEMA 9 still) */
+export const LAYOUT = '15'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */

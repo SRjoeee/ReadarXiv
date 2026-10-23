@@ -18,6 +18,7 @@
 // \titlerunning) `?s{x`, its value a group. A command LaTeXML reads in code past its prototype (\cmidrule[]'s
 // (trim){a-b}, acronym's \ac*{key}) is not known: its arguments are no reader's text
 import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, LATEXML_COMMIT, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUIRES } from './latexml-args.mjs'
+import { BREAK_HINTS, inkFree } from './tex-kernel.mjs'
 
 export { LATEXML_COMMIT }
 /** the roles' names, by their letter */
@@ -415,7 +416,7 @@ export function textArgsOf(src, paper = null) {
  * around one of these (\\noalign{\\vskip 4mm}, not \\noalign{\\hbox{Group A}})
  */
 const TEXTLESS = new Set([
-  'vspace', 'hspace', 'addvspace', 'vskip', 'hskip', 'kern', 'penalty', 'enlargethispage', 'linebreak', 'pagebreak', 'nolinebreak', 'nopagebreak',
+  'vspace', 'hspace', 'addvspace', 'vskip', 'hskip', 'kern', 'penalty', 'enlargethispage', ...BREAK_HINTS,
   'rule', 'specialrule', 'addlinespace', 'toprule', 'midrule', 'bottomrule', 'cmidrule', 'cline', 'hhline', 'tabularnewline',
   'setlength', 'addtolength', 'settowidth', 'settoheight', 'settodepth', 'setcounter', 'addtocounter', 'stepcounter', 'newlength', 'newcounter',
   'fontsize', 'linespread', 'setstretch', 'tablewidth', 'phantom', 'hphantom', 'vphantom',
@@ -432,9 +433,6 @@ const TEXTLESS = new Set([
  * (latex.ltx, the e-TeX manual); the registers the table holds as REGISTER are values already
  */
 const VALUES = new Set(['number', 'romannumeral', 'the', 'value', 'numexpr', 'dimexpr', 'glueexpr', 'muexpr', 'fontdimen', 'dimen', 'skip', 'count', 'muskip', 'toks', 'wd', 'ht', 'dp', 'fontcharwd', 'fontcharht', 'fontchardp', 'fontcharic', 'gluestretch', 'glueshrink', 'mutoglue', 'gluetomu'])
-/** control symbols that set no letters: a discretionary hyphen (its hyphen, where a line breaks there, is the line's
- *  break, which the layer sets anew) */
-const TEXTLESS_SYMBOLS = new Set(['\\-'])
 /**
  * Whether a placeholder can never be a text rendering: its source one command of TEXTLESS, its arguments all there as
  * the table reads them and nothing after them, or a register's assignment (\\looseness=-1, \\parindent 0pt). What it sets, if anything (a rule's bar), is the page's own drawing,
@@ -444,7 +442,9 @@ const TEXTLESS_SYMBOLS = new Set(['\\-'])
 export function textless(src, paper = null) {
   // booktabs' trim, (lr), before \\cmidrule's columns: what the front end passes over too
   const s = src.trim().replace(/^(\\cmidrule\s*(?:\[[^\]]*\]\s*)?)\([^()]*\)/, '$1')
-  if (TEXTLESS_SYMBOLS.has(s)) return true
+  // TeX's and the kernel's own control sequences that set no ink and read nothing (tex-kernel.mjs: `\\@`, `\\-`, `\\relax`…), but
+  // a control word the paper defines anew
+  if (inkFree(src)) return !paper?.own.has(/^\s*\\([A-Za-z]+)/.exec(src)?.[1])
   if (!/^\\[A-Za-z@]+/.test(s)) return false
   const { name, end } = commandAt(s, 0)
   if ((!TEXTLESS.has(name) && name !== 'noalign' && paperParams(name, paper) !== REGISTER) || paper?.own.has(name)) return false

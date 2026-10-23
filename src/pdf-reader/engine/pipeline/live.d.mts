@@ -30,7 +30,7 @@ export declare function probeFiles(paper: Paper, options?: { width?: boolean; ma
  *  mark; `names` false, no babel name marked. `spans` gets `skip` too: the main file's head of ours, in bytes. `transcode`
  *  (default: on without `layout`, off with it): a Latin-1 family file that is not UTF-8 written as UTF-8 (on, the live path's
  *  original as it was), or as the paper's own bytes under its own inputenc (off) */
-export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[]; skip?: number } | null; layout?: readonly import('../layout/marks.mjs').MarkClass[] | null; switches?: import('../layout/marks.mjs').Switches | null; inkless?: readonly string[] | null; unmarked?: Iterable<number> | null; names?: boolean; pastBegin?: boolean; transcode?: boolean }): Map<string, Uint8Array>
+export declare function originalFiles(paper: Paper, options?: { lines?: boolean; spans?: { lines?: () => import('./tex-errors.mjs').UnitLines<SourceUnit>[]; skip?: number } | null; layout?: readonly import('../layout/marks.mjs').MarkClass[] | null; switches?: import('../layout/marks.mjs').Switches | null; inkless?: readonly string[] | null; complete?: import('../layout/marks.mjs').Complete | null; apart?: readonly string[] | null; unmarked?: Iterable<number> | null; names?: boolean; pastBegin?: boolean; transcode?: boolean }): Map<string, Uint8Array>
 /** the units a translation into `lang` leaves as they are */
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a

@@ -196,11 +196,6 @@ const lineBound = (text, at, lineEnvs) => {
   for (const m of text.slice(from, at).matchAll(/\\(?:begin|end)\s*\{([^}]+)\}/g)) if (isLineEnv(m[1].trim(), lineEnvs) && !inComment(text, from + m.index)) return true
   return false
 }
-/** whether the text before `at` ends in an environment's \\begin{…} and the arguments written with it: LaTeX's \\begin ends in
- *  \\ignorespaces, so the space after it is skipped, and a command of ours there first would stop the skip and set the space
- *  (IEEEtran's abstract and keywords, run in after their dash: 2608.19431's abstract a line longer, its first two pages
- *  re-broken) */
-const afterBegin = (text, at) => !inComment(text, at) && /\\begin\s*\{[^{}]*\}(?:\s*\[[^\]]*\]|\s*\{[^{}]*\})*$/.test(text.slice(Math.max(0, at - 400), at))
 const ACCENTS = new Set(["'", '`', '"', '^', '~', '=', '.', 'u', 'v', 'H', 'c', 'd', 'b', 't', 'r', 'k'])
 /** the text accents whose letter goes into its word (accentLetter), by the combining mark each puts on its letter */
 const ACCENT_MARKS = { '`': '\u0300', "'": '\u0301', '^': '\u0302', '~': '\u0303', '"': '\u0308', c: '\u0327', v: '\u030c', u: '\u0306', H: '\u030b', '.': '\u0307' }
@@ -586,6 +581,73 @@ function paperMacros(files) {
     out.set(name, { params, opt, prose: p0, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
   }
   return out
+}
+/** every way a file defines a command, its name in group 1 (arg-roles.mjs OWN_COMMANDS' forms, \\let and the expanded
+ *  definitions among them): a definition completeMacros does not read makes what the command does unknown */
+const ANY_DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|futurelet|newtoks|DeclareMathOperator\*?|DeclareTextCommand|DeclareTextSymbol|DeclareTextCommandDefault|newcounter|newlength|newif)\s*\{?\s*\\([A-Za-z@]+)/g
+/** a body that may read on in a way readsOn does not see: it ends in an argument (`\\newcommand\\pair[2]{#1#2}`: the call's
+ *  last argument, `\\bert` = BERT\\xspace, is the body's last token), it defines or changes a command (`\\renewcommand\\s{#1}`,
+ *  `\\let`, `\\global`), or it names an argument past its own arity (a definition inside another's body, whose #1 is that one's) */
+const readsOnToo = (body, arity) => {
+  const t = uncommented(body).trimEnd()
+  if (/#\d$/.test(t)) return true
+  if (/\\(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|global|futurelet|csdef|csgdef|newtoks|newcounter|newlength|setlength|addtolength|setcounter|addtocounter)(?![A-Za-z@])/.test(t)) return true
+  return [...t.matchAll(/#(\d)/g)].some(m => Number(m[1]) > arity)
+}
+/** a body that sets more than a piece of a line: an environment, a paragraph's end, an alignment's row or cell, a list's item,
+ *  a page's end. No mark stands beside a call of one in a line, and set in the mark probe's box (marks.mjs probeSamples) it is
+ *  errors TeX may not get past (the kernel's \\and, `\\end{tabular}\\hskip1em\\begin{tabular}`, made a hundred in one paragraph
+ *  and stopped a probe) */
+const STRUCTURAL = /\\(?:begin|end|par|item|cr|crcr|noalign|hline|tabularnewline|newline|newpage|clearpage)(?![A-Za-z@])|\\\\|(?<!\\)&/
+/** \\NewDocumentCommand and its kin, all their arguments mandatory (`m`, `+m`): name, spec, at the body's brace */
+const DOCUMENT_COMMAND = /\\(?:New|Renew|Provide|Declare)DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*\{([^{}]*)\}\s*/g
+/**
+ * The paper's macros that read nothing past their own arguments, as [name, arity] by name: each definition of the name in the
+ * package's files one completeMacros reads — \\newcommand, \\renewcommand, \\providecommand, \\DeclareRobustCommand (starred
+ * or not, with `[n]` and no optional first argument), \\def\\x#1#2 (\\edef, \\gdef, \\xdef), \\NewDocumentCommand with a spec of
+ * mandatory arguments alone —, all of one arity, and none whose body reads on (readsOn: \\@ifnextchar, \\@ifstar, \\futurelet,
+ * \\xspace or any command at its end that may take what follows; readsOnToo: an argument at its end, a definition in it), nor
+ * one that sets more than a piece of a line (STRUCTURAL: an environment, a paragraph's end, an alignment's cell). A
+ * call of such a macro that holds its arguments (layout/marks.mjs) reads nothing after it, so a layout mark after it is none
+ * of its arguments — what a mark does to the punctuation after it is TeX's to answer (the mark probe). A name defined in any
+ * other way (\\let, a delimited \\def, \\DeclareMathOperator) is not one: what it reads is not known
+ */
+export function completeMacros(files) {
+  const found = new Map(), every = new Map()
+  const add = (name, arity) => (found.get(name) ?? found.set(name, []).get(name)).push(arity)
+  // (a \\def's parameters written against each other and its brace: white space after a parameter is a delimiter TeX
+  // matches, `\\def\\foo#1 #2{…}` whose first argument runs to a space, and a closing mark after a call of it would be read
+  // into that argument; white space after the name is none, TeX skips it)
+  const defs = /\\(?:((?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|(?:[egx]?def)\s*\\([A-Za-z@]+)\s*((?:#\d)*)(?=\{))/g
+  for (const { text: t } of files) {
+    for (const m of t.matchAll(ANY_DEFINITION)) if (!inComment(t, m.index) && !inOwnCall(t, m.index, m[1])) every.set(m[1], (every.get(m[1]) ?? 0) + 1)
+    // (each definition with its body's range: one inside another's body is that macro's doing, made when it is called, not the
+    // definition in effect where the paper calls it)
+    const here = []
+    for (const m of t.matchAll(defs)) {
+      const name = m[2] ?? m[3] ?? m[5], params = m[1] ? Number(m[4] ?? 0) : (m[6].match(/#\d/g) ?? []).length
+      if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
+      const k = skipSpaces(t, m.index + m[0].length)
+      here.push({ name, params, at: m.index, k, e: t[k] === '{' ? matchGroup(t, k) : -1, bracket: t[k] === '[' })
+    }
+    for (const d of here) {
+      const nested = here.some(o => o !== d && o.e > 0 && d.at > o.k && d.at < o.e)
+      // (an optional first argument: the call looks ahead for its bracket, so it may read what follows)
+      if (nested || d.bracket || d.e < 0) { add(d.name, -1); continue }
+      const body = t.slice(d.k + 1, d.e - 1)
+      add(d.name, readsOn(body) || readsOnToo(body, d.params) || STRUCTURAL.test(uncommented(body)) ? -1 : d.params)
+    }
+    for (const m of t.matchAll(DOCUMENT_COMMAND)) {
+      const name = m[1] ?? m[2], spec = m[3].trim().split(/\s+/).filter(Boolean)
+      if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
+      const k = m.index + m[0].length, e = t[k] === '{' ? matchGroup(t, k) : -1
+      const body = e < 0 ? '' : t.slice(k + 1, e - 1)
+      add(name, e < 0 || !spec.every(s => s === 'm' || s === '+m') || readsOn(body) || readsOnToo(body, spec.length) || STRUCTURAL.test(uncommented(body)) ? -1 : spec.length)
+    }
+  }
+  const out = []
+  for (const [name, arities] of found) if (arities.every(a => a >= 0 && a === arities[0]) && every.get(name) === arities.length) out.push([name, arities[0]])
+  return out.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
 }
 /**
  * The command a macro's body ends in, none of its arguments given there, by name: TeX's reading goes on past the call's
@@ -1623,7 +1685,8 @@ function readProject(fsys, main, tables, sourceText, own) {
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
-  return { main: mainFile.rel, files, units, inFloat, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode }
+  // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
+  return { main: mainFile.rel, files, units, inFloat, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode, complete: completeMacros(own) }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */
@@ -1757,12 +1820,14 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // environment TeX reads by lines (lineBound, LINE_ENVS), it goes past that line's end and the spaces that open the
     // next, before the unit's first word or command: TeX reads the line end's space and then ours, as it read the space
     // before, and the line keeps nothing after the environment's \\begin or \\end. A unit whose own words share that
-    // line — the paper's choice — is marked where it begins, as before. A unit that begins right after an environment's
-    // \\begin{…} has it past the spaces that open it too, which \\begin's \\ignorespaces skips (afterBegin), where asked
-    // (`pastBegin`: the marked original, our base page): ours first would stop the skip, and the space be set. (piece
-    // `beforeAt`, at `beforeCut` in its text, or before it at -1)
+    // line — the paper's choice — is marked where it begins, as before. Where asked (`pastBegin`: the marked original, our
+    // base page), it goes past the white space that opens the unit always, where the start mark goes: a space TeX skips —
+    // after a control word (`\\item Which`), or \\begin's or \\item's \\ignorespaces — would be set after ours, a real one
+    // after its `}` (IEEEtran's abstract run in after its dash: 2608.19431's a line longer; paralist's inline items: 2610.21098's
+    // paragraph re-broken from page 1), and one TeX sets is set as before, ahead of it. (piece `beforeAt`, at `beforeCut` in
+    // its text, or before it at -1)
     let beforeAt = 0, beforeCut = -1
-    const file = m?.before ? (project.files?.get(u.file) ?? '') : '', begun = pastBegin && !!m?.before && afterBegin(file, u.start)
+    const file = m?.before && !pastBegin ? (project.files?.get(u.file) ?? '') : '', begun = pastBegin && !!m?.before
     if (m?.before && (begun || lineBound(file, u.start, project.lineEnvs))) {
       let k = 0, crossed = false, cut = -1
       for (; k < pieces.length && pieces[k].t === 'text'; k++) {

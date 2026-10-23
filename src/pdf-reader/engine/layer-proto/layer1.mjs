@@ -79,11 +79,15 @@ export function blocksOf(rects, pageViews, keep = null) {
 // (step 3: a table's rules, \specialrule and \cmidrule, and a strut, \rule of no width, are no text either: v0 found no
 // rendering for them and drew their arguments as text, "1pt-1pt0pt 0pt2.2ex" in 1706.03762's table cells; an image's
 // file may be braced twice, \includegraphics[width=5cm]{{berimbau.jpg}} in 2307.16209)
+// (the control sequences TeX and the kernel define to set no ink — \relax, \noindent, \indent, \leavevmode, \nobreak, \newline, \@, \/ and
+// the like — are not listed here: rules/tex-kernel.mjs is their one table, read through the role table's textless below)
 /** \rule's call, which the role table's textless takes in but v0 reads itself (ZERO: a strut nothing, a bar looked
  *  for), as the layout maker leaves it to TeX (layout/marks.mjs RULE, the same) */
 const RULE = /^\s*\\rule\b/
-const ZERO = /^(?:\\(?:footnotesize|scriptsize|tiny|small|normalsize|large|Large|LARGE|huge|Huge|selectfont|noindent|hline|centering|raggedright|par|newline|linebreak|bf|it|rm|em|sf|tt|sc|bfseries|itshape|rmfamily|mdseries|upshape|protect|toprule|midrule|bottomrule|smallskip|medskip|bigskip|vfill|hfill|null|relax|arraystretch|clearpage|newpage|thanks|ignorespaces|unskip|xspace|noalign|cr|nobreak|allowbreak|strut)\b\*?|\\(?:v|h)space\*?\{[^}]*\}|\\fontsize\{[^}]*\}\{[^}]*\}|\\label\{[^}]*\}|\\c?line\{[^}]*\}|\\(?:v|h)skip\s*[-\d.]+\s*[a-z]*|\\setlength\{[^}]*\}\{[^}]*\}|\\arraystretch\{[^}]*\}|\\renewcommand.*|\\addlinespace(?:\[[^\]]*\])?|\\specialrule\{[^}]*\}\{[^}]*\}\{[^}]*\}|\\cmidrule(?:\[[^\]]*\])?(?:\([^)]*\))?\{[^}]*\}|\\rule(?:\[[^\]]*\])?\{0(?:\.0*)?[a-z]*\}\{[^}]*\}|\\arrayrulecolor\{[^}]*\}|\\includegraphics\*?(?:\[[^\]]*\])?\{(?:[^{}]|\{[^{}]*\})*\})$/
-const SPACE = /^(?:~|\\,|\\;|\\:|\\ |\\quad|\\qquad|\\\\(?:\[[^\]]*\])?|\\And|\\and|\\AND|\\enspace|\\thinspace)$/
+const ZERO = /^(?:\\(?:footnotesize|scriptsize|tiny|small|normalsize|large|Large|LARGE|huge|Huge|selectfont|hline|centering|raggedright|par|bf|it|rm|em|sf|tt|sc|bfseries|itshape|rmfamily|mdseries|upshape|protect|toprule|midrule|bottomrule|smallskip|medskip|bigskip|vfill|hfill|null|arraystretch|clearpage|newpage|thanks|xspace|noalign|cr|strut)\b\*?|\\(?:v|h)space\*?\{[^}]*\}|\\fontsize\{[^}]*\}\{[^}]*\}|\\label\{[^}]*\}|\\c?line\{[^}]*\}|\\(?:v|h)skip\s*[-\d.]+\s*[a-z]*|\\setlength\{[^}]*\}\{[^}]*\}|\\arraystretch\{[^}]*\}|\\renewcommand.*|\\addlinespace(?:\[[^\]]*\])?|\\specialrule\{[^}]*\}\{[^}]*\}\{[^}]*\}|\\cmidrule(?:\[[^\]]*\])?(?:\([^)]*\))?\{[^}]*\}|\\rule(?:\[[^\]]*\])?\{0(?:\.0*)?[a-z]*\}\{[^}]*\}|\\arrayrulecolor\{[^}]*\}|\\includegraphics\*?(?:\[[^\]]*\])?\{(?:[^{}]|\{[^{}]*\})*\})$/
+// (a control space is a backslash and any white space, a tab or a line's end as well as a space: rules/tex-kernel.mjs counts
+// all three, and \<newline> read as 'zero' drew nothing where the original has a space: "vs.\<newline>answer")
+const SPACE = /^(?:~|\\,|\\;|\\:|\\\s|\\quad|\\qquad|\\\\(?:\[[^\]]*\])?|\\And|\\and|\\AND|\\enspace|\\thinspace)$/
 export const CITE = /^\\(?:cite|citep|citet|citealp|citealt|citeauthor|citeyear|parencite|textcite|autocite)\*?(?:\[[^\]]*\])*\{/
 export const NUM = /^\\(?:ref|eqref|autoref|cref|Cref|pageref|footnotemark)\*?(?:\[[^\]]*\])?\{?/
 // (step 3: the engine's displayed environments, layout/marks.mjs DISPLAY's: v0 knew six, and read a subequations, an

@@ -26,7 +26,7 @@ import { DRAFT_OPTION, listsMissing, notFound, originalFiles, probeFiles, ranThr
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
-import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
+import { completeCalled, inkSamples, LAYOUT_CLASSES, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2
@@ -120,7 +120,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const log = lastTexLog(c?.log)
     if (!log) return null
     const ink = inkSamples(paper.units)
-    return { switches: readMarkProbe(log, probeSamples(paper.units)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, ink), names: readNameProbe(log), lineskip: readSkipProbe(log) }
+    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, ink), names: readNameProbe(log), lineskip: readSkipProbe(log), apart: readInkApart(log, ink) }
   })
   if (!probe) return { refused: 'probe', ms }
   // (the day the marked original and its final pass are compiled on: the host's, asked once; any failure of the host's but a
@@ -128,13 +128,15 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   if (sourceDate !== null && sourceDate !== undefined) {
     try { const d = typeof sourceDate === 'function' ? await sourceDate() : sourceDate; if (Number.isSafeInteger(d) && d >= 0) date = d } catch (e) { if (isMemoryError(e)) throw e }
   }
-  const { switches, inkless, texts, names, lineskip } = probe
+  const { switches, inkless, texts, names, lineskip, apart } = probe
+  // (the paper's macros that read nothing past their arguments, from their definitions: the front end's, those its units call)
+  const complete = completeCalled(paper.units, paper.project?.complete)
   const cm = converge ? { drafts: 0, marked: 0, settled: false } : null
   /** the result, with CM's record where it ran */
   const result = r => (cm ? { ...r, cm } : r)
   const job = jobName(main), count = paper.units.length, bibtex = paper.meta.bbl ? false : null
   /** the marked original's files, the units of `unmarked` as the paper's own and the babel names marked or not */
-  const filesOf = (unmarked, named, spans) => originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, ...(unmarked.size ? { unmarked } : {}), ...(named ? {} : { names: false }), spans })
+  const filesOf = (unmarked, named, spans) => originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, complete, apart, ...(unmarked.size ? { unmarked } : {}), ...(named ? {} : { names: false }), spans })
   // (before the compile: each unit's writing against its source's braces; our other edits unbalancing a file, no names)
   const g = { extra: 0, unmarked: new Set(), names: true, failed: [] }
   // (a throw of the check's own skips it: the marked original as before; the files written in the compile's stage then, whose
@@ -165,7 +167,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     // which the final pass is made over)
     return asked({ main, engine, rerun: true, bibtex, overrides: files, ...(wantFinal ? { files: true } : {}) })
   })
-  const options = { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, lineskip }
+  const options = { engine, classes: LAYOUT_CLASSES, switches, inkless, texts, names, lineskip, complete, apart }
   const record = () => ({ extra: g.extra, unmarked: [...g.unmarked].sort((a, b) => a - b), names: g.names, failed: g.failed, ...(g.judged ? { judged: g.judged } : {}) })
   const guarded = r => result(g.failed.length ? { ...r, guard: record() } : r)
   if (!marked) return guarded({ refused: 'compile', why: cm ? 'a marked pass did not run through, or the compile threw' : 'the compile threw', ms })
