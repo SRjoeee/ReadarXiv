@@ -26,8 +26,9 @@ describe('TV1: the items the view places', () => {
 
 describe('TV2: a PDF.js text content', () => {
   it('each item an upright run at its baseline, its width the item\'s, one face, a line\'s end where it breaks', () => {
-    const c = textContentOf(textItems(data([it0({ str: 'Ab', x: 72, base: 700, w: 15, fontSize: 9 }), it0({ str: 'c', from: 'translated', eol: true })])), 'zh')
-    expect(c.items.map(i => [i.str, i.transform, i.width, i.height, i.hasEOL])).toEqual([['Ab', [9, 0, 0, 9, 72, 700], 15, 9, false], ['c', [10, 0, 0, 10, 72, 700], 10, 10, true]])
+    const c = textContentOf(textItems(data([it0({ str: 'Ab', x: 72, base: 700, w: 15, fontSize: 9 }), it0({ str: 'c', from: 'translated', eol: true }), it0({ str: ' ' })])), 'zh')
+    // (a single character drawn twice as wide across as high: PDF.js scales a span of one character to its width only then)
+    expect(c.items.map(i => [i.str, i.transform, i.width, i.height, i.hasEOL])).toEqual([['Ab', [9, 0, 0, 9, 72, 700], 15, 9, false], ['c', [20, 0, 0, 10, 72, 700], 10, 10, true], [' ', [10, 0, 0, 10, 72, 700], 10, 10, false]])
     expect(new Set(c.items.map(i => i.fontName)).size).toBe(1)
     expect(Object.values(c.styles)).toEqual([{ fontFamily: 'sans-serif', ascent: 0.8, descent: -0.2, vertical: false }])
     expect(c.lang).toBe('zh')

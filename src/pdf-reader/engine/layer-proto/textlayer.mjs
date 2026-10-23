@@ -1,5 +1,5 @@
 // src/pdf-reader/engine/layer-proto/textlayer.mjs
-// The text layer of a laid page (docs/PDF-READER.md §11.11; the route note docs/route/text-layer.md): what a reader selects,
+// The text layer of a laid page (docs/PDF-READER.md §11.11): what a reader selects,
 // copies and finds on a page the layer draws, as plain data. A pure leaf: no DOM, no clock, no PDF.js object but the plain data
 // it is given, and of the engine's modules the word table's token band alone (words.mjs).
 //
@@ -10,11 +10,13 @@
 // - moved: the items under a crop's source (a formula the layer draws as a crop of the page), relocated by the crop's map from
 //   its source to where it is drawn, so that the formula's text lies under its drawn ink; where no item lies under the source,
 //   the crop's own plain text over its drawn box;
-// - translated: the translated text of each drawn unit and babel name, one item a drawn line (split where a crop or a change of
-//   script falls in the line), at the line's drawn box.
-// Ownership is the links' rule (links.mjs erasedOf): an original item is ERASED iff the page's operations leave the paper erased
-// at its box's centre (device pixels, through devOf). Erased and under the source of a crop of the same page: moved; erased
-// otherwise: dropped (the translation takes its place); not erased: kept. One rule for the ink, the links and the text.
+// - translated: the translated text of each drawn unit and babel name, one item a drawn line (split where a crop, a change of
+//   script or a superscript falls in the line), at the line's drawn box.
+// Ownership is the links' rule (links.mjs erasedOf): an original character is ERASED iff the page's operations leave the paper
+// erased at its place's centre (device pixels, through devOf; its place its share of its item's width, equal advance), and an
+// item whose characters part is cut into the runs of its characters alike. Erased and under the source of a crop of the same
+// page: moved; erased otherwise: dropped (the translation takes its place); not erased: kept. One rule for the ink, the links
+// and the text.
 //
 // Reading order. The composed page's text content is in its content stream's order, which for a TeX page is its reading order
 // (columns, floats and footnotes where the output routine shipped them). Each drawn thing (a unit, a name) owns the erased items
@@ -26,7 +28,7 @@
 // erased nothing goes before the first entry after it, geometrically. Moved items sit at their crop's place in their line.
 //
 // Bounds: at most TEXT_WORK_MAX point-against-operation tests a page (a grid over the operations' rectangles keeps a normal page
-// far below it); past it the remaining items are KEPT (a selectable duplicate is invisible, a lost text is not). At most
+// far below it); past it the remaining characters are KEPT (a selectable duplicate is invisible, a lost text is not). At most
 // TEXT_ITEMS_MAX items: the page's items that abut on one baseline at one size are one item (a run PDF.js reads in pieces), and
 // past the bound neighbouring items of one line are merged.
 import { tokenBand } from './words.mjs'
@@ -41,6 +43,9 @@ const ASCENT = 0.8
 const EOL = 1, RTL = 2
 /** the fields of a compact item: x, baseline, width, size, ascent, flags */
 const F = 6
+/** how far apart two items' baselines stand, in the larger one's size, for them to be on two lines (a line's skip is 1.2; a
+ *  superscript's rise some 0.4, a fraction's parts' 0.7 of their own size apart) */
+const LINE_APART = 0.9
 /** the least kern after a word that copies as a space, em (layer2.mjs lineRuns' COPY_SPACE_EM) */
 const COPY_SPACE_EM = 0.25
 /** the grid's cell over the operations, device pixels */
@@ -54,15 +59,16 @@ const CJK = /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/u
  * A page's text content (PDF.js's, or a draw's: drawInputsOf) kept compact for its text layer: each item that is upright text
  * of a direction a reader selects across (its transform without rotation, skew or mirror; `dir` not 'ttb'), as x, baseline,
  * width and size in PDF units, the font's ascent where PDF.js tells it (a style's `ascent`; ASCENT else), whether a line ends
- * after it (PDF.js's `hasEOL`, on the item or on the empty item that follows it) and whether it runs right to left; strings
- * apart. Rotated text (an axis label) is left out: the left pane's own layer holds it
+ * after it and whether it runs right to left; strings apart. A line ends after an item where the next one stands on another
+ * line (its baseline apart by most of the larger size: a superscript or a fraction's part does not end it), by the geometry
+ * alone, never PDF.js's `hasEOL`: a page read from its draw has none (draw.mjs drawInputsOf), and the two readings of a page
+ * give one layer. Rotated text (an axis label) is left out: the left pane's own layer holds it
  */
 export function itemsOf(tc) {
   const items = tc?.items ?? [], styles = tc?.styles ?? {}
   const str = [], num = []
   for (const it of items) {
-    if (typeof it?.str !== 'string') continue
-    if (!it.str) { if (it.hasEOL && str.length) num[(str.length - 1) * F + 5] |= EOL; continue }
+    if (typeof it?.str !== 'string' || !it.str) continue
     const t = it.transform
     if (!t || t.length < 6 || it.dir === 'ttb') continue
     const [a, b, c, d, e, f] = t
@@ -73,7 +79,11 @@ export function itemsOf(tc) {
     if (!(size > 0) || !(it.width >= 0)) continue
     const asc = styles[it.fontName]?.ascent
     str.push(it.str)
-    num.push(e, f, it.width, size, finite(asc) && asc > 0.3 && asc < 1.2 ? asc : ASCENT, (it.hasEOL ? EOL : 0) | (it.dir === 'rtl' ? RTL : 0))
+    num.push(e, f, it.width, size, finite(asc) && asc > 0.3 && asc < 1.2 ? asc : ASCENT, it.dir === 'rtl' ? RTL : 0)
+  }
+  for (let i = 0; i + 1 < str.length; i++) {
+    const o = i * F
+    if (Math.abs(num[o + F + 1] - num[o + 1]) > LINE_APART * Math.max(num[o + 3], num[o + F + 3])) num[o + 5] |= EOL
   }
   return { n: str.length, str, num: Float32Array.from(num) }
 }
@@ -82,11 +92,12 @@ export const NO_ITEMS = Object.freeze({ n: 0, str: Object.freeze([]), num: new F
 
 /**
  * The drawn lines of a unit's layout on page `page` as text-layer segments, in reading order: each line split where a crop
- * stands (a crop is a segment of its own: its source page and rectangle there, its drawn box here, its plain text) and where the
- * script changes (a Latin word in a CJK line: each its own measure). A text segment is { str, x, y, w, h, base, size, lx0, lx1 }: its
+ * stands (a crop is a segment of its own: its source page and rectangle there, its drawn box here, its plain text), where the
+ * script changes (a Latin word in a CJK line: each its own measure) and where a superscript begins or ends (on the baseline it
+ * is drawn on, at its size: svgOfUnit's). A text segment is { str, x, y, w, h, base, size, lx0, lx1 }: its
  * text as a copy reads it (a space where the line has one, a kern of a space's width or more, and after a line's last Latin word
  * unless it is hyphenated: layer2.mjs lineRuns' rules), its box from its first token's left to its last token's right edge and
- * across its tokens' bands (words.mjs tokenBand), the line's baseline and the size drawn, and the line's slot across (its x0, x1:
+ * across its tokens' bands (words.mjs tokenBand), the baseline and the size its tokens are drawn on, and the line's slot across (its x0, x1:
  * the reading order places a kept item below a line by it). `drawnCrop(crop)`: whether a crop is
  * drawn (its source page is): one that is not has no segment
  */
@@ -112,14 +123,14 @@ export function segsOfUnit(L, page, drawnCrop = () => true) {
         return
       }
       if (typeof t.s !== 'string' || !t.s) return
-      if (seg && seg.cls !== t.cls) flush()
+      if (seg && (seg.cls !== t.cls || seg.sup !== !!t.sup)) flush()
       const band = tokenBand(t, L, line.baseline)
-      if (!seg) seg = { str: '', x0: it.x, x1: it.x + it.w, top: band.top, bottom: band.bottom, base: line.baseline, size: 0, cls: t.cls, lx0: line.x0, lx1: line.x1 }
+      if (!seg) seg = { str: '', x0: it.x, x1: it.x + it.w, top: band.top, bottom: band.bottom, base: band.y, size: 0, cls: t.cls, sup: !!t.sup, lx0: line.x0, lx1: line.x1 }
       seg.str += t.s
       seg.x1 = Math.max(seg.x1, it.x + it.w)
       seg.top = Math.max(seg.top, band.top)
       seg.bottom = Math.min(seg.bottom, band.bottom)
-      if (!t.sup) seg.size = Math.max(seg.size, band.h)
+      seg.size = Math.max(seg.size, band.h)
       if (n === items.length - 1 && t.cls === 'latin' && !t.hyphenated) seg.str += ' '
       else if (n < items.length - 1 && t.cls !== 'cjk' && (it.kern ?? 0) >= COPY_SPACE_EM * L.f) seg.str += ' '
     })
@@ -181,8 +192,10 @@ function itemOut(P, i, from, unit) {
   if (flags & EOL) out.eol = true
   return out
 }
-/** an item's centre, PDF units */
-const centreOf = (P, i) => { const o = i * F; return [P.num[o] + P.num[o + 2] / 2, P.num[o + 1] + (P.num[o + 4] - 0.5) * P.num[o + 3]] }
+/** a point across an item's box at its centre's height (PDF units): `along` the share of its width (its centre at a half) */
+const centreOf = (P, i, along = 0.5) => { const o = i * F; return [P.num[o] + along * P.num[o + 2], P.num[o + 1] + (P.num[o + 4] - 0.5) * P.num[o + 3]] }
+/** a character's state where no operation erased it, and where one did that no drawn thing's range holds */
+const KEPT = Symbol('kept'), NO_OWNER = Symbol('no owner')
 const inBox = (x, y, b) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]
 /** an item relocated by a crop's map from its source rectangle to its drawn box */
 function relocated(it, crop) {
@@ -206,7 +219,8 @@ function after(a, b) {
 
 /**
  * The text layer of a laid page, plain data: { items, page: { w, h }, stats }. `page`: { n: its number, items: itemsOf's compact
- * items of the composed page, view: its [x0, y0, x1, y1] }; `plan`: { ops: the page's drawing operations (device pixels), devOf(x, y): a PDF
+ * items of the composed page, view: its [x0, y0, x1, y1] }; each item's characters tested at their places (equal advance) and an
+ * item cut where they part; `plan`: { ops: the page's drawing operations (device pixels), devOf(x, y): a PDF
  * point to their device pixels, owners: [from, to, key] the range of the operations each drawn thing (a unit, a name) appended,
  * rising }; `drawn`: each drawn thing on the page in the order it was painted, { key (its owners' key), unit (its id; none for
  * a name), segs (segsOfUnit's, nameSeg's) }; `o.sourceOf(page)`: another page's compact items, for a crop cut from it (null:
@@ -216,23 +230,53 @@ function after(a, b) {
  */
 export function textLayerOf(page, plan, drawn, o = {}) {
   const P = page?.items ?? NO_ITEMS, view = page?.view ?? [0, 0, 0, 0], self = page?.n
-  const N = P.n
   const ops = plan?.ops ?? [], devOf = plan?.devOf ?? ((x, y) => [x, y]), owners = plan?.owners ?? []
   const things = (drawn ?? []).filter(d => d && Array.isArray(d.segs))
   const stats = { kept: 0, moved: 0, translated: 0, dropped: 0, work: 0, merged: 0 }
-  // ---- each item erased or not, and by whose drawing (the operation that last erased it, in its owner's range)
+  // ---- each item's characters erased or not, and by whose drawing (the operation that last erased each, in its owner's range):
+  // an item whose characters part (a heading's number kept, its title erased, in one item of PDF.js's) is cut into the runs of
+  // its characters alike, each its characters' share of the item's width (equal advance, links.mjs pointsOf's estimate)
   const budget = { left: TEXT_WORK_MAX }
   const test = ops.length ? eraserOf(ops) : null
-  const owner = new Array(N).fill(null), erased = new Uint8Array(N)
   const ownerOf = k => { let lo = 0, hi = owners.length - 1; while (lo <= hi) { const m = (lo + hi) >> 1, r = owners[m]; if (k < r[0]) hi = m - 1; else if (k >= r[1]) lo = m + 1; else return r[2] } return null }
-  for (let i = 0; i < N && test; i++) {
-    const [cx, cy] = centreOf(P, i)
-    const [dx, dy] = devOf(cx, cy)
-    const by = test(dx, dy, budget)
-    // (past the budget: the rest kept)
-    if (by === null) break
-    if (by >= 0) { erased[i] = 1; owner[i] = ownerOf(by) }
+  const cut = { str: [], num: [] }, owner = [], erasedOf = []
+  let spent = false
+  for (let i = 0; i < P.n; i++) {
+    const o = i * F
+    // (nothing drawn, or the budget spent: the item kept whole)
+    if (!test || spent) {
+      cut.str.push(P.str[i])
+      for (let f = 0; f < F; f++) cut.num.push(P.num[o + f])
+      erasedOf.push(false)
+      owner.push(null)
+      continue
+    }
+    const cs = [...P.str[i]], n = cs.length
+    const states = []
+    for (let k = 0; k < n; k++) {
+      let by = -1
+      if (!spent) {
+        const [cx, cy] = centreOf(P, i, n > 1 ? (k + 0.5) / n : 0.5)
+        const [dx, dy] = devOf(cx, cy)
+        by = test(dx, dy, budget)
+        // (past the budget: the rest kept)
+        if (by === null) { spent = true; by = -1 }
+      }
+      states.push(by < 0 ? KEPT : ownerOf(by) ?? NO_OWNER)
+    }
+    for (let a = 0; a < n;) {
+      let b = a + 1
+      while (b < n && states[b] === states[a]) b++
+      const share = P.num[o + 2] / n
+      cut.str.push(a === 0 && b === n ? P.str[i] : cs.slice(a, b).join(''))
+      cut.num.push(P.num[o] + a * share, P.num[o + 1], (b - a) * share, P.num[o + 3], P.num[o + 4], P.num[o + 5] & (b === n ? EOL | RTL : RTL))
+      erasedOf.push(states[a] !== KEPT)
+      owner.push(states[a] === KEPT || states[a] === NO_OWNER ? null : states[a])
+      a = b
+    }
   }
+  const C = { n: cut.str.length, str: cut.str, num: cut.num }, N = C.n
+  const erased = Uint8Array.from(erasedOf, Number)
   stats.work = TEXT_WORK_MAX - Math.max(0, budget.left)
   // ---- the crops: each erased item of this page under a crop's source moved to it once (the first crop in drawing order that
   // holds it); a crop cut from another page takes that page's items under its source
@@ -244,8 +288,8 @@ export function textLayerOf(page, plan, drawn, o = {}) {
     if (c.page === self) {
       for (let i = 0; i < N; i++) {
         if (!erased[i] || claimed[i]) continue
-        const [cx, cy] = centreOf(P, i)
-        if (inBox(cx, cy, c.src)) { claimed[i] = 1; list.push(relocated(itemOut(P, i, 'moved', d.unit), c)) }
+        const [cx, cy] = centreOf(C, i)
+        if (inBox(cx, cy, c.src)) { claimed[i] = 1; list.push(relocated(itemOut(C, i, 'moved', d.unit), c)) }
       }
     } else {
       let Q = other.get(c.page)
@@ -276,7 +320,7 @@ export function textLayerOf(page, plan, drawn, o = {}) {
   for (let i = 0; i < N; i++) {
     if (erased[i]) { if (!claimed[i]) stats.dropped++; continue }
     stats.kept++
-    const it = itemOut(P, i, 'kept')
+    const it = itemOut(C, i, 'kept')
     const u = prevOwner[i]
     if (u !== null && u === nextOwner[i] && keys.has(u)) (inner.get(u) ?? inner.set(u, []).get(u)).push(it)
     else top.push({ key: i, items: [it], block: false })

@@ -154,9 +154,21 @@ describe('bounds', () => {
   })
 })
 
+describe('items the drawing splits', () => {
+  it('TL20 one item over a kept number and an erased heading: its kept characters kept, its erased ones dropped', () => {
+    // "1 Introduction", one item 70 wide, 5 an em: the drawing erases from x 81 on (the heading), not the number and its space
+    const page = P([item('1 Introduction', 72, 700, 70)])
+    const d = textLayerOf(page, { ops: [erase(81, 695, 300, 712)], devOf: dev, owners: [[0, 1, 'u1']] }, [{ key: 'u1', unit: 1, segs: [seg('Einleitung', 90, 140, 700)] }])
+    expect(d.items.map(i => [i.str, i.from])).toEqual([['1 ', 'kept'], ['Einleitung', 'translated']])
+    // (its piece's box: the characters' share of the item's width, equal advance)
+    expect([d.items[0]!.x, d.items[0]!.w]).toEqual([72, 10])
+    expect(d.stats).toMatchObject({ kept: 1, dropped: 1 })
+  })
+})
+
 describe('runs', () => {
   it('TL18 the page\'s items that abut on one baseline at one size are one item; a subscript, a gap, a line\'s end begin another', () => {
-    const page = P([item('Let ', 72, 700, 18), item('x', 90, 700, 5), item('=', 95.5, 700, 6), item('i', 101.5, 697, 2, { height: 7, transform: [7, 0, 0, 7, 101.5, 697] }), item('far', 140, 700, 15), item('end', 155, 700, 15, { hasEOL: true }), item('next', 170, 700, 20)])
+    const page = P([item('Let ', 72, 700, 18), item('x', 90, 700, 5), item('=', 95.5, 700, 6), item('i', 101.5, 697, 2, { height: 7, transform: [7, 0, 0, 7, 101.5, 697] }), item('far', 140, 700, 15), item('end', 155, 700, 15), item('next', 170, 688, 20)])
     const d = textLayerOf(page, { ops: [], devOf: dev, owners: [] }, [])
     expect(strs(d)).toEqual(['Let x=', 'i', 'farend', 'next'])
     const first = d.items[0]!
@@ -167,14 +179,23 @@ describe('runs', () => {
 })
 
 describe('the inputs', () => {
-  it('TL14 the compact items: upright text alone, a line\'s end from an empty item after it, the font\'s ascent where told', () => {
+  it('TL14 the compact items: upright text alone, the font\'s ascent where told, a line\'s end where the next item is on another line', () => {
     const c = itemsOf({
-      items: [item('a', 10, 20, 5), { str: '', hasEOL: true }, item('rot', 10, 20, 5, { transform: [0, 10, -10, 0, 10, 20] }), item('mirror', 1, 1, 5, { transform: [-10, 0, 0, 10, 1, 1] }), item('v', 1, 1, 5, { dir: 'ttb' }), item('r', 30, 20, 5, { dir: 'rtl', fontName: 'g', hasEOL: true }), { type: 'beginMarkedContent' }],
+      items: [item('a', 10, 20, 5), { str: '', hasEOL: true }, item('rot', 10, 20, 5, { transform: [0, 10, -10, 0, 10, 20] }), item('mirror', 1, 1, 5, { transform: [-10, 0, 0, 10, 1, 1] }), item('v', 1, 1, 5, { dir: 'ttb' }), item('r', 30, 20, 5, { dir: 'rtl', fontName: 'g', hasEOL: true }), { type: 'beginMarkedContent' }, item('next', 10, 8, 20)],
       styles: { f: { ascent: 0.7 } },
     })
-    expect(c.str).toEqual(['a', 'r'])
-    expect(Array.from(c.num)).toEqual([10, 20, 5, 10, Math.fround(0.7), 1, 30, 20, 5, 10, Math.fround(0.8), 3])
+    expect(c.str).toEqual(['a', 'r', 'next'])
+    // ('a' and 'r' on one baseline: no end between them, whatever PDF.js's hasEOL says; 'r' before the next line's 'next')
+    expect(Array.from(c.num)).toEqual([10, 20, 5, 10, Math.fround(0.7), 0, 30, 20, 5, 10, Math.fround(0.8), 3, 10, 8, 20, 10, Math.fround(0.7), 0])
     expect(itemsOf(null).n).toBe(0)
+  })
+  it('TL19 a page read from its draw (no hasEOL) and the same page read live give the same items, a line\'s end after each line', () => {
+    const lines = [item('First line of the refs', 72, 700, 100), item('second line', 72, 688, 50)]
+    const live = itemsOf({ items: [{ ...lines[0], hasEOL: true }, { ...lines[1], hasEOL: true }], styles: {} })
+    const draw = itemsOf({ items: lines.map(({ hasEOL: _, dir: __, ...x }) => x), styles: {} })
+    expect(draw).toEqual(live)
+    const d = textLayerOf({ n: 1, items: draw, view: VIEW }, { ops: [], devOf: dev, owners: [] }, [])
+    expect(d.items.map(i => i.eol ?? false)).toEqual([true, false])
   })
   it('TL15 a unit\'s lines as segments: split at a crop and where the script changes, a copy\'s spaces, a crop\'s space after it', () => {
     const face = { size: 1 }
@@ -197,5 +218,12 @@ describe('the inputs', () => {
     expect(segsOfUnit(L, 1, () => false).some(s => 'crop' in s)).toBe(false)
     const first = segs[0] as TextSeg
     expect([first.x, first.w, first.base, first.size]).toEqual([72, 20, 700, 10])
+  })
+  it('TL21 a superscript in a translated line is a segment of its own, on the raised baseline and at the size it is drawn', () => {
+    const face = { size: 1 }
+    const tok = (s: string, x: number, w: number, o: Record<string, unknown> = {}) => ({ x, w, t: { s, cls: 'latin', face, ...o } })
+    const L = { f: 10, scale: 1, lines: [{ page: 1, baseline: 700, x0: 72, x1: 300, items: [tok('x', 72, 6), tok('2', 78, 4, { sup: true }), tok('y', 82, 6)] }] } as never
+    const segs = segsOfUnit(L, 1) as TextSeg[]
+    expect(segs.map(s => [s.str, s.base, Math.round(s.size * 100) / 100])).toEqual([['x', 700, 10], ['2', 703.6, 6.2], ['y ', 700, 10]])
   })
 })

@@ -923,16 +923,21 @@ work as on the left's pages: **one transparent PDF.js text layer per laid page**
 of every text the page shows. The visible paint does not change (the e2e row compares the place's pixels with and without it).
 Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that drafted it is folded here).
 
-- **What it holds** (`layer-proto/textlayer.mjs`, pure; unit rows TL1-TL18). The composed page's text items (PDF.js's text
+- **What it holds** (`layer-proto/textlayer.mjs`, pure; unit rows TL1-TL21). The composed page's text items (PDF.js's text
   content of our compile's page, kept compact on the page's record as it is drawn: `itemsOf`, upright text alone, ~13-70 KB on
-  the heaviest pages) split by the page's drawing operations, by the links' rule (`links.mjs erasedOf`): an item whose box's
-  centre the operations leave erased (an erase, a paper fill or a swap, unless a later restore puts it back) is the drawing's.
+  the heaviest pages; a line ends after an item where the next one stands on another line, by the geometry alone, so that a
+  page read from its draw, which carries no `hasEOL`, gives the same layer as one read live) split by the page's drawing
+  operations, by the links' rule (`links.mjs erasedOf`): a character whose place's centre (equal advance across its item, as
+  `pointsOf` estimates) the operations leave erased (an erase, a paper fill or a swap, unless a later restore puts it back) is
+  the drawing's, and an item whose characters part (a heading's number kept, its title erased, in one item) is cut into the
+  runs of its characters alike.
   Erased and under the source of a crop of the same page: **moved**, relocated by the crop's map from its source to its drawn box
   (a formula's text where its ink is drawn); a crop cut from another page takes that page's items under its source; a crop
   with none under it carries its own plain text (the SVG's alternative) over its drawn box. Erased otherwise: dropped, its
   translation takes its place. Not erased: **kept** where PDF.js gives it (heading numbers, labels, untranslated units,
   references, page numbers). Each drawn unit and babel name adds its lines as **translated** items, one a drawn line (split
-  where a crop stands or the script changes: each span its own measure), at the line's box across its tokens' bands
+  where a crop stands, the script changes or a superscript begins or ends: each span its own measure, a superscript on the
+  baseline it is drawn on), at the line's box across its tokens' bands
   (`words.mjs tokenBand`), its text as a copy reads it (lineRuns' spaces). Items of the page's own that abut on one baseline at
   one size are one item (a run PDF.js reads in pieces where its font changes); at most 2000 items (`TEXT_ITEMS_MAX`, past it a
   line's neighbours are merged).
@@ -956,27 +961,30 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
 - **The host** (`view/text-layer.mjs`, `layer-side.mjs`): after a page's commit, once the main thread is idle (`requestIdleCallback`
   within `TEXT_IDLE_MS` 500), the side asks the door for the page's data and the view builds it with **PDF.js's own
   `TextLayerBuilder`** (the host's pdf_viewer, given in the kit's `viewer.TextLayerBuilder`) over a text content of the items (each
-  an upright run at its baseline, its width the item's, one generic face that PDF.js measures and scales each span to): one
+  an upright run at its baseline, its width the item's, one generic face that PDF.js measures and scales each span to; a single
+  character given twice the scale across, the one case where PDF.js scales a one-character span to its width): one
   span an item, `user-select: text`, PDF.js's handling of a drag (end of content, `selecting`) and of a copy (its Unicode
   normalisation). Translated spans carry the target's `lang`. An upright page's layer lies in the copy's frame (`--axt-frame-w`,
   `-h`, the SVG's), contained (`contain: strict`). The SVG's text becomes drawn, not read: `aria-hidden` and `user-select: none`,
-  so a selection, a copy, a search and a screen reader each meet one copy of the text (`window.find` finds the text layer's
-  alone). It goes with the drawing it belongs to (retired, failed back to the original, replaced, disposed), cancelled from
+  so a selection, a copy, a search and a screen reader each meet one copy of the text (Chromium's `window.find` finds the text
+  layer's alone; Firefox's and WebKit's find read the SVG's drawn text too, which `user-select` does not take out of a search
+  there: a translated phrase is found first in the SVG, at the same place). It goes with the drawing it belongs to (retired, failed back to the original, replaced, disposed), cancelled from
   PDF.js's registry of its selection listener; one that comes after its page was let go is put nowhere. The hover highlight is
   unaffected: the lighting reads the pointer's place, not its target. A host whose PDF.js gives no builder draws the page as
   before, with none. A page shown as the original's (no layout, refused parts, a page over arXiv's PDF) is never committed, so it
   gets no layer of ours: PDF.js's own is there.
 - **Cost** (`lab/pdf/spikes/text-layer-cost.mjs`, `lab/pdf/records/text-layer.md`, Chromium 153, real pages, a synthetic full,
-  half or no translation of them): the engine's step at most 0.6 ms a page (budget 3 ms), the host's build, its append and a
+  half or no translation of them): the engine's step at most 1.2 ms a page (budget 3 ms), the host's build, its append and a
   forced layout at most 4.0 ms (budget 5 ms), at most 361 nodes (budget 2000), on 2602.23285v2 pp6-9 (977 items on p7, the
   heaviest) and 2608.16117v1 pp11, 13. Before runs were merged, every item its own span, p7 with nothing translated took 9.1 ms:
   the merge is what holds the budget. On the sample in the extension: 1.4-1.8 ms a page (`probe().textsRing`).
 - **Not in v1.** Rotated and vertical text (an axis label turned a quarter) is left out of our layer (`itemsOf`): the left's
-  layer has it. Right-to-left targets. A zoom does not measure the spans again (PDF.js scales them by CSS; their widths were
+  layer has it. Right-to-left targets. Selection on a page turned a quarter (`/Rotate`) is PDF.js's own box and rotation rule,
+  not checked in a browser yet (the sample has none). The SVG's text out of Firefox's and WebKit's find. A zoom does not measure the spans again (PDF.js scales them by CSS; their widths were
   measured once). A page wrapped by optional content (§19.9) is read as today's pages are: the wrap's reader change gives
   `textOf` the visible text (`route/ocg-erasure.md`, the text layer's row).
 
-The rows: `tests/pdf-reader/textlayer.test.ts` (TL1-TL18, the pure core), `layer-door.test.ts` (the real door's pages and their
+The rows: `tests/pdf-reader/textlayer.test.ts` (TL1-TL21, the pure core), `layer-door.test.ts` (the real door's pages and their
 layers through three opens) and the conformance suite (`helpers/door-conformance.ts`), `text-layer-view.test.ts` (TV1-TV3 the
 builder, TS1-TS6 the side); in a real browser `pnpm e2e:reader` (built after the commit between the drawing and the links; one
 drag from a heading's number through its translated heading into the paragraph after it, the selection and its copy; a

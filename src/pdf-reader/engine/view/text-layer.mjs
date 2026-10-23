@@ -35,10 +35,12 @@ export function textItems(data) {
 }
 
 /** the items as a PDF.js text content: each an upright run at its baseline (transform [s, 0, 0, s, x, base]), its width the
- *  item's, in one generic face; a line's end where a copy breaks after it */
+ *  item's, in one generic face; a line's end where a copy breaks after it. A single character but a space is given twice the
+ *  scale across: PDF.js scales a span of one character to its width only where its transform's scales differ by half again
+ *  (text_layer.js #appendText), and its height is read from the transform's second column alone */
 export function textContentOf(items, lang = null) {
   return {
-    items: items.map(it => ({ str: it.str, dir: it.dir, transform: [it.fontSize, 0, 0, it.fontSize, it.x, it.base], width: it.w, height: it.fontSize, fontName: FONT, hasEOL: it.eol })),
+    items: items.map(it => ({ str: it.str, dir: it.dir, transform: [it.str.length === 1 && it.str !== ' ' ? 2 * it.fontSize : it.fontSize, 0, 0, it.fontSize, it.x, it.base], width: it.w, height: it.fontSize, fontName: FONT, hasEOL: it.eol })),
     styles: { [FONT]: { fontFamily: FAMILY, ascent: 0.8, descent: -0.2, vertical: false } },
     lang,
   }
