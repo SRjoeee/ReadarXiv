@@ -1,7 +1,7 @@
 // The engine's versions a reader checks what it is given against, kept apart from the run (live.mjs, which re-exports
 // PIPELINE_VERSION) so that a reader loads no part of it: the layer bundle (layer-proto/bundle.mjs) names them in its
-// versions and its key. The layout file's (layout/file.mjs LAYOUT) and the remover's (layout/addon-manifest.mjs REMOVAL)
-// stay beside their parsers, which the readers load already. Imports nothing.
+// versions and its key. The layout file's (layout/file.mjs LAYOUT) stays beside its parser, which the readers load already.
+// Imports nothing.
 
 /**
  * PIPELINE_VERSION, the extraction's: raised with any change to what a unit is — the units' cutting, kinds and texts
@@ -173,3 +173,10 @@ export const PIPELINE_VERSION = '25'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
+/**
+ * REMOVAL, how our page's ink a drawn unit replaces is taken away (the head's `versions.removal`, in the key: VTAG): 1 to 7 the
+ * text-removed PDF (an add-on of removed pages appended to the base, swapped in where a unit is drawn; 6 chained over the
+ * parts, 7 over our base page); 8 our page's own streams wrapped by optional content, each unit's ink in its own groups, which
+ * the reader hides where it draws the unit (layout/wrap.mjs, docs/route/ocg-erasure.md): no add-on, no tail
+ */
+export const REMOVAL = '8'
