@@ -56,8 +56,13 @@ export { LayoutRefusal } from './json.mjs'
  *  217 rows (31 units) convert, 57 units in all are placed better and no other unit's layout changes; of their 34 base pages
  *  made again, 19 set every word where the paper's own compile in the same image does (pdftotext), the other 15 as the sweep's
  *  did or nearer. Of the gate pack's seven papers 2609.26457's marking gains 73 marks, and each base page sets every word as
- *  before or as the paper's own compile does (2307.16209 and 2608.16117 now as it) (the file's schema is 5 still) */
-export const LAYOUT = '14'
+ *  before or as the paper's own compile does (2307.16209 and 2608.16117 now as it) (the file's schema is 5 still); 15 (the release sweep's
+ *  fallbacks, 2026-10-22): the layout compile writes a Latin-1 source as the paper's own bytes (live.mjs originalFiles
+ *  `transcode`), sets no mark inside an argument TeX reads verbatim (marks.mjs VERBATIM_ARG), reads no class's fallback that a
+ *  package the paper loads overrides as the command's definition (arg-roles.mjs overriddenFallback), and takes no marked original
+ *  of more pages than arXiv's for the base page (paper.mjs markedOfPaper): over 183 local sources the marked original changes in
+ *  2610.20581 and 2610.19860 alone, the gate pack's 32 outputs unchanged (the file's schema is 5 still; MARKS_SCHEMA 9 still) */
+export const LAYOUT = '15'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */

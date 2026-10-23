@@ -270,8 +270,16 @@ export function probeFiles({ fsys, project, meta }, { width = false, marks = fal
  *  LAYOUT_TEX each followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX: xdvipdfmx's specials where pdfTeX
  *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before. `pastBegin`
  *  (on with `layout`: the layout compile, our base page): a unit's line probe after an environment's \\begin goes past the
- *  spaces \\begin skips (latex-front.mjs patch), which it would set; off, the live path's original as it was */
-export function originalFiles({ fsys, project, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, complete = null, apart = null, unmarked = null, names = true, pastBegin = !!layout } = {}) {
+ *  spaces \\begin skips (latex-front.mjs patch), which it would set; off, the live path's original as it was. `transcode`
+ *  (off with `layout`: the layout compile and CM's drafts, our base page): a file of a declared Latin-1 family encoding
+ *  that is not UTF-8 (project.transcode) is written as the paper's own bytes, under the paper's own \\usepackage[…]{inputenc},
+ *  as every other file is. On, patch writes it as UTF-8, which only a translation may (translationFiles switches the
+ *  inputenc option to utf8; this does not): 2610.20581's latin1 source, transcoded under its own inputenc, set each é as
+ *  Ã© and each no-break space in math as a \\^ error, 74 errors and a page more than arXiv's. On by default without
+ *  `layout`: the live path's original as it was, whose aux the translation reads */
+export function originalFiles({ fsys, project: read, meta }, { lines = false, spans = null, layout = null, switches = null, inkless = null, complete = null, apart = null, unmarked = null, names = true, pastBegin = !!layout, transcode = !layout } = {}) {
+  // (the paper's own bytes: patch transcodes no file)
+  const project = !transcode && read.transcode?.size ? { ...read, transcode: new Set() } : read
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
   let out, patched = null

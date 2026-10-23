@@ -1569,17 +1569,31 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
     the names' marks off, then, passing, the units marked again (the smaller remedy, kept where it passes with no more
     errors), or, failing, the
     unmarked original compiled to tell whose fault it is. An attempt that passes is the marked original; where none does, the
-    best that ran through to arXiv's page count or more stands for the page pass and the carry to judge, as before; none that
+    best that ran through to arXiv's page count or more stands for the page pass and the carry to judge, as before — but with
+    the base page asked (`final`), none of more pages than arXiv's, there or where no compile is left: the page pass refuses a
+    base page of another page count whatever the carry (§19.7), so the unmarked original is compiled instead of the final
+    pass and tells whose fault it is, each why naming the page counts (2610.20581 before its Latin-1 rule: 34 pages to arXiv's
+    33, refused `marks` in the same four compiles, where it had spent its final pass and been refused `boxes`); none that
     ran through is refused with why: TeX's (`compile`; `texlive` where the paper's `texlive_version` is not the box's TeX
     Live year, as 2610.20595's 2023 under the box's 2025; `engine`) where the unmarked original fails too, else ours
     (`marks`), and `compile` where no compile was left to tell. A why holds no control character and WHY_MAX code units at
     most (`whyText`). A throw of the guard's own is no refusal: the brace check is skipped, or the marked original taken as
-    before the guard. `guard` records what the guard did (`extra`, `unmarked`,
+    before the guard (with the base page asked, not one of more pages than arXiv's: `compile`, the page counts named). `guard` records what the guard did (`extra`, `unmarked`,
     `names`, `failed`, `judged`). `engines`, where a host names the compilers it runs, refuses a paper of another before any
     compile ('engine').
   - *The front end's own mistakes* (pgffor's `\foreach … in {…}`, etoc's `\etocdepthtag.toc{…}`, a length argument such as
-    `\vspace{0.5mm}`, the `\appendixname` wrap) are the front end's to fix at their source; the guard is what keeps the next
-    unknown one from costing a whole paper.
+    `\vspace{0.5mm}`, the `\appendixname` wrap, a class's fallback read as a command's definition) are the front end's to fix
+    at their source; the guard is what keeps the next unknown one from costing a whole paper. A fallback, a definition TeX
+    makes only where its command is undefined (`\providecommand`'s kind, or one in the branch TeX then takes of
+    `\@ifundefined{x}`, `\ifcsundef{x}`, `\ifundef{\x}`, `\ifx\x\undefined`, `\expandafter\ifx\csname x\endcsname\relax`,
+    `\ifdefined\x\else` or `\ifcsname x\endcsname\else`, each the other branch after `\unless`, nothing conditional between),
+    is no definition of the paper's where the paper loads a package that defines the command whatever came before it
+    (`arg-roles.mjs` `overriddenFallback`, `OVERRIDDEN_BY`, from TeX Live 2025's sources: `\url` by url, hyperref or xurl;
+    `\nolinkurl` and `\href` by hyperref; `\burl` by breakurl; not `\path`, which url.sty defines only where it is undefined).
+    Where none is loaded, the fallback is the definition TeX uses and stays the paper's, as before. 2610.19860's llncs.cls falls
+    back to `\def\url#1{#1}`, and under its hyperref, read as `\url`'s own, it made each `\url`'s argument a group, inside
+    which a mark was printed. Over 183 local sources
+    one unit changes (that paper's unit 176: one placeholder, not a group holding one; no text piece and no kind).
   - *The web host* passes `compileBudgetMs` with CM alone today, and neither `pages` nor `engines`: its budget's answer past
     the budget (a `budget` limit) ends the guard as any limit, and the page check is the page pass's alone until it passes
     arXiv's page count.
@@ -1757,7 +1771,14 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   monospace face or OT1 roman's quote and dashes; an address with `axt@` in it is none) leaves the units its marks name
   unmarked and the paper is compiled again within GUARD_EXTRA, as a mark out of place in an aux is (2610.19860:
   `\axt@pma{p176.4a}` inside a `\url`). The page pass reads our page's own where the host's text gives none, and takes a hit
-  arXiv's same page also holds for the paper's own text (`markTextBeyond`).
+  arXiv's same page also holds for the paper's own text (`markTextBeyond`). Before either, the marking sets no mark inside a
+  group opened by a command that reads that argument verbatim (`marks.mjs` `VERBATIM_ARG`: `\url`, `\nolinkurl`, `\path`,
+  `\burl`, `\href`'s first argument), whatever definition the front end read for it.
+- **The paper's own bytes.** The layout compile and CM's unmarked drafts write a source of a declared Latin-1 family
+  encoding that is not UTF-8 as its own bytes, under its own `\usepackage[…]{inputenc}` (`live.mjs` `originalFiles`
+  `transcode`, off with `layout`): written as UTF-8, as only a translation may (`translationFiles` switches the option to
+  `utf8`), 2610.20581's `latin1` source set each é as Ã© and each no-break space in math as a `\^` error, 74 errors and a
+  page more than arXiv's, a fault no remedy of the guard's could mend. The live path's original transcodes as before.
 - **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
   picture, or any PostScript of the page's, dvipdfmx cannot interpret is missing from our page alone, and the marks and boxes
   would pass. The final pass is refused (`final`) where its log says dvipdfmx failed a special or an image (`base.mjs`
