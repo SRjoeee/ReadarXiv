@@ -130,10 +130,12 @@ describe('S4: one branch of a conditional is the translator\'s, never both', () 
     expect(texts(project(doc('Kept words.\n\n\\if 0\nA passage set aside.\n\n\\fi\nMore kept words.')))).toEqual(['Kept words.', 'More kept words.'])
   })
 
-  it('a span TeX reads otherwise than as tokens (\\verb, a definition) is read as before: the file written back is its own bytes (#457 review)', () => {
-    for (const body of ['\\iftrue Visible \\verb|\\else| example words.\\else Hidden branch words.\\fi', '\\iftrue Visible words \\def\\unused{\\else} here.\\else Hidden branch words.\\fi']) {
-      const tex = doc(body), p = project(tex)
+  it('a span TeX reads otherwise than as tokens (\\verb, a definition, a verbatim environment): neither branch is text, the file written back its own bytes (#457 review)', () => {
+    for (const body of ['\\iftrue Visible \\verb|\\else| example words.\\else Hidden branch words.\\fi', '\\iftrue Visible words \\def\\unused{\\else} here.\\else Hidden branch words.\\fi', '\\iftrue Visible words here.\n\\begin{verbatim}\n\\else\n\\end{verbatim}\nMore visible words.\\else Hidden branch words.\\fi']) {
+      const tex = doc(`Before words.\n\n${body}\n\nAfter words.`), p = project(tex)
       expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
+      expect(texts(p).join(' ')).not.toMatch(/Hidden/)
+      expect(texts(p)).toContain('After words.')
     }
   })
 

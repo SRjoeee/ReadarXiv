@@ -179,7 +179,7 @@
 //     its own is its expansion, one text piece whose source is the call (\newcommand{\nb}[1]{Notebook~#1}: 2610.21547 sent
 //     "(4--6)"), never a pair around its argument; a file that is not UTF-8 has its text read in the input encoding its main
 //     file declares (latin1, cp1252; latin1 where it declares none), not as UTF-8 (2610.20581's U+FFFDs); and a conditional TeX
-//     closes with \fi gives the translator one branch: the one the paper's own sources decide, or, where they do not and both
+//     closes with \fi gives the translator one branch where its own text decides it (\iftrue, \if 0), else, where both
 //     branches hold words, neither (2610.21098's \ifdefined branches, one unit). Over 150 local sources 159 of 36,111 units
 //     change, in 6 papers (S1 117 in three, S2 33 in one, S4 9 in two); every other unit is 26's, and so are the marked
 //     original and the untranslated patch of every paper but the two whose units S1 or S4 changed. A copy of 26 carries every unit it holds the source of, matched by sourceHash (live.mjs PIPELINE_CARRIES), and a changed

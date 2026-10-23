@@ -1210,9 +1210,9 @@ function walk(s, from, to, b, ctx) {
     // TeX does not set. One whose branches hold no words (wordsIn) has its pieces as they were
     if (isConditional(name, ctx.ifs) && name !== 'ifcase') {
       // (one whose span holds what TeX reads otherwise than as tokens there — \\verb, inline code, a verbatim environment, a
-      // definition's body — may have its \\else or \\fi where TeX has none: read as before, its pieces as they were)
-      const c = (x => (x && !consumes(s, end, x.end) ? x : null))(conditionalAt(s, end, to, ctx.ifs))
-      const value = c && conditionalValue(name, s, end)
+      // definition's body — may have its \\else where TeX has none: its value is not taken, neither branch is text)
+      const c = conditionalAt(s, end, to, ctx.ifs)
+      const value = c && !consumes(s, end, c.end) ? conditionalValue(name, s, end) : null
       if (c) c.thenFrom = Math.min(testEnd(name, s, end), c.thenTo)
       if (c && (value !== null || (wordsIn(s, c.thenFrom, c.thenTo) && c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo)))) {
         const [from, upto] = value === true ? [c.thenFrom, c.thenTo] : value === false ? (c.elseFrom >= 0 ? [c.elseFrom, c.elseTo] : [c.thenTo, c.thenTo]) : [-1, -1]

@@ -1904,10 +1904,12 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   body is more than text; only a body that sets no word outside its groups, commands and formulas is a pair around its
   argument (2610.21547 sent "(4--6)" for "(Notebook 4--Notebook 6)"). *A file that is not UTF-8* has its text pieces read in
   the encoding its main file declares (`latin1`, `cp1252`/`ansinew`), else latin1, what pdfTeX reads a byte as; a UTF-8 file
-  is never decoded again (2610.20581's é were U+FFFD). *A conditional TeX closes with `\fi`* gives one branch: the one the
-  paper's own sources decide (`\iftrue`, a `\newif` set once, `\ifdefined`/`\ifcsname`/`\ifx…\undefined` of a command the
-  paper surely defines, `\if` of two characters), else, where both branches hold words, neither (`skipped.ifUnknown`;
-  2610.21098's two \ifdefined branches were one unit). Not resolved by the probe compile: the units are cut before any
+  is never decoded again (2610.20581's é were U+FFFD). *A conditional TeX closes with `\fi`* gives one branch where its own text decides it (`\iftrue`, `\if` or `\ifx` of two
+  characters: an author's `\if 0 … \fi`); any other (`\ifdefined`, `\ifcsname`, a `\newif`, `\ifx` of commands) whose two
+  branches hold words gives neither (`skipped.ifUnknown`, left English: 2610.21098's two \ifdefined branches were one unit),
+  and so does one whose span holds `\verb`, inline code, a verbatim environment or a definition, where the scan could take an
+  `\else` TeX never reads for one. Following the paper's definitions was tried and dropped: the review of #457 found a fault
+  in it in each of three rounds (a file nothing reads, a group, a `\let` in the body), and that is TeX's own work. Not resolved by the probe compile: the units are cut before any
   compile and must be the same on every reader. The accents were checked and needed nothing: the regression's "JÃ©rÃ´me"
   was a report printing the units' raw bytes (their text is UTF-8 read latin1; `mt.mjs` `utf8` decodes it)
 - **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
