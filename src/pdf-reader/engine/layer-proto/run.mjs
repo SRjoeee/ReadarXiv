@@ -397,7 +397,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
     // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
     // page's size (not one the next paragraph's gap set closer: it is spread to its floor)
     const short = !closer && (p.fillLead > target + band + 1e-9 || p.fillLead >= p.fillTop - 1e-9)
-    let full = !short
+    let full = !short, tracked = 0
+    const untracked = { st, l }
     if (short && P.cjk) {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
       const K = Math.round(track / 0.01), st2 = k => ({ ...st, track: r3(st.track + k * 0.01) })
@@ -405,8 +406,21 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [] } = {}
       while (no - ok > 1) { const k = (ok + no) >> 1, l2 = at(p, st2(k)); if (l2) { ok = k; lk = l2 } else no = k }
       if (ok) { st = st2(ok); l = lk }
       full = ok < K
+      tracked = ok
     }
-    filled.push({ p, st, l, full })
+    filled.push({ p, st, l, full, tracked, untracked })
+  }
+  // (the runs of a unit split by its displays (`parent`, run.mjs layoutRuns) keep one tracking, as their fit does
+  // (layer2.mjs layoutRuns): each the least any of its unit's runs on the page takes, a run the pass does not track taking
+  // none; its leading still its own)
+  const least = new Map()
+  for (const q of units) if (q.parent) least.set(q.parent, Math.min(least.get(q.parent) ?? Infinity, filled.find(f => f.p === q)?.tracked ?? 0))
+  for (const f of filled) {
+    const k = f.p.parent ? least.get(f.p.parent) : f.tracked
+    if (k >= f.tracked) continue
+    const l = k ? at(f.p, { ...f.untracked.st, track: r3(f.untracked.st.track + k * 0.01) }) : null
+    f.st = l ? { ...f.untracked.st, track: r3(f.untracked.st.track + k * 0.01) } : f.untracked.st
+    f.l = l ?? f.untracked.l
   }
   // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
   // set whole, by halving (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink

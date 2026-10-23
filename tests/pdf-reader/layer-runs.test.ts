@@ -54,6 +54,16 @@ describe('a unit laid in runs between its displays', () => {
     expect(ends(whole as never).filter(([b], j, a) => a[j + 1]?.[0] !== b)).toEqual([[0, true], [1, true], [2, false]])
   })
 
+  it('a paragraph keeps one tracking: the roomy runs are laid from the tightest the cramped run needed', () => {
+    // (a script that tracks: the walk tightens a run's tracking before it shrinks it, so the cramped run is set at the floor's)
+    const Pt = { ...P, trackMin: -0.03 }
+    const whole = L2.layoutUnit2(tokens() as never, blocks() as never, 10, Pt as never)
+    expect([whole.scale, whole.state.trackLatin]).toEqual([0.925, -0.03])
+    const laid = L2.layoutRuns(tokens() as never, blocks() as never, 10, Pt as never)
+    expect(laid!.runs.map(r => [r.layout.scale, r.layout.state.trackLatin])).toEqual([[1, -0.03], [1, -0.03], [0.925, -0.03]])
+    expect(laid!.runs.map(r => !!r.P.runTrack)).toEqual([true, true, false])
+  })
+
   it('a cramped first run shrinks alone: the runs after it keep the original\'s size', () => {
     const b = [block(500, 2, 0, 0), block(450, 7, 1, 1)]
     const t = [...words(5), display(0), ...words(6)]

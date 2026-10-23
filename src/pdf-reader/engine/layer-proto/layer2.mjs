@@ -3182,12 +3182,14 @@ function* statesOf(P, blocks, s) {
   const t0 = P.cjk ? P.trackStart ?? 0 : 0
   // (capScale: the most its lines' room between the rules over and under them leaves it, cellBands: never above)
   const top = Math.min(P.maxScale ?? 1, P.capScale ?? 1)
-  const st = { lead: P.leadBase, track: t0, trackLatin: 0, compress: P.compressMax > 0 ? 1 : 0, borrow: 0, scale: top, knob: P.maxScale ? 'even' : P.capScale < 1 ? 'clear' : 'none' }
+  // (P.runTrack: a run of a unit split by its displays starts from its unit's tracking, the tightest its runs need, layoutRuns)
+  const R = P.runTrack
+  const st = { lead: P.leadBase, track: R ? R.track : t0, trackLatin: R ? R.trackLatin : 0, compress: R ? R.compress : P.compressMax > 0 ? 1 : 0, borrow: 0, scale: top, knob: P.maxScale ? 'even' : P.capScale < 1 ? 'clear' : 'none' }
   yield { ...st }
   for (const knob of P.order) {
     if (knob === 'track') {
       if (P.compressMax >= 2 && st.compress < 2) { st.compress = 2; yield { ...st, knob } }
-      for (let t = t0 - 0.01; t >= P.trackMin - 1e-9; t -= 0.01) {
+      for (let t = (P.cjk ? st.track : st.trackLatin) - 0.01; t >= P.trackMin - 1e-9; t -= 0.01) {
         if (P.cjk) st.track = t
         else st.trackLatin = t
         yield { ...st, knob }
@@ -3345,17 +3347,30 @@ export function runsOf(tokens, blocks) {
 export const runParams = (P, run, last) => ({ ...P, blockBase: run.bi0, lastLines: false, ...(last ? {} : { halfLead: null }) })
 /**
  * A unit's runs (runsOf) laid each at its own state: the first of the fit's states at which its own text fits its own slots,
- * so that only a cramped run shrinks, its leading and tracking its own too (the owner's ruling of 2026-10-09, sizes per unit,
- * carried to its natural unit: a block between two displays reads as its own text block). Every run fits at the state the unit
- * fitted at (the unit's walk sets each run on its own slots), so each comes out at that state or a more natural one. Null where
- * the unit is one run or a run does not fit alone; else { layout: joinRuns', runs: each with its blocks, tokens, `bi0`, `P`
- * and `layout` }
+ * so that only a cramped run shrinks, its leading its own too (the owner's ruling of 2026-10-09, sizes per unit, carried to
+ * its natural unit: a block between two displays reads as its own text block). Every run fits at the state the unit fitted
+ * at (the unit's walk sets each run on its own slots), so each comes out at that state or a more natural one. One tracking
+ * a paragraph: the walk tightens a run's tracking (and its CJK punctuation's compression) before it shrinks it, so a cramped
+ * run is set tighter than a roomy one, and a paragraph's parts would read at two letter spacings, its roomy part's last line
+ * looser than its own paragraph's tightest lines (the sweep's (j)); each run is laid again from the tightest tracking any of
+ * them needs (P.runTrack), its own size and leading still its own. Null where the unit is one run or a run does not fit alone; else { layout: joinRuns', runs: each with its blocks,
+ * tokens, `bi0`, `P` and `layout` }
  */
 export function layoutRuns(tokens, blocks, s, P) {
   const runs = runsOf(tokens, blocks)
   if (!runs) return null
   for (const [i, r] of runs.entries()) {
     r.P = runParams(P, r, i === runs.length - 1)
+    r.layout = layoutUnit2(r.tokens, r.blocks, s, r.P)
+    if (r.layout.clipped) return null
+  }
+  const trackOf = st => (P.cjk ? st.track : st.trackLatin)
+  const tight = runs.reduce((a, r) => (trackOf(r.layout.state) < trackOf(a.layout.state) - 1e-9 || (trackOf(r.layout.state) <= trackOf(a.layout.state) + 1e-9 && r.layout.state.compress > a.layout.state.compress) ? r : a)).layout.state
+  const R = { track: tight.track, trackLatin: tight.trackLatin, compress: tight.compress }
+  for (const r of runs) {
+    const st = r.layout.state
+    if (Math.abs(trackOf(st) - trackOf(R)) < 1e-9 && st.compress === R.compress) continue
+    r.P = { ...r.P, runTrack: R }
     r.layout = layoutUnit2(r.tokens, r.blocks, s, r.P)
     if (r.layout.clipped) return null
   }
