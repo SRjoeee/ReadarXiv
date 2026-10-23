@@ -1866,7 +1866,11 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   indirect one followed, as PDF.js reads it: `layout/xref.mjs` reads every object where the cross-reference puts it; the object
   layer's own scan to `endstream` reads a stream ending in CR or LF a byte short); a dict its sorted entries, an array its
   items, a reference the form of what it names (direct or indirect alike); the back links `/Parent` `/P` `/Prev` `/Next`
-  `/First` `/Last` cut; a cycle leaves the object unmatched (copied), never an error. Forms are interned (exact equality).
+  `/First` `/Last` cut where their value is a reference (a direct value under them is data: an optional-content membership's
+  `/P` policy); a cycle leaves the object unmatched (copied), never an error. Forms are interned (exact equality); stream
+  bytes are bucketed by a hash of secret random seeds and compared whole, and the whole build spends at most
+  `DELTA_WORK_MAX` (2^31 bytes hashed or compared and objects read: the 46 MB pair about 150 million), so no input makes a
+  bucket or the build long. Its `/Size` leaves the remover's tails `DELTA_TAIL_ROOM` (2^20) numbers below `OBJECT_MAX`.
 - **Refused, the whole base kept** (`DELTA_WHYS`): an original it cannot read safely (`delta-parse`, `delta-encrypted`,
   `delta-xref`: hybrid, an entry not at its `n g obj`, a section that does not parse; `delta-stream`: a `/Length` not ending at
   `endstream`), our pages more than arXiv's (`delta-pages`), a bound (`delta-bound`: `DELTA_MAX_BYTES` 24 MiB, more than
@@ -1879,18 +1883,27 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a pairwise graph
   comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
   gives (its console captured, each document read in turn); the original's page count; every page's box and text (strings and
-  places within 0.01) ours on replaced pages and the original's elsewhere. A failure is `delta-proof`.
+  places within 0.01) ours on replaced pages and the original's elsewhere. What the delta overrides of the original is bounded:
+  the replaced pages' objects exactly (no catalog, no other page) and its `/Size` not below the original's. An original whose
+  cross-reference PDF.js recovers on its own (any such message on the original alone: it then indexes the whole file, where an
+  unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
+  entry of a type PDF.js does not know. Any other failure is `delta-proof`.
 - **The host's contract.** At the end of the maker child, once the maker let its documents go: `deltaOf(orig, final, { PL,
   replacedPages })` and `proveDelta(...)`; then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, ..., delta: { bytes,
   sha256, replaced, stats } } })` (or `delta: { refused, why }`). The page pass checks it again (shape, bounds, digest, the
   section over `orig`, the head's reader): the head's base becomes `kind: 'delta'` where it checks, else stays `full` with
-  `stats.delta: { kind: 'full', why }` — never a refusal of the paper. The remover reads the composed document (`removerOf({
+  `stats.delta: { kind: 'full', why }` — never a refusal of the paper. The page pass binds `replaced` to the delta's bytes: each
+  replaced page's object (arXiv's PDF.js document's page refs) among the section's entries, and no other page's. The remover reads the composed document (`removerOf({
   bytes: orig ++ delta })`): the delta is the tails' base, the first chain's `end` O + D and `xref` the delta's startxref, its
   fresh numbers after the delta's `/Size`; `TAIL_CAP` binds the tails alone; `tailLinks`' `root` and `first` mean nothing of
-  the delta. The delta is a bundle object, content-addressed under the CTAG like a units chunk (`deltaKey`), not a `/base/` PDF.
+  the delta. The delta is a bundle object beside the units chunks, content-addressed under the CTAG: `deltaKey` =
+  `layer/<seg>/<ctag>/<sha256>.delta` (its own suffix: PDF bytes, not JSON), not a `/base/` PDF. A holder of its bytes (the
+  Worker before it commits it, a reader before it composes it) checks them with `checkDelta(head, bytes)` (length, digest,
+  `deltaSection` over `orig` and its startxref the head's), which the layer entry exports with `deltaSection`.
 - **The head** (`format.mjs`): `base { source: 'ours', kind: 'delta', bytes, sha256 (the section's), xref (its startxref,
-  composed: after `orig.bytes`), pages, tree, check { pages: [M, N], boxes: 'equal', carried }, replaced, stats }` with `orig`
-  required (it is the original the delta extends; no `over`). `replaced`: 1-based inclusive ranges `[[from, to], …]`,
+  composed: after `orig.bytes`), pages, tree, check { pages: [M, N], boxes: 'equal', carried }, replaced, stats }` with `orig
+  { bytes, sha256, xref }` required (the original the delta extends, its startxref the delta's /Prev, so that a holder checks
+  the section with no read of the original; a `full` head's `orig` takes no `xref`; no `over`). `replaced`: 1-based inclusive ranges `[[from, to], …]`,
   ascending, non-overlapping, adjacent ones merged, within our M pages, 1 to `REPLACED_MAX` 4096 (`replacedWhy`). `stats`,
   integers only: `{ replaced, reused: { fonts, images, forms, other }, included: { bytes, objects } }`. A head without `kind` is
   `full`; a `full` head keeps `check.pages` [N, N]. The catalog's base of a delta: `{ source: 'ours', kind: 'delta', object: {

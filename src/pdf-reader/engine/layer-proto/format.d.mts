@@ -19,7 +19,7 @@ export declare const BUNDLES_READ: readonly ['7', '8']
 export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
 /** how a base of ours is held: a delta over arXiv's PDF, or our whole PDF (`full`, no `kind` on the wire); the delta's bounds */
-export { BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, REPLACED_MAX, replacedWhy } from '../layout/delta-wire.mjs'
+export { BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_TAIL_ROOM, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
 /** why a head of 8's base is arXiv's (`base.why`): LAYOUT_REFUSED's codes, which each part with no layout says too */
 export declare const BASE_WHYS: typeof LAYOUT_REFUSED
 /** whether a head's layer draws: its base is ours (BUNDLE 8); a head of 7 and every head over arXiv's PDF draw nothing */
@@ -130,7 +130,8 @@ export interface ReadHead {
   /** the PDF the layer is drawn over */
   base: HeadBase
   /** arXiv's PDF, where the base is ours; null where the base is arXiv's */
-  orig: { bytes: number; sha256: string } | null
+  /** with its startxref (`xref`) where the base is a delta: the section the delta's /Prev names */
+  orig: { bytes: number; sha256: string; xref?: number } | null
   versions: HeadVersions
   units: (Ref & { from: number; to: number })[]; lineskip: [number, number] | null
   /** 1: the parts may carry the draw of their pages' left parts (a page can still have none); 0 (absent in the bytes): not made with them */
@@ -303,7 +304,7 @@ export declare function writeHead(o: {
   /** the PDF the layer is drawn over; one given with no `source` is arXiv's (as every base was before BUNDLE 8) */
   base: HeadBase | { bytes: number; sha256: string; xref: number; source?: undefined }
   /** arXiv's PDF: written where the base is ours (and required there), ignored else */
-  orig?: { bytes: number; sha256: string } | null
+  orig?: { bytes: number; sha256: string; xref?: number } | null
   image: string
   units: readonly (Written & { from: number; to: number })[]; lineskip: readonly [number, number] | null
   /** the parts may carry draws: the head says `draw: 1` (omitted when false) */
@@ -337,10 +338,12 @@ export declare function keyOf(paper: string, version: number, ctag: string, sha2
 export declare function catalogKey(paper: string, version: number, vtag: string): string
 /** a base page of ours' name, `base/<id>v<n>/<sha256>.pdf` (R2's key, immutable); throws a RangeError on what is not one */
 export declare function baseKey(paper: string, version: number, sha256: string): string
-/** a delta's name: a bundle object content-addressed under the CTAG (keyOf with CTAG5), never a /base/ PDF */
+/** a delta's name, `layer/<id>v<n>/<ctag>/<sha256>.delta`: a bundle object beside the units chunks, never a /base/ PDF */
 export declare function deltaKey(paper: string, version: number, sha256: string): string
 /** why a delta base would not be read in a head of `N` pages over `orig` (the head reader's refusal), null where it would */
-export declare function deltaBaseWhy(base: unknown, orig: { bytes: number; sha256: string }, N: number): string | null
+export declare function deltaBaseWhy(base: unknown, orig: { bytes: number; sha256: string; xref: number }, N: number): string | null
+/** whether bytes are the delta a head names (length, digest, its section over the head's orig, its startxref): null, or why not */
+export declare function checkDelta(head: ReadHead, bytes: Uint8Array): Promise<string | null>
 /** the base a catalog names, of its head as read */
 export declare function catalogBase(head: ReadHead): CatalogBase
 /** a key taken apart: an object's { paper, version, ctag, sha256 }, a catalog's { paper, version, vtag }; null for what keyOf

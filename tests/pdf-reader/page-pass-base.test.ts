@@ -172,7 +172,7 @@ describe('layerOfPaper over our base page held as a delta over arXiv\'s PDF', ()
     for (const whole of [false, true]) {
       const got = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { delta: d }), whole })
       expect(got.head.base, String(whole)).toEqual({ source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: 3, tree: '2025', check: { pages: [3, 3], boxes: 'equal', carried: 1 }, replaced: [[1, 3]], stats: d.stats })
-      expect(got.head.orig).toEqual({ bytes: ORIG.bytes, sha256: ORIG.sha256 })
+      expect(got.head.orig).toEqual({ bytes: ORIG.bytes, sha256: ORIG.sha256, xref: ORIG.xref })
       expect(got.parts.map(p => p.layout !== null)).toEqual([true, true])
       expect(got.r).toMatchObject({ stats: { delta: { kind: 'delta', bytes: d.bytes.length, replaced: 3 } } })
       // (the parts' chain begins after arXiv's bytes and the delta's)
@@ -191,6 +191,9 @@ describe('layerOfPaper over our base page held as a delta over arXiv\'s PDF', ()
       ['past its share of our base page', await deltaOver([1, 3], { extra: 5000 }), 'delta-bound'],
       ['the host\'s refusal', { refused: 'delta-proof', why: 'page 2\'s graph is not ours' }, 'delta-proof'],
       ['not bytes', { ...good, bytes: [1, 2] }, 'delta-shape'],
+      // (the replaced list bound to the delta's own page objects: one it writes and does not name, one it names and does not write)
+      ['a page written and not named', { ...(await deltaOver([1, 2, 3])), replaced: [[1, 1], [3, 3]], stats: { ...good.stats, replaced: 2 } }, 'delta-shape'],
+      ['a page named and not written', { ...(await deltaOver([1])), replaced: [[1, 1], [3, 3]], stats: { ...good.stats, replaced: 2 } }, 'delta-shape'],
     ]
     for (const [name, delta, why] of cases) {
       const got = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { delta }) })

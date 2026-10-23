@@ -41,12 +41,12 @@ export { BYTES_MAX, CHECK_SETS, COST, DecodeLimit, HELD_MAX, LexLimit, SETS, WAL
 export { ANSWER_CAP, ASK_CAP, ASK_VALUES, ENTRIES_CAP, ENTRIES_VALUES, REMOVER_WHYS, encodeAsk, encodeEntries, readAsk, readEntries } from './layout/chain-wire.mjs'
 export { chainedAddon } from './layout/chain.mjs'
 // our base as an incremental update over arXiv's PDF (the delta): built and proved in the maker child, its section read back, its why
-export { DELTA_DECODED_MAX, DELTA_HELD_MAX, deltaOf, proveDelta } from './layout/delta.mjs'
+export { DELTA_DECODED_MAX, DELTA_HELD_MAX, DELTA_WORK_MAX, deltaOf, proveDelta } from './layout/delta.mjs'
 export { DELTA_OBJECTS_MAX, DELTA_WHYS, deltaSection } from './layout/delta-wire.mjs'
 // the bundle's writer (the reader's parsers are the layer entry's)
 export { bundleUnitsOf, writeBundle } from './layer-proto/bundle.mjs'
 // BUNDLE 4: the writers of a paper's objects, the keys and the bounds (the readers are the layer entry's), and the memory-class errors every catch lets through
-export { BUILD_END_WHYS, BUNDLE5, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG5, DEPTH_NONE, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG5, catalogKey, isFinalEnd, keyOf, keyParts, KIND_NONE, RECORD_FLAG, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks, isLayoutRefusal, LAYOUT_REFUSED, WHY_MAX, BASE_SOURCES, BASE_WHYS, BUNDLES_READ, baseKey, catalogBase, layerDraws, baseRefusalRetryable, RETRY_LIMITS, BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, REPLACED_MAX, replacedWhy, deltaKey } from './layer-proto/format.mjs'
+export { BUILD_END_WHYS, BUNDLE5, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTENT_MAX, CTAG5, DEPTH_NONE, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, LEFT_CAP, LEFT_VALUES, PART_CAP, PART_VALUES, SPANNED_PER_TOKEN, TAIL_CAP, TOKENS_PAGE, TOKEN_FIELDS, TOKEN_LIMIT, TOKEN_SCALE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, VTAG5, catalogKey, isFinalEnd, keyOf, keyParts, KIND_NONE, RECORD_FLAG, partTarget, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks, isLayoutRefusal, LAYOUT_REFUSED, WHY_MAX, BASE_SOURCES, BASE_WHYS, BUNDLES_READ, baseKey, catalogBase, layerDraws, baseRefusalRetryable, RETRY_LIMITS, BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, REPLACED_MAX, replacedWhy, deltaKey, checkDelta, DELTA_TAIL_ROOM } from './layer-proto/format.mjs'
 export { BundleRefusal } from './layer-proto/bundle.mjs'
 // the cut: a paper made whole, in BUNDLE 4's objects
 export { cutBundle, needFrontier, partCutter, wholeCutter, wholeFrontier } from './layer-proto/cut.mjs'

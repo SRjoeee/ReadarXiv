@@ -22,7 +22,7 @@ import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
 import { chainedAddon } from '../layout/chain.mjs'
-import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection } from '../layout/delta-wire.mjs'
+import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf } from '../layout/delta-wire.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
@@ -140,12 +140,12 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
  * The delta the host gave with our base page (`ours.delta`: layout/delta.mjs deltaOf's { bytes, sha256, replaced, stats },
  * built in the maker child once the maker let its documents go, and proved there), checked before the head names it: its
  * shape and bounds (DELTA_MAX_BYTES, DELTA_MAX_SHARE of our base page's bytes), its digest, its section exact over arXiv's PDF
- * (`orig`: delta-wire.mjs deltaSection, /Prev the original's startxref), its replaced pages within our `M` and the head's
- * reader taking it (format.mjs deltaBaseWhy). { delta: { bytes, sha256, xref, replaced, stats } } or { why } (a DELTA_WHYS code
+ * (`orig`: delta-wire.mjs deltaSection, /Prev the original's startxref), its replaced pages within our `M`, exactly the pages
+ * whose objects (arXiv's PDF.js document `doc`) its section writes, and the head's reader taking it (format.mjs deltaBaseWhy). { delta: { bytes, sha256, xref, replaced, stats } } or { why } (a DELTA_WHYS code
  * and its reason: the host's refusal it passed, or `delta-shape`). Never throws but a failed allocation: a delta that fails is a
  * whole base, never a refused paper
  */
-async function deltaOfOurs(given, { orig, ours, M, N, tree }) {
+async function deltaOfOurs(given, { orig, ours, M, N, tree, doc }) {
   const shape = why => ({ why: 'delta-shape', reason: whyText(why) })
   if (given === null || given === undefined) return null
   if (typeof given !== 'object') return shape('not an object')
@@ -159,8 +159,17 @@ async function deltaOfOurs(given, { orig, ours, M, N, tree }) {
   const sect = deltaSection(bytes, { bytes: orig.bytes, xref: orig.xref })
   if (sect.why) return shape(`its section: ${sect.why}`)
   const base = { source: 'ours', kind: 'delta', bytes: bytes.length, sha256, xref: sect.startxref, pages: N, tree: typeof tree === 'string' ? tree : '0000', check: { pages: [M, N], boxes: 'equal', carried: 0 }, replaced, stats }
-  const bad = deltaBaseWhy(base, { bytes: orig.bytes, sha256: orig.sha256 }, N)
+  const bad = deltaBaseWhy(base, { bytes: orig.bytes, sha256: orig.sha256, xref: orig.xref }, N)
   if (bad !== null) return shape(bad)
+  // (`replaced` bound to the delta's bytes: each replaced page's object, by arXiv's PDF.js document, among its section's entries,
+  // and no other page's: a reader's copy of an unreplaced page trusts the list)
+  const rows = new Set(sect.rows.map(([n, g]) => `${n} ${g}`)), rep = new Set(pagesOf(replaced))
+  for (let p = 1; p <= N; p++) {
+    let ref = null
+    try { ref = (await doc.getPage(p))?.ref ?? null } catch (e) { if (isMemoryError(e)) throw e }
+    if (!Number.isInteger(ref?.num) || !Number.isInteger(ref?.gen)) return shape(`page ${p}'s object is not known`)
+    if (rows.has(`${ref.num} ${ref.gen}`) !== rep.has(p)) return shape(`page ${p} is ${rep.has(p) ? 'named and not written' : 'written and not named'} by the delta`)
+  }
   return { delta: { bytes, sha256, xref: sect.startxref, replaced: base.replaced, stats: base.stats } }
 }
 /** SHA-256 of the bytes, lower-case hex (Web Crypto) */
@@ -289,7 +298,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   let baseDoc = null, baseText = null, lineCheck = null, oursHead = null, oursTail = null, deltaStat = null
   if (!(marks && !('marks' in marks))) {
     const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
-    const held = oursDoc ? await deltaOfOurs(ours.delta, { orig: origRef, ours, M: Math.min(oursDoc.numPages, N), N, tree }) : null
+    const held = oursDoc ? await deltaOfOurs(ours.delta, { orig: origRef, ours, M: Math.min(oursDoc.numPages, N), N, tree, doc }) : null
     const checked = await checkOurBase({ ours, draft: marked?.doc ?? null, arxiv: { doc, text }, tree, draw, toplevels, delta: !!held?.delta })
     if ('refused' in checked) { marks = { refused: checked.refused, why: checked.why }; marked = null }
     else {
@@ -440,7 +449,7 @@ async function tell(ctx, state, cutter, part, layout, lines) {
 function headBaseOf(ctx, laid) {
   const { ours, orig, tail } = ctx.bases
   // (a delta is the tails' base: the composed document arXiv's bytes and the delta's, its section the last: `tail`)
-  if (laid && ours) return { base: ours, orig: { bytes: orig.bytes, sha256: orig.sha256 }, tail }
+  if (laid && ours) return { base: ours, orig: { bytes: orig.bytes, sha256: orig.sha256, ...(ours.kind === 'delta' ? { xref: orig.xref } : {}) }, tail }
   return { base: { source: 'arxiv', bytes: orig.bytes, sha256: orig.sha256, xref: orig.xref, why: layoutRecordOf(ctx.made)?.refused ?? 'marks' }, orig: null, tail: orig }
 }
 

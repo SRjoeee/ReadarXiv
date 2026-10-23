@@ -21,7 +21,7 @@
 import { checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
 import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
-import { BASE_KINDS, countOf, DELTA_MAX_BYTES, replacedWhy } from '../layout/delta-wire.mjs'
+import { BASE_KINDS, countOf, DELTA_MAX_BYTES, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
 import { TAIL_CAP, tailLinks } from '../layout/tail.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
@@ -108,7 +108,7 @@ export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
  *  the wire: a head without one reads as `full`), the delta's fallback. The delta's bounds and its replaced pages' list:
  *  layout/delta-wire.mjs */
 export { BASE_KINDS, DELTA_MAX_BYTES }
-export { DELTA_MAX_SHARE, REPLACED_MAX, replacedWhy } from '../layout/delta-wire.mjs'
+export { DELTA_MAX_SHARE, DELTA_TAIL_ROOM, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
 /** why a head's base is arXiv's in a bundle of 8 (`base.why`): the paper's refusal, a code of LAYOUT_REFUSED, which every part
  *  with no layout says too */
 export const BASE_WHYS = LAYOUT_REFUSED
@@ -361,10 +361,10 @@ export function baseKey(paper, version, sha256) {
   return `base/${seg}/${sha256}.pdf`
 }
 
-/** the name of a delta (BUNDLE 8, our base held as an update over arXiv's PDF): a bundle object like a units chunk,
- *  content-addressed under the CTAG (keyOf with CTAG5: `layer/<seg>/<ctag>/<sha256>.json`, served as the layer's `o/<sha256>`),
- *  never a /base/ PDF. Throws a RangeError on an identifier, a version or a digest that is not one */
-export const deltaKey = (paper, version, sha256) => keyOf(paper, version, CTAG5, sha256)
+/** the name of a delta (BUNDLE 8, our base held as an update over arXiv's PDF): a bundle object beside the units chunks, content-
+ *  addressed under the CTAG, `layer/<seg>/<ctag>/<sha256>.delta` (keyOf's directory and digest, its own suffix: its bytes are a
+ *  PDF section, not JSON), never a /base/ PDF. Throws a RangeError on an identifier, a version or a digest that is not one */
+export const deltaKey = (paper, version, sha256) => `${keyOf(paper, version, CTAG5, sha256).slice(0, -'.json'.length)}.delta`
 
 /** a key taken apart: `{ paper, version, ctag, sha256 }` for an object, `{ paper, version, vtag }` for a catalog; null for
  *  what keyOf and catalogKey would not write (a leading zero, upper-case hex, a slash where a _ goes) */
@@ -760,12 +760,13 @@ function baseShape(K, v, bundle, N) {
   return { base: { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check }, orig: o }
 }
 
-/** arXiv's PDF beside a base of ours (`orig`), required there */
-function origOf(K, v) {
+/** arXiv's PDF beside a base of ours (`orig`), required there; of a delta's, with its startxref (`xref`: the section the
+ *  delta's /Prev names, which a holder of the delta checks with no read of the original: checkDelta) */
+function origOf(K, v, withXref = false) {
   if (!Object.hasOwn(v, 'orig')) throw refuse(K, 'orig', 'missing, where the base is ours')
-  const o = exactKeys(K, v.orig, ['bytes', 'sha256'], 'orig')
-  pdfRef(K, o, 'orig', false)
-  return { bytes: o.bytes, sha256: o.sha256 }
+  const o = exactKeys(K, v.orig, withXref ? ['bytes', 'sha256', 'xref'] : ['bytes', 'sha256'], 'orig')
+  pdfRef(K, o, 'orig', withXref)
+  return withXref ? { bytes: o.bytes, sha256: o.sha256, xref: o.xref } : { bytes: o.bytes, sha256: o.sha256 }
 }
 
 /** a base of ours' pages, year and check: its pages the paper's, the check's our pages and arXiv's ([N, N]; a delta's [M, N],
@@ -792,7 +793,8 @@ function count(K, v, path) {
  *  after arXiv's bytes: `xref` within the delta, read in the composed document's offsets); no `over` (orig says it) */
 function deltaShape(K, v, N) {
   const b = exactKeys(K, v.base, BASE_DELTA, 'base')
-  const o = origOf(K, v)
+  if (b.kind !== 'delta') throw refuse(K, 'base.kind', `not 'delta' (${typeof b.kind === 'string' ? told(b.kind) : kindOf(b.kind)})`)
+  const o = origOf(K, v, true)
   if (!isInteger(b.bytes, 1, DELTA_MAX_BYTES)) throw refuse(K, 'base.bytes', `not an integer 1 to ${DELTA_MAX_BYTES}`)
   digestField(K, b.sha256, 'base.sha256')
   if (!isInteger(b.xref, o.bytes + 1, o.bytes + b.bytes - 1)) throw refuse(K, 'base.xref', `not an offset in the delta after arXiv's ${o.bytes} bytes`)
@@ -822,6 +824,22 @@ export function deltaBaseWhy(base, orig, N) {
     if (e instanceof BundleRefusal) return e.message
     throw e
   }
+}
+
+/**
+ * Whether `bytes` are the delta a head of `kind` 'delta' names (readHead's): its length and digest the base's, its section exact
+ * over the original the head names (delta-wire.mjs deltaSection: every entry at its object, /Prev `orig.xref`) and its startxref
+ * the base's `xref`. What the Worker checks before it commits the delta and a reader before it composes it: null, or why not
+ */
+export async function checkDelta(head, bytes) {
+  const b = head?.base, o = head?.orig
+  if (b?.kind !== 'delta' || !Number.isInteger(o?.xref)) return 'not a head whose base is a delta'
+  if (!(bytes instanceof Uint8Array) || bytes.length !== b.bytes) return `not the ${b.bytes} bytes the head names`
+  if ((await digestOf(bytes)) !== b.sha256) return 'not the bytes the head\'s digest names'
+  const sect = deltaSection(bytes, { bytes: o.bytes, xref: o.xref })
+  if (sect.why) return `its section: ${sect.why}`
+  if (sect.startxref !== b.xref) return 'its startxref is not the head\'s'
+  return null
 }
 
 /** the head's fields, checked: what a reader and a writer share */
@@ -872,7 +890,7 @@ export async function writeHead({ paper, base, orig = null, image, units, linesk
     bundle: BUNDLE5, kind: 'head',
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
     base: baseWire(base),
-    ...(base.source === 'ours' && orig ? { orig: { bytes: orig.bytes, sha256: orig.sha256 } } : {}),
+    ...(base.source === 'ours' && orig ? { orig: base.kind === 'delta' ? { bytes: orig.bytes, sha256: orig.sha256, xref: orig.xref } : { bytes: orig.bytes, sha256: orig.sha256 } } : {}),
     versions: { pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image },
     units: units.map(u => ({ kind: 'units', from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes.length })),
     lineskip: lineskip === null ? null : lineskip.map(r2),
