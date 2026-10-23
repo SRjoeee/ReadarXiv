@@ -19,7 +19,7 @@ beforeAll(async () => {
 const params = (to: string) => resolveRules(BUILTIN_RULES, to).params
 /** a block of n lines 12 pt apart from `top` on `page`, 100 pt wide */
 const block = (n = 6, page = 1, top = 500) => { const B = Array.from({ length: n }, (_, k) => top - 12 * k); return { page, rects: B.map(b => [page, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
-const chars = (n: number) => Array.from({ length: n }, () => ({ s: '汉', cls: 'cjk', w100: 100, st: {} }))
+const chars = (n: number) => Array.from({ length: n }, () => ({ s: '\u6c49', cls: 'cjk', w100: 100, st: {} }))
 const P = (o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, fillLead: 1.8, adaptiveFill: { band: 0.05, track: 0, size: 1.1 }, ...o })
 type Unit = { id: number; unit: { kind: string }; pages: number[]; tokens: unknown[]; blocks: ReturnType<typeof block>[]; s: number; P: Record<string, unknown>; layout: { lines: { baseline: number; page: number; from: number }[]; scale: number; state: { lead: number; scale: number; track: number } }; parent?: unknown; fillLead?: number | null; fitLines?: number; runs?: Unit[] }
 const laid = (id: number, n: number, PP = P(), blocks = [block()]): Unit => {
