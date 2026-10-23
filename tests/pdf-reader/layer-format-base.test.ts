@@ -32,7 +32,7 @@ describe('the head of BUNDLE 8', () => {
     expect(BUNDLES_READ).toEqual(['7', '8'])
     expect(BASE_SOURCES).toEqual(['ours', 'arxiv'])
     expect(BASE_WHYS).toEqual(LAYOUT_REFUSED)
-    expect(BASE_WHYS).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes'])
+    expect(BASE_WHYS).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap'])
   })
 
   it('a base of ours: its pages, year and check, arXiv\'s PDF beside it, in the wire\'s order; the share to a ten-thousandth', async () => {
@@ -317,5 +317,42 @@ describe('checkDelta: the bytes a delta head names, checked by a holder of them 
     expect(await checkDelta(read, d.bytes.subarray(1))).toMatch(/bytes/)
     expect(await checkDelta({ ...read, orig: { ...OX, xref: OX.xref - 1 } }, d.bytes)).toMatch(/Prev/)
     expect(await checkDelta((await headOf(OURS, ORIG)).read, d.bytes)).toMatch(/not a head/)
+  })
+})
+
+describe('a base of ours whose pages are wrapped by optional content (base.stats, base.unhidden, base.labelKept)', () => {
+  const WRAP = { stats: { wrapped: N, refusedPages: 0, unhidden: { marks: 1, across: 0, spell: 1, page: 0, bounds: 0 }, split: 2, groups: 40, labelKept: 1 }, unhidden: [[1, 'marks'], [4, 'spell']] as [number, string][], labelKept: [7] }
+  const OX = { ...ORIG, xref: ORIG.bytes - 100 }
+  const DELTA = { source: 'ours' as const, kind: 'delta' as const, bytes: 4_000, sha256: 'abcdef0123456789'.repeat(4), xref: ORIG.bytes + 3_500, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: 0.9 }, replaced: [[1, N]] as [number, number][], stats: { replaced: N, reused: { fonts: 3, images: 1, forms: 0, other: 2 }, included: { bytes: 3_200, objects: N + 4 } } }
+
+  it('round trips on a whole base and on a delta, the delta\'s own counts beside the wrap\'s', async () => {
+    const full = await headOf({ ...OURS, ...WRAP }, ORIG)
+    expect(Object.keys(parsed(full.head).base)).toEqual(['source', 'bytes', 'sha256', 'xref', 'pages', 'tree', 'check', 'stats', 'unhidden', 'labelKept'])
+    expect(full.read.base).toMatchObject({ stats: WRAP.stats, unhidden: WRAP.unhidden, labelKept: WRAP.labelKept })
+    const delta = await headOf({ ...DELTA, stats: { ...DELTA.stats, ...WRAP.stats }, unhidden: WRAP.unhidden, labelKept: WRAP.labelKept }, OX)
+    expect(delta.read.base).toMatchObject({ stats: { ...DELTA.stats, ...WRAP.stats }, unhidden: WRAP.unhidden, labelKept: WRAP.labelKept })
+    // (an unwrapped base: no fields, as before)
+    expect((await headOf(OURS, ORIG)).read.base).not.toHaveProperty('unhidden')
+  })
+
+  it('refuses lists the counts do not match, out of order, a code not one, an id in both, or past UNHIDDEN_MAX', async () => {
+    const { head } = await headOf({ ...OURS, ...WRAP }, ORIG)
+    const edits: [string, (h: Wire) => void][] = [
+      ['base.stats.unhidden', h => { h.base.stats.unhidden.spell = 0 }],
+      ['base.unhidden[1]', h => { h.base.unhidden = [[4, 'spell'], [1, 'marks']] }],
+      ['base.unhidden[0]', h => { h.base.unhidden[0][1] = 'lost' }],
+      ['base.labelKept[0]', h => { h.base.labelKept = [4] }],
+      ['base.stats.labelKept', h => { h.base.labelKept = [] }],
+      ['base.unhidden', h => { h.base.unhidden = Array.from({ length: 8001 }, (_, i) => [i, 'marks']); h.base.stats.unhidden.marks = 8001; h.base.stats.unhidden.spell = 0; h.base.labelKept = []; h.base.stats.labelKept = 0 }],
+      ['base.stats', h => { delete h.base.stats }],
+    ]
+    for (const [path, edit] of edits) {
+      const w = parsed(head)
+      edit(w)
+      const f = forged('head', w)
+      const e = await refusal(readHead(f.bytes, { ref: f.ref }))
+      expect(e, path).toBeInstanceOf(BundleRefusal)
+      expect(e?.path ?? '', path).toContain(path.split('[')[0])
+    }
   })
 })

@@ -28,3 +28,13 @@ export declare function replacedWhy(ranges: unknown, last: number): string | nul
 /** the delta's own section read from its bytes (`orig` arXiv's PDF's length and startxref): its kind, startxref (composed),
  *  /Prev, /Size and every entry [number, generation, offset], each checked to point at its `n g obj`; or why not */
 export declare function deltaSection(delta: Uint8Array, orig: { bytes: number; xref: number }): { kind: 'table' | 'stream'; startxref: number; prev: number; size: number; rows: [number, number, number][]; why?: undefined } | { why: string }
+/** why a unit's ink stays the original's on our wrapped pages (layout/own.mjs, layout/wrap.mjs) */
+export declare const UNHIDDEN: readonly ['marks', 'across', 'spell', 'page', 'bounds']
+export type Unhidden = (typeof UNHIDDEN)[number]
+/** a head's counts of our pages' wrap (in `base.stats`) */
+export declare const WRAP_STATS: readonly ['wrapped', 'refusedPages', 'unhidden', 'split', 'groups', 'labelKept']
+export interface WrapStats { wrapped: number; refusedPages: number; unhidden: Record<Unhidden, number>; split: number; groups: number; labelKept: number }
+/** the units a head lists as the original's, or with their label kept, at most */
+export declare const UNHIDDEN_MAX: number
+/** why a wrap's head fields do not read (`<path>: <why>`), null where they do */
+export declare function wrapWhy(stats: unknown, unhidden: unknown, labelKept: unknown): string | null

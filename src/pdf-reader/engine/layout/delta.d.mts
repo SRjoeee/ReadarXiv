@@ -29,3 +29,4 @@ export declare function proveDelta(origBytes: Uint8Array, deltaBytes: Uint8Array
   replaced: PageRanges
   objectsMax?: number; decodedMax?: number; heldMax?: number
 }): Promise<{ ok: true; pages: [ours: number, arxiv: number]; replaced: number } | { ok: false; code: 'delta-proof' | 'delta-xref'; why: string }>
+export declare function wrappedPagesOf(PL: import('./remove.mjs').PdfLib, doc: unknown): number[]

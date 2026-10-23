@@ -8,7 +8,9 @@
 // entries each mapped to the original's object where the two are canonically equal (the whole sub-graph reused: a font with its
 // descriptor, font file, widths and ToUnicode; an image with its SMask), else copied with its closure under new numbers from
 // the original's /Size up. Resource names stay ours (they live in the page's dict alone, so no content stream is rewritten).
-// Nothing else: the catalog, page tree, outlines, destinations, annotations and info stay the original's.
+// Nothing else: the page tree, outlines, destinations, annotations and info stay the original's, and so does the catalog but
+// for our /OCProperties where our pages are wrapped by optional content (layout/wrap.mjs): the catalog is then written again,
+// every key the original's but that one.
 //
 // Canonical form (one Merkle form for both documents, exact): a stream is its dict without /Length and its stored bytes, those
 // its RESOLVED /Length names (layout/xref.mjs: PDF.js's reading, never a scan to `endstream`), no decoding; a dict is its
@@ -87,8 +89,11 @@ async function sha256Of(bytes) {
   return hexOf(d)
 }
 
-/** the canonical forms, interned across the documents read: `of(doc)` gives a document's { ofRef, ser } */
+/** the canonical forms, interned across the documents read: `of(doc)` gives a document's { ofRef, ser }. An optional-content
+ *  group or membership (/Type /OCG, /OCMD) is matched by its identity alone: by reference, a form of its document and object;
+ *  direct, none (unmatched, copied) */
 function canonical(PL, heldMax, work) {
+  const isOC = v => v instanceof PL.PDFDict && ['/OCG', '/OCMD'].includes(v.get(PL.PDFName.of('Type'))?.asString?.())
   const { PDFRef, PDFDict, PDFArray, PDFRawStream, PDFName, PDFNumber, PDFString, PDFHexString, PDFBool, PDFNull } = PL
   const texts = new Map(), buckets = new Map(), hash = keyedHash()
   let held = 0
@@ -114,8 +119,9 @@ function canonical(PL, heldMax, work) {
   }
   // (a dict, an array or a stream is its form's token, `@<id>`, direct or reached by a reference alike: a resource written
   // inline in one document and as an object in the other is the same; a reference to a number, a name… is that value's form)
+  let docs = 0
   function of(doc) {
-    const memo = new Map(), busy = new Set()
+    const memo = new Map(), busy = new Set(), seq = docs++
     const ofRef = (ref, depth = 0) => {
       const k = `${ref.objectNumber} ${ref.generationNumber}`
       if (memo.has(k)) return memo.get(k)
@@ -124,7 +130,9 @@ function canonical(PL, heldMax, work) {
       let token
       try {
         const obj = doc.lookup(ref)
-        token = obj === undefined ? 'null' : obj instanceof PDFRef ? null : ser(obj, depth + 1)
+        // (an optional-content group or membership is its object, never its content: two of equal dicts, one ON and one OFF,
+        // are two layers, and nothing that names one is another document's)
+        token = obj === undefined ? 'null' : obj instanceof PDFRef ? null : isOC(obj) ? `@${intern(`OC${seq}:${k}`)}` : ser(obj, depth + 1)
       } finally { busy.delete(k) }
       memo.set(k, token)
       return token
@@ -141,7 +149,7 @@ function canonical(PL, heldMax, work) {
       work.spend(16)
       if (v instanceof PDFRef) return ofRef(v, depth)
       if (v instanceof PDFRawStream) { const d = serDict(v.dict, true, depth); return d === null ? null : token(`S${d}#${dataId(v.contents)}`) }
-      if (v instanceof PDFDict) return token(serDict(v, false, depth, drop))
+      if (v instanceof PDFDict) return isOC(v) ? null : token(serDict(v, false, depth, drop))
       if (v instanceof PDFArray) {
         const parts = []
         for (const x of v.asArray()) { const s = ser(x, depth); if (s === null) return null; parts.push(s) }
@@ -157,6 +165,56 @@ function canonical(PL, heldMax, work) {
     return { ofRef, ser }
   }
   return { of }
+}
+
+/**
+ * The layers of the two documents (the delta's and its proof's): `orig` arXiv's /OCProperties dict (or null), `ours` our groups
+ * (`axt:` named, in our /OCGs' order), `pairs` [our compile's own layer, arXiv's] by their place in each /OCGs, the paper's own
+ * layers alone; `why` where they do not pair (as many, each of the same name)
+ */
+function layersOf(PL, O, U) {
+  const { PDFDict, PDFArray, PDFRef, PDFName } = PL
+  const look = (D, v) => (v instanceof PDFRef ? D.lookup(v) : v)
+  const ocp = D => { const c = look(D, D.trailer.root); const o = c instanceof PDFDict ? look(D, c.get(PDFName.of('OCProperties'))) : undefined; return o instanceof PDFDict ? o : null }
+  const list = (D, o) => { const a = o ? look(D, o.get(PDFName.of('OCGs'))) : undefined; return a instanceof PDFArray ? a.asArray() : [] }
+  const nameOf = (D, r) => { const g = look(D, r); const n = g instanceof PDFDict ? g.get(PDFName.of('Name')) : undefined; return n?.decodeText?.() ?? null }
+  const oo = ocp(O), uo = ocp(U)
+  const origs = list(O, oo), mine = list(U, uo)
+  const ours = mine.filter(r => /^axt:/.test(nameOf(U, r) ?? '')), own = mine.filter(r => !/^axt:/.test(nameOf(U, r) ?? ''))
+  // (a pair is one layer only where each side names it alike, by a name no other of its layers has, at the same default state
+  // (/D's /BaseState, /ON, /OFF) and with the same /Intent and /Usage: two layers of one name are never paired by their place)
+  const stateOf = (D, o) => {
+    const d = o ? look(D, o.get(PDFName.of('D'))) : undefined
+    const refs = k => new Set((look(D, d?.get?.(PDFName.of(k))) instanceof PDFArray ? look(D, d.get(PDFName.of(k))).asArray() : []).filter(r => r instanceof PDFRef).map(r => `${r.objectNumber} ${r.generationNumber}`))
+    const on = refs('ON'), off = refs('OFF'), base = d?.get?.(PDFName.of('BaseState'))?.asString?.() ?? '/ON'
+    return r => { const k = `${r.objectNumber} ${r.generationNumber}`; return on.has(k) ? 'ON' : off.has(k) ? 'OFF' : base === '/OFF' ? 'OFF' : base === '/Unchanged' ? 'ON' : 'ON' }
+  }
+  const plain = (D, v, depth = 0) => {
+    const x = look(D, v)
+    if (depth > 8) return '?'
+    if (x instanceof PDFDict) return `<<${x.entries().map(([k, y]) => [k.asString(), plain(D, y, depth + 1)]).sort((p, q) => (p[0] < q[0] ? -1 : 1)).map(([k, y]) => `${k} ${y}`).join(' ')}>>`
+    if (x instanceof PDFArray) return `[${x.asArray().map(y => plain(D, y, depth + 1)).join(' ')}]`
+    return x === undefined ? 'none' : x.toString()
+  }
+  const facts = (D, r, state) => { const g = look(D, r); return `${nameOf(D, r)}|${state(r)}|${plain(D, g?.get?.(PDFName.of('Intent')))}|${plain(D, g?.get?.(PDFName.of('Usage')))}` }
+  if (own.length) {
+    const su = stateOf(U, uo), so = stateOf(O, oo)
+    const unique = (D, list) => new Set(list.map(r => nameOf(D, r))).size === list.length
+    if (own.length !== origs.length || !unique(U, own) || !unique(O, origs) || own.some((r, i) => !(r instanceof PDFRef) || !(origs[i] instanceof PDFRef) || facts(U, r, su) !== facts(O, origs[i], so))) return { why: 'the paper\'s own layers in our compile do not pair with arXiv\'s (as many, names unique, each pair one name, state, intent and usage)', ours: [], pairs: [], orig: oo }
+  }
+  return { orig: oo, ours, pairs: own.map((r, i) => [r, origs[i]]) }
+}
+
+/** the pages (1-based) of a document whose /Properties name a group of ours (`/axt…` to an OCG named `axt:…`): our wrapped pages */
+export function wrappedPagesOf(PL, D) {
+  const { PDFDict, PDFRef, PDFName } = PL
+  const look = v => (v instanceof PDFRef ? D.lookup(v) : v)
+  const out = []
+  D.pages().forEach((page, i) => {
+    const r = look(page.inherited.Resources), props = r instanceof PDFDict ? look(r.get(PDFName.of('Properties'))) : undefined
+    if (props instanceof PDFDict && props.entries().some(([k, v]) => /^\/axt/.test(k.toString()) && /^axt:/.test(look(v)?.get?.(PDFName.of('Name'))?.decodeText?.() ?? ''))) out.push(i + 1)
+  })
+  return out
 }
 
 /** the PDF text of a value, each reference written by `mapRef` (ref -> text) */
@@ -298,6 +356,11 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
       return `<<${out.join('')} >>`
     }
 
+    // the layers: the paper's own of our compile paired by their place with arXiv's (the same source, the same layers), so that a
+    // replaced page names arXiv's objects and arXiv's unreplaced pages keep theirs listed; ours (`axt:`) appended, copied
+    const layers = layersOf(PL, O, U)
+    if (layers.why) return refusal('delta-proof', layers.why)
+    for (const [u, o] of layers.pairs) mapped.set(`${u.objectNumber} ${u.generationNumber}`, sameRef(o))
     const replaced = []
     for (const p of [...new Set(laid)].sort((a, b) => a - b)) {
       const op = oPages[p - 1], up = uPages[p - 1]
@@ -321,6 +384,29 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
       pageObjects.push([op.ref.objectNumber, op.ref.generationNumber, enc(`${op.ref.objectNumber} ${op.ref.generationNumber} obj\n<<${ents.join('')} >>\nendobj\n`)])
     }
     if (replaced.length === 0) return refusal('delta-empty', 'no page of ours differs from arXiv\'s where the layer lays')
+    // (every page of ours that names a group of ours written again: a unit's group on a page left arXiv's could not be hidden)
+    const repSet = new Set(replaced), left = wrappedPagesOf(PL, U).find(p => !repSet.has(p))
+    if (left !== undefined) return refusal('delta-pages', `page ${left} of ours names a group of ours and is not replaced`)
+    // our pages wrapped by optional content (layout/wrap.mjs): the catalog's /OCProperties, and that key alone, carried into the
+    // original's catalog, written again under its number (its groups the objects our pages' /Properties name, copied once)
+    if (layers.ours.length) {
+      const rootRef = O.trailer.root, cat = look(O, rootRef)
+      if (!(rootRef instanceof PDFRef) || !(cat instanceof PDFDict)) return refusal('delta-parse', 'arXiv\'s catalog is no object of its own')
+      const ents = cat.entries().filter(([k]) => k.asString() !== '/OCProperties').map(([k, v]) => ` ${k.toString()} ${lit(v, sameRef)}`)
+      // (arXiv's /OCProperties as it is, its /OCGs and its default's /ON with ours appended: arXiv's layers keep their state)
+      const ours = layers.ours.map(r => copyRef(r, 'other', false)).join(' ')
+      const oc = layers.orig
+      let text
+      if (oc) {
+        const D = look(O, oc.get(PDFName.of('D')))
+        const arr = v => { const a = look(O, v); return a instanceof PL.PDFArray ? a.asArray().map(x => lit(x, sameRef)).join(' ') : '' }
+        const dEnts = D instanceof PDFDict ? D.entries().filter(([k]) => k.asString() !== '/ON').map(([k, v]) => ` ${k.toString()} ${lit(v, sameRef)}`).join('') : ''
+        const oEnts = oc.entries().filter(([k]) => k.asString() !== '/OCGs' && k.asString() !== '/D').map(([k, v]) => ` ${k.toString()} ${lit(v, sameRef)}`).join('')
+        text = `<< /OCGs [${arr(oc.get(PDFName.of('OCGs')))} ${ours}] /D <<${dEnts} /ON [${D instanceof PDFDict ? arr(D.get(PDFName.of('ON'))) : ''} ${ours}] >>${oEnts} >>`
+      } else text = `<< /OCGs [${ours}] /D << /BaseState /ON /ON [${ours}] /Order [] >> >>`
+      ents.push(` /OCProperties ${text}`)
+      pageObjects.push([rootRef.objectNumber, rootRef.generationNumber, enc(`${rootRef.objectNumber} ${rootRef.generationNumber} obj\n<<${ents.join('')} >>\nendobj\n`)])
+    }
     const all = [...pageObjects, ...objects]
     if (all.length > objectsMax) return refusal('delta-bound', `${all.length} objects, past ${objectsMax}`)
     const written = appendSection({ end: origBytes.length, objects: all, kind: O.kind, prev: O.startxref, size: next, trailer: { root: O.trailer.root, info: O.trailer.info, id: O.trailer.id } })
@@ -374,6 +460,126 @@ function sameGraph(PL) {
   }
 }
 
+/** why the composed document's optional content is not ours one to one (null where it is): ours to its by the position of each
+ *  in /OCProperties' /OCGs, then by each replaced page's /Properties names; a map that is not a bijection is a merge or a split */
+function ocIdentityWhy(PL, U, X, ourOcp, pages) {
+  const { PDFRef, PDFDict, PDFArray, PDFName } = PL
+  const fwd = new Map(), back = new Map()
+  const key = r => `${r.objectNumber} ${r.generationNumber}`
+  const pair = (u, x, where) => {
+    if (!(u instanceof PDFRef) || !(x instanceof PDFRef)) return u instanceof PDFRef || x instanceof PDFRef ? `${where}: a layer named by reference on one side only` : null
+    const a = key(u), b = key(x)
+    if ((fwd.has(a) && fwd.get(a) !== b) || (back.has(b) && back.get(b) !== a)) return `${where}: two layers of ours one, or one of ours two`
+    fwd.set(a, b)
+    back.set(b, a)
+    return null
+  }
+  const look = (D, v) => (v instanceof PDFRef ? D.lookup(v) : v)
+  const ocgs = D => { const c = look(D, D.trailer.root), o = c instanceof PDFDict ? look(D, c.get(PDFName.of('OCProperties'))) : undefined, a = o instanceof PDFDict ? look(D, o.get(PDFName.of('OCGs'))) : undefined; return a instanceof PDFArray ? a.asArray() : [] }
+  if (ourOcp !== undefined) {
+    // (ours, `axt:` named, the last of the composed /OCGs in their order; the paper's own, arXiv's, first, by their place)
+    const isOurs = (D, r) => /^axt:/.test(look(D, r)?.get?.(PDFName.of('Name'))?.decodeText?.() ?? '')
+    const u = ocgs(U), x = ocgs(X), uo = u.filter(r => isOurs(U, r)), xo = x.filter(r => isOurs(X, r)), un = u.filter(r => !isOurs(U, r)), xn = x.filter(r => !isOurs(X, r))
+    if (uo.length !== xo.length || (un.length && un.length !== xn.length)) return 'its /OCGs are not ours one to one'
+    for (let i = 0; i < uo.length; i++) { const why = pair(uo[i], xo[i], '/OCGs'); if (why) return why }
+    for (let i = 0; i < un.length; i++) { const why = pair(un[i], xn[i], '/OCGs'); if (why) return why }
+  }
+  for (const [up, xp] of pages) {
+    const props = (D, page) => { const r = look(D, page.inherited.Resources), p = r instanceof PDFDict ? look(D, r.get(PDFName.of('Properties'))) : undefined; return p instanceof PDFDict ? p : null }
+    const pu = props(U, up), px = props(X, xp)
+    if (!pu) continue
+    for (const [k, v] of pu.entries()) { const why = pair(v, px?.get(k), `a page's /Properties ${k.toString()}`); if (why) return why }
+  }
+  return null
+}
+
+/**
+ * Why the composed /OCProperties is not arXiv's with ours appended (null where it is): every key arXiv's but /OCGs and /D, its
+ * /OCGs arXiv's followed by ours (each an OCG named `axt:`, as many as `layers.ours`), its /D arXiv's but /ON, which is arXiv's
+ * followed by the same; with no /OCProperties of arXiv's, ours alone, all ON
+ */
+function ocPropertiesWhy(PL, O, X, layers) {
+  const { PDFDict, PDFArray, PDFRef, PDFName } = PL
+  const look = (D, v) => (v instanceof PDFRef ? D.lookup(v) : v)
+  const text = v => (v === undefined ? 'none' : v instanceof PDFRef ? `${v.objectNumber} ${v.generationNumber} R` : v.toString())
+  const xc = look(X, X.trailer.root), xo = xc instanceof PDFDict ? look(X, xc.get(PDFName.of('OCProperties'))) : undefined
+  if (!(xo instanceof PDFDict)) return 'it carries no /OCProperties'
+  const arr = (D, v) => { const a = look(D, v); return a instanceof PDFArray ? a.asArray() : [] }
+  const oo = layers.orig, n = layers.ours.length
+  const xg = arr(X, xo.get(PDFName.of('OCGs'))), og = oo ? arr(O, oo.get(PDFName.of('OCGs'))) : []
+  const xD = look(X, xo.get(PDFName.of('D'))), oD = oo ? look(O, oo.get(PDFName.of('D'))) : null
+  if (!(xD instanceof PDFDict)) return 'its /OCProperties has no default'
+  const xon = arr(X, xD.get(PDFName.of('ON'))), oon = oD instanceof PDFDict ? arr(O, oD.get(PDFName.of('ON'))) : []
+  if (xg.length !== og.length + n || og.some((r, i) => text(r) !== text(xg[i]))) return 'its /OCGs are not arXiv\'s followed by ours'
+  const added = xg.slice(og.length)
+  if (added.some(r => !/^axt:/.test(look(X, r)?.get?.(PDFName.of('Name'))?.decodeText?.() ?? ''))) return 'a group it adds is not ours'
+  if (xon.length !== oon.length + n || oon.some((r, i) => text(r) !== text(xon[i])) || added.some((r, i) => text(r) !== text(xon[oon.length + i]))) return 'its default\'s /ON is not arXiv\'s followed by ours'
+  if (oo) {
+    const keys = d => new Map(d.entries().map(([k, v]) => [k.asString(), v]))
+    const kx = keys(xo), ko = keys(oo)
+    for (const k of ['/OCGs', '/D']) { kx.delete(k); ko.delete(k) }
+    if (kx.size !== ko.size || [...ko].some(([k, v]) => text(kx.get(k)) !== text(v))) return 'its /OCProperties is not arXiv\'s but for /OCGs and its default'
+    const dx = keys(xD), dO = oD instanceof PDFDict ? keys(oD) : new Map()
+    dx.delete('/ON'); dO.delete('/ON')
+    if (dx.size !== dO.size || [...dO].some(([k, v]) => text(dx.get(k)) !== text(v))) return 'its default is not arXiv\'s but for /ON'
+  }
+  return null
+}
+
+/**
+ * Why a page of the composed document names a layer the composed /OCProperties does not list where its source page's layer
+ * is listed in its own document (null where none does): `pages` [source document, source page, composed page] — ours for a
+ * replaced page, arXiv's elsewhere — over the pages' /Properties, their forms' /OC and own /Properties, and their annotations'
+ * /OC; an OCG listed in /OCGs, an OCMD's groups each listed. PDF.js takes a group it does not know as visible: a layer of arXiv's
+ * dropped from the list would show
+ */
+function ocNamedWhy(PL, X, pages) {
+  const { PDFDict, PDFArray, PDFRef, PDFName, PDFRawStream } = PL
+  const key = r => `${r.objectNumber} ${r.generationNumber}`
+  const listedOf = D => {
+    const look = v => (v instanceof PDFRef ? D.lookup(v) : v)
+    const c = look(D.trailer.root), o = c instanceof PDFDict ? look(c.get(PDFName.of('OCProperties'))) : undefined
+    const a = o instanceof PDFDict ? look(o.get(PDFName.of('OCGs'))) : undefined
+    return new Set(a instanceof PDFArray ? a.asArray().filter(r => r instanceof PDFRef).map(key) : [])
+  }
+  const lists = new Map()
+  const known = (D, v) => {
+    if (!lists.has(D)) lists.set(D, listedOf(D))
+    const listed = lists.get(D), look = x => (x instanceof PDFRef ? D.lookup(x) : x)
+    const d = look(v), t = d instanceof PDFDict ? d.get(PDFName.of('Type'))?.asString?.() : undefined
+    if (t === '/OCG') return v instanceof PDFRef && listed.has(key(v))
+    if (t === '/OCMD') { const g = d.get(PDFName.of('OCGs')), gs = look(g) instanceof PDFArray ? look(g).asArray() : g === undefined ? [] : [g]; return gs.length > 0 && gs.every(r => r instanceof PDFRef && listed.has(key(r))) }
+    return true
+  }
+  /** the layer names of a page, by where: [where, value] */
+  const namesOf = (D, page) => {
+    const look = x => (x instanceof PDFRef ? D.lookup(x) : x)
+    const out = new Map()
+    const r = look(page.inherited.Resources)
+    if (r instanceof PDFDict) {
+      const props = look(r.get(PDFName.of('Properties')))
+      if (props instanceof PDFDict) for (const [k, v] of props.entries()) out.set(`its /Properties ${k.toString()}`, v)
+      const xo = look(r.get(PDFName.of('XObject')))
+      if (xo instanceof PDFDict) for (const [k, v] of xo.entries()) {
+        const f = look(v), d = f instanceof PDFRawStream ? f.dict : null
+        if (!d) continue
+        if (d.get(PDFName.of('OC')) !== undefined) out.set(`its form ${k.toString()}`, d.get(PDFName.of('OC')))
+        const fp = look(look(d.get(PDFName.of('Resources')))?.get?.(PDFName.of('Properties')))
+        if (fp instanceof PDFDict) for (const [kk, vv] of fp.entries()) out.set(`its form ${k.toString()}'s /Properties ${kk.toString()}`, vv)
+      }
+    }
+    const annots = look(page.node.get(PDFName.of('Annots')))
+    if (annots instanceof PDFArray) annots.asArray().forEach((an, i) => { const d = look(an); if (d instanceof PDFDict && d.get(PDFName.of('OC')) !== undefined) out.set(`its annotation ${i}`, d.get(PDFName.of('OC'))) })
+    return out
+  }
+  for (let p = 1; p <= pages.length; p++) {
+    const [D, src, xp] = pages[p - 1]
+    const theirs = namesOf(D, src), mine = namesOf(X, xp)
+    for (const [where, v] of theirs) if (known(D, v) && !known(X, mine.get(where))) return `page ${p}: ${where} names a layer the composed /OCProperties does not list`
+  }
+  return null
+}
+
 const near = (a, b) => Math.abs(a - b) <= 0.01
 /** the console taken by one proof at a time in this process (its PDF.js reads in turn): a proof that overlaps another waits for
  *  it, so that neither keeps the other's capture as the console's own nor reads the other's messages as its documents' */
@@ -411,7 +617,7 @@ function textDiffers(a, b) {
  * (a, d, e) PDF.js opens the composed bytes with no message that neither source alone gives (its console captured, each
  * document read in turn), the original's page count, every page's box and text (strings, places within 0.01) ours on replaced
  * pages and the original's elsewhere. What the delta overrides of the original is bounded: the replaced pages' objects exactly
- * (no catalog, no other page), its /Size not below the original's. An original PDF.js recovers by its own scan (any message
+ * (no other page; the catalog only to carry our /OCProperties, every other key of it the original's), its /Size not below the original's. An original PDF.js recovers by its own scan (any message
  * of its cross-reference on the original alone) is refused (`delta-xref`). { ok: true, pages, replaced } or { ok: false, code
  * ('delta-proof' or 'delta-xref'), why }. Never throws but a failed allocation
  */
@@ -434,7 +640,7 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     if (xP.length !== N) return no(`the composed document has ${xP.length} pages, arXiv's PDF ${N}`)
     if ([...rep].some(p => p > M)) return no('a replaced page past ours')
     // (what the delta overrides of the original: the replaced pages' objects, exactly, and nothing else of the original's numbers
-    // — no catalog, no other page — and its /Size not below the original's)
+    // — no other page, the catalog only for our /OCProperties — and its /Size not below the original's)
     if (sect.size < O.size) return no(`its /Size ${sect.size} is below the original's ${O.size}`)
     // (the composed trailer is the delta's own: it keeps the original's /Root and /Info as references and /ID byte for byte, so
     // that the catalog, outlines, destinations and document info stay the original's)
@@ -445,13 +651,33 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     if (idBytes(X.own.id) !== idBytes(O.trailer.id)) return no('its trailer\'s /ID is not the original\'s')
     const pageRefs = new Map(oP.map((o, i) => [o.ref.objectNumber, i + 1]))
     const over = new Set()
+    // (the catalog, written again only to carry our /OCProperties: every other key the original's, that one ours)
+    const root = O.trailer.root, ourOcp = (() => { const c = U.lookup(U.trailer.root); return c instanceof PL.PDFDict ? c.get(PL.PDFName.of('OCProperties')) : undefined })()
+    let catalog = false
     for (const [n, g] of sect.rows) {
       if (n >= O.size) continue
+      if (n === root.objectNumber && g === root.generationNumber) { catalog = true; continue }
       const p = pageRefs.get(n)
       if (p === undefined || !rep.has(p) || oP[p - 1].ref.generationNumber !== g) return no(`it overrides the original's object ${n} ${g}, no replaced page's`)
       over.add(p)
     }
     if (over.size !== rep.size) return no(`it writes ${over.size} of the ${rep.size} pages it says it replaces`)
+    const unrep = wrappedPagesOf(PL, U).find(p => !rep.has(p))
+    if (unrep !== undefined) return no(`page ${unrep} of ours names a group of ours and is not replaced`)
+    if (catalog !== (ourOcp !== undefined)) return no(catalog ? 'it writes the catalog again, our pass having no /OCProperties' : 'it does not carry our /OCProperties')
+    if (catalog) {
+      const xc = X.lookup(root), oc = O.lookup(root)
+      // (key by key, a reference by its number: the catalog's tree is the composed document's, its replaced pages ours)
+      const keysOf = d => (d instanceof PL.PDFDict ? new Map(d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => k !== '/OCProperties')) : null)
+      const kx = keysOf(xc), ko = keysOf(oc)
+      if (!kx || !ko || kx.size !== ko.size || [...ko].some(([k, v]) => !kx.has(k) || (v instanceof PL.PDFRef || kx.get(k) instanceof PL.PDFRef ? refText(v) !== refText(kx.get(k)) : !same(X, kx.get(k), O, v)))) return no('its catalog is not the original\'s but for /OCProperties')
+      const why = ocPropertiesWhy(PL, O, X, layersOf(PL, O, U))
+      if (why) return no(why)
+    }
+    // (optional content by identity: each group or membership of ours one object of the composed document's and no two of ours
+    // one, over /OCProperties' /OCGs and every replaced page's /Properties)
+    const ocWhy = ocIdentityWhy(PL, U, X, ourOcp, [...rep].map(p => [uP[p - 1], xP[p - 1]])) ?? ocNamedWhy(PL, X, xP.map((x, i) => (rep.has(i + 1) ? [U, uP[i], x] : [O, oP[i], x])))
+    if (ocWhy) return no(ocWhy)
     const drop = new Set(['/Contents', '/Resources'])
     const contents = (doc, page) => contentsOf(PL, doc, page.node)
     for (let p = 1; p <= N; p++) {

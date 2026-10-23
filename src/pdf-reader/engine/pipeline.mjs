@@ -42,7 +42,9 @@ export { ANSWER_CAP, ASK_CAP, ASK_VALUES, ENTRIES_CAP, ENTRIES_VALUES, REMOVER_W
 export { chainedAddon } from './layout/chain.mjs'
 // our base as an incremental update over arXiv's PDF (the delta): built and proved in the maker child, its section read back, its why
 export { DELTA_DECODED_MAX, DELTA_HELD_MAX, DELTA_WORK_MAX, deltaOf, proveDelta } from './layout/delta.mjs'
-export { DELTA_OBJECTS_MAX, DELTA_WHYS, deltaSection } from './layout/delta-wire.mjs'
+export { DELTA_OBJECTS_MAX, DELTA_WHYS, deltaSection, UNHIDDEN, WRAP_STATS, wrapWhy } from './layout/delta-wire.mjs'
+// our final pass's pages wrapped by optional content, in the maker child before the delta (per-unit erasure)
+export { GROUPS_DOC, GROUPS_PAGE, SEQUENCES_PAGE, WRAP_WHYS, wrapFinal } from './layout/wrap.mjs'
 // the bundle's writer (the reader's parsers are the layer entry's)
 export { bundleUnitsOf, writeBundle } from './layer-proto/bundle.mjs'
 // BUNDLE 4: the writers of a paper's objects, the keys and the bounds (the readers are the layer entry's), and the memory-class errors every catch lets through
