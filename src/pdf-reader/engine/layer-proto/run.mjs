@@ -516,7 +516,8 @@ function guessCloser(p, K, L, floorAt) {
  * The ink of a page that stays visible where a unit's lines would move to (E3 for the leftover packed, packPage): the
  * page's ink map (layer2.mjs inkMapOf, of the original page as PDF.js draws it: text, rules, images and vector paths
  * alike), less the glyphs the drawing takes away (`accounted`: the boxes of the characters the page's painted units
- * account for, hidden with them, each grown by a map cell, as the map holds a cell any of whose pixels is inked). Boxes are [x0, y0, x1, y1] in PDF units; `toDev` and `toPdf` map between them and the map's canvas. Returns
+ * account for, hidden with them, each grown by a map cell, as the map holds a cell any of whose pixels is inked). Boxes are
+ * [x0, y0, x1, y1] in PDF units; `toDev` and `toPdf` map between them and the map's canvas. Returns
  * foot(x0, x1, y0, y1): the PDF y of the lowest staying ink's foot in that box, or null where it holds none.
  */
 export function stayingInk({ map, toDev, toPdf, accounted = [] }) {

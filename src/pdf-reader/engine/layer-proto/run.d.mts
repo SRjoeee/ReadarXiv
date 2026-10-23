@@ -56,7 +56,7 @@ export interface Row {
 }
 /** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the
  *  units still to be laid that read it */
-export interface PageHeld { state: ('chars' | 'ink' | 'items' | 'accounted' | 'kept' | 'laid' | 'canvas' | 'removed' | 'pixels' | 'draw')[]; units: number[]; reads: number }
+export interface PageHeld { state: ('chars' | 'ink' | 'laid' | 'canvas' | 'pixels' | 'draw')[]; units: number[]; reads: number }
 /** a laid unit's record, as main.js kept it (each line: page, baseline, target baseline, exact, mode, overflow, x0, x1) */
 export interface Rec {
   id: number; kind: string; v: 2; pages: number[]; cut: boolean; s?: number; f?: number; fitScale: number; knob: string; clipped: boolean
@@ -126,8 +126,8 @@ export declare function pageTarget(units: readonly unknown[], continuing: readon
 export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, onFilled?: (p: Placed, target: number) => void, o?: { continuing?: unknown[] }): Filled | null
 /** the leftover packed (P.leftover 'pack'): a page's body units of one block moved up to keep the original's gap to the one above, the moves by id (PDF units up). `rects`: every unit's rectangles on the page, [id, [page, x0, y0, x1, y1]]; `chars`: the page's characters */
 export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[], stays?: ((x0: number, x1: number, y0: number, y1: number) => number | null) | null, gap?: number): Map<number, number>
-/** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away, and the add-on's dirty boxes; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
-export declare function stayingInk(o: { map: { w: number; h: number; ink: Uint8Array; factor: number }; toDev: (x: number, y: number) => number[]; toPdf: (x: number, y: number) => number[]; accounted?: readonly number[][]; dirty?: readonly number[][] }): (x0: number, x1: number, y0: number, y1: number) => number | null
+/** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
+export declare function stayingInk(o: { map: { w: number; h: number; ink: Uint8Array; factor: number }; toDev: (x: number, y: number) => number[]; toPdf: (x: number, y: number) => number[]; accounted?: readonly number[][] }): (x0: number, x1: number, y0: number, y1: number) => number | null
 /** a babel name of a page laid (D1a) */
 export interface NameDrawn {
   occurrence: number; key: string; page: number; drawn: boolean; why: string | null; chars: (Char & { page: number })[]

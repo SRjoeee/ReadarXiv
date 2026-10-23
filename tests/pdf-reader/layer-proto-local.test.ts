@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { indexLayout, LAYOUT_SCHEMA, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
+import { withGroups } from './helpers/groups'
 
 // What a unit's laying and a page's painting read is their own (the 1b design, §2.1 and §2.3 C1, PR 1b-B): a crop is cut
 // from any page of the paper that was read, whatever the host let go (S1); a unit's fill leading is its fit's (C1); and a
@@ -54,7 +55,7 @@ function paper(specs: Spec[], pages: number) {
   const items = all.map(p => specs.flatMap(s => s.lines.filter(l => l.page === p).flatMap(l => l.items.map(([x, str]) => ({ str, transform: [10, 0, 0, 10, x, l.b], width: 5 * str.length, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))))
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {} })
-  const doc = { numPages: pages, getPage: async (n: number) => pageOf(n) }
+  const doc = withGroups({ numPages: pages, getPage: async (n: number) => pageOf(n) })
   const file = specs
   const layout = {
     schema: LAYOUT_SCHEMA, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],

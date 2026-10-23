@@ -86,8 +86,8 @@ async function byPages(w: World, log: string) {
   const sm = await dm.byStream({ head: head2, events: events2 } as never)
   if ('refused' in sm) throw new Error('the default marked stream refused what the whole made')
   return {
-    whole, merged: mergeLayout([st.layout() as never]), cellRules: st.cellRules, marked: mergeLayout([sb.layout() as never]), markedRules: sb.cellRules, late: both.stats.late, rule3: { whole: whole3.file, merged: mergeLayout([s3.layout() as never]) },
-    defaults: { whole: wholeD.file, cellRules: wholeD.cellRules, stream: mergeLayout([sd.layout() as never]), streamRules: sd.cellRules, marked: mergeLayout([sm.layout() as never]), markedRules: sm.cellRules, late: dm.stats.late },
+    whole, merged: mergeLayout([st.layout() as never]), cellRules: st.cellRules ?? null, marked: mergeLayout([sb.layout() as never]), markedRules: sb.cellRules ?? null, late: both.stats.late, rule3: { whole: whole3.file, merged: mergeLayout([s3.layout() as never]) },
+    defaults: { whole: wholeD.file, cellRules: ('cellRules' in wholeD ? wholeD.cellRules : null) ?? null, stream: mergeLayout([sd.layout() as never]), streamRules: sd.cellRules ?? null, marked: mergeLayout([sm.layout() as never]), markedRules: sm.cellRules ?? null, late: dm.stats.late },
   }
 }
 /** what a file's stats count, but its times and its gzip size */
@@ -106,9 +106,9 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
   if (four) {
     const rows = (f: Record<string, unknown>) => ({ ...Object.fromEntries(PART_KEYS.map(k => [k, f[k]])), colours: f.colours ?? null })
     expect(rows(four.merged as never)).toEqual(rows(four.whole.file as never))
-    expect(four.cellRules).toEqual(four.whole.cellRules)
+    expect(four.cellRules).toEqual(four.whole.cellRules ?? null)
     expect(rows(four.marked as never)).toEqual(rows(four.whole.file as never))
-    expect(four.markedRules).toEqual(four.whole.cellRules)
+    expect(four.markedRules).toEqual(four.whole.cellRules ?? null)
     expect(four.late).toEqual({ rows: 0, vetoes: 0 })
     if (four.rule3) expect(rows(four.rule3.merged as never)).toEqual(rows(four.rule3.whole as never))
     const d = four.defaults

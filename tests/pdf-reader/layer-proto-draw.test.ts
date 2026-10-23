@@ -6,6 +6,7 @@ import type { LayerIndex, ReadPart } from '@/pdf-reader/engine/layer-proto/forma
 import { layerRows, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import type { TextContentLike } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { drawDataOf } from '@/pdf-reader/engine/pipeline/draw-data.mjs'
+import { withGroups } from './helpers/groups'
 import { CJK, cutSpec, groupsOfIndex, H, type PaperSpec, unitsOfRows, VIEW } from './helpers/parts-paper'
 
 // E-C's browser part (ec-browser-design.md): a page drawn from its draw geometry (run.mjs openProto `drawOf`), the door's
@@ -110,7 +111,7 @@ function docsOf(spec: PaperSpec, o: { textHold?: (n: number) => Promise<void> | 
     }
     return page
   }
-  const doc = { numPages: N, getPage: async (n: number) => { await o.pageHold?.(n); return pageOf(n) } }
+  const doc = withGroups({ numPages: N, getPage: async (n: number) => { await o.pageHold?.(n); return pageOf(n) } })
   /** each page's draw, as the server reads it (pipeline/draw-data.mjs) and a left part carries it (checked JSON) */
   const draws = async () => {
     const out: (Draw | null)[] = []

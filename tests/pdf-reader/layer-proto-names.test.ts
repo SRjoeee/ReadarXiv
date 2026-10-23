@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { indexLayout, LABEL_KINDS, LAYOUT_SCHEMA, NAME_FLAG, NAME_KEYS, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { nameInTarget } from '@/pdf-reader/engine/layer-proto/layer2.mjs'
+import { withGroups } from './helpers/groups'
 
 // babel's names drawn by v0 (D1a, run.mjs paintNames): a generated heading the layout file locates (its `names`) set in
 // the target's word for it, the original's erased as a label's is, at its size and alignment, where the target has a word
@@ -48,7 +49,7 @@ function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string
     names: [[1, NAME_KEYS.indexOf(key as never), 1, x, 230, x + width, 237, 228, nameSize, 0, flags | (runIn ? NAME_FLAG.RUN_IN : 0), runIn ? 0 : -1, glue, column[0], column[1]]],
   }
   return {
-    doc: { numPages: 1, getPage: async () => page },
+    doc: withGroups({ numPages: 1, getPage: async () => page }),
     geometry: { schema: 1, kinds: bare ? [] : ['para'], left: { pages: [[0, 0, 300, 300]], units: bare ? [] : [[0, 0, [runIn ? [1, 64 + glue, 227.85, 164 + glue, 236.83] : [1, 20, 197.85, 120, 206.83]]]] } },
     units: bare ? [] : [{ kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: text }] }],
     // (the translation's one text piece the source's: the file locates the run-in unit whole)
@@ -64,8 +65,9 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     expect(run.names).toEqual([expect.objectContaining({ occurrence: 1, key: 'abstract', page: 1, drawn: true, why: null, text: '\u6458\u8981', size: 10, x: 20 })])
     const svg = run.svgOf(1)
     expect(svg.querySelector('[data-n="1"]')?.textContent).toBe('\u6458\u8981')
-    // its erase the page's first operation, the unit's after it; its characters accounted, which no put-back returns
-    expect(run.rows[0]!.ops[0]).toMatchObject({ op: 'erase' })
+    // its group hidden, the page's first operation, the unit's after it; its characters accounted, which no paste returns
+    expect(run.rows[0]!.ops[0]).toMatchObject({ op: 'hidden' })
+    expect([...(run.rows[0] as unknown as { off: Set<string> }).off]).toContain('n1')
     expect(run.audit.find(a => a.what === 'erase' && a.name === 1)).toBeDefined()
     expect(run.names[0]!.chars.map(c => c.ch).join('')).toBe('Abstract')
   })

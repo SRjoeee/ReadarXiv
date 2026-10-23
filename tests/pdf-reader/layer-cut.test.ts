@@ -266,16 +266,16 @@ describe('the cut of a small paper', () => {
   })
 
   it('lets the cell rules take part in the fit: rules that overflow [2,3] shorten the part', async () => {
-    // 3 pages of 550 headings of 4,000 characters (2.2 MB a page): [2,3] fits alone (4.4 MB), not with 2 × 600 KB of rules
+    // 3 pages of 550 headings of 4,000 characters (2.2 MB a page): [2,3] fits alone (4.4 MB), not with 2 × 1.4 MB of rules
     const units: PaperSpec['units'] = []
     for (let p = 1; p <= 3; p++) for (let k = 0; k < 550; k++) units.push({ stream: null, lines: [p], heading: 'x'.repeat(4000) })
     const whole = wholeOf({ pages: 3, units })
-    const rules = Object.fromEntries([1, 2, 3].map(p => [p, Array.from({ length: 30_000 }, () => [72, 500, 540, 500.4]).flat()]))
+    const rules = Object.fromEntries([1, 2, 3].map(p => [p, Array.from({ length: 80_000 }, () => [72, 500, 540, 500.4]).flat()]))
     const c = await cutPlain(whole, { leftPages: () => null, base: BASE_OF, rules })
     expect(fits(c)).toEqual([[1, 1], [2, 2], [3, 3]])
     const back = await readBack(c)
     expect(back.parts.map(p => Object.keys(p.rules ?? {}))).toEqual([['1'], ['2'], ['3']])
-    expect(back.parts[1]!.rules![2]!.length).toBe(120_000)
+    expect(back.parts[1]!.rules![2]!.length).toBe(320_000)
   }, 120_000)
 
   it('shortens a part whose layout passes a per-part bound (here 10,000 names)', async () => {
@@ -566,8 +566,8 @@ describe('the schedule extended over the need bound', () => {
   })
 
   it('is a preference: a part that does not fit with it is shortened as ever, and the next part carries the unit', async () => {
-    // pages 1 and 2 hold 700 headings of 4,000 characters each (2.8 MB a page of layout): [1,1] fits, [1,2] passes CONTENT_MAX
-    const heads = (p: number) => Array.from({ length: 700 }, () => ({ stream: null, lines: [p], heading: 'x'.repeat(4000) }))
+    // pages 1 and 2 hold 800 headings of 4,000 characters each (3.2 MB a page of layout): [1,1] fits, [1,2] passes CONTENT_MAX
+    const heads = (p: number) => Array.from({ length: 800 }, () => ({ stream: null, lines: [p], heading: 'x'.repeat(4000) }))
     const spec: PaperSpec = { pages: 4, units: [across(0, 1), ...heads(1), ...heads(2), one(10, 3), one(20, 4)] }
     const plain = await cutWith(spec, { extend: false })
     const ext = await cutWith(spec)
@@ -730,8 +730,8 @@ describe('a dense paper', () => {
   }, 120_000)
 
   it('ships a page that alone does not fit without its layout: its units are drawn from the left', async () => {
-    // page 1: 1,300 headings of 4,000 characters in the file (5.2 MB, past CONTENT_MAX), each located by the original's side
-    const units: PaperSpec['units'] = Array.from({ length: 1300 }, (_, k) => ({ stream: k, rects: [1], lines: [1], heading: 'x'.repeat(4000) }))
+    // page 1: 1,600 headings of 4,000 characters in the file (6.4 MB, past CONTENT_MAX), each located by the original's side
+    const units: PaperSpec['units'] = Array.from({ length: 1600 }, (_, k) => ({ stream: k, rects: [1], lines: [1], heading: 'x'.repeat(4000) }))
     const whole = wholeOf({ pages: 3, units: [...units, { stream: 5000, rects: [2], lines: [2] }, { stream: 5001, rects: [3], lines: [3] }] })
     const c = await cutPlain(whole, { leftPages: nothing as never, base: BASE_OF })
     expect(fits(c)).toEqual([[1, 1], [2, 3]])
@@ -739,10 +739,10 @@ describe('a dense paper', () => {
     expect(back.parts[0]!.layout).toBeNull()
     expect(back.parts[0]!.rules).toBeNull()
     expect(back.parts[0]!.fileOnly).toEqual([])
-    expect(back.parts[0]!.left.length).toBe(1300)
+    expect(back.parts[0]!.left.length).toBe(1600)
     expect(back.parts[1]!.layout).not.toBeNull()
     // (the units of the part with no layout are told once, and the rest of the chain goes on)
-    expect(back.parts[1]!.left.map(w => w[0])).toEqual([1300, 1301])
+    expect(back.parts[1]!.left.map(w => w[0])).toEqual([1600, 1601])
   }, 120_000)
 
   it('refuses, saying so, a page that does not fit even without its layout', async () => {

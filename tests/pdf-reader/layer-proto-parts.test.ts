@@ -10,6 +10,7 @@ import { indexLayout, PH_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { made } from './helpers/format-paper'
 import { cutSpec, docsOf, everySplit, groupsOfIndex, leftPagesOfSpec, type PaperSpec, readCut, rowsOfIndex, splitAt, unitsOfRows, wholeOfSpec } from './helpers/parts-paper'
+import { withGroups } from './helpers/groups'
 
 // The door's parts mode at the run (layer-proto/run.mjs openProto `parts`, grow, endParts, swap; the door design §0 to §4, §5
 // H1): a paper cut into parts by the cutter at every split of its pages, its parts told to the run interleaved with the pages
@@ -344,7 +345,7 @@ describe('the run in parts: waits, failures and documents', () => {
     const P = await takePaper(TAKE)
     const base = docsOf(TAKE)(0)
     // (page 2's text in a font of its own, exported with no ToUnicode map: the document was opened without fontExtraProperties)
-    const doc = {
+    const doc = withGroups({
       numPages: base.numPages, reads: [] as number[],
       async getPage(n: number) {
         doc.reads.push(n)
@@ -355,7 +356,7 @@ describe('the run in parts: waits, failures and documents', () => {
           commonObjs: { get: (name: string) => ({ name: 'Times-Roman', isType3Font: false, ...(name === 'f2' ? {} : { toUnicode: { _map: [] } }) }) },
         }
       },
-    }
+    })
     const run = await openWarm(P, doc)
     const laid = await run.until(3).then(() => 'laid', (e: Error) => e.message)
     expect(laid).toMatch(/PDF_OPTIONS/)
@@ -433,51 +434,6 @@ describe('the run in parts: waits, failures and documents', () => {
     run.dispose()
   })
 
-  it('swaps documents at a part with a tail, telling each superseded one once its reads end, and the last at dispose', async () => {
-    const M = await made()
-    const units = M.index.units.map((_, id) => ({ text: `unit ${id}`, lines: M.readParts.flatMap(p => p.left.filter(w => w[0] === id).flatMap(w => w[2].map(r => [r[0], r[1], r[3], r[2] + 2.15]))) }))
-    let release = () => {}
-    const held = new Promise<void>(ok => { release = ok })
-    let holding = true
-    const docFor = docsOf({ pages: 4, units }, { hold: n => (n === 1 && holding ? held : null) })
-    const P: Paper = { N: 4, index: M.index, parts: M.readParts, docFor }
-    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
-    const facade = layoutFacade(P.index.head)
-    const retired: unknown[] = []
-    const run = await openProto({
-      parts: true, doc: docFor(0), geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
-      target: 'zh', pages: 4, scale: 1, dpr: 1, copy: false, labels: LABELS as never, tex: { ...HYBRID, index: facade.index, pieces: new Map() },
-      onRetired: (d: unknown) => retired.push(d),
-    } as never)
-    run.take(unitsOfRows(P.index, rowsOfIndex(P.index)) as never)
-    run.end()
-    const grow = (i: number) => { const part = P.parts[i]!; facade.add(part); run.grow(part) }
-    // (the first part's tail: its document read from now on, the one the run was opened with read by nothing, told at once)
-    grow(0)
-    expect(retired).toEqual([docFor(0)])
-    // (page 1 read from it, held: the swap to the next part's waits for that read to end)
-    const one = run.until(1)
-    await ticks()
-    expect(docFor(1).reads).toEqual([1])
-    grow(1)
-    expect(retired).toEqual([docFor(0)])
-    holding = false
-    release()
-    for (let i = 0; i < 20 && retired.length < 2; i++) await tick()
-    expect(retired).toEqual([docFor(0), docFor(1)])
-    // (the third part has no tail: no swap)
-    grow(2)
-    await one
-    run.endParts()
-    await run.until(4)
-    expect(docFor(2).reads.length).toBeGreaterThan(0)
-    expect(docFor(0).reads).toEqual([])
-    expect(retired).toEqual([docFor(0), docFor(1)])
-    run.dispose()
-    expect(retired).toEqual([docFor(0), docFor(1), docFor(2)])
-    run.dispose()
-    expect(retired.length).toBe(3)
-  })
 })
 
 // ---------------------------------------------------------------- the kept record and what the run holds (the 1b design §1, §3)
@@ -569,7 +525,7 @@ describe('the kept record and what the run holds (the 1b design §1, §3)', () =
       expect(run.doneAt(1), `${ends}`).toBe(1)
       for (const p of [1, 2]) {
         expect(at[p]!.reads, `${ends}: asked ${p}`).toBe(1)
-        expect(at[p]!.state, `${ends}: asked ${p}`).toEqual(expect.arrayContaining(['chars', 'ink', 'items']))
+        expect(at[p]!.state, `${ends}: asked ${p}`).toEqual(expect.arrayContaining(['chars', 'ink']))
       }
       expect(at[3], `${ends}`).toEqual(NOTHING)
       expect(drawing(run), `${ends}`).toEqual(want)

@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { indexLayout, LAYOUT_SCHEMA, PH_FLAG, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
+import { withGroups } from './helpers/groups'
 
 // The layer draws a unit only from the layout file (route step 2, 2026-10-22): a unit the file does not hold, or one with a
 // visible piece the file has no position for (a placeholder LOST or with no row, but a text symbol, a macro that sets no ink,
@@ -72,7 +73,7 @@ function paper(specs: Spec[]) {
   // (the left's geometry holds every unit, the file all but one)
   const geometry = { schema: 1, kinds: specs.map(() => 'para'), left: { pages: [VIEW], units: specs.map(s => [s.id, s.id, [[1, 20, s.b - 2.15, 280, s.b + 6.83]]]) } }
   const rows = specs.map(s => ({ kind: 'para', src: s.src, state: 'whole', pieces: s.tr }))
-  return { doc: { numPages: 1, getPage: async () => page }, index, geometry, rows }
+  return { doc: withGroups({ numPages: 1, getPage: async () => page }), index, geometry, rows }
 }
 
 async function run(specs: Spec[] = SPECS) {

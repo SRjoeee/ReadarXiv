@@ -337,7 +337,7 @@ describe('the real door: a fork, and L8', () => {
 })
 
 describe('the real door: (e) documents, (f) one open layer a page', () => {
-  it('each composed document told retired is destroyed once, the last at dispose; again() disposes before it opens', async () => {
+  it('one composed document a head, opened once whatever the parts and destroyed once, at dispose; again() disposes before it opens', async () => {
     const m = await M()
     const s = await real()
     await nearOn(s, [1])
@@ -348,10 +348,10 @@ describe('the real door: (e) documents, (f) one open layer a page', () => {
     s.side.tell({ parts: [jobRef(m, 1), jobRef(m, 2)], end: { through: N } })
     s.side.take(rowsOfIndex(m.index))
     await still(s)
-    expect(s.composed.length).toBe(3)
-    expect(s.destroyed.sort()).toEqual(['destroy composed 0', 'destroy composed 1'])
+    expect(s.composed.length).toBe(1)
+    expect(s.destroyed).toEqual([])
     expect(content(s, 1)).toBe('layer')
-    // again: the door disposed, then opened over the latest document (no throw of a second open); the rows taken again
+    // again: the door disposed, then opened over the same document (no throw of a second open); the rows taken again
     s.side.again()
     await still(s)
     expect(s.opens).toBe(2)
@@ -359,13 +359,13 @@ describe('the real door: (e) documents, (f) one open layer a page', () => {
     s.side.take(rowsOfIndex(m.index))
     s.side.end()
     await still(s)
-    expect(s.composed.length).toBe(3)
+    expect(s.composed.length).toBe(1)
     expect(content(s, 1)).toBe('layer')
     expect(s.doors[1]?.layer.pageState(1)).toBe('ready')
     s.side.dispose()
     await macrotask()
     await macrotask()
-    expect(s.destroyed.sort()).toEqual(['destroy composed 0', 'destroy composed 1', 'destroy composed 2'])
+    expect(s.destroyed).toEqual(['destroy composed 0'])
   })
 })
 

@@ -87,12 +87,11 @@ describe('glyph points, and the area the drawing left erased', () => {
   })
   const dev = (x: number, y: number) => [x, 800 - y]
   const ops: Op[] = [
-    { op: 'erase', box: [95, 90, 40, 20] },
-    { op: 'paper', rects: [[300, 100, 50, 20]] },
-    { op: 'swap', rects: [[400, 100, 50, 20]] },
+    { op: 'hidden', rects: [[95, 90, 40, 20], [300, 100, 50, 20]] },
+    { op: 'hidden', rects: [[400, 100, 50, 20]] },
     { op: 'crop' },
   ]
-  it('erases by erase, paper and swap rectangles in device pixels, and not by a crop', () => {
+  it('hides by the hidden operations\' rectangles in device pixels, and not by a crop', () => {
     // (device y = 800 - y: the erase box covers x 95..135, device y 90..110, PDF y 690..710)
     const erased = erasedOf(ops, dev)
     expect(erased(100, 700)).toBe(true)
@@ -101,16 +100,13 @@ describe('glyph points, and the area the drawing left erased', () => {
     expect(erased(200, 700)).toBe(false)
     expect(erased(100, 600)).toBe(false)
   })
-  it('puts back what a restore restores within its clip, in the operations\' order: a later erase takes it again', () => {
-    const restore: Op = { op: 'restore', boxes: [[95, 90, 20, 20]], clip: [[95, 90, 40, 20]] }
-    const back = erasedOf([ops[0]!, restore], dev)
-    expect(back(100, 700)).toBe(false) // in a restored box
-    expect(back(125, 700)).toBe(true) // in the erase box, outside the restored one
-    const again = erasedOf([ops[0]!, restore, { op: 'erase', box: [95, 90, 40, 20] }], dev)
+  it('puts back what a paste shows again, in the operations\' order: a later hidden operation takes it again', () => {
+    const paste: Op = { op: 'paste', page: 1, plane: 'C', rects: [[95, 90, 20, 20]] }
+    const back = erasedOf([ops[0]!, paste], dev)
+    expect(back(100, 700)).toBe(false) // in a pasted rectangle
+    expect(back(125, 700)).toBe(true) // in the hidden rectangle, outside the pasted one
+    const again = erasedOf([ops[0]!, paste, { op: 'hidden', rects: [[95, 90, 40, 20]] }], dev)
     expect(again(100, 700)).toBe(true)
-    // a restore box outside its clip restores nothing
-    const outside = erasedOf([ops[0]!, { op: 'restore', boxes: [[95, 90, 20, 20]], clip: [[500, 500, 5, 5]] }], dev)
-    expect(outside(100, 700)).toBe(true)
   })
 })
 
@@ -148,7 +144,7 @@ describe('a page\'s link measures: the baseline, where the engine drops every li
   })
   it('counts what in place alone could keep: the annotations of T none of whose glyph points is erased', () => {
     // the erase covers the first two links' text (PDF y 690..710, x 95..180)
-    const erased = erasedOf([{ op: 'erase', box: [95, 90, 85, 20] }], (x, y) => [x, 800 - y])
+    const erased = erasedOf([{ op: 'hidden', rects: [[95, 90, 85, 20]] }], (x, y) => [x, 800 - y])
     expect(run({ erased }).linksPlaceable).toBe(2)
     expect(run().linksPlaceable).toBe(4)
   })
@@ -198,16 +194,16 @@ describe('wrong: each defect in turn', () => {
   const a0: LinkSource = { annots: [[1, 0]] }
   const why = (m: ReturnType<typeof run>) => m.where.linksWrong.flatMap(x => x.split(':')[1]!.split('+'))
   it('an in-place record over an erased glyph point (links over erased text = 0)', () => {
-    const erased = erasedOf([{ op: 'erase', box: [95, 90, 40, 20] }], (x, y) => [x, 800 - y])
+    const erased = erasedOf([{ op: 'hidden', rects: [[95, 90, 40, 20]] }], (x, y) => [x, 800 - y])
     const m = run({ records: [inPlace({ boxes: [100, 698, 130, 712] })], sources: [a0], erased })
     expect(m.linksWrong).toBe(1)
     expect(why(m)).toEqual(['erased'])
-    // the same record over text a restore put back is fine
-    const restored = erasedOf([{ op: 'erase', box: [95, 90, 40, 20] }, { op: 'restore', boxes: [[95, 90, 40, 20]], clip: [[95, 90, 40, 20]] }], (x, y) => [x, 800 - y])
+    // the same record over text a paste showed again is fine
+    const restored = erasedOf([{ op: 'hidden', rects: [[95, 90, 40, 20]] }, { op: 'paste', rects: [[95, 90, 40, 20]] }], (x, y) => [x, 800 - y])
     expect(run({ records: [inPlace({ boxes: [100, 698, 130, 712] })], sources: [a0], erased: restored }).linksWrong).toBe(0)
   })
   it('a moved record is not asked about erased text: it lies over its own drawing', () => {
-    const erased = erasedOf([{ op: 'erase', box: [95, 90, 40, 20] }], (x, y) => [x, 800 - y])
+    const erased = erasedOf([{ op: 'hidden', rects: [[95, 90, 40, 20]] }], (x, y) => [x, 800 - y])
     expect(run({ records: [moved('cite.a', [150, 698, 170, 712])], sources: [a0], erased, drawn: () => '12', reference: () => '12' }).linksWrong).toBe(0)
   })
   it('an attribution that names no annotation of T, or one of another target', () => {

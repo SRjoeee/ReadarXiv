@@ -407,8 +407,8 @@ describe('a reader\'s envelope', () => {
       expect(await refusal(readHead(f.bytes, { ref: f.ref }))).toMatchObject({ kind: 'head', message: expect.stringMatching(/not an object/) })
     }
     expect(await refusal(readPart(M.chunks[0]!.bytes, { ref: { ...M.chunks[0]!.ref, kind: 'part' }, index: M.index, chain: null }))).toMatchObject({ path: 'bundle' })
-    // (a part is nested deeper than a chunk or a head allows: refused before it is parsed, as what it is)
-    expect(await refusal(readUnitsChunk(M.parts[0]!.bytes, { ref: { ...M.parts[0]!.ref, kind: 'units' }, before: null }))).toMatchObject({ kind: 'units', message: expect.stringMatching(/nested more than 5 deep/) })
+    // (a part given as a chunk or a head: refused as what it was asked as)
+    expect(await refusal(readUnitsChunk(M.parts[0]!.bytes, { ref: { ...M.parts[0]!.ref, kind: 'units' }, before: null }))).toMatchObject({ kind: 'units' })
     expect(await refusal(readHead(M.parts[0]!.bytes, { ref: { ...M.parts[0]!.ref, kind: 'head' } }))).toMatchObject({ kind: 'head' })
     // (a head of the depth a chunk allows, given as a chunk, is refused for its envelope)
     expect(await refusal(readUnitsChunk(M.head.bytes, { ref: { ...M.head.ref, kind: 'units' }, before: null }))).toMatchObject({ kind: 'units', path: 'format' })
@@ -1215,7 +1215,7 @@ describe('a part with no layout says why (`layout: { refused, why }`, LAYOUT_REF
     expect(await chainOf({ refused: 'carry', why: 'x' })).toEqual(await chainOf(null))
   })
 
-  it('refuses a word not LAYOUT_REFUSED\'s, a why past WHY_MAX or not a string, another key, and a record beside file-only units or an add-on', async () => {
+  it('refuses a word not LAYOUT_REFUSED\'s, a why past WHY_MAX or not a string, another key, and a record beside file-only units or cell rules', async () => {
     expect(LAYOUT_REFUSED).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap'])
     const refused = async (edit: (p: never) => void, path: string) => {
       const e = await refusal(partWith(0, edit as never))
@@ -1231,7 +1231,7 @@ describe('a part with no layout says why (`layout: { refused, why }`, LAYOUT_REF
     // biome-ignore lint/suspicious/noExplicitAny: as above
     await refused((p: any) => { none({ refused: 'marks', why: '' })(p); p.fileOnly = [[5, 41]] }, 'fileOnly')
     // biome-ignore lint/suspicious/noExplicitAny: as above
-    await refused((p: any) => { const addon = p.addon; none({ refused: 'marks', why: '' })(p); p.addon = addon }, 'addon')
+    await refused((p: any) => { none({ refused: 'marks', why: '' })(p); p.rules = { 1: [72, 500, 540, 500.4] } }, 'rules')
     expect((await refusal(partWith(0, none({ refused: 'compile', why: 'x'.repeat(WHY_MAX) }))))).toBeNull()
   })
 
@@ -1907,11 +1907,6 @@ describe('a memory-class error goes through a reader or a writer as itself', () 
         vi.restoreAllMocks()
       }
     }
-    // (the part chain's readers: a memory error inside the tail's reading)
-    const e = memory()
-    const p = M.parts[0]!
-    vi.spyOn(Uint8Array.prototype, 'subarray').mockImplementation(() => { throw e })
-    await expect(readPart(p.bytes, { ref: p.ref, index: M.index, chain: null })).rejects.toBe(e)
   })
 })
 
