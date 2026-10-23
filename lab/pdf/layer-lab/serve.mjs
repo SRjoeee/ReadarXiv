@@ -27,19 +27,19 @@
 // LAYER_PROTO names. LAYER_RULES_STAGING and LAYER_RULES_PRODUCTION give the URL of the web's current-set route for each
 // environment (https://…/api/v1/rules/s1); the page loads and compares the published set through them, and shows one that
 // was given no URL, or whose route answers 404 or is not there, as unavailable. The lab asks nothing else of the network.
-// The text-removed PDF: the paper's add-on, one a paper whatever the target, made from its layout file alone as the
-// server makes it (layout/addon.mjs paperAddon, the same function the gate's shipped half calls) and read as a reader
-// reads it: arXiv's PDF with the add-on appended, one document, and its manifest (GET /api/addon/<fixture>, GET
-// /addon/<key>.pdf). It is the gate's own where its cache holds one for the paper's bytes, layout file and remover
-// (out/layer-gate/removal/<key>/, LAYER_ADDONS another), else made here once and kept in out/layer-lab/addon/<key>/.
-import { createHash } from 'node:crypto'
+// The page the layer is drawn over: the fixture's base page (base.pdf, our final pass; arXiv's PDF where there is none) wrapped
+// by optional content as the maker child wraps it (docs/PDF-READER.md §19.9; layer-gate/wrap.mjs, the gate's own: its cache,
+// out/layer-gate/wrap/<key>/, the gate's and the lab's alike), the paper's source units from data/layout/<id>/source.gz or
+// data/corpus/<id>/source.gz (LAYER_SOURCES another folder of the same shape), and its head fields (what the wrap could not
+// hide, the cell rules): GET /api/wrap/<fixture> (made first where none is kept), GET /wrap/<key>.pdf. A page with no source
+// or whose wrap is refused (arXiv's PDF has no marks) is served unwrapped: every unit the original's.
 import { execFileSync } from 'node:child_process'
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { deflateSync, inflateRawSync, inflateSync, constants as Z } from 'node:zlib'
 import { geometryFile, PROTO_GEOMETRY } from '../spikes/layer-gate/ref.mjs'
+import { wrapOf } from '../spikes/layer-gate/wrap.mjs'
 import { isOwnHost } from './own-host.mjs'
 import { PAGE_FILES, unservedImports } from './page-files.mjs'
 import { createRulesApi, RULES_PATH } from './rules-api.mjs'
@@ -67,17 +67,17 @@ const PORT = Number(process.argv.find(a => a.startsWith('--port='))?.slice(7) ??
 /** the extension's style sheets the page is drawn with: its tokens (both themes) and its shared controls */
 const STYLES = resolve(REPO, 'src/styles')
 const STYLE_FILES = new Set(['tokens.css', 'controls.css'])
-const FIXTURE_FILES = ['arxiv.pdf', 'layout.json', 'units.json', 'final.pdf', 'final.json', 'refusal.json', 'record.json']
+const FIXTURE_FILES = ['arxiv.pdf', 'base.pdf', 'layout.json', 'units.json', 'final.pdf', 'final.json', 'refusal.json', 'record.json']
 /** where each of a fixture's files is looked for, in order: the translation in the records first, a final in the finals
  *  where the fixtures have none */
-const SOURCES = { 'arxiv.pdf': [FIXTURES], 'layout.json': [FIXTURES], 'refusal.json': [FIXTURES], 'units.json': [RECORDS, FIXTURES], 'record.json': [RECORDS, FIXTURES], 'final.pdf': [FIXTURES, FINALS], 'final.json': [FIXTURES, FINALS] }
+const SOURCES = { 'arxiv.pdf': [FIXTURES], 'base.pdf': [FIXTURES], 'layout.json': [FIXTURES], 'refusal.json': [FIXTURES], 'units.json': [RECORDS, FIXTURES], 'record.json': [RECORDS, FIXTURES], 'final.pdf': [FIXTURES, FINALS], 'final.json': [FIXTURES, FINALS] }
 /** the engine the v0 view runs: this worktree's own, or LAYER_PROTO's */
 const PROTO_ROOT = resolve(process.env.LAYER_PROTO ?? REPO)
 const PROTO = join(PROTO_ROOT, 'src/pdf-reader/engine')
 const TEXMF = process.env.TEXMF_DIST ?? join(process.env.HOME ?? '', 'Library/TinyTeX/texmf-dist')
-/** the add-ons: the gate's cache, read only, and the lab's own */
-const GATE_ADDONS = resolve(process.env.LAYER_ADDONS ?? join(root, 'out/layer-gate/removal'))
-const LAB_ADDONS = resolve(root, 'out/layer-lab/addon')
+/** the wrapped pages: the gate's cache, which the lab shares; the papers' sources the wrap reads */
+const WRAP_CACHE = resolve(root, 'out/layer-gate/wrap')
+const PAPER_SOURCES = [process.env.LAYER_SOURCES ? resolve(process.env.LAYER_SOURCES) : null, join(DATA, 'layout'), join(DATA, 'corpus')].filter(Boolean)
 /** v0's hyphenation patterns, read from TeX's files by v0's own reading (layer-proto/hyph.mjs) */
 const HYPH = new Map()
 {
@@ -111,58 +111,18 @@ function under(dir, rel) {
 const fileOf = (name, file) => (SOURCES[file] ?? []).filter(Boolean).map(d => under(d, join(name, file))).find(f => f && existsSync(f)) ?? null
 const git = (dir, args) => { try { return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return null } }
 const readJson = file => { try { return JSON.parse(readFileSync(file, 'utf8')) } catch { return null } }
-const sha = b => createHash('sha256').update(b).digest('hex')
 
-// ---- the paper's add-on
-/** the remover's files, digested as the gate digests them (layer-gate.mjs removerDigest) */
-const removerDigest = () => sha(['layout/remove.mjs', 'layout/ink.mjs', 'layout/file.mjs', 'layout/addon-manifest.mjs', 'layout/addon.mjs', 'layer-proto/removal.mjs'].map(f => readFileSync(join(PROTO, f))).join('\n')).slice(0, 16)
-/** where a key's add-on is kept, the gate's first: { dir, from }, or null */
-const keptAddon = key => [[join(GATE_ADDONS, key), 'the gate'], [join(LAB_ADDONS, key), 'the lab']].map(([dir, from]) => ({ dir, from })).find(({ dir }) => ['shipped.pdf', 'shipped-manifest.json', 'done.json'].every(f => existsSync(join(dir, f)))) ?? null
-/** the remover's inflate: no more than `limit` + 1 bytes out, or a throw (its contract, layout/remove.mjs); a stream with no zlib header read raw */
-const inflateTolerant = (b, limit = Infinity) => {
-  const o = { finishFlush: Z.Z_SYNC_FLUSH, ...(Number.isFinite(limit) ? { maxOutputLength: limit + 1 } : {}) }
-  try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) }
-}
-const ADDON_RUNS = new Map()
-/** a fixture's add-on: { key, from, manifest, done }, made once where none is kept */
-async function addonOf(name) {
-  const pdfFile = fileOf(name, 'arxiv.pdf'), layoutFile = fileOf(name, 'layout.json')
-  if (!pdfFile || !layoutFile) throw new Error(`${name}: no arXiv PDF or layout file`)
-  const bytes = new Uint8Array(readFileSync(pdfFile))
-  const key = sha([sha(bytes), sha(readFileSync(layoutFile)), removerDigest()].join('|')).slice(0, 24)
-  let kept = keptAddon(key)
-  if (!kept) {
-    if (!ADDON_RUNS.has(key)) ADDON_RUNS.set(key, makeAddon(key, bytes, layoutFile).finally(() => ADDON_RUNS.delete(key)))
-    await ADDON_RUNS.get(key)
-    kept = keptAddon(key)
-  }
-  return { key, from: kept.from, manifest: readJson(join(kept.dir, 'shipped-manifest.json')), done: readJson(join(kept.dir, 'done.json')) }
-}
-/**
- * The add-on a reader is sent, made as the server makes it: the engine's paperAddon (layout/addon.mjs) over PDF.js's
- * reading of arXiv's PDF, the gate's shipped half (layer-gate.mjs buildAddon with check false) and nothing of its check.
- * A paper the maker refuses has no add-on here, as none is shipped for it
- */
-async function makeAddon(key, bytes, layoutFile) {
-  const t0 = performance.now()
-  const E = f => import(pathToFileURL(join(PROTO, f)).href)
-  const [{ paperAddon }, { indexLayout, parseLayout }] = await Promise.all([E('layout/addon.mjs'), E('layout/file.mjs')])
-  const PL = await import('@cantoo/pdf-lib')
-  const { OPS, getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const doc = await getDocument({ data: bytes.slice(), verbosity: 0, cMapUrl: `${PDFJS}/cmaps/`, cMapPacked: true, standardFontDataUrl: `${PDFJS}/standard_fonts/`, useSystemFonts: false }).promise
-  try {
-    const index = indexLayout(parseLayout(new Uint8Array(readFileSync(layoutFile))))
-    const made = await paperAddon({ bytes, index, doc, OPS, PL, deflate: b => new Uint8Array(deflateSync(b)), inflate: inflateTolerant })
-    if (!made.ok) throw new Error(`the add-on was refused: ${made.refused}`)
-    const whole = new Uint8Array(bytes.length + made.tail.length)
-    whole.set(bytes)
-    whole.set(made.tail, bytes.length)
-    const dir = join(LAB_ADDONS, key)
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'shipped.pdf'), whole)
-    writeFileSync(join(dir, 'shipped-manifest.json'), JSON.stringify(made.manifest))
-    writeFileSync(join(dir, 'done.json'), JSON.stringify({ pages: doc.numPages, planned: Object.keys(made.manifest.page).length, appended: made.tail.length, checked: false, ms: Math.round(performance.now() - t0) }))
-  } finally { await doc.loadingTask.destroy() }
+// ---- the page the layer is drawn over
+const WRAP_RUNS = new Map(), WRAPPED = new Map()
+/** a fixture's wrapped page: { key, head } (head: wrapped or why not, unhidden, labelKept, stats, rules), made once where none is kept */
+async function wrapOfFixture(name) {
+  const pdfFile = fileOf(name, 'base.pdf') ?? fileOf(name, 'arxiv.pdf'), layoutFile = fileOf(name, 'layout.json')
+  if (!pdfFile || !layoutFile) throw new Error(`${name}: no base page or layout file`)
+  const paper = name.replace(/-[A-Za-z-]+$/, '')
+  const source = PAPER_SOURCES.map(d => join(d, paper, 'source.gz')).find(f => existsSync(f)) ?? null
+  const w = await wrapOf({ engine: PROTO_ROOT, out: WRAP_CACHE, base: pdfFile, layoutFile, source, runs: WRAP_RUNS })
+  WRAPPED.set(w.key, w.file)
+  return { key: w.key, head: w.head }
 }
 
 /** a paper's title, the source of the unit its record marks as the title (null without one), read once a record file */
@@ -203,7 +163,7 @@ function sendFile(res, file, cache = 'no-store') {
 const rel = dir => (dir?.startsWith(REPO + sep) ? dir.slice(REPO.length + 1) : dir)
 const info = () => ({
   commit: git(REPO, ['rev-parse', 'HEAD']), branch: git(REPO, ['rev-parse', '--abbrev-ref', 'HEAD']), subject: git(REPO, ['log', '-1', '--format=%s']), entry: ENTRY ? 'stand-in' : 'engine',
-  proto: { root: PROTO_ROOT === REPO ? 'this worktree' : PROTO_ROOT, commit: git(PROTO_ROOT, ['rev-parse', 'HEAD']), dirty: !!git(PROTO_ROOT, ['status', '--porcelain', '--untracked-files=no', '--', 'src/pdf-reader/engine']), remover: removerDigest() },
+  proto: { root: PROTO_ROOT === REPO ? 'this worktree' : PROTO_ROOT, commit: git(PROTO_ROOT, ['rev-parse', 'HEAD']), dirty: !!git(PROTO_ROOT, ['status', '--porcelain', '--untracked-files=no', '--', 'src/pdf-reader/engine']) },
   inputs: { fixtures: rel(FIXTURES), records: rel(RECORDS), geometry: rel(PROTO_GEOMETRY), finals: rel(FINALS) },
   rules: { path: RULES_PATH, staging: !!PUBLISHED.staging, production: !!PUBLISHED.production },
 })
@@ -220,14 +180,14 @@ const server = createServer((req, res) => {
     return
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'GET only')
-  // the paper's add-on: its manifest (made first where none is kept), and the document a reader opens
-  const ad = /^\/api\/addon\/([A-Za-z0-9._-]+)$/.exec(path)
-  if (ad) {
-    addonOf(ad[1]).then(a => send(res, 200, JSON.stringify(a), TYPES['.json']), e => send(res, 500, String(e?.stack ?? e).slice(0, 2000)))
+  // the page the layer is drawn over: its head fields (wrapped first where none is kept), and the document a reader opens
+  const wr = /^\/api\/wrap\/([A-Za-z0-9._-]+)$/.exec(path)
+  if (wr) {
+    wrapOfFixture(wr[1]).then(w => send(res, 200, JSON.stringify(w), TYPES['.json']), e => send(res, 500, String(e?.stack ?? e).slice(0, 2000)))
     return
   }
-  const af = /^\/addon\/([0-9a-f]{24})\.pdf$/.exec(path)
-  if (af) { const kept = keptAddon(af[1]); return sendFile(res, kept ? join(kept.dir, 'shipped.pdf') : null) }
+  const wf = /^\/wrap\/([0-9a-f]{24})\.pdf$/.exec(path)
+  if (wf) return sendFile(res, WRAPPED.get(wf[1]) ?? null)
   if (path === '/') return sendFile(res, join(here, 'index.html'))
   if (path.startsWith('/lab/')) { const name = path.slice(5); return sendFile(res, PAGE_FILES.has(name) ? join(here, name) : null) }
   if (path.startsWith('/styles/')) { const name = path.slice(8); return sendFile(res, STYLE_FILES.has(name) ? join(STYLES, name) : null) }
@@ -260,5 +220,5 @@ const server = createServer((req, res) => {
 })
 server.listen(PORT, '127.0.0.1', () => {
   const n = fixtures().length, i = info()
-  console.log(`layer lab: http://127.0.0.1:${PORT}/  (${n} fixture${n === 1 ? '' : 's'}; v0's engine ${i.proto.root} at ${i.proto.commit?.slice(0, 8)}${i.proto.dirty ? '+' : ''}, remover ${i.proto.remover}; ${JSON.stringify(i.inputs)}${ENTRY ? `; layer entry: ${ENTRY}` : ''})`)
+  console.log(`layer lab: http://127.0.0.1:${PORT}/  (${n} fixture${n === 1 ? '' : 's'}; v0's engine ${i.proto.root} at ${i.proto.commit?.slice(0, 8)}${i.proto.dirty ? '+' : ''}; ${JSON.stringify(i.inputs)}${ENTRY ? `; layer entry: ${ENTRY}` : ''})`)
 })

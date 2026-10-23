@@ -179,14 +179,14 @@ describe('layerOfPaper: the page pass', () => {
     expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'failed', why: 'a broken page' } } })
   })
 
-  it('the oracle\'s plan totals are the whole run\'s, counted before the told parts drop their plans', async () => {
+  it('the oracle\'s cell-rule totals are the whole run\'s, counted before the told parts drop their rules', async () => {
     const w = worldOf()
     const capture: Record<string, unknown> = {}
     const want = await passOf(w, { capture: capture as never })
     const got = await passOf(w, { oracle: capture as never })
-    const plans = (r: unknown) => (r as { stats: { plans: unknown } }).stats.plans
-    expect(plans(want.r)).toMatchObject({ pages: 3 })
-    expect(plans(got.r)).toEqual(plans(want.r))
+    const rules = (r: unknown) => (r as { stats: { rules: unknown } }).stats.rules
+    expect(rules(want.r)).toMatchObject({ pages: expect.any(Number) })
+    expect(rules(got.r)).toEqual(rules(want.r))
   })
 
   it('a throw of the maker\'s with no message is a failure all the same: the rest cut with no layout', async () => {
@@ -235,7 +235,7 @@ describe('layerOfPaper: the page pass', () => {
     const w = worldOf()
     const got = await passOf(w, { marks: { refused: 'probe' } as never })
     expect(got.notes).toEqual([{ pages: [1, 1], layout: 'none', lines: [0, 0] }, { pages: [2, 3], layout: 'none', lines: [0, 0] }])
-    expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'probe' }, plans: null, addon: null } })
+    expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'probe' }, rules: null } })
   })
 
   it('with TeX\'s refusal, the record keeps the unmarked original\'s verdict; each part\'s says why alone', async () => {
@@ -388,7 +388,7 @@ describe('layerOfPaper: a marked original of fewer pages than arXiv\'s PDF', () 
     for (const input of [{}, { whole: true }, { marks: null, marked: markedIn(w) }, { marks: null, marked: markedIn(w), whole: true }]) {
       const got = await passOf(w, input as never)
       const at = JSON.stringify(input)
-      expect(got.r, at).toMatchObject({ count: 2, stats: { layout: { refused: 'compile', why: 'the marked original has 2 pages, arXiv\'s PDF 3' }, plans: null, addon: null } })
+      expect(got.r, at).toMatchObject({ count: 2, stats: { layout: { refused: 'compile', why: 'the marked original has 2 pages, arXiv\'s PDF 3' }, rules: null } })
       expect(got.notes, at).toEqual(none.notes)
       // (the left by the units' text alone, as with the compile refused: no unit mark of the short original bounds it)
       expect(got.told, at).toEqual(none.told)

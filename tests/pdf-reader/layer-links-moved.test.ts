@@ -524,7 +524,7 @@ describe('LK13: a page\'s records ranked', () => {
   })
   it('counts an annotation its owner left by the reason the match gave it, where its ink is erased', () => {
     const list = [ann(0, { dest: 'a' }, 'x'), ann(1, { dest: 'b' }, 'y'), ann(2, { dest: 'c' }, 'z')].map(a => ({ ...a, rect: [10, 10, 20, 20], boxes: [[10, 10, 20, 20]] }))
-    const f = freezeLinks({ list, q: 1, ops: [{ op: 'erase', box: [0, 0, 100, 100] }], devOf: (x, y) => [x, y], units: [], why: new Map([[0, 'ambiguous'], [1, 'unplaced']]) })
+    const f = freezeLinks({ list, q: 1, ops: [{ op: 'hidden', rects: [[0, 0, 100, 100]] }], devOf: (x, y) => [x, y], units: [], why: new Map([[0, 'ambiguous'], [1, 'unplaced']]) })
     expect(f.dropped).toEqual({ unmatched: 1, ambiguous: 1, unplaced: 1 })
     expect(f.records).toEqual([])
   })

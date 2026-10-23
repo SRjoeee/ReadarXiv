@@ -1,6 +1,5 @@
 import type { UnitWire } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { partTarget } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { REMOVAL, type RemovalManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { type LayoutFile, type LayoutPart, NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 
 // A whole layout file and a whole left cut into parts at the doubling schedule, for the format's tests (the contract's test 1:
@@ -15,7 +14,6 @@ export interface CutPart {
   left: UnitWire[]
   fileOnly: [number, number][]
   layout: LayoutPart
-  manifest: RemovalManifest
 }
 
 /** the parts of `layout` and `left` (the left's units, [id, stream, rects]) at the doubling schedule */
@@ -64,12 +62,8 @@ export function cutAt(layout: LayoutFile, left: readonly UnitWire[]): CutPart[] 
     }
     const layoutIds = new Set(part.units.map(u => u[0]))
     const fileOnly = mine.filter(e => e.after !== null && layoutIds.has(e.id)).map(e => [e.id, e.after as number] as [number, number])
-    const manifest: RemovalManifest = {
-      schema: 1, removal: REMOVAL, pages: N, sets: {}, appended: 0, stats: {},
-      page: Object.fromEntries(Array.from({ length: b - a + 1 }, (_, i) => [a + i, { ok: true }])),
-    }
     parts.push({
-      pages: [a, b], views: layout.views.slice(4 * (a - 1), 4 * reach), left: mine.filter(e => e.after === null).map(e => leftOf.get(e.id) as UnitWire).sort((x, y) => x[0] - y[0]), fileOnly: fileOnly.sort((x, y) => x[0] - y[0]), layout: part, manifest,
+      pages: [a, b], views: layout.views.slice(4 * (a - 1), 4 * reach), left: mine.filter(e => e.after === null).map(e => leftOf.get(e.id) as UnitWire).sort((x, y) => x[0] - y[0]), fileOnly: fileOnly.sort((x, y) => x[0] - y[0]), layout: part,
     })
     a = b + 1
   }

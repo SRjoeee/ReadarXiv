@@ -19,7 +19,7 @@
 // drawing of the page is under way. A page view lives in a holder of its own inside the place, so that the --scale-factor
 // PDF.js writes on a standalone page view's container stays off the place.
 
-import { drawnCanvas, pageBox } from './drawn.mjs'
+import { pageBox } from './drawn.mjs'
 
 /** how far past the view a place is near: one pane's height above and below */
 export const NEAR = '100% 0px 100% 0px'
@@ -305,9 +305,6 @@ export function createPlaces(o) {
       if (p.near) show(p); else name(p)
       keepFocus(p, focus)
     },
-    /** the canvas of place n's own page view where PDF.js has drawn it whole, with the device pixels a PDF unit it drew it at
-     *  (`{ canvas, k }`, drawn.mjs); null else (read before a swap releases it) */
-    canvas: n => drawnCanvas(list[n - 1]?.view),
     /** place n's box in CSS px, as PDF.js sizes the left's page n (its viewport floored to the rounding the place carries,
      *  --scale-round-x and -y); null with no viewport. Nothing of the layout is read */
     box(n) {

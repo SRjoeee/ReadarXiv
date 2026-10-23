@@ -63,7 +63,9 @@ describe('the gate runs when what it loads changes', () => {
   it('covers every engine file the gate loads, found by following its imports from the files the page and the Node side load', () => {
     const E = (f: string) => join(ROOT, 'src/pdf-reader/engine', f)
     // the page (layer-gate/proto.mjs) imports these from /engine/; layer-gate.mjs imports the others in Node
-    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/removal.mjs', 'layout/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/addon.mjs', 'layout/remove.mjs', 'layer-proto/hyph.mjs'].map(E))
+    // (and the wrap's, layer-gate/wrap.mjs: the base page wrapped by optional content and its cell rules, beside the source
+    // units' reading, which is the pipeline's and not the drawing's)
+    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', 'layout/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap.mjs', 'layout/cell-rules.mjs', 'layout/remove.mjs', 'layer-proto/hyph.mjs'].map(E))
     expect(loaded.length).toBeGreaterThan(20)
     expect(loaded.filter(f => !covered(patterns, f))).toEqual([])
   })

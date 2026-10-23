@@ -9,8 +9,9 @@ import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { createLayerSide, type LayerSide, type LayerSideOptions, type TellRef } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { createFakeDoor, type FakeDoor, type FakeDoorOptions } from './fake-door'
-import { made, type Made, N, TAILS } from './format-paper'
+import { made, type Made, N } from './format-paper'
 import { drawPanes, FakeIO, FakeRO, fakeDoc, fakeKit, fakeTask, type FakeTask, flush, installLayout, type ManualClock, manualClock, resetFakes } from './reader-fakes'
+import { withGroups } from './groups'
 
 /** the hooks every side test file runs: the layout model, the observers, a console that keeps the warnings, the views disposed */
 export function installSideFakes() {
@@ -60,8 +61,8 @@ export interface Setup {
   hold: Set<string>; signals: Map<string, AbortSignal>
   composed: { tail: Uint8Array | null; options: Record<string, unknown>; task: FakeTask }[]
   destroyed: string[]; warned: () => string[]; opens: number; highlight(on: boolean): void
-  /** each door opened: the door, the rows it took, its ends, the copies it drew (page, source, k) and each source's size as it
-   *  was handed (page, width, height: a source drawn from the document is let go after) */
+  /** each door opened: the door, the rows it took, its ends, the copies it was asked (page, the ask, k) and each copy's size
+   *  (page, width, height) */
   doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][]; sized: [number, number, number][] }[]
   /** the door the side holds now (the last opened, while it lives) */
   layer(): Layer | null
@@ -92,8 +93,9 @@ export interface Options {
   copyFails?: readonly number[] | ((door: number, page: number, before: number) => boolean)
   /** the composed opens (0 the first) that fail */
   composedFailAt?: readonly number[]
-  /** the door refuses to open, as openLayer refuses a document of another page count */
+  /** the door refuses to open, as openLayer refuses a document of another page count; or the opens (0 the first) that do */
   openFails?: boolean
+  openFailAt?: readonly number[]
   /** the host's getDocument options (the kit's assets) in place of the fakes' */
   assets?: Record<string, unknown>
   /** the fake door's links of a laid page (the door's own gives none); `n` the page, `door` its index (0 the first opened) */
@@ -137,7 +139,6 @@ export async function setup(o: Options = {}): Promise<Setup> {
     if (!b) throw new Error('no such object')
     return b
   }
-  const rOf = (tail: Uint8Array | null) => (!tail ? 0 : tail.length === TAILS[0]!.tail.length ? m.readParts[0]!.chain.r : m.readParts[1]!.chain.r)
   const composed: Setup['composed'] = []
   const door = createFakeDoor({ laying: 'manual', ...o.door })
   let opens = 0, live: Layer | null = null
@@ -149,12 +150,12 @@ export async function setup(o: Options = {}): Promise<Setup> {
       const task = fakeTask(destroyed, `composed ${composed.length}`)
       composed.push({ tail, options, task })
       if (o.composedFails || o.composedFailAt?.includes(composed.length - 1)) task.reject(new Error('no composed document'))
-      else task.resolve((o.real ? o.real.docFor(rOf(tail)) : drawable(fakeDoc((o.paper?.pages ?? N) + rOf(tail)))) as never)
+      else task.resolve((o.real ? o.real.docFor(0) : drawable(fakeDoc(o.paper?.pages ?? N))) as never)
       return task as unknown as DocumentTask
     },
     openLayer: (async (oo: OpenLayerOptions) => {
       opens++
-      if (o.openFails) throw new BundleRefusal('the document has 9 pages, not 4', { kind: 'part', path: 'doc' })
+      if (o.openFails || o.openFailAt?.includes(opens - 1)) throw new BundleRefusal('the document has 9 pages, not 4', { kind: 'part', path: 'doc' })
       const layer = o.real ? await o.real.openLayer(oo) : await door.openLayer(oo)
       live = layer
       const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [], sized: [] }
@@ -164,12 +165,12 @@ export async function setup(o: Options = {}): Promise<Setup> {
       layer.end = () => { seen.ended++; end() }
       const which = doors.length - 1, list = Array.isArray(o.copyFails) ? new Set(o.copyFails) : null
       const fails = typeof o.copyFails === 'function' ? o.copyFails : (d: number, n: number, before: number) => d === 0 && before === 0 && !!list?.has(n)
-      layer.copyOf = (n, src, k) => {
+      layer.copyOf = (n, oo) => {
         const before = seen.copies.filter(c => c[0] === n).length
-        seen.copies.push([n, src, k])
-        seen.sized.push([n, src.width, src.height])
+        seen.copies.push([n, oo, oo.k])
+        seen.sized.push([n, oo.width, oo.height])
         if (fails(which, n, before)) return Promise.reject(new Error(`the copy of page ${n} failed (the test's)`))
-        return copyOf(n, src, k)
+        return copyOf(n, oo)
       }
       layer.dispose = () => { if (live === layer) live = null; dispose() }
       // the fake lays no unit: every unit with lines on a page is shown there as the original's, as the real door's words say
@@ -195,6 +196,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
 /** a document whose pages draw (on a canvas, nothing: a page's copy drawn from the composed document) */
 export const renders: { page: number; annotationMode: unknown }[] = []
 export function drawable(d: ReturnType<typeof fakeDoc>) {
+  withGroups(d)
   const get = d.getPage.bind(d)
   d.getPage = async (n: number) => Object.assign(await get(n), { render: (p: { annotationMode?: unknown }) => { renders.push({ page: n, annotationMode: p.annotationMode }); return { promise: Promise.resolve() } } })
   return d

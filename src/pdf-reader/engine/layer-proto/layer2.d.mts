@@ -302,8 +302,6 @@ export declare function colourOfStyle(st: { fill?: number } | null | undefined):
 export declare function fontOfStyle<T>(st: T): T
 /** a run's style from its characters (the first not a formula's), its colour too; its design `serif` where none is told */
 export declare function styleOfChars(cs: readonly Pick<Char, 'st'>[], serif: string): { fam: string; bold: boolean; italic: boolean; caps: boolean; design: string; color?: string }
-/** what an erasing covered that no painted unit accounts for, put back from the original: the restore operation, or null */
-export declare function restoreUnaccounted(erased: readonly number[][], px: ToDev, restore: { items: { chars: Char[]; keys: string[]; box: number[] }[]; accounted: Set<string>; kept: { keys: Set<string>; hulls: number[][] } | null | undefined; ink: InkMap | undefined; cover: Uint8Array | null }, audit: Audit[] | null, id: number | null, page: number): DrawOp | null
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
  *  is awaited before each measure (a face served in slices has the slice of the text by then) */
 export declare function warmFaces(to: string, cjk: boolean, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
@@ -373,28 +371,23 @@ export declare function shareOf(layout: Pick<Layout, 'lines'>, blocks: readonly 
 export declare function keepsShare(share: Share | null | undefined, lines: readonly Line[]): boolean
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]
-/** one of the layer's drawing operations (unitOps'): the paper's white, the page's own pixels put back within the erased
- *  boxes, a crop of a page's pixels darkened in */
+/** one of the layer's drawing operations over render A (hideOps'): where a unit's hidden ink lies (nothing drawn), a plane of the
+ *  page put back in rectangles, a crop of a page's plane darkened in */
 export type DrawOp =
-  | { op: 'erase'; box: DevBox }
-  | { op: 'paper'; rects: DevBox[] }
-  | { op: 'restore'; page: number; clip: DevBox[]; boxes: DevBox[] }
-  | { op: 'crop'; page: number; src: DevBox; dst: DevBox; plane?: Plane; clip?: DevBox[] }
-  | { op: 'swap'; page: number; rects: DevBox[] }
-/** which drawing of a page an operation cuts from: the original, its text-removed page, its placeholders alone */
-export type Plane = 'O' | 'R' | 'P'
+  | { op: 'hidden'; rects: DevBox[] }
+  | { op: 'paste'; page: number; plane: Plane; unit?: number | null; rects: DevBox[] }
+  | { op: 'crop'; page: number; src: DevBox; dst: DevBox; plane: Plane; clip?: DevBox[] }
+/** which render of a page an operation cuts from: B every unit's text and label hidden (a crop's source), C every group shown */
+export type Plane = 'B' | 'C'
 /** a canvas a drawing operation cuts from: the page as PDF.js drew it */
 export type DrawSource = CanvasImageSource
-/** the unit's lines erased on the page, what no painted unit accounts for put back, its crops: as operations */
-export declare function unitOps(L: Layout, blocks: readonly Block2[], page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; extents?: Map<string, number[]>; audit?: Audit[] | null; id?: number | null; restore?: unknown }): DrawOp[]
-/** the unit on a page whose text the removed PDF has taken out: the removed page's pixels swapped in over its own glyphs
- *  (`rects`), its crops cut from the placeholders' page where `removed` says its source page is removed */
-export declare function removalOps(L: Layout, page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; rects: DevBox[]; erase?: DevBox[]; lines?: number[][]; removed: (page: number) => boolean; audit?: Audit[] | null; id?: number | null; clips?: Map<number, { rects: DevBox[]; own: DevBox[] }> | null }): DrawOp[]
-/** the operations drawn on a copy of the page at `z` times v0's resolution, cut from each page and plane as PDF.js drew it
- *  there */
-/** `k`: the device pixels a PDF unit `ctx` is drawn at; where SWAP_PAD is less than one of them, a swap's and a paper fill's rectangles are taken out to whole device pixels */
-export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number, plane: Plane) => DrawSource | null | undefined, k?: number | null): void
-export declare function pageItemsOf(chars: readonly Char[], page: number, px: ToDev, ink: InkMap | undefined): { items: { chars: Char[]; keys: string[]; box: number[] }[]; cover: Uint8Array | null }
+/** a unit's drawing on a page of our wrapped document: its hidden rectangles, its pastes from B and C, its crops (PDF boxes in,
+ *  device pixels out) */
+export declare function hideOps(L: Layout, page: number, o: { px: ToDev; k: number; hasSource: (page: number) => boolean; pxOf: (page: number) => ToDev; hidden?: number[][]; fromB?: number[][]; fromC?: number[][]; clips?: Map<number, { rects: number[][]; own: number[][] }> | null; audit?: Audit[] | null; id?: number | null }): DrawOp[]
+/** the operations drawn over render A at `z` times v0's resolution, cut from each page's planes as PDF.js drew them there */
+/** the part of each plane the operations cut from, by `${plane}${page}`: [x, y, w, h], whole device pixels at z times v0's resolution */
+export declare function opsSources(ops: readonly DrawOp[], z: number): Map<string, [number, number, number, number]>
+export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, ops: readonly DrawOp[], z: number, sourceOf: (page: number, plane: Plane) => DrawSource | { canvas: DrawSource; x: number; y: number } | null | undefined): void
 /** the unit's lines on one page as SVG markup (a <g data-u="id">) */
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string
 /** a <tspan> of a laid line's text as svgOfUnit draws it: its face, whether it is a run of single CJK characters each at its

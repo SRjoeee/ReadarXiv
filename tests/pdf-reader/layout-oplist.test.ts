@@ -4,7 +4,6 @@ import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { giveUp, listWithin, OPS_MS, within } from '@/pdf-reader/engine/layout/oplist.mjs'
-import { pagePlansOf, paperAddon } from '@/pdf-reader/engine/layout/addon.mjs'
 import { readAnnots } from '@/pdf-reader/engine/layer-proto/links.mjs'
 import { ALLOCATION_FAILED, isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
@@ -70,7 +69,7 @@ describe('listWithin, giveUp: a page\'s operator list within OPS_MS, a page give
     expect(failed.cleanup).toHaveBeenCalledTimes(1)
   })
 
-  it('a memory-class failure is no page given up on: within and listWithin throw it, and the add-on\'s plans end on it (C8.4)', async () => {
+  it('a memory-class failure is no page given up on: within and listWithin throw it to the caller (C8.4)', async () => {
     // (PDF.js's wrapping of a worker-side allocation failure, pdf.mjs wrapReason, which isMemoryError takes; and V8's own)
     const oom = () => Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
     for (const e of [oom(), new RangeError(ALLOCATION_FAILED)]) {
@@ -80,23 +79,16 @@ describe('listWithin, giveUp: a page\'s operator list within OPS_MS, a page give
       await expect(listWithin(page as never, { warned: true })).rejects.toBe(e)
       // (thrown before any promise, as a synchronous allocation fails)
       await expect(listWithin({ getOperatorList: () => { throw e }, cleanup: vi.fn() } as never, { warned: true })).rejects.toBe(e)
-      const doc = { numPages: 1, getPage: async () => page }
-      const index = { file: { views: [0, 0, 612, 792], paper: { pages: 1 } }, onPage: () => [], names: () => [] }
-      await expect(pagePlansOf({ doc: doc as never, OPS: {} as never, index: index as never })).rejects.toBe(e)
     }
     // (another failure is still a page given up on: null)
     await expect(within(Promise.reject(new RangeError('Invalid array buffer length')), OPS_MS)).resolves.toBeNull()
   })
 
-  it('nor is it a page without links, or an add-on refused: readAnnots and paperAddon let it through, other failures as before', async () => {
+  it('nor is it a page without links: readAnnots lets it through, other failures as before', async () => {
     const oom = Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
     await expect(readAnnots({ getAnnotations: () => Promise.reject(oom) })).rejects.toBe(oom)
     await expect(readAnnots({ getAnnotations: () => { throw oom } })).rejects.toBe(oom)
     await expect(readAnnots({ getAnnotations: () => Promise.reject(new Error('broken page')) })).resolves.toBeNull()
-    // (the add-on's maker, failing inside: an input it cannot read)
-    const failing = (e: unknown) => new Proxy({}, { get: () => { throw e } })
-    await expect(paperAddon(failing(oom) as never)).rejects.toBe(oom)
-    await expect(paperAddon(failing(new Error('a broken input')) as never)).resolves.toMatchObject({ ok: false })
   })
 
   it('a PDF.js with no cancel: a warning once a reader, naming it', () => {

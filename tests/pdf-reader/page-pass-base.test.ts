@@ -177,8 +177,6 @@ describe('layerOfPaper over our base page held as a delta over arXiv\'s PDF', ()
       expect(got.head.orig).toEqual({ bytes: ORIG.bytes, sha256: ORIG.sha256, xref: ORIG.xref })
       expect(got.parts.map(p => p.layout !== null)).toEqual([true, true])
       expect(got.r).toMatchObject({ stats: { delta: { kind: 'delta', bytes: d.bytes.length, replaced: 3 } } })
-      // (the parts' chain begins after arXiv's bytes and the delta's)
-      expect(got.parts[0]?.chain).toMatchObject({ end: ORIG.bytes + d.bytes.length, xref: d.xref })
     }
   })
 

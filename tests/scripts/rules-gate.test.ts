@@ -604,7 +604,7 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
 describe('the runs are the production configuration', () => {
   it('runs the model tier of the hybrid over the text-removed PDF, on 4 workers, from the pack alone', () => {
     const { args, env } = gateArgs({ engine: '/work/base', rules: '/work/base/rules.json', pack: '/work/pack' })
-    expect(args).toEqual(['--tier=model', '--engine-kind=proto', '--proto-tex=lines', '--removal=draw', '--fixtures=/work/pack/fixtures', '--engine=/work/base', '--rules=/work/base/rules.json', '--workers=4'])
+    expect(args).toEqual(['--tier=model', '--engine-kind=proto', '--proto-tex=lines', '--fixtures=/work/pack/fixtures', '--sources=/work/pack/sources', '--engine=/work/base', '--rules=/work/base/rules.json', '--workers=4'])
     expect(env).toEqual({ AXT_DATA: '/work/pack/data', LAYER_REFS: '/work/pack/refs', LAYER_GEOMETRY: '/work/pack/geometry', TEXMF_DIST: '/work/pack/texmf' })
   })
 })

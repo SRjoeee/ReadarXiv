@@ -36,10 +36,11 @@ The address holds the view, for example:
 - **Finals** (`LAYER_FINALS`, default `data/layer-fixtures`): the compiled finals, made on 2026-10-06 from the lab's own
   fixtures. The lab only reads them: the compile path is parked (`parked/README.md`), and nothing here makes a final.
 - **The engine**: this worktree's (`LAYER_PROTO=<worktree>` runs another's).
-- **The add-on**: one per paper, as the engine makes it (`layout/addon.mjs`, `paperAddon`: the gate's shipped half). It
-  is read from the gate's cache (`out/layer-gate/removal/`) when that holds one for the paper's bytes, layout file and
-  remover, else made once into `out/layer-lab/addon/`. It is opened as a reader opens it: arXiv's pages and the add-on's
-  in one document, with its manifest.
+- **The page drawn over**: the fixture's base page (`base.pdf`, our final pass; arXiv's PDF where there is none) wrapped by
+  optional content as the maker child wraps it (`lab/pdf/spikes/layer-gate/wrap.mjs`, the gate's: its cache
+  `out/layer-gate/wrap/` is shared), with the paper's source units (`data/layout/<id>/source.gz`, `data/corpus/<id>/source.gz`,
+  or `LAYER_SOURCES`), and its head fields (what the wrap could not hide, the cell rules). A page with no source, or whose
+  wrap is refused (arXiv's PDF has no marks), is served unwrapped: every unit the original's.
 
 ## Views and controls
 
@@ -65,7 +66,7 @@ the foot of the settings); the target languages are always named in their own la
   script's leading on the original's pitch alone, are the rule `adaptiveFill`, set or empty; D's three sliders are its
   members.)
 - **The rules panel:** below the quick view's choices, while a pane shows the quick view. See below.
-- **The page summary:** each page's units by geometry, the removal, the fit, and the first drawing's time: v0's step
+- **The page summary:** each page's units by geometry, the groups hidden, the fit, and the first drawing's time: v0's step
   (render, text, lay, ops, svg) plus the pane's drawing at its resolution. Clicking a unit shows v0's record of it.
 
 ## The rules panel

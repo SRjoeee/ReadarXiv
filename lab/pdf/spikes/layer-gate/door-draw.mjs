@@ -31,7 +31,7 @@ async function cutOf(name) {
   const index = F.indexOf(head, chunks)
   const parts = []
   for (const p of c.parts) parts.push(await F.readPart(await bytes(p.path), { ref: p.ref, index, chain: parts.at(-1)?.chain ?? null }))
-  return { index, parts, docs: c.docs ?? {}, composed: c.composed ?? null, gz: c.gz }
+  return { index, parts, gz: c.gz }
 }
 
 /** a link of `rtt` ms and `bps` bytes a second: each ask answered RTT after it is made or once the link is free, in turn */
@@ -92,23 +92,21 @@ function counter(N) {
 }
 
 /**
- * The door over the cut: its parts told as the run waits for one (`at` 'wait': the document arXiv's PDF, each part with a tail
- * with the composed document through it) or all at the open (`at` 'open': the document through every tail); `draw` false, the
+ * The door over the cut: its parts told as the run waits for one (`at` 'wait') or all at the open (`at` 'open'), the document the
+ * wrapped page either way (base.pdf: no part carries a tail); `draw` false, the
  * run given no drawOf. Each left part fetched from the driver (and over `link`)
  */
 async function openB({ name, target, rules, at, draw, link = null }) {
   const R = await import('/engine/layer-proto/reader.mjs')
-  const { index, parts, docs, composed, gz } = await cutOf(name)
+  const { index, parts, gz } = await cutOf(name)
   const N = index.head.paper.pages
   const rows = await json(`/door/${name}/rows.json`)
   const counts = counter(N)
   const net = link ? linkOf(link, counts.span) : null
   const open = async path => counts.wrap(net ? await net.open(await bytes(path), R) : await pdfjs.getDocument({ data: await bytes(path), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise)
   const opened = []
-  const doc = await open(at === 'open' && composed ? composed : `/fixtures/${name}/base.pdf`)
+  const doc = await open(`/fixtures/${name}/base.pdf`)
   opened.push(doc)
-  const tails = new Map()
-  if (at === 'wait') for (const [i, path] of Object.entries(docs)) { const d = await open(path); tails.set(Number(i), d); opened.push(d) }
   const ruleSet = await ruleSetOf(rules)
   window.__gateRuns = []
   window.__gateNoDraw = !draw
@@ -122,7 +120,7 @@ async function openB({ name, target, rules, at, draw, link = null }) {
     return b
   }
   const layer = await R.openLayer({ index, doc, parts: at === 'open' ? parts : [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, leftPart, onRetired: d => { retired.push(d) } })
-  const tell = i => layer.addPart(parts[i], ...(tails.has(i) ? [{ doc: tails.get(i) }] : []))
+  const tell = i => layer.addPart(parts[i])
   if (at === 'wait') window.__gateWait = what => { if (what === 'part' && next < parts.length) tell(next++) }
   layer.take(rows)
   layer.end()

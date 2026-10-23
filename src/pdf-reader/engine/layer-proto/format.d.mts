@@ -1,6 +1,5 @@
 // format.mjs's types: the layer's wire format, BUNDLE 4 (the prepare pipeline's bundle 4 contract)
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
-import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { ReadBundle } from './bundle.mjs'
 import type { BundleUnit } from './units.mjs'
 import type { Draw, DrawSource } from './draw.mjs'
@@ -12,14 +11,14 @@ import type { UnitWire } from './bundle.mjs'
 /** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why;
  *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
  *  and `orig` names arXiv's beside ours, the catalog names the base */
-export declare const BUNDLE5: '8'
+export declare const BUNDLE5: '9'
 /** the formats a reader takes: its own and 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv') */
 export declare const BUNDLES_READ: readonly ['7', '8']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
 export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
 /** how a base of ours is held: a delta over arXiv's PDF, or our whole PDF (`full`, no `kind` on the wire); the delta's bounds */
-export { BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_TAIL_ROOM, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
+export { BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
 /** why a head of 8's base is arXiv's (`base.why`): LAYOUT_REFUSED's codes, which each part with no layout says too */
 export declare const BASE_WHYS: typeof LAYOUT_REFUSED
 /** whether a head's layer draws: its base is ours (BUNDLE 8); a head of 7 and every head over arXiv's PDF draw nothing */
@@ -54,9 +53,7 @@ export declare const LEFT_CAP: number
 export declare const LEFT_VALUES: number
 export declare const CATALOG_CAP: number
 export declare const CATALOG_VALUES: number
-/** a part's tail at most, raw */
-export declare const TAIL_CAP: number
-/** a part's content at most, in bytes: everything but its tail's base64 (the cut holds a part to it) */
+/** a part's content at most, in bytes (the cut holds a part to it) */
 export declare const CONTENT_MAX: number
 /** a left part's tokens at most, and the tokens its spans may name, per token */
 export declare const TOKENS_PAGE: number
@@ -123,7 +120,7 @@ export type Unhidden = import('../layout/delta-wire.mjs').Unhidden
 /** the PDF a layer is drawn over (the head's `base`): ours, the final pass of our marked compile, with its page count, the
  *  TeX Live year it was compiled on ('2025') and its check; or arXiv's, with why ours was refused where a head of 8 says it
  *  (absent: a head of 7, or a producer that made no base of its own). `xref`: the PDF's last cross-reference section's
- *  offset, which the remover's tails continue */
+ *  offset */
 export type HeadBase =
   | { source: 'ours'; kind?: undefined; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; stats?: WrapStats; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[] }
   | DeltaBase
@@ -175,14 +172,6 @@ export interface PartChain {
   readonly reach: number
   /** the views of pages through + 1 … reach */
   readonly ahead: readonly number[]
-  /** base.bytes (a delta's: arXiv's bytes and the delta's) + every tail told */
-  readonly end: number
-  /** the last cross-reference section's offset (base.xref before any tail) */
-  readonly xref: number
-  /** the next fresh object number, and the page tree root, null before any tail */
-  readonly next: number | null; readonly root: number | null
-  /** the removed pages told */
-  readonly r: number
 }
 /** why a part has no layout, as its wire records it in place of one: TeX's (`compile`, `texlive`, `engine`), ours (`marks`),
  *  the carry's (`carry`), and BUNDLE 8's where our compile is no base page (`final`: the final pass failed, moved a mark or had
@@ -201,8 +190,8 @@ export interface ReadPart {
   left: UnitWire[]; fileOnly: [id: number, after: number][]; layout: LayoutPart | null
   /** why the part has no layout, as its wire recorded it; null where it has one, or where none was recorded */
   noLayout: Readonly<LayoutRefusalRecord> | null
-  /** null where the layout is, and where the part has no add-on for its pages (M20: its pages drawn by erase and restore) */
-  addon: { manifest: RemovalManifest; tail: Uint8Array | null; r: number } | null
+  /** the rules near its table cells by page (x0, y0, x1, y1 stride 4: layer2.mjs cellBands), null where the layout is none or no page has any */
+  rules: Readonly<Record<number, readonly number[]>> | null
   leftParts: (Ref & { page: number })[]
   /** the state after this part */
   chain: PartChain
@@ -287,8 +276,8 @@ export declare function readPart(bytes: Uint8Array, o: { ref: Ref; index: LayerI
 export declare function readLeftPart(bytes: Uint8Array, o: { ref: Ref & { page: number }; streamOf(id: number): number | undefined; caps?: Caps }): Promise<ReadLeftPart>
 /** the catalog as fetched by name (no ref: its digest is computed); with `key`, its directory is the VTAG its versions make */
 export declare function readCatalog(bytes: Uint8Array, o?: { key?: string; paper?: { id: string; version: number }; caps?: Caps }): Promise<ReadCatalog>
-/** the parts as the whole BUNDLE 3 reading (lab, the equality harness): parts in order, layout merged (mergeLayout), manifests
- *  merged, tails concatenated */
+/** the parts as the whole BUNDLE 3 reading (lab, the equality harness): parts in order, layout merged (mergeLayout), the rules
+ *  by page */
 export declare function mergeParts(index: LayerIndex, parts: readonly ReadPart[]): ReadBundle
 
 // ---------------------------------------------------------------- writers
@@ -326,7 +315,7 @@ export declare function writeLeftPart(o: {
 export declare function writePart(o: {
   paper: { id: string; version: number }; head: string; prev: string | null; pages: readonly [number, number]; views: readonly number[]
   left: readonly UnitWire[]; fileOnly: readonly (readonly [number, number])[]; layout: LayoutPart | LayoutRefusalRecord | null
-  addon: { manifest: RemovalManifest; tail: Uint8Array | null } | null; leftParts: readonly (Written & { page: number })[]
+  rules?: Readonly<Record<number, readonly number[]>> | null; leftParts: readonly (Written & { page: number })[]
 }): Promise<Written & { from: number; to: number }>
 /** the catalog, written by the Worker from the refs it committed (only sha256, bytes, from and to of each are read) */
 export declare function writeCatalog(o: {

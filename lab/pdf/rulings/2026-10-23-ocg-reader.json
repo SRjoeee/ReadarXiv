@@ -1,0 +1,227 @@
+{
+ "date": "2026-10-23",
+ "by": "the maintainer",
+ "quote": "\u5982\u679c\u6211\u4eec\u8fc7\u53bb\u672c\u8eab\u6709\u4e00\u4e9b\u505a\u5f97\u4e0d\u591f\u597d\u7684\u5730\u65b9\u88ab\u9519\u8bef\u5730\u5f53\u6210\u4e86\u4eca\u65e5\u6d4b\u8bd5\u6807\u51c6\uff0c\u800c\u5b9e\u9645\u4e0a\u6211\u4eec\u6539\u8fdb\u540e\u7684\u65b0\u7248\u672c\u6bd4\u4e4b\u524d\u7684\u7248\u672c\u66f4\u597d\u3001\u66f4\u63a5\u8fd1\u539f\u7248 PDF\uff0c\u8fd9\u79cd\u60c5\u51b5\u4e0b\u6211\u4eec\u8981\u5927\u80c6\u53bb\u505a\uff0c\u800c\u4e0d\u662f\u4ee5\u65e7\u7684\u3001\u8fd8\u4e0d\u591f\u597d\u7684\u7248\u672c\u4e3a\u6807\u51c6\u3002; 3 \u63a5\u53d7",
+ "english": "The maintainer's standing rule (2026-10-23, relayed by the coordinator): where something we did less well before was wrongly taken as today's test standard, and the new version is in fact better and closer to the original PDF, be bold and do it, rather than take the old, not good enough version as the standard; and decision 3 (\"3 \u63a5\u53d7\", 2026-10-22): what fails the check is shown untranslated. The coordinator told the maintainer of this ruling and its evidence (numbers and side-by-side crops of the pages that move); no further word was needed before merge. Coverage first: every unit of the body translated but formulas and code",
+ "on": "the per-unit optional-content erasure's reader side (pull request of feat/ocg-reader, REMOVAL 8): a drawn unit's ink is hidden by its groups on our page wrapped by optional content (layer-proto/hide.mjs, visibility.mjs); a unit whose ink the wrap could not hide (no group of its own in the document, or listed unhidden: marks, across, spell, page, bounds; among them a unit that opens with a macro the marker gives no mark, whose ink precedes its start mark) is shown as the original and not drawn; no rectangle is erased, no paper fill, no add-on",
+ "measures": [
+  "unitsLeft",
+  "cellsLeft",
+  "paraGapTight",
+  "fullSize"
+ ],
+ "targets": [
+  "de",
+  "es",
+  "fr",
+  "ja",
+  "ko",
+  "ru",
+  "zh"
+ ],
+ "scope": "every target: text units left English +4 an output (de, es, fr, ko, ru 1 -> 5; ja 3 -> 7; zh 36 -> 40) on two pages, 1706.03762v7 p1 (3 units with no group: the title block the marker does not mark, docs/PDF-READER.md \u00a719.9) and 2608.04322v1 p1 (its journal header, a spell refusal); cells left English on two tables, 1512.03385v1 p7 and 1810.04805v2 p7, the cells that open with a macro the marker gives no mark (1810.04805v2's \\bertbase and \\bertlarge among them; 14 cells of the pack, own.leaks): de 63 -> 67, es 63 -> 83, fr 13 -> 16, ja 67 -> 87, ko 46 -> 66, ru 81 -> 100, zh 11 -> 31; with them es full size 0.256 -> 0.253 and ko paragraph gaps tighter than the lines beside them 0.184 -> 0.185 (2608.04322v1 p1). No other model-tier measure moves; contentLost improves (ja 0.014 -> 0, zh 0.004 -> 0: 1810.04805v2 p3's placeholders shown once), and so does 1810.04805v2 p2's size spread",
+ "why": "The standard is closeness to the original page. A unit whose ink cannot be hidden glyph for glyph was drawn before over rectangles that erased what lay under them, its own ink and anything else there, and a macro's ink the marks own no unit for stayed under the translation; it is now shown as the original, untranslated (decision 3, \"3 \u63a5\u53d7\"), until the marker marks the title block and those macros (the engine lane's item). On the pixel tier, run on 8 outputs of the same pack, both engines: overlap regions 22 -> 7, stray text 6 -> 5, residue at the erased rectangles 807 -> 276, erase bites 3,972 -> 3,876, graphics erased 822 -> 5, glyphs lost 60 -> 43, ink lost 40 -> 33, math vanished 167 -> 161, crops shown twice 3 -> 0, content lost 1 -> 0. Glyphs lost rise on 2608.16117v1 alone (8 -> 22: p39's 14 are the old build's stray \"following are\", now hidden with their unit, whose translation ends a line earlier: closer to the original, counted as lost because the translation is shorter than the line it replaces)",
+ "evidence": {
+  "what": "the rules gate locally (rules-gate.mjs run and compare, model tier, 32 outputs): the merge base feat/ocg-file 5ce608e9 against feat/ocg-reader 581f9bad (owner 1's round-2 ownership 2d0a3964 merged), both on pack d65ecd41 (c10eafbb with the 7 papers' sources) and one instrument; the pixel tier of the layer gate on 8 outputs of the same pack, both engines, for the pixel numbers and the crops",
+  "pack": {
+   "before": "c10eafbb62f4a1dfff662159102e438750d0cd6320357e1a50cae9a181b00080",
+   "after": "d65ecd4111f4c38f79f62abaff6e87397923dbf2aab47fe1729bed26ffd915be",
+   "newObjects": 7
+  },
+  "crops": "/Users/cheongzhiyan/Downloads/readarxiv-test/route-ocg-evidence/ (20 pages). Left panel: arXiv's own PDF, its page rendered from the fixture's arxiv.pdf by pdftoppm (its sha256 in the label); middle: the old build (5ce608e9, erase and put back) over our page; right: the new build (581f9bad) over our page wrapped. The cases of the pixel tier's two rounds: 1810.04805v2 pp. 1, 2, 7 (a table's macro-led cells, now the original's), 4 (the footnote rule, kept), 16; 2609.26457v1 p25 (\\aidehuman's subscript); 2608.16117v1 pp. 16, 20 (cleveref's \"Appendix\"), 39 (see why), 17; formula edges 1512.03385v1 p3, 1706.03762v7 p4, 2307.16209v1 pp. 31, 47; heavy 2307.16209v1 p134; tables 2608.04322v1 p8, 2609.26457v1 p6; a hyphen past the rectangle 1512.03385v1 p10; Japanese 1512.03385v1-ja p3. Also own-ink-past-rectangles.png (our page against the reader's view) and 2608.16117v1-zh-p39-top-old-vs-new.png",
+  "table": [
+   {
+    "target": "de",
+    "pages": "every page",
+    "unitsLeft": [
+     1,
+     5
+    ],
+    "cellsLeft": [
+     63,
+     67
+    ],
+    "paraGapTight": [
+     0.009,
+     0.009
+    ],
+    "contentLost": [
+     0,
+     0
+    ]
+   },
+   {
+    "target": "es",
+    "pages": "every page",
+    "unitsLeft": [
+     1,
+     5
+    ],
+    "cellsLeft": [
+     63,
+     83
+    ],
+    "fullSize": [
+     0.256,
+     0.253
+    ],
+    "paraGapTight": [
+     0.014,
+     0.014
+    ],
+    "contentLost": [
+     0,
+     0
+    ]
+   },
+   {
+    "target": "fr",
+    "pages": "every page",
+    "unitsLeft": [
+     1,
+     5
+    ],
+    "cellsLeft": [
+     13,
+     16
+    ],
+    "paraGapTight": [
+     0.014,
+     0.014
+    ],
+    "contentLost": [
+     0,
+     0
+    ]
+   },
+   {
+    "target": "ja",
+    "pages": "every page",
+    "unitsLeft": [
+     3,
+     7
+    ],
+    "cellsLeft": [
+     67,
+     87
+    ],
+    "paraGapTight": [
+     0.014,
+     0.014
+    ],
+    "contentLost": [
+     0.014,
+     0
+    ]
+   },
+   {
+    "target": "ko",
+    "pages": "every page",
+    "unitsLeft": [
+     1,
+     5
+    ],
+    "cellsLeft": [
+     46,
+     66
+    ],
+    "paraGapTight": [
+     0.184,
+     0.185
+    ],
+    "contentLost": [
+     0,
+     0
+    ]
+   },
+   {
+    "target": "ru",
+    "pages": "every page",
+    "unitsLeft": [
+     1,
+     5
+    ],
+    "cellsLeft": [
+     81,
+     100
+    ],
+    "paraGapTight": [
+     0.014,
+     0.014
+    ],
+    "contentLost": [
+     0,
+     0
+    ]
+   },
+   {
+    "target": "zh",
+    "pages": "every page",
+    "unitsLeft": [
+     36,
+     40
+    ],
+    "cellsLeft": [
+     11,
+     31
+    ],
+    "paraGapTight": [
+     0.176,
+     0.176
+    ],
+    "contentLost": [
+     0.004,
+     0
+    ]
+   }
+  ],
+  "pixel": {
+   "outputs": 8,
+   "overlap": [
+    22,
+    7
+   ],
+   "stray": [
+    6,
+    5
+   ],
+   "residue": [
+    807,
+    276
+   ],
+   "bites": [
+    3972,
+    3876
+   ],
+   "graphicsErased": [
+    822,
+    5
+   ],
+   "glyphsLost": [
+    60,
+    43
+   ],
+   "lostInk": [
+    40,
+    33
+   ],
+   "vanished": [
+    167,
+    161
+   ],
+   "doubled": [
+    3,
+    0
+   ],
+   "contentLost": [
+    1,
+    0
+   ],
+   "unitsLeft": [
+    38,
+    42
+   ]
+  }
+ },
+ "status": "draft (owner 2 of the per-unit erasure, for the coordinator to put to the maintainer)"
+}

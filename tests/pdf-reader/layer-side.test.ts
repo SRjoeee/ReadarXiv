@@ -8,7 +8,7 @@ import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { createLayerSide, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
-import { made, N, ORIG, partInputs, TAILS } from './helpers/format-paper'
+import { made, N, ORIG, partInputs } from './helpers/format-paper'
 import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, renders, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
@@ -327,23 +327,17 @@ describe('L6: the pane\'s resolution', () => {
 })
 
 describe('L10 and L13: the composed documents', () => {
-  it('one composed task a tail, opened with the view\'s assets, PDF_OPTIONS and disableAutoFetch, the tails told so far', async () => {
+  it('one composed task, opened once with the view\'s assets, PDF_OPTIONS and disableAutoFetch, and no tail (the base whole)', async () => {
     const s = await setup()
     s.side.tell(await ALL())
     await settle(s)
-    // the open over the parts read then (a units fetch first, the parts later: here, all of them), or the parts one by one
-    expect(s.composed.length).toBeGreaterThanOrEqual(1)
-    expect(s.composed.length).toBeLessThanOrEqual(3)
-    for (const c of s.composed) expect(c.options).toEqual({ ...ASSETS, ...PDF_OPTIONS, disableAutoFetch: true })
-    const lens = s.composed.map(c => c.tail?.length ?? 0)
-    expect(new Set(lens).size).toBe(lens.length)
-    expect(lens.at(-1)).toBe(TAILS[0]!.tail.length + TAILS[1]!.tail.length)
-    const whole = s.composed.at(-1)?.tail as Uint8Array
-    expect([...whole.subarray(0, TAILS[0]!.tail.length)]).toEqual([...TAILS[0]!.tail])
+    expect(s.composed.length).toBe(1)
+    expect(s.composed[0]?.options).toEqual({ ...ASSETS, ...PDF_OPTIONS, disableAutoFetch: true })
+    expect(s.composed[0]?.tail).toBeNull()
     expect(s.door.layer?.stats().parts).toEqual({ through: 4, told: 3 })
   })
 
-  it('each composed task is destroyed once no door reads it, or at dispose: none twice, none left; again() reuses the latest', async () => {
+  it('the composed task is the same over parts told one by one and over again(); destroyed at dispose, once', async () => {
     const s = await setup()
     const m = await M()
     s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref) })
@@ -352,18 +346,16 @@ describe('L10 and L13: the composed documents', () => {
     await settle(s)
     s.side.tell({ parts: [jobRef(m, 1), jobRef(m, 2)], end: { through: N } })
     await settle(s)
-    expect(s.composed.length).toBe(3)
-    // the first two let go as the door moved past them
-    expect(s.destroyed.sort()).toEqual(['destroy composed 0', 'destroy composed 1'])
+    expect(s.composed.length).toBe(1)
+    expect(s.destroyed).toEqual([])
     const opens = s.opens
     s.side.again()
     await settle(s)
     expect(s.opens).toBe(opens + 1)
-    expect(s.composed.length).toBe(3)
-    expect(s.destroyed.length).toBe(2)
+    expect(s.composed.length).toBe(1)
     s.side.dispose()
     await flush(10)
-    expect(s.destroyed.sort()).toEqual(['destroy composed 0', 'destroy composed 1', 'destroy composed 2'])
+    expect(s.destroyed).toEqual(['destroy composed 0'])
   })
 
   it('a composed task that does not open: refused, the right on its places, no layer page drawn after', async () => {
@@ -457,12 +449,10 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     viewer.render(1, null, { width: Math.floor(pv.viewport.width), height: Math.floor(pv.viewport.height), sx: 1, sy: 1 })
     return pv.canvas as HTMLCanvasElement
   }
-  const spies = (s: Setup) => { const V = internalsOf(s.view); return { left: vi.spyOn(V.left, 'canvas'), place: vi.spyOn(V.places, 'canvas') } }
   const copyOf = (s: Setup, n: number) => s.doors[0]?.copies.filter(c => c[0] === n) ?? []
 
   it('the copy of a page is drawn from the composed document, and the left\'s canvas and the place\'s (the original\'s page view) are never asked, at the commit or after a zoom', async () => {
     const s = await oursSetup()
-    const asked = spies(s)
     await nearOn(s, [1, 2])
     const canvas = leftDrawn()
     s.side.tell(await ALL(true))
@@ -476,20 +466,16 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     await settle(s, 60)
     expect(copyOf(s, 1).length).toBeGreaterThan(1)
     for (const c of copyOf(s, 1)) expect(c[1], 'the left\'s canvas is no source of ours').not.toBe(canvas)
-    expect(asked.left).not.toHaveBeenCalled()
-    expect(asked.place).not.toHaveBeenCalled()
   })
 
-  it('a head over arXiv\'s PDF (the writer\'s `arxiv`, which a bundle of 7 reads as too) takes the copy as before: from the left\'s canvas where PDF.js drew the page', async () => {
+  it('a head over arXiv\'s PDF (the writer\'s `arxiv`, which a bundle of 7 reads as too) is drawn the same way: its copy the door\'s, the left\'s canvas never asked', async () => {
     const s = await arxivSetup()
-    const asked = spies(s)
     await nearOn(s, [1, 2])
     const canvas = leftDrawn()
     s.side.tell(await ALL(false))
     await settle(s)
     expect((await s.side.index())?.head.base).toMatchObject({ source: 'arxiv' })
-    expect(copyOf(s, 1)[0]?.[1]).toBe(canvas)
-    expect(asked.left).toHaveBeenCalled()
+    expect(copyOf(s, 1)[0]?.[1]).not.toBe(canvas)
   })
 
   it('a page of a part with no layout is the original\'s: never asked of the door, never swapped, its place keeps the original\'s page view; a page of a part with a layout is laid', async () => {
@@ -537,7 +523,7 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
   it('a part that gains no layout mid-run (a fork told after its pages were laid): the page only it holds comes back as the original\'s, the pages of the others (and the one a unit of the first runs on onto) stay the layer\'s', async () => {
     const m = await M(true)
     const input = partInputs(m.head.sha256, m.lefts)[1]!
-    const refused = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], addon: null })
+    const refused = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], rules: null })
     const s = await oursSetup({ extra: [refused] })
     await nearOn(s, [1, 2, 3])
     s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)) })
@@ -559,7 +545,7 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     expect(m.readParts[0]?.pages).toEqual([1, 1])
     expect(m.readParts[0]?.reach).toBe(2)
     const input = partInputs(m.head.sha256, m.lefts)[1]!
-    const b = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], addon: null })
+    const b = await writePart({ ...input, prev: m.parts[0]!.sha256, layout: { refused: 'carry', why: 'the test' }, fileOnly: [], rules: null })
     const refB = { ...(b.ref as Ref), prev: m.parts[0]!.sha256 }
     const head = { head: m.head.ref, units: m.chunks.map(c => c.ref) }
     const check = async (s: Setup, what: string) => {
@@ -636,45 +622,34 @@ describe('L18: a layer whose base is a delta over arXiv\'s PDF (the delta route)
     return pv.canvas as HTMLCanvasElement
   }
   const copyOf = (s: Setup, n: number) => s.doors[0]?.copies.filter(c => c[0] === n) ?? []
-  const spies = (s: Setup) => { const V = internalsOf(s.view); return { left: vi.spyOn(V.left, 'canvas'), place: vi.spyOn(V.places, 'canvas') } }
 
-  it('a page the delta does not replace is the original\'s in the composed document: its copy is the left\'s canvas, drawn at its k, and the composed document is not rendered for it; a replaced page\'s copy is the composed document\'s page, the left\'s canvas never asked for it', async () => {
+  it('every page\'s copy is the door\'s, from the composed document (render A): a page the delta does not replace with its annotations as the render has them, a replaced one with them off; the left\'s canvas never asked', async () => {
     const s = await deltaSetup()
-    const asked = spies(s)
     await nearOn(s, [1, 2, 3, 4])
-    const canvas1 = leftDrawn(1), canvas2 = leftDrawn(2)
+    const canvas1 = leftDrawn(1)
     renders.length = 0
     s.side.tell(await ALL(true, REPLACED))
     await settle(s)
     expect((await s.side.index())?.head.base).toMatchObject({ source: 'ours', kind: 'delta', replaced: REPLACED })
-    // page 1: not replaced, the left\'s canvas
-    expect(copyOf(s, 1)[0]?.[1]).toBe(canvas1)
-    expect(renders.filter(r => r.page === 1)).toEqual([])
-    // page 2: replaced, the composed document\'s page, though the left\'s canvas of the original is drawn at the same k
-    expect(copyOf(s, 2)[0]?.[1]).not.toBe(canvas2)
-    expect(renders.filter(r => r.page === 2)).toHaveLength(1)
-    expect(asked.left.mock.calls.filter(c => c[0] === 2)).toEqual([])
+    expect(copyOf(s, 1)[0]?.[1]).not.toBe(canvas1)
+    expect(renders.filter(r => r.page === 1).map(r => r.annotationMode)).toEqual([undefined])
+    expect(renders.filter(r => r.page === 2).map(r => r.annotationMode)).toEqual([0])
     // (pages 1 to 3 are drawn; page 4 is the third part\'s, which records no layout: the original\'s page)
     for (const n of [1, 2, 3]) expect(content(s, n), `page ${n}`).toBe('layer')
     expect(content(s, 4)).toBe('original')
   })
 
-  it('a zoom draws the copies again by the same rule: the unreplaced page from the left\'s canvas, the replaced one from the document', async () => {
+  it('a zoom draws every copy again from the composed document, at the new k', async () => {
     const s = await deltaSetup()
     await nearOn(s, [1, 2])
-    leftDrawn(1)
     s.side.tell(await ALL(true, REPLACED))
     await settle(s)
-    const before = [copyOf(s, 1).length, copyOf(s, 2).length]
-    renders.length = 0
+    const before = [copyOf(s, 1).length, copyOf(s, 2).length], k0 = copyOf(s, 1)[0]?.[2]
     s.view.zoomTo(0.9)
-    await flush(10)
-    // (PDF.js redraws the left\'s page 1 at the new scale: the fake draws it on request)
-    const canvas = leftDrawn(1)
     await settle(s, 60)
-    expect(copyOf(s, 1).at(-1)?.[1]).toBe(canvas)
+    expect(copyOf(s, 1).length).toBeGreaterThan(before[0] as number)
     expect(copyOf(s, 2).length).toBeGreaterThan(before[1] as number)
-    expect(renders.filter(r => r.page === 1)).toEqual([])
+    expect(copyOf(s, 1).at(-1)?.[2]).not.toBe(k0)
   })
 
   it('a replaced page is drawn from the composed document with the original\'s annotations off: its links are the layer\'s own (the door\'s), once; no element of the composed document\'s annotation layer is on any laid page', async () => {
@@ -709,22 +684,13 @@ describe('L18: a layer whose base is a delta over arXiv\'s PDF (the delta route)
     expect(renders.some(r => r.page === 1)).toBe(true)
     expect(renders.every(r => r.annotationMode === undefined)).toBe(true)
   })
-
-  it('a head over arXiv\'s PDF is as it was (the shortcut of before the route)', async () => {
-    const s = await setup({ ours: false })
-    await nearOn(s, [1])
-    const canvas = leftDrawn(1)
-    s.side.tell(await ALL(false))
-    await settle(s)
-    expect(copyOf(s, 1)[0]?.[1]).toBe(canvas)
-  })
 })
 
 describe('L15: a fork', () => {
   it('a different part at a page told opens the door again over the new chain', async () => {
     const m = await M()
     const input = partInputs(m.head.sha256, m.lefts)[1]!
-    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const s = await setup({ extra: [other] })
     await nearOn(s, [1])
     // a job's parts (no end told yet)
@@ -780,7 +746,7 @@ describe('L15: a fork', () => {
   it('a fork told after the catalog by a job\'s part is passed over; a catalog naming it opens the door again', async () => {
     const m = await M()
     const input = partInputs(m.head.sha256, m.lefts)[1]!
-    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const s = await setup({ extra: [other] })
     await nearOn(s, [1])
     s.side.tell(await ALL())
@@ -1115,9 +1081,8 @@ describe('the PR\'s review', () => {
 
   it('a refusal after pages were laid puts the right\'s shapes back to the original\'s with its places (4288144909)', async () => {
     const m = await M()
-    const s = await setup({ composedFailAt: [2] })
+    const s = await setup({ openFailAt: [1] })
     await nearOn(s, [1])
-    // the door opened over no part (the original alone), then part 1's tail: the third composed document fails
     s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref) })
     await settle(s)
     s.side.tell({ parts: [jobRef(m, 0)] })
@@ -1125,10 +1090,10 @@ describe('the PR\'s review', () => {
     expect(content(s, 1)).toBe('layer')
     await want(s, 1)
     expect(s.side.probe().shapesLaid).toBe(1)
-    // the next part's tail: its composed document does not open
-    s.side.tell({ parts: [jobRef(m, 1)] })
+    // a later attempt: the door does not open again
+    s.side.again()
     await settle(s)
-    expect(s.side.probe()).toMatchObject({ state: 'refused', why: 'composed', shapesLaid: 0 })
+    expect(s.side.probe()).toMatchObject({ state: 'refused', why: 'open', shapesLaid: 0 })
     expect(content(s, 1)).toBe('original')
   })
 
@@ -1175,7 +1140,7 @@ describe('the PR\'s review', () => {
   it('again() lets the earlier attempt\'s titles go from the contents; a fork keeps the outline\'s pages (4288065086, 4288065279, 4288144903)', async () => {
     const m = await M()
     const input = partInputs(m.head.sha256, m.lefts)[1]!
-    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const s = await setup({ extra: [other] })
     // the original's own outline: 'Intro' on page 3
     const doc = internalsOf(s.view).left.doc() as unknown as Record<string, unknown>
@@ -1221,7 +1186,7 @@ describe('the PR\'s review, second round', () => {
 
   it('a refusal while a left part is fetched aborts that fetch (4289061885)', async () => {
     const m = await M()
-    const s = await setup({ composedFailAt: [2] })
+    const s = await setup({ openFailAt: [1] })
     await nearOn(s, [1])
     s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref) })
     await settle(s)
@@ -1231,7 +1196,7 @@ describe('the PR\'s review, second round', () => {
     await want(s, 1)
     const signal = s.signals.get(m.lefts[1]!.sha256)
     expect(signal?.aborted).toBe(false)
-    s.side.tell({ parts: [jobRef(m, 1)] })
+    s.side.again()
     await settle(s)
     expect(s.side.probe().state).toBe('refused')
     expect(signal?.aborted).toBe(true)
@@ -1240,7 +1205,7 @@ describe('the PR\'s review, second round', () => {
   it('a fork lets a page\'s failed left part be asked again at once, from the new door (4289061968)', async () => {
     const m = await M()
     const input = partInputs(m.head.sha256, m.lefts)[1]!
-    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, addon: { ...input.addon!, manifest: { ...input.addon!.manifest, stats: { removed: 9 } } } })
+    const other = await writePart({ ...input, prev: m.parts[0]!.sha256, rules: { 2: [72, 501, 540, 501.4] } })
     const s = await setup({ extra: [other] })
     await nearOn(s, [2])
     s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1].map(i => jobRef(m, i)) })

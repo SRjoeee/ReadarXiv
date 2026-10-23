@@ -2,7 +2,6 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, MIXED_FILL, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, PH_KINDS, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
-import { pagePlansOf } from '@/pdf-reader/engine/layout/addon.mjs'
 import { fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
@@ -12,7 +11,6 @@ import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
 import { LINKS_MAX, markedPages, marksOfHead, readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { MAX_LINKS } from '@/pdf-reader/engine/layer-proto/links.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
-import { inkOfPage } from '@/pdf-reader/engine/layer-proto/removal.mjs'
 
 // The layout maker over the fake world of helpers/make-world.ts
 
@@ -88,8 +86,8 @@ async function byPages(w: World, log: string) {
   const sm = await dm.byStream({ head: head2, events: events2 } as never)
   if ('refused' in sm) throw new Error('the default marked stream refused what the whole made')
   return {
-    whole, merged: mergeLayout([st.layout() as never]), plans: st.plans, marked: mergeLayout([sb.layout() as never]), markedPlans: sb.plans, late: both.stats.late, rule3: { whole: whole3.file, merged: mergeLayout([s3.layout() as never]) },
-    defaults: { whole: wholeD.file, plans: wholeD.plans, stream: mergeLayout([sd.layout() as never]), streamPlans: sd.plans, marked: mergeLayout([sm.layout() as never]), markedPlans: sm.plans, late: dm.stats.late },
+    whole, merged: mergeLayout([st.layout() as never]), cellRules: st.cellRules ?? null, marked: mergeLayout([sb.layout() as never]), markedRules: sb.cellRules ?? null, late: both.stats.late, rule3: { whole: whole3.file, merged: mergeLayout([s3.layout() as never]) },
+    defaults: { whole: wholeD.file, cellRules: ('cellRules' in wholeD ? wholeD.cellRules : null) ?? null, stream: mergeLayout([sd.layout() as never]), streamRules: sd.cellRules ?? null, marked: mergeLayout([sm.layout() as never]), markedRules: sm.cellRules ?? null, late: dm.stats.late },
   }
 }
 /** what a file's stats count, but its times and its gzip size */
@@ -108,16 +106,16 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
   if (four) {
     const rows = (f: Record<string, unknown>) => ({ ...Object.fromEntries(PART_KEYS.map(k => [k, f[k]])), colours: f.colours ?? null, unlaid: f.unlaid ?? null })
     expect(rows(four.merged as never)).toEqual(rows(four.whole.file as never))
-    expect(four.plans).toEqual(four.whole.plans)
+    expect(four.cellRules).toEqual(four.whole.cellRules ?? null)
     expect(rows(four.marked as never)).toEqual(rows(four.whole.file as never))
-    expect(four.markedPlans).toEqual(four.whole.plans)
+    expect(four.markedRules).toEqual(four.whole.cellRules ?? null)
     expect(four.late).toEqual({ rows: 0, vetoes: 0 })
     if (four.rule3) expect(rows(four.rule3.merged as never)).toEqual(rows(four.rule3.whole as never))
     const d = four.defaults
     expect(rows(d.stream as never)).toEqual(rows(d.whole as never))
     expect(rows(d.marked as never)).toEqual(rows(d.whole as never))
-    expect(d.streamPlans).toEqual(d.plans)
-    expect(d.markedPlans).toEqual(d.plans)
+    expect(d.streamRules).toEqual(d.cellRules)
+    expect(d.markedRules).toEqual(d.cellRules)
     expect(d.late).toEqual({ rows: 0, vetoes: 0 })
   }
   expect(parseLayout(new TextEncoder().encode(text))).toEqual(one.file)
@@ -1604,26 +1602,24 @@ describe('makeLayout with the add-on\'s plans (`plans`): each page\'s operator l
     marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[1] as Run), 688], ['1s', 2, 72, 700], ['1e', 2, 267, 648], ['p1.1a', 2, 217, 700], ['2s', 4, 72, 700], ['2e', 4, endOf({ s: words(40, 3), x: 72, y: 700 }), 700]],
     units: [unit('para', [text(words(0, 20))]), { ...(DISPLAY.units[0] as SourceUnit) }, unit('para', [text(words(40, 3))])],
   }
-  it('the plans are pagePlansOf\'s of the same document, a dirty page\'s removal and alignment facts among them, and the file is the same bytes', async () => {
+  it('the cell rules are pageRules\' of the same ink, page by page, and the file is the same bytes', async () => {
     const marks = await marksOf(w)
     const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' }
     const asked: number[] = []
-    const got = await makeLayout({ ...base, arxiv: baseOf(w, asked), plans: true })
+    const got = await makeLayout({ ...base, arxiv: baseOf(w, asked), cellRules: true })
     const want = await makeLayout({ ...base, arxiv: baseOf(w) })
     if (!('file' in got) || !('file' in want)) throw new Error('refused')
     expect(encodeLayout(got.file)).toBe(encodeLayout(want.file))
     expect(asked).toEqual([1, 2, 3, 4])
-    const { plans } = await pagePlansOf({ doc: baseOf(w) as never, OPS, index: indexLayout(got.file) })
-    expect(got.plans).toEqual(plans)
-    expect(plans.get(1)?.remove?.align.codes.length).toBeGreaterThan(0)
-    expect(plans.has(4)).toBe(false)
-    // without `plans`, none
-    expect('plans' in want).toBe(false)
+    // (no cell on these pages: no rule near one)
+    expect(got.cellRules).toEqual(new Map())
+    // without `cellRules`, none
+    expect('cellRules' in want).toBe(false)
   })
 
-  it("a page the walk does not read whole, capped or timed out, keeps its units the original's end to end: none located, no plan, its ink refused", async () => {
+  it("a page the walk does not read whole, capped or timed out, keeps its units the original's end to end: none located, no cell rules", async () => {
     const marks = await marksOf(w)
-    const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', plans: true }
+    const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', cellRules: true }
     const slow: Page[] = w.pages.map((pg, i) => (i === 3 ? { ...pg, ops: 'slow' } : pg))
     // (page 4 past OPS_CAP, the world's; or walked past the backstop on a clock that moves INK_MS at each reading, which a
     // page of fewer steps than come between two readings never sees)
@@ -1636,18 +1632,11 @@ describe('makeLayout with the add-on\'s plans (`plans`): each page\'s operator l
     expect(capped.stats.capped).toEqual([4])
     expect(late.stats.inkTimedOut).toEqual([4])
     for (const got of [capped, late]) {
-      // unit 2, the page's only one, located nowhere: the original's; no plan of the page, nothing of it removed
+      // unit 2, the page's only one, located nowhere: the original's; no rules of the page
       expect(got.file.units.map(u => u[0])).not.toContain(2)
       expect(indexLayout(got.file).onPage(4)).toEqual([])
-      expect(got.plans?.has(4)).toBe(false)
-      expect(got.plans?.has(1)).toBe(true)
+      expect(got.cellRules?.has(4)).toBe(false)
     }
-    // and the removal's own reading of the page (the gate's, removal.mjs inkOfPage) refuses it, no prefix of its ink given
-    expect(await inkOfPage(OPS, await baseOf(w).getPage(4))).toEqual({ unread: true, reason: 'capped' })
-    expect(await inkOfPage(OPS, await arxivOf(slow).getPage(4), null, null, { msMax: -1 })).toEqual({ unread: true, reason: 'timedOut' })
-    const whole = await inkOfPage(OPS, await baseOf(w).getPage(1))
-    expect(whole.unread).toBeFalsy()
-    if (!whole.unread) expect(whole.glyphs.length).toBeGreaterThan(0)
   })
 })
 
