@@ -217,7 +217,11 @@ proof's own reading did. The composed bytes and the object layer's three documen
 (an adversarial review of the first form found both held through the readers: up to the original's size again on the 46 MB
 pair). Its comparison became exact: before, the items' places within 0.01; now
 every field of every item, which the pack meets on every page (290 pages, 97,702 items; 106,763 wrapped). On the pack's 8 pairs,
-wrapped and not: the same verdicts (8 of 8 both ways) and the same deltas (2.56 %, 3.06 % wrapped). In Node, the proof and the two
+wrapped and not: the same verdicts (8 of 8 both ways) and the same deltas (2.56 %, 3.06 % wrapped). On 116 more of the lab's
+pairs (fixtures made at next for another check): 99 with a delta, the proof passing on 99 of 99 with the readers and without,
+the composed text items ours or arXiv's exactly on 1,900 pages (711,517 items); the other 17 refused by deltaOf before any proof
+(`delta-bound`), as before. A spurious refusal of the exact comparison would cost bytes alone (the whole base served): the random
+50-paper sweep of the next test build counts `delta-proof` refusals, to be read against this. In Node, the proof and the two
 readings together: 0.6 to 1.8 s less CPU a paper (1706.03762v7 2.2 to 1.5 s, 2602.23285v2 2.0 to 1.4, 2608.16117v1 2.1 to 1.5,
 2307.16209v1 5.0 to 3.2), the memory after them the same within 2 MiB; its transient peak is the same once the host collects
 before it opens arXiv's PDF (without that collection, 63 MiB of the proof's garbage were still uncollected on the 147-page
