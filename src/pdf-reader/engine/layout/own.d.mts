@@ -10,6 +10,6 @@ export interface OwnGlyph { n: number; k: number; u: string; x0: number; x1: num
 export interface OwnPage { glyphs: OwnGlyph[]; boxes: ArrayLike<number>; paths: ArrayLike<number>; points: { name: string; glyph: number; box: number }[]; boxAt: ArrayLike<number>; view?: number[] }
 export interface OwnUnit { groups: Set<string>; pages: Set<number>; unhidden: Unhidden | null; labelKept: boolean }
 export interface OwnStats { units: number; unhidden: Record<Unhidden, number>; spell: number[]; labelKept: number; leaks: { count: number; units: number[] } }
-export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; follows?: ((name: string) => unknown) | null }): { glyphs: (string | null)[][]; boxes: (string | null)[][]; units: Map<number, OwnUnit>; stats: OwnStats }
+export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; follows?: ((name: string) => unknown) | null; texts?: ReadonlyMap<string, string> | null }): { glyphs: (string | null)[][]; boxes: (string | null)[][]; units: Map<number, OwnUnit>; stats: OwnStats }
 /** the glyphs and boxes the ownership of a paper may visit */
 export declare const OWN_WORK: number

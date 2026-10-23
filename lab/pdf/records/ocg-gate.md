@@ -71,3 +71,36 @@ browser for each paper, on a heavily loaded machine (load average 70 to 120):
 - From REMOVAL 8 (feat/ocg-reader) on, G2' (text and labels OFF against the remover's cut of the same ownership) is no longer
   measured: the remover, its only oracle, is deleted there (docs/route/ocg-erasure.md §4.2), and the spike no longer runs it.
   The G2' columns of this record are its last runs, on the file side's branch.
+
+## The run at `a7d0f6b5` (the coverage round: the sweep of 2026-10-24, REMOVAL 9)
+
+The gate pack's eight papers (the scratch pack of LAYOUT 12, whose front matter has no marks: its authors' and notes' units
+are the `marks` left, LAYOUT 17's marking absent there). Counts: `marks` 14 (was 18 on `next`), `spell` 1 (2608.04322v1's
+title, which `986edb84` then trims to 0), `own.leaks` 0 (was 4: 1512.03385v1's `\#` cells now own their lead macro), labels
+kept 7, proof 8/8, deltas 2,560,409 bytes. Chromium, GPU canvas, a fresh browser for each paper: G1 pages with px outside
+split glyphs and image edges none, on every page of the eight.
+
+On the sweep's papers (lab/pdf/data/unhidden-2026-10-24, our base's ownership read again with this tree; the heads' counts
+before): 2610.19159v1 37 -> 2 (its page 3 wrapped: a soft mask's paths), 2610.20595v1 4 -> 1, 2610.20848v1 5 -> 4, 2610.21098v1
+8 -> 4, 2610.20581v1 8 -> 6, 2610.20967v1 9 -> 0, 2610.21547v1 22 -> 21, 2610.22065v1 14 -> 14. What stays: the source
+reader's (a wrapper macro's own words, `\nb{4}` setting "Notebook 4"; a Latin-1 source's accented letters dropped; both
+branches of `\ifdefined` in a unit), foreign ink inside a range (elsarticle's e-mail note, a footnote's URL), the title
+blocks' unmarked placeholders, and acmart's title, whose marks the ACM reference block sets a second time.
+
+## The run at `497301cd` + the text-symbol lead (pack `8a74b1a2`, its base records carrying the marks' texts)
+
+The re-packed gate pack (LAYOUT 18, the marks' `marking.texts` in each base.json), the eight papers. Counts: `marks` 4
+(1810.04805v2 u67, u260, u261 and 2608.16117v1 u102: units with no mark at all), `spell` 3 (1706.03762v7's authors u3 and u5,
+2608.04322v1's note u2), `own.leaks` 0, proof 8/8. Chromium, a fresh browser for each paper: G1 pages with px outside split
+glyphs and image edges none on every page of the eight, on the GPU canvas and on the CPU canvas alike.
+
+The layer gate's pixel tier on 8 outputs of the same pack (1512.03385v1-zh, -ja, 1706.03762v7-zh, 1810.04805v2-zh,
+2307.16209v1-zh, 2608.04322v1-zh, 2608.16117v1-zh, 2609.26457v1-zh), next 695190d2's engine against this one's, one
+instrument (this tree's): overlap regions 7 -> 7, stray text 5 -> 5, erase bites 3,929 -> 3,929, vanished math 161 -> 161,
+doubled crops 0 -> 0, lost ink 33 -> 33, graphics erased 5 -> 5, glyphs lost 43 -> 43; residue 279 -> 287 (1512.03385v1 p7, zh
+and ja, 4 each: the table's rules crossing the rectangles of the `\#` cells now drawn, the page's own ink, which stays); cells
+left English 86 -> 62, cells translated 41.0 % -> 43.8 %, text units left English 39 -> 38. The run before the text-symbol
+lead (a `\#` cell's "#" in `.p`, which the reader hides only for a found placeholder, so the original stood under the drawn
+one) had overlap 7 -> 20 (1512.03385v1 p7, 1810.04805v2 p7): the lead of text symbols alone now goes with the text.
+Crops of 1810.04805v2 p7 for the ruling (arXiv's own page, the old build, the new):
+`~/Downloads/readarxiv-test/route-ocg-cover-evidence/1810.04805v2-zh-p7-arxiv-old-new.png`.

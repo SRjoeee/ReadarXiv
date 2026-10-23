@@ -1283,7 +1283,20 @@ export function followsOf(units, names) {
     }
     const want = asSet(after).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT)
     const next = q < u.pieces.length ? nameOf(i, q) : null
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked: !!next && !names.has(`${next}a`), group }
+    const blocked = !!next && !names.has(`${next}a`)
+    // (`through`, the erasure's: past the unmarked visible pieces right after it, nothing but white space between, the next
+    // marked piece's opening; null where text or the unit's end comes first)
+    let through = null
+    if (blocked && !/\S/.test(after)) {
+      for (let r = q + 1; r < u.pieces.length; r++) {
+        const p = u.pieces[r]
+        if (p.t === 'text') { if (/\S/.test(plainTranslated([p]))) break; continue }
+        const c = classOf(p)
+        if (!c) continue
+        if (names.has(`${nameOf(i, r)}a`)) { through = `${nameOf(i, r)}a`; break }
+      }
+    }
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
   }
 }
 

@@ -175,6 +175,16 @@ describe('a run is accepted only when it is whole', () => {
   })
 })
 
+describe('an output that did not run says why where the engine did not load', () => {
+  it('names the engine\'s module in the problem, and nothing else of the reason', () => {
+    const failed = (why: string) => ({ ...run(base()), failed: [{ name: '1512.03385v1-de', why }] })
+    const r = judge(run(base()), failed('layer-proto/run.mjs: Failed to fetch dynamically imported module: http://127.0.0.1:58489/engine/layer-proto/run.mjs'))
+    expect(r.ok).toBe(false)
+    expect(r.problems).toContain('1512.03385v1-de did not run in the head run: the engine\'s layer-proto/run.mjs did not load')
+    expect(judge(run(base()), failed('TypeError: the paper says something')).problems).toContain('1512.03385v1-de did not run in the head run')
+  })
+})
+
 describe('a regression fails the run unless a ruling covers its measure and its target', () => {
   const regressed = () => judge(run(base()), run(base({ ja: [{ textDrawn: 9 }, {}] })), { rulings: [] })
   const ruling = (over: Record<string, unknown> = {}) => parseRuling({ date: '2026-10-08', by: 'the maintainer', quote: 'accepted', english: 'accepted', measures: [labelOf('unitsLeft')], targets: ['ja'], scope: 'one unit of one paper', why: 'the unit is a caption the face lacks', ...over }, 'ja-unit.json')
@@ -565,6 +575,9 @@ describe('the job log is public: the gate\'s output is filtered before it is ech
     expect(publicLine(`ok   ${NAME}: 12 pages, 111/111 text units drawn, in 9 parts (3.0 s)`)).toContain('in 9 parts')
     expect(publicLine(`FAIL ${NAME}: TypeError: cannot read ${TEXT} at layer-proto/run.mjs:12`)).toBe(`FAIL ${NAME}`)
     expect(publicLine(`FAIL ${NAME}: v0 changed its inputs (the geometry or the units) as it drew`)).toBe(`FAIL ${NAME}`)
+    // (the engine's own module that did not load in the page is named: a repository path, no paper's text — #456's head run)
+    expect(publicLine(`FAIL ${NAME}: layer-proto/run.mjs: Failed to fetch dynamically imported module: http://127.0.0.1:58489/engine/layer-proto/run.mjs (0.1 s)`)).toBe(`FAIL ${NAME}: the engine's layer-proto/run.mjs did not load`)
+    expect(publicLine(`FAIL ${NAME}: layer-proto/run.mjs: Failed to fetch dynamically imported module: http://example.com/${TEXT.replaceAll(' ', '%20')}.mjs`)).toBe(`FAIL ${NAME}`)
     expect(publicLine(`FAIL requests that would have left the machine: http://example.com/${TEXT.replaceAll(' ', '%20')}`)).toBe('FAIL requests that would have left the machine')
     expect(publicLine('model tier: 29 outputs, 483 pages in 34.2 s on 4 workers; the run in /work/out/layer-gate/model-010c5789-2026-10-08T08-05-36-198Z.json')).toMatch(/^model tier: 29 outputs/)
     expect(publicLine(`completeness (spec §5): 1 of 29 outputs fail: ${NAME} [missing, twice]`)).toContain(`${NAME} [missing, twice]`)
