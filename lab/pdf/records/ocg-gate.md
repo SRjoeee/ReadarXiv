@@ -71,3 +71,18 @@ browser for each paper, on a heavily loaded machine (load average 70 to 120):
 - From REMOVAL 8 (feat/ocg-reader) on, G2' (text and labels OFF against the remover's cut of the same ownership) is no longer
   measured: the remover, its only oracle, is deleted there (docs/route/ocg-erasure.md §4.2), and the spike no longer runs it.
   The G2' columns of this record are its last runs, on the file side's branch.
+
+## The run at `a7d0f6b5` (the coverage round: the sweep of 2026-10-24, REMOVAL 9)
+
+The gate pack's eight papers (the scratch pack of LAYOUT 12, whose front matter has no marks: its authors' and notes' units
+are the `marks` left, LAYOUT 17's marking absent there). Counts: `marks` 14 (was 18 on `next`), `spell` 1 (2608.04322v1's
+title, which `986edb84` then trims to 0), `own.leaks` 0 (was 4: 1512.03385v1's `\#` cells now own their lead macro), labels
+kept 7, proof 8/8, deltas 2,560,407 bytes. Chromium, GPU canvas, a fresh browser for each paper: G1 pages with px outside
+split glyphs and image edges none, on every page of the eight.
+
+On the sweep's papers (lab/pdf/data/unhidden-2026-10-24, our base's ownership read again with this tree; the heads' counts
+before): 2610.19159v1 37 -> 2 (its page 3 wrapped: a soft mask's paths), 2610.20595v1 3 -> 1, 2610.20848v1 5 -> 4, 2610.21098v1
+8 -> 4, 2610.20581v1 8 -> 6, 2610.20967v1 9 -> 0, 2610.21547v1 22 -> 21, 2610.22065v1 14 -> 14. What stays: the source
+reader's (a wrapper macro's own words, `\nb{4}` setting "Notebook 4"; a Latin-1 source's accented letters dropped; both
+branches of `\ifdefined` in a unit), foreign ink inside a range (elsarticle's e-mail note, a footnote's URL), the title
+blocks' unmarked placeholders, and acmart's title, whose marks the ACM reference block sets a second time.
