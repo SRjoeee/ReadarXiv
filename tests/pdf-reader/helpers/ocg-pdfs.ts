@@ -46,7 +46,7 @@ export function markShows(text: string, { every = 3, first = 0 } = {}) {
 }
 
 /** sample-1 with its pages' streams replaced: `edit(text, page)` the page's new content (markShows by default) */
-export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null | ((text: string, page: number) => string), every = 3, foreignOC = false, form = null as string | null, type3 = false as boolean | 'noWidths', fonts = null as null | ((ctx: PL.PDFContext) => Record<string, PL.PDFRef>) } = {}) {
+export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null | ((text: string, page: number) => string), every = 3, foreignOC = false, form = null as string | null, type3 = false as boolean | 'noWidths', fonts = null as null | ((ctx: PL.PDFContext) => Record<string, PL.PDFRef>), tweak = null as null | ((doc: PL.PDFDocument) => void | Promise<void>) } = {}) {
   const doc = await PL.PDFDocument.load(readFileSync(SAMPLE_1), { updateMetadata: false })
   let first = 0
   for (const p of pages) {
@@ -79,6 +79,8 @@ export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null |
       res.set(PL.PDFName.of('Properties'), ctx.obj({ fA, fB }))
     }
   }
+  // (`tweak`: the document changed by the case before it is written: its own layers, a page's /Properties)
+  if (tweak) await tweak(doc)
   return { bytes: new Uint8Array(await doc.save({ useObjectStreams: false })), units: first }
 }
 

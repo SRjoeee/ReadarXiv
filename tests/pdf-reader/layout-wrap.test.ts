@@ -89,7 +89,8 @@ describe('the wrap on hand-written pages (S1, S6, S9–S12; G1, G2)', () => {
     const { bytes } = await markedSample({ pages: [2], edit: only(text) })
     const r = ok(await wrapped(bytes, { units: [{ src: 'Order' }] }))
     expect(r.stats.refusedPages).toBe(1)
-    expect(r.unhidden).toEqual([[0, 'page']])
+    expect(r.stats.unhidden.page).toBe(1)
+    expect(r.unhidden).toEqual([])
     expect(r.bytes).toEqual(bytes)
   })
   it('keeps a foreign /OCProperties and lists ours ON beside it (S10)', async () => {

@@ -69,7 +69,7 @@ describe('S5: a form XObject', () => {
     const { bytes } = await markedSample({ pages: [2], edit: only('q /Fx1 Do Q\n'), form })
     const r = ok(await wrapped(bytes, { units: [{ src: 'x' }, { src: 'Order' }] }))
     expect(r.stats.refusedPages).toBe(1)
-    expect(r.unhidden).toContainEqual([1, 'page'])
+    expect(r.stats.unhidden.page).toBe(1)
     expect(r.bytes).toEqual(bytes)
   })
 })
@@ -154,8 +154,10 @@ describe('sample-1 end to end from its marked compile (T1.2, T2.4)', () => {
     expect(r.stats.refusedPages).toBe(0)
     // (I1: the groups are the units' by their ids, every unit with marks drawable but the ones listed)
     expect(r.stats.unhidden.spell).toBe(0)
-    // (the original's only where the marker sets no marks: the title block's author and date, the figure's TikZ labels)
-    expect(r.unhidden.map(([id, why]) => `${units[id]!.kind}:${why}`)).toEqual(['author:marks', 'para:marks', 'figure:marks', 'figure:marks'])
+    // (the original's only where the marker sets no marks: the title block's author and date, the figure's TikZ labels; with no
+    // group of their own, counted and not listed)
+    expect(r.stats.unhidden.marks).toBe(4)
+    expect(r.unhidden).toEqual([])
     for (const p of [1, 2, 3, 4]) expect(pixelsApart(await renderPage(final, p), await renderPage(r.bytes, p)), `page ${p}`).toBe(0)
     // (the page pass reads the wrapped pages: their glyphs the unwrapped pass's, one more show for each split)
     const inkOf = async (b: Uint8Array) => {

@@ -338,7 +338,7 @@ describe('a base of ours whose pages are wrapped by optional content (base.stats
   it('refuses lists the counts do not match, out of order, a code not one, an id in both, or past UNHIDDEN_MAX', async () => {
     const { head } = await headOf({ ...OURS, ...WRAP }, ORIG)
     const edits: [string, (h: Wire) => void][] = [
-      ['base.stats.unhidden', h => { h.base.stats.unhidden.spell = 2 }],
+      ['base.stats.unhidden', h => { h.base.stats.unhidden.spell = 0 }],
       ['base.unhidden[1]', h => { h.base.unhidden = [[4, 'spell'], [1, 'marks']] }],
       ['base.unhidden[0]', h => { h.base.unhidden[0][1] = 'lost' }],
       ['base.labelKept[0]', h => { h.base.labelKept = [4] }],
