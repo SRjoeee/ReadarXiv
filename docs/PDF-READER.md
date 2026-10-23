@@ -1942,12 +1942,16 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   source alone gives (its console captured, each document read in turn, the composed one first); the original's page count;
   every page's box (within 0.01), rotation and user unit, and its text items exactly, every field of every item (`page-text.mjs`
   `textRecordOf`: one SHA-256 of their exact values a page; before 2026-10-24 within 0.01 — the pack's composed pages are ours
-  item for item, 290 pages and 97,702 items, 106,763 wrapped), ours on replaced pages and the original's elsewhere. `readers`
-  `{ orig, ours }`, where the host gives them: its own readings of arXiv's PDF and of our final pass, which it keeps for the page
-  pass, each a function the proof calls in place of its own reading of that document, in its turn and under its capture of the
-  console (so the host opens the document there, at PDF.js's verbosity 1, and reads it with `readArxivText(doc, { draw: true,
-  pageTexts: true })`, whose `pageTexts` are the same records): each document's text is then read once in the box, not twice.
-  A reader that throws is a PDF.js failure, an entry that is no record a page not read. What the delta overrides of the original is bounded:
+  item for item, 290 pages and 97,702 items, 106,763 wrapped; a string by its UTF-16 code units, so that a lone surrogate is never
+  U+FFFD), ours on replaced pages and the original's elsewhere. `readers` `{ orig, ours }`, where the host gives them: its own
+  readings of arXiv's PDF and of our final pass, each `{ options, own?, read(doc) }`. In its turn and under its capture of the
+  console the proof opens the document itself, of its own bytes (ours given up to PDF.js where `own`), at PDF.js's verbosity 1,
+  with the reader's options over `documentOptions`, and gives it to `read`, which reads every page with `readArxivText(doc, {
+  draw: true, pageTexts: true })` (whose `pageTexts` are the same records) and keeps the document for the page pass: each
+  document's text is then read once in the box, not twice, and what is compared is by construction of the proof's bytes, read
+  where the proof hears PDF.js. A reader that throws, or a page of its document it did not read (compared or not, as the proof's
+  own reading reads every page), is a PDF.js failure. The composed bytes are let go once read, and the object layer's three
+  documents when its checks return, before a reader's document is opened. What the delta overrides of the original is bounded:
   the replaced pages' objects exactly (no other page; the catalog only to carry our `/OCProperties`, every other key of it the
   original's, that key ours), its `/Size` not below the original's, and its trailer the
   original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
@@ -1955,9 +1959,10 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
   entry of a type PDF.js does not know. Any other failure is `delta-proof`.
 - **The host's contract.** In the maker child, before it opens a document of its own: `deltaOf(orig, final, { PL,
-  replacedPages })` and `proveDelta(...)` with its `readers`, in which it opens arXiv's PDF and our page and reads their text
-  (the documents and texts the page pass is given: `arxiv: { doc, text }`, `ours: { doc, ..., text }`, so that `checkOurBase`
-  reads our page's text no more); then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, text, ..., delta: { bytes,
+  replacedPages })` and `proveDelta(...)` with its `readers`, whose documents (arXiv's PDF and our page, opened by the proof with
+  the draw's options) it reads and keeps (the documents and texts the page pass is given: `arxiv: { doc, text }`, `ours: { doc,
+  ..., text }`, so that `checkOurBase` reads our page's text no more), PDF.js's verbosity, which PDF.js 6 holds for the process,
+  set back to 0 after the proof; then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, text, ..., delta: { bytes,
   sha256, replaced, stats } } })` (or `delta: { refused, why }`). The box is one vCPU: a proof beside the page pass, in a thread
   of its own, would save nothing; a reading not made does. The page pass checks it again (shape, bounds, digest, the
   section over `orig`, the head's reader): the head's base becomes `kind: 'delta'` where it checks, else stays `full` with

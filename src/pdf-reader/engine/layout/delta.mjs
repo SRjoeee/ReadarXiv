@@ -24,9 +24,9 @@
 // section), the composed page graphs canonically ours on replaced pages and the original's elsewhere (a second, independent
 // parse), PDF.js opening the composed bytes with no message neither source gives alone, the page count the original's, every
 // page box and every page's text items (layout/page-text.mjs: exactly, every field of every item) ours on replaced pages and the
-// original's elsewhere. The two sources' texts are the host's own readings where it gives them (`readers`: the documents it keeps
-// for the page pass, read once), else read here; the composed document is always read here. No operator list and no pixel: those
-// are the lab's gate.
+// original's elsewhere. The two sources' texts are the host's own readings where it gives them (`readers`: documents the proof
+// opens of its own bytes and hands to the host, which reads them and keeps them for the page pass, so that each is read once),
+// else read here; the composed document is always read here. No operator list and no pixel: those are the lab's gate.
 //
 // An original module (no port statement). It imports the object layer's reading (xref.mjs), the section writer, the delta's
 // wire and the memory-class test; @cantoo/pdf-lib (MIT) and PDF.js are given.
@@ -610,10 +610,12 @@ const RECOVERY = /Indexing all PDF objects|XRef|xref|startxref|trailer/
  * (a, d, e) PDF.js opens the composed bytes with no message that neither source alone gives (its console captured, each
  * document read in turn), the original's page count, every page's box and text items (layout/page-text.mjs textRecordDiffers:
  * the box within 0.01, the items exactly) ours on replaced pages and the original's elsewhere. `readers` { orig?, ours? }: the
- * host's own readings of arXiv's PDF and of our final pass, each a function the proof calls in place of its own reading of that
- * document, in the same turn and under the same capture of the console (so the host opens the document there, at PDF.js's
- * verbosity 1, and keeps it): it gives each page's text record (arxiv.mjs readArxivText `pageTexts`, null for a page not read),
- * and a reader that throws is a PDF.js failure as the proof's own reading's is. What the delta overrides of the original is
+ * host's own readings of arXiv's PDF and of our final pass, each { options, own?, read(doc) } in place of the proof's own reading
+ * of that document: in the same turn and under the same capture of the console, the proof opens the document itself, of its own
+ * bytes (ours given up to PDF.js where `own`), at PDF.js's verbosity 1, with the reader's options over `documentOptions`, and
+ * gives it to `read`, which reads every page's text record (arxiv.mjs readArxivText `pageTexts`) and keeps the document (the
+ * host's, never destroyed here). A reader that throws, or leaves a page of its document unread, is a PDF.js failure as the proof's
+ * own reading's is. What the delta overrides of the original is
  * bounded: the replaced pages' objects exactly (no other page; the catalog only to carry our /OCProperties, every other key of it
  * the original's), its /Size not below the original's. An original PDF.js recovers by its own scan (any message of its
  * cross-reference on the original alone) is refused (`delta-xref`). { ok: true, pages, replaced } or { ok: false, code
@@ -621,10 +623,13 @@ const RECOVERY = /Indexing all PDF objects|XRef|xref|startxref|trailer/
  */
 export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDocument, documentOptions = {}, replaced, readers = null, objectsMax = DELTA_OBJECTS_MAX, decodedMax = DELTA_DECODED_MAX, heldMax = DELTA_HELD_MAX }) {
   const no = (why, code = 'delta-proof') => ({ ok: false, code, why: String(why).slice(0, 300) })
-  const composed = concat([origBytes, deltaBytes])
+  // (the proof's own bytes, let go once PDF.js has read them: never held while a reader's document is open)
+  let composed = concat([origBytes, deltaBytes])
   const rep = new Set(pagesOf(replaced ?? []))
   let N, M
-  try {
+  // (b, c, f) the section and the page graphs, in a function of their own: the object layer's three documents are let go when it
+  // returns, before PDF.js reads any document (a reader's is the host's, kept)
+  const structure = () => { try {
     const own = startxrefOf(origBytes)
     const sect = deltaSection(deltaBytes, { bytes: origBytes.length, xref: own })
     if (sect.why) return no(`the section: ${sect.why}`)
@@ -686,10 +691,13 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       const cx = contents(X, x), cd = contents(D, d)
       if (cx.length !== cd.length || cx.some((r, i) => !same(X, r, D, cd[i])) || !same(X, x.inherited.Resources ?? PL.PDFNull, D, d.inherited.Resources ?? PL.PDFNull)) return no(`page ${p}'s graph is not ${rep.has(p) ? 'ours' : 'the original\'s'}`)
     }
+    return null
   } catch (e) {
     const r = refusalOf(e)
     return no(`the object layer: ${r.why}`)
-  }
+  } }
+  const structural = structure()
+  if (structural) return structural
 
   // (a, d, e) PDF.js, each document read whole in turn under a captured console: the composed document here, always, first (its
   // reading let go before a reader's document, which the host keeps, is opened); then arXiv's PDF and ours, by the host's readers
@@ -724,21 +732,38 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       return pages
     } finally { await task?.destroy?.() }
   })
-  /** a document's text records as the host's reader gives them */
-  const given = (reader, tag) => heard(tag, async () => {
-    const pages = await reader()
+  /** a document opened here for the host's reader, with the reader's options (its own, for the document it keeps), and read by it:
+   *  its text records, each page's, the document the reader's from the moment it is given (never destroyed here). Every page of
+   *  it must be read, compared or not, as the proof's own reading reads every page */
+  const given = (bytes, tag, reader) => heard(tag, async () => {
+    const task = getDocument({ ...documentOptions, ...(reader.options ?? {}), data: bytes, verbosity: 1 })
+    let doc
+    try { doc = await task.promise } catch (e) {
+      try { await task?.destroy?.() } catch {}
+      throw e
+    }
+    const pages = await reader.read(doc)
     if (!Array.isArray(pages)) throw new TypeError(`the ${tag} reader gave no pages`)
-    // (an entry that is no text record is a page not read)
-    return Array.from(pages, r => (isTextRecord(r) ? r : null))
+    const n = doc.numPages
+    if (pages.length !== n) throw new TypeError(`the ${tag} reader gave ${pages.length} pages of ${n}`)
+    const unread = pages.findIndex(r => !isTextRecord(r))
+    if (unread >= 0) throw new TypeError(`page ${unread + 1} of the ${tag} document was not read`)
+    return pages
   })
-  // (one copy of a source document at a time, for PDF.js to own; the composed bytes are the proof's own, read whole first)
+  const reads = r => !!r && typeof r === 'object' && typeof r.read === 'function'
+  // (one copy of a source document at a time, for PDF.js to own, but ours where its reader owns it (`own`); the composed bytes are
+  // the proof's own, read whole first, and let go)
   let orig, ours, comp
   try {
-    ;[comp, orig, ours] = await consoleHeld(async () => [
-      await read(composed, 'composed'),
-      typeof readers?.orig === 'function' ? await given(readers.orig, 'orig') : await read(origBytes.slice(), 'orig'),
-      typeof readers?.ours === 'function' ? await given(readers.ours, 'ours') : await read(finalBytes.slice(), 'ours'),
-    ])
+    ;[comp, orig, ours] = await consoleHeld(async () => {
+      const c = await read(composed, 'composed')
+      composed = null
+      return [
+        c,
+        reads(readers?.orig) ? await given(origBytes.slice(), 'orig', readers.orig) : await read(origBytes.slice(), 'orig'),
+        reads(readers?.ours) ? await given(readers.ours.own === true ? finalBytes : finalBytes.slice(), 'ours', readers.ours) : await read(finalBytes.slice(), 'ours'),
+      ]
+    })
   } catch (e) {
     if (isMemoryError(e)) throw e
     return no(`PDF.js: ${String(e?.message ?? e)}`)

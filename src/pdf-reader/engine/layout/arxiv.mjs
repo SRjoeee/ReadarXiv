@@ -44,9 +44,11 @@ export async function readArxivText(doc, { draw = false, pageTexts: wantTexts = 
       styles = tc?.styles ?? {}
       read = true
       drawn?.push(drawTextOf(tc))
-      texts?.push(await textRecordOf(page, tc))
       const said = pageTextOf(tc)
       if (hasMarkText(said)) marked[p - 1] = said
+      // (the proof's record of the page, after everything else read of it: one that fails is that page's alone, none, which the
+      // proof refuses)
+      if (texts) try { texts.push(await textRecordOf(page, tc)) } catch (e) { if (isMemoryError(e)) throw e }
     } catch (e) {
       // (a memory-class failure is no page unread: the run ends on it, C8.4)
       if (isMemoryError(e)) throw e

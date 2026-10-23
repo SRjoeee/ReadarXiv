@@ -7,30 +7,31 @@
 // document options the document was opened with); a page whose items differ in any bit is another page's text.
 // An original module (no port statement): pure, Web Crypto alone.
 
-const encoder = new TextEncoder()
-
-/** the canonical bytes of a page's text items, the items with a string in order: each its string (UTF-8 behind its length, four
- *  bytes little-endian), the transform's six numbers, its width and height (float64 little-endian; NaN for one that is no
- *  number), its direction (as its string) and its line end (one byte); with how many items it holds */
+/** the canonical bytes of a page's text items, the items with a string in order: each its string (its UTF-16 code units, two bytes
+ *  little-endian each, behind their count in four: a lone surrogate is itself, never U+FFFD), the transform's six numbers, its
+ *  width and height (float64 little-endian; NaN for one that is no number), its direction (as its string, the same way) and its
+ *  line end (one byte); with how many items it holds */
 export function textItemsBytes(items) {
   const kept = items.filter(it => it && typeof it.str === 'string')
+  const dirs = kept.map(it => String(it.dir ?? ''))
   let n = 0
-  const strings = kept.map(it => { const s = encoder.encode(it.str), d = encoder.encode(String(it.dir ?? '')); n += 4 + s.length + 64 + 4 + d.length + 1; return [s, d] })
+  kept.forEach((it, k) => { n += 4 + 2 * it.str.length + 64 + 4 + 2 * dirs[k].length + 1 })
   const bytes = new Uint8Array(n), view = new DataView(bytes.buffer)
   const num = x => (typeof x === 'number' ? x : Number.NaN)
   let at = 0
-  kept.forEach((it, k) => {
-    const [s, d] = strings[k], t = Array.isArray(it.transform) ? it.transform : []
+  const units = s => {
     view.setUint32(at, s.length, true)
-    bytes.set(s, at + 4)
-    at += 4 + s.length
+    at += 4
+    for (let i = 0; i < s.length; i++, at += 2) view.setUint16(at, s.charCodeAt(i), true)
+  }
+  kept.forEach((it, k) => {
+    const t = Array.isArray(it.transform) ? it.transform : []
+    units(it.str)
     for (let i = 0; i < 6; i++, at += 8) view.setFloat64(at, num(t[i]), true)
     view.setFloat64(at, num(it.width), true)
     view.setFloat64(at + 8, num(it.height), true)
     at += 16
-    view.setUint32(at, d.length, true)
-    bytes.set(d, at + 4)
-    at += 4 + d.length
+    units(dirs[k])
     bytes[at++] = it.hasEOL === true ? 1 : 0
   })
   return { bytes, count: kept.length }

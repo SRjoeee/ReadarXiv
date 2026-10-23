@@ -208,10 +208,14 @@ pass is known only once it has run, so the last pass alone cannot be undrafted w
 conditional in TeX, the image-heavy papers kept as today, and the final pass as today whenever the guess was wrong): about
 1.4 s of the median paper's normalised CPU, for a mechanism and a fallback the coordinator judged not worth it.
 
-**What was done instead: each document's text read once** (PDF-READER §19.8, the proof's `readers`). The proof takes the host's
-own readings of arXiv's PDF and of our page (`readArxivText`'s `pageTexts`, one record a page: its box and a SHA-256 of its text
-items' exact values) in place of its own, under its own capture of the console, and reads only the composed document itself, so
-that the box reads three documents' text, not five. Its comparison became exact: before, the items' places within 0.01; now
+**What was done instead: each document's text read once** (PDF-READER §19.8, the proof's `readers`). The proof opens arXiv's
+PDF and our page itself, of its own bytes, at verbosity 1, inside its own capture of the console, and hands each document to the
+host, which reads it once (`readArxivText`'s `pageTexts`, one record a page: its box and a SHA-256 of its text items' exact
+values, a string by its UTF-16 code units) and keeps it for the page pass; the proof reads only the composed document itself, so
+that the box reads three documents' text, not five. A page the host did not read refuses the delta, compared or not, as the
+proof's own reading did. The composed bytes and the object layer's three documents are let go before the host's documents open
+(an adversarial review of the first form found both held through the readers: up to the original's size again on the 46 MB
+pair). Its comparison became exact: before, the items' places within 0.01; now
 every field of every item, which the pack meets on every page (290 pages, 97,702 items; 106,763 wrapped). On the pack's 8 pairs,
 wrapped and not: the same verdicts (8 of 8 both ways) and the same deltas (2.56 %, 3.06 % wrapped). In Node, the proof and the two
 readings together: 0.6 to 1.8 s less CPU a paper (1706.03762v7 2.2 to 1.5 s, 2602.23285v2 2.0 to 1.4, 2608.16117v1 2.1 to 1.5,
