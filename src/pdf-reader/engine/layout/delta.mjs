@@ -181,7 +181,27 @@ function layersOf(PL, O, U) {
   const oo = ocp(O), uo = ocp(U)
   const origs = list(O, oo), mine = list(U, uo)
   const ours = mine.filter(r => /^axt:/.test(nameOf(U, r) ?? '')), own = mine.filter(r => !/^axt:/.test(nameOf(U, r) ?? ''))
-  if (own.length && (own.length !== origs.length || own.some((r, i) => !(r instanceof PDFRef) || !(origs[i] instanceof PDFRef) || nameOf(U, r) !== nameOf(O, origs[i])))) return { why: 'the paper\'s own layers in our compile do not pair with arXiv\'s', ours: [], pairs: [], orig: oo }
+  // (a pair is one layer only where each side names it alike, by a name no other of its layers has, at the same default state
+  // (/D's /BaseState, /ON, /OFF) and with the same /Intent and /Usage: two layers of one name are never paired by their place)
+  const stateOf = (D, o) => {
+    const d = o ? look(D, o.get(PDFName.of('D'))) : undefined
+    const refs = k => new Set((look(D, d?.get?.(PDFName.of(k))) instanceof PDFArray ? look(D, d.get(PDFName.of(k))).asArray() : []).filter(r => r instanceof PDFRef).map(r => `${r.objectNumber} ${r.generationNumber}`))
+    const on = refs('ON'), off = refs('OFF'), base = d?.get?.(PDFName.of('BaseState'))?.asString?.() ?? '/ON'
+    return r => { const k = `${r.objectNumber} ${r.generationNumber}`; return on.has(k) ? 'ON' : off.has(k) ? 'OFF' : base === '/OFF' ? 'OFF' : base === '/Unchanged' ? 'ON' : 'ON' }
+  }
+  const plain = (D, v, depth = 0) => {
+    const x = look(D, v)
+    if (depth > 8) return '?'
+    if (x instanceof PDFDict) return `<<${x.entries().map(([k, y]) => [k.asString(), plain(D, y, depth + 1)]).sort((p, q) => (p[0] < q[0] ? -1 : 1)).map(([k, y]) => `${k} ${y}`).join(' ')}>>`
+    if (x instanceof PDFArray) return `[${x.asArray().map(y => plain(D, y, depth + 1)).join(' ')}]`
+    return x === undefined ? 'none' : x.toString()
+  }
+  const facts = (D, r, state) => { const g = look(D, r); return `${nameOf(D, r)}|${state(r)}|${plain(D, g?.get?.(PDFName.of('Intent')))}|${plain(D, g?.get?.(PDFName.of('Usage')))}` }
+  if (own.length) {
+    const su = stateOf(U, uo), so = stateOf(O, oo)
+    const unique = (D, list) => new Set(list.map(r => nameOf(D, r))).size === list.length
+    if (own.length !== origs.length || !unique(U, own) || !unique(O, origs) || own.some((r, i) => !(r instanceof PDFRef) || !(origs[i] instanceof PDFRef) || facts(U, r, su) !== facts(O, origs[i], so))) return { why: 'the paper\'s own layers in our compile do not pair with arXiv\'s (as many, names unique, each pair one name, state, intent and usage)', ours: [], pairs: [], orig: oo }
+  }
   return { orig: oo, ours, pairs: own.map((r, i) => [r, origs[i]]) }
 }
 
