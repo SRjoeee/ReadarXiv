@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-28",
+  "by": "the maintainer",
+  "on": "the CJK formula break and squeeze (pull request 438): a Chinese or Japanese line may break before an inline formula, and a line that would be letter-spaced squeezes to take the group it misses by a little",
+  "quote": "almost everything meets the requirements; there is no truly worse case. What matters is uniformity and naturalness within a block, and paragraph-level correspondence: each sentence lands at the right place in its paragraph, and paragraph boundaries fall where the original has them. Line-level shifts and per-line offsets are normal and are not a regression",
+  "english": "the maintainer's ruling of 2026-10-28 after the side-by-side sample, relayed by the coordinator: almost everything meets the requirements; there is no truly worse case; what matters is uniformity and naturalness within a block and paragraph-level correspondence (each sentence at the right place in its paragraph, paragraph boundaries where the original has them); line-level shifts and per-line offsets are normal and not a regression. With the standing rule relayed on 2026-10-22: the gate's 0-worse-than-base is a safety net, and the evidence is closeness to the original, not equality with the last build",
+  "measures": [
+    "paraGapWide"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "zh: paragraph gaps a pitch or more wider, 21.3 % to 22.4 % of the gaps at fe09b27f; the gate names 1512.03385 page 3 and 1706.03762 page 5 worse on it and 2307.16209 page 26 better",
+  "why": "paragraphs end a line earlier because their letter-spaced lines are full again. A seeded sample of 40 of the units the change moves with no stretched or ragged line before (original, base and head side by side) reads 14 closer, 24 the same and 2 farther by the per-line measure, and none a worse block in the maintainer's judgement; in its knock-on stratum (14 units, line breaks kept) the paragraph ends land 2 to 2.5 pt closer to the original's frame where they move. On the 53 papers of the release route's sweep, lines letter-spaced by more than 0.15 em a gap go from 403 to 265, ragged lines from 625 to 457, and 2610.10069 page 7's line from 0.194 to 0.022 em a gap"
+}

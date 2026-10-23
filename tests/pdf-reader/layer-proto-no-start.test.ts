@@ -149,7 +149,7 @@ describe('a layout no barred start touches is the one it was', () => {
   // a seeded generator of texts in which no line can open with a barred mark: words of letters (Latin, Cyrillic, Hangul),
   // CJK ideographs and kana, digits, opening brackets and dashes, with the rules' marks only right after a character (where
   // the rules already kept them from a line's start) and never after a space; laid at widths no token is wider than,
-  // every character of its own width. The digest is the layouts the breaker set before it learnt the barred starts, and
+  // every character of its own width. The digests, one a target, are the layouts the breaker set before it learnt the barred starts, and
   // since a script that sets no spaces between its words draws none between two of its characters (E3, 2026-10-19), the
   // Chinese and Japanese texts' with those spaces gone: the German, Russian and Korean texts' digests are the ones they were
   // (458033d154ed2821, fe6bba85f07f8b69, 31d1186069ea0844 for their 48 texts each)
@@ -178,15 +178,19 @@ describe('a layout no barred start touches is the one it was', () => {
   const measure = (s: string) => [...s].reduce((a, ch) => a + 30 + ((ch.codePointAt(0)! * 7919) % 41), 0)
   it('is the same layout, line by line, for every target', () => {
     const r = rng(20261017)
-    const out: string[] = []
+    const out: Record<string, string[]> = {}
     for (let n = 0; n < 240; n++) {
       const to = ['de', 'ru', 'zh', 'ja', 'ko'][n % 5]!
       const text = textOf(r, to)
       const w = 110 + Math.floor(r() * 90)
       const { shown, layout } = lay(text, to, w, { lines: 60, measure })
       expect(opened(shown, to), `${n}: ${JSON.stringify(shown)}`).toEqual([])
-      out.push(JSON.stringify([to, w, layout.clipped, shown, layout.lines.map(l => Math.round((l as unknown as { used: number }).used * 1000))]))
+      out[to] = out[to] ?? []
+      out[to].push(JSON.stringify([to, w, layout.clipped, shown, layout.lines.map(l => Math.round((l as unknown as { used: number }).used * 1000))]))
     }
-    expect(createHash('sha256').update(out.join('\n')).digest('hex').slice(0, 16)).toBe('f84a57e2be4ce11b')
+    const digests = Object.fromEntries(Object.entries(out).map(([to, v]) => [to, createHash('sha256').update(v.join('\n')).digest('hex').slice(0, 16)]))
+    // (the Chinese and Japanese texts' since a letter-spaced CJK line squeezes to take a group it misses by a little,
+    // 2026-10-23, layer2.mjs squeezeTakes; the German, Russian and Korean texts' are the ones they were before it)
+    expect(digests).toEqual({ de: '458033d154ed2821', ru: 'fe6bba85f07f8b69', zh: '2dcefb1882647b20', ja: '8e3872a8cb90cd41', ko: '31d1186069ea0844' })
   })
 })
