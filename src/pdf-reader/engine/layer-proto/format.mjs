@@ -1046,6 +1046,13 @@ function partShape(v, { N, unitCount, atFrom }) {
       seen.add(id)
     }
     for (let i = 0; i < fileOnly.length; i++) if (!seen.has(fileOnly[i][0])) throw refuse(K, `fileOnly[${i}][0]`, 'not a unit of the layout')
+    // (why each unit the part tells that the file does not lay is the original's: a left unit of the part's, as the cut writes it)
+    const unlaid = layout.unlaid ?? []
+    for (let i = 0; i < unlaid.length; i++) {
+      const id = unlaid[i][0]
+      if (id >= unitCount) throw refuse(K, `layout.unlaid[${i}][0]`, 'not a unit of the paper')
+      if (!inLeft.has(id)) throw refuse(K, `layout.unlaid[${i}][0]`, 'not a left unit of the part')
+    }
   } else if (fileOnly.length) throw refuse(K, 'fileOnly', 'units with no layout')
 
   // addon

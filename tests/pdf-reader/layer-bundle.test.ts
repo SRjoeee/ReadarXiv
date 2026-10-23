@@ -118,7 +118,7 @@ describe('the versions a bundle names', () => {
     expect(CTAG).toBe(`b${BUNDLE}-j${PDFJS}`)
     expect(VTAG).toBe(`${CTAG}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const vtag = VTAG
-    expect(vtag).toBe('b3-j6.3.289-p26-l17-r7')
+    expect(vtag).toBe('b3-j6.3.289-p26-l18-r7')
     expect(bundleKey('1706.03762', 7)).toBe(`layer/1706.03762v7/${vtag}.json`)
     expect(bundleKey('hep-th/9901001', 1)).toBe(`layer/hep-th_9901001v1/${vtag}.json`)
     // (the web's vtag form, src/shared/identity.ts VTAG_FORM, is stricter than a token of letters, digits and points)
@@ -301,6 +301,9 @@ describe('readBundle refuses', () => {
     expect(refusalOf(broken(b => { b.layout.units[1][0] = 9; b.layout.lines[1][0] = 9; b.layout.frames[1][0] = 9; b.layout.ph[0][0] = 9 }))?.why).toMatch(/^layout\.units\[1\]\[0\]/)
     expect(refusalOf(broken(b => { b.layout.units[1][1] = UNIT_KINDS.indexOf('caption') }))?.why).toMatch(/^layout\.units\[1\]\[1\]/)
     expect(refusalOf(broken(b => { b.layout.units[1][4] = 8 }))?.why).toMatch(/^layout\.units\[1\]\[4\]/)
+    // (why a unit is not laid, of a unit the bundle has: unit 1, which the file does not lay, taken; one past its units refused)
+    expect(refusalOf(broken(b => { (b.layout as { unlaid?: unknown }).unlaid = [[1, 'noAnchor']] }))).toBeNull()
+    expect(refusalOf(broken(b => { (b.layout as { unlaid?: unknown }).unlaid = [[9, 'noAnchor']] }))?.why).toMatch(/^layout\.unlaid\[0\]\[0\]/)
   })
 
   it("a layout file of a newer maker and a manifest of a newer remover are read: a part is refused by its schema, never by what made it (decision 4)", () => {
