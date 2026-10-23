@@ -2056,3 +2056,29 @@ describe('makeLayout, the marking the marks file records: the complete macros, t
     expect(await make({ ...w, pages: [{ runs }], marks: w.marks.slice(0, 5), units: w.units.slice(0, 1) })).toMatchObject({ refused: 'carry', stats: { units: { unplaced: 1, located: 0 } } })
   })
 })
+
+describe('makeLayout, a citation whose marks give it no ink: found by its link annotations on the base page (cite.sty\'s superscripts)', () => {
+  // (each character half an em of 10 pt: 5 pt; the citation's numbers set 3 pt above the line in 7 pt; TeX answered no mark
+  // before the full stop cite.sty moves, so the citations before one have none)
+  const line: Run = { s: 'Our work. And more,', x: 72, y: 700 }
+  const sup = (s: string, x: number): Run => ({ s, x, y: 703, size: 7 })
+  const box = (x: number, n: number) => [x - 0.5, 701, x + 3.5 * n + 0.5, 710]
+  const world = (annots: Annot[]): World => ({
+    pages: [{ runs: [line, sup('1', 117), sup('2,3', 167)], annots }],
+    marks: [['0s', 1, 72, 700], ['0e', 1, endOf(line), 700]],
+    units: [unit('para', [text('Our work'), ph('\\cite{a}'), text('. And more'), ph('\\cite{b,c}'), text(',')])],
+    switches: { '\\cite': '22220000' },
+  })
+  it('each found by its links in reading order, a list\'s numbers with what stands between them', async () => {
+    const { file } = await made(world([{ rect: box(117, 1), dest: 'cite.a' }, { rect: box(167, 1), dest: 'cite.b' }, { rect: box(174, 1), dest: 'cite.c' }]))
+    const a = phOf(file, 0, 1), b = phOf(file, 0, 3)
+    expect([(a[3] ?? 0) & PH_FLAG.LOST, (b[3] ?? 0) & PH_FLAG.LOST]).toEqual([0, 0])
+    expect((a[3] ?? 0) & PH_FLAG.RAISED).toBe(PH_FLAG.RAISED)
+    expect(a.slice(5, 8)).toEqual([117, 700, 120.5])
+    expect(b.slice(5, 8)).toEqual([167, 700, 177.5])
+  })
+  it('none where the page has no link of its keys, nor one whose glyphs are on no line of the unit\'s: LOST, as before', async () => {
+    const { file } = await made(world([{ rect: box(117, 1), dest: 'cite.z' }, { rect: [167, 500, 180, 510], dest: 'cite.b' }]))
+    expect([(phOf(file, 0, 1)[3] ?? 0) & PH_FLAG.LOST, (phOf(file, 0, 3)[3] ?? 0) & PH_FLAG.LOST]).toEqual([PH_FLAG.LOST, PH_FLAG.LOST])
+  })
+})

@@ -65,8 +65,18 @@ export { LayoutRefusal } from './json.mjs'
  *  16: a unit is laid only where every page it is on is drawable, its words arXiv's page's (carry.mjs PAGE_SAME: 0.98 in
  *  order, NFKC and the known text-layer substitutes applied) and none of its lines on another page of arXiv's (make.mjs
  *  drawable), the others left the original's, in place of the share of the paper's and each part's lines (CARRY_MIN, gone)
- *  (the file's schema is 5 still) */
-export const LAYOUT = '16'
+ *  (the file's schema is 5 still); 17 (the marks' coverage, second round): the layout compile marks the front matter's units
+ *  (an author block's names and places, a \\thanks, a \\date: a front unit not a heading nor one a macro only stores) as any unit, but one whose text another's
+ *  equals (latex-front.mjs frontMarks); a page shipped with no column's body bracketed (revtex4-2's ltxgrid makes its columns
+ *  without \\@makecol) has its text block bracketed at \\@outputpage (marks.mjs POINTS_TEX); a complete macro's probed call
+ *  glued to the placeholder after it is asked about that follower (its `call` code) and gets its closing mark where TeX
+ *  answered so; a unit's own marks keep a letter's italic correction as a cell's do (\\emph{…} at a unit's end); and a
+ *  citation whose marks give it no ink is found by its link annotations on the base page (make.mjs linkedInk). Over the
+ *  release-route sweep's 35 papers with unanchored rows, 92 of the 217 rows (62 units) convert and 95 units in all are placed
+ *  better; of their 34 base pages made again, 33 set every word as next's did and 2610.21924 eleven words nearer its own
+ *  compile; the gate pack's seven base pages are next's, word for word, its 15 author units and 5 notes all marked (the
+ *  file's schema is 5 still; MARKS_SCHEMA 9 still) */
+export const LAYOUT = '17'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */

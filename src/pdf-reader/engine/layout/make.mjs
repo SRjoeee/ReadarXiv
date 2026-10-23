@@ -38,7 +38,7 @@ import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { alignOf } from './remove.mjs'
 import { classOf, colourPieceOf, followsOf, headEnd, layoutMarking, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
-import { readAnnots } from '../layer-proto/links.mjs'
+import { linkKindOf, readAnnots } from '../layer-proto/links.mjs'
 
 /** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
 const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
@@ -501,6 +501,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // A page's annotations are read once, with its draw (gatherDraw: PDF.js reads them anew at each ask, at a cost of their own)
   const annotsAsked = new Map()
   const annotsOnce = (p, page) => { let a = annotsAsked.get(p); if (!a) { a = within(readAnnots(page), OPS_MS); annotsAsked.set(p, a) } return a }
+  /** each page's citation links on the base page (hyperref's `cite.<key>` destinations): { dest, x0, y0, x1, y1 }, read with its
+   *  ink where the paper holds a citation (phOf's `linkedInk`); none where its annotations could not be read */
+  const citeLinks = new Map(), wantLinks = units.some(u => u.pieces.some(piece => classOf(piece) === 'cite'))
+  const citeLinksOf = raw => (Array.isArray(raw) ? raw : []).flatMap(a => {
+    const r = a?.rect
+    if (a?.subtype !== 'Link' || typeof a.dest !== 'string' || !a.dest.startsWith('cite.') || !Array.isArray(r) || r.length !== 4 || !r.every(Number.isFinite)) return []
+    return [{ dest: a.dest, x0: Math.min(r[0], r[2]), y0: Math.min(r[1], r[3]), x1: Math.max(r[0], r[2]), y1: Math.max(r[1], r[3]) }]
+  })
   /** page p's draw geometry (pipeline/draw-data.mjs), held as its encoded text for the left part that will carry it (`drawOf`); none for
    *  a page past the held budget, one that cannot be read, or one whose font a host would read differently: the browser reads it */
   const draws = new Map(), drawStats = { pages: 0, none: 0, why: {}, bytes: 0, ms: 0, fills: { items: 0, glyphs: 0, told: 0, runs: 0 } }
@@ -551,12 +559,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const ops = await listWithin(page, seen)
     if (!ops) { stats.timedOut.push(p); dark.add(p); return }
     const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
+    // (its citation links, read once with its draw's annotations)
+    if (wantLinks) citeLinks.set(p, citeLinksOf(await annotsOnce(p, page)))
     // the page's draw geometry (E-C), read once its fonts are loaded, within the same limit, before the page is let go; its items'
     // fills from the ink's glyphs where the page's ink is whole (layout/fills.mjs), none told else
     if (wantDraw) {
       await gatherDraw(p, page, tx, got.capped || got.timedOut || got.rotated ? null : got.glyphs)
-      annotsAsked.delete(p)
     }
+    annotsAsked.delete(p)
     // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
     if (wantPlans && !got.capped && !got.timedOut && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
     // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
@@ -1094,6 +1104,55 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const r of [...rows, ...wrapped.map(w => w.row)]) if (r !== prev && r.page === part.page && columnOf(r.page, r.x0, r.x1) === col && r.base > row.base - 0.5 * size && r.base < prev.base) return null
       return row
     }
+    /**
+     * A citation's own glyphs where its marks give none (no mark: cite.sty's superscripts set the punctuation after a citation
+     * before it, so TeX answers no mark there; or an ownership its points leave open): those under its link annotations on the
+     * base page, the rectangle a hyperref citation's number is linked by (`cite.<key>`, one of its keys). The unit's citation
+     * links are taken in reading order (its lines', then left to right), each once: the first after the last one an earlier
+     * piece took whose destination is one of the piece's keys, then each next one whose destination is another of its keys
+     * (a list's numbers, \cite{a,b}), with the glyphs between two of them on one line (the comma, a range's dash). A link's
+     * glyphs are those whose advance centre and baseline lie inside its rectangle, on a line of the unit's, none another
+     * unit's or taken. { glyphs, boxes } as ownedOn gives them, taken, or null
+     */
+    const linkedInk = piece => {
+      const kind = classOf(piece) === 'cite' ? linkKindOf(piece) : null
+      if (kind?.kind !== 'cite' || !kind.keys.length) return null
+      const want = new Set(kind.keys.map(key => `cite.${key}`))
+      if (!one.links) {
+        one.links = []
+        for (const page of new Set(rows.map(r => r.page))) {
+          const P = ink[page]
+          if (!P) continue
+          for (const L of citeLinks.get(page) ?? []) {
+            const gs = []
+            for (let g = lowest(P, L.y0); g < P.n && P.y[g] < L.y1; g++) if (P.y[g] > L.y0 && mid(P, g) > L.x0 && mid(P, g) < L.x1 && /\S/u.test(P.u[g])) gs.push(g)
+            if (!gs.length) continue
+            const row = rowOfPart({ page, gs }, null)
+            if (row >= 0) one.links.push({ ...L, page, row, gs: gs.sort((x, y) => P.x0[x] - P.x0[y]) })
+          }
+        }
+        one.links.sort((x, y) => x.row - y.row || x.x0 - y.x0)
+        one.linkAt = 0
+      }
+      const free = L => L.gs.every(g => !ink[L.page].taken[g] && (ink[L.page].owner[g] === -1 || ink[L.page].owner[g] === i))
+      let j = one.linkAt
+      while (j < one.links.length && !(want.has(one.links[j].dest) && free(one.links[j]))) j++
+      if (j >= one.links.length) return null
+      const took = [one.links[j]], used = new Set([one.links[j].dest])
+      for (let q = j + 1; q < one.links.length && want.has(one.links[q].dest) && !used.has(one.links[q].dest) && free(one.links[q]); q++) { took.push(one.links[q]); used.add(one.links[q].dest) }
+      one.linkAt = j + took.length
+      const glyphs = []
+      took.forEach((L, q) => {
+        const P = ink[L.page]
+        for (const g of L.gs) glyphs.push([L.page, g])
+        // (what stands between it and the next of its links on its line, at its height: a comma, a dash)
+        const N = took[q + 1]
+        if (!N || N.page !== L.page || N.row !== L.row) return
+        for (let g = lowest(P, Math.min(L.y0, N.y0)); g < P.n && P.y[g] < Math.max(L.y1, N.y1); g++) if (mid(P, g) >= L.x1 && mid(P, g) <= N.x0 && !P.taken[g] && P.owner[g] === -1 && /\S/u.test(P.u[g])) glyphs.push([L.page, g])
+      })
+      for (const [p, g] of glyphs) ink[p].taken[g] = 1
+      return { glyphs, boxes: [] }
+    }
     const head = headEnd(u.pieces, 0), last = u.pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s ?? ''))
     /** whether the last visible piece is a display found, or one JOINED to a display found (a later display of the same
      *  group, stream.mjs, may then be JOINED); text and any other piece end the group */
@@ -1116,9 +1175,17 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         ph.push(entry)
         if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
       }
+      const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`
+      const before = u.pieces[k - 1], after = u.pieces[k + 1]
+      let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
+      // its own glyphs and rules on the base page, by its marks or, for a citation they give none, by its links (linkedInk);
+      // `inferred` whether they were not both its points', `counted` its owned ink's count
+      let got = null, inferred = true, counted = 0
+      found: {
       // a piece the marked original gives no mark (at a unit's head, after a prefix or a control sequence's end, glued
       // to a word): its rendering is not known
       if (!d?.open) {
+        if ((got = linkedInk(piece))) break found
         // a LaTeX text symbol (marks.mjs TEXT_SYMBOLS) is drawn as its character where the unit's lines show it (below)
         const sym = cls === 'macro' ? symbolText(piece.src) : null
         const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }
@@ -1128,9 +1195,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         else if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
         continue
       }
-      const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
+      const e = ownInk.get(name)
       // its own ink by its points in the marked compile's content stream (layout/stream.mjs), or why none is known
-      if (!e) { lost('no own ink known'); continue }
+      if (!e) { if ((got = linkedInk(piece))) break found; lost('no own ink known'); continue }
       // a later display of a display group, which TeX gives no point (the empty paragraph after a display): its ink is the
       // group's, its first display's segments, where that was found (JOINED: no segments of its own)
       if (e[1] === IN_GROUP) {
@@ -1139,9 +1206,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         groupFound = true
         continue
       }
-      if (e[1] >= OWNED) { lost(OWNED_HOW[e[1]] ?? 'no own ink known'); continue }
-      const before = u.pieces[k - 1], after = u.pieces[k + 1]
-      let flags = before?.t === 'text' && /[([]$/.test(before.s ?? '') && after?.t === 'text' && /^[)\]]/.test(after.s ?? '') ? PH_FLAG.SOURCE_BRACKETS : 0
+      if (e[1] >= OWNED) { if ((got = linkedInk(piece))) break found; lost(OWNED_HOW[e[1]] ?? 'no own ink known'); continue }
       const n = e[2], items = itemsOfInk(e), rules = []
       for (let j = 3 + 5 * n; j < e.length; j += 5) rules.push({ page: e[j], x0: e[j + 1], y0: e[j + 2], x1: e[j + 3], y1: e[j + 4] })
       // EMPTY only where both its points hold nothing between them: TeX set nothing there, and the piece draws nothing. One
@@ -1149,13 +1214,16 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // next point or the text after it, which may be at its own glyph (2610.19159: a \textquotedbl{} whose opening point
       // shares its glyph with another piece's, set late, the quote on the page's line): its ink is not known, LOST
       if (!items.length && !rules.length) {
-        if (e[1] !== CLOSED) { lost('open, nothing owned'); continue }
+        if (e[1] !== CLOSED) { if ((got = linkedInk(piece))) break found; lost('open, nothing owned'); continue }
         ph.push({ row: [i, k, kind, flags | PH_FLAG.EMPTY], cls, state: 'empty' })
         continue
       }
       // every owned glyph and rule the base page's at its own place (ownedOn: no matching), or the piece is LOST
-      const got = ownedOn(items, rules)
+      got = ownedOn(items, rules)
       if (got.why) { lost(got.why); continue }
+      inferred = e[1] !== 0
+      counted = items.length + rules.length
+      }
       const gs = got.glyphs, bs = got.boxes
       let segs = []
       if (cls === 'display') {
@@ -1248,9 +1316,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (fill !== null) row.push(fill)
       const key = `${i}.${k}`
       matchedBy.set(key, gs)
-      stats.ph.owned += items.length + rules.length
+      stats.ph.owned += counted || gs.length + bs.length
       stats.ph.matched += gs.length + bs.length
-      ph.push({ row, cls, state: 'found', inferred: e[1] !== 0, text: PAGE_TEXT.has(cls) ? pageTextOf(gs) : null })
+      ph.push({ row, cls, state: 'found', inferred, text: PAGE_TEXT.has(cls) ? pageTextOf(gs) : null })
       if (cls === 'display') groupFound = true
     }
     if (one.symbols) symbolsOf(one)
