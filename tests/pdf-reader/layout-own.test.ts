@@ -30,7 +30,7 @@ const units = (...texts: string[]) => texts.map(t => ({ src: t }))
 /** the text of each group on the pages */
 function groupsOf(r: ReturnType<typeof ownOf>, pages: ReturnType<typeof page>[]) {
   const out: Record<string, string> = {}
-  r.glyphs.forEach((G, p) => G.forEach((g, i) => { if (g) out[g] = (out[g] ?? '') + pages[p]!.glyphs[i]!.u }))
+  r.glyphs.forEach((G, p) => { G.forEach((g, i) => { if (g) out[g] = (out[g] ?? '') + pages[p]!.glyphs[i]!.u }) })
   return out
 }
 
