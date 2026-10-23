@@ -1,7 +1,7 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { auxUnits, braceBalance, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
+import { auxUnits, braceBalance, compilerOfPdf, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
 import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
@@ -495,5 +495,80 @@ describe('texLiveOfPdf: the TeX Live year arXiv\'s PDF says, from the Info dicti
       expect(((await doc.getMetadata()).info as { Custom?: unknown }).Custom).toBeInstanceOf(Map)
       expect(await texLiveOfPdf(doc as never)).toBe('2023')
     } finally { await doc.loadingTask.destroy() }
+  })
+})
+
+describe('compilerOfPdf: the compiler arXiv\'s PDF says made it, from the Info dictionary\'s Creator and Producer', () => {
+  const docOf = (info: Record<string, unknown> | null) => ({ getMetadata: async () => (info === null ? null : { info }) }) as never
+
+  it('names the compiler of the route that wrote the PDF: dvips is latex, pdfTeX pdflatex, XeTeX\'s driver xelatex, LuaTeX lualatex', async () => {
+    // 1007.0072v1: a figure-less revtex4 paper arXiv made with latex, dvips and Ghostscript
+    expect(await compilerOfPdf(docOf({ Creator: 'dvips(k) 5.98 Copyright 2009 Radical Eye Software', Producer: 'GPL Ghostscript GIT PRERELEASE 9.22' }))).toBe('latex')
+    expect(await compilerOfPdf(docOf({ Creator: 'dvips(k) 2024.1 (TeX Live 2024) Copyright 2024 Radical Eye Software', Producer: 'Ghostscript 10.03.1' }))).toBe('latex')
+    expect(await compilerOfPdf(docOf({ Creator: 'LaTeX with hyperref', Producer: 'pdfTeX-1.40.25' }))).toBe('pdflatex')
+    expect(await compilerOfPdf(docOf({ Creator: 'LaTeX with hyperref', Producer: 'xdvipdfmx (20240305)' }))).toBe('xelatex')
+    expect(await compilerOfPdf(docOf({ Creator: 'LaTeX with hyperref', Producer: 'LuaTeX-1.17.0' }))).toBe('lualatex')
+  })
+
+  it('is null where the document does not say, or says a tool that is no compiler of the route (a PDF library, a converter)', async () => {
+    expect(await compilerOfPdf(docOf({}))).toBeNull()
+    expect(await compilerOfPdf(docOf({ Creator: 'Microsoft Word', Producer: 'Adobe PDF Library' }))).toBeNull()
+    expect(await compilerOfPdf(docOf({ Producer: 'pikepdf 8.0' }))).toBeNull()
+    expect(await compilerOfPdf(docOf({ Creator: 5, Producer: { name: 'pdfTeX' } }))).toBeNull()
+    expect(await compilerOfPdf(docOf(null))).toBeNull()
+    expect(await compilerOfPdf({} as never)).toBeNull()
+    expect(await compilerOfPdf(null as never)).toBeNull()
+  })
+
+  it('does not throw where getMetadata does, and lets a memory-class error through', async () => {
+    expect(await compilerOfPdf({ getMetadata: async () => { throw new Error('broken') } } as never)).toBeNull()
+    await expect(compilerOfPdf({ getMetadata: async () => { throw new RangeError(ALLOCATION_FAILED) } } as never)).rejects.toThrow(ALLOCATION_FAILED)
+  })
+})
+
+describe('markedOfPaper: the compiler a package does not name is arXiv\'s PDF\'s, when the host reads it', () => {
+  // (1007.0072v1: no 00README, no figure, so the compiler is a guess, pdflatex; arXiv made the PDF with latex and dvips, Letter,
+  // where our pdfTeX base is A4)
+  const ENGINES = (asked: CompileRequest[]) => asked.map(r => r.engine)
+
+  it('asks every compile of the engine the host read, the probe included, and the DVI marks go with it', async () => {
+    const paper = paperOf()
+    expect(paper.meta).toMatchObject({ compiler: 'pdflatex', compilerGuessed: true })
+    const c = compiler([PROBE])
+    await markedOfPaper(paper, { compile: c.compile, compilerOf: async () => 'latex' })
+    expect(ENGINES(c.asked)[0]).toBe('latex')
+    // (the probe's source carries the DVI marks under latex: the engine's dviEngine)
+    expect(dec(c.asked[0]?.overrides?.get('main.tex'))).toContain('axt@dvidest')
+    expect(paper.meta).toMatchObject({ compiler: 'latex', compilerGuessed: false })
+  })
+
+  it('leaves the guess alone where the host reads nothing, throws, or names an engine that is none of the four', async () => {
+    for (const compilerOf of [undefined, async () => null, async () => { throw new Error('no PDF') }, async () => 'tex' as string]) {
+      const paper = paperOf()
+      const c = compiler([PROBE])
+      await markedOfPaper(paper, { compile: c.compile, ...(compilerOf ? { compilerOf } : {}) })
+      expect(ENGINES(c.asked)[0]).toBe('pdflatex')
+      expect(paper.meta).toMatchObject({ compiler: 'pdflatex', compilerGuessed: true })
+    }
+  })
+
+  it('does not ask for a compiler the package names (00README.json): arXiv\'s own word stands', async () => {
+    const paper = paperOf(SOURCE, [['00README.json', JSON.stringify({ process: { compiler: 'pdflatex' }, sources: [{ filename: 'main.tex', usage: 'toplevel' }] })]])
+    expect(paper.meta.compilerGuessed).toBeFalsy()
+    let asks = 0
+    const c = compiler([PROBE])
+    await markedOfPaper(paper, { compile: c.compile, compilerOf: async () => { asks++; return 'latex' } })
+    expect([asks, ENGINES(c.asked)[0]]).toEqual([0, 'pdflatex'])
+  })
+
+  it('lets a failed allocation of the host\'s reader through', async () => {
+    await expect(markedOfPaper(paperOf(), { compile: compiler([PROBE]).compile, compilerOf: async () => { throw new RangeError(ALLOCATION_FAILED) } })).rejects.toThrow(ALLOCATION_FAILED)
+  })
+
+  it('layoutMarksOfPaper passes it on', async () => {
+    const paper = paperOf()
+    const c = compiler([PROBE])
+    await layoutMarksOfPaper(paper, { compile: c.compile, open: async () => null as never, OPS: {} as never, compilerOf: async () => 'latex' }).catch(() => {})
+    expect(ENGINES(c.asked)[0]).toBe('latex')
   })
 })

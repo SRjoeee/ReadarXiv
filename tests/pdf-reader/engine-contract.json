@@ -173,6 +173,7 @@
     "citationLines",
     "classOf",
     "commandOf",
+    "compilerOfPdf",
     "countValues",
     "creationEpochOf",
     "cutBundle",
