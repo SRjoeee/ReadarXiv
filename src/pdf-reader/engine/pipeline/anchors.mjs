@@ -279,9 +279,9 @@ let shared = new Float64Array(256)
 const ON_BASE = 0.1
 /** the token a mark stands at, on the mark's baseline: for a start mark the word whose box is nearest it of those it does not
  *  stand past (a start mark is set before its unit's first glyph: a word whose box holds the mark is its word), else of those it
- *  does; for an end mark, its mirror, the last word that ends before it (half a character of the word's slack: a last word's
- *  shared box may overrun the mark a little), else the last that begins before it (a point of slack: boxes are approximate,
- *  see tokenizeDocument), of the words within 0.4 of their height of the mark's
+ *  does; for an end mark, its mirror, the last word that begins before it (a point of slack: boxes are approximate, see
+ *  tokenizeDocument; a last word's shared box may overrun the mark by a word's length, 2610.10069's "given by|" 9.8 pt), of
+ *  the words within 0.4 of their height of the mark's
  *  baseline — those on its own baseline (ON_BASE) first: a figure's label set large 4.7 pt above a heading's baseline begins
  *  after the heading's last word and is no word of its line (1706's "Attention Visualizations" and the "Layer5" beside it).
  *  A start mark past a word's box and short of the next one's is the next word's: the boxes of one text item are its width
@@ -289,23 +289,15 @@ const ON_BASE = 0.1
  *  mark, and the nearest box was the label's on a document read as one item and the caption's first word's on the same page
  *  read in items cut at the mark (our base page wrapped by optional content: 24 units of 11 papers, a start mark after a
  *  caption's label or a paragraph's run-in number, left the original's). No slack past a word's end: a label's digit is one
- *  narrow character, and half of one took 2610.22214's "9" (its box 1.4 pt short of the mark) for its caption's first word.
- *  An end mark before a placeholder that ends its unit (the end mark stands after the last text) had the placeholder's first
- *  word where the shared width began it within the point of slack, or the mark inside its box: 2610.20581's "Theorem 2.2" and
- *  2610.20716's "model the", three units */
+ *  narrow character, and half of one took 2610.22214's "9" (its box 1.4 pt short of the mark) for its caption's first word */
 export function tokenAtMark(doc, byPage, mk, start) {
   let best = null, on = null
-  // (`past`: for a start mark, the mark past the word's end; for an end mark, the word's end past the mark by more than half a
-  // character of its own, the mark then not after it)
-  const better = (cur, k, d, past) => !cur || (past !== cur.past ? !past : start ? d < cur.d : doc[k].x > doc[cur.k].x)
+  const better = (cur, k, d, past) => !cur || (start ? (past !== cur.past ? !past : d < cur.d) : doc[k].x > doc[cur.k].x)
   for (const k of byPage.get(mk.page) ?? []) {
     const t = doc[k], dy = Math.abs(t.y - mk.y)
     if (dy > t.h * 0.4) continue
     let d = 0, past = false
-    if (start) { past = mk.x > t.x + t.w; d = mk.x < t.x ? t.x - mk.x : past ? mk.x - t.x - t.w : 0; if (d >= 8) continue } else {
-      if (!(t.x < mk.x + 1)) continue
-      past = t.x + t.w > mk.x + t.w / Math.max(1, t.t?.length ?? 1) / 2
-    }
+    if (start) { past = mk.x > t.x + t.w; d = mk.x < t.x ? t.x - mk.x : past ? mk.x - t.x - t.w : 0; if (d >= 8) continue } else if (!(t.x < mk.x + 1)) continue
     if (better(best, k, d, past)) best = { k, d, past }
     if (dy <= ON_BASE * t.h && better(on, k, d, past)) on = { k, d, past }
   }
@@ -327,6 +319,21 @@ export const pageIndex = d => { const m = new Map(); d.forEach((t, k) => (m.get(
  *  kept when a Latin run still took the CJK characters after it in is the start mark's first part or the end mark's
  *  last */
 const cut = (t, start) => (t && t.length > 1 && CJK.test(t) ? ((start ? tokens(t)[0] : tokens(t).at(-1))?.t ?? t) : t)
+
+/** whether a carried word is token k's (as it was, or as the tokenizer cuts it now), or that of the word beside k on its line the
+ *  mark faces, before a start mark and after an end mark: the marked original's word boxes are approximate (one text item a
+ *  line, its width shared by its characters) where the page the marks are carried to may have them exact (our base page,
+ *  wrapped, read in items cut at its groups), so the marked original's word at a mark may be the one beside the mark (a start
+ *  mark's nearer a caption's label; an end mark's the next word, its shared box begun before the mark: 2610.20716's "model|
+ *  the", 2610.20581's "Theorem| 2.2", 2610.22195's cells) — never further */
+function wordAt(doc, k, t, start) {
+  const same = j => t === doc[j].t || cut(t, start) === doc[j].t
+  if (same(k)) return true
+  const step = start ? -1 : 1
+  let j = k + step
+  while (j >= 0 && j < doc.length && doc[j].t === '') j += step
+  return j >= 0 && j < doc.length && doc[j].page === doc[k].page && Math.abs(doc[j].y - doc[k].y) <= 0.4 * doc[k].h && same(j)
+}
 
 /**
  * Marks → Map id → [first token, last token]. `marks` is Map `${id}s` / `${id}e` → { page, x, y, t? }. A mark that
@@ -350,7 +357,7 @@ export function boundsFromMarks(doc, marks, byPage = pageIndex(doc), reach = nul
     // a carried word as it was, or as the tokenizer cuts it now (cut): the tokenizer still joins a word a hyphen cuts
     // at a line's end with the CJK character after it, as the carried word has it (the review of A1, M2); a reached start
     // has none to compare
-    if ((!reached && s.t !== undefined && s.t !== doc[a].t && cut(s.t, true) !== doc[a].t) || (e.t !== undefined && e.t !== doc[b].t && cut(e.t, false) !== doc[b].t)) continue
+    if ((!reached && s.t !== undefined && !wordAt(doc, a, s.t, true)) || (e.t !== undefined && !wordAt(doc, b, e.t, false))) continue
     out.set(id, [a, b])
   }
   return out

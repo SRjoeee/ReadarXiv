@@ -1950,9 +1950,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     ("Figure 1: Attention") was nearer the label's "1" in the one and on "attention" in the other: 24 units of 11 papers
     (`unplacedMarks`). A start mark now takes the nearest word it does not stand past, the word it stands past only where
     there is no other; with no slack past a word's end: half a character of slack took a label's narrow digit for the first
-    word in three units (2610.22214's "9", 1.4 pt short of the mark). An end mark keeps its rule, the last word that begins before it, which
-    is the mirror: a rule that took the last word ending before the mark would take the word before it wherever the last
-    word's shared box overruns the mark. The shared width itself (the tokenizer's) is left as it is.
+x
   - *A front matter unit's placeholders keep their marks* (`layout/marks.mjs` `layoutMarking`). \axtpma takes itself off in a
     moving argument, as a copy written to a list must; a \thanks stores its text with \protected@xdef and sets it in its note,
     so its placeholders' marks were gone and their ink LOST (5 notes' addresses, `\texttt`, `\href`). The marks of a front

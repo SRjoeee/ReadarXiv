@@ -95,14 +95,18 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     const one = tokenizeDocument([{ page: 1, items: [item('Figure 1: Attention maps', 318, 440, { width: 120 })], styles: {} }])
     expect(markWords(one, new Map([['0e', { page: 1, x: 436, y: 440 }]])).get('0e')?.t).toBe('maps')
     expect(markWords(one, new Map([['0e', { page: 1, x: 414, y: 440 }]])).get('0e')?.t).toBe('attention')
-    // the next word's shared box begun before the mark, the mark inside it: the word before is the unit's last (2610.20716's
-    // "… model| the right", our base page's "the" 4.5 pt after the mark)
+    // the next word's shared box begun before the mark, the mark inside it: the marked original's word at the end mark is the
+    // next one ("the"), our base page's the last ("model", exact); the unit is bounded all the same, by the base page's word, one
+    // word beside it the most (2610.20716's "… model| the right")
     const next = tokenizeDocument([{ page: 13, items: [item('model', 161.46, 255.91, { width: 24.57 }), item('the', 195.86, 255.91, { width: 14.74 })], styles: {} }])
-    expect(markWords(next, new Map([['0e', { page: 13, x: 198.13, y: 255.91 }]])).get('0e')?.t).toBe('model')
-    // a placeholder after the end mark (an end mark stands after the last text) begun within the point of slack: not the last
-    // word (2610.20581's "of Theorem| 2.2")
-    const ref = tokenizeDocument([{ page: 7, items: [item('Theorem', 160, 706.92, { width: 44 }), item('2.2', 208.43, 706.92, { width: 17.8 })], styles: {} }])
-    expect(markWords(ref, new Map([['0e', { page: 7, x: 207.5, y: 706.92 }]])).get('0e')?.t).toBe('theorem')
+    const exact = tokenizeDocument([{ page: 13, items: [item('So', 140, 255.91, { width: 10 }), item('model', 169.07, 255.91, { width: 24.21 }), item('the', 202.6, 255.91, { width: 13.78 }), item('right', 220.97, 255.91, { width: 22.97 })], styles: {} }])
+    const ends = markWords(next, new Map([['0s', { page: 13, x: 161.46, y: 255.91 }], ['0e', { page: 13, x: 198.13, y: 255.91 }]]))
+    expect(ends.get('0e')?.t).toBe('the')
+    expect(boundsFromMarks(exact, new Map([['0s', { page: 13, x: 169.07, y: 255.91, t: 'model' }], ['0e', { ...ends.get('0e')!, t: 'the' }]])).get('0')).toEqual([1, 1])
+    // two words over is no longer the same layout
+    expect(boundsFromMarks(exact, new Map([['0s', { page: 13, x: 169.07, y: 255.91, t: 'model' }], ['0e', { page: 13, x: 198.13, y: 255.91, t: 'right' }]])).get('0')).toBeUndefined()
+    // and the start side's mirror: a start mark's carried word the label's, the word before the base page's
+    expect(boundsFromMarks(exact, new Map([['0s', { page: 13, x: 169.07, y: 255.91, t: 'so' }], ['0e', { page: 13, x: 198.13, y: 255.91, t: 'model' }]])).get('0')).toEqual([1, 1])
   })
 
   it('a word the tokenizer still joins with a CJK character — a Latin word hyphenated at a line\'s end, CJK on the next — is carried whole, and bounds its unit (the review of A1, M2)', () => {
