@@ -355,3 +355,27 @@ describe('the proof restores the console on every path (a throw before, during o
     }
   })
 })
+
+describe('Codex on #439', () => {
+  it('a back link is cut by its dict\'s context: an OCMD\'s /P policy is data, direct or by reference, never reused across policies', async () => {
+    for (const indirect of [false, true]) {
+      const policy = (n: number, v: string) => (indirect ? [[n, { text: v }] as [number, Obj]] : [])
+      const p = (n: number, v: string) => (indirect ? `${n} 0 R` : v)
+      const { orig, ours } = pairOf({
+        origExtra: [[15, { text: '<< /Type /OCG /Name (Layer) >>' }], [16, { text: `<< /Type /OCMD /OCGs 15 0 R /P ${p(17, '/AnyOn')} >>` }], ...policy(17, '/AnyOn')],
+        oursExtra: [[25, { text: '<< /Type /OCG /Name (Layer) >>' }], [26, { text: `<< /Type /OCMD /OCGs 25 0 R /P ${p(27, '/AllOff')} >>` }], ...policy(27, '/AllOff')],
+        oursRes: '<< /Font << /F7 20 0 R >> /Properties << /oc1 26 0 R >> >>',
+        oursBody: `${line('Our one', 100, 'F7')}/OC /oc1 BDC ${line('hidden in ours', 60, 'F7')}EMC\n`,
+      })
+      const r = await built(orig, ours)
+      const t = latin(r.delta)
+      expect(t, String(indirect)).not.toMatch(/\/oc1 16 0 R/)
+      expect(await prove(orig, r.delta, ours, r.replaced), String(indirect)).toMatchObject({ ok: true })
+      // (a forged reuse of the original's OCMD fails the proof)
+      const at = /\/oc1 (\d+) 0 R/.exec(t)!
+      expect(at[1]!.length).toBe(2)
+      const forged = enc(t.replace(at[0], '/oc1 16 0 R'))
+      expect(await prove(orig, forged, ours, r.replaced), String(indirect)).toMatchObject({ ok: false, why: /graph is not ours/ })
+    }
+  })
+})

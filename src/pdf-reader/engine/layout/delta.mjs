@@ -44,9 +44,25 @@ const budget = max => { let spent = 0; return { spend: n => { spent += n; if (sp
 const DEPTH_MAX = 256
 /** a copied closure deeper than this is refused (`delta-bound`) before the stack is */
 const COPY_DEPTH_MAX = 1024
-/** the keys cut from the canonical form where their value is a reference: back links (reference cycles); a direct value under
- *  one of them is data (an optional-content membership's /P policy), kept */
-const CUT = new Set(['/Parent', '/P', '/Prev', '/Next', '/First', '/Last'])
+/**
+ * The keys cut from the canonical form and the proof's graph: the back links of the structures that have them, decided by the
+ * dict's own context, never by its value being a reference — /Parent of a page-tree node; /P and /Parent of an annotation; /P
+ * of a structure element; /Parent, /Prev, /Next, /First and /Last of the outline and its items. Nothing else is cut: an
+ * optional-content membership's /P policy (direct or by reference), /OCGs and /VE are data, and so is every key of a dict of
+ * no context above (a reference cycle there leaves the object unmatched, copied, never wrong)
+ */
+const NONE = new Set(), PARENT = new Set(['/Parent']), ANNOT = new Set(['/P', '/Parent']), ELEM = new Set(['/P'])
+const OUTLINE = new Set(['/Parent', '/Prev', '/Next', '/First', '/Last'])
+function backLinksOf(PL, d) {
+  const name = k => { const v = d.get(PL.PDFName.of(k)); return v instanceof PL.PDFName ? v.asString() : null }
+  const type = name('Type')
+  if (type === '/OCMD' || type === '/OCG') return NONE
+  if (type === '/Page' || type === '/Pages') return PARENT
+  if (type === '/Annot' || (type === null && d.get(PL.PDFName.of('Subtype')) instanceof PL.PDFName && d.get(PL.PDFName.of('Rect')) instanceof PL.PDFArray)) return ANNOT
+  if (type === '/StructElem') return ELEM
+  if (type === '/Outlines' || (type === null && d.get(PL.PDFName.of('Title')) !== undefined && d.get(PL.PDFName.of('Parent')) !== undefined)) return OUTLINE
+  return NONE
+}
 /** the page tree's own objects: a resource closure never copies them (a back link into the tree is written null) */
 const TREE = new Set(['/Page', '/Pages', '/Catalog'])
 const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'))
@@ -114,7 +130,8 @@ function canonical(PL, heldMax, work) {
       return token
     }
     const serDict = (d, isStream, depth, drop = null) => {
-      const entries = d.entries().map(([k, v]) => [k.asString(), v]).filter(([k, v]) => !(CUT.has(k) && v instanceof PDFRef) && !(isStream && k === '/Length') && !drop?.has(k)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      const cut = backLinksOf(PL, d)
+      const entries = d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => !cut.has(k) && !(isStream && k === '/Length') && !drop?.has(k)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
       const parts = []
       for (const [k, v] of entries) { const s = ser(v, depth); if (s === null) return null; parts.push(`${k} ${s}`) }
       return `<<${parts.join(' ')}>>`
@@ -327,7 +344,7 @@ function sameGraph(PL) {
       if (a instanceof PDFRawStream || b instanceof PDFRawStream) return a instanceof PDFRawStream && b instanceof PDFRawStream && equalBytes(a.contents, b.contents) && eq(a.dict, b.dict, new Set(['/Length']), depth + 1)
       if (a instanceof PDFDict || b instanceof PDFDict) {
         if (!(a instanceof PDFDict && b instanceof PDFDict)) return false
-        const entries = d => new Map(d.entries().map(([k, v]) => [k.asString(), v]).filter(([k, v]) => !(CUT.has(k) && v instanceof PDFRef) && !drop?.has(k)))
+        const entries = d => { const cut = backLinksOf(PL, d); return new Map(d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => !cut.has(k) && !drop?.has(k))) }
         const ea = entries(a), eb = entries(b)
         return ea.size === eb.size && [...ea].every(([k, v]) => eb.has(k) && eq(v, eb.get(k), null, depth + 1))
       }
