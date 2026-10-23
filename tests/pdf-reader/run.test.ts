@@ -508,6 +508,13 @@ describe('the base (design §3.2, §3.5): only a layer over our own compile draw
       expect(kinds(a.events).filter(k => k === 'translating' || k === 'translated'), what).toEqual([])
       expect(a.events.filter(e => e.type === 'unavailable'), what).toEqual([{ type: 'unavailable', why: 'cannot-prepare', retryAt: null }])
     }
+    // (a base of ours held as a delta, which this run does not bind yet: nothing sent either, the same word)
+    const delta = run({ looks: [() => new Response(catalog)], head: { base: { ...mOurs.index.head.base, kind: 'delta' } } })
+    await settle()
+    expect(delta.engine.translate).not.toHaveBeenCalled()
+    expect(delta.side.side.take).not.toHaveBeenCalled()
+    expect(kinds(delta.events).filter(k => k === 'translating' || k === 'translated')).toEqual([])
+    expect(delta.events.filter(e => e.type === 'unavailable')).toEqual([{ type: 'unavailable', why: 'cannot-prepare', retryAt: null }])
     // and a head of ours is translated as before
     const ok = run({ looks: [() => new Response(catalog)] })
     await settle()

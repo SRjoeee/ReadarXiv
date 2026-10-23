@@ -9,8 +9,14 @@ export interface SampleCut {
   catalog: Uint8Array
   index: LayerIndex
   paper: { id: string; version: number; pages: number }
-  /** our base page the head names: the stand-in PDF's length and digest (the stand-in serves it at /api/v1/base/<id>v<n>/<sha256>) */
-  base: { bytes: number; sha256: string }
+  /** our base page the head names: the stand-in PDF's length and digest (the stand-in serves it at /api/v1/base/<id>v<n>/<sha256>);
+   *  null where the base is a delta */
+  base: { bytes: number; sha256: string } | null
+  /** the delta a `base: 'delta'` cut's head names (its bytes `data`, served at the layer's object route by its digest; its key
+   *  deltaKey's), our page it was made of, and the original it extends; null for a cut of `base: 'ours'` */
+  delta: { bytes: number; sha256: string; key: string; xref: number; replaced: [from: number, to: number][]; data: Uint8Array } | null
+  ours: Uint8Array | null
+  orig: { bytes: number; sha256: string; xref?: number }
   /** each page's left part's digest */
   leftRefs: Record<number, string>
   stats: Record<string, number>
@@ -18,6 +24,9 @@ export interface SampleCut {
   views: [number, number, number, number][]
   kinds: (string | null)[]
 }
-export declare function cutSample(files: { pdf: Uint8Array; bundle: Uint8Array }): Promise<SampleCut>
+/** the sample cut, its base our page itself (`ours`, the default) or a delta over the stand-in PDF (`delta`) */
+export declare function cutSample(files: { pdf: Uint8Array; bundle: Uint8Array }, o?: { base?: 'ours' | 'delta' }): Promise<SampleCut>
+/** our page as another PDF of the original's pages (every page but the last one more content stream that draws nothing) */
+export declare function oursOf(pdf: Uint8Array): Promise<Uint8Array>
 export declare function rowsOf(index: LayerIndex, lang: string, make: (id: number, text: string) => string): Row[]
 export declare function sampleFiles(dir?: URL): { pdf: Uint8Array; bundle: Uint8Array }

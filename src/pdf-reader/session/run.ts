@@ -231,9 +231,11 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
    * it proves in the background that the tab's PDF is `orig` (proveTab), or, where the left is known to show another PDF (our copy
    * of an earlier head's orig, or the tab proven to be it: a retry may bring a head over another), shows the newly named original
    * first. A check that does not say pages and boxes alike, a head with no `orig`, a digest or a length no address is made of, or no PDF.js to read a base by ranges: no layer, the original
-   * staying
+   * staying. A base held as a delta over arXiv's PDF (`kind` 'delta': its composed document the original's bytes and the delta
+   * object, not a PDF at the base's address) is not read here yet: no layer, the original staying
    */
-  async function bindOurs(base: { bytes: number; sha256: string; check?: unknown }): Promise<boolean> {
+  async function bindOurs(base: { bytes: number; sha256: string; check?: unknown; kind?: unknown }): Promise<boolean> {
+    if (base.kind === 'delta') return false
     const check = base.check as { pages?: unknown; boxes?: unknown } | null | undefined
     const pages = check?.pages
     const proved = typeof check === 'object' && check !== null && check.boxes === 'equal' && Array.isArray(pages) && pages.length === 2 && Number.isSafeInteger(pages[0]) && pages[0] === pages[1]
@@ -401,7 +403,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     // a head whose layer draws nothing (base.ts layerDraws) is decided here, at the head, before bind has run and before a single
     // unit goes to the user's service: nothing is translated for a paper whose pages the layer will not draw, and the lasting
     // word is told (the controller keeps it over the side's own refusal at bind)
-    if (!layerDraws((index as { head?: { base?: unknown } }).head?.base)) {
+    // (a base of ours held as a delta over arXiv's PDF is not bound here yet, bindOurs: decided here too, nothing sent for it)
+    const headBase = (index as { head?: { base?: { kind?: unknown } } }).head?.base
+    if (!layerDraws(headBase) || headBase?.kind === 'delta') {
       terminal = true
       attempt?.abort()
       return unavailable('cannot-prepare')
