@@ -417,11 +417,13 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
   const read = async (bytes, tag) => {
     const log0 = console.log, warn0 = console.warn, err0 = console.error
     const keep = (...a) => said[tag].add(a.map(String).join(' '))
+    // (the console restored on every path: getDocument may throw before its task exists, the task reject, its destroy throw)
+    let task = null
     console.log = keep
     console.warn = keep
     console.error = keep
-    const task = getDocument({ ...documentOptions, data: bytes, verbosity: 1 })
     try {
+      task = getDocument({ ...documentOptions, data: bytes, verbosity: 1 })
       const doc = await task.promise
       const pages = []
       for (let p = 1; p <= doc.numPages; p++) {
@@ -432,10 +434,11 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       }
       return pages
     } finally {
-      console.log = log0
-      console.warn = warn0
-      console.error = err0
-      await task.destroy?.()
+      try { await task?.destroy?.() } finally {
+        console.log = log0
+        console.warn = warn0
+        console.error = err0
+      }
     }
   }
   // (one copy of a source document at a time, for PDF.js to own; the composed bytes are the proof's own, read last)

@@ -338,3 +338,20 @@ describe('the review\'s findings', () => {
     expect(deltaSection(d, { bytes: ORIG_TABLE.length, xref: startxrefOf(ORIG_TABLE)! }).why).toMatch(/tails/)
   })
 })
+
+describe('the proof restores the console on every path (a throw before, during or after PDF.js reads)', () => {
+  it('a getDocument that throws at once, a promise rejected, a destroy that throws: the refusal given, console.log, warn and error the originals', async () => {
+    const r = await built(ORIG_TABLE)
+    const before = [console.log, console.warn, console.error]
+    const stubs = [
+      () => { throw new Error('getDocument threw') },
+      () => ({ promise: Promise.reject(new Error('rejected')), destroy: async () => {} }),
+      (o: Record<string, unknown>) => { const t = getDocument(o as never); return { promise: t.promise, destroy: async () => { await t.destroy(); throw new Error('destroy threw') } } },
+    ]
+    for (const stub of stubs) {
+      const got = await proveDelta(ORIG_TABLE, r.delta, OURS, { PL, getDocument: stub as never, replaced: r.replaced })
+      expect(got.ok).toBe(false)
+      expect([console.log, console.warn, console.error]).toEqual(before)
+    }
+  })
+})
