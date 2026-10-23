@@ -23,8 +23,8 @@
    "fmtutil": "r77314"
   }
  },
- "made": "2026-10-23T05:03:41.923Z",
- "digest": "00ee0869cdb1baf23a72c494e88c80ab2e6d5721661144e68eeac18961124666",
+ "made": "2026-10-23T05:28:55.653Z",
+ "digest": "6fbda7a570df6b9440fda26c5043bb8f8340b83f97398e2d434a76808ada5826",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -1283,9 +1283,9 @@
   },
   {
    "path": "fixtures/2307.16209v1-zh/base.json",
-   "sha256": "0690b1c723694400d066d9ea0b789d64b8ebe3ae5f4077e80bfb25a8734751d6",
+   "sha256": "bfea45eeaeb58c847bc0e30820fbe33eec39d9cc663bdc3cdd3010cf6e3fcf1e",
    "bytes": 528,
-   "url": "r2://readarxiv-ci/gate-pack/0690b1c723694400d066d9ea0b789d64b8ebe3ae5f4077e80bfb25a8734751d6"
+   "url": "r2://readarxiv-ci/gate-pack/bfea45eeaeb58c847bc0e30820fbe33eec39d9cc663bdc3cdd3010cf6e3fcf1e"
   },
   {
    "path": "fixtures/2307.16209v1-zh/base.pdf",
@@ -1295,9 +1295,9 @@
   },
   {
    "path": "fixtures/2307.16209v1-zh/layout.json",
-   "sha256": "f19773de1ee5ab7a10082fbc7f7de8f9dcbbad2eaef4a1eb474ef493fbf0438c",
-   "bytes": 437111,
-   "url": "r2://readarxiv-ci/gate-pack/f19773de1ee5ab7a10082fbc7f7de8f9dcbbad2eaef4a1eb474ef493fbf0438c"
+   "sha256": "d1da86d6a0e2084c01d85621fb68e1be16e93492ea1127c0d46b4a107638d462",
+   "bytes": 443385,
+   "url": "r2://readarxiv-ci/gate-pack/d1da86d6a0e2084c01d85621fb68e1be16e93492ea1127c0d46b4a107638d462"
   },
   {
    "path": "fixtures/2307.16209v1-zh/record.json",
