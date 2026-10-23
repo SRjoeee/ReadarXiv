@@ -34,7 +34,9 @@ import { installFloatingButton } from '@/shared/floating'
 
 const hosts = () => document.querySelectorAll('.axt-floating').length
 const inside = (selector: string) => document.querySelector('.axt-floating')!.shadowRoot!.querySelector(selector) as HTMLElement
-const click = (selector: string) => inside(selector).dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 1 }))
+/** a click as the reader's pointer makes it: trusted, as no page script's can be (the button acts on no other, core/floating/button.ts) */
+const userClick = (init: MouseEventInit) => Object.defineProperty(new MouseEvent('click', init), 'isTrusted', { value: true })
+const click = (selector: string) => inside(selector).dispatchEvent(userClick({ bubbles: true, composed: true, detail: 1 }))
 const settle = () => new Promise(resolve => setTimeout(resolve, 0))
 const settings = (floating: Partial<FloatingEntryState>): EntrySettings => ({ ...DEFAULT_ENTRY_SETTINGS, floating: { ...DEFAULT_ENTRY_SETTINGS.floating, ...floating } })
 const install = () => installFloatingButton(document, { main: { kind: 'toggle', run: () => undefined }, label: (S, active) => (active ? S.primary.restore : S.primary.translate) })
