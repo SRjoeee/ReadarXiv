@@ -189,8 +189,8 @@ describe('a layout no barred start touches is the one it was', () => {
       out[to].push(JSON.stringify([to, w, layout.clipped, shown, layout.lines.map(l => Math.round((l as unknown as { used: number }).used * 1000))]))
     }
     const digests = Object.fromEntries(Object.entries(out).map(([to, v]) => [to, createHash('sha256').update(v.join('\n')).digest('hex').slice(0, 16)]))
-    // (the Chinese and Japanese texts' since a CJK line squeezes to take a group it misses by a little, 2026-10-23,
-    // layer2.mjs squeezeTakes; the German, Russian and Korean texts' are the ones they were before it)
-    expect(digests).toEqual({ de: '458033d154ed2821', ru: 'fe6bba85f07f8b69', zh: '53d8ec8e8f5b11f3', ja: '29a1259a717a75b1', ko: '31d1186069ea0844' })
+    // (the Chinese and Japanese texts' since a letter-spaced CJK line squeezes to take a group it misses by a little,
+    // 2026-10-23, layer2.mjs squeezeTakes; the German, Russian and Korean texts' are the ones they were before it)
+    expect(digests).toEqual({ de: '458033d154ed2821', ru: 'fe6bba85f07f8b69', zh: '2dcefb1882647b20', ja: '8e3872a8cb90cd41', ko: '31d1186069ea0844' })
   })
 })

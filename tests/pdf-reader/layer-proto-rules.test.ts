@@ -205,11 +205,9 @@ const drawingOf = async (run: Awaited<ReturnType<typeof open>>) => {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('')
 }
 /** SWITCH_PAGE's drawing by the engine before the leftover switch (0be9390d, D6's F6b, built in a scratch directory from
- *  `git archive 0be9390d src`), opened with its built-in set but Chinese's fill top at 2 em as the set is now, was
- *  8bbac5fa00176bad…; since a CJK line squeezes to take a group it misses by a little (2026-10-23, layer2.mjs
- *  squeezeTakes), B's and C's lines, twenty characters that fill them exactly, are drawn at the page fill's tracking of
- *  +0.01 em squeezed back onto their lines, and that is the drawing: what 'foot' must still draw */
-const BEFORE_THE_SWITCH = 'c9718de4c300bcbde8049238bd0b78c1ecf05067c005b03a4f6c09362e54ba77'
+ *  `git archive 0be9390d src`), opened with its built-in set but Chinese's fill top at 2 em as the set is now: what 'foot'
+ *  must still draw */
+const BEFORE_THE_SWITCH = '8bbac5fa00176badb835aa6e10bb614e4d00860ad954641f8ae0cec5d8d7a4b6'
 
 describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' moves the paragraphs up under a short one and paints them last, from the top; 'foot' draws as before the switch", () => {
   const packed = () => { const set = editable(); set.scripts.Hans!.leftover = 'pack'; return set }

@@ -34,9 +34,9 @@
 //   leading (down to the script's floor), and only then the size, in steps, down to its floor; past it, clipped.
 // - Line breaking: CJK kinsoku (as before), Korean at spaces with a cap on word spacing (ragged past it), alphabets at
 //   spaces with TeX's patterns for hyphenation (hyph.js), CJK–Latin autospace in Chinese and Japanese. In Chinese and
-//   Japanese a line may break before an inline formula that follows a CJK character (xeCJK's \CJKecglue), and a line takes
-//   a group it misses by a little by squeezing (its marks' blank halves, then at most SQUEEZE em a gap) where that costs
-//   less a gap than the stretch it would be justified by without it (breakLines' squeezeTakes).
+//   Japanese a line may break before an inline formula that follows a CJK character (xeCJK's \CJKecglue), and a line that
+//   would be letter-spaced without the group it misses takes it by squeezing (its marks' blank halves, then at most SQUEEZE
+//   em a gap, never past the tracking floor) where that costs less a gap than the stretch (breakLines' squeezeTakes).
 // - DOM text: an SVG per page over the page's copy, one <text> per line and a <tspan> per run, positioned from canvas
 //   measurements (no layout read-back): selectable, copyable, searchable, vector at any zoom. The canvas copy keeps the
 //   erasing and the crops of math.
@@ -2611,6 +2611,19 @@ const tokW = (t, f, st, scale) => {
  */
 const SQUEEZE = 0.02
 
+/**
+ * The stretch a gap past which a CJK line squeezes rather than stretch (breakLines' squeezeTakes), in em: below it the
+ * stretch does not read as letter-spaced (87 % of the sweep's justified CJK lines are within 0.05 em of their natural
+ * spacing), and the line is set as before; the squeeze is for the lines a group left letter-spaced
+ */
+const STRETCH_MIN = 0.05
+
+/** the full-width marks whose blank half a squeeze may take: those whose ink stands in one half of the em in every CJK face
+ *  the layer draws (the comma, the full stop, the enumeration comma, brackets and quotes); not the colon, the semicolon and
+ *  the exclamation and question marks, which a Japanese face sets in the em's middle (Harano Aji's question mark reaches
+ *  0.72 em: cut by half, it ran into the next character) */
+const SQUEEZE_MARKS = /^[\u3001\u3002\uFF0C\uFF0E\uFF08\uFF09\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009\u300A\u300B\u3018\u3019\u3016\u3017\u201C\u201D\u2018\u2019]$/
+
 /** whether a line is set as Latin text, its slack in its word spaces (placeItems): it has spaces, and its script breaks only
  *  at spaces or fewer than half its items are CJK */
 const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || items.filter(it => it.t.cls === 'cjk').length < items.length / 2)
@@ -2618,7 +2631,7 @@ const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || i
 /** the marks of a line whose blank half a squeeze may take (placeItems): its full-width marks that have not lost one (`cut`),
  *  but the closing mark at its end where it hangs in the margin; none where the state compresses as far as the rules let it
  *  (compress 2: every mark has lost its half) or the rules compress none (compressMax 0) */
-const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && !(hangs && n === items.length - 1)) : [])
+const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && SQUEEZE_MARKS.test(it.t.s) && !(hangs && n === items.length - 1)) : [])
 
 /**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
@@ -2790,10 +2803,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   // characters): light compression before stretching, as TeX takes the cheaper of the two breaks by their badness. The line
   // takes the group where the group overflows it by no more than the line can give, its marks' blank halves (the usual CJK
   // punctuation compression, where the state compresses less than the rules let it) and then SQUEEZE em a gap, its word
-  // spaces at spaceMin as `fits` takes them; and only where that squeeze a gap is less than the stretch a gap the line would
-  // be justified by if it ended before the group (`stretchOf`). placeItems sets it (`squeezed`). Never a centred line, nor
-  // one placeItems sets as Latin text
-  const squeezes = !!P.cjk && !P.keepAll
+  // spaces at spaceMin as `fits` takes them; and only where the line would otherwise be letter-spaced, its stretch a gap
+  // without the group (`stretchOf`) past STRETCH_MIN em, and the squeeze a gap less than that stretch. placeItems sets it
+  // (`squeezed`). The gaps close no further than the tracking floor, trackMin: the squeeze and the unit's tracking together
+  // never set two characters nearer than the fit's tightest state does. Never a centred line, nor one placeItems sets as
+  // Latin text; nor at a tracking above the one the fit set the unit at (`fitTrack`, laidOut's), which only the page fill
+  // sets (run.mjs fillPage: a unit short of its frame letter-spaced to fill it), whose lines the squeeze would take back
+  const squeezes = !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)
+  const gapSqueeze = Math.max(0, Math.min(SQUEEZE, st.track - (P.trackMin ?? 0))) * f
   /** the stretch a gap the line in hand is justified by if it is closed here: its trailing spaces and its last kern dropped
    *  and its closing mark hung, as trim and placeItems leave it; Infinity where it has no gap */
   const stretchOf = cap => {
@@ -2811,7 +2828,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     if (latinishOf(all, P)) return false
     const need = line.x - (line.spaces + g.sp) * (1 - P.spaceMin) + g.w - g.hang - cap
     const gaps = all.length - 1
-    return gaps > 0 && need <= squeezable(all, g.hang > 0, st.compress, P).length * half + SQUEEZE * f * gaps + 1e-9 && need / gaps < stretchOf(cap)
+    const stretch = stretchOf(cap)
+    return gaps > 0 && stretch > STRETCH_MIN * f && need <= squeezable(all, g.hang > 0, st.compress, P).length * half + gapSqueeze * gaps + 1e-9 && need / gaps < stretch
   }
   if (slots.length) open()
   while (i < tokens.length && li < slots.length && !stop) {
@@ -3268,7 +3286,10 @@ function laidOut({ r, st, f }, s, P, tried, blocks) {
     if (!inFlow(a, b) || !(a.baseline > b.baseline)) continue
     if (a.baseline - lineExtent(a, f, st.scale).d < b.baseline + lineExtent(b, f, st.scale).a) unopened++
   }
-  return { lines: r.lines, f, s, scale: st.scale, state: st, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled, opened: r.lines.filter(l => l.opened > 0).length, unopened }
+  // (`fitTrack`: the tracking the fit set the unit at, which a state made from this one keeps (run.mjs fillPage's): a line
+  // squeezes at no tracking above it, breakLines' squeezes)
+  const state = st.fitTrack === undefined ? { ...st, fitTrack: st.track } : st
+  return { lines: r.lines, f, s, scale: st.scale, state, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled, opened: r.lines.filter(l => l.opened > 0).length, unopened }
 }
 
 /**

@@ -6,9 +6,10 @@ import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mj
 // before it, so the character, the formula and the mark after it were one group a line could not take: the line ended
 // early and its gaps were spread up to cjkJust (2610.10069 page 7, unit 49: 4.84 em over 25 gaps, 0.194 em a gap).
 // xeCJK sets \CJKecglue there, a place TeX may break; and TeX takes the cheaper of two breaks by their badness. So the
-// line may break before the formula, and a line takes a group it misses by a little by squeezing (its marks' blank halves,
-// its spaces to spaceMin, then at most 0.02 em a gap) where that costs less a gap than stretching without it
-// (layer2.mjs tokensOf2's crop glue, breakLines' squeezeTakes, placeItems). Korean and the alphabets are as they were.
+// line may break before the formula; and a line that would be letter-spaced without the group it misses (more than
+// 0.05 em a gap) takes it by squeezing (its marks' blank halves, its spaces to spaceMin, then at most 0.02 em a gap, never
+// past the tracking floor) where that costs less a gap than the stretch (layer2.mjs tokensOf2's crop glue, breakLines'
+// squeezeTakes, placeItems). Korean and the alphabets are as they were.
 
 type L2 = typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
 let L2: L2
@@ -97,16 +98,25 @@ describe('a CJK line squeezes to take the group it misses by a little, where tha
     for (const g of gaps(0)) expect(g).toBeCloseTo(0.025, 3)
     expect(lines[0]!.used).toBeCloseTo(102, 6)
   })
+  it('leaves a line alone whose stretch does not read as letter-spaced (at most 0.05 em a gap)', () => {
+    // 101 pt: ten characters (100), 1 pt of slack over nine gaps, 0.011 em: a formula of 2 pt, which 0.01 em a gap would
+    // take, goes to the next line, and the line is justified as before
+    const l = lay([text(han(10)), ph(), text(han(4))], 'zh', 101, { 1: 2 })
+    expect(l.shown[0]).toBe(han(10))
+    expect(l.lines[0]!.squeezed).toBeUndefined()
+    for (const g of l.gaps(0)) expect(g).toBeCloseTo(0.0111, 3)
+  })
   it('breaks before the group where the stretch without it is the cheaper', () => {
-    // 101 pt: ten characters (100), 1 pt of slack over nine gaps, 0.011 em; a formula of 2 pt is squeezed in (1 pt over
-    // ten gaps, 0.010 em), one of 2.5 pt is not (0.015 em), though 0.02 em a gap would take it
-    const at = (cw: number) => lay([text(han(10)), ph(), text(han(4))], 'zh', 101, { 1: cw })
-    expect(at(2).shown[0]).toBe(`${han(10)}[F]`)
-    expect(at(2).lines[0]!.squeezed).toBe(true)
-    const wider = at(2.5)
-    expect(wider.shown[0]).toBe(han(10))
-    expect(wider.lines[0]!.squeezed).toBeUndefined()
-    for (const g of wider.gaps(0)) expect(g).toBeCloseTo(0.0111, 3)
+    // 94.8 pt: four characters, a comma, four characters (90), 4.8 pt over eight gaps, 0.06 em. A formula of 10 pt is 5.2 pt
+    // over, 0.058 em over nine gaps: taken, the comma giving its half; one of 11 pt is 6.2 pt over, 0.069 em: within what
+    // the line can give (6.8 pt), but dearer than the stretch
+    const at = (cw: number) => lay([text(`${han(4)}${COMMA}${han(4)}`), ph(), text(han(4))], 'zh', 94.8, { 1: cw })
+    expect(at(10).shown[0]).toBe(`${han(4)}${COMMA}${han(4)}[F]`)
+    expect(at(10).lines[0]!.squeezed).toBe(true)
+    const dearer = at(11)
+    expect(dearer.shown[0]).toBe(`${han(4)}${COMMA}${han(4)}`)
+    expect(dearer.lines[0]!.squeezed).toBeUndefined()
+    for (const g of dearer.gaps(0)) expect(g).toBeCloseTo(0.06, 3)
   })
   it('gives nothing from a line with no slack: a full line breaks before even a narrow formula', () => {
     const full = lay([text(han(10)), ph(), text(han(4))], 'zh', 100, { 1: 1 })
@@ -114,16 +124,51 @@ describe('a CJK line squeezes to take the group it misses by a little, where tha
     expect(full.lines[0]!.squeezed).toBeUndefined()
     for (const g of full.gaps(0)) expect(g).toBe(0)
   })
-  it('takes no more than its marks and 0.02 em a gap give: a group past that leaves the line stretched as before', () => {
-    // 101.9 pt: ten characters (100) and a formula. One of 3.8 pt is 1.9 pt over, within the ten gaps' 2 pt and cheaper a
-    // gap than the line's 1.9 pt of stretch over nine; one of 4.1 pt is 2.2 pt over, past them: the line keeps its stretch
-    const at = (cw: number) => lay([text(han(10)), ph(), text(han(4))], 'zh', 101.9, { 1: cw })
-    expect(at(3.8).lines[0]!.squeezed).toBe(true)
-    expect(Math.min(...at(3.8).gaps(0))).toBeGreaterThanOrEqual(-0.02)
-    const past = at(4.1)
-    expect(past.shown[0]).toBe(han(10))
-    expect(past.lines[0]!.squeezed).toBeUndefined()
-    for (const g of past.gaps(0)) expect(g).toBeCloseTo(0.0211, 3)
+  it('closes no gap by more than 0.02 em, however costly the stretch: 0.039 em a gap is refused', () => {
+    // 96 pt: nine characters (90), 6 pt over eight gaps, 0.075 em. A formula of 7.8 pt is 1.8 pt over, 0.02 em over nine
+    // gaps: taken. One of 9.5 pt is 3.5 pt over, 0.039 em a gap, cheaper than the stretch but past the bound; one of 8.1
+    // pt is past it by a hair: both leave the line stretched as before
+    const at = (cw: number) => lay([text(han(9)), ph(), text(han(4))], 'zh', 96, { 1: cw })
+    expect(at(7.8).lines[0]!.squeezed).toBe(true)
+    expect(Math.min(...at(7.8).gaps(0))).toBeGreaterThanOrEqual(-0.02)
+    for (const cw of [8.1, 9.5]) {
+      const past = at(cw)
+      expect(past.shown[0], `${cw}`).toBe(han(9))
+      expect(past.lines[0]!.squeezed, `${cw}`).toBeUndefined()
+      for (const g of past.gaps(0)) expect(g).toBeCloseTo(0.075, 3)
+    }
+  })
+  it("never closes the characters past the tracking floor: the squeeze and the unit's tracking together stay within trackMin", () => {
+    // nine characters at the state's tracking on a line of 93 pt, and a formula; trackMin is -0.03 em
+    const P = params('zh')
+    const at = (track: number, cw: number, more: object = {}) => {
+      const tokens = L2.tokensOf2({ kind: 'para', pieces: [text(han(9)), ph(), text(han(4))] } as never, new Map([[1, crop(cw)]]) as never, 'zh', BASE as never, DESIGNS as never, P as never, null, measure as never)
+      const st = { lead: 1, track, trackLatin: 0, compress: 1, borrow: 0, scale: 1, knob: 'track', ...more }
+      return L2.layoutAt(tokens as never, [block(4, 93)] as never, 10, P as never, st as never).lines[0] as unknown as { squeezed?: boolean }
+    }
+    // (at -0.02 the gaps may close by 0.01 em, 0.9 pt over nine: a formula of 5.5 pt, 0.7 pt over, is taken)
+    expect(at(-0.02, 5.5).squeezed).toBe(true)
+    // (at the floor, none: a formula of 6 pt, 0.3 pt over, goes down and the line is stretched by 0.071 em)
+    expect(at(-0.03, 6).squeezed).toBeUndefined()
+    // (nor at a tracking the page fill raised over the fit's, `fitTrack`, which the squeeze would take back)
+    expect(at(-0.02, 5.5, { fitTrack: -0.03 }).squeezed).toBeUndefined()
+    expect(at(-0.02, 5.5, { fitTrack: -0.02 }).squeezed).toBe(true)
+  })
+  it('cuts only the marks whose ink stands in one half of the em: never a colon, a semicolon, an exclamation or a question mark', () => {
+    // 102 pt: three characters, a mark, four characters (80) and a formula of 25 pt: 3 pt over, more than the gaps give
+    // (1.6 pt): taken only where the mark may give its half. In Harano Aji the question mark's ink reaches 0.72 em
+    for (const to of ['ja', 'zh']) {
+      for (const mark of ['\uff1f', '\uff1a', '\uff01', '\uff1b']) {
+        const l = lay([text(`${han(3)}${mark}${han(4)}`), ph(), text(han(6))], to, 102, { 1: 25 })
+        expect(l.lines[0]!.squeezed, `${to} ${mark}`).toBeUndefined()
+        expect(l.lines[0]!.items[3]!.w, `${to} ${mark}`).toBeCloseTo(10, 6)
+      }
+      for (const mark of [COMMA, '\u3001', '\u3002']) {
+        const l = lay([text(`${han(3)}${mark}${han(4)}`), ph(), text(han(6))], to, 102, { 1: 25 })
+        expect(l.lines[0]!.squeezed, `${to} ${mark}`).toBe(true)
+        expect(l.lines[0]!.items[3]!.w, `${to} ${mark}`).toBeCloseTo(5, 6)
+      }
+    }
   })
   it('leaves the marks alone where the state has compressed them all (compressMax reached)', () => {
     // at compress 2 every mark has already lost its blank half: the comma gives nothing more, and 3 pt over is past the
