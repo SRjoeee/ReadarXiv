@@ -512,8 +512,9 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
   if (novel.length) return no(`PDF.js says of the composed document alone: ${novel[0]}`)
   if (comp.length !== orig.length) return no(`PDF.js reads ${comp.length} pages of the composed document, ${orig.length} of arXiv's`)
   for (let p = 1; p <= comp.length; p++) {
-    const ref = p <= ours.length ? ours[p - 1] : orig[p - 1], c = comp[p - 1]
-    if (c.rotate !== ref.rotate || c.userUnit !== ref.userUnit || c.view.some((v, i) => !near(v, ref.view[i]))) return no(`page ${p}'s box is not ${p <= ours.length ? 'ours' : 'the original\'s'}`)
+    // (a replaced page is ours; every other is the original's in the composed document, whatever ours is there)
+    const ref = rep.has(p) ? ours[p - 1] : orig[p - 1], c = comp[p - 1]
+    if (c.rotate !== ref.rotate || c.userUnit !== ref.userUnit || c.view.some((v, i) => !near(v, ref.view[i]))) return no(`page ${p}'s box is not ${rep.has(p) ? 'ours' : 'the original\'s'}`)
     const want = rep.has(p) ? ours[p - 1] : orig[p - 1]
     const d = textDiffers(c.items, want.items)
     if (d) return no(`page ${p}'s text is not ${rep.has(p) ? 'ours' : 'the original\'s'}: ${d}`)

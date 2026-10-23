@@ -422,3 +422,14 @@ describe('the page geometry a replaced page keeps (Codex on #439)', () => {
     expect(await deltaOf(ORIG_TABLE, withPage(`${page1} /CropBox [0 0 200 200] /Rotate 360 /UserUnit 1 >>`), { PL })).not.toHaveProperty('refused')
   })
 })
+
+describe('an unreplaced page is the original\'s in the proof (CodeRabbit on #439)', () => {
+  it('ours of another geometry on a page the delta does not replace: the delta proves, its page read against arXiv\'s', async () => {
+    const u = oursObjects()
+    u.set(4, { text: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Rotate 90 /Resources 23 0 R /Contents 25 0 R >>' })
+    const final = pdfOf(u, { root: 1 })
+    const r = await built(ORIG_TABLE, final, { replacedPages: [1, 3] })
+    expect(r.replaced).toEqual([[1, 1], [3, 3]])
+    expect(await prove(ORIG_TABLE, r.delta, final, r.replaced)).toMatchObject({ ok: true })
+  })
+})
