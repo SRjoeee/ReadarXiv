@@ -1128,7 +1128,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const q of unswept) if (!reads[q] && readyOf(q) && !awaitsPaint(q)) letGoPage(q)
   }
   /** what a unit holds for its lay, its passes and its paint alone (and the file's lines it is laid by: `tex.lines`) */
-  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf', 'pieceAt']
+  const HEAVY = ['prep', 'tokens', 'layout', 'blocks', 'local', 'lead', 'P', 'clear', 'wordOf', 'pieceAt', 'runs']
   /** a unit nothing reads again: painted on every page it is on, or left the original's (refused, or withheld with its
    *  group), its table group settled, and each of its pages passed (with a page pass: a pass reads the units running on to
    *  its page) */
@@ -1982,7 +1982,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // (a unit split by its displays into runs: each run its own text block, at the first state at which its own text fits its
       // own slots, so that a cramped run alone shrinks (layer2.mjs layoutRuns); its page's fill fills each run apart (fillPass).
       // A unit of one run, or one its runs do not set alone, as before; a table's cell is one block of its table's)
-      const laidRuns = L2.layoutRuns(p.tokens, p.blocks, s, p.P)
+      const laidRuns = L2.layoutRuns(p.tokens, p.blocks, s, p.P, p.layout.lines)
       if (laidRuns) {
         p.layout = laidRuns.layout
         p.runs = laidRuns.runs.map((r, i) => ({ id: p.id, unit: p.unit, parent: p, run: i, refused: false, fillable: !!p.fillable, tokens: r.tokens, blocks: r.blocks, bi0: r.bi0, s, P: r.P, layout: r.layout, clear: null, share: null }))
@@ -2067,10 +2067,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // between two displays is a text block of its own), then laid as one again
     const asRuns = list => list.flatMap(p => p.runs ?? [p])
     const filledRuns = new Map()
-    const r = fillPage(asRuns(begun), P, (q, target) => {
+    // (each run filled on the page it begins on, against that page's target; a run begun on a page before and running on to
+    // this one continues here, and a run on no block of this page is no unit of its)
+    const firstOf = q => (q.parent ? q.blocks[0].page : q.pages[0])
+    const here = asRuns(laid[pg].filter(p => p.fillable && !p.refused))
+    const r = fillPage(here.filter(q => firstOf(q) === pg), P, (q, target) => {
       if (q.parent) { filledRuns.set(q.parent, target); return }
       recorded(q, target, q.fillLead)
-    }, { continuing: asRuns(laid[pg].filter(p => p.fillable && !p.refused && p.pages[0] !== pg)) })
+    }, { continuing: here.filter(q => firstOf(q) !== pg && (!q.parent || (firstOf(q) < pg && q.blocks.some(b => b.page === pg)))) })
     for (const [p, target] of filledRuns) {
       const keep = p.layout.extents
       p.layout = L2.joinRuns(p.runs)

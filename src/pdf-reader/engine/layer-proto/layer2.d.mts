@@ -343,7 +343,7 @@ export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: num
 export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): Layout
 /** a unit's run between its kept regions (a display each): its blocks (those of one `after`, from the unit's block `bi0`) and
  *  its tokens; with layoutRuns, its parameters and its own layout */
-export interface Run { after: number; bi0: number; blocks: Block2[]; tokens: Token[]; P?: Params; layout?: Layout }
+export interface Run { after: number; idx: number[]; bi0: number; blocks: Block2[]; tokens: Token[]; P?: Params; layout?: Layout }
 /** a unit's runs, or null where it is one run, a run with text has no slots of its own or a block no run's text, or the blocks
  *  are not in their regions' order */
 export declare function runsOf(tokens: readonly Token[], blocks: readonly Block2[]): Run[] | null
@@ -353,7 +353,7 @@ export declare function runParams(P: Params, run: Run, last: boolean): Params
 /** a unit's runs laid each at its own state (the first of the fit's at which its own text fits its own slots, from the
  *  tightest tracking any of them needs: runTrack), joined as one layout (joinRuns); null where the unit is one run or a run
  *  does not fit alone */
-export declare function layoutRuns(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): { layout: Layout & { runs: number }; runs: (Run & { P: Params; layout: Layout })[] } | null
+export declare function layoutRuns(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, fit?: readonly Pick<Line, 'from' | 'page'>[] | null): { layout: Layout & { runs: number }; runs: (Run & { P: Params; layout: Layout })[] } | null
 /** the runs' layouts as one: each line's block its place in the unit's blocks, and its run's size, scale and state (`seg`) */
 export declare function joinRuns(runs: readonly { bi0: number; layout: Layout }[]): Layout & { runs: number }
 /** a run's ink over (a) and under (d) its baseline at 100 px in its face (the measure that gives its width) */

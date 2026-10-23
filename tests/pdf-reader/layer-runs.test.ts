@@ -79,6 +79,23 @@ describe('a unit laid in runs between its displays', () => {
     expect(L2.runsOf([...words(2), display(0), ...words(2)] as never, [block(500, 2, 0, 0), block(400, 2, 0, 0)] as never)).toBeNull()
   })
 
+  it('a forced break that opens another frame is no display: the unit stays one run (Codex review)', () => {
+    const brk = (k: number) => ({ blockTo: k, w100: 0, brk: true })
+    expect(L2.runsOf([...words(10), brk(0), ...words(5)] as never, [block(500, 7, 0, 0), block(350, 2, 1, 1)] as never)).toBeNull()
+    expect(L2.layoutRuns([...words(10), brk(0), ...words(5)] as never, [block(500, 7, 0, 0), block(350, 2, 1, 1)] as never, 10, P as never)).toBeNull()
+    // (a display after it still opens a run, the forced break's frames the run's before it)
+    const runs = L2.runsOf([...words(4), brk(0), ...words(4), display(1), ...words(2)] as never, [block(500, 2, 0, 0), block(450, 2, 1, 1), block(400, 2, 2, 2)] as never)
+    expect(runs?.map(r => [r.after, r.bi0, r.blocks.length])).toEqual([[0, 0, 2], [2, 2, 1]])
+  })
+
+  it('a run set larger that would carry text to a later page than the unit\'s fit is not laid in runs (Codex review)', () => {
+    const whole = L2.layoutUnit2(tokens() as never, blocks() as never, 10, P as never)
+    expect(L2.layoutRuns(tokens() as never, blocks() as never, 10, P as never, whole.lines as never)).not.toBeNull()
+    // (the fit's lines read as all on an earlier page than the runs set them)
+    const earlier = whole.lines.map(l => ({ ...l, page: 0 }))
+    expect(L2.layoutRuns(tokens() as never, blocks() as never, 10, P as never, earlier as never)).toBeNull()
+  })
+
   it('a run\'s first line is the unit\'s first line only in its first run: its indent there alone', () => {
     const b = [block(500, 3, 0, 0, 20), block(400, 3, 1, 1, 20)]
     const t = [...words(3), display(0), ...words(3)]

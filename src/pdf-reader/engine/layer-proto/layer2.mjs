@@ -2168,7 +2168,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (r.brk && r.region !== undefined && resolved.referenced?.has(r.region)) {
       while (tokens.at(-1)?.space) tokens.pop()
       // (a group's later pieces are the same break)
-      if (tokens.at(-1)?.blockTo !== r.region) tokens.push({ blockTo: r.region, w100: 0 })
+      if (tokens.at(-1)?.blockTo !== r.region) tokens.push({ blockTo: r.region, w100: 0, brk: true })
       return
     }
     // iteration 3: a kept rendering (a displayed formula) stands where it is; the text after it starts below it
@@ -3311,30 +3311,36 @@ const textless = t => t.blockTo !== undefined || t.newline !== undefined || t.pa
  */
 export function runsOf(tokens, blocks) {
   if (blocks.length < 2) return null
+  // (a run opens at a display alone: a forced break that opens another frame (tokensOf2's `brk`) breaks the line, and its
+  // frames stay the run's, as the unit's own walk sets them. Each token kept with its place in the unit's (`idx`))
   const by = new Map()
-  let consumed = 0
-  for (const t of tokens) {
-    if (t.blockTo !== undefined) consumed = Math.max(consumed, t.blockTo + 1)
-    ;(by.get(consumed) ?? by.set(consumed, []).get(consumed)).push(t)
-  }
+  let consumed = 0, key = 0
+  tokens.forEach((t, i) => {
+    if (t.blockTo !== undefined) {
+      consumed = Math.max(consumed, t.blockTo + 1)
+      if (!t.brk) key = consumed
+    }
+    ;(by.get(key) ?? by.set(key, []).get(key)).push([t, i])
+  })
   // (a run that sets nothing goes with the next one, or the last one at the end)
   const keys = [...by.keys()].sort((a, b) => a - b), runs = []
   let carry = []
   for (const k of keys) {
     const ts = [...carry, ...by.get(k)]
     carry = []
-    if (!ts.some(t => !textless(t))) { carry = ts; continue }
-    runs.push({ after: k, tokens: ts })
+    if (!ts.some(([t]) => !textless(t))) { carry = ts; continue }
+    runs.push({ after: k, tokens: ts.map(x => x[0]), idx: ts.map(x => x[1]) })
   }
-  if (carry.length && runs.length) runs.at(-1).tokens.push(...carry)
+  if (carry.length && runs.length) { runs.at(-1).tokens.push(...carry.map(x => x[0])); runs.at(-1).idx.push(...carry.map(x => x[1])) }
   if (runs.length < 2) return null
   // (the display after a run ends its last line, TeX's \parfillskip before it: ragged, as the unit's own walk ends it there,
   // breakLines; a forced break of no room ends it so where the run is laid alone)
   for (const r of runs.slice(0, -1)) r.tokens.push({ newline: -1, room: 0, w100: 0 })
   let at = 0
-  for (const r of runs) {
-    const bi0 = at
-    while (at < blocks.length && (blocks[at].after ?? 0) === r.after) at++
+  for (const [i, r] of runs.entries()) {
+    const bi0 = at, upto = runs[i + 1]?.after ?? Infinity
+    if (at < blocks.length && (blocks[at].after ?? 0) !== r.after) return null
+    while (at < blocks.length && (blocks[at].after ?? 0) < upto) at++
     if (at === bi0) return null
     r.bi0 = bi0
     r.blocks = blocks.slice(bi0, at)
@@ -3355,7 +3361,7 @@ export const runParams = (P, run, last) => ({ ...P, blockBase: run.bi0, lastLine
  * them needs (P.runTrack), its own size and leading still its own. Null where the unit is one run or a run does not fit alone; else { layout: joinRuns', runs: each with its blocks,
  * tokens, `bi0`, `P` and `layout` }
  */
-export function layoutRuns(tokens, blocks, s, P) {
+export function layoutRuns(tokens, blocks, s, P, fit = null) {
   const runs = runsOf(tokens, blocks)
   if (!runs) return null
   for (const [i, r] of runs.entries()) {
@@ -3373,6 +3379,10 @@ export function layoutRuns(tokens, blocks, s, P) {
     r.layout = layoutUnit2(r.tokens, r.blocks, s, r.P)
     if (r.layout.clipped) return null
   }
+  // (no run sets a token on a later page than the unit's fit did (`fit`, its lines; keepsPages): a run set larger holds
+  // fewer lines on a page's frame, and the page cuts keep text only from the page before. Where one would, the unit is laid
+  // as one)
+  if (fit && !runs.every(r => keepsPages(fit, r.layout.lines.map(l => ({ from: r.idx[l.from] ?? r.idx.at(-1), page: l.page }))))) return null
   return { layout: joinRuns(runs), runs }
 }
 /**
