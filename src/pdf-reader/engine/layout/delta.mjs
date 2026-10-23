@@ -1,0 +1,420 @@
+// Our base page as a PDF incremental update over arXiv's original (the delta; the coordinator's GO of 2026-10-23, the
+// contract's §2 to §4 and §14): the composed document is arXiv's bytes followed by the delta (and then the remover's tails),
+// so that the layer's composed document and the left pane read ONE byte source, and only what our compile changed is stored.
+//
+// deltaOf(orig, final): for each page the layer lays on (`replacedPages`, every page of ours by default) whose content differs
+// from arXiv's, the original's page object written again under its own number and generation, every key kept but /Contents and
+// /Resources, which are ours: our content streams copied byte for byte as new objects, and a /Resources dict of our page's
+// entries each mapped to the original's object where the two are canonically equal (the whole sub-graph reused: a font with its
+// descriptor, font file, widths and ToUnicode; an image with its SMask), else copied with its closure under new numbers from
+// the original's /Size up. Resource names stay ours (they live in the page's dict alone, so no content stream is rewritten).
+// Nothing else: the catalog, page tree, outlines, destinations, annotations and info stay the original's.
+//
+// Canonical form (one Merkle form for both documents, exact): a stream is its dict without /Length and its stored bytes, those
+// its RESOLVED /Length names (layout/xref.mjs: PDF.js's reading, never a scan to `endstream`), no decoding; a dict is its
+// entries sorted by key, an array its items, each reference replaced by the referenced object's form; the back links /Parent,
+// /P, /Prev, /Next, /First and /Last are cut; a reference cycle (or a chain deeper than DEPTH_MAX) leaves the object unmatched,
+// so copied, never an error. Forms are interned to integers (exact text equality, no digest collision), stream data by its
+// bytes. The same inputs give the same bytes: no time, no random number, a fixed order.
+//
+// proveDelta: the structural proof the box runs before a head names a delta (the contract's §14.2), with the engine's PDF.js:
+// the delta's section exact (deltaSection: every entry at its `n g obj`, /Prev the original's startxref, startxref at the
+// section), the composed page graphs canonically ours on replaced pages and the original's elsewhere (a second, independent
+// parse), PDF.js opening the composed bytes with no message neither source gives alone, the page count the original's, every
+// page box and every page's text (strings and places within 0.01) ours on replaced pages and the original's elsewhere. No
+// operator list and no pixel: those are the lab's gate.
+//
+// An original module (no port statement). It imports the object layer's reading (xref.mjs), the section writer, the delta's
+// wire and the memory-class test; @cantoo/pdf-lib (MIT) and PDF.js are given.
+import { isMemoryError } from '../pipeline/memory.mjs'
+import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, deltaSection, pagesOf, rangesOf } from './delta-wire.mjs'
+import { appendSection } from './section.mjs'
+import { startxrefOf } from './tail.mjs'
+import { openObjects, XrefRefusal } from './xref.mjs'
+
+/** the canonical forms' text the builder holds at most (each distinct form once), and the bytes its object and cross-reference
+ *  streams decode to at most, per document (as the remover's HELD_MAX and BYTES_MAX bound its walk) */
+export const DELTA_HELD_MAX = 64 * 2 ** 20, DELTA_DECODED_MAX = 48 * 2 ** 20
+/** a reference chain deeper than this is not followed for the canonical form: the object stays unmatched */
+const DEPTH_MAX = 256
+/** the keys cut from the canonical form: back links (reference cycles) */
+const CUT = new Set(['/Parent', '/P', '/Prev', '/Next', '/First', '/Last'])
+/** the page tree's own objects: a resource closure never copies them (a back link into the tree is written null) */
+const TREE = new Set(['/Page', '/Pages', '/Catalog'])
+const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'))
+const hexOf = b => { let s = ''; for (let i = 0; i < b.length; i++) s += HEX[b[i]]; return s }
+const enc = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255; return b }
+const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
+const equalBytes = (a, b) => { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true }
+/** FNV-1a of the bytes: a bucket's key alone, equality is the bytes' */
+const fnv = b => { let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193) } return h >>> 0 }
+
+async function sha256Of(bytes) {
+  const d = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))
+  return hexOf(d)
+}
+
+/** the canonical forms, interned across the documents read: `of(doc)` gives a document's { ofRef, ser } */
+function canonical(PL, heldMax) {
+  const { PDFRef, PDFDict, PDFArray, PDFRawStream, PDFName, PDFNumber, PDFString, PDFHexString, PDFBool, PDFNull } = PL
+  const texts = new Map(), buckets = new Map()
+  let held = 0
+  const intern = s => {
+    let id = texts.get(s)
+    if (id === undefined) {
+      held += s.length + 64
+      if (held > heldMax) throw new XrefRefusal('delta-bound', `more than ${heldMax} bytes of canonical forms`)
+      id = texts.size
+      texts.set(s, id)
+    }
+    return id
+  }
+  const dataId = data => {
+    const key = `${data.length}:${fnv(data)}`
+    let list = buckets.get(key)
+    if (!list) buckets.set(key, (list = []))
+    for (const [d, id] of list) if (equalBytes(d, data)) return id
+    const id = intern(`D${key}#${list.length}`)
+    list.push([data, id])
+    return id
+  }
+  // (a dict, an array or a stream is its form's token, `@<id>`, direct or reached by a reference alike: a resource written
+  // inline in one document and as an object in the other is the same; a reference to a number, a name… is that value's form)
+  function of(doc) {
+    const memo = new Map(), busy = new Set()
+    const ofRef = (ref, depth = 0) => {
+      const k = `${ref.objectNumber} ${ref.generationNumber}`
+      if (memo.has(k)) return memo.get(k)
+      if (busy.has(k) || depth > DEPTH_MAX) return null
+      busy.add(k)
+      let token
+      try {
+        const obj = doc.lookup(ref)
+        token = obj === undefined ? 'null' : obj instanceof PDFRef ? null : ser(obj, depth + 1)
+      } finally { busy.delete(k) }
+      memo.set(k, token)
+      return token
+    }
+    const serDict = (d, isStream, depth, drop = null) => {
+      const entries = d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => !CUT.has(k) && !(isStream && k === '/Length') && !drop?.has(k)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      const parts = []
+      for (const [k, v] of entries) { const s = ser(v, depth); if (s === null) return null; parts.push(`${k} ${s}`) }
+      return `<<${parts.join(' ')}>>`
+    }
+    const token = text => (text === null ? null : `@${intern(text)}`)
+    function ser(v, depth = 0, drop = null) {
+      if (v instanceof PDFRef) return ofRef(v, depth)
+      if (v instanceof PDFRawStream) { const d = serDict(v.dict, true, depth); return d === null ? null : token(`S${d}#${dataId(v.contents)}`) }
+      if (v instanceof PDFDict) return token(serDict(v, false, depth, drop))
+      if (v instanceof PDFArray) {
+        const parts = []
+        for (const x of v.asArray()) { const s = ser(x, depth); if (s === null) return null; parts.push(s) }
+        return token(`[${parts.join(' ')}]`)
+      }
+      if (v instanceof PDFName) return v.asString()
+      if (v instanceof PDFNumber) return `n${v.asNumber()}`
+      if (v instanceof PDFString || v instanceof PDFHexString) return `x${hexOf(v.asBytes())}`
+      if (v instanceof PDFBool) return `b${v.asBoolean()}`
+      if (v === PDFNull || v === undefined) return 'null'
+      return null
+    }
+    return { ofRef, ser }
+  }
+  return { of }
+}
+
+/** the PDF text of a value, each reference written by `mapRef` (ref -> text) */
+function litOf(PL) {
+  const { PDFRef, PDFDict, PDFArray } = PL
+  const lit = (v, mapRef) => {
+    if (v instanceof PDFRef) return mapRef(v)
+    if (v instanceof PDFDict) return `<<${v.entries().map(([k, x]) => ` ${k.toString()} ${lit(x, mapRef)}`).join('')} >>`
+    if (v instanceof PDFArray) return `[${v.asArray().map(x => lit(x, mapRef)).join(' ')}]`
+    return v.toString()
+  }
+  return lit
+}
+const sameRef = r => `${r.objectNumber} ${r.generationNumber} R`
+
+/** a page's content streams' refs ([] for none), its /Contents a stream's ref or an array (direct or not) of them */
+function contentsOf(PL, doc, node) {
+  const { PDFArray, PDFRef, PDFName } = PL
+  const c = node.get(PDFName.of('Contents'))
+  if (c === undefined) return []
+  const v = c instanceof PDFRef ? doc.lookup(c) : c
+  if (v instanceof PDFArray) return v.asArray()
+  return [c]
+}
+
+/** a refusal: the code (delta-wire.mjs DELTA_WHYS) and its why */
+const refusal = (code, why) => ({ refused: code, why: String(why).slice(0, 300) })
+const refusalOf = e => {
+  if (isMemoryError(e)) throw e
+  return e instanceof XrefRefusal ? refusal(e.code, e.message) : refusal('delta-parse', `it could not be read: ${String(e?.message ?? e)}`)
+}
+
+/**
+ * The delta of our final pass over arXiv's PDF. `origBytes` arXiv's PDF as the head's `orig` names it; `finalBytes` our final
+ * pass (the base page the layout was made over); `PL` @cantoo/pdf-lib's exports; `replacedPages` the pages the layer lays on
+ * (1-based, within our pages; null: every page of ours), of which those whose content and resources are canonically arXiv's
+ * are left alone. Our pages may be fewer than arXiv's (a paper of several toplevel sources, the first compiled alone): the
+ * pages past ours are the original's by construction. Returns { delta, sha256, replaced, stats, xref, kind, size } — `delta`
+ * the section's bytes (to follow arXiv's exactly), `sha256` theirs, `replaced` the pages written as ranges (delta-wire.mjs),
+ * `stats` { replaced, reused: { fonts, images, forms, other }, included: { bytes, objects } } (the original's objects our
+ * resources name at their top, by kind; the objects the delta writes, pages included, and their bytes), `xref` the section's
+ * startxref in the composed document, `kind` its cross-reference's ('table' or 'stream', the original's), `size` its /Size
+ * (the next free number: the remover's first tail's) — or a refusal { refused, why } (DELTA_WHYS), for the host to keep the
+ * whole base (`full`). Never throws but a failed allocation
+ */
+export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null, heldMax = DELTA_HELD_MAX, decodedMax = DELTA_DECODED_MAX, objectsMax = DELTA_OBJECTS_MAX }) {
+  if (!(origBytes instanceof Uint8Array) || !(finalBytes instanceof Uint8Array)) throw new TypeError('origBytes, finalBytes: the two PDFs\' bytes')
+  try {
+    const { PDFRef, PDFDict, PDFRawStream, PDFName } = PL
+    const O = openObjects(origBytes, { PL, objectsMax, decodedMax })
+    const U = openObjects(finalBytes, { PL, objectsMax, decodedMax })
+    const C = canonical(PL, heldMax), OC = C.of(O), UC = C.of(U)
+    const lit = litOf(PL)
+    const oPages = O.pages(), uPages = U.pages()
+    const N = oPages.length, M = uPages.length
+    if (M > N) return refusal('delta-pages', `our final pass has ${M} pages, arXiv's PDF ${N}`)
+    const laid = replacedPages ?? Array.from({ length: M }, (_, i) => i + 1)
+    if (!Array.isArray(laid) || laid.some(p => !Number.isInteger(p) || p < 1 || p > M)) return refusal('delta-pages', `a page to replace that is not one of our ${M}`)
+
+    // the original's index: every object it holds by its form, the least number of each form (its object and cross-reference
+    // streams aside: their numbers are the file's, not a resource's)
+    const index = new Map()
+    for (const n of O.numbers()) {
+      const e = O.entryOf(n), ref = PDFRef.of(n, e.t === 1 ? e.g : 0), obj = O.lookup(ref)
+      if (obj instanceof PDFRawStream) { const t = obj.dict.get(PDFName.of('Type')); if (t === PDFName.of('XRef') || t === PDFName.of('ObjStm')) continue }
+      const id = OC.ofRef(ref)
+      if (id !== null && id[0] === '@' && !index.has(id)) index.set(id, ref)
+    }
+
+    const look = (doc, v) => (v instanceof PDFRef ? doc.lookup(v) : v)
+    const pageForm = (doc, Cn, page) => {
+      const cs = contentsOf(PL, doc, page.node).map(r => Cn.ser(r))
+      const rs = Cn.ser(page.inherited.Resources ?? PL.PDFNull)
+      return cs.some(x => x === null) || rs === null ? null : `${cs.join(',')}|${rs}`
+    }
+    let next = O.size
+    const reused = { fonts: 0, images: 0, forms: 0, other: 0 }, reusedTop = new Set()
+    const objects = [], pageObjects = [], mapped = new Map()
+    const reuse = (or, cat, top) => {
+      if (top && !reusedTop.has(or.objectNumber)) { reusedTop.add(or.objectNumber); reused[cat]++ }
+      return sameRef(or)
+    }
+    // (our object `r`, or the original's of its form: copied with its closure, each object once, under the next number)
+    const copyRef = (r, cat, top) => {
+      const id = UC.ofRef(r)
+      if (id !== null && index.has(id)) return reuse(index.get(id), cat, top)
+      const key = `${r.objectNumber} ${r.generationNumber}`
+      if (mapped.has(key)) return mapped.get(key)
+      const o = U.lookup(r)
+      if (o === undefined) return 'null'
+      const d = o instanceof PDFRawStream ? o.dict : o
+      if (d instanceof PDFDict && TREE.has(d.get(PDFName.of('Type'))?.asString?.())) return 'null'
+      const n = next++
+      const s = `${n} 0 R`
+      mapped.set(key, s)
+      const sub = x => copyRef(x, cat, false)
+      let bytes
+      if (o instanceof PDFRawStream) {
+        const entries = o.dict.entries().filter(([k]) => k.asString() !== '/Length').map(([k, x]) => ` ${k.toString()} ${lit(x, sub)}`).join('')
+        bytes = concat([enc(`${n} 0 obj\n<<${entries} /Length ${o.contents.length} >>\nstream\n`), o.contents, enc('\nendstream\nendobj\n')])
+      } else bytes = enc(`${n} 0 obj\n${lit(o, sub)}\nendobj\n`)
+      objects.push([n, 0, bytes])
+      return s
+    }
+    const CATS = { '/Font': 'fonts', '/XObject': null }
+    const xobjectCat = x => { const o = look(U, x); const st = o instanceof PDFRawStream ? o.dict.get(PDFName.of('Subtype'))?.asString?.() : undefined; return st === '/Image' ? 'images' : st === '/Form' ? 'forms' : 'other' }
+    const resourcesText = resVal => {
+      if (resVal instanceof PDFRef) { const id = UC.ofRef(resVal); if (id !== null && index.has(id)) return reuse(index.get(id), 'other', true) }
+      const d = look(U, resVal)
+      if (!(d instanceof PDFDict)) return '<< >>'
+      const out = []
+      for (const [k, v] of d.entries()) {
+        const key = k.toString(), cat = Object.hasOwn(CATS, k.asString()) ? CATS[k.asString()] : 'other'
+        const sub = look(U, v)
+        if (k.asString() === '/ProcSet' || !(sub instanceof PDFDict)) { out.push(` ${key} ${lit(v, x => copyRef(x, cat ?? 'other', true))}`); continue }
+        if (v instanceof PDFRef) { const id = UC.ofRef(v); if (id !== null && index.has(id)) { out.push(` ${key} ${reuse(index.get(id), cat ?? 'other', true)}`); continue } }
+        const ents = sub.entries().map(([nm, x]) => { const c = cat ?? xobjectCat(x); return ` ${nm.toString()} ${x instanceof PDFRef ? copyRef(x, c, true) : lit(x, y => copyRef(y, c, true))}` })
+        out.push(` ${key} <<${ents.join('')} >>`)
+      }
+      return `<<${out.join('')} >>`
+    }
+
+    const replaced = []
+    for (const p of [...new Set(laid)].sort((a, b) => a - b)) {
+      const op = oPages[p - 1], up = uPages[p - 1]
+      const a = pageForm(O, OC, op), b = pageForm(U, UC, up)
+      if (a !== null && a === b) continue
+      replaced.push(p)
+      const contents = contentsOf(PL, U, up.node).map(r => (r instanceof PDFRef ? copyRef(r, 'other', true) : 'null'))
+      const ctext = contents.length === 1 ? contents[0] : `[${contents.join(' ')}]`
+      const res = resourcesText(up.inherited.Resources)
+      const ents = []
+      let hadRes = false, hadContents = false
+      for (const [k, v] of op.node.entries()) {
+        const key = k.asString()
+        if (key === '/Contents') { hadContents = true; ents.push(` /Contents ${ctext}`) }
+        else if (key === '/Resources') { hadRes = true; ents.push(` /Resources ${res}`) }
+        else ents.push(` ${k.toString()} ${lit(v, sameRef)}`)
+      }
+      if (!hadRes) ents.push(` /Resources ${res}`)
+      if (!hadContents) ents.push(` /Contents ${ctext}`)
+      pageObjects.push([op.ref.objectNumber, op.ref.generationNumber, enc(`${op.ref.objectNumber} ${op.ref.generationNumber} obj\n<<${ents.join('')} >>\nendobj\n`)])
+    }
+    if (replaced.length === 0) return refusal('delta-empty', 'no page of ours differs from arXiv\'s where the layer lays')
+    const all = [...pageObjects, ...objects]
+    if (all.length > objectsMax) return refusal('delta-bound', `${all.length} objects, past ${objectsMax}`)
+    const written = appendSection({ end: origBytes.length, objects: all, kind: O.kind, prev: O.startxref, size: next, trailer: { root: O.trailer.root, info: O.trailer.info, id: O.trailer.id } })
+    const delta = written.bytes
+    if (delta.length > DELTA_MAX_BYTES) return refusal('delta-bound', `${delta.length} bytes, past ${DELTA_MAX_BYTES}`)
+    if (delta.length > DELTA_MAX_SHARE * finalBytes.length) return refusal('delta-bound', `${delta.length} bytes, past ${DELTA_MAX_SHARE} of our base page's ${finalBytes.length}`)
+    let included = 0
+    for (const [, , b] of all) included += b.length
+    const stats = { replaced: replaced.length, reused, included: { bytes: included, objects: all.length } }
+    return { delta, sha256: await sha256Of(delta), replaced: rangesOf(replaced), stats, xref: written.xref, kind: O.kind, size: written.size }
+  } catch (e) {
+    return refusalOf(e)
+  }
+}
+
+/**
+ * Whether two values of two documents are one graph (the proof's second reading): a reference and the value it names alike,
+ * streams by their dicts less /Length and their exact bytes, dicts by their keys (less the back links and `drop`), arrays by
+ * their items, the rest by their text; a pair of references met again is taken as equal (so a cycle compares as the graphs it
+ * makes, where the canonical form gives none)
+ */
+function sameGraph(PL) {
+  const { PDFRef, PDFDict, PDFArray, PDFRawStream, PDFName, PDFNumber, PDFString, PDFHexString } = PL
+  return (A, a0, B, b0, drop0 = null) => {
+    const met = new Set()
+    const leaf = v => (v instanceof PDFName ? v.asString() : v instanceof PDFNumber ? `n${v.asNumber()}` : v instanceof PDFString || v instanceof PDFHexString ? `x${hexOf(v.asBytes())}` : v === undefined ? 'null' : String(v))
+    const eq = (a, b, drop = null, depth = 0) => {
+      if (depth > 4 * DEPTH_MAX) return false
+      if (a instanceof PDFRef || b instanceof PDFRef) {
+        const key = `${a instanceof PDFRef ? a.toString() : '-'}|${b instanceof PDFRef ? b.toString() : '-'}`
+        if (met.has(key)) return true
+        met.add(key)
+        return eq(a instanceof PDFRef ? A.lookup(a) : a, b instanceof PDFRef ? B.lookup(b) : b, drop, depth + 1)
+      }
+      if (a instanceof PDFRawStream || b instanceof PDFRawStream) return a instanceof PDFRawStream && b instanceof PDFRawStream && equalBytes(a.contents, b.contents) && eq(a.dict, b.dict, new Set(['/Length']), depth + 1)
+      if (a instanceof PDFDict || b instanceof PDFDict) {
+        if (!(a instanceof PDFDict && b instanceof PDFDict)) return false
+        const entries = d => new Map(d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => !CUT.has(k) && !drop?.has(k)))
+        const ea = entries(a), eb = entries(b)
+        return ea.size === eb.size && [...ea].every(([k, v]) => eb.has(k) && eq(v, eb.get(k), null, depth + 1))
+      }
+      if (a instanceof PDFArray || b instanceof PDFArray) return a instanceof PDFArray && b instanceof PDFArray && a.size() === b.size() && a.asArray().every((x, i) => eq(x, b.get(i), null, depth + 1))
+      return leaf(a) === leaf(b)
+    }
+    return eq(a0, b0, drop0)
+  }
+}
+
+const near = (a, b) => Math.abs(a - b) <= 0.01
+/** the first difference between two pages' text items (PDF.js's getTextContent, strings alone), within 0.01 */
+function textDiffers(a, b) {
+  if (a.length !== b.length) return `${a.length} text items, not ${b.length}`
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i]
+    if (x.str !== y.str) return `item ${i}: ${JSON.stringify(x.str.slice(0, 40))}, not ${JSON.stringify(y.str.slice(0, 40))}`
+    if (!x.transform.every((v, k) => near(v, y.transform[k])) || !near(x.width, y.width) || !near(x.height, y.height)) return `item ${i}: another place`
+    if (x.dir !== y.dir || x.hasEOL !== y.hasEOL) return `item ${i}: another direction or line end`
+  }
+  return null
+}
+
+/**
+ * The structural proof of a delta (the contract's §14.2), in the box, before a head names it: `origBytes` arXiv's PDF,
+ * `deltaBytes` deltaOf's `delta`, `finalBytes` our final pass, `replaced` deltaOf's ranges; `PL` @cantoo/pdf-lib's exports,
+ * `getDocument` PDF.js's (the engine's pinned one, run where its warnings reach `console`: Node's legacy build) and
+ * `documentOptions` the host's getDocument options (its cMap and standard font URLs). In turn: (b, c) the section exact
+ * (delta-wire.mjs deltaSection) and the composed document's startxref the section's; (f) the composed page graphs, read by
+ * the object layer, canonically ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere;
+ * (a, d, e) PDF.js opens the composed bytes with no message that neither source alone gives (its console captured, each
+ * document read in turn), the original's page count, every page's box and text (strings, places within 0.01) ours on replaced
+ * pages and the original's elsewhere. { ok: true, pages, replaced, rows } or { ok: false, why }. Never throws but a failed
+ * allocation
+ */
+export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDocument, documentOptions = {}, replaced, objectsMax = DELTA_OBJECTS_MAX, decodedMax = DELTA_DECODED_MAX, heldMax = DELTA_HELD_MAX }) {
+  const no = why => ({ ok: false, why: String(why).slice(0, 300) })
+  const composed = concat([origBytes, deltaBytes])
+  const rep = new Set(pagesOf(replaced ?? []))
+  let N, M
+  try {
+    const own = startxrefOf(origBytes)
+    const sect = deltaSection(deltaBytes, { bytes: origBytes.length, xref: own })
+    if (sect.why) return no(`the section: ${sect.why}`)
+    if (startxrefOf(composed) !== sect.startxref) return no('the composed document\'s startxref is not the delta\'s section')
+    // (f) the page graphs, read again by the object layer from the composed bytes
+    const O = openObjects(origBytes, { PL, objectsMax, decodedMax }), U = openObjects(finalBytes, { PL, objectsMax, decodedMax }), X = openObjects(composed, { PL, objectsMax, decodedMax })
+    const same = sameGraph(PL)
+    const oP = O.pages(), uP = U.pages(), xP = X.pages()
+    N = oP.length
+    M = uP.length
+    if (xP.length !== N) return no(`the composed document has ${xP.length} pages, arXiv's PDF ${N}`)
+    if ([...rep].some(p => p > M)) return no('a replaced page past ours')
+    const drop = new Set(['/Contents', '/Resources'])
+    const contents = (doc, page) => contentsOf(PL, doc, page.node)
+    for (let p = 1; p <= N; p++) {
+      const x = xP[p - 1], o = oP[p - 1]
+      if (x.ref.objectNumber !== o.ref.objectNumber || x.ref.generationNumber !== o.ref.generationNumber) return no(`page ${p} is another object than the original's`)
+      if (!same(X, x.node, O, o.node, drop)) return no(`page ${p}'s dict is not the original's but for its contents and resources`)
+      const [D, d] = rep.has(p) ? [U, uP[p - 1]] : [O, o]
+      const cx = contents(X, x), cd = contents(D, d)
+      if (cx.length !== cd.length || cx.some((r, i) => !same(X, r, D, cd[i])) || !same(X, x.inherited.Resources ?? PL.PDFNull, D, d.inherited.Resources ?? PL.PDFNull)) return no(`page ${p}'s graph is not ${rep.has(p) ? 'ours' : 'the original\'s'}`)
+    }
+  } catch (e) {
+    const r = refusalOf(e)
+    return no(`the object layer: ${r.why}`)
+  }
+
+  // (a, d, e) PDF.js, each document read whole in turn under a captured console
+  const said = { orig: new Set(), ours: new Set(), composed: new Set() }
+  const read = async (bytes, tag) => {
+    const log0 = console.log, warn0 = console.warn, err0 = console.error
+    const keep = (...a) => said[tag].add(a.map(String).join(' '))
+    console.log = keep
+    console.warn = keep
+    console.error = keep
+    const task = getDocument({ ...documentOptions, data: bytes.slice(), verbosity: 1 })
+    try {
+      const doc = await task.promise
+      const pages = []
+      for (let p = 1; p <= doc.numPages; p++) {
+        const page = await doc.getPage(p)
+        const tc = await page.getTextContent()
+        pages.push({ view: [...page.view], rotate: page.rotate, items: tc.items.filter(x => 'str' in x) })
+        page.cleanup()
+      }
+      return pages
+    } finally {
+      console.log = log0
+      console.warn = warn0
+      console.error = err0
+      await task.destroy?.()
+    }
+  }
+  let orig, ours, comp
+  try {
+    orig = await read(origBytes, 'orig')
+    ours = await read(finalBytes, 'ours')
+    comp = await read(composed, 'composed')
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    return no(`PDF.js: ${String(e?.message ?? e)}`)
+  }
+  const novel = [...said.composed].filter(m => !said.orig.has(m) && !said.ours.has(m))
+  if (novel.length) return no(`PDF.js says of the composed document alone: ${novel[0]}`)
+  if (comp.length !== orig.length) return no(`PDF.js reads ${comp.length} pages of the composed document, ${orig.length} of arXiv's`)
+  for (let p = 1; p <= comp.length; p++) {
+    const ref = p <= ours.length ? ours[p - 1] : orig[p - 1], c = comp[p - 1]
+    if (c.rotate !== ref.rotate || c.view.some((v, i) => !near(v, ref.view[i]))) return no(`page ${p}'s box is not ${p <= ours.length ? 'ours' : 'the original\'s'}`)
+    const want = rep.has(p) ? ours[p - 1] : orig[p - 1]
+    const d = textDiffers(c.items, want.items)
+    if (d) return no(`page ${p}'s text is not ${rep.has(p) ? 'ours' : 'the original\'s'}: ${d}`)
+  }
+  return { ok: true, pages: [M, N], replaced: rep.size }
+}
