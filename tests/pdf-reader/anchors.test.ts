@@ -95,6 +95,14 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     const one = tokenizeDocument([{ page: 1, items: [item('Figure 1: Attention maps', 318, 440, { width: 120 })], styles: {} }])
     expect(markWords(one, new Map([['0e', { page: 1, x: 436, y: 440 }]])).get('0e')?.t).toBe('maps')
     expect(markWords(one, new Map([['0e', { page: 1, x: 414, y: 440 }]])).get('0e')?.t).toBe('attention')
+    // the next word's shared box begun before the mark, the mark inside it: the word before is the unit's last (2610.20716's
+    // "… model| the right", our base page's "the" 4.5 pt after the mark)
+    const next = tokenizeDocument([{ page: 13, items: [item('model', 161.46, 255.91, { width: 24.57 }), item('the', 195.86, 255.91, { width: 14.74 })], styles: {} }])
+    expect(markWords(next, new Map([['0e', { page: 13, x: 198.13, y: 255.91 }]])).get('0e')?.t).toBe('model')
+    // a placeholder after the end mark (an end mark stands after the last text) begun within the point of slack: not the last
+    // word (2610.20581's "of Theorem| 2.2")
+    const ref = tokenizeDocument([{ page: 7, items: [item('Theorem', 160, 706.92, { width: 44 }), item('2.2', 208.43, 706.92, { width: 17.8 })], styles: {} }])
+    expect(markWords(ref, new Map([['0e', { page: 7, x: 207.5, y: 706.92 }]])).get('0e')?.t).toBe('theorem')
   })
 
   it('a word the tokenizer still joins with a CJK character — a Latin word hyphenated at a line\'s end, CJK on the next — is carried whole, and bounds its unit (the review of A1, M2)', () => {
