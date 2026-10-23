@@ -278,6 +278,10 @@ try {
 
   // ------------------------------------------------------------------------------------------------------- a framing page
   section('a page that frames the reader or the popup')
+  // (the checks below count what nothing should cause: the readers of the rows above are let go first, or a run of theirs
+  // still preparing asks the layer API in the middle of the count)
+  await page.goto('about:blank')
+  await sleep(1500)
   await setReader({ original: true })
   const settingsBefore = JSON.stringify(await config())
   // the static address, from arXiv's own page; the dynamic one from another origin
@@ -334,6 +338,9 @@ try {
   // tab there. A release build's reader then draws nothing and does nothing, whatever the address or the settings ask:
   // only the PDF page ever opens it, in a frame it vouches for (src/entrypoints/pdf-reader/main.tsx)
   section('an arXiv page that sends its own tab to the reader\'s address')
+  // (the control's reader above let go first, as before the frames' checks)
+  await page.goto('about:blank')
+  await sleep(1500)
   for (const [query, original, why] of [
     [`?live=1&paper=${PAPER}&ask=translate`, true, 'asking for a translation, the original left on'],
     [`?live=1&paper=${PAPER}&mode=bilingual`, true, 'naming a translated display'],
