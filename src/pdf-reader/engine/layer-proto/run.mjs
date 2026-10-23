@@ -9,6 +9,8 @@
 // covers and no painted unit accounts for put back), and an SVG over the copy holding each unit's translation as text
 // (svgOfUnit). The units are the made output's: their rectangles on the original (the geometry's left side, schema 1:
 // the anchors' lines) and their translations (the units file).
+// (The erasing is gone since REMOVAL 8: a unit's ink is hidden by its optional-content groups on our wrapped page, hide.mjs and
+// visibility.mjs, docs/PDF-READER.md §11.8; the crops and the SVG are as they were.)
 //
 // What changed from main.js, and why:
 // - main.js streamed the units a batch at a time while its pages were still being drawn, each unit laid and painted

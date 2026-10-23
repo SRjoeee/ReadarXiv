@@ -18,7 +18,7 @@ export declare const BUNDLES_READ: readonly ['7', '8']
 export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
 /** how a base of ours is held: a delta over arXiv's PDF, or our whole PDF (`full`, no `kind` on the wire); the delta's bounds */
-export { BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_TAIL_ROOM, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
+export { BASE_KINDS, DELTA_MAX_BYTES, DELTA_MAX_SHARE, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
 /** why a head of 8's base is arXiv's (`base.why`): LAYOUT_REFUSED's codes, which each part with no layout says too */
 export declare const BASE_WHYS: typeof LAYOUT_REFUSED
 /** whether a head's layer draws: its base is ours (BUNDLE 8); a head of 7 and every head over arXiv's PDF draw nothing */

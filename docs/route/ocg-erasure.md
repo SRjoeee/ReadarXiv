@@ -100,8 +100,6 @@ part tails and `TAIL_CAP`, paper fills and the old way, `drawnSource`, `K_SLACK`
 left-canvas copies (`drawn.mjs` keeps `pageBox`). What stays open here:
 - T4.2 (A equals a per-unit oracle in Node over sample-1, and a D(p) change asks no operator list) is not written: the reader's
   pixel checks are the lab gate's (`lab/pdf/spikes/ocg-reader.mjs`) and the e2e's frame (`pnpm e2e:registration`).
-- `DELTA_TAIL_ROOM` (delta.mjs, delta-wire.mjs) kept room for the tails, which no part carries any more: the file side's to
-  drop or keep.
 
 ## 5. Hosts
 

@@ -106,7 +106,7 @@ export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
  *  the wire: a head without one reads as `full`), the delta's fallback. The delta's bounds and its replaced pages' list:
  *  layout/delta-wire.mjs */
 export { BASE_KINDS, DELTA_MAX_BYTES }
-export { DELTA_MAX_SHARE, DELTA_TAIL_ROOM, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
+export { DELTA_MAX_SHARE, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
 /** why a head's base is arXiv's in a bundle of 8 (`base.why`): the paper's refusal, a code of LAYOUT_REFUSED, which every part
  *  with no layout says too */
 export const BASE_WHYS = LAYOUT_REFUSED

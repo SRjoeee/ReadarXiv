@@ -298,11 +298,11 @@ describe('the review\'s findings', () => {
     expect(await deltaOf(orig, ours, { PL, workMax: 10_000 })).toMatchObject({ refused: 'delta-bound', why: /work/ })
   }, 30_000)
 
-  it('should-fix 4: a delta whose /Size leaves the remover\'s tails too few object numbers is refused, and read back refused', async () => {
-    const big = pdfOf(origObjects(), { root: 1, size: 8_000_000 })
-    expect(await deltaOf(big, OURS, { PL })).toMatchObject({ refused: 'delta-bound', why: /tails/ })
-    const d = appendSection({ end: ORIG_TABLE.length, objects: [[8_000_000, 0, enc('8000000 0 obj\nnull\nendobj\n')]], kind: 'table', prev: startxrefOf(ORIG_TABLE)!, size: 8_000_001, trailer: { root: '1 0 R' } }).bytes
-    expect(deltaSection(d, { bytes: ORIG_TABLE.length, xref: startxrefOf(ORIG_TABLE)! }).why).toMatch(/tails/)
+  it('should-fix 4: a delta whose /Size is past PDF\'s object numbers is refused, and read back refused', async () => {
+    const big = pdfOf(origObjects(), { root: 1, size: 8_388_609 })
+    expect(await deltaOf(big, OURS, { PL })).toMatchObject({ refused: 'delta-bound', why: /object numbers/ })
+    const d = appendSection({ end: ORIG_TABLE.length, objects: [[8_388_607, 0, enc('8388607 0 obj\nnull\nendobj\n')]], kind: 'table', prev: startxrefOf(ORIG_TABLE)!, size: 8_388_609, trailer: { root: '1 0 R' } }).bytes
+    expect(deltaSection(d, { bytes: ORIG_TABLE.length, xref: startxrefOf(ORIG_TABLE)! }).why).toMatch(/object numbers/)
   })
 })
 
