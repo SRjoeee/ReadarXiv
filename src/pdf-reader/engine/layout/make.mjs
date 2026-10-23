@@ -732,9 +732,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /** why each unit not laid stays the original's (file.mjs UNLAID), the first reason a pass gave: the file's `unlaid`. Every
    *  unit the file does not lay has one (unlaidOf): none is dropped without its reason */
   const unlaidBy = new Map()
-  const refuseUnit = (i, code) => { if (!unlaidBy.has(i)) unlaidBy.set(i, code) }
+  const notLaid = (i, code) => { if (!unlaidBy.has(i)) unlaidBy.set(i, code) }
   /** why a unit with no anchor has none: its own marks unplaced, or no anchor at all */
-  const unanchored = i => refuseUnit(i, unplaced.has(i) ? 'unplacedMarks' : 'noAnchor')
+  const unanchored = i => notLaid(i, unplaced.has(i) ? 'unplacedMarks' : 'noAnchor')
   /** the file's `unlaid` rows of units `ids` (rising) the file does not lay (`laid(i)` false): [id, code]; a unit with no
    *  reason is a defect of the maker's, never a row */
   const unlaidOf = (ids, laid) => {
@@ -750,16 +750,16 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /** each unit placed, as it is (the page stream's rule 3 edges, which take its body lines a page at a time) */
   let onPlaced = null
   /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none, and why
-   *  (refuseUnit) */
+   *  (notLaid) */
   function place(i) {
     const u = units[i], a = anchors.get(i)
     if (a && unplaced.has(i)) stats.units.unplaced++
     if (!a || unplaced.has(i)) return unanchored(i)
-    if (!KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return refuseUnit(i, 'kind')
+    if (!KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return notLaid(i, 'kind')
     const rects = rectsOf(doc, a.tokens)
-    if (!rects.length || rects.length !== a.rects.length) return refuseUnit(i, 'rects')
-    if (rects.length > LINES_UNIT) return refuseUnit(i, 'linesUnit')
-    if (rects.some(r => dark.has(r.page) || !inked[r.page])) return refuseUnit(i, 'dark')
+    if (!rects.length || rects.length !== a.rects.length) return notLaid(i, 'rects')
+    if (rects.length > LINES_UNIT) return notLaid(i, 'linesUnit')
+    if (rects.some(r => dark.has(r.page) || !inked[r.page])) return notLaid(i, 'dark')
     const S = carriedUnit.get(`${i}s`), E = carriedUnit.get(`${i}e`)
     const onRect = (m, r) => m && m.page === r.page && Math.abs(m.y - r.base) < 0.5 * r.h
     const rows = []
@@ -768,7 +768,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const from = j === 0 && onRect(S, r) ? S.x : null, to = j === rects.length - 1 && onRect(E, r) ? E.x : null
       const row = lineOf(ink[r.page], r, from, to, i)
       // (a line with no glyph of its own: none there, or another's, which a unit laid before it took)
-      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) return refuseUnit(i, !row && takenAt(ink[r.page], r, i) ? 'lineTaken' : 'noLine')
+      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) return notLaid(i, !row && takenAt(ink[r.page], r, i) ? 'lineTaken' : 'noLine')
       rows.push(row)
     }
     // the anchor's rectangles of one line (its tokens out of order: a script before its base, the line's two parts
@@ -1776,7 +1776,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       for (const e of merged) erase.push(j, ...solid(view, e[0], e[1], e[2], e[3]))
     })
-    if (refuse) return refuseUnit(i, 'erase')
+    if (refuse) return notLaid(i, 'erase')
     // lines (each its font's id; the file's index is admit's)
     const lines = []
     for (const r of rows) {
@@ -1853,8 +1853,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const { id: i, u, rows, S, E, out } = one
     // (no rows: rowsOf said why)
     if (!out) return false
-    if (!drawable(one)) { stats.units.undrawn++; refuseUnit(i, 'undrawn'); return false }
-    if (fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) { refuseUnit(i, 'fonts'); return false }
+    if (!drawable(one)) { stats.units.undrawn++; notLaid(i, 'undrawn'); return false }
+    if (fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) { notLaid(i, 'fonts'); return false }
     const { lines, frames, erase } = out
     for (let j = 7; j < lines.length; j += 8) lines[j] = fontOf(lines[j])
     outUnits.push(out.unit)

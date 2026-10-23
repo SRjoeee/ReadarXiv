@@ -1858,6 +1858,16 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   between its two marks, looked up on that page exactly (`ownedOn`, within `OWN_TOL` 0.02 pt), with no matching; EMPTY, LOST,
   TEXT, JOINED and OUTSIDE as before. `match.mjs`, `tolerant.mjs`, the link-anchor locator, the text runs and the carry's
   point mapping are gone.
+- **A unit the maker does not lay says why** (LAYOUT 18): the file's `unlaid`, `[unit, code]` by unit rising, a code of
+  `UNLAID` (`noAnchor`, `unplacedMarks`, `kind`, `rects`, `linesUnit`, `dark`, `noLine`, `lineTaken`, `erase`, `undrawn`,
+  `fonts`: each place the maker leaves a unit out, the first that does), and a part holds those of the units it tells. It is
+  an optional key under schema 5, as `colours` is: a file of before reads and writes back unchanged, and the reader never
+  draws by it (the key is not `refused`, which a part's `layout` holds where it has none). A unit not laid with no code is a
+  defect of the maker's, which throws. The record came of 2602.23285v2's paragraph beside a sideways table cell (unit 56),
+  laid by production and not by LAYOUT 14 to 17 with no word of why: the cell's start mark, on its turned run at no upright
+  word, reached the next cell's word (`reachIn`, LAYOUT 14), its end mark's word was the paragraph's, and the cell took the
+  paragraph's eighth line (`lineTaken`). A start mark on a turned token's box now reaches none (`turnedAt`): the cell stays
+  the original's, as the maker never lays a turned run, and the paragraph is laid as production lays it.
 - **The head** (`layer-proto/format.mjs`, BUNDLE5 `'8'`; a reader of 8 reads 7's objects, a head of 7 over arXiv's PDF):
   `base { source: 'ours', bytes, sha256, xref, pages, tree, check: { pages: [ours, arXiv's], boxes: 'equal', carried } }` with
   `orig { bytes, sha256 }` (arXiv's PDF), or `base { source: 'arxiv', bytes, sha256, xref, why }` (no `orig`) with `why` one of
