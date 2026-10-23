@@ -301,6 +301,9 @@ describe('readBundle refuses', () => {
     expect(refusalOf(broken(b => { b.layout.units[1][0] = 9; b.layout.lines[1][0] = 9; b.layout.frames[1][0] = 9; b.layout.ph[0][0] = 9 }))?.why).toMatch(/^layout\.units\[1\]\[0\]/)
     expect(refusalOf(broken(b => { b.layout.units[1][1] = UNIT_KINDS.indexOf('caption') }))?.why).toMatch(/^layout\.units\[1\]\[1\]/)
     expect(refusalOf(broken(b => { b.layout.units[1][4] = 8 }))?.why).toMatch(/^layout\.units\[1\]\[4\]/)
+    // (why a unit is not laid, of a unit the bundle has: unit 1, which the file does not lay, taken; one past its units refused)
+    expect(refusalOf(broken(b => { (b.layout as { unlaid?: unknown }).unlaid = [[1, 'noAnchor']] }))).toBeNull()
+    expect(refusalOf(broken(b => { (b.layout as { unlaid?: unknown }).unlaid = [[9, 'noAnchor']] }))?.why).toMatch(/^layout\.unlaid\[0\]\[0\]/)
   })
 
   it("a layout file of a newer maker and a manifest of a newer remover are read: a part is refused by its schema, never by what made it (decision 4)", () => {
