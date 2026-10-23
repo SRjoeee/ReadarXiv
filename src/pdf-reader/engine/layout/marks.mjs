@@ -206,7 +206,10 @@ export function inkSection(samples) {
 /** the probe document of the layout marks: its punctuation section, then its ink section, its name section, its skip section,
  *  and last the punctuation section of the paper's own macros (probeSamples' `own`, numbered on from the asked ones): a call
  *  of one runs whatever its body does, which may be more errors than TeX goes on past (a hundred in one paragraph), and what
- *  it loses then is the answers after it, its own kind's, which the marking does without as before */
+ *  it loses then is the answers after it, its own kind's, which the marking does without as before. 2610.21377's jnsao.cls
+ *  defines \\and as ` and ` in a group at \\begin{document}, which completeMacros takes for the document's (a definition in a
+ *  group or a hook is read as any other); the probe's \\and is the kernel's, \\end{tabular}…, and TeX stops there: the answers
+ *  for \\N and \\defeq after it are lost, the ink answers before it stand */
 export const markProbeTex = (samples, ink = []) => {
   const n = samples.findIndex(s => s.own), asked = n < 0 ? samples : samples.slice(0, n)
   return probeTex([punctuationSection(asked), ...(ink.length ? [inkSection(ink)] : []), nameSection(), skipSection(), ...(n < 0 ? [] : [punctuationSection(samples.slice(n), n)])])
@@ -988,7 +991,9 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   const closed = completeMap(complete)
   const answered = p => completeCall(p, closed) && !!switches?.[commandOf(p)]
   const looks = p => LOOKS_AHEAD(p) && !answered(p)
-  const opensAfter = (after, spaced) => spaced && answered(after) && switches[commandOf(after)][6] === '0'
+  // (white space after a call that ends in a control word is none: TeX skips it, and the next piece stands against the call's
+  // last letter, where its mark's whatsit would let TeX hyphenate the word a citation's box keeps whole: `\\tf \\cite{a}`)
+  const opensAfter = (after, spaced) => spaced && !ENDS_IN_CS.test(after.src ?? '') && answered(after) && switches[commandOf(after)][6] === '0'
   /** the paper's macros whose box TeX began with a node apart from a word (readInkApart): glued to one, none of its letters */
   const parted = new Set(apart ?? [])
   /** what TeX answered for a piece's command before what follows it: a code of readMarkProbe's ('x' no answer: no mark

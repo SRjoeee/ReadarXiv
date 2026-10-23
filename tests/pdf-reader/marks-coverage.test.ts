@@ -132,9 +132,9 @@ describe('layoutMarking with the complete macros: a call TeX answered for gets t
     const v = unit([text('Our '), ph('\\tf{}'), text('s and '), ph('\\tf{}'), ph('\\cite{a}'), text(' more '), ph('\\tf{}'), text('2.')])
     expect(marksOf(v, { lines: false, complete: { tf: 0 }, switches: all('\\tf', '\\cite') })).toEqual({ '\\tf{}': 'a', '\\cite{a}': '' })
   })
-  it('a call short of its arguments looks ahead still; a call ending in a control word gets no closing mark (TeX skips the spaces after it)', () => {
+  it('a call short of its arguments looks ahead still; a call ending in a control word gets no closing mark, nor the piece past its white space any (TeX skips the spaces after it)', () => {
     const v = unit([text('A '), ph('\\cls'), ph('\\cite{a}'), text(' B '), ph('\\dprime'), text(' '), ph('\\ref{b}'), text('.')])
-    expect(marksOf(v, { lines: false, complete: { cls: 1, dprime: 0 }, switches: all('\\cls', '\\dprime', '\\cite', '\\ref') })).toEqual({ '\\cls': 'a', '\\cite{a}': '', '\\dprime': 'a', '\\ref{b}': 'ab' })
+    expect(marksOf(v, { lines: false, complete: { cls: 1, dprime: 0 }, switches: all('\\cls', '\\dprime', '\\cite', '\\ref') })).toEqual({ '\\cls': 'a', '\\cite{a}': '', '\\dprime': 'a', '\\ref{b}': '' })
   })
   it('completeCalled: the complete macros the units call, by name', () => {
     expect(completeCalled([u], [['HarnessLimitShare', 0], ['cls', 1], ['unused', 2]])).toEqual({ HarnessLimitShare: 0, cls: 1 })

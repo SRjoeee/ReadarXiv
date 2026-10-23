@@ -95,6 +95,19 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     // (the marks it set: \\pp{}, whose box begins with a kern, both; the box, the formula and the rule glued, none)
     expect([r.marksOf('\\pp{}'), r.marksOf('\\st{}'), r.marksOf('\\sq{}'), r.marksOf('\\ru{}')]).toEqual(['ab', '', '', ''])
   }, 900_000)
+  it('a call ending in a control word before white space and a citation or a macro: TeX skips the space, so the next piece stands against the word', async () => {
+    // (\\tf answered for by its first call, \\tf{}: every mark safe before a word. After \\tf the space is skipped, and an
+    // opening mark on \\cite{a} or \\tg{} would stand against Transformer's last letter: a citation's box keeps TeX from
+    // hyphenating the word before it, a mark's whatsit does not, and Transformer would break where the paper's does not)
+    const r = await compare(doc('\\newcommand\\tf{Transformer}\\newcommand\\tg{Gizmo}', `First the \\tf{} here.\n\n${['\\tf.', '\\tf s', '\\tf 2', '\\tf \\tg{}', '\\tf \\cite{a}'].map(x => lines(x)).join('\n\n')}`))
+    expect(r.marked).toEqual(r.own)
+    expect(r.switches['\\tf']).toBe('00000000')
+    expect([r.marksOf('\\cite{a}'), r.marksOf('\\tg{}')]).toEqual(['', ''])
+  }, 900_000)
+  it('a unit that opens after a command TeX skips the space after (paralist\'s inline items, \\item Which: 2610.21098): its line probe past that space', async () => {
+    const r = await compare(`\\documentclass{article}\n\\usepackage{paralist}\n\\begin{document}\nWith this design we ask four questions.\n\\begin{inparaenum} [(1)]\n  \\item Which pressures reduce verified task success (VTS)?\n  \\item How much of each loss occurs together with a harness limit?\n  \\item Where do failed episodes end, and does the failure record reveal which pressure was assigned?\n\\end{inparaenum}\n\nNext paragraph.\n\\end{document}\n`)
+    expect(r.marked).toEqual(r.own)
+  }, 900_000)
   it('a complete macro whose call is more errors than TeX goes on past, asked about last: the probe\'s other answers stand', async () => {
     // (\\bad's four undefined commands, in each of the punctuation test's 32 boxes, make more than the hundred errors one
     // paragraph may hold, and TeX stops: \\nothing's ink answer, asked before, says it sets none, and it has no mark)

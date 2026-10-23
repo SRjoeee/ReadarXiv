@@ -49,11 +49,14 @@ export { LayoutRefusal } from './json.mjs'
  *  closing mark TeX answered moves nothing, before white space or punctuation, and leaves the piece after it, past white space,
  *  its marks; a macro glued to a word whose box TeX begins with glue, a kern, a penalty or a whatsit (readInkApart) is marked;
  *  the kernel's letters and \slash are text symbols; and a unit whose start mark stands at no word is bounded by the nearest
- *  upright word after it on its baseline in its column (make.mjs reachIn). Over the release-route sweep's 35 papers with
- *  unanchored rows, 37 of the 217 rows (31 units) convert, 57 units in all are placed better and no other unit's layout
- *  changes; the 21 papers whose marked originals were made again set every word of their base pages where they were
- *  (pdftotext, 378,881 words). Of the gate pack's seven papers 2609.26457's marked original changes (114 marks gained); the
- *  others' are byte for byte as before (the file's schema is 5 still) */
+ *  upright word after it on its baseline in its column (make.mjs reachIn); and a unit's line probe goes past the white space
+ *  that opens it, where its start mark goes, so that a space TeX skips after a control word or by \ignorespaces stays skipped
+ *  (latex-front.mjs patch: paralist's inline `\item Which`, 2610.21098's page re-broken from page 1). Every marked original's
+ *  bytes change where a unit opens with white space. Over the release-route sweep's 35 papers with unanchored rows, 37 of the
+ *  217 rows (31 units) convert, 57 units in all are placed better and no other unit's layout changes; of their 34 base pages
+ *  made again, 19 set every word where the paper's own compile in the same image does (pdftotext), the other 15 as the sweep's
+ *  did or nearer. Of the gate pack's seven papers 2609.26457's marking gains 114 marks, and each base page sets every word as
+ *  before or as the paper's own compile does (2307.16209 and 2608.16117 now as it) (the file's schema is 5 still) */
 export const LAYOUT = '14'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
