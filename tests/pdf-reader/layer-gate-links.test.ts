@@ -21,7 +21,7 @@ import {
   textUnder,
   urlAllowed,
 } from '../../lab/pdf/spikes/layer-gate/links.mjs'
-import { compare, completenessRows, fixtureTotals, inkLine, LINKS_MIN, type Measure, MEASURES, pageEntry, pooled, type Totals, worse } from '../../lab/pdf/spikes/layer-gate/score.mjs'
+import { compare, completenessRows, fixtureTotals, LINKS_MIN, type Measure, MEASURES, pageEntry, pooled, type Totals, worse, wrapLine } from '../../lab/pdf/spikes/layer-gate/score.mjs'
 
 // The layer gate's link measures (3a-0, lab/pdf/spikes/layer-gate/links.mjs; the design is 3a-links-design.md section 2):
 // what the original's links are (T and U), which of them a record keeps, which records are wrong, which moved records are
@@ -87,12 +87,11 @@ describe('glyph points, and the area the drawing left erased', () => {
   })
   const dev = (x: number, y: number) => [x, 800 - y]
   const ops: Op[] = [
-    { op: 'erase', box: [95, 90, 40, 20] },
-    { op: 'paper', rects: [[300, 100, 50, 20]] },
-    { op: 'swap', rects: [[400, 100, 50, 20]] },
+    { op: 'hidden', rects: [[95, 90, 40, 20], [300, 100, 50, 20]] },
+    { op: 'hidden', rects: [[400, 100, 50, 20]] },
     { op: 'crop' },
   ]
-  it('erases by erase, paper and swap rectangles in device pixels, and not by a crop', () => {
+  it('hides by the hidden operations\' rectangles in device pixels, and not by a crop', () => {
     // (device y = 800 - y: the erase box covers x 95..135, device y 90..110, PDF y 690..710)
     const erased = erasedOf(ops, dev)
     expect(erased(100, 700)).toBe(true)
@@ -101,16 +100,13 @@ describe('glyph points, and the area the drawing left erased', () => {
     expect(erased(200, 700)).toBe(false)
     expect(erased(100, 600)).toBe(false)
   })
-  it('puts back what a restore restores within its clip, in the operations\' order: a later erase takes it again', () => {
-    const restore: Op = { op: 'restore', boxes: [[95, 90, 20, 20]], clip: [[95, 90, 40, 20]] }
-    const back = erasedOf([ops[0]!, restore], dev)
-    expect(back(100, 700)).toBe(false) // in a restored box
-    expect(back(125, 700)).toBe(true) // in the erase box, outside the restored one
-    const again = erasedOf([ops[0]!, restore, { op: 'erase', box: [95, 90, 40, 20] }], dev)
+  it('puts back what a paste shows again, in the operations\' order: a later hidden operation takes it again', () => {
+    const paste: Op = { op: 'paste', page: 1, plane: 'C', rects: [[95, 90, 20, 20]] }
+    const back = erasedOf([ops[0]!, paste], dev)
+    expect(back(100, 700)).toBe(false) // in a pasted rectangle
+    expect(back(125, 700)).toBe(true) // in the hidden rectangle, outside the pasted one
+    const again = erasedOf([ops[0]!, paste, { op: 'hidden', rects: [[95, 90, 40, 20]] }], dev)
     expect(again(100, 700)).toBe(true)
-    // a restore box outside its clip restores nothing
-    const outside = erasedOf([ops[0]!, { op: 'restore', boxes: [[95, 90, 20, 20]], clip: [[500, 500, 5, 5]] }], dev)
-    expect(outside(100, 700)).toBe(true)
   })
 })
 
@@ -148,7 +144,7 @@ describe('a page\'s link measures: the baseline, where the engine drops every li
   })
   it('counts what in place alone could keep: the annotations of T none of whose glyph points is erased', () => {
     // the erase covers the first two links' text (PDF y 690..710, x 95..180)
-    const erased = erasedOf([{ op: 'erase', box: [95, 90, 85, 20] }], (x, y) => [x, 800 - y])
+    const erased = erasedOf([{ op: 'hidden', rects: [[95, 90, 85, 20]] }], (x, y) => [x, 800 - y])
     expect(run({ erased }).linksPlaceable).toBe(2)
     expect(run().linksPlaceable).toBe(4)
   })
@@ -198,16 +194,16 @@ describe('wrong: each defect in turn', () => {
   const a0: LinkSource = { annots: [[1, 0]] }
   const why = (m: ReturnType<typeof run>) => m.where.linksWrong.flatMap(x => x.split(':')[1]!.split('+'))
   it('an in-place record over an erased glyph point (links over erased text = 0)', () => {
-    const erased = erasedOf([{ op: 'erase', box: [95, 90, 40, 20] }], (x, y) => [x, 800 - y])
+    const erased = erasedOf([{ op: 'hidden', rects: [[95, 90, 40, 20]] }], (x, y) => [x, 800 - y])
     const m = run({ records: [inPlace({ boxes: [100, 698, 130, 712] })], sources: [a0], erased })
     expect(m.linksWrong).toBe(1)
     expect(why(m)).toEqual(['erased'])
-    // the same record over text a restore put back is fine
-    const restored = erasedOf([{ op: 'erase', box: [95, 90, 40, 20] }, { op: 'restore', boxes: [[95, 90, 40, 20]], clip: [[95, 90, 40, 20]] }], (x, y) => [x, 800 - y])
+    // the same record over text a paste showed again is fine
+    const restored = erasedOf([{ op: 'hidden', rects: [[95, 90, 40, 20]] }, { op: 'paste', rects: [[95, 90, 40, 20]] }], (x, y) => [x, 800 - y])
     expect(run({ records: [inPlace({ boxes: [100, 698, 130, 712] })], sources: [a0], erased: restored }).linksWrong).toBe(0)
   })
   it('a moved record is not asked about erased text: it lies over its own drawing', () => {
-    const erased = erasedOf([{ op: 'erase', box: [95, 90, 40, 20] }], (x, y) => [x, 800 - y])
+    const erased = erasedOf([{ op: 'hidden', rects: [[95, 90, 40, 20]] }], (x, y) => [x, 800 - y])
     expect(run({ records: [moved('cite.a', [150, 698, 170, 712])], sources: [a0], erased, drawn: () => '12', reference: () => '12' }).linksWrong).toBe(0)
   })
   it('an attribution that names no annotation of T, or one of another target', () => {
@@ -659,15 +655,19 @@ describe('the completeness gate: links that are wrong, at 0 from the first pull 
   })
 })
 
-describe('the ink line: the pages of arXiv\'s PDF whose ink the add-on\'s walk did not read whole, by output (reported, not gated)', () => {
-  const output = (ink: unknown) => ({ totals: { pages: 12, numbersShown: 3, numbersTotal: 3 } as unknown as Totals, summary: { removal: { ink } } })
-  it('counts each output\'s capped, timed out and degraded pages, and says so when every one is whole or none told', () => {
-    const rows = completenessRows({ fixtures: { a: output({ capped: [], timedOut: [], degraded: [] }), b: output({ capped: [3], timedOut: [], degraded: [5, 6] }), c: output(null) } } as never, 'model')
-    expect(rows.map(r => r.ink)).toEqual([{ capped: [], timedOut: [], degraded: [] }, { capped: [3], timedOut: [], degraded: [5, 6] }, null])
+describe('the wrap line: whether each output\'s page was wrapped by optional content, or why not (reported, not gated)', () => {
+  const output = (wrap: unknown) => ({ totals: { pages: 12, numbersShown: 3, numbersTotal: 3 } as unknown as Totals, summary: { wrap } })
+  it('names each output not wrapped with why, and says so when every one is or none told', () => {
+    const rows = completenessRows({ fixtures: { a: output({ wrapped: true, why: null }), b: output({ wrapped: false, why: 'no source' }), c: output(null) } } as never, 'model')
+    expect(rows.map(r => r.wrap)).toEqual([{ wrapped: true, why: null }, { wrapped: false, why: 'no source' }, null])
     // reported, never a failure of its own
     expect(rows.every(r => r.fails.length === 0)).toBe(true)
-    expect(inkLine(rows)).toBe("ink (the add-on's reading of arXiv's pages): 1 of 2 outputs not whole: b [capped 1, timed out 0, degraded 2]; 1 not told")
-    expect(inkLine(rows.slice(0, 1))).toBe("ink (the add-on's reading of arXiv's pages): whole on every one of 1 outputs")
-    expect(inkLine(rows.slice(2))).toBe("ink (the add-on's reading of arXiv's pages): not told by any output")
+    expect(wrapLine(rows)).toBe("wrap (our page wrapped by optional content): 1 of 2 outputs not wrapped, every unit the original's: b [no source]; 1 not told")
+    expect(wrapLine(rows.slice(0, 1))).toBe('wrap (our page wrapped by optional content): every one of 1 outputs')
+    expect(wrapLine(rows.slice(2))).toBe('wrap (our page wrapped by optional content): not told by any output')
+  })
+  it('fails the pixel tier on a pixel hidden outside the drawn units\' rectangles', () => {
+    const rows = completenessRows({ fixtures: { a: { totals: { pages: 1, numbersShown: 0, numbersTotal: 0, lostInk: 0, hiddenOutside: 3 } as unknown as Totals } } }, 'pixel')
+    expect(rows[0]!.fails).toEqual(['hiddenOutside'])
   })
 })

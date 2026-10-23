@@ -63,19 +63,10 @@ export const MEASURES = [
   // markerResidueOf: a marker, its `#`, an entity, a tag; markupResidueOf: a backslash, a math shift, a brace)
   ['markerResidue', 'model', 'defect', 'down', 'marker or markup syntax left in drawn text'],
   ['numbersLost', 'model', 'defect', 'down', 'equation numbers not shown'],
-  // the text-removed PDF's (--removal): its removed page the truth of what stays (pdf-remove-report.md §3.1)
-  ['trueResidue', 'pixel', 'defect', 'down', 'leftover English (true residue)'],
-  ['traces', 'pixel', 'defect', 'down', 'faint leftovers (traces)'],
-  ['trueBites', 'pixel', 'defect', 'down', 'kept ink destroyed (true bites)'],
-  ['cropForeignInk', 'pixel', 'defect', 'down', 'crops carrying foreign ink (6 px or more)'],
-  // and its exactness: the glyphs removed are the glyphs the layer replaces, nothing else removed or moved
-  ['rmOutside', 'pixel', 'defect', 'down', 'pixels changed outside the removed glyphs'],
-  ['rmMissed', 'model', 'defect', 'down', 'glyphs and rules replaced, not removed'],
-  ['rmOther', 'model', 'defect', 'down', 'glyphs and rules removed, not replaced'],
-  ['rmMoved', 'model', 'defect', 'down', 'kept glyphs moved'],
-  ['rmPOther', 'model', 'defect', 'down', "placeholders' page: other ink or a crop's glyph missing"],
-  ['rmMismatched', 'model', 'defect', 'down', "units whose removal is not the plan's"],
-  ['rmRefused', 'model', 'defect', 'down', 'pages refused by the remover'],
+  // the per-unit erasure (docs/PDF-READER.md §19.9): render A of our wrapped page (the groups the page's drawing hides OFF) against
+  // every group ON changes no pixel outside the rectangles of the page's `hidden` operations, each grown by 2 px (proto.mjs
+  // hiddenOutsideOf)
+  ['hiddenOutside', 'pixel', 'defect', 'down', "pixels hidden outside the drawn units' rectangles"],
   // generated text left in the source language (D1a): the babel names the frozen reference holds (a generated heading:
   // Abstract, References, Contents, …) not drawn in the target's word, by kind (`generated`: `name`, the only kind yet)
   ['generatedLeft', 'model', 'count', 'down', 'generated text left in the source language (babel names)'],
@@ -177,9 +168,7 @@ export function pageEntry(page, model, pixel) {
     paraGaps: gaps.length, paraGap: r(median(gaps.map(g => g.ratio)), 3), paraGapWide: gaps.filter(g => g.extra >= 1).length, paraGapTight: gaps.filter(g => g.tight === true).length,
     generated: model.generated ?? {}, generatedLeft: Object.values(model.generated ?? {}).reduce((a, n) => a + n, 0),
   }
-  if (model.removal) Object.assign(e, { rmRefused: model.removal.refused, rmMismatched: model.removal.mismatched, rmUnits: model.removal.units, rmSwapped: model.removal.swapped })
-  const ck = model.removalCheck
-  if (ck) Object.assign(e, { rmRemoved: ck.removed + ck.rulesRemoved, rmMissed: ck.missed + ck.rulesMissed, rmOther: ck.other + ck.extra + ck.rulesOther, rmMoved: ck.moved, rmPOther: ck.pOther + ck.pMissing })
+  if (model.hidden) e.hiddenGroups = model.hidden.groups
   if (pixel) {
     Object.assign(e, {
       textCells: pixel.coverage.text.cells, textTranslatedCells: r(pixel.coverage.text.translated, 3), textEnglishCells: r(pixel.coverage.text.english, 3), textBlankCells: r(pixel.coverage.text.blank, 3),
@@ -192,8 +181,7 @@ export function pageEntry(page, model, pixel) {
       ...(pixel.linesLeft !== undefined ? { linesLeft: pixel.linesLeft } : {}),
     })
     if (pixel.linesLeftWhere?.length) e.where = { ...e.where, linesLeft: [...new Set(pixel.linesLeftWhere)] }
-    const rm = pixel.removal
-    if (rm) Object.assign(e, { trueResidue: rm.trueResidue, trueResiduePx: rm.trueResiduePx, traces: rm.traces, tracesPx: rm.tracesPx, trueBites: rm.trueBites, trueBitesPx: rm.trueBitesPx, cropForeignInk: rm.cropForeignInk, cropForeignInkPx: rm.cropForeignInkPx, rmCrops: rm.crops, truthAt: rm.at })
+    if (pixel.hiddenOutside) Object.assign(e, { hiddenOutside: pixel.hiddenOutside.px, hiddenDiffering: pixel.hiddenOutside.differing, ...(pixel.hiddenOutside.at ? { hiddenOutsideAt: pixel.hiddenOutside.at } : {}) })
   }
   return { entry: e, frames: { body, fills, pitches, scales, gaps } }
 }
@@ -232,8 +220,8 @@ export function fixtureTotals(pages, frames, tier) {
       overlapPx: sum(pages, p => p.overlapPx), residuePx: sum(pages, p => p.residuePx), bitePx: sum(pages, p => p.bitePx), lostInkPx: sum(pages, p => p.lostInkPx), graphicsPx: sum(pages, p => p.graphicsPx), glyphsLostPx: sum(pages, p => p.glyphsLostPx),
     })
   }
-  // the text-removed PDF's sums, where the run has them
-  for (const k of ['rmRemoved', 'rmUnits', 'rmSwapped', 'trueResiduePx', 'tracesPx', 'trueBitesPx', 'rmDiffering', 'cropForeignInkPx', 'rmCrops']) if (pages.some(p => p[k] !== undefined)) t[k] = sum(pages, p => p[k])
+  // the per-unit erasure's sums: the groups hidden, the pixels render A changed
+  for (const k of ['hiddenGroups', 'hiddenDiffering']) if (pages.some(p => p[k] !== undefined)) t[k] = sum(pages, p => p[k])
   for (const d of DEFECTS) if (pages.some(p => p[d] !== undefined)) t[d] = sum(pages, p => p[d])
   t.rates = ratesOf(t, tier)
   t.modelRates = ratesOf(t, 'model')
@@ -372,21 +360,21 @@ export function compare(prev, cur, tier) {
 
 /** the brief's completeness rows: per output, each check's count over its pages, and the checks that fail (any count above 0;
  *  the pixel tier's lost ink too). Moved here from layer-gate.mjs (3a-0) so that its arithmetic is tested: `run.fixtures[name].totals` */
-/** an add-on's ink read (layout/addon.mjs pagePlansOf's `ink`) as the row reports it: its pages, by what befell them, or null */
-export function inkOf(ink) {
-  if (!ink || typeof ink !== 'object') return null
-  const pages = k => (Array.isArray(ink[k]) ? ink[k].filter(Number.isInteger) : [])
-  return { capped: pages('capped'), timedOut: pages('timedOut'), degraded: pages('degraded') }
+/** whether an output's page was drawn over our page wrapped by optional content, as the row reports it ({ wrapped, why }: why
+ *  the driver could not wrap it, then every unit the original's), or null where the run tells none */
+export function wrapOf(wrap) {
+  if (!wrap || typeof wrap !== 'object') return null
+  return { wrapped: wrap.wrapped === true, why: typeof wrap.why === 'string' ? wrap.why : null }
 }
 
-/** the ink line (the gate's, after the completeness line; names and numbers): every output's ink whole, or those whose is
- *  not, each with its counts; or that no output's add-on told */
-export function inkLine(rows) {
-  const told = rows.filter(r => r.ink)
-  if (!told.length) return 'ink (the add-on\'s reading of arXiv\'s pages): not told by any output'
-  const not = told.filter(r => r.ink.capped.length || r.ink.timedOut.length || r.ink.degraded.length)
+/** the wrap line (the gate's, after the completeness line; names and reasons): every output wrapped, or those that are not,
+ *  each with why; or that no output told */
+export function wrapLine(rows) {
+  const told = rows.filter(r => r.wrap)
+  if (!told.length) return 'wrap (our page wrapped by optional content): not told by any output'
+  const not = told.filter(r => !r.wrap.wrapped)
   const untold = rows.length - told.length
-  const head = `ink (the add-on's reading of arXiv's pages): ${not.length ? `${not.length} of ${told.length} outputs not whole: ${not.map(r => `${r.name} [capped ${r.ink.capped.length}, timed out ${r.ink.timedOut.length}, degraded ${r.ink.degraded.length}]`).join('; ')}` : `whole on every one of ${told.length} outputs`}`
+  const head = `wrap (our page wrapped by optional content): ${not.length ? `${not.length} of ${told.length} outputs not wrapped, every unit the original's: ${not.map(r => `${r.name} [${r.wrap.why ?? 'no reason told'}]`).join('; ')}` : `every one of ${told.length} outputs`}`
   return untold ? `${head}; ${untold} not told` : head
 }
 
@@ -401,8 +389,8 @@ export function completenessRows(run, tier) {
     // 3a-0: links.mjs linksPage)
     // (and a unit whose record the run could not make: drawn and measured by nothing, run.mjs recordErrors)
     const row = { name, pages: t.pages, missing: t.missing ?? 0, twice: t.twice ?? 0, brackets: t.brackets ?? 0, duplicated: t.duplicated ?? 0, numbers: [t.numbersShown, t.numbersTotal], clipped: t.clipped ?? 0, groupsSplit: t.groupsSplit ?? 0, labelsSource: t.labelsSource ?? 0, textInDisplay: t.textInDisplay ?? 0, lineStartPunct: t.lineStartPunct ?? 0, linksWrong: t.linksWrong ?? 0, recordErrors: f.summary?.recordErrors ?? 0 }
-    if (tier === 'pixel') row.lostInk = t.lostInk ?? 0
-    row.fails = ['lostInk', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay', 'lineStartPunct', 'linksWrong', 'recordErrors'].filter(k => row[k] > 0)
+    if (tier === 'pixel') { row.lostInk = t.lostInk ?? 0; row.hiddenOutside = t.hiddenOutside ?? 0 }
+    row.fails = ['lostInk', 'hiddenOutside', 'missing', 'twice', 'brackets', 'duplicated', 'clipped', 'groupsSplit', 'labelsSource', 'textInDisplay', 'lineStartPunct', 'linksWrong', 'recordErrors'].filter(k => row[k] > 0)
     if (t.numbersShown < t.numbersTotal) row.fails.push('numbers')
     // (and the links' two shares held to their minimums, 3a-2, the owner's ruling: none where there is nothing to share, no
     // link or no moved record; the misses listed, the annotations not kept (`linksLost`, page:rank) and the moved records whose
@@ -420,10 +408,8 @@ export function completenessRows(run, tier) {
     if (row.linksWrong > 0) row.linksWrongAt = (f.pages ?? []).flatMap(p => (p.where?.linksWrong ?? []).map(x => `p${p.p}:${x}`))
     if (row.fails.includes('linksKept')) row.linksLost = f.summary?.linksLost ?? []
     if (row.fails.includes('linksTrue')) row.linksFalse = (f.pages ?? []).flatMap(p => (p.where?.linksTrue ?? []).map(x => `${p.p}:${x}`))
-    // (and the pages of arXiv's PDF whose ink the add-on's walk did not read whole, capped or timed out (no unit drawn on
-    // them), or read degraded (its boxes past ink.mjs BOXES_PAGE merged): reported, not gated; null where the run made no
-    // add-on or its engine tells none)
-    row.ink = inkOf(f.summary?.removal?.ink)
+    // (and whether its page was wrapped, or why not: reported, not gated; null where the run tells none)
+    row.wrap = wrapOf(f.summary?.wrap)
     return row
   })
 }

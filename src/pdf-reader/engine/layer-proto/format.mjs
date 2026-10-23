@@ -2,7 +2,7 @@
 // layer is five kinds of object, each written once and read by its own reader, all within bounds. The units chunks hold the
 // paper's units (openPaper's, language-independent); the head binds the paper, the original, the versions and the chunks;
 // a part holds what the layer needs of some pages (the original's side of the units it places, their layout rows, the views,
-// the add-on's manifest entries and its tail); a left part holds one page's tokens, spans and word pairs; the catalog lists
+// the rules near its table cells); a left part holds one page's tokens, spans and word pairs; the catalog lists
 // them all and says how far the parts go. Every object's first two keys are `bundle` and `kind`; it is named by its digest.
 //
 // A reader receives an object from the network, so it is untrusted and read within bounds before anything is used, in this
@@ -18,19 +18,18 @@
 //
 // Imports the layout's parsers, the engine's versions, the units, and the rows' and the translation's readings of a unit
 // (for `records`, below) alone: never the run, the remover, the layout's maker nor the front end, which a reader does not load.
-import { checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
+import { checkBoxes } from '../layout/cell-rules.mjs'
 import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
 import { BASE_KINDS, countOf, DELTA_MAX_BYTES, deltaSection, replacedWhy, WRAP_STATS, wrapWhy } from '../layout/delta-wire.mjs'
-import { TAIL_CAP, tailLinks } from '../layout/tail.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
-import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
+import { PDFJS, PIPELINE_VERSION, REMOVAL } from '../pipeline/versions.mjs'
 import { groupOf } from '../translate/groups.mjs'
 import { plainSource } from '../translate/mt.mjs'
 import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
 import { checkDraw, DrawRefusal, wireOf } from './draw.mjs'
 import { sourceUnitsOf } from './rows.mjs'
-import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
+import { CELL, EDGES, unitStands } from './units.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG. 6: a part
@@ -42,9 +41,13 @@ import { CELL, EDGES, fromBase64, toBase64, unitStands } from './units.mjs'
  *  the base page): the head's `base` says whose PDF the layer is drawn over (`source`: 'ours', the final pass of our marked
  *  compile, with its check, or 'arxiv', with why our base was refused) and `orig` names arXiv's PDF beside ours; the catalog
  *  names the base object (`base`); a part with no layout may say `final` or `boxes` too (LAYOUT_REFUSED). A reader of 7
- *  refuses the new keys. This reader reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF */
-export const BUNDLE5 = '8'
-/** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 8 reads unchanged: its
+ *  refuses the new keys. 9 (REMOVAL 8, the per-unit erasure): a part carries its pages' cell rules (`rules`) in place of the
+ *  text-removed PDF's add-on (`addon`, its manifest and tail), no tail follows a part, and our base page is wrapped by optional
+ *  content (the head's `base.stats`, `unhidden`, `labelKept`): a reader of 8 refuses a part of 9, and this one a part of 8, so
+ *  a bundle of 8 is not found under 9's CTAG and is prepared again. The head's and the catalog's shapes are 8's. This reader
+ *  reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF */
+export const BUNDLE5 = '9'
+/** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`). Every object of a bundle is of its head's format */
 export const BUNDLES_READ = Object.freeze(['7', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
@@ -70,7 +73,7 @@ export const UNIT_ID_MAX = UNITS_TOTAL_VALUES, DROPPED_MAX = 148_000
 /** the head's: the object, `units` and a ref in it, or `base`, its `check` and its page counts */
 export const HEAD_CAP = 1024 * 1024, HEAD_VALUES = 64_000
 const HEAD_DEPTH = 4
-/** a part's: the object, `addon`, the manifest, its `page`, a page's entry, its `units`, a unit's boxes */
+/** a part's: the object, its layout part, a table of it, a row, a row's values; `rules`, a page's boxes */
 export const PART_CAP = 6 * 2 ** 20, PART_VALUES = 1_000_000
 const PART_DEPTH = 7
 /** a left part's: the object, `spans` or `pairs`, an entry, its ranges or runs */
@@ -79,11 +82,9 @@ const LEFT_DEPTH = 5
 /** the catalog's: the object, a list, a ref */
 export const CATALOG_CAP = 2 * 2 ** 20, CATALOG_VALUES = 200_000
 const CATALOG_DEPTH = 3
-/** a part's tail at most (layout/tail.mjs's, where the remover's side reads it too), and the part's content (everything but
- *  the tail's base64) at most: the cap less the base64 of a tail of TAIL_CAP and 64 KiB for the digests and the rest. The cut
- *  holds a part to it, so that a part's size is bounded by the cut and not by the paper */
-export { TAIL_CAP }
-export const CONTENT_MAX = PART_CAP - 4 * Math.ceil(TAIL_CAP / 3) - 64 * 1024
+/** a part's content at most: the cap less 64 KiB for the digests and the rest. The cut holds a part to it, so that a part's size is
+ *  bounded by the cut and not by the paper */
+export const CONTENT_MAX = PART_CAP - 64 * 1024
 /** a left part's tokens at most (a page of a dense paper holds thousands), and the tokens its spans may name, per token */
 export const TOKENS_PAGE = 15_000, SPANNED_PER_TOKEN = 2
 /** the tokens' wire: integers of TOKEN_SCALE (thousandths of a PDF unit), delta-coded, a decoded value past ±TOKEN_LIMIT
@@ -105,11 +106,11 @@ export const LAYOUT_REFUSED = Object.freeze(['compile', 'carry', 'engine', 'texl
 /** whose PDF a layer is drawn over (the head's `base.source`): our compile's final pass, or arXiv's (a fallback, or a bundle of 7) */
 export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
 /** how a base of ours is held (the head's `base.kind`, BUNDLE 8): `delta`, an incremental update over arXiv's PDF (the
- *  composed document arXiv's bytes, the delta, the remover's tails: layout/delta.mjs), or `full`, our whole PDF (no `kind` on
+ *  composed document arXiv's bytes and the delta: layout/delta.mjs), or `full`, our whole PDF (no `kind` on
  *  the wire: a head without one reads as `full`), the delta's fallback. The delta's bounds and its replaced pages' list:
  *  layout/delta-wire.mjs */
 export { BASE_KINDS, DELTA_MAX_BYTES }
-export { DELTA_MAX_SHARE, DELTA_TAIL_ROOM, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
+export { DELTA_MAX_SHARE, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
 /** why a head's base is arXiv's in a bundle of 8 (`base.why`): the paper's refusal, a code of LAYOUT_REFUSED, which every part
  *  with no layout says too */
 export const BASE_WHYS = LAYOUT_REFUSED
@@ -301,7 +302,7 @@ async function opened(kind, bytes, ref, def, caps) {
 const encoder = new TextEncoder()
 /** a text already built, counted as the reader will (bytes, values, nesting), digested and keyed; `pos` ({ from, to } or
  *  { page }) is the object's place, on its ref and on the result. `contentOf` gives, of the bytes, the content where the kind
- *  bounds that too (a part: less its tail's base64) */
+ *  bounds that too (a part's) */
 async function finish(kind, text, def, paper, pos, contentOf = null, vtag = null, pre = null) {
   const bytes = pre?.bytes ?? encoder.encode(text)
   // (`data.bound` tells which bound a writer's output passed, for the cut, which closes a part before it does)
@@ -956,7 +957,7 @@ export function indexOf(head, chunks, o = {}) {
 }
 
 // ---------------------------------------------------------------- the parts
-const PART_KEYS_WIRE = ['bundle', 'kind', 'head', 'prev', 'pages', 'views', 'left', 'fileOnly', 'layout', 'addon', 'leftParts']
+const PART_KEYS_WIRE = ['bundle', 'kind', 'head', 'prev', 'pages', 'views', 'left', 'fileOnly', 'layout', 'rules', 'leftParts']
 const PART_DEF = { cap: PART_CAP, values: PART_VALUES, depth: PART_DEPTH }
 
 /**
@@ -964,12 +965,11 @@ const PART_DEF = { cap: PART_CAP, values: PART_VALUES, depth: PART_DEPTH }
  * no index): its pages [a, b] within the paper's N; the views of pages a … reach (stride 4, reach within N and past b); the
  * left units [id, stream, rects], ids rising, each rectangle on a page of [a, reach] within that page's view; `fileOnly`
  * [id, after], ids rising and not the left's; the layout part by checkLayoutPart, its units the left's or the file-only's and
- * those alone; the add-on null where the layout is, and where the part has no add-on for its pages (M20: a producer with no
- * remover, its pages drawn by v0's own erase and restore), else its manifest by checkAddonManifest in part mode (`atFrom` the
- * first removed page of the document it numbers, else the manifest's own first) and its tail base64 or null (null exactly
- * where no entry names a removed page, and then `appended` 0); one left-part ref for each page a … b
+ * those alone; `rules`, the rules near its table cells, null where the layout is none or no page of it has any, else boxes
+ * (x0, y0, x1, y1 stride 4, layout/cell-rules.mjs checkBoxes) by page, each of pages a … b, within its view; one left-part ref for
+ * each page a … b
  */
-function partShape(v, { N, unitCount, atFrom }) {
+function partShape(v, { N, unitCount }) {
   const K = 'part'
   digestField(K, v.head, 'head')
   if (v.prev !== null) digestField(K, v.prev, 'prev')
@@ -1046,33 +1046,31 @@ function partShape(v, { N, unitCount, atFrom }) {
       seen.add(id)
     }
     for (let i = 0; i < fileOnly.length; i++) if (!seen.has(fileOnly[i][0])) throw refuse(K, `fileOnly[${i}][0]`, 'not a unit of the layout')
+    // (why each unit the part tells that the file does not lay is the original's: a left unit of the part's, as the cut writes it)
+    const unlaid = layout.unlaid ?? []
+    for (let i = 0; i < unlaid.length; i++) {
+      const id = unlaid[i][0]
+      if (id >= unitCount) throw refuse(K, `layout.unlaid[${i}][0]`, 'not a unit of the paper')
+      if (!inLeft.has(id)) throw refuse(K, `layout.unlaid[${i}][0]`, 'not a left unit of the part')
+    }
   } else if (fileOnly.length) throw refuse(K, 'fileOnly', 'units with no layout')
 
-  // addon
-  let addon = null
-  if (layout === null) {
-    if (v.addon !== null) throw refuse(K, 'addon', 'not null where the layout is')
-  } else if (v.addon !== null) {
-    const ad = exactKeys(K, v.addon, ['manifest', 'tail'], 'addon')
-    const m = ad.manifest
-    let at = atFrom
-    if (at === null && isObject(m) && isObject(m.page)) for (const k of Object.keys(m.page)) if (isObject(m.page[k]) && isObject(m.page[k].at) && Number.isInteger(m.page[k].at.R)) { at = m.page[k].at.R; break }
-    const manifest = inside(K, 'addon.manifest', () => checkAddonManifest(m, { pages: N, views, shipped: true, part: { from: a, to: b, atFrom: at ?? N + 1 } }))
-    let r = 0
-    for (const k of Object.keys(manifest.page)) if (Object.hasOwn(manifest.page[k], 'at')) r++
-    let tail = null, links = null
-    if (ad.tail !== null) {
-      tail = inside(K, '', () => fromBase64(ad.tail, TAIL_CAP, 'addon.tail'))
-      if (tail.length !== manifest.appended) throw refuse(K, 'addon.tail', `not the manifest's ${manifest.appended} bytes`)
-      if (r === 0) throw refuse(K, 'addon.tail', 'a tail, and no page of the manifest names a removed page')
-      // (a tail the reader could not read: the chain's values are the reader's, the section is the tail's own)
-      links = tailLinks(tail)
-      if (links === null) throw refuse(K, 'addon.tail', 'does not end in a cross-reference section')
-    } else {
-      if (manifest.appended !== 0) throw refuse(K, 'addon.manifest.appended', 'not 0, and no tail')
-      if (r !== 0) throw refuse(K, 'addon.manifest.page', 'a removed page named, and no tail')
+  // rules: by page, the part's own, where its layout is
+  let rules = null
+  if (v.rules !== null) {
+    if (layout === null) throw refuse(K, 'rules', 'not null where the layout is none')
+    if (!isObject(v.rules) || Array.isArray(v.rules)) throw refuse(K, 'rules', `not an object of pages (${kindOf(v.rules)})`)
+    const keys = Object.keys(v.rules)
+    if (!keys.length) throw refuse(K, 'rules', 'an object of no page: null')
+    rules = {}
+    for (const k of keys) {
+      const p = /^[1-9]\d{0,4}$/.test(k) ? Number(k) : NaN
+      if (!isInteger(p, a, b)) throw refuse(K, `rules.${told(k)}`, `not a page ${a} to ${b}`)
+      const boxes = v.rules[k]
+      if (!Array.isArray(boxes) || !boxes.length) throw refuse(K, `rules.${k}`, `not boxes (${kindOf(boxes)})`)
+      inside(K, 'rules', () => checkBoxes(boxes, p, views, k, a))
+      rules[p] = boxes
     }
-    addon = { manifest, tail, r, links }
   }
 
   // leftParts
@@ -1082,15 +1080,12 @@ function partShape(v, { N, unitCount, atFrom }) {
     const r = refOf(K, lp[i], `leftParts[${i}]`, 'left', 'page', LEFT_CAP)
     if (r.page !== a + i) throw refuse(K, `leftParts[${i}].page`, `not page ${a + i}, in page order`)
   }
-  return { a, b, reach, views, left, fileOnly, layout, noLayout, addon, leftParts: lp }
+  return { a, b, reach, views, left, fileOnly, layout, noLayout, rules, leftParts: lp }
 }
 
 /** the chain before any part */
 function initialChain(index) {
-  const base = index.head.base
-  // (a delta is the tails' base: the composed document so far arXiv's bytes and the delta's, its section the last)
-  const end = base.kind === 'delta' ? index.head.orig.bytes + base.bytes : base.bytes
-  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), groups: new Uint8Array(indexGroups(index).count), reach: 0, ahead: [], end, xref: base.xref, next: null, root: null, r: 0 }
+  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), groups: new Uint8Array(indexGroups(index).count), reach: 0, ahead: [] }
 }
 
 /**
@@ -1098,10 +1093,7 @@ function initialChain(index) {
  * first): its envelope and shape (partShape), then what it must agree with. The index: its head's; every id below the units;
  * a layout unit of the kind of its unit and of its piece count. The chain: its pages begin after the last told and `prev` is
  * the last part's digest; its K entries (a left unit at its stream, a file-only one at `after` + 0.5) come strictly after the
- * last K entry told, in (slot, id) order; the views of pages it shares with the last part's reach are what was told; its
- * manifest numbers its removed pages from the document's end, and its tail continues the last cross-reference section (its
- * `startxref` inside the tail, its `/Prev` the last section's, the same page tree root, fresh object numbers above the last
- * tail's). Any failure refuses the whole part. Gives the part and the chain after it. Throws BundleRefusal
+ * last K entry told, in (slot, id) order; the views of pages it shares with the last part's reach are what was told. Any failure refuses the whole part. Gives the part and the chain after it. Throws BundleRefusal
  */
 export async function readPart(bytes, { ref, index, chain = null, caps }) {
   const K = 'part'
@@ -1114,7 +1106,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   if (v.head !== was.head) throw refuse(K, 'head', 'not the head of the parts told')
   if (Array.isArray(v.pages) && v.pages.length === 2 && v.pages[0] !== was.through + 1) throw refuse(K, 'pages[0]', `not ${was.through + 1}, the page after the last part's`)
   if (v.prev !== was.last) throw refuse(K, 'prev', 'not the digest of the last part told')
-  const s = partShape(v, { N, unitCount: index.units.length, atFrom: N + was.r + 1 })
+  const s = partShape(v, { N, unitCount: index.units.length })
 
   // the ref's place, where it has one (a catalog's part refs do), is the part's pages
   if ((ref.from !== undefined && ref.from !== s.a) || (ref.to !== undefined && ref.to !== s.b)) throw refuse(K, 'ref', `the ref's pages ${ref.from ?? '?'} to ${ref.to ?? '?'} are not the part's ${s.a} to ${s.b}`)
@@ -1168,67 +1160,39 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   // units reach less far leaves the rest to the part that told them)
   for (let i = 0, n = Math.min(s.views.length, was.ahead.length); i < n; i++) if (s.views[i] !== was.ahead[i]) throw refuse(K, `views[${i}]`, 'not the view told by the last part')
 
-  let end = was.end, xref = was.xref, next = was.next, root = was.root
-  if (s.addon !== null && s.addon.tail !== null) {
-    const tail = s.addon.tail, links = s.addon.links
-    if (links.startxref !== end + links.xrefAt) throw refuse(K, 'addon.tail', 'its startxref is not where its cross-reference section is')
-    if (links.prev !== xref) throw refuse(K, 'addon.tail', '/Prev is not the last cross-reference section\'s')
-    if (root !== null && links.root !== root) throw refuse(K, 'addon.tail', 'rewrites another page tree root')
-    if (next !== null && links.first !== next) throw refuse(K, 'addon.tail', 'its fresh objects do not follow the last tail\'s')
-    end += tail.length
-    xref = links.startxref
-    next = links.last + 1
-    root = links.root
-  }
   const after = Object.freeze({
     head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, told, groups, reach: Math.max(s.reach, was.reach),
-    ahead: Object.freeze(s.reach >= was.reach ? s.views.slice(4 * (s.b - s.a + 1)) : was.ahead.slice(4 * (s.b - was.through))), end, xref, next, root, r: was.r + (s.addon === null ? 0 : s.addon.r),
+    ahead: Object.freeze(s.reach >= was.reach ? s.views.slice(4 * (s.b - s.a + 1)) : was.ahead.slice(4 * (s.b - was.through))),
   })
   return {
     kind: 'part', sha256, bytes: bytes.length, head: v.head, prev: v.prev, pages: [s.a, s.b], reach: s.reach, views: Object.freeze(s.views),
-    left: s.left, fileOnly: s.fileOnly, layout: s.layout, noLayout: s.noLayout, addon: s.addon === null ? null : { manifest: s.addon.manifest, tail: s.addon.tail, r: s.addon.r }, leftParts: s.leftParts, chain: after,
+    left: s.left, fileOnly: s.fileOnly, layout: s.layout, noLayout: s.noLayout, rules: s.rules, leftParts: s.leftParts, chain: after,
   }
-}
-
-/** the manifest as written: its objects in the schema's order, whatever order they came in (integer keys ascend by themselves) */
-function manifestText(m) {
-  const page = {}
-  for (const k of Object.keys(m.page)) {
-    const e = m.page[k], o = { ok: e.ok }
-    for (const key of ['refused', 'units', 'at', 'dirty', 'rules']) if (Object.hasOwn(e, key) && e[key] !== undefined) o[key] = e[key]
-    page[k] = o
-  }
-  const sorted = o => Object.fromEntries(Object.keys(o).sort().map(k => [k, o[k]]))
-  return { schema: m.schema, removal: m.removal, pages: m.pages, sets: sorted(m.sets), page, appended: m.appended, stats: sorted(m.stats) }
 }
 
 /**
  * The part written: `head` and `prev` digests, `pages` [a, b], the views of pages a … reach, the left units, the file-only
  * ones, the layout part, or why there is none ({ refused, why }: LAYOUT_REFUSED, written as given), or null (no reason given),
- * the add-on { manifest, tail } (null where the layout is none; `tail` null where the remover
- * gave none), and the left parts `writeLeftPart` gave, one for each page. Rectangles and views to a thousandth, layout rows
- * as the layout file writes them. Throws BundleRefusal for a part its reader would refuse for itself: past PART_CAP or
- * PART_VALUES, its content past CONTENT_MAX, a tail past TAIL_CAP, a shape the part alone shows wrong
+ * the rules near its table cells by page (null for none), and the left parts `writeLeftPart` gave, one for each page. Rectangles
+ * and views to a thousandth, layout rows as the layout file writes them. Throws BundleRefusal for a part its reader would refuse
+ * for itself: past PART_CAP or PART_VALUES, its content past CONTENT_MAX, a shape the part alone shows wrong
  */
-export async function writePart({ paper, head, prev, pages, views, left, fileOnly, layout, addon, leftParts }) {
+export async function writePart({ paper, head, prev, pages, views, left, fileOnly, layout, rules = null, leftParts }) {
   const K = 'part'
-  // (a tail past TAIL_CAP is the cut's to answer with a shorter part: E3's writer keeps one page's tail within it)
-  if (addon !== null && addon.tail !== null && addon.tail.length > TAIL_CAP) throw new BundleRefusal(`more than ${TAIL_CAP} bytes (${addon.tail.length})`, { kind: K, path: 'addon.tail', data: { bound: 'tail', size: addon.tail.length, max: TAIL_CAP } })
   const obj = {
     bundle: BUNDLE5, kind: 'part', head, prev, pages: [pages[0], pages[1]],
     views: views.map(r3),
     left: left.map(([id, stream, rects]) => [id, stream, rects.map(([p, x0, y0, x1, y1]) => [p, r3(x0), r3(y0), r3(x1), r3(y1)])]),
     fileOnly: fileOnly.map(([id, after]) => [id, after]),
     layout: layout === null ? null : isLayoutRefusal(layout) ? { refused: layout.refused, why: layout.why } : layoutPartRows(layout),
-    addon: addon === null ? null : { manifest: manifestText(addon.manifest), tail: addon.tail === null ? null : toBase64(addon.tail) },
+    rules: rules === null || !Object.keys(rules).length ? null : Object.fromEntries(Object.keys(rules).map(Number).sort((x, y) => x - y).map(p => [p, rules[p]])),
     leftParts: leftParts.map(l => ({ kind: 'left', page: l.page, sha256: l.sha256, bytes: l.bytes.length })),
   }
   if (!isInteger(pages[0], 1, PAGES_MAX) || !isInteger(pages[1], pages[0], PAGES_MAX)) throw refuse(K, 'pages', 'not [from, to] pages')
-  // (the paper's page count is the manifest's where there is one, else the views' reach: the writer is not told it)
-  const N = Math.max(pages[1], pages[0] + Math.floor(views.length / 4) - 1, addon === null ? 0 : addon.manifest.pages)
-  partShape(obj, { N, unitCount: ID_MAX, atFrom: null })
-  const tailB64 = obj.addon === null || obj.addon.tail === null ? 0 : obj.addon.tail.length
-  return written(K, obj, PART_DEF, paper, { from: pages[0], to: pages[1] }, total => total - tailB64)
+  // (the paper's page count is the views' reach: the writer is not told it)
+  const N = Math.max(pages[1], pages[0] + Math.floor(views.length / 4) - 1)
+  partShape(obj, { N, unitCount: ID_MAX })
+  return written(K, obj, PART_DEF, paper, { from: pages[0], to: pages[1] }, total => total)
 }
 
 // ---------------------------------------------------------------- the left parts
@@ -1510,9 +1474,8 @@ export async function writeCatalog({ head, units, parts, end }) {
 /**
  * The parts as the whole BUNDLE 3 file's reading (ReadBundle): the parts in order, each after the one before and the last
  * reaching the paper's last page; the units and their kinds the index's; the left's units by id and its pages' boxes from the
- * parts' views; the layout parts merged (mergeLayout) under the head's header, null where every part's is; the manifests
- * merged (each page's entry; a page no part plans `{ ok: false, refused: 'not planned' }`, sizes and stats added up) and the
- * tails concatenated, null where no part has an add-on. The lab's equality harness compares this with the whole; no reader
+ * parts' views; the layout parts merged (mergeLayout) under the head's header, null where every part's is; the rules by page,
+ * null where no part has any. The lab's equality harness compares this with the whole; no reader
  * of the layer takes it. Throws BundleRefusal when the parts are not a chain to the last page
  */
 export function mergeParts(index, parts) {
@@ -1528,21 +1491,13 @@ export function mergeParts(index, parts) {
   }
   if (through !== N) throw refuse(K, 'parts', `reaching page ${through}, not the paper's ${N}`)
   const boxes = new Array(N), units = []
-  const layouts = [], tails = []
-  const page = {}
-  let appended = 0, any = false
-  const stats = {}
+  const layouts = []
+  let rules = null
   for (const p of parts) {
     for (let q = p.pages[0]; q <= p.pages[1]; q++) boxes[q - 1] = p.views.slice(4 * (q - p.pages[0]), 4 * (q - p.pages[0] + 1))
     for (const w of p.left) units.push(w)
     if (p.layout !== null) layouts.push(p.layout)
-    if (p.addon !== null) {
-      any = true
-      for (const k of Object.keys(p.addon.manifest.page)) page[k] = p.addon.manifest.page[k]
-      appended += p.addon.manifest.appended
-      for (const k of Object.keys(p.addon.manifest.stats)) stats[k] = (stats[k] ?? 0) + p.addon.manifest.stats[k]
-      if (p.addon.tail !== null) tails.push(p.addon.tail)
-    }
+    if (p.rules !== null) Object.assign(rules ??= {}, p.rules)
   }
   units.sort((a, b) => a[0] - b[0])
   const flat = []
@@ -1551,14 +1506,6 @@ export function mergeParts(index, parts) {
   if (layouts.length) {
     layout = { schema: LAYOUT_SCHEMA, layout: head.versions.layout, pdfjs: head.versions.pdfjs, paper: { id: head.paper.id, version: head.paper.version, pages: N }, left: '', views: flat, ...mergeLayout(layouts), lineskip: head.lineskip }
   }
-  let addon = null
-  if (any) {
-    for (let q = 1; q <= N; q++) if (!Object.hasOwn(page, q)) page[q] = { ok: false, refused: 'not planned' }
-    const tail = new Uint8Array(tails.reduce((n, t) => n + t.length, 0))
-    let o = 0
-    for (const t of tails) { tail.set(t, o); o += t.length }
-    addon = { manifest: { schema: 1, removal: head.versions.removal, pages: N, sets: {}, page, appended, stats }, tail }
-  }
   return {
     schema: 1,
     paper: { id: head.paper.id, version: head.paper.version, pages: N },
@@ -1566,6 +1513,6 @@ export function mergeParts(index, parts) {
     versions: { bundle: BUNDLE5, ...head.versions },
     units: [...index.units],
     left: { kinds: index.kinds.map(k => k ?? ''), pages: boxes, units },
-    layout, addon, dropped: [...index.dropped],
+    layout, rules, dropped: [...index.dropped],
   }
 }

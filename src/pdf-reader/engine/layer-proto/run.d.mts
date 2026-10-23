@@ -2,9 +2,8 @@
 import type { Audit, CheckResult } from './check.mjs'
 import type { Rect } from './layer1.mjs'
 import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit as LaidUnit } from './layer2.mjs'
-import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
+import type { LayoutIndex, LayoutUnit, UnlaidCode } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
-import type { RemovalManifest } from '../layout/remove.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 import type { ReadPart } from './format.mjs'
@@ -60,7 +59,7 @@ export interface Row {
 }
 /** what a run holds of a page (held(page)): its analysis state by name, the units on it still holding their own state, and the
  *  units still to be laid that read it */
-export interface PageHeld { state: ('chars' | 'ink' | 'items' | 'accounted' | 'kept' | 'laid' | 'canvas' | 'removed' | 'pixels' | 'draw')[]; units: number[]; reads: number }
+export interface PageHeld { state: ('chars' | 'ink' | 'laid' | 'canvas' | 'pixels' | 'draw')[]; units: number[]; reads: number }
 /** a laid unit's record, as main.js kept it (each line: page, baseline, target baseline, exact, mode, overflow, x0, x1) */
 export interface Rec {
   id: number; kind: string; v: 2; pages: number[]; cut: boolean; s?: number; f?: number; fitScale: number; knob: string; clipped: boolean
@@ -71,8 +70,19 @@ export interface Rec {
   [more: string]: unknown
 }
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
+/** why the layer left a unit the original's (a `skipped` record's `code`), a closed set: the file not holding it whole (`unlocated`,
+ *  with the maker's own code beside it, `unlaid`; `pieces`, `noRow`, `lost`), `offPages`, `author`, `refused` (its row not of
+ *  this unit), `group`, the drawing's (`unfit`, `unproven`, `served`, `face`, `error`, `page`) and the door's `rowUnfit` (a row
+ *  naming no unit or piece of the paper's, dropped before the run sees it: the door's stats `droppedRows`), and `unhidden` (its
+ *  ink not wrapped in its groups by the file) */
+export declare const SKIP_CODES: readonly ['unlocated', 'pieces', 'noRow', 'lost', 'offPages', 'author', 'refused', 'group', 'unfit', 'unproven', 'served', 'face', 'error', 'page', 'rowUnfit', 'unhidden']
+export type SkipCode = (typeof SKIP_CODES)[number]
+/** `code` where it is one of SKIP_CODES; throws a TypeError for any other */
+export declare function skipCode(code: unknown): SkipCode
 /** the longest a page's drawing waits for its draw (openProto `drawOf`) once it begins, ms; then the page is read live */
 export declare const DRAW_WAIT_MS: number
+/** the pages a run keeps warm for its next renders (their operator lists and decoded images), the one drawn last kept longest */
+export declare const WARM_PAGES: number
 /** the longest the live fills' glyph walk runs, ms: past it a page tells no fill */
 export declare const LIVE_FILLS_MS: number
 /** what an ink read of a page read from its draw throws while its pixels are not read: the page, and the step that reads them */
@@ -130,8 +140,8 @@ export declare function pageTarget(units: readonly unknown[], continuing: readon
 export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, onFilled?: (p: Placed, target: number) => void, o?: { continuing?: unknown[] }): Filled | null
 /** the leftover packed (P.leftover 'pack'): a page's body units of one block moved up to keep the original's gap to the one above, the moves by id (PDF units up). `rects`: every unit's rectangles on the page, [id, [page, x0, y0, x1, y1]]; `chars`: the page's characters */
 export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[], stays?: ((x0: number, x1: number, y0: number, y1: number) => number | null) | null, gap?: number): Map<number, number>
-/** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away, and the add-on's dirty boxes; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
-export declare function stayingInk(o: { map: { w: number; h: number; ink: Uint8Array; factor: number }; toDev: (x: number, y: number) => number[]; toPdf: (x: number, y: number) => number[]; accounted?: readonly number[][]; dirty?: readonly number[][] }): (x0: number, x1: number, y0: number, y1: number) => number | null
+/** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
+export declare function stayingInk(o: { map: { w: number; h: number; ink: Uint8Array; factor: number }; toDev: (x: number, y: number) => number[]; toPdf: (x: number, y: number) => number[]; accounted?: readonly number[][] }): (x0: number, x1: number, y0: number, y1: number) => number | null
 /** a babel name of a page laid (D1a) */
 export interface NameDrawn {
   occurrence: number; key: string; page: number; drawn: boolean; why: string | null; chars: (Char & { page: number })[]
@@ -151,10 +161,11 @@ export interface ProtoRun {
   /** each page's row (under parts, null at runtime for a page whose view no part has told yet: none is drawn there) */
   rows: Row[]
   placed: Placed[]
-  /** the units left the original's and why: `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`
+  /** the units left the original's and why (`code`, one of SKIP_CODES; `unlaid`, the file's own code where it holds no row of the
+   *  unit): `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`
    *  (a character in no served slice of its runs' faces and their fallbacks, or a run's own face not served: `missing`, the
    *  first code points) and `face` (a table or a slice that failed) */
-  skipped: { id: number; kind: string; why: string; chars: number; pages?: number[]; missing?: number[] }[]
+  skipped: { id: number; kind: string; why: string; code: SkipCode; unlaid?: UnlaidCode | null; chars: number; pages?: number[]; missing?: number[] }[]
   /** each laid unit's record (with `records`; empty without) */
   stats: Rec[]
   /** the records that could not be made (with `records`), by unit: its drawing is the same, the record the error alone */
@@ -204,8 +215,6 @@ export interface ProtoRun {
   grow(part: ReadPart): void
   /** parts: no more parts; every page past the last covered fails as it is reached */
   endParts(): void
-  /** parts: the newest composed document, read from now on; the one it replaces told to `onRetired` once no read holds it */
-  swap(doc: { numPages: number; getPage(n: number): Promise<unknown> }): void
   /** the last page a part covers (every page, a whole open) */
   readonly through: number
   readonly partsEnded: boolean
@@ -232,8 +241,10 @@ export interface ProtoRun {
    *  page perhaps not laid yet), its row fixed by a table group read, taken after end(), or never expected. Never a
    *  page to draw again: no laid page changes */
   late(): number[]
-  /** a done page's copy at `k` device pixels a PDF unit onto `ctx`, from `source`, the page as PDF.js drew it at k */
-  drawCopy(page: number, ctx: CanvasRenderingContext2D, source: DrawSource, k: number): Promise<void>
+  /** a done page's copy at `k` device pixels a PDF unit onto `ctx` (a canvas of the page at k from its top-left corner): render A
+   *  of the composed document (the groups of the units drawn there hidden), then its crops and pastes; `annotationMode` PDF.js's,
+   *  for render A */
+  drawCopy(page: number, ctx: CanvasRenderingContext2D, k: number, o?: { annotationMode?: number; signal?: AbortSignal | null }): Promise<void>
   /** page `page`'s SVG, a new element each call, made of its record's markup (class, size and spacing as the page's own): a
    *  parse alone, no layout, face, ink or PDF.js call, 0.3 to 8.6 ms (420 to 12,000 elements) */
   svgOf(page: number): SVGSVGElement
@@ -256,38 +267,28 @@ export interface ProtoRun {
   full(p: Placed): Placed
   /** a done page's canvases let go (a copy's, the gate's): no unit paints it again, and no crop is cut from it */
   release(page: number): void
-  checkPage(page: number): CheckResult
-  check(): CheckResult
-  /** how the removal went */
-  removalStats(): RemovalStats | null
+  /** a done page's copy at v0's own resolution (with `copy`), drawn as a view draws it, once a check reads it; null before it is done */
+  copyCanvas(page: number): Promise<HTMLCanvasElement | null>
+  checkPage(page: number): Promise<CheckResult>
+  check(): Promise<CheckResult>
+  /** what the run hid and showed again: units drawn, boxes pasted from render B and C (`pastedKeep`), crops */
+  hidingStats(): HidingStats
   /** where pages are read from their draws (`drawOf`), a copy; null where none is (no drawOf, a copy kept, no page pass, an even
    *  pass, the leftover packed) */
   readonly drawStats: DrawStats | null
-  /** a done page's removed page at v0's own resolution (mode 'draw', with v0's copy), until it is released */
-  removedCanvas(page: number): HTMLCanvasElement | null
   /** the run let go: its sheet removed, every page's canvases released (a page under way, once it ends), nothing drawn
    *  or laid after; an until under way resolves */
   dispose(): void
 }
-/** how the text-removed PDF went: pages removed, pages drawn the old way, units drawn by it (over the layout file's
- *  rectangles), the rectangles filled with paper and swapped from the removed page, the characters erased the file gives no
- *  rectangle for, the pages a swap drew the removed page for */
-export interface RemovalStats {
-  pages: number; refused: number; units: number; fills: number; swaps: number; swapPages: number; extra: number
-  byPage: Record<number, { units: number }>
-  /** the time it took, ms in all: the removed pages drawn, the rectangles worked out */
-  ms: { render: number; rects: number }
-}
-/** the text-removed PDF (removal.mjs, layout/remove.mjs) */
-export interface RemovalOptions {
-  /** PDF.js's OPS: read by no drawing (the gate's instrument reads a page's ink with it) */
-  OPS?: Record<string, number>
-  /** 'draw': drawn by the add-on */
-  mode: 'draw'
-  /** arXiv's PDF with the paper's add-on (it may be openProto's `doc` itself, one document), its manifest (arXiv's page
-   *  count, each page's state and the kept ink under its units' rectangles) */
-  doc: { getPage(n: number): Promise<unknown> }
-  manifest: RemovalManifest
+/** what the run hid and showed again (hide.mjs) */
+export interface HidingStats { units: number; fromB: number; pastedKeep: number; crops: number }
+/** what the file says it could not hide (the wrap's word): why a unit's ink cannot be hidden, or null; the table rules near a
+ *  page's cells (x0, y0, x1, y1 stride 4), or undefined */
+export interface HidingOptions {
+  unhidden?: (id: number) => string | null
+  /** whether a unit's label is left the original's ink (the wrap wrote it no group): the body drawn, the label kept */
+  labelKept?: (id: number) => boolean
+  rules?: (page: number) => readonly number[] | undefined
 }
 export declare function openProto(o: {
   doc: { numPages: number; getPage(n: number): Promise<unknown> }
@@ -309,7 +310,6 @@ export declare function openProto(o: {
   dpr?: number
   batch?: number
   phMode?: 'auto' | 'source'
-  restoring?: boolean
   order?: number[] | null
   faces?: 'roles' | 'prototype'
   /** what the host serves of each role table face, asynchronously: its slices (each { url, ranges }), null where it is not
@@ -324,17 +324,17 @@ export declare function openProto(o: {
   copy?: boolean
   /** the layout file (tex.mjs), the layer's only source of a unit: a unit it does not locate whole is the original's */
   tex: LayoutOptions
-  /** the text-removed PDF: null, the unit's drawing erased and put back */
-  removal?: RemovalOptions | null
+  /** what the file could not hide: a unit it names, or one whose text group the document does not hold, is the original's */
+  hiding?: HidingOptions | null
   /** which floats the final names in the target's language (live.mjs captionsOf): a float's label is drawn in the target's
    *  name for it, which the rule set gives, where the final's is, and every babel name in the target's word whatever the
    *  captions say; null, every label and name kept as the original's */
   labels?: { captions: Captions | null } | null
   /** the layout rule set every choice made for the target is read from, resolved once at the open (absent: BUILTIN_RULES) */
   rules?: FrozenRuleSet
-  /** the paper in parts (grow, endParts): no view and no left unit given, `groups`, `tex` and `removal` ('draw') required */
+  /** the paper in parts (grow, endParts): no view and no left unit given, `groups` and `tex` required */
   parts?: boolean
-  /** a document the run read and no longer reads (a swap, dispose), told once */
+  /** a document the run read and no longer reads (dispose), told once */
   onRetired?: ((doc: unknown) => void) | null
   /** a page is ready (or failed), told once */
   onStep?: ((page: number) => void) | null

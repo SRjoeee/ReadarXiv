@@ -1,7 +1,7 @@
 // The layer's side of the reading view (the shared reader view's contract §1.2, §2.2–§2.7, §3; docs/PDF-READER.md §11.8): the
 // one sink of a paper's layer. The host tells it what it hears (refs, rows, ends) and gives it a transport and two openers; the
 // side fetches and reads through its feed (feed.mjs), binds the base, waits for the original, opens the composed document and
-// the engine's door over it, adds each later part in page order (a part with a tail over the composed document through it),
+// the engine's door over it, adds each later part in page order,
 // takes the rows, ends the parts. A fork of the chain, or a later attempt (again), opens the door again: one open layer a page.
 //
 // What the right pane shows, page by page, is the best version there is (§2.3): a place shows its pre-layer content (the
@@ -13,9 +13,9 @@
 // PAGE_MS, shows the original (a stall warns once a side and is asked again on the next scroll; a failure on a zoom or on
 // coming near again); a late `ready` is taken. A page still `waiting` (for its part, its closure or its rows) is never a stall.
 //
-// Over our own compile (the layer route, design §3.2: the head's base says `ours`) the composed document's pages are our base's, not
-// arXiv's rendering the left shows: a page's copy is then always drawn from the composed document, never taken from the left's
-// canvas or the place's (the original's page view); and a page whose parts all record no layout (a part the engine's check refused)
+// A page's copy is always drawn from the composed document (our wrapped base, whole or as a delta): render A, the page with the
+// groups of the units drawn there hidden (docs/route/ocg-erasure.md §4), never taken from the left's canvas or the place's (the
+// original's page view). A page whose parts all record no layout (a part the engine's check refused)
 // is not asked of the door and not swapped in: its place keeps the original's page, since what TeX's positions do not draw is
 // shown as arXiv's PDF, not as our base page in other line breaks beside it.
 //
@@ -29,10 +29,10 @@
 import { layerDraws } from '../layer-proto/format.mjs'
 import { pagesOf } from '../layout/delta-wire.mjs'
 import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
+import { visibilityOf } from '../layer-proto/visibility.mjs'
 import { unitOf } from '../layer-proto/rows.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { createContents } from './contents.mjs'
-import { drew, scaleOf } from './drawn.mjs'
 import { createFeed } from './feed.mjs'
 import { figureRegions } from './figures.mjs'
 import { pathsOf, wantsFloats } from './floats.mjs'
@@ -44,10 +44,11 @@ import { createShapes, layerShapes } from './shapes.mjs'
 export const PAGE_MS = 30_000
 /** the most pixels a copy is drawn at (iOS's canvas cap; PDF.js's own canvases are capped so too) */
 export const COPY_PIXELS = 2 ** 24
-/** how much a source's k may differ from the place's for the copy to be drawn from it */
-const K_SLACK = 0.02
 /** how long after a zoom's last step the copies are drawn again: PDF.js draws its own pages 400 ms after it */
 export const RECOPY_MS = 600
+/** the longest a laid page's copy waits for the left's page to be drawn before it is put in place (layer-side commit): the two
+ *  panes paint within one frame of each other, the left first, unless the left is slower than this */
+export const LEFT_WAIT_MS = 1500
 /** how long after a left part's fetch or read fails it is asked again, on a want of its page: a failure may be the network's,
  *  or the part's own, which asking on every pointer frame would only repeat */
 export const LEFT_RETRY_MS = 10_000
@@ -119,14 +120,14 @@ export function createLayerSide(view, o) {
   // ---------------------------------------------------------------- the door and its documents
   /** 'idle' (nothing read yet), 'opening', 'open', 'refused' */
   let state = 'idle', why = null
-  let index = null, bound = null, door = null, doorParts = [], gen = 0, token = null, offPage = null
+  let index = null, bound = null, door = null, doorParts = [], gen = 0, offPage = null
   /** whether the layer is drawn over our own compile (the head's base says `ours`: the layer route, design §3.2; the engine's
    *  layerDraws, format.mjs): the composed document's pages are then OUR base's, whose lines are not arXiv's page's, so a page's copy comes
    *  from the composed document alone and a page laid by no layout is the original's page */
   const oursBase = () => layerDraws(index?.head?.base)
   /** whether page `n` is one the composed document draws as ours: a base held whole is ours on every page; a base held as a delta over
    *  arXiv's PDF (`kind` 'delta') is ours on its replaced pages (`base.replaced`, ranges) alone and the original's own bytes on every
-   *  other, so that its canvas the left drew is the same page (the shortcut of before the route holds again there) */
+   *  other (its annotations then the original's own, drawn in the copy) */
   let replacedOf = null, replacedPages = null
   const replacedPage = n => {
     const b = index?.head?.base
@@ -156,21 +157,14 @@ export function createLayerSide(view, o) {
     entry.holders.delete(holder)
     if (!entry.holders.size) destroy(entry)
   }
-  /** the composed document through the last tail of `parts`: the latest again where it is that one; else opened, the side's
-   *  hold moved to it */
-  async function composedFor(parts) {
-    const withTail = parts.filter(p => p.addon?.tail)
-    const key = withTail.at(-1)?.sha256 ?? null
-    if (latest && !latest.gone && latest.key === key) return latest.doc
-    let tail = null
-    if (withTail.length) {
-      tail = new Uint8Array(withTail.reduce((n, p) => n + p.addon.tail.length, 0))
-      let at = 0
-      for (const p of withTail) { tail.set(p.addon.tail, at); at += p.addon.tail.length }
-    }
-    const task = o.composed(tail, Object.freeze({ ...V.assets, ...PDF_OPTIONS, disableAutoFetch: true }))
+  /** the composed document: the latest again where it is open; else opened, the side's hold moved to it, and its one configuration
+   *  of optional content read at once (visibility.mjs: every render of it passes that one) */
+  async function composedFor() {
+    if (latest && !latest.gone) return latest.doc
+    // (the opener's first argument was a tail of removed pages: there are none, the composed document is the base alone)
+    const task = o.composed(null, Object.freeze({ ...V.assets, ...PDF_OPTIONS, disableAutoFetch: true }))
     if (!task?.promise) throw new Error('the composed opener gave no loading task')
-    const entry = { task, doc: null, key, holders: new Set(['side']), gone: false }
+    const entry = { task, doc: null, holders: new Set(['side']), gone: false }
     entries.add(entry)
     counts.composed++
     let doc
@@ -178,6 +172,7 @@ export function createLayerSide(view, o) {
     if (disposed || entry.gone) { destroy(entry); throw new Error('the layer side is disposed') }
     entry.doc = doc
     byDoc.set(doc, entry)
+    void visibilityOf(doc).ready
     const was = latest
     latest = entry
     letGo(was, 'side')
@@ -244,14 +239,9 @@ export function createLayerSide(view, o) {
       if (!door) return
     }
     for (let i = doorParts.length; i < parts.length && door && !stuck; i++) {
-      const part = parts[i], my = gen
+      const part = parts[i]
       try {
-        if (part.addon?.tail) {
-          const doc = await composedFor(parts.slice(0, i + 1)).catch(e => { throw coded(e, 'composed') })
-          if (disposed || my !== gen || !door) return
-          door.addPart(part, { doc })
-          held(doc, token)
-        } else door.addPart(part)
+        door.addPart(part)
       } catch (e) {
         if (e?.axtCode) throw e
         // the door refuses the part: the chain stops at the part before it on this door, its later pages the original's
@@ -291,7 +281,7 @@ export function createLayerSide(view, o) {
     shapesChanged()
     state = 'opening'
     emitLayer()
-    const doc = await composedFor(parts).catch(e => { throw coded(e, 'composed') })
+    const doc = await composedFor().catch(e => { throw coded(e, 'composed') })
     if (disposed || my !== gen) return
     const me = {}
     let layer
@@ -305,7 +295,6 @@ export function createLayerSide(view, o) {
     } catch (e) { throw coded(e, 'open') }
     if (disposed || my !== gen) { layer.dispose(); return }
     door = layer
-    token = me
     doorParts = parts
     held(doc, me)
     counts.opens++
@@ -431,6 +420,7 @@ export function createLayerSide(view, o) {
    *  that holds the focus is kept until the focus leaves it (keptForFocus) */
   function retire(n) {
     const P = rec(n)
+    for (const ac of P.copyAcs ?? []) ac.abort()
     if (P.content && !P.content.wrap) return
     if (holdsFocus(n)) { keptForFocus.add(n); return }
     keptForFocus.delete(n)
@@ -500,63 +490,35 @@ export function createLayerSide(view, o) {
     const w = vp.width / vp.scale, h = vp.height / vp.scale, k = vp.scale * V.dpr()
     return w * h * k * k > COPY_PIXELS ? Math.sqrt(COPY_PIXELS / (w * h)) : k
   }
-  /** a canvas PDF.js drew page n on whole within K_SLACK of k (the left's, else the place's own page view's), with the scale
-   *  it drew it at (drawn.mjs); null where there is none */
-  function drawnSource(n, k) {
-    // over our base the left's canvas and the place's are the ORIGINAL's page, arXiv's rendering: not the composed document's page
-    // (our compile's), whose erase rectangles, crops and colours are laid on it; but a page a delta does not replace IS the original's
-    // bytes in the composed document, and its canvas is a copy source (replacedPage)
-    if (oursBase() && replacedPage(n)) return null
-    for (const [from, got] of [['left', V.left.canvas(n)], ['place', V.places.canvas(n)]]) {
-      if (got && Math.abs(got.k - k) / k <= K_SLACK) return { canvas: got.canvas, k: got.k, from }
-    }
-    return null
-  }
-  /** the page as it was drawn at about k, with the scale it was drawn at (one frame a page: never a canvas's width over the
-   *  page's, which PDF.js floors to whole CSS px): a canvas PDF.js drew (drawnSource: only where the composed document's pages
-   *  are the original's own bytes; over our base, never); else the page drawn here from the latest composed document (its
-   *  pages 1 to N are the original's, or our base's) at k, as PDF.js draws a page view: from its top-left
-   *  corner on a canvas of the place's box at k's resolution (its CSS px times the pixel ratio, where k is not held to
-   *  COPY_PIXELS), the rest of the page cropped, so that its copy maps pixel for pixel onto the place; and on the context
-   *  PDF.js draws the left's page views on (opaque, read back by the CPU unless the host opens its documents with enableHWA,
-   *  as the web does), so that where both are the CPU's it is the left's canvas pixel for pixel (the extension: 0 pixels
-   *  differ, pnpm e2e:registration; on the GPU's the two differ by anti-aliasing) */
-  async function sourceOf(n, k, fromDoc = false) {
-    if (!fromDoc) { const got = drawnSource(n, k); if (got) return got }
+  /** the page's copy at the place's k, drawn by `d` (the door asked, which a later open does not replace here) from the composed
+   *  document: render A (the page with the groups of the units drawn there hidden) and its crops and pastes, as PDF.js draws a page
+   *  view: from its top-left corner on a canvas of the place's box at k's resolution (its CSS px times the pixel ratio, where k is not
+   *  held to COPY_PIXELS), the rest of the page cropped, so that it maps pixel for pixel onto the place; on the context PDF.js draws
+   *  the left's page views on (opaque, read back by the CPU unless the host opens its documents with enableHWA). A delta's replaced
+   *  page keeps the original's /Annots, ~91 % of whose link rectangles are ours: the layer draws its own links from the layout, so
+   *  the original's annotations are not drawn into the copy */
+  async function copyAt(d, n, k, my) {
     const vp = V.places.view(n)?.viewport, box = V.places.box(n)
     if (!vp?.scale || !box) throw new Error(`page ${n} has no viewport to draw its copy at`)
-    const page = await latest.doc.getPage(n)
-    const viewport = page.getViewport({ scale: k })
-    const canvas = document.createElement('canvas'), r = k / vp.scale
-    canvas.width = Math.max(1, Math.round(box.width * r))
-    canvas.height = Math.max(1, Math.round(box.height * r))
-    try {
-      // (a replaced page of a delta keeps the original\'s /Annots, ~91 % of whose link rectangles are ours: the layer draws its own links
-    // from the layout, so the original\'s annotations are not drawn into the copy)
-    const off = index?.head?.base?.kind === 'delta' && replacedPage(n) ? V.lib?.AnnotationMode?.DISABLE : undefined
-    await page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false, willReadFrequently: !V.assets?.enableHWA }), viewport, ...(off === undefined ? {} : { annotationMode: off }) }).promise
-    } catch (e) { release(canvas); page.cleanup?.(); throw e }
-    drew(canvas, k)
-    return { canvas, k, from: 'doc', page }
+    const r = k / vp.scale
+    const annotationMode = index?.head?.base?.kind === 'delta' && replacedPage(n) ? V.lib?.AnnotationMode?.DISABLE : undefined
+    // (aborted where the page leaves the view before its copy is drawn: retire; its queued renders not drawn)
+    const P = rec(n), ac = new AbortController()
+    ;(P.copyAcs ??= new Set()).add(ac)
+    const canvas = await d.copyOf(n, { k, width: Math.max(1, Math.round(box.width * r)), height: Math.max(1, Math.round(box.height * r)), context: { alpha: false, willReadFrequently: !V.assets?.enableHWA }, annotationMode, signal: ac.signal }).finally(() => P.copyAcs.delete(ac))
+    if (disposed || my !== gen) { release(canvas); return null }
+    counts.copies++
+    return { canvas, k }
   }
-  /** the page's copy at the place's k, drawn by `d` (the door asked, which a later open does not replace here) from the page's
-   *  source at the scale kept with its canvas (drawn.mjs: never derived from a size here); again from the document where the
-   *  source was let go meanwhile */
-  async function copyAt(d, n, k, my) {
-    let src = await sourceOf(n, k)
-    try {
-      // (a source PDF.js let go meanwhile: the page drawn from the document instead)
-      if (src.from !== 'doc' && scaleOf(src.canvas) === null) src = await sourceOf(n, k, true)
-      let canvas = await d.copyOf(n, src.canvas, src.k)
-      if (src.from !== 'doc' && !src.canvas.width) {
-        release(canvas)
-        src = await sourceOf(n, k, true)
-        canvas = await d.copyOf(n, src.canvas, src.k)
-      }
-      if (disposed || my !== gen) { release(canvas); return null }
-      counts.copies++
-      return { canvas, k: src.k }
-    } finally { if (src.from === 'doc') { release(src.canvas); src.page?.cleanup?.() } }
+  /** resolves once page n of the left is drawn where it is being drawn (at once where it is not: drawn already, or not asked of the
+   *  left at all; else in the task the left's page is told drawn in, or after LEFT_WAIT_MS) */
+  function leftDrawn(n) {
+    if (!V.left.drawing?.(n)) return Promise.resolve()
+    return new Promise(done => {
+      let off = () => {}
+      const timer = clock.later(() => { off(); done() }, LEFT_WAIT_MS)
+      off = V.onPageDrawn((side, page) => { if (side === 'left' && page === n) { clock.clear(timer); off(); done() } })
+    })
   }
   /** a laid page in its place: its copy, then the copy and the SVG put in one task */
   async function commit(n, laid, my) {
@@ -566,7 +528,7 @@ export function createLayerSide(view, o) {
     if (originalPageOf(n)) { shownOriginal(n); return }
     let got
     try { got = await copyAt(d, n, k, my) } catch (e) {
-      if (disposed || my !== gen) return
+      if (disposed || my !== gen || e?.name === 'AbortError') return
       // the page shows the original (an earlier door's drawing let go); asked again on the next scroll or a zoom
       warn('copy', e)
       P.failed = true
@@ -575,6 +537,10 @@ export function createLayerSide(view, o) {
       return
     }
     if (!got) return
+    // (the left first, or in the same frame: a copy ready while the left's page is being drawn waits for it, at most LEFT_WAIT_MS,
+    // and is put in place in the same task as the left's page is told drawn, so that the two panes paint within one frame)
+    await leftDrawn(n)
+    if (disposed || my !== gen) { release(got.canvas); return }
     if (!V.places.near(n) || P.content?.gen === my && P.content.wrap) { release(got.canvas); if (!V.places.near(n)) retire(n); return }
     laid.svg.setAttribute('viewBox', `0 0 ${laid.w} ${laid.h}`)
     laid.svg.setAttribute('preserveAspectRatio', 'none')
@@ -612,12 +578,12 @@ export function createLayerSide(view, o) {
     const given = right?.lay(n, laid.words), shown = right?.show(n)
     if (given || shown) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
   }
-  /** a laid page's copy drawn again at the place's new k (a zoom): from the left's canvas once PDF.js drew it at that k. A
-   *  copy is kept while it is at the scale a copy drawn now would be at (its source's), whatever the zoom has done since */
+  /** a laid page's copy drawn again at the place's new k (a zoom). A copy is kept while it is at the k a copy drawn now would be
+   *  at, whatever the zoom has done since */
   async function recopy(n) {
     const P = pages.get(n), k = kOf(n)
     if (!P?.content?.wrap || P.content.gen !== gen || !door || k === null || !V.places.near(n)) return
-    if (P.content.k === (drawnSource(n, k)?.k ?? k)) return
+    if (P.content.k === k) return
     if (P.copying) { P.again = true; return }
     P.copying = true
     const my = gen
@@ -632,7 +598,7 @@ export function createLayerSide(view, o) {
       release(c.copy)
       c.copy = got.canvas
       c.k = got.k
-    } catch (e) { if (!disposed) warn('copy', e) } finally {
+    } catch (e) { if (!disposed && e?.name !== 'AbortError') warn('copy', e) } finally {
       P.copying = false
       if (P.again) { P.again = false; void recopy(n) }
     }
@@ -705,7 +671,6 @@ export function createLayerSide(view, o) {
     }),
     V.onPageDrawn((s, n, error) => {
       if (s !== 'left' || disposed) return
-      if (pages.get(n)?.content?.wrap) void recopy(n)
       floatsFor(n, error)
     }),
     V.onScrolled(() => {
@@ -953,56 +918,6 @@ export function createLayerSide(view, o) {
         composed: counts.composed, docs: entries.size, opens: counts.opens, forks: counts.forks, asked: counts.asked, commits: counts.commits, copies: counts.copies, retirements: counts.retired,
         leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '), texts: counts.texts, textsRing: textRing.join(' '),
         shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
-      }
-    },
-    /** the harness's registration check (layer-side.d.mts Registration): page n's copy drawn from the source a commit takes, and
-     *  compared pixel by pixel with the copy drawn from the other source: the page drawn here from the document at the place's k
-     *  (where the commit's source is a canvas PDF.js drew), or, over our base (where the commit's source is that page), the
-     *  left's canvas where PDF.js drew it at this k, which in a fixture whose base is arXiv's own bytes is the same page and
-     *  over a real build of ours differs where its lines do, the very reason the copy is not taken from it */
-    async registration(n, { tolerance = 16, canvases = false } = {}) {
-      if (disposed || !door || !V.places.near(n)) return null
-      const c = pages.get(n)?.content, vp = V.places.view(n)?.viewport, k = kOf(n), d = door
-      if (!c?.wrap || c.gen !== gen || !vp?.scale || k === null) return null
-      const w = vp.width / vp.scale
-      const mine = [], drawnHere = []
-      const letGo = s => { if (s?.from === 'doc') { release(s.canvas); s.page?.cleanup?.() } }
-      try {
-        // (the commit's own path, timed: its source, then its copy)
-        const t0 = clock.now(), src = await sourceOf(n, k), t1 = clock.now()
-        drawnHere.push(src)
-        const a = await d.copyOf(n, src.canvas, src.k), t2 = clock.now()
-        mine.push(a)
-        const out = { page: n, size: [w, vp.height / vp.scale], from: src.from, k, kSource: src.k, lost: k * w - src.canvas.width, source: [src.canvas.width, src.canvas.height], ms: { source: t1 - t0, copy: t2 - t1 } }
-        // the page drawn from the document and the source it is compared with
-        let docSrc = src, other = src
-        if (src.from === 'doc') {
-          const left = oursBase() && replacedPage(n) ? V.left.canvas(n) : null
-          if (!left || Math.abs(left.k - k) / k > K_SLACK) return out
-          other = { canvas: left.canvas, k: left.k }
-        } else {
-          const t3 = clock.now()
-          docSrc = await sourceOf(n, k, true)
-          out.ms.doc = clock.now() - t3
-          drawnHere.push(docSrc)
-          other = docSrc
-        }
-        const b = await d.copyOf(n, other.canvas, other.k)
-        mine.push(b)
-        const W = Math.min(a.width, b.width), H = Math.min(a.height, b.height)
-        const pa = a.getContext('2d').getImageData(0, 0, W, H).data, pb = b.getContext('2d').getImageData(0, 0, W, H).data
-        let differing = 0, maxDiff = 0
-        for (let i = 0; i < pa.length; i += 4) {
-          const m = Math.max(Math.abs(pa[i] - pb[i]), Math.abs(pa[i + 1] - pb[i + 1]), Math.abs(pa[i + 2] - pb[i + 2]))
-          if (m > maxDiff) maxDiff = m
-          if (m > tolerance) differing++
-        }
-        Object.assign(out, { doc: [docSrc.canvas.width, docSrc.canvas.height], compared: W * H, differing, maxDiff })
-        if (canvases) { out.copies = { source: a, doc: b }; mine.length = 0 }
-        return out
-      } finally {
-        for (const s of drawnHere) letGo(s)
-        for (const m of mine) release(m)
       }
     },
     dispose() {

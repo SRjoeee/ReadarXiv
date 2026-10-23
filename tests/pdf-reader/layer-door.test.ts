@@ -94,7 +94,7 @@ async function makeRealDoor(s: DoorSetup): Promise<DoorHarness> {
   const M = s.paper
   const docFor = docsOf(textOf(M), { fail: () => s.failPages ?? [], hold: n => s.hold?.(n) ?? null }) as unknown as (r: number) => LayerDocument
   const parts = M.readParts.slice(0, s.parts)
-  const layer = await openLayer({ index: M.index, doc: docFor(parts.at(-1)?.chain.r ?? 0), parts, target: 'zh', faceSources, hyphUrl, leftPart: s.leftPart, onRetired: s.onRetired })
+  const layer = await openLayer({ index: M.index, doc: docFor(0), parts, target: 'zh', faceSources, hyphUrl, leftPart: s.leftPart, onRetired: s.onRetired })
   const rows = rowsOfIndex(M.index)
   let given = false
   return {
@@ -176,10 +176,10 @@ describe('the door: three opens, the same pages', () => {
       const N = SPEC.pages
       const docFor = docsOf(SPEC) as unknown as (r: number) => LayerDocument
       const rows = rowsOfIndex(c.index)
-      const open = (parts: readonly ReadPart[]) => openLayer({ index: c.index, doc: docFor(parts.at(-1)?.chain.r ?? 0), parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+      const open = (parts: readonly ReadPart[]) => openLayer({ index: c.index, doc: docFor(0), parts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
       // BUNDLE 3's open of the whole
       seen.log.length = 0
-      const whole = await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(c.parts.at(-1)!.chain.r), target: 'zh', faceSources, hyphUrl })
+      const whole = await openLayer({ bundle: mergeParts(c.index, c.parts), doc: docFor(0), target: 'zh', faceSources, hyphUrl })
       whole.take(rows)
       const want = await askEvery(whole, N)
       // (the pages carry links: each page's margin link at least, in place)
@@ -215,11 +215,10 @@ describe('the door: three opens, the same pages', () => {
     }
   })
 
-  it('draws a paper with no add-on (M20) told in parts as BUNDLE 3\'s open of it with none, its table groups not withheld', async () => {
+  it('draws a paper told in parts as BUNDLE 3\'s open of it whole, at every cut', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     for (const ends of [[1], [1, 2], []]) {
-      const c = await cutSpec(SPEC, ends, { addon: false })
-      expect(c.parts.every(p => p.addon === null)).toBe(true)
+      const c = await cutSpec(SPEC, ends)
       const docFor = docsOf(SPEC) as unknown as (r: number) => LayerDocument
       const rows = rowsOfIndex(c.index)
       seen.log.length = 0
@@ -229,7 +228,6 @@ describe('the door: three opens, the same pages', () => {
       whole.end()
       const wantLeft = (seen.runs.at(-1) as Run).skipped.map(x => `${x.id}:${x.why}`).sort()
       whole.dispose()
-      expect(wantLeft.filter(x => x.includes('its page not removed'))).toEqual([])
       seen.log.length = 0
       const door = await openLayer({ index: c.index, doc: docFor(0), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
       door.take(rows)
@@ -457,7 +455,7 @@ describe('the door: three opens, the same pages', () => {
     const M = await made({ ours: true })
     const docFor = docsOf(textOf(M)) as unknown as (r: number) => LayerDocument
     // (page 1's closure draws page 2, a paragraph running on to it: only the first part, page 1, is ever told)
-    const layer = await openLayer({ index: M.index, doc: docFor(1), parts: M.readParts.slice(0, 1), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
+    const layer = await openLayer({ index: M.index, doc: docFor(0), parts: M.readParts.slice(0, 1), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} })
     try {
       layer.take(rowsOfIndex(M.index))
       layer.end()
@@ -534,7 +532,7 @@ describe('the door: three opens, the same pages', () => {
     const layer = await openLayer({ index: M.index, doc: docFor(0), target: 'zh', faceSources, hyphUrl, leftPart: () => transport, onRetired: () => {} })
     const c = new AbortController()
     const asked = layer.leftPageOf(1, { signal: c.signal }).then(() => 'value', (e: Error) => e.name)
-    layer.addPart(M.readParts[0]!, { doc: docFor(1) })
+    layer.addPart(M.readParts[0]!)
     await tick()
     c.abort()
     // (at once, not when the transport answers)
@@ -552,7 +550,7 @@ describe('the door: three opens, the same pages', () => {
     const cited = spec.units.length - 1
     for (const ends of [[1], []]) {
       const c = await cutSpec(spec, ends, { layout: false })
-      expect(c.parts.every(p => p.layout === null && p.addon === null)).toBe(true)
+      expect(c.parts.every(p => p.layout === null && p.rules === null)).toBe(true)
       const docFor = docsOf(spec) as unknown as (r: number) => LayerDocument
       const rows = rowsOfIndex(c.index)
       seen.log.length = 0
@@ -757,31 +755,31 @@ describe('the door: three opens, the same pages', () => {
     layer.dispose()
   })
 
-  it('draws the format test\'s paper (tails, a part with no layout) told in parts as opened warm, swapping its documents', async () => {
+  it('draws the format test\'s paper (a part with no layout) told in parts as opened warm, over its one document', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const M = await made()
     const docFor = docsOf(textOf(M)) as unknown as (r: number) => LayerDocument
     const rows = rowsOfIndex(M.index)
     seen.log.length = 0
     const retiredWarm: LayerDocument[] = []
-    const warm = await openLayer({ index: M.index, doc: docFor(M.readParts.at(-1)!.chain.r), parts: M.readParts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: d => retiredWarm.push(d) })
+    const warm = await openLayer({ index: M.index, doc: docFor(0), parts: M.readParts, target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: d => retiredWarm.push(d) })
     warm.take(rows)
     const want = await askEvery(warm, 4)
     warm.dispose()
-    expect(retiredWarm).toEqual([docFor(2)])
+    expect(retiredWarm).toEqual([docFor(0)])
     seen.log.length = 0
     const retired: LayerDocument[] = []
     const door = await openLayer({ index: M.index, doc: docFor(0), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: d => retired.push(d) })
     door.take(rows)
     let next = 0
-    seen.starved = () => { if (next < M.readParts.length) { const part = M.readParts[next++]!; door.addPart(part, part.addon?.tail ? { doc: docFor(part.chain.r) } : undefined) } }
+    seen.starved = () => { if (next < M.readParts.length) { const part = M.readParts[next++]!; door.addPart(part) } }
     const cold = await askEvery(door, 4)
     seen.starved = null
     expect(cold.pages).toEqual(want.pages)
     expect(cold.ops).toEqual(want.ops)
     expect(q1Of(cold.log)).toEqual([])
     door.dispose()
-    expect(retired).toEqual([docFor(0), docFor(1), docFor(2)])
+    expect(retired).toEqual([docFor(0)])
   })
 })
 
@@ -796,7 +794,7 @@ describe('the door: the draw of a left part, handed to the run', () => {
     const leftPart = async (page: number) => { fetched.push(page); return o.leftPart ? o.leftPart(page, M) : (M.lefts[page] as { bytes: Uint8Array }).bytes }
     const before = seen.drawOfs.length
     const parts = M.readParts.slice(0, o.parts ?? 0)
-    const doc = docFor(parts.at(-1)?.chain.r ?? 0)
+    const doc = docFor(0)
     const layer = await openLayer({ index: M.index, doc: o.doc ? o.doc(doc) : doc, parts, target: 'zh', faceSources, hyphUrl, leftPart, onRetired: () => {}, ...(o.drawsHeld !== undefined ? { drawsHeld: o.drawsHeld } : {}) } as never)
     const drawOf = seen.drawOfs[before]
     return { layer, M, docFor, fetched, drawOf }
@@ -822,7 +820,7 @@ describe('the door: the draw of a left part, handed to the run', () => {
     for (let i = 0; i < 10; i++) await tick()
     expect(settled).toBe('pending')
     expect(fetched).toEqual([])
-    layer.addPart(M.readParts[0]!, { doc: docFor(1) })
+    layer.addPart(M.readParts[0]!)
     expect(await asked).toEqual(DRAW)
     expect(fetched).toEqual([1])
     // (handed once: the door keeps no draw after it)

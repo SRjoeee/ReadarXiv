@@ -31,11 +31,10 @@ import { tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
-import { pagePlanOf } from './addon.mjs'
+import { checkBoxes, pageRules } from './cell-rules.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
-import { alignOf } from './remove.mjs'
 import { classOf, colourPieceOf, followsOf, headEnd, layoutMarking, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { readAnnots } from '../layer-proto/links.mjs'
@@ -181,9 +180,9 @@ function glyphsOf(got, fontIds) {
   const P = { ...packGlyphs(got.glyphs, { order, fontIds }), owner: new Int32Array(order.length).fill(-1), taken: new Uint8Array(order.length), boxes: [], boxTaken: new Uint8Array(got.boxes.length >> 2) }
   for (let i = 0; i + 3 < got.boxes.length; i += 4) P.boxes.push([got.boxes[i], got.boxes[i + 1], got.boxes[i + 2], got.boxes[i + 3]])
   if (Number.isInteger(got.mergedAt)) P.boxTaken.fill(1, got.mergedAt)
-  // (read with the remover's indices: what the add-on's plan reads of the page besides, kept beside the maker's columns, so
-  // that the page's one operator list gives both: each glyph's place in the stream, its showing operation and its place
-  // there, whether it is blank, its own ink across as read; each box's path)
+  // (read with the ink's indices: what the cell rules read of the page besides, kept beside the maker's columns, so that the
+  // page's one operator list gives both: each glyph's place in the stream, its showing operation and its place there, whether
+  // it is blank, its own ink across as read; each box's path)
   if (got.paths) {
     const n = order.length, stream = new Int32Array(n), on = new Int32Array(n), at = new Int32Array(n), blank = new Uint8Array(n), rix0 = new Float64Array(n), rix1 = new Float64Array(n)
     for (let i = 0; i < n; i++) {
@@ -195,8 +194,8 @@ function glyphsOf(got, fontIds) {
   return P
 }
 
-/** a page's ink as the add-on's plan reads it (pageInk with `indices`), made again of the maker's columns and the plan's
- *  (glyphsOf): its glyphs in stream order, each with what the plan reads of it, its boxes, paths and showing operations */
+/** a page's ink as the cell rules read it (pageInk with `indices`), made again of the maker's columns and the plan's
+ *  (glyphsOf): its glyphs in stream order, its boxes, paths and showing operations */
 function planInkOf(P) {
   const { stream, on, at, blank, rix0, rix1, paths, shows } = P.plan, glyphs = new Array(P.n)
   for (let i = 0; i < P.n; i++) {
@@ -208,21 +207,13 @@ function planInkOf(P) {
   for (const b of P.boxes) boxes.push(b[0], b[1], b[2], b[3])
   return { glyphs, boxes, points: [], boxAt: [], paths: Array.from(paths), shows, capped: false, rotated: false }
 }
-/** a page's alignment facts (remove.mjs alignOf) packed: each showing operation's codes in one column (null as NaN), where
- *  each begins, and the paths' count; and back */
-function packFacts({ codes, paths }) {
-  let n = 0
-  for (const row of codes) n += row.length
-  const all = new Float64Array(n), from = new Int32Array(codes.length + 1)
-  let i = 0
-  codes.forEach((row, r) => { from[r] = i; for (const c of row) all[i++] = c === null ? Number.NaN : c })
-  from[codes.length] = i
-  return { all, from, paths }
-}
-function unpackFacts({ all, from, paths }) {
-  const codes = []
-  for (let r = 0; r + 1 < from.length; r++) { const row = []; for (let i = from[r]; i < from[r + 1]; i++) row.push(Number.isNaN(all[i]) ? null : all[i]); codes.push(row) }
-  return { codes, paths }
+/** a page's cell rules (cell-rules.mjs pageRules over the page's ink), checked as a part's reader checks them; null where it has
+ *  none, or where they cannot be written (a box past the page's view by the reader's slack, or empty: that page's loss alone) */
+function cellRulesOf(index, p, ink) {
+  if (ink.rotated || ink.capped || ink.timedOut) return null
+  const rules = pageRules(index, p, ink)
+  if (!rules.length) return null
+  try { return checkBoxes(rules, p, index.file.views, 'rules') } catch { return null }
 }
 /** the first index whose baseline is at least y */
 function lowest(P, y) {
@@ -250,6 +241,21 @@ const bodyOf = (P, gs, size) => { const b = gs.filter(i => Math.abs(P.size[i] - 
 const charsOf = s => s.normalize('NFKC').toLowerCase()
 /** a glyph's characters as two PDFs are compared by them: NFKC, no white space, no variation selector (match.mjs's) */
 const NF = s => (typeof s === 'string' ? s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '') : '')
+
+/** a mark on a turned token's box, within this (PDF units): a turned run's first mark stands at its box's edge, to the marks
+ *  file's hundredth */
+const ON_TURNED = 0.5
+/** whether mark `mk` stands on token `t` and `t` is turned (anchors.mjs uprightToken: its box as high above its `y` as below,
+ *  a run set at an angle): the mark is on a turned line. A token that kept no box is none */
+const turnedAt = (t, mk) => typeof t.top === 'number' && typeof t.bottom === 'number' && !uprightToken(t) && t.page === mk.page
+  && mk.x >= t.x - ON_TURNED && mk.x <= t.x + t.w + ON_TURNED && mk.y >= t.bottom - ON_TURNED && mk.y <= t.top + ON_TURNED
+
+/** whether a line rectangle's glyphs (lineOf's first band: on its baseline's band, within its words' extent) hold one another
+ *  unit or a babel name took (`owner`): what makes a line of unit `unit`'s glyphs none */
+function takenAt(P, r, unit) {
+  const L = r.x0 - 0.5, R = r.x1 + 0.5
+  return band(P, Math.min(r.y0, r.y1), Math.max(r.y0, r.y1)).some(i => mid(P, i) >= L && mid(P, i) <= R && P.owner[i] !== -1 && P.owner[i] !== unit)
+}
 
 /** tokens → line rectangles as anchors.mjs lineRects makes them, each with its tokens */
 function rectsOf(doc, idx) {
@@ -404,8 +410,7 @@ async function gzipSize(bytes) {
  * A paper's layout file, or why none is made: { file, stats } or { refused, stats }. `units` the paper's (ids their
  * indices); `marks` the marks file of its layout compile; `arxiv` a PDF.js document of the base page (the final pass of that
  * compile: layout/paper.mjs markedOfPaper `base`, its coordinates the file's), which the caller opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
- * that a caller that reads its operator lists again pays a parse again (the add-on relies on PDF.js keeping them, and
- * takes a document of its own: addon.mjs); `OPS` PDF.js's operator codes. `text`: the base page's text as layout/arxiv.mjs
+ * that a caller that reads its operator lists again pays a parse again; `OPS` PDF.js's operator codes. `text`: the base page's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T), else read here. `lineCheck`: the line check (carry.mjs
  * lineCheckOf of the base page's own tokens, this document's, over arXiv's): a unit is laid only where every page it is on is
  * drawable (drawable), the rest counted (`stats.units.undrawn`) and left the original's, and the file is refused
@@ -414,10 +419,9 @@ async function gzipSize(bytes) {
  * `floatMatch`: anchors.mjs floatMatches of its tokens and the units' texts, else each float's is searched here; `frame`: the
  * pages' frame's rule its anchors are placed under (anchors.mjs FrameRule), given; else the rule set's (`rules`, DEFAULT_RULES'
  * where not given: rule 1's frameOfTokens; pageFrame under rules.frame 'units', the whole paper alone: the page stream, which
- * places a range's units alone, needs the whole document's). `plans`:
- * the add-on's plans as well, { file, stats, plans }: each page's (addon.mjs pagePlanOf) of the ink and the alignment
- * facts read here of the page's one operator list, as pagePlansOf makes them of the list read again (null where they
- * fail, `plansFailed` why: the add-on's loss, never the file's). A page whose ink
+ * places a range's units alone, needs the whole document's). `cellRules`:
+ * the rules near the table cells as well, { file, stats, cellRules }: each page's (cell-rules.mjs pageRules) of the ink read
+ * here of the page's one operator list (null where they fail, `rulesFailed` why: the reader's loss, never the file's). A page whose ink
  * passes GLYPHS_PAGE glyphs is capped (stats.capped), that page alone. `parts`: the file is cut into parts (layer-proto/
  * cut.mjs partCutter), which hold the bounds of what a part holds: the file is checked without the bounds a part holds of
  * its own (file.mjs parseLayout `sized`); `lines` in the result, each page's lines [in place, total] (the line check's
@@ -443,7 +447,7 @@ export async function makeLayout(o) {
  * at most `drawHeldMax` at a time; none for a page the read fails on, a font a host would read
  * differently, or past the budget. It reads no ink and writes none: the layout file is the same bytes with it on or off
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, lineCheck = null, floatMatch = null, frame: frameGiven = null, plans: wantPlans = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
+export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, lineCheck = null, floatMatch = null, frame: frameGiven = null, cellRules: wantRules = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
   const rules = rulesOf(rulesGiven)
   // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
   if (rules.floatSearch === 'forward' && !Array.isArray(inFloat)) throw new TypeError('inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
@@ -483,7 +487,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   // (`check`: a pass reading a page's ink outside the pages it was given throws, the pages a task in another order may run on
   // being exactly those: `allowed`, null where any page is a pass's)
   let allowed = null
-  const pagesInk = new Array(pages + 1).fill(null), facts = new Array(pages + 1).fill(null), names = [], nameId = new Map()
+  const pagesInk = new Array(pages + 1).fill(null), names = [], nameId = new Map()
   const ink = check ? new Proxy(pagesInk, {
     get(target, key, receiver) {
       if (allowed !== null && typeof key === 'string' && /^\d+$/.test(key) && !allowed.has(Number(key))) throw new RangeError(`a pass read page ${key}'s ink, outside its pages`)
@@ -550,19 +554,17 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs)
     const ops = await listWithin(page, seen)
     if (!ops) { stats.timedOut.push(p); dark.add(p); return }
-    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantPlans, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
+    const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantRules, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     // the page's draw geometry (E-C), read once its fonts are loaded, within the same limit, before the page is let go; its items'
     // fills from the ink's glyphs where the page's ink is whole (layout/fills.mjs), none told else
     if (wantDraw) {
       await gatherDraw(p, page, tx, got.capped || got.timedOut || got.rotated ? null : got.glyphs)
       annotsAsked.delete(p)
     }
-    // (the add-on's alignment facts read of the same list, before it is let go: `plans`)
-    if (wantPlans && !got.capped && !got.timedOut && !got.rotated) facts[p] = packFacts(alignOf(OPS, ops))
     // its operator list and decoded images let go once its ink is read, so that PDF.js holds them for one page at a time,
     // not every page's to the document's end (48 MiB on 2303.18223's 144 pages; an image a late decode brings is dropped
-    // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the
-    // add-on's plans are made of what was read here where `plans` asks, else of a document of its own: addon.mjs)
+    // with them). Nothing here reads a page's list again, and the callers destroy the document after the maker (the cell rules
+    // are made of what was read here where `cellRules` asks)
     page.cleanup?.()
     // (each page once, by what befell it: past a cap, past the walk's backstop (apart from a list that never came), or
     // read with its boxes past BOXES_PAGE merged by cell, its ink kept: its text is whole, ink.mjs pageInk)
@@ -662,14 +664,18 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /** the word a unit's start mark reaches where it stands at none (boundsFromMarks `reach`): a unit that opens with a formula, a
    *  dash or a comma has its start mark there, and its first word further on its line. The nearest upright word on the mark's
    *  baseline, in its column, after it, at any distance: its column bounds it, not a measure of points; or null. A turned line
-   *  (a sideways caption) reaches none: its baseline is no horizontal one, and a word at the mark's height there is another
-   *  line's. An end mark needs none: tokenAtMark takes the last word before it on its line at any distance. `byPage`, the base
-   *  page's tokens by page */
+   *  (a sideways caption, a \rotatebox's cell) reaches none: its baseline is no horizontal one, and a word at the mark's height
+   *  there is another line's. Its start mark stands on its turned run (turnedAt: on a turned token's box), and the nearest
+   *  upright word at its height may be any line's: 2602.23285v2's sideways cell "Discrete & Continuous" in a table set beside
+   *  a paragraph, whose mark reached the next cell's "ODEBRAIN" and whose end mark's word was the paragraph's, 30 pt left of
+   *  the table, so that the cell took a line of the paragraph's and the paragraph was laid not at all. An end mark needs none:
+   *  tokenAtMark takes the last word before it on its line at any distance. `byPage`, the base page's tokens by page */
   const reachIn = byPage => mk => {
     let best = null
     const col = colAt(mk)
     for (const k of byPage.get(mk.page) ?? []) {
       const t = doc[k]
+      if (turnedAt(t, mk)) return null
       if (!t.t || !uprightToken(t) || Math.abs(t.y - mk.y) > t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
       if (t.x >= mk.x && (best === null || t.x < doc[best].x)) best = k
     }
@@ -710,15 +716,37 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
 
   // ---------------------------------------------------------------- each located unit's lines
   const placed = [], placedById = new Map()
+  /** why each unit not laid stays the original's (file.mjs UNLAID), the first reason a pass gave: the file's `unlaid`. Every
+   *  unit the file does not lay has one (unlaidOf): none is dropped without its reason */
+  const unlaidBy = new Map()
+  const notLaid = (i, code) => { if (!unlaidBy.has(i)) unlaidBy.set(i, code) }
+  /** why a unit with no anchor has none: its own marks unplaced, or no anchor at all */
+  const unanchored = i => notLaid(i, unplaced.has(i) ? 'unplacedMarks' : 'noAnchor')
+  /** the file's `unlaid` rows of units `ids` (rising) the file does not lay (`laid(i)` false): [id, code]; a unit with no
+   *  reason is a defect of the maker's, never a row */
+  const unlaidOf = (ids, laid) => {
+    const out = []
+    for (const i of ids) {
+      if (laid(i)) continue
+      const code = unlaidBy.get(i)
+      if (code === undefined) throw new Error(`unit ${i} is not laid, and no pass said why`)
+      out.push([i, code])
+    }
+    return out
+  }
   /** each unit placed, as it is (the page stream's rule 3 edges, which take its body lines a page at a time) */
   let onPlaced = null
-  /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none */
+  /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none, and why
+   *  (notLaid) */
   function place(i) {
     const u = units[i], a = anchors.get(i)
     if (a && unplaced.has(i)) stats.units.unplaced++
-    if (!a || unplaced.has(i) || !KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return
+    if (!a || unplaced.has(i)) return unanchored(i)
+    if (!KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return notLaid(i, 'kind')
     const rects = rectsOf(doc, a.tokens)
-    if (!rects.length || rects.length !== a.rects.length || rects.length > LINES_UNIT || rects.some(r => dark.has(r.page) || !inked[r.page])) return
+    if (!rects.length || rects.length !== a.rects.length) return notLaid(i, 'rects')
+    if (rects.length > LINES_UNIT) return notLaid(i, 'linesUnit')
+    if (rects.some(r => dark.has(r.page) || !inked[r.page])) return notLaid(i, 'dark')
     const S = carriedUnit.get(`${i}s`), E = carriedUnit.get(`${i}e`)
     const onRect = (m, r) => m && m.page === r.page && Math.abs(m.y - r.base) < 0.5 * r.h
     const rows = []
@@ -726,10 +754,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const r = rects[j]
       const from = j === 0 && onRect(S, r) ? S.x : null, to = j === rects.length - 1 && onRect(E, r) ? E.x : null
       const row = lineOf(ink[r.page], r, from, to, i)
-      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) { rows.length = 0; break }
+      // (a line with no glyph of its own: none there, or another's, which a unit laid before it took)
+      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) return notLaid(i, !row && takenAt(ink[r.page], r, i) ? 'lineTaken' : 'noLine')
       rows.push(row)
     }
-    if (!rows.length) return
     // the anchor's rectangles of one line (its tokens out of order: a script before its base, the line's two parts
     // either side of a formula, 1706.03762's note): one line, wherever the second begins
     // again over the merged rows until none is left to merge: a row may match one only once another merge has made it
@@ -1735,7 +1763,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       for (const e of merged) erase.push(j, ...solid(view, e[0], e[1], e[2], e[3]))
     })
-    if (refuse) return
+    if (refuse) return notLaid(i, 'erase')
     // lines (each its font's id; the file's index is admit's)
     const lines = []
     for (const r of rows) {
@@ -1810,9 +1838,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    */
   function admit(one) {
     const { id: i, u, rows, S, E, out } = one
+    // (no rows: rowsOf said why)
     if (!out) return false
-    if (!drawable(one)) { stats.units.undrawn++; return false }
-    if (fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) return false
+    if (!drawable(one)) { stats.units.undrawn++; notLaid(i, 'undrawn'); return false }
+    if (fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) { notLaid(i, 'fonts'); return false }
     const { lines, frames, erase } = out
     for (let j = 7; j < lines.length; j += 8) lines[j] = fontOf(lines[j])
     outUnits.push(out.unit)
@@ -1872,6 +1901,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // each colour piece's run's fill (marks.mjs readColours), of the units it holds: a key only where one has a row
     const outColours = outUnits.flatMap(r => coloursBy.get(r[0]) ?? [])
     if (outColours.length) file.colours = outColours
+    // why each unit it does not hold is the original's: a key only where one is not laid
+    const outUnlaid = unlaidOf(units.map((_, i) => i), i => kept1.has(i))
+    if (outUnlaid.length) file.unlaid = outUnlaid
     for (const r of outUnits) countColours(r[0])
     stats.ph.texts = file.pageText.length
     // the placeholders and labels counted as the file holds them
@@ -1904,22 +1936,21 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     }
     stats.bytes.gzip = await gzipSize(bytes)
     const made = parts ? { file: parsed, stats, lines: lineCheck?.pageLines ?? new Map() } : { file: parsed, stats }
-    if (!wantPlans) return made
-    // ---------------------------------------------------------------- the add-on's plans, of the ink read above
-    // (each page's as addon.mjs pagePlansOf makes it of the page's operator list read again: the same ink, the same facts)
-    // (the plans failing are the add-on's alone, never the file's: `plans` null, why in `plansFailed`; a failed allocation the
+    if (!wantRules) return made
+    // ---------------------------------------------------------------- the cell rules, of the ink read above
+    // (the rules failing are the reader's loss alone, never the file's: `cellRules` null, why in `rulesFailed`; a failed allocation the
     // paper's)
     try {
-      const index = indexLayout(parsed), plans = new Map()
+      const index = indexLayout(parsed), cellRules = new Map()
       for (let p = 1; p <= pages; p++) {
         if (!ink[p]?.plan) continue
-        const plan = pagePlanOf(index, p, planInkOf(ink[p]), () => unpackFacts(facts[p]))
-        if (plan) plans.set(p, plan)
+        const rules = cellRulesOf(index, p, planInkOf(ink[p]))
+        if (rules) cellRules.set(p, rules)
       }
-      return { ...made, plans }
+      return { ...made, cellRules }
     } catch (e) {
       if (isMemoryError(e)) throw e
-      return { ...made, plans: null, plansFailed: String(e?.message ?? e).slice(0, 200) }
+      return { ...made, cellRules: null, rulesFailed: String(e?.message ?? e).slice(0, 200) }
     }
   }
 
@@ -2033,8 +2064,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * read) has them carried (anchoring()'s, a unit at a time); the units are anchored by ranges of a page (pipeline/left-part.mjs
    * rangedAnchors, under `frame`); each anchored unit whose pieces' own ink is known has its passes run as tasks (byTasks'), a
    * task once its pages are decided (no unit or babel name that may touch them is still to be anchored or known) and read and
-   * every task before it in the whole order on them has run; a page is let go (its ink and facts dropped) once its tasks have
-   * run, its names are taken in and its plan is made (`plans`). A unit's rows are the file's (`layout()`, a unit's as the whole
+   * every task before it in the whole order on them has run; a page is let go (its ink dropped) once its tasks have
+   * run, its names are taken in and its cell rules are made (`cellRules`). A unit's rows are the file's (`layout()`, a unit's as the whole
    * file's parse holds them) once they are made. `finish()` after the last page of each. `released()` the pages from 1 let go;
    * `settled(i)` whether unit i's rows are made or it has none (never anchored, or not placed); `laid()` the units the file holds
    * so far. The line check's refusal ('carry', no unit laid: no page drawable with a unit on it) is known once finished (`carryRefusal()`:
@@ -2195,8 +2226,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     let decidedCount = 0, releasedTo = 0
     const settledU = new Uint8Array(n), released = new Uint8Array(pages + 2)
     const inFile = new Set(), unitRows = new Map(), nameRows = new Map(), namedOn = new Map()
-    const plans = wantPlans ? new Map() : null
-    let plansFailed = null
+    const cellRules = wantRules ? new Map() : null
+    let rulesFailed = null
     /** unit i's rows as the whole file's parse holds them (encodeLayout's numbers, parseLayout's zeroes): the file's
      *  index of its lines' fonts the one `fonts` holds the names of */
     const fileRowsOf = one => {
@@ -2245,7 +2276,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       decided[i] = 1
       decidedCount++
       if (counted[i]) { lowCount[lowOf[i]]--; counted[i] = 0 }
-      if (!a) { settledU[i] = 1; return }
+      if (!a) { unanchored(i); settledU[i] = 1; return }
       const pg = unitPages(i, carriedKnown.get(i))
       carriedKnown.delete(i)
       for (const q of pg) (touching.get(q) ?? touching.set(q, []).get(q)).push(i)
@@ -2293,24 +2324,23 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       decidedTo = Math.max(decidedTo, to)
     }
     const open = q => q <= decidedTo && q <= readyTo()
-    /** a page let go: its names taken into the file, its plan made, its ink and facts dropped */
+    /** a page let go: its names taken into the file, its cell rules made, its ink dropped */
     const release = q => {
       if (released[q] || !open(q)) return
       const Q = queue.get(q)
       if (Q && Q.head < Q.list.length) return
       for (const nm of namedOn.get(q) ?? []) nameRowOf(nm)
-      if (plans && pagesInk[q]?.plan) {
+      if (cellRules && pagesInk[q]?.plan) {
         try {
           const ids = (touching.get(q) ?? []).filter(i => unitRows.has(i)).sort((x, y) => x - y)
-          const plan = pagePlanOf(indexLayout(partOf(ids, [...(namedOn.get(q) ?? [])].map(nm => nameRows.get(nm.occurrence)).filter(Boolean))), q, planInkOf(pagesInk[q]), () => unpackFacts(facts[q]))
-          if (plan) plans.set(q, plan)
+          const rules = cellRulesOf(indexLayout(partOf(ids, [...(namedOn.get(q) ?? [])].map(nm => nameRows.get(nm.occurrence)).filter(Boolean))), q, planInkOf(pagesInk[q]))
+          if (rules) cellRules.set(q, rules)
         } catch (e) {
           if (isMemoryError(e)) throw e
-          plansFailed ??= String(e?.message ?? e).slice(0, 200)
+          rulesFailed ??= String(e?.message ?? e).slice(0, 200)
         }
       }
       pagesInk[q] = null
-      facts[q] = null
       // (and what its tasks held: every one of them ran)
       queue.delete(q); touching.delete(q); namedOn.delete(q); kept.delete(q)
       released[q] = 1
@@ -2344,8 +2374,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       stats.names.located++
       if (nm.lead >= 0) stats.names.runIn++
     }
-    /** the rows of units `ids` (rising) and names `rows`, as a layout file holds them (its views and pages the paper's) */
+    /** the rows of units `ids` (rising) and names `rows`, as a layout file holds them (its views and pages the paper's), and
+     *  why each of `ids` the file does not lay is the original's (`unlaid`, units settled alone) */
     const partOf = (ids, rows) => {
+      const unlaid = unlaidOf(ids.filter(i => settledU[i]), i => unitRows.has(i))
+      ids = ids.filter(i => unitRows.has(i))
       const out = { schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts: fonts.slice(), lineskip: marks.marking.lineskip ?? null }
       for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key] = []
       for (const i of ids) { const r = unitRows.get(i); for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key].push(...r[key]) }
@@ -2353,6 +2386,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // (each colour piece's run's fill: a key only where a unit of the part has one)
       const colours = ids.flatMap(i => unitRows.get(i).colours ?? [])
       if (colours.length) out.colours = colours
+      if (unlaid.length) out.unlaid = unlaid
       return out
     }
     // ---- the babel names, each a task on the pages its marks are carried to and those of the unit it would lead (nameAt
@@ -2550,21 +2584,22 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       finished = true
     }
     return {
-      pageRead, markedPage, markedEnd, finish, plans, plansFailed: () => plansFailed,
+      pageRead, markedPage, markedEnd, finish, cellRules, rulesFailed: () => rulesFailed,
       /** the line check's refusal ('carry': no unit laid), once finished; null else */
       carryRefusal: () => (finished ? noneLaid() : null),
       /** the units the file holds so far */
       laid: () => stats.units.located,
-      /** the file's rows of the units settled so far (`ids`, rising: those of them it holds) and the names taken in */
-      layout: (ids = [...unitRows.keys()].sort((x, y) => x - y)) => partOf(ids.filter(i => unitRows.has(i)), [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
+      /** the file's rows of the units settled so far (`ids`, rising: those of them it holds, and why each other is the
+       *  original's) and the names taken in */
+      layout: (ids = Array.from({ length: n }, (_, i) => i).filter(i => settledU[i])) => partOf(ids, [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
       released: () => releasedTo,
       settled: i => settledU[i] === 1,
       /** units `ids` told by the parts through page `through`: their rows the stubs K reads (stubOf), the names on those pages
-       *  and their plans let go */
+       *  and their cell rules let go */
       tell: (ids, through) => {
         for (const i of ids) { const r = unitRows.get(i); if (r && !r.stub) unitRows.set(i, { ...stubOf(i, r), stub: true }) }
         for (const [k, row] of nameRows) if (row[2] <= through) nameRows.delete(k)
-        if (plans) for (const p of plans.keys()) if (p <= through) plans.delete(p)
+        if (cellRules) for (const p of cellRules.keys()) if (p <= through) cellRules.delete(p)
       },
       /** where the stream stands: the page read last (and the marked original's), the pages anchored, decided and let go */
       progress: () => {

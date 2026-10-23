@@ -430,7 +430,7 @@ async function layoutOf(id, paper, dir) {
   const made = async (doc, more = {}) => {
     const tm = performance.now()
     const out = await makeLayout({ units: paper.units, marks, arxiv: doc, OPS, paper: ofPaper, left: '', pdfjs: PDFJS, ...more })
-    // (the maker's own time, and its operator lists' within it: the server's prepare reads them once for the remover too)
+    // (the maker's own time, and its operator lists' within it)
     out.stats.makerMs = Math.round(performance.now() - tm)
     // GATE_DBG=<dir>: the maker's own diagnostics, where it gives them
     if (out.stats.dbg && process.env.GATE_DBG) writeFileSync(join(process.env.GATE_DBG, `${id}.json`), JSON.stringify({ dbg: out.stats.dbg, u: out.stats.dbgU }))

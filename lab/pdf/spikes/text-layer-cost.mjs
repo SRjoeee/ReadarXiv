@@ -3,7 +3,7 @@
 // page and 2000 nodes, the engine's step at most 3 ms), in Chromium (Playwright's), on real pages: each page's text content read by
 // the repository's PDF.js, its items kept compact (textlayer.mjs itemsOf), the page then taken as wholly translated (the hardest
 // case for the engine's step: every line of text a drawn line), its plan made from its own text: each text line (items on one
-// baseline, in the stream's order) erased by an operation of its own, six lines a unit, each unit's lines drawn as segments of the
+// baseline, in the stream's order) hidden by an operation of its own (layer2.mjs hideOps' `hidden`), six lines a unit, each unit's lines drawn as segments of the
 // same text over the same boxes. Measured, the median of `--runs` (5):
 //   - engine: textLayerOf's time (the door's textOf is this and a copy), its items by kind, the bytes its compact items hold;
 //   - host: the view's textLayer (text-layer.mjs: PDF.js's own TextLayerBuilder over the items, the place's viewport) built, put in
@@ -46,7 +46,7 @@ window.cost = {
     const page = await doc.getPage(n), tc = await page.getTextContent(), view = page.view
     const vp = page.getViewport({ scale: 2.5 }), devOf = (x, y) => vp.convertToViewportPoint(x, y)
     const t0 = performance.now(), items = TL.itemsOf(tc), tItems = performance.now() - t0
-    // the plan: each text line erased by an operation of its own, six lines a unit, each line drawn as a segment of its own text
+    // the plan: each text line hidden by an operation of its own, six lines a unit, each line drawn as a segment of its own text
     const lines = []
     for (let i = 0; i < items.n; i++) {
       const o = i * 6, x = items.num[o], base = items.num[o + 1], w = items.num[o + 2], size = items.num[o + 3]
@@ -60,7 +60,7 @@ window.cost = {
       const u = Math.floor(k / 6)
       if (plan === 'kept' || (plan === 'half' && u % 2)) return
       if (!drawn[u]) { drawn[u] = { key: 'u' + u, unit: u, segs: [] }; owners.push([ops.length, ops.length, 'u' + u]) }
-      ops.push({ op: 'erase', box: [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)] })
+      ops.push({ op: 'hidden', rects: [[Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)]] })
       owners.at(-1)[1] = ops.length
       drawn[u].segs.push({ str: l.str, x: l.x0, y: l.base - 0.22 * l.size, w: l.x1 - l.x0, h: 0.97 * l.size, base: l.base, size: l.size, lx0: l.x0, lx1: l.x1 })
     })

@@ -197,7 +197,7 @@ describe('the engine\'s packages', () => {
   it('refuses @cantoo/pdf-lib outside layout/, and in layout/ too: the layout maker is handed it as `PL`, it imports none', () => {
     expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/pipeline/x.mjs`)).toEqual(['@cantoo/pdf-lib'])
     expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/view/x.mjs`)).toEqual(['@cantoo/pdf-lib'])
-    expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/layout/addon.mjs`)).toEqual(['@cantoo/pdf-lib'])
+    expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/layout/wrap.mjs`)).toEqual(['@cantoo/pdf-lib'])
   })
   it('keeps the layout rules\' validator: zod in rules/ alone, as the rules-as-data plan allowed', () => {
     expect(ENGINE_PACKAGES).toEqual([{ name: 'zod', under: `${E}/rules/` }])

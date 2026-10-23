@@ -2,7 +2,6 @@
 import type { PartRefusal } from '../layer-proto/cut.mjs'
 import type { LayoutRefusalRecord, Written } from '../layer-proto/format.mjs'
 import type { ArxivText } from '../layout/arxiv.mjs'
-import type { AddonChainState, RemoverAnswer } from '../layout/chain.mjs'
 import type { LayoutStats, PageStreamRules } from '../layout/make.mjs'
 import type { LayoutMarks, MarkedOptions, UnitMarks } from '../layout/marks.mjs'
 import type { OwnVerdict } from '../layout/paper.mjs'
@@ -38,7 +37,7 @@ export interface LayerOptions {
   orig?: { bytes: number; sha256: string; xref: number } | null
   /** our base page (BUNDLE 8): the final pass of the marked original (layout/paper.mjs markedOfPaper `base`), a PDF.js document
    *  of it (the caller's to open and destroy, opened as arXiv's for the draw), its bytes, digest and startxref (the head's base,
-   *  which the remover's tails continue: the host's remover edits this PDF), its text as readArxivText read it (else read here,
+   *  the wrapped bytes' where `wrap` is given), its text as readArxivText read it (else read here,
    *  with `{ draw }` as this pass's), and `check`, a host's word that its marks were checked against the draft's (base.mjs
    *  finalCheck: layoutMarksOfPaper's `base.check`), needed where the marks are given (`marks`) and not read here (`marked`,
    *  whose document the check reads). Null, or { refused, why } (no final pass): no base of ours, the paper's fallback ('final') */
@@ -56,8 +55,6 @@ export interface LayerOptions {
   /** a host of BUNDLE 7's: arXiv's PDF as `orig` is, where neither `orig` nor `ours` is given: the layout made over it, as before */
   base?: { bytes: number; sha256: string; xref: number } | null
   image: string
-  /** the remover's transport (layout/chain.mjs chainedAddon's `remove`), null for none: no part has an add-on */
-  remove?: ((ask: { from: number; to: number; plans: Uint8Array }) => Promise<RemoverAnswer>) | null
   onHead?: ((head: Written, units: (Written & { from: number; to: number })[]) => void | Promise<void>) | null
   onLeft(left: Written & { page: number }): void | Promise<void>
   onPart(part: Written & { from: number; to: number; leftParts: (Written & { page: number })[] }, note: PartNote): void | Promise<void>
@@ -111,6 +108,6 @@ export declare function checkOurBase(o: {
 /** a paper's layer made and told part by part, or refused before anything is told (`anchors`); `toplevels` where the paper has
  *  several toplevel sources (its marked original's pages against arXiv's) */
 export declare function layerOfPaper(o: LayerOptions): Promise<
-  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; own?: OwnVerdict; plansFailed?: string }; plans: { pages: number; dirty: number } | null; addon: AddonChainState | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][]; toplevels?: { files: number; pages: [marked: number | null, arxiv: number] }; delta?: { kind: 'delta'; bytes: number; replaced: number } | { kind: 'full'; why: string; reason?: string } } }
+  | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; own?: OwnVerdict; rulesFailed?: string }; rules: { pages: number } | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][]; toplevels?: { files: number; pages: [marked: number | null, arxiv: number] }; delta?: { kind: 'delta'; bytes: number; replaced: number } | { kind: 'full'; why: string; reason?: string } } }
   | { refused: 'anchors'; why: string }
 >

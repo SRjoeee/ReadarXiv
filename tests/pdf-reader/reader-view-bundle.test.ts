@@ -3,8 +3,8 @@
 // and the layer entry built by esbuild for the browser, and every file the build read listed by its metafile. Nothing may
 // come from outside the engine but the three core modules and the one package the engine's rule allows
 // (scripts/check-boundary.mjs ENGINE_ALLOW, ENGINE_PACKAGES: the layout rules' validator); no pdfjs-dist (PDF.js is the
-// host's kit); and nothing of the server's: the paper's source, its pipeline, the layout maker, the remover and the add-on's
-// maker. The pipeline's anchors, versions and memory are leaves every reader takes (the view's floats read the anchors'
+// host's kit); and nothing of the server's: the paper's source, its pipeline, the layout maker, the content walk and the wrap
+// (layout/remove.mjs, own.mjs, wrap.mjs: the maker child's). The pipeline's anchors, versions and memory are leaves every reader takes (the view's floats read the anchors'
 // helpers; the layer its versions and memory errors), as engine-contract.test.ts holds them
 import { relative, resolve } from 'node:path'
 import { build } from 'esbuild'
@@ -14,7 +14,7 @@ import { ENGINE_ALLOW, ENGINE_PACKAGES } from '../../scripts/check-boundary.mjs'
 
 const ROOT = resolve(__dirname, '../..')
 const ENGINE = 'src/pdf-reader/engine/'
-const SERVER = [/^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|addon)\.mjs$/]
+const SERVER = [/^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap)\.mjs$/]
 
 /** the files a browser build of `entries` reads, repository-relative */
 async function inputsOf(entries: string[]): Promise<string[]> {
@@ -41,8 +41,8 @@ describe('the reading view, bundled for the browser', () => {
     const inputs = await inputsOf(['src/pdf-reader/engine/pipeline/live.mjs', 'src/pdf-reader/engine/view/figures.mjs'])
     expect(inputs.filter(f => SERVER.some(r => r.test(f))).length).toBeGreaterThan(0)
     expect(SERVER.some(r => r.test(`${ENGINE}pipeline/anchors.mjs`))).toBe(false)
-    expect(SERVER.some(r => r.test(`${ENGINE}layout/addon-manifest.mjs`))).toBe(false)
-    expect(SERVER.some(r => r.test(`${ENGINE}layout/addon.mjs`))).toBe(true)
+    expect(SERVER.some(r => r.test(`${ENGINE}layout/cell-rules.mjs`))).toBe(false)
+    expect(SERVER.some(r => r.test(`${ENGINE}layout/wrap.mjs`))).toBe(true)
     expect(allowed('node_modules/.pnpm/pdfjs-dist@6.3.289/node_modules/pdfjs-dist/build/pdf.mjs')).toBe(false)
     expect(allowed('src/pdf-reader/session/session.mjs')).toBe(false)
   }, 60_000)

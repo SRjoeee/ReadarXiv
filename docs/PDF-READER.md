@@ -692,7 +692,8 @@ no `pdfjs-dist`, and nothing of the server's).
 `createLayerSide(view, options)` (`engine/view/layer-side.mjs`, exported by `view.mjs`) is the reading view's one layer
 side. The host tells it what it hears of the paper's layer — refs, rows and their end, from any source, in any order — and
 gives it a transport (`fetchObject`, an object by its ref), the base's check (`bind`) and the composed document's opener
-(`composed`, the base page followed by every tail told: our compile's, §19.7). No host calls the door.
+(`composed`: the base page, our compile's wrapped by optional content, §19.7, §19.9; parts carry no tails, so it is opened once
+for a head, and `composed(null, options)` is the one call). No host calls the door.
 
 - **The feed** (`feed.mjs`) merges what is told, deduplicated by digest, fetches each object once while it is wanted and
   reads it with the format's own readers (cap, digest against its ref, values, shape, chain): the units chunks and the head
@@ -707,9 +708,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   again when it is told again (an abort of the host's transport is a refusal too). A second head is passed over with one
   warning.
 - **The order** (the reader view's contract §2.2): the index read; the base bound, once (false is no layer); the original
-  open; the composed document through the parts read so far opened with the view's assets, `PDF_OPTIONS` and
-  `disableAutoFetch`; the door opened over it with those parts; each later part added in page order, a part with a tail
-  over the composed document through it; the rows held until the door opens, then taken; the parts ended once the
+  open; the composed document opened with the view's assets, `PDF_OPTIONS` and `disableAutoFetch`, and its one
+  optional-content configuration read (`visibilityOf`, below); the door opened over it with the parts read so far; each later
+  part added in page order; the rows held until the door opens, then taken; the parts ended once the
   catalog's `through` is added. A fork, a later attempt (`again()`), or parts past the end the door was told (a later
   build's) dispose the door before it is opened again (one open layer a page): `again()` carries no row (the host takes
   its rows again), the others every row so far (the units are the head's). Only the first open waits for the original: a
@@ -725,21 +726,17 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   part's `layout` null) draws nothing and erases nothing, so its pages would show our base page in other line breaks beside
   arXiv's. What TeX's positions do not draw is arXiv's PDF: such a page (some part holds it and every part that holds it has no
   layout, `noLayoutPage`, a unit running on from the page before can put a page in two parts) is not asked of the door and not
-  swapped in, one the door laid before its parts were all told is not committed, and its place keeps, or returns to after a
+  committed, one the door laid before its parts were all told is not committed, and its place keeps, or returns to after a
   fork, the original's page view. Any other head is laid as before (it draws nothing: `layerDraws`).
-- **The documents** are the side's: each composed task is destroyed once no door reads it (the door's `onRetired`) and the
-  side holds a later one, at a refusal of the side (its feed's fetches with it, and the right's shapes the original's again),
-  and at dispose; none twice. `again()` reuses the latest.
+- **The document** is the side's: one composed document a head, destroyed once, at a refusal of the side (its feed's fetches
+  with it, and the right's shapes the original's again) or at dispose, once no door reads it (the door's `onRetired`, told at
+  the door's dispose). `again()` disposes the door and opens the next over the same document.
 - **Each place shows the best version there is** (§11.7): its pre-layer content until the door has laid its page and the
-  place is near the view, then the layer's copy (the door's `copyOf` at the place's k: device pixels a PDF unit, within
-  2^24 pixels; from the left's canvas where PDF.js drew it within 2 % of that k, else the place's own page view's canvas,
-  else the page drawn from the composed document; over our base page (the head's `base.source` `ours`, `layerDraws`) always
-  the page drawn from the composed document, because its pages are our compile's and the erase rectangles, crops and colours
-  are in their coordinates, not on arXiv's rendering the left shows: the left's canvas and the place's, which are the
-  original's, are never asked, at the commit or at a zoom's recopy; one page render a laid page, 10 to 25 ms on the sample
-  where the canvas was free; held as a delta over arXiv's PDF (§19.8), a page the delta does not replace (`base.replaced`) IS the
-  original's own bytes in the composed document, so the left's canvas is its copy source again and the composed document is not
-  rendered for it, while a replaced page is drawn from the composed document with annotations off) and its SVG, put in one task, in place: the place's size and the pane's
+  place is near the view, then the layer's copy (the door's `copyOf(page, { k, width, height, context, annotationMode })`:
+  the composed document's page rendered at the place's k, device pixels a PDF unit within 2^24 pixels, on a canvas of the
+  place's box at that k, the groups of the units drawn there hidden, below; never a canvas the left or a page view drew,
+  at the commit or at a zoom's recopy: one page render a laid page, 10 to 25 ms on the sample; a page of a delta over
+  arXiv's PDF, §19.8, is drawn with annotations off where the delta replaces it) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
   600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at. A page this
   door laid that leaves the view lets its SVG and its copy go and holds an
@@ -754,44 +751,71 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   keeps its drawing until the new door's page is ready; leaving the view, that drawing goes and the place shows its own
   content again. The window holds a copy for the places near the view alone: their pixels are bounded by the near area at
   any zoom, so no copy of a far page is kept.
-- **One frame a page** (`view/drawn.mjs`). PDF.js draws a page view at its viewport's unrounded scale times its output
-  scale, from the page's top-left corner, on a canvas it floors to whole CSS px (pdfjs-dist 6.3.289 `PDFPageView.draw`:
-  the canvas is `outputScale.sx` times the page's width floored to its rounding, the rest of the page cropped). So the
-  copy's source carries the scale it was drawn at, read as PDF.js begins the drawing (`pagerender`, its canvas sized and
-  its output scale set), checked against the canvas's size, and kept with the canvas once PDF.js tells that drawing done
-  (`pagerendered`, neither a CSS transform nor a detail view): not read at its end, where under restricted scaling PDF.js
-  lets a drawing run on after a zoom has given the page view its next viewport (`update`, `onlyCssZoom`); never the canvas's
-  width over the page's, which is short by up to a CSS px over the page's width (0.14 % at the 87 % fit), and an erase
-  laid at it left the original's ink showing past its rectangles where the floor drops near a pixel (80, 87, 110 and
-  125 %; at 125 % the page's 1020 CSS px floor to 1019 in floating point), deterministically, at any time. `copyAt`
-  hands `copyOf` the scale kept with the canvas, never one derived from a size.
-- **A canvas drawn at two scales is no source.** PDF.js approximates the pixel ratio by a fraction whose terms are at most
-  8 (`approximateFraction`) and floors the canvas's width and height each to its own term, so wherever the ratio is no
-  such fraction the canvas's scale across and its scale down come apart, at almost every zoom: at 1.1 and 0.9 (Chrome at
-  110 and 90 % on a 1× screen), 1.8 and 2.2 (the same on a 2× screen), 2.25 (Windows at 225 %), 2.4, 2.625, 2.75; and
-  under PDF.js's restricted scaling. Their anisotropy at 100 % is 1.4 to 3.7 device px over the page, above the erase's
-  pad, so no tolerance can take such a canvas: the copy is drawn from the composed document instead, at k, correctly.
-  At 1, 1.2, 1.25, 4/3, 1.5, 1.6, 1.75, 2, 2.5 and 3 the two agree to the bit (PDF.js's sizing replayed over zooms of 50
-  to 400 %, the review of 2026-10-19). Measured (`AXT_MEASURE=1 AXT_DPR=…
-  pnpm e2e:registration`, the sample, the fit and 100 %, the median of five): a copy at DPR 1.1 and 1.8 costs 14.3 to
-  17.3 ms (the page drawn 13.7 to 16.4 ms, the copy 0.6 to 0.9) against 0.1 to 0.2 ms from the left's canvas at DPR 1
-  and 2 (its raster left to the GPU), a recopy's long tasks none at any of the four: about a hundred times the cost, on
-  every commit and on each near page's recopy after a zoom, spread over PDF.js's slices of the main thread. The old code copied such a canvas and left the erase 4.4 device
-  px short across and 7.1 down at 100 % and DPR 1.1. Debt: a copy drawn at the canvas's two scales (`copyOf`, `drawCopy`,
-  `renderAt` and `drawOps` taking a scale across and one down) would take PDF.js's canvas at every ratio.
+- **No scale is captured.** Before the per-unit erasure a copy could be cut from the left's canvas or a place's page view where
+  PDF.js had drawn it near k, which meant reading the scale PDF.js drew at (`pagerender`), refusing a canvas drawn at two
+  scales (PDF.js's `approximateFraction` floors width and height to different terms at most ratios) and slack for the
+  difference (`K_SLACK`). A copy is now always the composed document's own render at the place's k, so none of it remains:
+  `view/drawn.mjs` keeps `pageBox` (PDF.js's rounding of a viewport) alone.
 - **The page drawn from the composed document** is drawn as PDF.js draws a page view: at k on a canvas of the place's box
   at k's resolution (`places.box`, PDF.js's rounding of the viewport, nothing of the layout read), on the left's page
   views' own context (opaque; read back by the CPU unless the host opens its documents with `enableHWA`, as PDF.js's
   `willReadFrequently: !enableHWA` gives it). Where both are the CPU's (the extension) its copy is the left's to the
   pixel; where the host draws on the GPU's (the web) the two differ by anti-aliasing, and a registration check there needs
   a tolerance for it. The SVG and the links are laid in the same frame: the page's size at its scale (`--axt-frame-w` and
-  `-h`, `--total-scale-factor` times its size in PDF units), never the place's floored box. Measured by
-  `pnpm e2e:registration` on the sample, at DPR 1 and 2, at the zooms PDF.js floors at least 0.6 of a CSS px off:
-  before, 307 to 8,142 pixels of a page's copy from PDF.js's canvas differed from its copy at the place's k by more than
-  16 in a channel (up to 255; 1 to 1,101 at an aligned zoom, the document's copy then drawn on another context) and the
-  ink left at the erased rectangles reached 889 px against an aligned zoom's 0 to 2; after, 0 pixels differ at any zoom
-  and the ink left is the aligned zoom's. The whole-pixel snap of `drawOps` (`SWAP_PAD × k < 1`, added for 85 % at
-  DPR 1 on 2608.16117, whose page is 693.6 CSS px wide) is still to be measured again under the right registration.
+  `-h`, `--total-scale-factor` times its size in PDF units), never the place's floored box. `pnpm e2e:registration` holds it
+  on the sample at DPR 1 and 2, at the fit and every step of the zoom menu: each copy on the place's box at the pixel ratio,
+  the SVG and the links the page's size, and a page retired and laid again the same copy to the pixel (82 of 82, over our
+  base whole and as a delta, 2026-10-23; at the fit and 100 % no zoom's recopy makes a long task).
+- **What a copy hides** (the per-unit erasure's reader side, `layer-proto/visibility.mjs`, `layer-proto/hide.mjs`; the file
+  side is §19.9). Our page is wrapped: each unit's text in group `axt:u<id>`, its placeholders in `axt:u<id>.p`, its label
+  in `axt:u<id>.l`, each babel name in `axt:n<occ>`, all shown by default. A copy is the page with the groups of the units
+  drawn there hidden, and nothing of the page is erased by a rectangle: what a unit owns goes, glyph for glyph, and nothing
+  else (no paper fill, no swap, no removed page; those, the text-removed PDF's add-on and its tails are deleted).
+  - **One configuration a document.** PDF.js 6.3.289 makes a new optional-content configuration on every render it is not
+    given one for (+23 MiB of main-thread peak on the 147-page thesis), so `visibilityOf(doc)` reads it once (6 ms for the
+    thesis's 979 groups in Chromium) and passes it to every render of the document. The configuration is read at paint
+    time, so it is never changed while a render that uses it runs: the document's renders go through one queue, each
+    setting the visibility it needs just before it starts (only the groups that change; 1.4 ms for 40,000) and awaited
+    before the next. A foreign group (the paper's own layers) is never touched.
+  - **Three renders, at one k on one canvas size.** A: the drawn units' groups hidden, every other group shown. B, only
+    where a crop or a placeholder kept in place needs it: every unit's text and label hidden, every placeholder shown, so
+    that a crop cut through its own segments brings no neighbouring word. C, only where a unit keeps characters of its own
+    (a kept line, a character it keeps or accounts for nowhere): every group shown, pasted back through their boxes
+    (`pastedKeep`). A crop of a label is cut from C. The copy is A, then the pastes and crops, then the SVG, in one task.
+  - **What a unit hides on a page** (`unitHiding`): its text group always; its placeholders' group where one of them is not
+    kept where it stands (drawn as a crop, or as text in the translation), its kept ones and its displays then pasted from B
+    through their segments; its label group where the reading draws the label in the target's form; a babel name that leads
+    it (RUN_IN) with it. A unit the head lists as `unhidden` (marks, across, spell, page, bounds) or whose text group the
+    document does not hold (an unwrapped page; a base that was not wrapped) is the original's and is not drawn; one the
+    head lists as `labelKept` draws its body alone and never hides a label. A table rule near a CJK cell (`cellBands`) is
+    read from the part's `rules` (each page's, made by the maker over our page's ink: `layout/cell-rules.mjs`), the one fact
+    of the add-on's manifest a reader kept.
+  - **Measured** (the reader's lab gate `lab/pdf/spikes/ocg-reader.mjs`, Chromium of Playwright, GPU canvases, k 2.5; the pack's
+    seven papers in Chinese, our final pass wrapped from the papers' source units, 2026-10-23): every page laid and drawn
+    (124 pages of the six papers with a geometry; a unit hidden on a page 1,092 times, 187 boxes pasted from B, 14 kept boxes from C, 702
+    crops).
+    G1, every group shown against our unwrapped page: 0 px on every page, but on two pages of 2608.04322v1 (p3, p9) where
+    two renders of the same unwrapped page differ from each other (497 and 2,469 px) — Chromium's, as the file side found
+    (§19.9). The copy's spill, a pixel the copy changes where render A left the page's own ink and outside every rectangle
+    it hides, pastes or crops into: 0 on every page, but those two and one more where two renders of A differ (2609.26457v1
+    p6, 397 px, 0 rendered again). Render A against our unwrapped page at the same k, the median of a paper's pages (cold, a page's
+    first render): 19.5 against 22.1 ms (1512.03385v1), 18.3 against 20.8 (1706.03762v7), 17.4 against 19.1 (1810.04805v2),
+    14.9 against 18.7 (2608.04322v1), 18.5 against 15.7 (2608.16117v1), 15.0 against 19.3 (2609.26457v1); on the thesis (2307.16209v1, 147 pages, render alone) 9.2 ms against 10.0 cold (p95 25.1 against
+    25.1), 9.5 against 8.3 warm (p95 23.8 against 22.4): within §8's 1.5× cold and about 1.1× warm. A copy (render A, B and C
+    where asked, its pastes and crops) 31.9 to 36.5 ms at the median.
+  - **One parse a page, planes cut to their boxes** (the review of #447). A copy's renders keep the page's rendering state for each
+    other (`run.mjs` `renderAt`, `WARM_PAGES` 4 pages, the one drawn last kept longest, let go at dispose): PDF.js 6.3.289's
+    `page.cleanup` drops the operator list and the decoded images, so A, B and C and every recopy after a zoom each parsed the
+    page and decoded its images again (2602.23285v2 p8, 16.6 MB of images, at k 2 in Node: 4 operator lists and 80 image decodes
+    for A, B, C and A again, 1 and 20 now). B and C are rendered on the box their operations cut from alone (`layer2.mjs`
+    `opsSources`: 8 to 30 % of the pages' pixels on the pack), with render A's annotation mode, and a copy of a page that leaves
+    the view is aborted before its next render (`copyOf`'s `signal`).
+  - **The left first, or in the same frame.** A copy ready while the left's page is being drawn waits for it (at most
+    `LEFT_WAIT_MS`) and is put in place in the task the left's page is told drawn in. Chromium, 2602.23285v2 p8 at k 2, asked to
+    both painted, three runs: 3,275 to 3,324 ms before (the right 2,031 to 2,083 ms after the left), 1,260 to 1,272 ms now (0 to
+    38 ms apart), against 1,211 to 1,238 ms for the left alone.
+  - **Failures.** A group the document does not hold: the unit is the original's. A render that throws: the page shows the
+    original (`shownOriginal`) and is asked again on the next scroll or zoom.
 - **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
   page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own, then
   the left parts of the other pages its running units are on (a page so fetched brings no more); the
@@ -811,10 +835,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
 
 The extension's run makes the side and tells it (§11.10). The side's rows are `tests/pdf-reader/layer-side.test.ts` (the fake door), `layer-side-door.test.ts` (the real door),
 `feed.test.ts`, `contents.test.ts` and `shapes.test.ts` SH5; `pnpm e2e:reader` runs it on the sample cut into BUNDLE 4's
-objects (`tests/e2e/lib/layer-cut.mjs`), served by the stand-in of the layer API, and `pnpm e2e:registration` holds the
-frame (the side's `registration(n)`: a laid page's copy from the document at the place's k, compared pixel by pixel with the one
-made from PDF.js's own canvas of the original where it drew it at that k; in the fixture the base is arXiv's own bytes, so
-0 px differ, and over a real build of ours the two differ where its lines do, the reason the copy is not taken from it).
+objects (`tests/e2e/lib/layer-cut.mjs`, our base the sample's final pass wrapped, `tests/fixtures/pdf/ocg/`), served by the
+stand-in of the layer API (120 of 120 over our base whole, 121 of 121 as a delta, 2026-10-23), and `pnpm e2e:registration`
+holds the frame.
 
 ### 11.9 The layer's links
 
@@ -895,14 +918,14 @@ contract §4.3), started by the host once a translated display is shown in a vis
    does not check, or past the bound, is no layer. Pages `check.pages` [M, N] with M at most N (a paper of several toplevel
    sources) bind; the pages past M are the original's and the layer draws none there. The composed document is then ONE byte
    source: the ORIGINAL by ranges from our server's copy (`/api/v1/original/<id>v<n>`, bound by `head.orig.bytes` and the tag the
-   layer's objects name, else the first answer's), then `delta ++ the tails` in memory after its last byte (`composedRange`
+   layer's objects name, else the first answer's), then the delta in memory after its last byte (`composedRange`
    unchanged; `/api/v1/base` is asked for a whole base alone). The composed document IS arXiv's bytes there, so the proof of the
    tab's PDF against `head.orig` applies exactly as above (`leftShows`, `proveTab`, `showOurs`), also across a retry whose head
    names another orig. The extension reads the original from our server's copy, not the tab's own source (it holds none by
    ranges); the left pane and the composed document are two streams of the same bytes there, which the web, one store, is not.
 5. **The composed document** (a whole base): our base page by ranges at `/api/v1/base/<id>v<n>/<sha256>` (`openRanged`, its own address: the
    digest of its bytes, so one object per URL), every answer a 206 of exactly the bytes asked, of the head's length and the tag
-   of the first answer (a `Bound` may carry the length alone: no route names a tag beforehand), the tails after its last byte;
+   of the first answer (a `Bound` may carry the length alone: no route names a tag beforehand);
    else the source refused (a page it cannot read stays the original's, the side's stall). A read with nothing from our server
    for 10 s is asked once more. The left is never read for the layer.
 6. **The rows**: the engine's `runRows` over the side's index, the paper's title and abstract as an LLM's context, the units
@@ -928,7 +951,8 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
   the heaviest pages; a line ends after an item where the next one stands on another line, by the geometry alone, so that a
   page read from its draw, which carries no `hasEOL`, gives the same layer as one read live) split by the page's drawing
   operations, by the links' rule (`links.mjs erasedOf`): a character whose place's centre (equal advance across its item, as
-  `pointsOf` estimates) the operations leave erased (an erase, a paper fill or a swap, unless a later restore puts it back) is
+  `pointsOf` estimates) the operations leave hidden (a `hidden` rectangle, where the unit's or the name's groups are off, unless a
+  later `paste` shows it again from render B or C; §19.9's per-unit erasure) is
   the drawing's, and an item whose characters part (a heading's number kept, its title erased, in one item) is cut into the
   runs of its characters alike.
   Erased and under the source of a crop of the same page: **moved**, relocated by the crop's map from its source to its drawn box
@@ -981,8 +1005,8 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
 - **Not in v1.** Rotated and vertical text (an axis label turned a quarter) is left out of our layer (`itemsOf`): the left's
   layer has it. Right-to-left targets. Selection on a page turned a quarter (`/Rotate`) is PDF.js's own box and rotation rule,
   not checked in a browser yet (the sample has none). The SVG's text out of Firefox's and WebKit's find. A zoom does not measure the spans again (PDF.js scales them by CSS; their widths were
-  measured once). A page wrapped by optional content (§19.9) is read as today's pages are: the wrap's reader change gives
-  `textOf` the visible text (`route/ocg-erasure.md`, the text layer's row).
+  measured once). The composed page's text content holds the hidden units' text too (PDF.js extracts text whatever a group's
+  visibility): the operations' `hidden` rectangles, not the text content, say which of it the drawing replaces.
 
 The rows: `tests/pdf-reader/textlayer.test.ts` (TL1-TL21, the pure core), `layer-door.test.ts` (the real door's pages and their
 layers through three opens) and the conformance suite (`helpers/door-conformance.ts`), `text-layer-view.test.ts` (TV1-TV3 the
@@ -1358,7 +1382,7 @@ table of §18.2 to the identities the engine exports and the table of §18.5 to 
 
 **The test that classifies a rule.** Ask what the change alters:
 
-- **the units, their geometry, the layout file or the add-on** (what our server makes per paper): **extraction**;
+- **the units, their geometry, the layout file, its cell rules or the wrap** (what our server makes per paper): **extraction**;
 - **what is sent to a translator, or how a reply becomes a row** (what a language's translation holds): **translation**;
 - **only the pixels and text a reader draws from the same bundle and the same rows**: **layout**.
 
@@ -1366,7 +1390,7 @@ A rule that does two of these is split, or classed by the more expensive.
 
 | Kind | Where it runs | Where it lives | Its identity | A change reaches readers by | Cost of a change |
 |---|---|---|---|---|---|
-| Extraction | the server, when a paper's bundle is made | engine code: `latex-front.mjs`, `arg-roles.mjs`, `latexml-args.mjs`, `groups.mjs` `groupOf`, the layout maker, the remover. HTML: `src/core/rules/latexml.ts`, in the extension | `PIPELINE_VERSION`, `LAYOUT`, `REMOVAL`: the bundle's content versions, in its key (HTML: `RULES_VERSION`, in the per-text key) | the web's deploy. Each paper's bundle is made again on its next open (§18.4). HTML: an extension release | one compile per opened paper. Rows are rebuilt, and the per-text cache answers every unit the change left alone |
+| Extraction | the server, when a paper's bundle is made | engine code: `latex-front.mjs`, `arg-roles.mjs`, `latexml-args.mjs`, `groups.mjs` `groupOf`, the layout maker, the ownership and the wrap. HTML: `src/core/rules/latexml.ts`, in the extension | `PIPELINE_VERSION`, `LAYOUT`, `REMOVAL`: the bundle's content versions, in its key (HTML: `RULES_VERSION`, in the per-text key) | the web's deploy. Each paper's bundle is made again on its next open (§18.4). HTML: an extension release | one compile per opened paper. Rows are rebuilt, and the per-text cache answers every unit the change left alone |
 | Layout | each reader, at draw time | the rule set, `rules/layout-rules.json` (§18.5) | `RULES_SCHEMA` (the shape and how the engine reads it) and the set's `version` (the values) | publishing: both readers take it on their next load | none |
 | Translation | each reader (the extension), the translation workflow (the web) | engine code: `translate/mt.mjs` (`serialize`, `rehydrate`, the wires, `translateUnits`), `translate/kept.mjs` and `keptFor`, `translate/groups.mjs` `decideGroups` and `NAMES_SHARE`, `batchesOf`; and, held by each reader, the paper's context sent with every batch (`paperContext`) | `TRANSLATE_VERSION` (`translate/version.mjs`) | the next release of each reader's engine. Rows of the old version are translated again on open | the rows. The per-text cache holds the translator's raw answers, so the translator is asked again only for texts that changed |
 
@@ -1390,9 +1414,9 @@ The edge cases, decided:
 | Identity | Kind | Covers | Enters | A bump means |
 |---|---|---|---|---|
 | `BUNDLE` (web `'1'`, engine `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not yet a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5. The web's pin does not move before `BUNDLE` 4 lands; M1 moves it with `BUNDLE` 4) | reader contract | everything a reader parses: the bundle's shape, the units' tuple, kinds and flags, the layout file's schema, the manifest's schema, the left geometry | the request (§18.4) and the R2 key | readers older than it get `unknown-versions` until they update |
-| `PDFJS` | reader contract | the PDF.js whose reading the layout and the manifest are made against | as `BUNDLE` | as `BUNDLE` |
+| `PDFJS` | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
 | `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
-| `LAYOUT`, `REMOVAL` | extraction | the layout maker, the remover | the R2 key | bundles made again lazily |
+| `LAYOUT`, `REMOVAL` (`pipeline/versions.mjs`, `'8'`: no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9; 7 the text-removed PDF's add-on) | extraction | the layout maker; how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `5`: `fillLeadRel` added, the fill's top relative to the original's pitch; 4 before it: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
@@ -1401,7 +1425,7 @@ The edge cases, decided:
 
 - **The web's translation identity** is `axt-tr/2|<paper>|v<version>|<target>|<chain>|p<PIPELINE>|t<TRANSLATE>|b<BUNDLE>`, with no `r<RULES>`: the rules of the HTML page cut none of a PDF's units.
 - **The background's per-text key** keeps `RULES_VERSION` for the HTML page's blocks only; a PDF text's key holds none (`cache/key.ts` `CacheSource`, named by every cache descriptor and `CACHE_KEY_VERSION` still 6: no HTML key changed, and a PDF text's old entries are no key of the new ones). The cache holds the translator's raw answer to a text, which no rule of reading changes.
-- **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 5 (4 before a found placeholder's row ended with its glyphs' fill, 2026-10-19; 3 before a display group's later displays were written `JOINED`, their ink the group's first display's, and a LOST piece outside its unit's lines `OUTSIDE`, the LOST survey of 2026-10-15; 2 before the paper's `\lineskip` and `\lineskiplimit`, 1 before the babel names, D1a) and `checkAddonManifest` a manifest whose `schema` is not 1; the file's `layout` and the manifest's `removal` are read for their shape (a version token) and never compared, so a reader opens what a newer maker or remover wrote. A change of either file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL` — but the layout file's schemas 4 and 5 did not raise `BUNDLE` (the controller's ruling of 2026-10-15: the next `BUNDLE`, 4, is the pipeline lane's new wire). This breaks the contract's promise for `b3`: a released reader of schema 3 asking `b3` of content this engine makes would refuse it whole, as `parseLayout` refuses any schema but its own. It holds only because no released reader asks for such content: the web's pin does not move before `BUNDLE` 4 lands, and moves with it (M1).
+- **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 5 (4 before a found placeholder's row ended with its glyphs' fill, 2026-10-19; 3 before a display group's later displays were written `JOINED`, their ink the group's first display's, and a LOST piece outside its unit's lines `OUTSIDE`, the LOST survey of 2026-10-15; 2 before the paper's `\lineskip` and `\lineskiplimit`, 1 before the babel names, D1a) (the add-on's manifest, refused by its own `schema` the same way, went with REMOVAL 8); the file's `layout` is read for its shape (a version token) and never compared, so a reader opens what a newer maker wrote. A change of the file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL` — but the layout file's schemas 4 and 5 did not raise `BUNDLE` (the controller's ruling of 2026-10-15: the next `BUNDLE`, 4, is the pipeline lane's new wire). This breaks the contract's promise for `b3`: a released reader of schema 3 asking `b3` of content this engine makes would refuse it whole, as `parseLayout` refuses any schema but its own. It holds only because no released reader asks for such content: the web's pin does not move before `BUNDLE` 4 lands, and moves with it (M1).
 
 ### 18.3 Bump rules
 
@@ -1412,6 +1436,14 @@ The edge cases, decided:
 - **Adding a language:** the published set gains its entry first. Engines that do not offer it ignore it. The engine that offers it follows.
 - **A drawing code change that keeps every field's meaning** bumps nothing. The layer gate measures it, and the live-engines check guards each published set on the engines that read it.
 - **Extraction and translation changes** bump their identity as §18.2 says. A change that touches two kinds bumps both.
+- **A unit cut that moves raises `PIPELINE_VERSION`**, whatever else it leaves alone: a stored translation is found again by an
+  identity naming the pipeline, and one made for the old cut given to the new one names pieces it does not have (#435 re-cut
+  2610.19860's `\url{…}` from seven pieces to five under PIPELINE 25; staging gave unit 176 its old row, which the door dropped,
+  and the unit stayed English). `tests/pdf-reader/unit-cut.test.ts` holds it mechanically: each unit's kind and its pieces'
+  types over a few sources the repository keeps (the sample paper; 2610.19860's llncs `\url`), recorded with the
+  `PIPELINE_VERSION` they were recorded under (`golden/unit-cut.json`). The cut moving under the same version fails, and so does
+  the version moving with the cut not recorded again; `WRITE_UNIT_CUT=1` records it, and refuses while the cut moved and the
+  version did not.
 - **The classification test of §18.1 decides which kind a change is.** When it is unclear, the change takes the more expensive kind and the pull request says why.
 
 ### 18.4 Bundles: the reader names its contract, the server names the content
@@ -1516,11 +1548,11 @@ src/pdf-reader/engine/
   pipeline.mjs translate.mjs rules.mjs layer.mjs view.mjs      the five entries: re-exports only
   source/       latex-front, tar, paper-meta, node-files                          a paper's source: the server
   pipeline/     live, anchors, versions, record.ts, tex-errors, and the compile path's cache, scripts, typeset/   the server
-  layout/       file, json, marks, make, paper, ink, carry, match, stream, remove, addon, addon-manifest         the layout file and the add-on (file, json and addon-manifest also the readers')
+  layout/       file, json, marks, make, paper, ink, carry, match, stream, own, wrap, delta, cell-rules, remove   the layout file, the wrap and the delta (file, json and cell-rules also the readers'; remove the content walk the wrap reads)
   translate/    mt, groups, kept, mixed, version                                    the wires and the units a target keeps: both
   rules/        layout (the rule set and its reader), font-roles, font-coverage, script, arg-roles, latexml-args   both
-  layer-proto/  run, reader (the reader's door), bundle, rows, fonts, hyph, removal, tex, check, layer1, layer2     the drawn layer: the browser
-  layer/        pieces, swap, and check (the pixel checker the layer gate's instrument loads)                       the browser
+  layer-proto/  run, reader (the reader's door), bundle, rows, fonts, hyph, visibility, hide, tex, check, layer1, layer2   the drawn layer: the browser
+  layer/        pieces, and check (the pixel checker the layer gate's instrument loads)                             the browser
   view/         reader-view, places, layer-side, feed, contents, lighting, highlight, shapes, floats, figures, pointer, sync, overlay, outline, engine.css   the browser
 ```
 
@@ -1533,7 +1565,7 @@ extension's compile client (`parked/extension-compile/`).
 
 | Entry | Loads in | What it gives |
 |---|---|---|
-| `pipeline` | Node (the server) | A paper's source to its units (`openPaper`, `loadProject`, `unpackSource`, `analyze`); the marked original and the probes (`originalFiles`, `probeFiles`, `readingsOf`, `stoppedShort`); the left geometry (`anchors`); the layout marks, the layout maker and the add-on's maker (`layoutMarksOfPaper`, `makeLayout`, `paperAddon`, the remover); the TeX Live year arXiv's PDF says it was built on, from its pdfTeX banner and before any compile (`texLiveOfPdf(doc)`: the `PTEX.Fullbanner` of the Info dictionary PDF.js resolves from the trailer, never a scan of the bytes, else null); the page pass, a paper's layer told a part at a time (`layerOfPaper`, §19.6), and its cut (`partCutter`, `wholeCutter`, `cutBundle`); the layout file and the add-on's manifest, with their caps; the bundle's writer (`writeBundle`, `bundleUnitsOf`); the faces' coverage; `PIPELINE_VERSION`, `PDFJS`. Not the compile path's typesetting, strategies or cache, and not `runLive`. |
+| `pipeline` | Node (the server) | A paper's source to its units (`openPaper`, `loadProject`, `unpackSource`, `analyze`); the marked original and the probes (`originalFiles`, `probeFiles`, `readingsOf`, `stoppedShort`); the left geometry (`anchors`); the layout marks, the layout maker and its cell rules (`layoutMarksOfPaper`, `makeLayout`, `pageRules`, `checkBoxes`), the wrap (`wrapFinal`); the TeX Live year arXiv's PDF says it was built on, from its pdfTeX banner and before any compile (`texLiveOfPdf(doc)`: the `PTEX.Fullbanner` of the Info dictionary PDF.js resolves from the trailer, never a scan of the bytes, else null); the page pass, a paper's layer told a part at a time (`layerOfPaper`, §19.6), and its cut (`partCutter`, `wholeCutter`, `cutBundle`); the layout file and the add-on's manifest, with their caps; the bundle's writer (`writeBundle`, `bundleUnitsOf`); the faces' coverage; `PIPELINE_VERSION`, `PDFJS`. Not the compile path's typesetting, strategies or cache, and not `runLive`. |
 | `translate` | Node and browser | The wires a unit goes out as and the reading back (`serialize`, `rehydrate`, `serializeTags`, `rehydrateTags`, `translateUnits`, the sentences, the batches); the table groups (`decideGroups`, `groupOf`); the units a target keeps (`authorsTranslated`); the rows (`rowOf`, `unitOf`, `layerRows`, `toTranslate`, `batchesOf`, `runRows`); `TRANSLATE_VERSION`. No DOM, no network. |
 | `rules` | Node and browser | The layout rule set and its reader (`readRules`, `parseRules`, `resolveRules`, `BUILTIN_RULES`, `RULES_SCHEMA`, `RULES_CAP`, `TARGETS`), the font roles (`FACES`, `rolesFor`, `faceFor`, `familyOfFonts`) and the script of a tag (`scriptOf`). |
 | `layer` | browser | The reader's door whole (`layer-proto/reader.mjs`): `openLayer`, `firstFaceOf`, `readBundle` and its caps and refusal, `BUNDLE`, `CTAG`, `VTAG`, `parseLayout`, `indexLayout`, `parseAddonManifest`, the rows' helpers it takes. |
@@ -1550,7 +1582,7 @@ extension's compile client (`parked/extension-compile/`).
   extension, which Node reads with its own type stripping; the closure behind the four core modules is those four files.
 - **Loading.** `pipeline`, `translate` and `rules` load in plain Node with no bundler (a child process in the contract test);
   `layer` and `view` load in a browser's environment. The closures of `translate`, `rules`, `layer` and `view` hold none of the
-  server's modules (the front end, the compile path, the layout maker, the marks, the remover and the add-on's maker). The
+  server's modules (the front end, the compile path, the layout maker, the marks, the ownership and the wrap). The
   `pipeline` entry's names leave the compile path out, but its closure still loads `cache`, `scripts` and `typeset/*` through
   `live.mjs`; PR 5 splits `live.mjs` into the paper's pipeline and the compile run before that path is parked.
 - **Licence.** No file in the closure of the five entries states that it is ported from a reference project or a scoped
@@ -1573,8 +1605,7 @@ extension's compile client (`parked/extension-compile/`).
   recording `engine-contract.json` again (`WRITE_CONTRACT=1 pnpm vitest run tests/pdf-reader/engine-contract.test.ts`), and
   the web sees it as a change of the surface it pins.
 - **Behaviour.** `tests/pdf-reader/engine-golden.test.ts` holds, as SHA-256 values, what the engine makes of inputs the
-  repository wrote itself (units, wires, the files of every compile, the bundle, the layout file, the add-on's manifest,
-  the rows). A move or a refactor leaves every hash as it is.
+  repository wrote itself (units, wires, the files of every compile, the bundle, the layout file, the rows). A move or a refactor leaves every hash as it is.
 
 ### 19.4 The layer API, as the web defines it
 
@@ -1582,11 +1613,12 @@ The routes are the web's, `/api/v1/` kept for every released extension; the engi
 tags they ask by (`layer-proto/bundle.mjs`).
 
 - **One file per paper version.** The bundle is a single JSON file: `{ schema, paper { id, version, pages }, base { bytes,
-  sha256, url }, versions { bundle, pipeline, layout, removal, pdfjs, image }, units, left, layout | null, addon { manifest,
-  tail } | null }`. Both readers parse it with `readBundle(json, caps)` after the byte cap (`BUNDLE_CAP`) and the value count
+  sha256, url }, versions { bundle, pipeline, layout, removal, pdfjs, image }, units, left, layout | null, rules | null }` (`rules`: the
+  table rules near each page's cells, `{ "<page>": [x0, y0, x1, y1, …] }`, where the layout file is; the add-on it carried
+  before REMOVAL 8 is gone). Both readers parse it with `readBundle(json, caps)` after the byte cap (`BUNDLE_CAP`) and the value count
   (`BUNDLE_VALUES`) are checked before `JSON.parse`; a refused bundle draws no layer, a refused unit is dropped and counted, a
-  layout of `null` draws nothing (the layer draws only from the layout file: every unit stays the original's), an add-on of
-  `null` erases and restores.
+  layout of `null` draws nothing (the layer draws only from the layout file: every unit stays the original's). Over arXiv's
+  PDF (BUNDLE 3's base) no unit has a group, so every unit stays the original's too (§11.8).
 - **Routes by tag.** `GET /api/v1/layer/<id>v<n>/<tag>` answers 200 with the bundle, 202 `Preparing { position, stage,
   progress, retryAfterMs }`, 404 `{ why }` (`not-prepared`, `no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`) or 429
   `{ retryAfterMs }`; `POST …/<tag>/prepare` (JSON body `{}`) answers 202, 200 `{ ready: true }`, 404 or 429; `GET
@@ -1614,15 +1646,15 @@ its seams or left out of its bundle until they are cut from it.
 
 `layerOfPaper` (`pipeline/page-pass.mjs`, in the `pipeline` entry) makes a paper's layer (bundle 4) from its marks and arXiv's
 PDF and tells it to its host a part at a time: the left (anchored on arXiv's tokens under the unit marks), the layout file
-(`makeLayout`'s, each page's operator list read once for the maker and the add-on's plans), the add-on chained over the host's
-remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
+(`makeLayout`'s, each page's operator list read once for the maker and its cell rules) and the cut (`partCutter`, `cutBundle`'s
+own), each part carrying its pages' cell rules (`rules`).
 
 - **In.** `paper { id, version }`; `source` (`openPaper`'s); `marks` (`layoutMarksOfPaper`'s: `{ marks, unitMarks }` or
   `{ refused }`), or `marked { doc, log, options }` (the marked original, read by the pass a page at a time); `arxiv { doc,
   text? }` (a PDF.js document of arXiv's PDF, the caller's to open and destroy, and its text as `readArxivText` read it, else
   read here: the left's); `ours` (our base page, §19.7: `{ doc, bytes, sha256, xref, check }`, or the final pass's refusal, or
   null), `orig { bytes, sha256 }` (arXiv's PDF beside it) and `tree` (the TeX Live year it was made on); `base { bytes, sha256,
-  xref }` alone is a host of BUNDLE 7's, whose paper falls back (`final`); `OPS`; `pdfjs`; `image`; `remove` (the remover's transport, or null: no add-on);
+  xref }` alone is a host of BUNDLE 7's, whose paper falls back (`final`); `OPS`; `pdfjs`; `image`;
   `rules` (`DEFAULT_RULES` where not given: rules 1, 3 and 4, the page stream; `WHOLE_RULES`, next's whole run), `whole`
   (the whole made first, whatever the rules), and `frame`, `columns` (read under the whole run's rules); `verdicts`
   (default on).
@@ -1840,7 +1872,7 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   96 pages while a float's whole-document match on its List of Figures keeps the early pages undecided, then none); a unit's
   rows are held until its part is written, a told unit's as the few numbers K reads of it, and the parts are the host's once
   told. Besides, per paper: both PDFs' tokens and the carrier, the PDF bytes, PDF.js's state of the document (its fonts and
-  images), the remover's.
+  images).
 - **What these do not bound.** The caps apply to what the pass keeps of a page, after PDF.js has parsed it: PDF.js's own
   operator list for the page being read is bounded by `OPS_MS` alone (a page of `q 1 0 0 1 72 72 cm /Im1 Do Q` 200,000 times
   parses to 800,804 operations in 0.44 s: in 10 s some 18 million, gigabytes, before the page is capped). And `OPS_MS` bounds
@@ -1864,8 +1896,8 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
 
 The layer is drawn over a page of our own compile: the **final pass** of the marked original, the paper set as its authors set
 it, with the marks the layout was read from. arXiv's PDF stays the left's (its anchoring and the highlight), the download and
-the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12), the remover's tails are appended to our
-bytes (REMOVAL 7), and no position is carried from one PDF to another.
+the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12), our page is wrapped by optional content
+(REMOVAL 8, §19.9), and no position is carried from one PDF to another.
 
 - **The final pass** (`layout/paper.mjs` `markedOfPaper`, `final` on by default). Once the guard accepts a marked compile
   (asked for the files it wrote, `files: true`), one more request: the accepted files with `DRAFT_OPTION`'s line (graphicx's
@@ -1934,6 +1966,26 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   between its two marks, looked up on that page exactly (`ownedOn`, within `OWN_TOL` 0.02 pt), with no matching; EMPTY, LOST,
   TEXT, JOINED and OUTSIDE as before. `match.mjs`, `tolerant.mjs`, the link-anchor locator, the text runs and the carry's
   point mapping are gone.
+- **A unit the maker does not lay says why** (LAYOUT 18): the file's `unlaid`, `[unit, code]` by unit rising, a code of
+  `UNLAID` (`noAnchor`, `unplacedMarks`, `kind`, `rects`, `linesUnit`, `dark`, `noLine`, `lineTaken`, `erase`, `undrawn`,
+  `fonts`: each place the maker leaves a unit out, the first that does), and a part holds those of the units it tells. It is
+  an optional key under schema 5, as `colours` is: a file of before reads and writes back unchanged, and the reader never
+  draws by it (the key is not `refused`, which a part's `layout` holds where it has none). A unit not laid with no code is a
+  defect of the maker's, which throws. The record came of 2602.23285v2's paragraph beside a sideways table cell (unit 56),
+  laid by production and not by LAYOUT 14 to 17 with no word of why: the cell's start mark, on its turned run at no upright
+  word, reached the next cell's word (`reachIn`, LAYOUT 14), its end mark's word was the paragraph's, and the cell took the
+  paragraph's eighth line (`lineTaken`). A start mark on a turned token's box now reaches none (`turnedAt`): the cell stays
+  the original's, as the maker never lays a turned run, and the paragraph is laid as production lays it.
+- **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
+  of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
+  it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
+  for: tex.mjs locatedWhole), `offPages`, `author`, `refused` (its row not of this unit), `group`, the drawing's `unfit`,
+  `unproven`, `served`, `face`, `error` and `page`, and `unhidden` (the file could not wrap its ink in its groups, §19.9); and the
+  door names the rows it drops as no unit or piece of the paper's
+  (`stats().droppedRows`, `[id, 'rowUnfit']`, at most `DROPPED_ROWS`), which the run never sees. A code outside the set is
+  refused (`skipCode`). So a sweep tells a maker's reason (`unlaid`) from the layer's (`code`) for every unit left English:
+  2610.20595v1's units across a page break were `lost` (revtex4-2 pages on TL2023, each with a LOST placeholder at the break,
+  which #443's body points mend), and 2610.19860v1's unit 176 `rowUnfit` (a row of the cut before #435).
 - **The head** (`layer-proto/format.mjs`, BUNDLE5 `'8'`; a reader of 8 reads 7's objects, a head of 7 over arXiv's PDF):
   `base { source: 'ours', bytes, sha256, xref, pages, tree, check: { pages: [ours, arXiv's], boxes: 'equal', carried } }` with
   `orig { bytes, sha256 }` (arXiv's PDF), or `base { source: 'arxiv', bytes, sha256, xref, why }` (no `orig`) with `why` one of
@@ -1966,7 +2018,7 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
 ### 19.8 Our base as an incremental update over arXiv's PDF (the delta)
 
 Our base page is stored not as a whole PDF but as one **incremental-update section** over arXiv's original, so that the
-composed document is `orig.bytes ++ delta ++ the remover's tails`: one byte source for the left pane and the layer, and only
+composed document is `orig.bytes ++ delta`: one byte source for the left pane and the layer, and only
 what our compile changed is stored (the coordinator's GO of 2026-10-23). `kind: 'full'`, the whole PDF of 19.7, stays the
 fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both), LAYOUT 16, the catalog key unmoved.
 
@@ -1985,7 +2037,7 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   serves: two layers of one name are never paired by their place), so a replaced page names the original's objects and an unreplaced
   page's layers stay listed with their default state. A page of ours that names a group of ours and is not replaced refuses
   the delta (`delta-pages`). The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
-  remover's `makeAddon` writes its tails with too: a table, or a stream of `/W [1 4 2]`, no hybrid), numbers in runs, objects
+  wrap writes its section with too: a table, or a stream of `/W [1 4 2]`, no hybrid), numbers in runs, objects
   uncompressed, `/Prev` the original's startxref, `/Root` `/Info` `/ID` the original's, its startxref in composed offsets.
 - **The canonical form**: a stream is its dict less `/Length` and the exact bytes its **resolved** `/Length` names (an
   indirect one followed, as PDF.js reads it: `layout/xref.mjs` reads every object where the cross-reference puts it; the object
@@ -2003,7 +2055,7 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   listed in its own document: PDF.js draws a group it does not know as visible. Forms are interned (exact equality); stream
   bytes are bucketed by a hash of secret random seeds and compared whole, and the whole build spends at most
   `DELTA_WORK_MAX` (2^31 bytes hashed or compared and objects read: the 46 MB pair about 150 million), so no input makes a
-  bucket or the build long. Its `/Size` leaves the remover's tails `DELTA_TAIL_ROOM` (2^20) numbers below `OBJECT_MAX`.
+  bucket or the build long. Its `/Size` is within `OBJECT_MAX` (it left 2^20 numbers below it for the text-removed PDF's tails until REMOVAL 8).
 - **Refused, the whole base kept** (`DELTA_WHYS`): an original it cannot read safely (`delta-parse`, `delta-encrypted`,
   `delta-xref`: hybrid, an entry not at its `n g obj`, a section that does not parse; `delta-stream`: a `/Length` not ending at
   `endstream`), our pages more than arXiv's (`delta-pages`), a replaced page of ours whose box (the CropBox within the MediaBox, inherited), rotation or `/UserUnit` is not arXiv's page's, which the delta's page dict keeps (`delta-boxes`), a bound (`delta-bound`: `DELTA_MAX_BYTES` 24 MiB, more than
@@ -2031,10 +2083,7 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   replaced page's object (arXiv's PDF.js document's page refs) among the section's entries, and no other page's. One rule
   for what is laid: **a page laid is a page replaced**. Under a delta the maker reads the composed document (our page where
   the delta replaces it, arXiv's elsewhere: `prefixDoc` with the replaced pages), so an unreplaced page's draw and text are
-  the original's, and the line check marks every page not replaced undrawable, so no unit is laid there. The remover reads the composed document (`removerOf({
-  bytes: orig ++ delta })`): the delta is the tails' base, the first chain's `end` O + D and `xref` the delta's startxref, its
-  fresh numbers after the delta's `/Size`; `TAIL_CAP` binds the tails alone; `tailLinks`' `root` and `first` mean nothing of
-  the delta. The delta is a bundle object beside the units chunks, content-addressed under the CTAG: `deltaKey` =
+  the original's, and the line check marks every page not replaced undrawable, so no unit is laid there. The delta is a bundle object beside the units chunks, content-addressed under the CTAG: `deltaKey` =
   `layer/<seg>/<ctag>/<sha256>.delta` (its own suffix: PDF bytes, not JSON), not a `/base/` PDF. A holder of its bytes (the
   Worker before it commits it, a reader before it composes it) checks them with `checkDelta(head, bytes)` (length, digest,
   `deltaSection` over `orig` and its startxref the head's), which the layer entry exports with `deltaSection`.
@@ -2061,7 +2110,7 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
 The original's ink under a drawn unit is hidden by that unit's own operators, never by rectangles: each unit's ink in our
 final pass is put in optional-content groups of its own, ON by default, and the reader sets a drawn unit's groups OFF
 (architecture audit item 5; the design note `docs/route/ocg-erasure.md` keeps what is not settled: the reader, the hosts,
-staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the base PDF's bytes do (wrapping adds a section).
+staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes do (wrapping adds a section). BUNDLE5 is `'9'` since the reader side (§11.8): a part carries its cell rules in place of the add-on and no tail, which a reader of 8 refuses, so 8's bundles are prepared again under 9's CTAG (`b9-j6.3.289`); the head's and the catalog's shapes are 8's, and the reader reads 7's and 9's objects.
 
 - **Ownership by marks** (`layout/own.mjs` `ownOf`, pure): a unit's ink is what TeX shipped between its points in our final
   pass, in content-stream order (pageInk with `indices`), in its start point's region (in a column's body or not, at a depth of
@@ -2151,7 +2200,7 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   `GROUPS_DOC` keeps its base, its later pages unwrapped; checked by `delta-wire.mjs wrapWhy` on both sides for their shape and
   that the counts are at least the lists' (that a unit with a group and no list entry is the reader's to hide is `wrapFinal`'s
   word: no head reader knows the groups). A page merged for its bounds makes a unit with a placeholder or a label there `bounds`. A unit is the reader's to hide iff the config holds `axt:u<id>` and it is in neither
-  list. A head without them is an unwrapped base. The cell rules the add-on manifest carried are the reader lane's.
+  list. A head without them is an unwrapped base. The cell rules the add-on manifest carried are each part's `rules` now (§11.8).
 - **Measured** (2026-10-23, the gate pack's 7 papers in Chinese and 2602.23285v2, the sources' units): every page wrapped
   (290/290, 0 refused, the proof passing on all); `spell` 1 unit of 1,806 (2608.04322v1 u0: its journal header over-taken),
   `marks` 38 (24 the title block's authors and `\thanks` notes the marker does not mark, the engine lane's item; 14 cells that
@@ -2164,6 +2213,6 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   (2307.16209v1), the delta proof passing on 8 of 8. The lab gate (`lab/pdf/spikes/ocg-gate.mjs`, its run in
   `lab/pdf/records/ocg-gate.md`) in Chromium, GPU and CPU canvases, every page of the 8: all groups ON is our page, 0 px
   outside split glyphs and image edges, 0 px inside the split glyphs; text and labels OFF equal the remover's cut of the same
-  ownership on 247 pages, 0 px outside image edges, and the image-edge pixels the two change equal (72 on GPU, 31 on CPU).
+  ownership on 247 pages (measured at 85fdc442, while the remover was still there; that comparison ended with its deletion), 0 px outside image edges, and the image-edge pixels the two change equal (72 on GPU, 31 on CPU).
   Chromium differs from itself on two pages in earlier runs of one long-lived browser (2608.04322v1 p9 GPU, 2609.26457v1 p2
   CPU: our unwrapped page against itself), 0 px from fresh documents.

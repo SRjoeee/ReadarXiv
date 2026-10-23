@@ -57,8 +57,8 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 .axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
 .axt-sk-abstract { margin-inline: 9%; }
 /* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy fills the
-   place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the page as PDF.js
-   draws a page view (drawn.mjs): at the pane's scale from the page's top-left corner, on a canvas of the place's box, which
+   place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the composed page drawn as
+   PDF.js draws a page view (drawn.mjs pageBox): at the pane's scale from the page's top-left corner, on a canvas of the place's box, which
    PDF.js floors to whole CSS px, the rest of the page cropped; so the frame is the page's size at that scale
    (--axt-frame-w and -h, --total-scale-factor times the page's size, set by the layer side), never the floored box, which
    would shrink the translation and the links by up to a pixel over the page against the copy. The frame passes the box by

@@ -1,6 +1,5 @@
 // cut.mjs's types: a paper made whole, cut into BUNDLE 4's objects (the bundle 4 contract C3b, C3c)
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
-import type { RemovalManifest } from '../layout/addon-manifest.mjs'
 import type { Box, UnitWire } from './bundle.mjs'
 import type { LayoutRefusalRecord, TableGroups, TokenWire, Written } from './format.mjs'
 import type { NeedEntry } from './need.mjs'
@@ -19,8 +18,8 @@ export interface WholePaper {
   units: readonly (BundleUnit | null)[]
   left: { pages: readonly Box[]; units: readonly UnitWire[] }
   layout: LayoutFile | null
-  /** the whole add-on (BUNDLE 3's): only its manifest is read, by the default (no `chainAddon`); its tail cannot be cut */
-  addon?: { manifest: RemovalManifest } | null
+  /** the rules near the paper's table cells by page (x0, y0, x1, y1 stride 4), each part with a layout carrying its own pages' */
+  rules?: Readonly<Record<number, readonly number[]>> | ReadonlyMap<number, readonly number[]> | null
 }
 /** one page's left part input: the tokens (the web's TokenWire), the spans [id, ranges] and, optionally, the pairs */
 export interface LeftPageInput {
@@ -54,15 +53,8 @@ export interface CutOptions {
   partPagesMax?: number
   /** F as an array indexed by page 0..N of indices into K (-1 for none); default `needFrontier` (the door's rule, need.mjs) */
   frontier?(K: readonly CutEntry[], N: number): readonly number[]
-  /** the add-on for a candidate page range of part `index` (its layout part), or null (the part's pages are refused, drawn by
-   *  erase and restore). It takes part in the part's size, so the hook is called for each range the size search tries, several
-   *  times for one index, and must have no effect until `acceptAddon`. A tail past TAIL_CAP (or a part past any bound) shortens the
-   *  part like any size refusal; one page's tail is kept within TAIL_CAP by the writer of the tails (E3), else that page ships no layout. Without the hook, `whole.addon`'s manifest is carried
-   *  without its tail (clean pages stay, removed pages are refused as TAIL_NOT_CARRIED); with no `whole.addon`, no part has an
-   *  add-on (`addon: null`, M20). A hook that answers null plans the part's pages as not planned */
-  chainAddon?(index: number, part: { pages: [number, number]; layout: LayoutPart }): Promise<{ manifest: RemovalManifest; tail: Uint8Array | null } | null> | { manifest: RemovalManifest; tail: Uint8Array | null } | null
-  /** called once for each part that has a layout, in order, with the range that was kept: the hook's state advances here */
-  acceptAddon?(index: number, part: { pages: [number, number] }): Promise<void> | void
+  /** the cell rules in place of `whole.rules` */
+  rules?: WholePaper['rules']
   base?: { bytes: number; sha256: string; xref: number } | import('./format.mjs').HeadBase
   /** arXiv's PDF beside a base of ours (the head's `orig`) */
   orig?: { bytes: number; sha256: string } | null
@@ -106,8 +98,7 @@ export interface PartCutter {
 export declare function wholeFrontier(whole: WholePaper, frontier?: CutOptions['frontier'], grouped?: TableGroups): { K: CutKnown['K']; F: number[] }
 export declare function partCutter(o: {
   paper: { id: string; version: number }; N: number; head: Written; views: readonly Box[]
-  leftPages: CutOptions['leftPages']; addon?: { manifest: RemovalManifest } | null
-  chainAddon?: CutOptions['chainAddon'] | null; acceptAddon?: CutOptions['acceptAddon'] | null
+  leftPages: CutOptions['leftPages']; rules?: WholePaper['rules']
   target?: CutOptions['target'] | null; partPagesMax?: number; verdict?: PartVerdict | null
   /** false: no part nor left part kept once given (`parts` and `left` hold nulls): a stream's */
   retain?: boolean
@@ -126,8 +117,6 @@ export interface Cut {
 }
 /** the most pages a part is extended over: the web's bound on a part's pages (M21) */
 export declare const PART_PAGES_MAX: 5000
-/** a removed page's reason when the whole add-on's manifest is carried without its tail */
-export declare const TAIL_NOT_CARRIED: 'tail not carried'
 /** the frontier by the door's rule: needsOf(K, N, false, layout-only).lay */
 export declare function needFrontier(K: readonly NeedEntry[], N: number): number[]
 export declare function cutBundle(whole: WholePaper, o: CutOptions): Promise<Cut>

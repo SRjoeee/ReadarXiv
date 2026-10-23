@@ -71,13 +71,11 @@ class FakeLayer implements Layer {
     this.gone.catch(() => {})
     this.doc = o.doc
     this.state = new Array(this.N + 1).fill('waiting')
-    let chain: ReadPart['chain'] | null = null
     for (const part of o.parts ?? []) {
       this.order(part)
       this.take1(part)
-      chain = part.chain
     }
-    if (o.doc.numPages !== this.N + (chain?.r ?? 0)) throw new BundleRefusal(`the document has ${o.doc.numPages} pages, not ${this.N + (chain?.r ?? 0)}`, { kind: 'part', path: 'doc' })
+    if (o.doc.numPages !== this.N) throw new BundleRefusal(`the document has ${o.doc.numPages} pages, not ${this.N}`, { kind: 'part', path: 'doc' })
   }
 
   // ---------------------------------------------------------------- parts
@@ -93,23 +91,12 @@ class FakeLayer implements Layer {
     this.last = part.sha256
   }
 
-  addPart(part: ReadPart, o: { doc?: LayerDocument } = {}): void {
+  addPart(part: ReadPart): void {
     if (this.disposed) return
     if (this.told.has(part.sha256)) return
     if (this.partsEnded) throw new BundleRefusal('the parts have ended', { kind: 'part', path: '' })
     this.order(part)
-    const tail = !!part.addon?.tail
-    const doc = o.doc
-    if (tail) {
-      if (doc === undefined || doc === null || typeof doc.getPage !== 'function' || !Number.isInteger(doc.numPages)) throw new TypeError('a part with a tail needs the composed document')
-      if (doc.numPages !== this.N + part.chain.r) throw new BundleRefusal(`the document has ${doc.numPages} pages, not ${this.N + part.chain.r}`, { kind: 'part', path: 'doc' })
-    } else if (doc !== undefined) throw new TypeError('a document with a part that has no tail')
     this.take1(part)
-    if (tail && doc !== this.doc) {
-      const old = this.doc
-      this.doc = doc as LayerDocument
-      this.retire(old)
-    }
     for (const [page, list] of [...this.leftWaiters]) if (page <= this.through) { this.leftWaiters.delete(page); for (const w of list) w.resolve() }
     this.promote()
   }
@@ -365,14 +352,21 @@ class FakeLayer implements Layer {
   }
 
   // ---------------------------------------------------------------- the rest
-  copyOf(page: number, source: CanvasImageSource & { width: number; height: number }, _k: number): Promise<HTMLCanvasElement> {
+  /** as the real door: render A of the composed document's page (its render told, with the host's annotation mode), on a canvas of
+   *  the size asked */
+  copyOf(page: number, o: { k: number; width: number; height: number; context?: CanvasRenderingContext2DSettings | null; annotationMode?: number; signal?: AbortSignal | null }): Promise<HTMLCanvasElement> {
     this.check()
     this.range(page)
     if (this.state[page] !== 'ready') return Promise.reject(new Error(`page ${page} is not laid`))
-    const canvas = document.createElement('canvas')
-    canvas.width = source.width
-    canvas.height = source.height
-    return Promise.resolve(canvas)
+    return (async () => {
+      const pg = await this.doc.getPage(page) as { render?: (p: object) => { promise: Promise<unknown> } }
+      const canvas = document.createElement('canvas')
+      canvas.width = o.width
+      canvas.height = o.height
+      await pg.render?.({ canvas, canvasContext: canvas.getContext('2d', o.context ?? undefined), viewport: null, ...(o.annotationMode === undefined ? {} : { annotationMode: o.annotationMode }) }).promise
+      this.check()
+      return canvas
+    })()
   }
   /** a ready page's text layer: its number kept (the page's first line) and one translated line, as the real door's are shaped */
   textOf(page: number): Promise<TextLayerData> {
@@ -415,7 +409,7 @@ class FakeLayer implements Layer {
     const ready: number[] = []
     for (let p = 1; p <= this.N; p++) if (this.state[p] === 'ready') ready.push(p)
     return {
-      units: this.o.index.units.filter(u => u !== null).length, drawn: ready.length, pages: ready, slowestTaskMs: 0, pageMs: {}, dropped: 0,
+      units: this.o.index.units.filter(u => u !== null).length, drawn: ready.length, pages: ready, slowestTaskMs: 0, pageMs: {}, dropped: 0, droppedRows: [],
       links: { total: 0, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 }, unsupported: 0, unread: 0 },
       rules: { schema: RULES_SCHEMA, version: (this.o.rules ?? BUILTIN_RULES).version },
       parts: { through: this.through, told: this.parts.length },

@@ -4,18 +4,16 @@
 // compared by the driver. `gate` is the gate's own call of v0 (run.mjs openProto) with the door's inputs: the geometry,
 // the record's units given at once, the fixture's layout file and the units file's pieces, as this page's proto.mjs gives
 // them, and the door's choices where they differ from the gate's recorded run (scale 2.5 at a device pixel ratio of 1,
-// the same 2.5 device pixels a unit; every float labelled in the target's names, L7; the paper's shipped add-on in one
-// document with arXiv's pages, as a reader opens it; one slice a face, its whole file over its coverage). `door` is a
-// reader's: the bundle the driver made of the same parts, read by readBundle, the document composed from arXiv's bytes and
-// the bundle's tail, openLayer over it, the rows the driver made of the record (rows.mjs rowOf) taken in parts, a
+// the same 2.5 device pixels a unit; every float labelled in the target's names, L7; the page our page wrapped by optional
+// content, as a reader opens it; one slice a face, its whole file over its coverage). `door` is a reader's: the bundle the
+// driver made of the same parts, read by readBundle, the wrapped page its document, openLayer over it, the rows the driver made of the record (rows.mjs rowOf) taken in parts, a
 // macrotask apart, beside the pages asked for. The gate's run keeps every state it lays with (openProto's `free` off), the
 // door's lets go of it as the reader's does (the 1b design §3): so the two equal also proves that letting go moves no drawing.
 // Each page's answer: its SVG's markup, its word table's digest (words.mjs; the right pane's sentence highlight reads it, 1b-E: equal
 // at the door and at the gate's own run, and at the gate's recorded scale), and its pixels' digests (SHA-256,
 // and one FNV-1a hash a pixel row, to say where two differ): the gate's run's original and copy planes (v0's own canvases
-// at 2.5 device pixels a unit), the page the door's document draws by PDF.js at 2.5, and copyOf(page, the gate's run's
-// original, 2.5): the page as PDF.js drew it at 2.5, the same pixels for both copies (PDF.js's first drawing of a page in
-// a document is not always its later ones')
+// at 2.5 device pixels a unit), the page the door's document draws by PDF.js at 2.5, and copyOf(page, { k: 2.5 }) at the size
+// of the gate's run's original: the page as a view draws it (render A, then its crops and pastes)
 import * as pdfjs from 'pdfjs-dist'
 
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
@@ -78,16 +76,12 @@ const hyphUrl = lang => `/hyph/${lang}.json`
 async function ruleSetOf(url) {
   return url ? (await (await import('/engine/rules/layout.mjs')).readRules(await bytes(url))).set : null
 }
-/** the reader's document: the base page's bytes (base.pdf: ours where the fixture has it, else arXiv's), their fingerprint the
- *  bundle's, followed by the bundle's add-on */
+/** the reader's document: the page the layer is drawn over (base.pdf: our page wrapped by optional content where the driver could
+ *  wrap it, layer-gate/wrap.mjs), its fingerprint the bundle's base */
 async function composedOf(name, bundle) {
   const original = await bytes(`/fixtures/${name}/base.pdf`)
   if (original.length !== bundle.base.bytes || (await digest(original)) !== bundle.base.sha256) throw new Error(`${name}: the base page's bytes are not the bundle's base`)
-  if (!bundle.addon) return original
-  const out = new Uint8Array(original.length + bundle.addon.tail.length)
-  out.set(original)
-  out.set(bundle.addon.tail, original.length)
-  return out
+  return original
 }
 const macrotask = () => new Promise(ok => setTimeout(ok, 0))
 /** the page's sheets but the faces' classes' (layer2.mjs faceClass: made once a page, for every run, and kept) */
@@ -140,7 +134,8 @@ window.door = {
     const run = await V.openProto({
       doc, geometry, units: record.units, target, pages: Number.POSITIVE_INFINITY, scale, dpr, copy: true,
       tex: { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0', index: F.indexLayout(F.parseLayout(layout)), pieces: new Map(unitsFile.units.map(u => [u.id, u.pieces])) },
-      removal: bundle.addon ? { OPS: pdfjs.OPS, mode: 'draw', doc, manifest: bundle.addon.manifest } : null,
+      // (the cell rules the bundle carries, as the door reads them; a BUNDLE 3 bundle names no unit the wrap could not hide)
+      hiding: { rules: q => bundle.rules?.[q] },
       labels: { captions: { figure: 'target', table: 'target' } },
       ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS,
     })
@@ -153,7 +148,7 @@ window.door = {
       // door's copy to be drawn over: PDF.js's first drawing of a page in a document may differ from its later ones,
       // 2608.04322's page 3 by a few pixel rows from run to run)
       const recs = JSON.stringify(run.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r))
-      out.push({ p, svg: run.svgOf(p).outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), o: await pixelsOf(row.left), c: await pixelsOf(row.right), ...(png ? { png: await pngOf(row.left) } : {}) })
+      out.push({ p, svg: run.svgOf(p).outerHTML, w: row.w, h: row.h, recs: await digest(new TextEncoder().encode(recs)), o: await pixelsOf(row.left), c: await pixelsOf(await run.copyCanvas(p)), ...(png ? { png: await pngOf(row.left) } : {}) })
       // (and the page's word table, a final page's: the pages its units run on to drawn first, after the page is read)
       const done = run.doneAt(p)
       if (Number.isFinite(done) && done > p) await run.until(done)
@@ -196,10 +191,10 @@ window.door = {
       source.width = Math.floor(viewport.width)
       source.height = Math.floor(viewport.height)
       await page.render({ canvas: source, canvasContext: source.getContext('2d'), viewport }).promise
-      // the copy drawn over the page as the gate's run drew it (its own original, as PNG), so that both copies start from
-      // the same pixels; the page this load's PDF.js draws compared with it apart
+      // the copy as a view draws it (copyOf: render A of the wrapped page, then its crops and pastes), at the size of the gate's
+      // run's own original (its PNG); the page this load's PDF.js draws compared with that original apart
       const original = await canvasOfPng(`/door/${name}/o${p}.png`)
-      const copy = await layer.copyOf(p, original, K)
+      const copy = await layer.copyOf(p, { k: K, width: original.width, height: original.height })
       out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), links: await textDigest(JSON.stringify(links ?? [])), source: await pixelsOf(source), original: await pixelsOf(original), copy: await pixelsOf(copy) })
       for (const c of [source, original, copy]) { c.width = 0; c.height = 0 }
     }

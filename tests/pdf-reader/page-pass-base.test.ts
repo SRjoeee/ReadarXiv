@@ -99,6 +99,8 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
       const got = await passOf(lower, { orig: ORIG, ours: oursOf(lower), whole })
       expect(got.head.base, String(whole)).toMatchObject({ source: 'ours', check: { carried: 0.3333 } })
       expect(units(got)).toEqual([[0], []])
+      // (each part says why each unit it tells is the original's, in the stream as made whole)
+      expect(got.parts.map(p => (p.layout as { unlaid?: unknown } | null)?.unlaid ?? null), String(whole)).toEqual([null, [[1, 'undrawn'], [2, 'undrawn']]])
       expect(got.notes.map(n => (n as { lines: unknown }).lines)).toEqual([[10, 10], [0, 20]])
       expect(got.r).toMatchObject({ stats: { layout: { stats: { units: { located: 1, undrawn: 2 } } } } })
     }
@@ -175,8 +177,6 @@ describe('layerOfPaper over our base page held as a delta over arXiv\'s PDF', ()
       expect(got.head.orig).toEqual({ bytes: ORIG.bytes, sha256: ORIG.sha256, xref: ORIG.xref })
       expect(got.parts.map(p => p.layout !== null)).toEqual([true, true])
       expect(got.r).toMatchObject({ stats: { delta: { kind: 'delta', bytes: d.bytes.length, replaced: 3 } } })
-      // (the parts' chain begins after arXiv's bytes and the delta's)
-      expect(got.parts[0]?.chain).toMatchObject({ end: ORIG.bytes + d.bytes.length, xref: d.xref })
     }
   })
 

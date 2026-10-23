@@ -142,8 +142,6 @@ export type PlaceContent = 'layer' | 'original' | 'skeleton' | 'none'
 /** the units located, as the layer side gives them: the unit at a point of a page (PDF units), a unit's first rectangle,
  *  and the page the contents give a heading not located */
 export interface ViewUnits { unitAt(page: number, x: number, y: number): number | null; firstRect(id: number): PageBox | null; pageOf(id: number): number | null }
-/** a page's canvas as PDF.js drew it, with the scale it drew it at (drawn.mjs): device pixels a PDF unit */
-export interface DrawnCanvas { canvas: HTMLCanvasElement; k: number }
 /** the view's handle for its layer side (layer-side.mjs): the right pane, its places, the left's pages, the paint's seam */
 export interface Internals {
   readonly pane: HTMLElement
@@ -153,9 +151,6 @@ export interface Internals {
     view(n: number): PlaceView | null
     near(n: number): boolean
     contentOf(n: number): PlaceContent
-    /** the canvas of place n's own page view where PDF.js drew it whole, with the device pixels a PDF unit it drew it at
-     *  (read before a swap releases it), else null */
-    canvas(n: number): DrawnCanvas | null
     /** place n's box in CSS px as PDF.js sizes the left's page n (its viewport floored to the place's rounding), else null */
     box(n: number): { width: number; height: number } | null
     /** the layer's content in place n, in place: its page view destroyed with its canvas first; size and scroll unchanged.
@@ -166,12 +161,11 @@ export interface Internals {
   }
   left: {
     doc(): ViewDocument | null
-    /** the left's page n drawn whole by PDF.js: its canvas, with the device pixels a PDF unit PDF.js drew it at (never its
-     *  width over the page's: PDF.js floors the canvas to whole CSS px), else null */
-    canvas(n: number): DrawnCanvas | null
     scale(): number
     /** the left's page n as PDF.js holds it (its operator list drawn: the floats' inputs), once laid out */
     pdfPage(n: number): unknown
+    /** whether page n of the left is being drawn (its page view running or paused) */
+    drawing?(n: number): boolean
   }
   /** the host's PDF.js library (OPS, AnnotationMode) and its getDocument options (assets) */
   readonly lib: unknown

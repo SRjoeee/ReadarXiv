@@ -12,8 +12,8 @@
 //   the crop's own plain text over its drawn box;
 // - translated: the translated text of each drawn unit and babel name, one item a drawn line (split where a crop, a change of
 //   script or a superscript falls in the line), at the line's drawn box.
-// Ownership is the links' rule (links.mjs erasedOf): an original character is ERASED iff the page's operations leave the paper
-// erased at its place's centre (device pixels, through devOf; its place its share of its item's width, equal advance), and an
+// Ownership is the links' rule (links.mjs erasedOf): an original character is ERASED iff the page's operations leave its ink
+// hidden at its place's centre (a unit's or a name's optional content groups off, a `hidden` rectangle not pasted back) (device pixels, through devOf; its place its share of its item's width, equal advance), and an
 // item whose characters part is cut into the runs of its characters alike. Erased and under the source of a crop of the same
 // page: moved; erased otherwise: dropped (the translation takes its place); not erased: kept. One rule for the ink, the links
 // and the text.
@@ -147,9 +147,10 @@ export function nameSeg(text, x, w, base, size) {
   return { str: text, x, y: bottom, w, h: top - bottom, base, size }
 }
 
-/** the erased state of points against a page's operations (links.mjs erasedOf, in order) with the operation that last erased
- *  each, through a grid over the operations' rectangles: `test(x, y)` answers that operation's index, or -1 where the point is
- *  not erased; `budget` ({ left }) is charged a test a candidate operation, and past it `test` answers null */
+/** the erased state of points against a page's operations (links.mjs erasedOf, in order: a `hidden` rectangle hides the ink under
+ *  it, a later `paste` shows it again; a crop hides nothing) with the operation that last hid each, through a grid over the
+ *  operations' rectangles: `test(x, y)` answers that operation's index, or -1 where the point is not hidden; `budget` ({ left })
+ *  is charged a test a candidate operation, and past it `test` answers null */
 function eraserOf(ops) {
   const cells = new Map()
   const key = (cx, cy) => cx * 65536 + cy
@@ -161,11 +162,7 @@ function eraserOf(ops) {
       if (!list) cells.set(key(cx, cy), [k]); else if (list.at(-1) !== k) list.push(k)
     }
   }
-  ;(ops ?? []).forEach((o, k) => {
-    if (o.op === 'erase') add(k, o.box)
-    else if (o.op === 'paper' || o.op === 'swap') for (const b of o.rects ?? []) add(k, b)
-    else if (o.op === 'restore') for (const b of o.boxes ?? []) add(k, b)
-  })
+  ;(ops ?? []).forEach((o, k) => { if (o.op === 'hidden' || o.op === 'paste') for (const b of o.rects ?? []) add(k, b) })
   const within = (x, y, b) => x >= b[0] && x < b[0] + b[2] && y >= b[1] && y < b[1] + b[3]
   return (x, y, budget) => {
     if (!finite(x) || !finite(y) || x < 0 || y < 0) return -1
@@ -176,9 +173,8 @@ function eraserOf(ops) {
     let by = -1
     for (const k of list) {
       const o = ops[k]
-      if (o.op === 'erase') { if (within(x, y, o.box)) by = k }
-      else if (o.op === 'paper' || o.op === 'swap') { if (o.rects.some(b => within(x, y, b))) by = k }
-      else if (o.op === 'restore') { if (o.boxes.some(b => within(x, y, b)) && o.clip.some(b => within(x, y, b))) by = -1 }
+      if (o.op === 'hidden') { if (o.rects.some(b => within(x, y, b))) by = k }
+      else if (o.op === 'paste') { if (o.rects.some(b => within(x, y, b))) by = -1 }
     }
     return by
   }

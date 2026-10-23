@@ -1,13 +1,10 @@
 // @vitest-environment node
-import * as PL from '@cantoo/pdf-lib'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { removerOf } from '@/pdf-reader/engine/layout/remove.mjs'
 import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
@@ -23,11 +20,6 @@ import { LAB } from './helpers/lab-data'
 
 const PDFJS_DIR = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 const open = (bytes: Uint8Array) => getDocument({ data: bytes.slice(), verbosity: 0, cMapUrl: join(PDFJS_DIR, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS_DIR, 'standard_fonts/'), useSystemFonts: false })
-const deflate = (b: Uint8Array) => new Uint8Array(deflateSync(b))
-const inflate = (b: Uint8Array, limit: number) => {
-  const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }
-  try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if ((e as { code?: string })?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) }
-}
 type Rect = [page: number, x0: number, y0: number, x1: number, y1: number]
 
 /** the papers: the corpus folder, the version, the caption unit set up its page, the page, and the band across it its lines stand in */
@@ -45,12 +37,12 @@ describe.skipIf(!LAB)('the real papers: a caption printed up its page is lit whe
       const paper = openPaper(source.files)
       const bytes = new Uint8Array(readFileSync(join(root, 'arxiv.pdf')))
       const base = { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), xref: startxrefOf(bytes) as number }
-      const t = open(bytes), doc = await t.promise, remover = removerOf({ bytes, PL, inflate, deflate })
+      const t = open(bytes), doc = await t.promise
       const views: number[][] = []
       for (let p = 1; p <= doc.numPages; p++) views.push((await doc.getPage(p)).view)
       const left = new Map<number, Rect[]>(), dec = new TextDecoder()
       const r = await layerOfPaper({
-        paper: { id: dir, version }, source: paper as never, marks: { refused: 'marks' } as never, arxiv: { doc }, OPS, pdfjs: PDFJS, base, image: '1', remove: ({ plans }) => remover.remove(plans),
+        paper: { id: dir, version }, source: paper as never, marks: { refused: 'marks' } as never, arxiv: { doc }, OPS, pdfjs: PDFJS, base, image: '1',
         onHead: () => {}, onLeft: () => {},
         onPart: p => { for (const [id, , rects] of (JSON.parse(dec.decode(p.bytes)) as { left?: [number, number, Rect[]][] }).left ?? []) left.set(id, rects) },
       })

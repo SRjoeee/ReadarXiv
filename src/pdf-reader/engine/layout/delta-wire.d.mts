@@ -8,8 +8,6 @@ export declare const DELTA_MAX_BYTES: number
 export declare const DELTA_MAX_SHARE: number
 /** the objects at most, of either document read and of the delta written */
 export declare const DELTA_OBJECTS_MAX: number
-/** the object numbers a delta leaves free below OBJECT_MAX for the remover's tails at least */
-export declare const DELTA_TAIL_ROOM: number
 /** the replaced pages' ranges a head names at most */
 export declare const REPLACED_MAX: number
 /** why a base of ours is whole where a delta was asked (the builder's, the proof's, or the page pass's of a delta it was given) */

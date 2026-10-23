@@ -183,7 +183,7 @@ describe("the source's explicit glue: a kern at TeX's width, never a space", () 
     expect(items[c + 1]!.x - items[c]!.x).toBeCloseTo(20, 6)
     const id = (x: number, y: number) => [x, y]
     const audit: { what: string; dst?: number[] }[] = []
-    const ops = L2.unitOps(L, [], 1, { px: id, k: 1, hasSource: () => true, pxOf: () => id, audit: audit as never, id: 3 } as never) as { op: string; dst?: number[] }[]
+    const ops = L2.hideOps(L, 1, { px: id, k: 1, hasSource: () => true, pxOf: () => id, audit: audit as never, id: 3 } as never) as { op: string; dst?: number[] }[]
     expect(ops.find(o => o.op === 'crop')!.dst![2]).toBeCloseTo(10, 6)
     const a = audit.find(x => x.what === 'crop')!.dst!
     expect(a[2]! - a[0]!).toBeCloseTo(10, 6)

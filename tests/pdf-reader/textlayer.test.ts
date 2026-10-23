@@ -14,7 +14,8 @@ const dev = (x: number, y: number): [number, number] => [2 * x, 2 * (792 - y)]
 const VIEW = [0, 0, 612, 792]
 /** a device-pixel rectangle [x, y, w, h] over a PDF box */
 const devBox = (x0: number, y0: number, x1: number, y1: number) => { const [a, b] = dev(x0, y1), [c, d] = dev(x1, y0); return [a, b, c - a, d - b] }
-const erase = (x0: number, y0: number, x1: number, y1: number) => ({ op: 'erase', box: devBox(x0, y0, x1, y1) })
+/** a unit's ink hidden over a PDF box (its groups off: layer2.mjs hideOps' `hidden`) */
+const erase = (x0: number, y0: number, x1: number, y1: number) => ({ op: 'hidden', rects: [devBox(x0, y0, x1, y1)] })
 /** a PDF.js text item at baseline y, size 10 */
 const item = (str: string, x: number, y: number, w: number, o: Record<string, unknown> = {}) => ({ str, width: w, height: 10, transform: [10, 0, 0, 10, x, y], dir: 'ltr', fontName: 'f', hasEOL: false, ...o })
 const P = (items: ReturnType<typeof item>[], n = 1) => ({ n, items: itemsOf({ items, styles: { f: { ascent: 0.8 } } }), view: VIEW })
@@ -37,19 +38,19 @@ describe('ownership: the operations decide, at the item\'s centre', () => {
     expect(a.items).toEqual([])
     expect(b.items.map(i => i.from)).toEqual(['kept'])
   })
-  it('TL3 a restore puts an erased item back, within its clip only; a later erase takes it again', () => {
+  it('TL3 a paste shows hidden ink again, in its rectangles only; a later hidden rectangle hides it again', () => {
     const it0 = item('x', 100, 700, 30)
-    const restore = (clipTo: number) => ({ op: 'restore', page: 1, clip: [devBox(90, 690, clipTo, 710)], boxes: [devBox(95, 695, 140, 710)] })
+    const paste = (to: number) => ({ op: 'paste', page: 1, plane: 'B', unit: 1, rects: [devBox(95, 695, to, 710)] })
     const run = (ops: unknown[]) => textLayerOf(P([it0]), { ops, devOf: dev, owners: [] }, []).items.length
-    expect(run([erase(90, 690, 300, 710), restore(300)])).toBe(1)
-    expect(run([erase(90, 690, 300, 710), restore(100)])).toBe(0)
-    expect(run([erase(90, 690, 300, 710), restore(300), erase(90, 690, 300, 710)])).toBe(0)
+    expect(run([erase(90, 690, 300, 710), paste(140)])).toBe(1)
+    expect(run([erase(90, 690, 300, 710), paste(110)])).toBe(0)
+    expect(run([erase(90, 690, 300, 710), paste(140), erase(90, 690, 300, 710)])).toBe(0)
   })
-  it('TL4 a paper fill and a swap erase as an erase does; a crop erases nothing', () => {
+  it('TL4 a crop hides nothing; an operation of another kind neither', () => {
     const run = (op: unknown) => textLayerOf(P([item('x', 100, 700, 30)]), { ops: [op], devOf: dev, owners: [] }, []).items.length
-    expect(run({ op: 'paper', rects: [devBox(90, 690, 300, 710)] })).toBe(0)
-    expect(run({ op: 'swap', page: 1, rects: [devBox(90, 690, 300, 710)] })).toBe(0)
-    expect(run({ op: 'crop', page: 1, src: devBox(90, 690, 300, 710), dst: devBox(90, 690, 300, 710) })).toBe(1)
+    expect(run({ op: 'crop', page: 1, plane: 'B', src: devBox(90, 690, 300, 710), dst: devBox(90, 690, 300, 710) })).toBe(1)
+    expect(run({ op: 'erase', box: devBox(90, 690, 300, 710) })).toBe(1)
+    expect(run(erase(90, 690, 300, 710))).toBe(0)
   })
   it('TL13 a page nothing is drawn on keeps every item, in the stream\'s order', () => {
     const d = textLayerOf(P([item('b', 100, 600, 10), item('a', 100, 700, 10)]), { ops: [], devOf: dev, owners: [] }, [])

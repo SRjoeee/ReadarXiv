@@ -5,24 +5,23 @@ import {
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import type { UnitWire } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import type { BundleUnit } from '@/pdf-reader/engine/layer-proto/units.mjs'
-import { REMOVAL, type RemovalManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { type LayoutPart, NAME_FLAG, NAME_KEYS, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 
 // A small paper written the way the prepare pipeline will write it, for the tests of BUNDLE 4's format: four pages, eight
 // units, the head, a units chunk, and three parts (pages 1, 2–3, 4) with a left part for each page. Every number is made
-// to satisfy the readers' bounds and the chain's rules (the K slots rise, the views overlap as told, the tails continue
-// each other's cross-reference section); a test breaks one and reads again
+// to satisfy the readers' bounds and the chain's rules (the K slots rise, the views overlap as told); a test breaks one and
+// reads again
 
 export const PAPER = { id: '2608.04322', version: 1 }
 export const N = 4
 export const BASE = { bytes: 10_000, sha256: '0123456789abcdef'.repeat(4), xref: 9_000 }
 export const IMAGE = '1'
-/** the PDF the layer is drawn over where it is ours (BUNDLE 8): our compile's final pass, of arXiv's size and page count, the same
- *  object the tails continue; and arXiv's, beside it */
+/** the PDF the layer is drawn over where it is ours (BUNDLE 8): our compile's final pass, of arXiv's size and page count; and
+ *  arXiv's, beside it */
 export const OURS = { source: 'ours' as const, ...BASE, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: 1 } }
 export const ORIG = { bytes: 30_000, sha256: 'fedcba9876543210'.repeat(4) }
 /** arXiv's PDF with its startxref, where our base is a delta over it (the section the delta's /Prev names): its bytes and the delta's
- *  4,000 end where BASE's do, which the parts' tails continue */
+ *  4,000 end where BASE's do */
 export const ORIG_X = { bytes: BASE.bytes - 4_000, sha256: ORIG.sha256, xref: 5_000 }
 /** the base of ours held as a delta over arXiv's PDF (`kind` 'delta'): the delta's bytes and digest, its startxref in the composed
  *  document (BASE's, after ORIG_X's bytes), the pages it replaces (`replaced`, ranges) and its counts */
@@ -68,24 +67,10 @@ export const LEFT_OF: Record<number, { spans: [number, number[]][]; pairs: [numb
   4: { spans: [[6, [2, 2]], [7, [10, 1]]], pairs: [[6, [0, 2, 2]]] },
 }
 
-/** an add-on's tail of the remover's classic form: some objects, then the section (`root` rewritten, `count` fresh objects from
- *  `first`) whose `startxref` is its own place in the document, which begins at `end` */
-export function tailOf(end: number, prev: number, root: number, first: number, count: number): { tail: Uint8Array; startxref: number } {
-  const pre = '\n3 0 obj\n<< /Length 0 >>\nstream\n\nendstream\nendobj\n'
-  const numbers = [root, ...Array.from({ length: count }, (_, i) => first + i)]
-  const table = numbers.map(n => `${n} 1\n${String(100 + n).padStart(10, '0')} 00000 n\r\n`).join('')
-  const startxref = end + pre.length
-  const text = `${pre}xref\n${table}trailer\n<< /Size ${first + count} /Root 1 0 R /Prev ${prev} >>\nstartxref\n${startxref}\n%%EOF\n`
-  return { tail: Uint8Array.from(text, c => c.charCodeAt(0)), startxref }
-}
-
 export type PartInput = Parameters<typeof writePart>[0]
 
-const manifest = (page: RemovalManifest['page'], appended: number): RemovalManifest => ({ schema: 1, removal: REMOVAL, pages: N, sets: {}, page, appended, stats: { removed: 3 } })
-
-const T1 = tailOf(BASE.bytes, BASE.xref, 12, 100, 4)
-const T2 = tailOf(BASE.bytes + T1.tail.length, T1.startxref, 12, 104, 4)
-export const TAILS = [T1, T2]
+/** the rules near the second part's table cells: one under the cell on page 2 */
+export const RULES_2 = [72, 500, 540, 500.4]
 
 const layout1: LayoutPart = {
   fonts: ['CMR10'],
@@ -110,21 +95,18 @@ export function partInputs(head: string, lefts: Record<number, Written & { page:
     {
       paper: PAPER, head, prev: prev[0] ?? null, pages: [1, 1], views: views(1, 2),
       left: [[0, 0, [[1, 150, 696, 460, 712]]], [2, 12, [[1, 72, 647, 540, 657.5], [2, 72, 700, 300, 710]]]], fileOnly: [], layout: layout1,
-      addon: { manifest: manifest({ 1: { ok: true, units: { 2: [72, 640, 300, 660] }, at: { R: 5 }, dirty: [72, 640, 80, 650] } }, T1.tail.length), tail: T1.tail },
+      rules: null,
       leftParts: lp(1, 1),
     },
     {
       paper: PAPER, head, prev: prev[1] ?? null, pages: [2, 3], views: views(2, 4),
       left: [[3, 25, [[2, 72, 498, 200, 508]]], [4, 41, [[3, 72, 300, 200, 310]]]], fileOnly: [[5, 41]], layout: layout2,
-      addon: {
-        manifest: manifest({ 2: { ok: true, rules: [72, 500, 540, 500.4] }, 3: { ok: true, units: { 3: [72, 300, 200, 320] }, at: { R: 6 }, dirty: [72, 300, 80, 310] } }, T2.tail.length),
-        tail: T2.tail,
-      },
+      rules: { 2: RULES_2 },
       leftParts: lp(2, 3),
     },
     {
       paper: PAPER, head, prev: prev[2] ?? null, pages: [4, 4], views: views(4, 4),
-      left: [[6, 62, [[4, 72, 700, 300, 712]]], [7, 70, [[4, 72, 600, 200, 610]]]] as UnitWire[], fileOnly: [], layout: null, addon: null, leftParts: lp(4, 4),
+      left: [[6, 62, [[4, 72, 700, 300, 712]]], [7, 70, [[4, 72, 600, 200, 610]]]] as UnitWire[], fileOnly: [], layout: null, rules: null, leftParts: lp(4, 4),
     },
   ]
 }

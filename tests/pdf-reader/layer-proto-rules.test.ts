@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { BUILTIN_RULES, type RuleSet, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
 import { fileOfGeometry, unitsOfGeometry } from './helpers/file-of-geometry'
+import { withGroups } from './helpers/groups'
 
 // The layer's open reads every choice made for its target from the layout rule set it is given (layer-proto/run.mjs `rules`,
 // rules/layout.mjs): none from the target's name. These are the wiring tests: a set passed changes the drawing, no set is
@@ -49,7 +50,7 @@ function paper(lines: [string, number, number, number?][] = [['Alpha beta gamma'
   const rects = [...new Set(lines.map((_, i) => rowOf(i)))].map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])
   const geometry = { schema: 1, kinds: ['para'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, rects]] } }
   return {
-    doc: { numPages: 1, getPage: async () => page },
+    doc: withGroups({ numPages: 1, getPage: async () => page }),
     geometry,
     units: [{ kind: 'para', src, state: 'whole', pieces: [{ t: 'text', tr: true, s: tr }] }],
     tex: fileOfGeometry(unitsOfGeometry(geometry)),
@@ -175,7 +176,7 @@ function column(units: { kind: string; rows: number[]; tr: string }[]) {
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
   const geometry = { schema: 1, kinds: units.map(u => u.kind), left: { pages: [[0, 0, 300, 300]], units: units.map((u, i) => [i, i, u.rows.map(r => [1, 20, 197.85 - 12 * r, 220, 206.83 - 12 * r])]) } }
   return {
-    doc: { numPages: 1, getPage: async () => page },
+    doc: withGroups({ numPages: 1, getPage: async () => page }),
     geometry,
     units: units.map((u, ui) => ({ kind: u.kind, src: u.rows.map(r => words(ui, r)).join(' '), state: 'whole', pieces: [{ t: 'text', tr: true, s: u.tr }] })),
     tex: fileOfGeometry(unitsOfGeometry(geometry)),
@@ -206,8 +207,9 @@ const drawingOf = async (run: Awaited<ReturnType<typeof open>>) => {
 }
 /** SWITCH_PAGE's drawing by the engine before the leftover switch (0be9390d, D6's F6b, built in a scratch directory from
  *  `git archive 0be9390d src`), opened with its built-in set but Chinese's fill top at 2 em as the set is now: what 'foot'
- *  must still draw */
-const BEFORE_THE_SWITCH = '8bbac5fa00176badb835aa6e10bb614e4d00860ad954641f8ae0cec5d8d7a4b6'
+ *  must still draw. Recorded again on 2026-10-23, when a unit's operations became its groups hidden in place of the paper's
+ *  fills (docs/route/ocg-erasure.md §4.2): the same open, 'foot' and the built-in set still drawing one and the same */
+const BEFORE_THE_SWITCH = '633ea126e64f205a311b0cbbdd301c4e3682f60b08ac81912bfd9af1f86c83de'
 
 describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' moves the paragraphs up under a short one and paints them last, from the top; 'foot' draws as before the switch", () => {
   const packed = () => { const set = editable(); set.scripts.Hans!.leftover = 'pack'; return set }

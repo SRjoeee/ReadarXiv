@@ -26,7 +26,7 @@
 // The sample's layer is one over our own compile (a head of ours), which the Worker binds by the base's digest and names no
 // original beside (no `X-Axt-Base-Etag`, design §3.2: only a layer over arXiv's PDF names one); `bound: true` names our copy's
 // entity-tag beside the catalog and every object all the same, as a layer over arXiv's PDF had it. The original answers with that
-// entity-tag (`ETag`, the MD5 of its bytes, as R2 tags an object written in one put), and so does our base page.
+// entity-tag (`ETag`, the MD5 of its bytes, as R2 tags an object written in one put), and our base page with its own.
 //
 // Every answer carries `Access-Control-Allow-Origin: *` (never credentials) and `X-Content-Type-Options: nosniff`; JSON
 // answers carry `Content-Security-Policy: sandbox`; a miss is JSON, never an HTML page. The <vtag> is the engine's own
@@ -224,10 +224,10 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     if (segment !== sample.segment || original.kind === 'none') return missing('no-pdf')
     return pdfAnswer(headers, sample.pdf)
   }
-  /** our base page a head of ours names: the cut's base, the stand-in PDF's bytes; another digest, or no cut, none */
+  /** our base page a head of ours names: the cut's base, its bytes (the wrapped pass); another digest, or no cut, none */
   function baseAnswer({ headers }, segment, sha) {
     if (!layer4?.base || segment !== sample.segment || sha !== layer4.base.sha256 || base.kind === 'none') return missing('no-base')
-    return pdfAnswer(headers, sample.pdf, { 'cache-control': IMMUTABLE })
+    return pdfAnswer(headers, layer4.base.data, { 'cache-control': IMMUTABLE, etag: `"${createHash('md5').update(layer4.base.data).digest('hex')}"` })
   }
 
   /**

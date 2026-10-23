@@ -67,3 +67,7 @@ browser for each paper, on a heavily loaded machine (load average 70 to 120):
 |---|---|---|---:|---|---|
 | GPU | none | 0 | 247 | none | 72 / 72 (1810.04805v2 4, 2602.23285v2 68) |
 | CPU | 2609.26457v1 p2: 27 px (Chromium's own, as above) | 0 | 247 | none | 43 / 43 (1810.04805v2 18, 2608.04322v1 24, 2602.23285v2 1) |
+
+- From REMOVAL 8 (feat/ocg-reader) on, G2' (text and labels OFF against the remover's cut of the same ownership) is no longer
+  measured: the remover, its only oracle, is deleted there (docs/route/ocg-erasure.md §4.2), and the spike no longer runs it.
+  The G2' columns of this record are its last runs, on the file side's branch.
