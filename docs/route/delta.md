@@ -164,3 +164,70 @@ Not changed: GO and the accepted rule (section 14); the build requirements of se
 **6. Measurement before enabling by default (staging, 2602.23285v2 p7->p8 and a light paper):** time to first paint of p8 with and without prefetch on a throttled link (1.5 MB/s), the bytes prefetched but never used (jump away), the CPU of the prefetch document's operator list on the heavy page (main-thread long frames must not appear: its work is in the worker), memory (store occupancy, third document). Gate: no regression of the visible page's latency (the gate keeps prefetch below), the p8 stall's wait drops to ~0 after a idle window on page 7, wasted bytes <= 50 % of prefetched on random jumps.
 
 **7. Scope and tests.** Web: web/src/ranges.ts (gate + wrapper), the session/viewer hooks for idleness (web/src/session/run.mjs, the viewer events), analytics in the Worker; public repo: the extension's session/ranges.ts + run.ts (same gate/prefetch), the shared view's idle hooks if the viewer events live there. Tests (fake clock, fake source): the gate's three classes and bounds, idle detection, target pages and forward-only, budget (second heavy page waits for the next window), abort on jump leaves the store intact and leaks no in-flight count, saveData/hidden tab off, the header on prefetch reads only, the Worker counts the purpose header and writes no visitor data; e2e: scroll to page 7, idle, the /orig/ requests for page 8's streams appear before any scroll to 8 and carry the header; a jump aborts them; no prefetch while pages are still painting.
+
+## 17. Box time at the pin 699b4aea: what the prepare's time is made of (box-time owner, 2026-10-24)
+
+The question: a new paper's prepare (the box: probe, compile, left, maker) took a median 31 s on staging on 2026-10-23
+(LAYOUT 16, the pin 699b4aea) against the route's 16 s. Read from staging's job records of 2026-10-21 (LAYOUT 11, 2 compiles),
+2026-10-22 (LAYOUT 12, our final pass added) and 2026-10-23 (LAYOUT 16), each paper paired with itself; the box time is the
+four stages' wall (the record's `timings.stages`). Scripts outside the repository; the web's `scripts/prepare-cost.mjs` makes
+the same comparison.
+
+**Most of it is the boxes, not the work.** Staging runs on two kinds of CPU (the record's `child.cpu.digest`): `a0575d…`, whose
+JavaScript speed index (`timings.speedJsUs`, the median of six rounds) is 15 to 23 ms, and `c33c5b…`, 32 to 54 ms, about half as
+fast. 2026-10-22 ran 18 of its 60 prepares on the slow kind, 2026-10-23 ran 32 of 59. TeX's CPU follows the index too: the mark
+probe's jail CPU (the same work at every pin) against the index's ratio, paper by paper, has a slope of 0.77 in log-log (the
+maker's CPU 0.72). A box's figures are therefore compared at one speed: each scaled by (22 ms / its index)^0.77, or between
+boxes of one CPU kind. Normalised, the box time's median is 15.6 s at LAYOUT 11 (p90 27.0), 17.9 s at LAYOUT 12 (35.2) and
+22.6 s at LAYOUT 16 (45.8): the code's cost since the route's baseline is +7.0 s, not +15.
+
+**What the code added, on one kind of CPU** (papers paired on the same digest, LAYOUT 12 to 16, 22 papers, medians of the
+differences): +3.3 s in all; `left` +2.0 s (the delta's build and proof, PDF-READER §19.8), `compile` +1.1 s (+0.7 s of it the
+prepare child's own CPU, the guard's text read of each marked compile, §19.7), `maker` +0.5 s. The marked compile's jail CPU
+moved by +0.2 s: the marked compile did not get slower, its boxes did. Compiles per paper: probe 1 pass, marked 2, 3 or 4
+passes (10, 33 and 16 papers), our final pass 1; normalised jail CPU medians 0.78, 5.52 and 1.78 s; the guard compiled again
+(more than three compiles) for 1 paper of 59.
+
+**The `left` stage, split** (Node on a laptop whose index is 10 ms, four papers: 1706.03762v7, 1810.04805v2, 2608.04322v1,
+2602.23285v2): 0.50 to 1.06 s in all; `proveDelta` 296 to 630 ms, `deltaOf` 40 to 164, arXiv's text (`readArxivText`) 107 to
+202, the paper opened again 12 to 36, the SHA-256s at most 20 (the 28 MB pair), each of the three documents opened at most 9,
+the collections 20 to 40. The proof is three whole PDF.js text reads (arXiv's PDF about 100 to 120 ms, our final pass about
+110, the composed document about 100) and the object layer (28 to 68 ms). Two of those reads repeat what the page pass reads
+anyway (arXiv's text in `left`, ours in `checkOurBase`). The box is one vCPU (wrangler.jsonc `instance_type`): wall is CPU, so
+running the proof in a thread beside the page pass saves nothing. Only work that is not done saves time.
+
+**Embedding the images in our final pass is not the bulk of it, and the delta cannot reference arXiv's images instead.** The
+same final pass compiled with and without graphicx's draft option, on the pinned 2025 image, the lesser of two runs: the
+images are 37.5 % of the pass on 1706.03762v7, 21.7 % on 2608.04322v1, 11.2 % on 2602.23285v2 (28 MB, 60 images) and 1.6 % on
+1810.04805v2. On staging the final pass costs about one draft pass of the marked compile for the median paper (its excess over
+a marked pass's average is -0.27 s); the images' excess is 7.6 % of all compile CPU, more than half of the final pass on 6
+papers of 59. And the delta reuses arXiv's image objects only because our pass writes their streams byte for byte (§13, §14):
+a pass that does not write them would leave the delta to bind our placements to arXiv's objects by position and size, which
+no check makes exact. Not done.
+
+**Merging the final pass into the marked compile's last pass: not done** (the coordinator, 2026-10-24). Under latexmk the last
+pass is known only once it has run, so the last pass alone cannot be undrafted without guessing (graphicx's draft option made
+conditional in TeX, the image-heavy papers kept as today, and the final pass as today whenever the guess was wrong): about
+1.4 s of the median paper's normalised CPU, for a mechanism and a fallback the coordinator judged not worth it.
+
+**What was done instead: each document's text read once** (PDF-READER §19.8, the proof's `readers`). The proof opens arXiv's
+PDF and our page itself, of its own bytes, at verbosity 1, inside its own capture of the console, and hands each document to the
+host, which reads it once (`readArxivText`) and keeps it for the page pass; the proof makes one record a page (its box and a
+SHA-256 of its text items' exact values, a string by its UTF-16 code units) of the text content each page gives the host, before
+the host sees it, and reads only the composed document itself, so that the box reads three documents' text, not five. A page the host did not read refuses the delta, compared or not, as the
+proof's own reading did. The composed bytes and the object layer's three documents are let go before the host's documents open
+(an adversarial review of the first form found both held through the readers: up to the original's size again on the 46 MB
+pair). Its comparison became exact: before, the items' places within 0.01; now
+every field of every item, which the pack meets on every page (290 pages, 97,702 items; 106,763 wrapped). On the pack's 8 pairs,
+wrapped and not: the same verdicts (8 of 8 both ways) and the same deltas (2.56 %, 3.06 % wrapped). On 116 more of the lab's
+pairs (fixtures made at next for another check): 99 with a delta, the proof passing on 99 of 99 with the readers and without,
+the composed text items ours or arXiv's exactly on 1,900 pages (711,517 items); the other 17 refused by deltaOf before any proof
+(`delta-bound`), as before. A spurious refusal of the exact comparison would cost bytes alone (the whole base served): the random
+50-paper sweep of the next test build counts `delta-proof` refusals, to be read against this. In Node, the proof and the two
+readings together: 0.6 to 1.8 s less CPU a paper (1706.03762v7 2.2 to 1.5 s, 2602.23285v2 2.0 to 1.4, 2608.16117v1 2.1 to 1.5,
+2307.16209v1 5.0 to 3.2), the memory after them the same within 2 MiB, and the peak no higher (on one pinned CPU, heap and
+external sampled every 5 ms: 2608.16117v1 331 to 333 MiB against 336, 2307.16209v1 162 to 166 against 160 to 166), with no
+collection of the host's before its documents open: the first form held the composed bytes and the object layer's documents
+through the readers (63 MiB uncollected on the 147-page thesis), the second lets them go first. No version moves: the proof writes nothing (no cache key, no file, no head field), and the delta's bytes are deltaOf's
+as before. Staging's job records do not say which base a head named, so there is no before-and-after count of deltas from
+staging; the pack's is above.
