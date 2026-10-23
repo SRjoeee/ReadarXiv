@@ -82,6 +82,11 @@ describe('createGoogleWebProvider', () => {
     const weird = createGoogleWebProvider({ fetch: (async () => new Response('{"nope":1}', { status: 200 })) as unknown as typeof globalThis.fetch })
     const e2 = await weird.translate(req(['a'])).catch((e: unknown) => e)
     expect((e2 as ProviderError).kind).toBe('invalid-response')
+    // both the endpoint's own doing, never a segment's: not split, sent once more (DESIGN §8.2, issue #78)
+    for (const e of [e1, e2]) {
+      expect((e as ProviderError).isolatable).toBe(false)
+      expect(getRequestErrorMeta(e)).toMatchObject({ isRetryable: true, maxRetries: 1 })
+    }
   })
 
   it('the free endpoint needs no credentials; isAvailable is always true', async () => {

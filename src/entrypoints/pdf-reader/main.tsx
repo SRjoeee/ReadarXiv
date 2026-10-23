@@ -10,22 +10,41 @@ import { trackModality } from '@/ui/controls/modality'
 import { readConfig } from '@/config/storage'
 import { applyPageLocale } from '@/ui/apply-locale'
 import { answeredBy, firstReadTime } from '@/ui/first-read'
+import { browser } from 'wxt/browser'
+import { LOOPBACK_ALLOWED } from '@/pdf-reader/addresses'
+import { frameOwner } from '@/shared/frame-owner'
 import { App } from './App'
+
+/**
+ * The manifest key that lets a reader that is no frame act: only the harness's copy of a release build carries it
+ * (tests/e2e/lib/extension.mjs), and scripts/check-output.mjs holds that a build never does
+ */
+export const TOP_LEVEL_READER_KEY = 'axt_top_level_reader'
 
 // The settings once, before the first paint, for the language and for the chrome (ui/first-read.ts): the page gives the
 // read 1,500 ms and paints the defaults, said to be unreadable, if it has not answered (S-R-21). The session, a heavy
-// module (the reading view, the engine's layer, PDF.js), starts on that reading and follows the settings from there
+// module (the reading view, the engine's layer, PDF.js), starts on that reading and follows the settings from there.
+// Beside it, whom the page acts for (shared/frame-owner.ts): framed by a page that is none of ours, the reader draws
+// nothing and does nothing — no paper fetched, no run, no setting written, whatever its address asks (PDF-READER §11.1).
+// Nor, in a release build, does a reader that is no frame: the PDF page only ever frames it (pdf.content.ts), while a page
+// of arXiv's that learnt the address could send its own tab there, and the settings alone would start a run. A development
+// build, and the harness's copy of a release build (TOP_LEVEL_READER_KEY), open one as its address says
+const owner = frameOwner()
 const reading = (await answeredBy(readConfig(), firstReadTime())) ?? null
-applyPageLocale(reading?.config.uiLanguage)
-const params = new URLSearchParams(location.search)
-// the session opens once the panes are there (App.tsx attach): the reading view over arXiv's PDF and the paper's layer
-const open = async (host: SessionHost) => (await import('@/pdf-reader/session/host')).openReader(host)
-const controller = createController({ open, params, reading })
-// the focus rings are the keyboard's (modality.ts)
-trackModality()
+const topLevel = LOOPBACK_ALLOWED || (browser.runtime.getManifest() as Record<string, unknown>)[TOP_LEVEL_READER_KEY] === true
+const vouched = await owner
+if (vouched !== null && (vouched.framed || topLevel)) {
+  applyPageLocale(reading?.config.uiLanguage)
+  const params = new URLSearchParams(location.search)
+  // the session opens once the panes are there (App.tsx attach): the reading view over arXiv's PDF and the paper's layer
+  const open = async (host: SessionHost) => (await import('@/pdf-reader/session/host')).openReader(host)
+  const controller = createController({ open, params, reading })
+  // the focus rings are the keyboard's (modality.ts)
+  trackModality()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App controller={controller} embedded={params.get('embedded') === '1'} />
-  </StrictMode>,
-)
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App controller={controller} embedded={params.get('embedded') === '1'} />
+    </StrictMode>,
+  )
+}

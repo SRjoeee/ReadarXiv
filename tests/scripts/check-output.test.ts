@@ -144,11 +144,17 @@ describe('the layer reader\'s package', () => {
     expect(verdict(ASKED, { AXT_BUILD: 'staging' })).toBe('✗')
   })
   it('the web-accessible resources are the popup and the reader to arXiv alone; the offscreen document stays', () => {
-    const war = [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'] }]
+    const war = [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'], use_dynamic_url: true }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'], use_dynamic_url: true }]
     put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: war, permissions: ['storage', 'offscreen'], content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'; frame-src 'none'" } }))
     expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✓')
     expect(verdict('the offscreen document stays')).toBe('✓')
     expect(verdict('the extension\'s pages frame nothing')).toBe('✓')
+    expect(verdict('the manifest does not let a reader that is no frame act')).toBe('✓')
+    // at a stable address (no use_dynamic_url) an arXiv page could write into a frame, and a manifest that lets a reader
+    // of its own act (the harness's copy) is no build's
+    put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: war.map(({ use_dynamic_url: _, ...entry }) => entry), axt_top_level_reader: true, permissions: ['storage', 'offscreen'], content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'; frame-src 'none'" } }))
+    expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✗')
+    expect(verdict('the manifest does not let a reader that is no frame act')).toBe('✗')
     put(`${OUT}/manifest.json`, JSON.stringify({ web_accessible_resources: [...war.slice(0, 1), { resources: ['pdf-reader.html'], matches: ['<all_urls>'] }], permissions: ['storage'] }))
     expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✗')
     expect(verdict('the offscreen document stays')).toBe('✗')

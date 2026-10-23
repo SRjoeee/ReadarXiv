@@ -101,6 +101,18 @@ describe('the run, once a translated display is shown (what is not seen takes no
     expect(ownVersion('2600.00001')).toBeNull()
   })
 
+  it('an address whose paper is no arXiv id opens with no paper: nothing fetched, no run, no setting written, nothing thrown, whatever else it asks', async () => {
+    const fetch = vi.fn(async () => new Response('', { status: 404 }))
+    for (const query of ['paper=../list/cs.AI/new&ask=translate', 'paper=xv3&ask=translate', 'live=1&paper=1706.03762/../../x&mode=bilingual']) {
+      const a = await opened(query, { config: { ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, original: true } }, fetch: fetch as never })
+      await flush(20)
+      a.session.setDisplay('bilingual')
+      await flush(20)
+      expect([query, a.run.mock.calls.length, a.surface.writes.length, a.view.showOriginal.mock.calls.length]).toEqual([query, 0, 0, 0])
+    }
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
   it('no version to be had (arXiv\'s page not read): the bilingual version cannot be had now, the original stays', async () => {
     const a = await opened('paper=2600.00001')
     await flush(20)

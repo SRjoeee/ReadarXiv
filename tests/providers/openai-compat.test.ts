@@ -61,6 +61,19 @@ describe('openai-compat provider', () => {
     expect(await kindOf(createOpenAICompatProvider(cfg, { model: extra }).translate(req))).toBe('invalid-response')
   })
 
+  it('a reply no object can be parsed from is the model\'s way of answering, not a segment\'s: not isolatable, sent once more (DESIGN §8.2, issue #78)', async () => {
+    const answering = (text: string) => new MockLanguageModelV4({ doGenerate: async () => ({ content: [{ type: 'text', text }], finishReason: { unified: 'stop', raw: undefined }, usage, warnings: [] }) })
+    // prose where JSON was asked for, fenced JSON, an object of another shape, a schema mismatch inside the segments
+    for (const text of ['Here is your translation: \u4f60\u597d \u4e16\u754c', '```json\n{"segments":[]}\n```', '{"translations":["a","b"]}', '{"segments":[{"id":"s1"}]}']) {
+      const e = await createOpenAICompatProvider(cfg, { model: answering(text) }).translate(req).then(() => null, (error: unknown) => error)
+      expect([text.slice(0, 16), (e as ProviderError)?.kind, (e as ProviderError)?.isolatable]).toEqual([text.slice(0, 16), 'invalid-response', false])
+      expect(getRequestErrorMeta(e)).toMatchObject({ isRetryable: true, maxRetries: 1 })
+    }
+    // a parsed reply with the wrong ids stays isolatable: some segment most likely led the model astray
+    const wrongIds = await createOpenAICompatProvider(cfg, { model: modelReturning({ segments: [{ id: 's1', text: 'a' }] }) }).translate(req).then(() => null, (error: unknown) => error)
+    expect([(wrongIds as ProviderError).kind, (wrongIds as ProviderError).isolatable]).toEqual(['invalid-response', true])
+  })
+
   it('no key: unavailable, and the model is not called', async () => {
     let calls = 0
     const model = modelReturning({ segments: [] }, () => { calls++ })

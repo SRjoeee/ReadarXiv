@@ -1,5 +1,6 @@
 // Ported from reference/read-frog/src/utils/request/retry-policy.ts@9b44f82 (GPL-3.0), 2026-09-03, modified: only what
-// this project's strict type checking required.
+// this project's strict type checking required; 2026-10-24: an error may carry its own retry cap (`maxRetries`), below
+// the queue's (a malformed reply is sent once more, DESIGN §8.2).
 // Request error classification, Retry-After parsing and the rate-limit backoff policy; driven by this directory's
 // request-queue (since 2026-09-05; before that by src/providers/retry.ts's withRetry).
 
@@ -17,6 +18,8 @@ export interface RequestErrorMeta {
   isRetryable?: boolean
   retryAfterMs?: number
   kind?: RequestErrorKind
+  // At most this many retries for this error, under the queue's own cap
+  maxRetries?: number
 }
 
 export interface RequestRetryContext {
@@ -106,6 +109,7 @@ export function getRequestErrorMeta(error: unknown): RequestErrorMeta {
     normalizeNonNegativeNumber(attachedMeta?.retryAfterMs ?? source?.retryAfterMs) ??
     getRetryAfterMsFromHeaders(responseHeaders)
   const isRetryable = normalizeBoolean(attachedMeta?.isRetryable ?? source?.isRetryable)
+  const maxRetries = normalizeNonNegativeNumber(attachedMeta?.maxRetries)
   const message = typeof source?.message === "string" ? source.message : ""
   const kind =
     normalizeKind(attachedMeta?.kind ?? source?.kind) ??
@@ -117,6 +121,7 @@ export function getRequestErrorMeta(error: unknown): RequestErrorMeta {
     retryAfterMs,
     isRetryable,
     kind,
+    maxRetries,
   })
 }
 
@@ -190,7 +195,7 @@ export const defaultRequestRetryPolicy: RequestRetryPolicy = {
       return { action: "pause-and-retry", pauseMs }
     }
 
-    if (context.retryCount >= context.maxRetries || !isRetryableRequestErrorMeta(meta)) {
+    if (context.retryCount >= Math.min(context.maxRetries, meta.maxRetries ?? context.maxRetries) || !isRetryableRequestErrorMeta(meta)) {
       return { action: "fail" }
     }
 

@@ -286,8 +286,9 @@ export function createTranslateService(deps: TranslateServiceDeps): TranslateSer
    * Turn the provider's “ids do not match / structure broken” into the batch error BatchQueue knows, marked
    * non-retryable. **Not for one declared `isolatable: false`** (Codex on #61): BatchQueue retries and falls back
    * per item on `BatchCountMismatchError` only, and converting would stack 3 batch-level retries + one request per
-   * segment on a systemic failure — a batch of 100 segments fired 104 times for nothing. A free engine returning
-   * non-JSON is that case, the same however small the split. RequestQueue no longer retries this error as an unknown
+   * segment on a systemic failure — a batch of 100 segments fired 104 times for nothing. A malformed reply
+   * (`malformedReply`, types.ts: no object parsed, a web translator's body not the array asked for) is that case, the
+   * same however small the split; the request queue sends it once more instead. RequestQueue no longer retries this error as an unknown
    * error; BatchQueue retries it 3 times and then falls back per item. Unmarked, 3 × 4 = 12 requests would go out before the per-item fallback; and with the kind set, the raw model output in the message is not misread by the "429" / "timeout" regex
    */
   const asBatchError = (e: unknown, expected: number): unknown =>
@@ -715,7 +716,10 @@ export function toErrorInfo(e: unknown): ErrorInfo {
   if (isTranslationCancelledError(e)) return { kind: 'aborted', message: (e as Error).message, isolatable: false }
   // Recovering from a timeout is the queue's job (a budget by character count, a deadline per batch); splitting again at the content layer multiplies the two — 8 segments measured 15 calls
   if (e instanceof Error && e.name === REQUEST_TIMEOUT_ERROR_NAME) return { kind: 'timeout', message: e.message, isolatable: false }
-  // A count mismatch is the very picture of “some segment led the output astray”: splitting locates it
-  if (e instanceof BatchCountMismatchError) return { kind: 'invalid-response', message: e.message, isolatable: true }
+  // A count mismatch is the very picture of “some segment led the output astray”, and the batch queue has located it
+  // already: the batch retried, then each segment sent alone (§8.2). What reaches a caller is one segment's own
+  // failure, so splitting it again would only resend segments that failed alone — a reply that never parsed with the
+  // right ids cost 40 requests a 4-segment batch, the content side halving what the queue had isolated (issue #78)
+  if (e instanceof BatchCountMismatchError) return { kind: 'invalid-response', message: e.message, isolatable: false }
   return { kind: 'unknown', message: e instanceof Error ? e.message : String(e), isolatable: true }
 }

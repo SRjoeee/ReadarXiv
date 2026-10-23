@@ -22,7 +22,7 @@
 import { toBcp47 } from '@/config/languages'
 import { kindOfStatus } from './http-errors'
 import { attachRequestErrorMeta } from './request/retry-policy'
-import { ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
+import { malformedReply, ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
 import { WIRE_FORMATS } from './wire-formats'
 import { type SentenceAlignment, verifyAlignment } from './alignment'
 
@@ -141,19 +141,21 @@ async function translateTexts(
     payload = await response.json()
   } catch (error) {
     // The whole response is not JSON: a smaller batch would come back the same (§8.3)
-    throw new ProviderError('invalid-response', 'translatetext did not return JSON', { cause: error, isolatable: false })
+    throw malformedReply('translatetext did not return JSON', error)
   }
 
+  // Not the array asked for, not as many items as were sent, an item with no text: the endpoint answers item for item,
+  // so each is its own doing, never a segment's (issue #78)
   if (!Array.isArray(payload)) {
-    throw new ProviderError('invalid-response', `unexpected translatetext response shape: ${JSON.stringify(payload).slice(0, 200)}`, { isolatable: false })
+    throw malformedReply(`unexpected translatetext response shape: ${JSON.stringify(payload).slice(0, 200)}`)
   }
   if (payload.length !== texts.length) {
-    throw new ProviderError('invalid-response', `translatetext returned ${payload.length} items, expected ${texts.length}`)
+    throw malformedReply(`translatetext returned ${payload.length} items, expected ${texts.length}`)
   }
   return payload.map((item: MicrosoftItem, i) => {
     const translation = item?.translations?.[0]
     const text = translation?.text
-    if (typeof text !== 'string') throw new ProviderError('invalid-response', `translatetext item ${i + 1} has no translation`)
+    if (typeof text !== 'string') throw malformedReply(`translatetext item ${i + 1} has no translation`)
     // The endpoint segments internally and reports it; we neither ask for it nor pay for it.
     // Measured over 60 real blocks: the partition was complete on all 60 and 96.2% of boundaries
     // landed after sentence punctuation — but only once whitespace was collapsed (#119), which is

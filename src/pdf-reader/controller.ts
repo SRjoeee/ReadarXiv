@@ -7,6 +7,7 @@ import { toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
+import { paperOf } from './addresses'
 import type { OutlineEntry } from './engine/view/outline'
 import type { ViewEvent } from './engine/view.mjs'
 import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
@@ -343,7 +344,7 @@ const NO_PAPER: Partial<ReaderState> = { noPaper: true, phase: 'ready', availabl
  * session shows the settings as they come. Without `reading` nothing is known until the session says
  */
 export function createController({ open, params, reading }: { open: (host: SessionHost) => Promise<Session>; params: URLSearchParams; reading?: ConfigReading | null }): ReaderController {
-  const id = params.get('paper') ?? ''
+  const id = paperOf(params)
   let state: ReaderState = {
     ...INITIAL,
     paper: { id, title: '' },

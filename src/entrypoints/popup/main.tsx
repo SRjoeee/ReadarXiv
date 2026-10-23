@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { answeredBy, firstReadTime } from '@/ui/first-read'
 import { prepareFirstPaint } from '@/ui/first-paint'
 import { trackModality } from '@/ui/controls/modality'
+import { frameOwner } from '@/shared/frame-owner'
 import { rejectedServices } from '@/shared/service-health'
 import { App } from './App'
 import { reportToOwner } from './embedded'
@@ -13,6 +14,8 @@ import { reportToOwner } from './embedded'
 // run, rather than drawing it runnable and flipping (the branch's final review). Unreadable, it holds nothing; so does
 // one that does not answer in time — the two reads share the page's clock (ui/first-read.ts, R100)
 const time = firstReadTime()
+// framed, whom it acts for: the content script that made its frame vouches for it, or nobody does (shared/frame-owner.ts)
+const owner = frameOwner()
 const refused = rejectedServices().catch(() => new Set<string>())
 await prepareFirstPaint(document.documentElement, brand => brand, time)
 const rejected = [...((await answeredBy(refused, time)) ?? [])]
@@ -20,10 +23,14 @@ const rejected = [...((await answeredBy(refused, time)) ?? [])]
 // are ringed for the keyboard alone
 trackModality()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App rejected={rejected} />
-  </StrictMode>,
-)
-// Framed as the floating button's control panel, the page reports its height and hands over Escape (embedded.ts)
-reportToOwner()
+// Framed by a page that is none of ours, the popup draws nothing and does nothing: a click there acts on no tab
+const vouched = await owner
+if (vouched !== null) {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App rejected={rejected} owner={vouched} />
+    </StrictMode>,
+  )
+  // Framed as the floating button's control panel, the page reports its height and hands over Escape (embedded.ts)
+  reportToOwner()
+}
