@@ -205,7 +205,7 @@ function prepare() {
       for (const [path, bytes] of q.files) writeFileSync(join(d, path), bytes)
       // v1np: v1 with no points, LAYOUT_TEX as it was before them
       // (under latex, v1np is v1 with no DVI point: POINTS_TEX's own sets nothing in DVI mode)
-      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
+      for (const [path, bytes] of originalFiles(q.paper, v === 'v0' ? { lines: true, transcode: false } : { lines: true, layout: MARK_CLASSES, switches })) writeFileSync(join(d, path), v === 'v1np' && path === 'main.tex' ? latin1Bytes(latin1(bytes).replace(q.engine === 'latex' ? DVI_POINTS_TEX : POINTS_TEX, '')) : bytes)
       jobs.push({ name: `${q.name}-${v}`, engine: q.engine, passes: q.passes, trace: q.trace })
     }
   }

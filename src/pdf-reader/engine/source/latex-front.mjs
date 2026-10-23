@@ -7,7 +7,7 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
-import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
+import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
@@ -560,6 +560,10 @@ function paperMacros(files) {
     if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
     // \\providecommand defines nothing a definition before it made (2608.16190's \\def\\cpanauthor{…} and its fallback)
     if (m[1] === 'providecommand' && out.has(name)) continue
+    // nor is a fallback a package the paper loads overrides (arg-roles.mjs overriddenFallback: llncs.cls'
+    // \\@ifundefined{url}{\\def\\url#1{#1}}{} under hyperref, read as \\url's own, made its argument a group, and hyperref's
+    // \\url printed a mark in it)
+    if (overriddenFallback(t, m.index, name, m[1] ?? 'def', paper?.packages)) continue
     let k = skipSpaces(t, m.index + m[0].length), opt = false
     if (m[4] && t[k] === '[') { const e = matchGroup(t, k, '[', ']'); if (e < 0) continue; k = skipSpaces(t, e); opt = true }
     if (t[k] !== '{') continue

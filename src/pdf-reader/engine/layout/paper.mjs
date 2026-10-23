@@ -64,7 +64,9 @@ const GUARD_EXTRA = 2
  *     'engine', 'compile'), else ours ('marks')
  * An attempt that passes is the marked original; where none does, the best that ran through to arXiv's page count or more
  * (fewest checks failed, then errors; the earliest) stands, judged by the page pass and the carry as before; none that ran
- * through: refused, with why. `engines`, where the host gives the compilers it runs: a paper of another is refused before
+ * through: refused, with why. With the base page asked (`final`), none of more pages than arXiv's stands, the page pass
+ * refusing a base page of another page count: the unmarked original tells whose fault it is ('compile' where it has other
+ * pages than arXiv's too, else 'marks'), with no final pass made. `engines`, where the host gives the compilers it runs: a paper of another is refused before
  * any compile ('engine'). `guard` records what the guard did, where it did anything: { extra, unmarked, names, failed,
  * judged? }
  *
@@ -173,8 +175,11 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   let verdict = null
   const owned = r => (verdict ? { ...r, own: verdict } : r)
   // (a throw of the guard's own after the compile: the last remedy that passed the checks stands, else the marked original as
-  // before the guard, one that ran through with a PDF, else the compile's refusal)
+  // before the guard, one that ran through with a PDF — with the base page asked, not one of more pages than arXiv's, as the
+  // guard's own rule (`stands`); a remedy that passed never is one —, else the compile's refusal)
   let standing = null
+  /** arXiv's page count, once the checks asked the host for it (null: not given, or not asked yet) */
+  let N = null
   /** the compile the marked original is (its evidence: the answer `c` and its files), once one stands: the final pass's */
   let accepted = null
   const made = await (async () => {
@@ -182,7 +187,12 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       if (isMemoryError(e)) throw e
       g.judged = whyText(`the layout guard failed: ${e?.message ?? e}`)
       if (standing) { g.unmarked = standing.unmarked; g.names = standing.named; accepted = standing; return guarded({ pdf: standing.c.pdf, log: lastTexLog(standing.c.log), options, ms }) }
-      if (ranThrough(marked) && marked.pdf?.length) { accepted = { c: marked, files }; return guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms }) }
+      if (ranThrough(marked) && marked.pdf?.length) {
+        const M = pagesOfLog(marked.log)
+        if (wantFinal && N !== null && M !== null && M > N) return guarded(owned({ refused: 'compile', why: whyText(`the marked original has ${M} pages, arXiv's PDF ${N}; ${g.judged}`), ms }))
+        accepted = { c: marked, files }
+        return guarded({ pdf: marked.pdf, log: lastTexLog(marked.log), options, ms })
+      }
       return guarded(owned({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms }))
     }
   })()
@@ -238,8 +248,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
 
   /** the checks after the compile, and the remedies */
   async function checked() {
-    // arXiv's page count, asked once where the host gives it
-    let N = null
+    // arXiv's page count, asked once where the host gives it (N, the result's too: a throw after it is judged by it)
     if (pages !== null && pages !== undefined) {
       // (any failure of the host's but a failed allocation leaves the page check out: N null)
       try { const n = typeof pages === 'function' ? await pages() : pages; if (Number.isInteger(n) && n > 0) N = n } catch (e) { if (isMemoryError(e)) throw e }
@@ -296,7 +305,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       let c = null
       try { c = await asked({ main, engine, rerun: true, bibtex, overrides: unmarkedFiles(paper) }) } catch (e) { if (isMemoryError(e)) throw e }
       const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
-      const u = { c, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, errors: c ? errorCount(c.log) : 0, own: c ? ownErrors(c.log) : new Set() }
+      const u = { c, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, long: ran && N !== null && M !== null && M > N, errors: c ? errorCount(c.log) : 0, own: c ? ownErrors(c.log) : new Set() }
       if (u.ran && !u.short) own = u
       verdict = ownVerdict(u)
       return u
@@ -304,8 +313,12 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     /** the attempt taken: its units and names the guard's record */
     const take = e => { if (e !== e0) { g.unmarked = e.unmarked; g.names = e.named } return timed(done(e)) }
     /** of attempts that ran through to arXiv's page count or more, the one that fails the fewest checks, then has the fewest
-     *  errors (the earliest of equals): judged by the page pass and the carry as before */
-    const best = list => { let b = null; for (const e of list) if (e.ran && !e.short && (!b || rank(e) < rank(b))) b = e; return b }
+     *  errors (the earliest of equals): judged by the page pass and the carry as before. With the base page asked (`final`),
+     *  none of more pages than arXiv's (`long`): the page pass refuses a base page of another page count whatever the carry
+     *  (BUNDLE 8, design note §3.3.4), so the unmarked original is compiled instead of the final pass, and tells whose fault
+     *  it is (2610.20581: a marked original of 34 pages, arXiv's 33, taken, and the final pass spent on it) */
+    const best = list => { let b = null; for (const e of list) if (stands(e) && (!b || rank(e) < rank(b))) b = e; return b }
+    const stands = e => e.ran && !e.short && !(wantFinal && e.long)
     const rank = e => (e.aux.size || e.text ? 2e9 : 0) + (e.long ? 1e9 : 0) + e.errors
     const union = (...sets) => { const out = new Set(); for (const s of sets) for (const x of s) out.add(x); return out }
     const blamedBy = (e, own = null) => (e.c && texRan(e.c.log) ? errorUnits(paper, e.c.log, e.files, e.spans.lines(), own) : new Set())
@@ -323,7 +336,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       if (declared && trees.length > 1) return { refused: 'compile', why: `the paper${cls} declares TeX Live ${declared}; its own source ${what} on TeX Live ${on}${said}` }
       return { refused: 'compile', why: `the paper's own source${cls} ${what}${on ? ` on TeX Live ${on}` : ''}${said}` }
     }
-    const whatOf = e => (!e.ran ? 'does not run through' : e.short ? `has ${e.pages} pages, arXiv's PDF ${N}` : 'is not the paper')
+    const whatOf = e => (!e.ran ? 'does not run through' : e.short || e.long ? `has ${e.pages} pages, arXiv's PDF ${N}` : 'is not the paper')
     /** the marked original refused as ours ('marks'), or, where nothing told whose fault it is (the unmarked original not
      *  compiled), as the compile's, as before the guard */
     const why = (e, more) => { const err = e.c ? firstError(e.c.log) : null; return `the marked original ${whatOf(e)}${err ? ` (${err})` : ''}, ${more}` }
@@ -333,7 +346,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
 
     if (!afford()) {
       g.judged = 'no compile left'
-      return e0.ran && !e0.short ? timed(done(e0)) : timed(refuse(untold(e0, 'and no compile was left to mend it')))
+      return stands(e0) ? timed(done(e0)) : timed(refuse(untold(e0, 'and no compile was left to mend it')))
     }
     // errors alone: the paper's own, or the units they stand in
     if (fits(e0)) {
@@ -395,7 +408,8 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       if (!afford()) return timed(refuse(untold(e0, `nor with ${remedy}`)))
     }
     const u = await original()
-    if (!u.ran || u.short) return timed(refuse(texs(u)))
+    // (the paper's own source of other pages than arXiv's: TeX's, where the base page is asked)
+    if (!u.ran || u.short || (wantFinal && u.long)) return timed(refuse(texs(u)))
     return timed(refuse(ours(e0, `${e1 ? `nor with ${remedy}, ` : ''}where the paper's own source makes ${u.pages ?? 'its'} pages`)))
   }
 }
@@ -508,7 +522,7 @@ const bibMissing = (files, fsys) => {
 /**
  * CM, converge then mark (paper.d.mts): the files the marked original's passes read, made by the unmarked original's
  * (live.mjs originalFiles with `lines`: MARK_DEF's unit marks and the line probes, which a caption writes into its list
- * and nameref into its names, as the marked one does) in draft passes, then the marked original (`marked`) compiled in
+ * and nameref into its names, as the marked one does; `transcode` off, the paper's own bytes as the marked one's) in draft passes, then the marked original (`marked`) compiled in
  * them, one pass at a time, until a pass writes the files it was given. `cm` counts the passes as they run, so that a
  * compile that throws (the stage's refusal) leaves them told
  *   - draft 1 asks BibTeX where the paper ships no bibliography; draft 2 runs only where draft 1 left the next pass
@@ -540,7 +554,9 @@ const bibMissing = (files, fsys) => {
  */
 async function convergeThenMark(paper, compile, marked, cm, { wall, budget, bound, keep = false }) {
   const { main } = paper.project, engine = paper.meta.compiler, shipped = !!paper.meta.bbl
-  const unmarked = originalFiles(paper, { lines: true })
+  // (the paper's own bytes, as the marked passes' are: originalFiles `transcode`, so that the aux the drafts write is the one
+  // the marked passes would)
+  const unmarked = originalFiles(paper, { lines: true, transcode: false })
   const carried = new Map()
   let passes = 0, bibSeen = null
   /** whether the budget leaves room for one more pass as long as the longest compile so far, the probe's included */

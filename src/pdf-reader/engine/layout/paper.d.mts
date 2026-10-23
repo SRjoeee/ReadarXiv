@@ -106,7 +106,7 @@ export declare function handoverOf(own: OwnVerdict | null | undefined, o: { decl
  * original's PDF, and its `close` is called whatever the reading did. The compile and the PDF opening are the caller's
  * (a native TeX Live and PDF.js in Node, the TeX page and a worker in a browser): this module imports neither. Never throws but a failed allocation, as markedOfPaper.
  * Without `converge` (the default), the original is one compile with every pass (`rerun`). With it (CM), the unmarked
- * original (originalFiles(paper, { lines: true })) is compiled in one or two drafts (`draft`, `files`), then the marked
+ * original (originalFiles(paper, { lines: true, transcode: false })) is compiled in one or two drafts (`draft`, `files`), then the marked
  * original one pass at a time (`files`) in the files the passes before returned (in place of the paper's own, never of
  * the pass's), until a pass writes the bytes it was given or five TeX passes have run; `ms.compile` is all of them, `cm`
  * their record. A pass that returns no `files`, a draft that did not run through (a timeout too), a bibliography job beside the

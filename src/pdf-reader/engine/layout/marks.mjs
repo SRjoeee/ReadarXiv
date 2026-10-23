@@ -922,6 +922,12 @@ const LOOKS_AHEAD = p => {
  *  is, by the probe and its own rows. The ink-free ones (rules/tex-kernel.mjs) never come here: INVISIBLE has no class for them */
 const READS_NOTHING = p => p?.t === 'ph' && symbolText(p.src) !== null
 
+/** a group's opening by a command that reads that argument verbatim, as characters, whatever definition the front end
+ *  read for it: url.sty's \url and \path, hyperref's \url and \nolinkurl, breakurl's \burl, hyperref's \href's first
+ *  argument (its options before it; its second, the link's text, is text). A mark inside is printed as its own name:
+ *  2610.19860's llncs.cls falls back to \def\url#1{#1} where \url is undefined, the front end read that as \url's
+ *  definition and its argument as a group, and hyperref's \url, in force, set \axtpma{p176.4a} on page 16 */
+const VERBATIM_ARG = /\\(?:url|nolinkurl|path|burl|href\s*(?:\[[^\]]*\])?)\s*\{$/
 /**
  * Where a unit's start mark goes, as patch places it: the first piece at or after it, from `from`. The commands at the
  * unit's head that patch passes over — \noindent, a run-in heading's macro, a table row's \cline or \multicolumn — get
@@ -978,6 +984,8 @@ function passedOver(pieces) {
  *   closing one would follow a control sequence (TeX skips the spaces after a control word), white space (a mark there
  *   would stand on the next line, a blank one no paragraph's end any more: 2608.08350's `.\` before one) or an
  *   environment's \end
+ * - none inside a group whose opening command reads that argument verbatim, as characters (VERBATIM_ARG), at any depth:
+ *   a mark there would be printed as its own name
  */
 export function layoutMarking(units, classes, { lines = false, switches = null, inkless = null, complete = null, apart = null } = {}) {
   const on = new Set(classes)
@@ -1026,11 +1034,16 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   units.forEach((u, i) => {
     const passed = own(u) ? passedOver(u.pieces) : null
     let last = null, gap = false
+    /** the groups open at a piece, innermost last: whether each is, or is inside, an argument read verbatim */
+    const verbatim = []
     copies[i].pieces = u.pieces.flatMap((p, k) => {
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
       // (`spaced`: white space alone between the piece before and this one)
       const after = last, spaced = gap
       if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) { last = p; gap = false } else gap = true
+      if (p.t === 'open') verbatim.push(verbatim.at(-1) === true || VERBATIM_ARG.test(p.src ?? ''))
+      else if (p.t === 'close') verbatim.pop()
+      if (verbatim.at(-1) === true) return [piece]
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
       const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced)) ? classOf(p) : null

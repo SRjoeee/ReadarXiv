@@ -342,9 +342,14 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const c = compiler([PROBE, ran(PDF, '', 3), ran(PDF1, '', 4)])
     expect(await markedOfPaper(paperOf(), { compile: c.compile, pages: async () => 4 })).toMatchObject({ pdf: PDF1, guard: { extra: 1, names: false, failed: ['pages'] } })
     expect(c.asked).toHaveLength(3)
-    // (more pages than arXiv's, mended by nothing: the marked original stands for the carry to judge, as before)
+    // (more pages than arXiv's, mended by nothing: without the base page the marked original stands for the carry to judge,
+    // as before; with it, none of other pages than arXiv's stands, and the unmarked original tells whose fault it is:
+    // here its own 5 pages, TeX's, with no final pass asked; layout-route-fallbacks.test.ts has the other cases)
     const more = compiler([PROBE, ran(PDF, '', 5), ran(PDF1, '', 5), ran(UNMARKED, '', 5)])
-    expect(await markedOfPaper(paperOf(), { compile: more.compile, pages: 4 })).toMatchObject({ pdf: PDF, guard: { failed: ['pages'] } })
+    expect(await markedOfPaper(paperOf(), { final: false, compile: more.compile, pages: 4 })).toMatchObject({ pdf: PDF, guard: { failed: ['pages'] } })
+    const based = compiler([PROBE, ran(PDF, '', 5), ran(PDF1, '', 5), ran(UNMARKED, '', 5)])
+    expect(await markedOfPaper(paperOf(), { compile: based.compile, pages: 4 })).toMatchObject({ refused: 'compile', why: 'the paper\'s own source (article) has 5 pages, arXiv\'s PDF 4 on TeX Live 2025', own: { ran: true, short: false } })
+    expect(based.asked).toHaveLength(4)
     const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }, { usage: 'toplevel', filename: 'supplement.tex' }], process: { compiler: 'pdflatex' } })
     const paper = paperOf(SOURCE, [['00README.json', readme], ['supplement.tex', '\\documentclass{article}\\begin{document}S\\end{document}\n']])
     expect(paper.meta.toplevels).toBe(2)
