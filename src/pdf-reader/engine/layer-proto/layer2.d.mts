@@ -22,6 +22,9 @@ export interface Params {
   lastLines?: boolean
   /** step 3: the CJK runs' tracking the fit's first state takes, in em; null: a face's size correction given back (run.mjs) */
   trackStart: number | null
+  /** a run of a unit split by its displays (layoutRuns): the fit's first state takes its unit's tracking, the tightest its
+   *  runs need (and its CJK punctuation's compression) */
+  runTrack?: { track: number; trackLatin: number; compress: number }
   /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
    *  fillSize, off at 0) and the size a unit may grow to (growTo) */
   leadRel: boolean; fillSize: number; growTo?: number
@@ -347,8 +350,9 @@ export declare function runsOf(tokens: readonly Token[], blocks: readonly Block2
 /** a run's parameters: its first block's place in the unit (`blockBase`), the gap under the paragraph and a heading's last
  *  lines the last run's alone */
 export declare function runParams(P: Params, run: Run, last: boolean): Params
-/** a unit's runs laid each at its own state (the first of the fit's at which its own text fits its own slots), joined as one
- *  layout (joinRuns); null where the unit is one run or a run does not fit alone */
+/** a unit's runs laid each at its own state (the first of the fit's at which its own text fits its own slots, from the
+ *  tightest tracking any of them needs: runTrack), joined as one layout (joinRuns); null where the unit is one run or a run
+ *  does not fit alone */
 export declare function layoutRuns(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): { layout: Layout & { runs: number }; runs: (Run & { P: Params; layout: Layout })[] } | null
 /** the runs' layouts as one: each line's block its place in the unit's blocks, and its run's size, scale and state (`seg`) */
 export declare function joinRuns(runs: readonly { bi0: number; layout: Layout }[]): Layout & { runs: number }
@@ -368,6 +372,8 @@ export interface Share { page: number; y: number; band: number; x0: number; x1: 
 export declare function shareOf(layout: Pick<Layout, 'lines'>, blocks: readonly Block2[], row: { page: number; baseline: number; size: number }): Share | null
 /** whether a layout's lines keep a shared row as the fit left it (no text there further right; none where the fit set none; its
  *  line there on the fit's baseline) */
+/** whether `lines` set no token on a later page than the fit's lines (`fit`) set it (the page fill's guard) */
+export declare function keepsPages(fit: readonly Pick<Line, 'from' | 'page'>[], lines: readonly Pick<Line, 'from' | 'page'>[]): boolean
 export declare function keepsShare(share: Share | null | undefined, lines: readonly Line[]): boolean
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]

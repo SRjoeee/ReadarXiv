@@ -96,3 +96,19 @@ describe('a unit laid in runs between its displays', () => {
     expect((runs?.[0]?.tokens.at(-1) as { newline?: number } | undefined)?.newline).toBe(-1)
   })
 })
+
+describe('the page fill keeps a unit\'s text on the pages its fit set it', () => {
+  // (2610.21884v1's unit 10 in Chinese: its last run, over pages 1 and 2, filled to a leading at which page 1's frame held one
+  // line fewer, and a sentence the source sets on page 1 was drawn at the top of page 2)
+  const fit = [{ from: 0, page: 1 }, { from: 5, page: 1 }, { from: 9, page: 2 }]
+  it('a layout that sets a token on a later page than the fit is refused', () => {
+    expect(L2.keepsPages(fit as never, fit as never)).toBe(true)
+    expect(L2.keepsPages(fit as never, [{ from: 0, page: 1 }, { from: 5, page: 2 }, { from: 9, page: 2 }] as never)).toBe(false)
+    // (a line opening inside a line the fit set on page 1)
+    expect(L2.keepsPages(fit as never, [{ from: 0, page: 1 }, { from: 3, page: 1 }, { from: 7, page: 2 }] as never)).toBe(false)
+  })
+  it('one that sets it on the same page or an earlier one is kept (the page cuts keep text from the page before)', () => {
+    expect(L2.keepsPages(fit as never, [{ from: 0, page: 1 }, { from: 4, page: 1 }, { from: 8, page: 1 }, { from: 9, page: 2 }] as never)).toBe(true)
+    expect(L2.keepsPages(fit as never, [{ from: 0, page: 1 }, { from: 6, page: 1 }, { from: 9, page: 1 }] as never)).toBe(true)
+  })
+})

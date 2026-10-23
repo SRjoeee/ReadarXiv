@@ -3452,6 +3452,21 @@ export function shareOf(layout, blocks, row) {
  *  right, none there where the fit set none, and the line that ends furthest there on the baseline the fit set it at (`at`),
  *  so that the next unit on the row, laid from the fit's end and on its baseline, stays clear of it and on its line
  *  (run.mjs fillPage). True with no share */
+/**
+ * Whether `lines` set no token on a later page than the fit's lines (`fit`) set it, read by each line's first token (`from`):
+ * the page fill spreads a unit's lines over its frames, and a looser leading holds fewer of them on a page's frame, so it can
+ * carry text the source sets on one page over to the next, which the page cuts (pageCutsOf) only keep from the page before.
+ * 2610.21884v1's unit 10 in Chinese, a paragraph over pages 1 and 2: its last run filled to 1.61 set a sentence of page 1 at
+ * the top of page 2 (the sweep's (i))
+ */
+export function keepsPages(fit, lines) {
+  let j = 0
+  for (const l of lines) {
+    while (j + 1 < fit.length && fit[j + 1].from <= l.from) j++
+    if (fit[j] && l.page > fit[j].page) return false
+  }
+  return true
+}
 export function keepsShare(share, lines) {
   if (!share) return true
   let far = null
