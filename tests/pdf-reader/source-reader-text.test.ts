@@ -137,6 +137,13 @@ describe('S4: one branch of a conditional is the translator\'s, never both', () 
     expect(texts(projectOf({ 'main.tex': enc(doc(body, '\\input{flags}')), 'flags.tex': enc('\\def\\Flag{1}\n') }))).toEqual(['Draft branch words.'])
   })
 
+  it('a test in the preamble is not decided by what the preamble defines (it may come first): neither branch; the same test in the body is', () => {
+    const cond = '\\ifdefined\\Flag Draft title words here.\\else Final title words here.\\fi'
+    const pre = project(`\\documentclass{article}\n\\def\\Flag{1}\n\\title{${cond}}\n\\begin{document}\n\\maketitle\nBody words here.\n\\end{document}\n`)
+    expect(texts(pre).some(t => /Draft|Final/.test(t))).toBe(false)
+    expect(texts(project(`\\def\\Flag{1}\n${doc(cond)}`))).toEqual(['Draft title words here.'])
+  })
+
   it('a conditional whose branches set no words is left as it was read: its pieces, and its units\' hashes, as before', () => {
     const p = project(doc('We release it at \\ifdefined\\X\\url{a}\\else\\url{b}\\fi today.'))
     expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\ifdefined', '\\X', '\\url{a}', '\\else', '\\url{b}', '\\fi'])
