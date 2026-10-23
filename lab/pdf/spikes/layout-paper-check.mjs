@@ -99,7 +99,7 @@ async function referenceMarks(paper, source, at) {
   const withSource = marked => { const all = new Map(source); for (const [p, b] of marked) all.set(p, b); return all }
   const probe = probeFiles(paper, { marks: true })
   const c0 = await kept(at, null, `probe-${keyOf(source, probe)}`, withSource(probe), paper, { once: true, bibtex: false }, false)
-  const switches = readMarkProbe(c0?.log ?? '', probeSamples(paper.units))
+  const switches = readMarkProbe(c0?.log ?? '', probeSamples(paper.units, paper.project.complete))
   const inkless = readInkProbe(c0?.log ?? '', inkSamples(paper.units)), texts = readInkTexts(c0?.log ?? '', inkSamples(paper.units))
   const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, ...(inkless ? { inkless } : {}) })
   const c = await kept(at, null, keyOf(source, marked), withSource(marked), paper, { once: false, bibtex: !paper.meta.bbl }, false)

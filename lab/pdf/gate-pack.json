@@ -3,7 +3,7 @@
  "pipeline": "18",
  "layout": {
   "schema": 5,
-  "version": "13"
+  "version": "14"
  },
  "compileImage": {
   "texlive": "texlive/texlive@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f",

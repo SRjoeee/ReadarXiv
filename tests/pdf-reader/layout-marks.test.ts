@@ -31,6 +31,9 @@ const srcs = (u: SourceUnit | undefined) => ((u?.pieces ?? []) as Piece[]).map(p
 
 afterEach(() => { vi.restoreAllMocks() })
 
+/** a switch of `n` commands, each \\axtq and its number in letters, every mark safe */
+const switchOf = (n: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`\\axtq${i.toString(26).replace(/\d/g, d => String.fromCharCode(113 + Number(d)))}`, '00000000']))
+
 describe('the classes', () => {
   it('subequations is a display, as every display environment of the corpus', () => {
     for (const env of ['subequations', 'equation', 'equation*', 'align', 'align*', 'gather', 'gather*', 'multline', 'multline*', 'flalign', 'alignat', 'eqnarray', 'eqnarray*', 'displaymath', 'dmath', 'IEEEeqnarray'])
@@ -777,12 +780,12 @@ describe('reading the marked original', () => {
     // no probe run: null, which the maker re-marks as LAYOUT_TEX sets every mark; a probe that answered nothing is {},
     // which the maker re-marks with no mark for an asked command (Task 2's m4): the two kept apart through the file
     const plain = await layoutMarksOf(doc, '', { engine: 'pdflatex' })
-    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null, texts: null, names: null, lineskip: null })
+    expect(plain.marking).toEqual({ classes: [...LAYOUT_CLASSES], switches: null, inkless: null, texts: null, names: null, lineskip: null, complete: null, apart: null })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(plain))).marking.switches).toBeNull()
     const none = await layoutMarksOf(doc, '', { engine: 'pdflatex', switches: {} })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none))).marking.switches).toEqual({})
     const m = await layoutMarksOf(doc, '', { engine: 'pdflatex', classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' } })
-    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null, texts: null, names: null, lineskip: null })
+    expect(m.marking).toEqual({ classes: ['math', 'cite'], switches: { '\\cite': '22220000', '\\ref': 'x0000000' }, inkless: null, texts: null, names: null, lineskip: null, complete: null, apart: null })
     // the names' answers (readNameProbe), in NAME_KEYS' order; a key of none, or a value not 0 or 1, refused
     const cased = await layoutMarksOf(doc, '', { engine: 'pdflatex', names: { ref: 0, abstract: 1 } })
     expect(Object.keys(cased.marking.names ?? {})).toEqual(['abstract', 'ref'])
@@ -1017,7 +1020,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: MARKS_SCHEMA, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0] }, pages: 2,
+  schema: MARKS_SCHEMA, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0], complete: { bert: 0, kimi: 1 }, apart: ['\\pp'] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -1065,13 +1068,19 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 8 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 8 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 8 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 8 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 8 }, 'schema'],
-      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 8 }, 'schema'],
-      ['schema 7, a file before the alignment', m => { m.schema = 7 as 8 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 9 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 9 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 9 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 9 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 9 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 9 }, 'schema'],
+      ['schema 7, a file before the alignment', m => { m.schema = 7 as 9 }, 'schema'],
+      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 9 }, 'schema'],
+      ['complete macros of no object', m => { (m.marking as Record<string, unknown>).complete = ['bert', 0] }, 'marking.complete'],
+      ['a complete macro\'s name with its backslash', m => { (m.marking as Record<string, unknown>).complete = { '\\bert': 0 } }, 'marking.complete.\\\\bert'],
+      ['a complete macro of arity 10', m => { (m.marking as Record<string, unknown>).complete = { bert: 10 } }, 'marking.complete.bert'],
+      ['a source apart twice', m => { (m.marking as Record<string, unknown>).apart = ['\\pp', '\\pp'] }, 'marking.apart[1]'],
+      ['a marking without its apart', m => { delete (m.marking as Record<string, unknown>).apart }, 'marking.apart'],
       ['a lineskip of one number', m => { (m.marking as Record<string, unknown>).lineskip = [1] }, 'marking.lineskip'],
       ['a lineskip past \\maxdimen', m => { (m.marking as Record<string, unknown>).lineskip = [1, 1e6] }, 'marking.lineskip[1]'],
       ['a lineskip a hundredth past \\maxdimen as written', m => { (m.marking as Record<string, unknown>).lineskip = [1, 16322.8] }, 'marking.lineskip[1]'],
@@ -1084,7 +1093,8 @@ describe('the marks file', () => {
       ['a switch of no command', m => { (m.marking.switches as Record<string, string>).cite = '00000000' }, 'marking.switches.cite'],
       ['a switch of 7 codes', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '2222000' }, 'marking.switches.\\\\cite'],
       ['a switch of a code 3', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '22223000' }, 'marking.switches.\\\\cite'],
-      ['a switch of 17 commands', m => { for (let i = 0; i < 17; i++) (m.marking.switches as Record<string, string>)[`\\c${'i'.repeat(i + 1)}te`] = '00000000' }, 'marking.switches'],
+      // (the asked classes' commands and the paper's own complete macros, PROBE_MAX + COMPLETE_PROBE_MAX: one past them)
+      ['a switch of 529 commands', m => { m.marking.switches = switchOf(529) }, 'marking.switches'],
       ['no inkless key', m => { delete (m.marking as Partial<LayoutMarks['marking']>).inkless }, 'marking.inkless'],
       ['the inkless an object', m => { (m.marking as Record<string, unknown>).inkless = {} }, 'marking.inkless'],
       ['an inkless source twice', m => { (m.marking.inkless as string[])[1] = '\\rule{0pt}{2ex}' }, 'marking.inkless[1]'],
@@ -1175,6 +1185,10 @@ describe('the marks file', () => {
       change(m)
       expect(refusal(bytes(m)), name).toBe(path)
     }
+    // a switch of every command the probe asks about at most stands
+    const most = valid()
+    most.marking.switches = switchOf(528)
+    expect(refusal(bytes(most))).toBeNull()
     // a later token the rest of the word before
     const rest = valid()
     rest.tokens[11] = -1

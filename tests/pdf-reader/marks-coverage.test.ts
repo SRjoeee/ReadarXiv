@@ -1,0 +1,221 @@
+import { describe, expect, it } from 'vitest'
+import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { completeMacros, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { completeCall, completeCalled, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+
+// The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
+// (LOOKS_AHEAD: no closing mark on it, no mark at all on the piece after it), a macro glued to the word before taken for that
+// word's letters (WORD_END), a unit whose start mark stands at no word (boundsFromMarks). Each guess is now read from what the
+// paper says: a macro's definition (its arity, whether its body reads on) with TeX's answer for what follows a call of it (the
+// mark probe), TeX's own box for a macro (whether it begins with a node apart from a word), the words on the mark's own line
+// (the release-route sweep's 217 unanchored rows: 2610.21098, 2610.21547, 2610.21376, 2610.21201). Whether a mark so placed
+// moves the page is checked under TeX by marks-invariant.test.ts
+
+type Piece = { t: string; s?: string; src?: string }
+const text = (s: string): Piece => ({ t: 'text', s })
+const ph = (src: string): Piece => ({ t: 'ph', src })
+const unit = (pieces: Piece[]): SourceUnit => ({ kind: 'para', file: 'main.tex', start: 0, end: 0, pieces }) as SourceUnit
+/** the marks layoutMarking writes round each placeholder of a unit, by its source: 'ab' both, 'a' the opening alone, '' none */
+const marksOf = (u: SourceUnit, o: Parameters<typeof layoutMarking>[2]) => {
+  const { units } = layoutMarking([u], MARK_CLASSES, o)
+  const out: Record<string, string> = {}
+  const pieces = (units[0]?.pieces ?? []) as Piece[]
+  pieces.forEach((p, j) => {
+    if (p.t !== 'ph' || /^\\axt/.test(p.src ?? '')) return
+    const before = pieces[j - 1]?.src ?? '', after = pieces[j + 1]?.src ?? ''
+    out[p.src ?? ''] = `${/^\\axtpm[am]\{/.test(before) ? 'a' : ''}${/^\\axtpm\{/.test(after) ? 'b' : ''}`
+  })
+  return out
+}
+const defs = (tex: string) => completeMacros([{ file: 'main.tex', text: tex }])
+/** TeX's answers: every mark safe before each follower (0), for the commands given */
+const all = (...cmds: string[]) => Object.fromEntries(cmds.map(c => [c, '00000000']))
+
+describe('completeMacros: the paper\'s macros that read nothing past their own arguments, from their definitions', () => {
+  it('each definition form, its arity', () => {
+    expect(defs([
+      "\\newcommand{\\dprime}{$d'$}", '\\newcommand\\HarnessLimitShare{91.5}', '\\renewcommand{\\cls}[1]{\\textsc{#1}}', '\\providecommand{\\pv}{x}',
+      '\\DeclareRobustCommand{\\rb}{y}', '\\newcommand*{\\st}[2]{#1 and #2.}', '\\def\\pair#1#2{(#1,#2)}', '\\gdef\\g{z}',
+      '\\NewDocumentCommand{\\nd}{m m}{(#1)}', '\\NewDocumentCommand\\ndp{+m}{[#1]}',
+    ].join('\n'))).toEqual([['HarnessLimitShare', 0], ['cls', 1], ['dprime', 0], ['g', 0], ['nd', 2], ['ndp', 1], ['pair', 2], ['pv', 0], ['rb', 0], ['st', 2]])
+  })
+  it('none that may read on: an optional first argument, a look ahead or a command at its body\'s end, an argument spec with more than mandatory ones', () => {
+    expect(defs([
+      '\\newcommand{\\opt}[2][x]{#1#2}', '\\newcommand\\bert{BERT\\xspace}', '\\newcommand\\nx{\\@ifnextchar[{a}{b}}', '\\newcommand\\st{\\@ifstar{a}{b}}',
+      '\\newcommand\\fl{\\futurelet\\next\\x}', '\\newcommand\\bf{\\textbf}', '\\NewDocumentCommand{\\ndo}{o m}{#2}', '\\NewDocumentCommand{\\nds}{s m}{#2}',
+    ].join('\n'))).toEqual([])
+  })
+  it('none whose body ends in an argument (\\pair[2]{#1#2}: its last may be \\bert = BERT\\xspace), defines a command, or names an argument past its arity (a definition inside another\'s)', () => {
+    expect(defs([
+      '\\newcommand\\pair[2]{#1#2}', '\\NewDocumentCommand\\ndp{+m}{x #1}', '\\newcommand\\setx[1]{\\renewcommand\\s{#1}}', '\\newcommand\\gl{\\global\\let\\a\\b}',
+      '\\newcommand\\sl[1]{\\setlength{\\parskip}{#1}x}', '\\def\\q{\\def\\r{1}}',
+    ].join('\n'))).toEqual([])
+  })
+  it('none that sets more than a piece of a line: an environment, a paragraph\'s end, an alignment\'s row or cell (jnsao.cls\'s \\and)', () => {
+    expect(defs([
+      '\\def\\and{\\end{tabular}\\hskip1em\\begin{tabular}[t]{c}}', '\\newcommand\\br{a\\\\b}', '\\newcommand\\cell{x & y}', '\\newcommand\\pp{a\\par b}',
+      '\\newcommand\\it{\\item x}', '\\newcommand\\rd{R\\&D}', '\\newcommand\\pb{\\parbox{1cm}{x}}',
+    ].join('\n'))).toEqual([['pb', 0], ['rd', 0]])
+  })
+  it('none whose \\def has white space after a parameter, which TeX takes for a delimiter (\\def\\foo#1 #2: the first argument runs to a space)', () => {
+    expect(defs(['\\def\\foo#1 #2{(#1,#2)}', '\\gdef\\zdoit#1 {#1}', '\\def\\nl#1\n  {#1}', '\\def\\ok #1#2{(#1,#2)}'].join('\n'))).toEqual([['ok', 2]])
+    // (and so a call of one gets no closing mark that TeX would read into its argument: \\foo{one}{two} {three})
+    const p = loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode('\\documentclass{article}\\def\\foo#1 #2{(#1,#2)}\\begin{document}\nA \\foo{one}{two} {three} here.\n\\end{document}\n')]])), 'main.tex')
+    expect(p.complete).toEqual([])
+    const marked = marksOf(p.units[0] as SourceUnit, { lines: false, complete: completeCalled(p.units, p.complete), switches: all('\\foo') })
+    expect(Object.entries(marked).filter(([src]) => src.startsWith('\\foo')).map(([, m]) => m)).toEqual(['a'])
+  })
+  it('none defined in another way too, nor twice with two arities, nor by a delimited \\def, nor in a comment', () => {
+    expect(defs(['\\newcommand\\lt{x}', '\\let\\lt\\relax', '\\newcommand\\two{x}', '\\renewcommand\\two[1]{#1}', '\\def\\dl#1.{#1}', '% \\newcommand\\cm{x}', '\\newcommand\\same{a}', '\\renewcommand\\same{b}'].join('\n'))).toEqual([['same', 0]])
+  })
+  it('the project gives them, of every file of the package (2610.21098\'s data macros, in a .sty of its own)', () => {
+    const files = new Map([
+      ['main.tex', new TextEncoder().encode('\\documentclass{article}\\usepackage{data}\\begin{document}\nThe share is \\HarnessLimitShare{} of all.\n\\end{document}\n')],
+      ['data.sty', new TextEncoder().encode('\\newcommand{\\HarnessLimitShare}{91.5}\n')],
+    ])
+    expect(loadProject(inMemory(files), 'main.tex').complete).toEqual([['HarnessLimitShare', 0]])
+  })
+})
+
+describe('completeCall: a call that holds every argument its macro takes', () => {
+  const C = new Map([['dprime', 0], ['cls', 1], ['pair', 2]])
+  it('its arguments, each a group or one token, and nothing after them', () => {
+    expect(['\\dprime', '\\dprime{}', '\\dprime ', '\\cls{abc}', '\\cls x', '\\pair{a}{b}', '\\pair ab', '\\pair{a} {b}', '\\pair\\alpha{b}'].map(s => completeCall(ph(s), C))).toEqual(Array(9).fill(true))
+  })
+  it('not one short of them, one past them, another macro, or none known', () => {
+    expect(['\\cls', '\\pair{a}', '\\cls{a}{b}', '\\dprime{x}', '\\other{a}', '\\clsx{a}'].map(s => completeCall(ph(s), C))).toEqual(Array(6).fill(false))
+    expect(completeCall(ph('\\dprime{}'), null)).toBe(false)
+    expect(completeCall(text('\\dprime'), C)).toBe(false)
+  })
+})
+
+describe('the mark probe asks about the complete macros\' calls, apart from the asked classes\' commands', () => {
+  it('each complete macro once, by its first call that holds its arguments, after the citations and references', () => {
+    const u = unit([ph('\\cls'), text(' a '), ph('\\cls{x}'), text(' b '), ph('\\cite{a}'), text(' c '), ph('\\cls{y}'), ph('\\other{z}')])
+    expect(probeSamples([u], [['cls', 1]])).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { command: '\\cls', src: '\\cls{x}', call: false, own: true }])
+    expect(probeSamples([u])).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }])
+    // (a call too long for the probe is asked about by none: the marking takes it to look ahead)
+    expect(probeSamples([unit([ph(`\\cls{${'x'.repeat(200)}}`)])], [['cls', 1]])).toEqual([])
+  })
+  it('last, after every other section, numbered on from the asked commands: a call of one runs what its body does, which may stop TeX', () => {
+    const u = unit([ph('\\cite{a}'), text(' and '), ph('\\cls{x}')])
+    const tex = markProbeTex(probeSamples([u], [['cls', 1]]), ['\\cls{x}'])
+    const at = (row: string) => tex.indexOf(row)
+    expect(at('LAYOUT-PROBE 1 punct-at 0 0 a')).toBeGreaterThan(-1)
+    expect(at('LAYOUT-PROBE 1 ink-at 0')).toBeGreaterThan(at('LAYOUT-PROBE 1 punct-at 0 0 a'))
+    expect(at('LAYOUT-PROBE 1 lineskip')).toBeGreaterThan(at('LAYOUT-PROBE 1 ink-at 0'))
+    expect(at('LAYOUT-PROBE 1 punct-at 1 0 a')).toBeGreaterThan(at('LAYOUT-PROBE 1 lineskip'))
+    expect(tex).toContain('\\axtpma{q1a}\\cls{x}\\axtpm{q1b}')
+    // (and a paper with none of its own asks as before)
+    expect(markProbeTex(probeSamples([u]), ['\\cls{x}'])).toBe(markProbeTex([{ src: '\\cite{a}', call: false }], ['\\cls{x}']))
+    expect(markProbeTex(probeSamples([u]), ['\\cls{x}'])).not.toContain('punct-at 1 ')
+  })
+})
+
+describe('layoutMarking with the complete macros: a call TeX answered for gets the marks TeX said move nothing', () => {
+  // (2610.21098 u15: \HarnessLimitShare{} = 91.5, then a citation after it)
+  const u = unit([text('The limit is '), ph('\\HarnessLimitShare{}'), text(' '), ph('\\cite{a}'), text(' of all, and '), ph('\\cls{word}'), text('. Then '), ph('\\ref{b}'), text('.')])
+  it('without them: no closing mark on the macro, no mark on the piece after it', () => {
+    expect(marksOf(u, { lines: false })).toEqual({ '\\HarnessLimitShare{}': 'a', '\\cite{a}': '', '\\cls{word}': 'a', '\\ref{b}': 'ab' })
+  })
+  it('with them and TeX\'s answer for each: its closing mark, and the piece after it, past white space, its two', () => {
+    expect(marksOf(u, { lines: false, complete: { HarnessLimitShare: 0, cls: 1 }, switches: all('\\HarnessLimitShare', '\\cls', '\\cite', '\\ref') })).toEqual({ '\\HarnessLimitShare{}': 'ab', '\\cite{a}': 'ab', '\\cls{word}': 'ab', '\\ref{b}': 'ab' })
+  })
+  it('as TeX answered: a closing mark it said moves what follows is none (cite\'s superscripts, a kern after the last letter), and a call it did not answer for looks ahead', () => {
+    // (\cls: a mark before the full stop moves it, '1')
+    expect(marksOf(u, { lines: false, complete: { HarnessLimitShare: 0, cls: 1 }, switches: { ...all('\\HarnessLimitShare', '\\cite', '\\ref'), '\\cls': '10000000' } })).toEqual({ '\\HarnessLimitShare{}': 'ab', '\\cite{a}': 'ab', '\\cls{word}': 'a', '\\ref{b}': 'ab' })
+    // (\cls answered '1' before a word too: the piece after it past white space keeps none of its marks)
+    const v = unit([text('A '), ph('\\cls{x}'), text(' '), ph('\\cite{a}'), text('.')])
+    expect(marksOf(v, { lines: false, complete: { cls: 1 }, switches: { ...all('\\cite'), '\\cls': '00000010' } })).toEqual({ '\\cls{x}': 'a', '\\cite{a}': '' })
+    // (\cls answered '2', no mark, before a word — a call ending in a control word is, TeX skipping the space after it — keeps
+    // its opening mark as any macro of the paper's, and the piece after it none)
+    expect(marksOf(v, { lines: false, complete: { cls: 1 }, switches: { ...all('\\cite'), '\\cls': '00000020' } })).toEqual({ '\\cls{x}': 'a', '\\cite{a}': '' })
+    // (\cls not answered for: as any macro, its opening mark alone, and none on the piece after it)
+    expect(marksOf(v, { lines: false, complete: { cls: 1 }, switches: all('\\cite') })).toEqual({ '\\cls{x}': 'a', '\\cite{a}': '' })
+    // (no probe at all: as before)
+    expect(marksOf(v, { lines: false, complete: { cls: 1 } })).toEqual({ '\\cls{x}': 'a', '\\cite{a}': '' })
+  })
+  it('no closing mark before a letter or a digit (\\tf{}s: the word\'s hyphenation) or right against the next piece, which keeps none', () => {
+    const v = unit([text('Our '), ph('\\tf{}'), text('s and '), ph('\\tf{}'), ph('\\cite{a}'), text(' more '), ph('\\tf{}'), text('2.')])
+    expect(marksOf(v, { lines: false, complete: { tf: 0 }, switches: all('\\tf', '\\cite') })).toEqual({ '\\tf{}': 'a', '\\cite{a}': '' })
+  })
+  it('a call short of its arguments looks ahead still; a call ending in a control word gets no closing mark, nor the piece past its white space any (TeX skips the spaces after it)', () => {
+    const v = unit([text('A '), ph('\\cls'), ph('\\cite{a}'), text(' B '), ph('\\dprime'), text(' '), ph('\\ref{b}'), text('.')])
+    expect(marksOf(v, { lines: false, complete: { cls: 1, dprime: 0 }, switches: all('\\cls', '\\dprime', '\\cite', '\\ref') })).toEqual({ '\\cls': 'a', '\\cite{a}': '', '\\dprime': 'a', '\\ref{b}': '' })
+  })
+  it('TeX\'s answer is its probed call\'s: a call with other arguments, or one short of them, has its opening mark alone', () => {
+    // (\\fmt{x}{x}. probed; \\fmt{x}{V}. ends in another glyph, which mathptmx kerns with the full stop)
+    const v = unit([text('A '), ph('\\fmt{x}{x}'), text('. B '), ph('\\fmt{x}{V}'), text('. C '), ph('\\fmt{x}{x}'), text('.')])
+    expect(marksOf(v, { lines: false, complete: { fmt: 2 }, switches: all('\\fmt') })).toEqual({ '\\fmt{x}{x}': 'ab', '\\fmt{x}{V}': 'a' })
+    // (a call of no arguments is its probed call whatever braces it has: \\dprime and \\dprime{} set the same)
+    const z = unit([text('A '), ph('\\dprime'), text(' and '), ph('\\dprime{}'), text('.')])
+    expect(marksOf(z, { lines: false, complete: { dprime: 0 }, switches: all('\\dprime') })).toEqual({ '\\dprime': 'a', '\\dprime{}': 'ab' })
+    // (a call short of its arguments keeps its opening mark though the probed call was answered '2', no mark)
+    const w = unit([text('A '), ph('\\foo{x}'), text(' and '), ph('\\foo'), text('.')])
+    expect(marksOf(w, { lines: false, complete: { foo: 1 }, switches: { '\\foo': '22222222' } })).toEqual({ '\\foo{x}': 'a', '\\foo': 'a' })
+  })
+  it('completeCalled: the complete macros the units call, by name', () => {
+    expect(completeCalled([u], [['HarnessLimitShare', 0], ['cls', 1], ['unused', 2]])).toEqual({ HarnessLimitShare: 0, cls: 1 })
+    expect(completeCalled([u], undefined)).toBeNull()
+  })
+})
+
+describe('the glue rule: a macro glued to the word before is part of it, unless TeX\'s box for it begins with a node apart from it', () => {
+  // (2610.21547: "0.58\pp", \pp = \,pp; 2610.21924: "Zhou\textsuperscript{1}", whose box begins with a formula)
+  const u = unit([text('a gap of 0.58'), ph('\\pp'), text(' then '), ph('$x$'), text(' by Zhou'), ph('\\textsuperscript{1}'), text(' and Giessenbachstra'), ph('\\foo'), text('e.')])
+  it('without TeX\'s answer, as before: no mark on either', () => {
+    expect(marksOf(u, { lines: false })).toMatchObject({ '\\pp': '', '\\textsuperscript{1}': '', '\\foo': '' })
+  })
+  it('with it: the one whose box begins with a kern is marked; one that begins with a character, a box or a formula stays the word\'s', () => {
+    // (its opening mark: no macro of the paper's that reads nothing past its arguments, so no closing one)
+    expect(marksOf(u, { lines: false, apart: ['\\pp'] })).toMatchObject({ '\\pp': 'a', '\\textsuperscript{1}': '', '\\foo': '' })
+  })
+  it('readInkApart: the samples whose box TeX listed in full and began with glue, a kern, a penalty or a whatsit', () => {
+    const row = (tag: string, i: number) => `LAYOUT-PROBE 1 ${tag} ${i}`
+    const box = (first: string) => ['> \\box0=', '\\hbox(6.83+0.0)x20.0', first, '.\\OT1/cmr/m/n/10 p', '', '! OK.']
+    const log = [
+      row('ink-at', 0), ...box('.\\kern1.66667'), row('ink-end', 0),
+      row('ink-at', 1), ...box('.\\mathon'), row('ink-end', 1),
+      row('ink-at', 2), ...box('.\\OT1/cmr/m/n/10 a'), row('ink-end', 2),
+      row('ink-at', 3), ...box('.\\pdfcolorstack 0 push {1 0 0 rg 1 0 0 RG}'), row('ink-end', 3),
+      row('ink-at', 4), '! Undefined control sequence.', ...box('.\\kern1.0'), row('ink-end', 4),
+      row('ink-at', 5), ...box('..\\kern1.0'), row('ink-end', 5),
+      row('ink-at', 6), ...box('.\\hbox(6.0+0.0)x5.0'), row('ink-end', 6),
+      row('ink-at', 7), ...box('.\\rule(1.0+0.0)x1.0'), row('ink-end', 7),
+      row('ink-at', 8), ...box('.\\glue 3.33'), row('ink-end', 8),
+    ].join('\n')
+    // (a formula, a box or a rule first: TeX hyphenates no word one of them follows, and would one a mark follows)
+    expect(readInkApart(log, ['\\pp', '\\textsuperscript{1}', '\\foo', '\\new{a}', '\\bad', '\\deep', '\\mbox{x}', '\\rule{1pt}{1pt}', '\\hfil'])).toEqual(['\\pp', '\\new{a}', '\\hfil'])
+  })
+  it('the kernel\'s letters and \\slash are text symbols: drawn as their characters, no mark needed (2610.21037\'s F\\o lner, 2610.21026\'s and\\slash or)', () => {
+    expect(['\\o', '\\O', '\\ss', '\\ae', '\\AE', '\\oe', '\\OE', '\\aa', '\\AA', '\\l', '\\L', '\\slash'].map(s => symbolText(s))).toEqual(['ø', 'Ø', 'ß', 'æ', 'Æ', 'œ', 'Œ', 'å', 'Å', 'ł', 'Ł', '/'])
+    // (not the dotless \\i and \\j, which a paper's text writes as its own as often as not: 2608.23818's indices)
+    expect(['\\i', '\\j'].map(s => symbolText(s))).toEqual([null, null])
+  })
+})
+
+describe('boundsFromMarks with the maker\'s reach: a unit start mark that stands at no word', () => {
+  // a line: a formula from x 100 to 160 (no token), then words; the unit's end mark after its last word
+  const tok = (t: string, x: number, w = 20) => ({ t, page: 1, x, y: 500, w, h: 10 })
+  const doc = [tok('Before', 40, 30), tok('is', 165), tok('a', 190, 8), tok('word.', 205, 30)]
+  const reach = (_mk: { x: number }) => 1
+  it('a start mark at no word, here and in its own compile (its word null): bounded by the word reached; else none, as before', () => {
+    const marks = new Map([['7s', { page: 1, x: 100, y: 500, t: null }], ['7e', { page: 1, x: 236, y: 500, t: 'word.' }]])
+    expect(boundsFromMarks(doc as never, marks).get('7')).toBeUndefined()
+    expect(boundsFromMarks(doc as never, marks, undefined, reach).get('7')).toEqual([1, 3])
+  })
+  it('not where its own compile had a word there (a carried word that is not the page\'s): unplaced, as before', () => {
+    const marks = new Map([['7s', { page: 1, x: 100, y: 500, t: 'Formula' }], ['7e', { page: 1, x: 236, y: 500, t: 'word.' }]])
+    expect(boundsFromMarks(doc as never, marks, undefined, reach).get('7')).toBeUndefined()
+  })
+})
+
+describe('uprightToken: the maker reaches only upright words (2610.19282 p15: a sideways caption, whose word at the mark\'s height is another line\'s)', () => {
+  const styles = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' } }
+  const tokensOf = (transform: number[]) => tokenizeDocument([{ page: 1, items: [{ str: 'Bifurcations of the map', transform, width: 110, height: 10, fontName: 'F1', dir: 'ltr' }], styles }] as never) as { t: string }[]
+  it('a word of an upright line is; of a line turned a quarter either way, or upside down, none is', () => {
+    expect(tokensOf([10, 0, 0, 10, 72, 700]).map(uprightToken)).toEqual([true, true, true, true])
+    for (const m of [[0, 10, -10, 0, 300, 400], [0, -10, 10, 0, 300, 400], [-10, 0, 0, -10, 400, 300]]) expect(tokensOf(m).map(uprightToken), JSON.stringify(m)).toEqual([false, false, false, false])
+  })
+})
