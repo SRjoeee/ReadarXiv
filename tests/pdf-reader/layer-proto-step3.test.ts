@@ -335,6 +335,90 @@ describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every o
     expect(baselines(three)).toEqual([500, 470, 440])
   })
 
+  // ---- fillLeadRel: the fill's top relative to the original's own pitch (zh and zh-TW only) ----
+  /** a frame of `slots` lines `pitch` apart from 500 (size 10), a unit of `chars` characters (ten a line) laid in it at the
+   *  leading a loose original gets: its pitch is more than 1.3 × 1.25 em, so the fit's leading is the floor, 1 */
+  const frameOf = (slots: number, pitch: number) => ({ ...block(slots), B: Array.from({ length: slots }, (_, k) => 500 - pitch * k), rects: Array.from({ length: slots }, (_, k) => [1, 0, 500 - pitch * k - 2, 100, 500 - pitch * k + 8]), exact: Array.from({ length: slots }, () => true), sizes: Array.from({ length: slots }, () => 10), pitch0: pitch })
+  const laidIn = (chars_: number, slots: number, pitch: number, PP: Record<string, unknown>): Unit => {
+    const p = { id: 1, unit: { kind: 'para' }, pages: [1], tokens: chars(chars_), blocks: [frameOf(slots, pitch)], s: 10, P: { ...PP, growTo: 0 } } as unknown as Unit
+    p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
+    return p
+  }
+  const NOGROW = { band: 0.05, track: 0, size: 1 }
+  const LOOSE = (o: Record<string, unknown> = {}) => P({ leadBase: 1, fillLead: 2, fillLeadRel: 1.3, adaptiveFill: NOGROW, ...o })
+  const filled = async (u: Unit, PP: Record<string, unknown>) => { await fill([u], PP); return { top: u.fillTop, lead: u.fillLead, base: baselines(u) } }
+
+  it('builds in fillLeadRel 1.3 for Chinese (Simplified and Traditional) and none for Japanese, Korean and the alphabets', () => {
+    expect(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'pt', 'ru'].map(t => params(t).fillLeadRel)).toEqual([1.3, 1.3, null, null, null, null, null, null, null])
+  })
+
+  it("lets a double-spaced original's unit spread to 1.3 of its pitch, where the em top stops it at the pitch itself", async () => {
+    // (20 characters, two lines, in a frame of six lines 20 apart: 2 em is the original's pitch, so the em top is 1.0)
+    const emOnly = await filled(laidIn(20, 6, 20, LOOSE({ fillLeadRel: null })), LOOSE({ fillLeadRel: null }))
+    expect(emOnly).toEqual({ top: 1, lead: 1, base: [500, 480] })
+    const rel = await filled(laidIn(20, 6, 20, LOOSE()), LOOSE())
+    expect(rel).toEqual({ top: 1.3, lead: 1.3, base: [500, 474] })
+  })
+
+  it("stops at the frame where it allows less than 1.3 pitches: eight lines in a frame of nine, never past its foot", async () => {
+    const r = await filled(laidIn(80, 9, 20, LOOSE()), LOOSE())
+    expect(r.top).toBe(1.3)
+    // (the last line on the frame's last slot at the latest, 500 - 8 x 20, and the leading above one and under the ceiling)
+    expect(r.lead).toBeGreaterThan(1)
+    expect(r.lead).toBeLessThan(1.3)
+    expect(Math.min(...r.base)).toBeGreaterThanOrEqual(340 - 1e-6)
+  })
+
+  it('never goes above the ceiling: two lines in a frame of five (room for 2.5) stop at 1.3', async () => {
+    const r = await filled(laidIn(20, 5, 20, LOOSE()), LOOSE())
+    expect(r).toEqual({ top: 1.3, lead: 1.3, base: [500, 474] })
+  })
+
+  it('leaves a single-spaced original as it was: the em top, 1.667 pitches, is the looser of the two', async () => {
+    const was = await filled(laidIn(20, 6, 12, LOOSE({ leadBase: 1.3, fillLeadRel: null })), LOOSE({ leadBase: 1.3, fillLeadRel: null }))
+    const now = await filled(laidIn(20, 6, 12, LOOSE({ leadBase: 1.3 })), LOOSE({ leadBase: 1.3 }))
+    expect(was.top).toBe(1.667)
+    expect(now).toEqual(was)
+  })
+
+  it('leaves a one-line unit as it was: its first baseline is the original\'s, the leftover below', async () => {
+    const was = await filled(laidIn(8, 4, 20, LOOSE({ fillLeadRel: null })), LOOSE({ fillLeadRel: null }))
+    const now = await filled(laidIn(8, 4, 20, LOOSE()), LOOSE())
+    expect(now.base).toEqual([500])
+    expect(now.base).toEqual(was.base)
+  })
+
+  it("scales the ceiling by the fit's size, so that a unit the fit shrank is spread no looser in proportion", async () => {
+    const u = laidIn(20, 6, 20, LOOSE())
+    u.layout = { ...u.layout, state: { ...u.layout.state, scale: 0.9 } } as never
+    await fill([u], LOOSE())
+    // (the em top is 2 x 10 x 0.9 / 20 = 0.9 pitches, the ceiling 1.3 x 0.9)
+    expect(u.fillTop).toBe(1.17)
+  })
+
+  it('reads zh-TW as zh, and Japanese and Korean as before (their rules hold none)', async () => {
+    const at = async (to: string) => { const PP = { ...params(to), borrow: 0, leadBase: 1, adaptiveFill: NOGROW }; return filled(laidIn(20, 6, 20, PP), PP) }
+    expect(await at('zh-TW')).toEqual(await at('zh'))
+    expect((await at('zh')).lead).toBe(1.3)
+    // (Japanese and Korean: the em top at 1.7 em of a pitch of 2 em, 0.85, under the fit's 1: the original's pitch, as it was)
+    for (const to of ['ja', 'ko']) expect(await at(to), to).toMatchObject({ top: 0.85, lead: 1 })
+  })
+
+  it("tries the top itself: a top off the 0.01 grid is reached, so that the unit counts as short (tracking and the page's size)", async () => {
+    // (a pitch of 12.4 puts the em top at 1.613, 31.3 steps over the fit's 1.3: counted down it stopped at 1.61)
+    const PP = LOOSE({ leadBase: 1.3 })
+    const fixed = await filled(laidIn(20, 6, 12.4, PP), PP)
+    expect(fixed).toMatchObject({ top: 1.613, lead: 1.613 })
+    const was = LOOSE({ leadBase: 1.3, fillLeadRel: null })
+    expect(await filled(laidIn(20, 6, 12.4, was), was)).toMatchObject({ top: 1.613, lead: 1.61 })
+    // (and so it is short, which earns the tracking the page's fill grants a unit short of its frame; counted down it earned none)
+    const tracked = (o: Record<string, unknown>) => { const q = LOOSE({ leadBase: 1.3, adaptiveFill: { band: 0.05, track: 0.05, size: 1 }, ...o }); return { q, u: laidIn(20, 6, 12.4, q) } }
+    const a = tracked({}), b = tracked({ fillLeadRel: null })
+    await fill([a.u], a.q)
+    await fill([b.u], b.q)
+    expect(a.u.layout.state.track).toBeGreaterThan(b.u.layout.state.track)
+  })
+
   it("holds a page's own within a band of its anchor, the median of every body unit drawn on it", async () => {
     // (own: the units begun on the page, 1.5, 1.5 and 1.3, median 1.5; with three continuations at 1.3 the anchor is 1.3, the upper median)
     const here = [told(1.5), told(1.5), told(1.3)]
