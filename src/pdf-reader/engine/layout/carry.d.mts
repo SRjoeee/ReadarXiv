@@ -27,30 +27,27 @@ export interface Carrier {
   readonly inPlace: readonly number[]
   /** each marked token's line (no entry for a token on no line) */
   readonly tokenLine: readonly number[]
-  /** each marked rest of a word given in parts on a page carried: 1 where arXiv's rest stands within LINE_PLACE of it, else 0 */
-  readonly rests: ReadonlyMap<number, number>
-  /** each marked token a partner word matched: its offset from that word, x and y */
-  readonly tokenDx: ReadonlyMap<number, number>
-  readonly tokenDy: ReadonlyMap<number, number>
   /** the marked tokens `from` to `to` (`marked`'s indices), whole pages none of which was added: their lines matched */
   add(from?: number, to?: number): void
 }
 export declare function carrierOf(marked: readonly DocToken[], arxiv: readonly DocToken[]): Carrier
 /** a line in place: found on its own page within this, PDF units */
 export declare const LINE_PLACE: 0.5
-/** the page-and-line check: the carrier's counts with the lines in place, and each page's [placed, total] (information); each
- *  of our lines' partner and verdict, each of our tokens' line (-1: none), each of our rests' verdict (1 in place), the pages
- *  past their work */
+/** a page is drawable where at least this share of its words are arXiv's page's, in order */
+export declare const PAGE_SAME: 0.98
+/** the page-and-line check: may we draw, per page (`pages`, `undrawable`), and do the panes align, per line, information alone:
+ *  the carrier's counts with the lines in place, each page's [placed, total], each of our lines' partner and verdict, each of
+ *  our tokens' line (-1: none), the pages past their work */
 export interface LineCheck {
   lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number; placed: number }
   pageLines: ReadonlyMap<number, readonly [placed: number, total: number]>
   lineAt: readonly (LinePartner | null)[]
   inPlace: Uint8Array
   tokenLine: Int32Array
-  rests: Uint8Array
-  /** each of our tokens a partner word matched: its offset from that word (NaN for none) */
-  tokenDx: Float64Array
-  tokenDy: Float64Array
+  /** may we draw, per page: its words against arXiv's page's (`overlap`, in order; null past the bound), our lines found on
+   *  another page (`elsewhere`), drawable or not; and the pages that are not */
+  pages: { page: number; words: [ours: number, arxiv: number]; overlap: number | null; elsewhere: number; drawable: boolean }[]
+  undrawable: number[]
   over: number[]
 }
 export declare function lineCheckOf(ours: readonly DocToken[], arxiv: readonly DocToken[]): LineCheck

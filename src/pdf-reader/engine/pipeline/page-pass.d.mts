@@ -83,8 +83,8 @@ export interface LayerOracle { frame: (t: unknown) => boolean; columnEdges: Map<
  *  or the part's own (a verdict's, a part's bound's), TeX's and the carry's as such, every fault of the engine's own `marks` */
 export declare function layoutRecordOf(r: { refused?: string; why?: string; stats?: { units?: { total: number } } } | null | undefined): LayoutRefusalRecord | null
 /** our base page's checks (the page-and-line check after the guard: the page count, no mark printed as text, the final pass the
- *  draft's page, every page box arXiv's, the TeX Live year) and its line check (each of our lines in place on arXiv's PDF or
- *  not, which the maker lays each unit by): its text, the line check and the head's base of ours (`carried` the share of our
+ *  draft's page, every page box arXiv's, the TeX Live year) and its page and line check (each page drawable or not, which the
+ *  maker lays each unit by; each of our lines in place on arXiv's PDF or not, information): its text, the line check and the head's base of ours (`carried` the share of our
  *  lines in place, information), or the first failing reason (its code, LAYOUT_REFUSED's) */
 export declare function checkOurBase(o: {
   ours: LayerOptions['ours']

@@ -62,10 +62,10 @@ export { LayoutRefusal } from './json.mjs'
  *  package the paper loads overrides as the command's definition (arg-roles.mjs overriddenFallback), and takes no marked original
  *  of more pages than arXiv's for the base page (paper.mjs markedOfPaper): over 183 local sources the marked original changes in
  *  2610.20581 and 2610.19860 alone, the gate pack's 32 outputs unchanged (the file's schema is 5 still; MARKS_SCHEMA 9 still);
- *  16: a unit is laid only where every line it owns is in place on arXiv's PDF (make.mjs inPlace: the median of its words'
- *  offsets within LINE_PLACE on its own page, or a twin of the same words but for their characters outside ASCII), the others
- *  left the original's, in place of the share of the paper's and each part's lines (CARRY_MIN, gone) (the file's schema is 5
- *  still) */
+ *  16: a unit is laid only where every page it is on is drawable, its words arXiv's page's (carry.mjs PAGE_SAME: 0.98 in
+ *  order, NFKC and the known text-layer substitutes applied) and none of its lines on another page of arXiv's (make.mjs
+ *  drawable), the others left the original's, in place of the share of the paper's and each part's lines (CARRY_MIN, gone)
+ *  (the file's schema is 5 still) */
 export const LAYOUT = '16'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour

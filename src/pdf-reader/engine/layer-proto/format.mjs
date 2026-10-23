@@ -94,8 +94,8 @@ export const TOKEN_SCALE = 1000, TOKEN_LIMIT = 100_000
  *  judged: a marked original of fewer pages than arXiv's PDF where the host gave the guard no page count, no compile left to
  *  tell whose fault it is, a compile that threw), `texlive` (as compile, the paper declaring another TeX Live year than the
  *  box's), `engine` (a compiler the host does not run, as `engines` or its answer names it) —; ours — `marks` (the marked original is not the paper and the layout guard could not mend it, or the mark probe,
- *  the marks' reading or the maker failed) —; and `carry` (no unit of our compile laid, none in place on arXiv's pages, every
- *  line it owns: layout/make.mjs inPlace); BUNDLE 8's, where our compile is no base page — `final` (the final pass of the
+ *  the marks' reading or the maker failed) —; and `carry` (no unit of our compile laid: no page with a unit on it arXiv's
+ *  page, layout/make.mjs drawable); BUNDLE 8's, where our compile is no base page — `final` (the final pass of the
  *  marked original failed, or did not place every mark where the draft did, or the compile budget held none), `boxes` (a page
  *  of ours is not arXiv's size, or the page counts differ). A part with `layout: null` is one whose producer recorded no
  *  reason (5's shape, cutBundle with none given) */

@@ -212,12 +212,12 @@ describe('layerOfPaper: the page pass', () => {
     expect(shas(off.parts)).toEqual(shas(got.parts))
   })
 
-  it('a paper none of whose units is in place falls back to arXiv\'s PDF: nothing told before the head, every part with no layout, in the stream as made whole', async () => {
-    // (arXiv's lines a line lower than ours on every page: every one found, none in place)
-    const w0 = worldOf(), w = { ...w0, marked: w0.pages, pages: w0.pages.map(p => ({ runs: p.runs.map(r => ({ ...r, y: r.y - 12 })) })) }
+  it('a paper no page of which is arXiv\'s page falls back to arXiv\'s PDF: nothing told before the head, every part with no layout, in the stream as made whole', async () => {
+    // (arXiv's pages hold our pages 2, 3 and 1: every line found, on another page)
+    const w0 = worldOf(), w = { ...w0, marked: w0.pages, pages: [1, 2, 0].map(i => w0.pages[i] as (typeof w0.pages)[number]) }
     const capture: Record<string, unknown> = {}
     const whole = await passOf(w, { whole: true })
-    const why = '0 of the 3 units verified in place on arXiv\'s PDF'
+    const why = '0 of the 3 units on a page that is arXiv\'s page'
     for (const got of [whole, await passOf(w), await passOf(w, { capture: capture as never }), await passOf(w, { oracle: capture as never })]) {
       expect(got.told, JSON.stringify(got.r)).toEqual(['head', 'left 1', 'part 1', 'left 2', 'left 3', 'part 2'])
       const head = await readHead(got.head!.bytes, { ref: got.head!.ref })
@@ -459,7 +459,7 @@ describe('layerOfPaper: each part with no layout says why, on the wire (BUNDLE 6
     // (no unit laid, the marked original read here: every part, the paper's refusal)
     const none = { ...worldOf(), marked: [1, 2, 3].map(() => ({ runs: [] })) }
     const all = await readBack(await passOf(none, { marks: null, marked: markedIn(none) } as never))
-    expect(all.map(p => p.noLayout)).toEqual(Array(2).fill({ refused: 'carry', why: '0 of the 3 units verified in place on arXiv\'s PDF' }))
+    expect(all.map(p => p.noLayout)).toEqual(Array(2).fill({ refused: 'carry', why: '0 of the 3 units on a page that is arXiv\'s page' }))
   })
 })
 

@@ -40,7 +40,7 @@ const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', tex
 /**
  * Why a part has no layout, as its record says it (layer-proto/format.mjs LAYOUT_REFUSED: `{ refused, why }`, `why` within
  * WHY_MAX): the paper's refusal — the marked original's (layout/paper.mjs markedOfPaper's 'compile', 'texlive', 'engine',
- * 'marks', and the probe's), the page count's, the maker's ('carry': no unit laid, none in place on arXiv's PDF; its throw
+ * 'marks', and the probe's), the page count's, the maker's ('carry': no unit laid, no page with a unit on it arXiv's page; its throw
  * 'failed', a refusal of its own) — or the part's own (a verdict's 'read', a part's bound's 'part'). TeX's and the carry's say
  * so; every fault of the engine's own (the probe, the reading, the maker, a part's reader) is `marks`. Null for none
  */
@@ -52,7 +52,7 @@ export function layoutRecordOf(r) {
     case 'compile': case 'texlive': case 'engine': case 'marks': case 'final': case 'boxes': return { refused: r.refused, why: given || PLAIN_WHY[r.refused] }
     case 'carry': {
       const n = r.stats?.units?.total
-      return { refused: 'carry', why: whyText(Number.isInteger(n) ? `0 of the ${n} units verified in place on arXiv's PDF` : 'no unit verified in place on arXiv\'s PDF') }
+      return { refused: 'carry', why: whyText(Number.isInteger(n) ? `0 of the ${n} units on a page that is arXiv's page` : 'no unit on a page that is arXiv\'s page') }
     }
     case 'probe': return { refused: 'marks', why: said('the mark probe gave no log') }
     case 'failed': return { refused: 'marks', why: said('the layout maker failed') }
@@ -88,8 +88,8 @@ function fitted(text) {
  * arXiv's PDF and its text, `tree` the TeX Live year our compile was made on. In turn: the base page's text read (ours.text, else
  * readArxivText with `draw`), its page count arXiv's ('boxes'), no mark of ours printed as text on it ('marks'), the final pass
  * the draft's page ('final'), every page box arXiv's ('boxes': boxesCheck), and the year known ('final'); then the line check
- * (carry.mjs lineCheckOf of the two texts' tokens: each of our lines in place on arXiv's PDF or not), which the maker lays each
- * unit by (layout/make.mjs inPlace: every line it owns in place), its share of our lines in place the head's `carried`,
+ * (carry.mjs lineCheckOf of the two texts' tokens: each page drawable or not, its words arXiv's page's), which the maker lays each
+ * unit by (layout/make.mjs drawable: every page it is on), its share of our lines in place the head's `carried`,
  * information alone. { text, lineCheck, head } (the head's base of ours, BUNDLE 8), or the first failing reason { refused, why }.
  * What the page pass checks before its head, and the lab's makers with it (the gate pack's base pages). Never throws but a
  * failed allocation
@@ -123,7 +123,7 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
   }
   if (!bc.equal) return no('boxes', bc.why)
   if (typeof tree !== 'string' || !/^\d{4}$/.test(tree)) return no('final', 'the TeX Live year our compile was made on is not known')
-  // the line check: each of our base page's lines in place on arXiv's PDF or not (carry.mjs lineCheckOf over the two texts'
+  // the line check: each page drawable or not, each line in place or not (carry.mjs lineCheckOf over the two texts'
   // tokens), the maker's to lay each unit by; the paper's share information alone; no position is carried
   const lineCheck = lineCheckOf(baseText.tokens, text.tokens), L = lineCheck.lines
   return { text: baseText, lineCheck, head: { source: 'ours', bytes: ours.bytes, sha256: ours.sha256, xref: ours.xref, pages: N, tree, check: { pages: [N, N], boxes: 'equal', carried: L.total > 0 ? L.placed / L.total : 0 } } }
@@ -187,10 +187,10 @@ export async function checkOurBase({ ours, draft = null, arxiv, tree = null, dra
  * (a marked original refused or of other pages: its refusal), no mark printed as text on our pages ('marks': arxiv.mjs
  * `markText`), the final pass placing every mark where the draft does ('final': base.mjs finalCheck against `marked.doc`,
  * else `ours.check`, a host's check of it), and every page box arXiv's ('boxes': boxesCheck): checkOurBase, whose line check
- * (carry.mjs lineCheckOf of our text's tokens over arXiv's) the maker lays each unit by, every line it owns in place on arXiv's
- * PDF, the others left the original's. The head's base is then ours ({ source: 'ours', …, check }, `orig` arXiv's PDF) and the
+ * (carry.mjs lineCheckOf of our text's tokens over arXiv's) the maker lays each unit by, every page it is on arXiv's page,
+ * the others left the original's. The head's base is then ours ({ source: 'ours', …, check }, `orig` arXiv's PDF) and the
  * remover's tails continue it. A paper that fails, that has no base of ours (`ours` null, or { refused, why }: no final pass,
- * 'final'), or none of whose units is in place on arXiv's PDF (no unit laid, the maker's 'carry': in the page stream the head
+ * 'final'), or none of whose units is on a page that is arXiv's page (no unit laid, the maker's 'carry': in the page stream the head
  * waits for the first unit laid, so that nothing is told before), falls back: its head's base arXiv's PDF ({ source: 'arxiv', …, why
  * }) and every part with no layout, its record the same why. The layout is never made over arXiv's PDF: a host that gives no
  * base of ours (BUNDLE 7's, arXiv's PDF alone as `base`) has every paper fall back ('final')
@@ -432,7 +432,7 @@ const wholeLeft = side => {
  * stream at least the left's first token still to be anchored, or the last stream of a smaller id's and a half), and no
  * layout-only entry there takes its slot after a unit whose left anchor is not final (it may still change); (3) every member
  * of the table groups of those entries is in K for good; and (4) a unit is laid (the head waits for it: a paper none of whose
- * units placed is in place on arXiv's PDF falls back to arXiv's, told whole at the end, as a paper with no layout is). K, F and the need bounds are then those of the whole paper on what the part
+ * units is laid falls back to arXiv's, told whole at the end, as a paper with no layout is). K, F and the need bounds are then those of the whole paper on what the part
  * reads (cutBundle's). The head is told once a unit is located on the left (else the paper is refused, telling nothing, as
  * the whole run refuses it). `drive({ making, close, read })` reads the pages: the maker's calls in `making` (a throw of its
  * own is the layout's), `close()` after each step, `read(p)` with the base page p read
@@ -577,7 +577,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   }
   await drive({ making, close: () => (failed ? null : close(false)), read: p => { X = p }, failed: () => failed })
   if (st && !failed) await making(async () => { st.finish() })
-  // (no unit laid, none in place on arXiv's PDF: nothing was told, the head waiting for a unit laid; the paper falls back to
+  // (no unit laid: nothing was told, the head waiting for a unit laid; the paper falls back to
   // arXiv's PDF, cut whole as a paper with no layout is)
   const carry = st && !failed ? st.carryRefusal() : null
   if (carry) {

@@ -20,10 +20,10 @@ export interface MakeInput {
   pdfjs: string
   /** the base page's text as layout/arxiv.mjs readArxivText read it from `arxiv` (step T), else read by the maker */
   text?: ArxivText | null
-  /** the line check: our base page's lines in place on arXiv's PDF (carry.mjs lineCheckOf of the base page's own tokens, `text`'s,
-   *  over arXiv's). A unit is laid only where every line it owns is in place (`stats.units.unverified` the others), the file
-   *  refused ('carry') where none is; its counts information (`stats.lines`, each page's in `lines` and `pageLines()`); none: no
-   *  line checked, every unit placed laid */
+  /** the line check (carry.mjs lineCheckOf of the base page's own tokens, `text`'s, over arXiv's). A unit is laid only where
+   *  every page it is on is drawable (`undrawable`; `stats.units.undrawn` the others), the file refused ('carry') where none is;
+   *  its line counts information (`stats.lines`, each page's in `lines` and `pageLines()`); none: no line checked, every unit
+   *  placed laid */
   lineCheck?: import('./carry.mjs').LineCheck | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
@@ -53,9 +53,8 @@ export interface LayoutStats {
   lines: { carried: number; total: number; held: number }
   /** `unplaced`: the units the text would place whose own marks stand on no page with ink, or not on their words (they stay
    *  the original's) */
-  /** `unverified`: the units placed but not in place on arXiv's PDF (the line check's), left the original's; `unread` those of
-   *  them of no row the check reads */
-  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number; unverified: number; unread: number }
+  /** `undrawn`: the units placed on a page that is not drawable (the line check's), left the original's */
+  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number; undrawn: number }
   /** `marked`: the placeholders of the located units the marked original marks (an opening mark at least), by kind
    *  found among them; `unmarked`: those it gives no mark (LOST, beside them); `symbols`: the text symbols it gives no
    *  mark drawn as their character (PH_FLAG.TEXT, beside them); `inferred`: those found whose end is
@@ -144,7 +143,7 @@ export interface MakerStream {
   /** the marked original's page (markedPages' page event's), pages in order; its end after its last */
   markedPage(page: MarkedPage): void
   markedEnd(end: Extract<MarkedEvent, { end: unknown }>['end']): void
-  /** the line check's refusal ('carry': no unit laid, none in place on arXiv's PDF), once finished; null before */
+  /** the line check's refusal ('carry': no unit laid), once finished; null before */
   carryRefusal(): 'carry' | null
   /** the units the file holds so far */
   laid(): number
