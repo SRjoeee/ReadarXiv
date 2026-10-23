@@ -43,6 +43,8 @@ export const RETRY_MS = 1000
 export const REQUEST_MS = 30_000
 /** our copy of the original read whole (no tag to read it by ranges): its own bound, a 46 MB copy at 80 KB/s */
 export const ORIGINAL_MS = 600_000
+/** a delta object (at most DELTA_MAX_BYTES, 24 MiB): 24 MiB at 400 KB/s */
+export const DELTA_MS = 60_000
 /** the header of the catalog's and the objects' answers that names the original the layer is bound to: our copy's entity-tag */
 export const BASE_ETAG_HEADER = 'x-axt-base-etag'
 /** a strong entity-tag (RFC 9110 §8.8.3), as R2 tags an object: the only kind a range is held to */
@@ -244,12 +246,12 @@ export async function askPrepare(api: string, p: Paper, o: { fetch?: typeof fetc
   void r.body?.cancel().catch(() => {})
   throw new LayerUnreachable(`the prepare's route answered ${r.status}`)
 }
-/** an object of the layer by its ref, no more of it read than its ref's bytes and OBJECT_MARGIN (the side's readers check
+/** an object of the layer by its ref (`ms`: how long its ask may take, REQUEST_MS by default: a delta's is longer), no more of it read than its ref's bytes and OBJECT_MARGIN (the side's readers check
  *  its digest, values and shape), and the original its answer names it bound to (boundOf); a ref that is no ref refused
  *  before any request, any answer but a 200 refused */
-export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256' | 'bytes'>, o: { fetch?: typeof fetch; signal?: AbortSignal } = {}): Promise<{ bytes: Uint8Array; bound: string | null }> {
+export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256' | 'bytes'>, o: { fetch?: typeof fetch; signal?: AbortSignal; ms?: number } = {}): Promise<{ bytes: Uint8Array; bound: string | null }> {
   if (typeof ref?.sha256 !== 'string' || !DIGEST.test(ref.sha256) || !Number.isSafeInteger(ref.bytes) || ref.bytes < 1) throw new TypeError(`the layer's object: not a ref (${String(ref?.sha256).slice(0, 80)})`)
-  const r = await fetched(o.fetch ?? fetch, objectPath(api, p, ref.sha256), { signal: o.signal ?? null })
+  const r = await fetched(o.fetch ?? fetch, objectPath(api, p, ref.sha256), { signal: o.signal ?? null }, o.ms ?? REQUEST_MS)
   if (r.status !== 200) { void r.body?.cancel().catch(() => {}); throw new Error(`the layer's object ${ref.sha256}: ${r.status}`) }
   return { bytes: await bodyWithin(r, ref.bytes + OBJECT_MARGIN), bound: boundOf(r) }
 }

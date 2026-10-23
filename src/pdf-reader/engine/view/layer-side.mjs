@@ -27,6 +27,7 @@
 // web/src/layer/side.ts (drawOver: the copy's source and resolution, the stall, the copies let go) and, for the document's
 // open and the open again, from its visit.ts.
 import { layerDraws } from '../layer-proto/format.mjs'
+import { pagesOf } from '../layout/delta-wire.mjs'
 import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
 import { unitOf } from '../layer-proto/rows.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
@@ -118,6 +119,16 @@ export function createLayerSide(view, o) {
    *  layerDraws, format.mjs): the composed document's pages are then OUR base's, whose lines are not arXiv's page's, so a page's copy comes
    *  from the composed document alone and a page laid by no layout is the original's page */
   const oursBase = () => layerDraws(index?.head?.base)
+  /** whether page `n` is one the composed document draws as ours: a base held whole is ours on every page; a base held as a delta over
+   *  arXiv's PDF (`kind` 'delta') is ours on its replaced pages (`base.replaced`, ranges) alone and the original's own bytes on every
+   *  other, so that its canvas the left drew is the same page (the shortcut of before the route holds again there) */
+  let replacedOf = null, replacedPages = null
+  const replacedPage = n => {
+    const b = index?.head?.base
+    if (b?.kind !== 'delta') return true
+    if (replacedOf !== b) { replacedOf = b; replacedPages = new Set(pagesOf(b.replaced ?? [])) }
+    return replacedPages.has(n)
+  }
   /** whether page `n` stays the original's page: the layer is over our base and the parts that hold the page have no layout (a
    *  page the door would lay with nothing drawn and nothing erased: our base page, in other line breaks, beside arXiv's) */
   const originalPageOf = n => oursBase() && noLayoutPage(feed.state().parts, n)
@@ -486,8 +497,9 @@ export function createLayerSide(view, o) {
    *  it drew it at (drawn.mjs); null where there is none */
   function drawnSource(n, k) {
     // over our base the left's canvas and the place's are the ORIGINAL's page, arXiv's rendering: not the composed document's page
-    // (our compile's), whose erase rectangles, crops and colours are laid on it
-    if (oursBase()) return null
+    // (our compile's), whose erase rectangles, crops and colours are laid on it; but a page a delta does not replace IS the original's
+    // bytes in the composed document, and its canvas is a copy source (replacedPage)
+    if (oursBase() && replacedPage(n)) return null
     for (const [from, got] of [['left', V.left.canvas(n)], ['place', V.places.canvas(n)]]) {
       if (got && Math.abs(got.k - k) / k <= K_SLACK) return { canvas: got.canvas, k: got.k, from }
     }
@@ -512,7 +524,10 @@ export function createLayerSide(view, o) {
     canvas.width = Math.max(1, Math.round(box.width * r))
     canvas.height = Math.max(1, Math.round(box.height * r))
     try {
-      await page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false, willReadFrequently: !V.assets?.enableHWA }), viewport }).promise
+      // (a replaced page of a delta keeps the original\'s /Annots, ~91 % of whose link rectangles are ours: the layer draws its own links
+    // from the layout, so the original\'s annotations are not drawn into the copy)
+    const off = index?.head?.base?.kind === 'delta' && replacedPage(n) ? V.lib?.AnnotationMode?.DISABLE : undefined
+    await page.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false, willReadFrequently: !V.assets?.enableHWA }), viewport, ...(off === undefined ? {} : { annotationMode: off }) }).promise
     } catch (e) { release(canvas); page.cleanup?.(); throw e }
     drew(canvas, k)
     return { canvas, k, from: 'doc', page }
@@ -917,7 +932,7 @@ export function createLayerSide(view, o) {
         // the page drawn from the document and the source it is compared with
         let docSrc = src, other = src
         if (src.from === 'doc') {
-          const left = oursBase() ? V.left.canvas(n) : null
+          const left = oursBase() && replacedPage(n) ? V.left.canvas(n) : null
           if (!left || Math.abs(left.k - k) / k > K_SLACK) return out
           other = { canvas: left.canvas, k: left.k }
         } else {
