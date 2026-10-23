@@ -163,10 +163,12 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     expect(groupsOf(r, pages)).toEqual({ u0: 'Completion cap', u1: 'tokens per request', 'u1.p': '1,024 ' })
     expect([r.units.get(0)?.unhidden, r.units.get(1)?.unhidden]).toEqual([null, null])
     expect(r.stats.leaks).toEqual({ count: 0, units: [] })
-    // (a text symbol's text is known without the probe: \\# sets "#")
+    // (a text symbol's text is known without the probe: \\# sets "#"; the layer draws a text symbol as its character in the
+    // translation, never from a crop, so its ink is hidden with the text: in `.p`, which the reader hides only for a found
+    // placeholder, the original "#" stood under the drawn one — the pixel tier's overlap, 1512.03385v1 p7, 1810.04805v2 p7)
     const hash = [page([{ pt: 't0s' }, 'Model', { pt: 't0e' }, { dx: 30 }, '#', { pt: 't1s' }, 'Steps', { pt: 't1e' }])]
     const h = ownOf(hash, { units: [{ kind: 'cell', pieces: [{ t: 'text', s: 'Model' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\#' }, { t: 'text', s: ' Steps' }] }] })
-    expect(groupsOf(h, hash)).toEqual({ u0: 'Model', u1: 'Steps', 'u1.p': '#' })
+    expect(groupsOf(h, hash)).toEqual({ u0: 'Model', u1: '#Steps' })
     // (the macro's text not known: the cell the original's, as before)
     expect(ownOf(pages, { units: cells }).units.get(1)?.unhidden).toBe('marks')
   })

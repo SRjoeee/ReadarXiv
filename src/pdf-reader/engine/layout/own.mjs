@@ -255,25 +255,27 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   const cellLead = new Set()
   /** the text a unit's unmarked lead placeholders set, NFKC with no white space, or null where one is not known */
   const leadText = (u, id) => {
-    let out = ''
+    let out = '', symbols = true
     for (let k = 0; k < (u?.pieces?.length ?? 0); k++) {
       const piece = u.pieces[k]
       if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) break; continue }
       const c = classOf(piece)
       if (!c) continue
       if (c === 'footnote' || where.has(`p${id}.${k}a`) || where.has(`p${id}.${k}b`)) break
-      const t = texts?.get(piece.src) ?? symbolText(piece.src)
+      const sym = symbolText(piece.src), t = texts?.get(piece.src) ?? sym
       if (typeof t !== 'string') return null
+      if (sym === null) symbols = false
       out += t
     }
     out = out.normalize('NFKC').replace(/\s/gu, '')
-    return out || null
+    return out ? { text: out, symbols } : null
   }
   for (const [id, { s }] of textOf) {
     if (!s || !units || !(units[id]?.kind === 'cell' || pt(s).name.startsWith('t')) || !opensUnmarked(units[id], id)) continue
     if (work > OWN_WORK) { unit(id).unhidden ??= 'marks'; continue }
-    const want = leadText(units[id], id)
-    if (want === null) continue
+    const lead = leadText(units[id], id)
+    if (lead === null) continue
+    const want = lead.text
     const [p, q] = s, pg = pages[p - 1], S = pt(s), r = at(s), R = regions[p - 1]
     if (S.glyph >= pg.glyphs.length) continue
     const F = pg.glyphs[S.glyph], from = q > 0 ? pg.points[q - 1].glyph : 0
@@ -289,7 +291,9 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       right = G
     }
     if (got !== want) continue
-    claim({ glyphs: run.reverse() }, `u${id}.p`, 'p')
+    // (text symbols alone, \\#: the layer draws them as their characters in the translation, so their ink goes with the text,
+    // hidden whenever the cell is drawn; a macro's the maker finds by the same text, a placeholder's crop: `.p`)
+    claim({ glyphs: run.reverse() }, lead.symbols ? `u${id}` : `u${id}.p`, lead.symbols ? 'u' : 'p')
     cellLead.add(id)
   }
 

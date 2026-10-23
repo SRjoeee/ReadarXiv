@@ -2134,8 +2134,9 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   placeholder of no mark of its own (`\CompletionTokenCap{}`, `\#`) has that ink before its start mark, told by its text
   alone, never by a gap (an unmarked number cell may stand 0.4 em or nothing before it: `\tabcolsep` 2pt, `@{}`): the glyphs
   right before the start that spell exactly the text the marking's probe showed the macro sets (`wrapFinal`'s `texts`, the
-  marks file's `marking.texts`) or a text symbol's (`\#` "#"), each under `CELL_ABUT` 0.6 em from the next, are its `.p`;
-  where that text is not known or not there, the cell is `marks`. Marks absent, twice or out of
+  marks file's `marking.texts`) or a text symbol's (`\#` "#"), each under `CELL_ABUT` 0.6 em from the next, are its `.p`
+  (a text symbol's alone go with the text, `u<id>`: the layer draws a symbol as its character, never from a crop, and the
+  reader hides `.p` only for a found placeholder); where that text is not known or not there, the cell is `marks`. Marks absent, twice or out of
   order, a unit the paper's units lack, a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
   it could not be kept in place, and the spell check reads no symbol), or a unit that opens with a placeholder of no mark of
   its own whose ink still stands, in no group, on its start's line before its start mark (a table's cell, `\bertlarge` first
