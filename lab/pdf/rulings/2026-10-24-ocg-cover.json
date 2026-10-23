@@ -19,6 +19,11 @@
  "scope": "the rules gate's model tier (next 695190d2 against feat/ocg-cover, both on pack 26ebc7f4, before the marking's texts reached the gate): table groups drawn partly 0 -> 2 on 1810.04805v2 p7 alone (es, ja, ko, ru, zh), the table whose model-name cells open with \\bertbase and \\bertlarge; with it cells left English down (1512.03385v1 p7, 1810.04805v2 p7: zh 31 -> 17) and 2608.04322v1 p1's title drawn again (text units left English zh 37 -> 36). The instrument's count follows the rule from this pull request on; a partly drawn group for any other reason still counts",
  "why": "The standard is closeness to the original page and coverage first. A cell whose ink cannot be hidden is shown as the original, untranslated (decision 3); before this ruling its whole table was shown English with it. A table with one English cell is closer to a translated page than an English table, and no ink is lost or doubled: the cell kept is the page's own ink, its siblings are hidden by their own groups. A cell whose range fails the spell check, or whose box other cells share, keeps the old rule, its range or box being no proof of its siblings' ink",
  "evidence": {
-  "what": "the rules gate locally (rules-gate.mjs run and compare, model tier) on the controller's run: next 695190d2 against feat/ocg-cover a199e682 on pack 26ebc7f4; the crops of 1810.04805v2 p7, arXiv's own page left (its sha256 in the label), the old build and the new, follow once the pack carries the marking's texts"
+  "what": "the rules gate locally (rules-gate.mjs run and compare, model tier) on the controller's run: next 695190d2 against feat/ocg-cover on pack 26ebc7f4; the layer gate's pixel tier on 8 outputs of pack 8a74b1a2 (the base records carrying the marks' texts), both engines, one instrument: overlap 7 -> 7, stray 5 -> 5, cells left English 86 -> 62, residue 279 -> 287 (1512.03385v1 p7: the table's rules in the rectangles of the cells now drawn) (lab/pdf/records/ocg-gate.md)",
+  "pack": {
+   "before": "26ebc7f4",
+   "after": "8a74b1a2"
+  },
+  "crops": "~/Downloads/readarxiv-test/route-ocg-cover-evidence/1810.04805v2-zh-p7-arxiv-old-new.png: left arXiv's own page 7 of 1810.04805v2 rendered from the fixture's arxiv.pdf by pdftoppm (sha256 5692a5514787a8c6 in its label), middle the old build (next 695190d2) over our page, right the new (feat/ocg-cover) over our page wrapped"
  }
 }
