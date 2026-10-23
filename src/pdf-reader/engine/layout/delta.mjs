@@ -182,6 +182,24 @@ function contentsOf(PL, doc, node) {
   return [c]
 }
 
+/**
+ * A page's geometry as PDF.js reads it (its `view`, `rotate`, `userUnit`): the CropBox (else the MediaBox) clipped to the
+ * MediaBox, both inherited, normalized; the rotation a multiple of 90 within 0 to 270; the user unit a positive number, else 1.
+ * A replaced page keeps the original's page dict but these, so ours must read as the original's (null: a box that is not one)
+ */
+function geometryOf(PL, doc, page) {
+  const look = v => (v instanceof PL.PDFRef ? doc.lookup(v) : v)
+  const box = v => { const a = look(v); if (!(a instanceof PL.PDFArray) || a.size() !== 4) return null; const n = a.asArray().map(x => look(x)?.asNumber?.()); return n.every(Number.isFinite) ? [Math.min(n[0], n[2]), Math.min(n[1], n[3]), Math.max(n[0], n[2]), Math.max(n[1], n[3])] : null }
+  const media = box(page.inherited.MediaBox) ?? [0, 0, 612, 792]
+  const crop = box(page.inherited.CropBox)
+  const view = crop ? [Math.max(crop[0], media[0]), Math.max(crop[1], media[1]), Math.min(crop[2], media[2]), Math.min(crop[3], media[3])] : media
+  const r = look(page.inherited.Rotate)?.asNumber?.() ?? 0
+  const rotate = Number.isInteger(r) && r % 90 === 0 ? ((r % 360) + 360) % 360 : 0
+  const u = look(page.node.get(PL.PDFName.of('UserUnit')))?.asNumber?.()
+  return { view, rotate, userUnit: Number.isFinite(u) && u > 0 ? u : 1 }
+}
+const sameGeometry = (a, b) => a.rotate === b.rotate && a.userUnit === b.userUnit && a.view.every((v, i) => Math.abs(v - b.view[i]) <= 0.01)
+
 /** a refusal: the code (delta-wire.mjs DELTA_WHYS) and its why */
 const refusal = (code, why) => ({ refused: code, why: String(why).slice(0, 300) })
 const refusalOf = e => {
@@ -285,6 +303,7 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
       const op = oPages[p - 1], up = uPages[p - 1]
       const a = pageForm(O, OC, op), b = pageForm(U, UC, up)
       if (a !== null && a === b) continue
+      if (!sameGeometry(geometryOf(PL, O, op), geometryOf(PL, U, up))) return refusal('delta-boxes', `page ${p} of ours is not arXiv's page box, rotation or user unit`)
       replaced.push(p)
       const contents = contentsOf(PL, U, up.node).map(r => (r instanceof PDFRef ? copyRef(r, 'other', true) : 'null'))
       const ctext = contents.length === 1 ? contents[0] : `[${contents.join(' ')}]`
@@ -465,7 +484,7 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       for (let p = 1; p <= doc.numPages; p++) {
         const page = await doc.getPage(p)
         const tc = await page.getTextContent()
-        pages.push({ view: [...page.view], rotate: page.rotate, items: tc.items.filter(x => 'str' in x) })
+        pages.push({ view: [...page.view], rotate: page.rotate, userUnit: page.userUnit ?? 1, items: tc.items.filter(x => 'str' in x) })
         page.cleanup()
       }
       return pages
@@ -494,7 +513,7 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
   if (comp.length !== orig.length) return no(`PDF.js reads ${comp.length} pages of the composed document, ${orig.length} of arXiv's`)
   for (let p = 1; p <= comp.length; p++) {
     const ref = p <= ours.length ? ours[p - 1] : orig[p - 1], c = comp[p - 1]
-    if (c.rotate !== ref.rotate || c.view.some((v, i) => !near(v, ref.view[i]))) return no(`page ${p}'s box is not ${p <= ours.length ? 'ours' : 'the original\'s'}`)
+    if (c.rotate !== ref.rotate || c.userUnit !== ref.userUnit || c.view.some((v, i) => !near(v, ref.view[i]))) return no(`page ${p}'s box is not ${p <= ours.length ? 'ours' : 'the original\'s'}`)
     const want = rep.has(p) ? ours[p - 1] : orig[p - 1]
     const d = textDiffers(c.items, want.items)
     if (d) return no(`page ${p}'s text is not ${rep.has(p) ? 'ours' : 'the original\'s'}: ${d}`)

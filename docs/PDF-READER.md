@@ -1874,7 +1874,7 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   bucket or the build long. Its `/Size` leaves the remover's tails `DELTA_TAIL_ROOM` (2^20) numbers below `OBJECT_MAX`.
 - **Refused, the whole base kept** (`DELTA_WHYS`): an original it cannot read safely (`delta-parse`, `delta-encrypted`,
   `delta-xref`: hybrid, an entry not at its `n g obj`, a section that does not parse; `delta-stream`: a `/Length` not ending at
-  `endstream`), our pages more than arXiv's (`delta-pages`), a bound (`delta-bound`: `DELTA_MAX_BYTES` 24 MiB, more than
+  `endstream`), our pages more than arXiv's (`delta-pages`), a replaced page of ours whose box (the CropBox within the MediaBox, inherited), rotation or `/UserUnit` is not arXiv's page's, which the delta's page dict keeps (`delta-boxes`), a bound (`delta-bound`: `DELTA_MAX_BYTES` 24 MiB, more than
   `DELTA_MAX_SHARE` 0.35 of our whole base page, `DELTA_OBJECTS_MAX` 200,000 objects, `DELTA_HELD_MAX` 64 MiB of forms held,
   `DELTA_DECODED_MAX` 48 MiB of object and cross-reference streams decoded), nothing to replace (`delta-empty`), the proof
   (`delta-proof`), a delta the page pass was given that does not check (`delta-shape`).
@@ -1883,7 +1883,7 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again by the object
   layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a pairwise graph
   comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
-  gives (its console captured, each document read in turn); the original's page count; every page's box and text (strings and
+  gives (its console captured, each document read in turn); the original's page count; every page's box, rotation, user unit and text (strings and
   places within 0.01) ours on replaced pages and the original's elsewhere. What the delta overrides of the original is bounded:
   the replaced pages' objects exactly (no catalog, no other page), its `/Size` not below the original's, and its trailer the
   original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
