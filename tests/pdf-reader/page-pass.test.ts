@@ -9,7 +9,7 @@ import { DEFAULT_RULES, makeLayout, WHOLE_RULES } from '@/pdf-reader/engine/layo
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { anchorUnits, boundsFromMarks, floatMatches } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { leftSideOf } from '@/pdf-reader/engine/pipeline/left-side.mjs'
-import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
+import { layerOfPaper, layoutRecordOf } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 import { lineCheckOf } from '@/pdf-reader/engine/layout/carry.mjs'
 import { deltaOf } from './helpers/delta-pdfs'
@@ -71,6 +71,16 @@ async function cutOf(w: World) {
   return cutBundle({ paper: { ...PAPER, pages: N }, base, units: bundleUnitsOf(source(w)), left: { pages: side.pages, units: side.units }, layout: made.file }, { leftPages: side.leftPages, base, orig: BASE, image: '1', draw: true })
 }
 const shas = (ws: readonly Written[]) => ws.map(x => x.sha256)
+
+describe('layoutRecordOf: a part with no layout says why in words that are true', () => {
+  it('a re-cut after the maker died says it died, never that the maker refused the paper (2610.21924\'s "the layout maker refused it (memory)")', () => {
+    expect(layoutRecordOf({ refused: 'memory' })).toEqual({ refused: 'marks', why: 'the layout maker ran out of memory, and the parts were cut again without it' })
+    expect(layoutRecordOf({ refused: 'clock' })?.why).toBe('the layout maker passed its clock, and the parts were cut again without it')
+    expect(layoutRecordOf({ refused: 'crashed' })?.why).toBe('the layout maker exited, and the parts were cut again without it')
+    // (a refusal of the maker's own keeps its words)
+    expect(layoutRecordOf({ refused: 'pages' })?.why).toBe('the layout maker refused it (pages)')
+  })
+})
 
 describe("layerOfPaper: a colour piece's fill reaches the reader (#407)", () => {
   it("each part carries the colour rows of its own units, and the reader's colourOf reads them back", async () => {

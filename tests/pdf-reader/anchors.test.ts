@@ -70,6 +70,29 @@ describe('tokens: a run of Latin letters or digits ends where a CJK character be
     expect(boundsFromMarks(near, new Map([['0s', { page: 1, x: 50, y: 700 }], ['0e', { page: 1, x: 70, y: 700 }]])).get('0')).toEqual([0, 0])
   })
 
+  it('a start mark takes the word it stands before, not the one it stands past: a caption\'s first word after its label, read in one item or in two (2610.22065)', () => {
+    // the marked original reads the line as one item, its width shared by its characters: "1" ends at 358 and "attention"
+    // begins at 368, and the start mark at 362 (where TeX set it, before "Attention") is 4 past the one and 6 short of the
+    // other; our wrapped base page reads it in two items cut at the mark, "attention" at 362 exactly
+    const one = tokenizeDocument([{ page: 1, items: [item('Figure 1: Attention maps', 318, 440, { width: 120 })], styles: {} }])
+    const cut = tokenizeDocument([{ page: 1, items: [item('Figure 1:', 318, 440, { width: 34.7 }), item('Attention maps', 362, 440, { width: 76 })], styles: {} }])
+    const at = new Map([['0s', { page: 1, x: 362, y: 440 }], ['0e', { page: 1, x: 438, y: 440 }]])
+    const words = markWords(one, at)
+    expect(words.get('0s')?.t).toBe('attention')
+    expect(boundsFromMarks(cut, words).get('0')).toEqual([2, 3])
+    // a word whose shared box ends within half a character before the mark is still the one it stands at
+    expect(markWords(one, new Map([['0s', { page: 1, x: 359.5, y: 440 }]])).get('0s')?.t).toBe('1')
+    // and with no word after it on its line within reach, the word it stands past, as before
+    expect(markWords(one, new Map([['0s', { page: 1, x: 441, y: 440 }]])).get('0s')?.t).toBe('maps')
+  })
+
+  it('an end mark takes the last word that begins before it, a box that overruns the mark its word (the start rule\'s mirror)', () => {
+    // "maps" shared from 418 to 438: an end mark at 436, inside its approximate box, is still the end of "maps", never "attention"
+    const one = tokenizeDocument([{ page: 1, items: [item('Figure 1: Attention maps', 318, 440, { width: 120 })], styles: {} }])
+    expect(markWords(one, new Map([['0e', { page: 1, x: 436, y: 440 }]])).get('0e')?.t).toBe('maps')
+    expect(markWords(one, new Map([['0e', { page: 1, x: 414, y: 440 }]])).get('0e')?.t).toBe('attention')
+  })
+
   it('a word the tokenizer still joins with a CJK character — a Latin word hyphenated at a line\'s end, CJK on the next — is carried whole, and bounds its unit (the review of A1, M2)', () => {
     const doc = tokenizeDocument([{ page: 1, items: [item('GPT-', 50, 700, { eol: true }), item('风格的模型', 50, 688, { eol: true })], styles: {} }])
     expect(doc[0]?.t).toBe('gpt风')

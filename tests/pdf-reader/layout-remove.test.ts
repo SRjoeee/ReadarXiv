@@ -54,6 +54,23 @@ function bounded<T>(body: string, data: unknown, ms = 4000, heapMb?: number): Pr
 }
 const lexOps = 'try { return { ops: R.lex(new TextEncoder().encode(data)).map(o => o.op) } } catch (e) { return { threw: String(e.message) } }'
 
+describe('the remover holds a decoded stream as bytes of its own', () => {
+  it('a small stream decoded through a buffer grown past it is its own bytes, so that the decoded streams\' cache holds what it counts (2610.21924)', async () => {
+    // a 2 KB content stream, Flate: the object layer's DecodeStream reads it in chunks of 64 KB and grows its buffer past that,
+    // and a view of it held the whole buffer (3,128 such forms on one page held 960 MB)
+    const body = 'q 0 0 1 1 re f Q\n'.repeat(120)
+    const z = Buffer.from(deflateSync(Buffer.from(body, 'latin1'))).toString('latin1')
+    const doc = pdfBin([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R >>',
+      ['/Filter /FlateDecode', z],
+    ])
+    const got = await bounded<{ length: number; held: number }>('const r = await R.openRemover(data, { PL }); const b = r.decode(r.ctx.lookup(PL.PDFRef.of(4))); return { length: b.length, held: b.buffer.byteLength }', doc)
+    expect(got).toEqual({ length: body.length, held: body.length })
+  })
+})
+
 describe("the remover on untrusted input: every loop advances or refuses", () => {
   it("skips a comment in an inline image's parameters, as the lexer does anywhere else", async () => {
     expect(await bounded(lexOps, 'BI %comment\n /W 1 /H 1 /BPC 8 /CS /G ID x EI Q')).toEqual({ ops: ['BI', 'Q'] })
