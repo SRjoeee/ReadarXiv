@@ -95,7 +95,9 @@ export interface LinkRecord {
 /** a laid page, new on every call (DR1): `svg` a new element of equal `outerHTML`, `words` and `links` equal data that are not
  *  the same objects (`words` always present: a page with no painted unit has an empty table, `tokens.n` 0); lang set, scale 2.5;
  *  the host's to keep or drop */
-export interface LaidPage { svg: SVGSVGElement; w: number; h: number; words: PageWords; links: LinkRecord[] }
+/** `hides`: how many groups the page's copy hides, 0 where the layer draws nothing of its own on it (no unit translated there: its
+ *  copy would be our base page as it is, which the host shows as arXiv's page instead) */
+export interface LaidPage { svg: SVGSVGElement; w: number; h: number; words: PageWords; links: LinkRecord[]; hides?: number }
 /** a page of the left, parsed: the part's tokens, spans and pairs (an empty part, `table.n` 0, has no shapes) */
 export type LeftPage = ReadLeftPart
 

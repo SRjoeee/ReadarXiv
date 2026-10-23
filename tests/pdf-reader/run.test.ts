@@ -829,22 +829,31 @@ describe('another target language, in place (retarget)', () => {
     await settle(80)
     expect(pool.made[0]?.translate.mock.calls.length).toBe(0)
     expect(byOf(a.side.taken).every(b => b === 'ja')).toBe(true)
+    // (the new target's service asked one run's batches, as an open of ja asks them: never twice)
+    const once = run({ looks: [() => new Response(catalog)], engine: tagged('ja') })
+    await settle(60)
+    expect(pool.made[1]?.translate.mock.calls.length).toBe(once.engine.translate.mock.calls.length)
   })
 
   it('a stop with rows of the target translated tells the end and lets no page go first; one whose rows are all `none` tells none and shows the original', async () => {
     const zh = tagged('zh'), ja = tagged('ja')
-    let calls = 0
-    ja.translate.mockImplementation(async (texts: string[]) => { if (calls++) throw Object.assign(new Error('down'), { kind: 'network' }); return texts.map(t => ({ text: t, by: 'ja' })) })
+    let down = false
+    ja.translate.mockImplementation(async (texts: string[]) => { if (down) throw Object.assign(new Error('down'), { kind: 'network' }); return texts.map(t => ({ text: t, by: 'ja' })) })
     let n = 0
     const a = run({ looks: [() => new Response(catalog)], engine: vi.fn(async () => (n++ ? ja : zh)) as never })
     await settle(60)
     a.r.retarget('ja')
     await settle(80)
+    expect(a.side.ended()).toBe(2)
+    // (the sample is one batch: the stop comes on a retry of the target, its rows held translated)
+    down = true
+    a.r.retry()
+    await settle(80)
     const last = a.events.filter(e => e.type === 'translated').at(-1) as Extract<RunEvent, { type: 'translated' }>
-    if (last.got > 0) {
-      expect(a.side.ended()).toBe(2)
-      expect(a.side.side.dropOthers).not.toHaveBeenCalled()
-    }
+    expect(last.got).toBeGreaterThan(0)
+    expect(last.stopped).toBe('network')
+    expect(a.side.ended()).toBe(3)
+    expect(a.side.side.dropOthers).not.toHaveBeenCalled()
     // (a translation whose every row says nothing, `none`, then a stop on the retry: nothing translated, no end)
     const dash = echo('zh')
     let k = 0

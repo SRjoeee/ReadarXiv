@@ -2916,6 +2916,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
      * caller may transfer or free them). Only a page that is final (ready) has one: it is frozen at the first ask if it is not
      * already; a RangeError for another, never a table that would change
      */
+    /** how many groups page pg's copy hides (render A's off): 0 where the layer draws nothing of its own there, its copy our base page
+     *  as it is */
+    hides: pg => rows[pg - 1]?.off?.size ?? 0,
     wordsOf(pg) {
       const r = rows[pg - 1]
       if (!r) throw new RangeError(`wordsOf: page ${pg} has no row`)

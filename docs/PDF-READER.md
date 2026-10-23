@@ -834,7 +834,10 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     (`VIS.render`'s `live`), so the door before holds no turn of the document's queue; a live reading pins its page warm until
     its fills are read. A stop tells the end only where a unit of the target was translated (`whole` or `partial`); a service
     that never answers ends as any stop does, by the request queue's bounds (each batch's timeout, the queue's whole budget).
-    A language change during a limit's wait (429) is retargeted in place, the look asked no sooner. The left pane is not
+    A language change during a limit's wait (429) is retargeted in place, the look asked no sooner. Whatever the target, a laid
+    page whose copy hides nothing (`LaidPage.hides` 0: no unit translated there, its rows `none`, lost or not come by the end, or
+    nothing to translate) is never put in place: arXiv's page stays, never our base page in its place. `dropOthers()` lets go
+    every drawing of a door before, another target's or this one's before it was opened again. The left pane is not
     touched. A same-target retry keeps its pages as before.
   - **The left first, or in the same frame.** A copy ready while the left's page is being drawn waits for it (at most
     `LEFT_WAIT_MS`) and is put in place in the task the left's page is told drawn in. Chromium, 2602.23285v2 p8 at k 2, asked to

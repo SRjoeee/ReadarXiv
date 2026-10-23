@@ -379,6 +379,11 @@ export function createLayerSide(view, o) {
     // the right's shapes there the original's again, as its place is
     if (right?.hide(n)) startsFor([...rows.keys()])
   }
+  /** a page of an earlier door let go (dropOthers): its place and the right's shapes there the original's; whether the shapes changed */
+  function dropPage(n) {
+    unlay(n)
+    return !!right?.hide(n)
+  }
   /** what the place shows of the layer let go, the place back to its pre-layer content */
   function unlay(n) {
     const P = pages.get(n)
@@ -416,7 +421,7 @@ export function createLayerSide(view, o) {
         keptForFocus.delete(n)
         if (!V.places.near(n)) farGone(n)
         // (kept for the focus by dropOthers: another target's layer, the original's page once the focus has left it)
-        else if (dropped && pages.get(n)?.content && pages.get(n).content.target !== target) unlay(n)
+        else if (dropped && pages.get(n)?.content && (pages.get(n).content.target !== target || pages.get(n).content.gen !== gen) && dropPage(n)) startsFor([...rows.keys()])
       }
     }, 0)
   }
@@ -535,8 +540,10 @@ export function createLayerSide(view, o) {
   async function commit(n, laid, my) {
     const P = rec(n), k = kOf(n), d = door
     if (k === null || !d) return
-    // (the page asked before its parts were all told, laid with nothing to draw: the original's page stays)
-    if (originalPageOf(n)) { shownOriginal(n); return }
+    // (the page asked before its parts were all told, laid with nothing to draw: the original's page stays; and a page the layer draws
+    // nothing of its own on, no unit translated there (its rows none, lost or not come by the end): arXiv's page stays, never our
+    // base page in its place)
+    if (originalPageOf(n) || laid.hides === 0) { shownOriginal(n); return }
     let got
     try { got = await copyAt(d, n, k, my) } catch (e) {
       if (disposed || my !== gen || e?.name === 'AbortError') return
@@ -688,6 +695,8 @@ export function createLayerSide(view, o) {
       right.dispose()
       left = createShapes({ kindOf: id => index.kinds[id] ?? undefined, warn })
       right = layerShapes(left)
+      // (the pages kept drawn by a door before keep their shapes muted: the new shapes describe none of them either)
+      for (const [n, P] of pages) if (P.content?.wrap && P.content.gen !== gen) right.mute(n, true)
       contents = createContents(index)
       contents.take([...rows.values()])
       // the original's outline gives the new contents the pages of the headings no part locates
@@ -885,18 +894,17 @@ export function createLayerSide(view, o) {
       for (const n of pages.keys()) { abortAsk(n); for (const c of pages.get(n).copyAcs ?? []) c.abort() }
       side.again()
     },
-    /** every page that still shows another target's layer back to the original's page: the host's word that this target's rows
-     *  will not come (its service failed, or it stopped short) */
+    /** every page that still shows a drawing of a door before (another target's, or this one's before it was opened again) back to
+     *  the original's page: the host's word that this target's rows will not come (its service failed, or it stopped short) */
     dropOthers() {
       if (disposed) return
       dropped = true
       let hid = false
       for (const [n, P] of pages) {
-        if (!P.content || P.content.target === target) continue
+        if (!P.content || (P.content.target === target && P.content.gen === gen)) continue
         // (a page holding the focus is kept until the focus leaves it, as a far page is: unlaid, it would take the focus with it)
         if (holdsFocus(n)) { keptForFocus.add(n); continue }
-        unlay(n)
-        if (right?.hide(n)) hid = true
+        if (dropPage(n)) hid = true
       }
       if (hid) startsFor([...rows.keys()])
     },

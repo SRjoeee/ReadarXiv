@@ -186,7 +186,7 @@ describe('the real door: (d) a fresh LaidPage each call, and L1 text as text', (
 })
 
 describe('the real door: L2 served faces only', () => {
-  it('no face served: every unit stays the original\'s, its tokens the left\'s copies on the right; no face rule in the pane', async () => {
+  it('no face served: every unit stays the original\'s, so the page draws nothing of its own and shows arXiv\'s page (no SVG of the layer); no face rule in the pane', async () => {
     const m = await M()
     const s = await real({ faceSources: async () => null })
     await nearOn(s, [1])
@@ -194,9 +194,9 @@ describe('the real door: L2 served faces only', () => {
     s.side.take(rowsOfIndex(m.index))
     s.side.end()
     await still(s)
-    expect(content(s, 1)).toBe('layer')
-    const svg = layerOf(s, 1)?.querySelector('svg') as SVGSVGElement
-    expect(svg.querySelectorAll('tspan').length).toBe(0)
+    expect(s.layer()?.pageState(1)).toBe('ready')
+    expect(content(s, 1)).toBe('original')
+    expect(layerOf(s, 1)).toBeNull()
     const sheets = [...document.querySelectorAll('style')].map(x => x.textContent ?? '').join('\n')
     expect(sheets).not.toMatch(/@font-face|local\(/)
   })
@@ -397,5 +397,34 @@ describe('the real door: the laid page\'s links (3b)', () => {
     a.find(x => x.getAttribute('href')?.startsWith('#'))?.click()
     await macrotask()
     expect(asked).toEqual([records.find(r => r.dest !== undefined)?.dest])
+  })
+})
+
+describe('the real door: a page the layer draws nothing of its own on is arXiv\'s page, never our base page in its place', () => {
+  const noneRows = (m: Made) => rowsOfIndex(m.index).map(r => [r[0], [], 'none', null, null] as unknown as Row)
+  for (const [what, feed] of [
+    ['every row `none`, then the end (a reply of no shape for every unit)', (s: Setup, m: Made) => { s.side.take(noneRows(m)); s.side.end() }],
+    ['every row `none`, no end (a stop after them)', (s: Setup, m: Made) => { s.side.take(noneRows(m)) }],
+    ['no row at all, then the end (nothing to translate)', (s: Setup) => { s.side.end() }],
+  ] as const) {
+    it(what, async () => {
+      const m = await M()
+      const s = await real()
+      await nearOn(s, [1])
+      s.side.tell(await ALL())
+      feed(s, m)
+      await still(s)
+      expect(s.layer()?.pageState(1)).toBe('ready')
+      expect(content(s, 1)).toBe('original')
+    })
+  }
+  it('the same pages with their rows translated: the layer (the control)', async () => {
+    const m = await M()
+    const s = await real()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(rowsOfIndex(m.index))
+    await still(s)
+    expect(content(s, 1)).toBe('layer')
   })
 })

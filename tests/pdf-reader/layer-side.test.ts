@@ -876,6 +876,35 @@ describe('another target over the same layer (retarget)', () => {
     expect(r.side.probe().target).toBe('ja')
   })
 
+  it('zh -> ja -> zh, then the rows will not come: the first zh door\'s pages go to the original as the ja ones would (a drawing of a door before)', async () => {
+    const { s } = await laid()
+    s.side.retarget('ja')
+    s.side.retarget('zh')
+    await settle(s)
+    expect([content(s, 1), s.side.probe().muted]).toEqual(['layer', '1 2'])
+    s.side.dropOthers()
+    await flush(4)
+    expect([content(s, 1), content(s, 2), s.side.probe().muted]).toEqual(['original', 'original', ''])
+  })
+
+  it('a page holding the focus is kept by dropOthers until the focus leaves, then let go as the others: the original, its shapes unmuted', async () => {
+    const { s } = await laid()
+    s.side.retarget('ja')
+    await settle(s)
+    const b = document.createElement('button')
+    layerOf(s, 1)?.append(b)
+    b.focus()
+    s.side.dropOthers()
+    await flush(4)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'original'])
+    const out = document.createElement('button')
+    document.body.append(out)
+    out.focus()
+    await settle(s, 4)
+    expect([content(s, 1), s.side.probe().muted]).toEqual(['original', ''])
+    out.remove()
+  })
+
   it('the same target, or a side that refused its layer: nothing', async () => {
     const { s } = await laid()
     s.side.retarget('zh')
