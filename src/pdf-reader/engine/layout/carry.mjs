@@ -396,15 +396,22 @@ const PAGE_CELLS = 25_000_000
  *  alone (punctuation a text layer glues to a word or gives apart is no word's); none where nothing is left */
 const pageWord = t => known(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
 /** arXiv's stamp up its first page's margin ("arXiv:2307.16209v1 [hep-th] 30 Jul 2023", "arXiv:hep-th/9901001v1 …"), as
- *  page words: no word of the paper's, so none of ours has it (2307.16209's title page, 35 words of ours against arXiv's 43) */
+ *  page words, taken out of arXiv's first page (`ws`) where our page (`mine`) does not hold the same run: no word of the paper's
+ *  (2307.16209's title page, 35 words of ours against arXiv's 43); a citation set alike in the text is on both pages */
 const MONTHS = new Set(['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])
-function unstamped(ws) {
+function unstamped(ws, mine) {
+  // (a run of the same words in our page is the paper's own text, a citation set alike: kept)
+  const ours = ` ${mine.join(' ')} `
   for (let i = 0; i < ws.length; i++) {
     if (ws[i] !== 'arxiv') continue
     const id = ws.slice(i + 1, i + 5).findIndex(w => /^\d{4,7}v\d+$/.test(w))
     if (id < 0) continue
     // (its category, then the day, the month and the year)
-    for (let j = i + 2 + id; j < Math.min(ws.length, i + 12); j++) if (/^\d{4}$/.test(ws[j]) && MONTHS.has(ws[j - 1])) return [...ws.slice(0, i), ...ws.slice(j + 1)]
+    for (let j = i + 2 + id; j < Math.min(ws.length, i + 12); j++) {
+      if (!(/^\d{4}$/.test(ws[j]) && MONTHS.has(ws[j - 1]))) continue
+      if (ours.includes(` ${ws.slice(i, j + 1).join(' ')} `)) break
+      return [...ws.slice(0, i), ...ws.slice(j + 1)]
+    }
   }
   return ws
 }
@@ -447,7 +454,9 @@ export function lineCheckOf(ours, arxiv) {
   // each page's words on both sides, in the text layers' order, and our lines found on another page of arXiv's
   const wordsOn = ts => { const by = new Map(); for (const t of ts) { if (!t || !Number.isInteger(t.page) || typeof t.t !== 'string') continue; const w = pageWord(t.t); if (w) (by.get(t.page) ?? by.set(t.page, []).get(t.page)).push(w) } return by }
   const mine = wordsOn(ours), theirs = wordsOn(arxiv)
-  for (const [p, ws] of theirs) theirs.set(p, unstamped(ws))
+  // (arXiv's stamp stands on the first page alone, where our page has not its words; the text layer gives no rotation or margin
+  // flag a token could be told by, and its words are as plain as the paper's)
+  if (theirs.has(1)) theirs.set(1, unstamped(theirs.get(1), mine.get(1) ?? []))
   const elsewhere = new Map()
   for (const k of ours.keys()) {
     const l = tokenLine[k]
