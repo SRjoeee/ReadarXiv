@@ -177,11 +177,13 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
     // unmarked cell's)
     if (!s || units?.[id]?.kind === 'cell' || pt(s).name.startsWith('t')) continue
+    if (work > OWN_WORK) { unit(id).unhidden ??= 'marks'; continue }
     const [p, q] = s, pg = pages[p - 1], S = pt(s), r = at(s), R = regions[p - 1]
     if (S.glyph >= pg.glyphs.length) continue
     const F = pg.glyphs[S.glyph]
     const lead = { glyphs: [] }
     let g = S.glyph - 1
+    work += S.glyph + q
     const glyphAt = i => { if (R.glyph[i] !== r || gOwn[p - 1][i] !== null) return; const G = pg.glyphs[i]; if (Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) lead.glyphs.push([p, i]) }
     let qq = q - 1
     for (; qq >= 0; qq--) {
@@ -203,6 +205,7 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     const m = OPENING.exec(name)
     if (!m) continue
     const id = Number(m[2])
+    if (work > OWN_WORK) { if (unitOf.has(id)) unit(id).unhidden ??= 'marks'; continue }
     let e = null
     let lost = false
     if (owned) { const x = owned.get(name); if (x && x.how < OWNED) e = { glyphs: x.glyphs, boxes: x.boxes }; else if (x && x.how > OWNED) lost = true }
@@ -231,7 +234,7 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
   // ---- the names (MR 6)
   for (const [name, list] of where) {
     const m = NAME_START.exec(name)
-    if (!m || list.length !== 1) continue
+    if (!m || list.length !== 1 || work > OWN_WORK) continue
     const close = where.get(`n${m[1]}.${m[2]}.e`) ?? []
     if (close.length !== 1 || before(close[0], list[0]) || at(close[0]) !== at(list[0])) continue
     claim(take(list[0], close[0], at(list[0])), `n${m[1]}`, 'n')

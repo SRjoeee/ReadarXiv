@@ -44,8 +44,9 @@ import { openObjects } from './xref.mjs'
 
 /** the groups and the marked-content sequences of ours a page may hold, and the groups a document may (E1, E3) */
 export const GROUPS_PAGE = 512, SEQUENCES_PAGE = 2000, GROUPS_DOC = 8000
-/** what the wrap of one page may read and hold, every read of it (the wrap, the proof's two) under the same bounds: its content
- *  streams' decoded bytes, and its operators by their heap (remove.mjs COST, every operator counted, not the walk's alone).
+/** what each read of one page may read and hold (the wrap's, the proof's of the new stream, the proof's of the unwrapped page:
+ *  each under these bounds of its own, in turn): its content streams' decoded bytes, and its operators by their heap
+ *  (remove.mjs COST, every operator counted, not the walk's alone: about 160 bytes an operator, so 48 MiB is about 300,000).
  *  Past either the page is not wrapped (its units the original's), never the paper and never the process: a plot of two
  *  million path operators (30 MB decoded) holds 320 MB of them. The remover's own walk keeps its HELD_MAX and BYTES_MAX */
 export const WRAP_DECODED_PAGE = 32 * 2 ** 20, WRAP_HELD_PAGE = 48 * 2 ** 20
@@ -106,7 +107,9 @@ function codeGroups(row, count) {
  * placeholder, `bounds`: wrapFinal's), groups (in the document), stats } or { refused (a WRAP_WHYS code), why }.
  * Never throws but a failed allocation
  */
-export async function wrapOf(finalBytes, plans, { PL, deflate, inflate = null, groupsPage = GROUPS_PAGE, sequencesPage = SEQUENCES_PAGE, groupsDoc = GROUPS_DOC }) {
+export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPage = GROUPS_PAGE, sequencesPage = SEQUENCES_PAGE, groupsDoc = GROUPS_DOC }) {
+  // (the written bytes are read back by `inflate`: without one no page could be proved, so none is asked for)
+  if (typeof deflate !== 'function' || typeof inflate !== 'function') throw new TypeError('deflate, inflate: functions of bytes (inflate(bytes, limit))')
   let R
   try { R = await openRemover(finalBytes, { PL, inflate }) } catch (e) { if (isMemoryError(e)) throw e; return { refused: 'wrap-parse', why: String(e?.message ?? e).slice(0, 300) } }
   try {
@@ -121,29 +124,39 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate = null, g
     for (const p of order) {
       const plan = plans.get(p)
       if (docFull) { out.set(p, { ok: false, why: `past ${groupsDoc} groups in the document` }); continue }
-      let made = wrapPage(R, p, plan, false)
-      if (made.ok && (made.groups.size > groupsPage || made.sequences > sequencesPage)) {
-        made = wrapPage(R, p, plan, true)
-        if (made.ok && (made.groups.size > groupsPage || made.sequences > sequencesPage)) made = { ok: false, why: `${made.groups.size} groups and ${made.sequences} sequences, past ${groupsPage} and ${sequencesPage}` }
-        else if (made.ok) made.merged = true
-      }
-      if (made.ok && [...made.groups].filter(g => !docGroups.has(g)).length + docGroups.size > groupsDoc) { docFull = true; made = { ok: false, why: `past ${groupsDoc} groups in the document` } }
-      // the page's own /Properties kept whole, ours beside them under names of our own; a page that already names one of ours
-      // is not wrapped (B3: never an entry of the page's dropped)
-      const node = made.ok ? made.walk.node : null, res = node ? node.Resources() : null
-      const own = res instanceof PDFDict ? R.look(res.get(PDFName.of('Properties'))) : undefined
-      if (made.ok && own instanceof PDFDict && own.entries().some(([k]) => made.groups.has(k.decodeText?.()?.replace(/^axt/, '') ?? '') && /^\/axt/.test(k.toString()))) made = { ok: false, why: 'its /Properties already name a group of ours' }
-      // (b), (c): the page's stream proved before it is written, and the bytes written read back (deflate's output inflated)
-      let data = null
-      if (made.ok) {
-        const why = provePage(R, p, made)
-        if (why) made = { ok: false, why: `its proof: ${why}` }
-        else {
-          data = deflate(made.stream)
-          let back = null
-          try { back = inflate ? inflate(data, made.stream.length) : null } catch (e) { if (isMemoryError(e)) throw e }
-          if (!back || !equalBytes(back, made.stream)) made = { ok: false, why: inflate ? 'its deflated stream does not inflate to the stream proved' : 'no inflate to read its deflated stream back' }
+      // the page's wrap, its proof and its bytes read back: any failure of these but a failed allocation is the page's alone (its
+      // units the original's), never the paper's
+      const page = () => {
+        let made = wrapPage(R, p, plan, false)
+        if (made.ok && (made.groups.size > groupsPage || made.sequences > sequencesPage)) {
+          made = wrapPage(R, p, plan, true)
+          if (made.ok && (made.groups.size > groupsPage || made.sequences > sequencesPage)) made = { ok: false, why: `${made.groups.size} groups and ${made.sequences} sequences, past ${groupsPage} and ${sequencesPage}` }
+          else if (made.ok) made.merged = true
         }
+        if (made.ok && [...made.groups].filter(g => !docGroups.has(g)).length + docGroups.size > groupsDoc) { docFull = true; made = { ok: false, why: `past ${groupsDoc} groups in the document` } }
+        // the page's own /Properties kept whole, ours beside them under names of our own; a page that already names one of ours
+        // is not wrapped (B3: never an entry of the page's dropped)
+        const node = made.ok ? made.walk.node : null, res = node ? node.Resources() : null
+        const own = res instanceof PDFDict ? R.look(res.get(PDFName.of('Properties'))) : undefined
+        if (made.ok && own instanceof PDFDict && own.entries().some(([k]) => made.groups.has(k.decodeText?.()?.replace(/^axt/, '') ?? '') && /^\/axt/.test(k.toString()))) made = { ok: false, why: 'its /Properties already name a group of ours' }
+        // (b), (c): the page's stream proved before it is written, and the bytes written read back (deflate's output inflated)
+        let data = null
+        if (made.ok) {
+          const why = provePage(R, p, made)
+          if (why) made = { ok: false, why: `its proof: ${why}` }
+          else {
+            data = deflate(made.stream)
+            let back = null
+            try { back = inflate(data, made.stream.length) } catch (e) { if (isMemoryError(e)) throw e }
+            if (!back || !equalBytes(back, made.stream)) made = { ok: false, why: 'its deflated stream does not inflate to the stream proved' }
+          }
+        }
+        return { made, data, node, res, own }
+      }
+      let made, data = null, node = null, res = null, own
+      try { ({ made, data, node, res, own } = page()) } catch (e) {
+        if (isMemoryError(e)) throw e
+        made = { ok: false, why: `its wrap failed: ${String(e?.message ?? e).slice(0, 200)}` }
       }
       R.release()
       if (!made.ok) { out.set(p, { ok: false, why: made.why }); continue }
@@ -417,11 +430,13 @@ function provePage(R, p, made) {
   }
   if (open) return 'a group left open'
   const walk = R.walkPage(p - 1)
+  // (the unwrapped page read again under a budget of its own: each read of a page within the documented bounds)
+  const theirsBudget = pageBudget()
   const theirs = []
   for (const piece of walk.pc.pieces) {
-    const read = readPiece(R, piece, budget)
+    const read = readPiece(R, piece, theirsBudget)
     if (read.why) return read.why
-    theirs.push(...read.ops)
+    for (const o of read.ops) theirs.push(o)
   }
   return sameOps(theirs, flat)
 }
@@ -503,7 +518,7 @@ function sameOps(a, b) {
       const target = elementsOf(o)
       const got = []
       while (j < b.length && b[j].op === 'TJ') {
-        got.push(...b[j].args[0])
+        for (const el of b[j].args[0]) got.push(el)
         j++
         if (elementsOf({ op: 'TJ', args: [got] }) === target) break
       }
@@ -536,7 +551,11 @@ export { UNHIDDEN_MAX }
  * (the lab's); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
-export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units = null, follows: given = undefined, deflate, inflate = null, keepOwned = false, bounds = {} }) {
+export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, deflate, inflate, keepOwned = false, bounds = {} }) {
+  // (units required: null alone, said, asks for no spell check, the lab's pair whose source is not read; deflate and inflate
+  // required, the written bytes read back)
+  if (units === undefined) throw new TypeError('units: the paper\'s source units, or null said for no spell check')
+  if (typeof deflate !== 'function' || typeof inflate !== 'function') throw new TypeError('deflate, inflate: functions of bytes (inflate(bytes, limit))')
   // (the paper's SOURCE units: a translation's (a record's units, its text pieces `tr`) holds no text after a placeholder to
   // find its ink's end by, nor the source text the spell check reads)
   if (units !== null && (!Array.isArray(units) || units.some(u => u?.pieces?.some?.(p => p?.tr)))) throw new TypeError('units: the paper\'s source units (live.mjs openPaper\'s, layerOfPaper\'s `source.units`), not a translation\'s')

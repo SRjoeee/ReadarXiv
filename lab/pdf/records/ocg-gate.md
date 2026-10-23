@@ -4,7 +4,7 @@ Our final pass wrapped by optional content (`src/pdf-reader/engine/layout/wrap.m
 §19.9), measured by `../spikes/ocg-gate.mjs` on the gate pack's seven papers in Chinese (`fixtures/<id>-zh`: arXiv's PDF
 and our final pass) and the heavy pair 2602.23285v2 (arXiv's PDF and our base of the delta spike; no source read, so no
 spell check and no marking's text after a placeholder). Each paper's units are its source's (`openPaper` of its
-`source.gz`). The engine as at `c4027ed7` (feat/ocg-file, after the adversarial review's fixes); Node 22.23.1, pdfjs-dist 6.3.289 (the lite worker in Node, the modern
+`source.gz`). The engine as at `db827a2f` (feat/ocg-file, after the three rounds of adversarial review; the counts below are unchanged since `c4027ed7`); Node 22.23.1, pdfjs-dist 6.3.289 (the lite worker in Node, the modern
 build in Chromium), Playwright's Chromium, macOS on an Apple M4 Pro. Counts only.
 
 ## How it was run
@@ -42,13 +42,17 @@ pnpm exec tsx lab/pdf/spikes/ocg-gate.mjs --pack=<pack>/fixtures --sources=<dir 
 
 ## Chromium
 
-Every page of the eight, a fresh browser for each paper; a mismatch rendered again up to three times.
+Every page of the eight, a fresh browser for each paper; a mismatch rendered again up to three times. The final run (at
+`db827a2f`) was made on a loaded machine (load average 26 to 45), and Chromium's own renders of a page then differ from
+each other on a few pages; each such page was run again twice on the same inputs.
 
 | Canvas | G1 pages with px outside split glyphs and image edges | Px inside split glyphs | G2' pages | G2' pages with px outside image edges and split glyphs | Image-edge px, wrap / remover |
 |---|---|---|---:|---|---|
-| GPU | none | 0 | 247 | none | 72 / 72 (1810.04805v2 4, 2602.23285v2 68) |
-| CPU | none | 0 | 247 | none | 31 / 31 (2608.04322v1 24, 2602.23285v2 7) |
+| GPU | none | 0 | 247 | 2608.04322v1 p9: 758 px | 72 / 72 (1810.04805v2 4, 2602.23285v2 68) |
+| CPU | none | 0 | 247 | 2608.04322v1 p3: 14 px; 2609.26457v1 p2: 27 px | 151 / 72 (2608.04322v1 p3 23 / 2, 2602.23285v2 p8 128 / 70) |
 
-- Chromium differs from itself on two pages in earlier runs: 2608.04322v1 p9 on GPU in one long-lived browser (our unwrapped
-  page against itself, 1,530 px between renders; 0 once warm), and 2609.26457v1 p2 on CPU (27 px, Δ 7, in a figure's text,
-  after earlier pages rendered; 0 px from fresh documents).
+- Every exception is Chromium's, not the wrap's: run again twice on the same inputs, each comes and goes. 2608.04322v1 p9
+  (GPU): 0, then 231 px in G1 and 201 in G2'; our unwrapped page against itself differs there by up to 1,530 px between
+  renders. 2609.26457v1 p2 (CPU): 0, then 27 px in G1 and G2'. 2602.23285v2 (CPU): image-edge px 0 / 0, then 1 / 1, and p5
+  76 px in G1 once. 2608.04322v1 p3 (CPU) image-edge px 24 / 24, then 24 / 23. The earlier runs on a quiet machine (at
+  `c4027ed7`, the same counts) showed no exception on either canvas, the image-edge px equal: 72 / 72 (GPU), 31 / 31 (CPU).

@@ -1904,8 +1904,15 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   ours; our content streams copied byte for byte as new objects; a `/Resources` dict of our entries, each the original's object
   where the two are canonically equal (the whole sub-graph reused), else copied with its closure from the original's `/Size`
   up. Names stay ours. Nothing else is written: page tree, outlines, destinations, annotations and info stay the
-  original's, and so does the catalog but for our `/OCProperties` where our pages are wrapped (19.9): the catalog is then
-  written again under its number, every other key the original's. The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
+  original's, and so does the catalog but for its `/OCProperties` where our pages are wrapped (19.9): the catalog is then
+  written again under its number, every other key the original's, and its `/OCProperties` is the original's with our groups
+  appended to its `/OCGs` and its default's `/ON` (every other key, and the default's `/BaseState`, `/OFF`, `/AS`, the
+  original's). The paper's own layers of our compile are paired with the original's by their place in each `/OCGs` where
+  each pair is one layer (as many, every name unique on each side, each pair of one name, one default state by `/D`'s
+  `/BaseState`, `/ON` and `/OFF`, one `/Intent` and `/Usage`; else the delta is refused, `delta-proof`, and the full base
+  serves: two layers of one name are never paired by their place), so a replaced page names the original's objects and an unreplaced
+  page's layers stay listed with their default state. A page of ours that names a group of ours and is not replaced refuses
+  the delta (`delta-pages`). The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
   wrap writes its section with too: a table, or a stream of `/W [1 4 2]`, no hybrid), numbers in runs, objects
   uncompressed, `/Prev` the original's startxref, `/Root` `/Info` `/ID` the original's, its startxref in composed offsets.
 - **The canonical form**: a stream is its dict less `/Length` and the exact bytes its **resolved** `/Length` names (an
@@ -1918,7 +1925,10 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   An optional-content group or membership (`/OCG`, `/OCMD`) is matched by its identity alone, never by its content (two
   layers of equal dicts, one ON and one OFF, are two layers): by reference its form is its document's and object's, so it
   and everything that names it are copied; the proof checks that ours and the composed document's are one to one over
-  `/OCProperties`' `/OCGs` and every replaced page's `/Properties`. Forms are interned (exact equality); stream
+  `/OCProperties`' `/OCGs` and every replaced page's `/Properties`, that the composed `/OCProperties` is the original's with
+  ours appended (as above), and that every layer a composed page names (its `/Properties`, its forms' `/OC` and own
+  `/Properties`, its annotations' `/OC`) is listed wherever its source page's (ours replaced, the original's elsewhere) is
+  listed in its own document: PDF.js draws a group it does not know as visible. Forms are interned (exact equality); stream
   bytes are bucketed by a hash of secret random seeds and compared whole, and the whole build spends at most
   `DELTA_WORK_MAX` (2^31 bytes hashed or compared and objects read: the 46 MB pair about 150 million), so no input makes a
   bucket or the build long. Its `/Size` leaves `DELTA_TAIL_ROOM` (2^20) numbers below `OBJECT_MAX` (the room the text-removed PDF's tails once took: no part carries a tail since REMOVAL 8).
@@ -1992,7 +2002,8 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's). Marks absent, twice or out of
   order, a unit the paper's units lack, or a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
   it could not be kept in place, and the spell check reads no symbol): `marks`. The ownership visits at most `OWN_WORK`
-  20 million glyphs and boxes (real ranges cost the ink once); past it a unit is `marks`.
+  20 million glyphs and boxes (real ranges cost the ink once), over every loop (text, labels, placeholders, names); past it a
+  unit is `marks`.
 - **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
   its source text, letters and digits alone (NFKD, marks and case dropped, `ß` as `ss`: TeX's accents, ligatures, hyphenation
   and punctuation are no evidence), or it is `spell`, its groups still written. Its label must be a label's form (a number
@@ -2012,8 +2023,10 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   re-points names, §3.3 of the note).
 - **Page refusals** (the page left unwrapped, its units `page`): it does not align with PDF.js's reading (remove.mjs
   `alignPage`), passes the walk's bounds or the wrap's own (`WRAP_DECODED_PAGE` 32 MiB of its content streams decoded,
-  `WRAP_HELD_PAGE` 48 MiB of every operator's heap by remove.mjs COST: the wrap and both of the proof's reads under the same
-  budget, so that a plot of millions of path operators is a refused page and never the process), fails its proof (below),
+  `WRAP_HELD_PAGE` 48 MiB of every operator's heap by remove.mjs COST, about 300,000 operators: each read of the page — the
+  wrap's, the proof's of the new stream, the proof's of the unwrapped page — under these bounds of its own, in turn, so that a
+  plot of millions of path operators is a refused page and never the process), fails its proof (below), or fails in any
+  other way (anything thrown but a failed allocation is the page's, never the paper's),
   its own `/Properties` already name a group of ours (the page's own entries are kept, never dropped), holds a form partly owned, an owned run in a clipping text mode (Tr 4 to 6: hiding
   the only clipping run lifts the clip; Tr 7 glyphs are never ink, so never owned), a split in a vertical font or a Type 3 font
   without widths, or PDF.js read it past its bounds. Past `GROUPS_PAGE` 512 groups or `SEQUENCES_PAGE` 2000 sequences the
@@ -2038,17 +2051,21 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   page decodes no image: a stock read of the 46 MB pair peaks at 3 GB of native memory); then `deltaOf(orig, bytes)` with
   every page replaced that the wrap wrapped (the default) and `proveDelta`; then `layerOfPaper({ …, ours: { doc (of the
   wrapped bytes), bytes, sha256, xref, delta, wrap: { stats, unhidden, labelKept, pages } } })` (a delta that leaves a wrapped
-  page arXiv's is refused there, `delta-shape`: a unit's group on it could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
-  bounds }, spell: [ids, at most 64], labelKept }`). `units` are the paper's SOURCE units, an array each entry of which has a
-  source text or pieces (a hole or an entry with neither a TypeError; null asks for no spell check, the lab's alone) (`pipeline/live.mjs openPaper`'s,
+  page arXiv's is refused there, `delta-shape`, beside deltaOf's and the proof's own check on the bytes: a unit's group on it
+  could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
+  bounds }, spell: [ids, at most 64], labelKept }`). `units` (required) are the paper's SOURCE units, an array each entry of
+  which has a source text or pieces (missing, a hole or an entry with neither a TypeError; `null` said asks for no spell check,
+  the lab's alone); `deflate` and `inflate` are required (the written bytes are read back); `pages` is required beside the
+  lists, the wrapped pages as ranges within our pages and as many as `stats.wrapped` (`pipeline/live.mjs openPaper`'s,
   the page pass's `source.units`): a translation's (text pieces `tr`) holds neither the text after a placeholder its ink ends
   at nor the source the spell check reads, and is refused (TypeError).
 - **The head** (both kinds): `base.stats` gains `{ wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds },
   split, groups, labelKept }` (a delta's own counts beside them; every unit counted); `base.unhidden` `[[unit id, code], …]`
   by rising id and `base.labelKept` rising ids, none in both, of the units with a group in the document alone (a unit with
   none is the original's by construction): so each holds at most `GROUPS_DOC`, `UNHIDDEN_MAX` 8000, and a long paper cut at
-  `GROUPS_DOC` keeps its base, its later pages unwrapped; checked by `delta-wire.mjs wrapWhy` on both sides (the counts at
-  least the lists'). A page merged for its bounds makes a unit with a placeholder or a label there `bounds`. A unit is the reader's to hide iff the config holds `axt:u<id>` and it is in neither
+  `GROUPS_DOC` keeps its base, its later pages unwrapped; checked by `delta-wire.mjs wrapWhy` on both sides for their shape and
+  that the counts are at least the lists' (that a unit with a group and no list entry is the reader's to hide is `wrapFinal`'s
+  word: no head reader knows the groups). A page merged for its bounds makes a unit with a placeholder or a label there `bounds`. A unit is the reader's to hide iff the config holds `axt:u<id>` and it is in neither
   list. A head without them is an unwrapped base. The cell rules the add-on manifest carried are each part's `rules` now (§11.8).
 - **Measured** (2026-10-23, the gate pack's 7 papers in Chinese and 2602.23285v2, the sources' units): every page wrapped
   (290/290, 0 refused, the proof passing on all); `spell` 1 unit of 1,806 (2608.04322v1 u0: its journal header over-taken),

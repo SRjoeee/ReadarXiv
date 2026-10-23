@@ -29,18 +29,23 @@ describe('B1: a page past the wrap\'s bounds is refused, never the process', () 
 })
 
 describe('B2: the delta matches optional content by identity, never by content', () => {
-  it('keeps two layers of equal dicts two, proves, and renders as the full base', async () => {
-    const layers = (doc: PL.PDFDocument) => {
-      const ctx = doc.context
-      const A = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of('frame') })), B = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of('frame') }))
-      doc.catalog.set(PL.PDFName.of('OCProperties'), ctx.obj({ OCGs: [A, B], D: ctx.obj({ BaseState: 'ON', OFF: [B] }) }))
-      doc.getPages()[1]!.node.Resources()!.set(PL.PDFName.of('Properties'), ctx.obj({ fa: A, fb: B }))
-    }
-    const body = (marked: boolean) => (marked ? unit(0, 72, 720, '(Order)') : run(72, 720, '(Order)')) + run(72, 700, '(shown)', { before: '/OC /fa BDC ', after: ' EMC' }) + run(72, 680, '(hidden)', { before: '/OC /fb BDC ', after: ' EMC' })
-    const orig = (await markedSample({ pages: [2], edit: only(body(false)), tweak: layers })).bytes
-    const ours = (await markedSample({ pages: [2], edit: only(body(true)), tweak: layers })).bytes
+  /** arXiv's and our compile's layers: two OCGs, A then B in arXiv's /OCGs, as `oursOrder` in ours; names and default states given */
+  const layered = (names: [string, string], states: { orig: [boolean, boolean]; ours: [boolean, boolean] }, swap = false) => (which: 'orig' | 'ours') => (doc: PL.PDFDocument) => {
+    const ctx = doc.context
+    const A = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of(names[0]) })), B = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of(names[1]) }))
+    const st = states[which], list = which === 'ours' && swap ? [B, A] : [A, B]
+    doc.catalog.set(PL.PDFName.of('OCProperties'), ctx.obj({ OCGs: list, D: ctx.obj({ BaseState: 'ON', OFF: [A, B].filter((_, i) => !st[i]) }) }))
+    doc.getPages()[1]!.node.Resources()!.set(PL.PDFName.of('Properties'), ctx.obj({ fa: A, fb: B }))
+  }
+  const body = (marked: boolean) => (marked ? unit(0, 72, 720, '(Order)') : run(72, 720, '(Order)')) + run(72, 700, '(shown)', { before: '/OC /fa BDC ', after: ' EMC' }) + run(72, 680, '(hidden)', { before: '/OC /fb BDC ', after: ' EMC' })
+  async function pair(tweak: ReturnType<typeof layered>) {
+    const orig = (await markedSample({ pages: [2], edit: only(body(false)), tweak: tweak('orig') })).bytes
+    const ours = (await markedSample({ pages: [2], edit: only(body(true)), tweak: tweak('ours') })).bytes
     const r = ok(await wrapped(ours, { units: [{ src: 'Order' }] }))
-    const d = await deltaOf(orig, r.bytes, { PL: PL as never })
+    return { orig, r, d: await deltaOf(orig, r.bytes, { PL: PL as never }) }
+  }
+  it('pairs the paper\'s own layers by place where each pair is one name, state, intent and usage: the delta renders as the full base', async () => {
+    const { orig, r, d } = await pair(layered(['frame', 'caption'], { orig: [true, false], ours: [true, false] }))
     if ('refused' in d) throw new Error(d.why)
     const prove = (delta: Uint8Array) => proveDelta(orig, delta, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced: d.replaced })
     expect((await prove(d.delta)).ok).toBe(true)
@@ -54,6 +59,12 @@ describe('B2: the delta matches optional content by identity, never by content',
     expect(m[1]!.length).toBe(m[2]!.length)
     const merged = Uint8Array.from(text.replace(`/fb ${m[2]} 0 R`, `/fb ${m[1]} 0 R`), c => c.charCodeAt(0))
     expect((await prove(merged)).ok).toBe(false)
+  })
+  it('refuses the delta where the layers do not pair: two of one name (in either order), or one name at another state (r18)', async () => {
+    for (const [names, states, swap] of [[['frame', 'frame'], { orig: [true, false], ours: [true, false] }, false], [['frame', 'frame'], { orig: [true, false], ours: [false, true] }, true], [['frame', 'caption'], { orig: [true, false], ours: [false, false] }, false]] as const) {
+      const { d } = await pair(layered([...names] as [string, string], { orig: [...states.orig] as [boolean, boolean], ours: [...states.ours] as [boolean, boolean] }, swap))
+      expect(d, JSON.stringify(names)).toMatchObject({ refused: 'delta-proof' })
+    }
   })
 })
 
@@ -144,5 +155,57 @@ describe('the proof of a split " show (review debt)', () => {
     expect(r.stats.split).toBe(1)
     expect(r.stats.wrapped).toBe(1)
     expect(pixelsApart(await renderPage(bytes, 2), await renderPage(r.bytes, 2))).toBeLessThan(200)
+  })
+})
+
+// ---- the re-review (at 09c0c45e)
+describe('re-review B1, S4: a dense page is the page\'s, within the documented bounds', () => {
+  const plot = (n: number) => `q 0.5 w 72 100 m\n${Array.from({ length: n }, (_, i) => `${72 + (i % 4000) * 0.1} ${100 + (i % 977) * 0.5} l`).join('\n')}\nS Q\n`
+  it('wraps a page of 160,000 operators in one stream (no spread of its operators, the proof\'s reads each under its own budget)', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(unit(0, 72, 700, '(Order)') + plot(160_000)) })
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order' }] }))
+    expect(r.stats.wrapped).toBe(1)
+    expect(r.unhidden).toEqual([])
+  })
+})
+
+describe('re-review B2: arXiv\'s own layers stay listed in the composed document', () => {
+  it('keeps arXiv\'s /OCGs and default, ours appended: an unreplaced page\'s hidden layer stays hidden', async () => {
+    const body = (p: number, marked: boolean) => (p === 2 && marked ? unit(0, 72, 720, '(Order)') : run(72, 720, '(Order)')) + run(72, 700, '(shown)', { before: '/OC /fA BDC ', after: ' EMC' }) + run(72, 680, '(hidden)', { before: '/OC /fB BDC ', after: ' EMC' })
+    const orig = (await markedSample({ pages: [1, 2], edit: (_, p) => body(p, false), foreignOC: true })).bytes
+    const ours = (await markedSample({ pages: [1, 2], edit: (_, p) => body(p, true), foreignOC: true })).bytes
+    const r = ok(await wrapped(ours, { units: [{ src: 'Order' }] }))
+    const d = await deltaOf(orig, r.bytes, { PL: PL as never, replacedPages: [2] })
+    if ('refused' in d) throw new Error(d.why)
+    const proof = await proveDelta(orig, d.delta, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced: d.replaced })
+    expect(proof.ok).toBe(true)
+    const composed = new Uint8Array(orig.length + d.delta.length)
+    composed.set(orig)
+    composed.set(d.delta, orig.length)
+    expect(pixelsApart(await renderPage(composed, 1), await renderPage(orig, 1))).toBe(0)
+    expect(pixelsApart(await renderPage(composed, 2), await renderPage(r.bytes, 2))).toBe(0)
+  })
+})
+
+describe('re-review S1, S2, S3: the wrap\'s inputs and the delta\'s pages', () => {
+  it('requires units (null said for none), deflate and inflate', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(unit(0, 72, 700, '(Order)')) })
+    const { wrapFinal } = await import('@/pdf-reader/engine/layout/wrap.mjs')
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { deflate, inflate } = await import('./helpers/ocg-pdfs')
+    const base = { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS }
+    await expect(wrapFinal(bytes, { ...base, deflate, inflate } as never)).rejects.toThrow(/units/)
+    await expect(wrapFinal(bytes, { ...base, units: null, deflate } as never)).rejects.toThrow(/inflate/)
+  })
+  it('refuses a delta that leaves a page of ours naming a group of ours arXiv\'s (delta-pages), and the proof one that does', async () => {
+    const { bytes: orig } = await markedSample({ pages: [2, 3], edit: (_, p) => run(72, 700, p === 2 ? '(Order)' : '(the)') })
+    const { bytes: ours } = await markedSample({ pages: [2, 3], edit: (_, p) => unit(p - 2, 72, 700, p === 2 ? '(Order)' : '(the)') })
+    const r = ok(await wrapped(ours, { units: [{ src: 'Order' }, { src: 'the' }] }))
+    expect(r.pages).toEqual([[2, 3]])
+    expect(await deltaOf(orig, r.bytes, { PL: PL as never, replacedPages: [2] })).toMatchObject({ refused: 'delta-pages' })
+    const whole = await deltaOf(orig, r.bytes, { PL: PL as never })
+    if ('refused' in whole) throw new Error(whole.why)
+    const prove = (replaced: [number, number][]) => proveDelta(orig, whole.delta, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced })
+    expect((await prove(whole.replaced)).ok).toBe(true)
   })
 })
