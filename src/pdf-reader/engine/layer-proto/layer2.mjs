@@ -2524,17 +2524,21 @@ function slotsAt(blocks, st, P, s) {
   if (floor !== null) lows[lows.length - 1] = floor
   const feet = lows.slice()
   for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi].through) feet[bi] = feet[bi + 1]
+  // (a run's blocks are laid alone, layoutRuns: the unit's first line is the first block's of the unit, P.blockBase the run's
+  // first block's place in it)
+  const base = P.blockBase ?? 0
   for (const [bi, b] of blocks.entries()) {
     const p0 = b.pitch0 ?? 1.2 * s
     const pitch = p0 * st.lead
     const onGrid = Math.abs(st.lead - 1) < 1e-6
     const low = lows[bi]
+    const firstBlock = bi + base === 0
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own)
     const G = b.G ?? b.B
     for (let k = 0; k < 400; k++) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
-      const shared = bi === 0 && k === 0 && b.startY !== undefined
+      const shared = firstBlock && k === 0 && b.startY !== undefined
       let y = shared ? b.startY : onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
@@ -2544,7 +2548,7 @@ function slotsAt(blocks, st, P, s) {
       // pitch and its flow its own across the change, one paragraph's)
       const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && k < G.length ? k : -1) : [b.x0, b.x1]
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
-      const x0 = bi === 0 && k === 0 && b.start !== undefined ? b.start : bi === 0 && k === 0 && !b.centred ? b.x0 + b.indent : mx0
+      const x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : firstBlock && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
       // that ends 2 em before it), whose top stands under its baseline in reach of its descent: it ends 2 em before the display,
       // as TeX's own test asks of the line before a display set so, and what no longer fits is the fit's. 2608.16117 page 23,
@@ -3292,6 +3296,80 @@ function laidOut({ r, st, f }, s, P, tried, blocks) {
   return { lines: r.lines, f, s, scale: st.scale, state, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled, opened: r.lines.filter(l => l.opened > 0).length, unopened }
 }
 
+// ---- a unit's runs between its displays, each its own text block (the per-block state, 2026-10-24)
+
+/** a token that sets nothing of the text: a kept region's break, a forced break, a page break, a space */
+const textless = t => t.blockTo !== undefined || t.newline !== undefined || t.pageBreak !== undefined || !!t.space
+/**
+ * A unit's runs between its kept regions (a display, `blockTo`): the text between two regions is set on the slots between
+ * them alone (breakLines: slots of its `after`), so each run is a text block of its own. Each run: its blocks (those of one
+ * `after`, consecutive from the unit's block `bi0`) and its tokens (the region's breaks that open it first; a region with no
+ * text after it before the next breaks with the run after it, or, at the unit's end, with the run before it). Null where the
+ * unit is one run, where a run with text has no slots of its own or a block no run's text (the walk's own rules then place
+ * it), or where the blocks are not in the order of their regions
+ */
+export function runsOf(tokens, blocks) {
+  if (blocks.length < 2) return null
+  const by = new Map()
+  let consumed = 0
+  for (const t of tokens) {
+    if (t.blockTo !== undefined) consumed = Math.max(consumed, t.blockTo + 1)
+    ;(by.get(consumed) ?? by.set(consumed, []).get(consumed)).push(t)
+  }
+  // (a run that sets nothing goes with the next one, or the last one at the end)
+  const keys = [...by.keys()].sort((a, b) => a - b), runs = []
+  let carry = []
+  for (const k of keys) {
+    const ts = [...carry, ...by.get(k)]
+    carry = []
+    if (!ts.some(t => !textless(t))) { carry = ts; continue }
+    runs.push({ after: k, tokens: ts })
+  }
+  if (carry.length && runs.length) runs.at(-1).tokens.push(...carry)
+  if (runs.length < 2) return null
+  let at = 0
+  for (const r of runs) {
+    const bi0 = at
+    while (at < blocks.length && (blocks[at].after ?? 0) === r.after) at++
+    if (at === bi0) return null
+    r.bi0 = bi0
+    r.blocks = blocks.slice(bi0, at)
+  }
+  return at === blocks.length ? runs : null
+}
+/** a run's parameters (layoutRuns): its first block's place in the unit (slotsAt's first line), and the gap under the paragraph
+ *  (P.halfLead, footFloorAt) and a heading's last lines the unit's last run's alone */
+export const runParams = (P, run, last) => ({ ...P, blockBase: run.bi0, lastLines: false, ...(last ? {} : { halfLead: null }) })
+/**
+ * A unit's runs (runsOf) laid each at its own state: the first of the fit's states at which its own text fits its own slots,
+ * so that only a cramped run shrinks, its leading and tracking its own too (the owner's ruling of 2026-10-09, sizes per unit,
+ * carried to its natural unit: a block between two displays reads as its own text block). Every run fits at the state the unit
+ * fitted at (the unit's walk sets each run on its own slots), so each comes out at that state or a more natural one. Null where
+ * the unit is one run or a run does not fit alone; else { layout: joinRuns', runs: each with its blocks, tokens, `bi0`, `P`
+ * and `layout` }
+ */
+export function layoutRuns(tokens, blocks, s, P) {
+  const runs = runsOf(tokens, blocks)
+  if (!runs) return null
+  for (const [i, r] of runs.entries()) {
+    r.P = runParams(P, r, i === runs.length - 1)
+    r.layout = layoutUnit2(r.tokens, r.blocks, s, r.P)
+    if (r.layout.clipped) return null
+  }
+  return { layout: joinRuns(runs), runs }
+}
+/**
+ * The runs' layouts as the unit's one layout: their lines in order, each line's block its place in the unit's blocks, and each
+ * with its run's size, scale and state (`seg`: what the drawing, the word table and the links read a line by, where it is
+ * there); the layout's own fields the first run's, its counts summed. The runs' own layouts are not changed
+ */
+export function joinRuns(runs) {
+  const first = runs[0].layout
+  const lines = runs.flatMap(r => { const seg = { f: r.layout.f, scale: r.layout.scale, state: r.layout.state }; return r.layout.lines.map(l => ({ ...l, block: l.block + r.bi0, seg })) })
+  const sum = k => runs.reduce((a, r) => a + (r.layout[k] ?? 0), 0)
+  return { ...first, lines, clipped: false, lostChars: sum('lostChars'), chars: sum('chars'), tried: sum('tried'), spilled: runs.some(r => r.layout.spilled), opened: sum('opened'), unopened: sum('unopened'), runs: runs.length }
+}
+
 /**
  * A unit laid at one state of the fit, with no search (D6's page fill, run.mjs fillPage: a unit's fitted state at another
  * leading, tracking or size): layoutUnit2's answer, clipped where the state does not set every token in the text's order
@@ -3416,7 +3494,7 @@ export function unitOps(L, blocks, page, { px, k, hasSource, pxOf, extents, audi
       if (!it.t.crop) continue
       const c = it.t.crop.crop
       if (!hasSource(it.t.crop.page)) continue
-      const sc = L.scale
+      const sc = (line.seg ?? L).scale
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
       ops.push({ op: 'crop', page: it.t.crop.page, src: [sx0, sy0, sx1 - sx0, sy1 - sy0], dst: [dx, dy, it.w * k, (c[3] - c[1]) * sc * k] })
@@ -3451,7 +3529,7 @@ export function removalOps(L, page, { px, k, hasSource, pxOf, rects, erase = [],
       if (!it.t.crop) continue
       const c = it.t.crop.crop
       if (!hasSource(it.t.crop.page)) continue
-      const sc = L.scale
+      const sc = (line.seg ?? L).scale
       const [sx0, sy0] = pxOf(it.t.crop.page)(c[0], c[3]), [sx1, sy1] = pxOf(it.t.crop.page)(c[2], c[1])
       const [dx, dy] = px(it.x, line.baseline + (c[3] - it.t.crop.baseline) * sc)
       // (cut from the original through its own glyphs' and rules' outline boxes, where it has them: a crop's box may
@@ -3654,9 +3732,10 @@ const fillAttr = c => (/^#[0-9a-f]{6}$/.test(c) ? c : '#141414')
  */
 export function svgOfUnit(L, page, toPx, scale, id) {
   let out = `<g data-u="${id}">`
-  const fs = L.f * scale
   for (const line of L.lines) {
     if (line.page !== page) continue
+    // (a line's size its run's, where the unit's runs are laid apart: layoutRuns)
+    const LF = (line.seg ?? L).f, fs = LF * scale
     const [, by] = toPx(line.x0, line.baseline)
     // (the line's runs in their order: the upright ones in a <text> at its baseline, each oblique run a <text> of its own
     // between them, so that the copy, a search and every reader of the markup take the text in the line's order)
@@ -3672,11 +3751,11 @@ export function svgOfUnit(L, page, toPx, scale, id) {
       const fill = run.color ? ` fill="${fillAttr(run.color)}"` : ''
       // (v0: a role table face's size correction, 1 for the prototype's faces)
       const size = n2((run.sup ? fs * 0.62 : fs) * (run.face.size ?? 1))
-      const y = run.sup ? n2(by - L.f * 0.36 * scale) : n2(by)
+      const y = run.sup ? n2(by - LF * 0.36 * scale) : n2(by)
       const cx = run.xs.map(x => toPx(x, line.baseline)[0])
       const xs = run.chars ? cx.map(n2).join(' ') : n2(cx[0])
       // a word laid out with tracking is drawn with it (single CJK characters carry it in their places)
-      const ls = !run.chars && run.track ? ` letter-spacing="${n2(run.track * L.f * scale)}"` : ''
+      const ls = !run.chars && run.track ? ` letter-spacing="${n2(run.track * LF * scale)}"` : ''
       const span = `<tspan class="${cls}" x="${xs}" y="${y}" font-size="${size}"${ls}${fill}>${esc(run.text)}</tspan>`
       // (an oblique face, its own slant: the run's points skewed about its baseline, so its places and advance stay the
       // upright's; fonts.mjs CJK_SLANT_DEG for a CJK italic run in the role table's faces)
@@ -3706,6 +3785,8 @@ const faceKey = face => `${face.family}|${face.weight}|${face.style}|${face.caps
 const COPY_SPACE_EM = 0.25
 export function lineRuns(line, L) {
   const out = []
+  // (a line's size and tracking its run's, where the unit's runs are laid apart: layoutRuns)
+  const LS = line.seg ?? L
   let run = null
   const flush = () => { if (run) { out.push(run); run = null } }
   line.items.forEach((it, n) => {
@@ -3742,7 +3823,7 @@ export function lineRuns(line, L) {
       const glued = run && !run.chars && sameFace && !line.items[n - 1]?.t.space && !line.items[n - 1]?.t.kern && !line.items[n - 1]?.kern && line.items[n - 1]?.t.cls === t.cls && !t.brk
       if (!glued) {
         flush()
-        run = { face: t.face, chars: false, sup: !!t.sup, color: t.st?.color, text: '', xs: [it.x], track: t.sup ? 0 : t.cls === 'cjk' ? L.state.track : L.state.trackLatin, items: [] }
+        run = { face: t.face, chars: false, sup: !!t.sup, color: t.st?.color, text: '', xs: [it.x], track: t.sup ? 0 : t.cls === 'cjk' ? LS.state.track : LS.state.trackLatin, items: [] }
       }
       run.items.push([n, run.text.length])
       run.text += t.s
@@ -3750,7 +3831,7 @@ export function lineRuns(line, L) {
     // the line's last word: a space after it for the copy, where it is not hyphenated; and a word explicit glue of a space's
     // width or more follows on the line (\\enspace, \\quad: its item's kern), which the run after it starts on its own
     if (n === line.items.length - 1 && t.cls === 'latin' && !t.hyphenated) run.text += ' '
-    else if (n < line.items.length - 1 && !run.chars && (it.kern ?? 0) >= COPY_SPACE_EM * L.f) run.text += ' '
+    else if (n < line.items.length - 1 && !run.chars && (it.kern ?? 0) >= COPY_SPACE_EM * LS.f) run.text += ' '
   })
   flush()
   return out
@@ -3772,8 +3853,8 @@ export function runEdge(run, at, line, L, measure = w100) {
     return it.x + it.w
   }
   const before = run.text.slice(0, at)
-  const f = L.f * (run.sup ? 0.62 : 1)
-  return run.xs[0] + (measure(before, run.face) * f) / 100 + (run.track ? run.track * L.f * [...before].length : 0)
+  const LF = (line?.seg ?? L).f, f = LF * (run.sup ? 0.62 : 1)
+  return run.xs[0] + (measure(before, run.face) * f) / 100 + (run.track ? run.track * LF * [...before].length : 0)
 }
 
 /**

@@ -218,19 +218,21 @@ export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () =
   lines.forEach((line, j) => {
     keptBefore(j)
     const by = line.baseline
+    // (a line's size and scale its run's, where the unit's runs are laid apart: layer2.mjs layoutRuns)
+    const LL = line.seg ?? L
     for (const it of line.items) {
       const t = it.t
       if (t.space) continue
       const l = it.x - (it.shift ?? 0)
       if (t.crop) {
         if (!drawnCrop(t.crop)) continue
-        const c = t.crop.crop, h = (c[3] - c[1]) * L.scale, top = by + (c[3] - t.crop.baseline) * L.scale
+        const c = t.crop.crop, h = (c[3] - c[1]) * LL.scale, top = by + (c[3] - t.crop.baseline) * LL.scale
         push(W, l, l + it.w, by, h, top, top - h, -1, placeOf(t.crop.k))
         continue
       }
       if (typeof t.s !== 'string') continue
-      const { y, h, top, bottom } = tokenBand(t, L, by)
-      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * L.f : 0), y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end), t.at ?? placeOf(t.k))
+      const { y, h, top, bottom } = tokenBand(t, LL, by)
+      push(W, l, l + it.w - (t.kern ? (t.kernEm ?? 0) * LL.f : 0), y, h, top, bottom, t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end), t.at ?? placeOf(t.k))
     }
   })
   keptBefore(lines.length)
