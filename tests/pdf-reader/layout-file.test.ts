@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countValues } from '@/pdf-reader/engine/layout/json.mjs'
 import {
   checkLayoutPart, checkLineskip, encodeLayout, encodeLayoutPart, indexLayout, layoutPartRows, mergeLayout, PART_KEYS, LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_SCHEMA, MIXED_FILL, LAYOUT_DEPTH, LAYOUT_VALUES, type LayoutFile, LayoutRefusal, NAME_FLAG, NAME_KEYS, PAGE_TEXT_ALL, PAGE_TEXT_KINDS, PH_FLAG, PH_KINDS,
-  parseLayout, TEXT_MAX, UNIT_FLAG, UNIT_KINDS,
+  parseLayout, TEXT_MAX, UNIT_FLAG, UNIT_KINDS, UNLAID, UNLAID_ALL,
 } from '@/pdf-reader/engine/layout/file.mjs'
 
 // The layout file (spec §4.2): a file made from a paper, read by the container's service and by the reader's main thread.
@@ -907,5 +907,37 @@ describe("each colour piece's run's fill (`colours`, PR-C): a key only where a u
     expect(mergeLayout([a, b] as never).colours).toEqual([[2, 0, 0x000099], [5, 1, 0]])
     const { colours: _drop, ...bare } = rows as { colours?: unknown }
     expect(Object.hasOwn(mergeLayout([bare] as never), 'colours')).toBe(false)
+  })
+})
+
+describe('why each unit not laid is the original\'s (`unlaid`): a key only where one is not laid', () => {
+  const withUnlaid = (unlaid: unknown) => { const f = structuredClone(made()) as unknown as Record<string, unknown>; f.unlaid = unlaid; return f }
+  it('is read, written back as it is, and its absence leaves the file the bytes it was', () => {
+    const f = withUnlaid([[1, 'noAnchor'], [4, 'lineTaken'], [6, 'unplacedMarks']])
+    const parsed = parseLayout(utf8(JSON.stringify(f)))
+    expect(parsed.unlaid).toEqual([[1, 'noAnchor'], [4, 'lineTaken'], [6, 'unplacedMarks']])
+    expect(parseLayout(utf8(encodeLayout(parsed)))).toEqual(parsed)
+    expect(encodeLayout(parseLayout(utf8(JSON.stringify(made()))))).not.toContain('unlaid')
+    // (every code of the closed set is one)
+    expect(parseLayout(utf8(JSON.stringify(withUnlaid(UNLAID.map((c, j) => [100 + j, c])))))?.unlaid).toHaveLength(UNLAID.length)
+  })
+  it('refuses an empty key, a row of another shape, a unit the file lays, ids out of order, a code not of the set, and past its bound', () => {
+    for (const [unlaid, path] of [[[], 'unlaid'], [[[1]], 'unlaid[0]'], [[[1, 'noLine', 0]], 'unlaid[0]'], [[[2, 'noLine']], 'unlaid[0][0]'], [[[4, 'noLine'], [1, 'noLine']], 'unlaid[1][0]'], [[[4, 'noLine'], [4, 'kind']], 'unlaid[1][0]'], [[[-1, 'noLine']], 'unlaid[0][0]'], [[[1.5, 'noLine']], 'unlaid[0][0]'], [[[1, 'other']], 'unlaid[0][1]'], [[[1, 3]], 'unlaid[0][1]'], ['x', 'unlaid']] as const) {
+      expect(refusal(utf8(JSON.stringify(withUnlaid(unlaid))))?.path, JSON.stringify(unlaid)).toBe(path)
+    }
+    const many = Array.from({ length: UNLAID_ALL + 1 }, (_, j) => [100 + j, 'kind'])
+    expect(refusal(utf8(JSON.stringify(withUnlaid(many))))).toMatchObject({ path: 'unlaid', bound: 'rows' })
+    // (a file cut into parts holds them all: the bound is each part's)
+    expect(parseLayout(utf8(JSON.stringify(withUnlaid(many))), { sized: false }).unlaid).toHaveLength(UNLAID_ALL + 1)
+  })
+  it('a part holds them too, and the parts merged hold them by unit', () => {
+    const f = parseLayout(utf8(JSON.stringify(withUnlaid([[1, 'noAnchor'], [6, 'dark']]))))
+    const rows = layoutPartRows(f as never)
+    expect(rows.unlaid).toEqual([[1, 'noAnchor'], [6, 'dark']])
+    expect(checkLayoutPart(structuredClone(rows), { pages: 3, views: f.views, lo: 1, hi: 3 }).unlaid).toEqual([[1, 'noAnchor'], [6, 'dark']])
+    const a = { ...(rows as object), unlaid: [[6, 'dark']] }, b = { ...(rows as object), unlaid: [[1, 'noAnchor']] }
+    expect(mergeLayout([a, b] as never).unlaid).toEqual([[1, 'noAnchor'], [6, 'dark']])
+    const { unlaid: _drop, ...bare } = rows as { unlaid?: unknown }
+    expect(Object.hasOwn(mergeLayout([bare] as never), 'unlaid')).toBe(false)
   })
 })

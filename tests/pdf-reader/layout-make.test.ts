@@ -106,7 +106,7 @@ async function made(w: World, log = ''): Promise<{ file: LayoutFile; stats: Layo
   // a page at a time: every unit's rows and every name's, as the whole file holds them, and every page's plan
   const four = await byPages(w, log)
   if (four) {
-    const rows = (f: Record<string, unknown>) => ({ ...Object.fromEntries(PART_KEYS.map(k => [k, f[k]])), colours: f.colours ?? null })
+    const rows = (f: Record<string, unknown>) => ({ ...Object.fromEntries(PART_KEYS.map(k => [k, f[k]])), colours: f.colours ?? null, unlaid: f.unlaid ?? null })
     expect(rows(four.merged as never)).toEqual(rows(four.whole.file as never))
     expect(four.plans).toEqual(four.whole.plans)
     expect(rows(four.marked as never)).toEqual(rows(four.whole.file as never))
@@ -492,6 +492,7 @@ describe('makeLayout', () => {
     const other = await made({ ...w, pages: [{ runs: linesOn(1).map((r, j) => (j >= 7 ? { ...r, s: words(900 + 10 * j, 10) } : r)) }, { runs: linesOn(2) }] })
     expect(other.file.units.map(u => u[0])).toEqual([2, 3])
     expect(other.stats.units).toMatchObject({ located: 2, undrawn: 2 })
+    expect(other.file.unlaid).toEqual([[0, 'undrawn'], [1, 'undrawn']])
     // every page otherwise: no unit laid, the file refused ('carry'), the stats told; for parts too
     const none = { ...w, pages: [1, 2].map(p => ({ runs: linesOn(p).map((r, j) => ({ ...r, s: words(5000 + 100 * p + 10 * j, 10) })) })) }
     expect(await make(none)).toMatchObject({ refused: 'carry', stats: { units: { located: 0, undrawn: 4 }, lines: { carried: 0, total: 20 } } })
@@ -560,6 +561,8 @@ describe('makeLayout', () => {
     const done = await out
     if (!('file' in done)) throw new Error('refused')
     expect(done.file.units.map(u => u[0])).toEqual([0])
+    // (each the original's for its marks, which stand on no page with ink)
+    expect(done.file.unlaid).toEqual([[1, 'unplacedMarks'], [2, 'unplacedMarks'], [3, 'unplacedMarks']])
     expect(done.stats.timedOut).toEqual([2, 3])
     expect(done.stats.capped).toEqual([4])
   })
@@ -1940,7 +1943,7 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
       if ('refused' in m) throw new Error('refused')
       const st = await m.byStream()
       if ('refused' in st) throw new Error('refused')
-      const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+      const rows = (f: Record<string, unknown>) => ({ ...Object.fromEntries(PART_KEYS.map(k => [k, f[k]])), unlaid: f.unlaid ?? null })
       expect(rows(mergeLayout([st.layout() as never]) as never)).toEqual(rows(whole.file as never))
       // (and its own rule-3 edges, a page at a time, none given: the whole run's, the cover page's caption waiting for page 2)
       const own = await makerOf({ ...(await input(rules)), arxiv: baseOf(w), check: true, ...given() })
@@ -1976,7 +1979,7 @@ describe('makerOf, the page stream\'s rules (`rules`): rule 3, the columns\' edg
       units: [unit('caption', [text(ws(cap))]), ...[0, 100, 200, 300].map(o => unit('para', [text(words(o, 100))])), unit('para', [text(ws(para))])],
     }
     const of = async (rules: object | null) => ({ units: six.units, marks: await marksOf(six), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', rules: rules as never, inFloat: [] })
-    const rows = (f: Record<string, unknown>) => Object.fromEntries(PART_KEYS.map(k => [k, f[k]]))
+    const rows = (f: Record<string, unknown>) => ({ ...Object.fromEntries(PART_KEYS.map(k => [k, f[k]])), unlaid: f.unlaid ?? null })
     for (const rules of [{ frame: 'tokens', edges: 'earlier' }, null]) {
       const first = await makerOf({ ...(await of(rules)), arxiv: arxivOf(six.pages) })
       if ('refused' in first) throw new Error('refused')
@@ -2076,5 +2079,19 @@ describe('makeLayout, the marking the marks file records: the complete macros, t
     // (the paragraph's lines, each from its first word to its last: the third from the rest to the last word after the table)
     expect(chunk(rowsOf(file, 1, 'lines'), 8).map(r => [r[3], r[1], r[2]])).toEqual([[764, 72, endOf(runs[0] as Run)], [752, 72, endOf(runs[1] as Run)], [740, 72, endOf(runs[5] as Run)], [728, 72, endOf(last)]])
     expect(file.lines.map(([u]) => u)).toEqual([1])
+    // (the cell the original's, and the file says why: its own marks bound nothing)
+    expect(file.unlaid).toEqual([[0, 'unplacedMarks']])
+  })
+  it('a unit whose line\'s glyphs a unit laid before it took is not laid, and the file says why (`lineTaken`)', async () => {
+    // (two units' words on one line, the first's two either side of the second's: the first's line runs from its first word
+    // to its last and takes every glyph between them, the second's word among them)
+    const runs: Run[] = [{ s: 'alpha', x: 72, y: 700 }, { s: 'omega', x: 290, y: 700 }, { s: 'inner', x: 150, y: 700 }, { s: 'a paragraph laid', x: 72, y: 600 }]
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[1] as Run), 700], ['1s', 1, 150, 700], ['1e', 1, endOf(runs[2] as Run), 700], ['2s', 1, 72, 600], ['2e', 1, endOf(runs[3] as Run), 600]],
+      units: [unit('para', [text('alpha omega')]), unit('para', [text('inner')]), unit('para', [text('a paragraph laid')])],
+    })
+    expect(file.units.map(u => u[0])).toEqual([0, 2])
+    expect(file.unlaid).toEqual([[1, 'lineTaken']])
   })
 })
