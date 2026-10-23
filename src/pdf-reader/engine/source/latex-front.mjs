@@ -595,7 +595,7 @@ function paperMacros(files) {
     // marked where it was called, left a translation's leading on every page after it)
     const p0 = prose.length === 1 ? prose[0] : undefined
     const then = params ? tailOf(t.slice(k + 1, e - 1)) : null
-    out.set(name, { params, opt, prose: p0, def: t.slice(k + 1, e - 1), ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
+    out.set(name, { params, opt, prose: p0, def: t.slice(k + 1, e - 1), defFile: file, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
   }
   return out
 }
@@ -716,8 +716,10 @@ function readsOn(body) {
 /** the pieces the walk reads a macro's body as, with `args` in place of its parameters (none: each parameter empty), in a
  *  walk of its own that changes nothing of the paper's: null where the body ends or starts a unit */
 function bodyPieces(macro, args, file, ctx) {
-  const body = macro.def.replace(/#(\d)/g, (m, n) => args?.[Number(n) - 1] ?? '')
-  const units = [], b = new Builder(file, units, body, ctx.bodies, null)
+  // (each part in the engine's text by its own file's encoding: the body by the file that defines it, the arguments by the
+  // caller's, so that a Latin-1 macros.tex's letter is not read as UTF-8 under a UTF-8 main file; walked as no file's)
+  const body = asEngineText(macro.defFile, macro.def).replace(/#(\d)/g, (m, n) => (args?.[Number(n) - 1] === undefined ? '' : asEngineText(file, args[Number(n) - 1])))
+  const units = [], b = new Builder(null, units, body, ctx.bodies, null)
   walk(body, 0, body.length, b, { ...ctx, called: null, fits: [], skipped: {}, ended: false, visit: () => {}, visitFront: () => {} })
   return units.length ? null : (b.cur?.pieces ?? [])
 }
@@ -726,7 +728,8 @@ function bodyPieces(macro, args, file, ctx) {
  *  hold none, and stay the pair they were) */
 function setsWords(macro) {
   if (macro.words === undefined) {
-    let t = typeof macro.def === 'string' ? uncommented(macro.def).replace(/\$[^$]*\$/g, ' ') : ''
+    // (a formula's letters are no words, in any of the forms the walk reads one: $…$, $$…$$, \\(…\\), \\[…\\], a math environment)
+    let t = typeof macro.def === 'string' ? uncommented(macro.def).replace(/\\begin\s*\{\s*([A-Za-z]+\*?)\s*\}[\s\S]*?\\end\s*\{\s*\1\s*\}/g, (m, env) => (MATH_ENVS.test(env) ? ' ' : m)).replace(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\$[^$]*\$/g, ' ') : ''
     for (let n = 0; n < 20 && /\{[^{}]*\}/.test(t); n++) t = t.replace(/\{[^{}]*\}/g, ' ')
     // (an optional argument's brackets, a box's [c][14.5pt], and a dimension after a command, \\rowcolor{gray!8}[0pt], are no words)
     t = t.replace(/\[[^\]]*\]/g, ' ').replace(/[-+]?(?:\d+\.?\d*|\.\d+)\s*(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu)\b/g, ' ')
@@ -741,11 +744,13 @@ function expandedText(macro, args, file, ctx) {
   if (!pieces?.length) return null
   let out = ''
   for (const p of pieces) {
-    if (p.t === 'text') out += UTF8_LAX.decode(latin1Bytes(p.src === undefined ? asEngineText(file, p.s) : p.s))
+    if (p.t === 'text') out += UTF8_LAX.decode(latin1Bytes(p.s))
     else if (p.t === 'ph' && /^(?:~|\\ )$/.test(p.src)) out += ' '
     else return null
   }
-  return /\p{L}/u.test(out) ? out : null
+  // (an address in it is the paper's, kept as it is (keepAddresses): the call one placeholder, never a text keepAddresses
+  // would cut while each part kept the whole call for its source)
+  return /\p{L}/u.test(out) && !HAS_EMAIL.test(out) ? out : null
 }
 function macroArgs(s, i, macro, to) {
   const reqs = []
@@ -977,6 +982,8 @@ function conditionalValue(name, s, end, ctx) {
   if (name === 'iftrue') return true
   if (ctx.ifValues.has(name)) return ctx.ifValues.get(name)
   const k = skipSpaces(s, end)
+  // (what the preamble defined is known in the body alone: a test in the preamble may come before the definition)
+  if (!ctx.inBody && /^(?:ifdefined|ifcsname|ifx)$/.test(name)) return null
   // \\if of two characters (an author's \\if 0 … \\fi around a passage): a line's end or a space is a space
   if (name === 'if') { const two = ifChars(s, end); return two ? two[0] === two[1] : null }
   if (name === 'ifdefined' && s[k] === '\\') return ctx.defined.has(commandAt(s, k).name) ? true : null
@@ -1759,6 +1766,32 @@ function decodersOf(own, sourceText, main) {
   for (const x of bad) out.set(x.file, INPUT_ENCODINGS[declared ?? 'latin1'])
   return out
 }
+const DEFINES = /^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|[gex]?def|let|newif|newcounter|newlength|newtoks|chardef|mathchardef)$/
+/**
+ * The commands TeX has surely defined when the document's body begins (conditionalValue): a definition TeX acts on (outside
+ * every definition's body and every conditional it may skip) in the main file before its \\begin{document}, or in a file of
+ * the package that preamble reads (\\input, \\include, \\usepackage, \\RequirePackage, \\documentclass of a .sty or .cls
+ * the package holds). A file nothing reads, or a definition later in the document, defines nothing here: 2026-10-24's
+ * review, an unused.tex's \\def\\Flag had chosen the branch TeX does not set
+ */
+function preambleDefinitions(mainFile, read, scan) {
+  const out = new Set(), done = new Set()
+  const take = (t, cmds, upto) => { for (const c of cmds) { if (c.at >= upto) break; if (c.inDef || !c.sure || !DEFINES.test(c.name)) continue; const m = /^\*?\s*\{?\s*\\([A-Za-z@]+)/.exec(t.slice(c.end, c.end + 200)); if (m) out.add(m[1]) } }
+  const t = mainFile.text, cmds = texCommands(t, scan), { begin } = boundsOf(cmds, t), upto = begin >= 0 ? begin : 0
+  take(t, cmds, upto)
+  for (const c of cmds) {
+    if (c.at >= upto || c.inDef || !c.sure) continue
+    const ext = c.name === 'documentclass' ? ['.cls'] : /^(?:usepackage|RequirePackage)$/.test(c.name) ? ['.sty'] : /^(?:input|include)$/.test(c.name) ? ['', '.tex'] : null
+    const arg = ext && /^\s*(?:\[[^\]]*\]\s*)?\{([^{}]+)\}/.exec(t.slice(c.end, c.end + 400))
+    if (!arg) continue
+    for (const name of arg[1].split(',').map(x => x.trim()).filter(Boolean)) for (const e of ext) {
+      const f = read(`${name}${e}`)
+      if (!f || done.has(f.rel) || f.rel === mainFile.rel) continue
+      done.add(f.rel); take(f.text, texCommands(f.text, scan), f.text.length)
+    }
+  }
+  return out
+}
 function readProject(fsys, main, tables, sourceText, own) {
   const ownTexts = own.map(x => x.text)
   // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from
@@ -1791,14 +1824,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  // the commands the paper surely defines (conditionalValue): a definition in one of its files outside every definition's
-  // body and every conditional TeX may skip
-  const defined = new Set()
-  for (const t of ownTexts) for (const c of texCommands(t, { lineEnvs: lineEnvsOf(ownTexts), ifs, ifValues })) {
-    if (c.inDef || !c.sure || !/^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|[gex]?def|let|newif|newcounter|newlength|newtoks|chardef|mathchardef)$/.test(c.name)) continue
-    const m = /^\*?\s*\{?\s*\\([A-Za-z@]+)/.exec(t.slice(c.end, c.end + 200))
-    if (m) defined.add(m[1])
-  }
+  const defined = preambleDefinitions(mainFile, read, { lineEnvs, ifs, ifValues })
   const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, defined, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
@@ -1821,6 +1847,7 @@ function readProject(fsys, main, tables, sourceText, own) {
       // the \end{document} TeX acts on, where the walk stops too
       const bounds = boundsOf(cmds, f.text)
       if (bounds.begin >= 0) { frontMatter(f.text, 0, bounds.begin, b, ctx); from = bounds.body }
+      ctx.inBody = true
       to = Math.min(to, bounds.end)
     }
     walk(f.text, from, to, b, ctx); b.flush()

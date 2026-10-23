@@ -45,6 +45,28 @@ describe('S1: a paper macro that sets words of its own is its expansion, never a
   })
 })
 
+describe('S1 under review (#457, Codex): an address, a formula, a Latin-1 macros file', () => {
+  it('an expansion holding an address is one placeholder: the untranslated file is its own bytes', () => {
+    const tex = doc('Please use \\contact{a@b.com} today.', '\\newcommand{\\contact}[1]{Email #1}')
+    const p = project(tex)
+    expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\contact{a@b.com}'])
+  })
+
+  it('a formula\'s letters are no words of the macro (\\(xy\\)): it stays the pair around its argument', () => {
+    const p = project(doc('The \\tagged{important result} follows.', '\\newcommand{\\tagged}[1]{#1 \\(xy\\)}'))
+    expect(texts(p)).toEqual(['The important result follows.'])
+  })
+
+  it('the body is read in the encoding of the file that defines it, the argument in the caller\'s', () => {
+    const p = projectOf({
+      'main.tex': enc(doc('The \\nb{4} is open.', '\\usepackage[latin1]{inputenc}\n\\input{macros}')),
+      'macros.tex': bytes('\\newcommand{\\nb}[1]{Caf\xe9~#1}\n'),
+    })
+    expect(texts(p)).toEqual(['The Caf\u00e9 4 is open.'])
+  })
+})
+
 describe('S2: a file that is not UTF-8 is read in the encoding it declares, latin1 where it declares none', () => {
   const LATIN1 = '\\documentclass{article}\n\\usepackage[latin1]{inputenc}\n\\begin{document}\nUniversit\xe9 Gustave Eiffel and Meeks-P\xe9rez-Ros wrote it.\n\\end{document}\n'
   it('\\usepackage[latin1]{inputenc}: each byte its Latin-1 letter, none a U+FFFD (2610.20581); the file written back is its own bytes', () => {
@@ -104,6 +126,15 @@ describe('S4: one branch of a conditional is the translator\'s, never both', () 
     const body = ['\\ifx\\Final\\undefined Draft words here. \\else Final words here. \\fi', '\\iflong Long words here. \\else Short words here. \\fi', '\\iftrue True words here. \\else False words here. \\fi'].join('\n\n')
     expect(texts(project(doc(body, pre)))).toEqual(['Final words here.', 'Long words here.', 'True words here.'])
     expect(texts(project(doc('Kept words.\n\n\\if 0\nA passage set aside.\n\n\\fi\nMore kept words.')))).toEqual(['Kept words.', 'More kept words.'])
+  })
+
+  it('a definition TeX has not read when the body begins decides nothing: a file nothing reads, or one later in the body', () => {
+    const body = '\\ifdefined\\Flag Draft branch words. \\else Final branch words. \\fi'
+    const unused = projectOf({ 'main.tex': enc(doc(body)), 'unused.tex': enc('\\def\\Flag{1}\n') })
+    expect(texts(unused)).toEqual([])
+    expect(texts(project(doc(`${body}\n\n\\def\\Flag{1}\nMore words here.`)))).toEqual(['More words here.'])
+    // (one the preamble reads: the input file's definition is TeX's before the body)
+    expect(texts(projectOf({ 'main.tex': enc(doc(body, '\\input{flags}')), 'flags.tex': enc('\\def\\Flag{1}\n') }))).toEqual(['Draft branch words.'])
   })
 
   it('a conditional whose branches set no words is left as it was read: its pieces, and its units\' hashes, as before', () => {
